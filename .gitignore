@@ -1,0 +1,65 @@
+# ---------------------------------------------------------------------------
+# Third-party media and anything derived from it.
+#
+# This repo is the TOOLING only. Source videos, their audio, transcripts and
+# rendered outputs are third-party copyrighted content and must never be
+# committed -- they are also large enough to wreck the repo.
+# ---------------------------------------------------------------------------
+sources/*
+audio/*
+outputs/*
+transcripts/*
+temp/*
+!sources/.gitkeep
+!audio/.gitkeep
+!outputs/.gitkeep
+!transcripts/.gitkeep
+!temp/.gitkeep
+
+# Belt and braces: these must not slip in from anywhere
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.webm
+*.mp3
+*.wav
+*.m4a
+*.flac
+*.aac
+*.srt
+*.vtt
+*.ass
+*.words.json
+*.info.json
+*.manifest.json
+
+# Environment / secrets
+.env
+.env.local
+
+# Python
+*.pyc
+__pycache__/
+.Python
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+env/
+
+# Working files
+*.tmp
+*.log
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+.cache/
+node_modules/
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,87 @@
+{
+  "description": "ElevenLabs voice reference. Copy voice IDs directly from the API or ElevenLabs dashboard.",
+  "default_model": "eleven_turbo_v2_5",
+  "models": {
+    "eleven_turbo_v2_5": {
+      "cost_credits_per_character": 0.5,
+      "quality": "excellent",
+      "latency": "fast",
+      "recommended": true,
+      "note": "Use this by default. Great quality, half the cost of multilingual v2."
+    },
+    "eleven_flash_v2_5": {
+      "cost_credits_per_character": 0.3,
+      "quality": "good",
+      "latency": "very fast",
+      "recommended": false,
+      "note": "Fastest and cheapest. Good for video demos. Slightly lower quality."
+    },
+    "eleven_multilingual_v2": {
+      "cost_credits_per_character": 1.0,
+      "quality": "premium",
+      "latency": "slow",
+      "recommended": false,
+      "note": "Only use if you need multilingual support or premium quality. 2x the cost."
+    }
+  },
+  "voices": {
+    "brian": {
+      "id": "nPczCjzI2devNBz1zQrb",
+      "accent": "American",
+      "gender": "Male",
+      "tone": "Neutral, professional narrator",
+      "use_case": "Video narration, demos, tutorials",
+      "notes": "Natural US male voice. Used for HPD OMO voiceover demo with excellent results at 128kbps."
+    },
+    "alice": {
+      "id": "Xb7hH8MSUJpSbvxk5AI5",
+      "accent": "American",
+      "gender": "Female",
+      "tone": "Warm, friendly",
+      "use_case": "Customer education, friendly narration",
+      "notes": "Professional female narrator, conversational tone."
+    },
+    "sam": {
+      "id": "yoZ06aMxZJJ28mfd3IW5",
+      "accent": "American",
+      "gender": "Male",
+      "tone": "Deep, serious",
+      "use_case": "Documentary, dramatic narration",
+      "notes": "Rich, authoritative male voice."
+    },
+    "jessica": {
+      "id": "cgSgspJ2msm4f57DCYsx",
+      "accent": "British",
+      "gender": "Female",
+      "tone": "Professional, articulate",
+      "use_case": "Professional content, business",
+      "notes": "British English, polished delivery."
+    },
+    "arnold": {
+      "id": "VR6AewLBIAG4zNiiZFUH",
+      "accent": "American",
+      "gender": "Male",
+      "tone": "Energetic, confident",
+      "use_case": "Marketing, promotional content",
+      "notes": "Dynamic, high-energy narrator."
+    }
+  },
+  "stability_similarity_presets": {
+    "natural": {
+      "stability": 0.5,
+      "similarity_boost": 0.75,
+      "note": "Balanced - natural variation in speech, clear similarity to voice"
+    },
+    "consistent": {
+      "stability": 0.75,
+      "similarity_boost": 0.75,
+      "note": "More consistent delivery, less variation"
+    },
+    "dramatic": {
+      "stability": 0.25,
+      "similarity_boost": 1.0,
+      "note": "More expressive, higher variation"
+    }
+  },
+  "api_reference": "https://elevenlabs.io/docs/speech-synthesis/getting-started-with-text-to-speech"
+}

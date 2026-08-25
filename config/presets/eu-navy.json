@@ -1,0 +1,96 @@
+{
+  "_comment": "Europeiska Pravda brand palette, sampled from the channel thumbnail: EU-flag blue card (#003399) with EU-star yellow (#FFCC00) spotlight, matching the EU/Ukraine roundel in the channel logo. Their badge red is #D80000 if you prefer to mirror the INTERVIEW tag instead.",
+  "canvas": {
+    "play_res_x": 1920,
+    "play_res_y": 1080
+  },
+  "font": {
+    "family": "Montserrat",
+    "file": "fonts/Montserrat-Bold.ttf",
+    "spacing": 0,
+    "fudge": 1.0,
+    "bold": 1,
+    "fontsdir": "fonts",
+    "cap_height_px": 31
+  },
+  "text": {
+    "uppercase": true,
+    "apostrophe": "’",
+    "strip_trailing": ",",
+    "word_gap_ratio": 1.0,
+    "outline_px": 0,
+    "outline_colour": "#000000",
+    "shadow_px": 0,
+    "shadow_colour": "#000000"
+  },
+  "card": {
+    "colour": "#003399",
+    "alpha": 0,
+    "corner_radius_px": 12,
+    "pad_x_px": 28,
+    "pad_y_px": 14,
+    "collision_gap_px": 16,
+    "enabled": true
+  },
+  "layout": {
+    "anchor_x": 960,
+    "bottom_margin_px": 170,
+    "max_line_width_px": 1180,
+    "max_lines": 2,
+    "line_height_px": 44
+  },
+  "states": {
+    "base": {
+      "colour": "#FFFFFF"
+    },
+    "active": {
+      "colour": "#FFCC00"
+    },
+    "spoken": {
+      "colour": "#FFFFFF"
+    }
+  },
+  "grouping": {
+    "max_words": 7,
+    "gap_break_s": 0.45,
+    "break_on_sentence_end": true,
+    "max_group_duration_s": 4.0
+  },
+  "timing": {
+    "lead_in_ms": 60,
+    "hold_out_ms": 220,
+    "min_active_ms": 80,
+    "min_gap_between_groups_ms": 40,
+    "active_extends_to_next_word": true,
+    "fade_ms": 70
+  },
+  "_measured": {
+    "source": "channel thumbnail x53-LmMb9iI",
+    "brand_red": "#D80000",
+    "brand_navy": [
+      "#003060",
+      "#184878"
+    ],
+    "eu_blue": "#003399",
+    "eu_yellow": "#FFCC00"
+  },
+  "pop": {
+    "enabled": false,
+    "scale": 112,
+    "rise_ms": 70,
+    "settle_ms": 110
+  },
+  "render": {
+    "encoder": "h264_nvenc",
+    "preset": "p6",
+    "cq": 20,
+    "maxrate": "20M",
+    "bufsize": "40M",
+    "aq_strength": 12
+  },
+  "overlays": {
+    "colour": "#FF0000",
+    "auto": false,
+    "_note": "Colour of the SOURCE video's own lower-third graphics to dodge (not your card colour). Targeted mode is reliable; auto is experimental and false-positives on saturated props."
+  }
+}
