@@ -19,7 +19,23 @@ Invoke as:  python -X utf8 -E scripts/build-captions-ass.py ...
 """
 import sys, os, json, argparse, unicodedata
 
-sys.path[:] = [p for p in sys.path if "Python311" not in p]
+# Drop any site-packages that belongs to a DIFFERENT Python install. A stale
+# machine-wide PYTHONPATH gets prepended to sys.path and shadows this
+# interpreter's packages with incompatible ones (or, once that install is
+# removed, with nothing at all). sys.path is frozen at startup so clearing
+# os.environ in-process cannot help -- hence also `-E` at the call site.
+import sysconfig as _sc, site as _site
+def _norm(p):
+    return os.path.normcase(os.path.abspath(p))
+_own = {_norm(p) for p in (_sc.get_paths().get("purelib"),
+                           _sc.get_paths().get("platlib")) if p}
+for _getter in (lambda: [_site.getusersitepackages()], _site.getsitepackages):
+    try:
+        _own.update(_norm(p) for p in _getter())
+    except Exception:
+        pass          # user site is where Store Python puts pip installs
+sys.path[:] = [p for p in sys.path
+               if "site-packages" not in p.lower() or _norm(p) in _own]
 for _s in (sys.stdout, sys.stderr):
     try:
         _s.reconfigure(encoding="utf-8")
@@ -492,9 +508,14 @@ def scale_style(cfg, W, H):
     L["anchor_x"] = W / 2.0 if centred else L["anchor_x"] * W / float(C["play_res_x"])
     L["bottom_margin_px"] = L["bottom_margin_px"] * f
     L["line_height_px"] = L["line_height_px"] * f
-    # scaled by height, then clamped: a vertical 1080x1920 video scaled x1.78
-    # would otherwise ask for lines wider than the frame
-    L["max_line_width_px"] = min(L["max_line_width_px"] * f, 0.92 * W)
+    # Scaled by height, then clamped to the frame. The clamp must budget for the
+    # CARD, which is the text width plus horizontal padding on both sides --
+    # clamping the text alone lets the card hang off the edge. Going landscape ->
+    # vertical scales by x1.78 while the frame gets NARROWER, so this is exactly
+    # where it bites.
+    _pad_x = cfg["card"].get("pad_x_px", 0) * f
+    L["max_line_width_px"] = min(L["max_line_width_px"] * f,
+                                 0.94 * W - 2 * _pad_x)
     K = cfg["card"]
     for k in ("corner_radius_px", "pad_x_px", "pad_y_px", "collision_gap_px"):
         if k in K:
@@ -573,7 +594,11 @@ def main():
     for e in errs[:20]:
         print("SELFCHECK:", e)
     if errs:
-        print("SELFCHECK: %d problem(s)" % len(errs))
+        # Fatal, and BEFORE writing: an off-canvas card or an overlapping active
+        # window is broken output. Printing a warning and rendering anyway wastes
+        # a full encode and, worse, can ship a defect that looks deliberate.
+        sys.exit("SELFCHECK: %d problem(s) -- refusing to write %s"
+                 % (len(errs), args.out))
 
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8", newline="") as f:

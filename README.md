@@ -65,7 +65,7 @@ read the dominant buckets.
 
 ## Requirements
 
-- Python 3.12 with `faster-whisper`, `ctranslate2`, `fonttools`, `numpy`, `pillow`
+- Python 3.12+ with `faster-whisper`, `ctranslate2`, `fonttools`, `numpy`, `pillow`
 - `ffmpeg`/`ffprobe` built with **libass** (check: `ffmpeg -filters | grep ass`)
 - `yt-dlp`
 - Optional NVIDIA GPU. CUDA also needs `nvidia-cublas-cu12` — ctranslate2 bundles

@@ -26,18 +26,22 @@ fails mid-run, transcription falls back automatically (cuda/int8 → cpu/int8).
 
 ## Always do these two things first
 
-1. **Check the audio tracks.** `yt-dlp -F <URL> | grep "audio only"`. If you see
-   both an `original` and a `dubbed-auto` track, the pipeline's selector already
-   prefers `original` — but confirm the transcript's detected language after the
-   run. Transcribing a YouTube AI dub silently produces a perfect transcript of
-   the wrong language.
+1. **Check the audio tracks.**
+   `python -X utf8 -E -m yt_dlp -F <URL> | grep "audio only"`. If you see both an
+   `original` and a `dubbed-auto` track, the pipeline's selector already prefers
+   `original` — but confirm the transcript's detected language after the run.
+   Transcribing a YouTube AI dub silently produces a perfect transcript of the
+   wrong language. One Shorts video carried **21** audio tracks (1 original + 20
+   AI dubs), so this is not a rare edge case.
+
+   Always invoke yt-dlp as `python -m yt_dlp`, never as bare `yt-dlp` — see traps.
 2. **Pick or derive the style.** Never edit code to change appearance. Either use
    a preset in `config/presets/`, or measure a reference frame and write a new one.
 
 ## Deriving a style from a reference video
 
 ```powershell
-yt-dlp --download-sections "*MM:SS-MM:SS" -f "<vfmt>+<afmt>" -o "temp/ref.%(ext)s" "<URL>"
+python -X utf8 -E -m yt_dlp --download-sections "*MM:SS-MM:SS" -f "<vfmt>+<afmt>" -o "temp/ref.%(ext)s" "<URL>"
 ffmpeg -i temp/ref.mp4 -vf "fps=5" -q:v 3 "temp/ref/f_%03d.jpg"
 ```
 Read the frames, then measure the caption band on a **native-resolution** frame
@@ -111,7 +115,7 @@ order) and refuses to report success if any check fails.
 ## Non-obvious traps (all already handled — do not "fix" them)
 
 - **`python -X utf8 -E` is mandatory.** A machine-wide `PYTHONPATH` points at
-  Python 3.11 and breaks `import faster_whisper` under 3.12. `sys.path` is frozen
+  another Python install and breaks `import faster_whisper`. `sys.path` is frozen
   at startup so scrubbing `os.environ` in-process does nothing, and a venv does
   not help either. `-E` also disables UTF-8 stdio on this cp1252 console, hence
   `-X utf8` too.
@@ -128,12 +132,30 @@ order) and refuses to report success if any check fails.
 - **`-b:v 0` is required with `-cq`** or NVENC ignores the quality target and text
   goes mushy.
 - **Keep filter paths relative** and run ffmpeg from the workspace root.
+- **Never invoke `yt-dlp` (or any console script) as a bare command.** The shim on
+  PATH hardcodes the interpreter that installed it, so when that Python is removed
+  or upgraded it dies *silently* — exit 1, zero bytes on stdout and stderr, no
+  traceback to read. A reinstall often lands its replacement in a Scripts dir that
+  is not on PATH, so the dead shim keeps winning. Use `python -m yt_dlp`.
+- **Vertical video needs `--height 1920`.** The format selector filters on height,
+  so the 1080 default picks a 608x1080 downscale of a 1080x1920 Short.
+- **Clamping caption width must budget for card padding.** Going landscape →
+  vertical scales every px value up ~1.78x while the frame gets *narrower*; the
+  card is text width + 2x padding, so clamping the text alone puts the card off
+  the edge. The self-check catches this.
 
 ## Verification
 
-`scripts/verify-captions.py` renders the caption layer onto black, probes frames
-at word midpoints, and asserts the word in the active colour is the expected one.
-The pipeline refuses to render if this fails. Do not skip it — it is the only
-check that actually proves sync.
+Two independent layers, both **fatal** — neither warns-and-continues:
+
+1. **Structural self-check** (in `build-captions-ass.py`) — off-canvas cards,
+   overlapping active windows, non-positive durations. Refuses to *write* the ASS.
+2. **Sync probe** (`verify-captions.py`) — renders the caption layer onto black,
+   probes frames at word midpoints, asserts the word in the active colour is the
+   expected one. The pipeline refuses to *render* if this fails.
+
+Do not skip either, and do not downgrade them to warnings. A check that reports a
+defect and proceeds anyway is not a check — the off-canvas bug on the first
+vertical video was detected correctly and shipped anyway for exactly that reason.
 
 Full background: `docs/karaoke-captions.md`.

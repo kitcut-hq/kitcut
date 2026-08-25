@@ -67,7 +67,7 @@ change the look.
 ## Traps found the hard way
 
 **`python -X utf8 -E` is mandatory.** A machine-wide `PYTHONPATH` points at
-Python 3.11's site-packages and is prepended to 3.12's `sys.path`, breaking
+another Python install's site-packages and is prepended to this interpreter's `sys.path`, breaking
 `import faster_whisper`. `sys.path` is frozen at interpreter startup, so
 scrubbing `os.environ` in-process does **not** help, and a venv does not either
 (venvs honour `PYTHONPATH` too). `-E` is the only invocation-level fix — but it

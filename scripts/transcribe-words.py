@@ -3,19 +3,35 @@
 
 MUST be invoked as:  python -X utf8 -E scripts/transcribe-words.py ...
 
-Why: this machine has a global PYTHONPATH pointing at Python 3.11 site-packages,
-which gets prepended to 3.12's sys.path and breaks `import faster_whisper`.
-sys.path is frozen at interpreter startup, so scrubbing os.environ in-process
-does NOT help. -E is the only invocation-level fix. But -E also disables
-PYTHONUTF8/PYTHONIOENCODING, and this console is cp1252, so -X utf8 is required
-too or any Cyrillic log line raises UnicodeEncodeError.
+Why: this machine has a global PYTHONPATH pointing at another Python install's
+site-packages, which gets prepended to this interpreter's sys.path and breaks
+`import faster_whisper`. sys.path is frozen at interpreter startup, so scrubbing
+os.environ in-process does NOT help. -E is the only invocation-level fix. But -E
+also disables PYTHONUTF8/PYTHONIOENCODING, and this console is cp1252, so
+-X utf8 is required too or any non-ASCII log line raises UnicodeEncodeError.
 
 The header below makes the script survive a bare `python script.py` anyway.
 """
 import sys, os, json, argparse, time
 
 # --- layer 1: prune the poisoned 3.11 path even if -E was forgotten
-sys.path[:] = [p for p in sys.path if "Python311" not in p]
+# Drop any site-packages that belongs to a DIFFERENT Python install. A stale
+# machine-wide PYTHONPATH gets prepended to sys.path and shadows this
+# interpreter's packages with incompatible ones (or, once that install is
+# removed, with nothing at all). sys.path is frozen at startup so clearing
+# os.environ in-process cannot help -- hence also `-E` at the call site.
+import sysconfig as _sc, site as _site
+def _norm(p):
+    return os.path.normcase(os.path.abspath(p))
+_own = {_norm(p) for p in (_sc.get_paths().get("purelib"),
+                           _sc.get_paths().get("platlib")) if p}
+for _getter in (lambda: [_site.getusersitepackages()], _site.getsitepackages):
+    try:
+        _own.update(_norm(p) for p in _getter())
+    except Exception:
+        pass          # user site is where Store Python puts pip installs
+sys.path[:] = [p for p in sys.path
+               if "site-packages" not in p.lower() or _norm(p) in _own]
 # --- layer 2: force UTF-8 stdio even if -X utf8 was forgotten
 for _s in (sys.stdout, sys.stderr):
     try: _s.reconfigure(encoding="utf-8")
@@ -29,11 +45,16 @@ os.environ.setdefault("HF_HUB_OFFLINE", "1")
 # nvidia-* wheels drop the DLLs under site-packages/nvidia/<pkg>/bin, and since
 # Python 3.8 Windows does not search PATH for extension-module dependencies --
 # each directory must be registered explicitly.
-import sysconfig
-_nv = os.path.join(sysconfig.get_paths()["purelib"], "nvidia")
-if os.path.isdir(_nv):
-    _dirs = [os.path.join(_nv, p, "bin") for p in sorted(os.listdir(_nv))]
-    _dirs = [d for d in _dirs if os.path.isdir(d)]
+# Search EVERY package root, not just purelib: a Microsoft Store Python puts pip
+# installs in the user site, so looking only at purelib finds nothing and CUDA
+# degrades to CPU silently.
+_dirs = []
+for _root in sorted(_own):
+    _nv = os.path.join(_root, "nvidia")
+    if os.path.isdir(_nv):
+        _dirs += [os.path.join(_nv, p, "bin") for p in sorted(os.listdir(_nv))]
+_dirs = [d for d in _dirs if os.path.isdir(d)]
+if _dirs:
     for _bin in _dirs:
         if hasattr(os, "add_dll_directory"):
             try:
@@ -48,8 +69,11 @@ if os.path.isdir(_nv):
 from faster_whisper import WhisperModel
 import faster_whisper, ctranslate2
 
-if "Python311" in faster_whisper.__file__:
-    sys.exit("FATAL: faster_whisper resolved under Python311 -- use: python -X utf8 -E")
+_fw = os.path.normcase(os.path.abspath(faster_whisper.__file__))
+if not any(_fw.startswith(p) for p in _own):
+    sys.exit("FATAL: faster_whisper resolved outside this interpreter's "
+             "site-packages (%s) -- a stale PYTHONPATH is shadowing it. "
+             "Invoke as: python -X utf8 -E" % _fw)
 
 
 def main():

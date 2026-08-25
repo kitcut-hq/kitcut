@@ -23,7 +23,23 @@ scaled automatically to the actual video dimensions.
 """
 import sys, os, json, argparse, subprocess, time, shutil, hashlib, struct
 
-sys.path[:] = [p for p in sys.path if "Python311" not in p]
+# Drop any site-packages that belongs to a DIFFERENT Python install. A stale
+# machine-wide PYTHONPATH gets prepended to sys.path and shadows this
+# interpreter's packages with incompatible ones (or, once that install is
+# removed, with nothing at all). sys.path is frozen at startup so clearing
+# os.environ in-process cannot help -- hence also `-E` at the call site.
+import sysconfig as _sc, site as _site
+def _norm(p):
+    return os.path.normcase(os.path.abspath(p))
+_own = {_norm(p) for p in (_sc.get_paths().get("purelib"),
+                           _sc.get_paths().get("platlib")) if p}
+for _getter in (lambda: [_site.getusersitepackages()], _site.getsitepackages):
+    try:
+        _own.update(_norm(p) for p in _getter())
+    except Exception:
+        pass          # user site is where Store Python puts pip installs
+sys.path[:] = [p for p in sys.path
+               if "site-packages" not in p.lower() or _norm(p) in _own]
 for _s in (sys.stdout, sys.stderr):
     try:
         _s.reconfigure(encoding="utf-8")
@@ -32,6 +48,13 @@ for _s in (sys.stdout, sys.stderr):
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PY = [sys.executable, "-X", "utf8", "-E"]
+# Invoke yt-dlp as a MODULE, never as a bare `yt-dlp` command. The console-script
+# shim on PATH hardcodes the interpreter it was installed by, so it dies silently
+# (exit 1, zero output) if that Python is removed or upgraded -- and a freshly
+# pip-installed replacement often lands in a Scripts dir that is not on PATH.
+# Going through sys.executable guarantees we run the yt-dlp that belongs to the
+# same interpreter as everything else in this pipeline.
+YTDLP = PY + ["-m", "yt_dlp"]
 ENV = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
 STAGES = ["download", "audio", "transcribe", "overlays", "ass", "verify", "render"]
 
@@ -141,7 +164,7 @@ def main():
     vid = args.id
     if not vid:
         if args.url:
-            vid = out(["yt-dlp", "--no-warnings", "--print", "%(id)s", args.url]).splitlines()[-1]
+            vid = out(YTDLP + ["--no-warnings", "--print", "%(id)s", args.url]).splitlines()[-1]
         else:
             vid = os.path.splitext(os.path.basename(args.input))[0]
     print("id: %s | style: %s | disk free: %.1f GB" % (vid, args.style, free_gb))
@@ -172,9 +195,9 @@ def main():
         fmt = ("bv*[height<=%d][vcodec^=avc1]+ba[format_note*=original]/"
                "bv*[height<=%d][vcodec^=avc1]+ba/"
                "bv*[height<=%d]+ba/b[height<=%d]") % (h, h, h, h)
-        sh(["yt-dlp", "-f", fmt, "--merge-output-format", "mp4",
-            "-o", src_mp4, "--write-info-json", "--no-overwrites",
-            "--no-warnings", "--newline", args.url])
+        sh(YTDLP + ["-f", fmt, "--merge-output-format", "mp4",
+                    "-o", src_mp4, "--write-info-json", "--no-overwrites",
+                    "--no-warnings", "--newline", args.url])
         mark("downloaded")
     else:
         mark("download skipped (exists)")
@@ -348,7 +371,7 @@ def main():
             asr=dict(model=args.model, device=args.device,
                      compute_type=args.compute_type, language=d["language"]),
             versions=dict(
-                yt_dlp=out(["yt-dlp", "--version"]),
+                yt_dlp=out(YTDLP + ["--version"]),
                 ffmpeg=out(["ffmpeg", "-version"]).splitlines()[0],
             ),
             argv=sys.argv[1:], timings={n: round(t, 1) for n, t in marks},
