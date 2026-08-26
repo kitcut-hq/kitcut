@@ -159,6 +159,23 @@ python scripts/yt-set-chapters.py <id> --chapters config/chapters/<id>.txt --dry
 python scripts/yt-set-chapters.py <id> --chapters config/chapters/<id>.txt
 ```
 
+**Find out which videos actually need chapters before writing any:**
+
+```powershell
+python scripts/yt-audit-chapters.py --channel @instafill_ai --none-only
+```
+
+`NONE` needs work; `AUTO` renders YouTube's own auto-chapters (fine, but nobody
+chose them); `RETRY` means the read failed and says nothing about chapters.
+
+**Do not judge chapters by the description's formatting.** The first version of
+this audit applied the usual "must start at 0:00, three or more, ten seconds
+apart" rules and was wrong on 11 of 46 videos — it called nine broken that were
+rendering perfectly. Measured against what YouTube actually shows: a late first
+mark just gets an `<Untitled Chapter 1>` prepended, a 4-second chapter renders,
+and out-of-order marks render. Those rules are advisory, so `yt-set-chapters.py`
+warns rather than refuses.
+
 **Read the existing description first — these videos often already have
 chapters.** The CMS-1500 video did: 13 hand-written marks, accurate against the
 transcript and finer-grained than the 11 a first pass generated. Overwriting

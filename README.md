@@ -348,6 +348,42 @@ must be at `00:00`, there must be at least three, and consecutive marks must be
 at least 10 s apart. YouTube does not report any of these as errors; it just
 renders no chapters at all, which is easy to mistake for a failed update.
 
+### Which videos actually need them
+
+```powershell
+python scripts/yt-audit-chapters.py --channel @instafill_ai
+python scripts/yt-audit-chapters.py --channel @instafill_ai --none-only
+```
+
+`NONE` is the list worth working through. `AUTO` means YouTube generated the
+chapters itself — they render, but nobody chose them, so writing real ones
+takes control back. `RETRY` means the read failed, **not** that chapters are
+missing; see below.
+
+**The watch page is the authority, not the description.** The first version of
+this audit judged descriptions against the familiar "first mark at 0:00, at
+least three, ten seconds apart" rules and was wrong on 11 of 46 videos —
+it declared nine of them broken while every one was rendering fine. Measuring
+what YouTube really shows (`yt-dlp`'s `chapters` field) against the descriptions
+that produce it found that **none of those rules are enforced** the way they are
+usually quoted:
+
+| assumption | what actually happens |
+|---|---|
+| first mark must be `00:00` | YouTube prepends an `<Untitled Chapter 1>`; the rest render |
+| marks must be ≥10 s apart | a 4-second chapter renders fine |
+| marks must be in order | an out-of-order pair still renders |
+
+So `yt-set-chapters.py` now *warns* about these instead of refusing. Only the
+three-chapter minimum is still enforced, and that one is inherited from
+documentation rather than measured — treat it with the same suspicion.
+
+Two failure modes are deliberately never reported as "no chapters": a scheduled
+live event (`LIVE`), and YouTube's bot check after too many fetches (`RETRY`).
+Auditing a 46-video channel a few times in a row is enough to trip it. A read
+that failed must not look like an empty one, or you go and write chapters for a
+video that already has them.
+
 **Check whether the video already has chapters before generating any.** Several
 of these videos were published with hand-written ones, and a freshly generated
 list is not automatically an improvement — the ones on the CMS-1500 video were
@@ -429,7 +465,9 @@ all, and its `FaceDetectorYN` replacement wants a model from an external host.
 | `scripts/build-captions-ass.py` | words + preset → styled ASS |
 | `scripts/verify-captions.py` | proves sync by probing rendered frames |
 | `scripts/transcript-outline.py` | skim a transcript; find the time of a phrase |
+| `scripts/_ytchapters.py` | chapter-marker rules, and what YouTube really enforces |
 | `scripts/yt-set-chapters.py` | write chapter markers into a video's description |
+| `scripts/yt-audit-chapters.py` | which videos on a channel actually show chapters |
 | `scripts/cut-clips.py` | manifest → standalone clips cut out of a long video |
 | `scripts/handle-overlay.py` | animated social-handle badge, drawn and burned in |
 | `scripts/dub-clips.py` | translate a clip and speak it back into its own cadence |

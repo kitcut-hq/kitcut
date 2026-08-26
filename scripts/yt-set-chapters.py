@@ -26,14 +26,13 @@ import sys, os, re, json, argparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _ytchapters as ch  # noqa: E402
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 OAUTH_DIR = os.path.join(_env.ROOT, ".yt-oauth")
 CLIENT_SECRET = os.path.join(OAUTH_DIR, "client_secret.json")
 TOKEN = os.path.join(OAUTH_DIR, "token.json")
 
-# A chapter line as it appears in a description: timestamp, whitespace, title.
-CHAPTER_LINE = re.compile(r"^\s*(\d{1,2}:)?\d{1,2}:\d{2}\s+\S")
 DESCRIPTION_LIMIT = 5000
 
 
@@ -46,14 +45,6 @@ def video_id(arg):
     sys.exit(f"cannot parse a video id out of {arg!r}")
 
 
-def parse_ts(ts):
-    parts = [int(p) for p in ts.split(":")]
-    while len(parts) < 3:
-        parts.insert(0, 0)
-    h, m, s = parts
-    return h * 3600 + m * 60 + s
-
-
 def load_chapters(path):
     """Parse and validate; returns the block exactly as it should be pasted."""
     lines = []
@@ -61,51 +52,17 @@ def load_chapters(path):
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
-        m = re.match(r"^((\d{1,2}:)?\d{1,2}:\d{2})\s+(.+)$", line)
-        if not m:
+        if not ch.CHAPTER_LINE.match(line):
             sys.exit(f"not a 'MM:SS Title' line: {line!r}")
-        lines.append((parse_ts(m.group(1)), line))
+        lines.append(line)
 
-    if len(lines) < 3:
-        sys.exit(f"only {len(lines)} chapters; YouTube needs at least 3")
-    if lines[0][0] != 0:
-        sys.exit("first chapter must start at 00:00 or the markers stay inert")
-    for (a, la), (b, lb) in zip(lines, lines[1:]):
-        if b - a < 10:
-            sys.exit(f"chapters under 10 s apart ({la!r} -> {lb!r}); "
-                     "YouTube silently disables all markers")
-    return "\n".join(l for _, l in lines)
-
-
-def find_block(description):
-    """Span of an existing chapter block (>=3 contiguous timestamp lines)."""
-    lines = description.split("\n")
-    run_start, best = None, None
-    for i, line in enumerate(lines + [""]):  # sentinel flushes a trailing run
-        if CHAPTER_LINE.match(line):
-            if run_start is None:
-                run_start = i
-        else:
-            if run_start is not None and i - run_start >= 3:
-                best = (run_start, i)
-            run_start = None
-    return best
-
-
-def splice(description, block):
-    """Replace an existing chapter block, or append after a blank line.
-
-    Returns (new_description, replaced_block_or_None) -- the caller has to know
-    whether this destroyed someone's hand-written chapters. See --replace.
-    """
-    lines = description.split("\n")
-    span = find_block(description)
-    if span:
-        old = "\n".join(lines[span[0]:span[1]])
-        lines[span[0]:span[1]] = block.split("\n")
-        return "\n".join(lines), old
-    sep = "" if not description.strip() else description.rstrip() + "\n\n"
-    return sep + block + "\n", None
+    marks = ch.parse_marks("\n".join(lines))
+    errs = ch.fatal(marks)
+    if errs:
+        sys.exit("refusing:\n  - " + "\n  - ".join(errs))
+    for note in ch.advisories(marks):
+        print(f"note: {note}")
+    return "\n".join(l for _, l in marks)
 
 
 def credentials():
@@ -153,7 +110,7 @@ def main():
         sys.exit(f"video {vid} not found or not visible to this account")
     snippet = r["items"][0]["snippet"]
 
-    new_desc, replaced = splice(snippet.get("description", ""), block)
+    new_desc, replaced = ch.splice(snippet.get("description", ""), block)
     if len(new_desc) > DESCRIPTION_LIMIT:
         sys.exit(f"resulting description is {len(new_desc)} chars; "
                  f"YouTube's limit is {DESCRIPTION_LIMIT}")
