@@ -422,6 +422,7 @@ all, and its `FaceDetectorYN` replacement wants a model from an external host.
 | `scripts/_env.py` | re-execs every script into `.venv`; import it first |
 | `scripts/setup-python.ps1` | builds/repairs the environment, idempotent |
 | `scripts/check-env.py` | the doctor — run this when an import breaks |
+| `scripts/check-dub.py` | dub self-test; no key, no TTS calls, no cost |
 | `scripts/run-captions.py` | the orchestrator — start here |
 | `scripts/transcribe-words.py` | faster-whisper → word-level JSON |
 | `scripts/detect-overlays.py` | finds the source's own lower-third graphics |

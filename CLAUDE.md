@@ -26,6 +26,10 @@ python scripts/check-env.py                                   # diagnose
 powershell -ExecutionPolicy Bypass -File scripts/setup-python.ps1   # repair
 ```
 
+After touching any `dub-*.py`, run `python scripts/check-dub.py` — it exercises
+the fitting, retune and word-mark logic with no API calls, so it costs nothing
+and catches what only a paid run would otherwise reach.
+
 ### Why the environment is like this
 
 A user-level `PYTHONPATH` pointed Python 3.13 at Python **3.11's**

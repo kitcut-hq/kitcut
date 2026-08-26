@@ -210,6 +210,7 @@ The render step separately proves caption sync on sampled frames (`sync probes:
 | `scripts/dub-clips.py` | orchestrator: segment → translate → fit → place |
 | `scripts/dub-translate.py` | per-slot translation and the retune round |
 | `scripts/dub-tts.py` | neural TTS, word boundaries, rate control |
+| `scripts/check-dub.py` | self-test for all of the above; free, run it after edits |
 | `config/elevenlabs-voices.json` | voice ids and model; refuses unverified ids |
 | `outputs/dub/<name>.<tag>.plan.json` | the segmentation, for inspection |
 | `outputs/dub/<name>.<tag>.translation.json` | editable; reused unless `--retranslate` |
