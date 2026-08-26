@@ -2,27 +2,38 @@
 """Put a chapter list into a YouTube video's description.
 
 Reads a chapters file (one `MM:SS Title` per line, `config/chapters/<id>.txt`),
-validates it against YouTube's rules for chapter markers to actually activate
-(first at 00:00, ascending, each >= 10 s, at least 3 of them), then patches the
-video's description through the Data API -- replacing a previous chapter block
-if one exists, appending otherwise. The rest of the description is preserved
-byte for byte; `videos.update` replaces the WHOLE snippet, so every other
-snippet field is sent back exactly as fetched.
+checks it, then patches the video's description through the Data API --
+replacing a previous chapter block if one exists, appending otherwise. The rest
+of the description is preserved byte for byte; `videos.update` replaces the
+WHOLE snippet, so every other snippet field is sent back exactly as fetched.
 
-Auth is a one-time browser consent by the channel owner:
+Only a count below three is refused. The other rules everyone quotes -- first
+mark at 0:00, ten seconds apart, in order -- are printed as notes, because
+measuring the published videos on this channel showed YouTube does not enforce
+them; see `_ytchapters.py` for what it actually does. Chapters already in a
+description are never overwritten without --replace.
 
-  1. In Google Cloud Console: create/pick a project, enable "YouTube Data API
-     v3", configure the OAuth consent screen (External; add yourself as a test
-     user), create an OAuth client ID of type "Desktop app", download the JSON
-     to .yt-oauth/client_secret.json (gitignored).
-  2. First run opens the browser for consent and caches the refresh token at
-     .yt-oauth/token.json. Later runs are non-interactive.
+Auth is the channel owner's OAuth consent, and the owner is the CHANNEL that
+holds the videos, not the person's own account -- consenting as a personal
+account yields a token that can read the videos and not write them. The script
+compares the two up front and says so.
+
+  1. Google Cloud Console: enable "YouTube Data API v3", configure the OAuth
+     consent screen (External; add yourself as a test user), create an OAuth
+     client ID of type "Desktop app", save the JSON to
+     .yt-oauth/client_secret.json (gitignored).
+  2. The first run opens a browser. Pick the channel that owns the videos.
+  3. The resulting grant is written to .env as YOUTUBE_CLIENT_ID /
+     YOUTUBE_CLIENT_SECRET / YOUTUBE_REFRESH_TOKEN, which is where this repo
+     keeps its secrets and what later runs read. .yt-oauth/token.json is kept
+     as a fallback, so deleting that directory no longer costs the grant.
 
 Invoke as:
   python scripts/yt-set-chapters.py <video-id-or-url> --chapters config/chapters/<id>.txt
   python scripts/yt-set-chapters.py <video-id-or-url> --chapters ... --dry-run
+  python scripts/yt-set-chapters.py --video=-qKcpLSk0iU --chapters ...   # id starting with '-'
 """
-import sys, os, re, json, argparse
+import sys, os, re, json, time, argparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -65,10 +76,75 @@ def load_chapters(path):
     return "\n".join(l for _, l in marks)
 
 
-def credentials():
+ENV_KEYS = ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET",
+            "YOUTUBE_REFRESH_TOKEN")
+
+
+def _env_credentials():
+    """Credentials from .env, or None if it does not carry all three keys.
+
+    A refresh token plus the client pair is the whole of a long-lived grant --
+    the access token is derived and short-lived, so there is nothing else worth
+    storing. `_env.py` has already loaded .env into the environment.
+    """
+    got = {k: os.environ.get(k) for k in ENV_KEYS}
+    if not all(got.values()):
+        return None
     from google.oauth2.credentials import Credentials
+    return Credentials(
+        token=None,
+        refresh_token=got["YOUTUBE_REFRESH_TOKEN"],
+        client_id=got["YOUTUBE_CLIENT_ID"],
+        client_secret=got["YOUTUBE_CLIENT_SECRET"],
+        token_uri="https://oauth2.googleapis.com/token",
+        scopes=SCOPES)
+
+
+def _save_to_env(creds):
+    """Upsert the grant into .env, rewriting only its own three keys."""
+    path = os.path.join(_env.ROOT, ".env")
+    lines = []
+    if os.path.exists(path):
+        lines = open(path, encoding="utf-8").read().split("\n")
+    values = {"YOUTUBE_CLIENT_ID": creds.client_id,
+              "YOUTUBE_CLIENT_SECRET": creds.client_secret,
+              "YOUTUBE_REFRESH_TOKEN": creds.refresh_token}
+    if not all(values.values()):
+        return                      # nothing durable to save; keep token.json
+    out, seen = [], set()
+    for line in lines:
+        key = line.split("=", 1)[0].strip() if "=" in line else ""
+        if key in values:
+            out.append(f"{key}={values[key]}")
+            seen.add(key)
+        else:
+            out.append(line)
+    missing = [k for k in ENV_KEYS if k not in seen]
+    if missing:
+        if out and out[-1].strip():
+            out.append("")
+        out.append("# YouTube Data API, for yt-set-chapters.py. Gitignored.")
+        out += [f"{k}={values[k]}" for k in missing]
+        out.append("")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(out))
+
+
+def credentials():
+    """A usable credential, preferring .env over the cached token file.
+
+    .env is where this repo already keeps secrets, and a refresh token there
+    survives deleting .yt-oauth/ -- which is the documented fix for a wrong
+    channel, and used to throw away the grant along with the mistake.
+    """
     from google.auth.transport.requests import Request
-    creds = None
+    from google.oauth2.credentials import Credentials
+
+    creds = _env_credentials()
+    if creds:
+        creds.refresh(Request())        # no access token is stored; mint one
+        return creds
+
     if os.path.exists(TOKEN):
         creds = Credentials.from_authorized_user_file(TOKEN, SCOPES)
     if creds and creds.expired and creds.refresh_token:
@@ -80,16 +156,26 @@ def credentials():
                      "(see this script's docstring for the console steps)")
         from google_auth_oauthlib.flow import InstalledAppFlow
         flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET, SCOPES)
-        creds = flow.run_local_server(port=0)
+        # offline + consent so Google actually returns a refresh token; it
+        # withholds one on a repeat grant otherwise, leaving .env unfillable.
+        creds = flow.run_local_server(port=0, access_type="offline",
+                                      prompt="consent")
     os.makedirs(OAUTH_DIR, exist_ok=True)
     with open(TOKEN, "w", encoding="utf-8") as f:
         f.write(creds.to_json())
+    _save_to_env(creds)
     return creds
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("video", help="video id or any YouTube URL form")
+    # nargs="?" plus --video, because plenty of YouTube ids begin with "-"
+    # (e.g. -qKcpLSk0iU) and argparse reads those as flags. A bare "--" does
+    # not save you either: it must come after every option, which is not how
+    # anyone types it.
+    ap.add_argument("video", nargs="?", help="video id or any YouTube URL form")
+    ap.add_argument("--video", dest="video_opt",
+                    help="same thing, for ids that start with '-'")
     ap.add_argument("--chapters", required=True,
                     help="config/chapters/<id>.txt, one 'MM:SS Title' per line")
     ap.add_argument("--dry-run", action="store_true",
@@ -103,7 +189,9 @@ def main():
                     help="with --lint, also flag marks past this many seconds")
     args = ap.parse_args()
 
-    vid = video_id(args.video)
+    if not (args.video or args.video_opt):
+        ap.error("give a video id, positionally or with --video")
+    vid = video_id(args.video_opt or args.video)
     block = load_chapters(args.chapters)
 
     if args.lint:
@@ -181,12 +269,21 @@ def main():
     yt.videos().update(part="snippet",
                        body={"id": vid, "snippet": snippet}).execute()
 
-    check = yt.videos().list(part="snippet", id=vid).execute()
-    got = check["items"][0]["snippet"]["description"]
-    if block not in got:
-        sys.exit("update call succeeded but the re-fetched description does "
-                 "not contain the chapter block -- inspect it on YouTube")
-    print(f"updated https://youtu.be/{vid} -- chapters verified in re-fetch")
+    # Read-after-write here is not immediately consistent: a re-fetch straight
+    # after a successful update can still return the OLD description, which
+    # made this check cry failure over a write that had in fact landed. Give
+    # it a few tries before believing the bad news.
+    for attempt in range(4):
+        if attempt:
+            time.sleep(2)
+        check = yt.videos().list(part="snippet", id=vid).execute()
+        got = check["items"][0]["snippet"]["description"]
+        if block in got:
+            print(f"updated https://youtu.be/{vid} -- verified in re-fetch"
+                  + (f" (after {attempt + 1} reads)" if attempt else ""))
+            return
+    sys.exit("update call succeeded but the description still does not carry "
+             "the chapter block after several reads -- inspect it on YouTube")
 
 
 if __name__ == "__main__":
