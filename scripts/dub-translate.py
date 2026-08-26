@@ -89,12 +89,15 @@ def _extract_json(s):
     while i >= 0:
         try:
             val, _ = dec.raw_decode(s, i)
-            if isinstance(val, list):
+            # it has to be OUR array: prose like "I kept slot [1] short" parses
+            # as a perfectly good JSON list of one integer
+            if isinstance(val, list) and val and all(isinstance(x, dict)
+                                                     for x in val):
                 return val
         except ValueError:
             pass
         i = s.find("[", i + 1)
-    raise ValueError("no JSON array in reply: %s" % s[:200])
+    raise ValueError("no JSON array of objects in reply: %s" % s[:200])
 
 
 def _via_claude(prompt, model=None):

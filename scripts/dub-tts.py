@@ -270,8 +270,10 @@ def monotonic(marks, min_len=0.01, max_t=None):
         a = max(float(a), prev_end)
         b = max(float(b), a + min_len)
         if max_t is not None:
+            # a mark past the end of the audio is a caption for a word nobody
+            # can hear; only a word starting in the last few ms may overhang
             a = min(a, max_t)
-            b = max(min(b, max_t + min_len), a + min_len)
+            b = max(min(b, max_t), a + min_len) if a < max_t else a + min_len
         out.append((w, a, b))
         prev_end = b
     return out
