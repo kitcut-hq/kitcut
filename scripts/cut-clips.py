@@ -13,22 +13,19 @@ a clip starts on the requested frame and not on the preceding keyframe. Pass
 Each clip is skipped when its output already exists (--force reruns it), so
 re-running after editing one entry only re-renders that entry.
 
-Invoke as:  python -X utf8 -E scripts/cut-clips.py --manifest config/clips/<id>.json
+Invoke as:  python scripts/cut-clips.py --manifest config/clips/<id>.json
 """
 import sys, os, json, argparse, subprocess, shutil
-from importlib import import_module
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+from importlib import import_module
+
 _outline = import_module("transcript-outline")   # hyphen: not importable by name
 _handle = import_module("handle-overlay")
 
-for _s in (sys.stdout, sys.stderr):
-    try:
-        _s.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
 
-ENV = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+ENV = _env.ENV
 
 DEFAULT_RENDER = {
     "encoder": "h264_nvenc", "preset": "p5", "cq": 21,
@@ -61,7 +58,7 @@ def hhmmss(t):
     return "%02d:%05.2f" % (int(t) // 60, t % 60)
 
 
-PY = [sys.executable, "-X", "utf8", "-E"]
+PY = _env.PY
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -228,32 +225,47 @@ def resolve(clip, words, pad_head, pad_tail):
     return max(0.0, start), end
 
 
-def cut(src, dst, start, dur, render, copy, overlay=None, pre_chain=None, base="vbase"):
+def cut(src, dst, start, dur, render, copy, overlay=None, pre_chain=None,
+        base="vbase", dub=None):
     """overlay is (png_paths, filter_complex, out_label) from handle-overlay;
-    pre_chain is a filter graph ending in [base] that runs before the badge."""
+    pre_chain is a filter graph ending in [base] that runs before the badge;
+    dub is a wav to use INSTEAD of the source audio."""
     extra = []
     if copy:
         if overlay or pre_chain:
             sys.exit("--copy cannot crop, caption or brand: stream copy does not filter")
+        if dub:
+            # -ss + -c copy snaps to the preceding keyframe, so the picture would
+            # start somewhere the dub was never aligned to
+            sys.exit("--copy cannot carry a dub: a keyframe-snapped cut desyncs it")
         args = ["-c", "copy"]
     else:
         chain = []
         if pre_chain:
             chain.append(pre_chain)
+        n_in = 1
         if overlay:
             pngs, fc, label = overlay
             for p in pngs:
                 extra += ["-i", p]
+            n_in += len(pngs)
             chain.append(fc)
         else:
             label = base
+        # The dub is appended AFTER the badge PNGs on purpose: handle-overlay
+        # addresses those by absolute index ([1:v], [2:v], ...), so slipping an
+        # input in ahead of them would quietly repoint the badge at the wav.
+        amap = "0:a:0"
+        if dub:
+            extra += ["-i", dub]
+            amap = "%d:a:0" % n_in
         if chain:
             # the badge animates on the OUTPUT clock, which -ss rebases to 0,
             # so every clip starts its cycle at the same place
             args = ["-filter_complex", ";".join(chain),
-                    "-map", "[%s]" % label, "-map", "0:a:0"]
+                    "-map", "[%s]" % label, "-map", amap]
         else:
-            args = ["-map", "0:v:0", "-map", "0:a:0"]
+            args = ["-map", "0:v:0", "-map", amap]
         args += ["-c:v", render["encoder"], "-preset", render["preset"],
                  "-rc", "vbr", "-cq", str(render["cq"]),
                  # NVENC ignores -cq unless the average bitrate target is unset
@@ -298,6 +310,12 @@ def main():
     ap.add_argument("--no-captions", action="store_true", help="skip burning captions")
     ap.add_argument("--no-verify", action="store_true",
                     help="skip the caption sync proof (not recommended)")
+    ap.add_argument("--dub", metavar="DIR",
+                    help="use the dubbed track and translated word timings from "
+                         "this directory (see dub-clips.py) instead of the "
+                         "source audio and transcript")
+    ap.add_argument("--dub-tag", default="en",
+                    help="language tag on the dub files and the output name")
     args = ap.parse_args()
 
     for tool in ("ffmpeg", "ffprobe"):
@@ -367,6 +385,10 @@ def main():
     if caps:
         print("captions %s" % caps["style"])
 
+    dubdir = args.dub or (m.get("dub") or {}).get("dir")
+    if dubdir:
+        print("dub %s (.%s)" % (dubdir, args.dub_tag))
+
     wanted = set(x.strip() for x in args.only.split(",")) if args.only else None
     plan = []
     for clip in m["clips"]:
@@ -375,24 +397,36 @@ def main():
         start, end = resolve(clip, words, pad_head, pad_tail)
         if end > src_dur:
             sys.exit("%s: end %.2f is past the source (%.2f)" % (clip["id"], end, src_dur))
-        name = "%s-%s.mp4" % (prefix, clip["id"]) if prefix else "%s.mp4" % clip["id"]
-        plan.append((clip, start, end, os.path.join(outdir, name)))
+        name = "%s-%s" % (prefix, clip["id"]) if prefix else clip["id"]
+        dub_wav = dub_words = None
+        if dubdir:
+            stem = os.path.join(dubdir, name)
+            dub_wav = "%s.%s.wav" % (stem, args.dub_tag)
+            dub_words = "%s.%s.words.json" % (stem, args.dub_tag)
+            for p in (dub_wav, dub_words):
+                if not os.path.exists(p):
+                    sys.exit("%s: %s is missing -- run dub-clips.py for this clip "
+                             "first" % (clip["id"], p))
+            # a dubbed cut is a different deliverable, not a replacement
+            name = "%s-%s" % (name, args.dub_tag)
+        plan.append((clip, start, end, os.path.join(outdir, name + ".mp4"),
+                     dub_wav, dub_words))
 
     if wanted:
-        missing = wanted - set(c["id"] for c, _, _, _ in plan)
+        missing = wanted - set(c["id"] for c, _, _, _, _, _ in plan)
         if missing:
             sys.exit("no such clip id: %s" % ", ".join(sorted(missing)))
     if not plan:
         sys.exit("nothing to do")
 
-    for clip, start, end, dst in plan:
+    for clip, start, end, dst, _dw, _dj in plan:
         print("%-20s %s -> %s  %5.1fs  %s"
               % (clip["id"], hhmmss(start), hhmmss(end), end - start,
                  clip.get("title", "")))
     if args.list:
         return
 
-    for clip, start, end, dst in plan:
+    for clip, start, end, dst, dub_wav, dub_words in plan:
         if os.path.exists(dst) and not args.force:
             print("skip (exists) %s" % dst)
             continue
@@ -423,7 +457,8 @@ def main():
         if caps:
             # captions are drawn AFTER the crop, so they are sized for the frame
             # the viewer sees rather than cropped along with the source pixels
-            ass = build_captions(clip, m["words"], caps["style"], start, end,
+            ass = build_captions(clip, dub_words or m["words"],
+                                 caps["style"], start, end,
                                  out_w, out_h, fps, tmpdir,
                                  verify=not args.no_verify,
                                  samples=int(caps.get("samples", 24)),
@@ -436,12 +471,14 @@ def main():
         elif last:
             parts.append("[%s]null[%s]" % (last, base))
         pre_chain = ";".join(parts) if parts else None
-        cut(src, dst, start, end - start, render, args.copy, overlay, pre_chain, base)
+        cut(src, dst, start, end - start, render, args.copy, overlay,
+            pre_chain, base, dub_wav)
         got, want = probe(dst), end - start
         if abs(got - want) > 0.5:
             sys.exit("%s: duration %.2fs, expected %.2fs" % (dst, got, want))
         meta = dict(clip, source=src, start=round(start, 3), end=round(end, 3),
                     duration=round(got, 3), stream_copy=bool(args.copy),
+                    dub=dub_wav, dub_words=dub_words,
                     render=None if args.copy else render)
         json.dump(meta, open(os.path.splitext(dst)[0] + ".json", "w", encoding="utf-8"),
                   ensure_ascii=False, indent=2)

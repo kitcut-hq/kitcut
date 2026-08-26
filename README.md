@@ -8,7 +8,7 @@ ASS subtitle file for styling, and NVENC to burn it in. No API keys, nothing
 uploaded.
 
 ```powershell
-python -X utf8 -E scripts/run-captions.py --url "<URL>" --style config/presets/red-card.json
+python scripts/run-captions.py --url "<URL>" --style config/presets/red-card.json
 ```
 
 Roughly **0.5–0.9x the video duration** end to end on a laptop RTX 3050 Ti.
@@ -70,12 +70,12 @@ it by quoting what is said rather than by hunting for timecodes.
 
 ```powershell
 # skim the whole thing as [mm:ss] lines, then find where a line lands
-python -X utf8 -E scripts/transcript-outline.py transcripts/<id>.words.json --outline
-python -X utf8 -E scripts/transcript-outline.py transcripts/<id>.words.json --find "so anyway"
+python scripts/transcript-outline.py transcripts/<id>.words.json --outline
+python scripts/transcript-outline.py transcripts/<id>.words.json --find "so anyway"
 
 # resolve every boundary and print the plan without encoding anything
-python -X utf8 -E scripts/cut-clips.py --manifest config/clips/<id>.json --list
-python -X utf8 -E scripts/cut-clips.py --manifest config/clips/<id>.json
+python scripts/cut-clips.py --manifest config/clips/<id>.json --list
+python scripts/cut-clips.py --manifest config/clips/<id>.json
 ```
 
 A manifest names the source, the transcript, and the clips:
@@ -119,9 +119,9 @@ then they are sized for the frame the viewer actually sees.
 
 ```powershell
 # 1. face-track the crop window
-python -X utf8 -E scripts/auto-reframe.py --manifest config/clips/<id>-vertical.json
+python scripts/auto-reframe.py --manifest config/clips/<id>-vertical.json
 # 2. cut: crop -> scale -> captions -> badge, one encode
-python -X utf8 -E scripts/cut-clips.py --manifest config/clips/<id>-vertical.json
+python scripts/cut-clips.py --manifest config/clips/<id>-vertical.json
 ```
 
 A vertical manifest adds three keys to the ordinary one:
@@ -176,10 +176,10 @@ crop out or paint over than a fixed corner watermark.
 
 ```powershell
 # eyeball the style without encoding anything
-python -X utf8 -E scripts/handle-overlay.py --badges-only --handle "@name"
+python scripts/handle-overlay.py --badges-only --handle "@name"
 
 # burn it into an existing file
-python -X utf8 -E scripts/handle-overlay.py --video in.mp4 --handle "@name"
+python scripts/handle-overlay.py --video in.mp4 --handle "@name"
 ```
 
 Better, put it in the clip manifest and let `cut-clips.py` apply it **while
@@ -218,24 +218,111 @@ viewfinder dot — not lifted from a brand asset. It reads as a camera mark; tre
 using it as attribution, and check the platform's brand guidelines if that
 matters to you.
 
-## Requirements
+## Dubbing into another language
 
-- Python 3.12+ with `faster-whisper`, `ctranslate2`, `fonttools`, `numpy`, `pillow`
-- `opencv-python<5` and `scenedetect` — only for `auto-reframe.py`, which falls
-  back to `--mode pan` without the latter. The OpenCV pin is load-bearing:
-  version 5 ships no Haar cascades, and its `FaceDetectorYN` replacement wants a
-  model downloaded from an external host.
-- `ffmpeg`/`ffprobe` built with **libass** (check: `ffmpeg -filters | grep ass`)
-- `yt-dlp`
-- Optional NVIDIA GPU. CUDA also needs `nvidia-cublas-cu12` — ctranslate2 bundles
-  cuDNN but not cuBLAS. Without a working GPU the pipeline falls back
-  automatically (`cuda/int8_float16 → cuda/int8 → cpu/int8`); CPU runs at roughly
-  1x realtime instead of ~3x.
+`dub-clips.py` translates a clip and speaks it back into the original's rhythm.
+The goal is not a fluent translation on its own — it is that sound starts when
+the mouth opens and stops when it closes. Read a translation straight over the
+top and it drifts within seconds; what the eye catches is cadence, not phonemes.
+
+```powershell
+# translate, speak and fit -- writes outputs/dub/<name>.en.wav + .en.words.json
+python scripts/dub-clips.py --manifest config/clips/<id>-vertical.json --only <clip-id>
+
+# render the dubbed cut; captions come from the dub's own word timings
+python scripts/cut-clips.py --manifest config/clips/<id>-vertical.json `
+    --only <clip-id> --dub outputs/dub
+```
+
+The output is named `…-<tag>.mp4` (`en` by default), so the original is never
+overwritten.
+
+### How it works
+
+1. **Segment.** Split the clip at the pauses the speaker actually took, then
+   recursively split anything still longer than `--max-dur` at its best internal
+   gap. Punctuation is a hint, not the rule: on this transcript Whisper stops
+   punctuating entirely near the end, and a punctuation-driven split produced a
+   single 25-second "unit". Gap-driven splitting gave 26 units averaging 2.9s.
+2. **Translate.** Every slot goes to the translator in one request, with the
+   whole passage as context and a per-slot time budget, plus a shorter `tight`
+   fallback. Default engine is the Claude Code CLI, which needs no API key.
+3. **Fit.** Speak the line, measure it, then re-render at a computed speaking
+   *rate* so it lands in its slot. `rate` is prosodic — the voice re-times
+   phonemes the way a person would — so it beats stretching the waveform.
+   Duration tracks `1/(1+rate)` closely enough to aim straight at a target.
+   rubberband is the last resort, and stays under ~18%.
+4. **Retune.** How long a sentence takes to say is a guess until you say it.
+   Slots that came out wrong go back to the translator *with the measurements*
+   and only those get re-rendered.
+5. **Place.** Each unit is laid at the exact time the original phrase began.
+
+### Does it work
+
+`sync` is the share of the clip where dub and original agree about whether
+anyone is talking. It drops when the dub speaks over a pause, and when it falls
+silent under a moving mouth. Measured on `01-silver-button` (78s, 26 units):
+
+| | first pass | after retune |
+|---|---|---|
+| sync | 85.8% | **94.4%** |
+| slot error, mean | 0.42s | **0.17s** |
+| slots overrunning their gap | 0 | 0 |
+| slots stuck at the slow-down floor | 14 | **2** |
+
+That last row is the one that mattered. The first prompt gave the word budget as
+a ceiling, so every line came in short and the voice had to drawl at `-18%` to
+cover the gap. Rewording it as a target to *hit*, plus the retune round, fixed
+it. Both numbers came from measuring, not from listening and guessing.
+
+### Knobs
+
+| flag | default | |
+|---|---|---|
+| `--voice` | `ava` | `--list-voices` on `dub-tts.py` for the rest |
+| `--max-dur` | `4.0` | longer slots translate better and sync worse |
+| `--words-per-sec` | `3.2` | the per-slot word budget handed to the translator |
+| `--tune-rounds` | `1` | measure-then-rewrite passes |
+| `--engine` | `claude` | or `openai` (needs a key), or `manual` |
+
+`--engine manual` takes a hand-written `[{"i":1,"text":"...","tight":"..."}]`
+via `--translation`, which is the escape hatch when a line has to be exact.
+
+## Setup
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup-python.ps1   # build .venv
+python scripts/check-env.py                                          # prove it works
+```
+
+That is the whole setup. Afterwards every script runs as plain
+`python scripts/<name>.py` from any shell — they re-exec themselves into `.venv`
+via `scripts/_env.py`, so there is nothing to activate and no `-E` to remember.
+`check-env.py` is also the first thing to run when an import breaks; it reports
+the cause rather than leaving you to infer it from a DLL error.
+
+Needed on the machine itself:
+
+- **Python 3.13** (`py -3.13`). Package versions are pinned in `requirements.txt`.
+- **`ffmpeg`/`ffprobe` built with libass and rubberband** — `check-env.py`
+  verifies both, plus NVENC.
+- **Optional NVIDIA GPU.** CUDA needs `nvidia-cublas-cu12`, since ctranslate2
+  bundles cuDNN but not cuBLAS; `check-env.py` counts the DLLs it can see,
+  because without them transcription silently drops to CPU and runs ~3x slower.
+- **Network**, for `edge-tts` during dubbing. No API key is needed for either
+  the voice or (with `--engine claude`) the translation.
+
+The `opencv-python<5` pin is load-bearing: version 5 ships no Haar cascades at
+all, and its `FaceDetectorYN` replacement wants a model from an external host.
 
 ## Repo layout
 
 | Path | |
 |---|---|
+| `CLAUDE.md` | orientation: how to run things, and the house rules |
+| `scripts/_env.py` | re-execs every script into `.venv`; import it first |
+| `scripts/setup-python.ps1` | builds/repairs the environment, idempotent |
+| `scripts/check-env.py` | the doctor — run this when an import breaks |
 | `scripts/run-captions.py` | the orchestrator — start here |
 | `scripts/transcribe-words.py` | faster-whisper → word-level JSON |
 | `scripts/detect-overlays.py` | finds the source's own lower-third graphics |
@@ -244,12 +331,15 @@ matters to you.
 | `scripts/transcript-outline.py` | skim a transcript; find the time of a phrase |
 | `scripts/cut-clips.py` | manifest → standalone clips cut out of a long video |
 | `scripts/handle-overlay.py` | animated social-handle badge, drawn and burned in |
+| `scripts/dub-clips.py` | translate a clip and speak it back into its own cadence |
+| `scripts/dub-translate.py` | per-slot translation under a time budget |
+| `scripts/dub-tts.py` | neural TTS with word boundaries and rate control |
 | `config/presets/` | all visual styling |
 | `config/clips/` | clip manifests (which episodes to cut, and where) |
 | `config/handles/` | handle-badge styling and motion |
 | `fonts/` | Montserrat Bold (SIL OFL 1.1, see `fonts/OFL.txt`) |
 | `docs/karaoke-captions.md` | design notes and the traps behind them |
-| `.claude/skills/video-captions/` | Claude Code skill |
+| `.claude/skills/` | Claude Code skills: captions, shorts, dub |
 
 `sources/`, `audio/`, `transcripts/`, `outputs/`, `temp/` are working
 directories and are **git-ignored** — they hold third-party video and material
@@ -263,10 +353,17 @@ everything in `temp/` regenerates in seconds.
 These are load-bearing; `docs/karaoke-captions.md` has the full list with
 evidence.
 
-- **`python -X utf8 -E` is required** on the dev machine — a global `PYTHONPATH`
-  pointing at another Python version breaks `faster_whisper`, and `sys.path` is
-  frozen at startup so fixing it in-process doesn't work. `-E` also disables
-  UTF-8 stdio on a cp1252 console, hence `-X utf8` too.
+- **A venv does not protect you from `PYTHONPATH`,** and neither does pip. A
+  global `PYTHONPATH` aimed at another Python's site-packages makes 3.13 load
+  3.11's compiled extensions (`DLL load failed`, or a bare segfault under Git
+  Bash) — *and* convinces pip those dependencies are already satisfied, so it
+  installs a venv quietly missing `yaml` and `idna`. `setup-python.ps1` clears
+  the variable before installing and finishes with `pip check`; `_env.py` clears
+  it for every child process. This is handled now: run scripts as plain
+  `python scripts/<name>.py`.
+- **Don't re-exec with `os.execve` on Windows.** It spawns a new process and
+  kills the current one rather than replacing it, so the shell sees the parent
+  die abnormally and the exit code is lost. `subprocess.run` + `sys.exit(rc)`.
 - **libass sizes fonts by `usWinAscent + usWinDescent`, not `unitsPerEm`.** For
   Montserrat that's 1562 vs 1000, so a nominal 43 px renders at 0.64x. This is
   why `font.cap_height_px` exists.
@@ -295,6 +392,16 @@ evidence.
   source, `-t` after every input. `cut-clips.py` checks the output duration
   against the plan, which is how that showed up as an error rather than as five
   eight-minute "shorts".
+
+- **edge-tts's default boundary mode is `SentenceBoundary`.** Ask for
+  `boundary="WordBoundary"` or you get audio and no word marks at all — and the
+  dub's captions are timed from those marks. It also pads ~0.36s of silence onto
+  the tail of a line, which has to be trimmed with the marks shifted to match,
+  or every dubbed phrase starts late.
+- **Give a translator a word budget and it will treat it as a ceiling.** The
+  first dub came in short on 14 of 26 lines, and the fitter drawled the voice at
+  its `-18%` floor to cover the gaps. Word the budget as a target to hit and say
+  why (silence under a moving mouth looks worse than a slightly long line).
 
 ## Legacy
 

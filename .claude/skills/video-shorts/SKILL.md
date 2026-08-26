@@ -9,8 +9,8 @@ The whole workflow, once a manifest exists:
 
 ```powershell
 cd C:\instafill\video-editing
-python -X utf8 -E scripts/cut-clips.py --manifest config/clips/<id>.json --list   # plan only
-python -X utf8 -E scripts/cut-clips.py --manifest config/clips/<id>.json          # cut
+python scripts/cut-clips.py --manifest config/clips/<id>.json --list   # plan only
+python scripts/cut-clips.py --manifest config/clips/<id>.json          # cut
 ```
 
 Clips land in `outputs/shorts/` as `<prefix>-<clipid>.mp4`, each with a `.json`
@@ -30,7 +30,7 @@ the burned-in subtitles.
 Dump the transcript as timestamped lines and read it end to end:
 
 ```powershell
-python -X utf8 -E scripts/transcript-outline.py transcripts/<id>.words.json --outline
+python scripts/transcript-outline.py transcripts/<id>.words.json --outline
 ```
 
 What makes a good as-is short (no editing pass to save it later):
@@ -46,7 +46,7 @@ What makes a good as-is short (no editing pass to save it later):
 Verify each candidate boundary before writing the manifest:
 
 ```powershell
-python -X utf8 -E scripts/transcript-outline.py transcripts/<id>.words.json --find "exact phrase"
+python scripts/transcript-outline.py transcripts/<id>.words.json --find "exact phrase"
 ```
 
 ## Step 2 — the manifest
@@ -97,8 +97,8 @@ authored on 1920x1080 and scaled to the real video. Keep `motion.positions`
 Standalone use on any existing file:
 
 ```powershell
-python -X utf8 -E scripts/handle-overlay.py --badges-only --handle "@name"      # preview PNGs
-python -X utf8 -E scripts/handle-overlay.py --video in.mp4 --handle "@name"     # burn in
+python scripts/handle-overlay.py --badges-only --handle "@name"      # preview PNGs
+python scripts/handle-overlay.py --video in.mp4 --handle "@name"     # burn in
 ```
 
 Architecture, if editing it: Pillow draws the badge once per colour variant into
@@ -128,7 +128,7 @@ and badge are both sized for the frame the viewer sees.
 over a real video they are not.
 
 ```powershell
-python -X utf8 -E scripts/auto-reframe.py --manifest config/clips/<id>-vertical.json
+python scripts/auto-reframe.py --manifest config/clips/<id>-vertical.json
 ```
 
 It writes `config/clips/<id>-vertical.reframe.json`, which `cut-clips.py` picks
@@ -160,7 +160,7 @@ override the sidecar.
 strategy on off-centre distance and window motion, writing nothing:
 
 ```powershell
-python -X utf8 -E scripts/auto-reframe.py --manifest ... --mode compare
+python scripts/auto-reframe.py --manifest ... --mode compare
 ```
 
 That is how `hybrid` was chosen: `pan` 27.9 px mean / 77 p95 / 10.5 px/s,
@@ -251,10 +251,9 @@ The cutter already asserts output duration against the plan. Additionally:
   silently ran to the end of the source. `-ss` before the source input, `-t`
   after all inputs. The duration assert is what catches this class of bug.
 - **`-b:v 0` is required with `-cq`** or NVENC ignores the quality target.
-- **`python -X utf8 -E` always** — cp1252 console + stale global PYTHONPATH;
-  same story as the captions pipeline.
+- **The environment is fixed; run scripts as plain `python scripts/<name>.py`.** A machine-wide `PYTHONPATH` used to point at another Python install and break `import faster_whisper` -- and a venv did not help, because `PYTHONPATH` is prepended inside one too. It has been removed, and every script now imports `scripts/_env.py` first, which re-execs into `.venv` with a clean environment and forces UTF-8 stdio on this cp1252 console. Run `python scripts/check-env.py` if an import ever breaks again.
 - **Bare `yt-dlp` prints nothing under Git Bash** on this machine; always
-  `python -m yt_dlp`.
+  `.venv/Scripts/python.exe -m yt_dlp`.
 - **Threads.com links can't be downloaded** — yt-dlp has no Threads extractor
   and the page is a logged-out JS shell with no og:video. Ask the user for the
   file or a DevTools-captured CDN URL.
@@ -281,3 +280,13 @@ The cutter already asserts output duration against the plan. Additionally:
 Requires `opencv-python<5` and `scenedetect` for auto-reframe (without
 scenedetect it falls back to `--mode pan`); everything else is the captions
 pipeline's existing dependency set.
+
+## Dubbing one of these into another language
+
+Use the **video-dub** skill. It reuses this manifest and this clip's
+boundaries, then renders a `…-en.mp4` alongside the original:
+
+```powershell
+python scripts/dub-clips.py --manifest config/clips/<id>-vertical.json --only <clip-id>
+python scripts/cut-clips.py --manifest config/clips/<id>-vertical.json --only <clip-id> --dub outputs/dub
+```
