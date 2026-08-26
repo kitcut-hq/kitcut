@@ -108,6 +108,91 @@ def smooth(samples, src_w, half_win, cut_jump, dead, default_x):
     return out
 
 
+def detect_shots(src, start, dur, threshold=27.0):
+    """Shot boundaries inside the clip's span, in seconds from clip start.
+
+    Returns [0.0, ...] always, so callers can treat the result as shot starts.
+    """
+    from scenedetect import open_video, SceneManager, ContentDetector
+    from scenedetect.frame_timecode import FrameTimecode
+
+    video = open_video(src)
+    fps = video.frame_rate
+    video.seek(FrameTimecode(start, fps))
+    sm = SceneManager()
+    sm.add_detector(ContentDetector(threshold=threshold))
+    sm.detect_scenes(video=video, duration=FrameTimecode(dur, fps))
+    cuts = [0.0]
+    for s, _ in sm.get_scene_list():
+        t = s.get_seconds() - start
+        if 0.25 < t < dur - 0.25:          # a shot shorter than that is a flash
+            cuts.append(t)
+    return sorted(set(round(c, 3) for c in cuts))
+
+
+def shot_keys(samples, shots, x_lo, x_hi, default_x, min_hits=0.2, snap=0.05):
+    """One static framing per shot, snapping at the boundaries.
+
+    The alternative to panning: inside a shot the window does not move at all,
+    so there is no drift and no easing across a cut. A shot with too few face
+    hits (b-roll, a graphic, the back of a head) has no subject to centre on and
+    inherits the previous shot's framing rather than inventing one.
+    """
+    ends = shots[1:] + [samples[-1][0] + 1e3]
+    keys, prev_x, flagged = [], default_x, []
+    for i, (t0, t1) in enumerate(zip(shots, ends)):
+        hits = [cx for t, cx in samples if t0 <= t < t1 and cx is not None]
+        n = sum(1 for t, _ in samples if t0 <= t < t1)
+        if n and len(hits) >= max(1, int(n * min_hits)):
+            x = float(np.median(hits))
+        else:
+            x = prev_x
+            flagged.append(i)
+        x = min(max(x, x_lo), x_hi)
+        prev_x = x
+        if keys:
+            keys.append([round(t0 - snap, 3), keys[-1][1]])   # hold, then snap
+        keys.append([round(t0, 3), round(x)])
+    keys[0][0] = 0.0
+    return keys, flagged
+
+
+def track_at(keys, t):
+    """Evaluate the keyframe track in Python -- same piecewise-linear shape that
+    cut-clips.crop_x_expr hands to ffmpeg, so the report measures what renders."""
+    if t <= keys[0][0]:
+        return float(keys[0][1])
+    for (t0, x0), (t1, x1) in zip(keys, keys[1:]):
+        if t < t1:
+            if t1 == t0:
+                return float(x1)
+            return x0 + (x1 - x0) * (t - t0) / float(t1 - t0)
+    return float(keys[-1][1])
+
+
+def measure(samples, keys, cw):
+    """How well a track holds the subject, and how much it moves doing it.
+
+    Only frames with an actual detection are scored -- on a held frame there is
+    no ground truth, and counting it would flatter whichever track happened to
+    freeze there.
+    """
+    errs = [abs(cx - track_at(keys, t)) for t, cx in samples if cx is not None]
+    half = cw / 2.0
+    move = sum(abs(track_at(keys, b[0]) - track_at(keys, a[0]))
+               for a, b in zip(samples, samples[1:]))
+    span = max(samples[-1][0] - samples[0][0], 1e-6)
+    if not errs:
+        return None
+    errs.sort()
+    return dict(n=len(errs),
+                mean=sum(errs) / len(errs),
+                p95=errs[min(len(errs) - 1, int(len(errs) * 0.95))],
+                out=100.0 * sum(1 for e in errs if e > half) / len(errs),
+                edge=100.0 * sum(1 for e in errs if e > half * 0.7) / len(errs),
+                move=move / span)
+
+
 def to_keys(times, xs, x_lo, x_hi, dead, min_gap):
     """Reduce a dense track to the few keys that actually matter."""
     keys = []
@@ -139,6 +224,10 @@ def main():
     ap.add_argument("--deadband", type=float, default=26.0,
                     help="source px a key must move to be worth emitting")
     ap.add_argument("--min-gap", type=float, default=0.6, help="seconds between keys")
+    ap.add_argument("--mode", choices=("pan", "shot", "compare"), default="pan",
+                    help="pan: smooth track. shot: one static framing per shot, "
+                         "snapping at cuts. compare: measure both, write nothing.")
+    ap.add_argument("--scene-threshold", type=float, default=27.0)
     args = ap.parse_args()
 
     for tool in ("ffmpeg", "ffprobe"):
@@ -155,6 +244,7 @@ def main():
     out_w, out_h = int(vert["width"]), int(vert["height"])
 
     wanted = set(x.strip() for x in args.only.split(",")) if args.only else None
+    comparison = {}
     half_win = max(1, int(round(args.smooth_window * args.fps / 2.0)))
     result = {}
     for clip in m["clips"]:
@@ -169,13 +259,43 @@ def main():
         hits = sum(1 for _, c in samples if c is not None)
         xs = smooth(samples, src_w, half_win, args.cut_jump, args.deadband,
                     src_w / 2.0)
-        keys = to_keys([t for t, _ in samples], xs, x_lo, x_hi,
-                       args.deadband, args.min_gap)
+        pan = to_keys([t for t, _ in samples], xs, x_lo, x_hi,
+                      args.deadband, args.min_gap)
+
+        shot = flagged = None
+        if args.mode in ("shot", "compare"):
+            shots = detect_shots(src, start, end - start, args.scene_threshold)
+            shot, flagged = shot_keys(samples, shots, x_lo, x_hi, src_w / 2.0)
+
+        if args.mode == "compare":
+            a, b = measure(samples, pan, cw), measure(samples, shot, cw)
+            print("%-20s %4.1fs  faces %3.0f%%  shots %d%s"
+                  % (clip["id"], end - start, 100.0 * hits / max(1, len(samples)),
+                     len(shots), "  (%d without a subject)" % len(flagged) if flagged else ""))
+            for name, r, k in (("pan ", a, pan), ("shot", b, shot)):
+                print("    %s  off-centre mean %5.1fpx  p95 %5.1fpx  "
+                      "near-edge %4.1f%%  out %4.1f%%  motion %5.1f px/s  keys %2d"
+                      % (name, r["mean"], r["p95"], r["edge"], r["out"], r["move"], len(k)))
+            comparison[clip["id"]] = (a, b)
+            continue
+
+        keys = shot if args.mode == "shot" else pan
         result[clip["id"]] = keys
-        print("%-20s %4.1fs  faces %3d/%3d (%3.0f%%)  keys %2d  x %4d..%4d"
+        print("%-20s %4.1fs  faces %3d/%3d (%3.0f%%)  keys %2d  x %4d..%4d%s"
               % (clip["id"], end - start, hits, len(samples),
                  100.0 * hits / max(1, len(samples)), len(keys),
-                 min(k[1] for k in keys), max(k[1] for k in keys)))
+                 min(k[1] for k in keys), max(k[1] for k in keys),
+                 "  shots %d" % len(shots) if args.mode == "shot" else ""))
+
+    if args.mode == "compare":
+        def avg(i, k):
+            v = [c[i][k] for c in comparison.values()]
+            return sum(v) / max(1, len(v))
+        print("\n%-6s %10s %10s %12s %10s" % ("", "mean", "p95", "near-edge", "motion"))
+        for name, i in (("pan", 0), ("shot", 1)):
+            print("%-6s %8.1fpx %8.1fpx %10.1f%% %8.1f px/s"
+                  % (name, avg(i, "mean"), avg(i, "p95"), avg(i, "edge"), avg(i, "move")))
+        return
 
     out = args.out or os.path.splitext(args.manifest)[0] + ".reframe.json"
     old = {}
