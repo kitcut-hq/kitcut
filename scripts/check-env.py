@@ -68,7 +68,10 @@ for mod, why in [
     ("fontTools", "badge cap-height metrics"),
     ("onnxruntime", "whisper VAD"),
     ("edge_tts", "dubbing text-to-speech"),
+    ("httpx", "ElevenLabs TTS and the OpenAI translation engine"),
     ("yt_dlp", "fetching sources"),
+    ("ctranslate2", "the inference engine under faster-whisper"),
+    ("av", "audio decode for faster-whisper"),
 ]:
     try:
         m = __import__(mod)
@@ -97,6 +100,56 @@ for _root in _env.site_roots():
                 n_dll += len([f for f in os.listdir(_bin) if f.lower().endswith(".dll")])
 (ok if n_dll else warn)("%d CUDA DLLs on the package path (GPU transcription)" % n_dll)
 
+# The two pins whose comments in requirements.txt say "load-bearing": drift
+# here is exactly what pip check cannot see.
+print("== pins ==")
+try:
+    import importlib.metadata as _md
+    _pins = {}
+    with open(os.path.join(ROOT, "requirements.txt"), encoding="utf-8") as _f:
+        for _line in _f:
+            _line = _line.split("#")[0].strip()
+            if "==" in _line:
+                _k, _, _v = _line.partition("==")
+                _pins[_k.strip().lower()] = _v.strip()
+    for _pkg in ("opencv-python", "nvidia-cublas-cu12"):
+        _want = _pins.get(_pkg)
+        if not _want:
+            continue
+        try:
+            _have = _md.version(_pkg)
+        except _md.PackageNotFoundError:
+            bad("%s is not installed (requirements.txt pins %s)" % (_pkg, _want))
+            continue
+        if _have == _want:
+            ok("%s %s matches its pin" % (_pkg, _have))
+        else:
+            warn("%s %s drifted from pin %s" % (_pkg, _have, _want))
+except Exception as _e:
+    warn("could not compare pins: %s" % _e)
+
+print("== external tools ==")
+import shutil as _sh  # noqa: E402
+if _sh.which("claude"):
+    ok("claude CLI on PATH (default translation engine for dubbing)")
+else:
+    warn("claude CLI not on PATH -- dub-clips.py's default --engine claude "
+         "needs it; use --engine openai or manual otherwise")
+for _k, _why in (("ELEVENLABS_API_KEY", "--tts elevenlabs"),
+                 ("OPENAI_API_KEY", "--engine openai")):
+    if os.environ.get(_k):
+        ok("%s is set (%s)" % (_k, _why))
+    else:
+        warn("%s not set -- optional, only needed for %s" % (_k, _why))
+
+print("== fonts ==")
+_font = os.path.join(ROOT, "fonts", "Montserrat-Bold.ttf")
+if os.path.exists(_font):
+    ok("fonts/Montserrat-Bold.ttf present")
+else:
+    bad("fonts/Montserrat-Bold.ttf missing -- every caption preset points at "
+        "it, and libass would silently substitute another face")
+
 print("== ffmpeg ==")
 for tool in ("ffmpeg", "ffprobe"):
     try:
@@ -107,13 +160,23 @@ for tool in ("ffmpeg", "ffprobe"):
 try:
     enc = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"],
                          capture_output=True, text=True).stdout
-    (ok if "h264_nvenc" in enc else warn)("h264_nvenc (GPU encoding)")
+    if "h264_nvenc" in enc:
+        ok("h264_nvenc (GPU encoding)")
+    else:
+        # cut-clips.py and the caption presets default to h264_nvenc, so
+        # "environment OK" with this warning still means zero renders succeed
+        # until the encoder is changed -- say so, with the fix
+        warn("h264_nvenc missing -- every render defaults to it; set "
+             "render.encoder to libx264 in the manifest or preset to encode "
+             "on CPU")
     flt = subprocess.run(["ffmpeg", "-hide_banner", "-filters"],
                          capture_output=True, text=True).stdout
     # rubberband time-stretches without shifting pitch; atempo is the fallback
     # and sounds worse past about +/-15%.
     (ok if "rubberband" in flt else warn)("rubberband (pitch-preserving stretch)")
-    (ok if " ass " in flt else bad)("ass (subtitle burn-in)")
+    import re as _re  # noqa: E402
+    (ok if _re.search(r"^\s*\S+\s+ass\s", flt, _re.M) else bad)(
+        "ass (subtitle burn-in)")
 except Exception as e:
     bad("could not query ffmpeg: %s" % e)
 

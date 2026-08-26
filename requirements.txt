@@ -35,6 +35,13 @@ edge-tts
 # --- fetching ------------------------------------------------------------
 yt-dlp
 
+# --- http ----------------------------------------------------------------
+# Imported directly (dub-tts.py ElevenLabs, dub-translate.py OpenAI,
+# transcribe-audio.py). Until now these arrived only as transitive deps of
+# huggingface_hub, so a faster-whisper bump could silently remove them.
+httpx
+requests
+
 # --- publishing ----------------------------------------------------------
 # Writing chapter markers back into a video description (yt-set-chapters.py).
 # Auth is the channel owner's own OAuth consent, cached under .yt-oauth/.
