@@ -1,0 +1,13 @@
+# How to connect Instafill.ai to Claude (4:41)
+00:00 Where the connector settings live
+00:19 Removing the existing Instafill connector
+00:30 Adding a custom connector
+00:46 Entering the MCP server URL
+01:25 Authenticating and granting access
+01:52 Reopening Claude to finish connecting
+02:14 Reconnecting the server
+02:39 Finding Instafill in the connector list
+03:07 Listing your uploaded forms
+03:20 Opening a form from Claude
+03:41 Checking past form sessions
+04:13 Opening filled forms from the links

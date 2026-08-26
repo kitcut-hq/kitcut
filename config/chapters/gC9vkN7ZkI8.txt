@@ -1,0 +1,13 @@
+# How to fill out form I-130A in seconds with AI (5:12)
+00:00 What form I-130A is
+00:35 Why other how-to guides take 30+ minutes
+01:06 Download the form and upload it to Instafill
+01:34 Submitting the source data
+01:51 What is in the data
+02:17 Why unstructured data is the hard part
+02:55 Reviewing the filled form - number fields
+03:13 Checkboxes, address and date
+03:42 Employer information
+04:01 Download the PDF and flatten it
+04:27 No reason to fill these forms by hand
+04:49 Privacy - deleting your data

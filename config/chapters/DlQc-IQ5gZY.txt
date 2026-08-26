@@ -1,0 +1,21 @@
+# Instafill.ai August 2025 Core Updates Review (live demo) (17:39)
+00:00 Waiting for everyone to join
+02:30 The two updates covered today
+03:16 The Aetna insurance form
+03:48 Uploading the form
+04:25 The discharge summary source document
+05:06 The medical claim form source document
+05:46 Attaching the documents, and how many is too many
+06:32 103 fields, checkboxes and tables
+07:12 Why PDF attachments take time to parse
+08:02 Downloading the form flat
+08:40 Checking the filled result
+09:28 What changed: filling tables row by row
+10:39 Second update: PDFs as source documents
+11:26 What the PDF parsing update fixed
+12:09 Going page by page, and the context window limit
+13:03 Questions, and who gets these updates
+13:28 Hinting where the table is
+14:15 Does source data have to be a table?
+15:29 Treating a list as a table
+16:22 Wrap-up and invitation

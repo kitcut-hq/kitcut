@@ -1,0 +1,10 @@
+# How to fill out form CMS 1763 using AI (3:24)
+00:00 Filling CMS 1763 with AI instead of by hand
+00:10 Find and download the form from Google
+00:24 Upload the form to Instafill.ai
+00:57 Paste unstructured data and submit
+01:39 Why retrieving the data is the slow part
+02:02 Checking the filled name, date and address fields
+02:31 Download the file, editable or flat
+02:59 Why this is a job for AI
+03:07 Filling the same form from the catalog

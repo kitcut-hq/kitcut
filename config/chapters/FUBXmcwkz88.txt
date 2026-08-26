@@ -1,0 +1,18 @@
+# How to use custom profiles in Instafill.ai for W-9, 1099-MISC and more (12:33)
+# Hand-written, checked against transcripts/FUBXmcwkz88.words.json -- every mark
+# lands on the sentence that opens its section. Not published yet.
+00:00 What custom profiles are
+01:02 Creating a profile
+01:26 Uploading a file with your details
+01:49 Naming and saving the profile
+02:13 Filling a form with the profile
+03:38 The filled form, and a second one
+04:51 The second form filled
+05:24 Why this saves time and errors
+06:13 Example: an accountant with contractors
+06:55 Creating a second profile as free text
+07:45 Filling a W-9 with the second profile
+08:42 Trying form 945, and what these forms share
+09:50 What it won't fill in
+10:22 Summary for accountants
+11:44 Wrap-up and support

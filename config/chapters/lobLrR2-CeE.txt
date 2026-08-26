@@ -1,0 +1,8 @@
+# How to fill out IRS Form 1099-SA using AI (3:12)
+00:00 What this video shows
+00:10 Download the form from the IRS site
+00:31 Upload it to Instafill
+00:54 Prepare the data to paste in
+01:19 Run the fill and what affects the wait
+01:58 Check the filled fields
+02:42 Bulk filling from a spreadsheet

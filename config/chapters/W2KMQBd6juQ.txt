@@ -1,0 +1,13 @@
+# How to fill out a medical report form using AI (5:01)
+00:00 What this walkthrough covers
+00:23 Uploading the form to Instafill
+00:35 Input tab vs Files tab
+01:07 The AI-generated CSV sample data
+01:51 How long the fill takes
+02:17 Form filled: which sections belong to patient vs doctor
+02:49 Checking fields and checkboxes
+03:11 Preferred language and remaining fields
+03:33 Social insurance number on every page
+03:52 Accuracy of the filled data
+04:14 Testing with real data
+04:37 Downloading and printing the PDF
