@@ -12,9 +12,21 @@ model download, fast enough to sample a whole clip in seconds. It is not
 state-of-the-art and does not need to be -- the output is smoothed hard and then
 reduced to a few keys, so isolated misses and jitter never reach the crop.
 
-Where no face is found -- b-roll, cutaways, the back of a head -- the last known
-position is held. That is the honest default, but it is a guess: review the
-result and hand-edit keys for inserts that need a different framing.
+The default `--mode hybrid` splits each clip at its shot boundaries and decides
+every shot separately, because measuring showed the pan-vs-static argument has
+no global answer:
+
+  static  the face barely moves in this shot -- freeze the window
+  pan     it moves -- track it
+  pad     no face at all -- do not crop; show the whole frame letterboxed over
+          a blurred fill, the only way a full-width burned-in graphic survives
+
+`--mode compare` measures all three against each other and writes nothing, which
+is how that default was chosen rather than guessed. `--mode pan` is the older
+behaviour and needs no scenedetect.
+
+A `pad` decision is only ever "no face was found here". That is usually b-roll,
+but it is also what a shot where the subject looks away looks like. Review them.
 
 Invoke as:  python -X utf8 -E scripts/auto-reframe.py --manifest config/clips/<id>-vertical.json
 """
@@ -108,6 +120,14 @@ def smooth(samples, src_w, half_win, cut_jump, dead, default_x):
     return out
 
 
+def _have_scenedetect():
+    try:
+        import scenedetect  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
 def detect_shots(src, start, dur, threshold=27.0):
     """Shot boundaries inside the clip's span, in seconds from clip start.
 
@@ -157,6 +177,61 @@ def shot_keys(samples, shots, x_lo, x_hi, default_x, min_hits=0.2, snap=0.05):
     return keys, flagged
 
 
+def hybrid_keys(samples, shots, xs, x_lo, x_hi, default_x, dur,
+                min_hits=0.2, static_spread=90.0, snap=0.05,
+                dead=26.0, min_gap=0.6):
+    """Decide each shot on its own terms: static, pan, or don't crop at all.
+
+    Measuring per-shot showed the pan/static argument is not global -- a static
+    frame wins where the subject sits still and loses badly where they walk. So
+    the spread of the face within a shot picks the treatment, and a shot with no
+    subject is not cropped at all but letterboxed over a blurred background,
+    which is the only way a full-width burned-in graphic survives 9:16.
+
+    Returns (keys, pads) where pads is [[t0, t1], ...] to letterbox.
+    """
+    ends = shots[1:] + [dur]
+    keys, pads, prev_x, plan = [], [], default_x, []
+    for t0, t1 in zip(shots, ends):
+        hits = [cx for t, cx in samples if t0 <= t < t1 and cx is not None]
+        n = sum(1 for t, _ in samples if t0 <= t < t1)
+        if not n:
+            continue
+        if len(hits) < max(1, int(n * min_hits)):
+            pads.append([round(t0, 3), round(t1, 3)])
+            plan.append("pad")
+            continue
+
+        hs = sorted(hits)
+        spread = hs[int(len(hs) * 0.9)] - hs[int(len(hs) * 0.1)]
+        seg = [(t, x) for (t, _), x in zip(samples, xs) if t0 <= t < t1]
+        if spread <= static_spread or len(seg) < 3:
+            pts = [(t0, float(np.median(hits)))]
+            plan.append("static")
+        else:
+            pts = [seg[0]]
+            for t, x in seg[1:]:
+                if abs(x - pts[-1][1]) >= dead and t - pts[-1][0] >= min_gap:
+                    pts.append((t, x))
+            plan.append("pan")
+
+        for j, (t, x) in enumerate(pts):
+            x = min(max(x, x_lo), x_hi)
+            t = t0 if j == 0 else t
+            if keys and j == 0:
+                keys.append([round(t - snap, 3), keys[-1][1]])   # hold, then snap
+            keys.append([round(t, 3), round(x)])
+            prev_x = x
+    if not keys:
+        keys = [[0.0, round(default_x)]]
+    keys[0][0] = 0.0
+    return keys, pads, plan
+
+
+def in_pads(t, pads):
+    return any(a <= t < b for a, b in pads)
+
+
 def track_at(keys, t):
     """Evaluate the keyframe track in Python -- same piecewise-linear shape that
     cut-clips.crop_x_expr hands to ffmpeg, so the report measures what renders."""
@@ -170,17 +245,21 @@ def track_at(keys, t):
     return float(keys[-1][1])
 
 
-def measure(samples, keys, cw):
+def measure(samples, keys, cw, pads=()):
     """How well a track holds the subject, and how much it moves doing it.
 
     Only frames with an actual detection are scored -- on a held frame there is
     no ground truth, and counting it would flatter whichever track happened to
     freeze there.
     """
-    errs = [abs(cx - track_at(keys, t)) for t, cx in samples if cx is not None]
+    # A letterboxed stretch shows the whole frame, so "off-centre" is meaningless
+    # there -- scoring it as perfect would flatter the hybrid for free.
+    errs = [abs(cx - track_at(keys, t)) for t, cx in samples
+            if cx is not None and not in_pads(t, pads)]
     half = cw / 2.0
     move = sum(abs(track_at(keys, b[0]) - track_at(keys, a[0]))
-               for a, b in zip(samples, samples[1:]))
+               for a, b in zip(samples, samples[1:])
+               if not in_pads(a[0], pads))
     span = max(samples[-1][0] - samples[0][0], 1e-6)
     if not errs:
         return None
@@ -224,10 +303,14 @@ def main():
     ap.add_argument("--deadband", type=float, default=26.0,
                     help="source px a key must move to be worth emitting")
     ap.add_argument("--min-gap", type=float, default=0.6, help="seconds between keys")
-    ap.add_argument("--mode", choices=("pan", "shot", "compare"), default="pan",
-                    help="pan: smooth track. shot: one static framing per shot, "
-                         "snapping at cuts. compare: measure both, write nothing.")
+    ap.add_argument("--mode", choices=("pan", "shot", "hybrid", "compare"), default="hybrid",
+                    help="pan: smooth track. shot: one static framing per shot. "
+                         "hybrid: per shot pick static/pan, letterbox shots with "
+                         "no subject. compare: measure all three, write nothing.")
     ap.add_argument("--scene-threshold", type=float, default=27.0)
+    ap.add_argument("--static-spread", type=float, default=90.0,
+                    help="source px of face movement within a shot below which "
+                         "that shot is framed statically")
     args = ap.parse_args()
 
     for tool in ("ffmpeg", "ffprobe"):
@@ -262,38 +345,59 @@ def main():
         pan = to_keys([t for t, _ in samples], xs, x_lo, x_hi,
                       args.deadband, args.min_gap)
 
-        shot = flagged = None
-        if args.mode in ("shot", "compare"):
+        shots = shot = flagged = hyb = pads = plan = None
+        mode = args.mode
+        if mode != "pan" and not _have_scenedetect():
+            print("scenedetect not installed -- falling back to --mode pan")
+            mode = "pan"
+        if mode in ("shot", "hybrid", "compare"):
             shots = detect_shots(src, start, end - start, args.scene_threshold)
             shot, flagged = shot_keys(samples, shots, x_lo, x_hi, src_w / 2.0)
+            hyb, pads, plan = hybrid_keys(samples, shots, xs, x_lo, x_hi,
+                                          src_w / 2.0, end - start,
+                                          static_spread=args.static_spread,
+                                          dead=args.deadband, min_gap=args.min_gap)
 
-        if args.mode == "compare":
-            a, b = measure(samples, pan, cw), measure(samples, shot, cw)
-            print("%-20s %4.1fs  faces %3.0f%%  shots %d%s"
+        if mode == "compare":
+            padded = sum(b - a for a, b in pads)
+            print("%-20s %4.1fs  faces %3.0f%%  shots %d  plan %s  padded %.0f%%"
                   % (clip["id"], end - start, 100.0 * hits / max(1, len(samples)),
-                     len(shots), "  (%d without a subject)" % len(flagged) if flagged else ""))
-            for name, r, k in (("pan ", a, pan), ("shot", b, shot)):
+                     len(shots), "/".join(plan) or "-", 100.0 * padded / (end - start)))
+            rows = (("pan   ", measure(samples, pan, cw), pan),
+                    ("shot  ", measure(samples, shot, cw), shot),
+                    ("hybrid", measure(samples, hyb, cw, pads), hyb))
+            for name, r, k in rows:
+                if r is None:
+                    continue
                 print("    %s  off-centre mean %5.1fpx  p95 %5.1fpx  "
                       "near-edge %4.1f%%  out %4.1f%%  motion %5.1f px/s  keys %2d"
                       % (name, r["mean"], r["p95"], r["edge"], r["out"], r["move"], len(k)))
-            comparison[clip["id"]] = (a, b)
+            comparison[clip["id"]] = tuple(r for _, r, _ in rows)
             continue
 
-        keys = shot if args.mode == "shot" else pan
-        result[clip["id"]] = keys
+        if mode == "hybrid":
+            result[clip["id"]] = {"keys": hyb, "pad": pads}
+            keys = hyb
+        else:
+            keys = shot if mode == "shot" else pan
+            result[clip["id"]] = keys
+        extra = ""
+        if mode == "hybrid":
+            extra = "  shots %d (%s)" % (len(shots), "/".join(plan) or "-")
+        elif mode == "shot":
+            extra = "  shots %d" % len(shots)
         print("%-20s %4.1fs  faces %3d/%3d (%3.0f%%)  keys %2d  x %4d..%4d%s"
               % (clip["id"], end - start, hits, len(samples),
                  100.0 * hits / max(1, len(samples)), len(keys),
-                 min(k[1] for k in keys), max(k[1] for k in keys),
-                 "  shots %d" % len(shots) if args.mode == "shot" else ""))
+                 min(k[1] for k in keys), max(k[1] for k in keys), extra))
 
     if args.mode == "compare":
         def avg(i, k):
-            v = [c[i][k] for c in comparison.values()]
+            v = [c[i][k] for c in comparison.values() if c[i]]
             return sum(v) / max(1, len(v))
-        print("\n%-6s %10s %10s %12s %10s" % ("", "mean", "p95", "near-edge", "motion"))
-        for name, i in (("pan", 0), ("shot", 1)):
-            print("%-6s %8.1fpx %8.1fpx %10.1f%% %8.1f px/s"
+        print("\n%-7s %10s %10s %12s %10s" % ("", "mean", "p95", "near-edge", "motion"))
+        for name, i in (("pan", 0), ("shot", 1), ("hybrid", 2)):
+            print("%-7s %8.1fpx %8.1fpx %10.1f%% %8.1f px/s"
                   % (name, avg(i, "mean"), avg(i, "p95"), avg(i, "edge"), avg(i, "move")))
         return
 

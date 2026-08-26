@@ -132,14 +132,28 @@ A vertical manifest adds three keys to the ordinary one:
 "handle":   { "text": "@name", "preset": "config/handles/vertical.json" }
 ```
 
-- **The crop moves.** `auto-reframe.py` samples each clip, finds the largest
-  face (Haar, frontal + profile, on small greyscale frames), smooths hard and
-  emits a few `[[t, centre_x], ...]` keys to a sidecar. `cut-clips.py` turns
-  those into a crop whose `x` is an expression in `t`, so the window pans
-  between keys and snaps at cuts. It prints a detection rate per clip — on this
-  material 74–99%. Where nothing is found it holds the last position, which is a
-  guess: look at the result.
-- Per-clip `crop_x` (static) or `crop_keys` (inline) override the sidecar.
+- **Every shot is decided separately.** `auto-reframe.py` splits each clip at its
+  shot boundaries and picks a treatment per shot: **static** where the face
+  barely moves, **pan** where it does, and **pad** — don't crop at all, show the
+  whole frame letterboxed over a blurred fill — where there is no face. Keys go
+  to a sidecar that `cut-clips.py` turns into a crop whose `x` is an expression
+  in `t`.
+- **That default was measured, not guessed.** `--mode compare` scores each
+  strategy on how far the subject sits from the crop centre and how much the
+  window moves. Over these five episodes:
+
+  | | off-centre mean | p95 | near-edge | motion |
+  |---|---|---|---|---|
+  | `pan` (track everything) | 27.9 px | 77 px | 0.5% | 10.5 px/s |
+  | `shot` (static per shot) | 32.0 px | 102 px | 1.7% | **4.0 px/s** |
+  | `hybrid` (default) | **24.8 px** | **73 px** | **0.5%** | 8.4 px/s |
+
+  `shot` alone is steadier but loses the subject; it wins outright where she
+  sits still and fails where she walks. `hybrid` beat both on every clip.
+- **`pad` only ever means "no face found here".** Usually that is b-roll, but a
+  shot where the subject looks away reads the same. Review them.
+- Per-clip `crop_x` (static), `crop_keys` (inline) and `crop_pad` override the
+  sidecar.
 - **Captions get a slice, not a copy.** The ASS builder's `--range` /
   `--time-offset` already exist, so each clip is a view onto the one transcript
   and no sliced word files are written. Sync is still proven per clip before
@@ -148,9 +162,11 @@ A vertical manifest adds three keys to the ordinary one:
   scale by the HEIGHT ratio, so vertical makes text ×1.78 bigger in a narrower
   frame; the badge scales by the WIDTH ratio, so a landscape preset comes out
   tiny.
-- **A crop cannot save wide burned-in graphics.** Full-width lower-thirds and
-  b-roll in the source get sliced — no 607 px window contains them. Inspect
-  inserts and decide per clip.
+- **A crop cannot save wide burned-in graphics** — no 607 px window contains a
+  full-width lower-third. That is what `pad` is for: those shots are letterboxed
+  whole instead of sliced. It is switched by `enable` on an overlay rather than
+  by cutting and concatenating segments, so it still costs one encode. Captions
+  and the badge composite on top, so they are never letterboxed with the shot.
 
 ## The handle badge
 
@@ -205,8 +221,9 @@ matters to you.
 ## Requirements
 
 - Python 3.12+ with `faster-whisper`, `ctranslate2`, `fonttools`, `numpy`, `pillow`
-- `opencv-python<5` — only for `auto-reframe.py`. The pin is load-bearing:
-  OpenCV 5 ships no Haar cascades, and its `FaceDetectorYN` replacement wants a
+- `opencv-python<5` and `scenedetect` — only for `auto-reframe.py`, which falls
+  back to `--mode pan` without the latter. The OpenCV pin is load-bearing:
+  version 5 ships no Haar cascades, and its `FaceDetectorYN` replacement wants a
   model downloaded from an external host.
 - `ffmpeg`/`ffprobe` built with **libass** (check: `ffmpeg -filters | grep ass`)
 - `yt-dlp`

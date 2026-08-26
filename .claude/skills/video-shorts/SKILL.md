@@ -124,25 +124,51 @@ landscape build stays intact:
 Order inside the single encode is crop → scale → captions → badge, so captions
 and badge are both sized for the frame the viewer sees.
 
-**Face-track the crop first.** A fixed centre crop is a bet that the subject is
-centred; over a real video they are not.
+**Reframe first.** A fixed centre crop is a bet that the subject is centred;
+over a real video they are not.
 
 ```powershell
 python -X utf8 -E scripts/auto-reframe.py --manifest config/clips/<id>-vertical.json
 ```
 
 It writes `config/clips/<id>-vertical.reframe.json`, which `cut-clips.py` picks
-up automatically and turns into a crop whose `x` is an expression in `t` — the
-window pans between keys and snaps at scene cuts. Report the detection rate it
-prints; below ~60% means it mostly held a guess and the result needs eyes.
-Per-clip `crop_x` (static) or `crop_keys` (inline `[[t, x], ...]`) in the
-manifest override it.
+up automatically. The default `--mode hybrid` splits each clip at its shot
+boundaries and decides every shot on its own:
 
-**What auto-reframe cannot fix:** b-roll and full-width lower-thirds burned into
-the source get sliced by any crop — a wide graphic has no 607 px window that
-contains it. Check inserts specifically and tell the user which clips lose
-source graphics; the options are accepting it, a hand-written `crop_keys`, or
-leaving that clip landscape.
+| | when | result |
+|---|---|---|
+| `static` | face barely moves in the shot | window frozen |
+| `pan` | face moves | window tracks it |
+| `pad` | no face found | **not cropped** — whole frame letterboxed over a blurred fill |
+
+`pad` is what saves full-width burned-in graphics and b-roll, which no 607 px
+window can contain. It is switched by `enable` on an overlay, so it still costs
+one encode, and captions and badge composite on top of it.
+
+Report the detection rate and the per-shot plan it prints. Two things to check
+by eye every time:
+
+- **A `pad` decision only ever means "no face found here."** Usually b-roll, but
+  a shot where the subject looks down or away reads identically — one clip here
+  letterboxes a shot she is actually in, because her face was not visible.
+- Below ~60% detection means it mostly held a guess.
+
+Per-clip `crop_x` (static), `crop_keys` (inline `[[t, x], ...]`) and `crop_pad`
+override the sidecar.
+
+**Do not swap the default on a hunch — measure.** `--mode compare` scores every
+strategy on off-centre distance and window motion, writing nothing:
+
+```powershell
+python -X utf8 -E scripts/auto-reframe.py --manifest ... --mode compare
+```
+
+That is how `hybrid` was chosen: `pan` 27.9 px mean / 77 p95 / 10.5 px/s,
+`shot` 32.0 / 102 / 4.0, `hybrid` 24.8 / 73 / 8.4 — hybrid beat both on every
+clip. Note the off-centre metric is scored against detected faces, so it
+structurally favours a face-following track; the near-edge and out-of-frame
+columns are the ones describing real damage. `--mode pan` is the older behaviour
+and is the automatic fallback when `scenedetect` is not installed.
 
 ### How the tracking actually works, and where it breaks
 
@@ -164,13 +190,16 @@ Deliberately the cheapest thing that worked, so know what you are trusting:
 If better framing is asked for, the worked-out upgrade path, best value first —
 all of these install cleanly on this machine's Python 3.13:
 
-1. **`scenedetect`** → one static crop per shot instead of a continuous pan, and
-   a blur-pad fallback for shots that are mostly a wide graphic. This targets
-   the visible defect (b-roll) and removes drift; a shot boundary is just two
-   keyframes a few frames apart, so it composes with what already exists.
+1. ~~`scenedetect` per-shot framing + blur-pad fallback~~ — **done**, this is
+   `--mode hybrid`. Worth knowing what the measurement showed: per-shot framing
+   *alone* was a regression (steadier, but it loses the subject), and scene
+   detection alone did **not** fix the b-roll — the pad fallback did. Both
+   halves were needed; the first half shipped alone would have looked like a
+   failed idea.
 2. **YuNet** (`cv2.FaceDetectorYN`, already in the installed cv2 — needs one
    ~350 KB ONNX from opencv_zoo) to replace Haar. Its 5 landmarks let you place
-   the eyeline on the upper third, i.e. finally drive `y`.
+   the eyeline on the upper third, i.e. finally drive `y`. It would also cut the
+   false `pad` decisions, which are purely detection misses.
 3. **Kalman / constant-velocity filter** over detections, replacing hold-last.
 4. Person detection (`ultralytics`) only if faces genuinely are not the subject.
 
@@ -242,12 +271,13 @@ The cutter already asserts output duration against the plan. Additionally:
 | `scripts/transcript-outline.py` | transcript → skimmable outline; `--find` a phrase's time |
 | `scripts/cut-clips.py` | manifest → clips; crop, captions and badge in one encode |
 | `scripts/handle-overlay.py` | badge rendering + ffmpeg animation graph |
-| `scripts/auto-reframe.py` | face-tracked crop keyframes for the vertical build |
+| `scripts/auto-reframe.py` | per-shot framing decisions; `--mode compare` measures them |
 | `config/clips/<id>.json` | one manifest per source video |
 | `config/handles/default.json` / `vertical.json` | badge style + motion, per orientation |
 | `config/presets/red-card-vertical.json` | caption preset for a 9:16 frame |
 | `config/clips/egr4Y4oZgLM.json` | working example (5 episodes, handle, Ukrainian phrases) |
 | `config/clips/egr4Y4oZgLM-vertical.json` | the same five, vertical + auto-reframed |
 
-Requires `opencv-python<5` for auto-reframe; everything else is the captions
+Requires `opencv-python<5` and `scenedetect` for auto-reframe (without
+scenedetect it falls back to `--mode pan`); everything else is the captions
 pipeline's existing dependency set.

@@ -106,6 +106,38 @@ def crop_x_expr(keys, x_lo, x_hi, cw):
     return "if(lt(t,%g),%g,%s)" % (pts[0][0], pts[0][1], e)
 
 
+def vertical_chain(crop_filter, pads, out_w, out_h, blur_h=480):
+    """Crop most of the time; letterbox the shots that have no subject.
+
+    A wide burned-in graphic has no 9:16 window that contains it, so those shots
+    are shown whole over a blurred fill instead of being sliced. Both treatments
+    are composited onto the same blurred base and switched by `enable`, which
+    keeps it to one pass -- the alternative, cutting each shot separately and
+    concatenating, would re-encode every segment.
+
+    The fill is blurred at 270x480 and then scaled up rather than blurred at
+    full size: it is out of focus by definition, so nobody can tell, and it
+    costs a fraction as much.
+    """
+    if not pads:
+        return "[0:v]%s,scale=%d:%d:flags=lanczos,setsar=1[vcomp]" % (
+            crop_filter, out_w, out_h), "vcomp"
+
+    blur_w = int(round(blur_h * out_w / float(out_h)))
+    hit = "+".join("between(t,%g,%g)" % (a, b) for a, b in pads)
+    e = _handle.esc
+    parts = [
+        "[0:v]split=3[bgs][fgs][pds]",
+        "[bgs]scale=-2:%d,crop=%d:%d,boxblur=10:2,scale=%d:%d,setsar=1[bgv]"
+        % (blur_h, blur_w, blur_h, out_w, out_h),
+        "[fgs]%s,scale=%d:%d:flags=lanczos,setsar=1[fgv]" % (crop_filter, out_w, out_h),
+        "[pds]scale=%d:-2,setsar=1[pdv]" % out_w,
+        "[bgv][fgv]overlay=0:0:enable=%s[vc1]" % e("not(%s)" % hit),
+        "[vc1][pdv]overlay=0:(H-h)/2:enable=%s[vcomp]" % e(hit),
+    ]
+    return ";".join(parts), "vcomp"
+
+
 def build_captions(clip, words_path, style, start, end, w, h, fps, tmpdir,
                    verify=True, samples=24, overlays=None, fontsdir="fonts"):
     """Render an ASS for just this clip's span, rebased to t=0.
@@ -196,18 +228,18 @@ def resolve(clip, words, pad_head, pad_tail):
     return max(0.0, start), end
 
 
-def cut(src, dst, start, dur, render, copy, overlay=None, ops=None, base="vbase"):
+def cut(src, dst, start, dur, render, copy, overlay=None, pre_chain=None, base="vbase"):
     """overlay is (png_paths, filter_complex, out_label) from handle-overlay;
-    ops is a list of plain video filters (crop, scale, ass) applied first."""
+    pre_chain is a filter graph ending in [base] that runs before the badge."""
     extra = []
     if copy:
-        if overlay or ops:
+        if overlay or pre_chain:
             sys.exit("--copy cannot crop, caption or brand: stream copy does not filter")
         args = ["-c", "copy"]
     else:
         chain = []
-        if ops:
-            chain.append("[0:v]%s[%s]" % (",".join(ops), base))
+        if pre_chain:
+            chain.append(pre_chain)
         if overlay:
             pngs, fc, label = overlay
             for p in pngs:
@@ -365,20 +397,29 @@ def main():
             print("skip (exists) %s" % dst)
             continue
         print("cutting %s ..." % os.path.basename(dst), flush=True)
-        ops = []
+        parts, last = [], None
         if vert:
             cw, ch, cx, cy = crop_box(clip, src_w, src_h, out_w, out_h)
-            keys = clip.get("crop_keys") or reframe.get(clip["id"])
+            entry = clip.get("crop_keys") or reframe.get(clip["id"])
+            # the sidecar is either a bare key list (pan/shot) or {keys, pad}
+            if isinstance(entry, dict):
+                keys, pads = entry.get("keys"), entry.get("pad") or []
+            else:
+                keys, pads = entry, clip.get("crop_pad") or []
             if keys:
                 # No eval=frame here: crop has no such option (that is scale and
                 # overlay). Its x/y are flagged runtime-tunable and already
                 # re-evaluated every frame, which is what makes the pan work.
-                ops.append("crop=%d:%d:x=%s:y=%d"
-                           % (cw, ch, _handle.esc(crop_x_expr(keys, cw / 2.0,
-                                                              src_w - cw / 2.0, cw)), cy))
+                crop_f = "crop=%d:%d:x=%s:y=%d" % (
+                    cw, ch, _handle.esc(crop_x_expr(keys, cw / 2.0,
+                                                    src_w - cw / 2.0, cw)), cy)
             else:
-                ops.append("crop=%d:%d:%d:%d" % (cw, ch, cx, cy))
-            ops += ["scale=%d:%d:flags=lanczos" % (out_w, out_h), "setsar=1"]
+                crop_f = "crop=%d:%d:%d:%d" % (cw, ch, cx, cy)
+            chain, last = vertical_chain(crop_f, pads, out_w, out_h)
+            parts.append(chain)
+            if pads:
+                print("  letterboxing %d shot(s), %.0f%% of the clip"
+                      % (len(pads), 100.0 * sum(b - a for a, b in pads) / (end - start)))
         if caps:
             # captions are drawn AFTER the crop, so they are sized for the frame
             # the viewer sees rather than cropped along with the source pixels
@@ -388,9 +429,14 @@ def main():
                                  samples=int(caps.get("samples", 24)),
                                  overlays=caps.get("overlays"),
                                  fontsdir=caps.get("fontsdir", "fonts"))
-            ops.append("ass=filename=%s:fontsdir=%s:shaping=simple"
-                       % (ass, caps.get("fontsdir", "fonts")))
-        cut(src, dst, start, end - start, render, args.copy, overlay, ops, base)
+            # captions go on top of the composite, so they are never letterboxed
+            # along with the shot underneath them
+            parts.append("[%s]ass=filename=%s:fontsdir=%s:shaping=simple[%s]"
+                         % (last or "0:v", ass, caps.get("fontsdir", "fonts"), base))
+        elif last:
+            parts.append("[%s]null[%s]" % (last, base))
+        pre_chain = ";".join(parts) if parts else None
+        cut(src, dst, start, end - start, render, args.copy, overlay, pre_chain, base)
         got, want = probe(dst), end - start
         if abs(got - want) > 0.5:
             sys.exit("%s: duration %.2fs, expected %.2fs" % (dst, got, want))
