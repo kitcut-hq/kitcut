@@ -126,6 +126,22 @@ def main():
         sys.exit(f"video {vid} not found or not visible to this account")
     snippet = r["items"][0]["snippet"]
 
+    # Reading a video works for anyone; only its owner may write it. Checking
+    # the token's channel here turns an opaque "403 Forbidden" from the update
+    # into the actual problem, which is almost always that the consent screen's
+    # channel picker chose a personal account over the brand channel.
+    mine = yt.channels().list(part="snippet", mine=True).execute().get("items")
+    owner = snippet.get("channelId")
+    if mine and owner not in {c["id"] for c in mine}:
+        sys.exit(
+            f"signed in as {mine[0]['snippet']['title']!r} "
+            f"({mine[0]['id']}), but this video belongs to "
+            f"{snippet.get('channelTitle')!r} ({owner}).\n"
+            f"Only the owning channel can edit it. Delete "
+            f"{os.path.relpath(TOKEN, _env.ROOT)} and rerun; at the Google "
+            f"consent screen pick the {snippet.get('channelTitle')!r} channel "
+            f"rather than a personal account.")
+
     new_desc, replaced = ch.splice(snippet.get("description", ""), block)
     if len(new_desc) > DESCRIPTION_LIMIT:
         sys.exit(f"resulting description is {len(new_desc)} chars; "

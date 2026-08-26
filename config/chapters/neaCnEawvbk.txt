@@ -1,0 +1,20 @@
+# How to fill out BPO forms with AI | Residential Broker Price Opinion (9:14)
+00:00 What a Broker Price Opinion is
+00:26 Where to get the BPO form
+00:52 Uploading the form
+01:12 A three-page form with 500+ fields
+01:38 The seven sections, and the adjustment grids
+02:06 The documents you need: subject property and scope
+02:31 The comparables: three closed sales, three active listings
+02:43 Name each file for what it is, so the AI can place it
+02:56 Submitting the form
+03:22 A look at the source documents
+04:12 Under two minutes, against 45 by hand
+05:19 How data from each comparable is routed to its section
+06:17 Reviewing the filled form: subject and scope
+06:54 Checking an active listing against the grid
+07:24 Checking a sold listing
+07:37 Why this is punishing by hand: hundreds of fields, six comparables
+08:14 One wrong adjustment and the report gets kicked back
+08:26 Downloading the finished report
+08:57 Wrap-up
