@@ -11,10 +11,15 @@ Usage:
 """
 
 import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 import json
 import os
 import argparse
 from pathlib import Path
+
 
 try:
     import requests

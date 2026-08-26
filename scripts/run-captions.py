@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """One-command pipeline: video URL (or local file) -> captioned MP4.
 
-    python -X utf8 -E scripts/run-captions.py --url <URL> --style config/presets/red-card.json
+    python scripts/run-captions.py --url <URL> --style config/presets/red-card.json
 
 Stages: download audio transcribe overlays ass verify render
 - Resumable: a stage is skipped when its artifact already exists.
@@ -23,31 +23,13 @@ scaled automatically to the actual video dimensions.
 """
 import sys, os, json, argparse, subprocess, time, shutil, hashlib, struct
 
-# Drop any site-packages that belongs to a DIFFERENT Python install. A stale
-# machine-wide PYTHONPATH gets prepended to sys.path and shadows this
-# interpreter's packages with incompatible ones (or, once that install is
-# removed, with nothing at all). sys.path is frozen at startup so clearing
-# os.environ in-process cannot help -- hence also `-E` at the call site.
-import sysconfig as _sc, site as _site
-def _norm(p):
-    return os.path.normcase(os.path.abspath(p))
-_own = {_norm(p) for p in (_sc.get_paths().get("purelib"),
-                           _sc.get_paths().get("platlib")) if p}
-for _getter in (lambda: [_site.getusersitepackages()], _site.getsitepackages):
-    try:
-        _own.update(_norm(p) for p in _getter())
-    except Exception:
-        pass          # user site is where Store Python puts pip installs
-sys.path[:] = [p for p in sys.path
-               if "site-packages" not in p.lower() or _norm(p) in _own]
-for _s in (sys.stdout, sys.stderr):
-    try:
-        _s.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+
+
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PY = [sys.executable, "-X", "utf8", "-E"]
+PY = _env.PY
 # Invoke yt-dlp as a MODULE, never as a bare `yt-dlp` command. The console-script
 # shim on PATH hardcodes the interpreter it was installed by, so it dies silently
 # (exit 1, zero output) if that Python is removed or upgraded -- and a freshly
@@ -55,7 +37,7 @@ PY = [sys.executable, "-X", "utf8", "-E"]
 # Going through sys.executable guarantees we run the yt-dlp that belongs to the
 # same interpreter as everything else in this pipeline.
 YTDLP = PY + ["-m", "yt_dlp"]
-ENV = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+ENV = _env.ENV
 STAGES = ["download", "audio", "transcribe", "overlays", "ass", "verify", "render"]
 
 

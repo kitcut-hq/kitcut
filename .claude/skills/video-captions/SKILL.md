@@ -9,7 +9,7 @@ One command, from URL to captioned MP4:
 
 ```powershell
 cd C:\instafill\video-editing
-python -X utf8 -E scripts/run-captions.py --url "<YOUTUBE_URL>" --style config/presets/red-card.json
+python scripts/run-captions.py --url "<YOUTUBE_URL>" --style config/presets/red-card.json
 ```
 
 Local file instead: `--input path\to\video.mp4 --id myclip`
@@ -27,21 +27,21 @@ fails mid-run, transcription falls back automatically (cuda/int8 → cpu/int8).
 ## Always do these two things first
 
 1. **Check the audio tracks.**
-   `python -X utf8 -E -m yt_dlp -F <URL> | grep "audio only"`. If you see both an
+   `.venv/Scripts/python.exe -m yt_dlp -F <URL> | grep "audio only"`. If you see both an
    `original` and a `dubbed-auto` track, the pipeline's selector already prefers
    `original` — but confirm the transcript's detected language after the run.
    Transcribing a YouTube AI dub silently produces a perfect transcript of the
    wrong language. One Shorts video carried **21** audio tracks (1 original + 20
    AI dubs), so this is not a rare edge case.
 
-   Always invoke yt-dlp as `python -m yt_dlp`, never as bare `yt-dlp` — see traps.
+   Always invoke yt-dlp as `.venv/Scripts/python.exe -m yt_dlp`, never as bare `yt-dlp` — see traps.
 2. **Pick or derive the style.** Never edit code to change appearance. Either use
    a preset in `config/presets/`, or measure a reference frame and write a new one.
 
 ## Deriving a style from a reference video
 
 ```powershell
-python -X utf8 -E -m yt_dlp --download-sections "*MM:SS-MM:SS" -f "<vfmt>+<afmt>" -o "temp/ref.%(ext)s" "<URL>"
+.venv/Scripts/python.exe -m yt_dlp --download-sections "*MM:SS-MM:SS" -f "<vfmt>+<afmt>" -o "temp/ref.%(ext)s" "<URL>"
 ffmpeg -i temp/ref.mp4 -vf "fps=5" -q:v 3 "temp/ref/f_%03d.jpg"
 ```
 Read the frames, then measure the caption band on a **native-resolution** frame
@@ -114,11 +114,7 @@ order) and refuses to report success if any check fails.
 
 ## Non-obvious traps (all already handled — do not "fix" them)
 
-- **`python -X utf8 -E` is mandatory.** A machine-wide `PYTHONPATH` points at
-  another Python install and breaks `import faster_whisper`. `sys.path` is frozen
-  at startup so scrubbing `os.environ` in-process does nothing, and a venv does
-  not help either. `-E` also disables UTF-8 stdio on this cp1252 console, hence
-  `-X utf8` too.
+- **The environment is fixed; run scripts as plain `python scripts/<name>.py`.** A machine-wide `PYTHONPATH` used to point at another Python install and break `import faster_whisper` -- and a venv did not help, because `PYTHONPATH` is prepended inside one too. It has been removed, and every script now imports `scripts/_env.py` first, which re-execs into `.venv` with a clean environment and forces UTF-8 stdio on this cp1252 console. Run `python scripts/check-env.py` if an import ever breaks again.
 - **libass sizes fonts by `usWinAscent + usWinDescent`, not `unitsPerEm`.** For
   Montserrat that is 1562 vs 1000, so a nominal 43 px renders at 0.64x. This is
   why `font.cap_height_px` exists — use it.
@@ -136,7 +132,7 @@ order) and refuses to report success if any check fails.
   PATH hardcodes the interpreter that installed it, so when that Python is removed
   or upgraded it dies *silently* — exit 1, zero bytes on stdout and stderr, no
   traceback to read. A reinstall often lands its replacement in a Scripts dir that
-  is not on PATH, so the dead shim keeps winning. Use `python -m yt_dlp`.
+  is not on PATH, so the dead shim keeps winning. Use `.venv/Scripts/python.exe -m yt_dlp`.
 - **Vertical video needs `--height 1920`.** The format selector filters on height,
   so the 1080 default picks a 608x1080 downscale of a 1080x1920 Short.
 - **Clamping caption width must budget for card padding.** Going landscape →

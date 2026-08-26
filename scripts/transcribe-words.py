@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Word-level transcription with faster-whisper (local, offline, GPU).
 
-MUST be invoked as:  python -X utf8 -E scripts/transcribe-words.py ...
+MUST be invoked as:  python scripts/transcribe-words.py ...
 
 Why: this machine has a global PYTHONPATH pointing at another Python install's
 site-packages, which gets prepended to this interpreter's sys.path and breaks
@@ -14,33 +14,15 @@ The header below makes the script survive a bare `python script.py` anyway.
 """
 import sys, os, json, argparse, time
 
-# --- layer 1: prune the poisoned 3.11 path even if -E was forgotten
-# Drop any site-packages that belongs to a DIFFERENT Python install. A stale
-# machine-wide PYTHONPATH gets prepended to sys.path and shadows this
-# interpreter's packages with incompatible ones (or, once that install is
-# removed, with nothing at all). sys.path is frozen at startup so clearing
-# os.environ in-process cannot help -- hence also `-E` at the call site.
-import sysconfig as _sc, site as _site
-def _norm(p):
-    return os.path.normcase(os.path.abspath(p))
-_own = {_norm(p) for p in (_sc.get_paths().get("purelib"),
-                           _sc.get_paths().get("platlib")) if p}
-for _getter in (lambda: [_site.getusersitepackages()], _site.getsitepackages):
-    try:
-        _own.update(_norm(p) for p in _getter())
-    except Exception:
-        pass          # user site is where Store Python puts pip installs
-sys.path[:] = [p for p in sys.path
-               if "site-packages" not in p.lower() or _norm(p) in _own]
-# --- layer 2: force UTF-8 stdio even if -X utf8 was forgotten
-for _s in (sys.stdout, sys.stderr):
-    try: _s.reconfigure(encoding="utf-8")
-    except Exception: pass
-# --- layer 3: ctranslate2 bundles its own libiomp5md.dll
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+
+# _env handles the poisoned path and UTF-8 stdio (layers 1 and 2).
+# --- ctranslate2 bundles its own libiomp5md.dll
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
-# --- layer 4: CUDA DLLs. ctranslate2 bundles cudnn64_9.dll but NOT cuBLAS, so
+# --- CUDA DLLs. ctranslate2 bundles cudnn64_9.dll but NOT cuBLAS, so
 # GPU inference dies with "Library cublas64_12.dll is not found". The pip
 # nvidia-* wheels drop the DLLs under site-packages/nvidia/<pkg>/bin, and since
 # Python 3.8 Windows does not search PATH for extension-module dependencies --
@@ -48,6 +30,7 @@ os.environ.setdefault("HF_HUB_OFFLINE", "1")
 # Search EVERY package root, not just purelib: a Microsoft Store Python puts pip
 # installs in the user site, so looking only at purelib finds nothing and CUDA
 # degrades to CPU silently.
+_own = _env.site_roots()
 _dirs = []
 for _root in sorted(_own):
     _nv = os.path.join(_root, "nvidia")
@@ -73,7 +56,7 @@ _fw = os.path.normcase(os.path.abspath(faster_whisper.__file__))
 if not any(_fw.startswith(p) for p in _own):
     sys.exit("FATAL: faster_whisper resolved outside this interpreter's "
              "site-packages (%s) -- a stale PYTHONPATH is shadowing it. "
-             "Invoke as: python -X utf8 -E" % _fw)
+             "Invoke as: python" % _fw)
 
 
 def main():

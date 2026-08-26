@@ -28,25 +28,22 @@ behaviour and needs no scenedetect.
 A `pad` decision is only ever "no face was found here". That is usually b-roll,
 but it is also what a shot where the subject looks away looks like. Review them.
 
-Invoke as:  python -X utf8 -E scripts/auto-reframe.py --manifest config/clips/<id>-vertical.json
+Invoke as:  python scripts/auto-reframe.py --manifest config/clips/<id>-vertical.json
 """
 import sys, os, json, argparse, subprocess, shutil
-from importlib import import_module
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+from importlib import import_module
+
 _outline = import_module("transcript-outline")
 _cut = import_module("cut-clips")
 
-for _s in (sys.stdout, sys.stderr):
-    try:
-        _s.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
 
 import numpy as np
 import cv2
 
-ENV = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+ENV = _env.ENV
 
 
 def sample_faces(src, start, dur, src_w, src_h, fps, probe_w=480, min_face=0.045):

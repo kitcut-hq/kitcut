@@ -7,7 +7,7 @@ lower-third card with the currently-spoken word highlighted.
 full reference — stages, presets, resuming, traps):
 
 ```powershell
-python -X utf8 -E scripts/run-captions.py --url "<URL>" --style config/presets/red-card.json
+python scripts/run-captions.py --url "<URL>" --style config/presets/red-card.json
 ```
 
 The manual per-stage commands below document the anatomy; artifact paths shown
@@ -33,21 +33,21 @@ ffmpeg -i sources/<ID>-1080p60.mp4 -vn -sn -dn -map 0:a:0 `
   -ac 1 -ar 16000 -c:a pcm_s16le audio/<ID>.16k.mono.wav
 
 # 3. Word-level transcript
-python -X utf8 -E scripts/transcribe-words.py audio/<ID>.16k.mono.wav `
+python scripts/transcribe-words.py audio/<ID>.16k.mono.wav `
   --out transcripts/<ID>.words.json --raw-out temp/asr.raw.json
 
 # 4. Find the source's own lower-third graphics (so cards can dodge them)
-python -X utf8 -E scripts/detect-overlays.py `
+python scripts/detect-overlays.py `
   --src sources/<ID>-1080p60.mp4 --out temp/overlays.json --fps 4
 
 # 5. Build the ASS
-python -X utf8 -E scripts/build-captions-ass.py `
+python scripts/build-captions-ass.py `
   --words transcripts/<ID>.words.json --style config/presets/red-card.json `
   --overlays temp/overlays.json `
   --out temp/captions.ass --debug-out temp/captions.debug.json
 
 # 6. Prove sync before committing to a long render
-python -X utf8 -E scripts/verify-captions.py `
+python scripts/verify-captions.py `
   --debug temp/captions.debug.json --style config/presets/red-card.json `
   --ass temp/captions.ass --samples 60
 
@@ -66,13 +66,7 @@ change the look.
 
 ## Traps found the hard way
 
-**`python -X utf8 -E` is mandatory.** A machine-wide `PYTHONPATH` points at
-another Python install's site-packages and is prepended to this interpreter's `sys.path`, breaking
-`import faster_whisper`. `sys.path` is frozen at interpreter startup, so
-scrubbing `os.environ` in-process does **not** help, and a venv does not either
-(venvs honour `PYTHONPATH` too). `-E` is the only invocation-level fix — but it
-also disables `PYTHONUTF8`, and this console is cp1252, so any Cyrillic log line
-then raises `UnicodeEncodeError`. Hence both flags.
+**The environment is fixed; run scripts as plain `python scripts/<name>.py`.** A machine-wide `PYTHONPATH` used to point at another Python install and break `import faster_whisper` -- and a venv did not help, because `PYTHONPATH` is prepended inside one too. It has been removed, and every script now imports `scripts/_env.py` first, which re-execs into `.venv` with a clean environment and forces UTF-8 stdio on this cp1252 console. Run `python scripts/check-env.py` if an import ever breaks again.
 
 **libass scales `Fontsize` by `usWinAscent + usWinDescent`, not `unitsPerEm`.**
 This silently makes text the wrong size. For Montserrat those are 1109+453=1562

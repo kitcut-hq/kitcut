@@ -19,19 +19,18 @@ Everything visual lives in a preset under `config/handles/`. Values are authored
 on the preset's canvas and scaled to the real video, so 720p / 1080p / vertical
 all land in the same place.
 
-Invoke as:  python -X utf8 -E scripts/handle-overlay.py --video in.mp4 --handle @name
+Invoke as:  python scripts/handle-overlay.py --video in.mp4 --handle @name
 """
 import sys, os, json, math, argparse, subprocess, shutil
 
-for _s in (sys.stdout, sys.stderr):
-    try:
-        _s.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+
+
 
 from PIL import Image, ImageDraw, ImageFont
 
-ENV = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+ENV = _env.ENV
 
 DEFAULT_PRESET = "config/handles/default.json"
 

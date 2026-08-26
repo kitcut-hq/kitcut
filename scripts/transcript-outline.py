@@ -12,15 +12,16 @@ Matching ignores whitespace and is case/punctuation-insensitive by default, so
 you can paste a phrase straight out of the outline (whose words run together)
 or type it normally -- both hit the same span.
 
-Invoke as:  python -X utf8 -E scripts/transcript-outline.py ...
+Invoke as:  python scripts/transcript-outline.py ...
 """
 import sys, json, argparse, unicodedata
+import os
 
-for _s in (sys.stdout, sys.stderr):
-    try:
-        _s.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import os
+
+
 
 
 def load_words(path):

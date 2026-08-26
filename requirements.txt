@@ -1,0 +1,36 @@
+# Everything this repo imports, for Python 3.13 in ./.venv.
+#
+# Install with:  powershell -ExecutionPolicy Bypass -File scripts/setup-python.ps1
+# Verify with:   .venv/Scripts/python.exe scripts/check-env.py
+#
+# Two pins here are load-bearing rather than cosmetic -- see the comments.
+
+# --- transcription -------------------------------------------------------
+faster-whisper==1.2.1          # word-level timestamps; GPU via ctranslate2
+ctranslate2==4.8.1
+av==18.1.0
+# CUDA runtime that ctranslate2 dlopens. Without these faster-whisper falls
+# back to CPU and a 40-minute video takes the best part of an hour.
+nvidia-cublas-cu12==12.9.2.10
+nvidia-cuda-nvrtc-cu12==12.9.86
+
+# --- vision --------------------------------------------------------------
+# HARD PIN: OpenCV 5.0 ships no Haar cascade XML at all (cv2.data.haarcascades
+# is empty and only the download-a-model FaceDetectorYN remains), which is what
+# auto-reframe.py's face tracking runs on. Do not relax this to >=5.
+opencv-python==4.14.0.94
+scenedetect==0.7.1
+
+# --- rendering -----------------------------------------------------------
+numpy==2.5.2
+pillow==12.3.0                 # draws the handle badge PNGs
+fonttools==4.63.0              # cap-height metrics for badge sizing
+onnxruntime==1.29.0
+
+# --- dubbing -------------------------------------------------------------
+# Neural TTS with no API key and no GPU, and it reports word boundaries --
+# which is what lets the English captions be timed from the dub itself.
+edge-tts
+
+# --- fetching ------------------------------------------------------------
+yt-dlp
