@@ -55,6 +55,8 @@ def probe_fps(path):
 
 
 def hhmmss(t):
+    if t >= 3600:
+        return "%d:%02d:%05.2f" % (int(t) // 3600, (int(t) % 3600) // 60, t % 60)
     return "%02d:%05.2f" % (int(t) // 60, t % 60)
 
 
@@ -162,6 +164,8 @@ def build_captions(clip, words_path, style, start, end, w, h, fps, tmpdir,
         r = subprocess.run(PY + ["scripts/verify-captions.py", "--debug", dbg,
                                  "--style", style, "--ass", ass,
                                  "--fontsdir", fontsdir,
+                                 "--tmp", os.path.join(
+                                     tmpdir, "_probe_%s.png" % clip["id"]),
                                  "--fps", "%.6f" % fps, "--samples", str(samples)],
                            cwd=ROOT, env=ENV)
         if r.returncode:
@@ -250,15 +254,21 @@ def cut(src, dst, start, dur, render, copy, overlay=None, pre_chain=None,
                 extra += ["-i", p]
             n_in += len(pngs)
             chain.append(fc)
+            # handle-overlay hardcodes [1:v]..[N:v]; this run's PNGs really do
+            # sit at those indices only because nothing was inserted before
+            # them. Keep that true, loudly.
+            assert all(("[%d:v]" % (k + 1)) in fc for k in range(len(pngs))), \
+                "badge filter no longer addresses inputs 1..N -- input order changed?"
         else:
             label = base
         # The dub is appended AFTER the badge PNGs on purpose: handle-overlay
         # addresses those by absolute index ([1:v], [2:v], ...), so slipping an
         # input in ahead of them would quietly repoint the badge at the wav.
-        amap = "0:a:0"
+        amap = "0:a:0?"                  # '?': a silent source is not an error
         if dub:
             extra += ["-i", dub]
-            amap = "%d:a:0" % n_in
+            amap = "%d:a:0" % n_in       # mandatory: a dub with no audio
+                                         # stream must fail loudly
         if chain:
             # the badge animates on the OUTPUT clock, which -ss rebases to 0,
             # so every clip starts its cycle at the same place
@@ -289,19 +299,21 @@ def cut(src, dst, start, dur, render, copy, overlay=None, pre_chain=None,
     # On Windows a media player holding the previous render open makes this
     # rename fail with EACCES, throwing away a finished encode over a file lock.
     # The lock clears as soon as the player lets go, so wait for it rather than
-    # asking for the whole clip again.
+    # asking for the whole clip again -- and if it never clears, keep the batch
+    # going and let the caller report this one at the end.
     for attempt in range(6):
         try:
             os.replace(tmp, dst)
-            break
+            return True
         except PermissionError:
-            if attempt == 0:
-                print("  %s is open in another program -- waiting for it to close"
-                      % os.path.basename(dst), flush=True)
-            elif attempt == 5:
-                sys.exit("%s is still locked; the finished render is at %s"
-                         % (dst, tmp))
-            time.sleep(2.0 * (attempt + 1))
+            if attempt == 5:
+                print("  %s is still locked; the finished render is at %s"
+                      % (dst, tmp), flush=True)
+                return False
+            wait = 5.0 * (attempt + 1)
+            print("  %s is open in another program -- retry %d/5 in %.0fs"
+                  % (os.path.basename(dst), attempt + 1, wait), flush=True)
+            time.sleep(wait)
 
 
 def main():
@@ -329,8 +341,9 @@ def main():
                     help="use the dubbed track and translated word timings from "
                          "this directory (see dub-clips.py) instead of the "
                          "source audio and transcript")
-    ap.add_argument("--dub-tag", default="en",
-                    help="language tag on the dub files and the output name")
+    ap.add_argument("--dub-tag",
+                    help="language tag on the dub files and the output name "
+                         "(default: the manifest's dub.tag, else en)")
     args = ap.parse_args()
 
     for tool in ("ffmpeg", "ffprobe"):
@@ -346,9 +359,10 @@ def main():
     prefix = m.get("prefix", "")
     pad = m.get("pad", {})
     pad_head, pad_tail = float(pad.get("head", 0.12)), float(pad.get("tail", 0.30))
-    render = dict(DEFAULT_RENDER, **m.get("render", {}))
     words = _outline.load_words(m["words"]) if m.get("words") else []
     src_dur = probe(src)
+    dubdir = args.dub or (m.get("dub") or {}).get("dir")
+    dub_tag = args.dub_tag or (m.get("dub") or {}).get("tag") or "en"
 
     # One badge render for the whole manifest: every clip shares the source's
     # dimensions, and the animation is driven by the output clock, so each clip
@@ -374,8 +388,29 @@ def main():
         caps = dict(caps or {}, style=args.caption_style)
     if args.no_captions:
         caps = None
-    if caps and not m.get("words"):
+    if caps and not m.get("words") and not dubdir:
         sys.exit("captions need a words transcript in the manifest")
+
+    if args.copy and (vert or caps or (hcfg.get("text") and not args.no_handle)):
+        # refuse here, not deep inside cut(): by then a caption build and a
+        # 24-frame sync verification have already been paid for
+        sys.exit("--copy cannot crop, caption or brand: stream copy does not "
+                 "filter. Pass --no-vertical --no-captions --no-handle, or "
+                 "drop --copy.")
+    if args.copy and dubdir:
+        sys.exit("--copy cannot carry a dub: a keyframe-snapped cut desyncs it")
+
+    # DEFAULT_RENDER <- caption preset render block <- manifest render block,
+    # same precedence run-captions.py uses -- the presets carry an encoding
+    # intent (p6/cq20) that used to be silently discarded here
+    render = dict(DEFAULT_RENDER)
+    if caps:
+        try:
+            with open(os.path.join(ROOT, caps["style"]), encoding="utf-8") as f:
+                render.update(json.load(f).get("render") or {})
+        except (OSError, ValueError):
+            pass
+    render.update(m.get("render", {}))
 
     # When anything precedes the badge, [0:v] is already consumed by that chain
     # and the badge has to composite onto its tail instead.
@@ -400,12 +435,11 @@ def main():
     if caps:
         print("captions %s" % caps["style"])
 
-    dubdir = args.dub or (m.get("dub") or {}).get("dir")
     if dubdir:
-        print("dub %s (.%s)" % (dubdir, args.dub_tag))
+        print("dub %s (.%s)" % (dubdir, dub_tag))
 
     wanted = set(x.strip() for x in args.only.split(",")) if args.only else None
-    plan = []
+    plan, missing_dub = [], []
     for clip in m["clips"]:
         if wanted and clip["id"] not in wanted:
             continue
@@ -414,34 +448,40 @@ def main():
             sys.exit("%s: end %.2f is past the source (%.2f)" % (clip["id"], end, src_dur))
         name = "%s-%s" % (prefix, clip["id"]) if prefix else clip["id"]
         dub_wav = dub_words = None
+        absent = []
         if dubdir:
             stem = os.path.join(dubdir, name)
-            dub_wav = "%s.%s.wav" % (stem, args.dub_tag)
-            dub_words = "%s.%s.words.json" % (stem, args.dub_tag)
-            for p in (dub_wav, dub_words):
-                if not os.path.exists(p):
-                    sys.exit("%s: %s is missing -- run dub-clips.py for this clip "
-                             "first" % (clip["id"], p))
+            dub_wav = "%s.%s.wav" % (stem, dub_tag)
+            dub_words = "%s.%s.words.json" % (stem, dub_tag)
+            absent = [p for p in (dub_wav, dub_words) if not os.path.exists(p)]
+            missing_dub += absent
             # a dubbed cut is a different deliverable, not a replacement
-            name = "%s-%s" % (name, args.dub_tag)
+            name = "%s-%s" % (name, dub_tag)
         plan.append((clip, start, end, os.path.join(outdir, name + ".mp4"),
-                     dub_wav, dub_words))
+                     dub_wav, dub_words, not absent))
 
     if wanted:
-        missing = wanted - set(c["id"] for c, _, _, _, _, _ in plan)
+        missing = wanted - set(c["id"] for c, *_ in plan)
         if missing:
             sys.exit("no such clip id: %s" % ", ".join(sorted(missing)))
     if not plan:
         sys.exit("nothing to do")
 
-    for clip, start, end, dst, _dw, _dj in plan:
-        print("%-20s %s -> %s  %5.1fs  %s"
+    for clip, start, end, dst, _dw, _dj, dub_ok in plan:
+        print("%-20s %s -> %s  %5.1fs %s %s"
               % (clip["id"], hhmmss(start), hhmmss(end), end - start,
+                 "" if not dubdir else ("dub:ok  " if dub_ok else "dub:MISSING"),
                  clip.get("title", "")))
     if args.list:
-        return
+        return                           # --list promises to cut nothing, so a
+                                         # missing dub is information, not an error
+    if missing_dub:
+        sys.exit("missing dub artifacts:\n  %s\nrun dub-clips.py for those "
+                 "clips first, or select the dubbed ones with --only"
+                 % "\n  ".join(missing_dub))
 
-    for clip, start, end, dst, dub_wav, dub_words in plan:
+    failed = []
+    for clip, start, end, dst, dub_wav, dub_words, _ok in plan:
         if os.path.exists(dst) and not args.force:
             print("skip (exists) %s" % dst)
             continue
@@ -456,6 +496,11 @@ def main():
             else:
                 keys, pads = entry, clip.get("crop_pad") or []
             if keys:
+                if not clip.get("crop_keys") and ("crop_x" in clip
+                                                  or "crop_pad" in clip):
+                    print("  note: the .reframe.json sidecar overrides this "
+                          "clip's crop_x/crop_pad (only crop_keys wins over "
+                          "the sidecar)")
                 # No eval=frame here: crop has no such option (that is scale and
                 # overlay). Its x/y are flagged runtime-tunable and already
                 # re-evaluated every frame, which is what makes the pan work.
@@ -486,18 +531,30 @@ def main():
         elif last:
             parts.append("[%s]null[%s]" % (last, base))
         pre_chain = ";".join(parts) if parts else None
-        cut(src, dst, start, end - start, render, args.copy, overlay,
-            pre_chain, base, dub_wav)
+        if not cut(src, dst, start, end - start, render, args.copy, overlay,
+                   pre_chain, base, dub_wav):
+            failed.append(dst)
+            continue
         got, want = probe(dst), end - start
-        if abs(got - want) > 0.5:
+        if args.copy:
+            if abs(got - want) > 0.5:
+                # -ss with -c copy snaps to the preceding keyframe; running a
+                # GOP long is what stream copy costs, not a broken render
+                print("  note: %.2fs vs %.2fs requested -- stream copy snaps "
+                      "to keyframes" % (got, want))
+        elif abs(got - want) > 0.5:
             sys.exit("%s: duration %.2fs, expected %.2fs" % (dst, got, want))
         meta = dict(clip, source=src, start=round(start, 3), end=round(end, 3),
                     duration=round(got, 3), stream_copy=bool(args.copy),
                     dub=dub_wav, dub_words=dub_words,
                     render=None if args.copy else render)
-        json.dump(meta, open(os.path.splitext(dst)[0] + ".json", "w", encoding="utf-8"),
-                  ensure_ascii=False, indent=2)
+        with open(os.path.splitext(dst)[0] + ".json", "w",
+                  encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
         print("  %s  %.2fs  %.1f MB" % (dst, got, os.path.getsize(dst) / 1e6))
+    if failed:
+        sys.exit("locked by another program, not replaced: %s\n(each finished "
+                 "render is beside its target as .part.mp4)" % ", ".join(failed))
 
 
 if __name__ == "__main__":

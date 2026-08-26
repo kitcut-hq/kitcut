@@ -61,7 +61,7 @@ def probe(path, entries, stream=None):
     return out(c).splitlines()
 
 
-def md5(path, limit=None):
+def md5(path):
     h = hashlib.md5()
     with open(path, "rb") as f:
         while True:
@@ -146,7 +146,14 @@ def main():
     vid = args.id
     if not vid:
         if args.url:
-            vid = out(YTDLP + ["--no-warnings", "--print", "%(id)s", args.url]).splitlines()[-1]
+            got = out(YTDLP + ["--no-warnings", "--print", "%(id)s",
+                               args.url]).splitlines()
+            if not got:
+                sys.exit("yt-dlp printed nothing for %s -- run "
+                         "scripts/check-env.py, or try the command by hand:\n"
+                         "  %s --print %%(id)s <url>"
+                         % (args.url, " ".join(YTDLP)))
+            vid = got[-1]
         else:
             vid = os.path.splitext(os.path.basename(args.input))[0]
     print("id: %s | style: %s | disk free: %.1f GB" % (vid, args.style, free_gb))
@@ -166,7 +173,9 @@ def main():
 
     # ---- download -------------------------------------------------------
     if args.input:
-        if not os.path.exists(os.path.join(ROOT, src_mp4)):
+        # do() honours --force download; existence alone used to shadow a new
+        # --input behind a stale copy under the same id
+        if do("download", src_mp4):
             shutil.copy(args.input, os.path.join(ROOT, src_mp4))
         mark("source ready (local)")
     elif do("download", src_mp4):
@@ -233,7 +242,10 @@ def main():
 
     for name in ("transcribe", "overlays"):        # ASR is the long pole; wait it first
         if name not in procs:
-            mark("%s skipped (exists)" % name)
+            if name == "overlays" and args.no_overlays:
+                mark("overlays skipped (--no-overlays)")
+            else:
+                mark("%s skipped (exists)" % name)
             continue
         p, log = procs[name]
         rc = p.wait()
@@ -248,6 +260,8 @@ def main():
 
     d = json.load(open(os.path.join(ROOT, words), encoding="utf-8"))
     ws = d["words"]
+    if not ws or not d.get("duration"):
+        sys.exit("transcript %s is empty -- re-run with --force transcribe" % words)
     cov = sum(x["end"] - x["start"] for x in ws) / d["duration"]
     tail = d["duration"] - ws[-1]["end"]
     print("   %d words | lang %s p=%.2f | coverage %.2f | tail gap %.1fs"

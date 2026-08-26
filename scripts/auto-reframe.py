@@ -87,7 +87,7 @@ def sample_faces(src, start, dur, src_w, src_h, fps, probe_w=480, min_face=0.045
     return out
 
 
-def smooth(samples, src_w, half_win, cut_jump, dead, default_x):
+def smooth(samples, half_win, cut_jump, default_x):
     """Hold through misses, median-filter, then exponentially smooth.
 
     Median first because Haar's failure mode is a single wild box, and a mean
@@ -188,7 +188,7 @@ def hybrid_keys(samples, shots, xs, x_lo, x_hi, default_x, dur,
     Returns (keys, pads) where pads is [[t0, t1], ...] to letterbox.
     """
     ends = shots[1:] + [dur]
-    keys, pads, prev_x, plan = [], [], default_x, []
+    keys, pads, plan = [], [], []
     for t0, t1 in zip(shots, ends):
         hits = [cx for t, cx in samples if t0 <= t < t1 and cx is not None]
         n = sum(1 for t, _ in samples if t0 <= t < t1)
@@ -218,7 +218,6 @@ def hybrid_keys(samples, shots, xs, x_lo, x_hi, default_x, dur,
             if keys and j == 0:
                 keys.append([round(t - snap, 3), keys[-1][1]])   # hold, then snap
             keys.append([round(t, 3), round(x)])
-            prev_x = x
     if not keys:
         keys = [[0.0, round(default_x)]]
     keys[0][0] = 0.0
@@ -327,6 +326,15 @@ def main():
     comparison = {}
     half_win = max(1, int(round(args.smooth_window * args.fps / 2.0)))
     result = {}
+    mode = args.mode
+    if mode != "pan" and not _have_scenedetect():
+        if mode == "compare":
+            # falling back would print a comparison table of zeros and exit 0
+            # -- confident, fabricated data
+            sys.exit("scenedetect is not installed (pip install scenedetect), "
+                     "so there is nothing to compare -- or use --mode pan")
+        print("scenedetect not installed -- falling back to --mode pan")
+        mode = "pan"
     for clip in m["clips"]:
         if wanted and clip["id"] not in wanted:
             continue
@@ -337,16 +345,11 @@ def main():
         samples = sample_faces(src, start, end - start, src_w, src_h,
                                args.fps, args.probe_width)
         hits = sum(1 for _, c in samples if c is not None)
-        xs = smooth(samples, src_w, half_win, args.cut_jump, args.deadband,
-                    src_w / 2.0)
+        xs = smooth(samples, half_win, args.cut_jump, src_w / 2.0)
         pan = to_keys([t for t, _ in samples], xs, x_lo, x_hi,
                       args.deadband, args.min_gap)
 
         shots = shot = flagged = hyb = pads = plan = None
-        mode = args.mode
-        if mode != "pan" and not _have_scenedetect():
-            print("scenedetect not installed -- falling back to --mode pan")
-            mode = "pan"
         if mode in ("shot", "hybrid", "compare"):
             shots = detect_shots(src, start, end - start, args.scene_threshold)
             shot, flagged = shot_keys(samples, shots, x_lo, x_hi, src_w / 2.0)
@@ -388,7 +391,7 @@ def main():
                  100.0 * hits / max(1, len(samples)), len(keys),
                  min(k[1] for k in keys), max(k[1] for k in keys), extra))
 
-    if args.mode == "compare":
+    if mode == "compare":
         def avg(i, k):
             v = [c[i][k] for c in comparison.values() if c[i]]
             return sum(v) / max(1, len(v))
