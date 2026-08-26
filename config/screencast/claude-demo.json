@@ -40,11 +40,16 @@
     "corner_radius_px": 18
   },
   "cut": {
-    "min_silence": 1.5,
-    "air": 0.4,
+    "min_silence": 0.7,
+    "air": 0.22,
+    "min_drop": 0.3,
     "silence_db": -34,
     "freeze_db": -60,
-    "require_frozen": true
+    "require_frozen": true,
+    "force_over": 1.2,
+    "camera_when_frozen_over": 100.0,
+    "_comment": "force_over: a silence this long goes even if the screen is moving. camera_when_frozen_over: once the screen has sat still longer than this, show the camera full-frame instead -- a PiP does not rescue a dead frame. 100 catches the 167s stretch here; 60 would also catch the 92s of empty prompt at the start, which is a bigger editorial change.",
+    "cutaway_lead_out": 3.5
   },
   "audio": {
     "highpass": 80,

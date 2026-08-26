@@ -59,6 +59,20 @@ that follows an action by an unknown pause — it dates the pause, not the event
 committing: on a quiet room the floor sat between -38 dB (found nothing at all)
 and -34 dB (found 43.5 s), and -30 dB found 79.5 s by eating soft speech.
 
+**How hard to bite.** `--list` prices a setting without encoding, so sweep
+`min_silence` / `air` / `force_over` rather than picking. Below about 0.7 s the
+cut count climbs faster than the runtime falls — 62 cuts in seven minutes is one
+every seven seconds. Do NOT measure the leftover silence on the *rendered* file:
+`loudnorm` and denoise lift the room tone, and `silencedetect` then finds zero
+gaps at any threshold. Measure the source and intersect with the keep-list.
+
+**When the screen stops being worth looking at.** A picture-in-picture does not
+rescue a frozen frame; 95% of the canvas is still dead. Past
+`camera_when_frozen_over` the camera takes the whole frame. Check how many
+frozen runs clear the threshold before setting it — at 60 s this shoot flipped
+both the intended 167 s stretch AND 92 s of empty prompt at the start, which is
+a bigger editorial change than anyone asked for.
+
 ## Footage shot separately
 
 An intro recorded after the fact, or a silent shot of the rig, goes in
@@ -83,6 +97,21 @@ them turned out to be a purpose-recorded intro that states where it goes ("на
 - The `min(iw,ih)` square, immune to whichever way the source turns out.
 - Duration, dimensions, rotation and **non-silent audio** asserted before the
   output is moved into place.
+
+## Publishing it
+
+```powershell
+python scripts/yt-upload.py outputs/screencast/<id>.mp4 `
+    --title "..." --description-file config/screencast/<id>.description.txt `
+    --channel @instafill_ai --privacy unlisted --dry-run
+```
+
+Drop `--dry-run` to send it. `--channel` is not decoration: a Google login can
+own several channels and the grant picks one silently, so it asserts which
+channel the token really points at before a byte leaves. The upload is
+resumable, re-reads the video afterwards to check the title and privacy came
+back as asked, and writes a `.youtube.json` sidecar with the id and URL.
+Default privacy is `unlisted` — the end you can widen later.
 
 ## Do not
 

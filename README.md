@@ -412,8 +412,10 @@ around it, and anything left shorter than `min_drop` is not worth a cut.
   "canvas": { "width": 1920, "height": 1080, "fit": "pad" },
   "pip": { "corner": "bottom-left", "size_px": 360, "margin_px": 48,
            "crop_x": 0.46, "corner_radius_px": 18, "border_px": 3 },
-  "cut": { "min_silence": 1.5, "air": 0.4, "silence_db": -34,
-           "freeze_db": -60, "require_frozen": true }
+  "cut": { "min_silence": 0.7, "air": 0.22, "min_drop": 0.3,
+           "silence_db": -34, "freeze_db": -60, "require_frozen": true,
+           "force_over": 1.2,
+           "camera_when_frozen_over": 100.0, "cutaway_lead_out": 3.5 }
 }
 ```
 
@@ -431,6 +433,52 @@ around it, and anything left shorter than `min_drop` is not worth a cut.
 `--plan` writes `config/screencast/<id>.cuts.json`, a keep-list of
 `[start, end, layout]` in camera time. Edit it and re-run with `--cuts` to
 override any decision the planner made.
+
+### Tuning the cut
+
+Three knobs decide how hard the cut bites, and one decides when the screen stops
+being worth looking at:
+
+| key | |
+|---|---|
+| `min_silence` | ignore gaps shorter than this |
+| `air` | seconds of breath kept at each end of a cut |
+| `force_over` | a silence this long goes **even if the screen is moving** |
+| `camera_when_frozen_over` | once the screen has sat still longer than this, show the camera full-frame instead |
+| `cutaway_lead_out` | come back to the screen this early, before it moves again |
+
+`force_over` exists because `require_frozen` is a guard against jump cuts
+mid-animation, not a reason to sit through a long dead spell just because output
+happened to be scrolling behind it. On this shoot it recovered another 4 s that
+the freeze mask was protecting for no good reason.
+
+`camera_when_frozen_over` is the one that changes the film rather than its
+length. A picture-in-picture does not rescue a frozen frame — 95% of the canvas
+is still dead — so past a threshold the camera takes the whole frame and the
+screen comes back when it has something to show. **Test the frozen RUN, not the
+overlap with a kept segment:** pause-cutting chops a dead region into many short
+segments, and asking each to clear the threshold on its own means the deadest
+stretch in the film qualifies for nothing. That was the first version, and it
+silently cut away for 0.0 s.
+
+`cutaway_lead_out` matters more than it looks. Narration points at the screen
+("внизу можна подивитися…") a second or two *before* the thing it points at
+happens, so returning on the exact frame the screen moves leaves the viewer
+staring at a face during the sentence that sends them to the screen.
+
+Sweep them before committing to any — `--list` prices each setting without
+encoding anything. On this shoot:
+
+| min_silence / air / force_over | cuts | removed | core |
+|---|---|---|---|
+| 1.5 / 0.40 / off | 11 | 27.1 s | 7:53 |
+| 0.8 / 0.25 / 1.2 | 33 | 45.6 s | 7:35 |
+| **0.7 / 0.22 / 1.2** | **37** | **49.0 s** | **7:32** |
+| 0.5 / 0.15 / off | 62 | 58.2 s | 7:22 |
+
+Below about 0.7 s the cut count climbs faster than the runtime falls — 62 cuts
+in seven minutes is one every seven seconds, and 0.15 s of air starts clipping
+consonants.
 
 ### Bookends, and picture that has nothing to say
 
@@ -641,6 +689,7 @@ all, and its `FaceDetectorYN` replacement wants a model from an external host.
 | `scripts/sync-tracks.py` | line up a silent screen capture with the camera take, and prove it |
 | `scripts/screencast-cut.py` | drop the dead air and composite the two into one film |
 | `scripts/import-iphone.ps1` | pull footage off a phone over MTP, verified by byte count |
+| `scripts/yt-upload.py` | upload a render to YouTube, channel-guarded and verified |
 | `config/presets/` | all visual styling |
 | `config/chapters/` | chapter lists, one `MM:SS Title` per line |
 | `config/clips/` | clip manifests (which episodes to cut, and where) |

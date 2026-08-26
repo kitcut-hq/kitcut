@@ -156,31 +156,50 @@ def plan_cuts(m, cut, film_a, film_b, screen_dur, offset, fps, verbose=True):
     # so those regions count as frozen -- otherwise no pause in the intro or
     # outro could ever be cut.
     cov_a, cov_b = offset, offset + screen_dur
-    if cut.get("require_frozen", True):
+    cutaway = float(cut.get("camera_when_frozen_over", 0.0))
+    fz_cam = []
+    if cut.get("require_frozen", True) or cutaway:
         fz = frozen_spans(screen, int(cut["freeze_db"]))
         fz_cam = merge([(a + offset, b + offset) for a, b in fz], gap=0.20)
-        still = merge(fz_cam + [(film_a - 1.0, cov_a), (cov_b, film_b + 1.0)],
-                      gap=0.0)
         if verbose:
             tot = sum(b - a for a, b in intersect(fz_cam, cov_a, cov_b))
             print("  screen is frozen for %.1fs of its %.1fs (%.0f%%)"
                   % (tot, screen_dur, 100.0 * tot / screen_dur))
+    if cut.get("require_frozen", True):
+        still = merge(fz_cam + [(film_a - 1.0, cov_a), (cov_b, film_b + 1.0)],
+                      gap=0.0)
     else:
         still = [(film_a - 1.0, film_b + 1.0)]
 
     air = float(cut["air"])
     min_drop = float(cut.get("min_drop", 0.5))
+    # A silence this long goes whether or not the screen is moving. The freeze
+    # mask exists to stop short breaths turning into jump cuts mid-animation;
+    # it is not a reason to sit through five seconds of nobody saying anything
+    # because output happened to be scrolling. 0 disables.
+    force_over = float(cut.get("force_over", 0.0))
     drops = []
     for a, b in sil:
         # Leave air on both sides so the join does not clip the words around it.
         ca, cb = a + air, b - air
         if cb - ca < min_drop:
             continue
-        # Only the part that is ALSO a still screen may go.
+        if force_over and (b - a) >= force_over:
+            drops.append((ca, cb))
+            continue
+        # Otherwise only the part that is ALSO a still screen may go.
         for x, y in intersect(still, ca, cb):
             if y - x >= min_drop:
                 drops.append((x, y))
     drops = merge(drops)
+
+    # Come back to the screen a beat BEFORE it starts moving again. Returning on
+    # the exact frame it changes drops the viewer in with no context, and the
+    # narration usually points at the screen ("below you can see...") a second
+    # or two before the thing it points at happens.
+    lead_out = float(cut.get("cutaway_lead_out", 2.0))
+    long_still = ([(a, b - lead_out) for a, b in fz_cam
+                   if b - lead_out - a >= cutaway] if cutaway else [])
 
     keeps = []
     for a, b in subtract(film_a, film_b, drops):
@@ -188,9 +207,52 @@ def plan_cuts(m, cut, film_a, film_b, screen_dur, offset, fps, verbose=True):
         for x, y in _split_at(a, b, [cov_a, cov_b]):
             layout = "pip" if (x >= cov_a - 1e-6 and y <= cov_b + 1e-6) else "full"
             x, y = quantise(x, fps), quantise(y, fps)
-            if y - x >= 1.0 / fps:
+            if y - x < 1.0 / fps:
+                continue
+            if layout == "pip" and long_still:
+                keeps.extend(_cutaway(x, y, long_still, cutaway, fps))
+            else:
                 keeps.append((x, y, layout))
+    if verbose and cutaway:
+        cam = sum(b - a for a, b, l in keeps
+                  if l == "full" and cov_a <= a and b <= cov_b)
+        print("  %.1fs cuts away to camera (screen still for over %.0fs there)"
+              % (cam, cutaway))
     return keeps, drops
+
+
+def _cutaway(a, b, long_still, threshold, fps):
+    """Show the camera instead of a screen that has stopped moving for good.
+
+    Nobody watches a still picture for two minutes, and a picture-in-picture
+    of a talking head does not rescue it -- the frame is still 95% dead. Where
+    the screen has been frozen longer than the threshold, the camera takes the
+    whole frame and the screen comes back when it has something to show.
+    """
+    # The test is on the frozen RUN, not on the overlap. Pause-cutting chops a
+    # dead region into many short segments, and asking each one to overlap the
+    # threshold on its own means the deadest stretch in the film qualifies for
+    # nothing. MIN_CUTAWAY only keeps a sliver at a run's edge from becoming a
+    # two-frame flash of camera.
+    MIN_CUTAWAY = 3.0
+    marks = []
+    for fa, fb in long_still:
+        lo, hi = max(fa, a), min(fb, b)
+        if hi - lo >= MIN_CUTAWAY:
+            marks.append((quantise(lo, fps), quantise(hi, fps)))
+    if not marks:
+        return [(a, b, "pip")]
+    out, cur = [], a
+    for lo, hi in sorted(marks):
+        lo, hi = max(lo, cur), min(hi, b)
+        if lo > cur + 1e-6:
+            out.append((cur, lo, "pip"))
+        if hi > lo + 1e-6:
+            out.append((lo, hi, "full"))
+            cur = hi
+    if b > cur + 1e-6:
+        out.append((cur, b, "pip"))
+    return [(x, y, l) for x, y, l in out if y - x >= 1.0 / fps]
 
 
 def _split_at(a, b, points):

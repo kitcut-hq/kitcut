@@ -111,6 +111,10 @@ silence alone would cut the wait while output streams, which is the one silence
 worth keeping. Get footage off a phone with `scripts/import-iphone.ps1`
 (`-DeviceName` for anything that is not an iPhone).
 
+Publish with `yt-upload.py` — `--channel @handle` asserts which channel the
+grant actually points at before a byte leaves, and the upload is re-read
+afterwards to check the privacy came back as asked. Defaults to unlisted.
+
 Clips shot separately top and tail the film via `bookends`. **Transcribe every
 extra clip before deciding what it is for** — one with no speech in it is
 picture, not a scene, and belongs in a bookend's `broll` list, where the
