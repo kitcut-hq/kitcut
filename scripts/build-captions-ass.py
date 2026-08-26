@@ -21,10 +21,11 @@ import sys, os, json, argparse, unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
-
-
+from importlib import import_module
 
 from fontTools.ttLib import TTFont
+
+_outline = import_module("transcript-outline")   # shared words-envelope loader
 
 BS = chr(92)          # dodge backslash-escaping pain, as shorts/bpo/captions.py does
 SENT_END = ".!?…"
@@ -192,7 +193,7 @@ def group_words(words, cfg, m):
             cur = [w]
         else:
             cur = trial
-        if cur and g["break_on_sentence_end"] and cur[-1]["raw"][-1:] in SENT_END:
+        if cur and g["break_on_sentence_end"] and cur[-1]["raw"].endswith(tuple(SENT_END)):
             groups.append(cur)
             cur = []
     if cur:
@@ -273,6 +274,11 @@ def state_windows(group, cfg, prev_end, next_start):
     bounds[-1][1] = min(bounds[-1][1], g1)
     if bounds[-1][1] <= bounds[-1][0]:
         bounds[-1][1] = bounds[-1][0] + 1
+    # min_act can push the last word past the g1 clamp; g1 is re-raised to
+    # match, DELIBERATELY creating a group overlap for selfcheck to catch.
+    # Trimming here would silently drop a word's highlight instead -- the
+    # downstream check keeps the failure visible and the fix (min_active_ms
+    # vs max_words, a tuned pair) in the user's hands.
     g1 = max(g1, bounds[-1][1])
     return g0, g1, bounds
 
@@ -451,13 +457,11 @@ def selfcheck(dbg, cfg):
     for d in dbg:
         if d["g1"] <= d["g0"]:
             errs.append("group %d: non-positive duration" % d["gi"])
-        prev = None
         for w in d["words"]:
             if w["b"] <= w["a"]:
                 errs.append("group %d word %s: non-positive active window" % (d["gi"], w["t"]))
-            if prev is not None and w["a"] < prev:
-                errs.append("group %d word %s: active window overlaps previous" % (d["gi"], w["t"]))
-            prev = w["b"]
+            # (no intra-group overlap check: state_windows() already forces
+            # each start past the previous end, so it could never fire)
             if w["cx"] - w["w"] / 2 < 0 or w["cx"] + w["w"] / 2 > px:
                 errs.append("group %d word %s: off-canvas" % (d["gi"], w["t"]))
         cx0, cy0, cw, ch = d["card"]
@@ -465,7 +469,12 @@ def selfcheck(dbg, cfg):
             errs.append("group %d: card off-canvas (x=%.0f w=%.0f)" % (d["gi"], cx0, cw))
     for i in range(1, len(dbg)):
         if dbg[i]["g0"] < dbg[i - 1]["g1"]:
-            errs.append("group %d overlaps group %d" % (i, i - 1))
+            errs.append(
+                "group %d starts at %dcs, before group %d ends at %dcs "
+                "(%dcs overlap) -- raise timing.min_active_ms or lower "
+                "grouping.max_words; they are a tuned pair"
+                % (i, dbg[i]["g0"], i - 1, dbg[i - 1]["g1"],
+                   dbg[i - 1]["g1"] - dbg[i]["g0"]))
     return errs
 
 
@@ -531,7 +540,7 @@ def main():
     cfg = json.load(open(args.style, encoding="utf-8"))
     if args.scale_to:
         scale_style(cfg, *args.scale_to)
-    data = json.load(open(args.words, encoding="utf-8"))
+
     F = cfg["font"]
     m = Metrics(F["file"], F.get("size"), F.get("spacing", 0), F.get("fudge", 1.0),
                 cap_height_px=F.get("cap_height_px"))
@@ -542,7 +551,9 @@ def main():
         print("WARNING: ASS Fontname '%s' != file family '%s' -- libass may substitute"
               % (cfg["font"]["family"], m.family))
 
-    words = sanitize(data["words"], cfg)
+    # the shared loader takes the faster-whisper envelope OR a bare list, so
+    # a hand-built transcript is no longer a TypeError three calls deep
+    words = sanitize(_outline.load_words(args.words), cfg)
     if args.range:
         t0, t1 = args.range
         words = [w for w in words if w["e"] / 100.0 >= t0 and w["s"] / 100.0 <= t1]

@@ -9,17 +9,15 @@ can cut on:
   --find "<phrase>"    report the start/end time of a phrase
 
 Matching ignores whitespace and is case/punctuation-insensitive by default, so
-you can paste a phrase straight out of the outline (whose words run together)
-or type it normally -- both hit the same span.
+a phrase pasted from the outline and a phrase typed by hand both hit the same
+span.
 
 Invoke as:  python scripts/transcript-outline.py ...
 """
-import sys, json, argparse, unicodedata
-import os
+import sys, os, json, argparse, unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
-import os
 
 
 
@@ -101,7 +99,9 @@ def main():
     ap.add_argument("--outline", action="store_true", help="dump timestamped lines")
     ap.add_argument("--chunk", type=float, default=12.0, help="seconds per outline line")
     ap.add_argument("--find", action="append", default=[], metavar="PHRASE")
-    ap.add_argument("--nth", type=int, default=0, help="use the Nth occurrence (0-based)")
+    ap.add_argument("--nth", type=int, default=0,
+                    help="use the Nth occurrence (0-based); applies to every "
+                         "--find phrase in the call, not per phrase")
     ap.add_argument("--exact", action="store_true",
                     help="match case and punctuation too")
     ap.add_argument("-o", "--out", help="write the outline here instead of stdout")
