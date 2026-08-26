@@ -335,6 +335,8 @@ def main():
     ap.add_argument("--tts", default="edge", choices=["edge", "elevenlabs"],
                     help="which voice service to speak with")
     ap.add_argument("--voice", help="voice name or id; default depends on --tts")
+    ap.add_argument("--el-model", help="ElevenLabs model id override (default "
+                                       "comes from config/elevenlabs-voices.json)")
     ap.add_argument("--tag",
                     help="tag in the output filenames; defaults to en for edge "
                          "and en-el for elevenlabs, so the two backends never "
@@ -364,6 +366,8 @@ def main():
     args = ap.parse_args()
 
     backend = args.tts
+    if args.el_model:
+        _tts.EL_MODEL = args.el_model
     # distinct default tags: with a shared one the second backend either
     # silently skips ("exists") or overwrites the first one's artifacts
     tag = args.tag or ("en" if backend == "edge" else "en-el")
