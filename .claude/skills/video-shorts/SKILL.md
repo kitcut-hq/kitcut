@@ -144,6 +144,39 @@ contains it. Check inserts specifically and tell the user which clips lose
 source graphics; the options are accepting it, a hand-written `crop_keys`, or
 leaving that clip landscape.
 
+### How the tracking actually works, and where it breaks
+
+Deliberately the cheapest thing that worked, so know what you are trusting:
+
+- **The subject is whichever face has the largest box** — no identity
+  association across frames. It holds because a talking head dwarfs the people
+  behind her. If a nearer background face ever measured larger, the window would
+  jump to them, and nothing in the design prevents that.
+- **Detection is Haar** (2001-era, frontal + profile) at 3 fps on 480 px
+  greyscale. The quality comes from the smoothing, not the detector: median over
+  1.2 s, then EMA, with jumps over 280 px snapping as scene cuts. A genuinely
+  fast movement is therefore tracked late.
+- **Misses hold the last position** rather than predicting, so a long faceless
+  stretch parks the window wherever the last face was.
+- **Only `x` is driven.** `y` sits at frame centre — headroom and eyeline are
+  not controlled at all.
+
+If better framing is asked for, the worked-out upgrade path, best value first —
+all of these install cleanly on this machine's Python 3.13:
+
+1. **`scenedetect`** → one static crop per shot instead of a continuous pan, and
+   a blur-pad fallback for shots that are mostly a wide graphic. This targets
+   the visible defect (b-roll) and removes drift; a shot boundary is just two
+   keyframes a few frames apart, so it composes with what already exists.
+2. **YuNet** (`cv2.FaceDetectorYN`, already in the installed cv2 — needs one
+   ~350 KB ONNX from opencv_zoo) to replace Haar. Its 5 landmarks let you place
+   the eyeline on the upper third, i.e. finally drive `y`.
+3. **Kalman / constant-velocity filter** over detections, replacing hold-last.
+4. Person detection (`ultralytics`) only if faces genuinely are not the subject.
+
+`cv2.saliency` is NOT available: that lives in `opencv-contrib-python`, not
+`opencv-python`.
+
 Both presets need a vertical variant, because both are authored on a landscape
 canvas:
 
