@@ -305,6 +305,14 @@ def pip_xy(pip, w, h):
 
 
 def build_graph(acts, offset, canvas, pip, audio_cfg, mask_idx, border_idx):
+    """One filtergraph for the whole film.
+
+    Every act is rendered to the canvas independently and the finished acts are
+    concatenated, so acts may differ in layout and even in source. Acts are
+    sequential in each source's timeline, which is what keeps this cheap: a
+    later act's trim discards frames while an earlier act is still playing, so
+    nothing queues up behind the concat.
+    """
     w, h, fps = canvas["width"], canvas["height"], canvas["fps"]
     bg = canvas.get("background", "black").replace("#", "0x")
     s = int(pip["size_px"])
@@ -313,17 +321,37 @@ def build_graph(acts, offset, canvas, pip, audio_cfg, mask_idx, border_idx):
     n = len(acts)
     ch = []
 
-    nseg = sum(len(a["segs"]) for a in acts)
-    nscr = sum(len(a["segs"]) for a in acts if a["layout"] == "pip")
-    npip = sum(1 for a in acts if a["layout"] == "pip")
+    # How many times each input is tapped. An input pad can only be consumed
+    # once, so everything goes through a split sized up front.
+    vt, at = {}, {}
+    for act in acts:
+        if act["layout"] == "clip":
+            for src, _, _ in act["parts"]:
+                vt[src] = vt.get(src, 0) + 1
+            at[act["audio"][0]] = at.get(act["audio"][0], 0) + 1
+        else:
+            k = len(act["segs"])
+            vt[1] = vt.get(1, 0) + k
+            at[1] = at.get(1, 0) + k
+            if act["layout"] == "pip":
+                vt[0] = vt.get(0, 0) + k
 
-    # Both sources are put on the output frame grid ONCE, before anything is
+    # Both sources go onto the output frame grid ONCE, before anything is
     # trimmed, so every trim lands on the same frame boundary and the video and
     # audio halves of a segment come out the same length.
-    ch.append("[1:v]fps=%d,split=%d%s" % (fps, nseg, labels("cv", nseg)))
-    ch.append("[1:a]asplit=%d%s" % (nseg, labels("ca", nseg)))
-    if nscr:
-        ch.append("[0:v]fps=%d,split=%d%s" % (fps, nscr, labels("sv", nscr)))
+    pool_v, pool_a = {}, {}
+    for idx in sorted(vt):
+        labs = ["xv%d_%d" % (idx, i) for i in range(vt[idx])]
+        ch.append("[%d:v]fps=%d,split=%d%s"
+                  % (idx, fps, len(labs), "".join("[%s]" % l for l in labs)))
+        pool_v[idx] = labs
+    for idx in sorted(at):
+        labs = ["xa%d_%d" % (idx, i) for i in range(at[idx])]
+        ch.append("[%d:a]asplit=%d%s"
+                  % (idx, len(labs), "".join("[%s]" % l for l in labs)))
+        pool_a[idx] = labs
+
+    npip = sum(1 for a in acts if a["layout"] == "pip")
     if npip and mask_idx is not None:
         ch.append("[%d:v]format=gray,split=%d%s"
                   % (mask_idx, npip, labels("mk", npip)))
@@ -331,34 +359,55 @@ def build_graph(acts, offset, canvas, pip, audio_cfg, mask_idx, border_idx):
         ch.append("[%d:v]format=rgba,split=%d%s"
                   % (border_idx, npip, labels("bd", npip)))
 
-    k = j = si = 0
+    # Acts are concatenated, so every one must hand over the same pixel format,
+    # sample rate and channel layout. The camera is mono 44.1k and a bookend
+    # shot on another phone is stereo 48k; without this the concat refuses.
+    vfmt = "format=yuv420p"
+    afmt = ("aresample=48000,aformat=sample_fmts=fltp:sample_rates=48000"
+            ":channel_layouts=stereo")
+
+    k = si = 0
     for i, act in enumerate(acts):
+        if act["layout"] == "clip":
+            src, a0, b0 = act["audio"]
+            ch.append("[%s]atrim=start=%.4f:end=%.4f,asetpts=PTS-STARTPTS,%s[a%d]"
+                      % (pool_a[src].pop(0), a0, b0, afmt, i))
+            vp = []
+            for j, (psrc, pa, pb) in enumerate(act["parts"]):
+                lab = "cp%d_%d" % (i, j)
+                ch.append("[%s]trim=start=%.4f:end=%.4f,setpts=PTS-STARTPTS,%s,%s[%s]"
+                          % (pool_v[psrc].pop(0), pa, pb, fill(w, h), vfmt, lab))
+                vp.append("[%s]" % lab)
+            cat(ch, vp, "v%d" % i, 1, 0)
+            continue
+
         vp, ap, sp = [], [], []
         for a, b in act["segs"]:
-            ch.append("[cv%d]trim=start=%.4f:end=%.4f,setpts=PTS-STARTPTS[tv%d]"
-                      % (k, a, b, k))
-            ch.append("[ca%d]atrim=start=%.4f:end=%.4f,asetpts=PTS-STARTPTS[ta%d]"
-                      % (k, a, b, k))
+            ch.append("[%s]trim=start=%.4f:end=%.4f,setpts=PTS-STARTPTS[tv%d]"
+                      % (pool_v[1].pop(0), a, b, k))
+            ch.append("[%s]atrim=start=%.4f:end=%.4f,asetpts=PTS-STARTPTS[ta%d]"
+                      % (pool_a[1].pop(0), a, b, k))
             vp.append("[tv%d]" % k)
             ap.append("[ta%d]" % k)
             if act["layout"] == "pip":
-                ch.append("[sv%d]trim=start=%.4f:end=%.4f,"
+                ch.append("[%s]trim=start=%.4f:end=%.4f,"
                           "setpts=PTS-STARTPTS[ts%d]"
-                          % (j, a - offset, b - offset, j))
-                sp.append("[ts%d]" % j)
-                j += 1
+                          % (pool_v[0].pop(0), a - offset, b - offset, k))
+                sp.append("[ts%d]" % k)
             k += 1
 
-        cat(ch, ap, "a%d" % i, 0, 1)
+        cat(ch, ap, "araw%d" % i, 0, 1)
+        ch.append("[araw%d]%s[a%d]" % (i, afmt, i))
         camv = cat(ch, vp, "camv%d" % i, 1, 0)
 
         if act["layout"] == "full":
-            ch.append("%s%s[v%d]" % (camv, fill(w, h), i))
+            ch.append("%s%s,%s[v%d]" % (camv, fill(w, h), vfmt, i))
             continue
 
         # Screen behind, camera square in front.
         scr = cat(ch, sp, "scrv%d" % i, 1, 0)
-        ch.append("%s%s[bg%d]" % (scr, fit(w, h, canvas.get("fit", "pad"), bg), i))
+        ch.append("%s%s[bg%d]"
+                  % (scr, fit(w, h, canvas.get("fit", "pad"), bg), i))
         # min(iw,ih) rather than a probed number: the square stays square
         # whichever way round the source turns out to be.
         sq = ("crop=w='min(iw,ih)':h='min(iw,ih)'"
@@ -374,12 +423,14 @@ def build_graph(acts, offset, canvas, pip, audio_cfg, mask_idx, border_idx):
             ch.append("[%s]format=rgba[sqa%d]" % (last, i))
             ch.append("[sqa%d][mk%d]alphamerge=shortest=1[pip%d]" % (i, si, i))
             last = "pip%d" % i
-        out = "v%d" % i if border_idx is None else "vb%d" % i
+        out = "vraw%d" % i
         ch.append("[bg%d][%s]overlay=%d:%d:shortest=1[%s]"
                   % (i, last, px, py, out))
         if border_idx is not None:
-            ch.append("[vb%d][bd%d]overlay=%d:%d:shortest=1[v%d]"
-                      % (i, si, px, py, i))
+            ch.append("[%s][bd%d]overlay=%d:%d:shortest=1[vb%d]"
+                      % (out, si, px, py, i))
+            out = "vb%d" % i
+        ch.append("[%s]%s[v%d]" % (out, vfmt, i))
         si += 1
 
     pairs = "".join("[v%d][a%d]" % (i, i) for i in range(n))
@@ -397,10 +448,104 @@ def build_graph(acts, offset, canvas, pip, audio_cfg, mask_idx, border_idx):
     return ";".join(ch)
 
 
+
+def act_dur(act):
+    if act["layout"] == "clip":
+        return act["audio"][2] - act["audio"][1]
+    return sum(b - a for a, b in act["segs"])
+
+
+def build_bookend(spec, extra):
+    """A clip that tops or tails the film, from a source of its own.
+
+    Its own audio runs the whole way; the picture may cut away to b-roll and
+    back. That is the only way a silent clip earns a place -- it has nothing to
+    say, so it plays under something that does.
+
+    `extra` maps a path to its ffmpeg input index and is filled in as sources
+    are met, so the caller can add them to the command line in the same order.
+    """
+    def idx(path):
+        p = rel(path)
+        if not os.path.exists(p):
+            sys.exit("bookend source not found: %s" % p)
+        if p not in extra:
+            extra[p] = len(extra)
+        return extra[p], p
+
+    src, path = idx(spec["source"])
+    words = _outline.load_words(rel(spec["words"])) if spec.get("words") else []
+    a0 = spec.get("start")
+    if a0 is None and spec.get("start_text"):
+        hit = _outline.find(words, spec["start_text"])
+        if hit is None:
+            sys.exit("bookend %s: start_text not found" % spec.get("id"))
+        a0 = max(0.0, hit[0] - float(spec.get("air", 0.4)))
+    a0 = float(a0 if a0 is not None else 0.0)
+    b0 = spec.get("end")
+    if b0 is None and spec.get("end_text"):
+        hit = _outline.find(words, spec["end_text"])
+        if hit is None:
+            sys.exit("bookend %s: end_text not found" % spec.get("id"))
+        b0 = hit[1] + float(spec.get("air", 0.4))
+    if b0 is None:
+        b0 = probe_duration(path)
+    b0 = float(b0)
+    if b0 <= a0:
+        sys.exit("bookend %s: end is not after start" % spec.get("id"))
+
+    # Walk the clip start to end, handing each span either to the clip's own
+    # picture or to a b-roll source. The parts must tile [a0, b0] exactly, or
+    # the picture and the sound come out different lengths.
+    parts, cur = [], a0
+    for cut_in in sorted(spec.get("broll") or [], key=lambda c: c["at"]):
+        at = a0 + float(cut_in["at"])
+        dur = float(cut_in["dur"])
+        if at < cur - 1e-6 or at + dur > b0 + 1e-6:
+            sys.exit("bookend %s: b-roll at %.2f+%.2f does not fit inside the "
+                     "clip or overlaps the one before it"
+                     % (spec.get("id"), cut_in["at"], dur))
+        if at > cur + 1e-6:
+            parts.append((src, cur, at))
+        bsrc, bpath = idx(cut_in["source"])
+        bfrom = float(cut_in.get("from", 0.0))
+        blen = probe_duration(bpath)
+        if bfrom + dur > blen + 1e-6:
+            sys.exit("bookend %s: b-roll wants %.2f..%.2f of a %.2fs source"
+                     % (spec.get("id"), bfrom, bfrom + dur, blen))
+        parts.append((bsrc, bfrom, bfrom + dur))
+        cur = at + dur
+    if b0 > cur + 1e-6:
+        parts.append((src, cur, b0))
+
+    tiled = sum(b - a for _, a, b in parts)
+    if abs(tiled - (b0 - a0)) > 1e-3:
+        sys.exit("bookend %s: picture is %.3fs against %.3fs of sound"
+                 % (spec.get("id"), tiled, b0 - a0))
+
+    return {"layout": "clip", "id": spec.get("id", "bookend"), "path": path,
+            "audio": (src, a0, b0), "parts": parts}
+
+
 def _truncate(acts, limit):
     """Keep only the first `limit` seconds of the film, for a quick look."""
     out, total = [], 0.0
     for act in acts:
+        if total >= limit:
+            break
+        if act["layout"] == "clip":
+            src, a0, b0 = act["audio"]
+            take = min(b0 - a0, limit - total)
+            parts, left = [], take
+            for psrc, pa, pb in act["parts"]:
+                if left <= 1e-6:
+                    break
+                d = min(pb - pa, left)
+                parts.append((psrc, pa, pa + d))
+                left -= d
+            out.append(dict(act, audio=(src, a0, a0 + take), parts=parts))
+            total += take
+            continue
         segs = []
         for a, b in act["segs"]:
             if total >= limit:
@@ -410,8 +555,6 @@ def _truncate(acts, limit):
             total += take
         if segs:
             out.append({"layout": act["layout"], "segs": segs})
-        if total >= limit:
-            break
     return out, total
 
 
@@ -509,19 +652,29 @@ def main():
         keeps, drops = plan_cuts(m, cut, film_a, film_b, screen_dur,
                                  offset, fps)
 
-    runtime = sum(b - a for a, b, _ in keeps)
-    dropped = (film_b - film_a) - runtime
+    core = sum(b - a for a, b, _ in keeps)
+    dropped = (film_b - film_a) - core
     print("")
     print("  %d segments, %d cuts" % (len(keeps), len(drops)))
-    print("  runtime %s  (cut %.1fs of pauses, %.0f%% of the tape)"
-          % (hhmmss(runtime), dropped,
+    print("  core %s  (cut %.1fs of pauses, %.0f%% of the tape)"
+          % (hhmmss(core), dropped,
              100.0 * dropped / max(1e-9, film_b - film_a)))
 
-    acts = acts_from(keeps)
+    extra = {}
+    bk = m.get("bookends") or {}
+    opens = [build_bookend(b, extra) for b in (bk.get("open") or [])]
+    closes = [build_bookend(b, extra) for b in (bk.get("close") or [])]
+    acts = opens + acts_from(keeps) + closes
+    for a in opens + closes:
+        print("  bookend %-10s %6.2fs from %s%s"
+              % (a["id"], act_dur(a), os.path.basename(a["path"]),
+                 "  (+%d b-roll)" % (len(a["parts"]) // 2)
+                 if len(a["parts"]) > 1 else ""))
+
+    runtime = sum(act_dur(a) for a in acts)
+    print("  runtime %s" % hhmmss(runtime))
     print("  acts: %s" % ", ".join(
-        "%s x%d (%s)" % (a["layout"], len(a["segs"]),
-                         hhmmss(sum(y - x for x, y in a["segs"])))
-        for a in acts))
+        "%s (%s)" % (a["layout"], hhmmss(act_dur(a))) for a in acts))
 
     if args.list:
         print("")
@@ -578,7 +731,8 @@ def main():
     # ffmpeg reads both files to EOF however little of them the film uses. -to
     # is an INPUT option here, which caps the read without shifting timestamps
     # the way -ss would (and the trim times are absolute).
-    cam_to = max(b for act in acts for _, b in act["segs"]) + 2.0
+    cam_to = max([b for act in acts if act["layout"] != "clip"
+                  for _, b in act["segs"]] or [1.0]) + 2.0
     scr_ends = [b - offset for act in acts if act["layout"] == "pip"
                 for _, b in act["segs"]]
     inputs = []
@@ -608,6 +762,24 @@ def main():
         else:
             border_idx = nxt
         nxt += 1
+
+    # Bookend sources come last on the command line. build_bookend numbered them
+    # from zero as it met them, which would collide with the screen and camera
+    # pads, so rebase them onto their real input indices now that the mask and
+    # border have claimed theirs.
+    if extra:
+        base = dict((ordinal, nxt + n)
+                    for n, (_, ordinal) in enumerate(sorted(extra.items(),
+                                                            key=lambda kv: kv[1])))
+        for act in acts:
+            if act["layout"] != "clip":
+                continue
+            s0, a0, b0 = act["audio"]
+            act["audio"] = (base[s0], a0, b0)
+            act["parts"] = [(base[s], a, b) for s, a, b in act["parts"]]
+        for path, ordinal in sorted(extra.items(), key=lambda kv: kv[1]):
+            inputs += ["-i", path]
+            nxt += 1
 
     graph = build_graph(acts, offset, canvas, pip, audio_cfg,
                         mask_idx, border_idx)

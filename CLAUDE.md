@@ -111,6 +111,11 @@ silence alone would cut the wait while output streams, which is the one silence
 worth keeping. Get footage off a phone with `scripts/import-iphone.ps1`
 (`-DeviceName` for anything that is not an iPhone).
 
+Clips shot separately top and tail the film via `bookends`. **Transcribe every
+extra clip before deciding what it is for** — one with no speech in it is
+picture, not a scene, and belongs in a bookend's `broll` list, where the
+bookend's own sound keeps running while only the picture cuts away.
+
 Two traps that cost a render each, both in the README gotchas: **`aselect`
 passes every audio frame** on this ffmpeg (so cutting uses `trim`/`atrim`), and
 a phone's **rotation tag can be wrong** — `-noautorotate` leaves the bogus

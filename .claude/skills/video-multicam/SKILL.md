@@ -59,6 +59,22 @@ that follows an action by an unknown pause — it dates the pause, not the event
 committing: on a quiet room the floor sat between -38 dB (found nothing at all)
 and -34 dB (found 43.5 s), and -30 dB found 79.5 s by eating soft speech.
 
+## Footage shot separately
+
+An intro recorded after the fact, or a silent shot of the rig, goes in
+`bookends.open` / `bookends.close` — a clip from its own source, rendered to the
+same canvas and concatenated as another act.
+
+A clip with **no speech in it cannot be an act of its own**; it is dead air.
+Transcribe every extra clip before deciding what it is for. One that comes back
+with zero words is picture, not a scene: put it in a bookend's `broll` list, so
+the bookend's sound keeps running while only the picture cuts away. Choose the
+moment from the narration — the cutaway should show what is being said.
+
+Read what the extra clips actually say before placing them. On this shoot one of
+them turned out to be a purpose-recorded intro that states where it goes ("на
+початку відео я ставлю цей фрагмент"), which settled the question outright.
+
 ## What is already handled
 
 - The offset seed, the correlation attempt and its **rejection** when the peak

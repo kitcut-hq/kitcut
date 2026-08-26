@@ -432,6 +432,46 @@ around it, and anything left shorter than `min_drop` is not worth a cut.
 `[start, end, layout]` in camera time. Edit it and re-run with `--cuts` to
 override any decision the planner made.
 
+### Bookends, and picture that has nothing to say
+
+Footage shot separately — an intro recorded after the fact, a silent shot of the
+rig — goes in `bookends.open` / `bookends.close`. Each is a clip from a source of
+its own, rendered to the same canvas and concatenated as another act:
+
+```json
+"bookends": {
+  "open": [
+    { "id": "px-intro",
+      "source": "sources/PXL_20260716_160930856.mp4",
+      "start": 0.6, "end": 23.1,
+      "broll": [
+        { "source": "sources/PXL_20260716_155547234.mp4",
+          "at": 8.8, "dur": 7.6, "from": 48.0 }
+      ] }
+  ],
+  "close": []
+}
+```
+
+`start` / `end` accept `start_text` / `end_text` instead, resolved against a
+`words` transcript of that clip.
+
+**`broll` is how a silent clip earns a place.** The bookend's own sound runs the
+whole way; only the picture cuts away and back. `at` is the offset into the
+bookend, `dur` how long the cutaway lasts, `from` the in-point in the b-roll
+source. The parts are checked to tile the bookend exactly — a gap or an overlap
+would leave the picture and the sound different lengths, and that is refused
+before anything renders rather than discovered afterwards.
+
+The setup take on this shoot transcribed to **zero words**. As an act of its own
+it would be 75 seconds of silence; laid under the line about combining files
+from two phones, it is the only shot in the film that shows the rig.
+
+Because acts are concatenated, each one is normalised to the canvas and to
+48 kHz stereo before the join. That matters more than it sounds: the camera here
+is mono 44.1 kHz and the bookend was shot on a different phone at stereo 48 kHz,
+and `concat` refuses a mismatch outright.
+
 ### What it checks before shipping
 
 Duration against the keep-list, output dimensions against the canvas, that the

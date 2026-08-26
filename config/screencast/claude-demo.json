@@ -58,5 +58,25 @@
     "maxrate": "16M",
     "bufsize": "32M",
     "audio_bitrate": "192k"
+  },
+  "bookends": {
+    "_comment": "PXL_...160930856 was recorded after the fact specifically to open the film -- he says so in it: 'на початку відео я ставлю цей фрагмент'. PXL_...155547234 is the setup take and is SILENT (0 words transcribed), so it can only work as picture under someone else's sound. It cuts in exactly where the intro says the film combines files from different phones, and shows the two-phone rig.",
+    "open": [
+      {
+        "id": "px-intro",
+        "source": "sources/PXL_20260716_160930856.mp4",
+        "start": 0.6,
+        "end": 23.1,
+        "broll": [
+          {
+            "source": "sources/PXL_20260716_155547234.mp4",
+            "at": 8.8,
+            "dur": 7.6,
+            "from": 48.0
+          }
+        ]
+      }
+    ],
+    "close": []
   }
 }
