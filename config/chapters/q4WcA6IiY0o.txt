@@ -1,0 +1,30 @@
+# Learn how to fill out forms with new features in Instafill.ai (33:45)
+00:00 Waiting for attendees to join
+00:38 Eugene introduces the session
+02:01 What the AI form filler does
+03:00 Filling out a form in two steps
+03:24 Custom forms and popular forms
+04:22 The instafill.ai form catalog
+05:25 What each form page includes
+06:24 Uploading your own form
+07:07 Ways to give Instafill your information
+07:54 Attaching images and phone photos
+08:58 New feature: required documents
+10:41 Instafill analyzes the form field by field
+11:20 Adding a file and seeing what is missing
+12:03 Filling the gaps: tax ID and address
+13:34 Previewing the PDF in real time
+14:49 The missing account number
+15:43 All required information provided
+16:42 Editing and deleting your information
+18:28 Downloading and signing the form
+19:15 Type, draw, or upload your signature
+20:54 Reviewing the signed PDF
+21:34 Extracting text from a photo
+22:18 Adding a passport photo to DS-82
+25:27 New feature: remove files
+26:50 Where uploaded files are stored
+27:23 Deleting files right after processing
+29:32 Running the whole flow from scratch
+30:47 The trade-off: no refilling forms
+32:10 Wrap-up and feedback

@@ -1,0 +1,16 @@
+# How to fill out multiple PDF forms in a batch with AI (8:58)
+00:00 What bulk PDF form filling does
+00:39 Finding the feature in the Forms section
+01:07 Uploading a new form
+01:32 Skipping the optional step and naming the form
+02:16 Starting a fill out form in batch
+02:30 Choosing the CSV file with your data
+02:54 Reviewing the rows and columns
+03:37 Generating all PDFs at once
+03:58 Generating only selected PDFs
+04:37 Downloading a filled PDF to check it
+05:26 Running the full batch
+05:56 Downloading every PDF as a zip
+06:31 Batch history for a form
+07:46 Several batches on the same form
+08:23 Feedback and support

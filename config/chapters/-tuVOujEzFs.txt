@@ -1,0 +1,12 @@
+# ANNOUNCEMENT: Introducing the New Instafill.ai Manual Review Feature (5:47)
+00:00 A wizard to verify pre-filled fields
+00:16 Why users wanted more control
+00:37 Starting a form on instafill.ai
+01:04 Uploading the form and supporting documents
+01:44 How long the AI takes to process
+02:08 Reviewing each section in the wizard
+02:37 Sparkles chat for empty fields
+02:59 Asking the AI why a field is blank
+03:48 Completing the wizard and previewing
+04:29 Download it, or go back and edit
+05:16 Our goal and how to send feedback
