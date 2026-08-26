@@ -1,0 +1,43 @@
+{
+  "_comment": "Handle badge authored for a 1080x1920 vertical frame. Same design as default.json, sized up relative to frame width and with anchors that stay clear of the caption card at the bottom.",
+  "canvas": {
+    "width": 1080,
+    "height": 1920
+  },
+  "font": {
+    "file": "fonts/Montserrat-Bold.ttf",
+    "cap_height_px": 21,
+    "uppercase": true,
+    "tracking_px": 1.5
+  },
+  "text": {
+    "colour": "#FFFFFF",
+    "outline_px": 3,
+    "outline_colour": "#000000"
+  },
+  "icon": {
+    "size_px": 46,
+    "stroke_px": 5,
+    "corner_radius_px": 13,
+    "gap_px": 2,
+    "colour": "#FFFFFF",
+    "outline_px": 3,
+    "outline_colour": "#000000",
+    "gradient": ["#FEDA75", "#FA7E1E", "#D62976", "#962FBF", "#4F5BD5"],
+    "gradient_angle_deg": 45
+  },
+  "motion": {
+    "_note": "centres on a 1080x1920 canvas; the caption card lives below y~1450, so nothing goes there",
+    "positions": [
+      [690, 1210],
+      [390, 470],
+      [690, 470],
+      [390, 1210]
+    ],
+    "move_every_s": 7.0,
+    "colour_cycle": ["gradient", "flat"],
+    "colour_every_s": 4.5,
+    "opacity": 0.92,
+    "start_index": 0
+  }
+}

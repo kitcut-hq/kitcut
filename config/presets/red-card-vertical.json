@@ -1,0 +1,87 @@
+{
+  "_comment": "Vertical 9:16 variant of red-card. Presets scale by the HEIGHT ratio, so landscape->vertical enlarges text x1.78 while the frame gets NARROWER; 7-word groups wrap into tall cards. max_words 6 + min_active_ms 40 is a VERIFIED PAIR -- both spans of this video's five episodes clear the builder's self-check with it, and changing either alone breaks a clip. If a new video trips 'group N overlaps group N-1', a group's min-active cascade ran past the next group's start; nudge max_words/min_active together and re-test every clip. Do not edit the builder to silence the check.",
+  "canvas": {
+    "play_res_x": 1920,
+    "play_res_y": 1080
+  },
+  "font": {
+    "family": "Montserrat",
+    "file": "fonts/Montserrat-Bold.ttf",
+    "size": 67,
+    "spacing": 0,
+    "fudge": 1.0,
+    "bold": 1,
+    "fontsdir": "fonts",
+    "cap_height_px": 30
+  },
+  "text": {
+    "uppercase": true,
+    "apostrophe": "’",
+    "strip_trailing": ",",
+    "word_gap_ratio": 1.0,
+    "outline_px": 0,
+    "outline_colour": "#000000",
+    "shadow_px": 0,
+    "shadow_colour": "#000000"
+  },
+  "card": {
+    "colour": "#FF0000",
+    "alpha": 0,
+    "corner_radius_px": 15,
+    "pad_x_px": 28,
+    "pad_y_px": 14,
+    "collision_gap_px": 16,
+    "enabled": true
+  },
+  "layout": {
+    "anchor_x": 960,
+    "bottom_margin_px": 170,
+    "max_line_width_px": 1180,
+    "max_lines": 2,
+    "line_height_px": 44
+  },
+  "states": {
+    "base": {
+      "colour": "#FFFFFF"
+    },
+    "active": {
+      "colour": "#FFE24B"
+    },
+    "spoken": {
+      "colour": "#FFFFFF"
+    }
+  },
+  "grouping": {
+    "max_words": 6,
+    "gap_break_s": 0.45,
+    "break_on_sentence_end": true,
+    "max_group_duration_s": 3.0
+  },
+  "timing": {
+    "lead_in_ms": 60,
+    "hold_out_ms": 140,
+    "min_active_ms": 40,
+    "min_gap_between_groups_ms": 40,
+    "active_extends_to_next_word": true,
+    "fade_ms": 70
+  },
+  "pop": {
+    "enabled": false,
+    "scale": 112,
+    "rise_ms": 70,
+    "settle_ms": 110
+  },
+  "render": {
+    "encoder": "h264_nvenc",
+    "preset": "p6",
+    "cq": 20,
+    "maxrate": "20M",
+    "bufsize": "40M",
+    "aq_strength": 12
+  },
+  "overlays": {
+    "colour": "#FF0000",
+    "auto": false,
+    "_note": "Colour of the SOURCE video's own lower-third graphics to dodge (not your card colour). Targeted mode is reliable; auto is experimental and false-positives on saturated props."
+  }
+}

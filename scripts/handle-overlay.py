@@ -212,11 +212,16 @@ def pick(index_expr, values):
     return out
 
 
-def prepare(preset_path, handle, vid_w, vid_h, tmpdir, tag=""):
+def prepare(preset_path, handle, vid_w, vid_h, tmpdir, tag="", base="0:v"):
     """Render the badge variants and build the filter graph that animates them.
 
     Returns (png_paths, filter_complex, out_label). The caller adds each png as
-    an ffmpeg input, in order, immediately after the video.
+    an ffmpeg input, in order, immediately after the video. `base` is the label
+    the badge composites onto, so a caller that crops or burns subtitles first
+    can hand in the tail of its own chain and keep everything to one pass.
+
+    vid_w/vid_h are the dimensions of THAT label, not of the source file --
+    a vertical crop changes both, and the badge scales to what it lands on.
     """
     preset = json.load(open(preset_path, encoding="utf-8"))
     canvas = preset.get("canvas", {"width": 1920, "height": 1080})
@@ -253,7 +258,7 @@ def prepare(preset_path, handle, vid_w, vid_h, tmpdir, tag=""):
     col_i = "mod(floor(t/%g),%d)" % (float(m.get("colour_every_s", 4.5)), len(variants))
 
     alpha = float(m.get("opacity", 1.0))
-    parts, cur = [], "0:v"
+    parts, cur = [], base
     for i, _ in enumerate(variants):
         parts.append("[%d:v]format=rgba,colorchannelmixer=aa=%g[hb%d]" % (i + 1, alpha, i))
     for i, _ in enumerate(variants):

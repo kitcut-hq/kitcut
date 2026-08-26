@@ -48,8 +48,96 @@ def probe(path):
     return float(json.loads(out.stdout)["format"]["duration"])
 
 
+def probe_fps(path):
+    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+               "stream=r_frame_rate", "-of", "json", path], capture_output=True, text=True)
+    if out.returncode:
+        sys.exit("ffprobe failed on %s" % path)
+    num, _, den = json.loads(out.stdout)["streams"][0]["r_frame_rate"].partition("/")
+    return float(num) / float(den or 1)
+
+
 def hhmmss(t):
     return "%02d:%05.2f" % (int(t) // 60, t % 60)
+
+
+PY = [sys.executable, "-X", "utf8", "-E"]
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def even(n):
+    """Crop and scale dimensions must be even for yuv420p chroma."""
+    return int(n) // 2 * 2
+
+
+def crop_box(clip, src_w, src_h, out_w, out_h):
+    """The source rectangle to keep, as (w, h, x, y).
+
+    Height is spent first -- going 16:9 -> 9:16 the full frame height already
+    fits, so zoom stays at 1 unless asked for. `crop_x` moves the window because
+    a fixed centre crop is a bet that the subject is centred, and over a whole
+    video they are not.
+    """
+    zoom = float(clip.get("crop_zoom", 1.0))
+    ch = even(min(src_h, src_h / zoom))
+    cw = even(min(src_w, ch * out_w / float(out_h)))
+    cx = float(clip.get("crop_x", src_w / 2.0)) - cw / 2.0
+    cy = float(clip.get("crop_y", src_h / 2.0)) - ch / 2.0
+    cx = even(min(max(cx, 0), src_w - cw))
+    cy = even(min(max(cy, 0), src_h - ch))
+    return cw, ch, cx, cy
+
+
+def crop_x_expr(keys, x_lo, x_hi, cw):
+    """Turn [[t, centre_x], ...] into a crop-x expression in t.
+
+    Linear between keys so the window pans rather than jumping; a scene cut is
+    expressed as two keys a few frames apart, which reads as a snap. Held flat
+    before the first key and after the last.
+    """
+    pts = [(float(t), min(max(float(x), x_lo), x_hi) - cw / 2.0) for t, x in keys]
+    pts.sort()
+    e = "%g" % pts[-1][1]
+    for i in range(len(pts) - 2, -1, -1):
+        (t0, x0), (t1, x1) = pts[i], pts[i + 1]
+        span = max(t1 - t0, 1e-3)
+        seg = "(%g+(%g)*(t-%g))" % (x0, (x1 - x0) / span, t0)
+        e = "if(lt(t,%g),%s,%s)" % (t1, seg, e)
+    return "if(lt(t,%g),%g,%s)" % (pts[0][0], pts[0][1], e)
+
+
+def build_captions(clip, words_path, style, start, end, w, h, fps, tmpdir,
+                   verify=True, samples=24, overlays=None, fontsdir="fonts"):
+    """Render an ASS for just this clip's span, rebased to t=0.
+
+    --range/--time-offset already exist in the ASS builder, so a clip needs no
+    sliced copy of the transcript: the full word list is the single source of
+    truth and each clip is a view onto it.
+    """
+    # Forward slashes, always: a Windows backslash reaches libass through the
+    # ass filter as an escape, so temp\05-x.ass silently becomes temp05-x.ass.
+    ass = os.path.join(tmpdir, "%s.captions.ass" % clip["id"]).replace("\\", "/")
+    dbg = os.path.join(tmpdir, "%s.captions.debug.json" % clip["id"]).replace("\\", "/")
+    cmd = PY + ["scripts/build-captions-ass.py", "--words", words_path,
+                "--style", style, "--out", ass, "--debug-out", dbg,
+                "--scale-to", str(w), str(h),
+                "--range", "%.3f" % start, "%.3f" % end,
+                "--time-offset", "%.3f" % start]
+    if overlays:
+        cmd += ["--overlays", overlays]
+    if subprocess.run(cmd, cwd=ROOT, env=ENV).returncode:
+        sys.exit("%s: building captions failed" % clip["id"])
+    if verify:
+        # Same guarantee the captions pipeline gives: prove the highlight lands
+        # on the right word BEFORE spending an encode on it.
+        r = subprocess.run(PY + ["scripts/verify-captions.py", "--debug", dbg,
+                                 "--style", style, "--ass", ass,
+                                 "--fontsdir", fontsdir,
+                                 "--fps", "%.6f" % fps, "--samples", str(samples)],
+                           cwd=ROOT, env=ENV)
+        if r.returncode:
+            sys.exit("%s: caption sync verification failed" % clip["id"])
+    return ass
 
 
 def resolve(clip, words, pad_head, pad_tail):
@@ -108,21 +196,30 @@ def resolve(clip, words, pad_head, pad_tail):
     return max(0.0, start), end
 
 
-def cut(src, dst, start, dur, render, copy, overlay=None):
-    """overlay is (png_paths, filter_complex, out_label) from handle-overlay."""
+def cut(src, dst, start, dur, render, copy, overlay=None, ops=None, base="vbase"):
+    """overlay is (png_paths, filter_complex, out_label) from handle-overlay;
+    ops is a list of plain video filters (crop, scale, ass) applied first."""
     extra = []
     if copy:
-        if overlay:
-            sys.exit("--copy cannot burn in a handle: stream copy does not filter")
+        if overlay or ops:
+            sys.exit("--copy cannot crop, caption or brand: stream copy does not filter")
         args = ["-c", "copy"]
     else:
+        chain = []
+        if ops:
+            chain.append("[0:v]%s[%s]" % (",".join(ops), base))
         if overlay:
             pngs, fc, label = overlay
             for p in pngs:
                 extra += ["-i", p]
+            chain.append(fc)
+        else:
+            label = base
+        if chain:
             # the badge animates on the OUTPUT clock, which -ss rebases to 0,
             # so every clip starts its cycle at the same place
-            args = ["-filter_complex", fc, "-map", "[%s]" % label, "-map", "0:a:0"]
+            args = ["-filter_complex", ";".join(chain),
+                    "-map", "[%s]" % label, "-map", "0:a:0"]
         else:
             args = ["-map", "0:v:0", "-map", "0:a:0"]
         args += ["-c:v", render["encoder"], "-preset", render["preset"],
@@ -162,6 +259,13 @@ def main():
                                      "(overrides the manifest)")
     ap.add_argument("--handle-preset", help="override the manifest handle preset")
     ap.add_argument("--no-handle", action="store_true", help="skip the handle badge")
+    ap.add_argument("--vertical", action="store_true",
+                    help="crop to 1080x1920 (overrides the manifest)")
+    ap.add_argument("--no-vertical", action="store_true", help="keep the source framing")
+    ap.add_argument("--caption-style", help="burn captions using this preset")
+    ap.add_argument("--no-captions", action="store_true", help="skip burning captions")
+    ap.add_argument("--no-verify", action="store_true",
+                    help="skip the caption sync proof (not recommended)")
     args = ap.parse_args()
 
     for tool in ("ffmpeg", "ffprobe"):
@@ -189,13 +293,47 @@ def main():
         hcfg["text"] = args.handle
     if args.handle_preset:
         hcfg["preset"] = args.handle_preset
+    src_w, src_h = _handle.probe_dims(src)
+    fps = probe_fps(src)
+    tmpdir = m.get("tmp", "temp")
+
+    vert = m.get("vertical") or None
+    if args.vertical:
+        vert = dict(vert or {}, width=1080, height=1920)
+    if args.no_vertical:
+        vert = None
+    out_w, out_h = (int(vert["width"]), int(vert["height"])) if vert else (src_w, src_h)
+
+    caps = m.get("captions") or None
+    if args.caption_style:
+        caps = dict(caps or {}, style=args.caption_style)
+    if args.no_captions:
+        caps = None
+    if caps and not m.get("words"):
+        sys.exit("captions need a words transcript in the manifest")
+
+    # When anything precedes the badge, [0:v] is already consumed by that chain
+    # and the badge has to composite onto its tail instead.
+    base = "vbase" if (vert or caps) else "0:v"
+
     overlay = None
     if hcfg.get("text") and not args.no_handle:
-        w, h = _handle.probe_dims(src)
+        # size the badge to the OUTPUT frame, not the source: a vertical crop
+        # changes both dimensions under it
         overlay = _handle.prepare(hcfg.get("preset", _handle.DEFAULT_PRESET),
-                                  hcfg["text"], w, h, m.get("tmp", "temp"))
+                                  hcfg["text"], out_w, out_h, tmpdir, base=base)
         print("handle %s  (%s)" % (hcfg["text"],
                                    hcfg.get("preset", _handle.DEFAULT_PRESET)))
+    # Face-tracked crop centres from auto-reframe.py, if that has been run.
+    reframe = {}
+    rpath = m.get("reframe") or (os.path.splitext(args.manifest)[0] + ".reframe.json")
+    if vert and os.path.exists(rpath):
+        reframe = json.load(open(rpath, encoding="utf-8"))
+        print("reframe %s (%d clips)" % (rpath, len(reframe)))
+    if vert:
+        print("vertical %dx%d from %dx%d" % (out_w, out_h, src_w, src_h))
+    if caps:
+        print("captions %s" % caps["style"])
 
     wanted = set(x.strip() for x in args.only.split(",")) if args.only else None
     plan = []
@@ -227,7 +365,32 @@ def main():
             print("skip (exists) %s" % dst)
             continue
         print("cutting %s ..." % os.path.basename(dst), flush=True)
-        cut(src, dst, start, end - start, render, args.copy, overlay)
+        ops = []
+        if vert:
+            cw, ch, cx, cy = crop_box(clip, src_w, src_h, out_w, out_h)
+            keys = clip.get("crop_keys") or reframe.get(clip["id"])
+            if keys:
+                # No eval=frame here: crop has no such option (that is scale and
+                # overlay). Its x/y are flagged runtime-tunable and already
+                # re-evaluated every frame, which is what makes the pan work.
+                ops.append("crop=%d:%d:x=%s:y=%d"
+                           % (cw, ch, _handle.esc(crop_x_expr(keys, cw / 2.0,
+                                                              src_w - cw / 2.0, cw)), cy))
+            else:
+                ops.append("crop=%d:%d:%d:%d" % (cw, ch, cx, cy))
+            ops += ["scale=%d:%d:flags=lanczos" % (out_w, out_h), "setsar=1"]
+        if caps:
+            # captions are drawn AFTER the crop, so they are sized for the frame
+            # the viewer sees rather than cropped along with the source pixels
+            ass = build_captions(clip, m["words"], caps["style"], start, end,
+                                 out_w, out_h, fps, tmpdir,
+                                 verify=not args.no_verify,
+                                 samples=int(caps.get("samples", 24)),
+                                 overlays=caps.get("overlays"),
+                                 fontsdir=caps.get("fontsdir", "fonts"))
+            ops.append("ass=filename=%s:fontsdir=%s:shaping=simple"
+                       % (ass, caps.get("fontsdir", "fonts")))
+        cut(src, dst, start, end - start, render, args.copy, overlay, ops, base)
         got, want = probe(dst), end - start
         if abs(got - want) > 0.5:
             sys.exit("%s: duration %.2fs, expected %.2fs" % (dst, got, want))

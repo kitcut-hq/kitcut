@@ -110,6 +110,48 @@ A manifest names the source, the transcript, and the clips:
 - Cutting is roughly **3x realtime** on a laptop RTX 3050 Ti — five ~75 s clips
   take about two minutes.
 
+## Vertical 9:16
+
+Cropping the captioned master does not work: its caption cards run to ~1180 px
+on a 1920 canvas while a 9:16 window is 607 px, so the crop slices the
+subtitles. Cut from the **clean source** and re-render captions after the crop —
+then they are sized for the frame the viewer actually sees.
+
+```powershell
+# 1. face-track the crop window
+python -X utf8 -E scripts/auto-reframe.py --manifest config/clips/<id>-vertical.json
+# 2. cut: crop -> scale -> captions -> badge, one encode
+python -X utf8 -E scripts/cut-clips.py --manifest config/clips/<id>-vertical.json
+```
+
+A vertical manifest adds three keys to the ordinary one:
+
+```json
+"vertical": { "width": 1080, "height": 1920 },
+"captions": { "style": "config/presets/red-card-vertical.json", "samples": 24 },
+"handle":   { "text": "@name", "preset": "config/handles/vertical.json" }
+```
+
+- **The crop moves.** `auto-reframe.py` samples each clip, finds the largest
+  face (Haar, frontal + profile, on small greyscale frames), smooths hard and
+  emits a few `[[t, centre_x], ...]` keys to a sidecar. `cut-clips.py` turns
+  those into a crop whose `x` is an expression in `t`, so the window pans
+  between keys and snaps at cuts. It prints a detection rate per clip — on this
+  material 74–99%. Where nothing is found it holds the last position, which is a
+  guess: look at the result.
+- Per-clip `crop_x` (static) or `crop_keys` (inline) override the sidecar.
+- **Captions get a slice, not a copy.** The ASS builder's `--range` /
+  `--time-offset` already exist, so each clip is a view onto the one transcript
+  and no sliced word files are written. Sync is still proven per clip before
+  rendering.
+- **Both presets need a vertical variant**, and for opposite reasons: captions
+  scale by the HEIGHT ratio, so vertical makes text ×1.78 bigger in a narrower
+  frame; the badge scales by the WIDTH ratio, so a landscape preset comes out
+  tiny.
+- **A crop cannot save wide burned-in graphics.** Full-width lower-thirds and
+  b-roll in the source get sliced — no 607 px window contains them. Inspect
+  inserts and decide per clip.
+
 ## The handle badge
 
 A camera glyph above an `@handle`, hopping between anchor points on a timer and
@@ -163,6 +205,9 @@ matters to you.
 ## Requirements
 
 - Python 3.12+ with `faster-whisper`, `ctranslate2`, `fonttools`, `numpy`, `pillow`
+- `opencv-python<5` — only for `auto-reframe.py`. The pin is load-bearing:
+  OpenCV 5 ships no Haar cascades, and its `FaceDetectorYN` replacement wants a
+  model downloaded from an external host.
 - `ffmpeg`/`ffprobe` built with **libass** (check: `ffmpeg -filters | grep ass`)
 - `yt-dlp`
 - Optional NVIDIA GPU. CUDA also needs `nvidia-cublas-cu12` — ctranslate2 bundles
@@ -216,6 +261,17 @@ evidence.
 - **Never seek with plain `-ss` when burning subtitles** — it rebases PTS to 0 so
   libass renders the wrong lines. Use `--preview`, which regenerates a shifted ASS.
 - **`-b:v 0` is required with `-cq`** or NVENC ignores the quality target.
+- **`crop` has no `eval` option** — that is `scale`/`overlay`/`drawtext`. Its
+  `x`/`y` are flagged runtime-tunable and already re-evaluated per frame, which
+  is what lets the vertical crop pan. Passing `eval=frame` is a hard error.
+- **The `ass` filter eats Windows backslashes.** `temp\05-x.ass` reaches libass
+  as `temp05-x.ass`, because `\0` is an escape. Forward slashes everywhere.
+- **`grouping.max_words` and `timing.min_active_ms` interact.** The builder's
+  `group N overlaps group N-1` check fires when a group's per-word min-active
+  cascade runs past the next group's start — which depends on where the group
+  seam happens to fall. Changing one of the two and re-testing only one clip
+  will look fine and break another. Tune them as a pair, re-test every clip, and
+  never edit the builder to silence the check.
 - **An ffmpeg option before an `-i` belongs to THAT input.** Adding badge PNGs
   to a cut turned a `-t` that used to sit next to the source into the *PNG's*
   duration, and the clip silently ran to the end of the source. `-ss` before the

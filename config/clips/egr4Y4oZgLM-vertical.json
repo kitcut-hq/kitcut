@@ -1,0 +1,48 @@
+{
+  "_comment": "Vertical 9:16 build of the same five episodes. Cut from the CLEAN source, not the captioned master: captions are re-rendered at vertical size after the crop, so they are never sliced by it. crop_x is the centre of the kept window on the 1920px-wide source; the default 960 is a bet that the subject is centred, which is not true in every scene.",
+  "source": "sources/egr4Y4oZgLM-1080p60.mp4",
+  "words": "transcripts/egr4Y4oZgLM.words.json",
+  "outdir": "outputs/shorts-vertical",
+  "prefix": "egr4Y4oZgLM-v",
+  "pad": { "head": 0.15, "tail": 0.35 },
+  "vertical": { "width": 1080, "height": 1920 },
+  "captions": { "style": "config/presets/red-card-vertical.json", "samples": 24 },
+  "handle": { "text": "@kris_zahrebelna", "preset": "config/handles/vertical.json" },
+  "clips": [
+    {
+      "id": "01-silver-button",
+      "title": "Розпаковка срібної кнопки YouTube",
+      "start_text": "Ну що, тільки що кур'єр подзвонив",
+      "end_before_text": "Наступне, друге.",
+      "crop_x": 960
+    },
+    {
+      "id": "02-immigrants",
+      "title": "В Америці чужинець — норма, в Європі чужинець залишається чужинцем",
+      "start_text": "Третя причина, чому я не поїду",
+      "end_before_text": "Що мене кожного разу неприємно",
+      "crop_x": 930
+    },
+    {
+      "id": "03-paid-toilets",
+      "title": "Платні туалети в Європі vs безкоштовні в США",
+      "start_text": "Що мене кожного разу неприємно",
+      "end_text": "І це, бляха-муха, приємно.",
+      "crop_x": 960
+    },
+    {
+      "id": "04-wages-vs-rent",
+      "title": "Мінімалка й оренда: Варшава vs Лос-Анджелес",
+      "start_text": "Наприклад, у Польщі, у Варшаві",
+      "end_text": "відносно доходів це набагато доступніше.",
+      "crop_x": 900
+    },
+    {
+      "id": "05-ranch-tsa",
+      "title": "Соус Ranch і офіційне попередження TSA",
+      "start_text": "До речі, міф про несмачну американську їжу",
+      "end_text": "Ось така, друзі, прикольна історія.",
+      "crop_x": 900
+    }
+  ]
+}

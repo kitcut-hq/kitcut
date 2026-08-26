@@ -1,6 +1,6 @@
 ---
 name: video-shorts
-description: Extract shorts/episodes from a long video and stamp them with an animated Instagram-handle badge. Reads the word-level transcript to pick self-contained episodes, resolves cut boundaries by quoting what is said (not by timecodes), cuts frame-accurately with NVENC, and burns in a hopping flat/gradient @handle overlay in the same encode. Use when asked to make shorts, extract clips or episodes from a video, or to add a social-handle watermark to clips.
+description: Extract shorts/episodes from a long video, optionally reframed to vertical 9:16, and stamp them with an animated Instagram-handle badge. Reads the word-level transcript to pick self-contained episodes, resolves cut boundaries by quoting what is said (not by timecodes), face-tracks the crop window so the subject stays in frame, re-renders captions at vertical size, and burns everything in one NVENC pass. Use when asked to make shorts, extract clips or episodes from a video, to make a video vertical for Reels/Shorts/TikTok, or to add a social-handle watermark to clips.
 ---
 
 # Shorts out of a long video, with a handle badge
@@ -106,6 +106,54 @@ a PNG (fonts, gradients, outlines are easy there); ffmpeg animates it with
 `overlay` using `x`/`y`/`enable` expressions in `t`. One filter pass, no
 per-frame Python. Don't try to move this into ASS — libass has no gradients.
 
+## Vertical 9:16
+
+Do **not** crop the captioned master — its caption cards are up to ~1180 px wide
+on a 1920 canvas and a 9:16 window is only 607 px, so the crop slices the
+subtitles. Cut from the **clean source** and re-render captions after the crop.
+Use a second manifest for it (`config/clips/<id>-vertical.json`) so the
+landscape build stays intact:
+
+```json
+"source": "sources/<id>-1080p60.mp4",
+"vertical": { "width": 1080, "height": 1920 },
+"captions": { "style": "config/presets/red-card-vertical.json", "samples": 24 },
+"handle":   { "text": "@name", "preset": "config/handles/vertical.json" }
+```
+
+Order inside the single encode is crop → scale → captions → badge, so captions
+and badge are both sized for the frame the viewer sees.
+
+**Face-track the crop first.** A fixed centre crop is a bet that the subject is
+centred; over a real video they are not.
+
+```powershell
+python -X utf8 -E scripts/auto-reframe.py --manifest config/clips/<id>-vertical.json
+```
+
+It writes `config/clips/<id>-vertical.reframe.json`, which `cut-clips.py` picks
+up automatically and turns into a crop whose `x` is an expression in `t` — the
+window pans between keys and snaps at scene cuts. Report the detection rate it
+prints; below ~60% means it mostly held a guess and the result needs eyes.
+Per-clip `crop_x` (static) or `crop_keys` (inline `[[t, x], ...]`) in the
+manifest override it.
+
+**What auto-reframe cannot fix:** b-roll and full-width lower-thirds burned into
+the source get sliced by any crop — a wide graphic has no 607 px window that
+contains it. Check inserts specifically and tell the user which clips lose
+source graphics; the options are accepting it, a hand-written `crop_keys`, or
+leaving that clip landscape.
+
+Both presets need a vertical variant, because both are authored on a landscape
+canvas:
+
+- **Captions** scale by the HEIGHT ratio, so vertical enlarges text ×1.78 while
+  the frame gets narrower. `red-card-vertical.json` cuts words-per-group so the
+  cards don't turn into tall multi-line blocks.
+- **The badge** scales by the WIDTH ratio, so a landscape preset comes out tiny.
+  `handles/vertical.json` is authored on 1080x1920 with anchors that stay clear
+  of the caption card (below y≈1450).
+
 ## Step 4 — verify before declaring done
 
 The cutter already asserts output duration against the plan. Additionally:
@@ -121,6 +169,21 @@ The cutter already asserts output duration against the plan. Additionally:
 
 ## Traps (all hit for real)
 
+- **`crop` has no `eval` option** — that is `scale`/`overlay`/`drawtext`. Its
+  `x`/`y` are flagged runtime-tunable and already re-evaluated every frame,
+  which is what makes the pan work. Passing `eval=frame` is a hard error.
+- **Never pass a Windows path to the `ass` filter with backslashes.** libass
+  reads `temp\05-x.ass` as an escape and silently looks for `temp05-x.ass`.
+  Forward slashes everywhere.
+- **`SELFCHECK: group N overlaps group N-1` is a real defect, not noise.** A
+  group's per-word `min_active_ms` cascade ran past the next group's start, so
+  the card would outlive its slot. It depends on where the group seam falls, so
+  it appears and disappears as `grouping.max_words` changes — and `max_words`
+  and `min_active_ms` interact. Tune them **as a pair and re-test every clip**
+  (build the ASS alone, no encode, it takes seconds). Never edit the builder to
+  silence it.
+- **Haar cascades need `opencv-python<5`.** OpenCV 5 ships none, and its
+  `FaceDetectorYN` wants a model downloaded from an external host.
 - **An ffmpeg option before an `-i` binds to THAT input.** Adding badge PNG
   inputs turned a `-t` next to the source into the PNG's duration and the clip
   silently ran to the end of the source. `-ss` before the source input, `-t`
@@ -144,8 +207,14 @@ The cutter already asserts output duration against the plan. Additionally:
 | Path | |
 |---|---|
 | `scripts/transcript-outline.py` | transcript → skimmable outline; `--find` a phrase's time |
-| `scripts/cut-clips.py` | manifest → clips, handle applied in the same encode |
+| `scripts/cut-clips.py` | manifest → clips; crop, captions and badge in one encode |
 | `scripts/handle-overlay.py` | badge rendering + ffmpeg animation graph |
+| `scripts/auto-reframe.py` | face-tracked crop keyframes for the vertical build |
 | `config/clips/<id>.json` | one manifest per source video |
-| `config/handles/default.json` | badge style + motion |
+| `config/handles/default.json` / `vertical.json` | badge style + motion, per orientation |
+| `config/presets/red-card-vertical.json` | caption preset for a 9:16 frame |
 | `config/clips/egr4Y4oZgLM.json` | working example (5 episodes, handle, Ukrainian phrases) |
+| `config/clips/egr4Y4oZgLM-vertical.json` | the same five, vertical + auto-reframed |
+
+Requires `opencv-python<5` for auto-reframe; everything else is the captions
+pipeline's existing dependency set.
