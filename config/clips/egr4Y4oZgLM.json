@@ -1,0 +1,42 @@
+{
+  "_comment": "Ukrainka v SShA - 'chomu ya ne pereidu zhyty v Yevropu' (24:23). Five self-contained episodes for shorts, cut as-is from the captioned master.",
+  "source": "outputs/egr4Y4oZgLM-captioned-1080p60.mp4",
+  "words": "transcripts/egr4Y4oZgLM.words.json",
+  "outdir": "outputs/shorts",
+  "prefix": "egr4Y4oZgLM",
+  "pad": { "head": 0.15, "tail": 0.35 },
+  "handle": { "text": "@kris_zahrebelna", "preset": "config/handles/default.json" },
+  "render": { "encoder": "h264_nvenc", "preset": "p5", "cq": 21, "maxrate": "16M", "bufsize": "32M", "audio_bitrate": "192k" },
+  "clips": [
+    {
+      "id": "01-silver-button",
+      "title": "Розпаковка срібної кнопки YouTube",
+      "start_text": "Ну що, тільки що кур'єр подзвонив",
+      "end_before_text": "Наступне, друге."
+    },
+    {
+      "id": "02-immigrants",
+      "title": "В Америці чужинець — норма, в Європі чужинець залишається чужинцем",
+      "start_text": "Третя причина, чому я не поїду",
+      "end_before_text": "Що мене кожного разу неприємно"
+    },
+    {
+      "id": "03-paid-toilets",
+      "title": "Платні туалети в Європі vs безкоштовні в США",
+      "start_text": "Що мене кожного разу неприємно",
+      "end_text": "І це, бляха-муха, приємно."
+    },
+    {
+      "id": "04-wages-vs-rent",
+      "title": "Мінімалка й оренда: Варшава vs Лос-Анджелес",
+      "start_text": "Наприклад, у Польщі, у Варшаві",
+      "end_text": "відносно доходів це набагато доступніше."
+    },
+    {
+      "id": "05-ranch-tsa",
+      "title": "Соус Ranch і офіційне попередження TSA",
+      "start_text": "До речі, міф про несмачну американську їжу",
+      "end_text": "Ось така, друзі, прикольна історія."
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "_comment": "Animated social handle badge: camera glyph above the @handle, hopping between anchor points and alternating between a flat and a gradient glyph. Authored on a 1920x1080 canvas; every px value is scaled to the actual video.",
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "font": {
+    "file": "fonts/Montserrat-Bold.ttf",
+    "cap_height_px": 26,
+    "uppercase": true,
+    "tracking_px": 1.5
+  },
+  "text": {
+    "colour": "#FFFFFF",
+    "outline_px": 4,
+    "outline_colour": "#000000"
+  },
+  "icon": {
+    "size_px": 58,
+    "stroke_px": 6,
+    "corner_radius_px": 16,
+    "gap_px": 2,
+    "colour": "#FFFFFF",
+    "outline_px": 4,
+    "outline_colour": "#000000",
+    "gradient": ["#FEDA75", "#FA7E1E", "#D62976", "#962FBF", "#4F5BD5"],
+    "gradient_angle_deg": 45
+  },
+  "motion": {
+    "_note": "positions are badge CENTRE points on the canvas, visited in order; keep them clear of the caption card at the bottom",
+    "positions": [
+      [1470, 690],
+      [430, 300],
+      [1470, 300],
+      [430, 690]
+    ],
+    "move_every_s": 7.0,
+    "colour_cycle": ["gradient", "flat"],
+    "colour_every_s": 4.5,
+    "opacity": 0.92,
+    "start_index": 0
+  }
+}

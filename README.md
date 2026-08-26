@@ -63,6 +63,103 @@ take cap height / colours / radius / margins off a **native-resolution** frame.
 For brand colours, mask a channel thumbnail to saturated pixels, quantise, and
 read the dominant buckets.
 
+## Cutting shorts out of a long video
+
+Once a video has a `transcripts/<id>.words.json`, episodes can be pulled out of
+it by quoting what is said rather than by hunting for timecodes.
+
+```powershell
+# skim the whole thing as [mm:ss] lines, then find where a line lands
+python -X utf8 -E scripts/transcript-outline.py transcripts/<id>.words.json --outline
+python -X utf8 -E scripts/transcript-outline.py transcripts/<id>.words.json --find "so anyway"
+
+# resolve every boundary and print the plan without encoding anything
+python -X utf8 -E scripts/cut-clips.py --manifest config/clips/<id>.json --list
+python -X utf8 -E scripts/cut-clips.py --manifest config/clips/<id>.json
+```
+
+A manifest names the source, the transcript, and the clips:
+
+```json
+{
+  "source": "outputs/<id>-captioned-1080p60.mp4",
+  "words": "transcripts/<id>.words.json",
+  "outdir": "outputs/shorts",
+  "prefix": "<id>",
+  "pad": { "head": 0.15, "tail": 0.35 },
+  "clips": [
+    { "id": "01-something", "title": "…",
+      "start_text": "ну що, тільки що кур'єр",
+      "end_before_text": "наступне, друге" }
+  ]
+}
+```
+
+- **Boundaries are phrases.** `start_text` / `end_text` / `end_before_text` are
+  matched against the transcript ignoring case, punctuation and spacing, so a
+  phrase pasted out of the outline and one typed normally both hit. Plain
+  `start` / `end` / `duration` in seconds still work.
+- **Pads never eat a neighbour.** The pad is a guess about silence; when the
+  transcript says a word is still being spoken inside it, the boundary meets it
+  halfway instead, so a clip does not open on the tail of the previous sentence.
+- **Cuts are frame-accurate**, because the source is re-encoded. `--copy`
+  stream-copies instead — instant, but the cut snaps to a keyframe.
+- Existing outputs are skipped, so editing one entry and re-running rebuilds only
+  that entry; `--only <ids>` and `--force` narrow it further. Each clip gets a
+  `.json` sidecar recording the exact source, boundaries and encoder settings.
+- Cutting is roughly **3x realtime** on a laptop RTX 3050 Ti — five ~75 s clips
+  take about two minutes.
+
+## The handle badge
+
+A camera glyph above an `@handle`, hopping between anchor points on a timer and
+alternating between a flat glyph and a gradient one — a moving mark is harder to
+crop out or paint over than a fixed corner watermark.
+
+```powershell
+# eyeball the style without encoding anything
+python -X utf8 -E scripts/handle-overlay.py --badges-only --handle "@name"
+
+# burn it into an existing file
+python -X utf8 -E scripts/handle-overlay.py --video in.mp4 --handle "@name"
+```
+
+Better, put it in the clip manifest and let `cut-clips.py` apply it **while
+cutting** — one encode instead of two, so the clips are not re-compressed:
+
+```json
+"handle": { "text": "@name", "preset": "config/handles/default.json" }
+```
+
+`--handle` / `--handle-preset` / `--no-handle` override the manifest per run.
+
+The split is deliberate: the badge is drawn once per colour variant into a PNG
+by Pillow — where fonts, gradients and outlines are easy — and the animation is
+an ffmpeg `overlay` whose `x`, `y` and `enable` are expressions in `t`. So the
+motion costs one filter pass and no per-frame Python. ASS could not have done
+it: libass has no gradients.
+
+Styling lives in `config/handles/*.json`, authored on a 1920x1080 canvas and
+scaled to the real video like the caption presets.
+
+| Key | Effect |
+|---|---|
+| `font.cap_height_px` / `tracking_px` / `uppercase` | the handle text |
+| `text.outline_px` / `outline_colour` | dark edge so white text survives a bright frame |
+| `icon.size_px` / `stroke_px` / `corner_radius_px` / `gap_px` | the glyph |
+| `icon.gradient` / `gradient_angle_deg` | colours of the gradient variant |
+| `motion.positions` | badge **centre** points, visited in order |
+| `motion.move_every_s` / `colour_every_s` | the two independent cycles |
+| `motion.colour_cycle` | which variants alternate (`flat`, `gradient`) |
+| `motion.opacity` / `start_index` | |
+
+Keep `motion.positions` clear of the caption card at the bottom of the frame.
+
+The glyph is drawn from primitives — a rounded square, a lens circle, a
+viewfinder dot — not lifted from a brand asset. It reads as a camera mark; treat
+using it as attribution, and check the platform's brand guidelines if that
+matters to you.
+
 ## Requirements
 
 - Python 3.12+ with `faster-whisper`, `ctranslate2`, `fonttools`, `numpy`, `pillow`
@@ -82,7 +179,12 @@ read the dominant buckets.
 | `scripts/detect-overlays.py` | finds the source's own lower-third graphics |
 | `scripts/build-captions-ass.py` | words + preset → styled ASS |
 | `scripts/verify-captions.py` | proves sync by probing rendered frames |
+| `scripts/transcript-outline.py` | skim a transcript; find the time of a phrase |
+| `scripts/cut-clips.py` | manifest → standalone clips cut out of a long video |
+| `scripts/handle-overlay.py` | animated social-handle badge, drawn and burned in |
 | `config/presets/` | all visual styling |
+| `config/clips/` | clip manifests (which episodes to cut, and where) |
+| `config/handles/` | handle-badge styling and motion |
 | `fonts/` | Montserrat Bold (SIL OFL 1.1, see `fonts/OFL.txt`) |
 | `docs/karaoke-captions.md` | design notes and the traps behind them |
 | `.claude/skills/video-captions/` | Claude Code skill |
@@ -114,6 +216,12 @@ evidence.
 - **Never seek with plain `-ss` when burning subtitles** — it rebases PTS to 0 so
   libass renders the wrong lines. Use `--preview`, which regenerates a shifted ASS.
 - **`-b:v 0` is required with `-cq`** or NVENC ignores the quality target.
+- **An ffmpeg option before an `-i` belongs to THAT input.** Adding badge PNGs
+  to a cut turned a `-t` that used to sit next to the source into the *PNG's*
+  duration, and the clip silently ran to the end of the source. `-ss` before the
+  source, `-t` after every input. `cut-clips.py` checks the output duration
+  against the plan, which is how that showed up as an error rather than as five
+  eight-minute "shorts".
 
 ## Legacy
 
