@@ -237,6 +237,22 @@ python scripts/cut-clips.py --manifest config/clips/<id>-vertical.json `
 The output is named `…-<tag>.mp4` (`en` by default), so the original is never
 overwritten.
 
+Two voices are available. edge-tts needs no key and has the wider speed range;
+ElevenLabs sounds better and needs `ELEVENLABS_API_KEY` in `.env`. Give each run
+its own `--tag` and they coexist:
+
+```powershell
+python scripts/dub-clips.py --manifest ... --only <id> `
+    --tts elevenlabs --voice jessica --tag en-el
+python scripts/cut-clips.py --manifest ... --only <id> --dub outputs/dub --dub-tag en-el
+```
+
+Measured against each other through the identical pipeline they tie on timing
+(sync 95.0% vs 93.9%, mean slot error 0.15s vs 0.18s), so choose on how the
+voice sounds. The one difference clearly owned by the backend: ElevenLabs caps
+`speed` at 0.7-1.2, so 14 of 26 lines sit pinned against that limit where edge
+pinned 5 — it just still fits.
+
 ### How it works
 
 1. **Segment.** Split the clip at the pauses the speaker actually took, then
@@ -283,7 +299,10 @@ it. Both numbers came from measuring, not from listening and guessing.
 | `--max-dur` | `4.0` | longer slots translate better and sync worse |
 | `--words-per-sec` | `3.2` | the per-slot word budget handed to the translator |
 | `--tune-rounds` | `1` | measure-then-rewrite passes |
-| `--engine` | `claude` | or `openai` (needs a key), or `manual` |
+| `--engine` | `claude` | translation: or `openai` (needs a key), or `manual` |
+| `--tts` | `edge` | or `elevenlabs` |
+| `--voice` | `ava` / `jessica` | default follows `--tts` |
+| `--tag` | `en` | names this run's artifacts; one per backend |
 
 `--engine manual` takes a hand-written `[{"i":1,"text":"...","tight":"..."}]`
 via `--translation`, which is the escape hatch when a line has to be exact.
@@ -402,6 +421,22 @@ evidence.
   first dub came in short on 14 of 26 lines, and the fitter drawled the voice at
   its `-18%` floor to cover the gaps. Word the budget as a target to hit and say
   why (silence under a moving mouth looks worse than a slightly long line).
+
+- **ElevenLabs' character-level alignment returns overlapping words** where
+  edge returns none, and the caption builder rightly refuses to write an ASS
+  whose groups overlap. `dub-tts.monotonic()` fixes the marks — and has to run
+  *after* the silence trim, not before: the trim shifts every mark and clamps at
+  zero, which collapses each word that began inside the trimmed lead onto 0.0
+  and recreates the exact overlaps. A guarantee established early is not a
+  guarantee if a later transform can violate it.
+- **A TTS-scoped ElevenLabs key cannot list voices.** `GET /v1/voices` and
+  `/v1/user/subscription` 401 with `missing_permissions` while synthesis works
+  fine, so voice ids have to be kept by hand in
+  `config/elevenlabs-voices.json` — and only the ones marked `verified: true`
+  there have actually been called. Two shipped ids in that file used to 404.
+- **A media player holding the previous render open** makes the final rename
+  fail with EACCES on Windows, discarding a finished encode over a file lock.
+  `cut-clips.py` waits it out.
 
 ## Legacy
 

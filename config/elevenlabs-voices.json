@@ -25,45 +25,60 @@
     }
   },
   "voices": {
-    "brian": {
-      "id": "nPczCjzI2devNBz1zQrb",
-      "accent": "American",
-      "gender": "Male",
-      "tone": "Neutral, professional narrator",
-      "use_case": "Video narration, demos, tutorials",
-      "notes": "Natural US male voice. Used for HPD OMO voiceover demo with excellent results at 128kbps."
+    "jessica": {
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "gender": "Female",
+      "verified": true,
+      "note": "default for dubbing -- young, conversational"
+    },
+    "sarah": {
+      "voice_id": "EXAVITQu4vr4xnSDxMaL",
+      "gender": "Female",
+      "verified": true
+    },
+    "laura": {
+      "voice_id": "FGY2WhTYpPnrIDTdsKH5",
+      "gender": "Female",
+      "verified": true
     },
     "alice": {
-      "id": "Xb7hH8MSUJpSbvxk5AI5",
-      "accent": "American",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
       "gender": "Female",
-      "tone": "Warm, friendly",
-      "use_case": "Customer education, friendly narration",
-      "notes": "Professional female narrator, conversational tone."
+      "verified": true
+    },
+    "matilda": {
+      "voice_id": "XrExE9yKIg1WjnnlVkGX",
+      "gender": "Female",
+      "verified": true
+    },
+    "lily": {
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "gender": "Female",
+      "verified": true
+    },
+    "brian": {
+      "voice_id": "nPczCjzI2devNBz1zQrb",
+      "gender": "Male",
+      "verified": true,
+      "note": "US male narrator"
+    },
+    "rachel": {
+      "voice_id": "21m00Tcm4TlvDq8ikWAM",
+      "gender": "Female",
+      "verified": false,
+      "note": "returned paid_plan_required on a free tier"
     },
     "sam": {
-      "id": "yoZ06aMxZJJ28mfd3IW5",
-      "accent": "American",
+      "voice_id": "yoZ06aMxZJJ28mfd3IW5",
       "gender": "Male",
-      "tone": "Deep, serious",
-      "use_case": "Documentary, dramatic narration",
-      "notes": "Rich, authoritative male voice."
-    },
-    "jessica": {
-      "id": "cgSgspJ2msm4f57DCYsx",
-      "accent": "British",
-      "gender": "Female",
-      "tone": "Professional, articulate",
-      "use_case": "Professional content, business",
-      "notes": "British English, polished delivery."
+      "verified": false,
+      "note": "carried over from the old file; never called"
     },
     "arnold": {
-      "id": "VR6AewLBIAG4zNiiZFUH",
-      "accent": "American",
+      "voice_id": "VR6AewLBIAG4zNiiZFUH",
       "gender": "Male",
-      "tone": "Energetic, confident",
-      "use_case": "Marketing, promotional content",
-      "notes": "Dynamic, high-energy narrator."
+      "verified": false,
+      "note": "carried over from the old file; never called"
     }
   },
   "stability_similarity_presets": {
@@ -83,5 +98,15 @@
       "note": "More expressive, higher variation"
     }
   },
-  "api_reference": "https://elevenlabs.io/docs/speech-synthesis/getting-started-with-text-to-speech"
+  "api_reference": "https://elevenlabs.io/docs/speech-synthesis/getting-started-with-text-to-speech",
+  "_voice_id_warning": "Two ids in this file used to 404: alice and jessica were Xb7hH8MSUJpSbvxk5AI5 and cgSgspJ2msm4f57DCYsx, which are corrupted variants of the real ones. Every id below marked verified:true returned audio from the API on 2026-08-25. Do not add an id here without calling it.",
+  "_scoped_key_note": "A TTS-scoped key cannot list voices or read the subscription -- GET /v1/voices and /v1/user/subscription both 401 with 'missing_permissions'. That is not a bad key; synthesis still works. It does mean you cannot discover voice ids at runtime, hence this file.",
+  "dubbing": {
+    "model": "eleven_multilingual_v2",
+    "speed_range": [
+      0.7,
+      1.2
+    ],
+    "note": "dub-clips.py uses multilingual_v2 with the /with-timestamps endpoint, which is what supplies word timings for the captions. speed outside 0.7-1.2 is rejected outright; measured, that is -30%/+20%, against edge-tts's -25%/+45%."
+  }
 }

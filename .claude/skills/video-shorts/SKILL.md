@@ -150,7 +150,13 @@ by eye every time:
 
 - **A `pad` decision only ever means "no face found here."** Usually b-roll, but
   a shot where the subject looks down or away reads identically — one clip here
-  letterboxes a shot she is actually in, because her face was not visible.
+  letterboxed a shot she is actually in, because she was holding something up
+  and her head was above the source frame.
+  **"No face" is not "nothing to crop to."** Letterboxing shrank a perfectly
+  good subject to a third of the screen; cropping to what she was holding looked
+  far better. Review every `pad` on screen, and when one is wrong, override it in
+  the `.reframe.json` sidecar — that file exists to be edited: clear the `pad`
+  entry and add `keys` across the span.
 - Below ~60% detection means it mostly held a guess.
 
 Per-clip `crop_x` (static), `crop_keys` (inline `[[t, x], ...]`) and `crop_pad`
@@ -262,6 +268,20 @@ The cutter already asserts output duration against the plan. Additionally:
 - `scripts/transcript-outline.py` and `scripts/cut-clips.py` have hyphens in
   their names: import via `importlib.import_module("transcript-outline")`, and
   keep it that way for CLI ergonomics.
+
+## Where to put the handle badge
+
+Anchors live in `config/handles/<preset>.json` as centres on the output canvas.
+Two constraints bound them: the caption card's top edge (near y=1412 on a
+1080x1920 frame) caps how low the bottom pair can sit, and the badge's own
+height caps how high the top pair can go. y=150 / y=1350 are the practical
+extremes for a 357x111 badge.
+
+Be honest about the limit: **in a tight close-up the face fills the whole frame
+and no anchor clears it.** At the extremes the badge sits on hair rather than on
+features, which is the best available rather than a fix. If that is not enough,
+the real options are shrinking the badge or dropping the 4-position cycle for a
+single fixed corner.
 
 ## Files
 

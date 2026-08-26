@@ -31,9 +31,48 @@ python scripts/cut-clips.py --manifest config/clips/<id>-vertical.json `
     --only <clip-id> --dub outputs/dub
 ```
 
-No API key is needed: the voice is edge-tts and the default translation engine
-shells out to the Claude Code CLI. Output is `…-en.mp4`; the original is never
-overwritten.
+Out of the box no API key is needed: the voice is edge-tts and the default
+translation engine shells out to the Claude Code CLI. Output is `…-en.mp4`; the
+original is never overwritten.
+
+## Choosing a voice
+
+```powershell
+# free, no key, wide speed range
+python scripts/dub-clips.py --manifest ... --only <id> --tts edge --voice ava
+
+# better voice, needs ELEVENLABS_API_KEY in .env, costs characters
+python scripts/dub-clips.py --manifest ... --only <id> `
+    --tts elevenlabs --voice jessica --tag en-el
+python scripts/cut-clips.py --manifest ... --only <id> `
+    --dub outputs/dub --dub-tag en-el
+```
+
+`--tag` is what lets two versions coexist: it names every artifact for that run
+(`.en-el.wav`, `.en-el.words.json`, `.en-el.dub.json`) and suffixes the rendered
+mp4. Without distinct tags the second backend overwrites the first.
+
+Measured head to head on `01-silver-button`, both through the identical
+pipeline:
+
+| | edge / Ava | 11labs / Jessica |
+|---|---|---|
+| sync | **95.0%** | 93.9% |
+| slot error, mean | **0.15s** | 0.18s |
+| needed the shorter rewrite | 9 / 26 | **4 / 26** |
+| needed rubberband | 5 / 26 | **1 / 26** |
+| sitting on a rate clamp | 5 | 14 |
+
+They tie on timing, so **pick on how the voice sounds, not on these numbers**.
+Two honest caveats: each run translates fresh, so some of the middle rows are
+translation luck rather than the engine; and the last row is the one cleanly
+attributable to the backend -- ElevenLabs is pinned against its speed limit
+more than half the time, it just still fits.
+
+Voice ids live in `config/elevenlabs-voices.json`, and only the ones marked
+`verified: true` have actually been called. A TTS-scoped key cannot list voices
+at runtime (`GET /v1/voices` 401s with `missing_permissions`), which is why that
+file has to be maintained by hand.
 
 ## Step 1 — check the segmentation first
 
@@ -116,6 +155,24 @@ The render step separately proves caption sync on sampled frames (`sync probes:
   them silently repoints the badge at the wav.
 - **`--copy` cannot carry a dub.** A keyframe-snapped cut starts the picture
   somewhere the dub was never aligned to; `cut-clips.py` refuses.
+- **ElevenLabs' character alignment returns overlapping words** -- 9 pairs in a
+  228-word clip, where edge returned none. The caption builder refuses to write
+  an ASS with overlapping groups, so a dub built on those timings fails at the
+  self-check. `dub-tts.monotonic()` nudges each start forward. Do not relax the
+  check instead.
+- **Sanitise last, not first.** That same fix was initially applied *before* the
+  silence trim, and the trim then shifted every mark and clamped at zero --
+  collapsing every word that began inside the trimmed lead onto 0.0 and
+  recreating the exact overlaps it had just removed. A guarantee established
+  early is not a guarantee if a later transform can violate it.
+- **ElevenLabs rejects `speed` outside 0.7-1.2** outright, rather than clamping.
+  `rate_limits()` reports that as -30%/+20% so the fitter never asks for more.
+- **Give every backend its own `--tag`.** `plan.json` and `dub.json` used not to
+  be tag-scoped, so a second voice silently overwrote the first one's report and
+  the comparison was lost.
+- **A media player holding the previous render open** makes the final rename
+  fail with EACCES and throws away a finished encode. `cut-clips.py` now waits
+  the lock out.
 
 ## Files
 
