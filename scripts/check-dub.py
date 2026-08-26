@@ -140,6 +140,47 @@ check("changes with text",
       _clips._fingerprint({"units": [{"text": "one"}, {"text": "THREE"}]}, A) != fp1,
       True)
 
+print("== retune revert: a rewrite that fits WORSE is thrown away ==")
+# calls the real keep_better(), so this fails if that logic ever changes
+units_by_i = {1: {"i": 1, "dur": 2.00}, 2: {"i": 2, "dur": 2.00}}
+prev = {1: ("audioA", "marksA", {"final": 2.05}),      # off by .05
+        2: ("audioB", "marksB", {"final": 2.40})}      # off by .40
+fit_by_i = {1: {"final": 2.60},                        # off by .60 -- worse
+            2: {"final": 2.02}}                        # off by .02 -- better
+audio_by_i = {1: "audioA2", 2: "audioB2"}
+marks_by_i = {1: "marksA2", 2: "marksB2"}
+before = {1: {"text": "old one"}, 2: {"text": "old two"}}
+by_i = {1: {"text": "new one"}, 2: {"text": "new two"}}
+back = _clips.keep_better([1, 2], units_by_i, prev, before,
+                          audio_by_i, marks_by_i, fit_by_i, by_i)
+check("only the worse rewrite reverted", back, [1])
+check("reverted slot kept its old audio", audio_by_i[1], "audioA")
+check("reverted slot kept its old text", by_i[1]["text"], "old one")
+check("better rewrite survived", (fit_by_i[2]["final"], audio_by_i[2]),
+      (2.02, "audioB2"))
+
+print("== cut(): a locked destination is reported, not fatal ==")
+_cut = import_module("cut-clips")
+_tmp = os.path.join(os.environ.get("TEMP", "."), "_lockprobe")
+os.makedirs(_tmp, exist_ok=True)
+_dst = os.path.join(_tmp, "out.mp4")
+_part = _dst + ".part.mp4"
+with open(_part, "w") as f:
+    f.write("x")                       # stand in for a finished encode
+_replace, _sleep, _run = os.replace, _cut.time.sleep, _cut.run
+slept = []
+os.replace = lambda a, b: (_ for _ in ()).throw(PermissionError("locked"))
+_cut.time.sleep = lambda s: slept.append(s)
+_cut.run = lambda cmd, **kw: type("R", (), {"returncode": 0})()
+try:
+    got = _cut.cut("src.mp4", _dst, 0.0, 1.0, _cut.DEFAULT_RENDER, True)
+finally:
+    os.replace, _cut.time.sleep, _cut.run = _replace, _sleep, _run
+check("returns False rather than exiting", got, False)
+check("waited out the lock 5 times", len(slept), 5)
+check("kept the finished encode", os.path.exists(_part), True)
+os.remove(_part)
+
 print()
 if fails:
     print("FAILED %d: %s" % (len(fails), ", ".join(fails)))

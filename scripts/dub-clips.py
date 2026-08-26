@@ -309,6 +309,27 @@ def loudnorm(src, dst, lufs=-14.5):
         sys.exit("loudness normalisation failed for %s" % src)
 
 
+def keep_better(changed, units_by_i, old, before,
+                audio_by_i, marks_by_i, fit_by_i, by_i):
+    """Undo any retune rewrite that measures worse than what it replaced.
+
+    A rewrite is a guess corrected by measurement, and a correction can
+    overshoot: asked for SHORTER, the model can come back far under, which is
+    the dead-air-under-a-moving-mouth failure the retune exists to fix. Each
+    re-rendered slot is compared against its previous take and reverted if it
+    landed further from the slot length. Returns the slots put back.
+    """
+    reverted = []
+    for i in changed:
+        u = units_by_i[i]
+        if (abs(fit_by_i[i]["final"] - u["dur"])
+                > abs(old[i][2]["final"] - u["dur"]) + 1e-6):
+            audio_by_i[i], marks_by_i[i], fit_by_i[i] = old[i]
+            by_i[i].update(before[i])
+            reverted.append(i)
+    return reverted
+
+
 def sync_score(units, fits, total, step=0.01):
     """Share of the clip where dub and original agree that someone is talking.
 
@@ -508,15 +529,9 @@ def main():
                 break
             print("   round %d: re-rendering %d slot(s)" % (rnd + 1, len(changed)))
             render(changed)
-            # a rewrite is only a win if it measures better; keep the old take
-            # otherwise, or a round can trade a near-fit for a worse one
-            for i in changed:
-                u = units_by_i[i]
-                if (abs(fit_by_i[i]["final"] - u["dur"])
-                        > abs(old[i][2]["final"] - u["dur"]) + 1e-6):
-                    audio_by_i[i], marks_by_i[i], fit_by_i[i] = old[i]
-                    by_i[i].update(before[i])
-                    print("   slot %d: rewrite fit worse, kept the old line" % i)
+            for i in keep_better(changed, units_by_i, old, before,
+                                 audio_by_i, marks_by_i, fit_by_i, by_i):
+                print("   slot %d: rewrite fit worse, kept the old line" % i)
             save_rows(rows)
             if args.translation:
                 print("   (retuned rows went to %s; your --translation file "
