@@ -46,8 +46,14 @@ VOICES = {
 DEFAULT_VOICE = "ava"
 
 
-def resolve_voice(name):
+def resolve_voice(name, backend="edge"):
+    if backend == "elevenlabs":
+        return EL_VOICES.get(name, name)
     return VOICES.get(name, name)
+
+
+def default_voice(backend="edge"):
+    return EL_DEFAULT_VOICE if backend == "elevenlabs" else DEFAULT_VOICE
 
 
 async def _stream(text, voice, rate_pct, pitch_hz):
@@ -93,22 +99,109 @@ def _trim(x, sr=SR, floor_db=-45.0, margin=0.02):
     return x[i0:i1], i0 / float(sr)
 
 
-def speak(text, voice=DEFAULT_VOICE, rate_pct=0.0, pitch_hz=0.0, sr=SR, tries=4):
+# --------------------------------------------------------------- ElevenLabs
+# Better voices, and it can clone. The cost is headroom: `speed` is capped at
+# 0.7-1.2, so a line can only be compressed to x0.83, where edge reaches x0.69.
+# Lines that run long therefore fall back on the `tight` rewrite and rubberband
+# more often. Both numbers were measured, not taken from the docs.
+EL_URL = "https://api.elevenlabs.io/v1/text-to-speech/%s/with-timestamps"
+EL_MODEL = "eleven_multilingual_v2"
+EL_SPEED_LO, EL_SPEED_HI = 0.7, 1.2
+EL_VOICES = {
+    "sarah":   "EXAVITQu4vr4xnSDxMaL",
+    "laura":   "FGY2WhTYpPnrIDTdsKH5",
+    "alice":   "Xb7hH8MSUJpSbSDYk0k2",
+    "matilda": "XrExE9yKIg1WjnnlVkGX",
+    "jessica": "cgSgspJ2msm6clMCkdW9",
+    "lily":    "pFZP5JQG7iQjIQuC4Bku",
+    "brian":   "nPczCjzI2devNBz1zQrb",
+}
+EL_DEFAULT_VOICE = "jessica"
+
+
+def _el_render(text, voice, rate_pct):
+    """Returns (mp3 bytes, [(word, t0, t1)]) with times in seconds."""
+    import base64
+    import httpx
+
+    key = os.environ.get("ELEVENLABS_API_KEY")
+    if not key:
+        raise RuntimeError("ELEVENLABS_API_KEY is not set (put it in .env)")
+    vid = EL_VOICES.get(voice, voice)
+    speed = max(EL_SPEED_LO, min(EL_SPEED_HI, 1.0 + rate_pct / 100.0))
+    r = httpx.post(EL_URL % vid, timeout=180,
+                   headers={"xi-api-key": key, "Content-Type": "application/json"},
+                   json={"text": text, "model_id": EL_MODEL,
+                         "voice_settings": {"stability": 0.5,
+                                            "similarity_boost": 0.75,
+                                            "speed": round(speed, 3)}})
+    if r.status_code != 200:
+        raise RuntimeError("elevenlabs %s: %s" % (r.status_code, r.text[:200]))
+    j = r.json()
+    mp3 = base64.b64decode(j["audio_base64"])
+    al = j.get("alignment") or {}
+    # alignment is per CHARACTER; glue them back into words on whitespace
+    marks, cur, t0, t1 = [], "", None, None
+    for c, a, b in zip(al.get("characters") or [],
+                       al.get("character_start_times_seconds") or [],
+                       al.get("character_end_times_seconds") or []):
+        if c.isspace():
+            if cur:
+                marks.append((cur, t0, t1))
+            cur, t0 = "", None
+            continue
+        if not cur:
+            t0 = a
+        cur += c
+        t1 = b
+    if cur:
+        marks.append((cur, t0, t1))
+    return mp3, monotonic(marks)
+
+
+def monotonic(marks, min_len=0.01):
+    """Force word marks to run forward and never overlap.
+
+    Character-level alignment hands back words that start a few milliseconds
+    before the previous one finished -- 9 such pairs in a 228-word clip, where
+    edge produced none. The caption builder refuses to write an ASS whose groups
+    overlap (rightly: overlapping karaoke groups render as garbage), so a dub
+    built on those timings fails at the self-check rather than at the eye.
+    Nudging the start forward costs a few ms of highlight and fixes it.
+    """
+    out, prev_end = [], 0.0
+    for w, a, b in marks:
+        a = max(float(a), prev_end)
+        b = max(float(b), a + min_len)
+        out.append((w, a, b))
+        prev_end = b
+    return out
+
+
+def speak(text, voice=DEFAULT_VOICE, rate_pct=0.0, pitch_hz=0.0, sr=SR, tries=4,
+          backend="edge"):
     """Render one line. Returns (samples float32 mono, [(word, t0, t1), ...]).
 
     Word times are seconds from the first sample of the returned audio.
 
-    This is a free public service and it does occasionally hand back nothing at
-    all for a line it rendered happily a moment earlier. One dropped request
-    would otherwise abandon a run of dozens of slots, so retry before giving up.
+    Both services intermittently hand back nothing at all for a line they
+    rendered happily a moment earlier. One dropped request would otherwise
+    abandon a run of dozens of slots, so retry before giving up.
     """
     if not text or not text.strip():
         return np.zeros(0, dtype=np.float32), []
     last = None
     for attempt in range(tries):
         try:
-            mp3, marks = asyncio.run(
-                _stream(text, resolve_voice(voice), rate_pct, pitch_hz))
+            if backend == "elevenlabs":
+                mp3, marks = _el_render(text, voice, rate_pct)
+            else:
+                mp3, raw = asyncio.run(
+                    _stream(text, resolve_voice(voice), rate_pct, pitch_hz))
+                # edge reports 100-nanosecond ticks; normalise to seconds so the
+                # two backends hand back the same shape
+                marks = [(m["text"], m["offset"] / 1e7,
+                          (m["offset"] + m["duration"]) / 1e7) for m in raw]
             if mp3:
                 break
             last = RuntimeError("empty audio")
@@ -119,24 +212,33 @@ def speak(text, voice=DEFAULT_VOICE, rate_pct=0.0, pitch_hz=0.0, sr=SR, tries=4)
         raise RuntimeError("text-to-speech failed after %d tries for %r: %s"
                            % (tries, text[:60], last))
     audio, lead = _trim(_decode(mp3, sr), sr)
-    words = []
-    for mk in marks:
-        # edge reports 100-nanosecond ticks
-        t0 = mk["offset"] / 1e7 - lead
-        t1 = t0 + mk["duration"] / 1e7
-        words.append((mk["text"], max(0.0, t0), max(0.0, t1)))
-    return audio, words
+    return audio, [(w, max(0.0, a - lead), max(0.0, b - lead)) for w, a, b in marks]
 
 
-def rate_for(natural_dur, target_dur, lo=-25.0, hi=45.0):
+def rate_limits(backend="edge"):
+    """How far each backend will let you push the speaking rate, in percent.
+
+    edge takes a rate directly. ElevenLabs takes a `speed` multiplier capped at
+    0.7-1.2, which is the same thing expressed as -30%..+20% -- noticeably less
+    room to compress a line that has run long.
+    """
+    if backend == "elevenlabs":
+        return (EL_SPEED_LO - 1.0) * 100.0, (EL_SPEED_HI - 1.0) * 100.0
+    return -25.0, 45.0
+
+
+def rate_for(natural_dur, target_dur, lo=None, hi=None, backend="edge"):
     """Speaking-rate percentage that turns natural_dur into target_dur.
 
     Duration goes as 1/(1+r), so r = natural/target - 1. Clamped, because past
-    roughly +45% the voice starts clipping its own consonants and past -25% it
-    drawls.
+    the limits the voice starts clipping its own consonants at one end and
+    drawling at the other.
     """
     if target_dur <= 0 or natural_dur <= 0:
         return 0.0
+    dlo, dhi = rate_limits(backend)
+    lo = dlo if lo is None else lo
+    hi = dhi if hi is None else hi
     return max(lo, min(hi, (natural_dur / target_dur - 1.0) * 100.0))
 
 

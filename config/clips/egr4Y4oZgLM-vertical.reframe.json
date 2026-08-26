@@ -90,8 +90,20 @@
         955
       ],
       [
-        38.627,
-        955
+        34.2,
+        955.0
+      ],
+      [
+        35.3,
+        1105.0
+      ],
+      [
+        37.9,
+        1105.0
+      ],
+      [
+        38.63,
+        955.0
       ],
       [
         38.677,
@@ -134,12 +146,8 @@
         914
       ]
     ],
-    "pad": [
-      [
-        34.823,
-        38.677
-      ]
-    ]
+    "pad": [],
+    "_note": "34.2-38.6 is hand-set: the tracker found no face (her head is above the source frame while she holds the plaque up) and letterboxed it, which shrank a perfectly good subject to a third of the screen. 'no face' is not the same as 'nothing to crop to'."
   },
   "02-immigrants": {
     "keys": [

@@ -23,19 +23,40 @@
     "colour": "#FFFFFF",
     "outline_px": 3,
     "outline_colour": "#000000",
-    "gradient": ["#FEDA75", "#FA7E1E", "#D62976", "#962FBF", "#4F5BD5"],
+    "gradient": [
+      "#FEDA75",
+      "#FA7E1E",
+      "#D62976",
+      "#962FBF",
+      "#4F5BD5"
+    ],
     "gradient_angle_deg": 45
   },
   "motion": {
-    "_note": "centres on a 1080x1920 canvas; the caption card lives below y~1450, so nothing goes there",
+    "_note": "Badge is 357x111, so y=150 spans 94-206 and y=1350 spans 1294-1406. These are the practical extremes: the caption card's top edge lands near y=1412, and going higher than 150 clips the frame. Note that in a tight close-up the face fills the whole frame and NO anchor clears it -- the top pair then sits on hair rather than on features, which is the best available, not a fix.",
     "positions": [
-      [690, 1210],
-      [390, 470],
-      [690, 470],
-      [390, 1210]
+      [
+        690,
+        1350
+      ],
+      [
+        390,
+        150
+      ],
+      [
+        690,
+        150
+      ],
+      [
+        390,
+        1350
+      ]
     ],
     "move_every_s": 7.0,
-    "colour_cycle": ["gradient", "flat"],
+    "colour_cycle": [
+      "gradient",
+      "flat"
+    ],
     "colour_every_s": 4.5,
     "opacity": 0.92,
     "start_index": 0

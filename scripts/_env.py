@@ -30,6 +30,29 @@ def venv_python(root=ROOT):
     return None
 
 
+def load_dotenv(path=None, override=False):
+    """Read KEY=VALUE lines from the repo's .env into os.environ.
+
+    Keeps credentials out of both the shell profile and the repo -- `.env` is
+    gitignored. Values already in the environment win unless override is set.
+    """
+    p = path or os.path.join(ROOT, ".env")
+    if not os.path.exists(p):
+        return {}
+    got = {}
+    with open(p, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            k, v = k.strip(), v.strip().strip('"').strip("'")
+            got[k] = v
+            if override or not os.environ.get(k):
+                os.environ[k] = v
+    return got
+
+
 def clean_env(env=None):
     """A child environment with the poisoned variable removed."""
     e = dict(os.environ if env is None else env)
@@ -116,6 +139,7 @@ def utf8_stdio():
 bootstrap()
 prune_foreign_site_packages()
 utf8_stdio()
+load_dotenv()
 
 # For subprocess calls: the interpreter to spawn, and an env that stays clean.
 PY = [venv_python() or sys.executable, "-X", "utf8"]

@@ -15,7 +15,7 @@ re-running after editing one entry only re-renders that entry.
 
 Invoke as:  python scripts/cut-clips.py --manifest config/clips/<id>.json
 """
-import sys, os, json, argparse, subprocess, shutil
+import sys, os, json, argparse, subprocess, shutil, time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -286,7 +286,22 @@ def cut(src, dst, start, dur, render, copy, overlay=None, pre_chain=None,
         if os.path.exists(tmp):
             os.remove(tmp)
         sys.exit("ffmpeg failed for %s" % dst)
-    os.replace(tmp, dst)
+    # On Windows a media player holding the previous render open makes this
+    # rename fail with EACCES, throwing away a finished encode over a file lock.
+    # The lock clears as soon as the player lets go, so wait for it rather than
+    # asking for the whole clip again.
+    for attempt in range(6):
+        try:
+            os.replace(tmp, dst)
+            break
+        except PermissionError:
+            if attempt == 0:
+                print("  %s is open in another program -- waiting for it to close"
+                      % os.path.basename(dst), flush=True)
+            elif attempt == 5:
+                sys.exit("%s is still locked; the finished render is at %s"
+                         % (dst, tmp))
+            time.sleep(2.0 * (attempt + 1))
 
 
 def main():

@@ -153,32 +153,37 @@ def _stretch(x, factor):
     return np.frombuffer(p.stdout, dtype=np.float32).copy()
 
 
-def fit_unit(u, tr, voice, max_rate=25.0, hard_rate=40.0, slow_rate=-18.0):
+def fit_unit(u, tr, voice, backend="edge"):
     """Render one slot so it lands inside it. Returns (audio, marks, fit)."""
+    # How hard this voice can be pushed. ElevenLabs caps `speed` at 0.7-1.2, so
+    # it has far less room to compress a long line than edge's rate does, and
+    # falls back on the `tight` rewrite more often.
+    lo, hi = _tts.rate_limits(backend)
+    max_rate, hard_rate, slow_rate = min(25.0, hi), hi, max(-18.0, lo)
     slot, hard = u["dur"], u["hard"]
-    audio, marks = _tts.speak(tr["text"], voice)
+    audio, marks = _tts.speak(tr["text"], voice, backend=backend)
     nat = audio.size / float(SR)
     note, rate, text = "natural", 0.0, tr["text"]
 
     if nat > hard:
         # too long: ask the voice to speak faster before touching the waveform
-        rate = min(max_rate, _tts.rate_for(nat, hard))
-        audio, marks = _tts.speak(text, voice, rate)
+        rate = min(max_rate, _tts.rate_for(nat, hard, backend=backend))
+        audio, marks = _tts.speak(text, voice, rate, backend=backend)
         note = "rate%+.0f%%" % rate
         if audio.size / float(SR) > hard and tr.get("tight") and tr["tight"] != text:
             text = tr["tight"]
-            audio, marks = _tts.speak(text, voice)
+            audio, marks = _tts.speak(text, voice, backend=backend)
             nat2 = audio.size / float(SR)
             note = "tight"
             if nat2 > hard:
-                rate = min(hard_rate, _tts.rate_for(nat2, hard))
-                audio, marks = _tts.speak(text, voice, rate)
+                rate = min(hard_rate, _tts.rate_for(nat2, hard, backend=backend))
+                audio, marks = _tts.speak(text, voice, rate, backend=backend)
                 note = "tight+rate%+.0f%%" % rate
     elif nat < slot * 0.80:
         # too short: her mouth is still moving, so draw the delivery out rather
         # than leaving a hole of silence under a talking face
-        rate = max(slow_rate, _tts.rate_for(nat, slot))
-        audio, marks = _tts.speak(text, voice, rate)
+        rate = max(slow_rate, _tts.rate_for(nat, slot, backend=backend))
+        audio, marks = _tts.speak(text, voice, rate, backend=backend)
         note = "rate%+.0f%%" % rate
 
     got = audio.size / float(SR)
@@ -240,7 +245,12 @@ def main():
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--only", help="comma-separated clip ids")
     ap.add_argument("--outdir", default="outputs/dub")
-    ap.add_argument("--voice", default=_tts.DEFAULT_VOICE)
+    ap.add_argument("--tts", default="edge", choices=["edge", "elevenlabs"],
+                    help="which voice service to speak with")
+    ap.add_argument("--voice", help="voice name or id; default depends on --tts")
+    ap.add_argument("--tag", default="en",
+                    help="language tag in the output filenames; use a distinct "
+                         "one to keep two versions side by side")
     ap.add_argument("--engine", default="claude",
                     choices=["claude", "openai", "manual"])
     ap.add_argument("--translation", help="manual engine: a translation json to use")
@@ -256,6 +266,10 @@ def main():
     ap.add_argument("--retranslate", action="store_true")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
+
+    backend = args.tts
+    voice = args.voice or _tts.default_voice(backend)
+    print("voice %s via %s" % (_tts.resolve_voice(voice, backend), backend))
 
     m = json.load(open(args.manifest, encoding="utf-8"))
     words = _outline.load_words(m["words"])
@@ -273,14 +287,16 @@ def main():
         start, end = _cut.resolve(clip, words, pad_head, pad_tail)
         stem = os.path.join(args.outdir,
                             ("%s-%s" % (prefix, clip["id"])) if prefix else clip["id"])
-        wav, wjson = stem + ".en.wav", stem + ".en.words.json"
+        wav = "%s.%s.wav" % (stem, args.tag)
+        wjson = "%s.%s.words.json" % (stem, args.tag)
         if os.path.exists(wav) and not args.force:
             print("skip (exists) %s" % wav)
             continue
 
         print("== %s  %.2f-%.2f (%.2fs)" % (clip["id"], start, end, end - start))
         plan = build_plan(clip, words, start, end, args.max_dur, args.min_dur)
-        json.dump(plan, open(stem + ".plan.json", "w", encoding="utf-8"),
+        json.dump(plan, open("%s.%s.plan.json" % (stem, args.tag), "w",
+                             encoding="utf-8"),
                   ensure_ascii=False, indent=2)
         durs = sorted(u["dur"] for u in plan["units"])
         print("   %d speech units, median %.2fs, longest %.2fs"
@@ -288,7 +304,7 @@ def main():
         if args.plan_only:
             continue
 
-        tpath = stem + ".translation.json"
+        tpath = "%s.%s.translation.json" % (stem, args.tag)
         if args.translation:
             rows = json.load(open(args.translation, encoding="utf-8"))
         elif os.path.exists(tpath) and not args.retranslate:
@@ -310,7 +326,7 @@ def main():
         def render(indices):
             for i in indices:
                 (audio_by_i[i], marks_by_i[i],
-                 fit_by_i[i]) = fit_unit(units_by_i[i], by_i[i], args.voice)
+                 fit_by_i[i]) = fit_unit(units_by_i[i], by_i[i], voice, backend)
 
         render([u["i"] for u in plan["units"]])
 
@@ -351,7 +367,7 @@ def main():
                   % (u["i"], u["dur"], f["final"], f["note"], f["text"][:58]))
 
         bed = place(plan["units"], audios, plan["duration"])
-        raw = stem + ".raw.wav"
+        raw = "%s.%s.raw.wav" % (stem, args.tag)
         _tts.write_wav(raw, bed)
         loudnorm(raw, wav)
         os.remove(raw)
@@ -360,7 +376,7 @@ def main():
         json.dump({"file": wav, "duration": plan["duration"],
                    "language": args.dst_lang[:2].lower(),
                    "language_probability": 1.0,
-                   "model": "edge-tts/%s" % _tts.resolve_voice(args.voice),
+                   "model": "%s/%s" % (backend, _tts.resolve_voice(voice, backend)),
                    "compute_type": "dub",
                    "text": " ".join(w["text"] for w in en_words),
                    "words": en_words},
@@ -370,7 +386,8 @@ def main():
         err = [abs(f["final"] - u["dur"]) for f, u in zip(fits, plan["units"])]
         report = {
             "clip": clip["id"], "start": round(start, 3), "end": round(end, 3),
-            "voice": _tts.resolve_voice(args.voice), "units": len(plan["units"]),
+            "voice": _tts.resolve_voice(voice, backend), "backend": backend,
+            "units": len(plan["units"]),
             "sync": round(sync_score(plan["units"], fits, plan["duration"]), 4),
             "slot_error_mean": round(float(np.mean(err)), 3),
             "slot_error_max": round(float(np.max(err)), 3),
@@ -379,7 +396,8 @@ def main():
             "squeezed": sum(1 for f in fits if "squeeze" in f["note"]),
             "fits": fits,
         }
-        json.dump(report, open(stem + ".dub.json", "w", encoding="utf-8"),
+        json.dump(report, open("%s.%s.dub.json" % (stem, args.tag), "w",
+                               encoding="utf-8"),
                   ensure_ascii=False, indent=2)
         print("   sync %.1f%%  slot error mean %.2fs max %.2fs  tight %d  squeezed %d"
               % (report["sync"] * 100, report["slot_error_mean"],
