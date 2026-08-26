@@ -212,7 +212,11 @@ def speak(text, voice=DEFAULT_VOICE, rate_pct=0.0, pitch_hz=0.0, sr=SR, tries=4,
         raise RuntimeError("text-to-speech failed after %d tries for %r: %s"
                            % (tries, text[:60], last))
     audio, lead = _trim(_decode(mp3, sr), sr)
-    return audio, [(w, max(0.0, a - lead), max(0.0, b - lead)) for w, a, b in marks]
+    # monotonic() AFTER the trim shift, not before: clamping the shifted times at
+    # zero collapses every word that began inside the trimmed lead onto 0.0, which
+    # re-creates exactly the overlaps it was there to remove.
+    return audio, monotonic([(w, max(0.0, a - lead), max(0.0, b - lead))
+                             for w, a, b in marks])
 
 
 def rate_limits(backend="edge"):
