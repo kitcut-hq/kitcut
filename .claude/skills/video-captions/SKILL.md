@@ -140,6 +140,38 @@ order) and refuses to report success if any check fails.
   card is text width + 2x padding, so clamping the text alone puts the card off
   the edge. The self-check catches this.
 
+## Chapter markers for a published video
+
+Transcript in, YouTube chapters out — no render involved, so skip the caption
+pipeline entirely and just transcribe:
+
+```powershell
+.venv/Scripts/python.exe -m yt_dlp -f bestaudio[ext=m4a] -o "audio/<id>.%(ext)s" "<URL>"
+python scripts/transcribe-words.py audio/<id>.m4a --out transcripts/<id>.words.json --language en
+python scripts/transcript-outline.py transcripts/<id>.words.json --outline
+```
+
+Read the outline, write `config/chapters/<id>.txt` as `MM:SS Title` lines, then
+publish it into the video's description:
+
+```powershell
+python scripts/yt-set-chapters.py <id> --chapters config/chapters/<id>.txt --dry-run
+python scripts/yt-set-chapters.py <id> --chapters config/chapters/<id>.txt
+```
+
+Choosing the boundaries is a judgement call — anchor each one to the sentence
+where the topic actually starts, not to a round number. The script enforces only
+what YouTube requires: first mark at `00:00`, three or more marks, ≥10 s apart.
+Break any of those and YouTube renders no chapters **without reporting an
+error**, which looks exactly like a failed update.
+
+Writing needs the channel owner's OAuth consent (an API key cannot edit a
+video); the one-time console setup is in the README, and the token caches to
+`.yt-oauth/`. **You cannot complete that consent on the user's behalf** — if
+`.yt-oauth/client_secret.json` is missing, hand them the steps and the exact
+command rather than trying to work around it. The update preserves the rest of
+the description and re-fetches to verify.
+
 ## Verification
 
 Two independent layers, both **fatal** — neither warns-and-continues:

@@ -34,3 +34,9 @@ edge-tts
 
 # --- fetching ------------------------------------------------------------
 yt-dlp
+
+# --- publishing ----------------------------------------------------------
+# Writing chapter markers back into a video description (yt-set-chapters.py).
+# Auth is the channel owner's own OAuth consent, cached under .yt-oauth/.
+google-api-python-client
+google-auth-oauthlib

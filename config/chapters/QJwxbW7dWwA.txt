@@ -1,0 +1,11 @@
+00:00 What the CMS-1500 claim form is
+00:26 Where to find the form & why other guides take 20–40 minutes
+01:18 Uploading the form to Instafill.ai
+02:06 Adding source files: face sheet, insurance card, superbill
+03:07 The form fills itself in 29 seconds
+03:18 Reviewing the result: patient info, diagnoses, services, charges
+04:29 Why this is hard by hand: field dependencies & form logic
+04:57 Downloading the form (flattened or editable)
+05:20 Time savings recap
+05:54 Health-data privacy: the auto-delete checkbox
+06:26 Outro

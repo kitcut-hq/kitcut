@@ -307,6 +307,49 @@ it. Both numbers came from measuring, not from listening and guessing.
 `--engine manual` takes a hand-written `[{"i":1,"text":"...","tight":"..."}]`
 via `--translation`, which is the escape hatch when a line has to be exact.
 
+## Chapter markers on a published video
+
+Turn a transcript into YouTube chapters, then write them into the video's own
+description:
+
+```powershell
+python scripts/transcribe-words.py audio/<id>.m4a --out transcripts/<id>.words.json --language en
+python scripts/transcript-outline.py transcripts/<id>.words.json --outline   # read, pick boundaries
+# write config/chapters/<id>.txt as "MM:SS Title" lines, then:
+python scripts/yt-set-chapters.py <id> --chapters config/chapters/<id>.txt --dry-run
+python scripts/yt-set-chapters.py <id> --chapters config/chapters/<id>.txt
+```
+
+Picking the boundaries is editorial and stays a human/model judgement — the
+script's job is to make the result *valid* and the write *safe*.
+
+It refuses to upload a list YouTube would silently ignore: the first chapter
+must be at `00:00`, there must be at least three, and consecutive marks must be
+at least 10 s apart. YouTube does not report any of these as errors; it just
+renders no chapters at all, which is easy to mistake for a failed update.
+
+The write itself preserves the description. `videos.update` replaces the
+**entire** snippet, so the script sends back the snippet it just fetched with
+only `description` changed — dropping `title` or `categoryId` from that body is
+how you blank a video's title. If the description already holds a chapter block
+(three or more contiguous timestamp lines) that block is replaced in place;
+otherwise the new one is appended. After writing it re-fetches and asserts the
+block is really there.
+
+### One-time auth
+
+The API writes as the channel owner, so it needs the owner's own OAuth consent —
+an API key cannot do this.
+
+1. Google Cloud Console → a project → enable **YouTube Data API v3**.
+2. **OAuth consent screen**: External, and add yourself as a test user.
+3. **Credentials → OAuth client ID → Desktop app**, download the JSON to
+   `.yt-oauth/client_secret.json` (gitignored).
+
+The first run opens a browser for consent and caches a refresh token at
+`.yt-oauth/token.json`; later runs are non-interactive. Quota note: `videos.update`
+costs 50 units of the default 10,000/day, while the `videos.list` read costs 1.
+
 ## Setup
 
 ```powershell
@@ -348,12 +391,14 @@ all, and its `FaceDetectorYN` replacement wants a model from an external host.
 | `scripts/build-captions-ass.py` | words + preset → styled ASS |
 | `scripts/verify-captions.py` | proves sync by probing rendered frames |
 | `scripts/transcript-outline.py` | skim a transcript; find the time of a phrase |
+| `scripts/yt-set-chapters.py` | write chapter markers into a video's description |
 | `scripts/cut-clips.py` | manifest → standalone clips cut out of a long video |
 | `scripts/handle-overlay.py` | animated social-handle badge, drawn and burned in |
 | `scripts/dub-clips.py` | translate a clip and speak it back into its own cadence |
 | `scripts/dub-translate.py` | per-slot translation under a time budget |
 | `scripts/dub-tts.py` | neural TTS with word boundaries and rate control |
 | `config/presets/` | all visual styling |
+| `config/chapters/` | chapter lists, one `MM:SS Title` per line |
 | `config/clips/` | clip manifests (which episodes to cut, and where) |
 | `config/handles/` | handle-badge styling and motion |
 | `fonts/` | Montserrat Bold (SIL OFL 1.1, see `fonts/OFL.txt`) |

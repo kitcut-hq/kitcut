@@ -37,6 +37,7 @@ temp/*
 # Environment / secrets
 .env
 .env.local
+.yt-oauth/
 
 # Python
 *.pyc
