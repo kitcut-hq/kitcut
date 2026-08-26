@@ -408,9 +408,23 @@ an API key cannot do this.
 3. **Credentials → OAuth client ID → Desktop app**, download the JSON to
    `.yt-oauth/client_secret.json` (gitignored).
 
-The first run opens a browser for consent and caches a refresh token at
-`.yt-oauth/token.json`; later runs are non-interactive. Quota note: `videos.update`
-costs 50 units of the default 10,000/day, while the `videos.list` read costs 1.
+The first run opens a browser. **At the account chooser, pick the channel that
+owns the videos, not your personal account** — this is the one step that goes
+wrong. A personal-account token reads those videos perfectly and cannot write
+them, so everything looks fine until the update returns a bare `403`. The script
+compares the token's channel against the video's owner and names both.
+
+The resulting grant is written into `.env` as `YOUTUBE_CLIENT_ID`,
+`YOUTUBE_CLIENT_SECRET` and `YOUTUBE_REFRESH_TOKEN`, which is where this repo
+keeps its secrets and what later runs read; `.yt-oauth/token.json` remains as a
+fallback. Keeping it in `.env` also means deleting `.yt-oauth/` — the fix for
+having consented as the wrong channel — no longer destroys the grant too.
+
+Quota note: `videos.update` costs 50 units of the default 10,000/day, while the
+`videos.list` read costs 1.
+
+Two ids on this channel begin with `-`, which argparse reads as a flag. Pass
+those as `--video=-qKcpLSk0iU`.
 
 ## Setup
 
