@@ -13,7 +13,9 @@ python scripts/cut-clips.py --manifest config/clips/<id>.json --list   # plan on
 python scripts/cut-clips.py --manifest config/clips/<id>.json          # cut
 ```
 
-Clips land in `outputs/shorts/` as `<prefix>-<clipid>.mp4`, each with a `.json`
+Clips land in the manifest's `outdir` — `outputs/shorts/` for landscape,
+`outputs/shorts-vertical/` for the 9:16 manifests — as
+`<prefix>-<clipid>.mp4`, each with a `.json`
 sidecar recording exact boundaries and encoder settings. Cutting runs ~3x
 realtime on this machine (five ~75s clips ≈ 2 minutes). Existing outputs are
 skipped, so editing one manifest entry and re-running rebuilds only that entry;
@@ -73,8 +75,7 @@ the manifest reads like the edit decisions that were made:
 - `start_text` starts where that phrase begins; `end_text` ends where that
   phrase ends; `end_before_text` ends just before that phrase begins (use it to
   cut right before the next thought). Matching ignores case, punctuation and
-  spacing, so phrases pasted from the outline (words run together) and typed
-  ones both hit. Plain `start`/`end`/`duration` seconds also work.
+  spacing, so a phrase pasted from the outline and one typed by hand both hit. Plain `start`/`end`/`duration` seconds also work.
 - Pads never eat a neighbouring word — when the transcript says speech continues
   inside the pad, the boundary meets it halfway. So don't hand-tune pads per
   clip; the defaults are right.
@@ -159,8 +160,13 @@ by eye every time:
   entry and add `keys` across the span.
 - Below ~60% detection means it mostly held a guess.
 
-Per-clip `crop_x` (static), `crop_keys` (inline `[[t, x], ...]`) and `crop_pad`
-override the sidecar.
+Only `crop_keys` (inline `[[t, x], ...]`) overrides the sidecar. `crop_x` and
+`crop_pad` do **not** — where a sidecar entry exists it wins, and `cut-clips.py`
+prints a note if a clip sets one anyway. Override by editing the sidecar
+itself, as above.
+
+`--mode compare` needs scenedetect; without it the comparison refuses rather
+than printing a table (it used to print one full of zeros and exit 0).
 
 **Do not swap the default on a hunch — measure.** `--mode compare` scores every
 strategy on off-centre distance and window motion, writing nothing:

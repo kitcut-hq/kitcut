@@ -74,8 +74,15 @@ python scripts/cut-clips.py --manifest config/clips/<id>-vertical.json --only <c
 ```
 
 Voice is `--tts edge` (free, no key) or `--tts elevenlabs` (needs
-`ELEVENLABS_API_KEY`; `_env.py` loads `.env` automatically). Give each run its
-own `--tag` or the second backend overwrites the first one's artifacts.
+`ELEVENLABS_API_KEY`; `_env.py` loads `.env` automatically). Each backend has
+its own default `--tag` -- `en` for edge, `en-el` for ElevenLabs -- so the two
+never overwrite each other; pointing one at the other's tag is refused.
+
+Voice names and the ElevenLabs model come from `config/elevenlabs-voices.json`
+and are validated before anything is spent. A cached translation carries a
+fingerprint of the plan and engine it was made for, so changing `--max-dur` (or
+the engine, or the language) refuses the stale reuse instead of mapping old
+lines onto new slots by index.
 
 The dub writes `outputs/dub/<name>.en.wav` plus an `.en.words.json` in exactly
 the envelope faster-whisper produces, so `cut-clips.py --dub` feeds it to the

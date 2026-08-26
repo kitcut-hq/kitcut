@@ -53,8 +53,9 @@ to change how captions look.
 Presets are authored on a 1920x1080 canvas and every pixel value is scaled
 automatically to the actual video, so 720p / 1440p / vertical all work.
 
-Two presets ship: `red-card` (solid red info-card, yellow spotlight) and
-`eu-navy` (EU-flag blue, star-yellow spotlight).
+Three presets ship: `red-card` (solid red info-card, yellow spotlight),
+`red-card-vertical` (the same styling re-authored for a 9:16 canvas, used by
+the shorts pipeline) and `eu-navy` (EU-flag blue, star-yellow spotlight).
 
 ### Deriving a style from a reference
 
@@ -152,8 +153,10 @@ A vertical manifest adds three keys to the ordinary one:
   sits still and fails where she walks. `hybrid` beat both on every clip.
 - **`pad` only ever means "no face found here".** Usually that is b-roll, but a
   shot where the subject looks away reads the same. Review them.
-- Per-clip `crop_x` (static), `crop_keys` (inline) and `crop_pad` override the
-  sidecar.
+- **Precedence:** per-clip `crop_keys` overrides the sidecar. `crop_x` and
+  `crop_pad` do NOT — a sidecar entry wins over both, and `cut-clips.py` prints
+  a note when a clip sets one anyway. To override a sidecar decision, edit the
+  sidecar: clear its `pad` and add `keys` across that span.
 - **Captions get a slice, not a copy.** The ASS builder's `--range` /
   `--time-offset` already exist, so each clip is a view onto the one transcript
   and no sliced word files are written. Sync is still proven per clip before
@@ -238,14 +241,19 @@ The output is named `…-<tag>.mp4` (`en` by default), so the original is never
 overwritten.
 
 Two voices are available. edge-tts needs no key and has the wider speed range;
-ElevenLabs sounds better and needs `ELEVENLABS_API_KEY` in `.env`. Give each run
-its own `--tag` and they coexist:
+ElevenLabs sounds better and needs `ELEVENLABS_API_KEY` in `.env`. Each backend
+gets its own default `--tag` (`en` for edge, `en-el` for ElevenLabs) so the two
+coexist without overwriting each other:
 
 ```powershell
-python scripts/dub-clips.py --manifest ... --only <id> `
-    --tts elevenlabs --voice jessica --tag en-el
+python scripts/dub-clips.py --manifest ... --only <id> --tts elevenlabs
 python scripts/cut-clips.py --manifest ... --only <id> --dub outputs/dub --dub-tag en-el
 ```
+
+Pointing a second backend at a tag that already holds another one's dub is
+refused rather than silently skipped or overwritten. Voice names are validated
+before anything is rendered, against `config/elevenlabs-voices.json` — which is
+also where the model comes from (`--el-model` overrides it).
 
 Measured against each other through the identical pipeline they tie on timing
 (sync 95.0% vs 93.9%, mean slot error 0.15s vs 0.18s), so choose on how the
@@ -295,17 +303,29 @@ it. Both numbers came from measuring, not from listening and guessing.
 
 | flag | default | |
 |---|---|---|
-| `--voice` | `ava` | `--list-voices` on `dub-tts.py` for the rest |
 | `--max-dur` | `4.0` | longer slots translate better and sync worse |
+| `--min-dur` | `0.9` | shorter than this and a slot sounds clipped |
 | `--words-per-sec` | `3.2` | the per-slot word budget handed to the translator |
 | `--tune-rounds` | `1` | measure-then-rewrite passes |
 | `--engine` | `claude` | translation: or `openai` (needs a key), or `manual` |
+| `--model` | — | model override for the translation engine |
 | `--tts` | `edge` | or `elevenlabs` |
-| `--voice` | `ava` / `jessica` | default follows `--tts` |
-| `--tag` | `en` | names this run's artifacts; one per backend |
+| `--voice` | `ava` / `jessica` | default follows `--tts`; `dub-tts.py --list-voices` prints both sets |
+| `--el-model` | from config | ElevenLabs model id |
+| `--tag` | `en` / `en-el` | names this run's artifacts; default follows `--tts` |
+| `--outdir` | `outputs/dub` | where the artifacts land |
+| `--plan-only` | — | segment and print, spend nothing |
+| `--retranslate` | — | throw the cached text away and ask again |
+| `--force` | — | re-render the audio, keep the cached text |
 
 `--engine manual` takes a hand-written `[{"i":1,"text":"...","tight":"..."}]`
-via `--translation`, which is the escape hatch when a line has to be exact.
+via `--translation`, which is the escape hatch when a line has to be exact. It
+covers one clip (pair it with `--only`), and the retune round leaves it alone
+rather than rewriting your file.
+
+A cached translation records a fingerprint of the plan and engine it was made
+for. Change `--max-dur`, `--min-dur`, `--engine` or the target language and the
+reuse is refused instead of mapping old lines onto new slots by index.
 
 ## Chapter markers on a published video
 
@@ -363,6 +383,9 @@ powershell -ExecutionPolicy Bypass -File scripts/setup-python.ps1   # build .ven
 python scripts/check-env.py                                          # prove it works
 ```
 
+Add `-Recreate` to delete and rebuild `.venv` — the answer when it exists but
+sits on the wrong Python version, which the script now refuses to install into.
+
 That is the whole setup. Afterwards every script runs as plain
 `python scripts/<name>.py` from any shell — they re-exec themselves into `.venv`
 via `scripts/_env.py`, so there is nothing to activate and no `-E` to remember.
@@ -372,13 +395,21 @@ the cause rather than leaving you to infer it from a DLL error.
 Needed on the machine itself:
 
 - **Python 3.13** (`py -3.13`). Package versions are pinned in `requirements.txt`.
-- **`ffmpeg`/`ffprobe` built with libass and rubberband** — `check-env.py`
-  verifies both, plus NVENC.
+- **`ffmpeg`/`ffprobe`.** libass is required and `check-env.py` fails without
+  it; rubberband and NVENC are warnings, because a dub can fit without the
+  stretcher and a manifest can name `libx264` instead of `h264_nvenc`.
 - **Optional NVIDIA GPU.** CUDA needs `nvidia-cublas-cu12`, since ctranslate2
   bundles cuDNN but not cuBLAS; `check-env.py` counts the DLLs it can see,
   because without them transcription silently drops to CPU and runs ~3x slower.
 - **Network**, for `edge-tts` during dubbing. No API key is needed for either
-  the voice or (with `--engine claude`) the translation.
+  the voice or (with `--engine claude`) the translation — that engine shells
+  out to the `claude` CLI, so `check-env.py` checks it is on PATH.
+
+Note on licensing: edge-tts reaches the endpoint behind Edge's Read Aloud
+feature. It is free and needs no account, but those voices are not licensed for
+commercial redistribution, and the endpoint can change without notice. For
+published client work, ElevenLabs on a paid plan is the one that grants
+commercial rights.
 
 The `opencv-python<5` pin is load-bearing: version 5 ships no Haar cascades at
 all, and its `FaceDetectorYN` replacement wants a model from an external host.

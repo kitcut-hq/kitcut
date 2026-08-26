@@ -107,6 +107,7 @@
       0.7,
       1.2
     ],
-    "note": "dub-clips.py uses multilingual_v2 with the /with-timestamps endpoint, which is what supplies word timings for the captions. speed outside 0.7-1.2 is rejected outright; measured, that is -30%/+20%, against edge-tts's -25%/+45%."
-  }
+    "note": "dub-clips.py reads dubbing.model from this file and uses the /with-timestamps endpoint, which is what supplies word timings for the captions. multilingual_v2 is what the published comparison was measured on (sync 93.9%); turbo_v2_5 is half the credits and worth trying, but listen before switching -- override per run with --el-model. speed outside 0.7-1.2 is rejected outright; measured, that is -30%/+20%, against edge-tts's -25%/+45%."
+  },
+  "_reader_note": "scripts/dub-tts.py reads this file at runtime: voices{} resolves --voice and refuses verified:false ids before any API call; dubbing.model sets the default model. stability_similarity_presets is reference only -- the dub hardcodes the 'natural' values."
 }

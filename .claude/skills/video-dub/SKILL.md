@@ -50,7 +50,9 @@ python scripts/cut-clips.py --manifest ... --only <id> `
 
 `--tag` is what lets two versions coexist: it names every artifact for that run
 (`.en-el.wav`, `.en-el.words.json`, `.en-el.dub.json`) and suffixes the rendered
-mp4. Without distinct tags the second backend overwrites the first.
+mp4. It now defaults per backend (`en` for edge, `en-el` for ElevenLabs), and
+aiming one backend at a tag that already holds another's dub is refused rather
+than silently skipped or overwritten.
 
 Measured head to head on `01-silver-button`, both through the identical
 pipeline:
@@ -69,10 +71,17 @@ translation luck rather than the engine; and the last row is the one cleanly
 attributable to the backend -- ElevenLabs is pinned against its speed limit
 more than half the time, it just still fits.
 
-Voice ids live in `config/elevenlabs-voices.json`, and only the ones marked
-`verified: true` have actually been called. A TTS-scoped key cannot list voices
-at runtime (`GET /v1/voices` 401s with `missing_permissions`), which is why that
-file has to be maintained by hand.
+Voice ids live in `config/elevenlabs-voices.json` — the single source, read at
+runtime by `resolve_voice()`. An unknown name, or one marked `verified: false`,
+is refused **before** anything is rendered or paid for. The model comes from the
+same file (`--el-model` overrides it). A TTS-scoped key cannot list voices at
+runtime (`GET /v1/voices` 401s with `missing_permissions`), which is why the
+file is maintained by hand; `dub-tts.py --tts elevenlabs --list-voices` prints
+it with the verified flags.
+
+Before a first run, `python scripts/check-env.py` reports whether the `claude`
+CLI (the default translation engine) is on PATH and whether
+`ELEVENLABS_API_KEY` resolved from `.env`.
 
 ## Step 1 — check the segmentation first
 
@@ -118,8 +127,8 @@ free and saves speeding the voice up. That is the `hard` field in the plan.
 
 ## Step 4 — verify with the number, not by listening
 
-`sync` in `outputs/dub/<name>.dub.json` is the share of the clip where dub and
-original agree about whether anyone is talking. It drops when the dub speaks
+`sync` in `outputs/dub/<name>.<tag>.dub.json` is the share of the clip where
+dub and original agree about whether anyone is talking. It drops when the dub speaks
 over a pause and when it goes silent under a moving mouth.
 
 Reference run — `01-silver-button`, 78s, 26 units:
@@ -171,8 +180,28 @@ The render step separately proves caption sync on sampled frames (`sync probes:
   be tag-scoped, so a second voice silently overwrote the first one's report and
   the comparison was lost.
 - **A media player holding the previous render open** makes the final rename
-  fail with EACCES and throws away a finished encode. `cut-clips.py` now waits
-  the lock out.
+  fail with EACCES and throws away a finished encode. `cut-clips.py` waits the
+  lock out, and if it never clears the clip is reported at the end with its
+  `.part.mp4` intact instead of killing the rest of the batch.
+- **A cached translation belongs to one plan.** Slots are matched by bare
+  index, so a plan rebuilt with a different `--max-dur` would speak the right
+  lines into the wrong holes. `translation.json` carries a fingerprint of the
+  unit texts and knobs; a mismatch refuses and asks for `--retranslate`.
+- **`--engine manual` never calls a model.** It used to fall through a two-way
+  ternary into the OpenAI path — burning credits under a flag that promised no
+  network, or failing with "OPENAI_API_KEY is not set" while you had asked for
+  manual. The retune round now skips instead, and leaves your `--translation`
+  file untouched.
+- **A retune can make a slot worse.** Rewrites are re-measured and reverted if
+  the new take fits worse than the old one; a model that returns the whole
+  array instead of the requested slots has the extras discarded, so
+  well-fitting lines are not re-rendered for nothing.
+- **ElevenLabs glues punctuation to words**, edge does not, so the two backends
+  tokenise the same script differently in `.words.json`. Captions render both
+  fine; it only matters if you diff them.
+- **Failures that a retry cannot fix are not retried.** A missing key, a bad
+  voice or an exhausted quota aborts immediately with the service's own
+  message; only 429 and genuine socket blips back off and try again.
 
 ## Files
 
@@ -181,6 +210,26 @@ The render step separately proves caption sync on sampled frames (`sync probes:
 | `scripts/dub-clips.py` | orchestrator: segment → translate → fit → place |
 | `scripts/dub-translate.py` | per-slot translation and the retune round |
 | `scripts/dub-tts.py` | neural TTS, word boundaries, rate control |
-| `outputs/dub/<name>.plan.json` | the segmentation, for inspection |
-| `outputs/dub/<name>.translation.json` | editable; reused unless `--retranslate` |
-| `outputs/dub/<name>.dub.json` | the fit report and `sync` score |
+| `config/elevenlabs-voices.json` | voice ids and model; refuses unverified ids |
+| `outputs/dub/<name>.<tag>.plan.json` | the segmentation, for inspection |
+| `outputs/dub/<name>.<tag>.translation.json` | editable; reused unless `--retranslate` |
+| `outputs/dub/<name>.<tag>.dub.json` | the fit report and `sync` score |
+
+Every artifact is tag-scoped. The skill's older, untagged names are gone; if
+you see one in a doc, it is stale.
+
+## Deferred — measure before adopting
+
+Reviewed and deliberately not built, because each changes output and the house
+rule is to score a proposal on real footage first (baseline: `01-silver-button`,
+edge/Ava, sync 95.0%, mean slot error 0.15s):
+
+- segmentation: `len(u) < 4` blocks splitting a long slow unit; slivers fold
+  backwards only, so an opening sliver is stranded
+- the retune word budget is a fixed 3.2 w/s, not the voice's measured rate —
+  ElevenLabs needs a deeper cut than edge to shed the same time
+- later translation batches cannot see earlier batches' English, so terminology
+  can drift at the 20-slot boundary
+- a word straddling the clip boundary is dropped from the translator's context
+- the caption grouping pair (`max_words` / `min_active_ms`) was tuned on
+  Ukrainian and is reused unchanged for English
