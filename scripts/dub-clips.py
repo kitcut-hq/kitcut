@@ -29,7 +29,7 @@ of the clip where dub and original agree about whether anyone is talking.
     python scripts/dub-clips.py --manifest config/clips/<id>-vertical.json \
         --only 01-silver-button
 """
-import sys, os, json, argparse, subprocess, math
+import sys, os, json, argparse, subprocess, math, hashlib
 from importlib import import_module
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -47,6 +47,37 @@ SR = _tts.SR
 MIN_GAP = 0.06        # never let one unit run into the next
 SENT_END = (".", "!", "?", "…")
 CLAUSE_END = (",", ";", ":", "—", "–")
+
+# The words.json this script writes is byte-compatible with faster-whisper's,
+# and that format carries a real ISO 639-1 code -- "Spanish"[:2] is not one.
+ISO_639 = {"english": "en", "ukrainian": "uk", "russian": "ru", "spanish": "es",
+           "german": "de", "french": "fr", "italian": "it", "portuguese": "pt",
+           "polish": "pl", "dutch": "nl", "greek": "el", "czech": "cs",
+           "turkish": "tr", "japanese": "ja", "chinese": "zh", "korean": "ko",
+           "arabic": "ar", "hindi": "hi", "romanian": "ro", "hungarian": "hu"}
+
+
+def iso_lang(name):
+    code = ISO_639.get(name.strip().lower())
+    if code:
+        return code
+    if len(name) == 2:
+        return name.lower()
+    guess = name[:2].lower()
+    print("   WARNING: no ISO 639-1 code known for %r, writing %r" % (name, guess))
+    return guess
+
+
+def _fingerprint(plan, args):
+    """Identity of the plan a translation belongs to.
+
+    A cached translation is matched to plan slots purely by index, so a plan
+    rebuilt with a different --max-dur silently maps every line onto the wrong
+    stretch of audio. Index equality is not identity; this is.
+    """
+    key = "|".join(u["text"] for u in plan["units"])
+    key += "|%s|%s|%s|%s" % (args.max_dur, args.min_dur, args.engine, args.dst_lang)
+    return hashlib.sha1(key.encode("utf-8")).hexdigest()[:12]
 
 
 # --------------------------------------------------------------- segmentation
@@ -139,18 +170,34 @@ def build_plan(clip, words, start, end, max_dur, min_dur):
 
 
 # -------------------------------------------------------------------- fitting
+_RB = None
+
+
+def _has_rubberband():
+    global _RB
+    if _RB is None:
+        p = subprocess.run(["ffmpeg", "-v", "error", "-filters"],
+                           capture_output=True, env=ENV)
+        _RB = b" rubberband " in p.stdout
+    return _RB
+
+
 def _stretch(x, factor):
-    """Time-scale audio by `factor` without moving pitch (rubberband)."""
+    """Time-scale audio by `factor` without moving pitch (rubberband).
+
+    Returns (audio, ok). ok=False means the audio came back untouched -- the
+    caller must not report a squeeze that never happened.
+    """
     if abs(factor - 1.0) < 1e-3 or x.size == 0:
-        return x
+        return x, True
     p = subprocess.run(
         ["ffmpeg", "-v", "error", "-f", "f32le", "-ar", str(SR), "-ac", "1",
          "-i", "pipe:0", "-filter:a", "rubberband=tempo=%.6f" % (1.0 / factor),
          "-f", "f32le", "pipe:1"],
         input=x.astype(np.float32).tobytes(), capture_output=True, env=ENV)
     if p.returncode:
-        return x
-    return np.frombuffer(p.stdout, dtype=np.float32).copy()
+        return x, False
+    return np.frombuffer(p.stdout, dtype=np.float32).copy(), True
 
 
 def fit_unit(u, tr, voice, backend="edge"):
@@ -159,61 +206,99 @@ def fit_unit(u, tr, voice, backend="edge"):
     # it has far less room to compress a long line than edge's rate does, and
     # falls back on the `tight` rewrite more often.
     lo, hi = _tts.rate_limits(backend)
-    max_rate, hard_rate, slow_rate = min(25.0, hi), hi, max(-18.0, lo)
+    max_rate, slow_rate = min(25.0, hi), max(-18.0, lo)
     slot, hard = u["dur"], u["hard"]
-    audio, marks = _tts.speak(tr["text"], voice, backend=backend)
+    cache = {}                 # a TTS render costs money; never pay for the
+                               # same (text, rate) twice within one slot
+
+    def say(text, rate=0.0):
+        k = (text, round(rate, 1))
+        if k not in cache:
+            cache[k] = _tts.speak(text, voice, rate, backend=backend)
+        return cache[k]
+
+    audio, marks = say(tr["text"])
     nat = audio.size / float(SR)
+    nat_used = nat
     note, rate, text = "natural", 0.0, tr["text"]
 
     if nat > hard:
         # too long: ask the voice to speak faster before touching the waveform
         rate = min(max_rate, _tts.rate_for(nat, hard, backend=backend))
-        audio, marks = _tts.speak(text, voice, rate, backend=backend)
+        audio, marks = say(text, rate)
         note = "rate%+.0f%%" % rate
         if audio.size / float(SR) > hard and tr.get("tight") and tr["tight"] != text:
             text = tr["tight"]
-            audio, marks = _tts.speak(text, voice, backend=backend)
-            nat2 = audio.size / float(SR)
-            note = "tight"
-            if nat2 > hard:
-                rate = min(hard_rate, _tts.rate_for(nat2, hard, backend=backend))
-                audio, marks = _tts.speak(text, voice, rate, backend=backend)
+            audio, marks = say(text)
+            nat_used = audio.size / float(SR)
+            note, rate = "tight", 0.0
+            if nat_used > hard:
+                rate = _tts.rate_for(nat_used, hard, backend=backend)
+                audio, marks = say(text, rate)
                 note = "tight+rate%+.0f%%" % rate
     elif nat < slot * 0.80:
         # too short: her mouth is still moving, so draw the delivery out rather
         # than leaving a hole of silence under a talking face
         rate = max(slow_rate, _tts.rate_for(nat, slot, backend=backend))
-        audio, marks = _tts.speak(text, voice, rate, backend=backend)
+        audio, marks = say(text, rate)
         note = "rate%+.0f%%" % rate
 
     got = audio.size / float(SR)
     if got > hard:                       # last resort, kept small on purpose
         f = hard / got
         if f > 0.82:
-            audio = _stretch(audio, f)
-            marks = [(w, a * f, b * f) for w, a, b in marks]
-            note += "+squeeze%.0f%%" % ((1 - f) * 100)
+            audio, ok = _stretch(audio, f)
+            if ok:
+                marks = [(w, a * f, b * f) for w, a, b in marks]
+                note += "+squeeze%.0f%%" % ((1 - f) * 100)
+            else:
+                why = ("this ffmpeg has no rubberband filter"
+                       if not _has_rubberband() else "rubberband failed")
+                print("   WARNING: slot %d: %s -- audio left %.2fs over its slot"
+                      % (u["i"], why, got - hard))
+    final = audio.size / float(SR)
+    if final > hard + 0.05:
+        print("   WARNING: slot %d overruns its hard budget (%.2fs > %.2fs) -- "
+              "it will overlap the next line" % (u["i"], final, hard))
+    # `natural` is the unhurried duration of the text actually spoken -- when
+    # the tight rewrite is used the full line's timing says nothing about it
     return audio, marks, {"note": note, "rate": round(rate, 1), "text": text,
-                          "natural": round(nat, 3),
-                          "final": round(audio.size / float(SR), 3)}
+                          "natural": round(nat_used, 3),
+                          "natural_full": round(nat, 3),
+                          "final": round(final, 3)}
 
 
 # --------------------------------------------------------------------- mixing
 def place(units, audios, total):
-    """Lay each unit onto a silent bed at the time the original phrase began."""
-    bed = np.zeros(int(math.ceil(total * SR)) + SR // 10, dtype=np.float32)
+    """Lay each unit onto a silent bed at the time the original phrase began.
+
+    The bed's length is the clip's length, exactly -- cut-clips.py asserts the
+    rendered duration against the plan, so the wav must not run long. Anything
+    a misfit unit pushes past the end is cut, but loudly.
+    """
+    n = int(math.ceil(total * SR))
+    bed = np.zeros(n + SR, dtype=np.float32)     # slack absorbs an overrun
     fade = int(0.005 * SR)
     for u, a in zip(units, audios):
         if a.size == 0:
+            continue
+        i = int(round(u["t0"] * SR))
+        if i >= bed.size:
+            print("   WARNING: slot %d starts past the end of the clip -- skipped"
+                  % u["i"])
             continue
         a = a.copy()
         if a.size > 2 * fade:            # no clicks at the splice points
             a[:fade] *= np.linspace(0, 1, fade, dtype=np.float32)
             a[-fade:] *= np.linspace(1, 0, fade, dtype=np.float32)
-        i = int(round(u["t0"] * SR))
         j = min(bed.size, i + a.size)
         bed[i:j] += a[:j - i]
-    return bed[:int(math.ceil(total * SR))]
+    tail = bed[n:]
+    if tail.size and float(np.abs(tail).max()) > 1e-4:
+        over = float(np.flatnonzero(np.abs(tail) > 1e-4)[-1] + 1) / SR
+        print("   WARNING: %.2fs of audio ran past the clip end and was cut"
+              % over)
+    return bed[:n]
 
 
 def loudnorm(src, dst, lufs=-14.5):
@@ -230,6 +315,8 @@ def sync_score(units, fits, total, step=0.01):
     This is the number the whole design is chasing: it drops when the dub talks
     over a pause, and when it falls silent under a moving mouth.
     """
+    if total <= 0:
+        return 0.0
     n = int(total / step)
     a = np.zeros(n, dtype=bool)
     b = np.zeros(n, dtype=bool)
@@ -248,12 +335,16 @@ def main():
     ap.add_argument("--tts", default="edge", choices=["edge", "elevenlabs"],
                     help="which voice service to speak with")
     ap.add_argument("--voice", help="voice name or id; default depends on --tts")
-    ap.add_argument("--tag", default="en",
-                    help="language tag in the output filenames; use a distinct "
-                         "one to keep two versions side by side")
+    ap.add_argument("--tag",
+                    help="tag in the output filenames; defaults to en for edge "
+                         "and en-el for elevenlabs, so the two backends never "
+                         "overwrite each other's artifacts")
     ap.add_argument("--engine", default="claude",
                     choices=["claude", "openai", "manual"])
-    ap.add_argument("--translation", help="manual engine: a translation json to use")
+    ap.add_argument("--model", help="model override for the translation engine")
+    ap.add_argument("--translation",
+                    help="a hand-written translation json for ONE clip; "
+                         "implies the retune round will not rewrite it")
     ap.add_argument("--src-lang", default="Ukrainian")
     ap.add_argument("--dst-lang", default="English")
     ap.add_argument("--max-dur", type=float, default=4.0,
@@ -262,59 +353,122 @@ def main():
     ap.add_argument("--words-per-sec", type=float, default=3.2)
     ap.add_argument("--tune-rounds", type=int, default=1,
                     help="rounds of measure-then-rewrite for slots that do not fit")
-    ap.add_argument("--plan-only", action="store_true")
-    ap.add_argument("--retranslate", action="store_true")
-    ap.add_argument("--force", action="store_true")
+    ap.add_argument("--plan-only", action="store_true",
+                    help="write and print the segmentation, spend nothing")
+    ap.add_argument("--retranslate", action="store_true",
+                    help="drop the cached translation and ask the engine again "
+                         "(--force alone re-renders audio but keeps the text)")
+    ap.add_argument("--force", action="store_true",
+                    help="re-render even if the wav exists; keeps the cached "
+                         "translation (see --retranslate)")
     args = ap.parse_args()
 
     backend = args.tts
+    # distinct default tags: with a shared one the second backend either
+    # silently skips ("exists") or overwrites the first one's artifacts
+    tag = args.tag or ("en" if backend == "edge" else "en-el")
     voice = args.voice or _tts.default_voice(backend)
-    print("voice %s via %s" % (_tts.resolve_voice(voice, backend), backend))
+    print("voice %s via %s, tag %s" % (_tts.resolve_voice(voice, backend),
+                                       backend, tag))
+    if args.translation and args.retranslate:
+        sys.exit("--translation and --retranslate contradict each other: one "
+                 "supplies the text, the other throws text away")
 
-    m = json.load(open(args.manifest, encoding="utf-8"))
+    with open(args.manifest, encoding="utf-8") as f:
+        m = json.load(f)
     words = _outline.load_words(m["words"])
     pad = m.get("pad", {})
     pad_head, pad_tail = float(pad.get("head", 0.12)), float(pad.get("tail", 0.30))
     prefix = m.get("prefix", "")
     os.makedirs(args.outdir, exist_ok=True)
     wanted = set(x.strip() for x in args.only.split(",")) if args.only else None
+    selected = [c for c in m["clips"] if not wanted or c["id"] in wanted]
+    if args.translation and len(selected) > 1:
+        sys.exit("--translation is one clip's script; select that clip with "
+                 "--only (got %d clips)" % len(selected))
 
-    for clip in m["clips"]:
-        if wanted and clip["id"] not in wanted:
-            continue
+    for clip in selected:
         # the SAME resolver the video cut uses, so audio and picture agree to the
         # millisecond about where this clip starts
         start, end = _cut.resolve(clip, words, pad_head, pad_tail)
         stem = os.path.join(args.outdir,
                             ("%s-%s" % (prefix, clip["id"])) if prefix else clip["id"])
-        wav = "%s.%s.wav" % (stem, args.tag)
-        wjson = "%s.%s.words.json" % (stem, args.tag)
+        if os.path.dirname(stem):        # a prefix may carry a subdirectory
+            os.makedirs(os.path.dirname(stem), exist_ok=True)
+        wav = "%s.%s.wav" % (stem, tag)
+        wjson = "%s.%s.words.json" % (stem, tag)
+
+        if args.plan_only:               # before the skip: re-planning an
+            plan = build_plan(clip, words, start, end,      # already-rendered
+                              args.max_dur, args.min_dur)   # clip is the point
+            with open("%s.%s.plan.json" % (stem, tag), "w",
+                      encoding="utf-8") as f:
+                json.dump(plan, f, ensure_ascii=False, indent=2)
+            durs = sorted(u["dur"] for u in plan["units"])
+            print("== %s  %.2f-%.2f (%.2fs)" % (clip["id"], start, end, end - start))
+            print("   %d speech units, median %.2fs, longest %.2fs"
+                  % (len(durs), durs[len(durs) // 2], durs[-1]))
+            continue
+
+        dpath = "%s.%s.dub.json" % (stem, tag)
+        if os.path.exists(dpath):
+            with open(dpath, encoding="utf-8") as f:
+                prev = json.load(f)
+            was = (prev.get("backend"), prev.get("voice"))
+            now = (backend, _tts.resolve_voice(voice, backend))
+            if was != (None, None) and was != now and not args.force:
+                sys.exit("tag %r already holds a %s/%s dub; you asked for %s/%s."
+                         "\nUse a distinct --tag to keep both, or --force to "
+                         "overwrite." % ((tag,) + was + now))
+
         if os.path.exists(wav) and not args.force:
             print("skip (exists) %s" % wav)
             continue
 
         print("== %s  %.2f-%.2f (%.2fs)" % (clip["id"], start, end, end - start))
         plan = build_plan(clip, words, start, end, args.max_dur, args.min_dur)
-        json.dump(plan, open("%s.%s.plan.json" % (stem, args.tag), "w",
-                             encoding="utf-8"),
-                  ensure_ascii=False, indent=2)
+        with open("%s.%s.plan.json" % (stem, tag), "w", encoding="utf-8") as f:
+            json.dump(plan, f, ensure_ascii=False, indent=2)
         durs = sorted(u["dur"] for u in plan["units"])
         print("   %d speech units, median %.2fs, longest %.2fs"
               % (len(durs), durs[len(durs) // 2], durs[-1]))
-        if args.plan_only:
-            continue
 
-        tpath = "%s.%s.translation.json" % (stem, args.tag)
+        # A cached translation is only valid for the plan and engine it was
+        # made against -- slots are matched by bare index, so reusing across a
+        # changed plan would speak the wrong line into the wrong hole.
+        fp = _fingerprint(plan, args)
+        tpath = "%s.%s.translation.json" % (stem, tag)
+
+        def save_rows(rows):
+            with open(tpath, "w", encoding="utf-8") as f:
+                json.dump({"fingerprint": fp, "rows": rows}, f,
+                          ensure_ascii=False, indent=2)
+
         if args.translation:
-            rows = json.load(open(args.translation, encoding="utf-8"))
+            with open(args.translation, encoding="utf-8") as f:
+                data = json.load(f)
+            rows = data["rows"] if isinstance(data, dict) else data
         elif os.path.exists(tpath) and not args.retranslate:
-            rows = json.load(open(tpath, encoding="utf-8"))
+            with open(tpath, encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                if data.get("fingerprint") not in (None, fp):
+                    sys.exit("%s was translated for a different plan or engine "
+                             "(fingerprint %s, this run needs %s).\nPass "
+                             "--retranslate, or use a fresh --tag."
+                             % (os.path.basename(tpath),
+                                data.get("fingerprint"), fp))
+                rows = data["rows"]
+            else:
+                rows = data              # pre-fingerprint file: trust it once
+                print("   note: %s predates plan fingerprints -- assuming it "
+                      "matches this plan" % os.path.basename(tpath))
             print("   reusing %s" % os.path.basename(tpath))
         else:
             rows = _tr.translate(plan["units"], plan["context"], args.engine,
-                                 args.src_lang, args.dst_lang, args.words_per_sec)
-            json.dump(rows, open(tpath, "w", encoding="utf-8"),
-                      ensure_ascii=False, indent=2)
+                                 args.src_lang, args.dst_lang,
+                                 args.words_per_sec, args.model)
+            save_rows(rows)
         by_i = {int(r["i"]): r for r in rows}
         units_by_i = {u["i"]: u for u in plan["units"]}
         for u in plan["units"]:
@@ -336,20 +490,33 @@ def main():
         # dead air under a moving mouth, which reads worse than a slightly long one.
         for rnd in range(args.tune_rounds):
             fits_now = [fit_by_i[u["i"]] for u in plan["units"]]
-            before = {i: by_i[i]["text"] for i in by_i}
+            before = {i: dict(by_i[i]) for i in by_i}
+            old = {i: (audio_by_i[i], marks_by_i[i], fit_by_i[i]) for i in by_i}
             rows, n = _tr.retune(plan["units"], fits_now, rows, plan["context"],
                                  args.engine, args.src_lang, args.dst_lang,
-                                 args.words_per_sec)
+                                 args.words_per_sec, args.model)
             if not n:
                 break
             by_i = {int(r["i"]): r for r in rows}
-            changed = [i for i in sorted(by_i) if by_i[i]["text"] != before.get(i)]
+            changed = [i for i in sorted(by_i)
+                       if by_i[i]["text"] != before[i]["text"]]
             if not changed:
                 break
             print("   round %d: re-rendering %d slot(s)" % (rnd + 1, len(changed)))
             render(changed)
-            json.dump(rows, open(tpath, "w", encoding="utf-8"),
-                      ensure_ascii=False, indent=2)
+            # a rewrite is only a win if it measures better; keep the old take
+            # otherwise, or a round can trade a near-fit for a worse one
+            for i in changed:
+                u = units_by_i[i]
+                if (abs(fit_by_i[i]["final"] - u["dur"])
+                        > abs(old[i][2]["final"] - u["dur"]) + 1e-6):
+                    audio_by_i[i], marks_by_i[i], fit_by_i[i] = old[i]
+                    by_i[i].update(before[i])
+                    print("   slot %d: rewrite fit worse, kept the old line" % i)
+            save_rows(rows)
+            if args.translation:
+                print("   (retuned rows went to %s; your --translation file "
+                      "was left untouched)" % os.path.basename(tpath))
 
         audios, fits, en_words = [], [], []
         for u in plan["units"]:
@@ -366,21 +533,40 @@ def main():
             print("   [%2d] slot %5.2fs -> %5.2fs  %-20s %s"
                   % (u["i"], u["dur"], f["final"], f["note"], f["text"][:58]))
 
+        # per-slot marks are monotonic, but a slot that overran its budget can
+        # push its last words past the next slot's first -- the same guarantee
+        # has to be re-established across slots or the caption builder refuses
+        clamped, prev_end = 0, 0.0
+        for w in en_words:
+            a, b = w["start"], w["end"]
+            if a < prev_end:
+                a, clamped = prev_end, clamped + 1
+            b = max(b, a + 0.01)
+            w["start"], w["end"] = round(a, 3), round(b, 3)
+            prev_end = b
+        if clamped:
+            print("   WARNING: nudged %d word mark(s) forward to keep them "
+                  "monotonic across slots" % clamped)
+
         bed = place(plan["units"], audios, plan["duration"])
-        raw = "%s.%s.raw.wav" % (stem, args.tag)
+        raw = "%s.%s.raw.wav" % (stem, tag)
         _tts.write_wav(raw, bed)
-        loudnorm(raw, wav)
-        os.remove(raw)
+        try:
+            loudnorm(raw, wav)
+        finally:
+            if os.path.exists(raw):      # never leave the raw wav for a media
+                os.remove(raw)           # player to grab a lock on
         # Same envelope faster-whisper writes, so the caption builder cannot
         # tell a dub transcript from a real one and needs no special case.
-        json.dump({"file": wav, "duration": plan["duration"],
-                   "language": args.dst_lang[:2].lower(),
-                   "language_probability": 1.0,
-                   "model": "%s/%s" % (backend, _tts.resolve_voice(voice, backend)),
-                   "compute_type": "dub",
-                   "text": " ".join(w["text"] for w in en_words),
-                   "words": en_words},
-                  open(wjson, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+        with open(wjson, "w", encoding="utf-8") as f:
+            json.dump({"file": wav, "duration": plan["duration"],
+                       "language": iso_lang(args.dst_lang),
+                       "language_probability": 1.0,
+                       "model": "%s/%s" % (backend,
+                                           _tts.resolve_voice(voice, backend)),
+                       "compute_type": "dub",
+                       "text": " ".join(w["text"] for w in en_words),
+                       "words": en_words}, f, ensure_ascii=False, indent=2)
 
         over = [f for f, u in zip(fits, plan["units"]) if f["final"] > u["hard"] + 0.05]
         err = [abs(f["final"] - u["dur"]) for f, u in zip(fits, plan["units"])]
@@ -394,11 +580,14 @@ def main():
             "overruns": len(over),
             "used_tight": sum(1 for f in fits if "tight" in f["note"]),
             "squeezed": sum(1 for f in fits if "squeeze" in f["note"]),
+            "tight_missing": sum(1 for r in rows
+                                 if not str(r.get("tight", "")).strip()
+                                 or r["tight"].strip() == r["text"].strip()),
+            "clamped_words": clamped,
             "fits": fits,
         }
-        json.dump(report, open("%s.%s.dub.json" % (stem, args.tag), "w",
-                               encoding="utf-8"),
-                  ensure_ascii=False, indent=2)
+        with open(dpath, "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
         print("   sync %.1f%%  slot error mean %.2fs max %.2fs  tight %d  squeezed %d"
               % (report["sync"] * 100, report["slot_error_mean"],
                  report["slot_error_max"], report["used_tight"], report["squeezed"]))
