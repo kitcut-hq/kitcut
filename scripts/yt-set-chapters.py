@@ -97,10 +97,26 @@ def main():
     ap.add_argument("--replace", action="store_true",
                     help="allow overwriting chapters the description already "
                          "has; without this, an existing block is refused")
+    ap.add_argument("--lint", action="store_true",
+                    help="check the chapters file and stop; no network at all")
+    ap.add_argument("--duration", type=int,
+                    help="with --lint, also flag marks past this many seconds")
     args = ap.parse_args()
 
     vid = video_id(args.video)
     block = load_chapters(args.chapters)
+
+    if args.lint:
+        marks = ch.parse_marks(block)
+        print(f"{len(marks)} chapters, {ch.fmt_ts(marks[0][0])} .. "
+              f"{ch.fmt_ts(marks[-1][0])}")
+        if args.duration:
+            over = [l for t, l in marks if t >= args.duration]
+            for l in over:
+                print(f"!! past the end ({ch.fmt_ts(args.duration)}): {l}")
+            if over:
+                sys.exit(1)
+        return
 
     from googleapiclient.discovery import build
     yt = build("youtube", "v3", credentials=credentials())
