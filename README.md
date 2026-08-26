@@ -327,6 +327,117 @@ A cached translation records a fingerprint of the plan and engine it was made
 for. Change `--max-dur`, `--min-dur`, `--engine` or the target language and the
 reuse is refused instead of mapping old lines onto new slots by index.
 
+## A screencast out of two recordings
+
+A screen capture and a phone pointed at your face are two clocks and one story.
+`sync-tracks.py` lines them up and proves it, `screencast-cut.py` throws away the
+dead air and composites the result in a single NVENC pass.
+
+```powershell
+# 1. measure the offset -- and look at the frames that prove it
+python scripts/sync-tracks.py --manifest config/screencast/<id>.json --verify
+
+# 2. read the timeline before spending an encode
+python scripts/screencast-cut.py --manifest config/screencast/<id>.json --list
+
+# 3. render
+python scripts/screencast-cut.py --manifest config/screencast/<id>.json
+```
+
+### The camera is the master clock, not the screen
+
+The phone is the stream that has the sound, and it is the one that covers the
+whole shoot -- recording starts before you begin talking and stops after you
+finish, while the screen recorder is started and stopped in the middle. So the
+film is laid out in camera time and falls into three acts, decided from the
+footage rather than declared:
+
+| act | when | layout |
+|---|---|---|
+| intro | camera rolling, no screen yet | camera fills the frame |
+| core | both rolling | screen, camera as a square |
+| outro | camera still rolling, screen stopped | camera fills the frame |
+
+Nothing configures this. Segments are split at the screen-coverage edges and
+each one gets the only layout it can have. A shoot where the two happen to start
+together simply has no intro act.
+
+### Finding the offset when one track is silent
+
+A screen recorder that captured no audio leaves nothing to cross-correlate
+against. Three sources, in increasing order of trust:
+
+- **`creation_time`** — both containers stamp the *start* of capture in UTC, so
+  they subtract directly. Whole-second granularity, so it is a seed good to
+  about ±1 s, not an answer. Sanity-check the direction: if a stamp were the
+  *end* of capture, a long take would have to overlap the clip recorded before
+  it, which one camera cannot do.
+- **`--correlate`** — the screen changes when keys are pressed and the mic hears
+  those keys, so screen change-energy against high-band audio energy should
+  spike at the true offset. On a Claude Code session it does not: output streams
+  silently and speech moves the audio without touching the screen. The peak's
+  z-score against the rest of the search curve is reported and anything under
+  `--min-confidence` is **refused**, not quietly used. On this shoot it scored
+  2.3 and was thrown away.
+- **anchors** — a phrase in the transcript pinned to a time on screen. The good
+  ones are events you can date from the screen alone and that the narration
+  names as they happen: a session picker opening while he says *"here are
+  several sessions"*. Two of those, 341 s apart, agreed to 0.11 s and landed
+  within 0.17 s of the metadata seed.
+
+`--verify` writes paired frames — screen on the left, camera on the right — at
+the moments the screen moved most, because a frozen frame proves nothing: two
+identical screenshots look aligned at every offset.
+
+### The cutting rule
+
+A pause is dropped only where the speaker is silent **and** the screen is not
+doing anything. Silence alone is the wrong test on a screencast: the long wait
+while output streams is the one silence a viewer needs to see. On the shoot this
+was built for, 91% of the screen was a frozen frame, so it is the freeze mask
+that keeps the cut from being driven by breathing alone.
+
+Each drop keeps `air` seconds at both ends, so a join never clips the words
+around it, and anything left shorter than `min_drop` is not worth a cut.
+
+### The manifest
+
+```json
+{
+  "id": "claude-demo",
+  "screen": "sources/screen-2026-08-26.mp4",
+  "camera": "sources/IMG_2695.MOV",
+  "camera_rotate": "none",
+  "words": "transcripts/claude-demo.words.json",
+  "canvas": { "width": 1920, "height": 1080, "fit": "pad" },
+  "pip": { "corner": "bottom-left", "size_px": 360, "margin_px": 48,
+           "crop_x": 0.46, "corner_radius_px": 18, "border_px": 3 },
+  "cut": { "min_silence": 1.5, "air": 0.4, "silence_db": -34,
+           "freeze_db": -60, "require_frozen": true }
+}
+```
+
+- **`camera_rotate`** is `auto` (believe the file), `none` (the tag is wrong) or
+  an angle. Look at a frame before choosing — see the gotcha below.
+- **`fit`** is `pad` (pillarbox, nothing lost) or `crop`. A 3840x2280 capture is
+  32:19, *taller* than 16:9, so `pad` lands it at 1818x1080 with 51 px bars and
+  `crop` trims 120 px of source height instead.
+- **`crop_x` / `crop_y`** place the square inside the camera frame, 0 to 1. The
+  square itself is `min(iw,ih)` — an expression, not a probed number, so it
+  stays square whichever way round the source turns out to be.
+- **`cut`** knobs are the tightness dial. `--list` prints what each setting
+  actually costs before anything is encoded.
+
+`--plan` writes `config/screencast/<id>.cuts.json`, a keep-list of
+`[start, end, layout]` in camera time. Edit it and re-run with `--cuts` to
+override any decision the planner made.
+
+### What it checks before shipping
+
+Duration against the keep-list, output dimensions against the canvas, that the
+output carries no rotation, and that the audio is **not silent** — which is the
+failure that made this pipeline necessary in the first place.
+
 ## Chapter markers on a published video
 
 Turn a transcript into YouTube chapters, then write them into the video's own
@@ -487,13 +598,17 @@ all, and its `FaceDetectorYN` replacement wants a model from an external host.
 | `scripts/dub-clips.py` | translate a clip and speak it back into its own cadence |
 | `scripts/dub-translate.py` | per-slot translation under a time budget |
 | `scripts/dub-tts.py` | neural TTS with word boundaries and rate control |
+| `scripts/sync-tracks.py` | line up a silent screen capture with the camera take, and prove it |
+| `scripts/screencast-cut.py` | drop the dead air and composite the two into one film |
+| `scripts/import-iphone.ps1` | pull footage off a phone over MTP, verified by byte count |
 | `config/presets/` | all visual styling |
 | `config/chapters/` | chapter lists, one `MM:SS Title` per line |
 | `config/clips/` | clip manifests (which episodes to cut, and where) |
+| `config/screencast/` | multicam manifests, plus `.sync.json` and `.cuts.json` sidecars |
 | `config/handles/` | handle-badge styling and motion |
 | `fonts/` | Montserrat Bold (SIL OFL 1.1, see `fonts/OFL.txt`) |
 | `docs/karaoke-captions.md` | design notes and the traps behind them |
-| `.claude/skills/` | Claude Code skills: captions, shorts, dub |
+| `.claude/skills/` | Claude Code skills: captions, shorts, dub, multicam |
 
 `sources/`, `audio/`, `transcripts/`, `outputs/`, `temp/` are working
 directories and are **git-ignored** — they hold third-party video and material
@@ -540,6 +655,36 @@ evidence.
   seam happens to fall. Changing one of the two and re-testing only one clip
   will look fine and break another. Tune them as a pair, re-test every clip, and
   never edit the builder to silence the check.
+- **`aselect` silently passes every audio frame on ffmpeg 8.0.1.** The
+  `select`/`aselect` pair is the usual way to drop spans in one pass, and the
+  video half works. Measured on the same file with the same expression: video
+  came out at 4.00 s, audio at 518.36 s — the full tape, picture racing ahead of
+  sound. `atrim` is exact. `screencast-cut.py` therefore cuts with
+  `trim`/`atrim` + `concat` throughout, and its duration assertion is what
+  caught this (a 40 s preview rendered 1036.80 s, which is 2x the camera).
+- **A phone's rotation tag can be wrong, and `-noautorotate` is not the fix.**
+  IMG_2695 was shot with the phone mounted flat, so iOS wrote `rotation=-90`
+  onto footage that is already upright. `-noautorotate` stops ffmpeg *applying*
+  it but the bogus matrix is then **copied onto the output**, and every player
+  turns the finished 1920x1080 film on its side while `ffprobe` still reports
+  1920x1080. `-display_rotation:v:0 0` before the input rewrites the value
+  instead, and nothing propagates. Read the tag as evidence, look at a frame,
+  then decide — this repo has been bitten from both directions: ignoring a real
+  rotation gives portrait footage a landscape crop.
+- **An image input used by `alphamerge` or `overlay` must be `-loop 1`, and then
+  the filter needs `shortest=1`.** A bare PNG is a one-frame stream, so a
+  rounded-corner mask applies its alpha for exactly one frame and the square
+  turns opaque for the rest of the film. Add `-loop 1` and the stream becomes
+  *infinite*, so `alphamerge` waits forever for it to end: ffmpeg writes a
+  file that grows and never gets a `moov` atom. You need both.
+- **`trim` does not seek, it decodes and discards.** Without an upper bound
+  ffmpeg reads every input to EOF no matter how little of it the film uses. `-to`
+  as an *input* option caps the read without shifting timestamps the way `-ss`
+  would — which matters when the trim times are absolute.
+- **CUDA decode is not automatically faster.** On the 4K screen capture,
+  `-hwaccel cuda` measured 10.2 s per 60 s of footage against 3.6 s on CPU: the
+  content is static screen capture that decodes trivially, and the round-trip to
+  the GPU costs more than it saves. Measure before reaching for it.
 - **An ffmpeg option before an `-i` belongs to THAT input.** Adding badge PNGs
   to a cut turned a `-t` that used to sit next to the source into the *PNG's*
   duration, and the clip silently ran to the end of the source. `-ss` before the

@@ -1,0 +1,65 @@
+{
+ "_comment": "Written by sync-tracks.py. offset is the camera time that lines up with screen t=0: camera_t = screen_t + offset.",
+ "id": "claude-demo",
+ "screen": "sources/screen-2026-08-26.mp4",
+ "camera": "sources/IMG_2695.MOV",
+ "screen_probe": {
+  "path": "C:\\instafill\\video-editing\\sources/screen-2026-08-26.mp4",
+  "width": 3840,
+  "height": 2280,
+  "fps": 30.0,
+  "duration": 461.077313,
+  "size": 2125389977,
+  "creation_time": "2026-08-26T18:15:08.000000Z",
+  "rotation": null
+ },
+ "camera_probe": {
+  "path": "C:\\instafill\\video-editing\\sources/IMG_2695.MOV",
+  "width": 1920,
+  "height": 1080,
+  "fps": 59.97955023375755,
+  "duration": 518.343333,
+  "size": 1522038618,
+  "creation_time": "2026-08-26T18:14:49.000000Z",
+  "rotation": -90.0
+ },
+ "camera_rotate": "none",
+ "seed_offset": 19.0,
+ "offset": 19.165,
+ "method": "anchors",
+ "confidence": 0.05499999999999261,
+ "anchors": [
+  {
+   "text": "Тут є декілька сесій",
+   "screen_t": 101.7,
+   "spoken_start": 120.92,
+   "spoken_end": 123.42,
+   "predicted_camera_t": 120.7,
+   "residual": 0.21999999999999886,
+   "found": true
+  },
+  {
+   "text": "декілька скілів",
+   "screen_t": 442.4,
+   "spoken_start": 461.51,
+   "spoken_end": 463.37,
+   "predicted_camera_t": 461.4,
+   "residual": 0.11000000000001364,
+   "found": true
+  }
+ ],
+ "coverage": {
+  "camera_start": 19.165,
+  "camera_end": 480.242,
+  "camera_duration": 518.343333,
+  "short_by": 0.0
+ },
+ "notes": [
+  "creation_time seed +19.000s; whole-second stamps, so +/-1s",
+  "fitted from 2 anchors, worst residual 0.05s"
+ ],
+ "input_sha1_head": {
+  "screen-2026-08-26.mp4": "2de286234f61b253",
+  "IMG_2695.MOV": "1ad8c6c111df143b"
+ }
+}

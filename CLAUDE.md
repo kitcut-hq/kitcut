@@ -51,7 +51,7 @@ Don't reintroduce it, and don't use `os.execve` to re-exec on Windows — it
 spawns rather than replaces, so the parent dies abnormally and the exit code is
 lost. `_env.bootstrap()` uses `subprocess.run` and propagates the status.
 
-## The three pipelines
+## The four pipelines
 
 Everything is manifest-driven. Nothing hardcodes a timecode, a colour or a font
 size; those live in `config/`.
@@ -93,12 +93,37 @@ the envelope faster-whisper produces, so `cut-clips.py --dub` feeds it to the
 normal caption builder with no special case. Output is named `…-en.mp4`; the
 original is never overwritten.
 
+**4. Multicam** — one film out of a screen recording plus a camera take of you
+narrating. `sync-tracks.py` (measure the offset, prove it) → `screencast-cut.py`
+(drop the dead air, composite, one NVENC pass).
+
+```powershell
+python scripts/sync-tracks.py    --manifest config/screencast/<id>.json --verify
+python scripts/screencast-cut.py --manifest config/screencast/<id>.json --list
+python scripts/screencast-cut.py --manifest config/screencast/<id>.json
+```
+
+The **camera is the master clock**: it carries the sound and it brackets the
+screen recording at both ends, so the film opens and closes full-frame on the
+camera and only puts the square PiP up where the screen was actually rolling.
+A pause is cut only where the speaker is silent *and* the screen is static —
+silence alone would cut the wait while output streams, which is the one silence
+worth keeping. Get footage off a phone with `scripts/import-iphone.ps1`
+(`-DeviceName` for anything that is not an iPhone).
+
+Two traps that cost a render each, both in the README gotchas: **`aselect`
+passes every audio frame** on this ffmpeg (so cutting uses `trim`/`atrim`), and
+a phone's **rotation tag can be wrong** — `-noautorotate` leaves the bogus
+matrix on the output and every player turns the film on its side, so
+`camera_rotate` drives `-display_rotation` instead.
+
 ## Layout
 
 | path | what |
 |---|---|
 | `scripts/` | all tooling; `_env.py` first, then the pipeline scripts |
 | `config/clips/` | which episodes to cut, and their crop sidecars |
+| `config/screencast/` | multicam manifests, plus `.sync.json` / `.cuts.json` sidecars |
 | `config/presets/` | caption styling |
 | `config/handles/` | the animated handle badge |
 | `sources/` `audio/` `transcripts/` `outputs/` `temp/` | gitignored content |

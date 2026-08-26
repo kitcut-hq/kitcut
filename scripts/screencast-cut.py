@@ -1,0 +1,666 @@
+#!/usr/bin/env python
+"""Cut a two-camera screencast down to what is worth watching, in one pass.
+
+The material this is built for: a screen recording with NO audio, plus a phone
+take that carries the narration and runs longer at both ends. sync-tracks.py has
+already measured the offset; this decides what to keep and renders it.
+
+The camera is the master clock, not the screen. It is the stream that has the
+sound, and it is the one that covers the whole shoot -- the screen recorder was
+started after the talking began and stopped before it ended. So the film is laid
+out in camera time and falls into three acts:
+
+  intro   camera rolling, no screen yet   -> camera fills the frame
+  core    both rolling                    -> screen, with the camera as a square
+  outro   camera still rolling, no screen -> camera fills the frame
+
+Cutting rule: a pause is dropped only where the speaker is silent AND the screen
+is not doing anything. Silence alone is the wrong test on a screencast, because
+a long wait while output streams is the one silence the viewer needs. On this
+shoot 89% of the screen is a frozen frame, so the freeze mask is what stops the
+cut from being driven by the speaker's breathing alone.
+
+  --plan   write config/screencast/<id>.cuts.json, a keep-list you can edit
+  --list   print the timeline and the runtime, encode nothing
+  (none)   render
+
+Invoke as:  python scripts/screencast-cut.py --manifest config/screencast/<id>.json
+"""
+import sys, os, json, argparse, subprocess, shutil
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+from importlib import import_module  # noqa: E402
+
+_outline = import_module("transcript-outline")
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+DEFAULT_RENDER = {"encoder": "h264_nvenc", "preset": "p5", "cq": 21,
+                  "maxrate": "16M", "bufsize": "32M", "audio_bitrate": "192k"}
+DEFAULT_CUT = {"min_silence": 1.5, "air": 0.4, "silence_db": -34,
+               "freeze_db": -60, "require_frozen": True, "min_drop": 0.5}
+DEFAULT_PIP = {"corner": "bottom-left", "size_px": 360, "margin_px": 48,
+               "crop_x": 0.5, "crop_y": 0.5, "border_px": 3,
+               "border_colour": "#F2F2F2", "corner_radius_px": 0}
+DEFAULT_CANVAS = {"width": 1920, "height": 1080, "fit": "pad",
+                  "background": "#000000", "fps": 30}
+
+
+def run(cmd, **kw):
+    return subprocess.run(cmd, check=True, capture_output=True, text=True, **kw)
+
+
+def hhmmss(t):
+    return "%d:%05.2f" % (int(t) // 60, t % 60)
+
+
+def probe_duration(path):
+    out = run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+               "-of", "default=noprint_wrappers=1:nokey=1", path]).stdout
+    return float(out.strip())
+
+
+def detect_spans(cmd, start_key, dur_key):
+    """Parse a detector filter's start/duration metadata into [(a, b), ...]."""
+    p = subprocess.run(cmd, capture_output=True, text=True)
+    spans, cur = [], None
+    for line in (p.stderr or "").splitlines():
+        if start_key in line:
+            try:
+                cur = float(line.split(start_key)[1].split()[0])
+            except (IndexError, ValueError):
+                cur = None
+        elif dur_key in line and cur is not None:
+            try:
+                spans.append((cur, cur + float(line.split(dur_key)[1].split()[0])))
+            except (IndexError, ValueError):
+                pass
+            cur = None
+    return spans
+
+
+def silent_spans(audio, db, min_dur):
+    """Where the speaker is not talking, in camera time."""
+    return detect_spans(
+        ["ffmpeg", "-hide_banner", "-nostats", "-i", audio, "-vn",
+         "-af", "silencedetect=noise=%ddB:d=%.3f" % (db, min_dur),
+         "-f", "null", "-"],
+        "silence_start:", "silence_duration:")
+
+
+def frozen_spans(video, db, min_dur=0.5):
+    """Where the screen is not moving, in screen time."""
+    return detect_spans(
+        ["ffmpeg", "-hide_banner", "-nostats", "-i", video, "-an",
+         "-vf", "freezedetect=n=%ddB:d=%.3f" % (db, min_dur),
+         "-f", "null", "-"],
+        "freeze_start:", "freeze_duration:")
+
+
+def merge(spans, gap=0.0):
+    out = []
+    for a, b in sorted(spans):
+        if out and a - out[-1][1] <= gap:
+            out[-1] = (out[-1][0], max(out[-1][1], b))
+        else:
+            out.append((a, b))
+    return out
+
+
+def intersect(spans, a, b):
+    """The parts of `spans` inside [a, b]."""
+    out = []
+    for x, y in spans:
+        lo, hi = max(x, a), min(y, b)
+        if hi - lo > 1e-6:
+            out.append((lo, hi))
+    return out
+
+
+def subtract(a, b, holes):
+    """[a, b] minus every hole, as a list of surviving spans."""
+    out, cur = [], a
+    for x, y in merge(holes):
+        if y <= cur or x >= b:
+            continue
+        x, y = max(x, cur), min(y, b)
+        if x > cur + 1e-6:
+            out.append((cur, x))
+        cur = max(cur, y)
+    if b > cur + 1e-6:
+        out.append((cur, b))
+    return out
+
+
+def quantise(t, fps):
+    return round(t * fps) / float(fps)
+
+
+def plan_cuts(m, cut, film_a, film_b, screen_dur, offset, fps, verbose=True):
+    """Decide what to keep, in camera time.
+
+    Returns (keeps, drops). Each keep is (a, b, layout) with layout in
+    {"full", "pip"} -- "pip" only where the screen actually covers it.
+    """
+    camera = rel(m["camera"])
+    screen = rel(m["screen"])
+
+    sil = silent_spans(camera, int(cut["silence_db"]), float(cut["min_silence"]))
+    sil = intersect(sil, film_a, film_b)
+    if verbose:
+        print("  %d silences >= %.1fs at %ddB inside the film"
+              % (len(sil), cut["min_silence"], cut["silence_db"]))
+
+    # Screen coverage in camera time. Outside it there is no picture to disturb,
+    # so those regions count as frozen -- otherwise no pause in the intro or
+    # outro could ever be cut.
+    cov_a, cov_b = offset, offset + screen_dur
+    if cut.get("require_frozen", True):
+        fz = frozen_spans(screen, int(cut["freeze_db"]))
+        fz_cam = merge([(a + offset, b + offset) for a, b in fz], gap=0.20)
+        still = merge(fz_cam + [(film_a - 1.0, cov_a), (cov_b, film_b + 1.0)],
+                      gap=0.0)
+        if verbose:
+            tot = sum(b - a for a, b in intersect(fz_cam, cov_a, cov_b))
+            print("  screen is frozen for %.1fs of its %.1fs (%.0f%%)"
+                  % (tot, screen_dur, 100.0 * tot / screen_dur))
+    else:
+        still = [(film_a - 1.0, film_b + 1.0)]
+
+    air = float(cut["air"])
+    min_drop = float(cut.get("min_drop", 0.5))
+    drops = []
+    for a, b in sil:
+        # Leave air on both sides so the join does not clip the words around it.
+        ca, cb = a + air, b - air
+        if cb - ca < min_drop:
+            continue
+        # Only the part that is ALSO a still screen may go.
+        for x, y in intersect(still, ca, cb):
+            if y - x >= min_drop:
+                drops.append((x, y))
+    drops = merge(drops)
+
+    keeps = []
+    for a, b in subtract(film_a, film_b, drops):
+        # Split at the screen-coverage edges so every kept span has one layout.
+        for x, y in _split_at(a, b, [cov_a, cov_b]):
+            layout = "pip" if (x >= cov_a - 1e-6 and y <= cov_b + 1e-6) else "full"
+            x, y = quantise(x, fps), quantise(y, fps)
+            if y - x >= 1.0 / fps:
+                keeps.append((x, y, layout))
+    return keeps, drops
+
+
+def _split_at(a, b, points):
+    edges = [a] + sorted(p for p in points if a < p < b) + [b]
+    return [(edges[i], edges[i + 1]) for i in range(len(edges) - 1)]
+
+
+def rel(p):
+    return p if os.path.isabs(p) else os.path.join(ROOT, p)
+
+
+def resolve_bound(m, words, key, default):
+    """A film boundary given as a phrase, a number, or left to the transcript."""
+    spec = (m.get("film") or {}).get(key)
+    if spec is None:
+        return default
+    if isinstance(spec, (int, float)):
+        return float(spec)
+    hit = _outline.find(words, spec)
+    if hit is None:
+        sys.exit("film.%s phrase not found in transcript: %r" % (key, spec))
+    return hit[0] if key == "start_text" else hit[1]
+
+
+def pip_masks(pip, outdir):
+    """Rounded-corner alpha mask and border ring, drawn once by Pillow.
+
+    libass and ffmpeg have no rounded rectangle, and drawbox cannot round a
+    corner, so the shape comes from Pillow the same way the handle badge does.
+    Returns (mask_png, border_png) or (None, None) for a plain square.
+    """
+    radius = int(pip.get("corner_radius_px", 0))
+    if radius <= 0:
+        return None, None
+    from PIL import Image, ImageDraw
+    s = int(pip["size_px"])
+    b = int(pip.get("border_px", 0))
+    os.makedirs(outdir, exist_ok=True)
+
+    mask = Image.new("L", (s, s), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([b, b, s - 1 - b, s - 1 - b],
+                                           radius=max(1, radius - b), fill=255)
+    mask_png = os.path.join(outdir, "pip-mask.png")
+    mask.save(mask_png)
+
+    border_png = None
+    if b > 0:
+        ring = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+        d = ImageDraw.Draw(ring)
+        col = pip.get("border_colour", "#FFFFFF")
+        d.rounded_rectangle([0, 0, s - 1, s - 1], radius=radius,
+                            outline=col, width=b)
+        border_png = os.path.join(outdir, "pip-border.png")
+        ring.save(border_png)
+    return mask_png, border_png
+
+
+def acts_from(keeps):
+    """Group the keep-list into runs of one layout. Acts are sequential in the
+    source timeline, which is what makes the whole film fit in one filtergraph:
+    split feeds each act's select, and because act 2 discards everything before
+    its first segment while act 1 is still playing, nothing queues up."""
+    acts = []
+    for a, b, layout in keeps:
+        if acts and acts[-1]["layout"] == layout:
+            acts[-1]["segs"].append((a, b))
+        else:
+            acts.append({"layout": layout, "segs": [(a, b)]})
+    return acts
+
+
+def labels(prefix, n):
+    return "".join("[%s%d]" % (prefix, i) for i in range(n))
+
+
+def cat(ch, parts, out, v, a):
+    """concat the parts into `out`, or pass through when there is only one.
+
+    Cutting is done with trim/atrim + concat rather than select/aselect. That
+    is not a style preference: on this ffmpeg build (8.0.1) aselect silently
+    passes EVERY audio frame -- measured, video cut to 4.00s while the audio
+    stayed 518.36s -- so a select-based cut yields a file as long as the raw
+    tape with the picture racing ahead of the sound. atrim is exact.
+    """
+    if len(parts) == 1:
+        ch.append("%s%s[%s]" % (parts[0], "anull" if a else "null", out))
+    else:
+        ch.append("%sconcat=n=%d:v=%d:a=%d[%s]"
+                  % ("".join(parts), len(parts), v, a, out))
+    return "[%s]" % out
+
+
+def fill(w, h):
+    return ("scale=%d:%d:force_original_aspect_ratio=increase:flags=lanczos,"
+            "crop=%d:%d,setsar=1" % (w, h, w, h))
+
+
+def fit(w, h, mode, bg):
+    if mode == "crop":
+        return fill(w, h)
+    return ("scale=%d:%d:force_original_aspect_ratio=decrease:flags=lanczos,"
+            "pad=%d:%d:(ow-iw)/2:(oh-ih)/2:%s,setsar=1"
+            % (w, h, w, h, bg))
+
+
+def pip_xy(pip, w, h):
+    s, mg = int(pip["size_px"]), int(pip["margin_px"])
+    corner = pip.get("corner", "bottom-left")
+    x = mg if "left" in corner else w - s - mg
+    y = mg if "top" in corner else h - s - mg
+    return x, y
+
+
+def build_graph(acts, offset, canvas, pip, audio_cfg, mask_idx, border_idx):
+    w, h, fps = canvas["width"], canvas["height"], canvas["fps"]
+    bg = canvas.get("background", "black").replace("#", "0x")
+    s = int(pip["size_px"])
+    px, py = pip_xy(pip, w, h)
+    cx, cy = float(pip.get("crop_x", 0.5)), float(pip.get("crop_y", 0.5))
+    n = len(acts)
+    ch = []
+
+    nseg = sum(len(a["segs"]) for a in acts)
+    nscr = sum(len(a["segs"]) for a in acts if a["layout"] == "pip")
+    npip = sum(1 for a in acts if a["layout"] == "pip")
+
+    # Both sources are put on the output frame grid ONCE, before anything is
+    # trimmed, so every trim lands on the same frame boundary and the video and
+    # audio halves of a segment come out the same length.
+    ch.append("[1:v]fps=%d,split=%d%s" % (fps, nseg, labels("cv", nseg)))
+    ch.append("[1:a]asplit=%d%s" % (nseg, labels("ca", nseg)))
+    if nscr:
+        ch.append("[0:v]fps=%d,split=%d%s" % (fps, nscr, labels("sv", nscr)))
+    if npip and mask_idx is not None:
+        ch.append("[%d:v]format=gray,split=%d%s"
+                  % (mask_idx, npip, labels("mk", npip)))
+    if npip and border_idx is not None:
+        ch.append("[%d:v]format=rgba,split=%d%s"
+                  % (border_idx, npip, labels("bd", npip)))
+
+    k = j = si = 0
+    for i, act in enumerate(acts):
+        vp, ap, sp = [], [], []
+        for a, b in act["segs"]:
+            ch.append("[cv%d]trim=start=%.4f:end=%.4f,setpts=PTS-STARTPTS[tv%d]"
+                      % (k, a, b, k))
+            ch.append("[ca%d]atrim=start=%.4f:end=%.4f,asetpts=PTS-STARTPTS[ta%d]"
+                      % (k, a, b, k))
+            vp.append("[tv%d]" % k)
+            ap.append("[ta%d]" % k)
+            if act["layout"] == "pip":
+                ch.append("[sv%d]trim=start=%.4f:end=%.4f,"
+                          "setpts=PTS-STARTPTS[ts%d]"
+                          % (j, a - offset, b - offset, j))
+                sp.append("[ts%d]" % j)
+                j += 1
+            k += 1
+
+        cat(ch, ap, "a%d" % i, 0, 1)
+        camv = cat(ch, vp, "camv%d" % i, 1, 0)
+
+        if act["layout"] == "full":
+            ch.append("%s%s[v%d]" % (camv, fill(w, h), i))
+            continue
+
+        # Screen behind, camera square in front.
+        scr = cat(ch, sp, "scrv%d" % i, 1, 0)
+        ch.append("%s%s[bg%d]" % (scr, fit(w, h, canvas.get("fit", "pad"), bg), i))
+        # min(iw,ih) rather than a probed number: the square stays square
+        # whichever way round the source turns out to be.
+        sq = ("crop=w='min(iw,ih)':h='min(iw,ih)'"
+              ":x='(iw-min(iw,ih))*%.4f':y='(ih-min(iw,ih))*%.4f'" % (cx, cy))
+        ch.append("%s%s,scale=%d:%d:flags=lanczos,setsar=1[sq%d]"
+                  % (camv, sq, s, s, i))
+        last = "sq%d" % i
+        # shortest=1 everywhere the mask or border is involved. Those come from
+        # -loop 1 image inputs, which are INFINITE: without it, alphamerge waits
+        # forever for its second input to end and ffmpeg never finishes -- it
+        # writes a growing file that has no moov atom and never will.
+        if mask_idx is not None:
+            ch.append("[%s]format=rgba[sqa%d]" % (last, i))
+            ch.append("[sqa%d][mk%d]alphamerge=shortest=1[pip%d]" % (i, si, i))
+            last = "pip%d" % i
+        out = "v%d" % i if border_idx is None else "vb%d" % i
+        ch.append("[bg%d][%s]overlay=%d:%d:shortest=1[%s]"
+                  % (i, last, px, py, out))
+        if border_idx is not None:
+            ch.append("[vb%d][bd%d]overlay=%d:%d:shortest=1[v%d]"
+                      % (i, si, px, py, i))
+        si += 1
+
+    pairs = "".join("[v%d][a%d]" % (i, i) for i in range(n))
+    ch.append("%sconcat=n=%d:v=1:a=1[vout][araw]" % (pairs, n))
+
+    af = []
+    if audio_cfg.get("highpass"):
+        af.append("highpass=f=%d" % int(audio_cfg["highpass"]))
+    if audio_cfg.get("denoise"):
+        af.append("afftdn=nr=%d" % int(audio_cfg["denoise"]))
+    if audio_cfg.get("loudnorm"):
+        af.append("loudnorm=%s" % audio_cfg["loudnorm"])
+    af.append("aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo")
+    ch.append("[araw]%s[aout]" % ",".join(af))
+    return ";".join(ch)
+
+
+def _truncate(acts, limit):
+    """Keep only the first `limit` seconds of the film, for a quick look."""
+    out, total = [], 0.0
+    for act in acts:
+        segs = []
+        for a, b in act["segs"]:
+            if total >= limit:
+                break
+            take = min(b - a, limit - total)
+            segs.append((a, a + take))
+            total += take
+        if segs:
+            out.append({"layout": act["layout"], "segs": segs})
+        if total >= limit:
+            break
+    return out, total
+
+
+def _rotation(path):
+    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
+               "-show_entries", "stream_side_data=rotation",
+               "-of", "default=noprint_wrappers=1:nokey=1", path]).stdout
+    for line in out.splitlines():
+        if line.strip() and float(line.strip()) != 0.0:
+            return line.strip()
+    return None
+
+
+def _dims(path):
+    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
+               "-show_entries", "stream=width,height",
+               "-of", "csv=p=0", path]).stdout.strip()
+    w, _, h = out.partition(",")
+    return int(w), int(h)
+
+
+def _peak_db(path):
+    p = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", path,
+                        "-vn", "-af", "volumedetect", "-f", "null", "-"],
+                       capture_output=True, text=True)
+    for line in (p.stderr or "").splitlines():
+        if "max_volume:" in line:
+            try:
+                return float(line.split("max_volume:")[1].split("dB")[0])
+            except (IndexError, ValueError):
+                return None
+    return None
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--manifest", required=True)
+    ap.add_argument("--plan", action="store_true",
+                    help="write the keep-list sidecar and stop")
+    ap.add_argument("--list", action="store_true",
+                    help="print the timeline and runtime, encode nothing")
+    ap.add_argument("--cuts", help="use this keep-list instead of planning one")
+    ap.add_argument("--out", help="output path (default outdir/<id>.mp4)")
+    ap.add_argument("--preview", type=float, default=0.0,
+                    help="render only the first N seconds, for a look")
+    ap.add_argument("--force", action="store_true", help="overwrite the output")
+    args = ap.parse_args()
+
+    m = json.load(open(args.manifest, encoding="utf-8"))
+    mid = m.get("id") or os.path.splitext(os.path.basename(args.manifest))[0]
+    screen, camera = rel(m["screen"]), rel(m["camera"])
+
+    canvas = dict(DEFAULT_CANVAS, **(m.get("canvas") or {}))
+    pip = dict(DEFAULT_PIP, **(m.get("pip") or {}))
+    cut = dict(DEFAULT_CUT, **(m.get("cut") or {}))
+    audio_cfg = m.get("audio") or {}
+    render = dict(DEFAULT_RENDER, **(m.get("render") or {}))
+    fps = int(canvas["fps"])
+
+    sync_path = os.path.join(os.path.dirname(args.manifest),
+                             "%s.sync.json" % mid)
+    if not os.path.exists(sync_path):
+        sys.exit("no sync sidecar at %s -- run sync-tracks.py first" % sync_path)
+    sync = json.load(open(sync_path, encoding="utf-8"))
+    offset = float(sync["offset"])
+
+    screen_dur = probe_duration(screen)
+    camera_dur = probe_duration(camera)
+    words = _outline.load_words(rel(m["words"])) if m.get("words") else []
+
+    # The film runs from the first word to the last unless told otherwise. The
+    # camera was rolling before and after both, and that dead air is not content.
+    d0 = max(0.0, (words[0]["start"] - 0.6) if words else 0.0)
+    d1 = min(camera_dur, (words[-1]["end"] + 0.8) if words else camera_dur)
+    film_a = resolve_bound(m, words, "start_text", d0)
+    film_b = resolve_bound(m, words, "end_text", d1)
+    film_a = max(0.0, min(film_a, camera_dur))
+    film_b = max(film_a + 1.0, min(film_b, camera_dur))
+
+    print("%s  offset %+.3fs (%s)" % (mid, offset, sync.get("method")))
+    print("  screen %.2fs, camera %.2fs" % (screen_dur, camera_dur))
+    print("  film spans camera %.2f .. %.2f  (%.1fs of tape)"
+          % (film_a, film_b, film_b - film_a))
+
+    cuts_path = args.cuts or os.path.join(os.path.dirname(args.manifest),
+                                          "%s.cuts.json" % mid)
+    if args.cuts and os.path.exists(args.cuts):
+        doc = json.load(open(args.cuts, encoding="utf-8"))
+        keeps = [(float(a), float(b), l) for a, b, l in doc["keeps"]]
+        drops = [(float(a), float(b)) for a, b in doc.get("drops", [])]
+        print("  keep-list loaded from %s" % os.path.relpath(args.cuts, ROOT))
+    else:
+        keeps, drops = plan_cuts(m, cut, film_a, film_b, screen_dur,
+                                 offset, fps)
+
+    runtime = sum(b - a for a, b, _ in keeps)
+    dropped = (film_b - film_a) - runtime
+    print("")
+    print("  %d segments, %d cuts" % (len(keeps), len(drops)))
+    print("  runtime %s  (cut %.1fs of pauses, %.0f%% of the tape)"
+          % (hhmmss(runtime), dropped,
+             100.0 * dropped / max(1e-9, film_b - film_a)))
+
+    acts = acts_from(keeps)
+    print("  acts: %s" % ", ".join(
+        "%s x%d (%s)" % (a["layout"], len(a["segs"]),
+                         hhmmss(sum(y - x for x, y in a["segs"])))
+        for a in acts))
+
+    if args.list:
+        print("")
+        print("  camera in       out      len   layout   what is said there")
+        for a, b, layout in keeps:
+            said = ""
+            if words:
+                ws = [w["text"] for w in words
+                      if a <= w["start"] < min(b, a + 6)]
+                said = " ".join(ws)[:56]
+            print("  %8.2f %8.2f %6.2f   %-6s   %s"
+                  % (a, b, b - a, layout, said))
+        if drops:
+            print("")
+            print("  cut out:")
+            for a, b in drops:
+                print("  %8.2f %8.2f %6.2f   pause" % (a, b, b - a))
+
+    doc = {
+        "_comment": "Keep-list for screencast-cut.py, in CAMERA time. Each keep "
+                    "is [start, end, layout]; layout pip means the screen is up "
+                    "with the camera as a square, full means camera only. Edit "
+                    "this and re-run with --cuts to override the plan.",
+        "id": mid, "offset": offset, "fps": fps,
+        "film": [film_a, film_b],
+        "rule": cut,
+        "runtime": round(runtime, 3),
+        "keeps": [[round(a, 4), round(b, 4), l] for a, b, l in keeps],
+        "drops": [[round(a, 4), round(b, 4)] for a, b in drops],
+    }
+    if not args.cuts:
+        with open(cuts_path, "w", encoding="utf-8") as f:
+            json.dump(doc, f, ensure_ascii=False, indent=1)
+        print("")
+        print("  keep-list -> %s" % os.path.relpath(cuts_path, ROOT))
+
+    if args.plan or args.list:
+        return
+
+    outdir = rel(m.get("outdir", "outputs/screencast"))
+    os.makedirs(outdir, exist_ok=True)
+    dst = args.out or os.path.join(outdir, "%s.mp4" % mid)
+    if os.path.exists(dst) and not args.force:
+        sys.exit("%s exists; --force to replace it" % os.path.relpath(dst, ROOT))
+
+    if args.preview > 0:
+        acts, runtime = _truncate(acts, args.preview)
+        print("  PREVIEW: first %.1fs only" % runtime)
+
+    tmpdir = os.path.join(ROOT, "temp", "screencast-%s" % mid)
+    mask_png, border_png = pip_masks(pip, tmpdir)
+
+    # trim does not seek -- it decodes and discards -- so without an upper bound
+    # ffmpeg reads both files to EOF however little of them the film uses. -to
+    # is an INPUT option here, which caps the read without shifting timestamps
+    # the way -ss would (and the trim times are absolute).
+    cam_to = max(b for act in acts for _, b in act["segs"]) + 2.0
+    scr_ends = [b - offset for act in acts if act["layout"] == "pip"
+                for _, b in act["segs"]]
+    inputs = []
+    if scr_ends:
+        inputs += ["-to", "%.3f" % (max(scr_ends) + 2.0)]
+    inputs += ["-i", screen]
+    # IMG_2695 carries rotation=-90 that is simply wrong. -display_rotation
+    # rewrites the input's rotation rather than merely declining to apply it,
+    # which -noautorotate does: with -noautorotate the frames come through
+    # upright but the bogus matrix is COPIED ONTO THE OUTPUT, and every player
+    # then turns the finished 1920x1080 film on its side. Measured, not guessed.
+    rot = m.get("camera_rotate", "auto")
+    if rot != "auto":
+        inputs += ["-display_rotation:v:0", "0" if rot == "none" else str(rot)]
+    inputs += ["-to", "%.3f" % cam_to, "-i", camera]
+    mask_idx = border_idx = None
+    nxt = 2
+    # -loop/-framerate matter: a bare PNG is a ONE frame stream, and alphamerge
+    # ends with the shorter of its inputs, so the square would keep its alpha
+    # for a single frame and turn opaque for the rest of the film.
+    for png, which in ((mask_png, "mask"), (border_png, "border")):
+        if not png:
+            continue
+        inputs += ["-loop", "1", "-framerate", str(fps), "-i", png]
+        if which == "mask":
+            mask_idx = nxt
+        else:
+            border_idx = nxt
+        nxt += 1
+
+    graph = build_graph(acts, offset, canvas, pip, audio_cfg,
+                        mask_idx, border_idx)
+
+    tmp = dst + ".part.mp4"
+    cmd = (["ffmpeg", "-hide_banner", "-nostats", "-loglevel", "warning"]
+           + inputs
+           + ["-filter_complex", graph, "-map", "[vout]", "-map", "[aout]",
+              "-r", str(fps),
+              "-c:v", render["encoder"], "-preset", render["preset"],
+              "-rc", "vbr", "-cq", str(render["cq"]),
+              # NVENC ignores -cq unless the average bitrate target is unset
+              "-b:v", "0", "-maxrate", render["maxrate"],
+              "-bufsize", render["bufsize"], "-pix_fmt", "yuv420p",
+              "-c:a", "aac", "-b:a", render["audio_bitrate"], "-ac", "2",
+              "-movflags", "+faststart", "-y", tmp])
+
+    print("")
+    print("  rendering %s ..." % os.path.relpath(dst, ROOT))
+    p = subprocess.run(cmd, capture_output=True, text=True)
+    if p.returncode != 0:
+        sys.stderr.write((p.stderr or "")[-4000:])
+        sys.exit("ffmpeg failed")
+
+    got = probe_duration(tmp)
+    if abs(got - runtime) > max(2.0 / fps, 0.5):
+        sys.stderr.write("output is %.2fs, the keep-list predicted %.2fs\n"
+                         % (got, runtime))
+        sys.exit("duration assertion failed; %s left in place" % tmp)
+
+    # The failure that started this job was a track nobody listened to.
+    peak = _peak_db(tmp)
+    if peak is None or peak < -60:
+        sys.exit("rendered audio is silent (peak %s dB); refusing to ship it"
+                 % peak)
+
+    # A phone's display matrix can survive the filtergraph and land on the
+    # output, which turns the whole film on its side in every player while
+    # ffprobe still cheerfully reports 1920x1080.
+    got_rot = _rotation(tmp)
+    if got_rot:
+        sys.exit("output carries rotation=%s, so players will turn it on its "
+                 "side; %s left in place" % (got_rot, tmp))
+    w, h = _dims(tmp)
+    if (w, h) != (canvas["width"], canvas["height"]):
+        sys.exit("output is %dx%d, expected %dx%d"
+                 % (w, h, canvas["width"], canvas["height"]))
+
+    shutil.move(tmp, dst)
+    print("  %s  %s  %.1f MB  audio peak %.1f dB"
+          % (os.path.relpath(dst, ROOT), hhmmss(got),
+             os.path.getsize(dst) / 1e6, peak))
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,62 @@
+{
+  "_comment": "Multicam screencast: a screen recording that captured NO audio, plus the iPhone take that carries the narration. camera_rotate is 'none' on purpose -- IMG_2695 has a rotation=-90 display matrix that is WRONG (the phone was mounted flat and iOS guessed), and honouring it lays the shot on its side. Check a frame before trusting that tag either way.",
+  "id": "claude-demo",
+  "screen": "sources/screen-2026-08-26.mp4",
+  "camera": "sources/IMG_2695.MOV",
+  "camera_rotate": "none",
+  "words": "transcripts/claude-demo.words.json",
+  "outdir": "outputs/screencast",
+  "sync": {
+    "seed": "creation_time",
+    "search": 6.0,
+    "hz": 10,
+    "anchors": [
+      {
+        "text": "Тут є декілька сесій",
+        "screen_t": 101.7,
+        "_why": "the Resume-session picker opens on screen at 101.1-102.3 and he says 'here are several sessions' over it"
+      },
+      {
+        "text": "декілька скілів",
+        "screen_t": 442.4,
+        "_why": "he selects the 'Skills wrapping these:' line at 442.3-442.5 while saying 'several skills'"
+      }
+    ]
+  },
+  "canvas": {
+    "width": 1920,
+    "height": 1080,
+    "fit": "pad",
+    "background": "#000000"
+  },
+  "pip": {
+    "corner": "bottom-left",
+    "size_px": 360,
+    "margin_px": 48,
+    "crop_x": 0.46,
+    "crop_y": 0.5,
+    "border_px": 3,
+    "border_colour": "#F2F2F2",
+    "corner_radius_px": 18
+  },
+  "cut": {
+    "min_silence": 1.5,
+    "air": 0.4,
+    "silence_db": -34,
+    "freeze_db": -60,
+    "require_frozen": true
+  },
+  "audio": {
+    "highpass": 80,
+    "denoise": 12,
+    "loudnorm": "I=-14:TP=-1.5:LRA=11"
+  },
+  "render": {
+    "encoder": "h264_nvenc",
+    "preset": "p5",
+    "cq": 21,
+    "maxrate": "16M",
+    "bufsize": "32M",
+    "audio_bitrate": "192k"
+  }
+}
