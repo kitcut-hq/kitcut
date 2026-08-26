@@ -77,9 +77,8 @@ def load_chapters(path):
     return "\n".join(l for _, l in lines)
 
 
-def splice(description, block):
-    """Replace an existing chapter block (>=3 contiguous timestamp lines),
-    or append the new one after a blank line."""
+def find_block(description):
+    """Span of an existing chapter block (>=3 contiguous timestamp lines)."""
     lines = description.split("\n")
     run_start, best = None, None
     for i, line in enumerate(lines + [""]):  # sentinel flushes a trailing run
@@ -90,11 +89,23 @@ def splice(description, block):
             if run_start is not None and i - run_start >= 3:
                 best = (run_start, i)
             run_start = None
-    if best:
-        lines[best[0]:best[1]] = block.split("\n")
-        return "\n".join(lines)
+    return best
+
+
+def splice(description, block):
+    """Replace an existing chapter block, or append after a blank line.
+
+    Returns (new_description, replaced_block_or_None) -- the caller has to know
+    whether this destroyed someone's hand-written chapters. See --replace.
+    """
+    lines = description.split("\n")
+    span = find_block(description)
+    if span:
+        old = "\n".join(lines[span[0]:span[1]])
+        lines[span[0]:span[1]] = block.split("\n")
+        return "\n".join(lines), old
     sep = "" if not description.strip() else description.rstrip() + "\n\n"
-    return sep + block + "\n"
+    return sep + block + "\n", None
 
 
 def credentials():
@@ -126,6 +137,9 @@ def main():
                     help="config/chapters/<id>.txt, one 'MM:SS Title' per line")
     ap.add_argument("--dry-run", action="store_true",
                     help="fetch and show the resulting description; no write")
+    ap.add_argument("--replace", action="store_true",
+                    help="allow overwriting chapters the description already "
+                         "has; without this, an existing block is refused")
     args = ap.parse_args()
 
     vid = video_id(args.video)
@@ -139,12 +153,28 @@ def main():
         sys.exit(f"video {vid} not found or not visible to this account")
     snippet = r["items"][0]["snippet"]
 
-    new_desc = splice(snippet.get("description", ""), block)
+    new_desc, replaced = splice(snippet.get("description", ""), block)
     if len(new_desc) > DESCRIPTION_LIMIT:
         sys.exit(f"resulting description is {len(new_desc)} chars; "
                  f"YouTube's limit is {DESCRIPTION_LIMIT}")
 
     print(f"video: {snippet['title']!r}")
+
+    # Chapters already up there were written by a person and are not
+    # recoverable from the API once overwritten. Show them and stop.
+    if replaced is not None and replaced != block:
+        print("\n!! this video ALREADY has chapters; the write would replace "
+              f"{len(replaced.splitlines())} of them with "
+              f"{len(block.splitlines())}:\n")
+        for line in replaced.splitlines():
+            print("  - " + line)
+        print()
+        for line in block.splitlines():
+            print("  + " + line)
+        if not args.replace:
+            print("\nrefusing to overwrite. Compare them, and pass --replace "
+                  "if the new list really is better.")
+            return
     print("--- resulting description " + "-" * 40)
     print(new_desc)
     print("-" * 66)

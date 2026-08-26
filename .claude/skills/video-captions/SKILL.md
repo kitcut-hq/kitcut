@@ -159,6 +159,13 @@ python scripts/yt-set-chapters.py <id> --chapters config/chapters/<id>.txt --dry
 python scripts/yt-set-chapters.py <id> --chapters config/chapters/<id>.txt
 ```
 
+**Read the existing description first — these videos often already have
+chapters.** The CMS-1500 video did: 13 hand-written marks, accurate against the
+transcript and finer-grained than the 11 a first pass generated. Overwriting
+them would have been a downgrade dressed up as a task completion. The script now
+prints an old-vs-new diff and refuses without `--replace`, but the judgement is
+still yours: generate, diff, and only publish if the new list genuinely wins.
+
 Choosing the boundaries is a judgement call — anchor each one to the sentence
 where the topic actually starts, not to a round number. The script enforces only
 what YouTube requires: first mark at `00:00`, three or more marks, ≥10 s apart.

@@ -328,13 +328,19 @@ must be at `00:00`, there must be at least three, and consecutive marks must be
 at least 10 s apart. YouTube does not report any of these as errors; it just
 renders no chapters at all, which is easy to mistake for a failed update.
 
-The write itself preserves the description. `videos.update` replaces the
-**entire** snippet, so the script sends back the snippet it just fetched with
+**Check whether the video already has chapters before generating any.** Several
+of these videos were published with hand-written ones, and a freshly generated
+list is not automatically an improvement — the ones on the CMS-1500 video were
+finer-grained than what a first pass produced. The script prints an old-vs-new
+diff and **refuses** to overwrite an existing block without `--replace`; the old
+text is gone for good once written, since the API keeps no history.
+
+The write itself preserves the rest of the description. `videos.update` replaces
+the **entire** snippet, so the script sends back the snippet it just fetched with
 only `description` changed — dropping `title` or `categoryId` from that body is
-how you blank a video's title. If the description already holds a chapter block
-(three or more contiguous timestamp lines) that block is replaced in place;
-otherwise the new one is appended. After writing it re-fetches and asserts the
-block is really there.
+how you blank a video's title. A chapter block already in the description is
+replaced in place; otherwise the new one is appended. After writing it re-fetches
+and asserts the block is really there.
 
 ### One-time auth
 
