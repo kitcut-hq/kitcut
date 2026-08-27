@@ -83,5 +83,14 @@
       }
     ],
     "close": []
-  }
+  },
+  "name_labels": [
+    {
+      "_why": "The opening bookend runs full-frame camera from 0 to ~8.2s of film time, where the b-roll of the two-phone rig cuts in. The card fades up once he is talking and is gone before that cut, so it never sits over footage it does not belong to.",
+      "name": "Oleksandr Gamaniuk",
+      "title": "CEO, Instafill.ai",
+      "at": 2.0,
+      "dur": 5.5
+    }
+  ]
 }

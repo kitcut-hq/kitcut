@@ -526,6 +526,83 @@ Duration against the keep-list, output dimensions against the canvas, that the
 output carries no rotation, and that the audio is **not silent** — which is the
 failure that made this pipeline necessary in the first place.
 
+## A lower-third name label
+
+A dark rounded card with a name over a title, and a mint rounded rectangle
+sitting nine pixels down-right of it so an accent sliver shows along the bottom
+and right edges. It fades up, holds, and fades out.
+
+```powershell
+# eyeball the card on its own
+python scripts/name-label.py --card-only --name "Jane Doe" --title "CEO, Example"
+
+# prove where it lands on THIS footage -- one still, no encode
+python scripts/name-label.py --video outputs/film.mp4 --frame 4.0 `
+    --name "Jane Doe" --title "CEO, Example"
+
+# burn it into an existing file
+python scripts/name-label.py --video outputs/film.mp4 `
+    --name "Jane Doe" --title "CEO, Example" --at 2.0 --dur 5.5
+```
+
+Better, put it in the screencast manifest and let `screencast-cut.py` apply it
+**while cutting** — the card goes on after the concat, inside the film's
+existing NVENC pass, so a labelled film is not a re-encode of an unlabelled one:
+
+```json
+"name_labels": [
+  {"name": "Oleksandr Gamaniuk", "title": "CEO, Instafill.ai", "at": 2.0, "dur": 5.5}
+]
+```
+
+`at` is **film time** — the time on the finished scrubber. The overlay is
+applied after the cut, so the pauses the cut removed are already off the clock.
+
+### Where the numbers came from
+
+Every default in `config/labels/lower-third.json` was measured, not chosen. The
+reference is [this clip](https://x.com/RiskReversal/status/2092685768833605757),
+whose label is up between t=4.7 and t=10.4. Reading it off a single frame is
+guesswork, because the card sits over a moving shot; so the frame at t=9.0 was
+diffed against t=10.6 — the label's **own fade-out** — which isolates exactly
+the pixels the label owns and nothing else. Those pixels were then classified
+into card, accent and text by colour:
+
+| | measured (720p) | preset (1080p) |
+|---|---|---|
+| card rect | x 458–897, y 468–555 | 440×88 → scaled ×1.5 |
+| accent sliver | 6 px on the right and bottom | `offset_*_px: 9` |
+| accent colour | rgb(19, 186, 130) | `#13BA82` |
+| name cap height | 34 px | 51 |
+| title cap height | 19 px | 28 |
+| fade up ends / out starts | 5.2 s / 10.3 s | 0.4 s / 0.35 s |
+
+The accent turned out not to be a stroke along two edges but a **whole rounded
+rectangle offset behind the card** — which is why the sliver has a rounded
+corner at bottom-right and tapers out at top-right and bottom-left. Drawing it
+as a two-sided stroke gets the colour right and the corners wrong.
+
+The reference sets its type in a humanist sans; Montserrat is substituted
+because the captions and the handle badge already use it, so a labelled film
+reads as one channel rather than two.
+
+### Style
+
+`config/labels/lower-third.json`, authored on a 1920×1080 canvas and scaled to
+whatever frame it lands on. `accent.colour` is the single key to change to
+rebrand it. `layout.corner` takes `bottom-left` (the default), `bottom-right`,
+`top-left`, `top-right`, or anything else for centred; `layout.max_width_px`
+shrinks an over-long name to fit and says so on stderr rather than letting it
+run off the frame.
+
+Type is sized by **cap height** rather than nominal size, for the same reason
+the caption presets are: nominal size includes ascent and descent, which differ
+between weights, so sizing by it would set the two lines at a ratio nobody chose.
+
+`fonts/Montserrat-Medium.ttf` carries the title line and was instanced from
+`temp/fontsrc/Montserrat-var.ttf` at `wght=500` with `fontTools.varLib.instancer`.
+It is covered by the same `fonts/OFL.txt` as the bold.
+
 ## Chapter markers on a published video
 
 Turn a transcript into YouTube chapters, then write them into the video's own
@@ -683,6 +760,7 @@ all, and its `FaceDetectorYN` replacement wants a model from an external host.
 | `scripts/yt-audit-chapters.py` | which videos on a channel actually show chapters |
 | `scripts/cut-clips.py` | manifest → standalone clips cut out of a long video |
 | `scripts/handle-overlay.py` | animated social-handle badge, drawn and burned in |
+| `scripts/name-label.py` | lower-third name label, drawn and burned in |
 | `scripts/dub-clips.py` | translate a clip and speak it back into its own cadence |
 | `scripts/dub-translate.py` | per-slot translation under a time budget |
 | `scripts/dub-tts.py` | neural TTS with word boundaries and rate control |
@@ -692,6 +770,7 @@ all, and its `FaceDetectorYN` replacement wants a model from an external host.
 | `scripts/yt-upload.py` | upload a render to YouTube, channel-guarded and verified |
 | `config/presets/` | all visual styling |
 | `config/chapters/` | chapter lists, one `MM:SS Title` per line |
+| `config/labels/` | the lower-third name label's styling |
 | `config/clips/` | clip manifests (which episodes to cut, and where) |
 | `config/screencast/` | multicam manifests, plus `.sync.json` and `.cuts.json` sidecars |
 | `config/handles/` | handle-badge styling and motion |
@@ -719,6 +798,11 @@ evidence.
   the variable before installing and finishes with `pip check`; `_env.py` clears
   it for every child process. This is handled now: run scripts as plain
   `python scripts/<name>.py`.
+- **A name label past the end of the film fails silently.** The overlay's
+  `enable` expression simply never turns true; ffmpeg reports nothing, the
+  render succeeds, and the card is not in it. `screencast-cut.py` checks every
+  `name_labels` entry against the cut runtime — which is only known after the
+  cut — for exactly this reason.
 - **Don't re-exec with `os.execve` on Windows.** It spawns a new process and
   kills the current one rather than replacing it, so the shell sees the parent
   die abnormally and the exit code is lost. `subprocess.run` + `sys.exit(rc)`.

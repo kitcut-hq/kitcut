@@ -159,6 +159,25 @@ gets a `moov` atom; and **never measure leftover silence on the rendered file** 
 `loudnorm` lifts the room tone and `silencedetect` then finds nothing at any
 threshold. Measure the source and intersect with the keep-list.
 
+**Name labels** — a lower third naming who is on screen. `name-label.py` draws
+the card; `screencast-cut.py` reads `name_labels` from the manifest and overlays
+it **after its concat**, inside the film's one NVENC pass, so labelling a film
+is not a re-encode of it.
+
+```json
+"name_labels": [
+  {"name": "Oleksandr Gamaniuk", "title": "CEO, Instafill.ai", "at": 2.0, "dur": 5.5}
+]
+```
+
+`at` is **film time**, not camera time — the overlay lands after the cut, so the
+pauses it removed are already off the clock. `--frame T` composites the card
+onto the real frame at T and writes a PNG, which is the placement check that
+costs nothing; run it before an encode. Style is `config/labels/lower-third.json`,
+every value measured off the reference clip (see the README table) rather than
+chosen. A label past the end of the film would fail **silently** — `enable`
+never turns true — so the runtime is asserted against it.
+
 **5. Publish** — upload it, then give it chapters.
 
 ```powershell
@@ -185,6 +204,7 @@ consent to give.
 | `config/clips/` | which episodes to cut, and their crop sidecars |
 | `config/screencast/` | multicam manifests, their `.sync.json` / `.cuts.json` sidecars, and the YouTube description text |
 | `config/presets/` | caption styling |
+| `config/labels/` | the lower-third name label |
 | `config/handles/` | the animated handle badge |
 | `config/chapters/` | chapter lists, one `MM:SS Title` per line |
 | `sources/` `audio/` `transcripts/` `outputs/` `temp/` | gitignored content |

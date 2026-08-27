@@ -1,0 +1,61 @@
+{
+  "_comment": "Broadcast lower third: near-black rounded card, name over title, with a mint rounded rectangle offset 9px down-right so an accent sliver shows along the bottom and right edges. Measured off x.com/RiskReversal/status/2092685768833605757 -- the frame at t=9.0 was diffed against t=10.6 (the label's own fade-out) to isolate its pixels, which were then classified into card / accent / text. That frame is 1280x720; every number below is the reading scaled by 1.5 onto this 1920x1080 canvas, and _measured keeps the raw readings. Recolour by editing accent.colour alone -- nothing else in the design is tied to the green.",
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "card": {
+    "colour": "#050608",
+    "alpha": 0.95,
+    "corner_radius_px": 21,
+    "pad_x_px": 15,
+    "pad_y_px": 15,
+    "line_gap_px": 18
+  },
+  "accent": {
+    "enabled": true,
+    "colour": "#13BA82",
+    "alpha": 1.0,
+    "offset_x_px": 9,
+    "offset_y_px": 9
+  },
+  "lines": {
+    "common": {
+      "colour": "#FFFFFF",
+      "uppercase": false,
+      "tracking_px": 0
+    },
+    "name": {
+      "file": "fonts/Montserrat-Bold.ttf",
+      "cap_height_px": 51
+    },
+    "title": {
+      "file": "fonts/Montserrat-Medium.ttf",
+      "cap_height_px": 28
+    }
+  },
+  "layout": {
+    "_note": "corner is one of top-left / top-right / bottom-left / bottom-right / bottom-centre. The reference sits centre-right because its subject does; ours sits bottom-left because the speaker is framed right of centre and the multicam PiP is not up during the opening bookend.",
+    "corner": "bottom-left",
+    "margin_x_px": 96,
+    "margin_y_px": 120,
+    "max_width_px": 1400
+  },
+  "animation": {
+    "fade_in_s": 0.4,
+    "hold_s": 5.5,
+    "fade_out_s": 0.35
+  },
+  "_measured": {
+    "reference": "x.com/RiskReversal/status/2092685768833605757, 1280x720 variant, t=9.0 vs t=10.6",
+    "card_rect_720p": [458, 468, 897, 555],
+    "accent_sliver_720p": {"right_x": [898, 903], "bottom_y": [556, 561]},
+    "accent_rgb": [19, 186, 130],
+    "name_cap_height_720p": 34,
+    "title_cap_height_720p": 19,
+    "line_gap_720p": 12,
+    "pad_720p": {"x": 10, "y": 10},
+    "on_screen_720p": {"fade_up_ends": 5.2, "fade_out_starts": 10.3},
+    "_note": "The reference sets its two lines in a humanist sans (Open Sans / Noto Sans family). Montserrat is substituted here because it is what the captions and the handle badge already use, so a labelled film reads as one channel rather than two."
+  }
+}

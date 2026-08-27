@@ -33,6 +33,7 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 from importlib import import_module  # noqa: E402
 
 _outline = import_module("transcript-outline")
+_namelabel = import_module("name-label")   # hyphen: not importable by name
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -366,7 +367,8 @@ def pip_xy(pip, w, h):
     return x, y
 
 
-def build_graph(acts, offset, canvas, pip, audio_cfg, mask_idx, border_idx):
+def build_graph(acts, offset, canvas, pip, audio_cfg, mask_idx, border_idx,
+                label_fc="", label_out=None):
     """One filtergraph for the whole film.
 
     Every act is rendered to the canvas independently and the finished acts are
@@ -496,7 +498,14 @@ def build_graph(acts, offset, canvas, pip, audio_cfg, mask_idx, border_idx):
         si += 1
 
     pairs = "".join("[v%d][a%d]" % (i, i) for i in range(n))
-    ch.append("%sconcat=n=%d:v=1:a=1[vout][araw]" % (pairs, n))
+    # Name labels go on AFTER the concat, so their times are film time --
+    # what the viewer sees on the scrubber -- rather than camera time, which
+    # the cut has already stopped being a straight line through.
+    ch.append("%sconcat=n=%d:v=1:a=1[%s][araw]"
+              % (pairs, n, "vcat" if label_fc else "vout"))
+    if label_fc:
+        ch.append(label_fc)
+        ch.append("[%s]null[vout]" % label_out)
 
     af = []
     if audio_cfg.get("highpass"):
@@ -677,6 +686,10 @@ def main():
     audio_cfg = m.get("audio") or {}
     render = dict(DEFAULT_RENDER, **(m.get("render") or {}))
     fps = int(canvas["fps"])
+    name_specs = m.get("name_labels") or []
+    for spec in name_specs:
+        if "name" not in spec or "at" not in spec:
+            sys.exit("every name_labels entry needs at least name and at")
 
     sync_path = os.path.join(os.path.dirname(args.manifest),
                              "%s.sync.json" % mid)
@@ -754,6 +767,22 @@ def main():
             print("  cut out:")
             for a, b in drops:
                 print("  %8.2f %8.2f %6.2f   pause" % (a, b, b - a))
+
+    # A label past the end of the cut film is not an error ffmpeg reports --
+    # `enable` simply never turns true and the card silently never appears. The
+    # runtime is only known here, after the cut, so this is where it is caught.
+    for spec in name_specs:
+        if float(spec["at"]) >= runtime:
+            sys.exit("name label %r starts at %.1fs but the film runs %.1fs"
+                     % (spec["name"], float(spec["at"]), runtime))
+    if name_specs and args.list:
+        print("")
+        print("  name labels (film time):")
+        for spec in name_specs:
+            print("  %8.2f %8.2f   %s -- %s"
+                  % (float(spec["at"]),
+                     float(spec["at"]) + float(spec.get("dur", 5.5)),
+                     spec["name"], spec.get("title", "")))
 
     doc = {
         "_comment": "Keep-list for screencast-cut.py, in CAMERA time. Each keep "
@@ -843,8 +872,20 @@ def main():
             inputs += ["-i", path]
             nxt += 1
 
+    # Label PNGs claim the last input indices, after the bookends have been
+    # rebased onto theirs -- allocating them earlier would shift every bookend.
+    label_fc, label_out = "", None
+    if name_specs:
+        pngs, label_fc, label_out = _namelabel.prepare(
+            m.get("label_preset", _namelabel.DEFAULT_PRESET), name_specs,
+            canvas["width"], canvas["height"], tmpdir, tag=mid, base="vcat",
+            first_input=nxt)
+        for png in pngs:
+            inputs += ["-loop", "1", "-framerate", str(fps), "-i", png]
+            nxt += 1
+
     graph = build_graph(acts, offset, canvas, pip, audio_cfg,
-                        mask_idx, border_idx)
+                        mask_idx, border_idx, label_fc, label_out)
 
     tmp = dst + ".part.mp4"
     cmd = (["ffmpeg", "-hide_banner", "-nostats", "-loglevel", "warning"]
