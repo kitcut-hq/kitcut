@@ -43,6 +43,7 @@ import _progress  # noqa: E402
 import _project  # noqa: E402
 
 _shots = import_module("shot-detect")   # hyphen: not importable by name
+_notes = import_module("debug-notes")
 
 ROOT = _env.ROOT
 ENV = _env.ENV
@@ -50,6 +51,13 @@ ENV = _env.ENV
 DEFAULT_RENDER = {"encoder": "h264_nvenc", "preset": "p5", "cq": 18,
                   "maxrate": "40M", "bufsize": "80M", "audio_bitrate": "192k"}
 DEFAULT_ANCHOR = {"still": 0.0015, "tolerance_frames": 1}
+# Finding a HELD stretch is a stricter job than finding where the opening freeze
+# ends, and wants its own numbers. Calibrated against stage 1, where the plan is
+# the human's own edit and every frame therefore has real footage behind it, so
+# any run reported there is a false positive: at 0.0015 over 10 frames cam1 alone
+# produced 65, and at 0.0005 over a second all four tapes together produce 21 of
+# 2796 -- the boundary frame and a few moments of someone sitting very still.
+DEFAULT_DEBUG = {"held": 0.0005, "held_min_run_s": 1.0, "warn_frac": 0.2}
 
 
 def run(cmd, **kw):
@@ -127,17 +135,75 @@ def picture_start(path, w, h, still):
     return i, floor, float(diff[i])
 
 
+def still_runs(diff, still, min_run):
+    """Stretches of a tape where the picture is held rather than shot."""
+    out, start = [], None
+    for i in range(1, len(diff)):
+        if diff[i] <= still:
+            start = i if start is None else start
+        else:
+            if start is not None and i - start >= min_run:
+                out.append((start, i))
+            start = None
+    if start is not None and len(diff) - start >= min_run:
+        out.append((start, len(diff)))
+    return out
+
+
+def overlap(a, b, spans):
+    return sum(max(0, min(b, y) - max(a, x)) for x, y in spans)
+
+
+def debug_notes(plan, anchors, off, files, tapes, fps, spf, stage, plan_src,
+                why, extra, warn_frac=0.2):
+    """One note per segment: what the cut did here, and why.
+
+    The freeze warning is the one that earns its place. A synthetic tape only
+    carries real frames where the original editor used that angle, so a
+    switcher that picks a different one is asking for footage that does not
+    exist and gets a held frame. That is invisible in an average and obvious
+    here, named on the picture at the moment it happens.
+    """
+    notes = []
+    for i, (c, a, b) in enumerate(plan):
+        ta, tb = anchors[c] + a, anchors[c] + b
+        lines = ["ANGLE-CUT  %s  plan: %s" % (stage, plan_src),
+                 "seg %02d/%02d   %s   %s-%s   %d frames"
+                 % (i + 1, len(plan), c, hhmmss(a * spf), hhmmss(b * spf), b - a),
+                 "why: %s" % (why.get(i) or "replaying the given plan"),
+                 "tape %s  f%d-%d   anchor +%d   sync %+.2f fr"
+                 % (os.path.basename(files[c]), ta, tb, anchors[c],
+                    off.get(c, 0.0))]
+        held = overlap(ta, tb, tapes.get(c, []))
+        if held > warn_frac * (b - a):
+            lines.append("!! %s is HELD for %.1fs of this shot -- no footage "
+                         "exists for this angle here" % (c, held * spf))
+        for x in extra:
+            lines.append(x)
+        notes.append({"start": a, "end": b, "lines": lines})
+    return notes
+
+
 def load_plan(m):
-    """[(camera, start, end)] in programme frames, from the manifest or a
-    shot list read off a finished film."""
+    """(plan, why, source) -- plan is [(camera, start, end)] in programme frames.
+
+    `why` is whatever the planner recorded about each segment; a shot list read
+    off a finished film has none, and says so.
+    """
     if m.get("plan"):
-        return [(p["camera"], int(p["start"]), int(p["end"])) for p in m["plan"]]
-    with open(rel(m["plan_from"]), encoding="utf-8") as f:
-        sh = json.load(f)
-    return [(s["camera"], int(s["start"]), int(s["end"])) for s in sh["shots"]]
+        src = m["plan"]
+        label = "inline in the manifest"
+    else:
+        with open(rel(m["plan_from"]), encoding="utf-8") as f:
+            src = json.load(f)["shots"]
+        label = os.path.basename(rel(m["plan_from"]))
+    plan = [(s["camera"], int(s["start"]), int(s["end"])) for s in src]
+    why = {i: s.get("why") for i, s in enumerate(src) if s.get("why")}
+    return plan, why, label
 
 
-def build_graph(plan, cams, anchors, idx, audio_from, a_start, a_end):
+def build_graph(plan, cams, anchors, idx, audio_from, a_start, a_end,
+                vlabel="vout"):
     """Per-segment trim from the tape that covers it, one concat, one atrim.
 
     Each camera's segments are monotonically increasing in its own time, so a
@@ -165,9 +231,10 @@ def build_graph(plan, cams, anchors, idx, audio_from, a_start, a_end):
                   % (c, k, anchors[c] + a, anchors[c] + b, i))
         segs.append("[v%d]" % i)
     if len(segs) == 1:
-        ch.append("[v0]null[vout]")
+        ch.append("[v0]null[%s]" % vlabel)
     else:
-        ch.append("%sconcat=n=%d:v=1:a=0[vout]" % ("".join(segs), len(segs)))
+        ch.append("%sconcat=n=%d:v=1:a=0[%s]"
+                  % ("".join(segs), len(segs), vlabel))
     ch.append("[%d:a]atrim=start_sample=%d:end_sample=%d,asetpts=PTS-STARTPTS[aout]"
               % (idx[audio_from], a_start, a_end))
     return ";".join(ch)
@@ -178,6 +245,11 @@ def main():
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--list", action="store_true",
                     help="print the plan and the anchors, encode nothing")
+    ap.add_argument("--debug", action="store_true",
+                    help="burn a running commentary into the corner: what each "
+                         "shot is, why, and whether its tape actually has "
+                         "footage there")
+    ap.add_argument("--debug-style", help="default config/overlays/debug-notes.json")
     ap.add_argument("--out", help="default <outdir>/<id>.mp4")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
@@ -203,7 +275,7 @@ def main():
         sys.exit("the sync was measured against %s but the manifest says %s"
                  % (sync.get("reference"), ref))
 
-    plan = load_plan(m)
+    plan, why, plan_src = load_plan(m)
     used = sorted({c for c, _, _ in plan})
     for c in used:
         if c not in files:
@@ -283,7 +355,6 @@ def main():
     if args.list:
         return
 
-    sr = sync.get("rate") and None
     a_rate = 48000
     if (a_rate * den) % num:
         sys.exit("%d Hz does not divide evenly into %d/%d fps" % (a_rate, num, den))
@@ -291,11 +362,44 @@ def main():
     a0 = anchors[audio_from] * aspf
     a1 = (anchors[audio_from] + n_prog) * aspf
     idx = {c: i for i, c in enumerate(cams)}
-    graph = build_graph(plan, cams, anchors, idx, audio_from, a0, a1)
+    tmpdir = os.path.join(ROOT, "temp", "anglecut-%s" % pid)
+    ass = None
+    if not args.debug:
+        graph = build_graph(plan, cams, anchors, idx, audio_from, a0, a1)
+    else:
+        os.makedirs(tmpdir, exist_ok=True)
+        # Read each tape's own picture to find where it is held rather than
+        # shot. This runs AFTER the plan is fixed, so it cannot leak into an
+        # editorial decision -- it only annotates one that was already made.
+        dcfg = dict(DEFAULT_DEBUG, **(m.get("debug") or {}))
+        tapes = {}
+        mn = max(1, int(round(dcfg["held_min_run_s"] / spf)))
+        for c in used:
+            diff, _ = _shots.scan(files[c], w, h)
+            tapes[c] = still_runs(diff, dcfg["held"], mn)
+            held = sum(b - a for a, b in tapes[c])
+            print("  %s: %d held runs, %d frames (%.0f%% of the tape)"
+                  % (c, len(tapes[c]), held, 100.0 * held / max(1, len(diff))))
+        stage = "stage 2 (chosen from sound)" if why else "stage 1 (given plan)"
+        extra = list((m.get("debug") or {}).get("lines") or [])
+        notes = debug_notes(plan, anchors, off, files, tapes, num / float(den),
+                            spf, stage, plan_src, why, extra, dcfg["warn_frac"])
+        ass, fc, _ = _notes.prepare(
+            notes, w, h, num / float(den), tmpdir, tag=pid,
+            preset=args.debug_style, base="vpre", label="vout")
+        graph = ";".join([build_graph(plan, cams, anchors, idx, audio_from,
+                                      a0, a1, vlabel="vpre"), fc])
+        n_warn = sum(1 for n in notes if any(x.startswith("!!") for x in n["lines"]))
+        print("  debug notes: %d, of which %d warn that the tape is held there"
+              % (len(notes), n_warn))
 
     outdir = rel(m.get("outdir", "projects/%s/outputs" % pid))
     os.makedirs(outdir, exist_ok=True)
-    dst = rel(args.out) if args.out else os.path.join(outdir, "%s-anglecut.mp4" % pid)
+    # A debug render is a different artifact, never a replacement: burning text
+    # changes pixels, so a debug copy of a stage-1 cut is no longer frame
+    # identical to the programme and would fail its own comparison.
+    dst = rel(args.out) if args.out else os.path.join(
+        outdir, "%s-anglecut%s.mp4" % (pid, "-debug" if args.debug else ""))
     if os.path.exists(dst) and not args.force:
         sys.exit("%s exists -- pass --force to overwrite" % _project.norm(dst))
     tmp = dst + ".part.mp4"
@@ -350,7 +454,10 @@ def main():
                             % (len(plan), len(used)),
                             "audio taken whole from %s -- no joins" % audio_from,
                             "anchored by %s" % (how if isinstance(how, str)
-                                                else "declared frames")])
+                                                else "declared frames")]
+                    + (["debug notes burned bottom-left: segment, reason, tape "
+                        "frames, and a warning where the tape is held"]
+                       if args.debug else []))
 
 
 if __name__ == "__main__":

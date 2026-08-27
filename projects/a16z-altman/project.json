@@ -15,7 +15,8 @@
     "the re-cut (cameras, anchor, plan, audio master)": "projects/a16z-altman/anglecut.json",
     "the edit read back off the film": "projects/a16z-altman/a16z-altman.shots.json",
     "ground truth -- HARNESS ONLY, no script under test may read it": "projects/a16z-altman/a16z-altman.truth.json",
-    "the auto-switched re-cut (stage 2)": "projects/a16z-altman/anglecut-auto.json"
+    "the auto-switched re-cut (stage 2)": "projects/a16z-altman/anglecut-auto.json",
+    "debug note styling": "config/overlays/debug-notes.json"
   },
   "deliverables": {
     "projects/a16z-altman/raws/cam1.mp4": {
@@ -107,10 +108,42 @@
       "sidecars": {
         "sync": "projects/a16z-altman/a16z-altman.anglesync.json"
       }
+    },
+    "projects/a16z-altman/outputs/a16z-altman-autocut-debug.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-27T18:45:53Z",
+      "kind": "anglecut",
+      "script": "scripts/angle-cut.py",
+      "manifest": "projects/a16z-altman/anglecut-auto.json",
+      "burned": [
+        "8 segments switching between 3 cameras full frame",
+        "audio taken whole from cam1 -- no joins",
+        "anchored by declared frames",
+        "debug notes burned bottom-left: segment, reason, tape frames, and a warning where the tape is held"
+      ],
+      "sidecars": {
+        "sync": "projects/a16z-altman/a16z-altman.anglesync.json"
+      }
+    },
+    "projects/a16z-altman/outputs/a16z-altman-anglecut-debug.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-27T18:45:27Z",
+      "kind": "anglecut",
+      "script": "scripts/angle-cut.py",
+      "manifest": "projects/a16z-altman/anglecut.json",
+      "burned": [
+        "16 segments switching between 4 cameras full frame",
+        "audio taken whole from cam1 -- no joins",
+        "anchored by picture_start",
+        "debug notes burned bottom-left: segment, reason, tape frames, and a warning where the tape is held"
+      ],
+      "sidecars": {
+        "sync": "projects/a16z-altman/a16z-altman.anglesync.json"
+      }
     }
   },
   "notes": [],
-  "updated_utc": "2026-08-27T18:14:22Z",
+  "updated_utc": "2026-08-27T18:48:55Z",
   "result": {
     "stage1_machinery": {
       "verdict": "PASS",
@@ -134,7 +167,9 @@
       },
       "cuts": "7 against the human 15; 4 of theirs within a second",
       "_fitted": "grammar knobs were swept against THIS film, so the number is optimistic; the honest one comes from a film the knobs have not seen",
-      "report": "projects/a16z-altman/a16z-altman.autocompare.json"
+      "report": "projects/a16z-altman/a16z-altman.autocompare.json",
+      "frozen_filler": "624 frames (22.3%) -- the same frames as the disagreement and the sub-0.90 SSIM tail; inherent to the fixture, not a render bug",
+      "crosstalk_finding": "the editor cuts wide on overlapping speech (wides 11.7%/18.0% vs median 0.0% for close-ups), but wide_overlap_pct is OFF: best of 30 sweeps gained 1.1 points on a film with 2 wide shots"
     }
   }
 }

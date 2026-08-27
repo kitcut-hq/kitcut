@@ -51,6 +51,44 @@
       663
     ]
   },
+  "frozen": {
+    "frames": 624,
+    "pct": 22.32,
+    "runs": [
+      [
+        632,
+        848
+      ],
+      [
+        932,
+        968
+      ],
+      [
+        1875,
+        1927
+      ],
+      [
+        2107,
+        2164
+      ],
+      [
+        2165,
+        2320
+      ],
+      [
+        2395,
+        2431
+      ],
+      [
+        2453,
+        2479
+      ],
+      [
+        2538,
+        2584
+      ]
+    ]
+  },
   "cuts": {
     "rendered": [
       510,
@@ -112,12 +150,15 @@
     "frames_exact": true,
     "max_shifted": 0,
     "min_ssim_median": 0.95,
-    "min_ssim_join": 0.8,
+    "min_ssim_p5": 0.9,
     "max_cut_offset": 0,
-    "max_audio_offset_ms": 1.0
+    "max_audio_offset_ms": 1.0,
+    "max_frozen_frames": 0
   },
   "failures": [
     "490 frames are shifted (allowed 0)",
+    "5th-percentile ssim 0.2318 below 0.9000 -- a bad tail the median cannot see",
+    "624 frames of frozen picture (allowed 0)",
     "a cut is 3 frames out (allowed 0)"
   ],
   "verdict": "FAIL"

@@ -26,8 +26,28 @@ How it decides:
                That is shoot metadata an editor has for free.
   grammar      be on the speaker's camera; never cut faster than `min_shot`;
                cut `lead` frames early, because an editor arrives on a face
-               just before it starts talking; and optionally break a long
-               monologue with the wide.
+               just before it starts talking; and optionally go wide where
+               people talk over each other.
+
+Why the wide is hard, and what is actually known about it. The editor's two
+wide shots are the two densest patches of crosstalk in the film -- 11.7% and
+18.0% of their length with more than one voice active, against a median of 0.0%
+and a maximum of 6.9% across every close-up longer than three seconds. So the
+wide plainly IS what a roundtable cuts to when several people talk at once, and
+`wide_overlap_pct` implements exactly that.
+
+It is nevertheless OFF by default, because knowing why the editor cut wide is
+not the same as being able to predict it. Crosstalk is 4.5% of the film and the
+wide is 14.2%; overlap is close to necessary but nowhere near sufficient, so a
+threshold rule marks a lot of ground the editor stayed close on. Swept over 30
+settings the best was 78.79% against 77.68% for plain speaker-following -- a
+gain of one point, fitted to a film with two wide shots in it, which is not a
+result. A different threshold matched far more of the human's cut TIMING (10 of
+15 within a second, against 4) at slightly worse camera agreement, but it also
+made 22 cuts against the human's 15, and `cuts_within_1s` does not penalise a
+spurious cut -- so read that number with suspicion too.
+
+Turn it on when a second film says it earns its place.
 
 `--score` measures the result against the edit a human actually made. It reads
 the answer, so it is the harness's mode, not the cutter's -- and knobs tuned
@@ -55,14 +75,20 @@ SR = 16000
 
 DEFAULT_DIARIZE = {
     "model": "models/diarization/nemo_en_titanet_large.onnx",
+    "segmentation":
+        "models/diarization/sherpa-onnx-pyannote-segmentation-3-0/model.onnx",
     "window_s": 1.5, "hop_s": 0.5, "silence_rms": 0.005, "threads": 4,
 }
 DEFAULT_GRAMMAR = {
-    "min_shot_s": 1.5,     # never cut faster than this
-    "lead_s": 0.25,        # arrive on the face this early
-    "wide_after_s": 0.0,   # 0 = never break a monologue with the wide
+    "min_shot_s": 1.5,        # never cut faster than this
+    "lead_s": 0.25,           # arrive on the face this early
+    "wide_after_s": 0.0,      # 0 = never break a monologue with the wide
     "wide_dur_s": 4.0,
+    "wide_overlap_pct": 0.0,  # 0 = off; see the docstring for why it is off
+    "overlap_window_s": 10.0,
 }
+
+WIDE = -2                     # a track value meaning "nobody in particular"
 
 
 def rel(p):
@@ -111,6 +137,57 @@ def embed(a, cfg):
     if not es:
         sys.exit("no speech found: every window was below silence_rms")
     return np.array(ts), np.array(es)
+
+
+def overlap_track(a, cfg, k, n_frames, fps):
+    """Per frame: is more than one person talking right now?
+
+    Windowed speaker embeddings cannot answer this. A window containing a
+    speaker plus somebody's "yeah" embeds as the speaker, because the dominant
+    voice dominates -- measured on the a16z clip, speaker churn inside the
+    editor's wide shots was 0.015 changes per window, exactly the same as
+    outside them. The segmentation model can: it is multi-label by design, so
+    two of its segments overlapping in time IS overlapping speech.
+
+    This matters because it is what the wide shot is FOR. The editor cut wide
+    at the two moments of the film with the most crosstalk (11.7% and 18.0% of
+    their length), and no close-up shot longer than three seconds had more than
+    6.9%, with a median of 0.0%.
+    """
+    import sherpa_onnx
+    seg = rel(cfg["segmentation"])
+    if not os.path.exists(seg):
+        return None
+    c = sherpa_onnx.OfflineSpeakerDiarizationConfig(
+        segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
+            pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
+                model=seg)),
+        embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(
+            model=rel(cfg["model"]), num_threads=int(cfg["threads"])),
+        clustering=sherpa_onnx.FastClusteringConfig(num_clusters=k),
+        min_duration_on=0.2, min_duration_off=0.3)
+    sd = sherpa_onnx.OfflineSpeakerDiarization(c)
+    n = np.zeros(n_frames, dtype=np.int16)
+    for s in sd.process(a).sort_by_start_time():
+        lo = max(0, int(round(s.start * fps)))
+        hi = min(n_frames, int(round(s.end * fps)))
+        if hi > lo:
+            n[lo:hi] += 1
+    return n
+
+
+def contention(over, g, fps, n_frames):
+    """Frames where crosstalk is dense enough to be worth going wide for."""
+    if over is None or not g.get("wide_overlap_pct"):
+        return np.zeros(n_frames, dtype=bool)
+    w = max(1, int(round(g["overlap_window_s"] * fps)))
+    hot = (over > 1).astype(np.float32)
+    c = np.concatenate([[0.0], np.cumsum(hot)])
+    out = np.zeros(n_frames, dtype=bool)
+    for i in range(n_frames):
+        lo, hi = max(0, i - w // 2), min(n_frames, i + w // 2)
+        out[i] = (100.0 * (c[hi] - c[lo]) / max(1, hi - lo)) >= g["wide_overlap_pct"]
+    return out
 
 
 def cluster(E, k):
@@ -179,11 +256,13 @@ def runs_of(track):
     return out
 
 
-def grammar(track, cam_of, wide, g, fps, n_frames):
+def grammar(track, cam_of, wide, g, fps, n_frames, hot=None):
     """The speaker track, turned into an edit."""
     lead = int(round(g["lead_s"] * fps))
     min_shot = max(1, int(round(g["min_shot_s"] * fps)))
 
+    if hot is not None and hot.any() and wide:
+        track = np.where(hot, WIDE, track)      # crosstalk wins over the speaker
     runs = runs_of(track)
     if lead:                                   # arrive early on the new face
         runs = [(max(0, a - lead) if i else 0, max(0, b - lead) if i + 1 < len(runs)
@@ -205,31 +284,38 @@ def grammar(track, cam_of, wide, g, fps, n_frames):
     plan = []
     for a, b, s in merged:
         c = cam_of.get(s)
-        if c is None:
+        why = "voice %d is speaking -> %s" % (s, c)
+        if s == WIDE:
+            c = wide
+            why = "several people talking at once -> the wide"
+        elif c is None:
             c = wide or (plan[-1][0] if plan else None)
+            why = "no camera bound to voice %d -- falling back to the wide" % s
         span = b - a
         cut = int(round(g["wide_after_s"] * fps))
         if wide and cut and span > cut:         # break a monologue with the wide
             hold = min(int(round(g["wide_dur_s"] * fps)), max(1, span // 3))
             mid = a + (span - hold) // 2
-            plan.append((c, a, mid))
-            plan.append((wide, mid, mid + hold))
-            plan.append((c, mid + hold, b))
+            plan.append((c, a, mid, why))
+            plan.append((wide, mid, mid + hold,
+                         "cutaway: %s held the frame longer than %.0fs"
+                         % (c, g["wide_after_s"])))
+            plan.append((c, mid + hold, b, "back to %s after the cutaway" % c))
         else:
-            plan.append((c, a, b))
+            plan.append((c, a, b, why))
     out = []
-    for c, a, b in plan:
+    for c, a, b, why in plan:
         if out and out[-1][0] == c:
-            out[-1] = (c, out[-1][1], b)
+            out[-1] = (c, out[-1][1], b, out[-1][3])
         elif b > a:
-            out.append((c, a, b))
-    return out
+            out.append((c, a, b, why))
+    return [(c, a, b, w) for c, a, b, w in out]
 
 
 def score(plan, ref_shots, n_frames):
     """Agreement with an edit a human made. Reads the answer; harness only."""
     mine = np.empty(n_frames, dtype=object)
-    for c, a, b in plan:
+    for c, a, b, _ in plan:
         mine[a:b] = c
     theirs = np.empty(n_frames, dtype=object)
     for s in ref_shots:
@@ -243,7 +329,7 @@ def score(plan, ref_shots, n_frames):
         e[1] += 1
         if x == y:
             e[0] += 1
-    mycuts = [a for _, a, _ in plan[1:]]
+    mycuts = [a for _, a, _, _ in plan[1:]]
     refcuts = [s["start"] for s in ref_shots[1:]]
     near = []
     for r in refcuts:
@@ -330,8 +416,18 @@ def main():
 
     track = speaker_per_frame(ts, lab, n_frames, fps)
 
+    over = overlap_track(a, dcfg, len(hints), n_frames, fps)
+    if over is None:
+        print("  no segmentation model -- crosstalk cannot be detected, so the "
+              "wide will never be chosen")
+    else:
+        pct = 100.0 * float((over > 1).mean())
+        print("  crosstalk: %.1f%% of the film has more than one voice active"
+              % pct)
+
     def build(gg):
-        return grammar(track, cam_of, wide, gg, fps, n_frames)
+        return grammar(track, cam_of, wide, gg, fps, n_frames,
+                       contention(over, gg, fps, n_frames))
 
     ref = None
     if args.score:
@@ -339,11 +435,12 @@ def main():
             ref = json.load(f)["shots"]
 
     if args.sweep:
-        print("\n  min_shot   lead  wide_after  cuts%s" % ("  agree   cuts<1s" if ref else ""))
+        print("\n  min_shot   lead  wide_overlap  cuts%s"
+              % ("  agree   cuts<1s" if ref else ""))
         for ms in (1.0, 1.5, 2.0, 3.0):
             for ld in (0.0, 0.25, 0.5):
-                for wa in (0.0, 12.0):
-                    gg = dict(g, min_shot_s=ms, lead_s=ld, wide_after_s=wa)
+                for wo in (0.0, 3.0, 4.5, 6.0, 9.0, 14.0):
+                    gg = dict(g, min_shot_s=ms, lead_s=ld, wide_overlap_pct=wo)
                     pl = build(gg)
                     extra = ""
                     if ref:
@@ -351,14 +448,15 @@ def main():
                         extra = "  %5.1f%%   %2d/%d" % (sc["agreement_pct"],
                                                         sc["cuts_within_1s"],
                                                         sc["reference_cuts"])
-                    print("  %8.2f %6.2f %11.1f  %4d%s" % (ms, ld, wa, len(pl), extra))
+                    print("  %8.2f %6.2f %13.1f  %4d%s"
+                          % (ms, ld, wo, len(pl), extra))
         return
 
     plan = build(g)
     print("\n   #  cam      start       end     len")
-    for i, (c, x, y) in enumerate(plan):
-        print("  %2d  %-5s %8s %9s %7.2f"
-              % (i, c, hhmmss(x / fps), hhmmss(y / fps), (y - x) / fps))
+    for i, (c, x, y, w) in enumerate(plan):
+        print("  %2d  %-5s %8s %9s %7.2f   %s"
+              % (i, c, hhmmss(x / fps), hhmmss(y / fps), (y - x) / fps, w))
     print("\n%d shots, %d cuts, grammar %s"
           % (len(plan), len(plan) - 1,
              ", ".join("%s=%g" % (k, v) for k, v in sorted(g.items()))))
@@ -386,8 +484,9 @@ def main():
            "separation": {"within": round(within, 4),
                           "between": None if between is None else round(between, 4)},
            "score": sc,
-           "cuts": [a for _, a, _ in plan[1:]],
-           "shots": [{"start": x, "end": y, "camera": c} for c, x, y in plan]}
+           "cuts": [a for _, a, _, _ in plan[1:]],
+           "shots": [{"start": x, "end": y, "camera": c, "why": w}
+                     for c, x, y, w in plan]}
     out = args.out or os.path.join(
         _project.find_project_dir(rel(args.manifest)) or os.path.join(ROOT, "temp"),
         "%s.autoplan.json" % pid)

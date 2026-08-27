@@ -134,6 +134,55 @@ killed a plausible idea: forcing a periodic wide cutaway drops agreement from
 77.7% to 64.6% while placing more cuts near the human's — right times, wrong
 camera.
 
+## Debug notes, and reading a stage-2 render
+
+```powershell
+python scripts/angle-cut.py --manifest projects/<id>/anglecut.json --debug
+```
+
+Burns a bottom-left commentary: the shot, the tape frames, the anchor, the sync,
+**why this camera**, and a warning where the tape is held. Style is
+`config/overlays/debug-notes.json`; check placement for free with
+`debug-notes.py --frame T --video f.mp4`.
+
+`--debug` writes `<id>-anglecut-debug.mp4` and never touches the clean render.
+Burning text changes pixels, so a debug copy of a stage-1 cut is no longer
+frame-identical and would fail its own comparison. Keep both.
+
+**A stage-2 render freezes wherever it disagrees with the human, and that is
+not a bug.** A synthetic tape only carries real frames where the original editor
+used that angle, so choosing any other camera asks for footage that does not
+exist. Expect it, say so when reporting, and never present a stage-2 render as
+a watchable film — it is a diagnostic. On the a16z clip the disagreement
+(22.32%), the frames below 0.90 SSIM (624) and the frozen frames (624) are the
+same 22.3%.
+
+**Calibrate any new detector against stage 1.** Its plan is the human's own
+edit, so every frame provably has real footage and any frozen run reported
+there is a false positive. Both frozen thresholds in this repo were set that
+way: 0.0015 over half a second called 12.8% of a pixel-identical render frozen,
+0.0005 over a second calls 0.0% while still catching all 624 in stage 2. Free
+ground truth — use it.
+
+## The wide shot
+
+It is nobody's close-up, so a speaker-following rule scores 0% on it. Before
+concluding that is a hard ceiling, know what is already measured: the editor
+cuts wide on **crosstalk**. The two wide shots hold the two densest patches of
+overlapping speech in the film (11.7% and 18.0%, against a median of 0.0% over
+every close-up longer than three seconds), and six of nine short interjections
+land within 0.31 s of a human cut.
+
+Detect it with the segmentation model, never with windowed embeddings — a
+window holding a speaker plus somebody's "yeah" embeds as the speaker, and
+measured churn inside the wide shots was identical to outside them.
+
+`wide_overlap_pct` implements the rule and is **off by default**. Crosstalk is
+4.5% of the film and the wide is 14.2%: overlap is close to necessary and
+nowhere near sufficient, and the best of 30 swept settings gained one point on
+a film with two wide shots in it. Turn it on when a second film says it earns
+its place, and do not quote the sweep's winner as a result.
+
 ## The leak rule
 
 The frozen filler tells you which camera the editor used — a motion detector

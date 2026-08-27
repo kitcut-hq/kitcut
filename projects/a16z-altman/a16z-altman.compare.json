@@ -18,6 +18,11 @@
     "count": 0,
     "first": []
   },
+  "frozen": {
+    "frames": 0,
+    "pct": 0.0,
+    "runs": []
+  },
   "cuts": {
     "rendered": [
       501,
@@ -88,9 +93,10 @@
     "frames_exact": true,
     "max_shifted": 0,
     "min_ssim_median": 0.95,
-    "min_ssim_join": 0.8,
+    "min_ssim_p5": 0.9,
     "max_cut_offset": 0,
-    "max_audio_offset_ms": 1.0
+    "max_audio_offset_ms": 1.0,
+    "max_frozen_frames": 0
   },
   "failures": [],
   "verdict": "PASS"

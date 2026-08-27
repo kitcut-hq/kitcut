@@ -158,37 +158,46 @@ CAM = {0: "cam1", 1: "cam2"}
 track = np.array([0] * 100 + [1] * 10 + [0] * 100, dtype=np.int32)
 check("runs are found", [(a, b, s) for a, b, s in _auto.runs_of(track)],
       [(0, 100, 0), (100, 110, 1), (110, 210, 0)])
+def shape(plan):
+    """(camera, start, end) only -- the reason is prose and tested separately."""
+    return [(c, a, b) for c, a, b, _ in plan]
+
+
 g = dict(_auto.DEFAULT_GRAMMAR, min_shot_s=1.5, lead_s=0.0, wide_after_s=0.0)
 plan = _auto.grammar(track, CAM, "cam3", g, FPS, 210)
 check("a 10-frame interjection is absorbed, not cut to",
-      plan, [("cam1", 0, 210)])
+      shape(plan), [("cam1", 0, 210)])
 g2 = dict(g, min_shot_s=0.2)
 check("...but it survives a shorter minimum",
-      _auto.grammar(track, CAM, "cam3", g2, FPS, 210),
+      shape(_auto.grammar(track, CAM, "cam3", g2, FPS, 210)),
       [("cam1", 0, 100), ("cam2", 100, 110), ("cam1", 110, 210)])
 long = np.array([0] * 100 + [1] * 100, dtype=np.int32)
 lead = _auto.grammar(long, CAM, "cam3", dict(g, lead_s=0.5), FPS, 200)
 check("lead moves the cut earlier, never the film's start or end",
-      lead, [("cam1", 0, 88), ("cam2", 88, 200)])
+      shape(lead), [("cam1", 0, 88), ("cam2", 88, 200)])
+check("every shot carries a reason for the debug notes",
+      all(isinstance(w, str) and w for _, _, _, w in lead), True)
+check("and the reason names the voice behind it",
+      "voice 1" in lead[1][3], True)
 check("the plan still starts at 0 and ends at the last frame",
       [lead[0][1], lead[-1][2]], [0, 200])
 check("and it is gapless",
-      all(b == a for (_, _, b), (_, a, _) in zip(lead, lead[1:])), True)
+      all(b == a for (_, _, b, _), (_, a, _, _) in zip(lead, lead[1:])), True)
 w = _auto.grammar(np.zeros(600, dtype=np.int32), CAM, "cam3",
                   dict(g, wide_after_s=10.0, wide_dur_s=2.0), FPS, 600)
 check("a long monologue can be broken with the wide",
-      [c for c, _, _ in w], ["cam1", "cam3", "cam1"])
+      [c for c, _, _, _ in w], ["cam1", "cam3", "cam1"])
 check("an unmapped voice falls back to the wide",
-      _auto.grammar(np.full(200, 7, dtype=np.int32), CAM, "cam3", g, FPS, 200),
-      [("cam3", 0, 200)])
+      shape(_auto.grammar(np.full(200, 7, dtype=np.int32), CAM, "cam3",
+                          g, FPS, 200)), [("cam3", 0, 200)])
 
 print("== scoring against a human edit ==")
 ref = [{"start": 0, "end": 100, "camera": "cam1"},
        {"start": 100, "end": 200, "camera": "cam2"}]
 check("a perfect match is 100%",
-      _auto.score([("cam1", 0, 100), ("cam2", 100, 200)], ref, 200)["agreement_pct"],
-      100.0)
-half = _auto.score([("cam1", 0, 200)], ref, 200)
+      _auto.score([("cam1", 0, 100, "x"), ("cam2", 100, 200, "y")], ref,
+                  200)["agreement_pct"], 100.0)
+half = _auto.score([("cam1", 0, 200, "x")], ref, 200)
 check("half right is 50%", half["agreement_pct"], 50.0)
 check("and it says which camera was missed",
       half["per_camera"]["cam2"][2], 0.0)

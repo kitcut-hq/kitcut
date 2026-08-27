@@ -730,6 +730,97 @@ anything comes from the next film, which is what the framework is for. And note
 `compare-videos.py`'s PASS/FAIL is the stage-1 bar — frame-exactness — so a
 stage-2 cut *should* fail it; the number to read there is the agreement.
 
+### Debug notes: making the film explain itself
+
+A finished render is silent about its own reasoning. `--debug` burns a running
+commentary into the bottom-left corner — which shot this is, which tape and
+which frames of it, what the anchor and the sync said, and **why** this camera:
+
+```
+ANGLE-CUT  stage 2 (chosen from sound)  plan: a16z-altman.autoplan.json
+seg 02/08   cam2   0:21.27-0:53.26   767 frames
+why: voice 1 is speaking -> cam2
+tape cam2.mp4  f608-1375   anchor +98   sync +11.00 fr
+!! cam2 is HELD for 10.5s of this shot -- no footage exists for this angle here
+```
+
+```powershell
+python scripts/angle-cut.py --manifest projects/<id>/anglecut.json --debug
+python scripts/debug-notes.py --notes n.json --out n.ass --frame 40 --video f.mp4
+```
+
+It is an ASS subtitle track, not a stack of overlays: libass already does
+per-note timing and corner placement, so N notes cost **one** filter instead of
+N image inputs, and it rides inside the existing NVENC pass. Style lives in
+`config/overlays/debug-notes.json`. `debug-notes.py --frame T` composites onto a
+real frame and writes a PNG, which is how to check placement before an encode.
+
+A debug render is a **separate artifact, never a replacement**: burning text
+changes pixels, so a debug copy of a stage-1 cut is no longer frame-identical to
+the programme and would fail its own comparison. `--debug` writes
+`<id>-anglecut-debug.mp4` and leaves the clean render alone.
+
+That last warning line is the one that earns its place — see below.
+
+### Frozen filler, and why stage-2 renders look broken
+
+A synthetic tape only carries real frames where the original editor used that
+angle. So whenever a stage-2 switcher picks a *different* camera, it is asking
+for footage that does not exist anywhere, and the tape hands back a held frame.
+The picture stops.
+
+That is not a rendering bug and not a bad source: it is the fixture, and it is
+unavoidable. It is also the **visible form of the disagreement**. On the a16z
+clip the three numbers are the same number:
+
+| | |
+|---|---|
+| timeline on a different camera than the human | 22.32% |
+| frames scoring below 0.90 SSIM | 624 (22.3%) |
+| frames of frozen filler | 624 (22.3%) |
+
+So read a stage-2 render as a diagnostic, not a film. `compare-videos.py`
+reports the frozen frames as a first-class number, counting only runs the
+*reference* does not also have — a talking head sitting still belongs to both
+films and is the source's own stillness, not the cut's.
+
+**Calibrate detectors against stage 1.** It is the free ground truth in this
+repo: its plan is the human's own edit, so every frame provably has real
+footage, and any frozen run reported there is a false positive. That is how
+both thresholds here were set rather than guessed — 0.0015 over half a second
+called 12.8% of a pixel-identical render frozen; 0.0005 over a second calls
+0.0%, while still catching all 624 in stage 2.
+
+### The wide shot, and a hypothesis that half survived
+
+The wide is nobody's close-up, so a speaker-following rule never cuts to it —
+0% of 396 frames on this film. The obvious question is whether it is really
+unpredictable, and the answer turns out to be measurable: the editor cuts wide
+when several people talk at once.
+
+That much is confirmed. The two wide shots are the two densest patches of
+crosstalk in the film — **11.7%** and **18.0%** of their length with more than
+one voice active — against a median of **0.0%** and a maximum of 6.9% across
+every close-up longer than three seconds. Six of nine short interjections land
+within 0.31 s of a human cut, one of them exact to the frame.
+
+Detecting it needs the right instrument. Windowed speaker embeddings cannot:
+a window holding a speaker plus somebody's "yeah" embeds as the speaker, and
+measured speaker churn inside the wide shots was 0.015 changes per window —
+*identical* to outside them. The segmentation model is multi-label, so two of
+its segments overlapping in time is overlapping speech, and that finds it.
+
+Acting on it is where it stops. `wide_overlap_pct` implements the rule and is
+**off by default**: crosstalk is 4.5% of the film and the wide is 14.2%, so
+overlap is close to necessary and nowhere near sufficient. Swept over 30
+settings the best scored 78.79% against 77.68% for plain speaker-following —
+one point, fitted to a film containing two wide shots, which is not a result.
+A different setting matched far more of the human's cut *timing* (10 of 15
+within a second, against 4) at slightly worse camera agreement, but it also
+made 22 cuts against the human's 15, and `cuts_within_1s` does not penalise a
+spurious cut. Knowing *why* an editor did something is not the same as being
+able to predict it, and the next film is what settles this one.
+
 ### The arithmetic has its own test
 
 The round trip is frame arithmetic wearing a video costume, and every part of it
@@ -1298,6 +1389,7 @@ all, and its `FaceDetectorYN` replacement wants a model from an external host.
 | `scripts/angle-cut.py` | cut one film out of N synchronised cameras, switching full frame |
 | `scripts/compare-videos.py` | score one film against another frame by frame, and pass or fail it |
 | `scripts/auto-switch.py` | choose the camera from the soundtrack alone: diarize, then apply a cutting grammar |
+| `scripts/debug-notes.py` | burn a running commentary onto a film: what the cut did here, and why |
 | `scripts/check-multicam.py` | multicam self-test; no GPU, no files, no cost |
 | `scripts/import-iphone.ps1` | pull footage off a phone over MTP, verified by byte count |
 | `scripts/yt-upload.py` | upload a render to YouTube, channel-guarded and verified |
@@ -1367,6 +1459,17 @@ evidence.
   immediately (665 frames, starting exactly at the offending camera's first
   live frame). Any comparator that reports only an average is reporting that it
   did not look.
+- **ASS alpha is inverted, and `00` is opaque.** Writing an opacity straight
+  into the alpha byte gets you `FF`, which is invisible — the text renders as
+  nothing at all while the background box appears exactly as designed, so the
+  filter looks like it half-worked. `debug-notes.py` takes an *opacity* and
+  inverts it in one place for that reason.
+- **A filter option value cannot hold a Windows absolute path.** ffmpeg splits
+  filter options on colons, so `ass=filename=C:/x.ass` parses as an option `C`
+  and a stray `/x.ass`, and the filterchain fails to build. Pass repo-relative
+  forward-slash paths and run ffmpeg from the repo root — which also dodges the
+  older trap that a backslash reaches libass as an escape and silently turns
+  `temp\x.ass` into `tempx.ass`.
 - **A downloaded file is usually not on the frame rate it claims.** The a16z
   clip averaged 23.9765 fps against a nominal 24000/1001. Conform before
   measuring anything to the frame, and conform with `setpts` by frame index

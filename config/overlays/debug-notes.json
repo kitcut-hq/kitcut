@@ -1,0 +1,20 @@
+{
+  "_comment": "Style for the burned-in debug notes -- the running commentary that says what the cut did at each moment and why. Deliberately plain and unbranded: this is an instrument, not a graphic, and it should never be mistaken for part of the film.",
+  "_why": "Sizes are in PlayRes units, and PlayRes is set to the video's own pixel size by debug-notes.py, so these numbers are pixels at 1280x720 and scale with the frame.",
+
+  "font": "Montserrat-Medium",
+  "fontsdir": "fonts",
+  "size_px": 17,
+
+  "ink": "#F2F2F2",
+  "_accent": "The first line of each note is the heading, drawn in this instead.",
+  "accent": "#7FD1C4",
+  "box": "#000000",
+  "box_alpha": 0.62,
+  "pad_px": 10,
+
+  "_corner": "bottom-left, bottom-centre, bottom-right, top-left, top-centre, top-right",
+  "corner": "bottom-left",
+  "margin_x_px": 24,
+  "margin_y_px": 20
+}

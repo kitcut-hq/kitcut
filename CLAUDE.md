@@ -297,6 +297,17 @@ known cut list and tests the machinery; stage 2 (`auto-switch.py`) gets the
 tapes and nothing else. `truth.json` belongs to the harness — no script under
 test may read it.
 
+`--debug` on `angle-cut.py` burns a bottom-left commentary (shot, tape frames,
+anchor, sync, **why**, and a warning where the tape is held) as an ASS track
+inside the same pass; it writes a `-debug.mp4` and never replaces the clean
+render, because burning text changes pixels. Style: `config/overlays/debug-notes.json`.
+
+**A stage-2 render freezes wherever it disagrees with the human — by design,
+not a bug.** A synthetic tape has real frames only where the editor used that
+angle. On this film the disagreement, the frames below 0.90 SSIM and the frozen
+frames are the same 624 (22.3%). Calibrate any new detector against stage 1,
+where every frame provably has footage, so a hit there is a false positive.
+
 **Stage 2 scores 77.68%** of the timeline on the same camera as the human
 editor, from the soundtrack alone: windowed speaker embeddings (sherpa-onnx,
 no torch), clustered here rather than by the library, bound to cameras by one

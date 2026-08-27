@@ -5,6 +5,7 @@
   "n_frames": 2796,
   "diarize": {
     "model": "models/diarization/nemo_en_titanet_large.onnx",
+    "segmentation": "models/diarization/sherpa-onnx-pyannote-segmentation-3-0/model.onnx",
     "window_s": 1.5,
     "hop_s": 0.5,
     "silence_rms": 0.005,
@@ -14,7 +15,9 @@
     "min_shot_s": 1.5,
     "lead_s": 0.25,
     "wide_after_s": 0.0,
-    "wide_dur_s": 4.0
+    "wide_dur_s": 4.0,
+    "wide_overlap_pct": 0.0,
+    "overlap_window_s": 10.0
   },
   "speakers": {
     "0": "cam1",
@@ -83,42 +86,50 @@
     {
       "start": 0,
       "end": 510,
-      "camera": "cam1"
+      "camera": "cam1",
+      "why": "voice 0 is speaking -> cam1"
     },
     {
       "start": 510,
       "end": 1277,
-      "camera": "cam2"
+      "camera": "cam2",
+      "why": "voice 1 is speaking -> cam2"
     },
     {
       "start": 1277,
       "end": 1781,
-      "camera": "cam4"
+      "camera": "cam4",
+      "why": "voice 2 is speaking -> cam4"
     },
     {
       "start": 1781,
       "end": 2164,
-      "camera": "cam2"
+      "camera": "cam2",
+      "why": "voice 1 is speaking -> cam2"
     },
     {
       "start": 2164,
       "end": 2320,
-      "camera": "cam1"
+      "camera": "cam1",
+      "why": "voice 0 is speaking -> cam1"
     },
     {
       "start": 2320,
       "end": 2452,
-      "camera": "cam2"
+      "camera": "cam2",
+      "why": "voice 1 is speaking -> cam2"
     },
     {
       "start": 2452,
       "end": 2584,
-      "camera": "cam4"
+      "camera": "cam4",
+      "why": "voice 2 is speaking -> cam4"
     },
     {
       "start": 2584,
       "end": 2796,
-      "camera": "cam2"
+      "camera": "cam2",
+      "why": "voice 1 is speaking -> cam2"
     }
   ]
 }

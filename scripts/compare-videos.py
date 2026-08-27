@@ -48,8 +48,13 @@ ENV = _env.ENV
 SW = 320                     # SSIM analysis width
 RATE = 8000                  # audio analysis rate
 DEFAULT_PASS = {"frames_exact": True, "max_shifted": 0, "min_ssim_median": 0.95,
-                "min_ssim_join": 0.80, "max_cut_offset": 0,
-                "max_audio_offset_ms": 1.0}
+                "min_ssim_p5": 0.90, "max_cut_offset": 0,
+                "max_audio_offset_ms": 1.0, "max_frozen_frames": 0}
+# Calibrated against a render known to be pixel-identical to its reference, so
+# every run it reports is a false positive. A looser 0.0015 over half a second
+# called 12.8% of that film frozen -- which was the podcast's own stillness, not
+# the cut's. A held frame scores 0.0000 (worst 0.0005); live footage sits above.
+FROZEN = {"still": 0.0005, "min_run_s": 1.0}
 
 
 def run(cmd, **kw):
@@ -149,6 +154,31 @@ def audio_align(a, b):
     return k, 20.0 * np.log10(max(err, 1e-12) / ref)
 
 
+def frozen_runs(diff, fps, still=None, min_run_s=None):
+    """Stretches where the rendered film's own picture stops moving.
+
+    Worth a first-class number, not a footnote. In the round-trip test a frozen
+    run means the cut asked a camera for footage it does not have -- which is
+    what happens whenever a stage-2 switcher picks an angle the original editor
+    was not on, because the synthetic tape only carries real frames where that
+    angle was used. A single frame proves nothing (a held frame and a still
+    moment score alike), but a RUN of them is unambiguous.
+    """
+    still = FROZEN["still"] if still is None else still
+    need = int(round((FROZEN["min_run_s"] if min_run_s is None else min_run_s) * fps))
+    out, start = [], None
+    for i in range(1, len(diff)):
+        if diff[i] <= still:
+            start = i if start is None else start
+        else:
+            if start is not None and i - start >= need:
+                out.append((start, i))
+            start = None
+    if start is not None and len(diff) - start >= need:
+        out.append((start, len(diff)))
+    return out
+
+
 def match_cameras(a_sigs, a_names, b_sigs, b_names):
     """Map the angle labels of one film onto the other's.
 
@@ -234,9 +264,16 @@ def main():
         sys.exit("no overlapping frames to compare")
     shifted = [i for i, v in enumerate(best_at) if v != 0]
 
+    p5 = float(np.percentile(scores, 5))
     print("\nssim over %d compared frames: median %.4f  p5 %.4f  min %.4f @ %s"
-          % (scores.size, float(np.median(scores)), float(np.percentile(scores, 5)),
+          % (scores.size, float(np.median(scores)), p5,
              float(scores.min()), hhmmss(int(np.argmin(scores)) / fps)))
+    if p5 < 0.9:
+        bad = int((scores < 0.9).sum())
+        print("  !! %d frames (%.1f%%) score below 0.90 -- the MEDIAN IS NOT THE "
+              "STORY here. A film can be 78%% right and still show something "
+              "completely wrong for a fifth of its length."
+              % (bad, 100.0 * bad / scores.size))
     print("frames whose best match is a NEIGHBOUR, not themselves: %d of %d"
           % (len(shifted), scores.size))
     for i in shifted[:12]:
@@ -244,10 +281,31 @@ def main():
     if len(shifted) > 12:
         print("    ... and %d more" % (len(shifted) - 12))
 
-    cuts_report, worst_join, agree = None, None, None
+    cuts_report, worst_join, agree, froz = None, None, None, []
     if not args.no_cuts:
         da, sa = _shots.scan(ren, ia["width"], ia["height"])
         db, sb = _shots.scan(ref, ib["width"], ib["height"])
+        # Only frozen where the reference is NOT. A talking head sitting still
+        # is the source's own stillness and belongs to both films; what matters
+        # is picture that stopped in ours and kept moving in theirs.
+        ref_still = np.zeros(len(db) + 1, dtype=bool)
+        for a, b in frozen_runs(db, fps):
+            ref_still[a:b] = True
+        froz = [(a, b) for a, b in frozen_runs(da, fps)
+                if (b - a) - int(ref_still[a:b].sum()) > 0.5 * (b - a)]
+        n_froz = sum(b - a for a, b in froz)
+        print("\nfrozen picture in the rendered film that is not frozen in the "
+              "reference: %d frames (%.1f%%) in %d runs"
+              % (n_froz, 100.0 * n_froz / max(1, na), len(froz)))
+        for a, b in froz[:8]:
+            print("    %s-%s  %.2fs held" % (hhmmss(a / fps), hhmmss(b / fps),
+                                             (b - a) / fps))
+        if len(froz) > 8:
+            print("    ... and %d more" % (len(froz) - 8))
+        if n_froz:
+            print("    a frozen run means the cut asked a camera for footage it "
+                  "does not have. In this fixture that is every moment the "
+                  "switcher chose an angle the original editor was not on.")
         pa, ssa, nma = _shots.build_shots(da, sa, _shots.DEFAULT_DETECT)
         pb, ssb, nmb = _shots.build_shots(db, sb, _shots.DEFAULT_DETECT)
         ca = [a for a, _ in pa[1:]]
@@ -298,6 +356,13 @@ def main():
     if float(np.median(scores)) < bar["min_ssim_median"]:
         fails.append("median ssim %.4f below %.4f"
                      % (float(np.median(scores)), bar["min_ssim_median"]))
+    if p5 < bar["min_ssim_p5"]:
+        fails.append("5th-percentile ssim %.4f below %.4f -- a bad tail the "
+                     "median cannot see" % (p5, bar["min_ssim_p5"]))
+    n_froz = sum(b - a for a, b in froz)
+    if n_froz > bar["max_frozen_frames"]:
+        fails.append("%d frames of frozen picture (allowed %d)"
+                     % (n_froz, bar["max_frozen_frames"]))
     if worst_join is not None and worst_join > bar["max_cut_offset"]:
         fails.append("a cut is %d frames out (allowed %d)"
                      % (worst_join, bar["max_cut_offset"]))
@@ -313,6 +378,9 @@ def main():
                     "min": round(float(scores.min()), 5),
                     "min_at_frame": int(np.argmin(scores))},
            "shifted_frames": {"count": len(shifted), "first": shifted[:32]},
+           "frozen": {"frames": n_froz,
+                      "pct": round(100.0 * n_froz / max(1, na), 2),
+                      "runs": [[a, b] for a, b in froz]},
            "cuts": cuts_report, "audio": aud,
            "pass_bar": bar, "failures": fails, "verdict": "PASS" if not fails else "FAIL"}
 

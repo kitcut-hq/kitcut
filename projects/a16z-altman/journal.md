@@ -91,3 +91,61 @@ The two agreement numbers (auto-switch --score off the shot list, compare-videos
 off the rendered pixels) agree to the second decimal by completely different
 routes. If they ever diverge, one of them is broken.
 - 18:14 compare scripts/compare-videos.py (--rendered projects/a16z-altman/outputs/a16z-altman-autocut.mp4 --reference projects/a16z-altman/temp/program.mp4 --out projects/a16z-altman/a16z-altman.autocompare.json) -- FAIL: projects/a16z-altman/outputs/a16z-altman-autocut.mp4 vs projects/a16z-altman/temp/program.mp4, median ssim 0.9992, 490 shifted frames
+- 18:29 auto-switch scripts/auto-switch.py (--manifest projects/a16z-altman/anglecut-auto.json) -- 8 shots from the sound alone
+- 18:29 anglecut scripts/angle-cut.py -> projects/a16z-altman/outputs/a16z-altman-autocut-debug.mp4 (--manifest projects/a16z-altman/anglecut-auto.json --debug --out projects/a16z-altman/outputs/a16z-altman-autocut-debug.mp4 --force)
+- 18:43 auto-switch scripts/auto-switch.py (--manifest projects/a16z-altman/anglecut-auto.json --score projects/a16z-altman/a16z-altman.shots.json) -- 8 shots from the sound alone, 77.7% agreement with the human edit
+- 18:43 anglecut scripts/angle-cut.py -> projects/a16z-altman/outputs/a16z-altman-anglecut-debug.mp4 (--manifest projects/a16z-altman/anglecut.json --debug --force)
+- 18:45 anglecut scripts/angle-cut.py -> projects/a16z-altman/outputs/a16z-altman-anglecut-debug.mp4 (--manifest projects/a16z-altman/anglecut.json --debug --force)
+- 18:45 anglecut scripts/angle-cut.py -> projects/a16z-altman/outputs/a16z-altman-autocut-debug.mp4 (--manifest projects/a16z-altman/anglecut-auto.json --debug --out projects/a16z-altman/outputs/a16z-altman-autocut-debug.mp4 --force)
+- 18:46 compare scripts/compare-videos.py (--rendered projects/a16z-altman/outputs/a16z-altman-anglecut.mp4 --reference projects/a16z-altman/temp/program.mp4) -- FAIL: projects/a16z-altman/outputs/a16z-altman-anglecut.mp4 vs projects/a16z-altman/temp/program.mp4, median ssim 0.9993, 0 shifted frames
+- 18:46 compare scripts/compare-videos.py (--rendered projects/a16z-altman/outputs/a16z-altman-autocut.mp4 --reference projects/a16z-altman/temp/program.mp4 --out projects/a16z-altman/a16z-altman.autocompare.json) -- FAIL: projects/a16z-altman/outputs/a16z-altman-autocut.mp4 vs projects/a16z-altman/temp/program.mp4, median ssim 0.9992, 490 shifted frames
+- 18:48 compare scripts/compare-videos.py (--rendered projects/a16z-altman/outputs/a16z-altman-anglecut.mp4 --reference projects/a16z-altman/temp/program.mp4) -- PASS: projects/a16z-altman/outputs/a16z-altman-anglecut.mp4 vs projects/a16z-altman/temp/program.mp4, median ssim 0.9993, 0 shifted frames
+- 18:48 compare scripts/compare-videos.py (--rendered projects/a16z-altman/outputs/a16z-altman-autocut.mp4 --reference projects/a16z-altman/temp/program.mp4 --out projects/a16z-altman/a16z-altman.autocompare.json) -- FAIL: projects/a16z-altman/outputs/a16z-altman-autocut.mp4 vs projects/a16z-altman/temp/program.mp4, median ssim 0.9992, 490 shifted frames
+
+Debug notes added, and a good question from Alex settled two things.
+
+`angle-cut.py --debug` now burns a bottom-left commentary -- shot, tape frames,
+anchor, sync, why this camera, and a warning where the tape is held. It is an
+ASS track spliced after the concat, so it costs one filter and rides in the
+existing pass. It writes a `-debug.mp4` and never replaces the clean render:
+burning text changes pixels, and a debug copy of the stage-1 cut would no longer
+be frame-identical to the programme and would fail its own comparison. The clean
+anglecut/autocut pair is the control-and-experiment; keep all four files.
+
+Alex spotted the picture freezing at 0:27 of the autocut and asked whether it
+was a bug. It is not: our switcher chose cam2 there, cam2's tape has real
+footage only up to frame 632, and the editor was on the wide from 632-848 -- so
+we asked for footage that does not exist and got a held frame for 9 seconds.
+That is inherent to the fixture and unavoidable, and it is the VISIBLE form of
+the disagreement. Worth knowing that the three numbers coincide exactly: 22.32%
+of the timeline on a different camera, 624 frames below 0.90 SSIM, 624 frames of
+frozen filler. Stage-2 renders are diagnostics, not films; say so when reporting.
+
+My reporting had been wrong, not the measurement. I quoted the autocut's median
+SSIM (0.9992) which is blind to a 22% tail while p5 was 0.2318 -- the exact
+mistake the negative control was written to warn about. compare-videos.py now
+prints a loud line when frames fall below 0.90, and fails on p5 as well as the
+median.
+
+Then Alex asked whether the editor cut to the wide BECAUSE several people spoke
+at once. Half right, and the half that is right is measured: the two wide shots
+are the two densest patches of crosstalk in the film (11.7% and 18.0% of their
+length with two voices active) against a median of 0.0% across every close-up
+longer than three seconds, and six of nine short interjections land within 0.31s
+of a human cut. Windowed embeddings CANNOT see this -- a window holding a
+speaker plus a "yeah" embeds as the speaker, and churn inside the wides measured
+identical to outside. The segmentation model can, because it is multi-label.
+
+But acting on it barely helps. `wide_overlap_pct` is implemented and OFF:
+crosstalk is 4.5% of the film and the wide is 14.2%, so overlap is close to
+necessary and nowhere near sufficient. Best of 30 swept settings was 78.79%
+against 77.68% -- one point, fitted to a film with two wide shots. One setting
+matched far more cut TIMING (10 of 15 within a second vs 4) but made 22 cuts
+against the human's 15, and cuts_within_1s does not penalise a spurious cut, so
+that metric wants fixing before it is trusted. Next film decides.
+
+Method worth reusing: calibrate detectors against stage 1. Its plan is the
+human's own edit so every frame provably has real footage, and any frozen run
+reported there is a false positive. That is how both freeze thresholds were set
+-- 0.0015 over half a second called 12.8% of a pixel-identical render frozen,
+0.0005 over a second calls 0.0% while still catching all 624 in stage 2.
