@@ -1,0 +1,44 @@
+<!--
+  Stat: one very large figure over a label, optionally with a caption under it.
+  For a number the speaker just said -- a price, a count, a percentage.
+
+  The FIRST line is the figure and is set huge; the rest are labels beneath it.
+  Give the figure a `fill` if it needs to survive a busy background.
+-->
+<meta charset="utf-8">
+<title>{{title}}</title>
+<style>
+  @font-face { font-family: "Brand"; font-weight: 700;
+               src: url("{{font_bold_url}}") format("truetype"); }
+  @font-face { font-family: "Brand"; font-weight: 500;
+               src: url("{{font_regular_url}}") format("truetype"); }
+
+  html, body { margin: 0; background: transparent; }
+
+  .card { display: inline-block; padding: 24px; text-align: center;
+          font-family: "Brand", "Segoe UI", sans-serif; }
+
+  .line { display: block; color: {{paper}}; font-weight: 700;
+          letter-spacing: {{tracking_px}}px; line-height: 1;
+          white-space: nowrap;
+          text-shadow: 0 6px 34px rgba(0,0,0,.8); }
+
+  .line:first-child { font-size: 210px; color: {{accent}}; }
+  .line + .line { margin-top: 20px; font-size: 56px; font-weight: 500;
+                  letter-spacing: 3px; }
+
+  .kicker { font-size: 40px !important; letter-spacing: 6px !important;
+            color: {{muted}} !important; }
+  .hero   { font-size: 210px; }
+  .accent { color: {{accent}}; }
+  .body   { }
+  .ghost  { color: {{muted}}; font-weight: 500; }
+
+  .em { color: {{accent}}; }
+</style>
+
+<div class="card">
+{{#lines}}
+  <span class="line {{style}}" style="{{inline}}">{{{text}}}</span>
+{{/lines}}
+</div>

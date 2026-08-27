@@ -88,6 +88,35 @@ def esc(expr):
     return expr.replace(",", r"\,")
 
 
+def anchor_xy(layout, cw, ch, vid_w, vid_h, scale, sy):
+    """Place a graphic from a named corner, clamped into the frame.
+
+    `corner` is top/bottom crossed with left/right -- anything else centres on
+    that axis, so "centre" centres both. Margins are authored on the preset's
+    canvas and scaled: `scale` horizontally, `sy` vertically, because a 9:16
+    crop of a 16:9 canvas stretches the two differently and a margin that
+    followed the width alone would drift off the bottom of a vertical frame.
+    """
+    corner = layout.get("corner", "bottom-left")
+    mx = layout.get("margin_x_px", 96) * scale
+    my = layout.get("margin_y_px", 120) * sy
+
+    if "left" in corner:
+        x = mx
+    elif "right" in corner:
+        x = vid_w - cw - mx
+    else:
+        x = (vid_w - cw) / 2.0
+    if "top" in corner:
+        y = my
+    elif "bottom" in corner:
+        y = vid_h - ch - my
+    else:
+        y = (vid_h - ch) / 2.0
+    return (int(round(min(max(x, 0), max(0, vid_w - cw)))),
+            int(round(min(max(y, 0), max(0, vid_h - ch)))))
+
+
 def probe_dims(path):
     w, h, _, _ = probe(path)
     return w, h

@@ -34,6 +34,7 @@ from importlib import import_module  # noqa: E402
 
 _outline = import_module("transcript-outline")
 _namelabel = import_module("name-label")   # hyphen: not importable by name
+_imgoverlay = import_module("image-overlay")
 import _progress  # noqa: E402
 import _project  # noqa: E402
 
@@ -703,6 +704,20 @@ def main():
         if "name" not in spec or "at" not in spec:
             sys.exit("every name_labels entry needs at least name and at")
 
+    img_specs = m.get("image_overlays") or []
+    img_preset = m.get("overlay_preset", _imgoverlay.DEFAULT_PRESET)
+    for spec in img_specs:
+        if "at" not in spec:
+            sys.exit("every image_overlays entry needs at least at")
+        given = [k for k in _imgoverlay.SOURCES if spec.get(k)]
+        if len(given) != 1:
+            sys.exit("every image_overlays entry needs exactly one of "
+                     "%s -- got %s"
+                     % ("/".join(_imgoverlay.SOURCES), ", ".join(given) or "none"))
+        src = _imgoverlay._overlay.repo_path(spec[given[0]])
+        if not os.path.exists(src):
+            sys.exit("image overlay source does not exist: %s" % src)
+
     sync_path = os.path.join(os.path.dirname(args.manifest),
                              "%s.sync.json" % mid)
     if not os.path.exists(sync_path):
@@ -795,6 +810,27 @@ def main():
                   % (float(spec["at"]),
                      float(spec["at"]) + float(spec.get("dur", 5.5)),
                      spec["name"], spec.get("title", "")))
+
+    # Same trap for image overlays, with one extra convenience to resolve: a
+    # negative `at` means "this many seconds before the end", which only becomes
+    # a number once the cut is planned. An end card is written that way on
+    # purpose -- re-cutting the film moves it automatically.
+    img_preset_doc = json.load(open(
+        _imgoverlay._overlay.repo_path(img_preset), encoding="utf-8")) \
+        if img_specs else {}
+    for i, spec in enumerate(img_specs):
+        at, dur = _imgoverlay.resolve_window(spec, img_preset_doc, runtime)
+        if at >= runtime:
+            sys.exit("image overlay %d starts at %.1fs but the film runs %.1fs"
+                     % (i, at, runtime))
+    if img_specs and args.list:
+        print("")
+        print("  image overlays (film time):")
+        for spec in img_specs:
+            at, dur = _imgoverlay.resolve_window(spec, img_preset_doc, runtime)
+            print("  %8.2f %8.2f   %s"
+                  % (at, at + dur,
+                     _imgoverlay.describe(spec, img_preset_doc, runtime)))
 
     doc = {
         "_comment": "Keep-list for screencast-cut.py, in CAMERA time. Each keep "
@@ -896,6 +932,20 @@ def main():
             inputs += ["-loop", "1", "-framerate", str(fps), "-i", png]
             nxt += 1
 
+    # Image overlays come after the labels, on both counts: later input indices,
+    # and later in the chain, so an end card sits on top of a lower third rather
+    # than under it. Both are spliced through build_graph's one seam.
+    if img_specs:
+        pngs, img_fc, img_out = _imgoverlay.prepare(
+            img_preset, img_specs, canvas["width"], canvas["height"], tmpdir,
+            tag=mid, base=(label_out or "vcat"), first_input=nxt,
+            runtime=runtime)
+        for png in pngs:
+            inputs += ["-loop", "1", "-framerate", str(fps), "-i", png]
+            nxt += 1
+        label_fc = ";".join(x for x in (label_fc, img_fc) if x)
+        label_out = img_out
+
     graph = build_graph(acts, offset, canvas, pip, audio_cfg,
                         mask_idx, border_idx, label_fc, label_out)
 
@@ -969,7 +1019,9 @@ def main():
                    for be in (m.get("bookends") or {}).get("open", [])]
                 + ["name label '%s' at %ss film time for %ss"
                    % (s.get("name"), s.get("at"), s.get("dur"))
-                   for s in name_specs]))
+                   for s in name_specs]
+                + [_imgoverlay.describe(s, img_preset_doc, runtime)
+                   for s in img_specs]))
 
 
 if __name__ == "__main__":

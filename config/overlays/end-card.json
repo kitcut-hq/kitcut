@@ -1,0 +1,53 @@
+{
+  "_comment": "An image overlay that reveals over a treated copy of the film -- the end-card grammar. Modelled on the Invest Like the Best end card (x.com/patrick_oshag/status/1985693514357756286 at 1:26:25), read frame by frame at 6fps: over about 1.5s the wide shot desaturates to black and white, blurs and darkens while it KEEPS PLAYING, and the show logo -- a PNG with real alpha -- reveals left to right behind a hard edge, then holds to the end. Everything below is that reading, generalised: the treatment is opt-in per overlay, so a mid-video logo does not dim the film by surprise.",
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "layout": {
+    "_note": "corner is top/bottom x left/right, or anything else for centred -- the same vocabulary as the name label. width_frac sizes the image as a fraction of the frame width, which is how a card stays the same size on a 1080p film and a 1080x1920 short.",
+    "corner": "centre",
+    "margin_x_px": 96,
+    "margin_y_px": 96,
+    "width_frac": 0.4,
+    "max_width_frac": 0.85
+  },
+  "animation": {
+    "_note": "in.type is wipe / fade / slide / none. feather_px softens the wipe's leading edge -- the reference is hard, so keep it small; a soft edge suits photographic images. direction is left/right/up/down: for a wipe it is the edge the reveal starts FROM, for a slide the edge the image travels in from.",
+    "in": {
+      "type": "wipe",
+      "dur": 1.0,
+      "direction": "left",
+      "feather_px": 24
+    },
+    "hold_s": 8.0,
+    "out": {
+      "type": "fade",
+      "dur": 0.6,
+      "direction": "left"
+    }
+  },
+  "background": {
+    "_note": "Applied to the film under the image while the overlay is up, and only if the overlay asks for it. desaturate 1.0 is fully black and white; dim is how much brightness is subtracted; blur_sigma is a gaussian on the whole frame. in_s/out_s are the ramps -- the treated layer is cross-faded over the sharp one, which reads as a progressive blur without needing sendcmd.",
+    "desaturate": 1.0,
+    "blur_sigma": 14,
+    "dim": 0.18,
+    "vignette": false,
+    "in_s": 1.5,
+    "out_s": 0.8
+  },
+  "html_render": {
+    "_note": "Defaults for a Claude-authored card rendered by html-to-image.py. Named html_render rather than html because on an overlay entry `html` is the page's path -- one name for two shapes would be merged with a string and explode. viewport is the browser window; the shot is cropped to its own alpha afterwards, so make the window comfortably bigger than the artwork. device_scale 2 keeps type crisp when the card is scaled onto a 1080p frame.",
+    "viewport": [1600, 1000],
+    "device_scale": 2,
+    "pad_px": 8
+  },
+  "_measured": {
+    "reference": "x.com/patrick_oshag/status/1985693514357756286 at 1:26:25 (end card), 1920x1080",
+    "treatment_ramp_s": 1.5,
+    "wipe_dur_s": 1.0,
+    "wipe_direction": "left-to-right, hard edge, per-line staggered",
+    "logo_width_frac": 0.31,
+    "_note": "The reference staggers the wipe per line of the logo, which this preset does not do yet -- a single-image wipe is one expression, a staggered one is the same expression with floor(Y/line_h)*delay added to the progress term. Reserved as animation.in.stagger."
+  }
+}

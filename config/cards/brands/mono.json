@@ -1,0 +1,12 @@
+{
+  "_comment": "Brand-neutral black and white. The default when a card is for someone who has no palette here yet, and the sanity check that a template is not secretly tied to Instafill's colours.",
+  "ink": "#0A0A0A",
+  "paper": "#FFFFFF",
+  "accent": "#FFFFFF",
+  "accent_ink": "#0A0A0A",
+  "muted": "#8A8A8A",
+  "font_bold": "fonts/Montserrat-Bold.ttf",
+  "font_regular": "fonts/Montserrat-Medium.ttf",
+  "radius_px": 0,
+  "tracking_px": -1
+}

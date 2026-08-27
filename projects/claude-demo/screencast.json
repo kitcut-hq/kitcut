@@ -97,5 +97,27 @@
       "at": 2.0,
       "dur": 5.5
     }
+  ],
+  "overlay_preset": "config/overlays/end-card.json",
+  "image_overlays": [
+    {
+      "_why": "End card. `at` is negative on purpose -- it means 'this many seconds before the end', so re-cutting the film (a different min_silence, another bookend) moves the card with it instead of stranding it at a timecode that no longer exists. The film's last line is the meta sign-off about how it was shot, so the card lands over that and holds to black. The treatment is what stops the card fighting the footage: he is still talking under it, and B&W + blur + dim puts him behind the type without freezing or cutting him off.",
+      "html": "projects/claude-demo/assets/end-card.html",
+      "at": -11.0,
+      "layout": {
+        "corner": "centre",
+        "width_frac": 0.56
+      },
+      "in": {
+        "type": "wipe",
+        "dur": 1.1,
+        "direction": "left",
+        "feather_px": 18
+      },
+      "out": {
+        "type": "none"
+      },
+      "background": {}
+    }
   ]
 }

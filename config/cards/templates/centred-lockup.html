@@ -1,0 +1,51 @@
+<!--
+  Centred lockup: one panel, lines centred inside it, with a rule under the
+  first. The outro / CTA archetype -- calmer than stacked-blocks and better
+  with a FADE than a wipe, because the panel has no internal edges for a wipe
+  to travel along.
+
+  Styles behave as in stacked-blocks but carry no slab of their own; the panel
+  behind them is the fill.
+-->
+<meta charset="utf-8">
+<title>{{title}}</title>
+<style>
+  @font-face { font-family: "Brand"; font-weight: 700;
+               src: url("{{font_bold_url}}") format("truetype"); }
+  @font-face { font-family: "Brand"; font-weight: 500;
+               src: url("{{font_regular_url}}") format("truetype"); }
+
+  html, body { margin: 0; background: transparent; }
+
+  .card { display: inline-block; padding: 24px;
+          font-family: "Brand", "Segoe UI", sans-serif; }
+
+  .panel {
+    background: {{ink}};
+    border-radius: {{#radius_px}}{{radius_px}}{{/radius_px}}{{^radius_px}}28{{/radius_px}}px;
+    padding: 64px 96px 72px;
+    text-align: center;
+    border-bottom: 10px solid {{accent}};
+  }
+
+  .line { display: block; color: {{paper}}; font-weight: 700;
+          letter-spacing: {{tracking_px}}px; line-height: 1.05;
+          white-space: nowrap; }
+  .line + .line { margin-top: 18px; }
+
+  .kicker { font-size: 44px; letter-spacing: 6px; color: {{accent}}; }
+  .hero   { font-size: 120px; }
+  .accent { font-size: 52px; color: {{accent}}; }
+  .body   { font-size: 56px; font-weight: 500; color: {{muted}}; }
+  .ghost  { font-size: 48px; font-weight: 500; color: {{muted}}; }
+
+  .em { color: {{accent}}; }
+</style>
+
+<div class="card">
+  <div class="panel">
+  {{#lines}}
+    <span class="line {{style}}" style="{{inline}}">{{{text}}}</span>
+  {{/lines}}
+  </div>
+</div>

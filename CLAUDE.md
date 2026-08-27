@@ -193,6 +193,54 @@ every value measured off the reference clip (see the README table) rather than
 chosen. A label past the end of the film would fail **silently** — `enable`
 never turns true — so the runtime is asserted against it.
 
+**Image overlays and end cards** — a picture over the film, with an entrance
+animation, transparency, and optionally a treatment of the footage under it.
+`image-overlay.py` builds it; both `screencast-cut.py` and `cut-clips.py` read
+`image_overlays` and apply it inside their existing NVENC pass, after the name
+labels. The picture comes from one of three places and nothing downstream can
+tell which: `image` (a file), `card` (a spec — **designed**, see below), or
+`html` (a hand-written page). Both generated routes go through
+`html-to-image.py`, which shoots a page to a transparent PNG with headless
+Edge/Chrome and refuses one that came back opaque.
+
+```json
+"image_overlays": [
+  {"html": "projects/<id>/assets/end-card.html", "at": -11.0,
+   "layout": {"corner": "centre", "width_frac": 0.56},
+   "in": {"type": "wipe", "dur": 1.1}, "out": {"type": "none"},
+   "background": {}}
+]
+```
+
+`at` **negative counts back from the end**, so an end card survives a re-cut
+instead of being stranded at a dead timecode; it is resolved where the runtime
+first exists, and asserted like a label. `wipe` is a `geq` on the image's own
+alpha (`crop` cannot do it — its w/h evaluate once, only x/y are per-frame),
+`enable`-gated to its window because a per-pixel interpreter is not free. The
+`background` treatment is a `split` with the treated branch cross-faded over the
+sharp one — so the picture recedes without freezing or cutting. It is **opt-in
+per overlay**. Animation and treatment defaults are
+`config/overlays/end-card.json`; the source page or spec is committed under
+`projects/<id>/` and the PNG regenerates into `temp/`.
+
+**Designing the card** — `make-card.py` is the other half, and it is generic:
+nothing about a design is in a script. A card is a **shape**
+(`config/cards/templates/*.html`), a **look** (`config/cards/brands/*.json`) and
+**words** (`projects/<id>/cards/*.json`). Swap the brand and it is another
+company's card; swap the template and it is another kind of card. Five templates
+ship — `stacked-blocks` (built for the wipe), `centred-lockup`, `corner-tag`,
+`quote`, `stat` — and a brand is only tokens (ink/paper/accent/fonts).
+
+```powershell
+python scripts/make-card.py --list          # templates, brands, line styles
+python scripts/make-card.py --spec projects/<id>/cards/outro.json --png
+```
+
+Templates use a deliberately tiny mustache; a card that needs logic wants a new
+template, not a branch. A template must never paint `html`/`body` — the renderer
+checks the alpha and refuses an opaque shot rather than letting a white slab
+reach the film.
+
 **5. Publish** — upload it, then give it chapters.
 
 ```powershell
@@ -276,6 +324,8 @@ which cannot encode the glyphs at all.
 | `projects/<id>/` | one video: `project.json`, `journal.md`, its manifests + sidecars (committed), and its `sources/ audio/ transcripts/ outputs/ temp/` (gitignored) |
 | `config/presets/` | caption styling |
 | `config/labels/` | the lower-third name label |
+| `config/overlays/` | image-overlay animation, layout and background treatment |
+| `config/cards/` | card design: `templates/` the shape, `brands/` the look |
 | `config/handles/` | the animated handle badge |
 | `config/chapters/` | legacy chapter lists for already-published channel videos; new projects keep `chapters.txt` in their folder |
 | `sources/` `audio/` `transcripts/` `outputs/` `temp/` | legacy shared content dirs, gitignored; new work lives under `projects/` |

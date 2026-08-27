@@ -104,6 +104,23 @@ def scan(pid):
                                            "config/labels/lower-third.json")))
         if (m.get("handle") or {}).get("preset"):
             controls.setdefault("handle-style", norm(m["handle"]["preset"]))
+        img_specs = list(m.get("image_overlays") or [])
+        for c in m.get("clips") or []:
+            img_specs += list(c.get("image_overlays") or [])
+        if m.get("overlay_preset") or img_specs:
+            controls.setdefault("overlay-style",
+                                norm(m.get("overlay_preset",
+                                           "config/overlays/end-card.json")))
+        for i, spec in enumerate(img_specs):
+            # The page or spec an overlay is drawn from is a CONTROL, not an
+            # input: editing it is how the card is changed, and the PNG
+            # regenerates from it. A supplied image has no such source, so it
+            # is an input like any other piece of footage.
+            src = spec.get("card") or spec.get("html")
+            if src:
+                controls.setdefault("overlay-%d" % (i + 1), norm(src))
+            elif spec.get("image"):
+                inputs.setdefault("overlay-%d" % (i + 1), norm(spec["image"]))
 
     for od in sorted(outdirs):
         for p in sorted(glob.glob(os.path.join(od, "**", "*.*"),
@@ -209,6 +226,27 @@ def screencast_burned(m):
     for lb in m.get("name_labels") or []:
         out.append("name label '%s' at %ss film time for %ss (scanned)"
                    % (lb.get("name"), lb.get("at"), lb.get("dur")))
+    out += image_overlay_burned(m)
+    return out
+
+
+def image_overlay_burned(m, specs=None):
+    """Scanned burn lines for image overlays.
+
+    A scan cannot resolve a negative `at` -- that needs the film's runtime,
+    which only the render knows -- so it says "before the end" rather than
+    inventing a timecode. The render's own recorded line carries the real
+    number and wins, because merge() only ever fills a gap.
+    """
+    out = []
+    for spec in (m.get("image_overlays") or []) if specs is None else specs:
+        at = float(spec.get("at", 0))
+        when = ("%.1fs before the end" % -at) if at < 0 else ("%.1fs" % at)
+        out.append("image overlay '%s' at %s%s (scanned)"
+                   % (os.path.basename(spec.get("image") or spec.get("html")
+                                       or spec.get("card") or "?"), when,
+                      ", over a treated background"
+                      if spec.get("background") is not None else ""))
     return out
 
 
@@ -221,6 +259,7 @@ def clips_burned(m):
                    % m["captions"].get("style", "?"))
     if (m.get("handle") or {}).get("text"):
         out.append("handle badge %s (scanned)" % m["handle"]["text"])
+    out += image_overlay_burned(m)
     return out
 
 

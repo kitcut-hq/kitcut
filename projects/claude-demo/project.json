@@ -17,7 +17,7 @@
   },
   "deliverables": {
     "projects/claude-demo/outputs/claude-demo-labelled.mp4": {
-      "status": "current",
+      "status": "superseded",
       "built_utc": "2026-08-27T04:40:50Z",
       "kind": "screencast",
       "manifest": "projects/claude-demo/screencast.json",
@@ -32,11 +32,11 @@
         "opening bookend px-intro + b-roll (scanned)",
         "name label 'Oleksandr Gamaniuk' at 2.0s film time for 5.5s (scanned)"
       ],
-      "_why": "Current published version (uploaded 04:43Z, after the unlabelled one). Second-generation encode: label burned onto the finished film with name-label.py --video BEFORE name_labels moved into the manifest. The next screencast-cut.py render of claude-demo.mp4 carries the label in its single pass and supersedes this file."
+      "_why": "Second-generation encode (label burned onto a finished film). Superseded by the 2026-08-27 render of claude-demo.mp4, which is one pass and carries the lower third AND the new end card. NOTE: the published upload al_qdMlck9I is still THIS file -- the newer render has not been uploaded."
     },
     "projects/claude-demo/outputs/claude-demo.mp4": {
-      "status": "superseded",
-      "built_utc": "2026-08-26T22:34:49Z",
+      "status": "current",
+      "built_utc": "2026-08-27T06:22:12Z",
       "kind": "screencast",
       "manifest": "projects/claude-demo/screencast.json",
       "published": {
@@ -45,15 +45,21 @@
         "sidecar": "projects/claude-demo/outputs/claude-demo.youtube.json"
       },
       "burned": [
-        "pause cut per cuts.json (min_silence 0.7) (scanned)",
-        "camera PiP bottom-left 360px (scanned)",
-        "opening bookend px-intro + b-roll (scanned)",
-        "name label 'Oleksandr Gamaniuk' at 2.0s film time for 5.5s (scanned)"
+        "pause cut per cuts.json (min_silence 0.7)",
+        "camera PiP bottom-left 360px",
+        "opening bookend px-intro + b-roll",
+        "name label 'Oleksandr Gamaniuk' at 2.0s film time for 5.5s",
+        "image overlay 'end-card.html' wipe in at 439.4s to the end, over a B&W/blur/dim treatment"
       ],
-      "_why": "Same film without the lower-third; replaced by the labelled upload al_qdMlck9I. Kept because it is first-generation (one encode) -- a re-render from the manifest beats relabelling this file."
+      "_why": "Current film: one NVENC pass carrying the pause cut, the camera PiP, the opening bookend, the lower third and the Instafill end card (image_overlays, wiped on over a B&W/blur/dim treatment). Supersedes claude-demo-labelled.mp4. The published upload 7FBUWAmJfu4 predates the end card.",
+      "script": "scripts/screencast-cut.py",
+      "sidecars": {
+        "sync": "projects/claude-demo/claude-demo.sync.json",
+        "cuts": "projects/claude-demo/claude-demo.cuts.json"
+      }
     }
   },
-  "updated_utc": "2026-08-27T04:57:07Z",
+  "updated_utc": "2026-08-27T06:22:12Z",
   "title": "Відеоредагування через Claude Code — огляд пайплайнів",
   "intent": "Screen recording of a Claude Code session plus an iPhone take of Oleksandr narrating; multicam pipeline (camera is the master clock), published unlisted on @instafill_ai.",
   "pipelines": [

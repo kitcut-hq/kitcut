@@ -1,0 +1,10 @@
+{
+  "_comment": "A designed card: template + brand + words, no HTML written by hand. Change the brand to re-skin it, the template to re-shape it.",
+  "template": "centred-lockup",
+  "brand": "instafill",
+  "lines": [
+    {"style": "kicker", "text": "ДЯКУЮ ЗА ПЕРЕГЛЯД"},
+    {"style": "hero",   "text": "Instafill.ai"},
+    {"style": "body",   "text": "@instafill_ai"}
+  ]
+}

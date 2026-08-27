@@ -624,6 +624,171 @@ between weights, so sizing by it would set the two lines at a ratio nobody chose
 `temp/fontsrc/Montserrat-var.ttf` at `wght=500` with `fontTools.varLib.instancer`.
 It is covered by the same `fonts/OFL.txt` as the bold.
 
+## An image overlay, and end cards
+
+Put a picture on top of the film — a logo, an end card, a chart, a screenshot —
+with an entrance animation, real transparency, and optionally a **treatment** on
+the footage underneath it.
+
+The grammar is lifted from the end card at 1:26:25 of
+[this episode](https://x.com/patrick_oshag/status/1985693514357756286), read
+frame by frame: over about a second and a half the wide shot desaturates, blurs
+and dims **while it keeps playing**, and the show's logo reveals left to right
+behind a hard edge. Two animations, one moment — and the reason it looks
+expensive is that the footage never freezes and never cuts.
+
+The image comes from one of three places, and nothing downstream can tell which:
+
+| source | when |
+|---|---|
+| `image` | a file that already exists — a supplied logo, a screenshot, a chart |
+| `card` | a **spec**: template + brand + words. The designed route — see below |
+| `html` | a page written by hand, for a design no template covers |
+
+```powershell
+# a file you already have
+python scripts/image-overlay.py --video outputs/film.mp4 --image assets/logo.png `
+    --at -12 --background --frame 440        # free: one composited still
+
+# a designed card -- no HTML written by hand
+python scripts/make-card.py --list           # templates, brands, line styles
+python scripts/image-overlay.py --video outputs/film.mp4 `
+    --card projects/<id>/cards/outro.json --at -12 --background --frame 440
+
+# a hand-written page
+python scripts/html-to-image.py --check      # which browser will render it
+python scripts/html-to-image.py --html projects/<id>/assets/end-card.html `
+    --out projects/<id>/temp/end-card.png
+```
+
+Better, put it in the manifest and let the pipeline apply it inside the film's
+existing NVENC pass, so an end card is not a re-encode of the film:
+
+```json
+"overlay_preset": "config/overlays/end-card.json",
+"image_overlays": [
+  {
+    "html": "projects/<id>/assets/end-card.html",
+    "at": -11.0,
+    "layout": {"corner": "centre", "width_frac": 0.56},
+    "in": {"type": "wipe", "dur": 1.1, "direction": "left", "feather_px": 18},
+    "out": {"type": "none"},
+    "background": {}
+  }
+]
+```
+
+Both `screencast-cut.py` and `cut-clips.py` read it. Overlays composite **after**
+the name labels, so a card sits on top of a lower third rather than under it.
+
+| key | |
+|---|---|
+| `image` / `card` / `html` | the source, exactly one of them; anything generated is cached against the mtime of what it was generated from |
+| `at` | when it appears. **Negative counts back from the end** — an end card written as `-11` follows the cut instead of being stranded at a timecode a re-cut moved |
+| `dur` | how long it stays; omitted means to the end |
+| `layout` | `corner` (as the name label) plus `width_frac`, which sizes the image against the frame so one card fits a 1080p film and a 9:16 short |
+| `in` / `out` | `{"type": "wipe" \| "fade" \| "slide" \| "none", "dur":, "direction":, "feather_px":}` |
+| `background` | opt-in treatment of the film underneath; `{}` takes the preset's defaults |
+
+### Why it animates the way it does
+
+`fade` is a `fade` on the image's alpha and `slide` is a clipped linear
+expression for the overlay's x/y — both the name label's idiom. **`wipe` is a
+`geq`** that multiplies the image's own alpha by a ramp across X or Y, so a logo
+with transparent gaps stays transparent: it reveals the picture rather than
+painting a rectangle over it. `geq` is a per-pixel interpreter, so it is
+`enable`-gated to the wipe window itself — a second, at logo size — and the rest
+of the film pays nothing.
+
+The treatment is a `split`: one branch untouched, the other desaturated, blurred
+and dimmed, then cross-faded over the first on its alpha. Fading a constant
+fully-treated layer looks identical to ramping the blur and needs no `sendcmd`.
+Those filters are `enable`-gated too, or a gaussian blur would run over ten
+minutes of film to be seen for eight seconds of it.
+
+Animated `crop` width is **not** an option for a wipe: crop's `w`/`h` are
+evaluated once when the filter is configured and only `x`/`y` re-evaluate per
+frame — the same trap noted for the vertical pan.
+
+### Designing a card
+
+`make-card.py` is the design half: it turns a spec into a page, and the page
+into a transparent PNG. Nothing about a design is in the script —
+
+- the **shape** is a template under `config/cards/templates/`
+- the **look** is a brand under `config/cards/brands/`
+- the **words** are the spec
+
+so swapping the brand makes the same card another company's, and swapping the
+template makes the same brand another kind of card.
+
+```json
+{
+  "template": "stacked-blocks",
+  "brand": "instafill",
+  "lines": [
+    {"style": "kicker", "text": "ВІДЕО ЗІБРАНЕ ТУЛІНГОМ"},
+    {"style": "hero",   "text": "INSTAFILL<span class='em'>.AI</span>"},
+    {"style": "accent", "text": "@instafill_ai"}
+  ]
+}
+```
+
+```powershell
+python scripts/make-card.py --list                       # what exists
+python scripts/make-card.py --spec projects/<id>/cards/outro.json --png
+python scripts/make-card.py --template stat --brand mono `
+    --text "hero:49s" --text "body:OF DEAD AIR REMOVED" --out temp/c.html --png
+```
+
+| template | |
+|---|---|
+| `stacked-blocks` | each line its own filled slab. **The one built for a wipe** — the reveal edge crosses type and fill together |
+| `centred-lockup` | one panel, centred lines, accent rule. Calmer; pairs with a fade |
+| `corner-tag` | a small pill for a persistent stamp rather than a moment |
+| `quote` | a pull quote with an accent bar; the last line becomes the attribution |
+| `stat` | one very large figure over a label |
+
+Line styles are `kicker`, `hero`, `accent`, `body`, `ghost`; any line may
+override `size_px`, `fill`, `colour` or `tracking_px` without the template
+growing a branch. `text` is raw HTML, so `<span class="em">` picks up the
+brand's accent inside a word.
+
+A brand is only tokens — `ink`, `paper`, `accent`, `accent_ink`, `muted`, two
+font paths, `radius_px`, `tracking_px`. Copy `config/cards/brands/mono.json`,
+change the colours, and every template draws that company's card.
+
+Templates use a very small mustache (`{{x}}`, `{{{x}}}` raw, `{{#x}}…{{/x}}`
+for a list or flag, `{{^x}}…{{/x}}` for its absence). That is deliberately not
+a real template language: a card that needs logic wants a new template.
+
+### Writing the page by hand
+
+Two rules, both enforced rather than assumed:
+
+- **Nothing may paint a background.** `--default-background-color=00000000` is
+  what makes the browser composite onto nothing, but `body { background: #fff }`
+  beats it every time, so the alpha channel is checked after the shot and a
+  fully opaque PNG **fails with the reason** instead of becoming a white slab on
+  the film.
+- **The artwork is the only ink.** The PNG is cropped to its own alpha bbox, and
+  that crop is what `corner` and `width_frac` then size and place. Use the
+  alpha channel's bbox, not the image's — `Image.getbbox()` counts a
+  coloured-but-transparent pixel and keeps the margin it is trying to remove.
+
+`projects/<id>/assets/` holds the page (authored, committed — it is the editable
+control); the rendered PNG goes to `projects/<id>/temp/`, gitignored, because
+browser output is not byte-deterministic and regenerates in seconds.
+
+Load repo fonts with a relative `@font-face` `src` so a card matches the
+captions and the lower third — `projects/claude-demo/assets/end-card.html` is
+the worked example.
+
+> `msedge --version` on Windows does **not** print a version — it hands the
+> argument to the running instance, opens a window and exits 0. `--check` reads
+> the version-numbered folder Chromium installs beside its exe instead, so a
+> free check stays free.
+
 ## Chapter markers on a published video
 
 Turn a transcript into YouTube chapters, then write them into the video's own
@@ -919,6 +1084,9 @@ all, and its `FaceDetectorYN` replacement wants a model from an external host.
 | `scripts/render-status.py` | the Claude Code status line for this repo |
 | `scripts/handle-overlay.py` | animated social-handle badge, drawn and burned in |
 | `scripts/name-label.py` | lower-third name label, drawn and burned in |
+| `scripts/image-overlay.py` | an image over the film — wipe/fade/slide, plus the background treatment |
+| `scripts/html-to-image.py` | an HTML page → a transparent PNG, via headless Edge/Chrome |
+| `scripts/make-card.py` | design a card: spec + template + brand → page → PNG |
 | `scripts/dub-clips.py` | translate a clip and speak it back into its own cadence |
 | `scripts/dub-translate.py` | per-slot translation under a time budget |
 | `scripts/dub-tts.py` | neural TTS with word boundaries and rate control |
@@ -938,9 +1106,14 @@ all, and its `FaceDetectorYN` replacement wants a model from an external host.
 | `config/chapters/` | legacy chapter lists for already-published channel videos; new projects keep `chapters.txt` in their folder |
 | `config/labels/` | the lower-third name label's styling |
 | `config/handles/` | handle-badge styling and motion |
+| `config/overlays/` | image-overlay animation, layout and background treatment |
+| `config/cards/templates/` | card layout archetypes — the *shape* of a card |
+| `config/cards/brands/` | brand tokens — the *look*; swap one to re-skin every template |
+| `projects/<id>/cards/` | card specs (the *words*), committed |
+| `projects/<id>/assets/` | authored overlay artwork — hand-written pages and logos, committed |
 | `fonts/` | Montserrat Bold (SIL OFL 1.1, see `fonts/OFL.txt`) |
 | `docs/karaoke-captions.md` | design notes and the traps behind them |
-| `.claude/skills/` | Claude Code skills: captions, shorts, dub, multicam, name-label, project |
+| `.claude/skills/` | Claude Code skills: captions, shorts, dub, multicam, name-label, image-overlay, project |
 
 `sources/`, `audio/`, `transcripts/`, `outputs/`, `temp/` — at the top level
 and inside each project folder — are working directories and are
@@ -968,7 +1141,23 @@ evidence.
   `enable` expression simply never turns true; ffmpeg reports nothing, the
   render succeeds, and the card is not in it. `screencast-cut.py` checks every
   `name_labels` entry against the cut runtime — which is only known after the
-  cut — for exactly this reason.
+  cut — for exactly this reason. `image_overlays` is checked the same way, and
+  it is where a negative `at` gets resolved into a real time.
+- **`crop`'s width and height are evaluated once,** when the filter is
+  configured; only `x` and `y` re-evaluate per frame. So an animated crop cannot
+  wipe a graphic on — the image overlay ramps the alpha with `geq` instead. The
+  vertical pan works for the same reason in reverse: it moves `x` only.
+- **`msedge --version` does not print a version on Windows.** It hands the
+  argument to the already-running browser, opens a window, and exits 0; Chrome's
+  hangs instead. Read the version-numbered folder Chromium installs beside its
+  exe — otherwise a "free" check pops a browser open on someone's desktop.
+- **A headless screenshot is opaque unless you ask twice.**
+  `--default-background-color=00000000` gets you a transparent canvas, but any
+  `background` on `html`/`body` paints over it, and the result is a white
+  rectangle that looks like a filter bug. `html-to-image.py` checks the alpha
+  channel afterwards and fails with the cause. Crop to the **alpha channel's**
+  bbox, too: `Image.getbbox()` counts coloured-but-transparent pixels and keeps
+  the margin you were removing.
 - **Don't re-exec with `os.execve` on Windows.** It spawns a new process and
   kills the current one rather than replacing it, so the shell sees the parent
   die abnormally and the exit code is lost. `subprocess.run` + `sys.exit(rc)`.

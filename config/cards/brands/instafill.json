@@ -1,0 +1,13 @@
+{
+  "_comment": "Instafill.ai. A brand is only these tokens -- copy this file, change the four colours and the two font paths, and every template draws that company's card instead. The mint is the same #13BA82 the lower-third accent uses, so a card, a label and a badge on one film read as one channel.",
+  "ink": "#050608",
+  "paper": "#FFFFFF",
+  "accent": "#13BA82",
+  "accent_ink": "#041B12",
+  "muted": "#9AA3AE",
+  "font_bold": "fonts/Montserrat-Bold.ttf",
+  "font_regular": "fonts/Montserrat-Medium.ttf",
+  "radius_px": 0,
+  "tracking_px": -1,
+  "_note": "radius_px 0 is deliberate: hard rectangles give the wipe a clean edge to travel along. Round them for a softer card, but check the wipe again -- a large radius makes the reveal look ragged."
+}

@@ -54,6 +54,8 @@ lost sources only — it costs a generation (see the name-label skill's warning)
 | reframe/crop a short | `clips-vertical.reframe.json` | that file exists to be edited; keys are `[time, centre_x]` pairs |
 | clip boundaries wrong | `clips*.json` → the clip's `start_text`/`end_text` | re-running the manifest rebuilds only entries whose output is missing; `--only <id> --force` for the one you changed |
 | handle badge text/style | `clips*.json` → `handle`, `config/handles/*.json` | manifest for the text, config for the look |
+| move/replace an end card or image overlay | the manifest's `image_overlays[]` | `at` is film time and **negative counts back from the end**, which is what keeps a card attached to the ending through a re-cut. Prove placement free with `image-overlay.py --frame T` |
+| restyle an end card | the page under `controls.overlay-*`, or `config/overlays/end-card.json` | the HTML in `projects/<id>/assets/` is the editable control — edit it and re-render; the PNG in `temp/` regenerates from it. The preset holds animation/treatment defaults shared by every future card |
 | description / chapters | `description.txt` / `chapters.txt` + `yt-set-chapters.py` | chapters edit the LIVE description; `--dry-run` first |
 | "what is on this video?" | nothing — read `project.json` | answer from `burned`, `published`, and the journal; do not re-derive from the files |
 

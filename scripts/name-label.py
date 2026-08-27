@@ -30,7 +30,7 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 from PIL import Image, ImageDraw
 import _overlay
 from _overlay import (hex_rgba, font_for_cap_height, draw_text_tracked,
-                      text_width_tracked, esc, probe)
+                      text_width_tracked, esc, probe, anchor_xy)
 
 ENV = _env.ENV
 ROOT = _overlay.ROOT
@@ -165,26 +165,8 @@ def render_label(preset, spec, scale, max_w=None):
 # ---------------------------------------------------------------- animation
 
 
-def anchor_xy(layout, cw, ch, vid_w, vid_h, scale, sy):
-    """Place the card from a named corner, clamped into the frame."""
-    corner = layout.get("corner", "bottom-left")
-    mx = layout.get("margin_x_px", 96) * scale
-    my = layout.get("margin_y_px", 120) * sy
-
-    if "left" in corner:
-        x = mx
-    elif "right" in corner:
-        x = vid_w - cw - mx
-    else:
-        x = (vid_w - cw) / 2.0
-    if "top" in corner:
-        y = my
-    elif "bottom" in corner:
-        y = vid_h - ch - my
-    else:
-        y = (vid_h - ch) / 2.0
-    return (int(round(min(max(x, 0), max(0, vid_w - cw)))),
-            int(round(min(max(y, 0), max(0, vid_h - ch)))))
+# anchor_xy now lives in _overlay.py -- the image overlay is its third caller,
+# and corner placement was never specific to the name card.
 
 
 def prepare(preset_path, specs, vid_w, vid_h, tmpdir, tag="", base="0:v",

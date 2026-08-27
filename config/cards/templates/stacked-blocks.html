@@ -1,0 +1,55 @@
+<!--
+  Stacked blocks: each line is its own filled slab, left-aligned, tight.
+  The end-card archetype, and the one built for a WIPE -- the reveal edge
+  crosses a line's type and its background together, which is what makes it
+  read as a reveal rather than a fade. Any number of lines.
+
+  Styles: kicker (small, ink slab), hero (large, paper slab), accent (accent
+  slab), body (paper slab, medium), ghost (no slab, paper type with a shadow).
+-->
+<meta charset="utf-8">
+<title>{{title}}</title>
+<style>
+  @font-face { font-family: "Brand"; font-weight: 700;
+               src: url("{{font_bold_url}}") format("truetype"); }
+  @font-face { font-family: "Brand"; font-weight: 500;
+               src: url("{{font_regular_url}}") format("truetype"); }
+
+  html, body { margin: 0; background: transparent; }
+
+  .card {
+    display: inline-block;
+    padding: 24px;
+    font-family: "Brand", "Segoe UI", sans-serif;
+    text-align: {{#align}}{{align}}{{/align}}{{^align}}left{{/align}};
+  }
+  .row { display: block; }
+  .row + .row { margin-top: 10px; }
+
+  .line {
+    display: inline-block;
+    padding: 10px 22px 14px;
+    line-height: 0.95;
+    white-space: nowrap;
+    font-weight: 700;
+    letter-spacing: {{tracking_px}}px;
+    border-radius: {{radius_px}}px;
+  }
+
+  .kicker { background: {{ink}};   color: {{paper}};      font-size: 54px;
+            letter-spacing: 6px; }
+  .hero   { background: {{paper}}; color: {{ink}};        font-size: 132px; }
+  .accent { background: {{accent}};color: {{accent_ink}}; font-size: 50px;
+            letter-spacing: 2px; }
+  .body   { background: {{paper}}; color: {{ink}};        font-size: 64px; }
+  .ghost  { background: transparent; color: {{paper}};    font-size: 64px;
+            text-shadow: 0 4px 24px rgba(0,0,0,.75); }
+
+  .em { color: {{accent}}; }
+</style>
+
+<div class="card">
+{{#lines}}
+  <div class="row"><span class="line {{style}}" style="{{inline}}">{{{text}}}</span></div>
+{{/lines}}
+</div>

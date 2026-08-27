@@ -23,6 +23,7 @@ from importlib import import_module
 
 _outline = import_module("transcript-outline")   # hyphen: not importable by name
 _handle = import_module("handle-overlay")
+_imgoverlay = import_module("image-overlay")
 import _progress
 import _project
 
@@ -45,6 +46,28 @@ def probe(path):
     if out.returncode:
         sys.exit("ffprobe failed on %s\n%s" % (path, out.stderr.strip()))
     return float(json.loads(out.stdout)["format"]["duration"])
+
+
+def probe_video(path):
+    """(width, height, nb_frames) of the first video stream, (0, 0, 0) if none.
+
+    Duration alone does not prove a render worked: a filter graph that ends up
+    bounded by a one-frame image input produces a file whose AUDIO runs the full
+    length while the video is a single frame or missing altogether, and every
+    duration check still passes. Ask about the picture directly.
+    """
+    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
+               "-count_packets", "-show_entries",
+               "stream=width,height,nb_read_packets", "-of", "json", path],
+              capture_output=True, text=True)
+    if out.returncode:
+        return 0, 0, 0
+    streams = json.loads(out.stdout).get("streams") or []
+    if not streams:
+        return 0, 0, 0
+    s = streams[0]
+    return (int(s.get("width") or 0), int(s.get("height") or 0),
+            int(s.get("nb_read_packets") or 0))
 
 
 def probe_fps(path):
@@ -232,13 +255,14 @@ def resolve(clip, words, pad_head, pad_tail):
 
 
 def cut(src, dst, start, dur, render, copy, overlay=None, pre_chain=None,
-        base="vbase", dub=None):
+        base="vbase", dub=None, img=None, fps=None):
     """overlay is (png_paths, filter_complex, out_label) from handle-overlay;
     pre_chain is a filter graph ending in [base] that runs before the badge;
+    img is the same triple from image-overlay, composited after the badge;
     dub is a wav to use INSTEAD of the source audio."""
     extra = []
     if copy:
-        if overlay or pre_chain:
+        if overlay or pre_chain or img:
             sys.exit("--copy cannot crop, caption or brand: stream copy does not filter")
         if dub:
             # -ss + -c copy snaps to the preceding keyframe, so the picture would
@@ -263,6 +287,25 @@ def cut(src, dst, start, dur, render, copy, overlay=None, pre_chain=None,
                 "badge filter no longer addresses inputs 1..N -- input order changed?"
         else:
             label = base
+        # Image overlays go after the badge PNGs -- both in the input list, for
+        # the reason below, and in the chain, so a card lands on top of the
+        # badge. image-overlay addresses its inputs relative to first_input, so
+        # unlike the badge it does not care where it ended up.
+        if img:
+            pngs, fc, label = img
+            for p in pngs:
+                # -loop 1 is NOT optional here, and its absence is silent. The
+                # image-overlay chain ends in shortest=1 (it must -- see
+                # image-overlay.py), and a plain image input is ONE frame long,
+                # so the shortest stream would be that frame and the output
+                # would carry a single video frame -- or none at all, while the
+                # audio still runs the full length and every duration check
+                # still passes. The badge gets away without it only because its
+                # overlay has no shortest=1.
+                extra += ["-loop", "1", "-framerate", "%g" % (fps or 30),
+                          "-i", p]
+            n_in += len(pngs)
+            chain.append(fc)
         # The dub is appended AFTER the badge PNGs on purpose: handle-overlay
         # addresses those by absolute index ([1:v], [2:v], ...), so slipping an
         # input in ahead of them would quietly repoint the badge at the wav.
@@ -450,6 +493,17 @@ def main():
 
     wanted = set(x.strip() for x in args.only.split(",")) if args.only else None
     plan, missing_dub = [], []
+    # Image overlays: a manifest-level list applies to every clip, and a clip
+    # may carry its own instead. Windows are in CLIP time -- -ss rebases the
+    # output clock to zero -- so a negative `at` counts back from the clip's own
+    # end, and one end card can ride every short in the batch.
+    img_preset = m.get("overlay_preset", _imgoverlay.DEFAULT_PRESET)
+    img_default = m.get("image_overlays") or []
+    img_preset_doc = json.load(open(
+        _imgoverlay._overlay.repo_path(img_preset), encoding="utf-8")) \
+        if (img_default or any(c.get("image_overlays") for c in m["clips"])) \
+        else {}
+
     for clip in m["clips"]:
         if wanted and clip["id"] not in wanted:
             continue
@@ -482,6 +536,9 @@ def main():
               % (clip["id"], hhmmss(start), hhmmss(end), end - start,
                  "" if not dubdir else ("dub:ok  " if dub_ok else "dub:MISSING"),
                  clip.get("title", "")))
+        for spec in (clip.get("image_overlays") or img_default):
+            print("  %s" % _imgoverlay.describe(spec, img_preset_doc,
+                                                end - start))
     if args.list:
         return                           # --list promises to cut nothing, so a
                                          # missing dub is information, not an error
@@ -541,8 +598,22 @@ def main():
         elif last:
             parts.append("[%s]null[%s]" % (last, base))
         pre_chain = ";".join(parts) if parts else None
+
+        # The badge, if any, has already claimed inputs 1..N and the tail of the
+        # chain; the card composites onto whatever that left.
+        img = None
+        img_specs = clip.get("image_overlays") or img_default
+        if img_specs and not args.copy:
+            img_base = overlay[2] if overlay else (base if parts else "0:v")
+            pngs, ifc, iout = _imgoverlay.prepare(
+                img_preset, img_specs, out_w, out_h, tmpdir,
+                tag=clip["id"], base=img_base,
+                first_input=1 + (len(overlay[0]) if overlay else 0),
+                runtime=end - start)
+            img = (pngs, ifc, iout)
+
         if not cut(src, dst, start, end - start, render, args.copy, overlay,
-                   pre_chain, base, dub_wav):
+                   pre_chain, base, dub_wav, img, fps):
             failed.append(dst)
             continue
         got, want = probe(dst), end - start
@@ -554,6 +625,21 @@ def main():
                       "to keyframes" % (got, want))
         elif abs(got - want) > 0.5:
             sys.exit("%s: duration %.2fs, expected %.2fs" % (dst, got, want))
+
+        # The picture, asked about directly. A graph bounded by a one-frame
+        # input yields full-length audio over a single video frame (or none),
+        # and the duration check above waves it straight through.
+        vw, vh, frames = probe_video(dst)
+        if not vw:
+            sys.exit("%s: no video stream -- the filter graph produced audio "
+                     "only" % dst)
+        if not args.copy and (vw, vh) != (out_w, out_h):
+            sys.exit("%s: %dx%d, expected %dx%d" % (dst, vw, vh, out_w, out_h))
+        if frames < max(2, int(got * 0.5)):
+            sys.exit("%s: %d video frames for %.2fs -- something bounded the "
+                     "graph early (a non-looped image input under shortest=1 "
+                     "does exactly this)" % (dst, frames, got))
+
         meta = dict(clip, source=src, start=round(start, 3), end=round(end, 3),
                     duration=round(got, 3), stream_copy=bool(args.copy),
                     dub=dub_wav, dub_words=dub_words,
@@ -574,7 +660,9 @@ def main():
                 "word-synced captions, style %s" % caps["style"] if caps else None,
                 "handle badge %s" % (m.get("handle") or {}).get("text")
                 if (m.get("handle") or {}).get("text") else None,
-                "dubbed audio .%s" % dub_tag if dub_wav else None) if b])
+                "dubbed audio .%s" % dub_tag if dub_wav else None) if b]
+            + [_imgoverlay.describe(s, img_preset_doc, end - start)
+               for s in (clip.get("image_overlays") or img_default)])
     if failed:
         sys.exit("locked by another program, not replaced: %s\n(each finished "
                  "render is beside its target as .part.mp4)" % ", ".join(failed))

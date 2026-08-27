@@ -1,0 +1,57 @@
+<!--
+  Pull quote: a large quoted line over an attribution, with an accent bar down
+  the left. For lifting something the speaker just said onto the screen.
+
+  The LAST line is treated as the attribution; every line before it is the
+  quote. Use \n inside a line's text (it becomes a break) to control wrapping
+  rather than letting the browser choose.
+-->
+<meta charset="utf-8">
+<title>{{title}}</title>
+<style>
+  @font-face { font-family: "Brand"; font-weight: 700;
+               src: url("{{font_bold_url}}") format("truetype"); }
+  @font-face { font-family: "Brand"; font-weight: 500;
+               src: url("{{font_regular_url}}") format("truetype"); }
+
+  html, body { margin: 0; background: transparent; }
+
+  .card { display: inline-block; padding: 24px;
+          font-family: "Brand", "Segoe UI", sans-serif; }
+
+  .quote {
+    border-left: 12px solid {{accent}};
+    padding: 8px 0 8px 48px;
+    max-width: 1400px;
+  }
+  .line { display: block; color: {{paper}}; font-weight: 700;
+          font-size: 82px; line-height: 1.16;
+          letter-spacing: {{tracking_px}}px;
+          text-shadow: 0 4px 28px rgba(0,0,0,.8); }
+  .line + .line { margin-top: 10px; }
+
+  .kicker { font-size: 40px; letter-spacing: 6px; color: {{accent}};
+            font-weight: 700; text-shadow: none; }
+  .hero   { font-size: 96px; }
+  .accent { color: {{accent}}; }
+  .body   { }
+  .ghost  { font-size: 44px; font-weight: 500; color: {{muted}};
+            text-shadow: 0 2px 16px rgba(0,0,0,.8); }
+
+  /* the attribution: last line, quieter, with a dash */
+  .line:last-child { font-size: 44px; font-weight: 500; color: {{muted}};
+                     margin-top: 26px; }
+  .line:last-child::before { content: "— "; color: {{accent}}; }
+  .line:only-child { font-size: 82px; font-weight: 700; color: {{paper}}; }
+  .line:only-child::before { content: none; }
+
+  .em { color: {{accent}}; }
+</style>
+
+<div class="card">
+  <div class="quote">
+  {{#lines}}
+    <span class="line {{style}}" style="{{inline}}">{{{text}}}</span>
+  {{/lines}}
+  </div>
+</div>

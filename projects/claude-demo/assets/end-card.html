@@ -1,0 +1,83 @@
+<meta charset="utf-8">
+<title>Instafill.ai end card</title>
+<!--
+  End card for claude-demo, rendered by scripts/html-to-image.py and burned in by
+  image_overlays in screencast.json.
+
+  Two rules this page has to obey, both enforced by the renderer:
+    * nothing paints a background -- html/body stay transparent, or the shot
+      comes back opaque and html-to-image.py refuses it.
+    * the artwork is the only ink, because the PNG is cropped to its own alpha
+      bbox and the crop is what the overlay's anchoring and width_frac size.
+
+  Stacked blocks with alternating fills, after the reference end card
+  (x.com/patrick_oshag/status/1985693514357756286 at 1:26:25) -- that shape is
+  what makes a left-to-right wipe read as a reveal instead of a fade. Montserrat
+  is loaded from the repo's own fonts/ so the card matches the captions, the
+  handle badge and the lower third.
+-->
+<style>
+  @font-face {
+    font-family: "Montserrat";
+    src: url("../../../fonts/Montserrat-Bold.ttf") format("truetype");
+    font-weight: 700;
+  }
+  @font-face {
+    font-family: "Montserrat";
+    src: url("../../../fonts/Montserrat-Medium.ttf") format("truetype");
+    font-weight: 500;
+  }
+
+  html, body { margin: 0; background: transparent; }
+
+  .card {
+    display: inline-block;
+    padding: 24px;                 /* breathing room the alpha crop keeps */
+    font-family: "Montserrat", "Segoe UI", sans-serif;
+  }
+
+  .row { display: block; }
+
+  /* Each line is its own inline block with its own fill, so the wipe edge
+     crosses type and background together -- the reference's look. */
+  .line {
+    display: inline-block;
+    padding: 10px 22px 14px;
+    line-height: 0.95;
+    letter-spacing: -1px;
+    white-space: nowrap;
+  }
+
+  .kicker {
+    background: #050608;
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 54px;
+    letter-spacing: 6px;
+  }
+
+  .brand {
+    background: #ffffff;
+    color: #050608;
+    font-weight: 700;
+    font-size: 132px;
+    margin-top: 10px;
+  }
+
+  .brand .dot { color: #13BA82; }
+
+  .handle {
+    background: #13BA82;
+    color: #041b12;
+    font-weight: 700;
+    font-size: 50px;
+    letter-spacing: 2px;
+    margin-top: 10px;
+  }
+</style>
+
+<div class="card">
+  <div class="row"><span class="line kicker">ВІДЕО ЗІБРАНЕ ТУЛІНГОМ</span></div>
+  <div class="row"><span class="line brand">INSTAFILL<span class="dot">.AI</span></span></div>
+  <div class="row"><span class="line handle">@instafill_ai</span></div>
+</div>

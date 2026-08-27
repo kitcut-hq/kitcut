@@ -30,3 +30,30 @@ one generation and supersedes the -labelled file; re-upload decision is open.
 Project migrated into projects/claude-demo/ (manifest renamed to
 screencast.json, paths rewritten); cut plan verified identical before/after
 the move. IMG_2691/2692/2694 are unused takes from the same shoot.
+- 06:07 render scripts/screencast-cut.py -> C:/Users/alex/AppData/Local/Temp/claude/C--instafill-video-editing/3b4ea4b3-a90c-4854-bc2e-3332f6d80981/scratchpad/preview-endcard.mp4 (--manifest projects/claude-demo/screencast.json --preview 40 --out C:/Users/alex/AppData/Local/Temp/claude/C--instafill-video-editing/3b4ea4b3-a90c-4854-bc2e-3332f6d80981/scratchpad/preview-endcard.mp)
+- 06:22 render scripts/screencast-cut.py -> projects/claude-demo/outputs/claude-demo.mp4 (--manifest projects/claude-demo/screencast.json --force)
+
+The 06:22 render is the first one-generation film: pause cut, camera PiP,
+opening bookend, the lower third AND a new Instafill end card, all in a single
+NVENC pass. It supersedes claude-demo-labelled.mp4, which was the
+second-generation label burn. **The published uploads are both older than this
+file** -- al_qdMlck9I is the labelled second-generation encode and 7FBUWAmJfu4
+predates the label. Re-upload is still an open decision, deliberately not taken
+here.
+
+The end card is the first use of the new image-overlay pipeline. It is written
+as `image_overlays` in screencast.json with `at: -11.0` -- negative meaning
+"eleven seconds before the end", which is the point: re-cutting the film moves
+the card with it instead of stranding it at a timecode the new cut no longer
+has. It wipes on left-to-right over a B&W/blur/dim treatment of the footage,
+which keeps playing underneath (he is still talking to camera there, which is
+why the treatment is worth having -- it puts him behind the type without
+freezing or cutting him off). The 06:07 preview render was a throwaway graph
+test into the scratchpad; its deliverable entry has been removed from
+project.json.
+
+Artwork lives two ways now and both are committed: assets/end-card.html is a
+hand-written page (the original, still the one the manifest points at), and
+cards/outro.json is the same idea as a *spec* -- template + brand + words --
+which make-card.py designs. Prefer the spec route for anything new; the page is
+kept as the worked example of the hand-written escape hatch.

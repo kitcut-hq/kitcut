@@ -1,0 +1,52 @@
+<!--
+  Corner tag: one small pill, for a persistent stamp rather than a moment.
+  A handle, a URL, a "live" marker -- something that sits in a corner for a
+  long stretch without competing with the picture. Pair it with a corner
+  layout and a fade, never a treatment.
+
+  The first line is the pill's body; a second line, if given, becomes a
+  quieter tail after a separator.
+-->
+<meta charset="utf-8">
+<title>{{title}}</title>
+<style>
+  @font-face { font-family: "Brand"; font-weight: 700;
+               src: url("{{font_bold_url}}") format("truetype"); }
+  @font-face { font-family: "Brand"; font-weight: 500;
+               src: url("{{font_regular_url}}") format("truetype"); }
+
+  html, body { margin: 0; background: transparent; }
+
+  .card { display: inline-block; padding: 20px;
+          font-family: "Brand", "Segoe UI", sans-serif; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 18px;
+    background: {{ink}};
+    border-radius: 999px;
+    padding: 18px 38px 22px;
+    box-shadow: 0 8px 40px rgba(0,0,0,.45);
+    white-space: nowrap;
+  }
+  .dot { width: 22px; height: 22px; border-radius: 50%;
+         background: {{accent}}; flex: none; }
+
+  .line { color: {{paper}}; font-weight: 700; font-size: 48px;
+          letter-spacing: {{tracking_px}}px; line-height: 1; }
+  .line + .line { color: {{muted}}; font-weight: 500; }
+
+  .kicker { font-size: 36px; letter-spacing: 4px; color: {{accent}}; }
+  .hero   { font-size: 60px; }
+  .accent { color: {{accent}}; }
+  .body   { }
+  .ghost  { color: {{muted}}; font-weight: 500; }
+
+  .em { color: {{accent}}; }
+</style>
+
+<div class="card">
+  <div class="pill">
+    {{^no_dot}}<span class="dot"></span>{{/no_dot}}
+    {{#lines}}<span class="line {{style}}" style="{{inline}}">{{{text}}}</span>{{/lines}}
+  </div>
+</div>
