@@ -317,7 +317,8 @@ film are fitted to it; the number that means anything comes from the next film,
 which is what the framework is for.
 
 After touching any of `shot-detect.py`, `split-cameras.py`, `sync-audio.py`,
-`angle-cut.py` or `compare-videos.py`, run `python scripts/check-multicam.py` —
+`angle-cut.py`, `compare-videos.py`, `auto-switch.py` or `debug-notes.py`, run
+`python scripts/check-multicam.py` —
 it tests the frame arithmetic with no GPU and no files.
 
 ## Projects: the memory that outlives the session

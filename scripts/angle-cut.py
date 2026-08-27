@@ -355,12 +355,12 @@ def main():
     if args.list:
         return
 
+    # Sample boundaries round to the nearest sample where 48 kHz does not
+    # divide the frame time (29.97 fps): at most half a sample, computed from
+    # frame zero so it cannot accumulate. See samples_at() in split-cameras.py.
     a_rate = 48000
-    if (a_rate * den) % num:
-        sys.exit("%d Hz does not divide evenly into %d/%d fps" % (a_rate, num, den))
-    aspf = a_rate * den // num
-    a0 = anchors[audio_from] * aspf
-    a1 = (anchors[audio_from] + n_prog) * aspf
+    a0 = int(round(anchors[audio_from] * a_rate * den / float(num)))
+    a1 = int(round((anchors[audio_from] + n_prog) * a_rate * den / float(num)))
     idx = {c: i for i, c in enumerate(cams)}
     tmpdir = os.path.join(ROOT, "temp", "anglecut-%s" % pid)
     ass = None

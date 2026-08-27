@@ -625,9 +625,12 @@ edit by looking for **motion** would be reading the answer key, which is why
 stage 2 is forbidden the picture entirely.
 
 Frames, never seconds. The pads are frame counts and the audio delay is a
-**sample** count: at 24000/1001 and 48 kHz one frame is exactly 2002 samples, so
-a stagger has no rounding error at all. A rate where that does not divide is
-refused rather than rounded.
+**sample** count: exact wherever 48 kHz divides the frame time (2002 a frame at
+24000/1001, and every integer rate), rounded to the *nearest sample* where it
+cannot (29.97: 1601.6 a frame) — at most half a sample, ten microseconds, and
+it cannot accumulate because every boundary is computed from frame zero rather
+than by summing deltas. An earlier version refused NTSC rates outright, which
+was purity at the price of refusing half the videos on the internet.
 
 ### Sync, and the anchor that sync cannot give you
 
@@ -817,9 +820,11 @@ settings the best scored 78.79% against 77.68% for plain speaker-following —
 one point, fitted to a film containing two wide shots, which is not a result.
 A different setting matched far more of the human's cut *timing* (10 of 15
 within a second, against 4) at slightly worse camera agreement, but it also
-made 22 cuts against the human's 15, and `cuts_within_1s` does not penalise a
-spurious cut. Knowing *why* an editor did something is not the same as being
-able to predict it, and the next film is what settles this one.
+made 22 cuts against the human's 15 — which is why cut timing is now scored in
+**both directions** (`cuts_within_1s` for recall of their cuts,
+`my_cuts_near_theirs` for precision of ours; quote the pair, never either
+alone). Knowing *why* an editor did something is not the same as being able to
+predict it, and the next film is what settles this one.
 
 ### The arithmetic has its own test
 

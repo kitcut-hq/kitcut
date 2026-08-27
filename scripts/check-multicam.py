@@ -9,8 +9,8 @@ the anchor got written in the first place -- it took a rebuild and a failed
 cross-check to find, and it takes a second to find here.
 
 Costs nothing, needs no GPU and touches no file. Run it after changing any of
-shot-detect.py, split-cameras.py, sync-audio.py, angle-cut.py or
-compare-videos.py.
+shot-detect.py, split-cameras.py, sync-audio.py, angle-cut.py,
+compare-videos.py, auto-switch.py or debug-notes.py.
 
     python scripts/check-multicam.py
 
@@ -30,6 +30,7 @@ _sync = import_module("sync-audio")
 _angle = import_module("angle-cut")
 _cmp = import_module("compare-videos")
 _auto = import_module("auto-switch")
+_dbg = import_module("debug-notes")
 
 fails = []
 
@@ -73,12 +74,18 @@ for pads in ((0, 0), (1, 1), (240, 3)):
     check("total with pads %s" % (pads,),
           sum(b - a for a, b, _ in tiles), pads[0] + 2796 + pads[1])
 
-print("== the audio stagger is sample-exact ==")
-check("48 kHz at 24000/1001 is 2002 samples a frame",
-      _split.samples_per_frame(24000, 1001), 2002)
-check("48 kHz at 25 fps is 1920", _split.samples_per_frame(25, 1), 1920)
-check("48 kHz at 30000/1001 is 1601.6, refused",
-      _split.samples_per_frame.__doc__ is not None, True)
+print("== audio boundaries: exact where possible, half a sample where not ==")
+check("24000/1001 stays exact: 87 frames is 87*2002 samples",
+      _split.samples_at(87, 24000, 1001), 87 * 2002)
+check("25 fps stays exact", _split.samples_at(10, 25, 1), 10 * 1920)
+check("29.97 rounds: 1 frame of 1601.6 samples becomes 1602",
+      _split.samples_at(1, 30000, 1001), 1602)
+check("...and 10 frames is 16016 exactly (the .6s cancel)",
+      _split.samples_at(10, 30000, 1001), 16016)
+worst = max(abs(_split.samples_at(f, 30000, 1001) - f * 48000 * 1001 / 30000.0)
+            for f in range(1, 500))
+check("no boundary is ever more than half a sample out, and it cannot "
+      "accumulate", worst <= 0.5, True)
 
 print("== the anchor's off-by-one ==")
 # A tape that opens on a held frame: the held frame IS the first live frame, so
@@ -196,11 +203,24 @@ ref = [{"start": 0, "end": 100, "camera": "cam1"},
        {"start": 100, "end": 200, "camera": "cam2"}]
 check("a perfect match is 100%",
       _auto.score([("cam1", 0, 100, "x"), ("cam2", 100, 200, "y")], ref,
-                  200)["agreement_pct"], 100.0)
-half = _auto.score([("cam1", 0, 200, "x")], ref, 200)
+                  200, FPS)["agreement_pct"], 100.0)
+half = _auto.score([("cam1", 0, 200, "x")], ref, 200, FPS)
 check("half right is 50%", half["agreement_pct"], 50.0)
 check("and it says which camera was missed",
       half["per_camera"]["cam2"][2], 0.0)
+
+print("== debug notes ==")
+check("opaque ink writes alpha 00 -- ASS alpha is inverted, and getting this "
+      "backwards renders NOTHING while the box shows fine",
+      _dbg.ass_colour("#FFFFFF", 1.0), "&H00FFFFFF")
+check("invisible writes FF", _dbg.ass_colour("#000000", 0.0)[:4], "&HFF")
+check("the 1c override form carries no alpha byte",
+      _dbg.ass_1c("#7FD1C4"), "&HC4D17F&")
+check("braces cannot open an override block from note text",
+      _dbg.esc_text("a{b}c" + chr(92)), "a(b)c/")
+check("a drive letter never reaches a filter option",
+      ":" in _dbg.filter_path(os.path.join(_dbg.ROOT, "temp", "x.ass")), False)
+check("centiseconds format", _dbg.fmt_cs(360000 + 6000 + 100 + 1), "1:01:01.01")
 
 print("")
 if fails:

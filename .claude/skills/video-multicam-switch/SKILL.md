@@ -96,10 +96,21 @@ python scripts/angle-cut.py   --manifest projects/<id>/anglecut-auto.json `
                               --out projects/<id>/outputs/<id>-autocut.mp4
 ```
 
-Needs the speaker models under `models/diarization/` (gitignored, ~200 MB):
-`sherpa-onnx-pyannote-segmentation-3-0` and `nemo_en_titanet_large.onnx`, both
-from the sherpa-onnx GitHub releases. `pip install sherpa-onnx` — it runs on the
-ONNX runtime that is already here, so no torch and no gated download.
+Needs the speaker models under `models/diarization/` (gitignored, ~200 MB) and
+`pip install sherpa-onnx` — it runs on the ONNX runtime that is already here,
+so no torch and no gated download. On a fresh machine:
+
+```powershell
+cd C:\instafill\video-editing\models\diarization
+curl -sL -o seg.tar.bz2 https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2
+tar xjf seg.tar.bz2; rm seg.tar.bz2
+curl -sL -O https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/nemo_en_titanet_large.onnx
+```
+
+(`speaker-recongition-models` is the release tag's own typo — do not fix it.)
+The embedding model matters: the zh-cn ERes2NetV2 model merged all three
+speakers of the a16z clip into one; TitaNet-large separated them at 0.59
+within-speaker vs 0.82 between. Try TitaNet first on English speech.
 
 **The manifest needs three things stage 1 did not.** Explicit `anchor` frames
 (the picture anchor is derived from a plan, and here the plan is the output —

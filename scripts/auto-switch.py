@@ -312,8 +312,15 @@ def grammar(track, cam_of, wide, g, fps, n_frames, hot=None):
     return [(c, a, b, w) for c, a, b, w in out]
 
 
-def score(plan, ref_shots, n_frames):
-    """Agreement with an edit a human made. Reads the answer; harness only."""
+def score(plan, ref_shots, n_frames, fps):
+    """Agreement with an edit a human made. Reads the answer; harness only.
+
+    Cut timing is scored in BOTH directions on purpose. "How many of their
+    cuts have one of mine within a second" alone rewards spraying cuts -- a
+    setting that made 22 cuts against the human's 15 looked better on it while
+    being a worse edit. "How many of mine sit near one of theirs" is the
+    precision that catches it; quote the pair, never either alone.
+    """
     mine = np.empty(n_frames, dtype=object)
     for c, a, b, _ in plan:
         mine[a:b] = c
@@ -331,17 +338,18 @@ def score(plan, ref_shots, n_frames):
             e[0] += 1
     mycuts = [a for _, a, _, _ in plan[1:]]
     refcuts = [s["start"] for s in ref_shots[1:]]
-    near = []
-    for r in refcuts:
-        if mycuts:
-            d = min(mycuts, key=lambda m: abs(m - r)) - r
-            near.append(d)
+    one_s = max(1, int(round(fps)))
+    near = [min(mycuts, key=lambda m: abs(m - r)) - r
+            for r in refcuts if mycuts]
+    back = [min(refcuts, key=lambda r: abs(r - m)) - m
+            for m in mycuts if refcuts]
     return {"agreement_pct": round(100.0 * same / max(1, n_frames), 2),
             "per_camera": {k: [v[0], v[1], round(100.0 * v[0] / max(1, v[1]), 1)]
                            for k, v in sorted(per.items())},
             "my_cuts": len(mycuts), "reference_cuts": len(refcuts),
             "cut_offsets": near,
-            "cuts_within_1s": sum(1 for d in near if abs(d) <= 24)}
+            "cuts_within_1s": sum(1 for d in near if abs(d) <= one_s),
+            "my_cuts_near_theirs": sum(1 for d in back if abs(d) <= one_s)}
 
 
 def main():
@@ -436,7 +444,7 @@ def main():
 
     if args.sweep:
         print("\n  min_shot   lead  wide_overlap  cuts%s"
-              % ("  agree   cuts<1s" if ref else ""))
+              % ("  agree   theirs-hit  mine-near" if ref else ""))
         for ms in (1.0, 1.5, 2.0, 3.0):
             for ld in (0.0, 0.25, 0.5):
                 for wo in (0.0, 3.0, 4.5, 6.0, 9.0, 14.0):
@@ -444,10 +452,11 @@ def main():
                     pl = build(gg)
                     extra = ""
                     if ref:
-                        sc = score(pl, ref, n_frames)
-                        extra = "  %5.1f%%   %2d/%d" % (sc["agreement_pct"],
-                                                        sc["cuts_within_1s"],
-                                                        sc["reference_cuts"])
+                        sc = score(pl, ref, n_frames, fps)
+                        extra = ("  %5.1f%%   %5d/%-4d %5d/%-4d"
+                                 % (sc["agreement_pct"], sc["cuts_within_1s"],
+                                    sc["reference_cuts"],
+                                    sc["my_cuts_near_theirs"], sc["my_cuts"]))
                     print("  %8.2f %6.2f %13.1f  %4d%s"
                           % (ms, ld, wo, len(pl), extra))
         return
@@ -463,13 +472,15 @@ def main():
 
     sc = None
     if ref:
-        sc = score(plan, ref, n_frames)
+        sc = score(plan, ref, n_frames, fps)
         print("\nagainst the edit a human made:")
         print("  same camera on %.2f%% of the timeline" % sc["agreement_pct"])
         for c, (hit, tot, pct) in sorted(sc["per_camera"].items()):
             print("    %-5s %5d of %5d frames  %5.1f%%" % (c, hit, tot, pct))
-        print("  %d cuts against their %d; %d of theirs matched within a second"
-              % (sc["my_cuts"], sc["reference_cuts"], sc["cuts_within_1s"]))
+        print("  %d cuts against their %d; %d of theirs matched within a second, "
+              "%d of mine sit near one of theirs"
+              % (sc["my_cuts"], sc["reference_cuts"], sc["cuts_within_1s"],
+                 sc["my_cuts_near_theirs"]))
 
     if args.list:
         return

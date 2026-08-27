@@ -24,8 +24,10 @@ What a raw looks like, and why:
             seeded generator, so the same manifest rebuilds the same tapes.
 
 Frames, never seconds. Every boundary is a frame index on the programme's own
-grid, and the audio delay is a SAMPLE count -- at 24000/1001 fps and 48 kHz one
-frame is exactly 2002 samples, so a stagger has no rounding error at all.
+grid, and the audio delay is a SAMPLE count -- exact where 48 kHz divides the
+frame time (2002 a frame at 24000/1001; every integer rate), and rounded to the
+nearest sample where it cannot (29.97), an error of ten microseconds that
+cannot accumulate because boundaries are computed from frame zero.
 
 Conforming comes first. A file off the internet is usually a little variable,
 and a one-frame join error must not be able to hide behind timestamp jitter, so
@@ -177,18 +179,19 @@ def conform(src, dst, cfg, fps_num, fps_den):
     return dst
 
 
-def samples_per_frame(fps_num, fps_den):
-    """Audio samples in one frame, exactly, or refuse.
+def samples_at(frames, fps_num, fps_den):
+    """The audio sample sitting at a frame boundary, at SR.
 
-    At 24000/1001 and 48 kHz this is 2002 with nothing left over, which is why
-    a stagger can be expressed as a sample count and be exact. A rate where it
-    does not divide would put the sound a fraction of a sample off on every
-    tape, and the whole point of this fixture is that it has no such slop.
+    Exact wherever SR divides the frame time -- 2002 samples a frame at
+    24000/1001, and every integer rate. At a rate where it cannot (29.97:
+    1601.6 a frame) the boundary rounds to the NEAREST sample, an error of at
+    most half a sample -- ten microseconds, three-and-a-half thousand times
+    smaller than a frame and far below anything the harness asserts. It cannot
+    accumulate, because every boundary is computed from frame zero rather than
+    by summing per-frame deltas; an earlier version refused non-dividing rates
+    outright, which was purity at the price of refusing every NTSC video.
     """
-    if (SR * fps_den) % fps_num:
-        sys.exit("%d Hz does not divide evenly into %d/%d fps -- a stagger "
-                 "cannot be sample-exact at this rate" % (SR, fps_num, fps_den))
-    return SR * fps_den // fps_num
+    return int(round(frames * SR * fps_den / float(fps_num)))
 
 
 def build_graph(live, n_frames, head, tail, fps_num, fps_den):
@@ -221,11 +224,11 @@ def build_graph(live, n_frames, head, tail, fps_num, fps_den):
         ch.append("%sconcat=n=%d:v=1:a=0[vout]" % ("".join(segs), n))
 
     total = head + n_frames + tail
-    spf = samples_per_frame(fps_num, fps_den)
     ch.append("[0:a]aresample=%d,aformat=sample_fmts=fltp:sample_rates=%d:"
               "channel_layouts=stereo,adelay=%dS:all=1,apad,"
               "atrim=end_sample=%d,asetpts=PTS-STARTPTS[aout]"
-              % (SR, SR, head * spf, total * spf))
+              % (SR, SR, samples_at(head, fps_num, fps_den),
+                 samples_at(total, fps_num, fps_den)))
     return ";".join(ch), total
 
 
@@ -446,8 +449,16 @@ def main():
              "head_pad_s": round(head * spf, 6),
              "live_spans": [[a, b] for a, b in live[c]]})
 
+    # Truth must describe EVERY camera: a --only rebuild keeps the existing
+    # sidecar (same seed, same pads, so it stays true), and refuses to invent
+    # one -- a truth listing a single camera would score the harness against
+    # a fiction.
     tpath = os.path.join(os.path.dirname(rel(args.manifest)), "%s.truth.json" % pid)
-    if not args.only or not os.path.exists(tpath):
+    if args.only:
+        if not os.path.exists(tpath):
+            sys.exit("no %s -- build the full set once before rebuilding a "
+                     "single tape" % _project.norm(tpath))
+    else:
         with open(tpath, "w", encoding="utf-8") as f:
             json.dump(truth, f, indent=2)
             f.write("\n")
