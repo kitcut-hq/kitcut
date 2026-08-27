@@ -16,6 +16,14 @@ temp/*
 !transcripts/.gitkeep
 !temp/.gitkeep
 
+# Per-video project folders: the metadata and manifests at the top of
+# projects/<id>/ are committed; the content dirs inside are not.
+projects/*/sources/
+projects/*/audio/
+projects/*/transcripts/
+projects/*/outputs/
+projects/*/temp/
+
 # Belt and braces: these must not slip in from anywhere
 *.mp4
 *.mov

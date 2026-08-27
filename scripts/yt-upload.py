@@ -26,6 +26,7 @@ import sys, os, json, time, argparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _project  # noqa: E402
 from importlib import import_module  # noqa: E402
 
 _yt = import_module("yt-set-chapters")
@@ -170,6 +171,17 @@ def main():
                                                  time.gmtime())},
                   f, ensure_ascii=False, indent=1)
     print("  %s" % os.path.relpath(side, _env.ROOT))
+
+    pid, _doc = _project.find_by_output(path)
+    if pid:
+        _project.record(pid, "publish", out=path, script=__file__,
+                        argv=sys.argv[1:],
+                        published={"url": url, "privacy": args.privacy,
+                                   "sidecar": _project.norm(side)},
+                        note="uploaded %s" % args.title)
+    else:
+        print("  note: no project claims this render -- record the upload in "
+              "its projects/<id>/project.json by hand")
     print("\n%s" % url)
 
 

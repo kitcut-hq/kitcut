@@ -35,6 +35,7 @@ from importlib import import_module  # noqa: E402
 _outline = import_module("transcript-outline")
 _namelabel = import_module("name-label")   # hyphen: not importable by name
 import _progress  # noqa: E402
+import _project  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -954,6 +955,21 @@ def main():
     print("  %s  %s  %.1f MB  audio peak %.1f dB"
           % (os.path.relpath(dst, ROOT), hhmmss(got),
              os.path.getsize(dst) / 1e6, peak))
+
+    _project.record(
+        _project.project_id(m, args.manifest), "render",
+        out=dst, script=__file__, argv=sys.argv[1:], kind="screencast",
+        manifest=args.manifest,
+        sidecars={"sync": sync_path, "cuts": cuts_path},
+        burned=(["pause cut per cuts.json (min_silence %s)" % cut["min_silence"],
+                 "camera PiP %s %spx" % (pip["corner"], pip["size_px"])]
+                + ["opening bookend %s%s"
+                   % (be.get("id", "clip"),
+                      " + b-roll" if be.get("broll") else "")
+                   for be in (m.get("bookends") or {}).get("open", [])]
+                + ["name label '%s' at %ss film time for %ss"
+                   % (s.get("name"), s.get("at"), s.get("dur"))
+                   for s in name_specs]))
 
 
 if __name__ == "__main__":

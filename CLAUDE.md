@@ -60,7 +60,8 @@ lost. `_env.bootstrap()` uses `subprocess.run` and propagates the status.
 ## The five pipelines
 
 Everything is manifest-driven. Nothing hardcodes a timecode, a colour or a font
-size; those live in `config/`.
+size; per-video decisions live in the project's manifests under
+`projects/<id>/`, reusable styling in `config/`.
 
 **1. Captions** — burn word-synced captions onto a whole video.
 `transcribe-words.py` → `build-captions-ass.py` → `verify-captions.py` → `run-captions.py`
@@ -70,17 +71,17 @@ size; those live in `config/`.
 `cut-clips.py` (one NVENC pass: crop → captions → badge)
 
 ```powershell
-python scripts/cut-clips.py --manifest config/clips/<id>-vertical.json --list
-python scripts/auto-reframe.py --manifest config/clips/<id>-vertical.json
-python scripts/cut-clips.py --manifest config/clips/<id>-vertical.json
+python scripts/cut-clips.py --manifest projects/<id>/clips-vertical.json --list
+python scripts/auto-reframe.py --manifest projects/<id>/clips-vertical.json
+python scripts/cut-clips.py --manifest projects/<id>/clips-vertical.json
 ```
 
 **3. Dub** — translate a clip into another language, keeping its cadence.
 `dub-clips.py` (segment → translate → fit → mix) → `cut-clips.py --dub`
 
 ```powershell
-python scripts/dub-clips.py --manifest config/clips/<id>-vertical.json --only <clip-id>
-python scripts/cut-clips.py --manifest config/clips/<id>-vertical.json --only <clip-id> --dub outputs/dub
+python scripts/dub-clips.py --manifest projects/<id>/clips-vertical.json --only <clip-id> --outdir projects/<id>/outputs/dub
+python scripts/cut-clips.py --manifest projects/<id>/clips-vertical.json --only <clip-id> --dub projects/<id>/outputs/dub
 ```
 
 Voice is `--tts edge` (free, no key) or `--tts elevenlabs` (needs
@@ -94,19 +95,19 @@ fingerprint of the plan and engine it was made for, so changing `--max-dur` (or
 the engine, or the language) refuses the stale reuse instead of mapping old
 lines onto new slots by index.
 
-The dub writes `outputs/dub/<name>.en.wav` plus an `.en.words.json` in exactly
-the envelope faster-whisper produces, so `cut-clips.py --dub` feeds it to the
-normal caption builder with no special case. Output is named `…-en.mp4`; the
-original is never overwritten.
+The dub writes `<name>.en.wav` plus an `.en.words.json` (under the `--outdir`)
+in exactly the envelope faster-whisper produces, so `cut-clips.py --dub` feeds
+it to the normal caption builder with no special case. Output is named
+`…-en.mp4`; the original is never overwritten.
 
 **4. Multicam** — one film out of a screen recording plus a camera take of you
 narrating. `sync-tracks.py` (measure the offset, prove it) → `screencast-cut.py`
 (plan the cut, composite, one NVENC pass).
 
 ```powershell
-python scripts/sync-tracks.py    --manifest config/screencast/<id>.json --verify
-python scripts/screencast-cut.py --manifest config/screencast/<id>.json --list
-python scripts/screencast-cut.py --manifest config/screencast/<id>.json
+python scripts/sync-tracks.py    --manifest projects/<id>/screencast.json --verify
+python scripts/screencast-cut.py --manifest projects/<id>/screencast.json --list
+python scripts/screencast-cut.py --manifest projects/<id>/screencast.json
 ```
 
 The **camera is the master clock**: it carries the sound and it brackets the
@@ -188,10 +189,10 @@ never turns true — so the runtime is asserted against it.
 **5. Publish** — upload it, then give it chapters.
 
 ```powershell
-python scripts/yt-upload.py outputs/screencast/<id>.mp4 --title "..." `
-    --description-file config/screencast/<id>.description.txt `
+python scripts/yt-upload.py projects/<id>/outputs/<id>.mp4 --title "..." `
+    --description-file projects/<id>/description.txt `
     --channel @instafill_ai --privacy unlisted --dry-run
-python scripts/yt-set-chapters.py <video-id> --chapters config/chapters/<id>.txt --dry-run
+python scripts/yt-set-chapters.py <video-id> --chapters projects/<id>/chapters.txt --dry-run
 python scripts/yt-audit-chapters.py --channel @instafill_ai --none-only
 ```
 
@@ -202,6 +203,36 @@ the title and privacy came back as asked, and write a `.youtube.json` sidecar
 beside the render. Privacy defaults to `unlisted` — the end you can widen later.
 Both scripts share the one `youtube.force-ssl` grant, so there is no second
 consent to give.
+
+## Projects: the memory that outlives the session
+
+Each video is a folder, `projects/<id>/`: its manifests and two committed
+metadata files at the top, its gitignored content (`sources/ audio/
+transcripts/ outputs/ temp/`) below. `project.json` is **current state** —
+every render, what is burned onto it, which manifest key controls it, where it
+was published. `journal.md` is **history**, addressed to the next session:
+scripts stamp the `- HH:MM` event lines, the AI writes the prose.
+
+**Before changing anything about an already-rendered video, read its project
+file** — it answers "what is on this mp4 and what do I edit to change it" in
+one read. Read `journal.md` before re-deciding anything; leave your own note at
+the end of a session. The finishing scripts (`run-captions.py`, `cut-clips.py`,
+`screencast-cut.py`, `dub-clips.py`, `yt-upload.py`) record renders and uploads
+themselves via `scripts/_project.py`; anything you do that a script did not
+record — a hand-run ffmpeg, a status change, a decision — record yourself.
+
+```powershell
+python scripts/project-scan.py --init <id>       # new project skeleton
+python scripts/project-scan.py --id <id> --list  # what a scan would change
+python scripts/project-scan.py --all --check     # doctor: stale/missing/unrecorded
+```
+
+The doctor's `STALE` means a controlling manifest changed after the render —
+either re-render or, if the edit was non-material (a path fix), acknowledge it
+with `checked_utc` on the deliverable. `--check` runs in seconds; run it before
+and after touching a project. Schema detail: `## Projects` in the README. The
+previous attempt at this — `config/video-specs.template.json` — died because no
+tool read or wrote it; that is why the writers live inside the render scripts.
 
 ## Watching a render
 
@@ -227,13 +258,13 @@ cannot encode the bar at all.
 |---|---|
 | `scripts/` | all tooling; `_env.py` first, then the pipeline scripts |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
-| `config/clips/` | which episodes to cut, and their crop sidecars |
-| `config/screencast/` | multicam manifests, their `.sync.json` / `.cuts.json` sidecars, and the YouTube description text |
+| `scripts/_project.py` | project metadata writer; finishing scripts call `record()` |
+| `projects/<id>/` | one video: `project.json`, `journal.md`, its manifests + sidecars (committed), and its `sources/ audio/ transcripts/ outputs/ temp/` (gitignored) |
 | `config/presets/` | caption styling |
 | `config/labels/` | the lower-third name label |
 | `config/handles/` | the animated handle badge |
-| `config/chapters/` | chapter lists, one `MM:SS Title` per line |
-| `sources/` `audio/` `transcripts/` `outputs/` `temp/` | gitignored content |
+| `config/chapters/` | legacy chapter lists for already-published channel videos; new projects keep `chapters.txt` in their folder |
+| `sources/` `audio/` `transcripts/` `outputs/` `temp/` | legacy shared content dirs, gitignored; new work lives under `projects/` |
 
 ## House rules
 
@@ -256,3 +287,13 @@ These come from how the repo is actually used — follow them without being aske
   A new tool is not finished until you can ask it what a choice costs.
 - **Record traps with the reason,** not just the fix — see `## Gotchas` in the
   README, which is where the ffmpeg and libass landmines are written down.
+- **Read the project file before editing a video; record after.** A change
+  request starts at `projects/<id>/project.json` and `journal.md`, not at the
+  filesystem. Wired scripts record renders and uploads; everything else — a
+  superseded render, a hand-run command, a decision — you record yourself, and
+  you end an editing session with a prose note in the journal for the next one.
+- **The scripts are an SDK, not a fixed appliance.** The human never reads
+  them; you are their only caller and their maintainer. When a task does not
+  fit an existing script, extend the script or write a new one — and the change
+  is not done until `_project.record()` still tells the truth, the README says
+  what the code does, and the affected skill teaches it.

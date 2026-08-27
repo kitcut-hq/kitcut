@@ -14,21 +14,37 @@ speaker pauses.
 So the clip is cut into speech units at the pauses the speaker actually took,
 and each unit is dubbed into its own slot on the original timeline.
 
+## The project folder comes first
+
+Every video lives in `projects/<id>/` — its manifests, its content dirs, and
+two committed metadata files. Before doing anything, read
+`projects/<id>/project.json` (create the folder with
+`python scripts/project-scan.py --init <id>` if this is a new video) and skim
+`projects/<id>/journal.md` if the ask touches past decisions. When the work
+lands: the finishing scripts record renders and uploads into the project file
+themselves; if you ran ffmpeg by hand or a script printed
+"PROJECT FILE NOT UPDATED", record the deliverable and journal line yourself.
+End an editing session by appending a short prose note to `journal.md`
+addressed to the next session: what was asked, which knob changed, why, and
+anything it should not have to rediscover. Details: `## Projects` in the
+README; the re-edit entry point is the `video-project` skill.
+
 ## The workflow
 
 ```powershell
 cd C:\instafill\video-editing
 
 # 1. plan only -- check the segmentation before spending anything
-python scripts/dub-clips.py --manifest config/clips/<id>-vertical.json `
+python scripts/dub-clips.py --manifest projects/<id>/clips-vertical.json `
     --only <clip-id> --plan-only
 
-# 2. translate, speak, fit  -> outputs/dub/<name>.en.wav + .en.words.json
-python scripts/dub-clips.py --manifest config/clips/<id>-vertical.json --only <clip-id>
+# 2. translate, speak, fit  -> projects/<id>/outputs/dub/<name>.en.wav + .en.words.json
+python scripts/dub-clips.py --manifest projects/<id>/clips-vertical.json `
+    --only <clip-id> --outdir projects/<id>/outputs/dub
 
 # 3. render; captions come from the dub's own word timings
-python scripts/cut-clips.py --manifest config/clips/<id>-vertical.json `
-    --only <clip-id> --dub outputs/dub
+python scripts/cut-clips.py --manifest projects/<id>/clips-vertical.json `
+    --only <clip-id> --dub projects/<id>/outputs/dub
 ```
 
 Out of the box no API key is needed: the voice is edge-tts and the default
@@ -39,13 +55,14 @@ original is never overwritten.
 
 ```powershell
 # free, no key, wide speed range
-python scripts/dub-clips.py --manifest ... --only <id> --tts edge --voice ava
+python scripts/dub-clips.py --manifest ... --only <id> --tts edge --voice ava `
+    --outdir projects/<id>/outputs/dub
 
 # better voice, needs ELEVENLABS_API_KEY in .env, costs characters
 python scripts/dub-clips.py --manifest ... --only <id> `
-    --tts elevenlabs --voice jessica --tag en-el
+    --tts elevenlabs --voice jessica --tag en-el --outdir projects/<id>/outputs/dub
 python scripts/cut-clips.py --manifest ... --only <id> `
-    --dub outputs/dub --dub-tag en-el
+    --dub projects/<id>/outputs/dub --dub-tag en-el
 ```
 
 `--tag` is what lets two versions coexist: it names every artifact for that run
@@ -127,7 +144,7 @@ free and saves speeding the voice up. That is the `hard` field in the plan.
 
 ## Step 4 — verify with the number, not by listening
 
-`sync` in `outputs/dub/<name>.<tag>.dub.json` is the share of the clip where
+`sync` in `projects/<id>/outputs/dub/<name>.<tag>.dub.json` is the share of the clip where
 dub and original agree about whether anyone is talking. It drops when the dub speaks
 over a pause and when it goes silent under a moving mouth.
 
@@ -212,9 +229,9 @@ The render step separately proves caption sync on sampled frames (`sync probes:
 | `scripts/dub-tts.py` | neural TTS, word boundaries, rate control |
 | `scripts/check-dub.py` | self-test for all of the above; free, run it after edits |
 | `config/elevenlabs-voices.json` | voice ids and model; refuses unverified ids |
-| `outputs/dub/<name>.<tag>.plan.json` | the segmentation, for inspection |
-| `outputs/dub/<name>.<tag>.translation.json` | editable; reused unless `--retranslate` |
-| `outputs/dub/<name>.<tag>.dub.json` | the fit report and `sync` score |
+| `projects/<id>/outputs/dub/<name>.<tag>.plan.json` | the segmentation, for inspection |
+| `projects/<id>/outputs/dub/<name>.<tag>.translation.json` | editable; reused unless `--retranslate` |
+| `projects/<id>/outputs/dub/<name>.<tag>.dub.json` | the fit report and `sync` score |
 
 Every artifact is tag-scoped. The skill's older, untagged names are gone; if
 you see one in a doc, it is stale.

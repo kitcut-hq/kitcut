@@ -24,6 +24,7 @@ from importlib import import_module
 _outline = import_module("transcript-outline")   # hyphen: not importable by name
 _handle = import_module("handle-overlay")
 import _progress
+import _project
 
 
 ENV = _env.ENV
@@ -561,6 +562,19 @@ def main():
                   encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
         print("  %s  %.2fs  %.1f MB" % (dst, got, os.path.getsize(dst) / 1e6))
+        _project.record(
+            _project.project_id(m, args.manifest), "render",
+            out=dst, script=__file__, argv=sys.argv[1:],
+            kind="short-dubbed" if dub_wav else "short",
+            manifest=args.manifest,
+            sidecars={"clip": os.path.splitext(dst)[0] + ".json",
+                      "dub-audio": dub_wav, "dub-words": dub_words},
+            burned=[b for b in (
+                "9:16 crop per reframe sidecar" if m.get("vertical") else None,
+                "word-synced captions, style %s" % caps["style"] if caps else None,
+                "handle badge %s" % (m.get("handle") or {}).get("text")
+                if (m.get("handle") or {}).get("text") else None,
+                "dubbed audio .%s" % dub_tag if dub_wav else None) if b])
     if failed:
         sys.exit("locked by another program, not replaced: %s\n(each finished "
                  "render is beside its target as .part.mp4)" % ", ".join(failed))

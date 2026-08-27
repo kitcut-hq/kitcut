@@ -34,6 +34,7 @@ from importlib import import_module
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _project  # noqa: E402
 
 import numpy as np
 
@@ -611,6 +612,15 @@ def main():
               % (report["sync"] * 100, report["slot_error_mean"],
                  report["slot_error_max"], report["used_tight"], report["squeezed"]))
         print("   %s" % wav)
+        _project.record(
+            _project.project_id(m, args.manifest), "dub",
+            out=wav, script=__file__, argv=sys.argv[1:], kind="dub-audio",
+            manifest=args.manifest,
+            sidecars={"plan": "%s.%s.plan.json" % (stem, tag),
+                      "translation": "%s.%s.translation.json" % (stem, tag),
+                      "report": dpath, "words": wjson},
+            note="sync %.1f%%, %s/%s" % (report["sync"] * 100, backend,
+                                         report["voice"]))
 
 
 if __name__ == "__main__":

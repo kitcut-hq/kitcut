@@ -1,12 +1,25 @@
 {
   "_comment": "Ukrainka v SShA - 'chomu ya ne pereidu zhyty v Yevropu' (24:23). Five self-contained episodes for shorts, cut as-is from the captioned master.",
-  "source": "outputs/egr4Y4oZgLM-captioned-1080p60.mp4",
-  "words": "transcripts/egr4Y4oZgLM.words.json",
-  "outdir": "outputs/shorts",
+  "source": "projects/egr4Y4oZgLM/outputs/egr4Y4oZgLM-captioned-1080p60.mp4",
+  "words": "projects/egr4Y4oZgLM/transcripts/egr4Y4oZgLM.words.json",
+  "outdir": "projects/egr4Y4oZgLM/outputs/shorts",
   "prefix": "egr4Y4oZgLM",
-  "pad": { "head": 0.15, "tail": 0.35 },
-  "handle": { "text": "@kris_zahrebelna", "preset": "config/handles/default.json" },
-  "render": { "encoder": "h264_nvenc", "preset": "p5", "cq": 21, "maxrate": "16M", "bufsize": "32M", "audio_bitrate": "192k" },
+  "pad": {
+    "head": 0.15,
+    "tail": 0.35
+  },
+  "handle": {
+    "text": "@kris_zahrebelna",
+    "preset": "config/handles/default.json"
+  },
+  "render": {
+    "encoder": "h264_nvenc",
+    "preset": "p5",
+    "cq": 21,
+    "maxrate": "16M",
+    "bufsize": "32M",
+    "audio_bitrate": "192k"
+  },
   "clips": [
     {
       "id": "01-silver-button",
@@ -38,5 +51,6 @@
       "start_text": "До речі, міф про несмачну американську їжу",
       "end_text": "Ось така, друзі, прикольна історія."
     }
-  ]
+  ],
+  "tmp": "projects/egr4Y4oZgLM/temp"
 }

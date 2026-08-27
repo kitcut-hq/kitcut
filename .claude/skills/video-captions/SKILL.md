@@ -9,13 +9,15 @@ One command, from URL to captioned MP4:
 
 ```powershell
 cd C:\instafill\video-editing
-python scripts/run-captions.py --url "<YOUTUBE_URL>" --style config/presets/red-card.json
+python scripts/run-captions.py --url "<YOUTUBE_URL>" --project <id> --style config/presets/red-card.json
 ```
 
 Local file instead: `--input path\to\video.mp4 --id myclip`
 
-Output lands at `outputs/<id>-captioned.mp4`, with a reproducibility manifest at
-`outputs/<id>.manifest.json` (tool versions, style/transcript hashes, timings).
+`--project <id>` redirects every artifact dir into `projects/<id>/`. Output
+lands at `projects/<id>/outputs/<id>-captioned.mp4`, with a reproducibility
+manifest at `projects/<id>/outputs/<id>.manifest.json` (tool versions,
+style/transcript hashes, timings).
 Total runtime is roughly **0.5-0.9x the video duration** on this machine with
 CUDA available; transcription and overlay detection run in parallel.
 
@@ -23,6 +25,21 @@ Works at any resolution: presets are authored for a 1920x1080 canvas and every
 pixel value is scaled to the actual video automatically (720p, 1440p, vertical).
 ASR language is autodetected unless you pass `--lang`; if CUDA is unavailable or
 fails mid-run, transcription falls back automatically (cuda/int8 → cpu/int8).
+
+## The project folder comes first
+
+Every video lives in `projects/<id>/` — its manifests, its content dirs, and
+two committed metadata files. Before doing anything, read
+`projects/<id>/project.json` (create the folder with
+`python scripts/project-scan.py --init <id>` if this is a new video) and skim
+`projects/<id>/journal.md` if the ask touches past decisions. When the work
+lands: the finishing scripts record renders and uploads into the project file
+themselves; if you ran ffmpeg by hand or a script printed
+"PROJECT FILE NOT UPDATED", record the deliverable and journal line yourself.
+End an editing session by appending a short prose note to `journal.md`
+addressed to the next session: what was asked, which knob changed, why, and
+anything it should not have to rediscover. Details: `## Projects` in the
+README; the re-edit entry point is the `video-project` skill.
 
 ## Always do these two things first
 
@@ -101,9 +118,11 @@ flags: `--preview 380 25` (render just a 25 s window, with a correctly
 time-shifted ASS), `--no-overlays`, `--samples N`, `--device cpu`,
 `--min-free-gb N`.
 
-Artifact locations matter: the transcript goes to `transcripts/<id>.words.json`
-— the ONE artifact that costs minutes of GPU time — while everything in `temp/`
-regenerates in seconds and is safe to delete.
+Artifact locations matter: with `--project <id>` every artifact dir lives under
+the project folder, so the transcript goes to
+`projects/<id>/transcripts/<id>.words.json` — the ONE artifact that costs
+minutes of GPU time — while everything in `temp/` regenerates in seconds and is
+safe to delete.
 
 Iterate on style with `--force ass --stop-after verify` (~9 s) or
 `--force ass --preview <t> 20` for a watchable clip.
@@ -146,17 +165,17 @@ Transcript in, YouTube chapters out — no render involved, so skip the caption
 pipeline entirely and just transcribe:
 
 ```powershell
-.venv/Scripts/python.exe -m yt_dlp -f bestaudio[ext=m4a] -o "audio/<id>.%(ext)s" "<URL>"
-python scripts/transcribe-words.py audio/<id>.m4a --out transcripts/<id>.words.json --language en
-python scripts/transcript-outline.py transcripts/<id>.words.json --outline
+.venv/Scripts/python.exe -m yt_dlp -f bestaudio[ext=m4a] -o "projects/<id>/audio/<id>.%(ext)s" "<URL>"
+python scripts/transcribe-words.py projects/<id>/audio/<id>.m4a --out projects/<id>/transcripts/<id>.words.json --language en
+python scripts/transcript-outline.py projects/<id>/transcripts/<id>.words.json --outline
 ```
 
-Read the outline, write `config/chapters/<id>.txt` as `MM:SS Title` lines, then
-publish it into the video's description:
+Read the outline, write `projects/<id>/chapters.txt` as `MM:SS Title` lines,
+then publish it into the video's description:
 
 ```powershell
-python scripts/yt-set-chapters.py <id> --chapters config/chapters/<id>.txt --dry-run
-python scripts/yt-set-chapters.py <id> --chapters config/chapters/<id>.txt
+python scripts/yt-set-chapters.py <id> --chapters projects/<id>/chapters.txt --dry-run
+python scripts/yt-set-chapters.py <id> --chapters projects/<id>/chapters.txt
 ```
 
 **Find out which videos actually need chapters before writing any:**

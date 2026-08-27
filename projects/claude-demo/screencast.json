@@ -1,16 +1,16 @@
 {
   "_comment": "Multicam screencast: a screen recording that captured NO audio, plus the iPhone take that carries the narration. camera_rotate is 'none' on purpose -- IMG_2695 has a rotation=-90 display matrix that is WRONG (the phone was mounted flat and iOS guessed), and honouring it lays the shot on its side. Check a frame before trusting that tag either way.",
   "id": "claude-demo",
-  "screen": "sources/screen-2026-08-26.mp4",
-  "camera": "sources/IMG_2695.MOV",
+  "screen": "projects/claude-demo/sources/screen-2026-08-26.mp4",
+  "camera": "projects/claude-demo/sources/IMG_2695.MOV",
   "camera_rotate": "none",
-  "words": "transcripts/claude-demo.words.json",
+  "words": "projects/claude-demo/transcripts/claude-demo.words.json",
   "film": {
     "_why": "He turns away at 7:37 of the finished film and delivers the last sentence in profile, to a phone that is switched off. The last line he gives to camera is the meta sign-off about how the film was shot, so the film ends on that. end_pad restores the 0.8s of air the transcript default would have given, which a phrase-resolved bound does not.",
     "end_text": "Desktop Sharing",
     "end_pad": 0.8
   },
-  "outdir": "outputs/screencast",
+  "outdir": "projects/claude-demo/outputs",
   "sync": {
     "seed": "creation_time",
     "search": 6.0,
@@ -74,12 +74,12 @@
     "open": [
       {
         "id": "px-intro",
-        "source": "sources/PXL_20260716_160930856.mp4",
+        "source": "projects/claude-demo/sources/PXL_20260716_160930856.mp4",
         "start": 0.6,
         "end": 23.1,
         "broll": [
           {
-            "source": "sources/PXL_20260716_155547234.mp4",
+            "source": "projects/claude-demo/sources/PXL_20260716_155547234.mp4",
             "at": 8.8,
             "dur": 7.6,
             "from": 48.0

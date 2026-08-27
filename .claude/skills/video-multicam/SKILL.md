@@ -7,13 +7,28 @@ description: Cut a film out of a screen recording plus a separate camera take of
 
 ```powershell
 cd C:\instafill\video-editing
-python scripts/sync-tracks.py    --manifest config/screencast/<id>.json --verify
-python scripts/screencast-cut.py --manifest config/screencast/<id>.json --list
-python scripts/screencast-cut.py --manifest config/screencast/<id>.json
+python scripts/sync-tracks.py    --manifest projects/<id>/screencast.json --verify
+python scripts/screencast-cut.py --manifest projects/<id>/screencast.json --list
+python scripts/screencast-cut.py --manifest projects/<id>/screencast.json
 ```
 
-The worked example is `config/screencast/claude-demo.json`. README has the
+The worked example is `projects/claude-demo/screencast.json`. README has the
 reference under "A screencast out of two recordings".
+
+## The project folder comes first
+
+Every video lives in `projects/<id>/` — its manifests, its content dirs, and
+two committed metadata files. Before doing anything, read
+`projects/<id>/project.json` (create the folder with
+`python scripts/project-scan.py --init <id>` if this is a new video) and skim
+`projects/<id>/journal.md` if the ask touches past decisions. When the work
+lands: the finishing scripts record renders and uploads into the project file
+themselves; if you ran ffmpeg by hand or a script printed
+"PROJECT FILE NOT UPDATED", record the deliverable and journal line yourself.
+End an editing session by appending a short prose note to `journal.md`
+addressed to the next session: what was asked, which knob changed, why, and
+anything it should not have to rediscover. Details: `## Projects` in the
+README; the re-edit entry point is the `video-project` skill.
 
 ## Get the footage off the phone first
 
@@ -111,7 +126,8 @@ them turned out to be a purpose-recorded intro that states where it goes ("на
 ## What is already handled
 
 - The offset seed, the correlation attempt and its **rejection** when the peak
-  is mush, and the anchor fit — all recorded in `<id>.sync.json` with residuals.
+  is mush, and the anchor fit — all recorded in `projects/<id>/<id>.sync.json`
+  with residuals.
 - Act splitting at the screen-coverage edges, so no segment has two layouts.
 - The `min(iw,ih)` square, immune to whichever way the source turns out.
 - Duration, dimensions, rotation and **non-silent audio** asserted before the
@@ -120,8 +136,8 @@ them turned out to be a purpose-recorded intro that states where it goes ("на
 ## Publishing it
 
 ```powershell
-python scripts/yt-upload.py outputs/screencast/<id>.mp4 `
-    --title "..." --description-file config/screencast/<id>.description.txt `
+python scripts/yt-upload.py projects/<id>/outputs/<id>.mp4 `
+    --title "..." --description-file projects/<id>/description.txt `
     --channel @instafill_ai --privacy unlisted --dry-run
 ```
 

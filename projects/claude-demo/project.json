@@ -1,0 +1,68 @@
+{
+  "v": 1,
+  "id": "claude-demo",
+  "inputs": {
+    "screen": "projects/claude-demo/sources/screen-2026-08-26.mp4",
+    "camera": "projects/claude-demo/sources/IMG_2695.MOV",
+    "words": "projects/claude-demo/transcripts/claude-demo.words.json",
+    "bookend-px-intro": "projects/claude-demo/sources/PXL_20260716_160930856.mp4",
+    "broll-1": "projects/claude-demo/sources/PXL_20260716_155547234.mp4"
+  },
+  "controls": {
+    "cuts": "projects/claude-demo/claude-demo.cuts.json",
+    "sync": "projects/claude-demo/claude-demo.sync.json",
+    "manifest": "projects/claude-demo/screencast.json",
+    "description": "projects/claude-demo/description.txt",
+    "label-style": "config/labels/lower-third.json"
+  },
+  "deliverables": {
+    "projects/claude-demo/outputs/claude-demo-labelled.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-27T04:40:50Z",
+      "kind": "screencast",
+      "manifest": "projects/claude-demo/screencast.json",
+      "published": {
+        "url": "https://youtu.be/al_qdMlck9I",
+        "privacy": "unlisted",
+        "sidecar": "projects/claude-demo/outputs/claude-demo-labelled.youtube.json"
+      },
+      "burned": [
+        "pause cut per cuts.json (min_silence 0.7) (scanned)",
+        "camera PiP bottom-left 360px (scanned)",
+        "opening bookend px-intro + b-roll (scanned)",
+        "name label 'Oleksandr Gamaniuk' at 2.0s film time for 5.5s (scanned)"
+      ],
+      "_why": "Current published version (uploaded 04:43Z, after the unlabelled one). Second-generation encode: label burned onto the finished film with name-label.py --video BEFORE name_labels moved into the manifest. The next screencast-cut.py render of claude-demo.mp4 carries the label in its single pass and supersedes this file."
+    },
+    "projects/claude-demo/outputs/claude-demo.mp4": {
+      "status": "superseded",
+      "built_utc": "2026-08-26T22:34:49Z",
+      "kind": "screencast",
+      "manifest": "projects/claude-demo/screencast.json",
+      "published": {
+        "url": "https://youtu.be/7FBUWAmJfu4",
+        "privacy": "unlisted",
+        "sidecar": "projects/claude-demo/outputs/claude-demo.youtube.json"
+      },
+      "burned": [
+        "pause cut per cuts.json (min_silence 0.7) (scanned)",
+        "camera PiP bottom-left 360px (scanned)",
+        "opening bookend px-intro + b-roll (scanned)",
+        "name label 'Oleksandr Gamaniuk' at 2.0s film time for 5.5s (scanned)"
+      ],
+      "_why": "Same film without the lower-third; replaced by the labelled upload al_qdMlck9I. Kept because it is first-generation (one encode) -- a re-render from the manifest beats relabelling this file."
+    }
+  },
+  "updated_utc": "2026-08-27T04:57:07Z",
+  "title": "Відеоредагування через Claude Code — огляд пайплайнів",
+  "intent": "Screen recording of a Claude Code session plus an iPhone take of Oleksandr narrating; multicam pipeline (camera is the master clock), published unlisted on @instafill_ai.",
+  "pipelines": [
+    "multicam",
+    "publish"
+  ],
+  "notes": [
+    "camera_rotate is 'none' on purpose -- IMG_2695's rotation matrix is wrong; see manifest _comment.",
+    "IMG_2691/2692/2694 in sources/ are unused takes from the same shoot; IMG_2695 is the used one.",
+    "px-intro / px-setup words+audio in transcripts/ and audio/ back the opening bookend decisions."
+  ]
+}

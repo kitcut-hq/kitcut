@@ -1,0 +1,279 @@
+{
+  "v": 1,
+  "id": "egr4Y4oZgLM",
+  "inputs": {
+    "source": "projects/egr4Y4oZgLM/sources/egr4Y4oZgLM-1080p60.mp4",
+    "words": "projects/egr4Y4oZgLM/transcripts/egr4Y4oZgLM.words.json"
+  },
+  "controls": {
+    "reframe": "projects/egr4Y4oZgLM/clips-vertical.reframe.json",
+    "manifest-clips-vertical": "projects/egr4Y4oZgLM/clips-vertical.json",
+    "manifest-clips": "projects/egr4Y4oZgLM/clips.json",
+    "caption-style": "config/presets/red-card-vertical.json",
+    "handle-style": "config/handles/vertical.json"
+  },
+  "deliverables": {
+    "projects/egr4Y4oZgLM/outputs/shorts/egr4Y4oZgLM-01-silver-button.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-26T00:17:57Z",
+      "kind": "short",
+      "manifest": "projects/egr4Y4oZgLM/clips.json",
+      "sidecars": {
+        "clip": "projects/egr4Y4oZgLM/outputs/shorts/egr4Y4oZgLM-01-silver-button.json"
+      },
+      "burned": [
+        "handle badge @kris_zahrebelna (scanned)"
+      ],
+      "checked_utc": "2026-08-27T05:01:18Z",
+      "_checked_why": "Migration path-rewrite only; cut plan verified identical via --list diff on 2026-08-27."
+    },
+    "projects/egr4Y4oZgLM/outputs/shorts/egr4Y4oZgLM-02-immigrants.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-26T00:18:17Z",
+      "kind": "short",
+      "manifest": "projects/egr4Y4oZgLM/clips.json",
+      "sidecars": {
+        "clip": "projects/egr4Y4oZgLM/outputs/shorts/egr4Y4oZgLM-02-immigrants.json"
+      },
+      "burned": [
+        "handle badge @kris_zahrebelna (scanned)"
+      ],
+      "checked_utc": "2026-08-27T05:01:18Z",
+      "_checked_why": "Migration path-rewrite only; cut plan verified identical via --list diff on 2026-08-27."
+    },
+    "projects/egr4Y4oZgLM/outputs/shorts/egr4Y4oZgLM-03-paid-toilets.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-26T00:18:35Z",
+      "kind": "short",
+      "manifest": "projects/egr4Y4oZgLM/clips.json",
+      "sidecars": {
+        "clip": "projects/egr4Y4oZgLM/outputs/shorts/egr4Y4oZgLM-03-paid-toilets.json"
+      },
+      "burned": [
+        "handle badge @kris_zahrebelna (scanned)"
+      ],
+      "checked_utc": "2026-08-27T05:01:18Z",
+      "_checked_why": "Migration path-rewrite only; cut plan verified identical via --list diff on 2026-08-27."
+    },
+    "projects/egr4Y4oZgLM/outputs/shorts/egr4Y4oZgLM-04-wages-vs-rent.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-26T00:18:53Z",
+      "kind": "short",
+      "manifest": "projects/egr4Y4oZgLM/clips.json",
+      "sidecars": {
+        "clip": "projects/egr4Y4oZgLM/outputs/shorts/egr4Y4oZgLM-04-wages-vs-rent.json"
+      },
+      "burned": [
+        "handle badge @kris_zahrebelna (scanned)"
+      ],
+      "checked_utc": "2026-08-27T05:01:18Z",
+      "_checked_why": "Migration path-rewrite only; cut plan verified identical via --list diff on 2026-08-27."
+    },
+    "projects/egr4Y4oZgLM/outputs/shorts/egr4Y4oZgLM-05-ranch-tsa.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-26T00:19:08Z",
+      "kind": "short",
+      "manifest": "projects/egr4Y4oZgLM/clips.json",
+      "sidecars": {
+        "clip": "projects/egr4Y4oZgLM/outputs/shorts/egr4Y4oZgLM-05-ranch-tsa.json"
+      },
+      "burned": [
+        "handle badge @kris_zahrebelna (scanned)"
+      ],
+      "checked_utc": "2026-08-27T05:01:18Z",
+      "_checked_why": "Migration path-rewrite only; cut plan verified identical via --list diff on 2026-08-27."
+    },
+    "projects/egr4Y4oZgLM/outputs/shorts-vertical/egr4Y4oZgLM-v-01-silver-button-en-el.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-26T05:46:15Z",
+      "kind": "short-dubbed",
+      "manifest": "projects/egr4Y4oZgLM/clips-vertical.json",
+      "sidecars": {
+        "clip": "projects/egr4Y4oZgLM/outputs/shorts-vertical/egr4Y4oZgLM-v-01-silver-button-en-el.json",
+        "dub-words": "outputs/dub/egr4Y4oZgLM-v-01-silver-button.en-el.words.json"
+      },
+      "burned": [
+        "9:16 crop per reframe sidecar (scanned)",
+        "word-synced captions, style config/presets/red-card-vertical.json (scanned)",
+        "handle badge @kris_zahrebelna (scanned)",
+        "dubbed audio: egr4Y4oZgLM-v-01-silver-button.en-el.wav (scanned)"
+      ],
+      "_why": "ElevenLabs-voice variant (tag en-el); coexists with en-fix by design.",
+      "checked_utc": "2026-08-27T05:01:18Z",
+      "_checked_why": "Migration path-rewrite only; cut plan verified identical via --list diff on 2026-08-27."
+    },
+    "projects/egr4Y4oZgLM/outputs/shorts-vertical/egr4Y4oZgLM-v-01-silver-button-en-fix.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-26T06:43:23Z",
+      "kind": "short-dubbed",
+      "manifest": "projects/egr4Y4oZgLM/clips-vertical.json",
+      "sidecars": {
+        "clip": "projects/egr4Y4oZgLM/outputs/shorts-vertical/egr4Y4oZgLM-v-01-silver-button-en-fix.json",
+        "dub-words": "outputs/dub/egr4Y4oZgLM-v-01-silver-button.en-fix.words.json"
+      },
+      "burned": [
+        "9:16 crop per reframe sidecar (scanned)",
+        "word-synced captions, style config/presets/red-card-vertical.json (scanned)",
+        "handle badge @kris_zahrebelna (scanned)",
+        "dubbed audio: egr4Y4oZgLM-v-01-silver-button.en-fix.wav (scanned)"
+      ],
+      "_why": "Current English dub: edge voice, manual translation fixes via --engine manual. The en-el variant is NOT superseded by this -- it is the paid ElevenLabs voice, kept as a coexisting variant.",
+      "checked_utc": "2026-08-27T05:01:18Z",
+      "_checked_why": "Migration path-rewrite only; cut plan verified identical via --list diff on 2026-08-27."
+    },
+    "projects/egr4Y4oZgLM/outputs/shorts-vertical/egr4Y4oZgLM-v-01-silver-button-en.mp4": {
+      "status": "superseded",
+      "built_utc": "2026-08-26T05:48:21Z",
+      "kind": "short-dubbed",
+      "manifest": "projects/egr4Y4oZgLM/clips-vertical.json",
+      "sidecars": {
+        "clip": "projects/egr4Y4oZgLM/outputs/shorts-vertical/egr4Y4oZgLM-v-01-silver-button-en.json",
+        "dub-words": "outputs/dub/egr4Y4oZgLM-v-01-silver-button.en.words.json"
+      },
+      "burned": [
+        "9:16 crop per reframe sidecar (scanned)",
+        "word-synced captions, style config/presets/red-card-vertical.json (scanned)",
+        "handle badge @kris_zahrebelna (scanned)",
+        "dubbed audio: egr4Y4oZgLM-v-01-silver-button.en.wav (scanned)"
+      ],
+      "_why": "First edge-TTS dub; its translation left lines drawling at the slow-down floor. en-fix re-speaks the same voice with manually fixed lines (sync 0.954 vs 0.950) and replaces it.",
+      "checked_utc": "2026-08-27T05:01:18Z",
+      "_checked_why": "Migration path-rewrite only; cut plan verified identical via --list diff on 2026-08-27."
+    },
+    "projects/egr4Y4oZgLM/outputs/shorts-vertical/egr4Y4oZgLM-v-01-silver-button.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-26T01:10:41Z",
+      "kind": "short",
+      "manifest": "projects/egr4Y4oZgLM/clips-vertical.json",
+      "sidecars": {
+        "clip": "projects/egr4Y4oZgLM/outputs/shorts-vertical/egr4Y4oZgLM-v-01-silver-button.json"
+      },
+      "burned": [
+        "9:16 crop per reframe sidecar (scanned)",
+        "word-synced captions, style config/presets/red-card-vertical.json (scanned)",
+        "handle badge @kris_zahrebelna (scanned)"
+      ],
+      "checked_utc": "2026-08-27T05:01:18Z",
+      "_checked_why": "Migration path-rewrite only; cut plan verified identical via --list diff on 2026-08-27."
+    },
+    "projects/egr4Y4oZgLM/outputs/shorts-vertical/egr4Y4oZgLM-v-02-immigrants.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-26T01:11:30Z",
+      "kind": "short",
+      "manifest": "projects/egr4Y4oZgLM/clips-vertical.json",
+      "sidecars": {
+        "clip": "projects/egr4Y4oZgLM/outputs/shorts-vertical/egr4Y4oZgLM-v-02-immigrants.json"
+      },
+      "burned": [
+        "9:16 crop per reframe sidecar (scanned)",
+        "word-synced captions, style config/presets/red-card-vertical.json (scanned)",
+        "handle badge @kris_zahrebelna (scanned)"
+      ],
+      "checked_utc": "2026-08-27T05:01:18Z",
+      "_checked_why": "Migration path-rewrite only; cut plan verified identical via --list diff on 2026-08-27."
+    },
+    "projects/egr4Y4oZgLM/outputs/shorts-vertical/egr4Y4oZgLM-v-03-paid-toilets.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-26T01:12:26Z",
+      "kind": "short",
+      "manifest": "projects/egr4Y4oZgLM/clips-vertical.json",
+      "sidecars": {
+        "clip": "projects/egr4Y4oZgLM/outputs/shorts-vertical/egr4Y4oZgLM-v-03-paid-toilets.json"
+      },
+      "burned": [
+        "9:16 crop per reframe sidecar (scanned)",
+        "word-synced captions, style config/presets/red-card-vertical.json (scanned)",
+        "handle badge @kris_zahrebelna (scanned)"
+      ],
+      "checked_utc": "2026-08-27T05:01:18Z",
+      "_checked_why": "Migration path-rewrite only; cut plan verified identical via --list diff on 2026-08-27."
+    },
+    "projects/egr4Y4oZgLM/outputs/shorts-vertical/egr4Y4oZgLM-v-04-wages-vs-rent.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-26T01:13:07Z",
+      "kind": "short",
+      "manifest": "projects/egr4Y4oZgLM/clips-vertical.json",
+      "sidecars": {
+        "clip": "projects/egr4Y4oZgLM/outputs/shorts-vertical/egr4Y4oZgLM-v-04-wages-vs-rent.json"
+      },
+      "burned": [
+        "9:16 crop per reframe sidecar (scanned)",
+        "word-synced captions, style config/presets/red-card-vertical.json (scanned)",
+        "handle badge @kris_zahrebelna (scanned)"
+      ],
+      "checked_utc": "2026-08-27T05:01:18Z",
+      "_checked_why": "Migration path-rewrite only; cut plan verified identical via --list diff on 2026-08-27."
+    },
+    "projects/egr4Y4oZgLM/outputs/shorts-vertical/egr4Y4oZgLM-v-05-ranch-tsa.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-26T01:13:53Z",
+      "kind": "short",
+      "manifest": "projects/egr4Y4oZgLM/clips-vertical.json",
+      "sidecars": {
+        "clip": "projects/egr4Y4oZgLM/outputs/shorts-vertical/egr4Y4oZgLM-v-05-ranch-tsa.json"
+      },
+      "burned": [
+        "9:16 crop per reframe sidecar (scanned)",
+        "word-synced captions, style config/presets/red-card-vertical.json (scanned)",
+        "handle badge @kris_zahrebelna (scanned)"
+      ],
+      "checked_utc": "2026-08-27T05:01:18Z",
+      "_checked_why": "Migration path-rewrite only; cut plan verified identical via --list diff on 2026-08-27."
+    },
+    "projects/egr4Y4oZgLM/outputs/dub/egr4Y4oZgLM-v-01-silver-button.en-el.wav": {
+      "status": "current",
+      "kind": "dub-audio",
+      "built_utc": "2026-08-26T05:44:53Z",
+      "sidecars": {
+        "plan": "projects/egr4Y4oZgLM/outputs/dub/egr4Y4oZgLM-v-01-silver-button.en-el.plan.json",
+        "translation": "projects/egr4Y4oZgLM/outputs/dub/egr4Y4oZgLM-v-01-silver-button.en-el.translation.json",
+        "report": "projects/egr4Y4oZgLM/outputs/dub/egr4Y4oZgLM-v-01-silver-button.en-el.dub.json",
+        "words": "projects/egr4Y4oZgLM/outputs/dub/egr4Y4oZgLM-v-01-silver-button.en-el.words.json"
+      }
+    },
+    "projects/egr4Y4oZgLM/outputs/dub/egr4Y4oZgLM-v-01-silver-button.en-fix.wav": {
+      "status": "current",
+      "kind": "dub-audio",
+      "built_utc": "2026-08-26T06:42:34Z",
+      "sidecars": {
+        "plan": "projects/egr4Y4oZgLM/outputs/dub/egr4Y4oZgLM-v-01-silver-button.en-fix.plan.json",
+        "translation": "projects/egr4Y4oZgLM/outputs/dub/egr4Y4oZgLM-v-01-silver-button.en-fix.translation.json",
+        "report": "projects/egr4Y4oZgLM/outputs/dub/egr4Y4oZgLM-v-01-silver-button.en-fix.dub.json",
+        "words": "projects/egr4Y4oZgLM/outputs/dub/egr4Y4oZgLM-v-01-silver-button.en-fix.words.json"
+      }
+    },
+    "projects/egr4Y4oZgLM/outputs/dub/egr4Y4oZgLM-v-01-silver-button.en.wav": {
+      "status": "superseded",
+      "kind": "dub-audio",
+      "built_utc": "2026-08-26T05:47:43Z",
+      "sidecars": {
+        "plan": "projects/egr4Y4oZgLM/outputs/dub/egr4Y4oZgLM-v-01-silver-button.en.plan.json",
+        "translation": "projects/egr4Y4oZgLM/outputs/dub/egr4Y4oZgLM-v-01-silver-button.en.translation.json",
+        "report": "projects/egr4Y4oZgLM/outputs/dub/egr4Y4oZgLM-v-01-silver-button.en.dub.json",
+        "words": "projects/egr4Y4oZgLM/outputs/dub/egr4Y4oZgLM-v-01-silver-button.en.words.json"
+      },
+      "_why": "Audio behind the superseded en render; en-fix.wav replaced it."
+    },
+    "projects/egr4Y4oZgLM/outputs/egr4Y4oZgLM-captioned-1080p60.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-25T20:04:48Z",
+      "kind": "captioned",
+      "burned": [
+        "word-synced captions (scanned)"
+      ]
+    }
+  },
+  "updated_utc": "2026-08-27T05:00:09Z",
+  "title": "Українка в США — чому я не переїду жити в Європу",
+  "intent": "Long talking-head video (24:23): captioned master, five episodes cut as shorts (horizontal from the captioned master, vertical 9:16 from the clean source with re-rendered captions + handle badge), and clip 01 dubbed into English.",
+  "pipelines": [
+    "captions",
+    "shorts",
+    "dub"
+  ],
+  "notes": [
+    "The handle badge text @kris_zahrebelna is the source creator's handle, on purpose.",
+    "Vertical shorts cut from the CLEAN source, not the captioned master -- captions are re-rendered after the crop; see clips-vertical.json _comment.",
+    "Tag-less files in outputs/dub/ (plan/translation/dub.json without .en) are pre-tag-era leftovers of the en run."
+  ]
+}

@@ -9,30 +9,46 @@ The whole workflow, once a manifest exists:
 
 ```powershell
 cd C:\instafill\video-editing
-python scripts/cut-clips.py --manifest config/clips/<id>.json --list   # plan only
-python scripts/cut-clips.py --manifest config/clips/<id>.json          # cut
+python scripts/cut-clips.py --manifest projects/<id>/clips.json --list   # plan only
+python scripts/cut-clips.py --manifest projects/<id>/clips.json          # cut
 ```
 
-Clips land in the manifest's `outdir` — `outputs/shorts/` for landscape,
-`outputs/shorts-vertical/` for the 9:16 manifests — as
+Clips land in the manifest's `outdir` — `projects/<id>/outputs/shorts/` for
+landscape, `projects/<id>/outputs/shorts-vertical/` for the 9:16 manifests — as
 `<prefix>-<clipid>.mp4`, each with a `.json`
 sidecar recording exact boundaries and encoder settings. Cutting runs ~3x
 realtime on this machine (five ~75s clips ≈ 2 minutes). Existing outputs are
 skipped, so editing one manifest entry and re-running rebuilds only that entry;
 `--only <ids>` / `--force` narrow it further.
 
-**Prerequisite:** a word-level transcript at `transcripts/<id>.words.json`. If
-there isn't one, run the captions pipeline first (see the `video-captions`
-skill) or just its transcribe stage — everything below keys off that file.
-Prefer cutting from the **captioned master** in `outputs/` so the shorts carry
-the burned-in subtitles.
+**Prerequisite:** a word-level transcript at
+`projects/<id>/transcripts/<id>.words.json`. If there isn't one, run the
+captions pipeline first (see the `video-captions` skill) or just its transcribe
+stage — everything below keys off that file. Prefer cutting from the
+**captioned master** in `projects/<id>/outputs/` so the shorts carry the
+burned-in subtitles.
+
+## The project folder comes first
+
+Every video lives in `projects/<id>/` — its manifests, its content dirs, and
+two committed metadata files. Before doing anything, read
+`projects/<id>/project.json` (create the folder with
+`python scripts/project-scan.py --init <id>` if this is a new video) and skim
+`projects/<id>/journal.md` if the ask touches past decisions. When the work
+lands: the finishing scripts record renders and uploads into the project file
+themselves; if you ran ffmpeg by hand or a script printed
+"PROJECT FILE NOT UPDATED", record the deliverable and journal line yourself.
+End an editing session by appending a short prose note to `journal.md`
+addressed to the next session: what was asked, which knob changed, why, and
+anything it should not have to rediscover. Details: `## Projects` in the
+README; the re-edit entry point is the `video-project` skill.
 
 ## Step 1 — analyze: pick the episodes
 
 Dump the transcript as timestamped lines and read it end to end:
 
 ```powershell
-python scripts/transcript-outline.py transcripts/<id>.words.json --outline
+python scripts/transcript-outline.py projects/<id>/transcripts/<id>.words.json --outline
 ```
 
 What makes a good as-is short (no editing pass to save it later):
@@ -48,19 +64,19 @@ What makes a good as-is short (no editing pass to save it later):
 Verify each candidate boundary before writing the manifest:
 
 ```powershell
-python scripts/transcript-outline.py transcripts/<id>.words.json --find "exact phrase"
+python scripts/transcript-outline.py projects/<id>/transcripts/<id>.words.json --find "exact phrase"
 ```
 
 ## Step 2 — the manifest
 
-`config/clips/<id>.json`. Boundaries are **quoted speech**, not timecodes, so
+`projects/<id>/clips.json`. Boundaries are **quoted speech**, not timecodes, so
 the manifest reads like the edit decisions that were made:
 
 ```json
 {
-  "source": "outputs/<id>-captioned-1080p60.mp4",
-  "words": "transcripts/<id>.words.json",
-  "outdir": "outputs/shorts",
+  "source": "projects/<id>/outputs/<id>-captioned-1080p60.mp4",
+  "words": "projects/<id>/transcripts/<id>.words.json",
+  "outdir": "projects/<id>/outputs/shorts",
   "prefix": "<id>",
   "pad": { "head": 0.15, "tail": 0.35 },
   "handle": { "text": "@kris_zahrebelna", "preset": "config/handles/default.json" },
@@ -112,11 +128,11 @@ per-frame Python. Don't try to move this into ASS — libass has no gradients.
 Do **not** crop the captioned master — its caption cards are up to ~1180 px wide
 on a 1920 canvas and a 9:16 window is only 607 px, so the crop slices the
 subtitles. Cut from the **clean source** and re-render captions after the crop.
-Use a second manifest for it (`config/clips/<id>-vertical.json`) so the
+Use a second manifest for it (`projects/<id>/clips-vertical.json`) so the
 landscape build stays intact:
 
 ```json
-"source": "sources/<id>-1080p60.mp4",
+"source": "projects/<id>/sources/<id>-1080p60.mp4",
 "vertical": { "width": 1080, "height": 1920 },
 "captions": { "style": "config/presets/red-card-vertical.json", "samples": 24 },
 "handle":   { "text": "@name", "preset": "config/handles/vertical.json" }
@@ -129,10 +145,10 @@ and badge are both sized for the frame the viewer sees.
 over a real video they are not.
 
 ```powershell
-python scripts/auto-reframe.py --manifest config/clips/<id>-vertical.json
+python scripts/auto-reframe.py --manifest projects/<id>/clips-vertical.json
 ```
 
-It writes `config/clips/<id>-vertical.reframe.json`, which `cut-clips.py` picks
+It writes `projects/<id>/clips-vertical.reframe.json`, which `cut-clips.py` picks
 up automatically. The default `--mode hybrid` splits each clip at its shot
 boundaries and decides every shot on its own:
 
@@ -237,7 +253,7 @@ The cutter already asserts output duration against the plan. Additionally:
    position hops, colour alternation, captions intact, badge not overlapping
    the caption card:
    ```powershell
-   ffmpeg -v error -ss 6 -i outputs/shorts/<clip>.mp4 -frames:v 1 -vf scale=760:-1 -y temp/chk.png
+   ffmpeg -v error -ss 6 -i projects/<id>/outputs/shorts/<clip>.mp4 -frames:v 1 -vf scale=760:-1 -y temp/chk.png
    ```
 3. Check both ends of one clip for clipped words (frame at t=0.2 and t=dur-0.2).
 
@@ -297,11 +313,11 @@ single fixed corner.
 | `scripts/cut-clips.py` | manifest → clips; crop, captions and badge in one encode |
 | `scripts/handle-overlay.py` | badge rendering + ffmpeg animation graph |
 | `scripts/auto-reframe.py` | per-shot framing decisions; `--mode compare` measures them |
-| `config/clips/<id>.json` | one manifest per source video |
+| `projects/<id>/clips.json` | one manifest per source video |
 | `config/handles/default.json` / `vertical.json` | badge style + motion, per orientation |
 | `config/presets/red-card-vertical.json` | caption preset for a 9:16 frame |
-| `config/clips/egr4Y4oZgLM.json` | working example (5 episodes, handle, Ukrainian phrases) |
-| `config/clips/egr4Y4oZgLM-vertical.json` | the same five, vertical + auto-reframed |
+| `projects/egr4Y4oZgLM/clips.json` | working example (5 episodes, handle, Ukrainian phrases) |
+| `projects/egr4Y4oZgLM/clips-vertical.json` | the same five, vertical + auto-reframed |
 
 Requires `opencv-python<5` and `scenedetect` for auto-reframe (without
 scenedetect it falls back to `--mode pan`); everything else is the captions
@@ -313,6 +329,6 @@ Use the **video-dub** skill. It reuses this manifest and this clip's
 boundaries, then renders a `…-en.mp4` alongside the original:
 
 ```powershell
-python scripts/dub-clips.py --manifest config/clips/<id>-vertical.json --only <clip-id>
-python scripts/cut-clips.py --manifest config/clips/<id>-vertical.json --only <clip-id> --dub outputs/dub
+python scripts/dub-clips.py --manifest projects/<id>/clips-vertical.json --only <clip-id> --outdir projects/<id>/outputs/dub
+python scripts/cut-clips.py --manifest projects/<id>/clips-vertical.json --only <clip-id> --dub projects/<id>/outputs/dub
 ```

@@ -25,6 +25,7 @@ import sys, os, json, argparse, subprocess, time, shutil, hashlib, struct
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _project  # noqa: E402
 
 
 
@@ -98,6 +99,10 @@ def main():
     src.add_argument("--url")
     src.add_argument("--input")
     ap.add_argument("--id", help="slug for artifacts; defaults to the video id / filename")
+    ap.add_argument("--project",
+                    help="put every artifact under projects/<PROJECT>/ (the "
+                         "per-video project folder) instead of the shared "
+                         "top-level dirs")
     ap.add_argument("--style", required=True)
     ap.add_argument("--height", type=int, default=1080)
     ap.add_argument("--lang", default=None, help="ASR language code; autodetect if omitted")
@@ -158,16 +163,17 @@ def main():
             vid = os.path.splitext(os.path.basename(args.input))[0]
     print("id: %s | style: %s | disk free: %.1f GB" % (vid, args.style, free_gb))
 
-    src_mp4 = "sources/%s.mp4" % vid
-    wav = "audio/%s.16k.mono.wav" % vid
-    words = "transcripts/%s.words.json" % vid       # the one expensive artifact
-    overl = "temp/%s.overlays.json" % vid
-    ass = "temp/%s.captions.ass" % vid
-    dbg = "temp/%s.captions.debug.json" % vid
-    final = "outputs/%s-captioned.mp4" % vid
+    base = ("projects/%s/" % args.project) if args.project else ""
+    src_mp4 = base + "sources/%s.mp4" % vid
+    wav = base + "audio/%s.16k.mono.wav" % vid
+    words = base + "transcripts/%s.words.json" % vid  # the one expensive artifact
+    overl = base + "temp/%s.overlays.json" % vid
+    ass = base + "temp/%s.captions.ass" % vid
+    dbg = base + "temp/%s.captions.debug.json" % vid
+    final = base + "outputs/%s-captioned.mp4" % vid
 
     for d in ("sources", "audio", "transcripts", "temp", "outputs"):
-        os.makedirs(os.path.join(ROOT, d), exist_ok=True)
+        os.makedirs(os.path.join(ROOT, base + d), exist_ok=True)
 
     style_cfg = json.load(open(os.path.join(ROOT, args.style), encoding="utf-8"))
 
@@ -220,7 +226,7 @@ def main():
     procs = {}
     if need_t:
         cmd = PY + ["scripts/transcribe-words.py", wav, "--out", words,
-                    "--raw-out", "temp/%s.asr.raw.json" % vid,
+                    "--raw-out", base + "temp/%s.asr.raw.json" % vid,
                     "--model", args.model, "--device", args.device,
                     "--compute-type", args.compute_type]
         if args.lang:
@@ -236,7 +242,8 @@ def main():
             ocmd += ["--colour", ocfg["colour"]]
         if need_t and args.device == "cuda":
             ocmd += ["--no-hwaccel"]        # leave the GPU to the ASR model
-        olog = open(os.path.join(ROOT, "temp/%s.overlays.log" % vid), "w", encoding="utf-8")
+        olog = open(os.path.join(ROOT, base + "temp/%s.overlays.log" % vid),
+                    "w", encoding="utf-8")
         procs["overlays"] = (subprocess.Popen(ocmd, cwd=ROOT, env=ENV,
                                               stdout=olog, stderr=subprocess.STDOUT), olog)
 
@@ -251,7 +258,7 @@ def main():
         rc = p.wait()
         if log:
             log.close()
-            for line in open(os.path.join(ROOT, "temp/%s.overlays.log" % vid),
+            for line in open(os.path.join(ROOT, base + "temp/%s.overlays.log" % vid),
                              encoding="utf-8").read().splitlines()[-4:]:
                 print("   overlays| " + line)
         if rc != 0:
@@ -310,10 +317,10 @@ def main():
     pre = []
     if args.preview:
         s, dsec = args.preview
-        pass_ass = "temp/%s.preview.ass" % vid
+        pass_ass = base + "temp/%s.preview.ass" % vid
         cmd = PY + ["scripts/build-captions-ass.py", "--words", words,
                     "--style", args.style, "--out", pass_ass,
-                    "--debug-out", "temp/%s.preview.debug.json" % vid,
+                    "--debug-out", base + "temp/%s.preview.debug.json" % vid,
                     "--scale-to", str(vw), str(vh),
                     "--range", str(s), str(s + dsec), "--time-offset", str(s)]
         if overl:
@@ -321,7 +328,7 @@ def main():
         sh(cmd)
         vf = "ass=filename=%s:fontsdir=%s:shaping=simple,format=yuv420p" % (pass_ass, fontsdir)
         pre = ["-ss", str(s), "-t", str(dsec)]
-        render_out = "outputs/%s-preview.mp4" % vid
+        render_out = base + "outputs/%s-preview.mp4" % vid
 
     sh(["ffmpeg", "-hide_banner", "-loglevel", "error", "-stats", "-y"]
        + pre + ["-i", src_mp4, "-vf", vf,
@@ -374,10 +381,16 @@ def main():
             output=dict(path=render_out, bytes=os.path.getsize(op),
                         duration=odur, bit_rate=obr),
         )
-        mpath = os.path.join(ROOT, "outputs/%s.manifest.json" % vid)
+        mpath = os.path.join(ROOT, base + "outputs/%s.manifest.json" % vid)
         with open(mpath, "w", encoding="utf-8") as f:
             json.dump(manifest, f, ensure_ascii=False, indent=1)
-        print("   manifest: outputs/%s.manifest.json" % vid)
+        print("   manifest: %soutputs/%s.manifest.json" % (base, vid))
+
+        _project.record(
+            args.project or vid, "render", out=op, script=__file__,
+            argv=sys.argv[1:], kind="captioned",
+            sidecars={"render-manifest": mpath, "words": words},
+            burned=["word-synced captions, style %s" % args.style])
 
     report(marks, render_out)
 

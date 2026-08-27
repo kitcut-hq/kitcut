@@ -75,8 +75,8 @@ python scripts/transcript-outline.py transcripts/<id>.words.json --outline
 python scripts/transcript-outline.py transcripts/<id>.words.json --find "so anyway"
 
 # resolve every boundary and print the plan without encoding anything
-python scripts/cut-clips.py --manifest config/clips/<id>.json --list
-python scripts/cut-clips.py --manifest config/clips/<id>.json
+python scripts/cut-clips.py --manifest projects/<id>/clips.json --list
+python scripts/cut-clips.py --manifest projects/<id>/clips.json
 ```
 
 A manifest names the source, the transcript, and the clips:
@@ -85,7 +85,7 @@ A manifest names the source, the transcript, and the clips:
 {
   "source": "outputs/<id>-captioned-1080p60.mp4",
   "words": "transcripts/<id>.words.json",
-  "outdir": "outputs/shorts",
+  "outdir": "projects/<id>/outputs/shorts",
   "prefix": "<id>",
   "pad": { "head": 0.15, "tail": 0.35 },
   "clips": [
@@ -120,9 +120,9 @@ then they are sized for the frame the viewer actually sees.
 
 ```powershell
 # 1. face-track the crop window
-python scripts/auto-reframe.py --manifest config/clips/<id>-vertical.json
+python scripts/auto-reframe.py --manifest projects/<id>/clips-vertical.json
 # 2. cut: crop -> scale -> captions -> badge, one encode
-python scripts/cut-clips.py --manifest config/clips/<id>-vertical.json
+python scripts/cut-clips.py --manifest projects/<id>/clips-vertical.json
 ```
 
 A vertical manifest adds three keys to the ordinary one:
@@ -229,12 +229,12 @@ the mouth opens and stops when it closes. Read a translation straight over the
 top and it drifts within seconds; what the eye catches is cadence, not phonemes.
 
 ```powershell
-# translate, speak and fit -- writes outputs/dub/<name>.en.wav + .en.words.json
-python scripts/dub-clips.py --manifest config/clips/<id>-vertical.json --only <clip-id>
+# translate, speak and fit -- writes <outdir>/<name>.en.wav + .en.words.json
+python scripts/dub-clips.py --manifest projects/<id>/clips-vertical.json --only <clip-id>
 
 # render the dubbed cut; captions come from the dub's own word timings
-python scripts/cut-clips.py --manifest config/clips/<id>-vertical.json `
-    --only <clip-id> --dub outputs/dub
+python scripts/cut-clips.py --manifest projects/<id>/clips-vertical.json `
+    --only <clip-id> --dub projects/<id>/outputs/dub
 ```
 
 The output is named `…-<tag>.mp4` (`en` by default), so the original is never
@@ -247,7 +247,7 @@ coexist without overwriting each other:
 
 ```powershell
 python scripts/dub-clips.py --manifest ... --only <id> --tts elevenlabs
-python scripts/cut-clips.py --manifest ... --only <id> --dub outputs/dub --dub-tag en-el
+python scripts/cut-clips.py --manifest ... --only <id> --dub projects/<id>/outputs/dub --dub-tag en-el
 ```
 
 Pointing a second backend at a tag that already holds another one's dub is
@@ -335,13 +335,13 @@ dead air and composites the result in a single NVENC pass.
 
 ```powershell
 # 1. measure the offset -- and look at the frames that prove it
-python scripts/sync-tracks.py --manifest config/screencast/<id>.json --verify
+python scripts/sync-tracks.py --manifest projects/<id>/screencast.json --verify
 
 # 2. read the timeline before spending an encode
-python scripts/screencast-cut.py --manifest config/screencast/<id>.json --list
+python scripts/screencast-cut.py --manifest projects/<id>/screencast.json --list
 
 # 3. render
-python scripts/screencast-cut.py --manifest config/screencast/<id>.json
+python scripts/screencast-cut.py --manifest projects/<id>/screencast.json
 ```
 
 ### The camera is the master clock, not the screen
@@ -430,7 +430,7 @@ around it, and anything left shorter than `min_drop` is not worth a cut.
 - **`cut`** knobs are the tightness dial. `--list` prints what each setting
   actually costs before anything is encoded.
 
-`--plan` writes `config/screencast/<id>.cuts.json`, a keep-list of
+`--plan` writes `projects/<id>/<id>.cuts.json`, a keep-list of
 `[start, end, layout]` in camera time. Edit it and re-run with `--cuts` to
 override any decision the planner made.
 
@@ -723,6 +723,89 @@ Quota note: `videos.update` costs 50 units of the default 10,000/day, while the
 Two ids on this channel begin with `-`, which argparse reads as a flag. Pass
 those as `--video=-qKcpLSk0iU`.
 
+## Projects: one folder and two files per video
+
+Everything about one video lives in `projects/<id>/`: the manifests that drive
+the pipelines and two committed metadata files at the top, the gitignored
+content below.
+
+```
+projects/<id>/
+  project.json          current state: renders, what is on them, what controls them
+  journal.md            history, addressed to the next session working here
+  screencast.json       multicam manifest        (role-named: the folder carries the id)
+  clips.json, clips-vertical.json (+ .reframe.json)
+  <id>.sync.json, <id>.cuts.json  chapters.txt  description.txt
+  sources/  audio/  transcripts/  outputs/  temp/     gitignored content
+```
+
+The two metadata files exist because a later session — asked to move a label,
+fix one dub line, recut with less air — otherwise has nothing to read: the
+knowledge of what is burned onto a render dies with the session that made it.
+The previous attempt at this, `config/video-specs.template.json`, was a
+hand-authored document that no script read or wrote, and it rotted unnoticed.
+That is the design constraint: **every field here is either written by a
+script or read on the re-edit path.** The finishing scripts call
+`_project.record()` the moment a render or upload lands; the AI adds only what
+a script cannot know.
+
+### project.json
+
+| key | |
+|---|---|
+| `v` | schema version, currently 1; readers ignore unknown keys |
+| `id`, `title`, `intent`, `pipelines`, `notes` | what this project is; `intent` and `notes` are prose |
+| `inputs` | role → repo-relative path (`screen`, `camera`, `source`, `words`, `bookend-*`, `broll-*`) |
+| `controls` | role → the file you edit to change that aspect: `manifest`, `sync`, `cuts`, `reframe`, `caption-style`, `label-style`, `handle-style`, `chapters`, `description` |
+| `deliverables` | keyed by output path — the heart of the file, one entry per render |
+
+Each deliverable:
+
+| key | |
+|---|---|
+| `kind` | `captioned`, `short`, `short-dubbed`, `screencast`, `dub-audio` — a new pipeline adds a new string, nothing structural |
+| `status` | `current` \| `superseded` \| `deleted`. Scripts only ever upsert `current`; demoting is an editorial act, with a `_why` |
+| `built_utc`, `script`, `manifest` | provenance: when, by what, from which manifest |
+| `burned` | prose list of what is on the pixels/audio — statements, not machine-parsed |
+| `sidecars` | role → path of the per-render evidence (clip sidecar, dub report, render manifest) |
+| `published` | `url`, `privacy`, and the `.youtube.json` sidecar. Duplicated inline on purpose: the sidecar is gitignored, so this is the only committed record of the link |
+| `checked_utc` | acknowledges a later manifest edit as non-material (a path fix proven by a `--list` diff); the doctor compares the manifest mtime against `max(built_utc, checked_utc)` |
+| `_why` and friends | prose. Neither `record()` nor the scanner ever overwrites prose it did not write |
+
+All paths are repo-relative with forward slashes. `scripts/_project.py` is the
+only writer scripts use: `record()` appends a journal event line and upserts
+the deliverable, merging — and it deliberately never raises into a pipeline,
+because it runs after a render that may have cost 20 minutes; it warns loudly
+instead.
+
+### journal.md
+
+Append-only markdown, one `## YYYY-MM-DD` section per day. Scripts stamp
+`- HH:MM render … -> path (argv)` lines automatically; the AI ends an editing
+session with a short prose note — what was asked, which knob changed, why, and
+anything the next session should not have to rediscover. History lives here and
+not in project.json so the state file stays a one-screen read no matter how
+long a project runs.
+
+### project-scan.py
+
+```powershell
+python scripts/project-scan.py --init <id>        # new skeleton
+python scripts/project-scan.py --id <id> --list   # what a scan would change, no write
+python scripts/project-scan.py --id <id>          # scan the folder into project.json
+python scripts/project-scan.py --all --check      # doctor everything, exit 1 on findings
+```
+
+The scan is mechanical and additive: existing values win, prose is never
+touched, scan-inferred `burned` lines are marked `(scanned)`. The doctor
+reports `MISSING` (deliverable file gone), `STALE` (controlling manifest newer
+than the render and not acknowledged), `UNRECORDED UPLOAD` (a `.youtube.json`
+with no `published` block), `AMBIGUOUS` (two `current` renders of a kind that
+should have one), and `BADPATH` (backslashes or absolute paths). On its first
+run against the real repo it found a genuinely ambiguous pair — two published
+claude-demo renders, the labelled one newer — which is the exact confusion it
+exists to prevent.
+
 ## Watching a render from outside it
 
 A render is minutes of NVENC behind `capture_output=True`, so from any other
@@ -826,19 +909,22 @@ all, and its `FaceDetectorYN` replacement wants a model from an external host.
 | `scripts/screencast-cut.py` | drop the dead air and composite the two into one film |
 | `scripts/import-iphone.ps1` | pull footage off a phone over MTP, verified by byte count |
 | `scripts/yt-upload.py` | upload a render to YouTube, channel-guarded and verified |
+| `scripts/_project.py` | the project-metadata writer every finishing script calls |
+| `scripts/project-scan.py` | bootstrap and doctor for project files |
+| `projects/<id>/` | one video: metadata + manifests committed, content gitignored — see `## Projects` |
 | `config/presets/` | all visual styling |
-| `config/chapters/` | chapter lists, one `MM:SS Title` per line |
+| `config/chapters/` | legacy chapter lists for already-published channel videos; new projects keep `chapters.txt` in their folder |
 | `config/labels/` | the lower-third name label's styling |
-| `config/clips/` | clip manifests (which episodes to cut, and where) |
-| `config/screencast/` | multicam manifests, plus `.sync.json` and `.cuts.json` sidecars |
 | `config/handles/` | handle-badge styling and motion |
 | `fonts/` | Montserrat Bold (SIL OFL 1.1, see `fonts/OFL.txt`) |
 | `docs/karaoke-captions.md` | design notes and the traps behind them |
-| `.claude/skills/` | Claude Code skills: captions, shorts, dub, multicam |
+| `.claude/skills/` | Claude Code skills: captions, shorts, dub, multicam, name-label, project |
 
-`sources/`, `audio/`, `transcripts/`, `outputs/`, `temp/` are working
-directories and are **git-ignored** — they hold third-party video and material
-derived from it, which is never committed.
+`sources/`, `audio/`, `transcripts/`, `outputs/`, `temp/` — at the top level
+and inside each project folder — are working directories and are
+**git-ignored**: they hold third-party video and material derived from it,
+which is never committed. The top-level ones are the legacy shared layout;
+new work lives under `projects/`.
 
 Of those, `transcripts/` is the only expensive artifact (minutes of GPU time);
 everything in `temp/` regenerates in seconds.
@@ -957,3 +1043,7 @@ and are unrelated to captions. Both have known bugs — `transcribe-audio.py` pu
 the transcript text in its `file` field, and `generate-voiceover.py` computes
 per-line start times then concatenates clips end to end, ignoring them.
 `WORKSPACE-SETUP.md` documents that original scaffold and is partly stale.
+Its `config/video-specs.template.json` — a hand-authored per-video project
+document — was deleted when `projects/<id>/project.json` replaced the idea: no
+script ever read or wrote the template, so it silently rotted, which is the
+failure mode the project files are designed against (see `## Projects`).

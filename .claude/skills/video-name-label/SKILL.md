@@ -12,18 +12,33 @@ cd C:\instafill\video-editing
 python scripts/name-label.py --card-only --name "Jane Doe" --title "CEO, Example"
 
 # 2. prove where it lands on THIS footage -- one still, no encode
-python scripts/name-label.py --video outputs/film.mp4 --frame 4.0 `
+python scripts/name-label.py --video projects/<id>/outputs/film.mp4 --frame 4.0 `
     --name "Jane Doe" --title "CEO, Example"
 
 # 3. burn it in
-python scripts/name-label.py --video outputs/film.mp4 `
+python scripts/name-label.py --video projects/<id>/outputs/film.mp4 `
     --name "Jane Doe" --title "CEO, Example" --at 2.0 --dur 5.5
 ```
 
 The worked example is the `name_labels` block in
-`config/screencast/claude-demo.json`. Style lives in
+`projects/claude-demo/screencast.json`. Style lives in
 `config/labels/lower-third.json`; README has the reference under
 "A lower-third name label".
+
+## The project folder comes first
+
+Every video lives in `projects/<id>/` — its manifests, its content dirs, and
+two committed metadata files. Before doing anything, read
+`projects/<id>/project.json` (create the folder with
+`python scripts/project-scan.py --init <id>` if this is a new video) and skim
+`projects/<id>/journal.md` if the ask touches past decisions. When the work
+lands: the finishing scripts record renders and uploads into the project file
+themselves; if you ran ffmpeg by hand or a script printed
+"PROJECT FILE NOT UPDATED", record the deliverable and journal line yourself.
+End an editing session by appending a short prose note to `journal.md`
+addressed to the next session: what was asked, which knob changed, why, and
+anything it should not have to rediscover. Details: `## Projects` in the
+README; the re-edit entry point is the `video-project` skill.
 
 ## Do not re-encode a finished film to label it
 
@@ -38,8 +53,8 @@ NVENC pass:
 ```
 
 ```powershell
-python scripts/screencast-cut.py --manifest config/screencast/<id>.json --list
-python scripts/screencast-cut.py --manifest config/screencast/<id>.json
+python scripts/screencast-cut.py --manifest projects/<id>/screencast.json --list
+python scripts/screencast-cut.py --manifest projects/<id>/screencast.json
 ```
 
 So when the film is being cut anyway, put the label in the manifest and render

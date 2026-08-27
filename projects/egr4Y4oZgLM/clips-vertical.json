@@ -1,13 +1,25 @@
 {
   "_comment": "Vertical 9:16 build of the same five episodes. Cut from the CLEAN source, not the captioned master: captions are re-rendered at vertical size after the crop, so they are never sliced by it. crop_x is the centre of the kept window on the 1920px-wide source; the default 960 is a bet that the subject is centred, which is not true in every scene.",
-  "source": "sources/egr4Y4oZgLM-1080p60.mp4",
-  "words": "transcripts/egr4Y4oZgLM.words.json",
-  "outdir": "outputs/shorts-vertical",
+  "source": "projects/egr4Y4oZgLM/sources/egr4Y4oZgLM-1080p60.mp4",
+  "words": "projects/egr4Y4oZgLM/transcripts/egr4Y4oZgLM.words.json",
+  "outdir": "projects/egr4Y4oZgLM/outputs/shorts-vertical",
   "prefix": "egr4Y4oZgLM-v",
-  "pad": { "head": 0.15, "tail": 0.35 },
-  "vertical": { "width": 1080, "height": 1920 },
-  "captions": { "style": "config/presets/red-card-vertical.json", "samples": 24 },
-  "handle": { "text": "@kris_zahrebelna", "preset": "config/handles/vertical.json" },
+  "pad": {
+    "head": 0.15,
+    "tail": 0.35
+  },
+  "vertical": {
+    "width": 1080,
+    "height": 1920
+  },
+  "captions": {
+    "style": "config/presets/red-card-vertical.json",
+    "samples": 24
+  },
+  "handle": {
+    "text": "@kris_zahrebelna",
+    "preset": "config/handles/vertical.json"
+  },
   "clips": [
     {
       "id": "01-silver-button",
@@ -44,5 +56,6 @@
       "end_text": "Ось така, друзі, прикольна історія.",
       "crop_x": 900
     }
-  ]
+  ],
+  "tmp": "projects/egr4Y4oZgLM/temp"
 }
