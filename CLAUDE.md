@@ -36,6 +36,13 @@ After touching any `dub-*.py`, run `python scripts/check-dub.py` — it exercise
 the fitting, retune and word-mark logic with no API calls, so it costs nothing
 and catches what only a paid run would otherwise reach.
 
+After writing or changing **any** script, run
+`python scripts/check-script.py --changed` — it enforces the conventions
+(_env bootstrap, docstring, free mode, `_project.record()` on deliverables)
+and prints every deliberate exception with its reason. The check-script skill
+carries the judgement half a grep cannot do. The corpus passes clean; keep it
+that way.
+
 ### Why the environment is like this
 
 A user-level `PYTHONPATH` pointed Python 3.13 at Python **3.11's**
@@ -296,4 +303,6 @@ These come from how the repo is actually used — follow them without being aske
   them; you are their only caller and their maintainer. When a task does not
   fit an existing script, extend the script or write a new one — and the change
   is not done until `_project.record()` still tells the truth, the README says
-  what the code does, and the affected skill teaches it.
+  what the code does, the affected skill teaches it, and
+  `python scripts/check-script.py --changed` passes (the check-script skill
+  is the full review).

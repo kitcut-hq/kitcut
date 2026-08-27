@@ -26,8 +26,7 @@ Speech therefore starts and stops with the mouth, and every pause the speaker
 took is still a pause. `sync` in the report measures precisely that: the share
 of the clip where dub and original agree about whether anyone is talking.
 
-    python scripts/dub-clips.py --manifest config/clips/<id>-vertical.json \
-        --only 01-silver-button
+Invoke as:  python scripts/dub-clips.py --manifest projects/<id>/clips-vertical.json --only <clip-id>
 """
 import sys, os, json, argparse, subprocess, math, hashlib
 from importlib import import_module

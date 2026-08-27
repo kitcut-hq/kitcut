@@ -909,6 +909,11 @@ all, and its `FaceDetectorYN` replacement wants a model from an external host.
 | `scripts/screencast-cut.py` | drop the dead air and composite the two into one film |
 | `scripts/import-iphone.ps1` | pull footage off a phone over MTP, verified by byte count |
 | `scripts/yt-upload.py` | upload a render to YouTube, channel-guarded and verified |
+| `scripts/yt-fetch-transcripts.py` | pull audio + word transcripts for published channel videos |
+| `scripts/yt-audit-chapters.py` | verdict per channel video: has chapters, needs them, or too short |
+| `scripts/verify-chapters.py` | check a chapter list against the transcript before it goes live |
+| `scripts/chapter-thumbs.py` | contact sheet of the frame each chapter timestamp lands on |
+| `scripts/check-script.py` | conformance check for new/changed scripts (see the check-script skill) |
 | `scripts/_project.py` | the project-metadata writer every finishing script calls |
 | `scripts/project-scan.py` | bootstrap and doctor for project files |
 | `projects/<id>/` | one video: metadata + manifests committed, content gitignored — see `## Projects` |

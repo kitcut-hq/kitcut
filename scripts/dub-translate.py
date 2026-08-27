@@ -21,6 +21,8 @@ Engines:
 
     python scripts/dub-translate.py --plan outputs/dub/01.plan.json \
         --out outputs/dub/01.translation.json
+
+Invoke as:  python scripts/dub-translate.py --help  (usually driven in-process by dub-clips.py)
 """
 import sys, os, json, argparse, subprocess, re, shutil
 

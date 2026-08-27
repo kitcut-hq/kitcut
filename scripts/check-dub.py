@@ -10,6 +10,8 @@ the end of the audio -- found real defects the day they were written.
 Costs nothing and needs no key. Run it after touching any dub-*.py.
 
     python scripts/check-dub.py
+
+Invoke as:  python scripts/check-dub.py
 """
 import sys, os
 

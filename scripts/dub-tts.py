@@ -20,6 +20,8 @@ Two things this module is careful about:
 Standalone:
     python scripts/dub-tts.py --say "hello there" --out temp/x.wav --rate 10
     python scripts/dub-tts.py --list-voices --filter en-US
+
+Invoke as:  python scripts/dub-tts.py --help  (usually driven in-process by dub-clips.py)
 """
 import sys, os, json, argparse, asyncio, subprocess, time, wave, re
 

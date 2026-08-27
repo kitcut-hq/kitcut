@@ -7,6 +7,8 @@ pulling in another Python's compiled extensions, a venv that pip left
 half-populated, and missing ffmpeg features (NVENC, rubberband).
 
     python scripts/check-env.py
+
+Invoke as:  python scripts/check-env.py
 """
 import os
 import subprocess

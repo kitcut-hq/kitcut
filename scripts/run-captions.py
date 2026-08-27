@@ -20,6 +20,8 @@ Every visual choice lives in the style preset JSON -- font, colours, corner
 radius, padding, position, grouping, timing, animation. Never edit code to
 change how captions look. Presets are authored for a 1920x1080 canvas and are
 scaled automatically to the actual video dimensions.
+
+Invoke as:  python scripts/run-captions.py --url <youtube-url> --style config/presets/red-card.json --project <id>
 """
 import sys, os, json, argparse, subprocess, time, shutil, hashlib, struct
 

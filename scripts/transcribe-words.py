@@ -11,6 +11,8 @@ also disables PYTHONUTF8/PYTHONIOENCODING, and this console is cp1252, so
 -X utf8 is required too or any non-ASCII log line raises UnicodeEncodeError.
 
 The header below makes the script survive a bare `python script.py` anyway.
+
+Invoke as:  python scripts/transcribe-words.py <audio.wav> --out <id>.words.json
 """
 import sys, os, json, argparse, time
 

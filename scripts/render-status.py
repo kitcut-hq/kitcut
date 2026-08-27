@@ -19,6 +19,8 @@ Two rules this file follows, both because of where it runs:
   * **it never fails.** Any exception would blank the status line with no
     explanation, so the whole body is guarded and the fallback still prints
     something useful.
+
+Invoke as:  (the Claude Code status line runs it; not invoked by hand)
 """
 import sys, os, json, subprocess
 
