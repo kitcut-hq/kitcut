@@ -806,39 +806,56 @@ run against the real repo it found a genuinely ambiguous pair — two published
 claude-demo renders, the labelled one newer — which is the exact confusion it
 exists to prevent.
 
-## Watching a render from outside it
+## The status line, and watching a render from outside it
 
-A render is minutes of NVENC behind `capture_output=True`, so from any other
-process it is a silent wait on a growing `.part.mp4`. `.claude/settings.json`
-points the Claude Code status line at `render-status.py`, which turns that into:
+`.claude/settings.json` points the Claude Code status line at `statusline.py`
+— project-scoped on purpose, so every session opened in this folder gets it
+and no session anywhere else does. It shows the session, not the work:
 
 ```
-Opus 5 · video-editing · main · claude-demo ██████░░░░  61%  4:34/7:30  1.4x  eta 2:07
+video-editing | ⎇ main | Fable 5 (1M context) | effort: xhigh | ctx: 33% (334k) | 5h: 26% 2h58m | wk: 60% 2d18h
 ```
 
-It is project-scoped on purpose — committed to `.claude/settings.json`, so every
-session opened in this folder gets it and no session anywhere else does.
+Everything on it comes from the JSON Claude Code feeds the command on stdin
+(`model`, `effort.level`, `context_window`, `rate_limits.five_hour` /
+`.seven_day` — captured from a live session, not assumed) except the branch,
+which the script asks git for. The context token figure is
+`total_input_tokens` alone, because `used_percentage` is input-only by
+definition and the two numbers should sit on one basis. Any absent field drops
+its segment rather than erroring; rate limits in particular only appear on
+subscription accounts after the first response.
+
+Render progress used to be appended to this line and that was reverted — an
+encode's position belongs to a watch tool, not the prompt. A render is still
+minutes of NVENC behind `capture_output=True`, so when you want to see one:
+
+```powershell
+python scripts/render-status.py
+```
+
+```
+claude-demo ██████░░░░  61%  4:34/7:30  1.4x  eta 2:07
+```
 
 The plumbing is ffmpeg's own `-progress` writer: give it a path and it appends
 `out_time` and `speed` twice a second. That says how far the encode has come but
 not how far it has to go, so `_progress.begin()` writes a sidecar carrying the
-runtime the script already computed, and the status line reads the pair.
+runtime the script already computed, and the reader takes the pair.
 `screencast-cut.py` and `cut-clips.py` both publish; the job is cleared in a
 `finally`, so a crashed or cancelled render does not leave the bar stuck at 61%.
+A job whose progress file has gone untouched for 90s is reported as stalled
+rather than left frozen at its last position.
 
-Three things `render-status.py` has to get right, all because of where it runs:
+Three things `statusline.py` has to get right, all because of where it runs:
 
 - **stdlib only, no `_env`.** It re-runs on every refresh, and the repo's usual
   re-exec into `.venv` would spawn a subprocess each time. It needs no package.
 - **it never raises.** An exception blanks the status line with no explanation,
-  so the body is guarded and the fallback still prints something.
+  so the body is guarded and every missing field degrades to absence.
 - **it forces UTF-8 on stdout.** Windows hands a child `cp1252`, which cannot
-  encode the bar (U+2588/U+2591) at all — the line would die on a
+  encode the branch glyph or the progress bar at all — the line would die on a
   `UnicodeEncodeError`. Measured: `sys.stdout.encoding` really is `cp1252` here
   even though the terminal renders UTF-8 fine.
-
-A job whose progress file has gone untouched for 90s is reported as stalled
-rather than left frozen at its last position.
 
 ## Setup
 

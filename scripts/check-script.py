@@ -36,10 +36,15 @@ ROOT = _env.ROOT
 
 # checks a script is allowed to skip, each with the reason it may
 EXCEPTIONS = {
-    "render-status.py": {
+    "statusline.py": {
         "env": "status-line reader; must NOT import _env -- a re-exec per "
                "refresh would spawn a subprocess every second",
-        "argparse": "invoked by the status line, not by hand",
+        "argparse": "the status line feeds it JSON on stdin; it takes no flags",
+    },
+    "render-status.py": {
+        "env": "stdlib on purpose: it needs nothing from the venv, and a "
+               "dependency-free watch tool starts instantly",
+        "argparse": "one job, no options: print what is rendering",
     },
     "name-label.py": {
         "record": "standalone --video burn is the lost-source fallback; the "
@@ -49,6 +54,11 @@ EXCEPTIONS = {
         "record": "standalone burn is a preview path; cut-clips.py records "
                   "the real render",
         "free": "preview tool; the costed path is cut-clips --list",
+    },
+    "image-overlay.py": {
+        "record": "standalone --video burn is the lost-source fallback, the "
+                  "same bargain as name-label.py; screencast-cut.py and "
+                  "cut-clips.py record when the overlay rides a real render",
     },
     "generate-voiceover.py": {
         "record": "legacy, predates the pipelines (see README ## Legacy)",

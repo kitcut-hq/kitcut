@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "statusLine": {
     "type": "command",
-    "command": "python scripts/render-status.py",
+    "command": "python scripts/statusline.py",
     "refreshInterval": 3
   }
 }

@@ -241,23 +241,30 @@ and after touching a project. Schema detail: `## Projects` in the README. The
 previous attempt at this — `config/video-specs.template.json` — died because no
 tool read or wrote it; that is why the writers live inside the render scripts.
 
-## Watching a render
+## The status line, and watching a render
 
-Renders are silent for minutes. `.claude/settings.json` points the Claude Code
-status line at `render-status.py`, which shows the live position of whatever is
-encoding — project-scoped, so it applies to every session in this folder only.
+`.claude/settings.json` points the Claude Code status line at `statusline.py`
+— project-scoped, session facts only:
 
 ```
-Opus 5 · video-editing · main · claude-demo ██████░░░░  61%  4:34/7:30  1.4x  eta 2:07
+video-editing | ⎇ main | Fable 5 (1M context) | effort: xhigh | ctx: 33% (334k) | 5h: 26% 2h58m | wk: 60% 2d18h
+```
+
+Render progress used to live there too and was reverted — it belongs to a
+watch tool, not the prompt. Renders are still silent for minutes; watch one
+with `python scripts/render-status.py`:
+
+```
+claude-demo ██████░░░░  61%  4:34/7:30  1.4x  eta 2:07
 ```
 
 `_progress.py` is the plumbing: ffmpeg's `-progress` gives position and speed,
 a sidecar gives the total. `screencast-cut.py` and `cut-clips.py` publish, and
-clear the job in a `finally` so a crash does not freeze the bar. The reader is
-**stdlib only and must not import `_env`** — it runs on every status-line
-refresh and a re-exec would spawn a subprocess each time — it must never raise,
-and it forces UTF-8 on stdout because Windows hands a child `cp1252`, which
-cannot encode the bar at all.
+clear the job in a `finally` so a crash does not freeze the bar. The status
+line reader is **stdlib only and must not import `_env`** — it runs on every
+refresh and a re-exec would spawn a subprocess each time — it must never
+raise, and it forces UTF-8 on stdout because Windows hands a child `cp1252`,
+which cannot encode the glyphs at all.
 
 ## Layout
 
