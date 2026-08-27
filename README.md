@@ -547,6 +547,154 @@ Duration against the keep-list, output dimensions against the canvas, that the
 output carries no rotation, and that the audio is **not silent** — which is the
 failure that made this pipeline necessary in the first place.
 
+## Cutting between cameras, and proving the cut is right
+
+`screencast-cut.py` composites two tracks into one picture. `angle-cut.py`
+chooses **between** tracks: N synchronised cameras, switching full frame, in one
+NVENC pass. It exists on its own merits, and it also has a test harness that no
+other pipeline here has — one that can take somebody else's finished multicam
+film, rebuild the raw tapes it must have been cut from, re-cut it with these
+scripts, and score the result against the original frame by frame.
+
+That round trip is the point. If a film we assembled is indistinguishable from
+the film a professional editor assembled, the edit is automatable.
+
+```powershell
+python scripts/split-cameras.py  --manifest projects/<id>/multicam-sim.json --conform-only
+python scripts/shot-detect.py    --src projects/<id>/temp/program.mp4 --list --sheets
+python scripts/shot-detect.py    --src projects/<id>/temp/program.mp4
+python scripts/split-cameras.py  --manifest projects/<id>/multicam-sim.json --plan
+python scripts/split-cameras.py  --manifest projects/<id>/multicam-sim.json
+python scripts/sync-audio.py     --manifest projects/<id>/anglecut.json
+python scripts/angle-cut.py      --manifest projects/<id>/anglecut.json --list
+python scripts/angle-cut.py      --manifest projects/<id>/anglecut.json
+python scripts/compare-videos.py --rendered projects/<id>/outputs/<id>-anglecut.mp4 `
+                                 --reference projects/<id>/temp/program.mp4
+```
+
+The worked example is `projects/a16z-altman/`: a two-minute a16z podcast clip,
+three speakers on four angles, 16 shots. It round-trips **exactly** — 2796 of
+2796 frames, every one of the 15 cuts at offset 0, no frame shifted, audio at
+0.000 ms.
+
+### Conform first, or a one-frame error has somewhere to hide
+
+A file off the internet is usually a little variable — this one averaged
+23.9765 fps against a nominal 24000/1001. So `--conform-only` rewrites it onto a
+strict CFR grid **frame for frame**, with `setpts=N*1001/24000/TB` and
+`-fps_mode passthrough`. Not the `fps` filter: that hits its target by
+duplicating and dropping, which is the one thing this step exists to rule out.
+The output frame count is asserted against the input, and the conformed
+programme — not the download — is what the tapes are built from and what the
+re-cut is scored against.
+
+### Reading an edit back off a finished film
+
+`shot-detect.py` makes three measurements in one decode pass:
+
+| | |
+|---|---|
+| **cut** | a spike in frame-to-frame difference that is *also* a local maximum *and* far above the local median. The last two conditions separate a cut from a fade — a fade is a sustained moderate difference with no peak, and this clip ends on one |
+| **angle** | shots cluster by their **median** fingerprint, not their mean. The speaker moves; the room behind them does not, and the median is the room. Complete linkage, so two angles never chain together through a shot that sits between them |
+| **re-split** | a shot whose two halves have different medians was never one shot. Candidates are the *sub-threshold* peaks only, so a speaker standing up mid-shot — a real change, but a gradual one — cannot be mistaken for a cut |
+
+`--list` sweeps the threshold instead of picking one. On the a16z clip the
+answer is 15 cuts / 16 shots / 4 angles at **every** threshold from 0.030 to
+0.120, which is a plateau rather than a lucky setting. It also prints the angle
+separation: worst distance *within* an angle 0.0357, closest *between* two
+angles 0.1692. A 4.7× margin is a decision; anything under 1× is a coin toss,
+and it says so.
+
+### What a synthetic tape looks like
+
+`split-cameras.py` writes one tape per angle, each covering the **whole** shoot
+the way a real camera does — not the handful of clips that angle contributed.
+
+- **live** where the finished cut used this angle, the real frames.
+- **frozen** everywhere else, its last live frame held, via
+  `tpad=stop_mode=clone`. We do not have the footage a second camera shot while
+  the editor was elsewhere, so the picture stops while the clock does not.
+- **audio** the whole programme's sound on every tape, `adelay`ed by that
+  camera's own start. Cameras fed from one recorder — and it is what gives
+  `sync-audio.py` something to measure.
+- **stagger** each tape starts and stops at its own moment, from a seeded
+  generator, because nobody hits record on four cameras at once.
+
+Freezing is deliberately *visibly* not real footage. Anything that scored the
+edit by looking for **motion** would be reading the answer key, which is why
+stage 2 is forbidden the picture entirely.
+
+Frames, never seconds. The pads are frame counts and the audio delay is a
+**sample** count: at 24000/1001 and 48 kHz one frame is exactly 2002 samples, so
+a stagger has no rounding error at all. A rate where that does not divide is
+refused rather than rounded.
+
+### Sync, and the anchor that sync cannot give you
+
+`sync-tracks.py` answers a different question and keeps its own shape — one
+silent screen capture against one camera, correlating picture change against
+sound. `sync-audio.py` is for N tapes that all carry the same programme audio,
+so the sound is correlated against itself by FFT. On the a16z fixture it
+recovered every stagger to the **exact frame** (+11, −2, −14), with a peak
+z-score of 604 and a three-way residual of 0.125 ms.
+
+Offsets are *relative*, though. Where programme frame zero sits on each tape is
+a separate question, and `angle-cut.py`'s `anchor` settles it:
+
+- `picture_start` — **measured**. Find where each tape's opening held frame
+  stops holding, and subtract the programme frame at which the plan first uses
+  that angle. Watch the off-by-one: the held frame *is* the tape's first live
+  frame repeated, so the first frame that *differs* is the second live one.
+- a map of camera to frame — **declared**, the editor's in-point. A tape with
+  footage running before the film starts has no motion onset to find.
+
+Either way the anchors must reproduce the audio offsets before a frame is
+encoded. Picture and sound are independent instruments; on the fixture they
+agree to **zero frames** on all four tapes, and that agreement is the evidence
+the film will land right.
+
+### Scoring it
+
+`compare-videos.py` takes four measurements, because one number hides the
+failure that matters:
+
+| | |
+|---|---|
+| **ssim** | per frame, downscaled greyscale. Rules out gross corruption |
+| **shift** | every frame scored against the reference frame *before*, *at* and *after* it, reporting which wins. **This is the measurement the test turns on** |
+| **cuts** | both films read back through `shot-detect.py`, so it compares two recovered edits rather than an edit against a claim |
+| **audio** | correlation offset, then the residual of the aligned waveforms |
+
+The pass bar is on the worst join, the shift count and the frame count — all
+exact — and SSIM is only asked to rule out corruption. Here is why, measured: a
+deliberately broken render with **one camera one frame out** still scored a
+median SSIM of 0.9992, against 0.9993 for the correct one. A global average
+cannot see a one-frame join error, because 2795 of 2796 frames are still right.
+The shift probe flagged 665 frames, starting at frame 932 — exactly where that
+camera's first live span begins — each of them matching the reference's *next*
+frame better than its own.
+
+Run that negative control after changing anything: re-render with one anchor
+moved by a frame and confirm the comparator fails. A harness that has never
+failed has not been tested.
+
+### The arithmetic has its own test
+
+The round trip is frame arithmetic wearing a video costume, and every part of it
+is otherwise reachable only through a GPU render and a five-minute comparison —
+which is how the anchor's off-by-one got written in the first place.
+
+```powershell
+python scripts/check-multicam.py
+```
+
+Costs nothing, touches no file: tape layouts tile gaplessly under every pad,
+sample-per-frame arithmetic is exact, the anchor's off-by-one holds for four
+known head pads, correlation recovers known lags, SSIM of a frame against
+itself is 1, the generated filtergraph trims from the right tape frames, the
+audio is one `atrim` and never a concat, and a fade is not mistaken for a cut.
+Run it after touching any of the five scripts.
+
 ## A lower-third name label
 
 A dark rounded card with a name over a title, and a mint rounded rectangle
@@ -1092,6 +1240,12 @@ all, and its `FaceDetectorYN` replacement wants a model from an external host.
 | `scripts/dub-tts.py` | neural TTS with word boundaries and rate control |
 | `scripts/sync-tracks.py` | line up a silent screen capture with the camera take, and prove it |
 | `scripts/screencast-cut.py` | drop the dead air and composite the two into one film |
+| `scripts/shot-detect.py` | read an edit back off a finished film: where it cuts, and on which angle |
+| `scripts/split-cameras.py` | conform a programme, then rebuild the camera tapes it was cut from |
+| `scripts/sync-audio.py` | line up N tapes that share a soundtrack, by FFT correlation |
+| `scripts/angle-cut.py` | cut one film out of N synchronised cameras, switching full frame |
+| `scripts/compare-videos.py` | score one film against another frame by frame, and pass or fail it |
+| `scripts/check-multicam.py` | multicam self-test; no GPU, no files, no cost |
 | `scripts/import-iphone.ps1` | pull footage off a phone over MTP, verified by byte count |
 | `scripts/yt-upload.py` | upload a render to YouTube, channel-guarded and verified |
 | `scripts/yt-fetch-transcripts.py` | pull audio + word transcripts for published channel videos |
@@ -1143,6 +1297,29 @@ evidence.
   `name_labels` entry against the cut runtime — which is only known after the
   cut — for exactly this reason. `image_overlays` is checked the same way, and
   it is where a negative `at` gets resolved into a real time.
+- **NVENC does not re-encode an identical frame identically.** A frozen stretch
+  built with `tpad=stop_mode=clone` decodes back differing from itself by up to
+  3/255, so `freezedetect` at the −60 dB this repo uses for screen recordings
+  finds *nothing* in a 95-second freeze, and its span count is not even
+  monotonic in the threshold. Do not verify synthetic footage with a freeze
+  detector. `split-cameras.py` fingerprints every sampled frame and compares it
+  against the programme frame the layout says it should be showing — which
+  proves the *right* picture is in the *right* place, not merely that something
+  is static. It scores 0.0002 against a 0.02 limit.
+- **A global SSIM average cannot see a one-frame join error.** Measured: a
+  render with one camera a single frame out scored a median SSIM of 0.9992,
+  versus 0.9993 for the correct render. The signal is not in the average, it is
+  in *which* reference frame each frame matches best — score every frame against
+  the reference frame before, at and after it, and a shifted segment lights up
+  immediately (665 frames, starting exactly at the offending camera's first
+  live frame). Any comparator that reports only an average is reporting that it
+  did not look.
+- **A downloaded file is usually not on the frame rate it claims.** The a16z
+  clip averaged 23.9765 fps against a nominal 24000/1001. Conform before
+  measuring anything to the frame, and conform with `setpts` by frame index
+  rather than the `fps` filter — `fps=` hits its target by duplicating and
+  dropping frames, so it silently changes the very thing being measured. Assert
+  the frame count across the conform; `split-cameras.py` exits if it moved.
 - **`crop`'s width and height are evaluated once,** when the filter is
   configured; only `x` and `y` re-evaluate per frame. So an animated crop cannot
   wipe a graphic on — the image overlay ramps the alpha with `geq` instead. The

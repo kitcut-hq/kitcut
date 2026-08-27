@@ -1,0 +1,144 @@
+{
+  "_comment": "Shots and angles read back off a finished video by scripts/shot-detect.py. Frame indices on the source's own grid; end is exclusive. seconds = frame*fps_den/fps_num.",
+  "source": "projects/a16z-altman/temp/program.mp4",
+  "width": 1280,
+  "height": 720,
+  "fps_num": 24000,
+  "fps_den": 1001,
+  "fps": 23.976023976023978,
+  "n_frames": 2796,
+  "detect": {
+    "threshold": 0.055,
+    "ratio": 4.0,
+    "window": 4,
+    "median_win": 60,
+    "alike": 0.055,
+    "split": 0.07,
+    "min_shot": 8
+  },
+  "separation": {
+    "within": 0.03566,
+    "between": 0.16915
+  },
+  "cuts": [
+    501,
+    632,
+    848,
+    932,
+    968,
+    1280,
+    1783,
+    1891,
+    1927,
+    2107,
+    2287,
+    2395,
+    2431,
+    2479,
+    2538
+  ],
+  "shots": [
+    {
+      "start": 0,
+      "end": 501,
+      "camera": "cam1"
+    },
+    {
+      "start": 501,
+      "end": 632,
+      "camera": "cam2"
+    },
+    {
+      "start": 632,
+      "end": 848,
+      "camera": "cam3"
+    },
+    {
+      "start": 848,
+      "end": 932,
+      "camera": "cam2"
+    },
+    {
+      "start": 932,
+      "end": 968,
+      "camera": "cam4"
+    },
+    {
+      "start": 968,
+      "end": 1280,
+      "camera": "cam2"
+    },
+    {
+      "start": 1280,
+      "end": 1783,
+      "camera": "cam4"
+    },
+    {
+      "start": 1783,
+      "end": 1891,
+      "camera": "cam2"
+    },
+    {
+      "start": 1891,
+      "end": 1927,
+      "camera": "cam4"
+    },
+    {
+      "start": 1927,
+      "end": 2107,
+      "camera": "cam2"
+    },
+    {
+      "start": 2107,
+      "end": 2287,
+      "camera": "cam3"
+    },
+    {
+      "start": 2287,
+      "end": 2395,
+      "camera": "cam2"
+    },
+    {
+      "start": 2395,
+      "end": 2431,
+      "camera": "cam4"
+    },
+    {
+      "start": 2431,
+      "end": 2479,
+      "camera": "cam2"
+    },
+    {
+      "start": 2479,
+      "end": 2538,
+      "camera": "cam4"
+    },
+    {
+      "start": 2538,
+      "end": 2796,
+      "camera": "cam2"
+    }
+  ],
+  "cameras": [
+    {
+      "id": "cam1",
+      "n_shots": 1,
+      "frames": 501
+    },
+    {
+      "id": "cam2",
+      "n_shots": 8,
+      "frames": 1229
+    },
+    {
+      "id": "cam3",
+      "n_shots": 2,
+      "frames": 396
+    },
+    {
+      "id": "cam4",
+      "n_shots": 5,
+      "frames": 670
+    }
+  ]
+}

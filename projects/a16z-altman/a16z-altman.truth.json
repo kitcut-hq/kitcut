@@ -1,0 +1,130 @@
+{
+  "_comment": "Ground truth for the multicam round-trip test, written by scripts/split-cameras.py. Frame indices; live spans are in PROGRAMME frames, pads are in that tape's own frames. The pipeline under test must never read this -- only the harness that scores it.",
+  "id": "a16z-altman",
+  "program": "projects/a16z-altman/temp/program.mp4",
+  "shots": "projects/a16z-altman/a16z-altman.shots.json",
+  "fps_num": 24000,
+  "fps_den": 1001,
+  "n_frames": 2796,
+  "width": 1280,
+  "height": 720,
+  "sample_rate": 48000,
+  "stagger": {
+    "seed": 20260827,
+    "head_s": [
+      1.0,
+      6.0
+    ],
+    "tail_s": [
+      0.5,
+      4.0
+    ],
+    "_comment": "Seeded so the same manifest rebuilds the same tapes. Ranges are seconds; the draw is converted to whole frames before anything uses it."
+  },
+  "cameras": [
+    {
+      "id": "cam1",
+      "file": "projects/a16z-altman/raws/cam1.mp4",
+      "head_pad_frames": 87,
+      "tail_pad_frames": 25,
+      "total_frames": 2908,
+      "head_pad_s": 3.628625,
+      "live_spans": [
+        [
+          0,
+          501
+        ]
+      ]
+    },
+    {
+      "id": "cam2",
+      "file": "projects/a16z-altman/raws/cam2.mp4",
+      "head_pad_frames": 98,
+      "tail_pad_frames": 46,
+      "total_frames": 2940,
+      "head_pad_s": 4.087417,
+      "live_spans": [
+        [
+          501,
+          632
+        ],
+        [
+          848,
+          932
+        ],
+        [
+          968,
+          1280
+        ],
+        [
+          1783,
+          1891
+        ],
+        [
+          1927,
+          2107
+        ],
+        [
+          2287,
+          2395
+        ],
+        [
+          2431,
+          2479
+        ],
+        [
+          2538,
+          2796
+        ]
+      ]
+    },
+    {
+      "id": "cam3",
+      "file": "projects/a16z-altman/raws/cam3.mp4",
+      "head_pad_frames": 85,
+      "tail_pad_frames": 44,
+      "total_frames": 2925,
+      "head_pad_s": 3.545208,
+      "live_spans": [
+        [
+          632,
+          848
+        ],
+        [
+          2107,
+          2287
+        ]
+      ]
+    },
+    {
+      "id": "cam4",
+      "file": "projects/a16z-altman/raws/cam4.mp4",
+      "head_pad_frames": 73,
+      "tail_pad_frames": 65,
+      "total_frames": 2934,
+      "head_pad_s": 3.044708,
+      "live_spans": [
+        [
+          932,
+          968
+        ],
+        [
+          1280,
+          1783
+        ],
+        [
+          1891,
+          1927
+        ],
+        [
+          2395,
+          2431
+        ],
+        [
+          2479,
+          2538
+        ]
+      ]
+    }
+  ]
+}

@@ -77,6 +77,10 @@ EXCEPTIONS = {
         "record": "self-test harness; writes only scratch under %TEMP%",
         "argparse": "takes no arguments by design -- it is one button",
     },
+    "check-multicam.py": {
+        "argparse": "same bargain as check-dub.py: one button, no files, no "
+                    "GPU -- it tests the round-trip arithmetic in memory",
+    },
     "check-env.py": {
         "argparse": "takes no arguments by design -- it is one button",
         "pythonpath": "it is the doctor for that variable; reading and "

@@ -23,6 +23,7 @@ projects/*/audio/
 projects/*/transcripts/
 projects/*/outputs/
 projects/*/temp/
+projects/*/raws/
 
 # Belt and braces: these must not slip in from anywhere
 *.mp4

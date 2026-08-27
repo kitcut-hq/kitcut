@@ -5,6 +5,11 @@ description: Cut a film out of a screen recording plus a separate camera take of
 
 # A film out of a screen recording and a camera take
 
+**Wrong skill?** This one **composites** two tracks into one picture — a screen
+recording with a camera in the corner. For several cameras that shot the same
+event, where the film **switches between** them full frame, use
+`video-multicam-switch` (`angle-cut.py`) instead.
+
 ```powershell
 cd C:\instafill\video-editing
 python scripts/sync-tracks.py    --manifest projects/<id>/screencast.json --verify

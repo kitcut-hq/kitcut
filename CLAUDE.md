@@ -34,7 +34,9 @@ powershell -ExecutionPolicy Bypass -File scripts/setup-python.ps1   # repair
 
 After touching any `dub-*.py`, run `python scripts/check-dub.py` — it exercises
 the fitting, retune and word-mark logic with no API calls, so it costs nothing
-and catches what only a paid run would otherwise reach.
+and catches what only a paid run would otherwise reach. `check-multicam.py` is
+the same idea for the multicam round trip: no GPU, no files, and it covers the
+frame arithmetic a render would otherwise have to find for you.
 
 After writing or changing **any** script, run
 `python scripts/check-script.py --changed` — it enforces the conventions
@@ -64,7 +66,7 @@ Don't reintroduce it, and don't use `os.execve` to re-exec on Windows — it
 spawns rather than replaces, so the parent dies abnormally and the exit code is
 lost. `_env.bootstrap()` uses `subprocess.run` and propagates the status.
 
-## The five pipelines
+## The six pipelines
 
 Everything is manifest-driven. Nothing hardcodes a timecode, a colour or a font
 size; per-video decisions live in the project's manifests under
@@ -258,6 +260,45 @@ the title and privacy came back as asked, and write a `.youtube.json` sidecar
 beside the render. Privacy defaults to `unlisted` — the end you can widen later.
 Both scripts share the one `youtube.force-ssl` grant, so there is no second
 consent to give.
+
+**6. Multicam switch** — one film out of several cameras that shot the same
+event, switching full frame instead of compositing. `angle-cut.py` is the
+cutter; `sync-audio.py` lines up N tapes that share a soundtrack by FFT
+correlation, recovering the staggers to the exact frame.
+
+It comes with the only round-trip test in the repo: take somebody else's
+finished multicam film, rebuild the raw tapes it must have been cut from, re-cut
+it here, and score the result frame by frame. `projects/a16z-altman/` round-trips
+**exactly** — 2796 of 2796 frames, all 15 cuts at offset 0, no frame shifted.
+
+```powershell
+python scripts/split-cameras.py  --manifest projects/<id>/multicam-sim.json --conform-only
+python scripts/shot-detect.py    --src projects/<id>/temp/program.mp4 --list --sheets
+python scripts/split-cameras.py  --manifest projects/<id>/multicam-sim.json
+python scripts/sync-audio.py     --manifest projects/<id>/anglecut.json
+python scripts/angle-cut.py      --manifest projects/<id>/anglecut.json --list
+python scripts/compare-videos.py --rendered <cut>.mp4 --reference <program>.mp4
+```
+
+Four things here cost real time to learn, all in the README gotchas: **conform
+before measuring** (a download is rarely on the frame rate it claims, and `fps=`
+duplicates and drops — use `setpts` by frame index and assert the count);
+**NVENC does not re-encode an identical frame identically**, so `freezedetect`
+finds nothing in a 95-second freeze and synthetic footage must be verified by
+fingerprinting each frame against the one it should be showing; **an average
+SSIM cannot see a one-frame join error** (0.9992 wrong vs 0.9993 right — score
+each frame against the reference frame *before, at and after* it instead); and
+the **anchor's off-by-one** — a tape's held opening frame *is* its first live
+frame, so the first frame that differs is the second live one.
+
+The frozen filler tells you which camera the editor used, so anything scoring
+the *edit* by looking for motion is reading the answer key. Stage 1 replays the
+known cut list and tests the machinery; stage 2 gets the tapes and nothing else.
+`truth.json` belongs to the harness — no script under test may read it.
+
+After touching any of `shot-detect.py`, `split-cameras.py`, `sync-audio.py`,
+`angle-cut.py` or `compare-videos.py`, run `python scripts/check-multicam.py` —
+it tests the frame arithmetic with no GPU and no files.
 
 ## Projects: the memory that outlives the session
 
