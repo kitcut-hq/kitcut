@@ -723,6 +723,40 @@ Quota note: `videos.update` costs 50 units of the default 10,000/day, while the
 Two ids on this channel begin with `-`, which argparse reads as a flag. Pass
 those as `--video=-qKcpLSk0iU`.
 
+## Watching a render from outside it
+
+A render is minutes of NVENC behind `capture_output=True`, so from any other
+process it is a silent wait on a growing `.part.mp4`. `.claude/settings.json`
+points the Claude Code status line at `render-status.py`, which turns that into:
+
+```
+Opus 5 · video-editing · main · claude-demo ██████░░░░  61%  4:34/7:30  1.4x  eta 2:07
+```
+
+It is project-scoped on purpose — committed to `.claude/settings.json`, so every
+session opened in this folder gets it and no session anywhere else does.
+
+The plumbing is ffmpeg's own `-progress` writer: give it a path and it appends
+`out_time` and `speed` twice a second. That says how far the encode has come but
+not how far it has to go, so `_progress.begin()` writes a sidecar carrying the
+runtime the script already computed, and the status line reads the pair.
+`screencast-cut.py` and `cut-clips.py` both publish; the job is cleared in a
+`finally`, so a crashed or cancelled render does not leave the bar stuck at 61%.
+
+Three things `render-status.py` has to get right, all because of where it runs:
+
+- **stdlib only, no `_env`.** It re-runs on every refresh, and the repo's usual
+  re-exec into `.venv` would spawn a subprocess each time. It needs no package.
+- **it never raises.** An exception blanks the status line with no explanation,
+  so the body is guarded and the fallback still prints something.
+- **it forces UTF-8 on stdout.** Windows hands a child `cp1252`, which cannot
+  encode the bar (U+2588/U+2591) at all — the line would die on a
+  `UnicodeEncodeError`. Measured: `sys.stdout.encoding` really is `cp1252` here
+  even though the terminal renders UTF-8 fine.
+
+A job whose progress file has gone untouched for 90s is reported as stalled
+rather than left frozen at its last position.
+
 ## Setup
 
 ```powershell
@@ -781,6 +815,8 @@ all, and its `FaceDetectorYN` replacement wants a model from an external host.
 | `scripts/yt-audit-chapters.py` | which videos on a channel actually show chapters |
 | `scripts/cut-clips.py` | manifest → standalone clips cut out of a long video |
 | `scripts/_overlay.py` | drawing and filter helpers shared by the burned-in graphics |
+| `scripts/_progress.py` | publishes an ffmpeg render's position for the status line |
+| `scripts/render-status.py` | the Claude Code status line for this repo |
 | `scripts/handle-overlay.py` | animated social-handle badge, drawn and burned in |
 | `scripts/name-label.py` | lower-third name label, drawn and burned in |
 | `scripts/dub-clips.py` | translate a clip and speak it back into its own cadence |

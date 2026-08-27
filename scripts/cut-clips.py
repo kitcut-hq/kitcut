@@ -23,6 +23,7 @@ from importlib import import_module
 
 _outline = import_module("transcript-outline")   # hyphen: not importable by name
 _handle = import_module("handle-overlay")
+import _progress
 
 
 ENV = _env.ENV
@@ -289,10 +290,18 @@ def cut(src, dst, start, dur, render, copy, overlay=None, pre_chain=None,
     # before an -i attaches to THAT input -- with badge PNGs in the graph a -t
     # sitting next to the source would silently become the PNG's duration and
     # leave the clip running to the end of the source.
+    # -progress publishes the encode's position for the status line; the clip's
+    # own duration is the total, since -ss already rebased the output clock.
+    job = os.path.splitext(os.path.basename(dst))[0]
+    prog = _progress.begin(job, dur, os.path.relpath(dst, ROOT), kind="clip")
     cmd = (["ffmpeg", "-hide_banner", "-v", "error", "-nostdin",
-            "-ss", "%.3f" % start, "-i", src]
+            "-progress", prog, "-ss", "%.3f" % start, "-i", src]
            + extra + args + ["-t", "%.3f" % dur, "-movflags", "+faststart", "-y", tmp])
-    if run(cmd).returncode:
+    try:
+        rc = run(cmd).returncode
+    finally:
+        _progress.end(job)
+    if rc:
         if os.path.exists(tmp):
             os.remove(tmp)
         sys.exit("ffmpeg failed for %s" % dst)

@@ -203,6 +203,24 @@ beside the render. Privacy defaults to `unlisted` — the end you can widen late
 Both scripts share the one `youtube.force-ssl` grant, so there is no second
 consent to give.
 
+## Watching a render
+
+Renders are silent for minutes. `.claude/settings.json` points the Claude Code
+status line at `render-status.py`, which shows the live position of whatever is
+encoding — project-scoped, so it applies to every session in this folder only.
+
+```
+Opus 5 · video-editing · main · claude-demo ██████░░░░  61%  4:34/7:30  1.4x  eta 2:07
+```
+
+`_progress.py` is the plumbing: ffmpeg's `-progress` gives position and speed,
+a sidecar gives the total. `screencast-cut.py` and `cut-clips.py` publish, and
+clear the job in a `finally` so a crash does not freeze the bar. The reader is
+**stdlib only and must not import `_env`** — it runs on every status-line
+refresh and a re-exec would spawn a subprocess each time — it must never raise,
+and it forces UTF-8 on stdout because Windows hands a child `cp1252`, which
+cannot encode the bar at all.
+
 ## Layout
 
 | path | what |

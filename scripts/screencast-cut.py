@@ -34,6 +34,7 @@ from importlib import import_module  # noqa: E402
 
 _outline = import_module("transcript-outline")
 _namelabel = import_module("name-label")   # hyphen: not importable by name
+import _progress  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -898,7 +899,12 @@ def main():
                         mask_idx, border_idx, label_fc, label_out)
 
     tmp = dst + ".part.mp4"
-    cmd = (["ffmpeg", "-hide_banner", "-nostats", "-loglevel", "warning"]
+    # -progress makes the encode legible from outside this process: ffmpeg
+    # appends out_time and speed to that file twice a second, which is what the
+    # status line reads. Without it a multi-minute NVENC pass is a silent wait.
+    prog = _progress.begin(mid, runtime, os.path.relpath(dst, ROOT))
+    cmd = (["ffmpeg", "-hide_banner", "-nostats", "-loglevel", "warning",
+            "-progress", prog]
            + inputs
            + ["-filter_complex", graph, "-map", "[vout]", "-map", "[aout]",
               "-r", str(fps),
@@ -912,7 +918,10 @@ def main():
 
     print("")
     print("  rendering %s ..." % os.path.relpath(dst, ROOT))
-    p = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True)
+    finally:
+        _progress.end(mid)
     if p.returncode != 0:
         sys.stderr.write((p.stderr or "")[-4000:])
         sys.exit("ffmpeg failed")
