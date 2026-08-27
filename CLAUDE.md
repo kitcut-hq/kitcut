@@ -1,11 +1,17 @@
 # Notes for Claude
 
-Tooling for turning long talking-head videos into captioned vertical shorts, and
-now into dubbed ones. The repo is **tooling only** — every source video, audio
-file, transcript and render is gitignored third-party content.
+Tooling for turning raw footage into finished video: captions burned onto a whole
+talking-head recording, vertical shorts cut out of it, a dub that keeps the
+original's cadence, an edit assembled from a screen recording and a camera take
+that were never in sync, and the upload afterwards. The repo is **tooling only**
+— every source video, audio file, transcript and render is gitignored
+third-party content.
 
 Full detail lives in `README.md` and the skills under `.claude/skills/`. This
 file is the map.
+
+Nothing here is a one-off. A task that ends in a rendered file and no reusable
+script has not ended — see `## House rules`.
 
 ## Run anything like this
 
@@ -51,7 +57,7 @@ Don't reintroduce it, and don't use `os.execve` to re-exec on Windows — it
 spawns rather than replaces, so the parent dies abnormally and the exit code is
 lost. `_env.bootstrap()` uses `subprocess.run` and propagates the status.
 
-## The four pipelines
+## The five pipelines
 
 Everything is manifest-driven. Nothing hardcodes a timecode, a colour or a font
 size; those live in `config/`.
@@ -95,7 +101,7 @@ original is never overwritten.
 
 **4. Multicam** — one film out of a screen recording plus a camera take of you
 narrating. `sync-tracks.py` (measure the offset, prove it) → `screencast-cut.py`
-(drop the dead air, composite, one NVENC pass).
+(plan the cut, composite, one NVENC pass).
 
 ```powershell
 python scripts/sync-tracks.py    --manifest config/screencast/<id>.json --verify
@@ -104,27 +110,72 @@ python scripts/screencast-cut.py --manifest config/screencast/<id>.json
 ```
 
 The **camera is the master clock**: it carries the sound and it brackets the
-screen recording at both ends, so the film opens and closes full-frame on the
-camera and only puts the square PiP up where the screen was actually rolling.
-A pause is cut only where the speaker is silent *and* the screen is static —
-silence alone would cut the wait while output streams, which is the one silence
-worth keeping. Get footage off a phone with `scripts/import-iphone.ps1`
-(`-DeviceName` for anything that is not an iPhone).
+screen recording at both ends. So the film is laid out in camera time and the
+acts fall out of the footage rather than being declared — camera full-frame
+where the screen was not rolling yet, screen with a square PiP where it was, and
+camera again wherever the screen has stopped being worth looking at.
 
-Publish with `yt-upload.py` — `--channel @handle` asserts which channel the
-grant actually points at before a byte leaves, and the upload is re-read
-afterwards to check the privacy came back as asked. Defaults to unlisted.
+**Sync when one track is silent.** `creation_time` subtracts to a ±1 s seed
+(both containers stamp capture *start*, in UTC). A screen-change-vs-key-clicks
+correlation is attempted and **refused** when the peak is mush — it scored
+z=2.3 here, because output streams silently and speech moves the audio without
+touching the screen. Phrase anchors settle it, but an anchor only counts if its
+screen time can be read off the screen *alone*.
 
-Clips shot separately top and tail the film via `bookends`. **Transcribe every
-extra clip before deciding what it is for** — one with no speech in it is
-picture, not a scene, and belongs in a bookend's `broll` list, where the
+What the cut does, all manifest keys under `cut`:
+
+| key | |
+|---|---|
+| `min_silence` / `air` | ignore gaps shorter than this; keep this much breath at each join |
+| `require_frozen` | only cut where the screen is static too |
+| `force_over` | …except a silence this long, which goes **even if the screen is moving** |
+| `camera_when_frozen_over` | screen still longer than this → the camera takes the whole frame |
+| `cutaway_lead_out` | come back to the screen this early, before it moves again |
+
+**Sweep, do not pick.** `--list` prices any setting without encoding anything.
+Dropping `min_silence` from 1.5 s to 0.7 s took this film from 27 s of pauses
+removed to 49 s; below 0.7 s the cut count climbs faster than the runtime falls.
+Test `camera_when_frozen_over` against the frozen **runs**, not against kept
+segments — pause-cutting chops a dead region into pieces too short to qualify
+individually, and the first version silently cut away for 0.0 s.
+
+`bookends` bring in clips shot separately, and each may carry `broll`.
+**Transcribe every extra clip before deciding what it is for** — one with no
+speech in it is picture, not a scene, and belongs in a `broll` list, where the
 bookend's own sound keeps running while only the picture cuts away.
 
-Two traps that cost a render each, both in the README gotchas: **`aselect`
-passes every audio frame** on this ffmpeg (so cutting uses `trim`/`atrim`), and
-a phone's **rotation tag can be wrong** — `-noautorotate` leaves the bogus
-matrix on the output and every player turns the film on its side, so
-`camera_rotate` drives `-display_rotation` instead.
+Get footage off a phone with `scripts/import-iphone.ps1` (`-DeviceName` for
+anything that is not an iPhone). It waits for the byte count to stop moving and
+compares it against the device, because the shell creates the destination file
+instantly and a truncated take still probes clean — it just reports a shorter
+duration.
+
+Four traps, all with evidence in the README gotchas: **`aselect` passes every
+audio frame** on this ffmpeg, so cutting uses `trim`/`atrim`; a phone's
+**rotation tag can be wrong**, and `-noautorotate` copies the bogus matrix onto
+the output, so `camera_rotate` drives `-display_rotation` instead; a looped PNG
+mask needs **`shortest=1`** or `alphamerge` waits forever and the file never
+gets a `moov` atom; and **never measure leftover silence on the rendered file** —
+`loudnorm` lifts the room tone and `silencedetect` then finds nothing at any
+threshold. Measure the source and intersect with the keep-list.
+
+**5. Publish** — upload it, then give it chapters.
+
+```powershell
+python scripts/yt-upload.py outputs/screencast/<id>.mp4 --title "..." `
+    --description-file config/screencast/<id>.description.txt `
+    --channel @instafill_ai --privacy unlisted --dry-run
+python scripts/yt-set-chapters.py <video-id> --chapters config/chapters/<id>.txt --dry-run
+python scripts/yt-audit-chapters.py --channel @instafill_ai --none-only
+```
+
+`--channel` is not decoration: one Google login can own several channels and the
+grant picks one silently, so it asserts which channel the token really points at
+before a byte leaves. Uploads are resumable, are re-read afterwards to confirm
+the title and privacy came back as asked, and write a `.youtube.json` sidecar
+beside the render. Privacy defaults to `unlisted` — the end you can widen later.
+Both scripts share the one `youtube.force-ssl` grant, so there is no second
+consent to give.
 
 ## Layout
 
@@ -132,9 +183,10 @@ matrix on the output and every player turns the film on its side, so
 |---|---|
 | `scripts/` | all tooling; `_env.py` first, then the pipeline scripts |
 | `config/clips/` | which episodes to cut, and their crop sidecars |
-| `config/screencast/` | multicam manifests, plus `.sync.json` / `.cuts.json` sidecars |
+| `config/screencast/` | multicam manifests, their `.sync.json` / `.cuts.json` sidecars, and the YouTube description text |
 | `config/presets/` | caption styling |
 | `config/handles/` | the animated handle badge |
+| `config/chapters/` | chapter lists, one `MM:SS Title` per line |
 | `sources/` `audio/` `transcripts/` `outputs/` `temp/` | gitignored content |
 
 ## House rules
@@ -151,5 +203,10 @@ These come from how the repo is actually used — follow them without being aske
   footage and report where it loses. Per-shot framing looked obviously better
   and measured worse; the dub's first prompt looked fine and left 14 of 26 lines
   drawling at the slow-down floor. Both were caught by measuring, not reasoning.
+- **Ship a mode that prices the decision.** Every script here has `--list`,
+  `--plan`, `--dry-run` or `--plan-only`, and it exists so a threshold can be
+  swept instead of guessed. Picking `min_silence` by eye would have left 22
+  seconds of dead air in a film; pricing four settings took no encode at all.
+  A new tool is not finished until you can ask it what a choice costs.
 - **Record traps with the reason,** not just the fix — see `## Gotchas` in the
   README, which is where the ffmpeg and libass landmines are written down.
