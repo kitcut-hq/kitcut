@@ -296,14 +296,16 @@ each frame against the reference frame *before, at and after* it instead); and
 the **anchor's off-by-one** — a tape's held opening frame *is* its first live
 frame, so the first frame that differs is the second live one.
 
-**Know what it cannot do.** An angle is identified by the BACKGROUND behind the
-speaker, so the cameras must look different from each other. A studio with one
-plain backdrop behind everybody defeats it — two hour-long Ukrainian interviews
-(`projects/up-interview-1`, `-2`, kept as documented negative results) produced
-55 and 61 phantom angles with same-angle distance at 0.44x the between-angle
-distance. Three rescues were measured and all failed. `shot-detect.py` refuses
-to write a shot list in that state, which is what stops a fifty-five-tape build.
-Fixing it needs person identity, not a threshold.
+**Angles are identified two ways; `--angle-by auto` picks per film.** Frame
+fingerprints read the background and win where cameras look different (the a16z
+films, 4.7x margin). Where every camera shares one backdrop — the case that
+produced 55 phantom angles on an hour-long studio interview — face identity
+takes over: YuNet + SFace ONNX models under `models/face/` (download commands
+in the skill), one-face shots clustered by who is in them (3.0x margin),
+wides and no-face shots by composition. A green wall is the easy case for
+person mode, not a failure. If BOTH methods fail to separate, shot-detect
+refuses to write the shot list rather than let split-cameras build a tape per
+phantom angle.
 
 The frozen filler tells you which camera the editor used, so anything scoring
 the *edit* by looking for motion is reading the answer key. Stage 1 replays the

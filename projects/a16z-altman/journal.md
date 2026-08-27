@@ -185,3 +185,6 @@ runtime. The decide step (speaker embeddings on CPU) is ~85% of it; the NVENC
 render is ~15x faster than realtime. If that ever needs to be faster, the
 embeddings are the only thing worth optimising.
 - 20:26 shot-detect scripts/shot-detect.py (--src projects/a16z-altman/temp/program.mp4) -- 16 shots, 4 angles, 15 cuts from projects/a16z-altman/temp/program.mp4
+- 20:48 shot-detect scripts/shot-detect.py (--src projects/a16z-altman/temp/program.mp4 --angle-by person --out temp/altman-person.shots.json) -- 16 shots, 4 angles, 15 cuts from projects/a16z-altman/temp/program.mp4
+- 20:49 shot-detect scripts/shot-detect.py (--src projects/a16z-altman/temp/program.mp4 --out temp/regress/a16z-altman.shots.json) -- 16 shots, 4 angles, 15 cuts from projects/a16z-altman/temp/program.mp4
+- 21:19 shot-detect scripts/shot-detect.py (--src projects/a16z-altman/temp/program.mp4 --angle-by person --out temp/altman-person.shots.json) -- 16 shots, 4 angles, 15 cuts from projects/a16z-altman/temp/program.mp4

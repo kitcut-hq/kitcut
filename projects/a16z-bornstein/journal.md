@@ -39,3 +39,4 @@ cluster.
 Editing this film -- sync, decide, render, from raw tapes -- takes about half
 its runtime. The decide step is ~85% of that and is CPU-bound speaker
 embedding; the NVENC render is roughly fifteen times faster than realtime.
+- 20:49 shot-detect scripts/shot-detect.py (--src projects/a16z-bornstein/temp/program.mp4 --alike 0.13 --out temp/regress/a16z-bornstein.shots.json) -- 6 shots, 3 angles, 5 cuts from projects/a16z-bornstein/temp/program.mp4

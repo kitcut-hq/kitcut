@@ -72,6 +72,39 @@ SEPARATION_FAILED = (
     "these angles apart needs person identity, not appearance -- which this "
     "script does not do.")
 
+PERSON_SEPARATION_FAILED = (
+    "face identity does not separate these angles either: some shot's face "
+    "sits closer to ANOTHER person's centroid than to its own. That usually "
+    "means two genuinely similar faces, heavy occlusion, or a film whose "
+    "'angles' are not people at all. Look at --sheets; if the clusters look "
+    "right to your eyes, --force writes them and the numbers are recorded "
+    "for the record.")
+
+DEFAULT_FACE = {
+    "detector": "models/face/face_detection_yunet_2023mar.onnx",
+    "recognizer": "models/face/face_recognition_sface_2021dec.onnx",
+    "samples": 5,          # frames sampled per shot; majority decides the count
+    "width": 640,          # decode width for detection
+    "score": 0.7,          # YuNet confidence floor
+    "alike_face": 0.5,     # same person within this cosine distance. Measured:
+                           # same-person max 0.24, different-person min 0.72,
+                           # SFace's published match threshold ~0.64. 0.5 sits
+                           # in the gap with margin on both sides.
+    "layout_split": 0.06,  # same people, but framed differently: mean abs
+                           # difference of the sorted (centre, width) face
+                           # layout that splits one pairing into two cameras.
+                           # Only honoured where the split is decisive.
+    "min_id_face": 0.085,  # a face narrower than this fraction of the frame is
+                           # too small to IDENTIFY and stays anonymous: on the
+                           # wide of a four-person studio, per-face identities
+                           # were noise and split one wide camera six ways.
+    "face_second": 0.64,   # SFace's published same-person bar. A single-shot
+                           # "person" inside it of a real person's centroid is
+                           # that person mid-gesture -- an outstretched arm and
+                           # a thrown-back head each cost a phantom camera --
+                           # not a new face at the table.
+}
+
 DEFAULT_DETECT = {
     "threshold": 0.055,   # mean abs frame difference, 0..1 grey
     "ratio": 4.0,         # ... and this many times the local median
@@ -260,6 +293,357 @@ def separation(shot_sigs, names):
     return within, between
 
 
+def collect_frames(src, targets, w, h_src, w_src, hwaccel=True):
+    """One streaming decode, yielding (frame_index, bgr) for each target.
+
+    The same one-pass discipline as scan(): a thousand seeks into an hour of
+    AV1 cost more than reading it once, and NVDEC reads it fast.
+    """
+    ah = int(round(w * h_src / float(w_src))) // 2 * 2
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin"]
+    if hwaccel:
+        cmd += ["-hwaccel", "cuda"]
+    cmd += ["-i", src, "-vf", "scale=%d:%d" % (w, ah),
+            "-fps_mode", "passthrough", "-an",
+            "-f", "rawvideo", "-pix_fmt", "bgr24", "-"]
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, env=ENV)
+    nbytes = w * ah * 3
+    want = set(int(t) for t in targets)
+    last = max(want) if want else -1
+    got_any, i = False, 0
+    while True:
+        buf = p.stdout.read(nbytes)
+        if len(buf) < nbytes or i > last:
+            break
+        if i in want:
+            got_any = True
+            yield i, np.frombuffer(buf, np.uint8).reshape(ah, w, 3).copy()
+        i += 1
+    p.stdout.close()
+    p.kill()
+    p.wait()
+    if not got_any and hwaccel:
+        for out in collect_frames(src, targets, w, h_src, w_src, hwaccel=False):
+            yield out
+
+
+def person_angles(src, spans, sigs, info, d, fc):
+    """Cluster shots into angles by WHO is in frame, not what is behind them.
+
+    This exists because the frame-fingerprint method reads the background, and
+    a studio that puts every camera against the same black backdrop gives it
+    nothing to read -- measured at 0.44x separation, where a usable margin is
+    well above 1x. Detecting the person instead makes that the easy case: the
+    less background there is, the more the frame IS the person.
+
+    Instruments matter more than features here, and both cheap attempts were
+    measured and rejected: Haar cascades missed one of four people in five of
+    five samples, and a colour-torso fingerprint reached only 1.11x. YuNet
+    detects 5/5 on every shot of the same film, and SFace identity embeddings
+    separate at 3.0x (same-person max 0.24, different-person min 0.72) -- and
+    corrected two hand-labelled shots in the process.
+
+    Shots split into families by MAJORITY face count over sampled frames.
+
+    ONE face -> cluster by face identity, AVERAGE linkage: pose stretches a
+    person's own embeddings (an outstretched arm and a thrown-back head each
+    earned themselves a phantom camera under complete linkage), and averaging
+    absorbs the stretch the same way it absorbs a shouted word in the voice
+    clustering. Within a person, a further frame-sig split is accepted only
+    when it separates decisively -- the same person filmed by two cameras
+    against different walls.
+
+    TWO OR MORE faces -> cluster by WHICH PEOPLE are in the shot: every face
+    is embedded and matched to the person centroids the one-face family just
+    established, and shots group by their identity set, then split by face
+    layout only where that is decisive. Clustered by frame fingerprint at
+    first, and the same black backdrop that broke the close-ups shattered the
+    two-shots into fifteen phantom angles of the same pairing.
+
+    ZERO faces -> one shared angle. Graphics, logo animations, b-roll: they
+    are not cameras, and every one of them made its own angle before this --
+    which downstream means one full-length synthetic tape EACH.
+    """
+    det_path, rec_path = rel_model(fc["detector"]), rel_model(fc["recognizer"])
+    for pth in (det_path, rec_path):
+        if not os.path.exists(pth):
+            sys.exit("no face model at %s -- see the video-multicam-switch "
+                     "skill for the two curl commands" % _project.norm(pth))
+    det = cv2.FaceDetectorYN_create(det_path, "", (fc["width"], fc["width"]),
+                                    fc["score"])
+    rec = cv2.FaceRecognizerSF_create(rec_path, "")
+
+    k = int(fc["samples"])
+    frame_shots, per_shot = {}, {i: [] for i in range(len(spans))}
+    for i, (a, b) in enumerate(spans):
+        lo, hi = a + 2, max(a + 2, b - 3)
+        for t in sorted(set(np.linspace(lo, hi, k).astype(int).tolist())):
+            frame_shots.setdefault(int(t), []).append(i)
+
+    # Detections cache: the face pass is deterministic per (file, params), and
+    # re-decoding an hour of AV1 to re-ask the same questions cost ten minutes
+    # per grouping-logic iteration before this existed.
+    import hashlib
+    ck = "%s|%d|%d|%.3f" % (os.path.abspath(src), k, fc["width"], fc["score"])
+    cpath = os.path.join(ROOT, "temp", "shot-detect-faces-%s.npz"
+                         % hashlib.md5(ck.encode("utf-8")).hexdigest()[:12])
+    cache = {}
+    if os.path.exists(cpath) and os.path.getmtime(cpath) > os.path.getmtime(src):
+        try:
+            z = np.load(cpath, allow_pickle=True)
+            if str(z["key"]) == ck:
+                cache = z["faces"].item()
+        except Exception:
+            cache = {}
+    missing = {t: s for t, s in frame_shots.items() if t not in cache}
+    for idx, img in collect_frames(src, missing, fc["width"],
+                                   info["height"], info["width"]):
+        det.setInputSize((img.shape[1], img.shape[0]))
+        _, faces = det.detect(img)
+        found = []
+        if faces is not None:
+            for f in faces:
+                e = rec.feature(rec.alignCrop(img, f)).ravel()
+                nz = float(np.linalg.norm(e)) or 1.0
+                found.append((float(f[0] + f[2] / 2) / img.shape[1],
+                              float(f[2]) / img.shape[1], e / nz))
+        cache[idx] = found
+    if missing:
+        os.makedirs(os.path.dirname(cpath), exist_ok=True)
+        np.savez_compressed(cpath, key=ck,
+                            faces=np.array(cache, dtype=object))
+    for idx, shots_here in frame_shots.items():
+        found = cache.get(idx, [])
+        for i in shots_here:
+            per_shot[i].append(found)
+
+    majority, face_sig = {}, {}
+    for i in range(len(spans)):
+        counts = [len(fs) for fs in per_shot[i]] or [0]
+        majority[i] = int(np.median(counts))
+        embs = [fs[0][2] for fs in per_shot[i] if len(fs) == 1]
+        if majority[i] == 1 and embs:
+            s = np.median(np.array(embs), axis=0)
+            face_sig[i] = s / (float(np.linalg.norm(s)) or 1.0)
+
+    names = [None] * len(spans)
+    order, next_id = {}, [0]
+
+    def name_for(key, first_shot):
+        if key not in order:
+            order[key] = (min(first_shot), len(order))
+        return key
+
+    # one-face shots: identity clustering, average linkage
+    persons = group_by_identity(face_sig, fc["alike_face"])
+
+    def centroid(g):
+        c = np.mean([face_sig[i] for i in g], axis=0)
+        return c / (float(np.linalg.norm(c)) or 1.0)
+
+    # second chance for pose outliers: a single-shot "person" within SFace's
+    # published same-person bar of a real person is that person mid-gesture
+    settled = [g for g in persons if len(g) > 1]
+    if settled:
+        cs = [centroid(g) for g in settled]
+        rest = []
+        for g in persons:
+            if len(g) == 1:
+                ds = [1.0 - float(face_sig[g[0]] @ c) for c in cs]
+                j = int(np.argmin(ds))
+                if ds[j] < fc["face_second"]:
+                    settled[j].append(g[0])
+                    continue
+            if len(g) == 1:
+                rest.append(g)
+        persons = settled + rest
+    cents = [centroid(g) for g in persons]
+    # ...split a person across two cameras only if the frame sigs
+    # separate decisively on their own
+    cams = []
+    for g in persons:
+        if len(g) >= 2:
+            sub, _ = cluster([sigs_of(sigs, spans, i) for i in g], d["alike"])
+            groups = {}
+            for i, nm in zip(g, sub):
+                groups.setdefault(nm, []).append(i)
+            if len(groups) > 1:
+                w_, b_ = _family_sep([sigs_of(sigs, spans, i) for i in g], sub)
+                if b_ is not None and b_ > 2.0 * max(w_, 1e-6):
+                    cams.extend(groups.values())
+                    continue
+        cams.append(g)
+    for g in cams:
+        key = ("p", min(g))
+        for i in g:
+            names[i] = key
+        name_for(key, g)
+
+    # multi-face shots: which people, then how they are framed
+    def idset_and_layout(i):
+        fam = majority[i]
+        sets, lays = [], []
+        for fs in per_shot[i]:
+            if len(fs) != fam:
+                continue
+            byx = sorted(fs, key=lambda f: f[0])
+            ids = []
+            for cx, w, e in byx:
+                if w < fc["min_id_face"]:
+                    ids.append(-2)      # too small to identify: anonymous
+                    continue
+                ds = [1.0 - float(e @ c) for c in cents]
+                j = int(np.argmin(ds)) if ds else -1
+                ids.append(j if ds and ds[j] < fc["alike_face"] else -1)
+            sets.append(tuple(sorted(ids)))
+            lays.append([v for f in byx for v in (f[0], f[1])])
+        if not sets:
+            return None, None
+        best = max(set(sets), key=sets.count)
+        lay = np.median(np.array([l for s, l in zip(sets, lays)
+                                  if s == best and len(l) == 2 * fam]), axis=0)
+        return best, lay
+
+    multis = {}
+    for i in range(len(spans)):
+        if majority[i] >= 2 and names[i] is None:
+            ids, lay = idset_and_layout(i)
+            if ids is not None:
+                multis.setdefault((majority[i], ids), []).append((i, lay))
+    for (fam, ids), members in sorted(multis.items()):
+        # same people; split by framing only where framing is decisive
+        lays = [l for _, l in members]
+        subgroups = [[m for m, _ in members]]
+        if len(members) >= 2:
+            D = np.array([[float(np.abs(a - b).mean()) for b in lays]
+                          for a in lays])
+            groups = _agg_threshold(D, fc["layout_split"])
+            if len(groups) > 1:
+                w_ = max((D[np.ix_(g, g)].max() for g in groups if len(g) > 1),
+                         default=0.0)
+                b_ = min(D[np.ix_(g, h)].min()
+                         for x, g in enumerate(groups)
+                         for h in groups[x + 1:])
+                if b_ > 2.0 * max(w_, 1e-6):
+                    subgroups = [[members[m][0] for m in g] for g in groups]
+        for g in subgroups:
+            key = ("m%d" % fam, ids, min(g))
+            for i in g:
+                names[i] = key
+            name_for(key, g)
+
+    # no-face shots: graphics and b-roll share ONE angle -- they are not cameras
+    noface = [i for i in range(len(spans))
+              if majority[i] == 0 and names[i] is None]
+    for i in noface:
+        names[i] = ("gfx",)
+    if noface:
+        name_for(("gfx",), noface)
+
+    # leftovers (majority 1 but no clean embedding): nearest person by frame sig
+    for i in range(len(spans)):
+        if names[i] is None:
+            done = [j for j in range(len(spans)) if names[j] is not None]
+            j = min(done, key=lambda j: distance(sigs_of(sigs, spans, i),
+                                                sigs_of(sigs, spans, j)))
+            names[i] = names[j]
+
+    ranked = sorted(order, key=lambda k_: order[k_])
+    final = {k_: "cam%d" % (n + 1) for n, k_ in enumerate(ranked)}
+    out = [final[k_] for k_ in names]
+
+    # Identity separation, centroid-based: is every shot closer to its OWN
+    # person than to any other? Pairwise was the first metric here and it was
+    # wrong for this clustering: absorbing a mid-gesture outlier is the
+    # correct move, and pairwise then reports the outlier's distance to its
+    # farthest team-mate as "within", failing a clustering that is actually
+    # unambiguous. What the decision uses is distance to centroids, so that
+    # is what the guard measures.
+    group_cents = [centroid(g) for g in cams if g]
+    own = {i: gi for gi, g in enumerate(cams) for i in g}
+    within, between = 0.0, None
+    for i, e in face_sig.items():
+        for gi, c in enumerate(group_cents):
+            v = 1.0 - float(e @ c)
+            if gi == own.get(i):
+                within = max(within, v)
+            else:
+                between = v if between is None else min(between, v)
+    return out, majority, within, between
+
+
+def _agg_threshold(D, thr):
+    """Average-linkage agglomerative merge until nothing is closer than thr.
+
+    Lance-Williams row update, same as auto-switch's voice clustering and for
+    the same reason: each merge costs a row rewrite, not a recomputation.
+    Returns groups of row indices, sorted by their smallest member.
+    """
+    m = len(D)
+    if m == 0:
+        return []
+    D = D.astype(np.float64).copy()
+    np.fill_diagonal(D, np.inf)
+    size = np.ones(m)
+    members = [[i] for i in range(m)]
+    while True:
+        f = int(np.argmin(D))
+        i, j = divmod(f, m)
+        if not np.isfinite(D[i, j]) or D[i, j] >= thr:
+            break
+        if i > j:
+            i, j = j, i
+        ni, nj = size[i], size[j]
+        row = (ni * D[i] + nj * D[j]) / (ni + nj)
+        D[i] = row
+        D[:, i] = row
+        D[i, i] = np.inf
+        D[j, :] = np.inf
+        D[:, j] = np.inf
+        size[i] = ni + nj
+        members[i] += members[j]
+        members[j] = []
+    return sorted((g for g in members if g), key=min)
+
+
+def group_by_identity(face_sig, alike):
+    """Average-linkage identity clustering on cosine distance.
+
+    Average, not complete: pose stretches a person's own embeddings -- across
+    229 shots of one film the same person reached 0.46 from himself while the
+    closest two DIFFERENT people sat at 0.467, and under complete linkage an
+    outstretched arm and a thrown-back head each earned a phantom camera.
+    Averaging absorbs the stretch; two people merging would need their whole
+    clusters to be near, which the 3.0x centroid margin rules out."""
+    keys = sorted(face_sig)
+    if not keys:
+        return []
+    E = np.array([face_sig[k] for k in keys])
+    D = 1.0 - E @ E.T
+    return [[keys[i] for i in g] for g in _agg_threshold(D, alike)]
+
+
+def _family_sep(shot_sigs, names):
+    within, between = 0.0, None
+    for i in range(len(shot_sigs)):
+        for j in range(i + 1, len(shot_sigs)):
+            v = distance(shot_sigs[i], shot_sigs[j])
+            if names[i] == names[j]:
+                within = max(within, v)
+            elif between is None or v < between:
+                between = v
+    return within, between
+
+
+def sigs_of(sigs, spans, i):
+    a, b = spans[i]
+    return med_sig(sigs, a, b)
+
+
+def rel_model(p):
+    return p if os.path.isabs(p) else os.path.join(ROOT, p)
+
+
 def frame_png(src, idx, fps_num, fps_den, path, width=320):
     """One frame by index, addressed at the midpoint of its display slot."""
     t = (idx + 0.5) * fps_den / float(fps_num)
@@ -297,6 +681,10 @@ def main():
     ap.add_argument("--json", action="store_true", help="print the document")
     ap.add_argument("--force", action="store_true",
                     help="write the shot list even if the angles do not separate")
+    ap.add_argument("--angle-by", choices=("frame", "person", "auto"),
+                    default="auto",
+                    help="how angles are identified: frame fingerprints, face "
+                         "identity, or frame-first-then-person (default)")
     for k, v in DEFAULT_DETECT.items():
         ap.add_argument("--" + k.replace("_", "-"), type=type(v), default=None,
                         help="default %s" % v)
@@ -324,6 +712,23 @@ def main():
 
     spans, shot_sigs, names = build_shots(diff, sigs, d)
     within, between = separation(shot_sigs, names)
+    frame_failed = between is not None and within >= between
+
+    angle_by = "frame"
+    majority = None
+    if args.angle_by == "person" or (args.angle_by == "auto" and frame_failed):
+        if args.angle_by == "auto":
+            print("frame fingerprints do not separate these angles (within "
+                  "%.4f >= between %.4f) -- switching to face identity"
+                  % (within, between))
+        names, majority, within, between = person_angles(
+            src, spans, sigs, info, d, DEFAULT_FACE)
+        angle_by = "person"
+        print("angles by face identity: %d angles; identity separation "
+              "within %.3f, between %s"
+              % (len(set(names)), within,
+                 "n/a" if between is None else "%.3f" % between))
+    failed = between is not None and within >= between
 
     if args.list:
         print("%s  %d frames  %.4f fps (%d/%d)  %s"
@@ -338,9 +743,10 @@ def main():
             print("  %6.3f  %5d  %5d  %6d%s"
                   % (t, len(find_cuts(diff, dd)), len(sp), len(set(nm)),
                      "   <- current" if abs(t - d["threshold"]) < 1e-9 else ""))
-        print("\nangle separation: worst within %.4f, closest between %s"
-              % (within, "n/a" if between is None else "%.4f" % between))
-        if between is not None and within >= between:
+        print("\nangle separation (%s): worst within %.4f, closest between %s"
+              % (angle_by, within,
+                 "n/a" if between is None else "%.4f" % between))
+        if failed:
             print("  !! " + SEPARATION_FAILED)
 
     print("\n  #  cam    start      end     len  frames        peak")
@@ -368,7 +774,8 @@ def main():
         "fps_num": info["fps_num"], "fps_den": info["fps_den"], "fps": fps,
         "n_frames": n,
         "detect": d,
-        "separation": {"within": round(within, 5),
+        "angle_by": angle_by,
+        "separation": {"method": angle_by, "within": round(within, 5),
                        "between": None if between is None else round(between, 5)},
         "cuts": [a for a, _ in spans[1:]],
         "shots": [{"start": a, "end": b, "camera": nm}
@@ -406,8 +813,9 @@ def main():
     # split-cameras.py builds one full-length tape per angle: on an hour-long
     # interview that mis-clustered into 55, this check is the difference
     # between a warning and fifty-five hours of encoding nobody wanted.
-    if between is not None and within >= between and not args.force:
-        print("\n!! %s" % SEPARATION_FAILED)
+    if failed and not args.force:
+        print("\n!! %s" % (PERSON_SEPARATION_FAILED if angle_by == "person"
+                           else SEPARATION_FAILED))
         sys.exit("refusing to write a shot list with %d angles that do not "
                  "separate -- pass --force if you know better" % len(set(names)))
 

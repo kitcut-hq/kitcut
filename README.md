@@ -617,28 +617,63 @@ re-cut is scored against.
 | **angle** | shots cluster by their **median** fingerprint, not their mean. The speaker moves; the room behind them does not, and the median is the room. Complete linkage, so two angles never chain together through a shot that sits between them |
 | **re-split** | a shot whose two halves have different medians was never one shot. Candidates are the *sub-threshold* peaks only, so a speaker standing up mid-shot — a real change, but a gradual one — cannot be mistaken for a cut |
 
-**It reads the room, not the person — and that is its limit.** An angle is
-identified by the background behind the speaker, so cameras must have visually
-different backgrounds. Two hour-long Ukrainian studio interviews
-(`projects/up-interview-1`, `-2`, kept as documented negative results) put four
-people at one table against a single black backdrop, and the method collapses:
-55 and 61 phantom angles, no plateau, and worst-distance-within-an-angle
-*exceeding* closest-distance-between-two. A shot resembles a different camera
-more than its own. Burned-in lower-third name cards compound it — while a name
-is up, that camera fingerprints as a new angle.
+**Angles are identified two ways, and the film picks which.** The frame
+fingerprint reads the whole picture — in practice, the background behind the
+speaker — and it is cheap and exact where cameras have visually different
+backgrounds, which is all four a16z films (margin 4.7×). A studio that puts
+every camera against the same black backdrop defeats it outright: two hour-long
+Ukrainian interviews (`projects/up-interview-1`, `-2`) collapsed into 55 and 61
+phantom angles, with within-angle distance *exceeding* between-angle (0.44×).
+Three cheap rescues — a top-60% mask, contrast normalisation, a colour torso
+patch with Haar face detection — were measured at 0.47×, 0.72× and 1.11×, all
+rejected; Haar also missed one of the four people in five of five samples.
 
-Three rescues were measured and all three failed: plain, a top-60% mask
-(dropping the name cards and the table), and that plus contrast normalisation.
-Best margin 0.47×, where usable is well above 1.0 and the a16z films score 4.7×.
-Masking does fix the name-card pairs specifically (0.158 → 0.062) without fixing
-the angles. **Do not tune thresholds at this** — the signal is absent, not
-buried. Separating those angles needs person identity (who is in frame, and how
-they are framed), which is a different method rather than a parameter.
+So `--angle-by person` identifies angles by **who is in frame** instead: YuNet
+face detection plus SFace identity embeddings (both via the OpenCV already
+installed; two small ONNX models under `models/face/`, curl commands in the
+skill). Shots split by majority face count over sampled frames, and each family
+got its rule the same way — by watching the previous rule fail on a real film:
 
-`shot-detect.py` therefore **refuses to write a shot list whose angles do not
-separate**, unless `--force`. That refusal is what stops `split-cameras.py` from
-cheerfully building one full-length tape per phantom angle — fifty-five of them
-on a one-hour film.
+- **One face**: cluster by identity, *average* linkage — pose stretches a
+  person's own embeddings, and under complete linkage an outstretched arm and
+  a thrown-back head each earned themselves a phantom camera. A single-shot
+  "person" within SFace's published same-person bar (0.64) of a real person's
+  centroid is that person mid-gesture and is absorbed. Calibration margin
+  3.0× (same person ≤ 0.24, different people ≥ 0.72); the embeddings even
+  corrected two hand-labelled shots.
+- **Two-plus faces**: cluster by *which people* are in the shot — every face
+  matched to the person centroids — then split by face layout only where the
+  split is decisive. First tried frame fingerprints here, and the same black
+  backdrop that broke the close-ups shattered one two-shot pairing into
+  fifteen phantom angles. Faces too small to identify (under ~8.5% of frame
+  width, i.e. everyone in a four-person wide) stay anonymous, because tiny-face
+  identities are noise and split one wide camera six ways.
+- **Zero faces**: ONE shared angle. Graphics and b-roll are not cameras, and
+  every logo animation frame-clustered into its own angle before this — which
+  downstream means one full-length synthetic tape *each*.
+
+The separation guard for person mode is **centroid-based** — is every shot
+closer to its own person than to any other — because pairwise distance fails
+correct clusterings: absorbing a mid-gesture outlier is right, and pairwise
+then reports that outlier's distance to its farthest team-mate as "within".
+Face detections are cached under `temp/` per (file, params); iterating on
+grouping logic cost a ten-minute hour-of-AV1 decode per attempt before that.
+A single backdrop — or a green wall — is the *easy* case for all of this: the
+less background there is, the more the frame is the person.
+
+On the film that produced 55 phantom angles, person mode finds **13**: four
+close-ups (their burned-in name-card shots correctly merged into their
+cameras — impossible for frame sigs), two wide framings, six framings of the
+two two-shot pairings (operated cameras genuinely reframe over an hour), and
+one graphics angle. Every one is a real picture.
+
+The default `--angle-by auto` runs frame first and switches to person only when
+the separation guard fires, so the four a16z fixtures produce byte-identical
+shot lists — and person mode run explicitly on `a16z-altman` finds the same 16
+shots in the same 4-angle structure, two independent instruments agreeing on a
+solved film. If **both** methods fail to separate, `shot-detect.py` still
+refuses to write the shot list (unless `--force`) — the refusal is what stops
+`split-cameras.py` from building one full-length tape per phantom angle.
 
 `--list` sweeps the threshold instead of picking one. On the a16z clip the
 answer is 15 cuts / 16 shots / 4 angles at **every** threshold from 0.030 to

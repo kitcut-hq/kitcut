@@ -33,3 +33,7 @@ work needs angle identity from WHO is in frame and how they are framed -- face
 or person embeddings -- which is a different method, not a parameter. Until
 then shot-detect refuses to write a shot list here, which is what stops
 split-cameras from building one hour-long tape per phantom angle.
+- 21:02 shot-detect scripts/shot-detect.py (--src projects/up-interview-1/sources/original.mp4 --sheets) -- 229 shots, 31 angles, 228 cuts from projects/up-interview-1/sources/original.mp4
+- 21:16 shot-detect scripts/shot-detect.py (--src projects/up-interview-1/sources/original.mp4 --sheets) -- 229 shots, 16 angles, 228 cuts from projects/up-interview-1/sources/original.mp4
+- 21:28 conform scripts/split-cameras.py (--manifest projects/up-interview-1/multicam-sim.json --conform-only) -- CFR 25/1 programme from projects/up-interview-1/sources/original.mp4
+- 21:51 shot-detect scripts/shot-detect.py (--src projects/up-interview-1/sources/original.mp4 --sheets) -- 229 shots, 13 angles, 228 cuts from projects/up-interview-1/sources/original.mp4

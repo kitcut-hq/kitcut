@@ -244,6 +244,37 @@ check("...correctly", purity(lab, who) > 0.95, True)
 check("...in under a minute (took %.1fs)" % _el, _el < 60.0, True)
 check("separation stays cheap too", _auto.separation(V, lab)[1] is not None, True)
 
+print("== angle identity by person ==")
+def unit(v):
+    v = np.array(v, dtype=np.float32)
+    return v / np.linalg.norm(v)
+A_ = unit([1, 0, 0, 0.1]); B_ = unit([0, 1, 0, 0.1]); C_ = unit([0, 0, 1, 0.1])
+fs = {0: A_, 1: B_, 2: unit([0.98, 0.05, 0, 0.1]), 3: C_,
+      4: unit([0.02, 0.99, 0, 0.1])}
+check("three people found from five shots",
+      _shots.group_by_identity(fs, 0.5), [[0, 2], [1, 4], [3]])
+check("a tighter bar splits nobody who is really one person",
+      _shots.group_by_identity({0: A_, 1: unit([0.995, 0.02, 0, 0.1])}, 0.5),
+      [[0, 1]])
+check("an empty film has no people", _shots.group_by_identity({}, 0.5), [])
+# a bridge shot halfway between two people cannot chain them into one
+bridge = unit([1, 1, 0, 0.1])
+got = _shots.group_by_identity({0: A_, 1: B_, 2: bridge}, 0.5)
+check("a between-two-people shot cannot merge them", len(got) >= 2, True)
+# average linkage absorbs a pose outlier that complete linkage refuses: one
+# far pairwise (0.6) does not veto a shot whose MEAN distance to the person
+# is fine -- an outstretched arm earned itself a phantom camera this way
+Dm = np.array([[0.00, 0.05, 0.05, 0.60, 0.90],
+               [0.05, 0.00, 0.05, 0.30, 0.90],
+               [0.05, 0.05, 0.00, 0.30, 0.90],
+               [0.60, 0.30, 0.30, 0.00, 0.90],
+               [0.90, 0.90, 0.90, 0.90, 0.00]])
+check("a pose outlier is absorbed by its person, not made a camera",
+      _shots._agg_threshold(Dm, 0.5), [[0, 1, 2, 3], [4]])
+check("nothing merges when nothing is alike",
+      _shots._agg_threshold(np.full((3, 3), 0.7), 0.5), [[0], [1], [2]])
+check("an empty matrix has no groups", _shots._agg_threshold(np.zeros((0, 0)), 0.5), [])
+
 print("== debug notes ==")
 check("opaque ink writes alpha 00 -- ASS alpha is inverted, and getting this "
       "backwards renders NOTHING while the box shows fine",

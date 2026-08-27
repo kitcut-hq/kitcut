@@ -70,16 +70,26 @@ Then read the separation line: worst distance within an angle vs closest between
 two angles. 0.036 vs 0.169 is a 4.7× margin. If within ≥ between it says so, and
 you must look at `--sheets` before believing anything.
 
-**Check the content class before anything else.** This method identifies an
-angle by the background behind the speaker, so it needs cameras with visually
-different backgrounds. A studio with one plain backdrop behind everybody defeats
-it outright — measured on two hour-long interviews (`up-interview-1`, `-2`):
-55 and 61 phantom angles, and same-angle distance running 0.44x the
-between-angle distance where usable is well above 1.0. `shot-detect.py` now
-refuses to write a shot list in that state, which is what stops a fifty-five
-tape build. Do not reach for `--force` or a threshold; the signal is absent, not
-buried, and the fix is person identity rather than appearance. Burned-in
-lower-third name cards cause a milder version of the same thing.
+**Two angle-identity methods; `--angle-by auto` picks per film.** Frame
+fingerprints read the background and win where cameras look different (all four
+a16z films, 4.7x). Face identity (`person`) wins where they do not — a studio
+backdrop, a green wall — clustering one-face shots by SFace embeddings (3.0x
+measured on `up-interview-1`) and wides/no-face shots by composition. Auto runs
+frame first and switches only when the guard fires, so solved films are
+byte-stable. Do not hand-pick the mode without a reason; do not `--force` past
+a refusal when BOTH methods fail — that means a genuinely unreadable film, and
+the fix is a better instrument, not a threshold. Person mode needs two ONNX
+models (gitignored, ~39 MB):
+
+```powershell
+cd C:\instafill\video-editing\models\face
+curl -sL -O https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx
+curl -sL -O https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx
+```
+
+Do not substitute Haar cascades to avoid the download: measured on the same
+film, Haar missed one of four people in five of five samples, and the best
+cheap-feature margin was 1.11x against SFace's 3.0x.
 
 **Always look at `--sheets`.** One contact sheet per detected angle. This takes
 ten seconds and is the only check that catches "these two clusters are the same
