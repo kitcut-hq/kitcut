@@ -83,3 +83,4 @@ grouping-logic iteration cost a ten-minute decode of an hour of AV1.
 This film is also the first through the 25 fps audio-boundary path (exact:
 1920 samples a frame) and the hour-long clustering path. Conform preserved all
 90145 frames.
+- 22:50 sync-audio scripts/sync-audio.py (--manifest temp/up1-syncprobe-manifest.json --out temp/up1-syncprobe.json) -- 3 tapes aligned on cam1, worst confidence 3298.5, worst three-way residual 0.000 ms

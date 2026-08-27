@@ -17,7 +17,7 @@
   },
   "deliverables": {},
   "notes": [],
-  "updated_utc": "2026-08-27T21:51:32Z",
+  "updated_utc": "2026-08-27T22:50:07Z",
   "result": {
     "stage0_shot_detect": {
       "verdict": "PASS via person mode",

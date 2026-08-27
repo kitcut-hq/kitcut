@@ -91,6 +91,22 @@ Do not substitute Haar cascades to avoid the download: measured on the same
 film, Haar missed one of four people in five of five samples, and the best
 cheap-feature margin was 1.11x against SFace's 3.0x.
 
+**Inserts are not cameras, and person mode alone will not tell you.** Archive
+footage has faces in it, so face identity happily clusters Freddie Mercury as
+an angle -- which is what a culture show cutting to Queen and Joy Division
+actually did (61 -> 36 angles, still refused). The cast rule finishes the job:
+an angle showing nobody who holds `cast_share` (3%) of the film is an insert,
+however often the editor returns to it. 36 -> 10, guard passes. Rarity is NOT
+the test -- it was tried and it binned a legitimate wide used once; rare is not
+the same as inserted.
+
+**Know when a film is not a fixture at all.** A show whose inserts are a third
+of its runtime stretches the round trip past meaning: an insert is not a camera
+that was rolling, so "rebuild the tape it came from" has no answer. The `xtra`
+bin gives them one self-consistent pseudo-tape that WOULD round-trip, but it is
+not a camera and must never be reported as one. `up-interview-2` is kept as a
+detection fixture for exactly this reason.
+
 **Always look at `--sheets`.** One contact sheet per detected angle. This takes
 ten seconds and is the only check that catches "these two clusters are the same
 camera" or "this angle is actually two". Numbers cannot tell you the wide shot
