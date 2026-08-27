@@ -480,6 +480,27 @@ Below about 0.7 s the cut count climbs faster than the runtime falls — 62 cuts
 in seven minutes is one every seven seconds, and 0.15 s of air starts clipping
 consonants.
 
+### Where the film starts and ends
+
+`film.start_text` / `film.end_text` quote what is said rather than naming a
+timecode, so the bound survives a re-transcribe. Left out, the film runs from
+0.6 s before the first word to 0.8 s after the last.
+
+A phrase lands on the word's own edge, which cuts the instant the speaker stops
+— audibly abrupt, and tighter than that default. `start_pad` / `end_pad` buy the
+breath back. They default to 0, so a manifest already cut against a phrase keeps
+the timing it shipped with.
+
+```json
+"film": { "end_text": "Desktop Sharing", "end_pad": 0.8 }
+```
+
+Worth cutting to: `claude-demo` ends there because the speaker turns away at
+7:37 of the finished film and gives the last sentence in profile, to a phone
+that is switched off. The audio is fine; the picture is not. **Read the picture,
+not just the transcript** — a sentence that reads well can be delivered to
+nobody.
+
 ### Bookends, and picture that has nothing to say
 
 Footage shot separately — an intro recorded after the fact, a silent shot of the
@@ -759,6 +780,7 @@ all, and its `FaceDetectorYN` replacement wants a model from an external host.
 | `scripts/yt-set-chapters.py` | write chapter markers into a video's description |
 | `scripts/yt-audit-chapters.py` | which videos on a channel actually show chapters |
 | `scripts/cut-clips.py` | manifest → standalone clips cut out of a long video |
+| `scripts/_overlay.py` | drawing and filter helpers shared by the burned-in graphics |
 | `scripts/handle-overlay.py` | animated social-handle badge, drawn and burned in |
 | `scripts/name-label.py` | lower-third name label, drawn and burned in |
 | `scripts/dub-clips.py` | translate a clip and speak it back into its own cadence |

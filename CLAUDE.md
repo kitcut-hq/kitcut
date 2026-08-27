@@ -139,6 +139,13 @@ Test `camera_when_frozen_over` against the frozen **runs**, not against kept
 segments — pause-cutting chops a dead region into pieces too short to qualify
 individually, and the first version silently cut away for 0.0 s.
 
+`film.start_text` / `film.end_text` quote what is said instead of naming a
+timecode; `start_pad` / `end_pad` add the breath a phrase-resolved bound
+otherwise lacks (they default to 0, so existing cuts are unchanged). **Read the
+picture, not just the transcript** when choosing the end — `claude-demo` stops
+at "Desktop Sharing" because the speaker turns away right after and delivers a
+perfectly good sentence in profile, to a phone that is switched off.
+
 `bookends` bring in clips shot separately, and each may carry `broll`.
 **Transcribe every extra clip before deciding what it is for** — one with no
 speech in it is picture, not a scene, and belongs in a `broll` list, where the
@@ -201,6 +208,7 @@ consent to give.
 | path | what |
 |---|---|
 | `scripts/` | all tooling; `_env.py` first, then the pipeline scripts |
+| `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
 | `config/clips/` | which episodes to cut, and their crop sidecars |
 | `config/screencast/` | multicam manifests, their `.sync.json` / `.cuts.json` sidecars, and the YouTube description text |
 | `config/presets/` | caption styling |

@@ -64,6 +64,16 @@ gone from the clock.
 3. **Render**, then sample the fade at `at-0.2`, `at+0.5`, `at+dur-0.3` and
    `at+dur+0.2` to confirm it arrives and leaves when it should.
 
+## Shared code
+
+Drawing and filter helpers live in `scripts/_overlay.py` — `hex_rgba`,
+`font_for_cap_height`, `draw_text_tracked`, `text_width_tracked`, `esc`,
+`probe`. `handle-overlay.py` uses the same ones. A new burned-in graphic should
+import from there rather than grow a third copy of each, and follow the same shape:
+Pillow draws a PNG, ffmpeg animates it with expressions in `t`, and `prepare()`
+returns `(pngs, filter_complex, out_label)` so a caller can splice it onto its
+own chain and keep the render to one encode.
+
 ## Style
 
 Everything visual is in the preset — nothing is in the script.

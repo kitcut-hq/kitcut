@@ -5,6 +5,11 @@
   "camera": "sources/IMG_2695.MOV",
   "camera_rotate": "none",
   "words": "transcripts/claude-demo.words.json",
+  "film": {
+    "_why": "He turns away at 7:37 of the finished film and delivers the last sentence in profile, to a phone that is switched off. The last line he gives to camera is the meta sign-off about how the film was shot, so the film ends on that. end_pad restores the 0.8s of air the transcript default would have given, which a phrase-resolved bound does not.",
+    "end_text": "Desktop Sharing",
+    "end_pad": 0.8
+  },
   "outdir": "outputs/screencast",
   "sync": {
     "seed": "creation_time",

@@ -27,8 +27,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
 
+from PIL import Image, ImageDraw
+import _overlay
 
-from PIL import Image, ImageDraw, ImageFont
+# Re-exported: cut-clips.py reaches for _handle.esc and _handle.probe_dims.
+from _overlay import (hex_rgba, font_for_cap_height, draw_text_tracked,
+                      text_width_tracked, esc, probe_dims)
 
 ENV = _env.ENV
 
@@ -36,51 +40,6 @@ DEFAULT_PRESET = "config/handles/default.json"
 
 
 # ---------------------------------------------------------------- drawing
-
-
-def hex_rgba(h, alpha=255):
-    h = h.lstrip("#")
-    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), alpha)
-
-
-def font_for_cap_height(path, cap_px):
-    """Pick the nominal size whose CAP height measures cap_px.
-
-    Sizing by cap height rather than nominal size is the only way two different
-    typefaces land the same optical size -- nominal size includes ascent and
-    descent, which vary wildly. Same reason the caption presets do it.
-    """
-    lo, hi = 4, max(16, int(cap_px * 8))
-    best = None
-    while lo <= hi:
-        mid = (lo + hi) // 2
-        f = ImageFont.truetype(path, mid)
-        box = f.getbbox("H")          # (x0, y0, x1, y1) of the glyph ink
-        h = box[3] - box[1]
-        if h == cap_px:
-            return f
-        if h < cap_px:
-            best = f
-            lo = mid + 1
-        else:
-            hi = mid - 1
-    return best or ImageFont.truetype(path, max(4, int(cap_px)))
-
-
-def draw_text_tracked(draw, xy, text, font, fill, tracking, stroke, stroke_fill):
-    """Pillow has no letter-spacing, so place glyph by glyph."""
-    x, y = xy
-    for ch in text:
-        draw.text((x, y), ch, font=font, fill=fill,
-                  stroke_width=stroke, stroke_fill=stroke_fill)
-        x += draw.textlength(ch, font=font) + tracking
-    return x - tracking - xy[0]
-
-
-def text_width_tracked(draw, text, font, tracking):
-    if not text:
-        return 0.0
-    return sum(draw.textlength(c, font=font) for c in text) + tracking * (len(text) - 1)
 
 
 def gradient_image(size, colours, angle_deg):
@@ -197,12 +156,6 @@ def render_badge(preset, handle, scale, variant):
 # ---------------------------------------------------------------- animation
 
 
-def esc(expr):
-    """ffmpeg splits filter options on commas, so commas inside an expression
-    have to be escaped. Doing it here means callers write normal expressions."""
-    return expr.replace(",", r"\,")
-
-
 def pick(index_expr, values):
     """Nested if() choosing among constants by an integer expression."""
     out = "%g" % values[-1]
@@ -267,16 +220,6 @@ def prepare(preset_path, handle, vid_w, vid_h, tmpdir, tag="", base="0:v"):
                      % (cur, i, esc(x_expr), esc(y_expr), esc(enable), nxt))
         cur = nxt
     return pngs, ";".join(parts), cur
-
-
-def probe_dims(path):
-    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-                          "-show_entries", "stream=width,height", "-of", "json", path],
-                         env=ENV, capture_output=True, text=True)
-    if out.returncode:
-        sys.exit("ffprobe failed on %s\n%s" % (path, out.stderr.strip()))
-    s = json.loads(out.stdout)["streams"][0]
-    return int(s["width"]), int(s["height"])
 
 
 def main():

@@ -28,6 +28,25 @@ powershell -ExecutionPolicy Bypass -File scripts/import-iphone.ps1 -DeviceName '
 Zero items listed means the phone is **locked or untrusted**, not broken. A
 device missing from `This PC` entirely means it is unplugged.
 
+## Where the film ends
+
+`film.start_text` / `film.end_text` quote what is said; `start_pad` / `end_pad`
+add the breath a phrase-resolved bound otherwise lacks (default 0).
+
+```json
+"film": { "end_text": "Desktop Sharing", "end_pad": 0.8 }
+```
+
+**Read the picture, not just the transcript.** A sentence that reads perfectly
+well can be delivered to nobody. `claude-demo` ends at "Desktop Sharing" because
+the speaker turns away at 7:37 of the finished film and gives the last sentence
+in profile, to a phone that is switched off — the transcript gives no hint of
+it. Sample frames across the last half-minute before settling the end.
+
+Film time is not camera time: to check a moment you spotted on the finished
+scrubber, map it back through the keep-list, remembering the opening bookend is
+not in `keeps` and so offsets everything after it.
+
 ## Order of work
 
 1. **Import**, then `ffprobe` for real. Sizes and MTP timestamps are estimates;

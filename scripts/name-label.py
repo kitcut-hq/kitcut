@@ -12,12 +12,9 @@ classifying them. That frame is 1280x720, so each number was scaled by 1.5 onto
 the 1920x1080 canvas the presets are authored on. `_measured` in the preset
 keeps the raw 720p readings next to the scaled ones.
 
-Same two-part split as `handle-overlay.py`, for the same reason:
-
-  * the card is drawn once into a PNG, by Pillow, where rounded rectangles,
-    two type weights and centring are easy;
-  * the animation is an ffmpeg `fade` on that PNG's alpha plus an `overlay`
-    gated by `enable`, so it costs one filter pass and no per-frame Python.
+Drawn by Pillow into a PNG, animated by an ffmpeg `fade` on that PNG's alpha
+plus an `overlay` gated by `enable` -- the split `_overlay.py` describes, which
+this shares with the handle badge. One filter pass, no per-frame Python.
 
 That means it composes: `screencast-cut.py` hands `prepare()` the tail of its
 own chain and the label lands inside the film's single NVENC pass, so a labelled
@@ -30,10 +27,13 @@ import sys, os, json, argparse, subprocess, shutil
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
+import _overlay
+from _overlay import (hex_rgba, font_for_cap_height, draw_text_tracked,
+                      text_width_tracked, esc, probe)
 
 ENV = _env.ENV
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = _overlay.ROOT
 
 DEFAULT_PRESET = "config/labels/lower-third.json"
 
@@ -44,55 +44,6 @@ SS = 4
 
 
 # ---------------------------------------------------------------- drawing
-
-
-def hex_rgba(h, alpha=255):
-    h = h.lstrip("#")
-    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), alpha)
-
-
-def font_for_cap_height(path, cap_px):
-    """Pick the nominal size whose CAP height measures cap_px.
-
-    Sizing by cap height rather than nominal size is the only way the two
-    weights on this card land at the ratio they were measured at -- nominal
-    size includes ascent and descent, which differ between weights. The caption
-    presets size the same way.
-    """
-    lo, hi = 4, max(16, int(cap_px * 8))
-    best = None
-    while lo <= hi:
-        mid = (lo + hi) // 2
-        f = ImageFont.truetype(path, mid)
-        box = f.getbbox("H")
-        h = box[3] - box[1]
-        if h == cap_px:
-            return f
-        if h < cap_px:
-            best = f
-            lo = mid + 1
-        else:
-            hi = mid - 1
-    return best or ImageFont.truetype(path, max(4, int(cap_px)))
-
-
-def draw_text_tracked(draw, xy, text, font, fill, tracking):
-    """Pillow has no letter-spacing, so place glyph by glyph."""
-    x, y = xy
-    for ch in text:
-        draw.text((x, y), ch, font=font, fill=fill)
-        x += draw.textlength(ch, font=font) + tracking
-
-
-def text_width_tracked(draw, text, font, tracking):
-    if not text:
-        return 0.0
-    return sum(draw.textlength(c, font=font) for c in text) + tracking * (len(text) - 1)
-
-
-def _resolve(path):
-    """Preset paths are repo-relative so a preset is portable between machines."""
-    return path if os.path.isabs(path) else os.path.join(ROOT, path)
 
 
 def _line_cfg(preset, key):
@@ -109,7 +60,7 @@ def measure(preset, texts, scale):
     Returned separately from render() because the auto-fit loop needs the width
     of a candidate scale without paying to rasterise it.
     """
-    probe = ImageDraw.Draw(Image.new("RGBA", (8, 8)))
+    pen = ImageDraw.Draw(Image.new("RGBA", (8, 8)))
     card = preset["card"]
     pad_x = card["pad_x_px"] * scale
     pad_y = card["pad_y_px"] * scale
@@ -122,10 +73,10 @@ def measure(preset, texts, scale):
         c = _line_cfg(preset, key)
         if c.get("uppercase"):
             text = text.upper()
-        f = font_for_cap_height(_resolve(c["file"]),
+        f = font_for_cap_height(_overlay.repo_path(c["file"]),
                                 max(4, int(round(c["cap_height_px"] * scale))))
         tracking = c.get("tracking_px", 0) * scale
-        w = text_width_tracked(probe, text, f, tracking)
+        w = text_width_tracked(pen, text, f, tracking)
         cap = f.getbbox("H")
         asc, desc = f.getmetrics()
         rows.append({"key": key, "text": text, "font": f, "tracking": tracking,
@@ -214,12 +165,6 @@ def render_label(preset, spec, scale, max_w=None):
 # ---------------------------------------------------------------- animation
 
 
-def esc(expr):
-    """ffmpeg splits filter options on commas, so commas inside an expression
-    have to be escaped. Doing it here means callers write normal expressions."""
-    return expr.replace(",", r"\,")
-
-
 def anchor_xy(layout, cw, ch, vid_w, vid_h, scale, sy):
     """Place the card from a named corner, clamped into the frame."""
     corner = layout.get("corner", "bottom-left")
@@ -254,7 +199,7 @@ def prepare(preset_path, specs, vid_w, vid_h, tmpdir, tag="", base="0:v",
 
     vid_w/vid_h are the dimensions of THAT label, not of the source file.
     """
-    preset = json.load(open(_resolve(preset_path), encoding="utf-8"))
+    preset = json.load(open(_overlay.repo_path(preset_path), encoding="utf-8"))
     canvas = preset.get("canvas", {"width": 1920, "height": 1080})
     scale = vid_w / float(canvas["width"])
     sy = vid_h / float(canvas.get("height", 1080))
@@ -305,23 +250,9 @@ def prepare(preset_path, specs, vid_w, vid_h, tmpdir, tag="", base="0:v",
 # ---------------------------------------------------------------- cli
 
 
-def probe(path):
-    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-                          "-show_entries", "stream=width,height,r_frame_rate"
-                          ":format=duration", "-of", "json", path],
-                         env=ENV, capture_output=True, text=True)
-    if out.returncode:
-        sys.exit("ffprobe failed on %s\n%s" % (path, out.stderr.strip()))
-    j = json.loads(out.stdout)
-    s = j["streams"][0]
-    num, den = (s.get("r_frame_rate") or "30/1").split("/")
-    fps = float(num) / float(den or 1)
-    return int(s["width"]), int(s["height"]), fps, float(j["format"]["duration"])
-
-
 def load_specs(args):
     if args.labels:
-        specs = json.load(open(_resolve(args.labels), encoding="utf-8"))
+        specs = json.load(open(_overlay.repo_path(args.labels), encoding="utf-8"))
         if isinstance(specs, dict):
             specs = specs.get("labels", [])
         return specs
@@ -392,7 +323,7 @@ def main():
         # The still is grabbed at T, so the image inputs' clocks restart at zero
         # and the fades would land somewhere else entirely. Composite the cards
         # flat instead: this mode is about WHERE the card sits, not when.
-        preset = json.load(open(_resolve(args.preset), encoding="utf-8"))
+        preset = json.load(open(_overlay.repo_path(args.preset), encoding="utf-8"))
         sx = w / float(preset["canvas"]["width"])
         sy = h / float(preset["canvas"].get("height", 1080))
         parts, cur = [], "0:v"

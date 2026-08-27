@@ -266,8 +266,16 @@ def rel(p):
 
 
 def resolve_bound(m, words, key, default):
-    """A film boundary given as a phrase, a number, or left to the transcript."""
-    spec = (m.get("film") or {}).get(key)
+    """A film boundary given as a phrase, a number, or left to the transcript.
+
+    A phrase lands on the word's own edge, which cuts the film the instant the
+    speaker stops -- audibly abrupt, and tighter than the transcript default,
+    which gives itself 0.6s before the first word and 0.8s after the last.
+    start_pad / end_pad buy that breath back. They default to 0, so a manifest
+    that already resolves a bound by phrase keeps the timing it was cut with.
+    """
+    film = m.get("film") or {}
+    spec = film.get(key)
     if spec is None:
         return default
     if isinstance(spec, (int, float)):
@@ -275,7 +283,9 @@ def resolve_bound(m, words, key, default):
     hit = _outline.find(words, spec)
     if hit is None:
         sys.exit("film.%s phrase not found in transcript: %r" % (key, spec))
-    return hit[0] if key == "start_text" else hit[1]
+    if key == "start_text":
+        return hit[0] - float(film.get("start_pad", 0.0))
+    return hit[1] + float(film.get("end_pad", 0.0))
 
 
 def pip_masks(pip, outdir):
