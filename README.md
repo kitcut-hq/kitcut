@@ -678,6 +678,58 @@ Run that negative control after changing anything: re-render with one anchor
 moved by a frame and confirm the comparator fails. A harness that has never
 failed has not been tested.
 
+### Stage 2: choosing the cut from the sound alone
+
+Stage 1 proves the machinery can replay an edit it was handed. `auto-switch.py`
+has to *choose* one. It gets the tapes and nothing else — no shot list, no truth
+sidecar, and **no picture**, because the frozen filler makes "which camera is
+moving" the answer key.
+
+```powershell
+python scripts/auto-switch.py --manifest projects/<id>/anglecut-auto.json --list
+python scripts/auto-switch.py --manifest projects/<id>/anglecut-auto.json --sweep `
+                              --score projects/<id>/<id>.shots.json
+python scripts/auto-switch.py --manifest projects/<id>/anglecut-auto.json
+python scripts/angle-cut.py   --manifest projects/<id>/anglecut-auto.json --out <...>-autocut.mp4
+```
+
+1.5 s of audio every 0.5 s → a speaker vector per window (sherpa-onnx on the
+already-installed ONNX runtime: no torch, no gated download) → average-linkage
+agglomerative clustering to K people, K declared because how many were at the
+table is a fact about the shoot. Each cluster is bound to a camera by **one hint
+per person** — "at 0:45, the person talking is the one on cam2" — which is the
+only human knowledge in the stage, and is what an editor has for free. Then the
+grammar: be on the speaker, never cut faster than `min_shot`, arrive `lead`
+frames early.
+
+Sherpa's own clustering was tried first and merged two of the three speakers
+into a single 33-second block. The embeddings were never the problem — measured
+cosine distance is 0.59 within a speaker against 0.82 between — so the
+clustering happens here instead. That is worth knowing before blaming a model.
+
+**Result on the a16z clip: 77.68% of the timeline on the same camera as the
+human editor**, computed twice by different routes — `auto-switch --score` off
+the shot list, and `compare-videos.py` off the rendered pixels — agreeing to the
+second decimal. Per camera: the interviewer 100% (501 of 501 frames), 90.4%,
+83.6%, and the wide 0%.
+
+That 0% is the ceiling talking. The wide is nobody's close-up, so a
+speaker-following rule can never predict a cut to it, and it is 14.2% of this
+film — meaning ~85.8% is the most this grammar can score, and 77.68% is 90% of
+what is reachable. The remaining gap is the editor holding on a listener.
+
+The sweep is where a plausible idea died. "Break a long monologue with the
+wide" sounds obviously right, and it **loses**: agreement falls from 77.7% to
+64.6%. It does place more cuts near the human's cuts (8 of 15 within a second,
+against 4), which is the honest shape of the trade — it cuts at the right
+*times* to the wrong *camera*. `min_shot` changed nothing at all on this film,
+because the speaker runs are all longer than three seconds anyway.
+
+**Knobs swept against one film are fitted to it.** The number that means
+anything comes from the next film, which is what the framework is for. And note
+`compare-videos.py`'s PASS/FAIL is the stage-1 bar — frame-exactness — so a
+stage-2 cut *should* fail it; the number to read there is the agreement.
+
 ### The arithmetic has its own test
 
 The round trip is frame arithmetic wearing a video costume, and every part of it
@@ -1245,6 +1297,7 @@ all, and its `FaceDetectorYN` replacement wants a model from an external host.
 | `scripts/sync-audio.py` | line up N tapes that share a soundtrack, by FFT correlation |
 | `scripts/angle-cut.py` | cut one film out of N synchronised cameras, switching full frame |
 | `scripts/compare-videos.py` | score one film against another frame by frame, and pass or fail it |
+| `scripts/auto-switch.py` | choose the camera from the soundtrack alone: diarize, then apply a cutting grammar |
 | `scripts/check-multicam.py` | multicam self-test; no GPU, no files, no cost |
 | `scripts/import-iphone.ps1` | pull footage off a phone over MTP, verified by byte count |
 | `scripts/yt-upload.py` | upload a render to YouTube, channel-guarded and verified |

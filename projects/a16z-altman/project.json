@@ -14,7 +14,8 @@
     "the fixture (conform, staggers, tape quality)": "projects/a16z-altman/multicam-sim.json",
     "the re-cut (cameras, anchor, plan, audio master)": "projects/a16z-altman/anglecut.json",
     "the edit read back off the film": "projects/a16z-altman/a16z-altman.shots.json",
-    "ground truth -- HARNESS ONLY, no script under test may read it": "projects/a16z-altman/a16z-altman.truth.json"
+    "ground truth -- HARNESS ONLY, no script under test may read it": "projects/a16z-altman/a16z-altman.truth.json",
+    "the auto-switched re-cut (stage 2)": "projects/a16z-altman/anglecut-auto.json"
   },
   "deliverables": {
     "projects/a16z-altman/raws/cam1.mp4": {
@@ -91,19 +92,49 @@
       "sidecars": {
         "sync": "projects/a16z-altman/a16z-altman.anglesync.json"
       }
+    },
+    "projects/a16z-altman/outputs/a16z-altman-autocut.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-27T18:11:13Z",
+      "kind": "anglecut",
+      "script": "scripts/angle-cut.py",
+      "manifest": "projects/a16z-altman/anglecut-auto.json",
+      "burned": [
+        "8 segments switching between 3 cameras full frame",
+        "audio taken whole from cam1 -- no joins",
+        "anchored by declared frames"
+      ],
+      "sidecars": {
+        "sync": "projects/a16z-altman/a16z-altman.anglesync.json"
+      }
     }
   },
   "notes": [],
-  "updated_utc": "2026-08-27T17:49:33Z",
+  "updated_utc": "2026-08-27T18:14:22Z",
   "result": {
-    "stage": "1 of 2 -- machinery",
-    "verdict": "PASS",
-    "frames": "2796 of 2796",
-    "cuts_at_offset_0": 15,
-    "shifted_frames": 0,
-    "ssim_median": 0.9993,
-    "audio_offset_ms": 0.0,
-    "angle_agreement_pct": 100.0,
-    "report": "projects/a16z-altman/a16z-altman.compare.json"
+    "stage1_machinery": {
+      "verdict": "PASS",
+      "frames": "2796 of 2796",
+      "cuts_at_offset_0": 15,
+      "shifted_frames": 0,
+      "ssim_median": 0.9993,
+      "audio_offset_ms": 0.0,
+      "angle_agreement_pct": 100.0,
+      "report": "projects/a16z-altman/a16z-altman.compare.json"
+    },
+    "stage2_editorial": {
+      "agreement_pct": 77.68,
+      "ceiling_pct": 85.8,
+      "_ceiling": "the wide is nobody close-up, so a speaker-following rule can never predict it: 14.2% of this film",
+      "per_camera_pct": {
+        "cam1": 100.0,
+        "cam2": 90.4,
+        "cam4": 83.6,
+        "cam3": 0.0
+      },
+      "cuts": "7 against the human 15; 4 of theirs within a second",
+      "_fitted": "grammar knobs were swept against THIS film, so the number is optimistic; the honest one comes from a film the knobs have not seen",
+      "report": "projects/a16z-altman/a16z-altman.autocompare.json"
+    }
   }
 }

@@ -57,3 +57,37 @@ nothing else -- no truth, no shot list, no picture -- and has to decide from the
 sound alone who is speaking and which camera to be on. The frozen filler makes
 the answer visible to any motion detector, so reading the picture there is
 cheating and the skill says so.
+- 18:11 auto-switch scripts/auto-switch.py (--manifest projects/a16z-altman/anglecut-auto.json --score projects/a16z-altman/a16z-altman.shots.json) -- 8 shots from the sound alone, 77.7% agreement with the human edit
+- 18:11 anglecut scripts/angle-cut.py -> projects/a16z-altman/outputs/a16z-altman-autocut.mp4 (--manifest projects/a16z-altman/anglecut-auto.json --out projects/a16z-altman/outputs/a16z-altman-autocut.mp4 --force)
+
+Stage 2 is now done too, and scores **77.68%** of the timeline on the same
+camera as the human editor, from the soundtrack alone. Two things about that
+number before anyone quotes it.
+
+The ceiling is about 85.8%, not 100%. The wide is nobody's close-up, so a
+speaker-following rule cannot predict a cut to it, and it is 14.2% of this film.
+Per camera we get 100% on the interviewer (501 of 501 frames), 90.4%, 83.6% and
+0% on the wide. So 77.68% is roughly 90% of what this grammar can reach, and the
+rest is the editor holding on a listener rather than the talker.
+
+And the grammar knobs were swept against this film, so the number is optimistic
+by construction. The honest one comes from the next video, which is the whole
+reason the framework is manifest-driven. Do not report 77.68% as "how well we
+edit" -- report it as "how well we edit the film we tuned on".
+
+Worth keeping: the sweep killed a plausible idea. "Break a long monologue with a
+wide cutaway" sounds obviously right and measures worse -- 64.6% against 77.7%
+-- while placing MORE cuts near the human's (8 of 15 within a second, against
+4). It cuts at the right times to the wrong camera. min_shot did nothing at all
+here because the speaker runs are all longer than three seconds.
+
+Also worth keeping: sherpa-onnx's built-in clustering merged two of the three
+speakers into one 33-second block, and it was not the model's fault -- measured
+cosine distance is 0.59 within a speaker against 0.82 between, which separates
+fine. auto-switch.py does its own average-linkage clustering for that reason.
+Suspect the clustering before the embeddings.
+
+The two agreement numbers (auto-switch --score off the shot list, compare-videos
+off the rendered pixels) agree to the second decimal by completely different
+routes. If they ever diverge, one of them is broken.
+- 18:14 compare scripts/compare-videos.py (--rendered projects/a16z-altman/outputs/a16z-altman-autocut.mp4 --reference projects/a16z-altman/temp/program.mp4 --out projects/a16z-altman/a16z-altman.autocompare.json) -- FAIL: projects/a16z-altman/outputs/a16z-altman-autocut.mp4 vs projects/a16z-altman/temp/program.mp4, median ssim 0.9992, 490 shifted frames

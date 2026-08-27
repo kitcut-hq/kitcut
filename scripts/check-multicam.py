@@ -29,6 +29,7 @@ _split = import_module("split-cameras")
 _sync = import_module("sync-audio")
 _angle = import_module("angle-cut")
 _cmp = import_module("compare-videos")
+_auto = import_module("auto-switch")
 
 fails = []
 
@@ -149,6 +150,48 @@ d[400:460] = np.linspace(0.02, 0.05, 60)       # a fade: sustained, no spike
 cuts = _shots.find_cuts(d, _shots.DEFAULT_DETECT)
 check("the cut is found", 200 in cuts, True)
 check("the fade is not a cut", [c for c in cuts if 395 <= c <= 465], [])
+
+print("== the switching grammar ==")
+FPS = 24000 / 1001.0
+CAM = {0: "cam1", 1: "cam2"}
+# a speaker track: 100 frames of voice 0, 10 of voice 1, 100 of voice 0.
+track = np.array([0] * 100 + [1] * 10 + [0] * 100, dtype=np.int32)
+check("runs are found", [(a, b, s) for a, b, s in _auto.runs_of(track)],
+      [(0, 100, 0), (100, 110, 1), (110, 210, 0)])
+g = dict(_auto.DEFAULT_GRAMMAR, min_shot_s=1.5, lead_s=0.0, wide_after_s=0.0)
+plan = _auto.grammar(track, CAM, "cam3", g, FPS, 210)
+check("a 10-frame interjection is absorbed, not cut to",
+      plan, [("cam1", 0, 210)])
+g2 = dict(g, min_shot_s=0.2)
+check("...but it survives a shorter minimum",
+      _auto.grammar(track, CAM, "cam3", g2, FPS, 210),
+      [("cam1", 0, 100), ("cam2", 100, 110), ("cam1", 110, 210)])
+long = np.array([0] * 100 + [1] * 100, dtype=np.int32)
+lead = _auto.grammar(long, CAM, "cam3", dict(g, lead_s=0.5), FPS, 200)
+check("lead moves the cut earlier, never the film's start or end",
+      lead, [("cam1", 0, 88), ("cam2", 88, 200)])
+check("the plan still starts at 0 and ends at the last frame",
+      [lead[0][1], lead[-1][2]], [0, 200])
+check("and it is gapless",
+      all(b == a for (_, _, b), (_, a, _) in zip(lead, lead[1:])), True)
+w = _auto.grammar(np.zeros(600, dtype=np.int32), CAM, "cam3",
+                  dict(g, wide_after_s=10.0, wide_dur_s=2.0), FPS, 600)
+check("a long monologue can be broken with the wide",
+      [c for c, _, _ in w], ["cam1", "cam3", "cam1"])
+check("an unmapped voice falls back to the wide",
+      _auto.grammar(np.full(200, 7, dtype=np.int32), CAM, "cam3", g, FPS, 200),
+      [("cam3", 0, 200)])
+
+print("== scoring against a human edit ==")
+ref = [{"start": 0, "end": 100, "camera": "cam1"},
+       {"start": 100, "end": 200, "camera": "cam2"}]
+check("a perfect match is 100%",
+      _auto.score([("cam1", 0, 100), ("cam2", 100, 200)], ref, 200)["agreement_pct"],
+      100.0)
+half = _auto.score([("cam1", 0, 200)], ref, 200)
+check("half right is 50%", half["agreement_pct"], 50.0)
+check("and it says which camera was missed",
+      half["per_camera"]["cam2"][2], 0.0)
 
 print("")
 if fails:

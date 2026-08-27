@@ -1,0 +1,124 @@
+{
+  "_comment": "A camera plan decided from the soundtrack alone by scripts/auto-switch.py -- no shot list, no truth sidecar, no picture. Same shape as a shots.json so angle-cut.py can read it as plan_from.",
+  "id": "a16z-altman",
+  "fps": 23.976023976023978,
+  "n_frames": 2796,
+  "diarize": {
+    "model": "models/diarization/nemo_en_titanet_large.onnx",
+    "window_s": 1.5,
+    "hop_s": 0.5,
+    "silence_rms": 0.005,
+    "threads": 4
+  },
+  "grammar": {
+    "min_shot_s": 1.5,
+    "lead_s": 0.25,
+    "wide_after_s": 0.0,
+    "wide_dur_s": 4.0
+  },
+  "speakers": {
+    "0": "cam1",
+    "1": "cam2",
+    "2": "cam4"
+  },
+  "separation": {
+    "within": 0.5938,
+    "between": 0.8161
+  },
+  "score": {
+    "agreement_pct": 77.68,
+    "per_camera": {
+      "cam1": [
+        501,
+        501,
+        100.0
+      ],
+      "cam2": [
+        1111,
+        1229,
+        90.4
+      ],
+      "cam3": [
+        0,
+        396,
+        0.0
+      ],
+      "cam4": [
+        560,
+        670,
+        83.6
+      ]
+    },
+    "my_cuts": 7,
+    "reference_cuts": 15,
+    "cut_offsets": [
+      9,
+      -122,
+      -338,
+      345,
+      309,
+      -3,
+      -2,
+      -110,
+      -146,
+      57,
+      33,
+      57,
+      21,
+      -27,
+      46
+    ],
+    "cuts_within_1s": 4
+  },
+  "cuts": [
+    510,
+    1277,
+    1781,
+    2164,
+    2320,
+    2452,
+    2584
+  ],
+  "shots": [
+    {
+      "start": 0,
+      "end": 510,
+      "camera": "cam1"
+    },
+    {
+      "start": 510,
+      "end": 1277,
+      "camera": "cam2"
+    },
+    {
+      "start": 1277,
+      "end": 1781,
+      "camera": "cam4"
+    },
+    {
+      "start": 1781,
+      "end": 2164,
+      "camera": "cam2"
+    },
+    {
+      "start": 2164,
+      "end": 2320,
+      "camera": "cam1"
+    },
+    {
+      "start": 2320,
+      "end": 2452,
+      "camera": "cam2"
+    },
+    {
+      "start": 2452,
+      "end": 2584,
+      "camera": "cam4"
+    },
+    {
+      "start": 2584,
+      "end": 2796,
+      "camera": "cam2"
+    }
+  ]
+}

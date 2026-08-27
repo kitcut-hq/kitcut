@@ -1,0 +1,124 @@
+{
+  "_comment": "Round-trip score by scripts/compare-videos.py.",
+  "id": "a16z-altman",
+  "rendered": "projects/a16z-altman/outputs/a16z-altman-autocut.mp4",
+  "reference": "projects/a16z-altman/temp/program.mp4",
+  "frames": {
+    "rendered": 2796,
+    "reference": 2796,
+    "compared": 2796
+  },
+  "ssim": {
+    "median": 0.9992,
+    "p5": 0.23181,
+    "min": 0.22719,
+    "min_at_frame": 824
+  },
+  "shifted_frames": {
+    "count": 490,
+    "first": [
+      501,
+      502,
+      504,
+      505,
+      506,
+      508,
+      509,
+      632,
+      633,
+      634,
+      635,
+      636,
+      638,
+      640,
+      642,
+      643,
+      644,
+      646,
+      647,
+      648,
+      649,
+      650,
+      652,
+      653,
+      654,
+      656,
+      657,
+      658,
+      659,
+      660,
+      662,
+      663
+    ]
+  },
+  "cuts": {
+    "rendered": [
+      510,
+      1277,
+      1781,
+      2164,
+      2320,
+      2452,
+      2584
+    ],
+    "reference": [
+      501,
+      632,
+      848,
+      932,
+      968,
+      1280,
+      1783,
+      1891,
+      1927,
+      2107,
+      2287,
+      2395,
+      2431,
+      2479,
+      2538
+    ],
+    "offsets": [
+      9,
+      -122,
+      -338,
+      345,
+      309,
+      -3,
+      -2,
+      -110,
+      -146,
+      57,
+      33,
+      57,
+      21,
+      -27,
+      46
+    ],
+    "worst_matched_offset": 3,
+    "angle_map": {
+      "cam1": "cam1",
+      "cam2": "cam2",
+      "cam3": "cam4"
+    },
+    "timeline_agreement_pct": 77.682
+  },
+  "audio": {
+    "offset_samples": 0,
+    "offset_ms": 0.0,
+    "residual_db": -30.54
+  },
+  "pass_bar": {
+    "frames_exact": true,
+    "max_shifted": 0,
+    "min_ssim_median": 0.95,
+    "min_ssim_join": 0.8,
+    "max_cut_offset": 0,
+    "max_audio_offset_ms": 1.0
+  },
+  "failures": [
+    "490 frames are shifted (allowed 0)",
+    "a cut is 3 frames out (allowed 0)"
+  ],
+  "verdict": "FAIL"
+}

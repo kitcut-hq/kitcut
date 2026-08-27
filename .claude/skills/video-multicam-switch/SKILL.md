@@ -85,6 +85,55 @@ that was measured, not imagined. `PASS` means the frame count is exact, no
 frame's best match is a neighbour, every cut is at offset 0, and the audio is
 aligned.
 
+## Stage 2: choosing the cut from the sound
+
+```powershell
+python scripts/auto-switch.py --manifest projects/<id>/anglecut-auto.json --list
+python scripts/auto-switch.py --manifest projects/<id>/anglecut-auto.json --sweep `
+                              --score projects/<id>/<id>.shots.json
+python scripts/auto-switch.py --manifest projects/<id>/anglecut-auto.json
+python scripts/angle-cut.py   --manifest projects/<id>/anglecut-auto.json `
+                              --out projects/<id>/outputs/<id>-autocut.mp4
+```
+
+Needs the speaker models under `models/diarization/` (gitignored, ~200 MB):
+`sherpa-onnx-pyannote-segmentation-3-0` and `nemo_en_titanet_large.onnx`, both
+from the sherpa-onnx GitHub releases. `pip install sherpa-onnx` — it runs on the
+ONNX runtime that is already here, so no torch and no gated download.
+
+**The manifest needs three things stage 1 did not.** Explicit `anchor` frames
+(the picture anchor is derived from a plan, and here the plan is the output —
+use the values stage 1 measured); `film.frames` (the in and out points are
+given, because what is scored is the switching, not the trim); and `speakers`,
+one `{camera, at}` hint per person naming a moment when that person is talking.
+That hint is the only human knowledge in the stage and says nothing about when
+to cut.
+
+**Read the separation line before believing any of it.** Cosine distance within
+a speaker against between speakers — 0.59 vs 0.82 on the a16z clip. If within
+exceeds between the voices did not separate, and every cut after that is a
+guess; the script says so. Sherpa's built-in clustering merged two of three
+speakers into one 33-second block, which is why the clustering is done in the
+script and not by the library. Suspect the clustering before the model.
+
+**Expect the wide to score zero.** It is nobody's close-up, so a
+speaker-following rule can never predict a cut to it. On this film that is 14.2%
+of the timeline, which puts the ceiling at ~85.8%; the measured 77.68% is 90% of
+what is reachable. Quote the ceiling alongside the score or the number is
+misleading.
+
+**`compare-videos.py` will FAIL a stage-2 cut, and should.** Its bar is stage
+1's frame-exactness. The number to read is the timeline agreement, which it
+computes independently of `auto-switch --score` — if the two disagree, one of
+them is broken.
+
+**Knobs swept on one film are fitted to it.** `--sweep --score` reads the answer;
+it is the harness's mode. Report what it found *and* that it was fitted, and get
+the real number from a film the knobs have never seen. On this one the sweep
+killed a plausible idea: forcing a periodic wide cutaway drops agreement from
+77.7% to 64.6% while placing more cuts near the human's — right times, wrong
+camera.
+
 ## The leak rule
 
 The frozen filler tells you which camera the editor used — a motion detector

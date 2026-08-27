@@ -293,8 +293,17 @@ frame, so the first frame that differs is the second live one.
 
 The frozen filler tells you which camera the editor used, so anything scoring
 the *edit* by looking for motion is reading the answer key. Stage 1 replays the
-known cut list and tests the machinery; stage 2 gets the tapes and nothing else.
-`truth.json` belongs to the harness — no script under test may read it.
+known cut list and tests the machinery; stage 2 (`auto-switch.py`) gets the
+tapes and nothing else. `truth.json` belongs to the harness — no script under
+test may read it.
+
+**Stage 2 scores 77.68%** of the timeline on the same camera as the human
+editor, from the soundtrack alone: windowed speaker embeddings (sherpa-onnx,
+no torch), clustered here rather than by the library, bound to cameras by one
+hint per person. The wide is nobody's close-up and scores 0% by construction,
+so the ceiling is ~85.8% — quote it alongside the score. Knobs swept on one
+film are fitted to it; the number that means anything comes from the next film,
+which is what the framework is for.
 
 After touching any of `shot-detect.py`, `split-cameras.py`, `sync-audio.py`,
 `angle-cut.py` or `compare-videos.py`, run `python scripts/check-multicam.py` —
