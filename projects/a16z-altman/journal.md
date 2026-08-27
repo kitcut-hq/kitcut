@@ -184,3 +184,4 @@ Editing time, measured end to end from raw tapes: 0.46x to 0.57x of the film's
 runtime. The decide step (speaker embeddings on CPU) is ~85% of it; the NVENC
 render is ~15x faster than realtime. If that ever needs to be faster, the
 embeddings are the only thing worth optimising.
+- 20:26 shot-detect scripts/shot-detect.py (--src projects/a16z-altman/temp/program.mp4) -- 16 shots, 4 angles, 15 cuts from projects/a16z-altman/temp/program.mp4

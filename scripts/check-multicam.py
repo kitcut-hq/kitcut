@@ -209,6 +209,41 @@ check("half right is 50%", half["agreement_pct"], 50.0)
 check("and it says which camera was missed",
       half["per_camera"]["cam2"][2], 0.0)
 
+print("== clustering scales to a long film ==")
+_c = rng.standard_normal((3, 192)).astype(np.float32)
+_c /= np.linalg.norm(_c, axis=1, keepdims=True)
+
+
+def voices(n, spread=0.18):
+    who = rng.integers(0, 3, n)
+    V = _c[who] + rng.standard_normal((n, 192)).astype(np.float32) * spread
+    return V / np.linalg.norm(V, axis=1, keepdims=True), who
+
+
+def purity(lab, who, k=3):
+    import itertools
+    n = len(who)
+    return max(sum(int(((lab == i) & (who == p[i])).sum()) for i in range(k))
+               for p in itertools.permutations(range(k))) / float(n)
+
+
+V, who = voices(400)
+check("exact below the cap: every window keeps a label",
+      len(_auto.cluster(V, 3)[0]), 400)
+check("...and finds the three voices", purity(_auto.cluster(V, 3)[0], who) > 0.95, True)
+# An hour of film is ~7200 windows. The old merge recomputed every pair from
+# its members on every merge and never returned; this must stay affordable.
+import time as _t
+V, who = voices(7200)
+_t0 = _t.perf_counter()
+lab, groups = _auto.cluster(V, 3)
+_el = _t.perf_counter() - _t0
+check("an hour of windows still labels every one", len(lab), 7200)
+check("...into three voices", len(groups), 3)
+check("...correctly", purity(lab, who) > 0.95, True)
+check("...in under a minute (took %.1fs)" % _el, _el < 60.0, True)
+check("separation stays cheap too", _auto.separation(V, lab)[1] is not None, True)
+
 print("== debug notes ==")
 check("opaque ink writes alpha 00 -- ASS alpha is inverted, and getting this "
       "backwards renders NOTHING while the box shows fine",

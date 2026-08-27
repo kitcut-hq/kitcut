@@ -90,6 +90,7 @@ DEFAULT_GRAMMAR = {
 }
 
 WIDE = -2                     # a track value meaning "nobody in particular"
+CLUSTER_CAP = 2000            # above this, cluster a sample -- see cluster()
 
 
 def rel(p):
@@ -235,43 +236,93 @@ def contention(over, g, fps, n_frames):
     return out
 
 
-def cluster(E, k):
+def cluster(E, k, cap=CLUSTER_CAP):
     """Average-linkage agglomerative on cosine distance, down to k groups.
 
     Average linkage, not complete: a speaker's own windows vary a lot with what
     they are saying, and complete linkage refuses to merge a group as soon as
     one shouted word sits far from one whispered one.
+
+    Two things keep this affordable on a long film. The merge uses the
+    Lance-Williams update -- the distance from a merged pair to everyone else
+    is the size-weighted mean of the two rows it came from -- so each merge
+    costs a row rewrite instead of recomputing every pair from its members. And
+    above `cap` windows it clusters an evenly spaced SAMPLE and then assigns
+    every window to its nearest centroid.
+
+    Sampling evenly rather than randomly is deliberate: a voice that only
+    appears in the last ten minutes must still be represented. An hour of film
+    is ~7200 windows, where recomputing every pair per merge is upwards of
+    10^11 operations and simply never returns; that is the wall this exists
+    to clear, and it was hit on the first hour-long film put through.
     """
-    D = 1.0 - E @ E.T
-    groups = [[i] for i in range(len(E))]
-    while len(groups) > k:
-        best = None
-        for i in range(len(groups)):
-            for j in range(i + 1, len(groups)):
-                v = float(D[np.ix_(groups[i], groups[j])].mean())
-                if best is None or v < best[0]:
-                    best = (v, i, j)
-        _, i, j = best
-        groups[i] = groups[i] + groups[j]
-        groups.pop(j)
-    groups.sort(key=min)
-    lab = np.empty(len(E), dtype=np.int32)
-    for k_, g in enumerate(groups):
-        for i in g:
-            lab[i] = k_
+    n = len(E)
+    idx = (np.arange(n) if n <= cap
+           else np.unique(np.linspace(0, n - 1, cap).astype(int)))
+    S = E[idx]
+    m = len(S)
+    D = (1.0 - S @ S.T).astype(np.float64)
+    np.fill_diagonal(D, np.inf)
+    size = np.ones(m)
+    members = [[i] for i in range(m)]
+    for _ in range(max(0, m - k)):
+        f = int(np.argmin(D))
+        i, j = divmod(f, m)
+        if i > j:
+            i, j = j, i
+        ni, nj = size[i], size[j]
+        row = (ni * D[i] + nj * D[j]) / (ni + nj)
+        D[i] = row
+        D[:, i] = row
+        D[i, i] = np.inf
+        D[j, :] = np.inf
+        D[:, j] = np.inf
+        size[i] = ni + nj
+        members[i] = members[i] + members[j]
+        members[j] = []
+    groups = sorted((g for g in members if g), key=min)
+
+    lab = np.empty(n, dtype=np.int32)
+    if m == n:
+        for k_, g in enumerate(groups):
+            for i in g:
+                lab[i] = k_
+    else:
+        cents = []
+        for g in groups:
+            c = S[g].mean(axis=0)
+            cents.append(c / (float(np.linalg.norm(c)) or 1.0))
+        lab = np.argmax(E @ np.array(cents).T, axis=1).astype(np.int32)
+        groups = [np.nonzero(lab == k_)[0].tolist()
+                  for k_ in range(len(groups))]
     return lab, groups
 
 
-def separation(E, lab):
-    D = 1.0 - E @ E.T
+def separation(E, lab, cap=CLUSTER_CAP):
+    """Worst mean distance inside a voice vs the closest between two.
+
+    Sampled above `cap` for the same reason clustering is: the full matrix for
+    an hour of film is 7200x7200, and this number is a sanity check, not a
+    measurement anything depends on.
+    """
+    n = len(E)
+    idx = (np.arange(n) if n <= cap
+           else np.unique(np.linspace(0, n - 1, cap).astype(int)))
+    Es, ls = E[idx], lab[idx]
+    D = 1.0 - Es @ Es.T
     within, between = 0.0, None
-    for a in sorted(set(lab.tolist())):
-        ia = np.nonzero(lab == a)[0]
+    ks = sorted(set(ls.tolist()))
+    for a in ks:
+        ia = np.nonzero(ls == a)[0]
+        if not len(ia):
+            continue
         within = max(within, float(D[np.ix_(ia, ia)].mean()))
-        for b in sorted(set(lab.tolist())):
+        for b in ks:
             if b <= a:
                 continue
-            ib = np.nonzero(lab == b)[0]
+            ib = np.nonzero(ls == b)[0]
+            if not len(ib):
+                continue
             v = float(D[np.ix_(ia, ib)].mean())
             between = v if between is None else min(between, v)
     return within, between

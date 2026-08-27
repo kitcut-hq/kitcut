@@ -1,0 +1,23 @@
+{
+  "v": 1,
+  "id": "up-interview-2",
+  "intent": "DOCUMENTED NEGATIVE RESULT -- not a working fixture, kept because the failure is the finding. Suspilne Kultura, Vakarchuk interview, 53:56 (VP9 1080p, 25/1 CFR, 80902 frames). shot-detect clusters it into 61 angles with no plateau and refuses to write a shot list: worst distance WITHIN an angle 0.0549 exceeds the closest distance BETWEEN two (0.0102), so a shot resembles another angle more than its own. Cause: every camera shares one black studio backdrop, so the background this method reads carries no signal; burned-in lower-third name cards make it worse by turning one camera into two. Masking the lower third and normalising contrast were both measured and neither helped -- the best margin of three variants was 0.47x where a usable one is well above 1.0. Telling these angles apart needs person identity, not appearance.",
+  "pipelines": [],
+  "inputs": {
+    "source": "projects/up-interview-2/sources/original.mp4"
+  },
+  "controls": {},
+  "deliverables": {},
+  "notes": [],
+  "updated_utc": "2026-08-27T20:06:17Z",
+  "result": {
+    "stage0_shot_detect": {
+      "verdict": "REFUSED",
+      "angles_found": "61",
+      "cuts_found": "470",
+      "separation_within": 0.0549,
+      "separation_between": 0.0102,
+      "_note": "The refusal is correct behaviour, not a bug. Downstream this would have built one full-length tape per phantom angle."
+    }
+  }
+}

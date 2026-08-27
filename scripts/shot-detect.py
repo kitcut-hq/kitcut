@@ -55,6 +55,23 @@ ENV = _env.ENV
 AW = 128
 SIG = 16
 
+SEPARATION_FAILED = (
+    "the fingerprints do not separate these angles: a shot resembles a "
+    "DIFFERENT angle more than it resembles its own. No threshold fixes that, "
+    "because the signal is not there.\n"
+    "     What it usually means: every camera shares a background. This method "
+    "reads the room behind the speaker, so a studio shooting four people "
+    "against one black backdrop gives it nothing to read -- measured on two "
+    "hour-long interviews, same-angle distance ran 0.44x the between-angle "
+    "distance, where a usable margin is several times ABOVE 1.0. Masking the "
+    "lower third and normalising contrast were both tried and neither helped.\n"
+    "     Burned-in lower-third name cards do the same thing on a smaller "
+    "scale: the same camera fingerprints as a new angle for as long as the "
+    "card is up.\n"
+    "     Look at --sheets and believe your eyes over the numbers. Telling "
+    "these angles apart needs person identity, not appearance -- which this "
+    "script does not do.")
+
 DEFAULT_DETECT = {
     "threshold": 0.055,   # mean abs frame difference, 0..1 grey
     "ratio": 4.0,         # ... and this many times the local median
@@ -278,6 +295,8 @@ def main():
     ap.add_argument("--sheets", action="store_true",
                     help="write one contact sheet per angle into temp/")
     ap.add_argument("--json", action="store_true", help="print the document")
+    ap.add_argument("--force", action="store_true",
+                    help="write the shot list even if the angles do not separate")
     for k, v in DEFAULT_DETECT.items():
         ap.add_argument("--" + k.replace("_", "-"), type=type(v), default=None,
                         help="default %s" % v)
@@ -322,8 +341,7 @@ def main():
         print("\nangle separation: worst within %.4f, closest between %s"
               % (within, "n/a" if between is None else "%.4f" % between))
         if between is not None and within >= between:
-            print("  !! the fingerprints do not separate these angles -- "
-                  "raise --alike or look at --sheets before trusting this")
+            print("  !! " + SEPARATION_FAILED)
 
     print("\n  #  cam    start      end     len  frames        peak")
     for i, ((a, b), nm) in enumerate(zip(spans, names)):
@@ -383,6 +401,15 @@ def main():
 
     if args.list:
         return
+
+    # Refuse to hand on a shot list whose angles do not separate. Downstream,
+    # split-cameras.py builds one full-length tape per angle: on an hour-long
+    # interview that mis-clustered into 55, this check is the difference
+    # between a warning and fifty-five hours of encoding nobody wanted.
+    if between is not None and within >= between and not args.force:
+        print("\n!! %s" % SEPARATION_FAILED)
+        sys.exit("refusing to write a shot list with %d angles that do not "
+                 "separate -- pass --force if you know better" % len(set(names)))
 
     out = args.out or (os.path.join(pdir, "%s.shots.json" % pid) if pdir
                        else os.path.join(ROOT, "temp", "%s.shots.json" % pid))

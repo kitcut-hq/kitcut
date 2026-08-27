@@ -70,6 +70,17 @@ Then read the separation line: worst distance within an angle vs closest between
 two angles. 0.036 vs 0.169 is a 4.7× margin. If within ≥ between it says so, and
 you must look at `--sheets` before believing anything.
 
+**Check the content class before anything else.** This method identifies an
+angle by the background behind the speaker, so it needs cameras with visually
+different backgrounds. A studio with one plain backdrop behind everybody defeats
+it outright — measured on two hour-long interviews (`up-interview-1`, `-2`):
+55 and 61 phantom angles, and same-angle distance running 0.44x the
+between-angle distance where usable is well above 1.0. `shot-detect.py` now
+refuses to write a shot list in that state, which is what stops a fifty-five
+tape build. Do not reach for `--force` or a threshold; the signal is absent, not
+buried, and the fix is person identity rather than appearance. Burned-in
+lower-third name cards cause a milder version of the same thing.
+
 **Always look at `--sheets`.** One contact sheet per detected angle. This takes
 ten seconds and is the only check that catches "these two clusters are the same
 camera" or "this angle is actually two". Numbers cannot tell you the wide shot

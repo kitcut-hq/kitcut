@@ -617,6 +617,29 @@ re-cut is scored against.
 | **angle** | shots cluster by their **median** fingerprint, not their mean. The speaker moves; the room behind them does not, and the median is the room. Complete linkage, so two angles never chain together through a shot that sits between them |
 | **re-split** | a shot whose two halves have different medians was never one shot. Candidates are the *sub-threshold* peaks only, so a speaker standing up mid-shot — a real change, but a gradual one — cannot be mistaken for a cut |
 
+**It reads the room, not the person — and that is its limit.** An angle is
+identified by the background behind the speaker, so cameras must have visually
+different backgrounds. Two hour-long Ukrainian studio interviews
+(`projects/up-interview-1`, `-2`, kept as documented negative results) put four
+people at one table against a single black backdrop, and the method collapses:
+55 and 61 phantom angles, no plateau, and worst-distance-within-an-angle
+*exceeding* closest-distance-between-two. A shot resembles a different camera
+more than its own. Burned-in lower-third name cards compound it — while a name
+is up, that camera fingerprints as a new angle.
+
+Three rescues were measured and all three failed: plain, a top-60% mask
+(dropping the name cards and the table), and that plus contrast normalisation.
+Best margin 0.47×, where usable is well above 1.0 and the a16z films score 4.7×.
+Masking does fix the name-card pairs specifically (0.158 → 0.062) without fixing
+the angles. **Do not tune thresholds at this** — the signal is absent, not
+buried. Separating those angles needs person identity (who is in frame, and how
+they are framed), which is a different method rather than a parameter.
+
+`shot-detect.py` therefore **refuses to write a shot list whose angles do not
+separate**, unless `--force`. That refusal is what stops `split-cameras.py` from
+cheerfully building one full-length tape per phantom angle — fifty-five of them
+on a one-hour film.
+
 `--list` sweeps the threshold instead of picking one. On the a16z clip the
 answer is 15 cuts / 16 shots / 4 angles at **every** threshold from 0.030 to
 0.120, which is a plateau rather than a lucky setting. It also prints the angle
@@ -750,6 +773,16 @@ with one voice has no audio signal to cut on at all: `a16z-sinofsky` is a
 106-second monologue where the editor cut six times purely for rhythm, and the
 switcher correctly cut zero times — 73.27% is the honest floor of the method,
 not a bug.
+
+**It scales to an hour.** Clustering an hour of film means ~7200 windows, and
+recomputing every pair from its members on every merge is upwards of 10^11
+operations — it simply never returns. The merge now uses the Lance-Williams
+update (a merged pair's distance to everyone else is the size-weighted mean of
+the two rows it came from), and above 2000 windows it clusters an evenly spaced
+sample and assigns the rest to the nearest centroid. Evenly, not randomly: a
+voice that only speaks in the last ten minutes must still be represented. 7200
+windows now cluster in about five seconds, and all four a16z films reproduce
+their previous scores to the second decimal.
 
 **Boundaries come from the segments, identity from the windows.** Windows vote
 the voice centroids into existence; each speech segment is then embedded whole,
