@@ -103,6 +103,11 @@ DEFAULT_FACE = {
                            # that person mid-gesture -- an outstretched arm and
                            # a thrown-back head each cost a phantom camera --
                            # not a new face at the table.
+    "cast_share": 0.03,    # a person on screen this much of the film is IN the
+                           # show. A camera in a shoot films the people in that
+                           # shoot, so an angle showing nobody from the cast is
+                           # an insert however often it recurs -- which is how
+                           # Queen and Joy Division stopped being cameras.
 }
 
 DEFAULT_DETECT = {
@@ -360,9 +365,14 @@ def person_angles(src, spans, sigs, info, d, fc):
     first, and the same black backdrop that broke the close-ups shattered the
     two-shots into fifteen phantom angles of the same pairing.
 
-    ZERO faces -> one shared angle. Graphics, logo animations, b-roll: they
-    are not cameras, and every one of them made its own angle before this --
-    which downstream means one full-length synthetic tape EACH.
+    ZERO faces -> the shared `xtra` bin, and so does any angle showing nobody
+    from the CAST -- the people who hold `cast_share` of the film between them.
+    A camera in a shoot films the people in that shoot, so archive footage and
+    music videos are inserts however often the editor returns to them: a
+    culture show cut back to the same Queen clip repeatedly, and to vinyl
+    animations, and to Joy Division, each about to become its own hour-long
+    synthetic tape. The bin sits outside the separation guard because its
+    members are not supposed to look alike, or like anyone.
     """
     det_path, rec_path = rel_model(fc["detector"]), rel_model(fc["recognizer"])
     for pth in (det_path, rec_path):
@@ -460,8 +470,8 @@ def person_angles(src, spans, sigs, info, d, fc):
     cents = [centroid(g) for g in persons]
     # ...split a person across two cameras only if the frame sigs
     # separate decisively on their own
-    cams = []
-    for g in persons:
+    cams, cam_person = [], []
+    for pi, g in enumerate(persons):
         if len(g) >= 2:
             sub, _ = cluster([sigs_of(sigs, spans, i) for i in g], d["alike"])
             groups = {}
@@ -470,9 +480,12 @@ def person_angles(src, spans, sigs, info, d, fc):
             if len(groups) > 1:
                 w_, b_ = _family_sep([sigs_of(sigs, spans, i) for i in g], sub)
                 if b_ is not None and b_ > 2.0 * max(w_, 1e-6):
-                    cams.extend(groups.values())
+                    for sg in groups.values():
+                        cams.append(sg)
+                        cam_person.append(pi)
                     continue
         cams.append(g)
+        cam_person.append(pi)
     for g in cams:
         key = ("p", min(g))
         for i in g:
@@ -532,13 +545,10 @@ def person_angles(src, spans, sigs, info, d, fc):
                 names[i] = key
             name_for(key, g)
 
-    # no-face shots: graphics and b-roll share ONE angle -- they are not cameras
-    noface = [i for i in range(len(spans))
-              if majority[i] == 0 and names[i] is None]
-    for i in noface:
-        names[i] = ("gfx",)
-    if noface:
-        name_for(("gfx",), noface)
+    # no-face shots join the xtra bin outright
+    for i in range(len(spans)):
+        if majority[i] == 0 and names[i] is None:
+            names[i] = ("xtra",)
 
     # leftovers (majority 1 but no clean embedding): nearest person by frame sig
     for i in range(len(spans)):
@@ -548,7 +558,40 @@ def person_angles(src, spans, sigs, info, d, fc):
                                                 sigs_of(sigs, spans, j)))
             names[i] = names[j]
 
-    ranked = sorted(order, key=lambda k_: order[k_])
+    # The b-roll bin: an angle showing nobody from the CAST. A camera in a
+    # shoot films the people in that shoot, so archive footage and music
+    # videos are inserts however often the editor returns to them -- a culture
+    # show cut back to the same Queen clip repeatedly, which no rarity rule
+    # could catch. Rarity WAS tried first and dropped: it binned a legitimate
+    # wide the editor happened to use once, and rare is not the same as
+    # inserted.
+    n_total = spans[-1][1] if spans else 1
+
+    # Screen time per PERSON, summed over however many cameras filmed them --
+    # a person split across two cameras is still one member of the cast.
+    seen = {}
+    for gi, g in enumerate(cams):
+        pi = cam_person[gi]
+        seen[pi] = seen.get(pi, 0) + sum(spans[i][1] - spans[i][0] for i in g)
+    cast = {pi for pi, fr in seen.items() if fr >= fc["cast_share"] * n_total}
+    person_of = {("p", min(g)): cam_person[gi]
+                 for gi, g in enumerate(cams) if g}
+    for i in range(len(spans)):
+        key = names[i]
+        if key == ("xtra",):
+            continue
+        if key[0] == "p":
+            if person_of.get(key) not in cast:
+                names[i] = ("xtra",)
+        elif key[0].startswith("m"):
+            if not (set(key[1]) & cast):
+                names[i] = ("xtra",)
+    binned = {i for i in range(len(spans)) if names[i] == ("xtra",)}
+    if binned:
+        name_for(("xtra",), sorted(binned))
+
+    ranked = sorted((k_ for k_ in order if any(n == k_ for n in names)),
+                    key=lambda k_: order[k_])
     final = {k_: "cam%d" % (n + 1) for n, k_ in enumerate(ranked)}
     out = [final[k_] for k_ in names]
 
@@ -558,14 +601,25 @@ def person_angles(src, spans, sigs, info, d, fc):
     # correct move, and pairwise then reports the outlier's distance to its
     # farthest team-mate as "within", failing a clustering that is actually
     # unambiguous. What the decision uses is distance to centroids, so that
-    # is what the guard measures.
-    group_cents = [centroid(g) for g in cams if g]
-    own = {i: gi for gi, g in enumerate(cams) for i in g}
+    # is what the guard measures. The bin is left out on both sides: its
+    # members are not supposed to look alike, or like anyone.
+    live_cams = [[i for i in g if i not in binned] for g in cams]
+    group_cents = [centroid(g) for g in live_cams if g]
+    own = {}
+    gi = 0
+    for g in live_cams:
+        if not g:
+            continue
+        for i in g:
+            own[i] = gi
+        gi += 1
     within, between = 0.0, None
     for i, e in face_sig.items():
-        for gi, c in enumerate(group_cents):
+        if i in binned or i not in own:
+            continue
+        for gj, c in enumerate(group_cents):
             v = 1.0 - float(e @ c)
-            if gi == own.get(i):
+            if gj == own[i]:
                 within = max(within, v)
             else:
                 between = v if between is None else min(between, v)
@@ -775,6 +829,7 @@ def main():
         "n_frames": n,
         "detect": d,
         "angle_by": angle_by,
+        "face": DEFAULT_FACE if angle_by == "person" else None,
         "separation": {"method": angle_by, "within": round(within, 5),
                        "between": None if between is None else round(between, 5)},
         "cuts": [a for a, _ in spans[1:]],

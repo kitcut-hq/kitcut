@@ -1,23 +1,31 @@
 {
   "v": 1,
   "id": "up-interview-1",
-  "intent": "DOCUMENTED NEGATIVE RESULT -- not a working fixture, kept because the failure is the finding. Ukrainska Pravda, 60:06, 4-person roundtable (AV1 1080p, 25/1 CFR, 90145 frames). shot-detect clusters it into 55 angles with no plateau and refuses to write a shot list: worst distance WITHIN an angle 0.0526 exceeds the closest distance BETWEEN two (0.0130), so a shot resembles another angle more than its own. Cause: every camera shares one black studio backdrop, so the background this method reads carries no signal; burned-in lower-third name cards make it worse by turning one camera into two. Masking the lower third and normalising contrast were both measured and neither helped -- the best margin of three variants was 0.47x where a usable one is well above 1.0. Telling these angles apart needs person identity, not appearance.",
-  "pipelines": [],
+  "intent": "Round-trip fixture and the film that forced person-identity angle detection. Ukrainska Pravda studio roundtable, 60:06, 25 fps, 1080p AV1, four people against one black backdrop. Frame fingerprints found 55 phantom angles here (within-angle distance exceeding between); face identity finds 13 real ones. Also the first film through the 25 fps audio-boundary path and the hour-long clustering path.",
+  "pipelines": [
+    "multicam-switch"
+  ],
   "inputs": {
-    "source": "projects/up-interview-1/sources/original.mp4"
+    "source": "projects/up-interview-1/sources/original.mp4",
+    "programme (conformed CFR 25/1, 90145 frames, frame-for-frame)": "projects/up-interview-1/temp/program.mp4"
   },
-  "controls": {},
+  "controls": {
+    "the fixture (conform, staggers, tape quality)": "projects/up-interview-1/multicam-sim.json",
+    "the stage-1 replay": "projects/up-interview-1/anglecut.json",
+    "the edit read back off the film (angle_by: person)": "projects/up-interview-1/up-interview-1.shots.json",
+    "ground truth -- HARNESS ONLY": "projects/up-interview-1/up-interview-1.truth.json"
+  },
   "deliverables": {},
   "notes": [],
   "updated_utc": "2026-08-27T21:51:32Z",
   "result": {
     "stage0_shot_detect": {
-      "verdict": "REFUSED",
-      "angles_found": "55",
-      "cuts_found": "211",
-      "separation_within": 0.0526,
-      "separation_between": 0.013,
-      "_note": "The refusal is correct behaviour, not a bug. Downstream this would have built one full-length tape per phantom angle."
+      "verdict": "PASS via person mode",
+      "angle_by": "person",
+      "angles": 13,
+      "shots": 229,
+      "frame_mode_would_give": "55 phantom angles, within 0.0526 >= between 0.0130",
+      "_note": "Four close-ups absorbed their own burned-in name-card shots, which frame fingerprints cannot do. Measured instrument margins on this film: whole-frame 0.44x, masked+normalised 0.72x, colour torso with Haar 1.11x, SFace 3.0x."
     }
   }
 }

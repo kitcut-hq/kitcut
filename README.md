@@ -648,9 +648,16 @@ got its rule the same way — by watching the previous rule fail on a real film:
   fifteen phantom angles. Faces too small to identify (under ~8.5% of frame
   width, i.e. everyone in a four-person wide) stay anonymous, because tiny-face
   identities are noise and split one wide camera six ways.
-- **Zero faces**: ONE shared angle. Graphics and b-roll are not cameras, and
-  every logo animation frame-clustered into its own angle before this — which
-  downstream means one full-length synthetic tape *each*.
+- **The `xtra` bin**: zero-face shots, plus any angle showing nobody from the
+  *cast* — the people who hold ≥3% of the film between them. A camera in a
+  shoot films the people in that shoot, so archive footage is an insert
+  however often the editor returns to it. A Ukrainian culture show cut
+  repeatedly to Queen and Joy Division music videos, vinyl-record animations
+  and a picture-in-picture; each was about to become its own hour-long
+  synthetic tape. Rarity was tried as the test first and dropped — it binned a
+  legitimate wide the editor happened to use once, and rare is not the same as
+  inserted. The bin sits outside the separation guard because its members are
+  not supposed to look alike, or like anyone.
 
 The separation guard for person mode is **centroid-based** — is every shot
 closer to its own person than to any other — because pairwise distance fails

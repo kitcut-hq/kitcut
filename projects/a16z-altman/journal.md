@@ -188,3 +188,4 @@ embeddings are the only thing worth optimising.
 - 20:48 shot-detect scripts/shot-detect.py (--src projects/a16z-altman/temp/program.mp4 --angle-by person --out temp/altman-person.shots.json) -- 16 shots, 4 angles, 15 cuts from projects/a16z-altman/temp/program.mp4
 - 20:49 shot-detect scripts/shot-detect.py (--src projects/a16z-altman/temp/program.mp4 --out temp/regress/a16z-altman.shots.json) -- 16 shots, 4 angles, 15 cuts from projects/a16z-altman/temp/program.mp4
 - 21:19 shot-detect scripts/shot-detect.py (--src projects/a16z-altman/temp/program.mp4 --angle-by person --out temp/altman-person.shots.json) -- 16 shots, 4 angles, 15 cuts from projects/a16z-altman/temp/program.mp4
+- 22:08 shot-detect scripts/shot-detect.py (--src projects/a16z-altman/temp/program.mp4 --angle-by person --out temp/altman-p2.json) -- 16 shots, 4 angles, 15 cuts from projects/a16z-altman/temp/program.mp4

@@ -37,3 +37,49 @@ split-cameras from building one hour-long tape per phantom angle.
 - 21:16 shot-detect scripts/shot-detect.py (--src projects/up-interview-1/sources/original.mp4 --sheets) -- 229 shots, 16 angles, 228 cuts from projects/up-interview-1/sources/original.mp4
 - 21:28 conform scripts/split-cameras.py (--manifest projects/up-interview-1/multicam-sim.json --conform-only) -- CFR 25/1 programme from projects/up-interview-1/sources/original.mp4
 - 21:51 shot-detect scripts/shot-detect.py (--src projects/up-interview-1/sources/original.mp4 --sheets) -- 229 shots, 13 angles, 228 cuts from projects/up-interview-1/sources/original.mp4
+
+SECOND VISIT -- the negative result above is now obsolete, and this film is the
+reason person-identity angle detection exists.
+
+Alex's question settled it: what is the problem with detecting the person
+instead of the background, and would a green wall be a shock? It would have
+been, and that was the flaw. Frame fingerprints read the room behind the
+speaker, and the room was only ever a proxy for the camera. A single black
+backdrop is the EASY case for detecting a person -- the less background there
+is, the more the frame is the person.
+
+shot-detect --angle-by person (auto by default) now uses YuNet detection plus
+SFace identity embeddings. On this film: 55 phantom angles -> 13 real ones,
+every one a real picture. The four close-ups absorbed their own burned-in
+name-card shots, which frame fingerprints could never do.
+
+Instruments were chosen by elimination, all measured on these shots:
+whole-frame 0.44x, masked+contrast-normalised 0.72x, colour torso with Haar
+1.11x -- and Haar missed one of the four people in five of five samples.
+YuNet detects 5/5 everywhere and SFace separates at 3.0x.
+
+Four rules each earned themselves by failing here first, and the iteration was
+55 -> 31 -> 16 -> 13:
+- one face, AVERAGE linkage: pose stretches a person's own embeddings, and
+  under complete linkage an outstretched arm and a thrown-back head each got a
+  phantom camera. A singleton within SFace's published 0.64 of a real person is
+  that person mid-gesture.
+- two-plus faces: group by WHICH people are in the shot, not by frame sig --
+  the same black backdrop shattered one two-shot pairing into fifteen angles.
+- faces under ~8.5% of frame width stay anonymous: in a four-person wide, per
+  face identities are noise and split one wide camera six ways.
+- zero faces (and, after up-interview-2, anyone not in the cast) go to one
+  shared xtra bin. A logo animation is not a camera, and each of its frames was
+  about to become its own hour-long synthetic tape.
+
+The separation guard is centroid-based for person mode -- is every shot closer
+to its own person than to any other -- because pairwise fails a correct
+clustering: absorbing an outlier is right, and pairwise then reports that
+outlier's distance to its farthest team-mate as "within".
+
+Face detections are cached under temp/ per (file, params). Before that, every
+grouping-logic iteration cost a ten-minute decode of an hour of AV1.
+
+This film is also the first through the 25 fps audio-boundary path (exact:
+1920 samples a frame) and the hour-long clustering path. Conform preserved all
+90145 frames.

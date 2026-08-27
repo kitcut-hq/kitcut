@@ -1,23 +1,29 @@
 {
   "v": 1,
   "id": "up-interview-2",
-  "intent": "DOCUMENTED NEGATIVE RESULT -- not a working fixture, kept because the failure is the finding. Suspilne Kultura, Vakarchuk interview, 53:56 (VP9 1080p, 25/1 CFR, 80902 frames). shot-detect clusters it into 61 angles with no plateau and refuses to write a shot list: worst distance WITHIN an angle 0.0549 exceeds the closest distance BETWEEN two (0.0102), so a shot resembles another angle more than its own. Cause: every camera shares one black studio backdrop, so the background this method reads carries no signal; burned-in lower-third name cards make it worse by turning one camera into two. Masking the lower third and normalising contrast were both measured and neither helped -- the best margin of three variants was 0.47x where a usable one is well above 1.0. Telling these angles apart needs person identity, not appearance.",
-  "pipelines": [],
+  "intent": "Detection fixture: Suspilne Kultura culture show (Vakarchuk), 53:56, 25 fps, 1080p VP9. A produced show, not a plain interview -- roughly a third of it is archival insert material (Queen and Joy Division music videos, vinyl-record animations, picture-in-picture composites). Frame fingerprints found 61 phantom angles; face identity alone still found 36, because archive footage HAS faces. The cast rule settled it: an angle showing nobody who holds 3%+ of the film is an insert however often the editor returns to it. 10 angles, guard passes.",
+  "pipelines": [
+    "multicam-switch"
+  ],
   "inputs": {
     "source": "projects/up-interview-2/sources/original.mp4"
   },
-  "controls": {},
+  "controls": {
+    "the edit read back off the film (angle_by: person)": "projects/up-interview-2/up-interview-2.shots.json"
+  },
   "deliverables": {},
   "notes": [],
-  "updated_utc": "2026-08-27T20:06:17Z",
+  "updated_utc": "2026-08-27T22:39:50Z",
   "result": {
     "stage0_shot_detect": {
-      "verdict": "REFUSED",
-      "angles_found": "61",
-      "cuts_found": "470",
-      "separation_within": 0.0549,
-      "separation_between": 0.0102,
-      "_note": "The refusal is correct behaviour, not a bug. Downstream this would have built one full-length tape per phantom angle."
+      "verdict": "PASS via person mode + cast rule",
+      "angle_by": "person",
+      "angles": 10,
+      "shots": 506,
+      "separation_within": 0.594,
+      "separation_between": 0.752,
+      "progression": "61 (frame) -> 36 (face identity) -> 10 (cast rule)",
+      "_note": "Not round-tripped: a show whose inserts are a third of the runtime stretches the fixture idea, since an insert is not a camera that was rolling. Kept as the detection fixture that produced the cast rule."
     }
   }
 }
