@@ -1,0 +1,43 @@
+{
+  "_comment": "N-track audio alignment by scripts/sync-audio.py. offset is seconds of THIS tape relative to the reference: the same moment sits offset seconds later into it, and is exact. audio_start is an approximate second opinion -- where the tape becomes audible, which is a little after it starts -- and must not be used to anchor a cut.",
+  "id": "a16z-agents",
+  "reference": "cam1",
+  "fps_num": 24000,
+  "fps_den": 1001,
+  "fps": 23.976023976023978,
+  "rate": 8000,
+  "config": {
+    "onset_db": -100.0,
+    "min_confidence": 8.0,
+    "max_residual_ms": 5.0,
+    "max_onset_drift_ms": 60.0
+  },
+  "tracks": [
+    {
+      "id": "cam1",
+      "file": "projects/a16z-agents/raws/cam1.mp4",
+      "offset_s": 0.0,
+      "offset_frames": 0.0,
+      "confidence": null,
+      "audio_start_s": 4.04,
+      "audio_start_frames": 97
+    },
+    {
+      "id": "cam2",
+      "file": "projects/a16z-agents/raws/cam2.mp4",
+      "offset_s": 1.71,
+      "offset_frames": 40.999,
+      "confidence": 453.583,
+      "audio_start_s": 5.75,
+      "audio_start_frames": 138
+    }
+  ],
+  "pairwise_offset_s": {
+    "cam1->cam1": 0.0,
+    "cam1->cam2": -1.71,
+    "cam2->cam1": 1.71,
+    "cam2->cam2": 0.0
+  },
+  "worst_three_way_residual_ms": 0.0,
+  "notes": []
+}

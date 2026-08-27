@@ -1,0 +1,73 @@
+{
+  "_comment": "Round-trip score by scripts/compare-videos.py.",
+  "id": "a16z-bornstein",
+  "rendered": "projects/a16z-bornstein/outputs/a16z-bornstein-anglecut.mp4",
+  "reference": "projects/a16z-bornstein/temp/program.mp4",
+  "frames": {
+    "rendered": 1418,
+    "reference": 1418,
+    "compared": 1418
+  },
+  "ssim": {
+    "median": 0.99947,
+    "p5": 0.99917,
+    "min": 0.99908,
+    "min_at_frame": 1077
+  },
+  "shifted_frames": {
+    "count": 0,
+    "first": []
+  },
+  "frozen": {
+    "frames": 0,
+    "pct": 0.0,
+    "runs": []
+  },
+  "cuts": {
+    "rendered": [
+      426,
+      462,
+      1049,
+      1085,
+      1337
+    ],
+    "reference": [
+      426,
+      462,
+      1049,
+      1085,
+      1337
+    ],
+    "offsets": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "worst_matched_offset": 0,
+    "angle_map": {
+      "cam1": "cam1",
+      "cam2": "cam2",
+      "cam3": "cam3",
+      "cam4": "cam4"
+    },
+    "timeline_agreement_pct": 100.0
+  },
+  "audio": {
+    "offset_samples": 0,
+    "offset_ms": 0.0,
+    "residual_db": -27.64
+  },
+  "pass_bar": {
+    "frames_exact": true,
+    "max_shifted": 0,
+    "min_ssim_median": 0.95,
+    "min_ssim_p5": 0.9,
+    "max_cut_offset": 0,
+    "max_audio_offset_ms": 1.0,
+    "max_frozen_frames": 0
+  },
+  "failures": [],
+  "verdict": "PASS"
+}

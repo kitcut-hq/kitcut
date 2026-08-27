@@ -1,0 +1,74 @@
+{
+  "_comment": "Round-trip score by scripts/compare-videos.py.",
+  "id": "a16z-sinofsky",
+  "rendered": "projects/a16z-sinofsky/outputs/a16z-sinofsky-anglecut.mp4",
+  "reference": "projects/a16z-sinofsky/temp/program.mp4",
+  "frames": {
+    "rendered": 2540,
+    "reference": 2540,
+    "compared": 2540
+  },
+  "ssim": {
+    "median": 0.99924,
+    "p5": 0.99895,
+    "min": 0.99887,
+    "min_at_frame": 501
+  },
+  "shifted_frames": {
+    "count": 0,
+    "first": []
+  },
+  "frozen": {
+    "frames": 0,
+    "pct": 0.0,
+    "runs": []
+  },
+  "cuts": {
+    "rendered": [
+      248,
+      328,
+      983,
+      1283,
+      1786,
+      2085
+    ],
+    "reference": [
+      248,
+      328,
+      983,
+      1283,
+      1786,
+      2085
+    ],
+    "offsets": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "worst_matched_offset": 0,
+    "angle_map": {
+      "cam1": "cam1",
+      "cam2": "cam2"
+    },
+    "timeline_agreement_pct": 100.0
+  },
+  "audio": {
+    "offset_samples": 0,
+    "offset_ms": 0.0,
+    "residual_db": -34.29
+  },
+  "pass_bar": {
+    "frames_exact": true,
+    "max_shifted": 0,
+    "min_ssim_median": 0.95,
+    "min_ssim_p5": 0.9,
+    "max_cut_offset": 0,
+    "max_audio_offset_ms": 1.0,
+    "max_frozen_frames": 0
+  },
+  "failures": [],
+  "verdict": "PASS"
+}

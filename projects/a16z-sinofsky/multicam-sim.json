@@ -1,0 +1,35 @@
+{
+  "_comment": "The round-trip test fixture for this video. split-cameras.py conforms `source` onto a strict CFR grid as `program`, then rebuilds one synthetic camera raw per angle in `shots`. Nothing here describes the finished edit -- that is read back off the programme by shot-detect.py.",
+  "_why": "A16Z clip: Steven Sinofsky on big-company culture. Fourth fixture -- cut from the same episode as a16z-altman, so its angles should match.",
+  "id": "a16z-sinofsky",
+  "source": "projects/a16z-sinofsky/sources/original.mp4",
+  "program": "projects/a16z-sinofsky/temp/program.mp4",
+  "shots": "projects/a16z-sinofsky/a16z-sinofsky.shots.json",
+  "outdir": "projects/a16z-sinofsky/raws",
+  "stagger": {
+    "_comment": "Seeded so the same manifest rebuilds the same tapes. Ranges are seconds; the draw is converted to whole frames before anything uses it.",
+    "seed": 20260830,
+    "head_s": [
+      1.0,
+      6.0
+    ],
+    "tail_s": [
+      0.5,
+      4.0
+    ]
+  },
+  "conform": {
+    "_comment": "One generation, high quality: everything downstream is scored against this file, so its own loss is the noise floor of the whole test.",
+    "cq": 16
+  },
+  "render": {
+    "_comment": "The tapes. cq 16 keeps generational loss well below the structural differences the comparator is looking for.",
+    "cq": 16
+  },
+  "verify": {
+    "_comment": "freeze_db -60 is far below anything real footage registers, so a freeze found inside a live span means the graph put the wrong picture there. cover_frac is loose on purpose: freezedetect needs a moment to declare a freeze, so the first fraction of a gap never counts.",
+    "freeze_db": -60,
+    "min_gap_s": 1.0,
+    "cover_frac": 0.75
+  }
+}

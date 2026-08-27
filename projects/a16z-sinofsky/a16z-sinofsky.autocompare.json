@@ -1,0 +1,113 @@
+{
+  "_comment": "Round-trip score by scripts/compare-videos.py.",
+  "id": "a16z-sinofsky",
+  "rendered": "projects/a16z-sinofsky/outputs/a16z-sinofsky-autocut.mp4",
+  "reference": "projects/a16z-sinofsky/temp/program.mp4",
+  "frames": {
+    "rendered": 2540,
+    "reference": 2540,
+    "compared": 2540
+  },
+  "ssim": {
+    "median": 0.99916,
+    "p5": 0.20534,
+    "min": 0.19884,
+    "min_at_frame": 1144
+  },
+  "shifted_frames": {
+    "count": 25,
+    "first": [
+      248,
+      256,
+      257,
+      282,
+      300,
+      301,
+      327,
+      983,
+      1111,
+      1139,
+      1140,
+      1141,
+      1142,
+      1143,
+      1144,
+      1145,
+      1146,
+      1150,
+      1152,
+      1187,
+      1190,
+      1250,
+      1282,
+      1786,
+      2084
+    ]
+  },
+  "frozen": {
+    "frames": 678,
+    "pct": 26.69,
+    "runs": [
+      [
+        248,
+        328
+      ],
+      [
+        983,
+        1283
+      ],
+      [
+        1786,
+        2000
+      ],
+      [
+        2001,
+        2085
+      ]
+    ]
+  },
+  "cuts": {
+    "rendered": [],
+    "reference": [
+      248,
+      328,
+      983,
+      1283,
+      1786,
+      2085
+    ],
+    "offsets": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "worst_matched_offset": 0,
+    "angle_map": {
+      "cam1": "cam1"
+    },
+    "timeline_agreement_pct": 73.268
+  },
+  "audio": {
+    "offset_samples": 0,
+    "offset_ms": 0.0,
+    "residual_db": -34.29
+  },
+  "pass_bar": {
+    "frames_exact": true,
+    "max_shifted": 0,
+    "min_ssim_median": 0.95,
+    "min_ssim_p5": 0.9,
+    "max_cut_offset": 0,
+    "max_audio_offset_ms": 1.0,
+    "max_frozen_frames": 0
+  },
+  "failures": [
+    "25 frames are shifted (allowed 0)",
+    "5th-percentile ssim 0.2053 below 0.9000 -- a bad tail the median cannot see",
+    "678 frames of frozen picture (allowed 0)"
+  ],
+  "verdict": "FAIL"
+}

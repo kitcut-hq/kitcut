@@ -9,7 +9,9 @@
     "window_s": 1.5,
     "hop_s": 0.5,
     "silence_rms": 0.005,
-    "threads": 4
+    "threads": 4,
+    "paint": false,
+    "_comment": "Painting segment boundaries over the window track is the shipped default -- it won on both films it had never seen (+4.8 and +1.4 points). On THIS film it loses 4.2 points: two of its male voices are similar enough that whole-segment embeddings land on the wrong man for a few long segments, while the many independent window votes do not. Pinned off here; the counter-example is the reason the knob exists."
   },
   "grammar": {
     "min_shot_s": 1.5,
@@ -28,51 +30,7 @@
     "within": 0.5938,
     "between": 0.8161
   },
-  "score": {
-    "agreement_pct": 77.68,
-    "per_camera": {
-      "cam1": [
-        501,
-        501,
-        100.0
-      ],
-      "cam2": [
-        1111,
-        1229,
-        90.4
-      ],
-      "cam3": [
-        0,
-        396,
-        0.0
-      ],
-      "cam4": [
-        560,
-        670,
-        83.6
-      ]
-    },
-    "my_cuts": 7,
-    "reference_cuts": 15,
-    "cut_offsets": [
-      9,
-      -122,
-      -338,
-      345,
-      309,
-      -3,
-      -2,
-      -110,
-      -146,
-      57,
-      33,
-      57,
-      21,
-      -27,
-      46
-    ],
-    "cuts_within_1s": 4
-  },
+  "score": null,
   "cuts": [
     510,
     1277,

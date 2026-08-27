@@ -1,0 +1,55 @@
+{
+  "_comment": "A camera plan decided from the soundtrack alone by scripts/auto-switch.py -- no shot list, no truth sidecar, no picture. Same shape as a shots.json so angle-cut.py can read it as plan_from.",
+  "id": "a16z-agents",
+  "fps": 23.976023976023978,
+  "n_frames": 1992,
+  "diarize": {
+    "model": "models/diarization/nemo_en_titanet_large.onnx",
+    "segmentation": "models/diarization/sherpa-onnx-pyannote-segmentation-3-0/model.onnx",
+    "window_s": 1.5,
+    "hop_s": 0.5,
+    "silence_rms": 0.005,
+    "threads": 4,
+    "paint": true
+  },
+  "grammar": {
+    "min_shot_s": 1.5,
+    "lead_s": 0.25,
+    "wide_after_s": 0.0,
+    "wide_dur_s": 4.0,
+    "wide_overlap_pct": 0.0,
+    "overlap_window_s": 10.0
+  },
+  "speakers": {
+    "0": "cam2"
+  },
+  "separation": {
+    "within": 0.5104,
+    "between": 0.7013
+  },
+  "score": null,
+  "cuts": [
+    301,
+    350
+  ],
+  "shots": [
+    {
+      "start": 0,
+      "end": 301,
+      "camera": "cam2",
+      "why": "voice 0 is speaking -> cam2"
+    },
+    {
+      "start": 301,
+      "end": 350,
+      "camera": "cam1",
+      "why": "no camera bound to voice 1 -- falling back to the wide"
+    },
+    {
+      "start": 350,
+      "end": 1992,
+      "camera": "cam2",
+      "why": "voice 0 is speaking -> cam2"
+    }
+  ]
+}

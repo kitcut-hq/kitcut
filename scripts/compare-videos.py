@@ -55,6 +55,7 @@ DEFAULT_PASS = {"frames_exact": True, "max_shifted": 0, "min_ssim_median": 0.95,
 # called 12.8% of that film frozen -- which was the podcast's own stillness, not
 # the cut's. A held frame scores 0.0000 (worst 0.0005); live footage sits above.
 FROZEN = {"still": 0.0005, "min_run_s": 1.0}
+SHIFT_MARGIN = 0.001         # see the comment where it is used
 
 
 def run(cmd, **kw):
@@ -257,7 +258,15 @@ def main():
         if nxt_b is not None:
             cand.append((ssim(a, nxt_b), 1))
         scores.append(here)
-        best_at.append(max(cand)[1])
+        # A neighbour only counts as the better match when it wins by more
+        # than encode noise. Measured: on a near-still moment two adjacent
+        # reference frames are 0.9996 alike and the coin-flip margin is
+        # 0.00006; a real one-frame misalignment wins by 0.01 and more, and
+        # arrives as a run, not as one frame. Without this guard a single
+        # still frame of a 2540-frame film failed an otherwise exact round
+        # trip.
+        best, at = max(cand)
+        best_at.append(at if best - here > SHIFT_MARGIN else 0)
         prev_b, cur_b, nxt_b = cur_b, nxt_b, next(gb, None)
     scores = np.array(scores, dtype=np.float64)
     if scores.size == 0:

@@ -96,7 +96,7 @@
     },
     "projects/a16z-altman/outputs/a16z-altman-autocut.mp4": {
       "status": "current",
-      "built_utc": "2026-08-27T18:11:13Z",
+      "built_utc": "2026-08-27T19:32:54Z",
       "kind": "anglecut",
       "script": "scripts/angle-cut.py",
       "manifest": "projects/a16z-altman/anglecut-auto.json",
@@ -111,7 +111,7 @@
     },
     "projects/a16z-altman/outputs/a16z-altman-autocut-debug.mp4": {
       "status": "current",
-      "built_utc": "2026-08-27T18:45:53Z",
+      "built_utc": "2026-08-27T19:37:26Z",
       "kind": "anglecut",
       "script": "scripts/angle-cut.py",
       "manifest": "projects/a16z-altman/anglecut-auto.json",
@@ -143,7 +143,7 @@
     }
   },
   "notes": [],
-  "updated_utc": "2026-08-27T18:48:55Z",
+  "updated_utc": "2026-08-27T19:37:26Z",
   "result": {
     "stage1_machinery": {
       "verdict": "PASS",

@@ -1,0 +1,80 @@
+{
+  "_comment": "Shots and angles read back off a finished video by scripts/shot-detect.py. Frame indices on the source's own grid; end is exclusive. seconds = frame*fps_den/fps_num.",
+  "source": "projects/a16z-sinofsky/temp/program.mp4",
+  "width": 1280,
+  "height": 720,
+  "fps_num": 24000,
+  "fps_den": 1001,
+  "fps": 23.976023976023978,
+  "n_frames": 2540,
+  "detect": {
+    "threshold": 0.055,
+    "ratio": 4.0,
+    "window": 4,
+    "median_win": 60,
+    "alike": 0.055,
+    "split": 0.07,
+    "min_shot": 8
+  },
+  "separation": {
+    "within": 0.02429,
+    "between": 0.24299
+  },
+  "cuts": [
+    248,
+    328,
+    983,
+    1283,
+    1786,
+    2085
+  ],
+  "shots": [
+    {
+      "start": 0,
+      "end": 248,
+      "camera": "cam1"
+    },
+    {
+      "start": 248,
+      "end": 328,
+      "camera": "cam2"
+    },
+    {
+      "start": 328,
+      "end": 983,
+      "camera": "cam1"
+    },
+    {
+      "start": 983,
+      "end": 1283,
+      "camera": "cam2"
+    },
+    {
+      "start": 1283,
+      "end": 1786,
+      "camera": "cam1"
+    },
+    {
+      "start": 1786,
+      "end": 2085,
+      "camera": "cam2"
+    },
+    {
+      "start": 2085,
+      "end": 2540,
+      "camera": "cam1"
+    }
+  ],
+  "cameras": [
+    {
+      "id": "cam1",
+      "n_shots": 4,
+      "frames": 1861
+    },
+    {
+      "id": "cam2",
+      "n_shots": 3,
+      "frames": 679
+    }
+  ]
+}

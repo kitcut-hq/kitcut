@@ -78,6 +78,7 @@ DEFAULT_DIARIZE = {
     "segmentation":
         "models/diarization/sherpa-onnx-pyannote-segmentation-3-0/model.onnx",
     "window_s": 1.5, "hop_s": 0.5, "silence_rms": 0.005, "threads": 4,
+    "paint": True,
 }
 DEFAULT_GRAMMAR = {
     "min_shot_s": 1.5,        # never cut faster than this
@@ -111,28 +112,34 @@ def audio(path, start_s, dur_s):
     return np.frombuffer(p.stdout, dtype=np.float32)
 
 
-def embed(a, cfg):
-    """(times, unit-norm speaker vectors) for every window with sound in it."""
+def extractor(cfg):
     import sherpa_onnx
     model = rel(cfg["model"])
     if not os.path.exists(model):
         sys.exit("no speaker model at %s -- see the video-multicam-switch skill"
                  % _project.norm(model))
-    ex = sherpa_onnx.SpeakerEmbeddingExtractor(
+    return sherpa_onnx.SpeakerEmbeddingExtractor(
         sherpa_onnx.SpeakerEmbeddingExtractorConfig(
             model=model, num_threads=int(cfg["threads"])))
+
+
+def embed_span(ex, chunk):
+    s = ex.create_stream()
+    s.accept_waveform(SR, chunk)
+    s.input_finished()
+    v = np.array(ex.compute(s), dtype=np.float32)
+    return v / (float(np.linalg.norm(v)) or 1.0)
+
+
+def embed(a, cfg, ex):
+    """(times, unit-norm speaker vectors) for every window with sound in it."""
     w, hop = int(cfg["window_s"] * SR), int(cfg["hop_s"] * SR)
     ts, es = [], []
     for st in range(0, max(0, a.size - w), hop):
         chunk = a[st:st + w]
         if np.sqrt((chunk.astype(np.float64) ** 2).mean()) < cfg["silence_rms"]:
             continue
-        s = ex.create_stream()
-        s.accept_waveform(SR, chunk)
-        s.input_finished()
-        v = np.array(ex.compute(s), dtype=np.float32)
-        n = float(np.linalg.norm(v)) or 1.0
-        es.append(v / n)
+        es.append(embed_span(ex, chunk))
         ts.append((st + w / 2.0) / SR)
     if not es:
         sys.exit("no speech found: every window was below silence_rms")
@@ -167,13 +174,51 @@ def overlap_track(a, cfg, k, n_frames, fps):
         clustering=sherpa_onnx.FastClusteringConfig(num_clusters=k),
         min_duration_on=0.2, min_duration_off=0.3)
     sd = sherpa_onnx.OfflineSpeakerDiarization(c)
+    segs = [(s.start, s.end) for s in sd.process(a).sort_by_start_time()]
     n = np.zeros(n_frames, dtype=np.int16)
-    for s in sd.process(a).sort_by_start_time():
-        lo = max(0, int(round(s.start * fps)))
-        hi = min(n_frames, int(round(s.end * fps)))
+    for s, e in segs:
+        lo = max(0, int(round(s * fps)))
+        hi = min(n_frames, int(round(e * fps)))
         if hi > lo:
             n[lo:hi] += 1
-    return n
+    return segs, n
+
+
+def paint(track, segs, a, ex, E, lab, fps, n_frames):
+    """Overlay the segmentation model's exact boundaries onto the window track.
+
+    The windows have one job left after this: voting the voice CENTROIDS into
+    existence. Identity per moment comes from embedding each segment whole and
+    taking the nearest centroid; timing comes from the segment's own edges.
+    Both parts are load-bearing and were chosen from failures, not taste:
+
+      * a 1.5 s window cannot resolve a 1.1 s interjection -- it embeds as a
+        blend of two voices and lands on whichever dominates, which is how a
+        two-line interjection cost 20 seconds of wrong camera on the second
+        test film. A segment is exactly the speech it covers, nothing else.
+      * the segmentation model's own speaker LABELS are not used at all --
+        its clustering merged two of three speakers on the first test film.
+        Boundaries good, identity bad; so take only the boundaries.
+
+    Segments are painted in start order, so where two overlap, the later --
+    the interjection -- wins the overlapped stretch. That is also what the
+    editor does with it.
+    """
+    cents = {}
+    for k in sorted(set(lab.tolist())):
+        c = E[lab == k].mean(axis=0)
+        cents[k] = c / (float(np.linalg.norm(c)) or 1.0)
+    out = track.copy()
+    for s, e in segs:
+        lo, hi = int(s * SR), min(int(e * SR), a.size)
+        if hi - lo < int(0.25 * SR):
+            continue
+        v = embed_span(ex, a[lo:hi])
+        k = min(cents, key=lambda k_: 1.0 - float(v @ cents[k_]))
+        fa, fb = max(0, int(round(s * fps))), min(n_frames, int(round(e * fps)))
+        if fb > fa:
+            out[fa:fb] = k
+    return out
 
 
 def contention(over, g, fps, n_frames):
@@ -395,15 +440,24 @@ def main():
     if not hints:
         sys.exit("declare `speakers`: one {camera, at} per person, naming a "
                  "moment when that person is talking")
+    # People at the table with no close-up of their own -- a host off camera,
+    # a guest the shoot never framed. Declaring them is shoot metadata, and it
+    # matters: their voices then cluster separately instead of polluting a
+    # framed speaker's cluster, and an unmapped voice falls back to the wide,
+    # which is where an editor puts a voice with no face.
+    K = len(hints) + int(m.get("off_camera_speakers") or 0)
     wide = m.get("wide")
 
     a = audio(files[src], anchor[src] / fps, n_frames / fps)
     print("%s: %.1f s of sound from %s" % (pid, a.size / float(SR), src))
-    ts, E = embed(a, dcfg)
-    lab, groups = cluster(E, len(hints))
+    ex = extractor(dcfg)
+    ts, E = embed(a, dcfg, ex)
+    lab, groups = cluster(E, K)
     within, between = separation(E, lab)
-    print("%d windows, %d speakers; cosine distance within %.3f, between %.3f"
-          % (len(ts), len(hints), within, between if between is not None else -1))
+    print("%d windows, %d voices (%d framed); cosine distance within %.3f, "
+          "between %.3f"
+          % (len(ts), K, len(hints), within,
+             between if between is not None else -1))
     if between is not None and between <= within:
         print("  !! the voices do not separate -- every cut after this is a "
               "guess. Try another model or fewer speakers.")
@@ -424,14 +478,21 @@ def main():
 
     track = speaker_per_frame(ts, lab, n_frames, fps)
 
-    over = overlap_track(a, dcfg, len(hints), n_frames, fps)
-    if over is None:
-        print("  no segmentation model -- crosstalk cannot be detected, so the "
-              "wide will never be chosen")
+    got = overlap_track(a, dcfg, max(K, 2), n_frames, fps)
+    if got is None:
+        over = None
+        print("  no segmentation model -- boundaries stay window-blurred and "
+              "crosstalk cannot be detected")
     else:
+        segs, over = got
         pct = 100.0 * float((over > 1).mean())
-        print("  crosstalk: %.1f%% of the film has more than one voice active"
-              % pct)
+        if dcfg.get("paint"):
+            track = paint(track, segs, a, ex, E, lab, fps, n_frames)
+            print("  %d speech segments painted over the window track; "
+                  "crosstalk on %.1f%% of the film" % (len(segs), pct))
+        else:
+            print("  painting off by manifest; crosstalk on %.1f%% of the film"
+                  % pct)
 
     def build(gg):
         return grammar(track, cam_of, wide, gg, fps, n_frames,

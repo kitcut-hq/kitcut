@@ -572,10 +572,29 @@ python scripts/compare-videos.py --rendered projects/<id>/outputs/<id>-anglecut.
                                  --reference projects/<id>/temp/program.mp4
 ```
 
-The worked example is `projects/a16z-altman/`: a two-minute a16z podcast clip,
-three speakers on four angles, 16 shots. It round-trips **exactly** — 2796 of
-2796 frames, every one of the 15 cuts at offset 0, no frame shifted, audio at
-0.000 ms.
+Four films have been through it, and **stage 1 passes exactly on all four** —
+frame-for-frame, zero shifted frames, zero frozen filler, every cut at offset 0,
+audio at 0.000 ms:
+
+| project | film | shots / angles | stage 1 | stage 2 agreement |
+|---|---|---|---|---|
+| `a16z-altman` | 1:56 | 16 / 4 | exact | 77.68% |
+| `a16z-bornstein` | 0:59 | 6 / 3 | exact | 78.77% |
+| `a16z-agents` | 1:23 | 5 / 2 | exact | **86.90%** |
+| `a16z-sinofsky` | 1:45 | 7 / 2 | exact | 73.27% |
+
+The first is the worked example; the other three were run on a framework that
+had never seen them, which is the only reason the stage-2 column means anything.
+The spread — 73% to 87% — is the honest range, and each end has a cause:
+`a16z-agents` has one framed speaker and an off-camera interjector, which a
+speaker-follower handles almost perfectly; `a16z-sinofsky` is a single
+106-second monologue, where the editor cut six times for rhythm alone and
+nothing in the audio predicts any of it.
+
+**Editing costs about half the film's runtime.** From raw tapes to finished
+film — sync, decide, render — measured across the four: 0.46× to 0.57× realtime.
+The decide step (speaker embeddings, CPU) is ~85% of it; the NVENC render is
+roughly fifteen times faster than realtime.
 
 ### Conform first, or a one-frame error has somewhere to hide
 
@@ -644,17 +663,25 @@ z-score of 604 and a three-way residual of 0.125 ms.
 Offsets are *relative*, though. Where programme frame zero sits on each tape is
 a separate question, and `angle-cut.py`'s `anchor` settles it:
 
-- `picture_start` — **measured**. Find where each tape's opening held frame
-  stops holding, and subtract the programme frame at which the plan first uses
-  that angle. Watch the off-by-one: the held frame *is* the tape's first live
-  frame repeated, so the first frame that *differs* is the second live one.
+- `picture_start` — **measured**. ONE tape anchors the film from its picture:
+  the one whose opening hold breaks most decisively, which in practice is a
+  close-up. Every other tape is then placed by the audio offset, which is
+  already exact to the frame. Watch the off-by-one: the held frame *is* the
+  tape's first live frame repeated, so the first frame that *differs* is the
+  second live one.
 - a map of camera to frame — **declared**, the editor's in-point. A tape with
   footage running before the film starts has no motion onset to find.
 
-Either way the anchors must reproduce the audio offsets before a frame is
-encoded. Picture and sound are independent instruments; on the fixture they
-agree to **zero frames** on all four tapes, and that agreement is the evidence
-the film will land right.
+**A wide angle cannot anchor itself, and this is why one tape anchors rather
+than each.** Its people are small at analysis resolution and its live footage
+barely moves, so a fixed motion threshold walks past the hold into near-still
+live frames and reports the onset late — by +2, +30 and +6 frames on three
+different films. Each tape whose own margin is clean still measures
+independently and must agree to the frame; a tape too still to self-anchor says
+so and reports its margin, so the weakness is visible rather than silent.
+
+The cross-check is not decoration. It caught that late-onset bug three times
+out of three before a single frame was encoded.
 
 ### Scoring it
 
@@ -710,16 +737,35 @@ into a single 33-second block. The embeddings were never the problem — measure
 cosine distance is 0.59 within a speaker against 0.82 between — so the
 clustering happens here instead. That is worth knowing before blaming a model.
 
-**Result on the a16z clip: 77.68% of the timeline on the same camera as the
-human editor**, computed twice by different routes — `auto-switch --score` off
-the shot list, and `compare-videos.py` off the rendered pixels — agreeing to the
-second decimal. Per camera: the interviewer 100% (501 of 501 frames), 90.4%,
-83.6%, and the wide 0%.
+**Results: 73–87% of the timeline on the same camera as the human editor**,
+across four films (see the table above), three of which the framework had never
+seen. Each score is computed twice by different routes — `auto-switch --score`
+off the shot list and `compare-videos.py` off the rendered pixels — and they
+agree to the second decimal.
 
-That 0% is the ceiling talking. The wide is nobody's close-up, so a
-speaker-following rule can never predict a cut to it, and it is 14.2% of this
-film — meaning ~85.8% is the most this grammar can score, and 77.68% is 90% of
-what is reachable. The remaining gap is the editor holding on a listener.
+Two structural limits explain most of the gap. The wide is nobody's close-up,
+so a speaker-following rule can never predict a cut to it; on `a16z-altman`
+that alone is 14.2% of the film, putting the ceiling near 85.8%. And a film
+with one voice has no audio signal to cut on at all: `a16z-sinofsky` is a
+106-second monologue where the editor cut six times purely for rhythm, and the
+switcher correctly cut zero times — 73.27% is the honest floor of the method,
+not a bug.
+
+**Boundaries come from the segments, identity from the windows.** Windows vote
+the voice centroids into existence; each speech segment is then embedded whole,
+matched to the nearest centroid, and painted over the track with its own exact
+edges. A 1.5 s window cannot resolve a 1.1 s interjection — it embeds as a
+blend and lands on whichever voice dominates, which cost 20 seconds of wrong
+camera on `a16z-bornstein` before painting was added (+4.8 points there, +1.4
+on `a16z-agents`). The segmentation model's own speaker *labels* are never
+used: its clustering merged two of three speakers on `a16z-altman`. Good
+boundaries, bad identity — so take only the boundaries.
+
+Painting is the default and `a16z-altman` pins it off, because there it loses
+4.2 points: two of its male voices are close enough that whole-segment
+embeddings land on the wrong man, while many independent window votes do not.
+A default that wins on two unseen films and loses on one is worth shipping with
+its counter-example committed next to it.
 
 The sweep is where a plausible idea died. "Break a long monologue with the
 wide" sounds obviously right, and it **loses**: agreement falls from 77.7% to

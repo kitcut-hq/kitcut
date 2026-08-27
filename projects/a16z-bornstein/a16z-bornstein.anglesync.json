@@ -1,0 +1,57 @@
+{
+  "_comment": "N-track audio alignment by scripts/sync-audio.py. offset is seconds of THIS tape relative to the reference: the same moment sits offset seconds later into it, and is exact. audio_start is an approximate second opinion -- where the tape becomes audible, which is a little after it starts -- and must not be used to anchor a cut.",
+  "id": "a16z-bornstein",
+  "reference": "cam1",
+  "fps_num": 24000,
+  "fps_den": 1001,
+  "fps": 23.976023976023978,
+  "rate": 8000,
+  "config": {
+    "onset_db": -100.0,
+    "min_confidence": 8.0,
+    "max_residual_ms": 5.0,
+    "max_onset_drift_ms": 60.0
+  },
+  "tracks": [
+    {
+      "id": "cam1",
+      "file": "projects/a16z-bornstein/raws/cam1.mp4",
+      "offset_s": 0.0,
+      "offset_frames": 0.0,
+      "confidence": null,
+      "audio_start_s": 5.61,
+      "audio_start_frames": 135
+    },
+    {
+      "id": "cam2",
+      "file": "projects/a16z-bornstein/raws/cam2.mp4",
+      "offset_s": -3.2115,
+      "offset_frames": -76.999,
+      "confidence": 512.102,
+      "audio_start_s": 2.41,
+      "audio_start_frames": 58
+    },
+    {
+      "id": "cam3",
+      "file": "projects/a16z-bornstein/raws/cam3.mp4",
+      "offset_s": -0.75075,
+      "offset_frames": -18.0,
+      "confidence": 752.702,
+      "audio_start_s": 4.86,
+      "audio_start_frames": 117
+    }
+  ],
+  "pairwise_offset_s": {
+    "cam1->cam1": 0.0,
+    "cam1->cam2": 3.2115,
+    "cam1->cam3": 0.75075,
+    "cam2->cam1": -3.2115,
+    "cam2->cam2": 0.0,
+    "cam2->cam3": -2.46075,
+    "cam3->cam1": -0.75075,
+    "cam3->cam2": 2.46075,
+    "cam3->cam3": 0.0
+  },
+  "worst_three_way_residual_ms": 0.0,
+  "notes": []
+}

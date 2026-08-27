@@ -1,0 +1,68 @@
+{
+  "_comment": "Round-trip score by scripts/compare-videos.py.",
+  "id": "a16z-agents",
+  "rendered": "projects/a16z-agents/outputs/a16z-agents-anglecut.mp4",
+  "reference": "projects/a16z-agents/temp/program.mp4",
+  "frames": {
+    "rendered": 1992,
+    "reference": 1992,
+    "compared": 1992
+  },
+  "ssim": {
+    "median": 0.99927,
+    "p5": 0.99904,
+    "min": 0.9988,
+    "min_at_frame": 1505
+  },
+  "shifted_frames": {
+    "count": 0,
+    "first": []
+  },
+  "frozen": {
+    "frames": 0,
+    "pct": 0.0,
+    "runs": []
+  },
+  "cuts": {
+    "rendered": [
+      114,
+      304,
+      420,
+      1918
+    ],
+    "reference": [
+      114,
+      304,
+      420,
+      1918
+    ],
+    "offsets": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "worst_matched_offset": 0,
+    "angle_map": {
+      "cam1": "cam1",
+      "cam2": "cam2"
+    },
+    "timeline_agreement_pct": 100.0
+  },
+  "audio": {
+    "offset_samples": 0,
+    "offset_ms": 0.0,
+    "residual_db": -26.65
+  },
+  "pass_bar": {
+    "frames_exact": true,
+    "max_shifted": 0,
+    "min_ssim_median": 0.95,
+    "min_ssim_p5": 0.9,
+    "max_cut_offset": 0,
+    "max_audio_offset_ms": 1.0,
+    "max_frozen_frames": 0
+  },
+  "failures": [],
+  "verdict": "PASS"
+}

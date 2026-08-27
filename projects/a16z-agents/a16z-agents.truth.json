@@ -1,0 +1,66 @@
+{
+  "_comment": "Ground truth for the multicam round-trip test, written by scripts/split-cameras.py. Frame indices; live spans are in PROGRAMME frames, pads are in that tape's own frames. The pipeline under test must never read this -- only the harness that scores it.",
+  "id": "a16z-agents",
+  "program": "projects/a16z-agents/temp/program.mp4",
+  "shots": "projects/a16z-agents/a16z-agents.shots.json",
+  "fps_num": 24000,
+  "fps_den": 1001,
+  "n_frames": 1992,
+  "width": 1280,
+  "height": 720,
+  "sample_rate": 48000,
+  "stagger": {
+    "seed": 20260829,
+    "head_s": [
+      1.0,
+      6.0
+    ],
+    "tail_s": [
+      0.5,
+      4.0
+    ],
+    "_comment": "Seeded so the same manifest rebuilds the same tapes. Ranges are seconds; the draw is converted to whole frames before anything uses it."
+  },
+  "cameras": [
+    {
+      "id": "cam1",
+      "file": "projects/a16z-agents/raws/cam1.mp4",
+      "head_pad_frames": 96,
+      "tail_pad_frames": 41,
+      "total_frames": 2129,
+      "head_pad_s": 4.004,
+      "live_spans": [
+        [
+          0,
+          114
+        ],
+        [
+          304,
+          420
+        ],
+        [
+          1918,
+          1992
+        ]
+      ]
+    },
+    {
+      "id": "cam2",
+      "file": "projects/a16z-agents/raws/cam2.mp4",
+      "head_pad_frames": 137,
+      "tail_pad_frames": 67,
+      "total_frames": 2196,
+      "head_pad_s": 5.714042,
+      "live_spans": [
+        [
+          114,
+          304
+        ],
+        [
+          420,
+          1918
+        ]
+      ]
+    }
+  ]
+}

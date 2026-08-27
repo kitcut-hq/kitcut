@@ -1,0 +1,48 @@
+{
+  "_comment": "Stage 2: the same four tapes, but the edit is decided from the soundtrack alone. auto-switch.py writes the plan into <id>.autoplan.json and angle-cut.py renders it with this same manifest. Nothing here names a shot, a cut or a timecode from the original edit.",
+  "_anchor": "Measured in stage 1 by angle-cut.py's picture_start, and independently confirmed by the audio correlation. These say where each tape's footage sits, not who is on screen when -- a property of the recordings, not of the edit. Stated explicitly because the picture anchor is derived from a plan, and here the plan is the output.",
+  "_film": "The in and out points are given. What is being scored is the switching, not the trim, and handing over the same span as the original is what makes the comparison frame-for-frame.",
+  "_speakers": "The only human knowledge in stage 2, and the kind an editor has for free: which camera is pointed at which person. One moment per person, in film seconds, at which that person is the one talking. It says nothing about when to cut.",
+  "_wide": "The angle that is nobody's close-up. A speaker-following rule can never predict a cut to it, which is most of the disagreement with the human edit.",
+  "id": "a16z-agents",
+  "cameras": [
+    {
+      "id": "cam1",
+      "file": "projects/a16z-agents/raws/cam1.mp4"
+    },
+    {
+      "id": "cam2",
+      "file": "projects/a16z-agents/raws/cam2.mp4"
+    }
+  ],
+  "reference": "cam1",
+  "audio_from": "cam1",
+  "sync": "projects/a16z-agents/a16z-agents.anglesync.json",
+  "plan_from": "projects/a16z-agents/a16z-agents.autoplan.json",
+  "anchor": {
+    "cam1": 96,
+    "cam2": 137
+  },
+  "film": {
+    "frames": 1992
+  },
+  "speakers": [
+    {
+      "camera": "cam2",
+      "at": 40.0,
+      "who": "Aaron Levie -- the only framed speaker; a host interjects once from off-camera"
+    }
+  ],
+  "off_camera_speakers": 1,
+  "wide": "cam1",
+  "grammar": {
+    "min_shot_s": 1.5,
+    "lead_s": 0.25,
+    "wide_after_s": 0.0,
+    "wide_dur_s": 4.0
+  },
+  "outdir": "projects/a16z-agents/outputs",
+  "render": {
+    "cq": 16
+  }
+}

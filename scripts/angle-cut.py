@@ -50,7 +50,7 @@ ENV = _env.ENV
 
 DEFAULT_RENDER = {"encoder": "h264_nvenc", "preset": "p5", "cq": 18,
                   "maxrate": "40M", "bufsize": "80M", "audio_bitrate": "192k"}
-DEFAULT_ANCHOR = {"still": 0.0015, "tolerance_frames": 1}
+DEFAULT_ANCHOR = {"still": 0.0015, "tolerance_frames": 1, "min_margin": 3.0}
 # Finding a HELD stretch is a stricter job than finding where the opening freeze
 # ends, and wants its own numbers. Calibrated against stage 1, where the plan is
 # the human's own edit and every frame therefore has real footage behind it, so
@@ -284,7 +284,19 @@ def main():
     spf = den / float(num)
     n_prog = max(b for _, _, b in plan)
 
-    anchors, margins, how = {}, {}, m.get("anchor", "picture_start")
+    # Anchoring uses each instrument where it is strong. The picture gives ONE
+    # absolute anchor, taken from the tape whose opening hold breaks most
+    # decisively -- a close-up, in practice. The sound, already proven exact
+    # to the frame, places every other tape relative to it. A wide CANNOT
+    # reliably anchor itself: its people are small at analysis size, its live
+    # footage barely moves, and a fixed motion threshold finds its first live
+    # frame late -- +2, +30 and +6 frames on three different films, caught by
+    # this cross-check every time. Any tape whose own margin is clean still
+    # measures independently and must agree; a thin margin reports itself,
+    # because walking past the hold into near-still live frames is exactly
+    # what raises the measured floor.
+    anchors, how = {}, m.get("anchor", "picture_start")
+    cand = {}
     if how == "picture_start":
         first = {}
         for c, a, _ in plan:
@@ -294,46 +306,62 @@ def main():
                 anchors[c] = None
                 continue
             i, floor, jump = picture_start(files[c], w, h, acfg["still"])
-            if i is None:
-                sys.exit("%s never moves: it cannot anchor itself, declare "
-                         "`anchor` per camera instead" % c)
-            if i == 1:
-                sys.exit("%s moves from its very first frame, so it does not "
-                         "open on a held frame -- declare `anchor` per camera"
-                         % c)
-            anchors[c] = i - first[c] - 1     # the held frame is the first live one
-            margins[c] = (floor, jump)
+            if i is None or i == 1:
+                sys.exit("%s does not open on a held frame it ever leaves -- "
+                         "declare `anchor` per camera instead" % c)
+            cand[c] = (i - first[c] - 1,      # the held frame is the first live one
+                       floor, jump, jump / max(floor, 1e-6))
+        base = max(cand, key=lambda c: cand[c][3])
+        if cand[base][3] < acfg["min_margin"]:
+            sys.exit("no tape breaks its opening hold decisively (best margin "
+                     "%.1fx on %s) -- declare `anchor` per camera instead"
+                     % (cand[base][3], base))
+        if off.get(base) is None:
+            sys.exit("%s anchors the film but the sync has no offset for it"
+                     % base)
+        anchors[base] = cand[base][0]
+        for c in cand:
+            if c != base:
+                anchors[c] = cand[base][0] + int(round(off[c] - off[base]))
     elif isinstance(how, dict):
         anchors = {c: int(how[c]) for c in cams if c in how}
+        base = None
     else:
         sys.exit("anchor must be \"picture_start\" or a map of camera to frame")
 
     print("%d tapes, reference %s, %dx%d %d/%d, programme %d frames (%s)"
           % (len(cams), ref, w, h, num, den, n_prog, hhmmss(n_prog * spf)))
-    print("\n  cam   anchor   vs sync   tape frames   still/moving   covers")
+    print("\n  cam   anchor   tape frames   margin   picture check")
     bad = []
     for c in cams:
         if anchors.get(c) is None:
-            print("  %-5s      -         -                            "
-                  "unused by the plan" % c)
+            print("  %-5s      -                             unused by the plan"
+                  % c)
             continue
         mine = []
-        want = off.get(c)
-        got = anchors[c] - anchors[ref]
-        drift = None if want is None else got - want
         tot = count_frames(files[c])
         need = anchors[c] + n_prog
         if anchors[c] < 0 or need > tot:
             mine.append("%s: the plan needs frames %d-%d but the tape has %d"
                         % (c, anchors[c], need, tot))
-        if drift is not None and abs(drift) > acfg["tolerance_frames"]:
-            mine.append("%s: the picture says %+d frames from %s, the sound "
-                        "says %+.2f -- they must agree" % (c, got, ref, want))
-        mg = margins.get(c)
-        print("  %-5s %6d   %+8s %13d   %13s   %s"
-              % (c, anchors[c], "-" if drift is None else "%+d fr" % drift, tot,
-                 "-" if not mg else "%.4f/%.4f" % mg,
-                 "ok" if not mine else "FAILS"))
+        note, mg = "declared", None
+        if c in cand:
+            mg = cand[c][3]
+            if c == base:
+                note = "anchors the film (%.4f -> %.4f)" % cand[c][1:3]
+            elif mg >= acfg["min_margin"]:
+                d = cand[c][0] - anchors[c]
+                note = "agrees %+d fr" % d
+                if abs(d) > acfg["tolerance_frames"]:
+                    mine.append("%s: its own picture says anchor %d but the "
+                                "sound-derived anchor is %d -- they must agree"
+                                % (c, cand[c][0], anchors[c]))
+            else:
+                note = ("too still to self-anchor (%.1fx) -- placed by sound"
+                        % mg)
+        print("  %-5s %6d  %12d   %5s    %s"
+              % (c, anchors[c], tot,
+                 "-" if mg is None else "%.1fx" % mg, note))
         bad += mine
     if bad:
         for b in bad:

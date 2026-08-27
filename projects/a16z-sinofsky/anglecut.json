@@ -1,0 +1,25 @@
+{
+  "_comment": "Re-cut the programme out of the synthetic camera raws. This manifest and everything it points at are the ONLY things angle-cut.py and sync-audio.py may read -- the truth sidecar is the harness's, not the pipeline's.",
+  "_plan": "Stage 1 replays the edit read back off the programme, which is what makes it a test of the machinery rather than of the editing. Stage 2 swaps this for a plan auto-switch.py wrote from the sound alone.",
+  "_anchor": "Where programme frame 0 sits on each tape. `picture_start` finds the first frame on each tape whose picture moves and subtracts the programme frame at which the plan first uses that angle -- measured from the recordings rather than handed over, and exact to the frame. The audio sync must independently agree, which is asserted before anything is encoded. Real footage with its own head and tail rolling has no motion onset to find and wants explicit per-camera frame numbers here instead.",
+  "id": "a16z-sinofsky",
+  "cameras": [
+    {
+      "id": "cam1",
+      "file": "projects/a16z-sinofsky/raws/cam1.mp4"
+    },
+    {
+      "id": "cam2",
+      "file": "projects/a16z-sinofsky/raws/cam2.mp4"
+    }
+  ],
+  "reference": "cam1",
+  "sync": "projects/a16z-sinofsky/a16z-sinofsky.anglesync.json",
+  "plan_from": "projects/a16z-sinofsky/a16z-sinofsky.shots.json",
+  "anchor": "picture_start",
+  "audio_from": "cam1",
+  "outdir": "projects/a16z-sinofsky/outputs",
+  "render": {
+    "cq": 16
+  }
+}

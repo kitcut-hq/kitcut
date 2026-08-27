@@ -18,7 +18,15 @@ a screen recording plus a camera, **composited** into one picture. This one
 **chooses between** pictures. Different problem, different script.
 
 README reference: "Cutting between cameras, and proving the cut is right".
-Worked example: `projects/a16z-altman/`.
+Four worked examples: `projects/a16z-altman/` (4 angles, the original),
+`a16z-bornstein` (3), `a16z-agents` (2, with an off-camera speaker),
+`a16z-sinofsky` (2, a single monologue). Stage 1 is exact on all four; stage 2
+scores 73–87%. Copy the closest one's three manifests for a new film.
+
+**Adding a film takes three manifests and no code.** `multicam-sim.json`
+(source + stagger seed), `anglecut.json` (stage 1), `anglecut-auto.json`
+(stage 2: explicit anchors from the stage-1 run, `film.frames`, one speaker
+hint per person, `wide`, and `off_camera_speakers` if anyone is unframed).
 
 ## The project folder comes first
 
@@ -71,13 +79,14 @@ is the wide shot.
 actually uses, and `sync-audio.py` and `anglecut.json` must name the same one —
 angle-cut refuses a sync measured against a different reference.
 
-**Where the film starts on each tape.** `anchor: "picture_start"` measures it
-from the picture and is exact for tapes that open on a held frame. Real footage
-that was rolling before the film starts has no motion onset to find; declare
-`anchor` as a map of camera to frame instead. Whichever you use, the anchors
-must reproduce the offsets the audio measured — the assertion runs before any
-encode, and if picture and sound disagree, one of them is wrong and neither
-should be trusted.
+**Where the film starts on each tape.** `anchor: "picture_start"` lets ONE tape
+anchor from its picture — whichever breaks its opening hold most decisively —
+and places the rest by the audio offset. Do not expect a wide to anchor itself:
+its people are small and it barely moves, so the onset reads late (+2, +30 and
++6 frames on three films). The script reports each tape's margin and says which
+one was too still; a tape with a clean margin still measures independently and
+must agree to the frame. Real footage rolling before the film starts has no
+onset at all — declare `anchor` as a map of camera to frame instead.
 
 **Reading the comparator.** Look at the shift count first, not the SSIM. A
 median SSIM of 0.999 is compatible with an entire camera being one frame out;
@@ -127,11 +136,18 @@ guess; the script says so. Sherpa's built-in clustering merged two of three
 speakers into one 33-second block, which is why the clustering is done in the
 script and not by the library. Suspect the clustering before the model.
 
-**Expect the wide to score zero.** It is nobody's close-up, so a
-speaker-following rule can never predict a cut to it. On this film that is 14.2%
-of the timeline, which puts the ceiling at ~85.8%; the measured 77.68% is 90% of
-what is reachable. Quote the ceiling alongside the score or the number is
-misleading.
+**Expect the wide to score zero, and quote the ceiling with the score.** It is
+nobody's close-up, so a speaker-following rule can never predict a cut to it —
+14.2% of `a16z-altman`, putting its ceiling near 85.8%. And a single-voice film
+has no signal to cut on at all: `a16z-sinofsky` is a 106-second monologue where
+the switcher correctly cut zero times against the editor's six. 73% there is
+the method's floor, not a defect; say so rather than reporting it as failure.
+
+**Declare `off_camera_speakers` when someone is never framed.** A host who
+interjects from off camera still needs a cluster of their own, or their voice
+pollutes a framed speaker's. Unmapped voices fall back to the wide, which is
+where an editor puts a voice with no face — that one line is why `a16z-agents`
+scores 86.90%.
 
 **`compare-videos.py` will FAIL a stage-2 cut, and should.** Its bar is stage
 1's frame-exactness. The number to read is the timeline agreement, which it

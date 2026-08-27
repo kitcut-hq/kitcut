@@ -1,0 +1,63 @@
+{
+  "_comment": "A camera plan decided from the soundtrack alone by scripts/auto-switch.py -- no shot list, no truth sidecar, no picture. Same shape as a shots.json so angle-cut.py can read it as plan_from.",
+  "id": "a16z-bornstein",
+  "fps": 23.976023976023978,
+  "n_frames": 1418,
+  "diarize": {
+    "model": "models/diarization/nemo_en_titanet_large.onnx",
+    "segmentation": "models/diarization/sherpa-onnx-pyannote-segmentation-3-0/model.onnx",
+    "window_s": 1.5,
+    "hop_s": 0.5,
+    "silence_rms": 0.005,
+    "threads": 4,
+    "paint": true
+  },
+  "grammar": {
+    "min_shot_s": 1.5,
+    "lead_s": 0.25,
+    "wide_after_s": 0.0,
+    "wide_dur_s": 4.0,
+    "wide_overlap_pct": 0.0,
+    "overlap_window_s": 10.0
+  },
+  "speakers": {
+    "0": "cam1",
+    "1": "cam2"
+  },
+  "separation": {
+    "within": 0.4229,
+    "between": 0.5824
+  },
+  "score": null,
+  "cuts": [
+    1047,
+    1104,
+    1174
+  ],
+  "shots": [
+    {
+      "start": 0,
+      "end": 1047,
+      "camera": "cam1",
+      "why": "voice 0 is speaking -> cam1"
+    },
+    {
+      "start": 1047,
+      "end": 1104,
+      "camera": "cam2",
+      "why": "voice 1 is speaking -> cam2"
+    },
+    {
+      "start": 1104,
+      "end": 1174,
+      "camera": "cam1",
+      "why": "voice 0 is speaking -> cam1"
+    },
+    {
+      "start": 1174,
+      "end": 1418,
+      "camera": "cam2",
+      "why": "voice 1 is speaking -> cam2"
+    }
+  ]
+}

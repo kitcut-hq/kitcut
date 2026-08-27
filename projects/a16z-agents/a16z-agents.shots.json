@@ -1,0 +1,68 @@
+{
+  "_comment": "Shots and angles read back off a finished video by scripts/shot-detect.py. Frame indices on the source's own grid; end is exclusive. seconds = frame*fps_den/fps_num.",
+  "source": "projects/a16z-agents/temp/program.mp4",
+  "width": 1280,
+  "height": 720,
+  "fps_num": 24000,
+  "fps_den": 1001,
+  "fps": 23.976023976023978,
+  "n_frames": 1992,
+  "detect": {
+    "threshold": 0.055,
+    "ratio": 4.0,
+    "window": 4,
+    "median_win": 60,
+    "alike": 0.055,
+    "split": 0.07,
+    "min_shot": 8
+  },
+  "separation": {
+    "within": 0.01999,
+    "between": 0.21376
+  },
+  "cuts": [
+    114,
+    304,
+    420,
+    1918
+  ],
+  "shots": [
+    {
+      "start": 0,
+      "end": 114,
+      "camera": "cam1"
+    },
+    {
+      "start": 114,
+      "end": 304,
+      "camera": "cam2"
+    },
+    {
+      "start": 304,
+      "end": 420,
+      "camera": "cam1"
+    },
+    {
+      "start": 420,
+      "end": 1918,
+      "camera": "cam2"
+    },
+    {
+      "start": 1918,
+      "end": 1992,
+      "camera": "cam1"
+    }
+  ],
+  "cameras": [
+    {
+      "id": "cam1",
+      "n_shots": 3,
+      "frames": 304
+    },
+    {
+      "id": "cam2",
+      "n_shots": 2,
+      "frames": 1688
+    }
+  ]
+}

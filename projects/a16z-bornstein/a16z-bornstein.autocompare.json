@@ -1,0 +1,116 @@
+{
+  "_comment": "Round-trip score by scripts/compare-videos.py.",
+  "id": "a16z-bornstein",
+  "rendered": "projects/a16z-bornstein/outputs/a16z-bornstein-autocut.mp4",
+  "reference": "projects/a16z-bornstein/temp/program.mp4",
+  "frames": {
+    "rendered": 1418,
+    "reference": 1418,
+    "compared": 1418
+  },
+  "ssim": {
+    "median": 0.99939,
+    "p5": 0.2488,
+    "min": 0.24568,
+    "min_at_frame": 1383
+  },
+  "shifted_frames": {
+    "count": 59,
+    "first": [
+      426,
+      439,
+      440,
+      441,
+      442,
+      446,
+      447,
+      448,
+      461,
+      1048,
+      1085,
+      1091,
+      1099,
+      1103,
+      1175,
+      1187,
+      1207,
+      1208,
+      1220,
+      1247,
+      1248,
+      1251,
+      1252,
+      1253,
+      1255,
+      1256,
+      1259,
+      1262,
+      1263,
+      1264,
+      1265,
+      1266
+    ]
+  },
+  "frozen": {
+    "frames": 279,
+    "pct": 19.68,
+    "runs": [
+      [
+        426,
+        462
+      ],
+      [
+        1175,
+        1418
+      ]
+    ]
+  },
+  "cuts": {
+    "rendered": [
+      1047,
+      1104,
+      1174
+    ],
+    "reference": [
+      426,
+      462,
+      1049,
+      1085,
+      1337
+    ],
+    "offsets": [
+      621,
+      585,
+      -2,
+      19,
+      -163
+    ],
+    "worst_matched_offset": 2,
+    "angle_map": {
+      "cam1": "cam1",
+      "cam2": "cam3"
+    },
+    "timeline_agreement_pct": 78.773
+  },
+  "audio": {
+    "offset_samples": 0,
+    "offset_ms": 0.0,
+    "residual_db": -27.64
+  },
+  "pass_bar": {
+    "frames_exact": true,
+    "max_shifted": 0,
+    "min_ssim_median": 0.95,
+    "min_ssim_p5": 0.9,
+    "max_cut_offset": 0,
+    "max_audio_offset_ms": 1.0,
+    "max_frozen_frames": 0
+  },
+  "failures": [
+    "59 frames are shifted (allowed 0)",
+    "5th-percentile ssim 0.2488 below 0.9000 -- a bad tail the median cannot see",
+    "279 frames of frozen picture (allowed 0)",
+    "a cut is 2 frames out (allowed 0)"
+  ],
+  "verdict": "FAIL"
+}

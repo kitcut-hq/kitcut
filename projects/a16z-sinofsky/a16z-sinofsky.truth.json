@@ -1,0 +1,74 @@
+{
+  "_comment": "Ground truth for the multicam round-trip test, written by scripts/split-cameras.py. Frame indices; live spans are in PROGRAMME frames, pads are in that tape's own frames. The pipeline under test must never read this -- only the harness that scores it.",
+  "id": "a16z-sinofsky",
+  "program": "projects/a16z-sinofsky/temp/program.mp4",
+  "shots": "projects/a16z-sinofsky/a16z-sinofsky.shots.json",
+  "fps_num": 24000,
+  "fps_den": 1001,
+  "n_frames": 2540,
+  "width": 1280,
+  "height": 720,
+  "sample_rate": 48000,
+  "stagger": {
+    "seed": 20260830,
+    "head_s": [
+      1.0,
+      6.0
+    ],
+    "tail_s": [
+      0.5,
+      4.0
+    ],
+    "_comment": "Seeded so the same manifest rebuilds the same tapes. Ranges are seconds; the draw is converted to whole frames before anything uses it."
+  },
+  "cameras": [
+    {
+      "id": "cam1",
+      "file": "projects/a16z-sinofsky/raws/cam1.mp4",
+      "head_pad_frames": 31,
+      "tail_pad_frames": 31,
+      "total_frames": 2602,
+      "head_pad_s": 1.292958,
+      "live_spans": [
+        [
+          0,
+          248
+        ],
+        [
+          328,
+          983
+        ],
+        [
+          1283,
+          1786
+        ],
+        [
+          2085,
+          2540
+        ]
+      ]
+    },
+    {
+      "id": "cam2",
+      "file": "projects/a16z-sinofsky/raws/cam2.mp4",
+      "head_pad_frames": 36,
+      "tail_pad_frames": 69,
+      "total_frames": 2645,
+      "head_pad_s": 1.5015,
+      "live_spans": [
+        [
+          248,
+          328
+        ],
+        [
+          983,
+          1283
+        ],
+        [
+          1786,
+          2085
+        ]
+      ]
+    }
+  ]
+}

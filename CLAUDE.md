@@ -268,8 +268,13 @@ correlation, recovering the staggers to the exact frame.
 
 It comes with the only round-trip test in the repo: take somebody else's
 finished multicam film, rebuild the raw tapes it must have been cut from, re-cut
-it here, and score the result frame by frame. `projects/a16z-altman/` round-trips
-**exactly** — 2796 of 2796 frames, all 15 cuts at offset 0, no frame shifted.
+it here, and score the result frame by frame. **Four films are through it and
+stage 1 is exact on all four** — frame-for-frame, no shifted frames, no frozen
+filler, every cut at offset 0: `a16z-altman` (4 angles), `a16z-bornstein` (3),
+`a16z-agents` (2 + an off-camera speaker), `a16z-sinofsky` (2, a monologue).
+Stage 2 scores 73–87%, three of them on films the framework had never seen.
+Adding a film is three manifests and no code. Editing costs about half a film's
+runtime end to end; the decide step is ~85% of it, the render ~15x realtime.
 
 ```powershell
 python scripts/split-cameras.py  --manifest projects/<id>/multicam-sim.json --conform-only
@@ -308,13 +313,14 @@ angle. On this film the disagreement, the frames below 0.90 SSIM and the frozen
 frames are the same 624 (22.3%). Calibrate any new detector against stage 1,
 where every frame provably has footage, so a hit there is a false positive.
 
-**Stage 2 scores 77.68%** of the timeline on the same camera as the human
-editor, from the soundtrack alone: windowed speaker embeddings (sherpa-onnx,
-no torch), clustered here rather than by the library, bound to cameras by one
-hint per person. The wide is nobody's close-up and scores 0% by construction,
-so the ceiling is ~85.8% — quote it alongside the score. Knobs swept on one
-film are fitted to it; the number that means anything comes from the next film,
-which is what the framework is for.
+**Stage 2 scores 73-87%** of the timeline on the same camera as the human
+editor, from the soundtrack alone: windowed speaker embeddings (sherpa-onnx, no
+torch) vote the voice centroids, the segmentation model's boundaries are painted
+over them, and one hint per person binds a voice to a camera. Its own speaker
+labels are never used — good boundaries, bad identity. The wide is nobody's
+close-up and scores 0% by construction, and a single-voice film gives nothing to
+cut on at all, so quote the ceiling with the score. A wide also cannot anchor
+itself from its picture: one tape anchors, the sound places the rest.
 
 After touching any of `shot-detect.py`, `split-cameras.py`, `sync-audio.py`,
 `angle-cut.py`, `compare-videos.py`, `auto-switch.py` or `debug-notes.py`, run

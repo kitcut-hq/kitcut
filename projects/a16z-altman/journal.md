@@ -149,3 +149,38 @@ human's own edit so every frame provably has real footage, and any frozen run
 reported there is a false positive. That is how both freeze thresholds were set
 -- 0.0015 over half a second called 12.8% of a pixel-identical render frozen,
 0.0005 over a second calls 0.0% while still catching all 624 in stage 2.
+- 19:31 sync-audio scripts/sync-audio.py (--manifest projects/a16z-altman/anglecut.json) -- 4 tapes aligned on cam1, worst confidence 604.5, worst three-way residual 0.125 ms
+- 19:32 auto-switch scripts/auto-switch.py (--manifest projects/a16z-altman/anglecut-auto.json) -- 8 shots from the sound alone
+- 19:32 anglecut scripts/angle-cut.py -> projects/a16z-altman/outputs/a16z-altman-autocut.mp4 (--manifest projects/a16z-altman/anglecut-auto.json --out projects/a16z-altman/outputs/a16z-altman-autocut.mp4 --force)
+- 19:35 compare scripts/compare-videos.py (--rendered projects/a16z-altman/outputs/a16z-altman-anglecut.mp4 --reference projects/a16z-altman/temp/program.mp4) -- PASS: projects/a16z-altman/outputs/a16z-altman-anglecut.mp4 vs projects/a16z-altman/temp/program.mp4, median ssim 0.9993, 0 shifted frames
+- 19:37 anglecut scripts/angle-cut.py -> projects/a16z-altman/outputs/a16z-altman-autocut-debug.mp4 (--manifest projects/a16z-altman/anglecut-auto.json --debug --out projects/a16z-altman/outputs/a16z-altman-autocut-debug.mp4 --force)
+
+Three more films went through the framework in the same session -- bornstein,
+agents, sinofsky -- and they earned their keep immediately by breaking three
+things one film could never have shown. All fixed; see their journals too.
+
+The one that matters most here: a16z-altman is now the COUNTER-EXAMPLE for
+segment painting. Painting the segmentation model's exact boundaries over the
+window track is the shipped default because it won on both unseen films (+4.8
+bornstein, +1.4 agents), but on this film it LOSES 4.2 points (77.68 -> 73.50).
+Two of the men here sound alike enough that a whole-segment embedding lands on
+the wrong one for a few long segments, while many independent window votes
+average it out. anglecut-auto.json pins paint:false with that reason written
+in. Do not "fix" this by flipping the default back; a default that wins twice
+and loses once is worth keeping WITH its counter-example committed next to it.
+
+Cross-film numbers, for anyone tempted to quote 77.68% as "how well we edit":
+altman 77.68, bornstein 78.77, agents 86.90, sinofsky 73.27. The spread is the
+answer, and both ends have causes. agents is easiest because one framed speaker
+plus an off-camera interjector is exactly what a speaker-follower is good at.
+sinofsky is hardest because it is a single 106-second monologue: the editor cut
+six times for rhythm alone, our switcher cut zero, and no audio feature could
+have known. That is the floor of the method, not a defect.
+
+Stage 1 is exact on all four films. That is the result worth repeating -- the
+machinery is not the uncertain part.
+
+Editing time, measured end to end from raw tapes: 0.46x to 0.57x of the film's
+runtime. The decide step (speaker embeddings on CPU) is ~85% of it; the NVENC
+render is ~15x faster than realtime. If that ever needs to be faster, the
+embeddings are the only thing worth optimising.
