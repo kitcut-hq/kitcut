@@ -84,3 +84,21 @@ This film is also the first through the 25 fps audio-boundary path (exact:
 1920 samples a frame) and the hour-long clustering path. Conform preserved all
 90145 frames.
 - 22:50 sync-audio scripts/sync-audio.py (--manifest temp/up1-syncprobe-manifest.json --out temp/up1-syncprobe.json) -- 3 tapes aligned on cam1, worst confidence 3298.5, worst three-way residual 0.000 ms
+
+## 2026-08-28
+- 00:16 sim-raw scripts/split-cameras.py -> projects/up-interview-1/raws/cam1.mp4 (--manifest projects/up-interview-1/multicam-sim.json)
+- 00:16 sim-raw scripts/split-cameras.py -> projects/up-interview-1/raws/cam10.mp4 (--manifest projects/up-interview-1/multicam-sim.json)
+- 00:16 sim-raw scripts/split-cameras.py -> projects/up-interview-1/raws/cam11.mp4 (--manifest projects/up-interview-1/multicam-sim.json)
+- 00:16 sim-raw scripts/split-cameras.py -> projects/up-interview-1/raws/cam12.mp4 (--manifest projects/up-interview-1/multicam-sim.json)
+- 00:16 sim-raw scripts/split-cameras.py -> projects/up-interview-1/raws/cam13.mp4 (--manifest projects/up-interview-1/multicam-sim.json)
+- 00:16 sim-raw scripts/split-cameras.py -> projects/up-interview-1/raws/cam2.mp4 (--manifest projects/up-interview-1/multicam-sim.json)
+- 00:16 sim-raw scripts/split-cameras.py -> projects/up-interview-1/raws/cam3.mp4 (--manifest projects/up-interview-1/multicam-sim.json)
+- 00:16 sim-raw scripts/split-cameras.py -> projects/up-interview-1/raws/cam4.mp4 (--manifest projects/up-interview-1/multicam-sim.json)
+- 00:16 sim-raw scripts/split-cameras.py -> projects/up-interview-1/raws/cam5.mp4 (--manifest projects/up-interview-1/multicam-sim.json)
+- 00:16 sim-raw scripts/split-cameras.py -> projects/up-interview-1/raws/cam6.mp4 (--manifest projects/up-interview-1/multicam-sim.json)
+- 00:16 sim-raw scripts/split-cameras.py -> projects/up-interview-1/raws/cam7.mp4 (--manifest projects/up-interview-1/multicam-sim.json)
+- 00:16 sim-raw scripts/split-cameras.py -> projects/up-interview-1/raws/cam8.mp4 (--manifest projects/up-interview-1/multicam-sim.json)
+- 00:16 sim-raw scripts/split-cameras.py -> projects/up-interview-1/raws/cam9.mp4 (--manifest projects/up-interview-1/multicam-sim.json)
+- 00:24 sync-audio scripts/sync-audio.py (--manifest projects/up-interview-1/anglecut.json) -- 13 tapes aligned on cam1, worst confidence 3298.5, worst three-way residual 0.000 ms
+- 01:54 anglecut scripts/angle-cut.py -> projects/up-interview-1/outputs/up-interview-1-anglecut.mp4 (--manifest projects/up-interview-1/anglecut.json)
+- 02:07 compare scripts/compare-videos.py (--rendered projects/up-interview-1/outputs/up-interview-1-anglecut.mp4 --reference projects/up-interview-1/temp/program.mp4) -- FAIL: projects/up-interview-1/outputs/up-interview-1-anglecut.mp4 vs projects/up-interview-1/temp/program.mp4, median ssim 0.9993, 0 shifted frames

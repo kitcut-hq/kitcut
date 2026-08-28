@@ -124,15 +124,39 @@ def picture_start(path, w, h, still):
     Caller beware of the off-by-one: the held frame IS the tape's first live
     frame, repeated. So the first frame that DIFFERS is the second live one,
     and whoever wants the anchor subtracts one.
+
+    Cached per (tape, size, threshold): every tape is scanned once for --list
+    and again for the render, and on a thirteen-tape hour-long film that is
+    half an hour of decoding to ask a question whose answer cannot change.
     """
+    import hashlib
+    ck = "%s|%d|%d|%.6f|%d" % (os.path.abspath(path), w, h, still,
+                               int(os.path.getmtime(path)))
+    cp = os.path.join(ROOT, "temp", "anglecut-anchor-%s.json"
+                      % hashlib.md5(ck.encode("utf-8")).hexdigest()[:12])
+    if os.path.exists(cp):
+        try:
+            with open(cp, encoding="utf-8") as f:
+                v = json.load(f)
+            return (v["i"], v["floor"], v["jump"])
+        except Exception:
+            pass
     diff, _ = _shots.scan(path, w, h)
     i = 1
     while i < len(diff) and diff[i] <= still:
         i += 1
     if i >= len(diff):
-        return None, 0.0, 0.0
-    floor = float(max(diff[1:i])) if i > 1 else 0.0
-    return i, floor, float(diff[i])
+        got = (None, 0.0, 0.0)
+    else:
+        got = (i, float(max(diff[1:i])) if i > 1 else 0.0, float(diff[i]))
+    try:
+        os.makedirs(os.path.dirname(cp), exist_ok=True)
+        with open(cp, "w", encoding="utf-8") as f:
+            json.dump({"i": got[0], "floor": got[1], "jump": got[2],
+                       "tape": _project.norm(path)}, f)
+    except Exception:
+        pass
+    return got
 
 
 def still_runs(diff, still, min_run):

@@ -48,7 +48,14 @@ ENV = _env.ENV
 SW = 320                     # SSIM analysis width
 RATE = 8000                  # audio analysis rate
 DEFAULT_PASS = {"frames_exact": True, "max_shifted": 0, "min_ssim_median": 0.95,
-                "min_ssim_p5": 0.90, "max_cut_offset": 0,
+                "min_ssim_p5": 0.90,
+                # One frame, because that is the shot detector's own precision
+                # -- not a relaxation of frame-exactness, which the shift probe
+                # still holds at zero. Measured: a boundary that is a smooth
+                # plateau rather than a cut peaked at frame 62167 in one film
+                # and 62168 in the other, values differing in the fifth
+                # decimal. A real misalignment moves every cut, not one.
+                "max_cut_offset": 1,
                 "max_audio_offset_ms": 1.0, "max_frozen_frames": 0}
 # Calibrated against a render known to be pixel-identical to its reference, so
 # every run it reports is a false positive. A looser 0.0015 over half a second
@@ -294,14 +301,19 @@ def main():
     if not args.no_cuts:
         da, sa = _shots.scan(ren, ia["width"], ia["height"])
         db, sb = _shots.scan(ref, ib["width"], ib["height"])
-        # Only frozen where the reference is NOT. A talking head sitting still
-        # is the source's own stillness and belongs to both films; what matters
-        # is picture that stopped in ours and kept moving in theirs.
-        ref_still = np.zeros(len(db) + 1, dtype=bool)
-        for a, b in frozen_runs(db, fps):
-            ref_still[a:b] = True
+        # Only frozen where the reference is MOVING. A talking head sitting
+        # still is the source's own stillness and belongs to both films; what
+        # matters is picture that stopped in ours and kept going in theirs.
+        #
+        # Compared run-to-run at first, and that was too fragile to trust: when
+        # both films hover either side of the still threshold their runs come
+        # out with different boundaries, and shared stillness gets reported as
+        # filler. Measured on an hour-long film where it did exactly that --
+        # rendered max 0.000858 against reference 0.000866 over the same
+        # frames, the same stillness called two different ways. Asking whether
+        # the REFERENCE moves over those frames has no boundary to disagree on.
         froz = [(a, b) for a, b in frozen_runs(da, fps)
-                if (b - a) - int(ref_still[a:b].sum()) > 0.5 * (b - a)]
+                if float(db[a:b].mean()) > FROZEN["still"]]
         n_froz = sum(b - a for a, b in froz)
         print("\nfrozen picture in the rendered film that is not frozen in the "
               "reference: %d frames (%.1f%%) in %d runs"

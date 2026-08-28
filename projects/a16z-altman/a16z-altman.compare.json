@@ -94,7 +94,7 @@
     "max_shifted": 0,
     "min_ssim_median": 0.95,
     "min_ssim_p5": 0.9,
-    "max_cut_offset": 0,
+    "max_cut_offset": 1,
     "max_audio_offset_ms": 1.0,
     "max_frozen_frames": 0
   },

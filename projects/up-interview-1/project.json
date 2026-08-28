@@ -15,9 +15,220 @@
     "the edit read back off the film (angle_by: person)": "projects/up-interview-1/up-interview-1.shots.json",
     "ground truth -- HARNESS ONLY": "projects/up-interview-1/up-interview-1.truth.json"
   },
-  "deliverables": {},
+  "deliverables": {
+    "projects/up-interview-1/raws/cam1.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-28T00:16:01Z",
+      "kind": "sim-raw",
+      "script": "scripts/split-cameras.py",
+      "manifest": "projects/up-interview-1/multicam-sim.json",
+      "burned": [
+        "synthetic camera raw: real frames where the cut used this angle, last live frame held elsewhere",
+        "programme audio, staggered by this tape's head pad"
+      ],
+      "sidecars": {
+        "truth": "projects/up-interview-1/up-interview-1.truth.json",
+        "shots": "projects/up-interview-1/up-interview-1.shots.json"
+      }
+    },
+    "projects/up-interview-1/raws/cam10.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-28T00:16:01Z",
+      "kind": "sim-raw",
+      "script": "scripts/split-cameras.py",
+      "manifest": "projects/up-interview-1/multicam-sim.json",
+      "burned": [
+        "synthetic camera raw: real frames where the cut used this angle, last live frame held elsewhere",
+        "programme audio, staggered by this tape's head pad"
+      ],
+      "sidecars": {
+        "truth": "projects/up-interview-1/up-interview-1.truth.json",
+        "shots": "projects/up-interview-1/up-interview-1.shots.json"
+      }
+    },
+    "projects/up-interview-1/raws/cam11.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-28T00:16:01Z",
+      "kind": "sim-raw",
+      "script": "scripts/split-cameras.py",
+      "manifest": "projects/up-interview-1/multicam-sim.json",
+      "burned": [
+        "synthetic camera raw: real frames where the cut used this angle, last live frame held elsewhere",
+        "programme audio, staggered by this tape's head pad"
+      ],
+      "sidecars": {
+        "truth": "projects/up-interview-1/up-interview-1.truth.json",
+        "shots": "projects/up-interview-1/up-interview-1.shots.json"
+      }
+    },
+    "projects/up-interview-1/raws/cam12.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-28T00:16:01Z",
+      "kind": "sim-raw",
+      "script": "scripts/split-cameras.py",
+      "manifest": "projects/up-interview-1/multicam-sim.json",
+      "burned": [
+        "synthetic camera raw: real frames where the cut used this angle, last live frame held elsewhere",
+        "programme audio, staggered by this tape's head pad"
+      ],
+      "sidecars": {
+        "truth": "projects/up-interview-1/up-interview-1.truth.json",
+        "shots": "projects/up-interview-1/up-interview-1.shots.json"
+      }
+    },
+    "projects/up-interview-1/raws/cam13.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-28T00:16:01Z",
+      "kind": "sim-raw",
+      "script": "scripts/split-cameras.py",
+      "manifest": "projects/up-interview-1/multicam-sim.json",
+      "burned": [
+        "synthetic camera raw: real frames where the cut used this angle, last live frame held elsewhere",
+        "programme audio, staggered by this tape's head pad"
+      ],
+      "sidecars": {
+        "truth": "projects/up-interview-1/up-interview-1.truth.json",
+        "shots": "projects/up-interview-1/up-interview-1.shots.json"
+      }
+    },
+    "projects/up-interview-1/raws/cam2.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-28T00:16:01Z",
+      "kind": "sim-raw",
+      "script": "scripts/split-cameras.py",
+      "manifest": "projects/up-interview-1/multicam-sim.json",
+      "burned": [
+        "synthetic camera raw: real frames where the cut used this angle, last live frame held elsewhere",
+        "programme audio, staggered by this tape's head pad"
+      ],
+      "sidecars": {
+        "truth": "projects/up-interview-1/up-interview-1.truth.json",
+        "shots": "projects/up-interview-1/up-interview-1.shots.json"
+      }
+    },
+    "projects/up-interview-1/raws/cam3.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-28T00:16:01Z",
+      "kind": "sim-raw",
+      "script": "scripts/split-cameras.py",
+      "manifest": "projects/up-interview-1/multicam-sim.json",
+      "burned": [
+        "synthetic camera raw: real frames where the cut used this angle, last live frame held elsewhere",
+        "programme audio, staggered by this tape's head pad"
+      ],
+      "sidecars": {
+        "truth": "projects/up-interview-1/up-interview-1.truth.json",
+        "shots": "projects/up-interview-1/up-interview-1.shots.json"
+      }
+    },
+    "projects/up-interview-1/raws/cam4.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-28T00:16:01Z",
+      "kind": "sim-raw",
+      "script": "scripts/split-cameras.py",
+      "manifest": "projects/up-interview-1/multicam-sim.json",
+      "burned": [
+        "synthetic camera raw: real frames where the cut used this angle, last live frame held elsewhere",
+        "programme audio, staggered by this tape's head pad"
+      ],
+      "sidecars": {
+        "truth": "projects/up-interview-1/up-interview-1.truth.json",
+        "shots": "projects/up-interview-1/up-interview-1.shots.json"
+      }
+    },
+    "projects/up-interview-1/raws/cam5.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-28T00:16:01Z",
+      "kind": "sim-raw",
+      "script": "scripts/split-cameras.py",
+      "manifest": "projects/up-interview-1/multicam-sim.json",
+      "burned": [
+        "synthetic camera raw: real frames where the cut used this angle, last live frame held elsewhere",
+        "programme audio, staggered by this tape's head pad"
+      ],
+      "sidecars": {
+        "truth": "projects/up-interview-1/up-interview-1.truth.json",
+        "shots": "projects/up-interview-1/up-interview-1.shots.json"
+      }
+    },
+    "projects/up-interview-1/raws/cam6.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-28T00:16:01Z",
+      "kind": "sim-raw",
+      "script": "scripts/split-cameras.py",
+      "manifest": "projects/up-interview-1/multicam-sim.json",
+      "burned": [
+        "synthetic camera raw: real frames where the cut used this angle, last live frame held elsewhere",
+        "programme audio, staggered by this tape's head pad"
+      ],
+      "sidecars": {
+        "truth": "projects/up-interview-1/up-interview-1.truth.json",
+        "shots": "projects/up-interview-1/up-interview-1.shots.json"
+      }
+    },
+    "projects/up-interview-1/raws/cam7.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-28T00:16:01Z",
+      "kind": "sim-raw",
+      "script": "scripts/split-cameras.py",
+      "manifest": "projects/up-interview-1/multicam-sim.json",
+      "burned": [
+        "synthetic camera raw: real frames where the cut used this angle, last live frame held elsewhere",
+        "programme audio, staggered by this tape's head pad"
+      ],
+      "sidecars": {
+        "truth": "projects/up-interview-1/up-interview-1.truth.json",
+        "shots": "projects/up-interview-1/up-interview-1.shots.json"
+      }
+    },
+    "projects/up-interview-1/raws/cam8.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-28T00:16:01Z",
+      "kind": "sim-raw",
+      "script": "scripts/split-cameras.py",
+      "manifest": "projects/up-interview-1/multicam-sim.json",
+      "burned": [
+        "synthetic camera raw: real frames where the cut used this angle, last live frame held elsewhere",
+        "programme audio, staggered by this tape's head pad"
+      ],
+      "sidecars": {
+        "truth": "projects/up-interview-1/up-interview-1.truth.json",
+        "shots": "projects/up-interview-1/up-interview-1.shots.json"
+      }
+    },
+    "projects/up-interview-1/raws/cam9.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-28T00:16:01Z",
+      "kind": "sim-raw",
+      "script": "scripts/split-cameras.py",
+      "manifest": "projects/up-interview-1/multicam-sim.json",
+      "burned": [
+        "synthetic camera raw: real frames where the cut used this angle, last live frame held elsewhere",
+        "programme audio, staggered by this tape's head pad"
+      ],
+      "sidecars": {
+        "truth": "projects/up-interview-1/up-interview-1.truth.json",
+        "shots": "projects/up-interview-1/up-interview-1.shots.json"
+      }
+    },
+    "projects/up-interview-1/outputs/up-interview-1-anglecut.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-28T01:54:49Z",
+      "kind": "anglecut",
+      "script": "scripts/angle-cut.py",
+      "manifest": "projects/up-interview-1/anglecut.json",
+      "burned": [
+        "229 segments switching between 13 cameras full frame",
+        "audio taken whole from cam1 -- no joins",
+        "anchored by picture_start"
+      ],
+      "sidecars": {
+        "sync": "projects/up-interview-1/up-interview-1.anglesync.json"
+      }
+    }
+  },
   "notes": [],
-  "updated_utc": "2026-08-27T22:50:07Z",
+  "updated_utc": "2026-08-28T02:07:55Z",
   "result": {
     "stage0_shot_detect": {
       "verdict": "PASS via person mode",
