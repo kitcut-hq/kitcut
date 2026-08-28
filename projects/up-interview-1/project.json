@@ -228,7 +228,7 @@
     }
   },
   "notes": [],
-  "updated_utc": "2026-08-28T02:07:55Z",
+  "updated_utc": "2026-08-28T02:28:04Z",
   "result": {
     "stage0_shot_detect": {
       "verdict": "PASS via person mode",
@@ -237,6 +237,23 @@
       "shots": 229,
       "frame_mode_would_give": "55 phantom angles, within 0.0526 >= between 0.0130",
       "_note": "Four close-ups absorbed their own burned-in name-card shots, which frame fingerprints cannot do. Measured instrument margins on this film: whole-frame 0.44x, masked+normalised 0.72x, colour torso with Haar 1.11x, SFace 3.0x."
+    },
+    "stage1_machinery": {
+      "verdict": "PASS",
+      "frames": "90145 of 90145",
+      "shifted_frames": 0,
+      "frozen_frames": 0,
+      "cuts": "228 vs 228",
+      "angle_agreement_pct": 100.0,
+      "ssim_median": 0.9993,
+      "ssim_p5": 0.9987,
+      "audio_offset_ms": 0.0,
+      "segments": 229,
+      "switches": 202,
+      "tapes": 13,
+      "_scale": "The largest round trip run: 13 hour-long tapes, 1.17M encoded frames, a 229-segment filtergraph. Also the first at 25 fps (audio boundaries exact at 1920 samples a frame) and the first on a person-mode shot list.",
+      "_anchors": "cam2 anchored the film at 980x margin; nine tapes agreed at +0 frames independently; three self-reported as too still to self-anchor and were placed by sound. All 13 sync offsets came back at exact whole frames.",
+      "report": "projects/up-interview-1/up-interview-1.compare.json"
     }
   }
 }

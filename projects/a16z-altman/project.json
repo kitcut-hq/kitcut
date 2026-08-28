@@ -143,7 +143,7 @@
     }
   },
   "notes": [],
-  "updated_utc": "2026-08-28T02:16:15Z",
+  "updated_utc": "2026-08-28T02:29:29Z",
   "result": {
     "stage1_machinery": {
       "verdict": "PASS",
@@ -168,7 +168,7 @@
       "cuts": "7 against the human 15; 4 of theirs within a second",
       "_fitted": "grammar knobs were swept against THIS film, so the number is optimistic; the honest one comes from a film the knobs have not seen",
       "report": "projects/a16z-altman/a16z-altman.autocompare.json",
-      "frozen_filler": "624 frames (22.3%) -- the same frames as the disagreement and the sub-0.90 SSIM tail; inherent to the fixture, not a render bug",
+      "frozen_filler": "624 frames (22.3%) -- the same frames as the disagreement; inherent to the fixture, not a render bug",
       "crosstalk_finding": "the editor cuts wide on overlapping speech (wides 11.7%/18.0% vs median 0.0% for close-ups), but wide_overlap_pct is OFF: best of 30 sweeps gained 1.1 points on a film with 2 wide shots"
     }
   }

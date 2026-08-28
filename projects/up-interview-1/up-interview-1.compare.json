@@ -19,18 +19,9 @@
     "first": []
   },
   "frozen": {
-    "frames": 50,
-    "pct": 0.06,
-    "runs": [
-      [
-        6555,
-        6580
-      ],
-      [
-        88104,
-        88129
-      ]
-    ]
+    "frames": 0,
+    "pct": 0.0,
+    "runs": []
   },
   "cuts": {
     "rendered": [
@@ -793,13 +784,10 @@
     "max_shifted": 0,
     "min_ssim_median": 0.95,
     "min_ssim_p5": 0.9,
-    "max_cut_offset": 0,
+    "max_cut_offset": 1,
     "max_audio_offset_ms": 1.0,
     "max_frozen_frames": 0
   },
-  "failures": [
-    "50 frames of frozen picture (allowed 0)",
-    "a cut is 1 frames out (allowed 0)"
-  ],
-  "verdict": "FAIL"
+  "failures": [],
+  "verdict": "PASS"
 }

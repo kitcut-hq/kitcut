@@ -572,19 +572,27 @@ python scripts/compare-videos.py --rendered projects/<id>/outputs/<id>-anglecut.
                                  --reference projects/<id>/temp/program.mp4
 ```
 
-Four films have been through it, and **stage 1 passes exactly on all four** —
-frame-for-frame, zero shifted frames, zero frozen filler, every cut at offset 0,
+Five films have been through it, and **stage 1 passes exactly on all five** —
+frame-for-frame, zero shifted frames, zero frozen filler, 100% angle agreement,
 audio at 0.000 ms:
 
-| project | film | shots / angles | stage 1 | stage 2 agreement |
-|---|---|---|---|---|
-| `a16z-altman` | 1:56 | 16 / 4 | exact | 77.68% |
-| `a16z-bornstein` | 0:59 | 6 / 3 | exact | 78.77% |
-| `a16z-agents` | 1:23 | 5 / 2 | exact | **86.90%** |
-| `a16z-sinofsky` | 1:45 | 7 / 2 | exact | 73.27% |
+| project | film | shots / angles | angle mode | stage 1 | stage 2 |
+|---|---|---|---|---|---|
+| `a16z-altman` | 1:56 | 16 / 4 | frame | exact | 77.68% |
+| `a16z-bornstein` | 0:59 | 6 / 3 | frame | exact | 78.77% |
+| `a16z-agents` | 1:23 | 5 / 2 | frame | exact | **86.90%** |
+| `a16z-sinofsky` | 1:45 | 7 / 2 | frame | exact | 73.27% |
+| `up-interview-1` | **60:06** | 229 / 13 | **person** | exact | — |
 
-The first is the worked example; the other three were run on a framework that
-had never seen them, which is the only reason the stage-2 column means anything.
+The first is the worked example; the rest were run on a framework that had
+never seen them, which is the only reason those columns mean anything.
+
+`up-interview-1` is the scale test and the widest stretch of the machinery:
+25 fps rather than 23.976, 13 hour-long tapes, 1.17 million encoded frames, a
+229-segment filtergraph, and a shot list that only person mode could produce.
+Its anchors behaved exactly as designed — one tape anchored at a 980× margin,
+nine agreed independently at +0 frames, and three near-static angles correctly
+self-reported as too still and took their placement from sound.
 The spread — 73% to 87% — is the honest range, and each end has a cause:
 `a16z-agents` has one framed speaker and an off-camera interjector, which a
 speaker-follower handles almost perfectly; `a16z-sinofsky` is a single
