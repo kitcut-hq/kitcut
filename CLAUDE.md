@@ -40,10 +40,33 @@ frame arithmetic a render would otherwise have to find for you.
 
 After writing or changing **any** script, run
 `python scripts/check-script.py --changed` — it enforces the conventions
-(_env bootstrap, docstring, free mode, `_project.record()` on deliverables)
-and prints every deliberate exception with its reason. The check-script skill
-carries the judgement half a grep cannot do. The corpus passes clean; keep it
-that way.
+(_env bootstrap, docstring, free mode, `_project.record()` on deliverables,
+no absolute machine paths, and the platform boundary below) and prints every
+deliberate exception with its reason. The check-script skill carries the
+judgement half a grep cannot do. The corpus passes clean; keep it that way.
+`--all` also scans the skills and these docs for absolute paths, because a
+skill is read by an agent on a machine that is not this one.
+
+### Tooling, work, and the one resolver
+
+`_env.ROOT` is where the **tooling** lives; `_env.workspace()` is where the
+**user's work** lives (`projects/` sits under it). They name the same folder
+today and every manifest path assumes it — the point is that the assumption has
+one home. Resolution is `--workspace` flag → `$VIDEDIT_WORKSPACE` → a
+`.workspace` pointer file → `ROOT`. **Never join `ROOT` with `"projects"`**;
+`_project.projects_dir()` is the only place that happens.
+
+`_env.resolve(p, base=None)` is the path resolver — absolute stays, relative
+joins `base` (default `ROOT`: config, fonts and models are tooling, not work).
+Ten scripts each had their own copy; there is one now, and a hardcoded absolute
+path is a FAIL.
+
+Eight files are **platform, not video** — `_env.py`, `_progress.py`,
+`_project.py`, `check-env.py`, `check-script.py`, `project-scan.py`,
+`render-status.py`, `statusline.py`. None may import anything from this repo
+outside that list, and the last three must be stdlib-only. The checker enforces
+both. This is what keeps lifting the platform out a move rather than a rewrite
+(see `docs/product-strategy.md`).
 
 ### Why the environment is like this
 
@@ -399,7 +422,7 @@ which cannot encode the glyphs at all.
 |---|---|
 | `scripts/` | all tooling; `_env.py` first, then the pipeline scripts |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
-| `scripts/_project.py` | project metadata writer; finishing scripts call `record()` |
+| `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
 | `projects/<id>/` | one video: `project.json`, `journal.md`, its manifests + sidecars (committed), and its `sources/ audio/ transcripts/ outputs/ temp/` (gitignored) |
 | `config/presets/` | caption styling |
 | `config/labels/` | the lower-third name label |

@@ -9,7 +9,7 @@ The burn side (`video-image-overlay`) will put **any** PNG on a film. This skill
 is where that PNG comes from when nobody has one.
 
 ```powershell
-cd C:\instafill\video-editing
+# from the repo root
 
 python scripts/make-card.py --list                      # templates, brands, styles
 python scripts/make-card.py --spec projects/<id>/cards/outro.json --png

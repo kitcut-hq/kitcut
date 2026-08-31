@@ -8,7 +8,7 @@ description: Extract shorts/episodes from a long video, optionally reframed to v
 The whole workflow, once a manifest exists:
 
 ```powershell
-cd C:\instafill\video-editing
+# from the repo root
 python scripts/cut-clips.py --manifest projects/<id>/clips.json --list   # plan only
 python scripts/cut-clips.py --manifest projects/<id>/clips.json          # cut
 ```

@@ -8,7 +8,7 @@ description: Add word-synced burned-in captions ("real time transcript" subtitle
 One command, from URL to captioned MP4:
 
 ```powershell
-cd C:\instafill\video-editing
+# from the repo root
 python scripts/run-captions.py --url "<YOUTUBE_URL>" --project <id> --style config/presets/red-card.json
 ```
 

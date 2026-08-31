@@ -1485,12 +1485,45 @@ commercial rights.
 The `opencv-python<5` pin is load-bearing: version 5 ships no Haar cascades at
 all, and its `FaceDetectorYN` replacement wants a model from an external host.
 
+`sherpa-onnx` is pinned too, and was not for a long time: `auto-switch.py`
+imports it and nothing else does, so a clean machine passed `check-env.py` and
+then failed at the one import only stage 2 of the multicam round trip reaches.
+It is in `requirements.txt` and in the doctor's probe list now. The ONNX
+*models* under `models/` remain a manual download — see the multicam-switch
+skill.
+
+### Where things live: ROOT, workspace, and one resolver
+
+Two ideas, deliberately separated even though they currently name the same
+folder:
+
+| | |
+|---|---|
+| `_env.ROOT` | where the **tooling** lives: `scripts/`, `config/`, `fonts/`, `models/` |
+| `_env.workspace()` | where the **user's work** lives: `projects/` under it |
+
+`workspace()` resolves most-explicit-first — a `--workspace` flag
+(`_env.add_workspace_arg()` / `set_workspace()`, wired into `project-scan.py`),
+then `$VIDEDIT_WORKSPACE`, then a one-line `.workspace` pointer file beside the
+repo, then `ROOT`. Today it is always `ROOT` and every manifest path assumes it.
+The point of the function is that the assumption has **one** home: nothing in
+the corpus joins `ROOT` with `"projects"` any more — `_project.projects_dir()`
+does, once — so moving the work out of the tool's folder is a setting rather
+than a refactor.
+
+`_env.resolve(p, base=None)` is the path resolver: absolute stays, relative
+joins `base` (default `ROOT`, because config and fonts are tooling rather than
+work). Ten scripts carried their own copy of that one line, which meant every
+new script acquired it by copy-paste and the base could never have been changed
+in fewer than ten places. There is one copy now, and `check-script.py` fails any
+absolute path written into a script, a skill or these docs.
+
 ## Repo layout
 
 | Path | |
 |---|---|
 | `CLAUDE.md` | orientation: how to run things, and the house rules |
-| `scripts/_env.py` | re-execs every script into `.venv`; import it first |
+| `scripts/_env.py` | re-execs every script into `.venv`; import it first. Also the one path resolver and the ROOT/workspace split |
 | `scripts/setup-python.ps1` | builds/repairs the environment, idempotent |
 | `scripts/check-env.py` | the doctor — run this when an import breaks |
 | `scripts/check-dub.py` | dub self-test; no key, no TTS calls, no cost |
@@ -1720,8 +1753,11 @@ evidence.
 and are unrelated to captions. Both have known bugs — `transcribe-audio.py` puts
 the transcript text in its `file` field, and `generate-voiceover.py` computes
 per-line start times then concatenates clips end to end, ignoring them.
-`WORKSPACE-SETUP.md` documents that original scaffold and is partly stale.
-Its `config/video-specs.template.json` — a hand-authored per-video project
-document — was deleted when `projects/<id>/project.json` replaced the idea: no
-script ever read or wrote the template, so it silently rotted, which is the
-failure mode the project files are designed against (see `## Projects`).
+`WORKSPACE-SETUP.md` and `docs/QUICKSTART.md` documented that original scaffold
+— shared `sources/ outputs/ audio/` folders, a hand `pip install requests`, no
+`_env` bootstrap — and were deleted rather than half-corrected: a document that
+contradicts the code is worse than no document, and git keeps them. The same
+went for their `config/video-specs.template.json`, a hand-authored per-video
+project document, when `projects/<id>/project.json` replaced the idea: no script
+ever read or wrote the template, so it silently rotted, which is the failure
+mode the project files are designed against (see `## Projects`).

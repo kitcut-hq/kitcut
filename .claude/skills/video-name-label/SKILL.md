@@ -6,7 +6,7 @@ description: Add a broadcast lower-third name label to a video — a dark rounde
 # A lower-third name label
 
 ```powershell
-cd C:\instafill\video-editing
+# from the repo root
 
 # 1. eyeball the card on its own
 python scripts/name-label.py --card-only --name "Jane Doe" --title "CEO, Example"

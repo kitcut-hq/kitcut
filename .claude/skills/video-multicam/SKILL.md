@@ -11,7 +11,7 @@ event, where the film **switches between** them full frame, use
 `video-multicam-switch` (`angle-cut.py`) instead.
 
 ```powershell
-cd C:\instafill\video-editing
+# from the repo root
 python scripts/sync-tracks.py    --manifest projects/<id>/screencast.json --verify
 python scripts/screencast-cut.py --manifest projects/<id>/screencast.json --list
 python scripts/screencast-cut.py --manifest projects/<id>/screencast.json

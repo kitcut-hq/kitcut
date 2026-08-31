@@ -14,7 +14,7 @@ The source is one of three, and nothing downstream can tell which:
 hand-written page).
 
 ```powershell
-cd C:\instafill\video-editing
+# from the repo root
 
 # 0. can this machine render HTML at all?
 python scripts/html-to-image.py --check

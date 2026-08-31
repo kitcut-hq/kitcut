@@ -32,7 +32,7 @@ README; the re-edit entry point is the `video-project` skill.
 ## The workflow
 
 ```powershell
-cd C:\instafill\video-editing
+# from the repo root
 
 # 1. plan only -- check the segmentation before spending anything
 python scripts/dub-clips.py --manifest projects/<id>/clips-vertical.json `

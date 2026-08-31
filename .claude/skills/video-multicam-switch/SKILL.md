@@ -39,7 +39,7 @@ by hand, you record yourself. End the session with a prose note in the journal.
 ## The round trip, in order
 
 ```powershell
-cd C:\instafill\video-editing
+# from the repo root
 python scripts/split-cameras.py  --manifest projects/<id>/multicam-sim.json --conform-only
 python scripts/shot-detect.py    --src projects/<id>/temp/program.mp4 --list --sheets
 python scripts/shot-detect.py    --src projects/<id>/temp/program.mp4
@@ -82,7 +82,8 @@ the fix is a better instrument, not a threshold. Person mode needs two ONNX
 models (gitignored, ~39 MB):
 
 ```powershell
-cd C:\instafill\video-editing\models\face
+# from the repo root
+cd models/face
 curl -sL -O https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx
 curl -sL -O https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx
 ```
@@ -142,12 +143,15 @@ python scripts/angle-cut.py   --manifest projects/<id>/anglecut-auto.json `
                               --out projects/<id>/outputs/<id>-autocut.mp4
 ```
 
-Needs the speaker models under `models/diarization/` (gitignored, ~200 MB) and
-`pip install sherpa-onnx` — it runs on the ONNX runtime that is already here,
-so no torch and no gated download. On a fresh machine:
+Needs the speaker models under `models/diarization/` (gitignored, ~200 MB).
+`sherpa-onnx` itself is pinned in `requirements.txt` and probed by
+`check-env.py`, so `setup-python.ps1` installs it — it runs on the ONNX runtime
+that is already here, so no torch and no gated download. The models are the
+only manual step; on a fresh machine:
 
 ```powershell
-cd C:\instafill\video-editing\models\diarization
+# from the repo root
+cd models/diarization
 curl -sL -o seg.tar.bz2 https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2
 tar xjf seg.tar.bz2; rm seg.tar.bz2
 curl -sL -O https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/nemo_en_titanet_large.onnx
