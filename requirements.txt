@@ -32,6 +32,14 @@ onnxruntime==1.29.0
 # which is what lets the English captions be timed from the dub itself.
 edge-tts
 
+# --- speaker identity ----------------------------------------------------
+# Windowed speaker embeddings and segmentation for auto-switch.py (stage 2 of
+# the multicam round trip). Runs on the ONNX runtime already pinned above --
+# no torch. It was installed by hand for months and missing from here, so a
+# clean machine passed check-env.py and then failed at the one import that
+# only stage 2 reaches.
+sherpa-onnx==1.13.6
+
 # --- fetching ------------------------------------------------------------
 yt-dlp
 

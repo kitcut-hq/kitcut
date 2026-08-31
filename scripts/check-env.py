@@ -74,6 +74,7 @@ for mod, why in [
     ("yt_dlp", "fetching sources"),
     ("ctranslate2", "the inference engine under faster-whisper"),
     ("av", "audio decode for faster-whisper"),
+    ("sherpa_onnx", "speaker embeddings for the multicam auto-switch"),
 ]:
     try:
         m = __import__(mod)
