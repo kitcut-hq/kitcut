@@ -12,6 +12,10 @@ What it enforces (FAIL) and what it flags (warn):
     FAIL  entry script that never imports _env, or imports third-party first
     FAIL  os.execve anywhere (spawns-not-replaces on Windows; exit code lost)
     FAIL  writing PYTHONPATH (the variable this repo spent a day exorcising)
+    FAIL  an absolute machine path in a string literal (or, under --all, in a
+          skill or the README) -- it is wrong everywhere but one machine
+    FAIL  a platform file importing something outside the platform, or one of
+          the three stdlib-only files importing anything third-party
     warn  docstring without an "Invoke as:" line
     warn  entry script without argparse
     warn  a script that encodes/uploads but has no free mode
@@ -92,6 +96,35 @@ EXCEPTIONS = {
 
 STDLIB = set(sys.stdlib_module_names) | {"__future__"}
 
+# The files that are *platform* rather than video: nothing here should ever
+# need to know what a caption or a camera is. The boundary is enforced by
+# imports -- a platform file may import the standard library, third-party
+# packages, and other platform files, but nothing else from this repo. That is
+# what keeps "lift the platform out" a move rather than a rewrite, and it gets
+# checked at commit time instead of discovered on extraction day.
+PLATFORM = {
+    "_env.py": "interpreter bootstrap, .env, path and workspace resolution",
+    "_progress.py": "render progress plumbing",
+    "_project.py": "project record writer",
+    "check-env.py": "the doctor",
+    "check-script.py": "this checker",
+    "project-scan.py": "project scaffolder and doctor",
+    "render-status.py": "the render watch tool",
+    "statusline.py": "the status line reader",
+}
+
+# These three run on every status-line refresh, or as a watch tool that must
+# start instantly, so they import nothing outside the standard library -- an
+# _env re-exec would spawn a subprocess per refresh. CLAUDE.md says so; this
+# makes it a check rather than a promise.
+STDLIB_ONLY = ("_progress.py", "render-status.py", "statusline.py")
+
+# An absolute path belonging to one machine. Two segments are required so the
+# drive-letter gotcha both this file's neighbours and the README explain
+# ("ass=filename=C:/x.ass" parses as an option C) is not mistaken for one.
+ABSPATH = re.compile(r"(?<![\w:])(?:[A-Za-z]:[\\/]{1,2}[\w.$-]+[\\/][\w.$-]"
+                     r"|/(?:Users|home|Volumes)/\w)")
+
 FREE_FLAGS = ("--list", "--plan", "--dry-run", "--plan-only", "--frame",
               "--card-only", "--check", "--verify", "--stop-after")
 
@@ -124,6 +157,55 @@ def imports_in_order(src):
         elif isinstance(node, ast.ImportFrom) and node.module:
             got.append((node.lineno, node.module.split(".")[0]))
     return sorted(got)
+
+
+def repo_modules():
+    """Every module name that resolves to a file in scripts/.
+
+    Hyphenated names are here too: they cannot be imported with a plain import
+    statement, so the scripts reach them through import_module("image-overlay"),
+    which the import walker above cannot see.
+    """
+    return {os.path.basename(p)[:-3]
+            for p in glob.glob(os.path.join(ROOT, "scripts", "*.py"))}
+
+
+def dynamic_imports(src):
+    """Modules pulled in by import_module("..."), as calls and not as text.
+
+    The regex version of this flagged the example in repo_modules()' own
+    docstring, which is the same lesson imports_in_order() learned.
+    """
+    got = set()
+    for node in ast.walk(ast.parse(src)):
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+        fn = node.func
+        name = fn.attr if isinstance(fn, ast.Attribute) else \
+            fn.id if isinstance(fn, ast.Name) else None
+        if name == "import_module" and isinstance(node.args[0], ast.Constant) \
+                and isinstance(node.args[0].value, str):
+            got.add(node.args[0].value)
+    return got
+
+
+def abspath_hits(text, in_strings_only=False):
+    """[(lineno, excerpt)] for absolute machine paths.
+
+    For Python the search is confined to string literals, because the comment
+    explaining the drive-letter trap is not itself a hardcoded path.
+    """
+    hits = []
+    if in_strings_only:
+        for node in ast.walk(ast.parse(text)):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str) \
+                    and ABSPATH.search(node.value):
+                hits.append((node.lineno, node.value.strip()[:70]))
+    else:
+        for i, line in enumerate(text.splitlines(), 1):
+            if ABSPATH.search(line):
+                hits.append((i, line.strip()[:70]))
+    return hits
 
 
 def check(path):
@@ -191,6 +273,35 @@ def check(path):
             and not skip("pythonpath"):
         out.append(("FAIL", "writes PYTHONPATH -- see CLAUDE.md for the day "
                             "that variable cost"))
+    for ln, excerpt in abspath_hits(src, in_strings_only=True):
+        out.append(("FAIL", "line %d hardcodes an absolute path (%s) -- it is "
+                            "wrong on every machine but one; resolve it "
+                            "through _env.resolve() or _env.workspace()"
+                            % (ln, excerpt)))
+
+    if base in PLATFORM:
+        local = {m for _, m in imports}
+        local |= dynamic_imports(src)
+        known = repo_modules()
+        strays = sorted(m for m in local
+                        if (m in known or m.replace("_", "-") in known)
+                        and m + ".py" not in PLATFORM)
+        if strays:
+            out.append(("FAIL", "platform file (%s) imports %s from outside "
+                                "the platform -- the platform must not depend "
+                                "on the video pipeline, or lifting it out "
+                                "stops being a move and becomes a rewrite"
+                                % (PLATFORM[base], ", ".join(strays))))
+        if base in STDLIB_ONLY:
+            third = sorted({m for _, m in imports
+                            if m not in STDLIB and not m.startswith("_")})
+            if third:
+                out.append(("FAIL", "%s must be stdlib-only but imports %s -- "
+                                    "it runs on every refresh, and anything "
+                                    "needing the venv would re-exec a "
+                                    "subprocess each time"
+                                    % (base, ", ".join(third))))
+
     if re.search(r'"(?:temp|outputs|projects|sources|audio|transcripts)\\\\',
                  src):
         out.append(("warn", "backslash in a path literal -- the ass filter "
@@ -247,6 +358,24 @@ def main():
             elif level == "warn":
                 warns += 1
             print("%-5s %s: %s" % (level, base, msg))
+    if args.all:
+        # The skills are read by an agent on somebody else's machine, so an
+        # absolute path there is the same bug as one in a script -- and it is
+        # the form the repo actually shipped ten of.
+        docs = sorted(glob.glob(os.path.join(ROOT, ".claude", "skills", "*",
+                                             "SKILL.md")))
+        docs += [os.path.join(ROOT, f) for f in ("README.md", "CLAUDE.md")]
+        for d in docs:
+            if not os.path.exists(d):
+                continue
+            for ln, excerpt in abspath_hits(open(d, encoding="utf-8").read()):
+                fails += 1
+                print("FAIL  %s:%d: absolute path (%s) -- a skill runs on "
+                      "machines that are not this one"
+                      % (os.path.relpath(d, ROOT).replace("\\", "/"), ln,
+                         excerpt))
+        print("ok    %d skills and docs carry no absolute paths" % len(docs))
+
     print("\n%d checked, %d FAIL, %d warn" % (len(paths), fails, warns))
     if fails or (args.strict and warns):
         sys.exit(1)

@@ -21,10 +21,33 @@ python scripts/check-script.py scripts/x.py # one file
 ```
 
 It enforces (FAIL, exit 1): a module docstring; `import _env` before any
-third-party import; no `os.execve`; no writing `PYTHONPATH`. It flags (warn):
-no `Invoke as:` line, no argparse, a script that encodes or spends with no
-free mode, a deliverable-producer that never calls `_project.record()`,
+third-party import; no `os.execve`; no writing `PYTHONPATH`; no absolute
+machine path in a string literal; and the platform boundary (below). It flags
+(warn): no `Invoke as:` line, no argparse, a script that encodes or spends with
+no free mode, a deliverable-producer that never calls `_project.record()`,
 backslash path literals, and a script the README does not mention.
+
+`--all` additionally scans every `SKILL.md`, the README and CLAUDE.md for
+absolute paths, because a skill is read by an agent on a machine that is not
+this one — the repo shipped ten `cd C:\...` lines that way before this check
+existed.
+
+### The platform boundary
+
+Eight files are **platform, not video** — `_env.py`, `_progress.py`,
+`_project.py`, `check-env.py`, `check-script.py`, `project-scan.py`,
+`render-status.py`, `statusline.py`. None of them may import anything from this
+repo that is not also on that list. Third-party imports are fine; a dependency
+on the *video pipeline* is not, because it turns "lift the platform out" from a
+move into a rewrite. The set lives in `PLATFORM` in the checker.
+
+Three of them — `_progress.py`, `render-status.py`, `statusline.py` — go
+further and must be **stdlib-only**: they run on every status-line refresh or
+as a watch tool that has to start instantly, and anything needing the venv
+would re-exec a subprocess each time.
+
+Adding a script to `PLATFORM` is a claim that it knows nothing about video.
+Make the claim deliberately; the checker will hold you to it.
 
 **The corpus passes clean — keep it that way.** `--all` is the calibration
 run: if your change makes another script warn, either your change or the
