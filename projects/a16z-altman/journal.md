@@ -194,3 +194,14 @@ embeddings are the only thing worth optimising.
 - 02:16 compare scripts/compare-videos.py (--rendered projects/a16z-altman/outputs/a16z-altman-anglecut.mp4 --reference projects/a16z-altman/temp/program.mp4) -- PASS: projects/a16z-altman/outputs/a16z-altman-anglecut.mp4 vs projects/a16z-altman/temp/program.mp4, median ssim 0.9993, 0 shifted frames
 - 02:16 compare scripts/compare-videos.py (--rendered projects/a16z-altman/outputs/a16z-altman-autocut.mp4 --reference projects/a16z-altman/temp/program.mp4 --out temp/a2.json) -- FAIL: projects/a16z-altman/outputs/a16z-altman-autocut.mp4 vs projects/a16z-altman/temp/program.mp4, median ssim 0.9992, 92 shifted frames
 - 02:29 compare scripts/compare-videos.py (--rendered projects/a16z-altman/outputs/a16z-altman-autocut.mp4 --reference projects/a16z-altman/temp/program.mp4 --out projects/a16z-altman/a16z-altman.autocompare.json) -- FAIL: projects/a16z-altman/outputs/a16z-altman-autocut.mp4 vs projects/a16z-altman/temp/program.mp4, median ssim 0.9992, 92 shifted frames
+
+## 2026-08-31
+- 04:47 publish scripts/yt-upload.py -> projects/a16z-altman/outputs/a16z-altman-anglecut.mp4 (projects/a16z-altman/outputs/a16z-altman-anglecut.mp4 --title Benchmark: 4-camera replay, frame-exact (stage 1) --description-file temp/ytdesc/a16z-stage1.txt --channel @instafill_ai --privacy unliste) https://youtu.be/V9IQmCufSOE -- uploaded Benchmark: 4-camera replay, frame-exact (stage 1)
+- 04:48 publish scripts/yt-upload.py -> projects/a16z-altman/outputs/a16z-altman-autocut.mp4 (projects/a16z-altman/outputs/a16z-altman-autocut.mp4 --title Benchmark: 4-camera AI auto-switch (stage 2) --description-file temp/ytdesc/a16z-stage2.txt --channel @instafill_ai --privacy unlisted) https://youtu.be/NHGDcX7EcwU -- uploaded Benchmark: 4-camera AI auto-switch (stage 2)
+
+## 2026-08-30
+
+Uploaded the finished render(s) to the @instafill_ai channel as **unlisted**, with a short
+description in each saying what the AI did and which capabilities the film demonstrates.
+Description sources are in `temp/ytdesc/`; the video ids are in the `.youtube.json`
+sidecars beside each render.

@@ -213,9 +213,9 @@
     },
     "projects/up-interview-1/outputs/up-interview-1-anglecut.mp4": {
       "status": "current",
-      "built_utc": "2026-08-28T01:54:49Z",
+      "built_utc": "2026-08-31T04:46:05Z",
       "kind": "anglecut",
-      "script": "scripts/angle-cut.py",
+      "script": "scripts/yt-upload.py",
       "manifest": "projects/up-interview-1/anglecut.json",
       "burned": [
         "229 segments switching between 13 cameras full frame",
@@ -224,11 +224,16 @@
       ],
       "sidecars": {
         "sync": "projects/up-interview-1/up-interview-1.anglesync.json"
+      },
+      "published": {
+        "url": "https://youtu.be/7epl42cOb-w",
+        "privacy": "unlisted",
+        "sidecar": "projects/up-interview-1/outputs/up-interview-1-anglecut.youtube.json"
       }
     }
   },
   "notes": [],
-  "updated_utc": "2026-08-28T02:28:04Z",
+  "updated_utc": "2026-08-31T04:46:05Z",
   "result": {
     "stage0_shot_detect": {
       "verdict": "PASS via person mode",

@@ -49,9 +49,9 @@
     },
     "projects/a16z-sinofsky/outputs/a16z-sinofsky-anglecut.mp4": {
       "status": "current",
-      "built_utc": "2026-08-27T19:12:00Z",
+      "built_utc": "2026-08-31T04:48:07Z",
       "kind": "anglecut",
-      "script": "scripts/angle-cut.py",
+      "script": "scripts/yt-upload.py",
       "manifest": "projects/a16z-sinofsky/anglecut.json",
       "burned": [
         "7 segments switching between 2 cameras full frame",
@@ -60,13 +60,18 @@
       ],
       "sidecars": {
         "sync": "projects/a16z-sinofsky/a16z-sinofsky.anglesync.json"
+      },
+      "published": {
+        "url": "https://youtu.be/ep2DDYPWLC4",
+        "privacy": "unlisted",
+        "sidecar": "projects/a16z-sinofsky/outputs/a16z-sinofsky-anglecut.youtube.json"
       }
     },
     "projects/a16z-sinofsky/outputs/a16z-sinofsky-autocut.mp4": {
       "status": "current",
-      "built_utc": "2026-08-27T19:35:01Z",
+      "built_utc": "2026-08-31T04:48:33Z",
       "kind": "anglecut",
-      "script": "scripts/angle-cut.py",
+      "script": "scripts/yt-upload.py",
       "manifest": "projects/a16z-sinofsky/anglecut-auto.json",
       "burned": [
         "1 segments switching between 1 cameras full frame",
@@ -75,11 +80,16 @@
       ],
       "sidecars": {
         "sync": "projects/a16z-sinofsky/a16z-sinofsky.anglesync.json"
+      },
+      "published": {
+        "url": "https://youtu.be/qoS0BnytGNM",
+        "privacy": "unlisted",
+        "sidecar": "projects/a16z-sinofsky/outputs/a16z-sinofsky-autocut.youtube.json"
       }
     }
   },
   "notes": [],
-  "updated_utc": "2026-08-27T20:49:55Z",
+  "updated_utc": "2026-08-31T04:48:33Z",
   "result": {
     "stage1_machinery": {
       "verdict": "PASS",

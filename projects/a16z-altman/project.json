@@ -81,9 +81,9 @@
     },
     "projects/a16z-altman/outputs/a16z-altman-anglecut.mp4": {
       "status": "current",
-      "built_utc": "2026-08-27T17:47:05Z",
+      "built_utc": "2026-08-31T04:47:48Z",
       "kind": "anglecut",
-      "script": "scripts/angle-cut.py",
+      "script": "scripts/yt-upload.py",
       "manifest": "projects/a16z-altman/anglecut.json",
       "burned": [
         "16 segments switching between 4 cameras full frame",
@@ -92,13 +92,18 @@
       ],
       "sidecars": {
         "sync": "projects/a16z-altman/a16z-altman.anglesync.json"
+      },
+      "published": {
+        "url": "https://youtu.be/V9IQmCufSOE",
+        "privacy": "unlisted",
+        "sidecar": "projects/a16z-altman/outputs/a16z-altman-anglecut.youtube.json"
       }
     },
     "projects/a16z-altman/outputs/a16z-altman-autocut.mp4": {
       "status": "current",
-      "built_utc": "2026-08-27T19:32:54Z",
+      "built_utc": "2026-08-31T04:48:15Z",
       "kind": "anglecut",
-      "script": "scripts/angle-cut.py",
+      "script": "scripts/yt-upload.py",
       "manifest": "projects/a16z-altman/anglecut-auto.json",
       "burned": [
         "8 segments switching between 3 cameras full frame",
@@ -107,6 +112,11 @@
       ],
       "sidecars": {
         "sync": "projects/a16z-altman/a16z-altman.anglesync.json"
+      },
+      "published": {
+        "url": "https://youtu.be/NHGDcX7EcwU",
+        "privacy": "unlisted",
+        "sidecar": "projects/a16z-altman/outputs/a16z-altman-autocut.youtube.json"
       }
     },
     "projects/a16z-altman/outputs/a16z-altman-autocut-debug.mp4": {
@@ -143,7 +153,7 @@
     }
   },
   "notes": [],
-  "updated_utc": "2026-08-28T02:29:29Z",
+  "updated_utc": "2026-08-31T04:48:15Z",
   "result": {
     "stage1_machinery": {
       "verdict": "PASS",

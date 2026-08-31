@@ -39,3 +39,14 @@ Editing this film -- sync, decide, render, from raw tapes -- takes about half
 its runtime. The decide step is ~85% of that and is CPU-bound speaker
 embedding; the NVENC render is roughly fifteen times faster than realtime.
 - 20:49 shot-detect scripts/shot-detect.py (--src projects/a16z-agents/temp/program.mp4 --out temp/regress/a16z-agents.shots.json) -- 5 shots, 2 angles, 4 cuts from projects/a16z-agents/temp/program.mp4
+
+## 2026-08-31
+- 04:48 publish scripts/yt-upload.py -> projects/a16z-agents/outputs/a16z-agents-anglecut.mp4 (projects/a16z-agents/outputs/a16z-agents-anglecut.mp4 --title Benchmark: 2-camera replay, frame-exact (stage 1) --description-file temp/ytdesc/a16z-stage1.txt --channel @instafill_ai --privacy unliste) https://youtu.be/w5EL_tisbsA -- uploaded Benchmark: 2-camera replay, frame-exact (stage 1)
+- 04:48 publish scripts/yt-upload.py -> projects/a16z-agents/outputs/a16z-agents-autocut.mp4 (projects/a16z-agents/outputs/a16z-agents-autocut.mp4 --title Benchmark: 2-camera AI auto-switch (stage 2) --description-file temp/ytdesc/a16z-stage2.txt --channel @instafill_ai --privacy unlisted) https://youtu.be/eRH7nODTBpw -- uploaded Benchmark: 2-camera AI auto-switch (stage 2)
+
+## 2026-08-30
+
+Uploaded the finished render(s) to the @instafill_ai channel as **unlisted**, with a short
+description in each saying what the AI did and which capabilities the film demonstrates.
+Description sources are in `temp/ytdesc/`; the video ids are in the `.youtube.json`
+sidecars beside each render.

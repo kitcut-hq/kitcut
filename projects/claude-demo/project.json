@@ -17,12 +17,12 @@
   },
   "deliverables": {
     "projects/claude-demo/outputs/claude-demo-labelled.mp4": {
-      "status": "superseded",
-      "built_utc": "2026-08-27T04:40:50Z",
+      "status": "current",
+      "built_utc": "2026-08-31T04:40:42Z",
       "kind": "screencast",
       "manifest": "projects/claude-demo/screencast.json",
       "published": {
-        "url": "https://youtu.be/al_qdMlck9I",
+        "url": "https://youtu.be/_3n076Zfzj0",
         "privacy": "unlisted",
         "sidecar": "projects/claude-demo/outputs/claude-demo-labelled.youtube.json"
       },
@@ -32,7 +32,8 @@
         "opening bookend px-intro + b-roll (scanned)",
         "name label 'Oleksandr Gamaniuk' at 2.0s film time for 5.5s (scanned)"
       ],
-      "_why": "Second-generation encode (label burned onto a finished film). Superseded by the 2026-08-27 render of claude-demo.mp4, which is one pass and carries the lower third AND the new end card. NOTE: the published upload al_qdMlck9I is still THIS file -- the newer render has not been uploaded."
+      "_why": "Second-generation encode (label burned onto a finished film). Superseded by the 2026-08-27 render of claude-demo.mp4, which is one pass and carries the lower third AND the new end card. NOTE: the published upload al_qdMlck9I is still THIS file -- the newer render has not been uploaded.",
+      "script": "scripts/yt-upload.py"
     },
     "projects/claude-demo/outputs/claude-demo.mp4": {
       "status": "current",
@@ -59,7 +60,7 @@
       }
     }
   },
-  "updated_utc": "2026-08-27T06:22:12Z",
+  "updated_utc": "2026-08-31T04:40:42Z",
   "title": "Відеоредагування через Claude Code — огляд пайплайнів",
   "intent": "Screen recording of a Claude Code session plus an iPhone take of Oleksandr narrating; multicam pipeline (camera is the master clock), published unlisted on @instafill_ai.",
   "pipelines": [

@@ -144,3 +144,13 @@ is a scan of each, once for --list and once for the render.
 Stage 2 is NOT run here. With 13 angles including six framings of two-shot
 pairings, the speaker-to-camera hint mapping stops being one hint per person,
 and that is a design question rather than a run.
+
+## 2026-08-31
+- 04:46 publish scripts/yt-upload.py -> projects/up-interview-1/outputs/up-interview-1-anglecut.mp4 (projects/up-interview-1/outputs/up-interview-1-anglecut.mp4 --title Interview — AI multicam angle switching --description-file temp/ytdesc/interview.txt --channel @instafill_ai --privacy unlisted) https://youtu.be/7epl42cOb-w -- uploaded Interview — AI multicam angle switching
+
+## 2026-08-30
+
+Uploaded the finished render(s) to the @instafill_ai channel as **unlisted**, with a short
+description in each saying what the AI did and which capabilities the film demonstrates.
+Description sources are in `temp/ytdesc/`; the video ids are in the `.youtube.json`
+sidecars beside each render.

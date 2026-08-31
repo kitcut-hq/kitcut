@@ -57,3 +57,13 @@ hand-written page (the original, still the one the manifest points at), and
 cards/outro.json is the same idea as a *spec* -- template + brand + words --
 which make-card.py designs. Prefer the spec route for anything new; the page is
 kept as the worked example of the hand-written escape hatch.
+
+## 2026-08-31
+- 04:40 publish scripts/yt-upload.py -> projects/claude-demo/outputs/claude-demo-labelled.mp4 (projects/claude-demo/outputs/claude-demo-labelled.mp4 --title Claude Code demo — AI-edited screencast + camera --description-file temp/ytdesc/claude-demo.txt --channel @instafill_ai --privacy unlisted) https://youtu.be/_3n076Zfzj0 -- uploaded Claude Code demo — AI-edited screencast + camera
+
+## 2026-08-30
+
+Uploaded the finished render(s) to the @instafill_ai channel as **unlisted**, with a short
+description in each saying what the AI did and which capabilities the film demonstrates.
+Description sources are in `temp/ytdesc/`; the video ids are in the `.youtube.json`
+sidecars beside each render.
