@@ -194,9 +194,16 @@ where an editor puts a voice with no face — that one line is why `a16z-agents`
 scores 86.90%.
 
 **`compare-videos.py` will FAIL a stage-2 cut, and should.** Its bar is stage
-1's frame-exactness. The number to read is the timeline agreement, which it
-computes independently of `auto-switch --score` — if the two disagree, one of
-them is broken.
+1's frame-exactness.
+
+**But do not read its timeline agreement on a stage-2 render.** It used to be
+offered as an independent check on `auto-switch --score`; it is not one. The
+comparator derives its angle map by *detecting* angles in both films, and a
+stage-2 render is ~46% frozen — so on this podcast it found seven angles in a
+three-camera cut and swapped two of them, reporting 44.76% where the plan
+actually scores 53.57%. Scored name-for-name against the reference shot list,
+`auto-switch --score` agreed exactly (53.6%). On a **stage-1** render, where
+nothing is frozen, the comparator's map is sound and the cross-check stands.
 
 **Knobs swept on one film are fitted to it.** `--sweep --score` reads the answer;
 it is the harness's mode. Report what it found *and* that it was fitted, and get
@@ -254,6 +261,23 @@ nowhere near sufficient, and the best of 30 swept settings gained one point on
 a film with two wide shots in it. Turn it on when a second film says it earns
 its place, and do not quote the sweep's winner as a result.
 
+## Count the people first, including the unframed ones
+
+Before any grammar, before any sweep: **how many people were at the shoot?**
+`K` is `len(speakers) + off_camera_speakers`, and getting it wrong is the most
+expensive mistake in stage 2 — a merged pair puts the film on the wrong face for
+as long as that person talks. On УТ-2 a third man sat behind the camera;
+separating him moved the held-out score from 49.5% to **63.9%** with no tuning
+at all, where the best grammar change was worth two points and did not survive.
+
+`cluster_people()` handles the mechanics: agglomerative clustering peels
+outliers before it splits people, so asking for exactly `K` groups hands slots
+to coughs. It raises `k` until `K` groups clear 2% of windows — the two segments
+of one film needed k=4 and k=8 from the same honest `K=3` — and `--list` says so
+when it does. If it prints that fewer than `K` voices clear the bar, either
+somebody barely speaks in that stretch or two are still fused; check by
+sweeping `k` yourself before believing any score.
+
 ## Not every channel cuts on the speaker
 
 Check this before quoting any stage-2 number, because it decides what the
@@ -273,8 +297,10 @@ sitting on the wide (45.0% against 52.4%).
 `wide_between` + `wide_after_s` + `wide_dur_s` implement the metronome
 (`alternating()`), snapping each beat to a gap between speech segments via
 `snap_s`. It is **off by default and should stay off** until a film earns it:
-swept on one segment it reached 59.1%, and on a held-out segment of the *same
-film* it fell to 35.8% while plain speaker-following held 49.5%.
+swept on one segment it reached 59.1% against speaker-following's 45.0%, and on
+a held-out segment of the *same film* it fell to 35.8%. With the voices properly
+separated it loses on both (58.1% vs 53.6% fitted, 51.0% vs **63.9%** held out)
+— the gap it appeared to fill was a merged speaker all along.
 
 **Hold a second segment out.** It costs almost nothing and it is the only thing
 that tells a result from a fit: `projects/yt2-fpv33-val/` builds no tapes and

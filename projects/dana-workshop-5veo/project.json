@@ -1,0 +1,23 @@
+{
+  "v": 1,
+  "id": "dana-workshop-5veo",
+  "intent": "Channel audit #2, business question not technical: can this repo edit for DANA PAVLYCHKO / Bohdana Pavlychko (@bohdanapavlychko, UCicbiU1GGOFjANGIq1Y7cXg, 6.92k subs). Target film youtu.be/5VeOzyEd1VQ, \"How to build a business through a personal brand\", 50:57.68, 1920x1080, 25 fps CFR, 76442 frames, AV1/opus, uploaded 2026-08-28. IT IS NOT A MULTICAM FILM AND IT IS NOT EDITED AT ALL: a raw Zoom-style webinar export -- a 31-slide deck full frame with the presenter webcam pinned as a fixed 320x180 tile at x1600-1919,y0-179 carrying Zooms own burned nameplate \"Bohdana Pavlychko\". Zero camera cuts; the 30 changes shot-detect reports are slide changes (mean dwell 98.6 s, median 72 s, longest 351 s). One voice, one framing, no captions, no lower third, no intro, no outro, no music, no b-roll. So no round trip was run: stage 1 has nothing to replay. See journal.md for the capability table and the two new traps.",
+  "pipelines": [
+    "channel-audit"
+  ],
+  "inputs": {
+    "source": "projects/dana-workshop-5veo/sources/original.mp4",
+    "audio": "projects/dana-workshop-5veo/audio/original.wav",
+    "peek": "projects/dana-workshop-5veo/temp/peek-openai.mp4"
+  },
+  "controls": {},
+  "deliverables": {},
+  "notes": [
+    "Brand measured off their own slides (5 frames, PiP column excluded, HSV S>90, 3.44M saturated px): accent #CCFF60 lime, ink #0E1309, paper #FCFCFC. Type is a geometric grotesque with a high-contrast didone italic for the accented words.",
+    "Speech is continuous: only 27 s of pauses >= 0.7 s at -30 dB in 3057.7 s (0.9%), 2 s at >= 1.0 s, none at >= 1.5 s. ffmpeg silencedetect finds ZERO gaps at -30/-35/-40 dB because the noise floor sits at p1 = -56.6 dB with speech at p70 = -21.7 dB; the pause structure only appears from a 50 ms RMS envelope thresholded relative to speech. Dead-air cutting has nothing to take here.",
+    "Presenter face measured with YuNet across 8 sampled frames: 51-66 px wide, 70-91 px tall in a 1920x1080 frame (6.5-9.0% of frame height). A 1080x1920 vertical short would need ~5x upscale of the webcam tile, so auto-reframe.py cannot make a short out of this film.",
+    "shot-detect.py did NOT refuse this single-camera film. Frame fingerprints failed (within 0.0513 >= between 0.0448), face identity then reported \"2 angles, within 0.119, between n/a\" and the guard (failed = between is not None and within >= between) passes when between is None. A one-person screencast therefore gets a 27-shot, 2-angle shot list that would have driven split-cameras.py to build two phantom tapes.",
+    "Channel format mix from the 68 listed videos: mostly solo talking-head (8-25 min), some remote-call interviews, this workshop screencast, one meditation (117 min), one city vlog. Their top video (48k views, the OpenAI interview) is a single-frame remote-call recording with burned glossary cards top-right (term + definition) -- makeable with make-card.py + image-overlay.py."
+  ],
+  "updated_utc": "2026-08-31T16:25:41Z"
+}

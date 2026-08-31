@@ -25,3 +25,17 @@ editorial choice, so the scoring reference merges them back into camW. And the
 first speaker hint, taken from a long close-up of the young host, resolved to
 the wrong voice: this channel cuts to listening faces, so a close-up is not
 evidence that its subject is talking.
+
+CORRECTION, same day. The 49.5% above was measured with two of the three voices
+merged, and it was the merge that capped it -- not the method.
+
+With the man behind the camera separated (K=3 people, cluster_people raising k
+to EIGHT here before three groups clear 2%), plain speaker-following scores
+63.9% on this held-out segment against a 44.8% always-wide baseline. The
+metronome grammar, which looked like a win on the fitted segment, scores 51.0%.
+So the verdict on wide_between is unchanged and better evidenced: it stays off.
+
+This segment is where the clustering fix was proven necessary. Declaring K=4 --
+which fixed the fitted segment -- changed nothing here: the shares stayed
+82.4/17.5/0.1/0.1 all the way to k=7, and only at k=8 did the big cluster split
+into 42.4/39.6/16.9. One declared number could never have fixed both segments.

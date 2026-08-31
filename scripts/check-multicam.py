@@ -244,6 +244,56 @@ check("...correctly", purity(lab, who) > 0.95, True)
 check("...in under a minute (took %.1fs)" % _el, _el < 60.0, True)
 check("separation stays cheap too", _auto.separation(V, lab)[1] is not None, True)
 
+print("== a film with one camera is not a shot list ==")
+# `between` is None when only one identity is found: nothing was measured
+# against anything. That used to pass the separation guard by default, so a
+# Zoom webinar -- one webcam tile over slides, zero camera cuts -- came back as
+# "2 angles, between n/a" and would have been handed to split-cameras.
+check("one identity refuses", _shots.NOT_MULTICAM[:22], "there is only one iden")
+_between, _names = None, ["cam1", "cam2"]
+check("...the condition that catches it",
+      _between is None and len(set(_names)) > 1, True)
+_between, _names = None, ["cam1"]
+check("a genuine single-angle list is not caught",
+      _between is None and len(set(_names)) > 1, False)
+_between, _names = 0.9, ["cam1", "cam2"]
+check("a film that DID separate is not caught",
+      _between is None and len(set(_names)) > 1, False)
+
+print("== K counts people, not clusters ==")
+# The geometry is the real film's, not an invented one: two people in one room
+# share a microphone, a codec and an accent, so their windows sit far closer to
+# each other than a speck -- a cough, a clipped word, a bar of music -- sits to
+# anything. Average linkage then merges two SPEAKERS before it absorbs a speck,
+# so asking for exactly K groups hands slots to the specks and leaves people
+# fused. Reproduces the podcast's own numbers: 46/40/14 against its 47/38/15.
+_base = rng.standard_normal(192).astype(np.float32)
+_p = _base + 1.2 * rng.standard_normal((3, 192)).astype(np.float32)
+_p /= np.linalg.norm(_p, axis=1, keepdims=True)
+_who = np.array([0] * 300 + [1] * 260 + [2] * 90)
+V = np.vstack([_p[_who] + rng.standard_normal((len(_who), 192)).astype(np.float32) * 0.03,
+               rng.standard_normal((4, 192)).astype(np.float32)])
+V /= np.linalg.norm(V, axis=1, keepdims=True)
+
+
+def n_people(lab):
+    return sum(1 for k in set(lab.tolist())
+               if (lab == k).sum() >= _auto.MIN_VOICE_SHARE * len(lab))
+
+
+check("asking for exactly K leaves the speakers fused",
+      n_people(_auto.cluster(V, 3)[0]), 1)
+
+lab, groups, k_used, n_big = _auto.cluster_people(V, 3)
+check("cluster_people finds all three people", n_big, 3)
+check("...by raising k past the specks", k_used > 3, True)
+check("...every window still has a label", len(lab), len(V))
+check("...and the quiet one survives",
+      min(sorted((int((lab == k).sum()) for k in set(lab.tolist())),
+                 reverse=True)[:3]) > 50, True)
+check("headroom 0 cannot raise k, and reports the shortfall",
+      _auto.cluster_people(V, 3, headroom=0)[3] < 3, True)
+
 print("== the speaker model's length ceiling ==")
 # TitaNet's ONNX export raises above 12288 feature frames (122.88 s). A stub
 # extractor stands in for it here: no model, no audio, and it FAILS the way

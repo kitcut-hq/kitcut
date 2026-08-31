@@ -44,15 +44,15 @@
     }
   ],
   "off_camera_speakers": 1,
-  "_off_camera": "The third man at the table is never framed in this segment -- he sits at the near end, his back to the studio wide, and no camera is pointed at him. Declaring him keeps his voice out of a host's cluster, and an unmapped voice falls back to the wide, which is where an editor puts a voice with no face.",
+  "_off_camera": "One unframed person: the third man sits behind the camera -- he is the silhouette in the foreground of the studio wide -- so K is 3, the number of people at the shoot. It used to say 2 here, to force the clustering to split him out; cluster_people() does that properly now by raising k until three groups are PEOPLE, and K went back to meaning what it says. An unmapped voice falls back to the wide, which is exactly where this editor puts a voice with no face.",
   "wide": "cam1",
   "grammar": {
     "min_shot_s": 1.5,
     "lead_s": 0.25,
-    "wide_after_s": 10.0,
-    "wide_dur_s": 14.0,
+    "wide_after_s": 0.0,
+    "wide_dur_s": 4.0,
     "wide_overlap_pct": 0.0,
-    "wide_between": 1,
+    "wide_between": 0,
     "snap_s": 0.0
   },
   "outdir": "projects/yt2-fpv33-seg/outputs",
@@ -71,26 +71,18 @@
       0.0
     ],
     "wide_after_s": [
-      8.0,
-      10.0,
-      11.0,
-      12.0,
-      14.0
+      0.0,
+      10.0
     ],
     "wide_dur_s": [
-      8.0,
-      10.0,
-      11.0,
-      12.0,
       14.0
     ],
     "wide_between": [
+      0,
       1
     ],
     "snap_s": [
-      0.0,
-      1.5,
-      3.0
+      0.0
     ]
   },
   "_grammar": "Fitted on THIS segment by --sweep, which reads the answer: 59.1% against 45.0% for plain speaker-following and 52.4% for simply sitting on the wide. Their own shots run 11.6 s on average, so 10 s of face and 14 s of room is close to the metronome they cut to. The honest number for this grammar comes from footage it was not fitted on -- see yt2-fpv33-val."

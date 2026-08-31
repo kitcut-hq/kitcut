@@ -301,17 +301,25 @@ podcast). Stage 2 scores 73–87% **where the editor follows the voice** and
 code. Editing costs about half a film's runtime end to end; the decide step is
 ~85% of it, the render ~15x realtime.
 
-**Not every channel cuts on the speaker, and that decides what a stage-2 score
-means.** Read the transition matrix off their own shot list before quoting one.
-On УТ-2 a close-up is followed by the wide 97% and 92% of the time, every shot
-runs ~11.6 s and the wide holds 52% of the runtime: the room is the default
-state and the faces are accents. Speaker-following scored 45.0% there — *below*
-the 52.4% you get by never cutting at all. The `wide_between` metronome that
-fits that style reached 59.1% on the segment it was swept on and **35.8% on a
-held-out segment of the same film**, so it ships off. Hold a second segment out
+**Count the people at the shoot, including the ones no camera points at.** It
+is the highest-value input in stage 2 and it is free. On УТ-2 a third man sat
+behind the camera; his voice merged into a host's and the switcher spent his
+speech on the wrong face. Separating him moved the held-out score from 49.5% to
+**63.9%**, against 44.8% for never cutting away from the wide — worth more than
+any grammar, and it needed no tuning. `K` is people, and `cluster_people()`
+raises the cluster count until `K` groups are actually people rather than
+coughs (the two segments needed k=4 and k=8 from the same K=3).
+
+**Not every channel cuts on the speaker, and that decides what a score means.**
+Read the transition matrix off their own shot list first. On УТ-2 a close-up is
+followed by the wide 97% and 92% of the time, every shot runs ~11.6 s and the
+wide holds 52% of the runtime. The `wide_between` metronome that fits that style
+reached 59.1% on the segment it was swept on and **35.8% on a held-out segment
+of the same film**, so it ships off. Hold a second segment out
 (`projects/yt2-fpv33-val/`: no tapes, no render, three camera entries pointing
 at the programme, fifteen minutes) — it is the only thing that tells a result
-from a fit.
+from a fit, and `video-channel-audit` is the skill that walks the whole
+procedure.
 
 `angle-cut.py` also reads `name_labels` and `image_overlays`, composited inside
 its own NVENC pass, so finishing a multicam film is not a re-encode of it. Give

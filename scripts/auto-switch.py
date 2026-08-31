@@ -111,6 +111,8 @@ MAX_EMBED_S = 60.0            # the longest span handed to the speaker model in
                               # one go -- half its 122.88 s ceiling, see
                               # embed_span()
 CLUSTER_CAP = 2000            # above this, cluster a sample -- see cluster()
+MIN_VOICE_SHARE = 0.02        # a cluster smaller than this is a cough, not a
+                              # person -- see cluster_people()
 
 
 def rel(p):
@@ -340,6 +342,41 @@ def cluster(E, k, cap=CLUSTER_CAP):
         groups = [np.nonzero(lab == k_)[0].tolist()
                   for k_ in range(len(groups))]
     return lab, groups
+
+
+def cluster_people(E, K, min_share=MIN_VOICE_SHARE, headroom=8):
+    """Cluster until K clusters are big enough to be PEOPLE, not until K exist.
+
+    K is declared as a fact about the shoot -- how many were at the table --
+    but agglomerative clustering does not spend its splits on people. It peels
+    outliers first: a cough, a laugh, a clipped word, a moment of music. Asking
+    it for exactly K groups therefore hands speaker slots to noise while two
+    real speakers stay merged, and the merged pair is the expensive kind of
+    wrong -- the film cuts to the wrong face for as long as that person talks.
+
+    Measured on one podcast, both segments, same two hosts plus a third man
+    behind the camera:
+
+        fitted segment   K=3 -> 84.1 / 15.3 / 0.6     the third man is inside
+                                                       the 84, unsplit
+                         K=4 -> 47.1 / 37.5 / 14.9 / 0.4      split, correct
+        held-out segment K=4 -> 82.4 / 17.5 / 0.1 / 0.1       still merged
+                         K=8 -> 42.4 / 39.6 / 16.9 + 5 specks split, correct
+
+    Declaring K=4 fixed the first and did nothing for the second. So raise k
+    until K clusters clear `min_share`, and let the specks keep their own
+    labels -- an unmapped voice already falls back to the wide, which is where
+    an editor puts a sound with no face.
+    """
+    best = None
+    for k in range(K, K + headroom + 1):
+        lab, groups = cluster(E, k)
+        big = sum(1 for g in groups if len(g) >= min_share * len(E))
+        if best is None:
+            best = (lab, groups, k, big)
+        if big >= K:
+            return lab, groups, k, big
+    return best
 
 
 def separation(E, lab, cap=CLUSTER_CAP):
@@ -608,12 +645,20 @@ def main():
     print("%s: %.1f s of sound from %s" % (pid, a.size / float(SR), src))
     ex = extractor(dcfg)
     ts, E = embed(a, dcfg, ex)
-    lab, groups = cluster(E, K)
+    lab, groups, k_used, n_big = cluster_people(E, K)
     within, between = separation(E, lab)
     print("%d windows, %d voices (%d framed); cosine distance within %.3f, "
           "between %.3f"
           % (len(ts), K, len(hints), within,
              between if between is not None else -1))
+    if k_used != K:
+        print("  clustered to %d to get %d voices above %.0f%% -- the extra "
+              "groups are specks, not people" % (k_used, n_big,
+                                                 100 * MIN_VOICE_SHARE))
+    if n_big < K:
+        print("  !! only %d of %d declared voices clear %.0f%% even at k=%d -- "
+              "either somebody barely speaks here, or two are still merged"
+              % (n_big, K, 100 * MIN_VOICE_SHARE, k_used))
     if between is not None and between <= within:
         print("  !! the voices do not separate -- every cut after this is a "
               "guess. Try another model or fewer speakers.")

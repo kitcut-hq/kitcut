@@ -46,10 +46,10 @@
   "grammar": {
     "min_shot_s": 1.5,
     "lead_s": 0.25,
-    "wide_after_s": 10.0,
+    "wide_after_s": 0.0,
     "wide_dur_s": 14.0,
     "wide_overlap_pct": 0.0,
-    "wide_between": 1,
+    "wide_between": 0,
     "snap_s": 0.0
   },
   "outdir": "projects/yt2-fpv33-val/outputs",
@@ -78,5 +78,6 @@
     "snap_s": [
       0.0
     ]
-  }
+  },
+  "_off_camera": "One unframed person: the third man sits behind the camera -- he is the silhouette in the foreground of the studio wide -- so K is 3, the number of people at the shoot. It used to say 2 here, to force the clustering to split him out; cluster_people() does that properly now by raising k until three groups are PEOPLE, and K went back to meaning what it says. An unmapped voice falls back to the wide, which is exactly where this editor puts a voice with no face."
 }

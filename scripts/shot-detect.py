@@ -80,6 +80,16 @@ PERSON_SEPARATION_FAILED = (
     "right to your eyes, --force writes them and the numbers are recorded "
     "for the record.")
 
+NOT_MULTICAM = (
+    "there is only one identity in this film, so nothing was measured against "
+    "anything: `between` is n/a, not large. That is not a multicam shoot.\n"
+    "     What it usually means: a single-camera talking head, or a screencast "
+    "with a fixed webcam tile -- where every 'cut' found is a SLIDE change and "
+    "every 'angle' is a brightness family of slide. Measured on a 51-minute "
+    "Zoom webinar: 26 'cuts', 2 'angles', and not one camera cut in the film. "
+    "Look at --sheets before overriding; a tape per phantom angle is hours of "
+    "encoding.")
+
 DEFAULT_FACE = {
     "detector": "models/face/face_detection_yunet_2023mar.onnx",
     "recognizer": "models/face/face_recognition_sface_2021dec.onnx",
@@ -784,6 +794,16 @@ def main():
                  "n/a" if between is None else "%.3f" % between))
     failed = between is not None and within >= between
 
+    # A film with ONE camera has no between-angle distance at all, and `None`
+    # used to pass this guard by default -- the refusal was written for angles
+    # that fail to separate, not for footage that has no angles. Measured on a
+    # 51-minute Zoom webinar: one fixed webcam tile over a slide deck, zero
+    # camera cuts, and this printed "2 angles, between n/a" and would have
+    # written a 27-shot two-angle list whose "cuts" were slide changes.
+    # split-cameras.py builds a full-length tape per angle, so believing it
+    # costs hours of encoding a film that was never cut.
+    single = between is None and len(set(names)) > 1
+
     if args.list:
         print("%s  %d frames  %.4f fps (%d/%d)  %s"
               % (args.src, n, fps, info["fps_num"], info["fps_den"],
@@ -873,6 +893,11 @@ def main():
                            else SEPARATION_FAILED))
         sys.exit("refusing to write a shot list with %d angles that do not "
                  "separate -- pass --force if you know better" % len(set(names)))
+    if single and not args.force:
+        print("\n!! %s" % NOT_MULTICAM)
+        sys.exit("refusing to write a %d-angle shot list for a film with one "
+                 "identity in it -- pass --force if you know better"
+                 % len(set(names)))
 
     out = args.out or (os.path.join(pdir, "%s.shots.json" % pid) if pdir
                        else os.path.join(ROOT, "temp", "%s.shots.json" % pid))

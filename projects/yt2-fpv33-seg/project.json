@@ -70,12 +70,12 @@
     },
     "projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-autocut.mp4": {
       "status": "current",
-      "built_utc": "2026-08-31T06:24:04Z",
+      "built_utc": "2026-08-31T17:06:05Z",
       "kind": "anglecut",
       "script": "scripts/angle-cut.py",
       "manifest": "projects/yt2-fpv33-seg/anglecut-auto.json",
       "burned": [
-        "98 segments switching between 3 cameras full frame",
+        "59 segments switching between 3 cameras full frame",
         "audio taken whole from cam1 -- no joins",
         "anchored by declared frames"
       ],
@@ -84,7 +84,7 @@
       }
     },
     "projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-autocut-debug.mp4": {
-      "status": "current",
+      "status": "deleted",
       "built_utc": "2026-08-31T06:47:18Z",
       "kind": "anglecut",
       "script": "scripts/angle-cut.py",
@@ -97,7 +97,8 @@
       ],
       "sidecars": {
         "sync": "projects/yt2-fpv33-seg/yt2-fpv33-seg.anglesync.json"
-      }
+      },
+      "_deleted_why": "Rendered from the stage-2 plan made when two of the three voices were still merged, so its burned commentary explains decisions the cutter would no longer make. Deleted rather than kept: a debug render whose reasoning is out of date is worse than none. Re-make it with --debug from the current plan if the reasoning needs reading again."
     },
     "projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-finished.mp4": {
       "status": "current",
@@ -131,10 +132,11 @@
     }
   },
   "notes": [
-    "The wide holds 52.4% of the runtime and a close-up is followed by the wide 97%/92% of the time: their grammar is a metronome, not speaker-following.",
-    "Baselines to quote with any score here: sitting on the wide forever = 52.4%; speaker-following = 45.0%; the fitted alternating grammar = 59.1% -- which lost 14 points on the held-out segment (yt2-fpv33-val).",
-    "The -finished.mp4 render is the stage-1 cut with a lower third and an end card burned in during the same pass -- it is NOT frame-comparable to the programme, which is why it has its own manifest.",
+    "THREE people at this shoot: two hosts on camera and a third man behind it. Getting that count right is worth more than any grammar -- see journal.md.",
+    "Baselines to quote with any score here: sitting on the wide forever = 52.4%. Speaker-following = 53.6% fitted / 63.9% on the held-out segment (44.8% baseline there). The alternating metronome = 58.1% / 51.0%, so it stays off.",
+    "The -finished.mp4 render is the stage-1 cut with a lower third and an end card burned in during the same pass -- NOT frame-comparable to the programme, which is why it has its own manifest. -captioned-captioned.mp4 adds Ukrainian captions.",
+    "-autocut.mp4 is EVIDENCE, NOT A DEMO: a stage-2 render holds a frozen frame wherever it disagrees with the human, measured at 40.5% of the runtime on the first version. Never show it as a film.",
     "Person name labels are deliberately absent: their own film carries no name cards, so which host is Олексій Бабенко and which is Володимир Несторак cannot be read off the footage."
   ],
-  "updated_utc": "2026-08-31T07:07:10Z"
+  "updated_utc": "2026-08-31T17:11:54Z"
 }

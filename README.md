@@ -1002,16 +1002,25 @@ speaker-following grammar. Measured against their edit:
 | grammar | fitted segment | held-out segment |
 |---|---|---|
 | sit on the wide and never cut | 52.4% | 44.8% |
-| speaker-following | 45.0% | **49.5%** |
-| alternating close-up/wide (`wide_between`) | **59.1%** | 35.8% |
+| speaker-following, third man merged into a host | 45.0% | 49.5% |
+| speaker-following, **all three voices separated** | 53.6% | **63.9%** |
+| alternating close-up/wide (`wide_between`) | 58.1% | 51.0% |
+
+Two lessons, and the second one is bigger than the first.
 
 `alternating()` implements the metronome, snapping each beat to a gap between
-speech segments (`snap_s`), and it wins by 14 points on the segment its two
-numbers were swept on — then **loses 14** on a different segment of the same
-film. That is what fitting looks like, and it is why the second segment exists:
-`yt2-fpv33-val` builds no tapes and renders nothing, it points three camera
-entries at the programme's own soundtrack and scores a plan. Fifteen minutes,
-and it turned a result into a non-result.
+speech segments (`snap_s`). Fitted against the first segment it won by 14
+points — and **lost 14** on a different segment of the same film. That is what
+fitting looks like, and it is why the second segment exists: `yt2-fpv33-val`
+builds no tapes and renders nothing, it points three camera entries at the
+programme's own soundtrack and scores a plan. Fifteen minutes, and it turned a
+result into a non-result.
+
+The bigger one: **a third man sat behind the camera**, and until he was given a
+voice of his own the switcher spent his speech on a host's close-up. Separating
+him is worth **+14 points on unseen footage** — far more than any grammar — and
+it needed no tuning at all, only counting the people in the room. See
+`cluster_people()` below.
 
 So `wide_between` ships **off**, like `wide_overlap_pct`, with its evidence
 written down. What the exercise did establish is worth as much as a win:
@@ -1020,11 +1029,47 @@ written down. What the exercise did establish is worth as much as a win:
   cut to listening faces. A speaker hint picked from a long close-up landed on
   the wrong voice, which on a speaker-following show is a safe way to choose
   one. Read `--list`'s own voice track instead.
-- Speaker-following beats sitting on the wide by five points on unseen
-  footage, and nothing yet beats speaker-following.
+- Speaker-following beats sitting on the wide by 19 points on unseen footage
+  once every voice is separated, and nothing yet beats speaker-following.
 - **Agreement with one human's edit is a harsh yardstick.** Two competent
   editors cutting the same tapes would not agree 100% either. Quote it with
   the always-wide baseline beside it, or it reads as a mark out of 100.
+
+### The comparator cannot score a stage-2 cut
+
+`compare-videos.py` prints a timeline agreement, and it was tempting to read it
+as an independent check on `auto-switch --score`. It is not one on a stage-2
+render. The comparator builds its angle map by **detecting** angles in both
+films, and a stage-2 render is roughly half frozen — on this podcast it found
+seven angles in a three-camera cut, mapped `cam2`→`cam3` and `cam3`→`cam2`, and
+reported **44.76%** where the plan it rendered actually scores **53.57%**
+name-for-name against the reference shot list (which is what `auto-switch
+--score` computes, and it agreed to two decimal places).
+
+On a **stage-1** render nothing is frozen, the map is sound, and the cross-check
+is worth having. On stage 2, quote the scorer and use the comparator only for
+what it measures directly: shifted frames, frozen frames, SSIM, audio offset.
+
+### K counts people, not clusters
+
+Declaring `K` — hints plus `off_camera_speakers` — says how many were at the
+shoot. Agglomerative clustering does not spend its splits on people, though: it
+peels outliers first, a cough or a clipped word or a bar of music, so asking for
+exactly `K` groups hands speaker slots to noise while two real speakers stay
+fused. And a fused pair is the expensive kind of wrong — the film sits on the
+wrong face for as long as that person talks.
+
+| | asked for K | what came back |
+|---|---|---|
+| fitted segment | 3 | 84.1 / 15.3 / 0.6 — the third man inside the 84 |
+| | 4 | 47.1 / 37.5 / 14.9 / 0.4 — split, correct |
+| held-out segment | 4 | 82.4 / 17.5 / 0.1 / 0.1 — still fused |
+| | 8 | 42.4 / 39.6 / 16.9 + five specks — split, correct |
+
+One number could not fix both. `cluster_people()` raises `k` until `K` groups
+clear 2% of the windows and lets the specks keep their own labels — an unmapped
+voice already falls back to the wide, which is where an editor puts a sound with
+no face. The two segments now settle at k=4 and k=8 from the same honest `K=3`.
 
 ### The speaker model has a hard length ceiling
 
@@ -1409,6 +1454,32 @@ Quota note: `videos.update` costs 50 units of the default 10,000/day, while the
 Two ids on this channel begin with `-`, which argparse reads as a flag. Pass
 those as `--video=-qKcpLSk0iU`.
 
+## Deleting an upload
+
+Removing a video is the one publish operation with no undo, so `yt-delete.py`
+is dry-run by default: without `--yes` it fetches each id and prints the title
+and privacy it *would* delete, and stops.
+
+```powershell
+python scripts/yt-delete.py <id-or-url> [<id-or-url> ...] --channel @instafill_ai
+python scripts/yt-delete.py <id-or-url> ... --channel @instafill_ai --yes
+```
+
+`--channel` is required here for the same reason `yt-upload.py` guards it: one
+Google login can own several channels and the grant picks one silently. The
+script asserts the handle or title the token actually points at before anything
+is removed. It reuses the one `youtube.force-ssl` grant, so there is no second
+consent to give.
+
+An id that is already gone, or that belongs to another channel, prints
+`NOT FOUND` and is skipped rather than failing the batch — deleting the same
+list twice is safe.
+
+Ids are accepted as bare ids or as any YouTube URL form, so the `url` field
+from a render's `.youtube.json` sidecar can be pasted straight in. After
+deleting, drop the deliverable's entry from `projects/<id>/project.json` and
+its `.youtube.json` sidecar yourself — no script records a deletion.
+
 ## Projects: one folder and two files per video
 
 Everything about one video lives in `projects/<id>/`: the manifests that drive
@@ -1656,6 +1727,7 @@ absolute path written into a script, a skill or these docs.
 | `scripts/check-multicam.py` | multicam self-test; no GPU, no files, no cost |
 | `scripts/import-iphone.ps1` | pull footage off a phone over MTP, verified by byte count |
 | `scripts/yt-upload.py` | upload a render to YouTube, channel-guarded and verified |
+| `scripts/yt-delete.py` | delete videos from YouTube, channel-guarded, dry-run by default |
 | `scripts/yt-fetch-transcripts.py` | pull audio + word transcripts for published channel videos |
 | `scripts/yt-audit-chapters.py` | verdict per channel video: has chapters, needs them, or too short |
 | `scripts/verify-chapters.py` | check a chapter list against the transcript before it goes live |

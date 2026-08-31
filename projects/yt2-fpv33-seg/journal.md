@@ -78,3 +78,40 @@ agreement against a 44.8-52.4% do-nothing baseline. Agreement with one human's
 edit is a harsh yardstick and two editors would not agree either, but it is not
 yet a claim that we can make their taste.
 - 07:07 render scripts/run-captions.py -> projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-captioned-captioned.mp4 (--input projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-finished.mp4 --project yt2-fpv33-seg --id yt2-fpv33-seg-captioned --style config/presets/eu-navy.json --lang uk)
+- 15:50 compare scripts/compare-videos.py (--rendered projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-autocut.mp4 --reference projects/yt2-fpv33-seg/temp/program.mp4 --out projects/yt2-fpv33-seg/yt2-fpv33-seg.autocompare.json) -- FAIL: projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-autocut.mp4 vs projects/yt2-fpv33-seg/temp/program.mp4, median ssim 0.9974, 1001 shifted frames
+- 17:02 auto-switch scripts/auto-switch.py (--manifest projects/yt2-fpv33-seg/anglecut-auto.json) -- 59 shots from the sound alone
+
+CORRECTION, same day, and it changes the headline. Everything above about the
+metronome stands, but it was answering the wrong question.
+
+There are THREE people in this shoot, not two. The third sits behind the camera
+-- he is the silhouette in the foreground of the studio wide -- and his voice was
+merged into the right-hand host's, so the switcher put his speech on the wrong
+face for as long as he talked. One cluster held 84.6% of the windows here and
+split cleanly into 47.1% + 37.5% the moment k went to 4.
+
+Separating him is worth more than every grammar change put together:
+
+    fitted segment    45.0% -> 53.6%      (always-wide baseline 52.4%)
+    held-out segment  49.5% -> 63.9%      (always-wide baseline 44.8%)
+
+And with the voices properly separated the metronome LOSES on both (58.1% and
+51.0%): the gap it appeared to fill was a merged speaker all along. It stays
+off. Plain speaker-following is what ships, and on unseen footage it now beats
+sitting on the wide by 19 points.
+
+The mechanism needed fixing, not just the declaration. Agglomerative clustering
+peels outliers before it splits people, so asking for exactly K groups hands
+slots to coughs while two speakers stay fused. Declaring K=4 fixed this segment
+and did nothing for the held-out one, which needed k=8. cluster_people() now
+raises k until K groups clear 2% of the windows, and both segments settle from
+the same honest K=3 (people at the shoot) at k=4 and k=8. check-multicam.py
+holds it with a synthetic that reproduces the real geometry -- 46/40/14 against
+this film's 47/38/15.
+
+Also measured, because it was quoted loosely before: the stage-2 render is
+frozen for 11852 of 29250 frames, 40.5% of its runtime. That is not a file to
+show anyone. The watchable artifacts here are the stage-1 replay and the
+finished/captioned renders.
+- 17:06 anglecut scripts/angle-cut.py -> projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-autocut.mp4 (--manifest projects/yt2-fpv33-seg/anglecut-auto.json --out projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-autocut.mp4)
+- 17:11 compare scripts/compare-videos.py (--rendered projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-autocut.mp4 --reference projects/yt2-fpv33-seg/temp/program.mp4 --out projects/yt2-fpv33-seg/yt2-fpv33-seg.autocompare.json) -- FAIL: projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-autocut.mp4 vs projects/yt2-fpv33-seg/temp/program.mp4, median ssim 0.9974, 1016 shifted frames
