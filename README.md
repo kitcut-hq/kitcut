@@ -862,6 +862,32 @@ anything comes from the next film, which is what the framework is for. And note
 `compare-videos.py`'s PASS/FAIL is the stage-1 bar — frame-exactness — so a
 stage-2 cut *should* fail it; the number to read there is the agreement.
 
+### Finishing a multicam film: labels and cards in the same pass
+
+`angle-cut.py` reads `name_labels` and `image_overlays` and means exactly what
+`screencast-cut.py` means by them — a lower third naming who is on screen, a
+card or a logo over the film. They are spliced onto the tail of the cut, so
+labelling a multicam film is **not** a re-encode of it:
+
+```json
+"name_labels":    [{"name": "УТ-2", "title": "fpv #33", "at": 3.0, "dur": 6.0}],
+"image_overlays": [{"card": "projects/<id>/cards/outro.json", "at": -9.0,
+                    "layout": {"corner": "centre", "width_frac": 0.52},
+                    "in": {"type": "wipe", "dur": 1.1}, "background": {}}]
+```
+
+Order in the graph is labels → overlays → `--debug` commentary, so an end card
+sits over a lower third and the commentary over both. `at` is **film time** —
+after the switching — and a negative `at` on an overlay counts back from the
+end, resolved once the runtime is known and asserted against it, because a
+graphic past the end fails *silently*. `--list` prints both with their resolved
+windows, which prices a placement without an encode.
+
+Give a finished render its own manifest and its own output name. Burning
+graphics changes pixels, so a labelled stage-1 cut is no longer frame-identical
+to the programme and would fail its own comparison — the same reason `--debug`
+writes a separate file.
+
 ### Debug notes: making the film explain itself
 
 A finished render is silent about its own reasoning. `--debug` burns a running
@@ -954,6 +980,76 @@ made 22 cuts against the human's 15 — which is why cut timing is now scored in
 `my_cuts_near_theirs` for precision of ours; quote the pair, never either
 alone). Knowing *why* an editor did something is not the same as being able to
 predict it, and the next film is what settles this one.
+
+### A channel that does not cut on the speaker at all
+
+Everything above assumes the editor follows the voice. The УТ-2 podcast
+(`yt2-fpv33-seg`, a Ukrainian three-camera show) does not, and it is worth
+writing down because it is probably the common case rather than the exception.
+
+Read its cut back and the grammar is unmistakable. 101 shots in 19.5 minutes,
+mean **11.6 s**, median 11.0, and a transition matrix with no ambiguity in it:
+
+| from | to the wide | to the other close-up |
+|---|---|---|
+| close-up A | 97% | 3% |
+| close-up B | 92% | 8% |
+
+A close-up is *never* followed by another close-up. The wide holds **52.4%** of
+the runtime and the faces are the accents — the exact inverse of a
+speaker-following grammar. Measured against their edit:
+
+| grammar | fitted segment | held-out segment |
+|---|---|---|
+| sit on the wide and never cut | 52.4% | 44.8% |
+| speaker-following | 45.0% | **49.5%** |
+| alternating close-up/wide (`wide_between`) | **59.1%** | 35.8% |
+
+`alternating()` implements the metronome, snapping each beat to a gap between
+speech segments (`snap_s`), and it wins by 14 points on the segment its two
+numbers were swept on — then **loses 14** on a different segment of the same
+film. That is what fitting looks like, and it is why the second segment exists:
+`yt2-fpv33-val` builds no tapes and renders nothing, it points three camera
+entries at the programme's own soundtrack and scores a plan. Fifteen minutes,
+and it turned a result into a non-result.
+
+So `wide_between` ships **off**, like `wide_overlap_pct`, with its evidence
+written down. What the exercise did establish is worth as much as a win:
+
+- On this channel a close-up does **not** mean that person is talking — they
+  cut to listening faces. A speaker hint picked from a long close-up landed on
+  the wrong voice, which on a speaker-following show is a safe way to choose
+  one. Read `--list`'s own voice track instead.
+- Speaker-following beats sitting on the wide by five points on unseen
+  footage, and nothing yet beats speaker-following.
+- **Agreement with one human's edit is a harsh yardstick.** Two competent
+  editors cutting the same tapes would not agree 100% either. Quote it with
+  the always-wide baseline beside it, or it reads as a mark out of 100.
+
+### The speaker model has a hard length ceiling
+
+TitaNet's ONNX export builds its mask for **12288 feature frames — 122.88 s** at
+the model's 10 ms hop, and one frame more raises
+
+```
+Attempting to broadcast an axis by a dimension other than 1. 12288 by 12298
+```
+
+from inside the encoder. Measured here: 122.8 s embeds, 123.0 s throws. Nothing
+documents it and it is not a truncation — the run dies. `embed_span()` therefore
+embeds a long span in 60-second pieces and averages the unit vectors, which is
+identical to the old behaviour under the cap and keeps the whole span
+represented. A 132-second answer with no pause the segmentation model would
+split on is what found it; four earlier films never held the floor that long.
+
+### The sweep grid is manifest data
+
+`--sweep` walks `DEFAULT_SWEEP` unless the manifest names its own `sweep`, one
+list per grammar knob; a knob with a single value is held fixed and its column
+is not printed. This exists because the axis a channel's style lives on is not
+knowable in advance — the a16z films wanted `min_shot_s` and `wide_overlap_pct`,
+УТ-2 wanted `wide_after_s`, and pricing a new axis must never mean editing the
+script.
 
 ### The arithmetic has its own test
 
@@ -1594,6 +1690,18 @@ everything in `temp/` regenerates in seconds.
 
 These are load-bearing; `docs/karaoke-captions.md` has the full list with
 evidence.
+
+- **A zero-length word from Whisper steals a centisecond from the next one.**
+  Whisper emits `start == end` wherever it clips a word at a segment boundary
+  (10 of 3795 words on one film here, 13 of 2768 on another). The caption
+  builder gives such a word a synthetic 1 cs duration — and if the following
+  word starts at that same instant, the two groups overlap by exactly 1 cs and
+  `selfcheck` refuses the whole file. The refusal blames `min_active_ms` and
+  `max_words`; on a dense 19-minute Ukrainian podcast **six settings of that
+  pair all failed by exactly 1 cs**, which is the tell that neither was the
+  cause. `sanitize()` now orders each word's start against the previous word's
+  **end** rather than its start: a no-op on a well-formed transcript, a repair
+  on a degenerate one.
 
 - **A venv does not protect you from `PYTHONPATH`,** and neither does pip. A
   global `PYTHONPATH` aimed at another Python's site-packages makes 3.13 load

@@ -28,7 +28,16 @@ The audio comes whole from ONE tape. Every camera carries the same sound, so a
 programme cut from them has no audio joins at all -- one atrim across the span,
 no concat, nothing to click.
 
-  --list   print the plan, the anchors and the runtime; encode nothing
+Graphics ride inside the same pass. `name_labels` and `image_overlays` in the
+manifest mean exactly what they mean to screencast-cut.py -- a lower third
+naming who is on screen, a card or logo over the film -- and are composited
+onto the tail of the cut rather than in a second encode, so labelling a
+multicam film is not a re-render of it. They land in film time, after the
+switching, and are listed by --list so a placement can be priced before an
+encode.
+
+  --list   print the plan, the anchors, the runtime and any graphics; encode
+           nothing
   (none)   render
 
 Invoke as:  python scripts/angle-cut.py --manifest projects/<id>/anglecut.json
@@ -44,6 +53,8 @@ import _project  # noqa: E402
 
 _shots = import_module("shot-detect")   # hyphen: not importable by name
 _notes = import_module("debug-notes")
+_namelabel = import_module("name-label")
+_imgoverlay = import_module("image-overlay")
 
 ROOT = _env.ROOT
 ENV = _env.ENV
@@ -284,6 +295,28 @@ def main():
     render = dict(DEFAULT_RENDER, **(m.get("render") or {}))
     acfg = dict(DEFAULT_ANCHOR, **(m.get("anchor_cfg") or {}))
 
+    # Graphics are validated before anything is decoded: a missing PNG or a
+    # spec naming two sources is a typo, and finding it after the anchor scans
+    # costs a full read of every tape.
+    name_specs = m.get("name_labels") or []
+    for spec in name_specs:
+        if "name" not in spec or "at" not in spec:
+            sys.exit("every name_labels entry needs at least name and at")
+    img_specs = m.get("image_overlays") or []
+    img_preset = m.get("overlay_preset", _imgoverlay.DEFAULT_PRESET)
+    for spec in img_specs:
+        if "at" not in spec:
+            sys.exit("every image_overlays entry needs at least at")
+        given = [k for k in _imgoverlay.SOURCES if spec.get(k)]
+        if len(given) != 1:
+            sys.exit("every image_overlays entry needs exactly one of %s -- "
+                     "got %s" % ("/".join(_imgoverlay.SOURCES),
+                                 ", ".join(given) or "none"))
+        src = rel(spec[given[0]])
+        if not os.path.exists(src):
+            sys.exit("image overlay source does not exist: %s"
+                     % _project.norm(src))
+
     cams = [c["id"] for c in m["cameras"]]
     files = {c["id"]: rel(c["file"]) for c in m["cameras"]}
     for c in cams:
@@ -404,6 +437,41 @@ def main():
     if total != n_prog:
         print("  note: the plan tiles %d frames but ends at %d -- it has holes "
               "or overlaps" % (total, n_prog))
+
+    # A graphic past the end of the film fails SILENTLY -- `enable` simply
+    # never turns true and the render is a frame-perfect copy of a film with
+    # no card on it. The runtime is only known here, after the plan, so this
+    # is where it is caught. An overlay's negative `at` counts back from the
+    # end for the same reason: re-cutting the film moves the end card with it.
+    runtime = n_prog * spf
+    for spec in name_specs:
+        if float(spec["at"]) >= runtime:
+            sys.exit("name label %r starts at %.1fs but the film runs %.1fs"
+                     % (spec["name"], float(spec["at"]), runtime))
+    img_preset_doc = {}
+    if img_specs:
+        with open(rel(img_preset), encoding="utf-8") as f:
+            img_preset_doc = json.load(f)
+    for i, spec in enumerate(img_specs):
+        at, _ = _imgoverlay.resolve_window(spec, img_preset_doc, runtime)
+        if at >= runtime:
+            sys.exit("image overlay %d starts at %.1fs but the film runs %.1fs"
+                     % (i, at, runtime))
+    if name_specs:
+        print("\n  name labels (film time):")
+        for spec in name_specs:
+            print("  %8.2f %8.2f   %s -- %s"
+                  % (float(spec["at"]),
+                     float(spec["at"]) + float(spec.get("dur", 5.5)),
+                     spec["name"], spec.get("title", "")))
+    if img_specs:
+        print("\n  image overlays (film time):")
+        for spec in img_specs:
+            at, dur = _imgoverlay.resolve_window(spec, img_preset_doc, runtime)
+            print("  %8.2f %8.2f   %s"
+                  % (at, at + dur,
+                     _imgoverlay.describe(spec, img_preset_doc, runtime)))
+
     if args.list:
         return
 
@@ -416,9 +484,33 @@ def main():
     idx = {c: i for i, c in enumerate(cams)}
     tmpdir = os.path.join(ROOT, "temp", "anglecut-%s" % pid)
     ass = None
-    if not args.debug:
-        graph = build_graph(plan, cams, anchors, idx, audio_from, a0, a1)
-    else:
+
+    # Everything drawn on the film is spliced onto the tail of the cut, in one
+    # pass: name labels first, image overlays over them so an end card sits on
+    # top of a lower third, the debug commentary over both. Their PNGs claim
+    # input indices AFTER the tapes, which is why nothing here may renumber a
+    # camera.
+    graphics = bool(name_specs or img_specs or args.debug)
+    graph = build_graph(plan, cams, anchors, idx, audio_from, a0, a1,
+                        vlabel="vcut" if graphics else "vout")
+    chains, pngs_in, cur, nxt = [], [], "vcut", len(cams)
+    if name_specs:
+        os.makedirs(tmpdir, exist_ok=True)
+        pngs, fc, cur = _namelabel.prepare(
+            m.get("label_preset", _namelabel.DEFAULT_PRESET), name_specs,
+            w, h, tmpdir, tag=pid, base=cur, first_input=nxt)
+        chains.append(fc)
+        pngs_in += pngs
+        nxt += len(pngs)
+    if img_specs:
+        os.makedirs(tmpdir, exist_ok=True)
+        pngs, fc, cur = _imgoverlay.prepare(
+            img_preset, img_specs, w, h, tmpdir, tag=pid, base=cur,
+            first_input=nxt, runtime=runtime)
+        chains.append(fc)
+        pngs_in += pngs
+        nxt += len(pngs)
+    if args.debug:
         os.makedirs(tmpdir, exist_ok=True)
         # Read each tape's own picture to find where it is held rather than
         # shot. This runs AFTER the plan is fixed, so it cannot leak into an
@@ -436,14 +528,19 @@ def main():
         extra = list((m.get("debug") or {}).get("lines") or [])
         notes = debug_notes(plan, anchors, off, files, tapes, num / float(den),
                             spf, stage, plan_src, why, extra, dcfg["warn_frac"])
-        ass, fc, _ = _notes.prepare(
+        ass, fc, cur = _notes.prepare(
             notes, w, h, num / float(den), tmpdir, tag=pid,
-            preset=args.debug_style, base="vpre", label="vout")
-        graph = ";".join([build_graph(plan, cams, anchors, idx, audio_from,
-                                      a0, a1, vlabel="vpre"), fc])
+            preset=args.debug_style, base=cur, label="vout")
+        chains.append(fc)
         n_warn = sum(1 for n in notes if any(x.startswith("!!") for x in n["lines"]))
         print("  debug notes: %d, of which %d warn that the tape is held there"
               % (len(notes), n_warn))
+
+    # The encoder is mapped to [vout], so whatever the last graphic left behind
+    # is renamed rather than the chain being built backwards from it.
+    if graphics and cur != "vout":
+        chains.append("[%s]null[vout]" % cur)
+    graph = ";".join([graph] + [c for c in chains if c])
 
     outdir = rel(m.get("outdir", "projects/%s/outputs" % pid))
     os.makedirs(outdir, exist_ok=True)
@@ -462,6 +559,10 @@ def main():
            "-progress", prog]
     for c in cams:
         cmd += ["-i", files[c]]
+    # -loop 1 makes each graphic an INFINITE stream; every overlay that uses
+    # one carries shortest=1, which is what lets the render end at all.
+    for png in pngs_in:
+        cmd += ["-loop", "1", "-framerate", "%d/%d" % (num, den), "-i", png]
     cmd += ["-filter_complex", graph, "-map", "[vout]", "-map", "[aout]",
             "-r", "%d/%d" % (num, den), "-fps_mode", "cfr",
             "-video_track_timescale", str(num),
@@ -507,6 +608,12 @@ def main():
                             "audio taken whole from %s -- no joins" % audio_from,
                             "anchored by %s" % (how if isinstance(how, str)
                                                 else "declared frames")]
+                    + ["name label: %s -- %s at %.1fs"
+                       % (sp["name"], sp.get("title", ""), float(sp["at"]))
+                       for sp in name_specs]
+                    + ["image overlay: %s"
+                       % _imgoverlay.describe(sp, img_preset_doc, runtime)
+                       for sp in img_specs]
                     + (["debug notes burned bottom-left: segment, reason, tape "
                         "frames, and a warning where the tape is held"]
                        if args.debug else []))

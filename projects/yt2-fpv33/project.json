@@ -1,0 +1,19 @@
+{
+  "v": 1,
+  "id": "yt2-fpv33",
+  "intent": "The source film, kept whole: УТ-2 (@yt-2) 'Про майбутнє Федорова, інвестиції у VYRIY та що робити з реактивними шахедами. fpv #33', https://youtu.be/L7OWgi116yU -- 110:51, 25 fps, 1080p h264, Ukrainian, 28 chapters, three-camera studio podcast. Downloaded to answer one question: can this repo replicate the way this channel cuts, before inviting them to use it. Nothing is rendered from this project directly; it is the well the two segment projects draw from.",
+  "pipelines": [
+    "multicam-switch"
+  ],
+  "inputs": {
+    "source (full film, 166285 frames)": "projects/yt2-fpv33/sources/original.mp4"
+  },
+  "controls": {},
+  "deliverables": {},
+  "notes": [
+    "yt2-fpv33-seg -- chapters 2-4 (158..1328 s): the round trip and the grammar fitting.",
+    "yt2-fpv33-val -- chapters 8-10 (1976..2817 s): held out, scores plans only, builds nothing.",
+    "NOT published anywhere and must not be. This is somebody else's video, re-cut to test ourselves; showing the result to them is fine, posting it is not."
+  ],
+  "updated_utc": "2026-08-31T06:55:01Z"
+}

@@ -1,0 +1,57 @@
+{
+  "_comment": "N-track audio alignment by scripts/sync-audio.py. offset is seconds of THIS tape relative to the reference: the same moment sits offset seconds later into it, and is exact. audio_start is an approximate second opinion -- where the tape becomes audible, which is a little after it starts -- and must not be used to anchor a cut.",
+  "id": "yt2-fpv33-seg",
+  "reference": "cam1",
+  "fps_num": 25,
+  "fps_den": 1,
+  "fps": 25.0,
+  "rate": 8000,
+  "config": {
+    "onset_db": -100.0,
+    "min_confidence": 8.0,
+    "max_residual_ms": 5.0,
+    "max_onset_drift_ms": 60.0
+  },
+  "tracks": [
+    {
+      "id": "cam1",
+      "file": "projects/yt2-fpv33-seg/raws/cam1.mp4",
+      "offset_s": 0.0,
+      "offset_frames": 0.0,
+      "confidence": null,
+      "audio_start_s": 1.27,
+      "audio_start_frames": 32
+    },
+    {
+      "id": "cam2",
+      "file": "projects/yt2-fpv33-seg/raws/cam2.mp4",
+      "offset_s": 0.24,
+      "offset_frames": 6.0,
+      "confidence": 2062.989,
+      "audio_start_s": 1.51,
+      "audio_start_frames": 38
+    },
+    {
+      "id": "cam3",
+      "file": "projects/yt2-fpv33-seg/raws/cam3.mp4",
+      "offset_s": 4.28,
+      "offset_frames": 107.0,
+      "confidence": 2062.937,
+      "audio_start_s": 5.55,
+      "audio_start_frames": 139
+    }
+  ],
+  "pairwise_offset_s": {
+    "cam1->cam1": 0.0,
+    "cam1->cam2": -0.24,
+    "cam1->cam3": -4.28,
+    "cam2->cam1": 0.24,
+    "cam2->cam2": 0.0,
+    "cam2->cam3": -4.04,
+    "cam3->cam1": 4.28,
+    "cam3->cam2": 4.04,
+    "cam3->cam3": 0.0
+  },
+  "worst_three_way_residual_ms": 0.0,
+  "notes": []
+}

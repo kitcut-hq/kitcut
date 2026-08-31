@@ -244,6 +244,61 @@ check("...correctly", purity(lab, who) > 0.95, True)
 check("...in under a minute (took %.1fs)" % _el, _el < 60.0, True)
 check("separation stays cheap too", _auto.separation(V, lab)[1] is not None, True)
 
+print("== the speaker model's length ceiling ==")
+# TitaNet's ONNX export raises above 12288 feature frames (122.88 s). A stub
+# extractor stands in for it here: no model, no audio, and it FAILS the way
+# the real one does, so the chunking is what is being tested rather than a
+# lucky length.
+CEILING = int(122.88 * _auto.SR)
+
+
+class Stub:
+    """Refuses anything the real model refuses; embeds towards a fixed vector."""
+
+    def __init__(self):
+        self.sizes = []
+
+    def create_stream(self):
+        self.buf = None
+        return self
+
+    def accept_waveform(self, sr, x):
+        self.buf = x
+
+    def input_finished(self):
+        pass
+
+    def compute(self, _s):
+        n = self.buf.size
+        self.sizes.append(n)
+        if n > CEILING:
+            raise RuntimeError("Attempting to broadcast an axis by a dimension "
+                               "other than 1. 12288 by %d" % (n // 160))
+        v = np.zeros(8, dtype=np.float32)
+        v[0] = 1.0
+        v[1] = float(n) / CEILING
+        return v
+
+
+stub = Stub()
+short = np.zeros(int(30 * _auto.SR), dtype=np.float32)
+v = _auto.embed_span(stub, short)
+check("a short span is one call", len(stub.sizes), 1)
+close("...and comes back unit norm", float(np.linalg.norm(v)), 1.0, 1e-5)
+
+stub = Stub()
+long_ = np.zeros(int(200 * _auto.SR), dtype=np.float32)
+v = _auto.embed_span(stub, long_)
+check("200 s does not reach the model in one piece",
+      max(stub.sizes) <= CEILING, True)
+check("...it is cut into whole chunks plus a tail", len(stub.sizes), 4)
+close("...and the average is renormalised", float(np.linalg.norm(v)), 1.0, 1e-5)
+
+stub = Stub()
+_auto.embed_span(stub, np.zeros(int(120.1 * _auto.SR), dtype=np.float32))
+check("a span just under the ceiling is still split, not risked",
+      max(stub.sizes) <= CEILING, True)
+
 print("== angle identity by person ==")
 def unit(v):
     v = np.array(v, dtype=np.float32)

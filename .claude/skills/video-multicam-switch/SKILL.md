@@ -18,10 +18,13 @@ a screen recording plus a camera, **composited** into one picture. This one
 **chooses between** pictures. Different problem, different script.
 
 README reference: "Cutting between cameras, and proving the cut is right".
-Four worked examples: `projects/a16z-altman/` (4 angles, the original),
+Worked examples: `projects/a16z-altman/` (4 angles, the original),
 `a16z-bornstein` (3), `a16z-agents` (2, with an off-camera speaker),
-`a16z-sinofsky` (2, a single monologue). Stage 1 is exact on all four; stage 2
-scores 73–87%. Copy the closest one's three manifests for a new film.
+`a16z-sinofsky` (2, a single monologue), `up-interview-1` (13 angles, an hour
+long, 25 fps), `yt2-fpv33-seg` (a Ukrainian podcast that does not cut on the
+speaker at all). Stage 1 is exact on all six; stage 2 scores 73–87% where the
+editor follows the voice and **45–50%** where they do not. Copy the closest
+one's three manifests for a new film.
 
 **Adding a film takes three manifests and no code.** `multicam-sim.json`
 (source + stagger seed), `anglecut.json` (stage 1), `anglecut-auto.json`
@@ -250,6 +253,67 @@ measured churn inside the wide shots was identical to outside them.
 nowhere near sufficient, and the best of 30 swept settings gained one point on
 a film with two wide shots in it. Turn it on when a second film says it earns
 its place, and do not quote the sweep's winner as a result.
+
+## Not every channel cuts on the speaker
+
+Check this before quoting any stage-2 number, because it decides what the
+number means. Read the transition matrix off their own shot list:
+
+```python
+seq = [s["camera"] for s in json.load(open("projects/<id>/<id>.shots.json"))["shots"]]
+collections.Counter(zip(seq, seq[1:]))
+```
+
+On УТ-2 a close-up is followed by the wide 97% and 92% of the time and by the
+other close-up 3%, every shot runs ~11.6 s, and the wide holds 52% of the
+runtime. The room is their default state and the faces are accents — the
+inverse of a speaker-following grammar, which there scored **below** simply
+sitting on the wide (45.0% against 52.4%).
+
+`wide_between` + `wide_after_s` + `wide_dur_s` implement the metronome
+(`alternating()`), snapping each beat to a gap between speech segments via
+`snap_s`. It is **off by default and should stay off** until a film earns it:
+swept on one segment it reached 59.1%, and on a held-out segment of the *same
+film* it fell to 35.8% while plain speaker-following held 49.5%.
+
+**Hold a second segment out.** It costs almost nothing and it is the only thing
+that tells a result from a fit: `projects/yt2-fpv33-val/` builds no tapes and
+renders nothing — three camera entries all pointing at the programme, anchors
+0, a `sync` sidecar carrying only `fps`, and `--score` against that segment's
+own shot list. Fifteen minutes.
+
+**A close-up does not mean that person is talking.** A channel that cuts to
+listening faces will send a speaker hint to the wrong voice — it happened here.
+Take hint moments from `--list`'s own voice track (`voice N is speaking` lines),
+never from a long close-up in their edit.
+
+**Two wide cameras may or may not separate.** The same shoot detected 3 angles
+on one segment (person identity merged the studio wide and the frontal
+two-shot: same two people, similar layout) and 5 on another. For scoring, merge
+them into one `camW` in a `*.shots-merged.json` and say you did.
+
+## Graphics on a multicam film
+
+`angle-cut.py` takes `name_labels` and `image_overlays` exactly as
+`screencast-cut.py` does, composited inside the same NVENC pass — labels, then
+overlays, then the `--debug` commentary on top. `at` is film time; a negative
+`at` on an overlay counts back from the end. `--list` prints both with resolved
+windows, and a graphic past the end is an error rather than a silent no-op.
+
+Give the finished film its **own manifest and output name**: burning graphics
+changes pixels, so it can no longer be compared frame-for-frame against the
+programme.
+
+**Do not put a real person's name on a face you have not verified.** If their
+own film carries no name cards, label the show and leave `name_labels` for the
+channel to fill in.
+
+## The speaker model's length ceiling
+
+TitaNet's ONNX export dies above **122.88 s** in one embedding (12288 feature
+frames) with a broadcast error from inside the encoder. `embed_span()` chunks at
+60 s and averages, so this is handled — but if a new model is swapped in, probe
+its ceiling before trusting a long segment, and keep the check-multicam test.
 
 ## The leak rule
 

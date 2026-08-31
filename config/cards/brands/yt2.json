@@ -1,0 +1,12 @@
+{
+  "_comment": "УТ-2 (@yt-2). Every colour here was measured off their own footage rather than chosen: the accent is the studio's purple wall behind the left-hand host, sampled from 164k saturated pixels of a close-up (mean #44276D, 85th percentile #4F2D7F -- the lit part of the wall, which is what a viewer reads as the colour). The ink is the near-black of their set. Swap this file for another brand and the same template draws another channel's card.",
+  "ink": "#0B0910",
+  "paper": "#FFFFFF",
+  "accent": "#4F2D7F",
+  "accent_ink": "#F2ECFA",
+  "muted": "#9A93A6",
+  "font_bold": "fonts/Montserrat-Bold.ttf",
+  "font_regular": "fonts/Montserrat-Medium.ttf",
+  "radius_px": 0,
+  "tracking_px": -1
+}

@@ -1,0 +1,82 @@
+{
+  "_comment": "The HELD-OUT test. Chapters 8-10 of the same film (32:56..46:57), which no knob was fitted on. Nothing is rendered here: the plan is scored against the edit read off this segment, and the cameras all point at the segment itself because only its soundtrack is needed.",
+  "_why": "A grammar swept against one segment is fitted to it. This is the second segment, and the number it produces is the one worth quoting.",
+  "_angles": "cam1 is the young host's close-up, cam3 the bearded host's, camW the room -- the shoot has two wide cameras (a studio wide from behind the rig and a frontal two-shot) which the editor uses interchangeably, so the scoring reference merges them. See yt2-fpv33-val.shots-merged.json.",
+  "id": "yt2-fpv33-val",
+  "cameras": [
+    {
+      "id": "camW",
+      "file": "projects/yt2-fpv33-val/sources/original.mp4"
+    },
+    {
+      "id": "cam1",
+      "file": "projects/yt2-fpv33-val/sources/original.mp4"
+    },
+    {
+      "id": "cam3",
+      "file": "projects/yt2-fpv33-val/sources/original.mp4"
+    }
+  ],
+  "reference": "camW",
+  "audio_from": "camW",
+  "sync": "projects/yt2-fpv33-val/yt2-fpv33-val.anglesync.json",
+  "plan_from": "projects/yt2-fpv33-val/yt2-fpv33-val.autoplan.json",
+  "anchor": {
+    "camW": 0,
+    "cam1": 0,
+    "cam3": 0
+  },
+  "film": {
+    "frames": 21025
+  },
+  "speakers": [
+    {
+      "camera": "cam1",
+      "at": 280.0,
+      "who": "the young host in the grey sweater -- cam1 is his close-up"
+    },
+    {
+      "camera": "cam3",
+      "at": 65.0,
+      "who": "the bearded host against the purple wall -- cam3 is his close-up. The moment is one where the minority voice is the only one talking; that this voice is his is not read off the edit but off the show: he is the minority speaker in both segments (15.3% and 17.5% of windows), and in the fitted segment that binding produced 77.1% agreement on his own shots."
+    }
+  ],
+  "off_camera_speakers": 1,
+  "wide": "camW",
+  "grammar": {
+    "min_shot_s": 1.5,
+    "lead_s": 0.25,
+    "wide_after_s": 10.0,
+    "wide_dur_s": 14.0,
+    "wide_overlap_pct": 0.0,
+    "wide_between": 1,
+    "snap_s": 0.0
+  },
+  "outdir": "projects/yt2-fpv33-val/outputs",
+  "_hint_trap": "The first hint here was placed inside a long close-up of the young host and resolved to the WRONG voice, because this channel cuts to LISTENING faces: being on someone's close-up does not mean he is talking. On a speaker-following channel picking a hint off a close-up is safe; here it is not.",
+  "sweep": {
+    "min_shot_s": [
+      1.5
+    ],
+    "lead_s": [
+      0.25
+    ],
+    "wide_overlap_pct": [
+      0.0
+    ],
+    "wide_after_s": [
+      0.0,
+      10.0
+    ],
+    "wide_dur_s": [
+      14.0
+    ],
+    "wide_between": [
+      0,
+      1
+    ],
+    "snap_s": [
+      0.0
+    ]
+  }
+}

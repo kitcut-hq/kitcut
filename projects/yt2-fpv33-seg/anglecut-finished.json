@@ -1,0 +1,26 @@
+{
+  "_comment": "The same stage-1 cut, finished: their edit rebuilt frame for frame, with a lower third and an end card burned in during the SAME NVENC pass. A separate manifest and a separate output on purpose -- burning graphics changes pixels, so this file can no longer be compared frame-for-frame against the programme the way anglecut.json's render is.",
+  "_labels": "The lower third names the SHOW, not a person. Their own intro carries no name cards, so which of the two hosts is Олексій Бабенко and which is Володимир Несторак cannot be read off the footage, and putting a real person's name on the wrong face is not a demo. Person labels drop straight into name_labels once the channel says who is who.",
+  "id": "yt2-fpv33-seg",
+  "cameras": [
+    {"id": "cam1", "file": "projects/yt2-fpv33-seg/raws/cam1.mp4"},
+    {"id": "cam2", "file": "projects/yt2-fpv33-seg/raws/cam2.mp4"},
+    {"id": "cam3", "file": "projects/yt2-fpv33-seg/raws/cam3.mp4"}
+  ],
+  "reference": "cam1",
+  "sync": "projects/yt2-fpv33-seg/yt2-fpv33-seg.anglesync.json",
+  "plan_from": "projects/yt2-fpv33-seg/yt2-fpv33-seg.shots.json",
+  "anchor": {"cam1": 32, "cam2": 38, "cam3": 139},
+  "audio_from": "cam1",
+  "name_labels": [
+    {"name": "УТ-2", "title": "fpv #33 — реконструкція монтажу", "at": 3.0, "dur": 6.0}
+  ],
+  "image_overlays": [
+    {"card": "projects/yt2-fpv33-seg/cards/outro.json", "at": -9.0,
+     "layout": {"corner": "centre", "width_frac": 0.52},
+     "in": {"type": "wipe", "dur": 1.1}, "out": {"type": "none"},
+     "background": {}}
+  ],
+  "outdir": "projects/yt2-fpv33-seg/outputs",
+  "render": {"cq": 18}
+}

@@ -60,7 +60,7 @@ against one film are fitted to it. The honest number comes from the next film.
 
 Invoke as:  python scripts/auto-switch.py --manifest projects/<id>/anglecut-auto.json
 """
-import sys, os, json, argparse, subprocess
+import sys, os, json, argparse, subprocess, itertools
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -87,9 +87,29 @@ DEFAULT_GRAMMAR = {
     "wide_dur_s": 4.0,
     "wide_overlap_pct": 0.0,  # 0 = off; see the docstring for why it is off
     "overlap_window_s": 10.0,
+    "wide_between": 0,        # 1 = the film ALTERNATES close-up and wide; see
+                              # alternating(). 0 = follow the speaker.
+    "snap_s": 0.0,            # ... and land each cut in a pause within this
+                              # many seconds of where the rhythm asks for it
+}
+
+# The grid --sweep walks unless the manifest names another, one entry per
+# grammar knob. A knob left at a single value is held fixed and not printed,
+# so a sweep stays readable however many axes exist.
+DEFAULT_SWEEP = {
+    "min_shot_s": [1.0, 1.5, 2.0, 3.0],
+    "lead_s": [0.0, 0.25, 0.5],
+    "wide_overlap_pct": [0.0, 3.0, 4.5, 6.0, 9.0, 14.0],
+    "wide_after_s": [0.0],
+    "wide_dur_s": [4.0],
+    "wide_between": [0],
+    "snap_s": [0.0],
 }
 
 WIDE = -2                     # a track value meaning "nobody in particular"
+MAX_EMBED_S = 60.0            # the longest span handed to the speaker model in
+                              # one go -- half its 122.88 s ceiling, see
+                              # embed_span()
 CLUSTER_CAP = 2000            # above this, cluster a sample -- see cluster()
 
 
@@ -125,10 +145,34 @@ def extractor(cfg):
 
 
 def embed_span(ex, chunk):
-    s = ex.create_stream()
-    s.accept_waveform(SR, chunk)
-    s.input_finished()
-    v = np.array(ex.compute(s), dtype=np.float32)
+    """One unit-norm speaker vector for a span of any length.
+
+    TitaNet's ONNX export has a hard ceiling that is not documented anywhere
+    and is not a truncation: its mask is built for 12288 feature frames --
+    122.88 s at the model's 10 ms hop -- and one frame more raises
+    "Attempting to broadcast an axis by a dimension other than 1. 12288 by
+    12298" from inside the encoder. Measured on this machine: 122.8 s embeds,
+    123.0 s throws. The first four test films never held the floor that long
+    without a pause the segmentation model would split on; a Ukrainian podcast
+    answer ran 132 s and killed the run.
+
+    So a long span is embedded in pieces and the unit vectors averaged, which
+    is identical to the old behaviour for anything under the cap and keeps the
+    WHOLE span represented -- taking the middle N seconds instead would throw
+    away most of the evidence for exactly the segments that matter most.
+    """
+    step = int(MAX_EMBED_S * SR)
+    vs = []
+    for st in range(0, max(1, chunk.size), step):
+        piece = chunk[st:st + step]
+        if vs and piece.size < int(0.25 * SR):
+            break                      # a scrap at the tail adds nothing
+        s = ex.create_stream()
+        s.accept_waveform(SR, piece)
+        s.input_finished()
+        v = np.array(ex.compute(s), dtype=np.float32)
+        vs.append(v / (float(np.linalg.norm(v)) or 1.0))
+    v = vs[0] if len(vs) == 1 else np.mean(vs, axis=0)
     return v / (float(np.linalg.norm(v)) or 1.0)
 
 
@@ -352,8 +396,58 @@ def runs_of(track):
     return out
 
 
-def grammar(track, cam_of, wide, g, fps, n_frames, hot=None):
+def alternating(track, cam_of, wide, g, fps, n_frames, bounds=None):
+    """A film that alternates close-up and room on a cadence, not on a speaker.
+
+    Measured on the УТ-2 podcast, whose transition matrix leaves no doubt: a
+    close-up is followed by the wide 97% and 92% of the time and by the other
+    close-up 3%, every shot runs 11.6 s on average with a median of 11.0, and
+    the wide holds 52% of the runtime. The room is the DEFAULT state there and
+    the faces are the accents -- the exact inverse of the speaker-following
+    grammar above, which on that film scored below simply sitting on the wide.
+
+    So the speaker track answers a smaller question here: not *when* to cut,
+    which the rhythm decides, but *whose* close-up the rhythm should punch in
+    to. `snap_s` then moves each cut to the nearest gap between speech
+    segments, because an editor cuts in a pause and a metronome does not.
+    """
+    face = max(1, int(round(g["wide_after_s"] * fps)))
+    room = max(1, int(round(g["wide_dur_s"] * fps)))
+    snap = int(round(g.get("snap_s", 0.0) * fps))
+    plan, pos, on_wide = [], 0, False
+    while pos < n_frames:
+        end = min(n_frames, pos + (room if on_wide else face))
+        if snap and bounds is not None and len(bounds) and end < n_frames:
+            near = bounds[int(np.argmin(np.abs(bounds - end)))]
+            if abs(int(near) - end) <= snap and int(near) > pos:
+                end = min(n_frames, int(near))
+        if on_wide:
+            plan.append((wide, pos, end, "the room, between close-ups"))
+        else:
+            seen = track[pos:end]
+            seen = seen[seen >= 0]
+            if seen.size:
+                s_ = int(np.bincount(seen).argmax())
+                c = cam_of.get(s_) or wide
+                why = "punch in: voice %d holds this beat -> %s" % (s_, c)
+            else:
+                c, why = wide, "nobody speaking on this beat -- stay wide"
+            plan.append((c, pos, end, why))
+        pos, on_wide = end, not on_wide
+    out = []
+    for c, a, b, why in plan:                 # a punch-in to the wide is no cut
+        if out and out[-1][0] == c:
+            out[-1] = (c, out[-1][1], b, out[-1][3])
+        elif b > a:
+            out.append((c, a, b, why))
+    return out
+
+
+def grammar(track, cam_of, wide, g, fps, n_frames, hot=None, bounds=None):
     """The speaker track, turned into an edit."""
+    if g.get("wide_between") and wide and g.get("wide_after_s"):
+        return alternating(track, cam_of, wide, g, fps, n_frames, bounds)
+
     lead = int(round(g["lead_s"] * fps))
     min_shot = max(1, int(round(g["min_shot_s"] * fps)))
 
@@ -387,18 +481,29 @@ def grammar(track, cam_of, wide, g, fps, n_frames, hot=None):
         elif c is None:
             c = wide or (plan[-1][0] if plan else None)
             why = "no camera bound to voice %d -- falling back to the wide" % s
-        span = b - a
+        # Break a long run with the wide, and keep breaking it. One cutaway in
+        # the middle of a 170-second answer is not how anyone cuts: the УТ-2
+        # podcast spends 52% of its runtime on the wide with a mean shot of
+        # 11.6 s, alternating face and room while ONE person talks, which no
+        # speaker-following rule can reach. A rhythm is a property of a
+        # channel's style, so it lives in the manifest -- wide_after_s stays 0
+        # by default and every film cut before this one is unchanged.
         cut = int(round(g["wide_after_s"] * fps))
-        if wide and cut and span > cut:         # break a monologue with the wide
-            hold = min(int(round(g["wide_dur_s"] * fps)), max(1, span // 3))
-            mid = a + (span - hold) // 2
-            plan.append((c, a, mid, why))
-            plan.append((wide, mid, mid + hold,
-                         "cutaway: %s held the frame longer than %.0fs"
-                         % (c, g["wide_after_s"])))
-            plan.append((c, mid + hold, b, "back to %s after the cutaway" % c))
-        else:
-            plan.append((c, a, b, why))
+        hold = max(1, int(round(g["wide_dur_s"] * fps)))
+        pos, first = a, True
+        if wide and cut:
+            # Only cut away while a whole shot's worth of face remains to come
+            # back to, so the rhythm never leaves a two-frame stub behind.
+            while b - pos > cut + hold + min_shot:
+                on = pos + cut
+                plan.append((c, pos, on,
+                             why if first else "back to %s after the cutaway" % c))
+                plan.append((wide, on, on + hold,
+                             "cutaway: %s held the frame longer than %.0fs"
+                             % (c, g["wide_after_s"])))
+                pos, first = on + hold, False
+        plan.append((c, pos, b,
+                     why if first else "back to %s after the cutaway" % c))
     out = []
     for c, a, b, why in plan:
         if out and out[-1][0] == c:
@@ -545,9 +650,15 @@ def main():
             print("  painting off by manifest; crosstalk on %.1f%% of the film"
                   % pct)
 
+    # Where speech stops and starts, in frames -- the only places an editor
+    # cuts. The alternating grammar snaps its beats to these; nothing else
+    # uses them, and without the segmentation model there are none.
+    bounds = np.array(sorted({int(round(x * fps)) for se in (segs if got else [])
+                              for x in se}), dtype=np.int64) if got else None
+
     def build(gg):
         return grammar(track, cam_of, wide, gg, fps, n_frames,
-                       contention(over, gg, fps, n_frames))
+                       contention(over, gg, fps, n_frames), bounds)
 
     ref = None
     if args.score:
@@ -555,22 +666,27 @@ def main():
             ref = json.load(f)["shots"]
 
     if args.sweep:
-        print("\n  min_shot   lead  wide_overlap  cuts%s"
-              % ("  agree   theirs-hit  mine-near" if ref else ""))
-        for ms in (1.0, 1.5, 2.0, 3.0):
-            for ld in (0.0, 0.25, 0.5):
-                for wo in (0.0, 3.0, 4.5, 6.0, 9.0, 14.0):
-                    gg = dict(g, min_shot_s=ms, lead_s=ld, wide_overlap_pct=wo)
-                    pl = build(gg)
-                    extra = ""
-                    if ref:
-                        sc = score(pl, ref, n_frames, fps)
-                        extra = ("  %5.1f%%   %5d/%-4d %5d/%-4d"
-                                 % (sc["agreement_pct"], sc["cuts_within_1s"],
-                                    sc["reference_cuts"],
-                                    sc["my_cuts_near_theirs"], sc["my_cuts"]))
-                    print("  %8.2f %6.2f %13.1f  %4d%s"
-                          % (ms, ld, wo, len(pl), extra))
+        # Which axes to walk is manifest data. The default grid is the one the
+        # a16z films wanted; a channel that cuts on a rhythm rather than on the
+        # speaker lives on wide_after_s, and pricing that must not need an edit
+        # to this file.
+        grid = dict(DEFAULT_SWEEP, **(m.get("sweep") or {}))
+        axes = [k for k in DEFAULT_SWEEP if len(grid[k]) > 1] or ["min_shot_s"]
+        print("\n  %s  cuts%s"
+              % ("".join("%13s" % k for k in axes),
+                 "  agree   theirs-hit  mine-near" if ref else ""))
+        for combo in itertools.product(*[grid[k] for k in DEFAULT_SWEEP]):
+            gg = dict(g, **dict(zip(DEFAULT_SWEEP, combo)))
+            pl = build(gg)
+            extra = ""
+            if ref:
+                sc = score(pl, ref, n_frames, fps)
+                extra = ("  %5.1f%%   %5d/%-4d %5d/%-4d"
+                         % (sc["agreement_pct"], sc["cuts_within_1s"],
+                            sc["reference_cuts"],
+                            sc["my_cuts_near_theirs"], sc["my_cuts"]))
+            print("  %s  %4d%s"
+                  % ("".join("%13.2f" % gg[k] for k in axes), len(pl), extra))
         return
 
     plan = build(g)

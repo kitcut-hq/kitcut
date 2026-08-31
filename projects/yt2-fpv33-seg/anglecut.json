@@ -1,0 +1,18 @@
+{
+  "_comment": "Re-cut the programme out of the synthetic camera raws. This manifest and everything it points at are the ONLY things angle-cut.py and sync-audio.py may read -- the truth sidecar is the harness's, not the pipeline's.",
+  "_plan": "Stage 1 replays the edit read back off the programme, which is what makes it a test of the machinery rather than of the editing. Stage 2 swaps this for a plan auto-switch.py wrote from the sound alone.",
+  "_angles": "cam1 is the wide bin: two framings of the same two people (the behind-the-rig studio wide and the frontal two-shot), which person identity groups together because the cast is the same. cam2 is the right-hand host's close-up, cam3 the left-hand host's.",
+  "id": "yt2-fpv33-seg",
+  "cameras": [
+    {"id": "cam1", "file": "projects/yt2-fpv33-seg/raws/cam1.mp4"},
+    {"id": "cam2", "file": "projects/yt2-fpv33-seg/raws/cam2.mp4"},
+    {"id": "cam3", "file": "projects/yt2-fpv33-seg/raws/cam3.mp4"}
+  ],
+  "reference": "cam1",
+  "sync": "projects/yt2-fpv33-seg/yt2-fpv33-seg.anglesync.json",
+  "plan_from": "projects/yt2-fpv33-seg/yt2-fpv33-seg.shots.json",
+  "anchor": "picture_start",
+  "audio_from": "cam1",
+  "outdir": "projects/yt2-fpv33-seg/outputs",
+  "render": {"cq": 18}
+}

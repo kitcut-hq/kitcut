@@ -1,0 +1,10 @@
+{
+  "_comment": "End card for the УТ-2 reconstruction: template + brand + words, no HTML written by hand. The brand tokens are their own studio's colours, measured off the footage.",
+  "template": "stacked-blocks",
+  "brand": "yt2",
+  "lines": [
+    {"style": "kicker", "text": "УТ-2"},
+    {"style": "hero",   "text": "fpv #33"},
+    {"style": "accent", "text": "змонтовано автоматично"}
+  ]
+}

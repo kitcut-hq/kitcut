@@ -1,0 +1,723 @@
+{
+  "_comment": "A camera plan decided from the soundtrack alone by scripts/auto-switch.py -- no shot list, no truth sidecar, no picture. Same shape as a shots.json so angle-cut.py can read it as plan_from.",
+  "id": "yt2-fpv33-seg",
+  "fps": 25.0,
+  "n_frames": 29250,
+  "diarize": {
+    "model": "models/diarization/nemo_en_titanet_large.onnx",
+    "segmentation": "models/diarization/sherpa-onnx-pyannote-segmentation-3-0/model.onnx",
+    "window_s": 1.5,
+    "hop_s": 0.5,
+    "silence_rms": 0.005,
+    "threads": 4,
+    "paint": true
+  },
+  "grammar": {
+    "min_shot_s": 1.5,
+    "lead_s": 0.25,
+    "wide_after_s": 10.0,
+    "wide_dur_s": 14.0,
+    "wide_overlap_pct": 0.0,
+    "overlap_window_s": 10.0,
+    "wide_between": 1,
+    "snap_s": 0.0
+  },
+  "speakers": {
+    "0": "cam2",
+    "1": "cam3"
+  },
+  "separation": {
+    "within": 0.7197,
+    "between": 0.8918
+  },
+  "score": null,
+  "cuts": [
+    250,
+    600,
+    850,
+    1200,
+    1450,
+    1800,
+    2050,
+    2400,
+    2650,
+    3000,
+    3250,
+    3600,
+    3850,
+    4200,
+    4450,
+    4800,
+    5050,
+    5400,
+    5650,
+    6000,
+    6250,
+    6600,
+    6850,
+    7200,
+    7450,
+    7800,
+    8050,
+    8400,
+    8650,
+    9000,
+    9250,
+    9600,
+    9850,
+    10200,
+    10450,
+    10800,
+    11050,
+    11400,
+    11650,
+    12000,
+    12250,
+    12600,
+    12850,
+    13200,
+    13450,
+    13800,
+    14050,
+    14400,
+    14650,
+    15000,
+    15250,
+    15600,
+    15850,
+    16200,
+    16450,
+    16800,
+    17050,
+    17400,
+    17650,
+    18000,
+    18250,
+    18600,
+    18850,
+    19200,
+    19450,
+    19800,
+    20050,
+    20400,
+    20650,
+    21000,
+    21250,
+    21600,
+    21850,
+    22200,
+    22450,
+    22800,
+    23050,
+    23400,
+    23650,
+    24000,
+    24250,
+    24600,
+    24850,
+    25200,
+    25450,
+    25800,
+    26050,
+    26400,
+    26650,
+    27000,
+    27250,
+    27600,
+    27850,
+    28200,
+    28450,
+    28800,
+    29050
+  ],
+  "shots": [
+    {
+      "start": 0,
+      "end": 250,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 250,
+      "end": 600,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 600,
+      "end": 850,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 850,
+      "end": 1200,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 1200,
+      "end": 1450,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 1450,
+      "end": 1800,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 1800,
+      "end": 2050,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 2050,
+      "end": 2400,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 2400,
+      "end": 2650,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 2650,
+      "end": 3000,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 3000,
+      "end": 3250,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 3250,
+      "end": 3600,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 3600,
+      "end": 3850,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 3850,
+      "end": 4200,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 4200,
+      "end": 4450,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 4450,
+      "end": 4800,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 4800,
+      "end": 5050,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 5050,
+      "end": 5400,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 5400,
+      "end": 5650,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 5650,
+      "end": 6000,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 6000,
+      "end": 6250,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 6250,
+      "end": 6600,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 6600,
+      "end": 6850,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 6850,
+      "end": 7200,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 7200,
+      "end": 7450,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 7450,
+      "end": 7800,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 7800,
+      "end": 8050,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 8050,
+      "end": 8400,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 8400,
+      "end": 8650,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 8650,
+      "end": 9000,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 9000,
+      "end": 9250,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 9250,
+      "end": 9600,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 9600,
+      "end": 9850,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 9850,
+      "end": 10200,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 10200,
+      "end": 10450,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 10450,
+      "end": 10800,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 10800,
+      "end": 11050,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 11050,
+      "end": 11400,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 11400,
+      "end": 11650,
+      "camera": "cam3",
+      "why": "punch in: voice 1 holds this beat -> cam3"
+    },
+    {
+      "start": 11650,
+      "end": 12000,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 12000,
+      "end": 12250,
+      "camera": "cam3",
+      "why": "punch in: voice 1 holds this beat -> cam3"
+    },
+    {
+      "start": 12250,
+      "end": 12600,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 12600,
+      "end": 12850,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 12850,
+      "end": 13200,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 13200,
+      "end": 13450,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 13450,
+      "end": 13800,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 13800,
+      "end": 14050,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 14050,
+      "end": 14400,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 14400,
+      "end": 14650,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 14650,
+      "end": 15000,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 15000,
+      "end": 15250,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 15250,
+      "end": 15600,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 15600,
+      "end": 15850,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 15850,
+      "end": 16200,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 16200,
+      "end": 16450,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 16450,
+      "end": 16800,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 16800,
+      "end": 17050,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 17050,
+      "end": 17400,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 17400,
+      "end": 17650,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 17650,
+      "end": 18000,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 18000,
+      "end": 18250,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 18250,
+      "end": 18600,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 18600,
+      "end": 18850,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 18850,
+      "end": 19200,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 19200,
+      "end": 19450,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 19450,
+      "end": 19800,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 19800,
+      "end": 20050,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 20050,
+      "end": 20400,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 20400,
+      "end": 20650,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 20650,
+      "end": 21000,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 21000,
+      "end": 21250,
+      "camera": "cam3",
+      "why": "punch in: voice 1 holds this beat -> cam3"
+    },
+    {
+      "start": 21250,
+      "end": 21600,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 21600,
+      "end": 21850,
+      "camera": "cam3",
+      "why": "punch in: voice 1 holds this beat -> cam3"
+    },
+    {
+      "start": 21850,
+      "end": 22200,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 22200,
+      "end": 22450,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 22450,
+      "end": 22800,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 22800,
+      "end": 23050,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 23050,
+      "end": 23400,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 23400,
+      "end": 23650,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 23650,
+      "end": 24000,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 24000,
+      "end": 24250,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 24250,
+      "end": 24600,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 24600,
+      "end": 24850,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 24850,
+      "end": 25200,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 25200,
+      "end": 25450,
+      "camera": "cam3",
+      "why": "punch in: voice 1 holds this beat -> cam3"
+    },
+    {
+      "start": 25450,
+      "end": 25800,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 25800,
+      "end": 26050,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 26050,
+      "end": 26400,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 26400,
+      "end": 26650,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 26650,
+      "end": 27000,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 27000,
+      "end": 27250,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 27250,
+      "end": 27600,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 27600,
+      "end": 27850,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 27850,
+      "end": 28200,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 28200,
+      "end": 28450,
+      "camera": "cam2",
+      "why": "punch in: voice 0 holds this beat -> cam2"
+    },
+    {
+      "start": 28450,
+      "end": 28800,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    },
+    {
+      "start": 28800,
+      "end": 29050,
+      "camera": "cam3",
+      "why": "punch in: voice 1 holds this beat -> cam3"
+    },
+    {
+      "start": 29050,
+      "end": 29250,
+      "camera": "cam1",
+      "why": "the room, between close-ups"
+    }
+  ]
+}

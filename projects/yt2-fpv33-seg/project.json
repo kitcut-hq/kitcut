@@ -1,0 +1,140 @@
+{
+  "v": 1,
+  "id": "yt2-fpv33-seg",
+  "intent": "Round-trip fixture #7 and the capability proof for УТ-2 (@yt-2). Chapters 2-4 of 'fpv #33' (158..1328 s of the full film), 19:30, 25 fps, 1080p, three angles: cam1 the wide bin (the studio wide from behind the rig AND the frontal two-shot, which person identity merges because both frame the same two men), cam2 the right-hand host's close-up, cam3 the left-hand host's. Frame fingerprints failed here as on every studio film (within 0.049 >= between 0.016); face identity separated the angles 0.068 vs 0.671, a 9.9x margin and the cleanest in the repo. STAGE 1 IS EXACT: 29250/29250 frames, 0 shifted, 0 frozen, 100 cuts against 100 at offset 0, 100.00% angle agreement, audio 0.000 ms, median SSIM 0.9986. Stage 2 is where the interesting result is -- this channel does not cut on the speaker, see journal.md.",
+  "pipelines": [
+    "multicam-switch"
+  ],
+  "inputs": {},
+  "controls": {},
+  "deliverables": {
+    "projects/yt2-fpv33-seg/raws/cam1.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-31T05:23:51Z",
+      "kind": "sim-raw",
+      "script": "scripts/split-cameras.py",
+      "manifest": "projects/yt2-fpv33-seg/multicam-sim.json",
+      "burned": [
+        "synthetic camera raw: real frames where the cut used this angle, last live frame held elsewhere",
+        "programme audio, staggered by this tape's head pad"
+      ],
+      "sidecars": {
+        "truth": "projects/yt2-fpv33-seg/yt2-fpv33-seg.truth.json",
+        "shots": "projects/yt2-fpv33-seg/yt2-fpv33-seg.shots.json"
+      }
+    },
+    "projects/yt2-fpv33-seg/raws/cam2.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-31T05:23:51Z",
+      "kind": "sim-raw",
+      "script": "scripts/split-cameras.py",
+      "manifest": "projects/yt2-fpv33-seg/multicam-sim.json",
+      "burned": [
+        "synthetic camera raw: real frames where the cut used this angle, last live frame held elsewhere",
+        "programme audio, staggered by this tape's head pad"
+      ],
+      "sidecars": {
+        "truth": "projects/yt2-fpv33-seg/yt2-fpv33-seg.truth.json",
+        "shots": "projects/yt2-fpv33-seg/yt2-fpv33-seg.shots.json"
+      }
+    },
+    "projects/yt2-fpv33-seg/raws/cam3.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-31T05:23:51Z",
+      "kind": "sim-raw",
+      "script": "scripts/split-cameras.py",
+      "manifest": "projects/yt2-fpv33-seg/multicam-sim.json",
+      "burned": [
+        "synthetic camera raw: real frames where the cut used this angle, last live frame held elsewhere",
+        "programme audio, staggered by this tape's head pad"
+      ],
+      "sidecars": {
+        "truth": "projects/yt2-fpv33-seg/yt2-fpv33-seg.truth.json",
+        "shots": "projects/yt2-fpv33-seg/yt2-fpv33-seg.shots.json"
+      }
+    },
+    "projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-anglecut.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-31T05:29:32Z",
+      "kind": "anglecut",
+      "script": "scripts/angle-cut.py",
+      "manifest": "projects/yt2-fpv33-seg/anglecut.json",
+      "burned": [
+        "101 segments switching between 3 cameras full frame",
+        "audio taken whole from cam1 -- no joins",
+        "anchored by picture_start"
+      ],
+      "sidecars": {
+        "sync": "projects/yt2-fpv33-seg/yt2-fpv33-seg.anglesync.json"
+      }
+    },
+    "projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-autocut.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-31T06:24:04Z",
+      "kind": "anglecut",
+      "script": "scripts/angle-cut.py",
+      "manifest": "projects/yt2-fpv33-seg/anglecut-auto.json",
+      "burned": [
+        "98 segments switching between 3 cameras full frame",
+        "audio taken whole from cam1 -- no joins",
+        "anchored by declared frames"
+      ],
+      "sidecars": {
+        "sync": "projects/yt2-fpv33-seg/yt2-fpv33-seg.anglesync.json"
+      }
+    },
+    "projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-autocut-debug.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-31T06:47:18Z",
+      "kind": "anglecut",
+      "script": "scripts/angle-cut.py",
+      "manifest": "projects/yt2-fpv33-seg/anglecut-auto.json",
+      "burned": [
+        "98 segments switching between 3 cameras full frame",
+        "audio taken whole from cam1 -- no joins",
+        "anchored by declared frames",
+        "debug notes burned bottom-left: segment, reason, tape frames, and a warning where the tape is held"
+      ],
+      "sidecars": {
+        "sync": "projects/yt2-fpv33-seg/yt2-fpv33-seg.anglesync.json"
+      }
+    },
+    "projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-finished.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-31T06:54:20Z",
+      "kind": "anglecut",
+      "script": "scripts/angle-cut.py",
+      "manifest": "projects/yt2-fpv33-seg/anglecut-finished.json",
+      "burned": [
+        "101 segments switching between 3 cameras full frame",
+        "audio taken whole from cam1 -- no joins",
+        "anchored by declared frames",
+        "name label: УТ-2 -- fpv #33 — реконструкція монтажу at 3.0s",
+        "image overlay: image overlay 'outro.json' wipe in at 1161.0s to the end, over a B&W/blur/dim treatment"
+      ],
+      "sidecars": {
+        "sync": "projects/yt2-fpv33-seg/yt2-fpv33-seg.anglesync.json"
+      }
+    },
+    "projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-captioned-captioned.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-31T07:07:10Z",
+      "kind": "captioned",
+      "script": "scripts/run-captions.py",
+      "burned": [
+        "word-synced captions, style config/presets/eu-navy.json"
+      ],
+      "sidecars": {
+        "render-manifest": "projects/yt2-fpv33-seg/outputs/yt2-fpv33-seg-captioned.manifest.json",
+        "words": "projects/yt2-fpv33-seg/transcripts/yt2-fpv33-seg-captioned.words.json"
+      }
+    }
+  },
+  "notes": [
+    "The wide holds 52.4% of the runtime and a close-up is followed by the wide 97%/92% of the time: their grammar is a metronome, not speaker-following.",
+    "Baselines to quote with any score here: sitting on the wide forever = 52.4%; speaker-following = 45.0%; the fitted alternating grammar = 59.1% -- which lost 14 points on the held-out segment (yt2-fpv33-val).",
+    "The -finished.mp4 render is the stage-1 cut with a lower third and an end card burned in during the same pass -- it is NOT frame-comparable to the programme, which is why it has its own manifest.",
+    "Person name labels are deliberately absent: their own film carries no name cards, so which host is Олексій Бабенко and which is Володимир Несторак cannot be read off the footage."
+  ],
+  "updated_utc": "2026-08-31T07:07:10Z"
+}

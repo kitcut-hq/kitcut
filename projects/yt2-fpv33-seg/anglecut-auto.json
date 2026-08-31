@@ -1,0 +1,97 @@
+{
+  "_comment": "Stage 2: the same three tapes, but the edit is decided from the soundtrack alone. auto-switch.py writes the plan into <id>.autoplan.json and angle-cut.py renders it with this same manifest. Nothing here names a shot, a cut or a timecode from the original edit.",
+  "_anchor": "Measured in stage 1 by angle-cut.py's picture_start (cam3 anchored the film at a 16.5x margin; cam1 and cam2 are near-static tapes placed by sound), and independently confirmed by the audio correlation. These say where each tape's footage sits, not who is on screen when -- a property of the recordings, not of the edit.",
+  "_film": "The in and out points are given. What is being scored is the switching, not the trim, and handing over the same span as the original is what makes the comparison frame-for-frame.",
+  "_speakers": "The only human knowledge in stage 2, and the kind an editor has for free: which camera is pointed at which person, plus one moment when that person is talking. Which person each camera films was read off the TAPES (each close-up tape shows one man), not off the cut.",
+  "_wide": "cam1 is the wide bin -- two framings of the two hosts together, which is nobody's close-up. A speaker-following rule can never predict a cut to it, so it comes off the ceiling.",
+  "id": "yt2-fpv33-seg",
+  "cameras": [
+    {
+      "id": "cam1",
+      "file": "projects/yt2-fpv33-seg/raws/cam1.mp4"
+    },
+    {
+      "id": "cam2",
+      "file": "projects/yt2-fpv33-seg/raws/cam2.mp4"
+    },
+    {
+      "id": "cam3",
+      "file": "projects/yt2-fpv33-seg/raws/cam3.mp4"
+    }
+  ],
+  "reference": "cam1",
+  "audio_from": "cam1",
+  "sync": "projects/yt2-fpv33-seg/yt2-fpv33-seg.anglesync.json",
+  "plan_from": "projects/yt2-fpv33-seg/yt2-fpv33-seg.autoplan.json",
+  "anchor": {
+    "cam1": 32,
+    "cam2": 38,
+    "cam3": 139
+  },
+  "film": {
+    "frames": 29250
+  },
+  "speakers": [
+    {
+      "camera": "cam2",
+      "at": 975.0,
+      "who": "the right-hand host, grey sweater -- cam2 is his close-up"
+    },
+    {
+      "camera": "cam3",
+      "at": 483.0,
+      "who": "the left-hand host, dark patterned shirt against the purple wall -- cam3 is his close-up"
+    }
+  ],
+  "off_camera_speakers": 1,
+  "_off_camera": "The third man at the table is never framed in this segment -- he sits at the near end, his back to the studio wide, and no camera is pointed at him. Declaring him keeps his voice out of a host's cluster, and an unmapped voice falls back to the wide, which is where an editor puts a voice with no face.",
+  "wide": "cam1",
+  "grammar": {
+    "min_shot_s": 1.5,
+    "lead_s": 0.25,
+    "wide_after_s": 10.0,
+    "wide_dur_s": 14.0,
+    "wide_overlap_pct": 0.0,
+    "wide_between": 1,
+    "snap_s": 0.0
+  },
+  "outdir": "projects/yt2-fpv33-seg/outputs",
+  "render": {
+    "cq": 18
+  },
+  "_sweep": "Which grammars --sweep prices. This channel cuts on a RHYTHM, not on the speaker: 52% of the runtime is the wide with a mean shot of 11.6 s, so the axis that matters here is wide_after_s -- how long a face may hold the frame before the room gets it back.",
+  "sweep": {
+    "min_shot_s": [
+      1.5
+    ],
+    "lead_s": [
+      0.25
+    ],
+    "wide_overlap_pct": [
+      0.0
+    ],
+    "wide_after_s": [
+      8.0,
+      10.0,
+      11.0,
+      12.0,
+      14.0
+    ],
+    "wide_dur_s": [
+      8.0,
+      10.0,
+      11.0,
+      12.0,
+      14.0
+    ],
+    "wide_between": [
+      1
+    ],
+    "snap_s": [
+      0.0,
+      1.5,
+      3.0
+    ]
+  },
+  "_grammar": "Fitted on THIS segment by --sweep, which reads the answer: 59.1% against 45.0% for plain speaker-following and 52.4% for simply sitting on the wide. Their own shots run 11.6 s on average, so 10 s of face and 14 s of room is close to the metronome they cut to. The honest number for this grammar comes from footage it was not fitted on -- see yt2-fpv33-val."
+}

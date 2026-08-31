@@ -134,6 +134,13 @@ order) and refuses to report success if any check fails.
 ## Non-obvious traps (all already handled — do not "fix" them)
 
 - **The environment is fixed; run scripts as plain `python scripts/<name>.py`.** A machine-wide `PYTHONPATH` used to point at another Python install and break `import faster_whisper` -- and a venv did not help, because `PYTHONPATH` is prepended inside one too. It has been removed, and every script now imports `scripts/_env.py` first, which re-execs into `.venv` with a clean environment and forces UTF-8 stdio on this cp1252 console. Run `python scripts/check-env.py` if an import ever breaks again.
+- **A 1 cs group overlap is a zero-length WORD, not the timing pair.** When
+  `selfcheck` refuses with "group N starts before group N-1 ends (1cs overlap)"
+  it suggests raising `timing.min_active_ms` or lowering `grouping.max_words`.
+  Try one setting; if the overlap stays exactly 1 cs, stop tuning — Whisper
+  emitted `start == end` for a word and the next word begins at that same
+  centisecond. `sanitize()` handles it by ordering each start against the
+  previous **end**. Any *larger* overlap really is the tuned pair.
 - **libass sizes fonts by `usWinAscent + usWinDescent`, not `unitsPerEm`.** For
   Montserrat that is 1562 vs 1000, so a nominal 43 px renders at 0.64x. This is
   why `font.cap_height_px` exists — use it.

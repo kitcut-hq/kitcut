@@ -1,0 +1,663 @@
+{
+  "_comment": "Shots and angles read back off a finished video by scripts/shot-detect.py. Frame indices on the source's own grid; end is exclusive. seconds = frame*fps_den/fps_num.",
+  "source": "projects/yt2-fpv33-seg/sources/original.mp4",
+  "width": 1920,
+  "height": 1080,
+  "fps_num": 25,
+  "fps_den": 1,
+  "fps": 25.0,
+  "n_frames": 29250,
+  "detect": {
+    "threshold": 0.055,
+    "ratio": 4.0,
+    "window": 4,
+    "median_win": 60,
+    "alike": 0.055,
+    "split": 0.07,
+    "min_shot": 8
+  },
+  "angle_by": "person",
+  "face": {
+    "detector": "models/face/face_detection_yunet_2023mar.onnx",
+    "recognizer": "models/face/face_recognition_sface_2021dec.onnx",
+    "samples": 5,
+    "width": 640,
+    "score": 0.7,
+    "alike_face": 0.5,
+    "layout_split": 0.06,
+    "min_id_face": 0.085,
+    "face_second": 0.64,
+    "cast_share": 0.03
+  },
+  "separation": {
+    "method": "person",
+    "within": 0.06778,
+    "between": 0.6707
+  },
+  "cuts": [
+    150,
+    416,
+    664,
+    1075,
+    1321,
+    1606,
+    1925,
+    2100,
+    2261,
+    2442,
+    2696,
+    2989,
+    3141,
+    3373,
+    3567,
+    3821,
+    4004,
+    4146,
+    4338,
+    4504,
+    4751,
+    5026,
+    5522,
+    5911,
+    6140,
+    6370,
+    6640,
+    7072,
+    7334,
+    7725,
+    8050,
+    8207,
+    8412,
+    8630,
+    8888,
+    9200,
+    9527,
+    9675,
+    10024,
+    10373,
+    10757,
+    11060,
+    11312,
+    11624,
+    11923,
+    12263,
+    12553,
+    12797,
+    13246,
+    13518,
+    13837,
+    14070,
+    14570,
+    14835,
+    15066,
+    15306,
+    15550,
+    15825,
+    16142,
+    16449,
+    16816,
+    17225,
+    17488,
+    17702,
+    17951,
+    18315,
+    18727,
+    19028,
+    19413,
+    19654,
+    19977,
+    20163,
+    20539,
+    20756,
+    21018,
+    21257,
+    21474,
+    21765,
+    22103,
+    22508,
+    22797,
+    23092,
+    23395,
+    23716,
+    24132,
+    24663,
+    25039,
+    25395,
+    25562,
+    25768,
+    26179,
+    26431,
+    26753,
+    27360,
+    27699,
+    28034,
+    28612,
+    28796,
+    29056,
+    29203
+  ],
+  "shots": [
+    {
+      "start": 0,
+      "end": 150,
+      "camera": "cam1"
+    },
+    {
+      "start": 150,
+      "end": 416,
+      "camera": "cam2"
+    },
+    {
+      "start": 416,
+      "end": 664,
+      "camera": "cam1"
+    },
+    {
+      "start": 664,
+      "end": 1075,
+      "camera": "cam1"
+    },
+    {
+      "start": 1075,
+      "end": 1321,
+      "camera": "cam2"
+    },
+    {
+      "start": 1321,
+      "end": 1606,
+      "camera": "cam1"
+    },
+    {
+      "start": 1606,
+      "end": 1925,
+      "camera": "cam2"
+    },
+    {
+      "start": 1925,
+      "end": 2100,
+      "camera": "cam1"
+    },
+    {
+      "start": 2100,
+      "end": 2261,
+      "camera": "cam3"
+    },
+    {
+      "start": 2261,
+      "end": 2442,
+      "camera": "cam1"
+    },
+    {
+      "start": 2442,
+      "end": 2696,
+      "camera": "cam2"
+    },
+    {
+      "start": 2696,
+      "end": 2989,
+      "camera": "cam1"
+    },
+    {
+      "start": 2989,
+      "end": 3141,
+      "camera": "cam2"
+    },
+    {
+      "start": 3141,
+      "end": 3373,
+      "camera": "cam1"
+    },
+    {
+      "start": 3373,
+      "end": 3567,
+      "camera": "cam3"
+    },
+    {
+      "start": 3567,
+      "end": 3821,
+      "camera": "cam1"
+    },
+    {
+      "start": 3821,
+      "end": 4004,
+      "camera": "cam2"
+    },
+    {
+      "start": 4004,
+      "end": 4146,
+      "camera": "cam1"
+    },
+    {
+      "start": 4146,
+      "end": 4338,
+      "camera": "cam2"
+    },
+    {
+      "start": 4338,
+      "end": 4504,
+      "camera": "cam1"
+    },
+    {
+      "start": 4504,
+      "end": 4751,
+      "camera": "cam2"
+    },
+    {
+      "start": 4751,
+      "end": 5026,
+      "camera": "cam1"
+    },
+    {
+      "start": 5026,
+      "end": 5522,
+      "camera": "cam2"
+    },
+    {
+      "start": 5522,
+      "end": 5911,
+      "camera": "cam1"
+    },
+    {
+      "start": 5911,
+      "end": 6140,
+      "camera": "cam2"
+    },
+    {
+      "start": 6140,
+      "end": 6370,
+      "camera": "cam1"
+    },
+    {
+      "start": 6370,
+      "end": 6640,
+      "camera": "cam1"
+    },
+    {
+      "start": 6640,
+      "end": 7072,
+      "camera": "cam2"
+    },
+    {
+      "start": 7072,
+      "end": 7334,
+      "camera": "cam1"
+    },
+    {
+      "start": 7334,
+      "end": 7725,
+      "camera": "cam2"
+    },
+    {
+      "start": 7725,
+      "end": 8050,
+      "camera": "cam1"
+    },
+    {
+      "start": 8050,
+      "end": 8207,
+      "camera": "cam2"
+    },
+    {
+      "start": 8207,
+      "end": 8412,
+      "camera": "cam1"
+    },
+    {
+      "start": 8412,
+      "end": 8630,
+      "camera": "cam2"
+    },
+    {
+      "start": 8630,
+      "end": 8888,
+      "camera": "cam1"
+    },
+    {
+      "start": 8888,
+      "end": 9200,
+      "camera": "cam2"
+    },
+    {
+      "start": 9200,
+      "end": 9527,
+      "camera": "cam1"
+    },
+    {
+      "start": 9527,
+      "end": 9675,
+      "camera": "cam3"
+    },
+    {
+      "start": 9675,
+      "end": 10024,
+      "camera": "cam1"
+    },
+    {
+      "start": 10024,
+      "end": 10373,
+      "camera": "cam2"
+    },
+    {
+      "start": 10373,
+      "end": 10757,
+      "camera": "cam1"
+    },
+    {
+      "start": 10757,
+      "end": 11060,
+      "camera": "cam2"
+    },
+    {
+      "start": 11060,
+      "end": 11312,
+      "camera": "cam1"
+    },
+    {
+      "start": 11312,
+      "end": 11624,
+      "camera": "cam3"
+    },
+    {
+      "start": 11624,
+      "end": 11923,
+      "camera": "cam1"
+    },
+    {
+      "start": 11923,
+      "end": 12263,
+      "camera": "cam3"
+    },
+    {
+      "start": 12263,
+      "end": 12553,
+      "camera": "cam1"
+    },
+    {
+      "start": 12553,
+      "end": 12797,
+      "camera": "cam2"
+    },
+    {
+      "start": 12797,
+      "end": 13246,
+      "camera": "cam1"
+    },
+    {
+      "start": 13246,
+      "end": 13518,
+      "camera": "cam2"
+    },
+    {
+      "start": 13518,
+      "end": 13837,
+      "camera": "cam1"
+    },
+    {
+      "start": 13837,
+      "end": 14070,
+      "camera": "cam2"
+    },
+    {
+      "start": 14070,
+      "end": 14570,
+      "camera": "cam1"
+    },
+    {
+      "start": 14570,
+      "end": 14835,
+      "camera": "cam2"
+    },
+    {
+      "start": 14835,
+      "end": 15066,
+      "camera": "cam1"
+    },
+    {
+      "start": 15066,
+      "end": 15306,
+      "camera": "cam2"
+    },
+    {
+      "start": 15306,
+      "end": 15550,
+      "camera": "cam1"
+    },
+    {
+      "start": 15550,
+      "end": 15825,
+      "camera": "cam2"
+    },
+    {
+      "start": 15825,
+      "end": 16142,
+      "camera": "cam1"
+    },
+    {
+      "start": 16142,
+      "end": 16449,
+      "camera": "cam2"
+    },
+    {
+      "start": 16449,
+      "end": 16816,
+      "camera": "cam1"
+    },
+    {
+      "start": 16816,
+      "end": 17225,
+      "camera": "cam2"
+    },
+    {
+      "start": 17225,
+      "end": 17488,
+      "camera": "cam1"
+    },
+    {
+      "start": 17488,
+      "end": 17702,
+      "camera": "cam2"
+    },
+    {
+      "start": 17702,
+      "end": 17951,
+      "camera": "cam1"
+    },
+    {
+      "start": 17951,
+      "end": 18315,
+      "camera": "cam2"
+    },
+    {
+      "start": 18315,
+      "end": 18727,
+      "camera": "cam1"
+    },
+    {
+      "start": 18727,
+      "end": 19028,
+      "camera": "cam2"
+    },
+    {
+      "start": 19028,
+      "end": 19413,
+      "camera": "cam1"
+    },
+    {
+      "start": 19413,
+      "end": 19654,
+      "camera": "cam2"
+    },
+    {
+      "start": 19654,
+      "end": 19977,
+      "camera": "cam1"
+    },
+    {
+      "start": 19977,
+      "end": 20163,
+      "camera": "cam3"
+    },
+    {
+      "start": 20163,
+      "end": 20539,
+      "camera": "cam1"
+    },
+    {
+      "start": 20539,
+      "end": 20756,
+      "camera": "cam2"
+    },
+    {
+      "start": 20756,
+      "end": 21018,
+      "camera": "cam1"
+    },
+    {
+      "start": 21018,
+      "end": 21257,
+      "camera": "cam3"
+    },
+    {
+      "start": 21257,
+      "end": 21474,
+      "camera": "cam1"
+    },
+    {
+      "start": 21474,
+      "end": 21765,
+      "camera": "cam3"
+    },
+    {
+      "start": 21765,
+      "end": 22103,
+      "camera": "cam2"
+    },
+    {
+      "start": 22103,
+      "end": 22508,
+      "camera": "cam1"
+    },
+    {
+      "start": 22508,
+      "end": 22797,
+      "camera": "cam1"
+    },
+    {
+      "start": 22797,
+      "end": 23092,
+      "camera": "cam2"
+    },
+    {
+      "start": 23092,
+      "end": 23395,
+      "camera": "cam1"
+    },
+    {
+      "start": 23395,
+      "end": 23716,
+      "camera": "cam2"
+    },
+    {
+      "start": 23716,
+      "end": 24132,
+      "camera": "cam1"
+    },
+    {
+      "start": 24132,
+      "end": 24663,
+      "camera": "cam2"
+    },
+    {
+      "start": 24663,
+      "end": 25039,
+      "camera": "cam1"
+    },
+    {
+      "start": 25039,
+      "end": 25395,
+      "camera": "cam3"
+    },
+    {
+      "start": 25395,
+      "end": 25562,
+      "camera": "cam1"
+    },
+    {
+      "start": 25562,
+      "end": 25768,
+      "camera": "cam3"
+    },
+    {
+      "start": 25768,
+      "end": 26179,
+      "camera": "cam1"
+    },
+    {
+      "start": 26179,
+      "end": 26431,
+      "camera": "cam3"
+    },
+    {
+      "start": 26431,
+      "end": 26753,
+      "camera": "cam1"
+    },
+    {
+      "start": 26753,
+      "end": 27360,
+      "camera": "cam2"
+    },
+    {
+      "start": 27360,
+      "end": 27699,
+      "camera": "cam1"
+    },
+    {
+      "start": 27699,
+      "end": 28034,
+      "camera": "cam2"
+    },
+    {
+      "start": 28034,
+      "end": 28612,
+      "camera": "cam1"
+    },
+    {
+      "start": 28612,
+      "end": 28796,
+      "camera": "cam2"
+    },
+    {
+      "start": 28796,
+      "end": 29056,
+      "camera": "cam3"
+    },
+    {
+      "start": 29056,
+      "end": 29203,
+      "camera": "cam1"
+    },
+    {
+      "start": 29203,
+      "end": 29250,
+      "camera": "cam2"
+    }
+  ],
+  "cameras": [
+    {
+      "id": "cam1",
+      "n_shots": 51,
+      "frames": 15319
+    },
+    {
+      "id": "cam2",
+      "n_shots": 38,
+      "frames": 10986
+    },
+    {
+      "id": "cam3",
+      "n_shots": 12,
+      "frames": 2945
+    }
+  ]
+}

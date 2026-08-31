@@ -144,9 +144,21 @@ def sanitize(words, cfg):
             e_cs = s_cs + 1
         out.append(dict(text=t, raw=w["text"].strip(), s=s_cs, e=e_cs,
                         prob=w.get("probability", 1.0)))
+    # Words must not overlap, and the reason is not tidiness. A word whose end
+    # equals its start gets the synthetic centisecond above -- and if the NEXT
+    # word starts at that same instant, that centisecond is stolen from it: the
+    # groups either side then overlap by exactly 1cs and selfcheck refuses the
+    # whole file. Whisper emits such a word wherever it clips one at a segment
+    # boundary; a dense 19-minute Ukrainian podcast produced one ("БІЛЬШЕ." at
+    # 988.98 s, zero length, with the next word starting there too) and no
+    # setting of min_active_ms or max_words could fix it, because neither was
+    # the cause.
+    #
+    # Ordering by the previous END rather than the previous START is what makes
+    # this a no-op on a well-formed transcript and a repair on a degenerate one.
     for i in range(1, len(out)):
-        if out[i]["s"] < out[i - 1]["s"]:
-            out[i]["s"] = out[i - 1]["s"]
+        if out[i]["s"] < out[i - 1]["e"]:
+            out[i]["s"] = out[i - 1]["e"]
         if out[i]["e"] <= out[i]["s"]:
             out[i]["e"] = out[i]["s"] + 1
     return out

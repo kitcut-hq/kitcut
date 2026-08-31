@@ -291,13 +291,32 @@ correlation, recovering the staggers to the exact frame.
 
 It comes with the only round-trip test in the repo: take somebody else's
 finished multicam film, rebuild the raw tapes it must have been cut from, re-cut
-it here, and score the result frame by frame. **Four films are through it and
-stage 1 is exact on all four** — frame-for-frame, no shifted frames, no frozen
+it here, and score the result frame by frame. **Six films are through it and
+stage 1 is exact on all six** — frame-for-frame, no shifted frames, no frozen
 filler, every cut at offset 0: `a16z-altman` (4 angles), `a16z-bornstein` (3),
-`a16z-agents` (2 + an off-camera speaker), `a16z-sinofsky` (2, a monologue).
-Stage 2 scores 73–87%, three of them on films the framework had never seen.
-Adding a film is three manifests and no code. Editing costs about half a film's
-runtime end to end; the decide step is ~85% of it, the render ~15x realtime.
+`a16z-agents` (2 + an off-camera speaker), `a16z-sinofsky` (2, a monologue),
+`up-interview-1` (13 angles, an hour long) and `yt2-fpv33-seg` (3, a Ukrainian
+podcast). Stage 2 scores 73–87% **where the editor follows the voice** and
+45–50% where they do not — see below. Adding a film is three manifests and no
+code. Editing costs about half a film's runtime end to end; the decide step is
+~85% of it, the render ~15x realtime.
+
+**Not every channel cuts on the speaker, and that decides what a stage-2 score
+means.** Read the transition matrix off their own shot list before quoting one.
+On УТ-2 a close-up is followed by the wide 97% and 92% of the time, every shot
+runs ~11.6 s and the wide holds 52% of the runtime: the room is the default
+state and the faces are accents. Speaker-following scored 45.0% there — *below*
+the 52.4% you get by never cutting at all. The `wide_between` metronome that
+fits that style reached 59.1% on the segment it was swept on and **35.8% on a
+held-out segment of the same film**, so it ships off. Hold a second segment out
+(`projects/yt2-fpv33-val/`: no tapes, no render, three camera entries pointing
+at the programme, fifteen minutes) — it is the only thing that tells a result
+from a fit.
+
+`angle-cut.py` also reads `name_labels` and `image_overlays`, composited inside
+its own NVENC pass, so finishing a multicam film is not a re-encode of it. Give
+a finished render its own manifest and output name: burning graphics changes
+pixels, so it is no longer frame-comparable to the programme.
 
 ```powershell
 python scripts/split-cameras.py  --manifest projects/<id>/multicam-sim.json --conform-only

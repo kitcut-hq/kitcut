@@ -1,0 +1,10 @@
+{
+  "_comment": "Not a measured sync. This project scores a PLAN and never renders, so no tapes were built: the three cameras all point at the conformed programme, which carries the same soundtrack every real tape would. auto-switch.py reads only `fps` from this file.",
+  "fps": 25.0,
+  "reference": "camW",
+  "tracks": [
+    {"id": "camW", "offset_frames": 0},
+    {"id": "cam1", "offset_frames": 0},
+    {"id": "cam3", "offset_frames": 0}
+  ]
+}
