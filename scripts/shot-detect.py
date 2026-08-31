@@ -695,7 +695,7 @@ def sigs_of(sigs, spans, i):
 
 
 def rel_model(p):
-    return p if os.path.isabs(p) else os.path.join(ROOT, p)
+    return _env.resolve(p)
 
 
 def frame_png(src, idx, fps_num, fps_den, path, width=320):
@@ -750,7 +750,7 @@ def main():
         if v is not None:
             d[k] = v
 
-    src = args.src if os.path.isabs(args.src) else os.path.join(ROOT, args.src)
+    src = _env.resolve(args.src)
     if not os.path.exists(src):
         sys.exit("no such file: %s" % args.src)
     pdir = _project.find_project_dir(src)

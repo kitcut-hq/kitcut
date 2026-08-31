@@ -79,8 +79,7 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    path = args.file if os.path.isabs(args.file) else os.path.join(_env.ROOT,
-                                                                   args.file)
+    path = _env.resolve(args.file)
     if not os.path.exists(path):
         sys.exit("no such file: %s" % path)
     size = os.path.getsize(path)
@@ -90,7 +89,7 @@ def main():
     desc = args.description
     if args.description_file:
         p = args.description_file
-        p = p if os.path.isabs(p) else os.path.join(_env.ROOT, p)
+        p = _env.resolve(p)
         desc = open(p, encoding="utf-8").read()
     if len(desc) > 5000:
         sys.exit("description is %d chars; YouTube's limit is 5000" % len(desc))

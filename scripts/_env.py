@@ -53,6 +53,81 @@ def load_dotenv(path=None, override=False):
     return got
 
 
+# ---------------------------------------------------------------------------
+# Where things live.
+#
+# ROOT is where the *tooling* lives; workspace() is where the *user's work*
+# lives. Today they are the same directory and every manifest path in the repo
+# is written relative to it. They stop being the same the moment these scripts
+# are installed somewhere their operator does not edit -- so that assumption
+# gets one home here instead of being re-spelled in every script that touches
+# projects/. Nothing in the corpus should join ROOT with "projects" again.
+# ---------------------------------------------------------------------------
+
+WORKSPACE_VAR = "VIDEDIT_WORKSPACE"
+POINTER = ".workspace"
+_workspace = None
+
+
+def set_workspace(path):
+    """Override the workspace for this process -- what a --workspace flag calls.
+
+    Passing None leaves the resolution order below untouched, so a script can
+    call this unconditionally with whatever argparse handed it.
+    """
+    global _workspace
+    if path:
+        _workspace = os.path.abspath(os.path.expanduser(path))
+    return workspace()
+
+
+def workspace():
+    """The directory that holds projects/, most explicit source winning:
+
+        1. set_workspace()      a --workspace flag
+        2. $VIDEDIT_WORKSPACE   a shell, a launcher, or a host program
+        3. <ROOT>/.workspace    a one-line pointer file, for a fixed setup
+        4. ROOT                 the repo itself, which is the case today
+    """
+    if _workspace:
+        return _workspace
+    env = os.environ.get(WORKSPACE_VAR)
+    if env and env.strip():
+        return os.path.abspath(os.path.expanduser(env.strip()))
+    ptr = os.path.join(ROOT, POINTER)
+    if os.path.exists(ptr):
+        try:
+            with open(ptr, encoding="utf-8") as f:
+                for line in f:
+                    line = line.split("#")[0].strip()
+                    if line:
+                        return os.path.abspath(os.path.expanduser(line))
+        except OSError:
+            pass                    # an unreadable pointer is not worth dying for
+    return ROOT
+
+
+def add_workspace_arg(ap):
+    """Give a parser the flag, so every script spells it the same way."""
+    ap.add_argument("--workspace", metavar="DIR", default=None,
+                    help="directory holding projects/ (default: the repo "
+                         "itself; also $%s, or a .workspace pointer file)"
+                         % WORKSPACE_VAR)
+    return ap
+
+
+def resolve(p, base=None):
+    """A manifest path made absolute; an already-absolute one is unchanged.
+
+    Ten scripts carried their own copy of this one line, so every new script
+    acquired it by copy-paste and the base could never be changed in fewer than
+    ten places. The default base is ROOT because that is where config/, fonts/
+    and models/ live, and those are tooling rather than work; a caller that
+    knows a path belongs to the user's side passes workspace().
+    """
+    return p if os.path.isabs(p) else os.path.join(base or ROOT, p)
+
+
 def clean_env(env=None):
     """A child environment with the poisoned variable removed."""
     e = dict(os.environ if env is None else env)

@@ -86,7 +86,7 @@ def hhmmss(t):
 
 
 PY = _env.PY
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = _env.ROOT
 
 
 def even(n):

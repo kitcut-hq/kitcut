@@ -54,7 +54,7 @@ def classify_manifest(doc):
 
 def scan(pid):
     """A fresh mechanical view of one project folder."""
-    pdir = os.path.join(_project.PROJECTS, pid)
+    pdir = os.path.join(_project.projects_dir(), pid)
     inputs, controls, deliverables = {}, {}, {}
     manifests = []                      # (path, kind, doc)
 
@@ -329,7 +329,7 @@ def check(pid, doc):
 
 
 def init(pid):
-    pdir = os.path.join(_project.PROJECTS, pid)
+    pdir = os.path.join(_project.projects_dir(), pid)
     for d in CONTENT_DIRS:
         os.makedirs(os.path.join(pdir, d), exist_ok=True)
     if not os.path.exists(_project.path_for(pid)):
@@ -345,10 +345,10 @@ def init(pid):
 
 
 def all_ids():
-    if not os.path.isdir(_project.PROJECTS):
+    if not os.path.isdir(_project.projects_dir()):
         return []
-    return sorted(d for d in os.listdir(_project.PROJECTS)
-                  if os.path.isdir(os.path.join(_project.PROJECTS, d)))
+    return sorted(d for d in os.listdir(_project.projects_dir())
+                  if os.path.isdir(os.path.join(_project.projects_dir(), d)))
 
 
 def main():
@@ -360,7 +360,9 @@ def main():
                     help="print what a scan would change; write nothing")
     ap.add_argument("--check", action="store_true",
                     help="doctor the file(s) against the filesystem")
+    _env.add_workspace_arg(ap)
     args = ap.parse_args()
+    _env.set_workspace(args.workspace)
 
     if args.init:
         init(args.init)
@@ -377,7 +379,7 @@ def main():
 
     bad = 0
     for pid in ids:
-        if not os.path.isdir(os.path.join(_project.PROJECTS, pid)):
+        if not os.path.isdir(os.path.join(_project.projects_dir(), pid)):
             sys.exit("no such project: projects/%s" % pid)
         old = _project.load(pid)
         if args.check:

@@ -38,7 +38,7 @@ _imgoverlay = import_module("image-overlay")
 import _progress  # noqa: E402
 import _project  # noqa: E402
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = _env.ROOT
 
 DEFAULT_RENDER = {"encoder": "h264_nvenc", "preset": "p5", "cq": 21,
                   "maxrate": "16M", "bufsize": "32M", "audio_bitrate": "192k"}
@@ -265,7 +265,7 @@ def _split_at(a, b, points):
 
 
 def rel(p):
-    return p if os.path.isabs(p) else os.path.join(ROOT, p)
+    return _env.resolve(p)
 
 
 def resolve_bound(m, words, key, default):

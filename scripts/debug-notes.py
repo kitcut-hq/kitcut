@@ -51,7 +51,7 @@ CORNERS = {"bottom-left": 1, "bottom-centre": 2, "bottom-center": 2,
 
 
 def rel(p):
-    return p if os.path.isabs(p) else os.path.join(ROOT, p)
+    return _env.resolve(p)
 
 
 def filter_path(p):

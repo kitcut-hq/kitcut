@@ -26,8 +26,22 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402,F401 -- re-execs into .venv; before any 3rd-party import
 
-ROOT = _env.ROOT
-PROJECTS = os.path.join(ROOT, "projects")
+ROOT = _env.ROOT                 # where the tooling lives
+
+
+def root():
+    """Where the user's *content* lives -- see _env.workspace() for the why.
+
+    Today this is ROOT and every path in the repo assumes it. This function is
+    the one place that assumption is written down, so moving the work out of
+    the tool's folder is a setting rather than a refactor.
+    """
+    return _env.workspace()
+
+
+def projects_dir():
+    """<workspace>/projects -- the only place these two ideas are joined."""
+    return os.path.join(root(), "projects")
 
 _PROSE_KEYS = ("_comment", "_why", "intent", "notes")
 
@@ -40,16 +54,20 @@ def norm(path):
     """
     p = os.path.abspath(path) if not os.path.isabs(path) else path
     p = os.path.normpath(p)
-    root = os.path.normpath(ROOT)
-    if os.path.normcase(p).startswith(os.path.normcase(root + os.sep)):
-        p = p[len(root) + 1:]
+    # Longest base wins, so a workspace nested under the repo (or the other way
+    # round) still yields the shortest relative key rather than a doubled one.
+    for base in sorted({root(), ROOT}, key=len, reverse=True):
+        b = os.path.normpath(base)
+        if os.path.normcase(p).startswith(os.path.normcase(b + os.sep)):
+            p = p[len(b) + 1:]
+            break
     return p.replace("\\", "/")
 
 
 def find_project_dir(path):
     """Walk up from any file to its projects/<id>/ root, or None."""
     p = os.path.abspath(path)
-    stop = os.path.normcase(os.path.normpath(PROJECTS))
+    stop = os.path.normcase(os.path.normpath(projects_dir()))
     while True:
         parent = os.path.dirname(p)
         if os.path.normcase(os.path.normpath(parent)) == stop:
@@ -60,11 +78,11 @@ def find_project_dir(path):
 
 
 def path_for(pid):
-    return os.path.join(PROJECTS, pid, "project.json")
+    return os.path.join(projects_dir(), pid, "project.json")
 
 
 def journal_for(pid):
-    return os.path.join(PROJECTS, pid, "journal.md")
+    return os.path.join(projects_dir(), pid, "journal.md")
 
 
 def load(pid):
@@ -99,11 +117,12 @@ def find_by_output(path):
         pid = os.path.basename(d)
         return pid, load(pid)
     want = norm(path).casefold()
-    if os.path.isdir(PROJECTS):
-        for pid in sorted(os.listdir(PROJECTS)):
+    pdir = projects_dir()
+    if os.path.isdir(pdir):
+        for pid in sorted(os.listdir(pdir)):
             doc = load(pid)
             for key in (doc or {}).get("deliverables", {}):
-                if norm(os.path.join(ROOT, key)).casefold() == want:
+                if norm(os.path.join(root(), key)).casefold() == want:
                     return pid, doc
     return None, None
 
@@ -151,7 +170,7 @@ def record(pid, action, out=None, script=None, argv=None, kind=None,
     """
     try:
         when = time.gmtime()
-        os.makedirs(os.path.join(PROJECTS, pid), exist_ok=True)
+        os.makedirs(os.path.join(projects_dir(), pid), exist_ok=True)
         doc = load(pid) or {"v": 1, "id": pid, "inputs": {}, "controls": {},
                             "deliverables": {}}
         doc["updated_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", when)

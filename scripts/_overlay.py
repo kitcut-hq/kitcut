@@ -27,7 +27,7 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 from PIL import ImageFont
 
 ENV = _env.ENV
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = _env.ROOT
 
 
 def hex_rgba(h, alpha=255):
@@ -37,7 +37,7 @@ def hex_rgba(h, alpha=255):
 
 def repo_path(path):
     """Preset paths are repo-relative so a preset is portable between machines."""
-    return path if os.path.isabs(path) else os.path.join(ROOT, path)
+    return _env.resolve(path)
 
 
 def font_for_cap_height(path, cap_px):

@@ -94,7 +94,7 @@ CLUSTER_CAP = 2000            # above this, cluster a sample -- see cluster()
 
 
 def rel(p):
-    return p if os.path.isabs(p) else os.path.join(ROOT, p)
+    return _env.resolve(p)
 
 
 def hhmmss(t):

@@ -70,7 +70,7 @@ def hhmmss(t):
 
 
 def rel(p):
-    return p if os.path.isabs(p) else os.path.join(ROOT, p)
+    return _env.resolve(p)
 
 
 def probe_video(path):

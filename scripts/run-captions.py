@@ -31,7 +31,7 @@ import _project  # noqa: E402
 
 
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = _env.ROOT
 PY = _env.PY
 # Invoke yt-dlp as a MODULE, never as a bare `yt-dlp` command. The console-script
 # shim on PATH hardcodes the interpreter it was installed by, so it dies silently

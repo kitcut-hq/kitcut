@@ -76,3 +76,7 @@ node_modules/
 
 # Speaker models for auto-switch.py -- 200 MB, downloaded not authored
 models/
+
+# Points the tooling at a working directory outside the repo (see
+# _env.workspace()). One machine-local path; never shared.
+.workspace

@@ -34,7 +34,7 @@ from importlib import import_module  # noqa: E402
 
 _outline = import_module("transcript-outline")
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = _env.ROOT
 
 
 def run(cmd, **kw):
@@ -299,7 +299,7 @@ def main():
     mid = m.get("id") or os.path.splitext(os.path.basename(args.manifest))[0]
 
     def rel(p):
-        return p if os.path.isabs(p) else os.path.join(ROOT, p)
+        return _env.resolve(p)
 
     screen, camera = rel(m["screen"]), rel(m["camera"])
     for p in (screen, camera):
