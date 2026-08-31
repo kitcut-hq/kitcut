@@ -547,6 +547,250 @@ Duration against the keep-list, output dimensions against the canvas, that the
 output carries no rotation, and that the audio is **not silent** — which is the
 failure that made this pipeline necessary in the first place.
 
+## A screencast with no soundtrack at all
+
+`screencast-cut.py` above cuts a screen recording against a camera take that
+carries the sound. Sometimes there is no camera and no microphone: Windows'
+window capture, started from the Game Bar, writes a **digitally silent** AAC
+track — `-91 dB` mean *and* max, which is not room tone, it is zero — and the
+voice-over is recorded later against the finished film.
+
+That breaks every silence-driven decision in that pipeline. `min_silence`,
+`force_over`, the whole keep-list: they all reduce to "cut everything" or "cut
+nothing" when the audio never crosses any threshold. Measure the picture
+instead.
+
+```powershell
+python scripts/screen-activity.py --src projects/<id>/sources/<f>.mp4 --list --probe-motion
+python scripts/scan-pii.py        --src projects/<id>/sources/<f>.mp4 --report --emit
+python scripts/screen-cut.py      --manifest projects/<id>/screen.json --list --sweep
+python scripts/screen-cut.py      --manifest projects/<id>/screen.json --target 8:00 --sheet projects/<id>/temp/sheet
+python scripts/screen-cut.py      --manifest projects/<id>/screen.json --target 8:00
+```
+
+### Activity is measured per region, not per frame
+
+`screen-activity.py` decodes small and slow (gray, 320 px wide, 6 fps) and
+counts the fraction of pixels that changed by more than a noise floor. A static
+screen scores ~0; typing and scrolling score high. The threshold is on the pixel
+**delta**, not on equality, because H.264 at 4K re-quantizes flat areas between
+keyframes and an untouched screen still flickers by a few levels.
+
+One number for the whole frame is not enough, and the footage says so. On a
+screencast of an agent working, two very different things both read as "the
+screen is moving": the human clicking through a checkout, and an AI streaming
+text into a side panel. So activity is measured per **named region** and the
+edit is a three-way decision:
+
+| what is moving | what the cut does |
+|---|---|
+| `main` — the browser | keep at `keep_speed` (1x by default) |
+| only `panel` — Claude thinking | run at `speed` |
+| nothing | drop it |
+
+`--probe-motion` finds the panel for you rather than making you hunt: it reports
+which eighth-of-the-frame cells move during otherwise-still stretches. On the
+`books-giveaway` footage every recording named the same column, and measuring
+the vertical edge across six timestamps per file put the Edge side-panel divider
+at **x = 0.748** on all five recordings that had it open.
+
+Without the region split there is nothing to fast-forward *with*: whole-frame
+activity says 80% of that footage is dead, but the interesting 20% and the
+boring 20% look identical to it.
+
+### A spinner never stops, so `ignore` it
+
+A "thinking" animation, a blinking caret, a taskbar clock or the recorder's own
+running timer keeps a dead screen permanently above any threshold, and nothing
+is ever cut. `ignore` rectangles are given in **fractions** of frame size, so
+they survive a resolution change, and are blanked before the difference is
+taken. The phone screen recordings here ignore `0,0,1,0.04` — the status bar
+with its clock and the red recording dot.
+
+### Hold, or the film strobes
+
+Thresholding the raw activity track produced **1094 segments** across 47 minutes
+and a film that flickered between 1x and 6x several times a second. Screen
+activity is bursty in a way that means nothing: text arrives in packets, a
+scroll is a flick and a wait, a caret blinks.
+
+`hold` dilates each region's boolean track forward and back — "it moved within
+the last second, so it is still moving", which is what a viewer perceives
+anyway. `panel_hold` is longer (2 s) because streaming text is burstier than a
+mouse. That one change took the same footage to **579 segments**.
+
+Then any run shorter than its class minimum is absorbed into a **neighbour**,
+repeatedly, until nothing short is left — into the *longer* neighbour, not
+always back to "keep". Absorbing to keep put a visible hitch in the middle of
+every fast-forward, because half a second of panel flicker inside a two-minute
+wait belongs to the wait.
+
+Finally `air` hands back a fraction of a second at each end of a dropped run
+**at 1x**, so a cut lands on stillness. The first version handed it back as
+*sped* footage, which is not breath — it is a quarter-second lurch on either
+side of every join.
+
+### Length is a decision, so price it
+
+`--list` prints where the runtime actually goes, and the answer is usually not
+where you would guess:
+
+```
+  source                                      in    drop      1x sped in     out  segs
+  TOTAL                                  47:14.4  3:17.2 21:45.5 22:11.7 25:27.4   579
+```
+
+Only 3:17 of 47 minutes is truly dead — the spinner means something is nearly
+always moving. Raising `speed` from 6x to 12x only moves the film from 25:27 to
+23:36, because **21:45 is held at 1x** and no panel setting touches it. That is
+what `keep_speed` is for, and `--target M:SS` solves for both together, keeping
+the panel:work ratio the manifest asked for:
+
+```
+  --target 8:00.0: x3.18 on both speeds -> work 3.18x, waiting 19.07x, giving 8:00.5
+```
+
+`hold_1x` windows on a source are forced to 1x whatever the picture is doing and
+do **not** scale with `--target`. That is the point of them: "show each of the
+eight books" is a content requirement, and no motion metric knows which page
+matters. The solver reports the floor they impose.
+
+`--sweep` prices a grid without encoding anything; `--sheet` writes one frame per
+kept segment and per blur rect, which is the check that costs nothing.
+
+### Blur runs in source time, before the cut
+
+This is the same trap as the name label's `at` being *film* time. Once segments
+are dropped and others run at 19x, a window measured against a source timecode
+no longer lands where it was measured. Rather than map every window through the
+cut, the blur runs **upstream of the trim**, so a rect verified against a source
+frame stays verified.
+
+The order inside the pass is deliberate: `scale → blur → trim → concat → pad`.
+Scaling first makes the blur run at 1080p instead of 4K; blurring before the trim
+keeps the windows in source time; padding after the concat means the canvas is
+applied once.
+
+`mode: "pixelate"` is the default rather than a soft blur, because a soft blur
+reads as a focus artefact and invites someone to try to sharpen it back. It is a
+`crop → scale down → scale up with `neighbor`` per rect, `enable`-gated to its
+window.
+
+### Finding what to blur, instead of scrubbing for it
+
+A screencast of somebody buying things is a screencast of somebody typing their
+card number, with other people's names, phones and delivery addresses sitting on
+the page while it happens. Deciding what to blur by scrubbing is how a phone
+number reaches YouTube: the eye skips the one frame between two identical-looking
+ones, and 4K screen text is unreadable at the zoom a human scrubs at.
+
+`scan-pii.py` samples, OCRs (RapidOCR on onnxruntime — no torch), and matches
+patterns that describe the **shape** of the secret rather than its value: a card
+number is 13–19 digits that pass Luhn, a CVV is three digits next to the word, a
+Ukrainian mobile is `+380` and nine more, an IBAN is `UA` and 27. Each hit is
+reported with the time it is on screen **and** the box it occupies in frame
+fractions — exactly the shape a `blur` entry wants — and `--emit` writes those
+entries so the manifest is generated from measurement rather than typed from
+memory.
+
+Two things it taught us on this footage:
+
+- **Luhn is what makes the card rule usable.** `Замовлення #1806413786` is ten
+  digits in a row and is not a card. Without the checksum every order number on
+  every confirmation page becomes a false positive.
+- **Match the mask's shape, not its glyph.** Privat24 draws a bullet; this OCR
+  model returns `----`, another returns `****`, a third drops it. Requiring the
+  full 27-character IBAN found *nothing* — the field is always drawn part-masked
+  (`UA57 ---- 2527428`). The prefix plus any digits is the real signature.
+
+`--match NAME=REGEX` rides the same pass, because the expensive half is the OCR,
+not the matching — so "where does each order confirmation appear" costs nothing
+once the frames are being read anyway.
+
+A third lesson cost a proof frame to find: **the country code is optional.**
+The first phone rule required `+38`, and a Claude panel summary reading
+`(Київ, відділення 57, 0939589090, Стрельченко Марія — «Іздрик…», 430 грн)`
+sailed through it — city, branch, phone and full name, in the clear, in the
+national `0XX` form. A Ukrainian mobile is 0 plus nine digits however it is
+punctuated, and `check-screen.py` now holds that exact string.
+
+**It is a net, not a clearance.** OCR misses rotated, low-contrast and
+partly-scrolled text, and it cannot know that a first name plus a Nova Poshta
+branch identifies a real person. A clean report means "nothing obvious left",
+never "safe to publish" — look at the `--sheet` frames before you encode.
+
+Two habits make the net much tighter:
+
+- **`--sheet` composites every rect active at that instant**, not one at a
+  time. The one-rect proof is actively misleading: it showed a card panel
+  "covered" while a full IBAN two rects away sat in the clear, because the rect
+  meant to catch it was drawn on its own frame.
+- **Scan the RENDER, not just the sources.** The film is 1080p and eight
+  minutes, so a pass over it costs a few minutes and checks the thing you are
+  actually about to publish — including anything a source-time window missed
+  because the cut moved it.
+
+```powershell
+python scripts/scan-pii.py --src projects/<id>/outputs/<id>.mp4 --report --fps 0.25
+```
+
+Anything that comes back is a rect that did not land. Fix it in the manifest,
+not by trimming the film.
+
+### Transcode once, at the size the work happens
+
+Every pass over this footage decoded 3840x2280 and threw most of it away in its
+first filter: `screen-activity.py` analyses at 320 px wide, the render's first
+step is a scale to 1080p, the contact sheets are 480 px tiles. That decode is
+the dominant cost of the whole pipeline and it was being paid on every
+iteration.
+
+```powershell
+python scripts/make-proxies.py --manifest projects/<id>/screen.json --list
+python scripts/make-proxies.py --manifest projects/<id>/screen.json --verify
+```
+
+It writes one file per source at the canvas fit size and records the path on
+each source; `screen-cut.py` reads it automatically, and `--no-proxy` goes back
+to the originals. On this project the proxies are **3% of the source bytes**
+(4.5 GB -> 38 MB for the longest recording).
+
+Why this is safe rather than a quality trade:
+
+- **Every rectangle in this pipeline is a FRACTION of the frame, never a pixel
+  box.** Blur rects, `ignore` rects and region definitions all are. Proxy and
+  original are interchangeable by construction, so there is no "now apply the
+  decisions to the big one" step to get wrong.
+- **The proxy is the working resolution, not a preview.** The deliverable is
+  1080p, so the scale has to happen anyway — doing it once up front is strictly
+  less resampling than doing it inside every render.
+- `screen-cut.py` **skips the scale filter entirely** when the input already
+  matches the fit size, so the proxy is not resampled a second time.
+- Screen text is where H.264 hurts most, so the proxy is encoded at `cq 16` and
+  `--verify` scores it against the source frame by frame rather than assuming.
+
+**Where a proxy does not help, and it matters:** OCR. Text recognition is
+resolution-bound, so shrinking first costs recall on the single most expensive
+step in the pipeline. `scan-pii.py` reads the **originals**; the lever there is
+fewer frames (`--skip-static`), not smaller ones.
+
+### The arithmetic and the rules have their own test
+
+```powershell
+python scripts/check-screen.py
+```
+
+No GPU, no files, no OCR. It covers the two halves a render cannot check for
+you: the PII rules against the exact strings that came off these frames
+(including both false positives), and hold/absorb/air on a synthetic label
+track. A stutter or a missed PAN otherwise costs an encode to discover.
+
+### The render carries no audio at all
+
+`-an`, deliberately. The sources are silent, and the voice-over is recorded
+against the finished cut; muxing a silent AAC track just invites a later pass to
+mix onto it and produce nothing.
+
 ## Cutting between cameras, and proving the cut is right
 
 `screencast-cut.py` composites two tracks into one picture. `angle-cut.py`
@@ -1717,6 +1961,11 @@ absolute path written into a script, a skill or these docs.
 | `scripts/dub-tts.py` | neural TTS with word boundaries and rate control |
 | `scripts/sync-tracks.py` | line up a silent screen capture with the camera take, and prove it |
 | `scripts/screencast-cut.py` | drop the dead air and composite the two into one film |
+| `scripts/screen-activity.py` | measure when a silent screen recording is doing something, per region |
+| `scripts/screen-cut.py` | cut/speed/blur silent screen recordings into one film |
+| `scripts/scan-pii.py` | OCR a recording for card numbers, CVVs, IBANs, phones and addresses |
+| `scripts/make-proxies.py` | transcode a manifest's sources once, at the working size |
+| `scripts/check-screen.py` | silent-screencast self-test; no GPU, no files, no OCR |
 | `scripts/shot-detect.py` | read an edit back off a finished film: where it cuts, and on which angle |
 | `scripts/split-cameras.py` | conform a programme, then rebuild the camera tapes it was cut from |
 | `scripts/sync-audio.py` | line up N tapes that share a soundtrack, by FFT correlation |

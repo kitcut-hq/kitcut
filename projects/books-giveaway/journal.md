@@ -1,0 +1,174 @@
+# books-giveaway -- edit journal
+AI notes for future sessions. Scripts append the `- HH:MM` event lines;
+after each editing session, append a short prose note: what was asked,
+which knob changed, why, and anything the next session should not rediscover.
+
+## 2026-08-31
+- 19:05 project created
+
+### Stage 1: assembling the raw session into one film
+
+**The ask.** Ten raw recordings of buying eight children's books for people who
+commented under a Threads post, driven by Claude in the browser. Cut the dead
+air, fast-forward where nothing is happening, show each of the eight books,
+and blur the card number, CVV and phone numbers. Voice-over comes in stage 2.
+
+**The finding that shaped everything: there is no audio.** Six of the seven
+Windows captures are digitally silent (`mean_volume: -91.0 dB` AND
+`max_volume: -91.0 dB` -- zero samples, not room tone). The seventh has ambient
+noise at -56 dB and faster-whisper returned **0 words** from four minutes of
+it. So `screencast-cut.py` cannot be used: every silence threshold it has
+degenerates. Three new scripts exist because of this -- `screen-activity.py`,
+`screen-cut.py`, `scan-pii.py`, tested by `check-screen.py`. See
+"A screencast with no soundtrack at all" in the README.
+
+**Where the footage came from.** Seven Windows Game Bar captures in
+`~/Videos` (Windows also writes a byte-identical copy to
+`Videos/Screen Recordings/` -- verified with `sha1sum` on the first 5 MB, they
+are not two takes; `Recording 2026-08-31 105144.mp4` and `115632.mp4` are also
+the same file). Two Android **screen recordings** from the phone's `Movies/`
+folder -- NOT `DCIM/Camera`, which is where I looked first and wasted a pass.
+One handheld camera clip from `DCIM/Camera`.
+
+Ordering them needed care: Windows names a capture for when it *stopped*,
+Android for when it *started*, and `PXL_20260831_181726168.mp4` is stamped in
+**UTC** (18:17Z = 11:17 local), so it belongs between `desktop-110556` and
+`desktop-112123` rather than at the end where a filename sort puts it. Also,
+`Shell.Application` sorts MTP listings as strings, so `9/9/2025` sorted above
+`8/31/2026` and the newest phone video looked eleven months old.
+
+**The three-way cut.** Whole-frame activity says 80% of this footage is dead,
+but it cannot tell the interesting 20% from the boring 20%. Measuring `main`
+(browser, x < 0.748) and `panel` (the Claude side panel) separately gives the
+distinction the edit needs: keep where the browser moves, speed up where only
+the panel streams, drop where nothing does. The panel divider is at
+**x = 0.748**, found by taking the strongest long vertical edge in the right
+half at six timestamps per file and using the mode -- a single timestamp gave
+three different answers because dialogs were on screen.
+
+`hold` (dilating the activity track) is what makes it watchable: without it,
+1094 segments and a film flickering between speeds several times a second;
+with it, 579.
+
+**Length.** Only 3:17 of 47:14 is truly dead, because the thinking spinner
+means something is nearly always moving. `speed` 6x -> 12x only moved the film
+25:27 -> 23:36, because 21:45 was held at 1x. `--target 8:00` was chosen by
+the user from a priced menu; it solves to work 3.18x / waiting 19.07x.
+
+**Privacy.** Asked for "phone number, card and CVV". The footage also carries
+recipients' full names, phones and Nova Poshta addresses, their emails, the
+user's own email, a 132,420.45 UAH balance and transaction history. Asked, and
+the answer was **"everything above, but keep the city name"** -- so cities stay
+readable in the checkout selector and the Claude summaries while the recipient
+records are covered.
+
+Two things `scan-pii.py` got wrong at first and now has tests for: a Threads
+thread id (`.../t/2239405853520443/`) **passes Luhn** and would have pixelated
+the address bar through the whole DM section; and OCR of mangled Cyrillic
+produced `pMEAHyrOCbAo@gorokhovsky.FoTOBMio...`, which matched a loose email
+pattern and would have covered the post text.
+
+Two things it could not do at all, handled by hand in the manifest:
+
+- **The phone bank clips.** `screen-20260831-083709` (monobank -- *not*
+  Privat24, despite the ask) returned **zero hits** while showing two full
+  PANs, three balances and a transaction list. The digits sit on a dark
+  stylised card face in a display font and the model did not read them. Rects
+  measured by hand off a fraction grid.
+- **Cyrillic names.** This OCR cannot read them, so the recipient name above a
+  detected phone and the branch address below it are invisible to it. The
+  desktop rects are therefore grown by 0.075/0.055 of the frame around each
+  readable field, to cover the record it belongs to.
+
+The store's own support numbers (`+38 068 668-35-95`, `+380737161131`) are in
+every page header and footer. They are real hits and nobody's private data, so
+they are filtered out rather than smeared across the top of half the film.
+- 20:40 screen-cut scripts/screen-cut.py -> projects/books-giveaway/temp/rendertest.mp4 (--manifest projects/books-giveaway/temp/rendertest.json --target 0:45) -- 1:30.0 of sources -> 0:45.9
+- 20:53 screen-cut scripts/screen-cut.py -> projects/books-giveaway/temp/rendertest.mp4 (--manifest projects/books-giveaway/temp/rendertest.json --target 0:45) -- 1:30.0 of sources -> 0:45.9
+
+**The near-miss worth remembering.** The first phone rule required the `+38`
+country code. A composite proof frame from `desktop-105144` showed a Claude
+panel summary reading
+
+> (Київ, відділення 57, 0939589090, Стрельченко Марія — «Іздрик: Ліниві і
+> ніжні», 430 грн)
+
+in the clear -- city, branch, phone and full name -- because the national `0XX`
+form never matched. Widening the rule and re-scanning took `desktop-110556`
+from **0 regions to 7** and `desktop-105144` from 5 to 18. A recording that had
+reported clean was not clean. `check-screen.py` now holds that exact string.
+
+Two habits came out of it and are in the README:
+
+- `--sheet` composites **every rect active at that instant**, not one per
+  frame. The one-at-a-time proof had shown a card panel "covered" while a full
+  IBAN two rects away sat in the clear.
+- Scan the **render**, not only the sources. It is eight minutes at 1080p, so
+  the pass costs minutes and checks the artefact that actually gets published.
+
+Hand-measured rects live in `blur_extra` on the source so regenerating the
+scanned ones cannot drop the rects that exist *because* the OCR missed
+something. `desktop-104945` has one: scan-pii never reported the IBAN printed
+there in full, even though its rule matches that string.
+- 21:36 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 47:14.4 of sources -> 8:00.4
+- 21:48 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00 --where 2:10 --where 2:36 --where 0:28 --where 7:12 --where 3:22) -- 47:14.4 of sources -> 8:00.4
+- 22:05 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 45:38.3 of sources -> 7:42.0
+- 22:22 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 45:38.3 of sources -> 7:42.0
+- 22:26 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 45:38.3 of sources -> 7:42.0
+- 22:27 publish scripts/yt-upload.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (projects/books-giveaway/outputs/books-giveaway.mp4 --title Купую книжки підписникам з Threads — чорновий монтаж (без озвучки) --description-file projects/books-giveaway/description.txt --channel @inst) https://youtu.be/gkSgIQKfgMc -- uploaded Купую книжки підписникам з Threads — чорновий монтаж (без озвучки)
+
+### Stage 1 delivered
+
+`outputs/books-giveaway.mp4`, 7:42, 1920x1080, 30 fps, **no audio track at
+all** -- the voice-over is stage 2 and a silent AAC track would only invite a
+later pass to mix onto nothing. Uploaded private to @instafill_ai as
+https://youtu.be/gkSgIQKfgMc.
+
+**What the user relaxed after seeing frames**, and it is worth keeping: the
+Nova Poshta branch line, the masked PAN (`**** 4699`) and the whole LiqPay page
+are all fine to show. Twelve rects came back out. Recipient names, phones,
+emails and the Claude panel stay covered.
+
+**Two sources are `skip: true`**, not deleted -- `desktop-104945` and
+`desktop-105144`, both carrying the full PAN (the second one in a Notepad
+WINDOW TITLE). 18 s of planning footage between them; the "I made a card"
+beat is already told by the two phone clips. The reason lives on the source
+entry so nobody re-adds them blindly.
+
+**The verification lesson, which cost the most time here.** A scan at one frame
+every two seconds came back with six findings, three of which looked stale on
+inspection -- so it read as "essentially clean". Re-scanning the same ranges at
+2 fps with `--skip-static 0` found the PAN in a window title that no rect was
+near. **Sparse sampling had simply never landed on those frames.** The gate is
+now: render, scan the RENDER at 1 fps with skipping off (462 frames, ~25 min),
+and only then upload. That pass ended with 8 findings, of which 6 were OCR
+variants of the store's own support number.
+
+**Four ffmpeg traps, all new, all in the README:**
+
+- A 579-segment graph is **87 KB** and Windows caps a command line at 32767, so
+  it dies as `WinError 206: The filename or extension is too long` -- which
+  names entirely the wrong thing. Use `-filter_complex_script`.
+- `concat` with ten FILE inputs makes ffmpeg demux all ten concurrently and
+  buffer the nine it is not consuming: 2.8 GB RSS and output frozen at 25 MB.
+  Render per source, join with the concat DEMUXER and `-c copy`.
+- Pixelate rects cost **35 s per 10 s of video at 18 rects**; drawbox costs 2 s.
+  Each pixelate rect is its own split/crop/scale/scale/overlay and runs every
+  frame whether its `enable` window is open or not. Boxes are also the safer
+  redaction. Pixelate is kept for ONE big rect (the Claude panel), where the
+  look is worth it and the cost is a single chain.
+- `_progress.begin()` RETURNS the path ffmpeg must be given as `-progress`.
+  Declaring the job and not wiring it leaves the status line reading an empty
+  file and reporting "stalled" for the entire encode.
+
+**Proxies.** `make-proxies.py` transcodes each source once at the canvas fit
+size: 12 GB -> 332 MB, SSIM 0.9999 against source. Safe because every rect in
+this pipeline is a FRACTION of the frame, so proxy and original are
+interchangeable and there is no "apply it to the big one" step. It is what made
+five re-renders affordable. **Do not** proxy for `scan-pii.py` -- OCR is
+resolution-bound.
+
+**Not done, and the next session should decide it:** the eight books are not
+pinned to beats. At 3.18x the pages stay readable because each is on screen
+15-40 s, but nothing guarantees it. `hold_1x` windows on the source are the
+lever; `--target` deliberately does not scale them.

@@ -1,0 +1,112 @@
+{
+  "v": 1,
+  "id": "books-giveaway",
+  "intent": "One film out of ten silent recordings of buying eight children's books for people who commented under a Threads post, with Claude in the browser doing the ordering. Dead air dropped, AI-thinking stretches fast-forwarded, every card number / CVV / IBAN / phone / email / recipient record blurred, city names deliberately left readable. Rendered silent: the voice-over is stage 2.",
+  "pipelines": [
+    "screen-cut"
+  ],
+  "inputs": {
+    "_comment": "Chronological. Windows names a capture for when it STOPPED, Android for when it STARTED, and the PXL clip is stamped in UTC -- so this order is not the filename order.",
+    "sources": [
+      {
+        "path": "projects/books-giveaway/sources/screen-20260831-083709-1788190581246.mp4",
+        "when": "08:37 local",
+        "what": "monobank on the phone: card list, opening a card",
+        "audio": "ambient only"
+      },
+      {
+        "path": "projects/books-giveaway/sources/screen-20260831-083827-1788190653366.mp4",
+        "when": "08:38 local",
+        "what": "Privat24: the new Universal card and the 10 000 UAH transfer that funds it",
+        "audio": "none (no audio stream at all)"
+      },
+      {
+        "path": "projects/books-giveaway/sources/desktop-085957.mp4",
+        "when": "08:59 local",
+        "what": "the Threads post and its ~55 comments; Claude collects who asked for what",
+        "audio": "digital silence (-91 dB)"
+      },
+      {
+        "path": "projects/books-giveaway/sources/desktop-104620.mp4",
+        "when": "10:46 local",
+        "what": "DMs and the commenter/address spreadsheet",
+        "audio": "ambient, 0 words transcribed"
+      },
+      {
+        "path": "projects/books-giveaway/sources/desktop-104945.mp4",
+        "when": "10:49 local",
+        "what": "Privat24 card details -- CARRIES THE FULL PAN IN PLAIN TEXT",
+        "audio": "digital silence"
+      },
+      {
+        "path": "projects/books-giveaway/sources/desktop-105144.mp4",
+        "when": "10:51 local",
+        "what": "planning the checkout run",
+        "audio": "digital silence"
+      },
+      {
+        "path": "projects/books-giveaway/sources/desktop-110556.mp4",
+        "when": "11:05 local",
+        "what": "first book page and order",
+        "audio": "digital silence"
+      },
+      {
+        "path": "projects/books-giveaway/sources/PXL_20260831_181726168.mp4",
+        "when": "11:17 local (18:17Z)",
+        "what": "handheld cutaway of the desk, shot on the phone",
+        "audio": "room"
+      },
+      {
+        "path": "projects/books-giveaway/sources/desktop-112123.mp4",
+        "when": "11:21 local",
+        "what": "the bulk of the ordering and paying",
+        "audio": "digital silence"
+      },
+      {
+        "path": "projects/books-giveaway/sources/desktop-115024.mp4",
+        "when": "11:50 local",
+        "what": "the rest of the orders, payments and confirmation DMs",
+        "audio": "digital silence"
+      }
+    ],
+    "duplicates_ignored": [
+      "~/Videos/Screen Recordings/* -- byte-identical copies Windows writes alongside the ones in ~/Videos",
+      "Recording 2026-08-31 115632.mp4 -- byte-identical to 105144"
+    ]
+  },
+  "controls": {
+    "manifest": "projects/books-giveaway/screen.json",
+    "cut": "cut.* in the manifest; --target M:SS solves keep_speed and speed together",
+    "blur": "sources[].blur -- desktop entries generated from temp/pii/*.pii.json, phone entries measured by hand",
+    "regions": "regions.main / regions.panel; the Edge side-panel divider is x=0.748",
+    "activity": "temp/*.activity.json, rebuilt by screen-activity.py if a source changes"
+  },
+  "deliverables": {
+    "projects/books-giveaway/outputs/books-giveaway.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-31T22:27:56Z",
+      "kind": "film",
+      "script": "scripts/yt-upload.py",
+      "manifest": "projects/books-giveaway/screen.json",
+      "burned": {
+        "cut": "activity-driven",
+        "blur_rects": 101,
+        "speed_badge": true,
+        "speed": 19.072265625,
+        "audio": "none (silent sources)"
+      },
+      "published": {
+        "url": "https://youtu.be/gkSgIQKfgMc",
+        "privacy": "private",
+        "sidecar": "projects/books-giveaway/outputs/books-giveaway.youtube.json"
+      }
+    }
+  },
+  "notes": [
+    "Rendered with -an on purpose: every source is silent and the voice-over is stage 2.",
+    "scan-pii.py found NOTHING in the monobank clip while two full PANs were on screen -- its report is a net, not a clearance.",
+    "The user chose 8:00 from a priced menu and 'blur everything but keep the city name'.",
+    "The render-pipeline test manifest (temp/rendertest.json) was a throwaway for proving the filtergraph end to end before spending a full encode; its deliverable entry was removed as it is not a render of this video."
+  ],
+  "updated_utc": "2026-08-31T22:27:56Z"
+}

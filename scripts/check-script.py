@@ -85,6 +85,18 @@ EXCEPTIONS = {
         "argparse": "same bargain as check-dub.py: one button, no files, no "
                     "GPU -- it tests the round-trip arithmetic in memory",
     },
+    "check-screen.py": {
+        "argparse": "same bargain as check-dub.py: one button, no files, no "
+                    "GPU, no OCR -- it tests the PII rules and the cut "
+                    "arithmetic in memory",
+    },
+    "make-proxies.py": {
+        "record": "a proxy is an intermediate, not a deliverable: it lives "
+                  "under temp/, is regenerated from the source on demand, and "
+                  "is recorded where it belongs -- as the `proxy` key on the "
+                  "manifest source it was built from. screen-cut.py records "
+                  "the film that comes out the other end",
+    },
     "check-env.py": {
         "argparse": "takes no arguments by design -- it is one button",
         "pythonpath": "it is the doctor for that variable; reading and "
