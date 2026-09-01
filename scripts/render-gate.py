@@ -132,7 +132,8 @@ def pools(tb, man, mpath, plans):
             by_geo.setdefault(geo, {"src": p["path"], "info": info, "pii": []})["pii"].append(pii)
     out = {}
     for geo, d in by_geo.items():
-        out[geo] = tb.collect_templates(d["src"], d["pii"], benign, tb.KINDS, d["info"])
+        kinds = set(man.get("blur_kinds") or tb.KINDS)
+        out[geo] = tb.collect_templates(d["src"], d["pii"], benign, kinds, d["info"])
     return out
 
 
@@ -186,7 +187,10 @@ def main():
         sp = load("scan-pii")
         frames = sp.ocr_pass(render, args.ocr_fps, 1600, 0.004)
         benign = [b.replace(" ", "") for b in (man.get("benign_text") or [])]
+        kinds = set(man.get("blur_kinds") or tb.KINDS)
         for h in sp.apply_rules(frames):
+            if h["kind"] not in kinds:
+                continue
             if any(b in h["text"].replace(" ", "") for b in benign):
                 continue
             hits.append({"t": h["t"], "kind": h["kind"], "key": tb.norm_key(h["kind"], h["text"]),

@@ -89,7 +89,7 @@ Don't reintroduce it, and don't use `os.execve` to re-exec on Windows — it
 spawns rather than replaces, so the parent dies abnormally and the exit code is
 lost. `_env.bootstrap()` uses `subprocess.run` and propagates the status.
 
-## The six pipelines
+## The seven pipelines
 
 Everything is manifest-driven. Nothing hardcodes a timecode, a colour or a font
 size; per-video decisions live in the project's manifests under
@@ -388,6 +388,40 @@ After touching any of `shot-detect.py`, `split-cameras.py`, `sync-audio.py`,
 `python scripts/check-multicam.py` —
 it tests the frame arithmetic with no GPU and no files.
 
+**7. Silent screencast** — one film out of screen recordings that carry **no
+usable sound** (a Game Bar capture with no microphone writes a digitally silent
+track, `-91 dB` mean *and* max), with the sensitive fields blurred and the
+voice-over added later. Eleven stages, one command, one stop:
+
+```powershell
+python scripts/screencast-pipeline.py --project <id> --target 8:00            # stops at the review sheet
+python scripts/screencast-pipeline.py --project <id> --target 8:00 --approve --upload unlisted
+```
+
+`import-footage.py` → `make-proxies.py` → `screen-activity.py` (per-region
+motion; the panel divider *found*) → `scan-pii.py` (OCR once, cached) →
+`track-blur.py` (each secret's own pixels followed, templates pooled across
+the session) → **`--recall`** (the tracker measured against the OCR hits;
+stops below the bar) → **`redaction-review.py`** (a before/after sheet;
+nothing renders unapproved) → `screen-cut.py --smoke` → `screen-cut.py`
+(content-addressed pieces, stream-copy join) → `render-gate.py` (the secrets'
+pixels searched on the *render*; `--patch` and loop) → `yt-upload.py`.
+
+Three rules it enforces, each learned at a cost of an hour or more
+(`docs/retro-books-giveaway.md`): **never render a look the user has not
+seen**; **never adopt a detector you have not measured** — the first tracker
+scored 27 % on frames it cut its own templates from, and three renders went
+out before anyone asked; **the gate reads the render**, a sparse OCR "looks
+clean" is not a gate. The two ffmpeg facts that matter most: the `fps` filter
+labels the sampling *slot*, not the frame (`select` + `showinfo` gives the
+frame's own time), and a filtergraph on the Windows command line dies at
+32 KB as `WinError 206`.
+
+After touching any of `screen-activity.py`, `screen-cut.py`, `scan-pii.py`,
+`track-blur.py`, `render-gate.py` or `redaction-review.py`, run
+`python scripts/check-screen.py` — the PII rules against the strings that came
+off real frames, the cut arithmetic, the recall harness, no GPU, no OCR.
+
 ## Projects: the memory that outlives the session
 
 Each video is a folder, `projects/<id>/`: its manifests and two committed
@@ -450,6 +484,8 @@ which cannot encode the glyphs at all.
 | `scripts/` | all tooling; `_env.py` first, then the pipeline scripts |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
+| `scripts/screencast-pipeline.py` | the silent-screencast job as one cached, checkpointed command; the stage scripts it drives are listed under pipeline 7 |
+| `docs/retro-books-giveaway.md` | where six hours went on the first silent-screencast edit, and the rule that now prevents each loss |
 | `projects/<id>/` | one video: `project.json`, `journal.md`, its manifests + sidecars (committed), and its `sources/ audio/ transcripts/ outputs/ temp/` (gitignored) |
 | `config/presets/` | caption styling |
 | `config/labels/` | the lower-third name label |

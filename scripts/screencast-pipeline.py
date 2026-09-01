@@ -128,6 +128,48 @@ class Pipeline:
             raise SystemExit(f"\n  stage failed: {what} (exit {r.returncode})")
         return r.returncode
 
+    def run_parallel(self, jobs, what, workers=None):
+        """Run per-source jobs concurrently, one process each.
+
+        OCR and template matching are CPU-bound and single-threaded in
+        practice: onnxruntime here has no CUDA provider, so RapidOCR runs on
+        the CPU, and the first pipeline left fifteen of sixteen cores idle
+        while it read one recording at a time. Sources are independent, so
+        the honest fix is processes, not a GPU build that would replace the
+        onnxruntime sherpa-onnx needs.
+
+        Output is captured per job and printed when it finishes, so two
+        streams never interleave into nonsense.
+        """
+        workers = workers or self.args.jobs
+        if workers <= 1 or len(jobs) <= 1:
+            for argv, label in jobs:
+                self.run(argv, label)
+            return
+        import concurrent.futures as cf
+        print(f"    {len(jobs)} job(s) on {workers} worker(s)", flush=True)
+        fails = []
+        with cf.ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = {ex.submit(subprocess.run, [PY] + argv, cwd=ROOT,
+                              capture_output=True, text=True): (argv, label)
+                    for argv, label in jobs}
+            for fut in cf.as_completed(futs):
+                argv, label = futs[fut]
+                r = fut.result()
+                tail = [ln for ln in (r.stdout or "").splitlines()
+                        if ln.strip() and not ln.lstrip().startswith("...")]
+                print(f"    -- {label}")
+                for ln in tail[-6:]:
+                    print(f"       {ln}")
+                if r.returncode != 0:
+                    fails.append((label, (r.stderr or "").strip().splitlines()[-6:]))
+        if fails:
+            for label, err in fails:
+                print(f"    FAILED {label}:")
+                for ln in err:
+                    print(f"       {ln}")
+            raise SystemExit(f"\n  stage failed: {what}")
+
     # -- stages ----------------------------------------------------------
     def st_import(self):
         have = glob.glob(os.path.join(self.pdir, "sources", "*.mp4"))
@@ -201,6 +243,7 @@ class Pipeline:
         sig = stat_sig(ins) + rules_sig
         if self.is_done("ocr", sig):
             return "cached", ""
+        jobs = []
         for s in self.sources():
             base = self.base(s)
             out = os.path.join(self.tdir, "pii", base + ".pii.json")
@@ -211,7 +254,8 @@ class Pipeline:
                     "--width", "1600", "--report"]
             if os.path.exists(cache):
                 argv.append("--from-cache")
-            self.run(argv, f"ocr {base}")
+            jobs.append((argv, f"ocr {base}"))
+        self.run_parallel(jobs, "ocr")
         return "ran", sig
 
     def tracked_sources(self):
@@ -236,15 +280,19 @@ class Pipeline:
         if self.is_done("track", sig):
             return "cached", ""
         m = self.man()
+        jobs = []
         for s in self.tracked_sources():
             tdir = os.path.join(self.tdir, "track", self.base(s))
-            self.run([os.path.join(HERE, "track-blur.py"), "--src",
-                      self.rel(self.proxy_or_src(s)), "--outdir", self.rel(tdir),
-                      "--manifest", self.rel(self.mpath)], f"track {self.base(s)}")
+            jobs.append(([os.path.join(HERE, "track-blur.py"), "--src",
+                          self.rel(self.proxy_or_src(s)), "--outdir", self.rel(tdir),
+                          "--manifest", self.rel(self.mpath)], f"track {self.base(s)}"))
             for s2 in m["sources"]:
                 if s2["path"] == s["path"]:
                     s2["track"] = self.rel(tdir)
+        # the manifest must name the track dirs BEFORE the jobs run: each
+        # tracker reads it to pool the other sources' scans
         self.save_man(m)
+        self.run_parallel(jobs, "track")
         return "ran", sig
 
     def st_recall(self):
@@ -362,6 +410,13 @@ def main():
     ap.add_argument("--title")
     ap.add_argument("--channel", default="@instafill_ai")
     ap.add_argument("--since", help="import: only captures from this date (YYYY-MM-DD)")
+    ap.add_argument("--jobs", "-j", type=int,
+                    default=max(1, min(6, (os.cpu_count() or 4) // 3)),
+                    help="parallel per-source processes for the CPU-bound "
+                         "stages (ocr, track). Default is a third of the "
+                         "cores, capped at 6: onnxruntime already uses "
+                         "several threads per process, so more workers than "
+                         "that mostly contend.")
     ap.add_argument("--ocr-fps", type=float, default=0.25)
     ap.add_argument("--recall-min", type=float, default=0.98)
     ap.add_argument("--gate-rounds", type=int, default=3,

@@ -40,497 +40,22 @@
   "sources": [
     {
       "_why": "08:37 -- monobank on the phone: the card list, and opening a new card. NOT Privat24, despite the ask saying so; the second clip is the Privat24 one.",
-      "_blur_why": "blurred fields only, from temp/pii/screen-20260831-083709-1788190581246.pii.json; padded 0.006/0.01 -- enough not to clip a glyph",
+      "_blur_why": "review pass 1: the full-width bands hid the selfie and the card-creation story this clip exists to show. Tracking measures its own recall now; hand rects only where --recall says they are needed.",
       "path": "projects/books-giveaway/sources/screen-20260831-083709-1788190581246.mp4",
       "activity": "projects/books-giveaway/temp/screen-20260831-083709-1788190581246.activity.json",
       "proxy": "projects/books-giveaway/temp/proxy/screen-20260831-083709-1788190581246.mp4",
-      "blur_extra": [
-        {
-          "_why": "PAN 4441 **** **** 7789 on the card face",
-          "rect": [
-            0.12,
-            0.405,
-            0.76,
-            0.052
-          ],
-          "when": [
-            4,
-            16
-          ]
-        },
-        {
-          "_why": "account balance",
-          "rect": [
-            0.27,
-            0.258,
-            0.46,
-            0.062
-          ],
-          "when": [
-            4,
-            16
-          ]
-        },
-        {
-          "_why": "top-bar amount",
-          "rect": [
-            0.59,
-            0.132,
-            0.18,
-            0.042
-          ],
-          "when": [
-            4,
-            49
-          ]
-        },
-        {
-          "_why": "card last-4",
-          "rect": [
-            0.35,
-            0.172,
-            0.16,
-            0.048
-          ],
-          "when": [
-            28,
-            38
-          ]
-        },
-        {
-          "_why": "card last-4",
-          "rect": [
-            0.81,
-            0.172,
-            0.16,
-            0.048
-          ],
-          "when": [
-            28,
-            38
-          ]
-        },
-        {
-          "_why": "balance",
-          "rect": [
-            0.05,
-            0.277,
-            0.34,
-            0.058
-          ],
-          "when": [
-            28,
-            38
-          ]
-        },
-        {
-          "_why": "balance",
-          "rect": [
-            0.51,
-            0.277,
-            0.26,
-            0.058
-          ],
-          "when": [
-            28,
-            38
-          ]
-        },
-        {
-          "_why": "card last-4",
-          "rect": [
-            0.35,
-            0.352,
-            0.16,
-            0.048
-          ],
-          "when": [
-            28,
-            38
-          ]
-        },
-        {
-          "_why": "balance",
-          "rect": [
-            0.05,
-            0.452,
-            0.3,
-            0.058
-          ],
-          "when": [
-            28,
-            38
-          ]
-        },
-        {
-          "_why": "PAN 4441 **** **** 8596 on the card face",
-          "rect": [
-            0.12,
-            0.405,
-            0.76,
-            0.052
-          ],
-          "when": [
-            41,
-            49
-          ]
-        },
-        {
-          "_why": "USD balance",
-          "rect": [
-            0.27,
-            0.258,
-            0.46,
-            0.062
-          ],
-          "when": [
-            41,
-            49
-          ]
-        },
-        {
-          "_why": "transaction amounts",
-          "rect": [
-            0.76,
-            0.772,
-            0.22,
-            0.165
-          ],
-          "when": [
-            41,
-            49
-          ]
-        }
-      ],
-      "blur": [
-        {
-          "_why": "PAN 4441 **** **** 7789 on the card face",
-          "rect": [
-            0.12,
-            0.405,
-            0.76,
-            0.052
-          ],
-          "when": [
-            4,
-            16
-          ]
-        },
-        {
-          "_why": "account balance",
-          "rect": [
-            0.27,
-            0.258,
-            0.46,
-            0.062
-          ],
-          "when": [
-            4,
-            16
-          ]
-        },
-        {
-          "_why": "top-bar amount",
-          "rect": [
-            0.59,
-            0.132,
-            0.18,
-            0.042
-          ],
-          "when": [
-            4,
-            49
-          ]
-        },
-        {
-          "_why": "card last-4",
-          "rect": [
-            0.35,
-            0.172,
-            0.16,
-            0.048
-          ],
-          "when": [
-            28,
-            38
-          ]
-        },
-        {
-          "_why": "card last-4",
-          "rect": [
-            0.81,
-            0.172,
-            0.16,
-            0.048
-          ],
-          "when": [
-            28,
-            38
-          ]
-        },
-        {
-          "_why": "balance",
-          "rect": [
-            0.05,
-            0.277,
-            0.34,
-            0.058
-          ],
-          "when": [
-            28,
-            38
-          ]
-        },
-        {
-          "_why": "balance",
-          "rect": [
-            0.51,
-            0.277,
-            0.26,
-            0.058
-          ],
-          "when": [
-            28,
-            38
-          ]
-        },
-        {
-          "_why": "card last-4",
-          "rect": [
-            0.35,
-            0.352,
-            0.16,
-            0.048
-          ],
-          "when": [
-            28,
-            38
-          ]
-        },
-        {
-          "_why": "balance",
-          "rect": [
-            0.05,
-            0.452,
-            0.3,
-            0.058
-          ],
-          "when": [
-            28,
-            38
-          ]
-        },
-        {
-          "_why": "PAN 4441 **** **** 8596 on the card face",
-          "rect": [
-            0.12,
-            0.405,
-            0.76,
-            0.052
-          ],
-          "when": [
-            41,
-            49
-          ]
-        },
-        {
-          "_why": "USD balance",
-          "rect": [
-            0.27,
-            0.258,
-            0.46,
-            0.062
-          ],
-          "when": [
-            41,
-            49
-          ]
-        },
-        {
-          "_why": "transaction amounts",
-          "rect": [
-            0.76,
-            0.772,
-            0.22,
-            0.165
-          ],
-          "when": [
-            41,
-            49
-          ]
-        }
-      ],
-      "track": false,
-      "_track_why": "hand rects, not tracking: phone-bank screens render one number in several fonts and a handheld shot is photographed pixels -- NCC recall was 14% there"
+      "blur_extra": [],
+      "blur": []
     },
     {
       "_why": "08:38 -- Privat24: the new Universal card (0499) and the 10 000 UAH transfer that funds it.",
-      "_blur_why": "hand-measured, time-gated, verified on proof frames. Tracking is NOT used here: the app renders the same number in several fonts/sizes across views and a missed template match is a leak; the screens are static, so time windows are sound on this clip.",
+      "_blur_why": "review pass 1: the full-width bands hid the selfie and the card-creation story this clip exists to show. Tracking measures its own recall now; hand rects only where --recall says they are needed.",
       "path": "projects/books-giveaway/sources/screen-20260831-083827-1788190653366.mp4",
       "activity": "projects/books-giveaway/temp/screen-20260831-083827-1788190653366.activity.json",
       "proxy": "projects/books-giveaway/temp/proxy/screen-20260831-083827-1788190653366.mp4",
-      "blur": [
-        {
-          "_why": "new card face: PAN 0499, expiry 11/27, balance",
-          "rect": [
-            0.0,
-            0.02,
-            1.0,
-            0.34
-          ],
-          "when": [
-            4.0,
-            22.0
-          ]
-        },
-        {
-          "_why": "USD card + 1 066.35 balance",
-          "rect": [
-            0.0,
-            0.1,
-            1.0,
-            0.4
-          ],
-          "when": [
-            14.0,
-            23.0
-          ]
-        },
-        {
-          "_why": "history: TEXACO, Airbnb, card *4699 and their amounts",
-          "rect": [
-            0.0,
-            0.52,
-            1.0,
-            0.42
-          ],
-          "when": [
-            14.0,
-            23.0
-          ]
-        },
-        {
-          "_why": "transfer + confirmation: both IBANs, both PANs, balances, recipient name",
-          "rect": [
-            0.0,
-            0.13,
-            1.0,
-            0.42
-          ],
-          "when": [
-            18.0,
-            46.0
-          ]
-        },
-        {
-          "_why": "funded card face and balance",
-          "rect": [
-            0.0,
-            0.02,
-            1.0,
-            0.36
-          ],
-          "when": [
-            44.0,
-            55.0
-          ]
-        },
-        {
-          "_why": "history line naming the source card",
-          "rect": [
-            0.0,
-            0.56,
-            1.0,
-            0.3
-          ],
-          "when": [
-            44.0,
-            55.0
-          ]
-        }
-      ],
-      "blur_extra": [
-        {
-          "_why": "new card face: PAN 0499, expiry 11/27, balance",
-          "rect": [
-            0.0,
-            0.02,
-            1.0,
-            0.34
-          ],
-          "when": [
-            4.0,
-            22.0
-          ]
-        },
-        {
-          "_why": "USD card + 1 066.35 balance",
-          "rect": [
-            0.0,
-            0.1,
-            1.0,
-            0.4
-          ],
-          "when": [
-            14.0,
-            23.0
-          ]
-        },
-        {
-          "_why": "history: TEXACO, Airbnb, card *4699 and their amounts",
-          "rect": [
-            0.0,
-            0.52,
-            1.0,
-            0.42
-          ],
-          "when": [
-            14.0,
-            23.0
-          ]
-        },
-        {
-          "_why": "transfer + confirmation: both IBANs, both PANs, balances, recipient name",
-          "rect": [
-            0.0,
-            0.13,
-            1.0,
-            0.42
-          ],
-          "when": [
-            18.0,
-            46.0
-          ]
-        },
-        {
-          "_why": "funded card face and balance",
-          "rect": [
-            0.0,
-            0.02,
-            1.0,
-            0.36
-          ],
-          "when": [
-            44.0,
-            55.0
-          ]
-        },
-        {
-          "_why": "history line naming the source card",
-          "rect": [
-            0.0,
-            0.56,
-            1.0,
-            0.3
-          ],
-          "when": [
-            44.0,
-            55.0
-          ]
-        }
-      ],
-      "track": false,
-      "_track_why": "hand rects, not tracking: phone-bank screens render one number in several fonts and a handheld shot is photographed pixels -- NCC recall was 14% there"
+      "blur": [],
+      "blur_extra": [],
+      "track": "projects/books-giveaway/temp/track/screen-20260831-083827-1788190653366"
     },
     {
       "_why": "08:59 -- the Threads post and its comments; Claude collects who asked for what.",
@@ -647,209 +172,40 @@
     },
     {
       "_why": "11:17 -- handheld cutaway of the same session, shot on the phone. Its creation_time is UTC (18:17Z), which is 11:17 local, so it belongs here and not at the end where a filename sort puts it.",
-      "_blur_why": "blurred fields only, from temp/pii/PXL_20260831_181726168.pii.json; padded 0.006/0.01 -- enough not to clip a glyph",
+      "_blur_why": "review pass 1: the full-width bands hid the selfie and the card-creation story this clip exists to show. Tracking measures its own recall now; hand rects only where --recall says they are needed.",
       "path": "projects/books-giveaway/sources/PXL_20260831_181726168.mp4",
       "activity": "projects/books-giveaway/temp/PXL_20260831_181726168.activity.json",
-      "blur_extra": [],
-      "blur": [
+      "blur_extra": [
         {
-          "_why": "phone: +38 (066) 317-5125",
+          "_why": "recall miss at 8 s: '+38 (066) 317-3125' in the checkout form on the photographed screen while the camera moves; the template exists but NCC does not hold through the motion. One field, one window.",
           "rect": [
-            0.4091,
-            0.3733,
-            0.0547,
-            0.0357
+            0.22,
+            0.27,
+            0.22,
+            0.12
           ],
           "when": [
-            -2.5,
-            2.5
-          ]
-        },
-        {
-          "_why": "email: agamanuk@gmafl.com",
-          "rect": [
-            0.3169,
-            0.4243,
-            0.0604,
-            0.0348
-          ],
-          "when": [
-            -2.5,
-            2.5
-          ]
-        },
-        {
-          "_why": "email: agamanuk@gmail.com",
-          "rect": [
-            0.3148,
-            0.4243,
-            0.061,
-            0.0348
-          ],
-          "when": [
-            -0.5,
-            4.5
-          ]
-        },
-        {
-          "_why": "phone: +38 (066)317-3125",
-          "rect": [
-            0.332,
-            0.3261,
-            0.0771,
-            0.0404
-          ],
-          "when": [
-            1.5,
-            6.5
-          ]
-        },
-        {
-          "_why": "email: agamanuk@gmail.com",
-          "rect": [
-            0.1872,
-            0.4094,
-            0.0917,
-            0.0413
-          ],
-          "when": [
-            1.5,
-            6.5
-          ]
-        },
-        {
-          "_why": "phone: +38(066)317-3125",
-          "rect": [
-            0.2544,
-            0.2419,
-            0.088,
-            0.0441
-          ],
-          "when": [
-            3.5,
-            8.5
-          ]
-        },
-        {
-          "_why": "email: agamanuk@gmail.com",
-          "rect": [
-            0.0779,
-            0.3261,
-            0.1084,
-            0.0422
-          ],
-          "when": [
-            3.5,
-            8.5
-          ]
-        },
-        {
-          "_why": "phone: +38(066)317-3125",
-          "rect": [
-            0.2612,
-            0.3122,
-            0.0849,
-            0.0422
-          ],
-          "when": [
-            5.5,
-            10.5
-          ]
-        },
-        {
-          "_why": "email: agamanuk@gmail.com",
-          "rect": [
-            0.0909,
-            0.3909,
-            0.1047,
-            0.0422
-          ],
-          "when": [
-            5.5,
-            10.5
-          ]
-        },
-        {
-          "_why": "phone: +38(066)317-3125",
-          "rect": [
-            0.2466,
-            0.3317,
-            0.0828,
-            0.0422
-          ],
-          "when": [
-            7.5,
-            12.5
-          ]
-        },
-        {
-          "_why": "email: agamanuk@gmail.com",
-          "rect": [
-            0.0789,
-            0.4067,
-            0.1031,
-            0.0431
-          ],
-          "when": [
-            7.5,
-            12.5
-          ]
-        },
-        {
-          "_why": "phone: +38(066)317-3125",
-          "rect": [
-            0.2581,
-            0.3085,
-            0.0828,
-            0.0413
-          ],
-          "when": [
-            9.5,
-            14.5
-          ]
-        },
-        {
-          "_why": "email: agamanuk@gmail.com",
-          "rect": [
-            0.0924,
-            0.3872,
-            0.1016,
-            0.0413
-          ],
-          "when": [
-            9.5,
-            14.5
-          ]
-        },
-        {
-          "_why": "phone: +38 (066)317-3125",
-          "rect": [
-            0.2706,
-            0.2946,
-            0.0823,
-            0.0413
-          ],
-          "when": [
-            11.5,
-            16.5
-          ]
-        },
-        {
-          "_why": "email: agamanuk@gmail.com",
-          "rect": [
-            0.1065,
-            0.3724,
-            0.1011,
-            0.0413
-          ],
-          "when": [
-            11.5,
-            16.5
+            0.0,
+            22.0
           ]
         }
       ],
-      "track": false,
-      "_track_why": "hand rects, not tracking: phone-bank screens render one number in several fonts and a handheld shot is photographed pixels -- NCC recall was 14% there"
+      "blur": [
+        {
+          "_why": "recall miss at 8 s: '+38 (066) 317-3125' in the checkout form on the photographed screen while the camera moves; the template exists but NCC does not hold through the motion. One field, one window.",
+          "rect": [
+            0.22,
+            0.27,
+            0.22,
+            0.12
+          ],
+          "when": [
+            0.0,
+            22.0
+          ]
+        }
+      ],
+      "track": "projects/books-giveaway/temp/track/PXL_20260831_181726168"
     },
     {
       "_why": "11:21 -- the bulk of the ordering.",
@@ -886,5 +242,14 @@
     "store@ababahalamaha.com",
     "4699"
   ],
-  "_benign_why": "store support numbers printed in every header/footer, empty-form placeholders, and the masked PAN the user cleared. track-blur.py reads this list."
+  "_benign_why": "store support numbers printed in every header/footer, empty-form placeholders, and the masked PAN the user cleared. track-blur.py reads this list.",
+  "blur_kinds": [
+    "card",
+    "cvv",
+    "expiry",
+    "iban",
+    "phone",
+    "email"
+  ],
+  "_blur_kinds_why": "review pass 1: 'I'm not against showing these balances' -- and blurring them in some frames but not others was the inconsistency complained about. Names and delivery branches are not in the list either: this OCR cannot read Cyrillic names, so claiming to cover them would be a promise the tool cannot keep."
 }

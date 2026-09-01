@@ -55,3 +55,4 @@ requests
 # Auth is the channel owner's own OAuth consent, cached under .yt-oauth/.
 google-api-python-client
 google-auth-oauthlib
+rapidocr-onnxruntime==1.2.3   # OCR for scan-pii.py and render-gate.py; CPU, no torch

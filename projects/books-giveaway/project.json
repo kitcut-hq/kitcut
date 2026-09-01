@@ -111,5 +111,10 @@
     "The render-pipeline test manifest (temp/rendertest.json) was a throwaway for proving the filtergraph end to end before spending a full encode; its deliverable entry was removed as it is not a render of this video.",
     "User: blur, never black-out; never wipe whole screens or panels; the Claude chat stays readable except the sensitive field itself; uploads unlisted."
   ],
-  "updated_utc": "2026-09-01T00:24:29Z"
+  "updated_utc": "2026-09-01T04:30:48Z",
+  "review": {
+    "fingerprint": "8c9ce85e4859af6a",
+    "approved_utc": "2026-09-01T04:30:48Z",
+    "sheet": "projects/books-giveaway/temp/review/redaction-sheet.jpg"
+  }
 }

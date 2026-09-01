@@ -69,6 +69,7 @@ for mod, why in [
     ("PIL", "handle badge rendering"),
     ("fontTools", "badge cap-height metrics"),
     ("onnxruntime", "whisper VAD"),
+    ("rapidocr_onnxruntime", "OCR for scan-pii.py and the redaction gate"),
     ("edge_tts", "dubbing text-to-speech"),
     ("httpx", "ElevenLabs TTS and the OpenAI translation engine"),
     ("yt_dlp", "fetching sources"),

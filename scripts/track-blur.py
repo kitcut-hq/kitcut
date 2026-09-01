@@ -536,7 +536,9 @@ def main():
     if args.manifest:
         man = json.load(open(_env.resolve(args.manifest), encoding="utf-8"))
         benign = man.get("benign_text") or []
-    kinds = set(args.kinds.split(","))
+    # the manifest decides what counts as a secret; --kinds still overrides
+    kinds = set(args.kinds.split(",")) if args.kinds != ",".join(sorted(KINDS)) \
+        else set(man.get("blur_kinds") or KINDS)
     pii_paths = args.pii.split(",") if args.pii else pool_from_manifest(man, args.manifest, info)
     if not pii_paths:
         raise SystemExit("no scans to pool: give --pii or a --manifest whose "

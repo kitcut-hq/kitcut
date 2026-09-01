@@ -257,3 +257,33 @@ New: `screencast-pipeline.py` (eleven stages, cached, one stop),
 `import-footage.py`, `redaction-review.py`, `render-gate.py --patch`,
 `screen-cut.py --smoke`, `screen-activity.py --find-panel`, the OCR cache.
 Phone clips are `track: false` in the manifest: hand rects there.
+- 04:30 redaction-review -- redaction look approved (8c9ce85e4859af6a)
+
+### Review pass 1 applied; first full pipeline run
+
+The user's review recording (`review-notes.md`) changed three decisions:
+balances are shown (out of `blur_kinds`), no full-width bands on the phone
+clips, and the phone clips are tracked again -- their 14% recall had been
+measured with the timestamp bug in place. The measurement after the fix:
+
+    desktop-104620   11/11  100%      desktop-112123  162/166  97.6%
+    desktop-104945    6/6   100%      desktop-115024  182/189  96.3%
+    desktop-110556    6/6   100%      screen-…083827    9/10   90.0%
+    desktop-105144   25/27   92.6%    PXL (handheld)    6/7    85.7% -> one hand rect
+
+407/422 = 96.4% overall. Recipient NAMES are deliberately not blurred: the
+OCR cannot read Cyrillic, so the tool cannot promise them; the user approved
+the look with that stated.
+
+**The new bottleneck is tracking time**: OCR 27 min, tracking **82 min** with
+5 parallel workers. Worse than the original 8-minute tracker, and for a known
+reason: the full-resolution search added for small templates runs every
+pooled template (~85 per source, x3 scales) on every change frame for every
+lost template. The fix is a cost model, not a tune -- a permissive coarse
+prefilter with full-res confirmation, sweeps bounded to the windows the OCR
+cache says a secret is on screen (plus a slow patrol outside them), one
+thread per worker process. Next task after this upload.
+
+Also: never pipe a long run through `tail` into a log -- it kept only the
+last 40 lines of the pipeline output, and the per-source recall table had to
+be re-run to be read. The pipeline now writes its own log file.

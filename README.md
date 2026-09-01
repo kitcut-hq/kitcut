@@ -590,6 +590,26 @@ piece and one gate:
 The individual tools remain usable on their own; the pipeline is what makes
 the order and the caching un-forgettable.
 
+### The reviewer's recording is an input
+
+The best review of the first cut was the user's own: they scrubbed the film in
+a player with its timecode visible in the corner, recorded the screen, and said
+what was wrong. Turning that into a ticket list by hand — transcribe, read the
+timecode off each frame, map film time back through the cut — took forty
+minutes. `review-ingest.py` does it in two:
+
+```powershell
+python scripts/review-ingest.py --manifest projects/<id>/screen.json --recording <review.mp4> --target 8:00
+```
+
+It transcribes the narration, OCRs the player's timecode from the bottom-left
+corner **per segment**, groups consecutive segments that read the same
+timecode into one remark (one remark per frame paused on — the reviewer's own
+unit, not a speech pause), and maps each through the render plan to a source
+and a source time. It appends a dated table to `projects/<id>/review-notes.md`
+with an empty *disposition* column and changes nothing else: what to do about
+a remark is a decision, and the manifest is edited by the person or the gate.
+
 ```powershell
 python scripts/screen-activity.py --src <proxy> --list --probe-motion
 python scripts/scan-pii.py        --src <proxy> --out temp/pii/<base>.pii.json --report
@@ -2070,6 +2090,7 @@ absolute path written into a script, a skill or these docs.
 | `scripts/render-gate.py` | search the secrets' pixels on the finished film; `--patch` the manifest |
 | `scripts/import-footage.py` | desktop + phone captures into a project, ordered by real capture start |
 | `scripts/screencast-pipeline.py` | the eleven stages in order, cached, with one stop |
+| `scripts/review-ingest.py` | the user's narrated review recording → remarks mapped to source frames |
 | `scripts/check-screen.py` | silent-screencast self-test; no GPU, no files, no OCR |
 | `scripts/shot-detect.py` | read an edit back off a finished film: where it cuts, and on which angle |
 | `scripts/split-cameras.py` | conform a programme, then rebuild the camera tapes it was cut from |
