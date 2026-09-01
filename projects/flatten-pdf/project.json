@@ -67,9 +67,9 @@
     },
     "projects/flatten-pdf/outputs/shorts/flatten-pdf-01-free-tool-vo.mp4": {
       "status": "current",
-      "built_utc": "2026-09-01T19:23:50Z",
+      "built_utc": "2026-09-01T19:30:35Z",
       "kind": "short-dubbed",
-      "script": "scripts/cut-clips.py",
+      "script": "scripts/yt-upload.py",
       "manifest": "projects/flatten-pdf/clips-vertical.json",
       "burned": [
         "source rect (215, 72, 900, 535) fitted to 1080 wide on #0B0D10",
@@ -82,18 +82,23 @@
         "clip": "projects/flatten-pdf/outputs/shorts/flatten-pdf-01-free-tool-vo.json",
         "dub-audio": "projects/flatten-pdf/outputs/dub/flatten-pdf-01-free-tool.vo.wav",
         "dub-words": "projects/flatten-pdf/outputs/dub/flatten-pdf-01-free-tool.vo.words.json"
+      },
+      "published": {
+        "url": "https://youtu.be/hmHbL-66G-o",
+        "privacy": "unlisted",
+        "sidecar": "projects/flatten-pdf/outputs/shorts/flatten-pdf-01-free-tool-vo.youtube.json"
       }
     }
   },
   "notes": [
     "Both shorts carry the SOURCE audio as a reference track and no captions. Neither is the deliverable look: stage 2 replaces the audio with a scripted voice-over via cut-clips.py --dub and rebuilds the captions from its word timings, into new files tagged -vo. These two are never overwritten.",
+    "Short 1 published UNLISTED as a YouTube Short: https://youtu.be/hmHbL-66G-o (2026-09-01). Confirmed a Short, not a regular video: youtube.com/shorts/hmHbL-66G-o serves 200, where a non-Short 303-redirects to /watch. It qualified on format alone (1080x1920, 20.5s) -- there is no API flag for Shorts. Note the redirect was still 303 for the first couple of minutes after upload: the classification lands only once processingStatus reaches 'succeeded', so re-check before concluding it failed. Unlisted means it will NOT appear in the Shorts feed -- flip to public for that.",
     "Short 1 is voiced and captioned and ready to publish: outputs/shorts/flatten-pdf-01-free-tool-vo.mp4, 20.5s, ElevenLabs Brian, seven lines written to the picture via dub-clips.py --script. All seven fit `natural` -- no rate change, no tight fallback, nothing squeezed -- which is the gate for a written voice-over. `sync 79.3%` in the .dub.json does NOT apply: it measures agreement with the original speech, which a voice-over throws away. The spoken words were verified by transcribing the wav back and diffing against the script: exact, word for word.",
-    "Publish package for short 1, dry-run passed against @instafill_ai (UCa57I5DFqulQaoMR_0H--kA): title 'Flatten a PDF for free - 97 form fields gone in seconds #Shorts', description-01.txt, category 28, privacy unlisted. NOT uploaded -- waiting on the go-ahead.",
     "Three things had to leave the picture and all three are gone, verified on the render: the burned-in caption card (source y 612-660) and the taskbar (y 682+) fall below the rect; the webcam PiP (x 21-183, y 498-660) sits INSIDE it, in the same band as the buttons the demo is about, so it is masked with delogo instead. YuNet found a face in 30/30 sampled source frames and 0/80 sampled frames across the two renders.",
     "Moments were picked on the PICTURE, not the transcript -- with the sound being replaced the original speech boundaries do not bind the cut. Short 1 drops the landing hero (91-115, 23 static seconds of a page being read aloud, and its headline starts at source x=82 where this window clips it). Short 2 drops 150-168, a progress bar that goes from 1% to done without visibly moving; it opens 3s before the status chip flips to 'Ready for Review' at 167.75s, measured off the chip's hue.",
     "Already public on the original, so left alone: the Forms list shows real user data (Eugene Smirnov, real form names) and short 2's file dialog shows the Downloads folder. scan-pii.py + track-blur.py can blur them on request.",
     "Source has its own branded end card wiping in at ~192s; short 2 ends at 191 to stay clear of it.",
     "Short 2 (02-whole-packet.mp4) is still stage 1: picture only, source audio, no captions."
   ],
-  "updated_utc": "2026-09-01T19:23:50Z"
+  "updated_utc": "2026-09-01T19:30:35Z"
 }

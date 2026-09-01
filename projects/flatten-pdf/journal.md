@@ -123,3 +123,25 @@ UCa57I5DFqulQaoMR_0H--kA. Privacy unlisted.
 captions. Same treatment when wanted; its beats are the status flip at 3.25 s
 into the clip, the "flat document / fields added automatically" modal, then the
 field-covered pages.
+- 19:30 publish scripts/yt-upload.py -> projects/flatten-pdf/outputs/shorts/flatten-pdf-01-free-tool-vo.mp4 (projects/flatten-pdf/outputs/shorts/flatten-pdf-01-free-tool-vo.mp4 --title Flatten a PDF for free - 97 form fields gone in seconds #Shorts --description-file projects/flatten-pdf/description-01.txt -) https://youtu.be/hmHbL-66G-o -- uploaded Flatten a PDF for free - 97 form fields gone in seconds #Shorts
+
+### Published — short 1, as a Short
+
+`https://youtu.be/hmHbL-66G-o`, unlisted, on @instafill_ai
+(UCa57I5DFqulQaoMR_0H--kA). The uploader re-read it afterwards and title and
+privacy came back as asked.
+
+**There is no API flag for "this is a Short".** YouTube classifies on format
+alone — vertical or square, three minutes or less. This file is 1080x1920 and
+20.5 s, so it qualified without anything special; the `#Shorts` hashtag in the
+title is a legacy hint that does not decide it.
+
+**How to check, and the trap in checking.** `youtube.com/shorts/<id>` serves
+**200** for a Short and **303**-redirects to `/watch` for a regular video. Ours
+returned 303 for the first couple of minutes and 200 afterwards — the
+classification only lands once `processingDetails.processingStatus` reaches
+`succeeded`. Query that before concluding the upload came out as a normal video.
+
+Unlisted was deliberate (standing preference: a review link that opens for
+others). It does mean the Short will not appear in the Shorts feed — that needs
+public.
