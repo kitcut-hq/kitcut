@@ -1,0 +1,102 @@
+{
+  "_comment": "One screen recording, already composited by the recorder: browser, a round webcam bubble bottom-left, narration, 4:54. It is 42% silence over 0.5s, because operating a product and describing it at the same time is not a fluent activity. This manifest is the whole edit -- the cut, the two things that had to go by name, the transcript corrections that keep the burned captions from reading as typos, and the end card.",
+  "id": "flatten-pdf",
+  "src": "projects/flatten-pdf/sources/flatten-pdf-raw.mp4",
+  "words": "projects/flatten-pdf/transcripts/flatten-pdf.lv3.words.json",
+  "outdir": "projects/flatten-pdf/outputs",
+
+  "film": {
+    "start_text": "Here in this video",
+    "start_pad": 0.8,
+    "end_text": "This is how it works. Thanks",
+    "end_pad": 0.8
+  },
+
+  "cut": {
+    "_why": "Picked off the --list sweep, not by eye. 0.7/0.35 removes ~78s and lands a cut about every 3s; going to 0.6/0.30 buys another 6s and starts making the webcam bubble jump faster than the eye forgives. keep_pause 0.35 is what SURVIVES each silence -- enough that the narration still breathes between ideas.",
+    "min_silence": 0.7,
+    "keep_pause": 0.35,
+    "silence_db": -34,
+    "min_drop": 0.30,
+    "join_fade_ms": 12
+  },
+
+  "fillers": {"enabled": true, "reach": 0.45},
+
+  "remove": [
+    {
+      "from_text": "First one, the W",
+      "to_text": "flat fields at all",
+      "pad_in": 0.25,
+      "pad_out": 0.25,
+      "why": "14.5s of a sentence that never arrives -- he means to say which of the three forms already have fields and loses it. Whisper's own confidence collapses here (0.22 on 'W', 0.34 on 'all', 0.39 on 'them'), which is the tell. Pause-cutting alone would have made this WORSE: it compresses the hesitation into five seconds of captioned gibberish. The point it was making survives in 'two of these forms have already fillable fields' just before it."
+    },
+    {
+      "from_text": "Let's wait a few seconds",
+      "to_text": "It's almost done. Yep. And",
+      "pad_in": 0.25,
+      "pad_out": 0.30,
+      "why": "The wait for the conversion to finish, and the aside about pausing the video that goes with it -- 20s, of which 14s is dead. No detector finds this: 'we'll pause the video' is perfectly fluent speech that simply must not be in a published demo. The join lands on 'It's ready for review', so the conversion finishing reads as a cut rather than as a wait."
+    }
+  ],
+
+  "corrections": [
+    {
+      "_why": "Whisper returned the first 25s and the 134-179s stretch with no capitals and no punctuation -- an artefact of the hotword prompt, not of the audio. Burned captions make that everybody's problem, so it is fixed here rather than by re-running a 45-minute CPU transcription. Case and punctuation only, plus the one place he says 'for' twice; nothing that changes a word the viewer can hear.",
+      "find": "here in this video i will show you how our flattened pdf tool works and in which cases can be useful",
+      "replace": "Here in this video I will show you how our Flatten PDF tool works, and in which cases can be useful."
+    },
+    {
+      "find": "so here i have an example of a document packet a property manager may prepare for a new housing choice voucher tenancy and it includes three different forms",
+      "replace": "So here I have an example of a document packet a property manager may prepare for a new Housing Choice Voucher tenancy, and it includes three different forms."
+    },
+    {
+      "find": "first one is a request for for tenancy approval or RFTA",
+      "replace": "First one is a Request for Tenancy Approval, or RFTA,"
+    },
+    {
+      "find": "so you can just open this tool i will share the link in comments or in the description of this video and all i need to do is to upload this packet to",
+      "replace": "So you can just open this tool. I will share the link in comments or in the description of this video. And all I need to do is to upload this packet to"
+    },
+    {
+      "_why": "Split from the one before it on purpose: a 4.7s pause sits between 'packet to' and 'the flattened PDF', and a correction that spans a pause redistributes its words across the gap and desyncs the captions after it.",
+      "find": "the flattened pdf and once it processed i can download the flattened pdf as you can see it took me just a few seconds let's open it and review all the fields that were previously fillable now completely flat",
+      "replace": "the Flatten PDF. And once it processed, I can download the flattened PDF. As you can see, it took me just a few seconds. Let's open it and review. All the fields that were previously fillable, now completely flat."
+    },
+    {
+      "_why": "The product is called Flatten PDF. 'the flattened PDF' a few lines later is correct English about the file and is left alone; this one names the tool.",
+      "find": "our flattened PDF tool gives a very simple way",
+      "replace": "our Flatten PDF tool gives a very simple way"
+    },
+    {
+      "find": "adjust. but in general you get",
+      "replace": "adjust. But in general you get"
+    },
+    {
+      "_why": "The removal above takes the 'And' with it, so this sentence now opens the shot.",
+      "find": "it's ready for review",
+      "replace": "It's ready for review."
+    }
+  ],
+
+  "audio": {
+    "_why": "YouTube normalises to about -14 LUFS; delivering -16 with 1.5 dB of headroom means it turns the film UP rather than down, which is the direction that does not audibly compress. highpass clears the desk rumble a laptop mic picks up.",
+    "highpass": 85,
+    "loudnorm": "I=-16:TP=-1.5:LRA=11"
+  },
+
+  "overlay_preset": "config/overlays/end-card.json",
+  "image_overlays": [
+    {
+      "_why": "End card. `at` is negative on purpose -- it means 'this many seconds before the end', so re-cutting the film moves the card with it instead of stranding it at a timecode that no longer exists. It lands over the sign-off, and the background treatment puts the browser behind the type without freezing or cutting it.",
+      "card": "projects/flatten-pdf/cards/outro.json",
+      "at": -8.5,
+      "layout": {"corner": "centre", "width_frac": 0.62},
+      "in": {"type": "wipe", "dur": 1.0, "direction": "left", "feather_px": 18},
+      "out": {"type": "none"},
+      "background": {}
+    }
+  ],
+
+  "render": {"cq": 20, "speed": 5, "maxrate": "12M", "bufsize": "24M"}
+}

@@ -1,0 +1,90 @@
+{
+  "_comment": "Instafill.ai product captions, for a screen recording rather than a social short. Four deliberate departures from red-card.json, which was measured off somebody else's channel and reads as a news chyron: (1) the slab is near-black at 12% transparency instead of saturated red -- a screen demo is already a busy, mostly-white frame, and a red bar competes with the very UI the video is pointing at, while a dark one recedes behind it; (2) sentence case, not uppercase -- a tutorial that shouts is a tutorial nobody finishes, and mixed case carries word shape, which is what makes a line readable at a glance; (3) the spotlight is the brand mint #13BA82, the same token config/cards/brands/instafill.json and the lower third use, so captions, a name label and an end card on one film read as one channel; (4) narrower lines and fewer words per group, because the frame under them is content the viewer needs to see.",
+  "canvas": {
+    "play_res_x": 1920,
+    "play_res_y": 1080
+  },
+  "font": {
+    "family": "Montserrat",
+    "file": "fonts/Montserrat-Bold.ttf",
+    "spacing": 0,
+    "fudge": 1.0,
+    "bold": 1,
+    "fontsdir": "fonts",
+    "cap_height_px": 34
+  },
+  "text": {
+    "uppercase": false,
+    "apostrophe": "’",
+    "strip_trailing": ",",
+    "word_gap_ratio": 1.0,
+    "outline_px": 0,
+    "outline_colour": "#000000",
+    "shadow_px": 0,
+    "shadow_colour": "#000000"
+  },
+  "card": {
+    "colour": "#0B0F14",
+    "alpha": 30,
+    "corner_radius_px": 10,
+    "pad_x_px": 26,
+    "pad_y_px": 14,
+    "collision_gap_px": 16,
+    "enabled": true
+  },
+  "layout": {
+    "anchor_x": 960,
+    "bottom_margin_px": 96,
+    "max_line_width_px": 1080,
+    "max_lines": 2,
+    "line_height_px": 50
+  },
+  "states": {
+    "base": {
+      "colour": "#FFFFFF"
+    },
+    "active": {
+      "colour": "#13BA82"
+    },
+    "spoken": {
+      "colour": "#FFFFFF"
+    }
+  },
+  "grouping": {
+    "max_words": 6,
+    "gap_break_s": 0.40,
+    "break_on_sentence_end": true,
+    "max_group_duration_s": 3.4
+  },
+  "timing": {
+    "lead_in_ms": 60,
+    "hold_out_ms": 200,
+    "min_active_ms": 80,
+    "min_gap_between_groups_ms": 40,
+    "active_extends_to_next_word": true,
+    "fade_ms": 90
+  },
+  "pop": {
+    "enabled": false,
+    "scale": 112,
+    "rise_ms": 70,
+    "settle_ms": 110
+  },
+  "render": {
+    "speed": 5,
+    "cq": 20,
+    "maxrate": "12M",
+    "bufsize": "24M",
+    "aq_strength": 8
+  },
+  "overlays": {
+    "auto": false,
+    "_note": "Colour of the SOURCE video's own lower-third graphics to dodge, not the colour of this card. A screencast has none, so there is nothing to dodge."
+  },
+  "_geometry": {
+    "target": "1280x720 screen recording with a round webcam bubble in the bottom-left corner",
+    "bubble_px": "x 15..190, y 490..660 at 1280x720",
+    "why_bottom_margin_96": "96 on the 1920 canvas scales to 64px at 720p, which puts the card's baseline clear of the Windows taskbar (top edge ~y 682) without pushing it up into the page content.",
+    "why_max_line_1080": "1080 on the 1920 canvas scales to 720px at 720p, centred on x=640, so the card spans x 280..1000 and never reaches the webcam bubble at x<190. Widening this past ~1150 makes them collide."
+  }
+}

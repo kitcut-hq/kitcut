@@ -367,9 +367,21 @@ def main():
         problems = []
         if abs(odur - dur) > 0.5:
             problems.append("duration %.2fs vs source %.2fs" % (odur, dur))
-        if obr < 1_500_000:
-            problems.append("bitrate %.1f Mbps suspiciously low -- was -b:v 0 dropped? "
-                            "(-cq is silently ignored without it)" % (obr / 1e6))
+        # A flat 1.5 Mbps floor was wrong on its own: a 720p screen recording of
+        # mostly-static pages legitimately encodes to 0.6 Mbps at cq 20, with
+        # form text still pin-sharp, and the check failed a render that was
+        # fine. What the floor is really trying to catch is the quality target
+        # not reaching the encoder at all -- and that collapses the output far
+        # below whatever the SOURCE cost, whatever the content was. So require
+        # both: absolutely low, AND a fraction of the source.
+        sbr = int(probe(src_mp4, "format=bit_rate")[0] or 0)
+        if obr < 1_500_000 and (not sbr or obr < 0.5 * sbr):
+            problems.append("bitrate %.1f Mbps against a %.1f Mbps source, too "
+                            "low for %s -- on NVENC this is -b:v 0 having been "
+                            "dropped, which makes -cq silently ignored; "
+                            "elsewhere check the quality target reached the "
+                            "encoder at all (_encode.describe prints what was "
+                            "sent)" % (obr / 1e6, sbr / 1e6, R.get("encoder")))
         if not fast:
             problems.append("faststart missing (box order: %s)" % boxes)
         if problems:

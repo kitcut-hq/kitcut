@@ -266,7 +266,39 @@ template, not a branch. A template must never paint `html`/`body` — the render
 checks the alpha and refuses an opaque shot rather than letting a white slab
 reach the film.
 
-**5. Publish** — upload it, then give it chapters.
+**5. Tighten** — one recording that is *already* composited (screen, webcam
+bubble and narration burned together by the recorder), with no second tape to
+sync. `tighten-cut.py` is the subtractive pass: it shortens the pauses, swallows
+the stumbles that lean on them, and removes the spans you name by quoting them.
+
+```powershell
+python scripts/tighten-cut.py --manifest projects/<id>/tighten.json --list
+python scripts/tighten-cut.py --manifest projects/<id>/tighten.json
+```
+
+A pause is **shortened, not deleted** — `keep_pause` is what survives of every
+silence over `min_silence`, split across the join so the cut lands in room tone.
+Removing every pause outright sounds like a ransom note. `--list` sweeps the two
+knobs and prints the **segment length** as well as the runtime: a cut is a jump
+for whatever is moving in the frame (on a screencast, the webcam bubble), and
+runtime cannot see that.
+
+The `remove` list is for the line no detector can find because it is perfectly
+fluent — "let me pause the video while this runs". Quote it (`from_text` /
+`to_text`) so it survives a re-transcription. Joins are ramped by `join_fade_ms`
+(12 ms) because room tone spliced to room tone **clicks**.
+
+It writes `<out>.words.json`, the word transcript remapped through the keep-list
+— exact, because a cut only deletes — so `run-captions.py` captions the tight
+film with the ASR stage already satisfied. `name_labels` and `image_overlays`
+work as they do in `screencast-cut.py`, inside the same pass.
+
+**Brand names go in before the transcription, not after.** One demo gave
+"Instafili"/"Instafil"/"Instafield" for the same product. `transcribe-words.py
+--hotwords-file config/vocab/instafill.txt` fixes it at the source; patching
+afterwards leaves the timings attached to words that were never decoded.
+
+**6. Publish** — upload it, then give it chapters.
 
 ```powershell
 python scripts/yt-upload.py projects/<id>/outputs/<id>.mp4 --title "..." `
@@ -284,7 +316,7 @@ beside the render. Privacy defaults to `unlisted` — the end you can widen late
 Both scripts share the one `youtube.force-ssl` grant, so there is no second
 consent to give.
 
-**6. Multicam switch** — one film out of several cameras that shot the same
+**7. Multicam switch** — one film out of several cameras that shot the same
 event, switching full frame instead of compositing. `angle-cut.py` is the
 cutter; `sync-audio.py` lines up N tapes that share a soundtrack by FFT
 correlation, recovering the staggers to the exact frame.
@@ -514,12 +546,14 @@ which cannot encode the glyphs at all.
 | path | what |
 |---|---|
 | `scripts/` | all tooling; `_env.py` first, then the pipeline scripts |
+| `scripts/tighten-cut.py` | one already-composited recording: shorten its pauses, drop its stumbles, remove the parts you name |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
 | `scripts/screencast-pipeline.py` | the silent-screencast job as one cached, checkpointed command; the stage scripts it drives are listed under pipeline 7 |
 | `docs/retro-books-giveaway.md` | where six hours went on the first silent-screencast edit, and the rule that now prevents each loss |
 | `projects/<id>/` | one video: `project.json`, `journal.md`, its manifests + sidecars (committed), and its `sources/ audio/ transcripts/ outputs/ temp/` (gitignored) |
 | `config/presets/` | caption styling |
+| `config/vocab/` | ASR hotword lists: brand names and acronyms Whisper has never seen |
 | `config/labels/` | the lower-third name label |
 | `config/overlays/` | image-overlay animation, layout and background treatment |
 | `config/cards/` | card design: `templates/` the shape, `brands/` the look |

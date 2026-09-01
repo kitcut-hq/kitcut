@@ -22,6 +22,36 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
 
 
+def rejoin(words):
+    """Put back together the names Whisper's tokeniser took apart.
+
+    A hyphenated or dotted name arrives as several "words": W / -9,
+    flat / -to / -fillable, Instafill / .ai, lead / -based. Nothing downstream
+    knows they belong together, so captions render "W -9" and "Instafill .ai"
+    with a space in front of the punctuation -- which looks like a typo to
+    every viewer, and is burned into the picture.
+
+    The join happens HERE, in the envelope loader, rather than in
+    transcribe-words.py, so that transcripts already paid for are fixed on read
+    instead of re-transcribed. Merging is safe for timing: the pieces are
+    adjacent by construction, so the joined word simply spans both.
+    """
+    out = []
+    for w in words:
+        t = w["text"]
+        glue = (out and t and (
+            # ".ai", "-9", "-fillable" -- punctuation LEADING a real fragment
+            (t[0] in "-." and len(t) > 1 and t[1].isalnum())
+            # "flat-" waiting for its other half
+            or out[-1]["text"].endswith("-")))
+        if glue:
+            out[-1]["text"] += t
+            out[-1]["end"] = w["end"]
+            continue
+        out.append(dict(w))
+    return out
+
+
 def load_words(path):
     d = json.load(open(path, encoding="utf-8"))
     words = d["words"] if isinstance(d, dict) else d
@@ -34,7 +64,7 @@ def load_words(path):
         out.append({"text": t, "start": float(w["start"]), "end": float(w["end"])})
     if not out:
         sys.exit("no words in %s" % path)
-    return out
+    return rejoin(out)
 
 
 def fold(s, loose=True):
@@ -73,6 +103,119 @@ def find(words, phrase, loose=True, nth=0):
         if pos < 0:
             return None
     return words[owner[pos]]["start"], words[owner[pos + len(needle) - 1]]["end"]
+
+
+def find_span(words, phrase, loose=True, nth=0):
+    """Like find(), but the word INDICES the phrase covers."""
+    hay, owner = index(words, loose)
+    needle = fold(phrase, loose)
+    if not needle:
+        return None
+    pos = -1
+    for _ in range(nth + 1):
+        pos = hay.find(needle, pos + 1)
+        if pos < 0:
+            return None
+    return owner[pos], owner[pos + len(needle) - 1]
+
+
+def _retime(old, new):
+    """Give the replacement words times taken from the words they replace.
+
+    The obvious implementation -- spread the new words evenly across the span
+    from the first old word's start to the last one's end -- is WRONG, and
+    wrong in a way that only shows up two passes later. A corrected phrase is
+    usually a whole sentence, a sentence contains pauses, and spreading across
+    the span drops words INTO those pauses. The pause cut then removes the
+    silence, the remap drops every word that was sitting in it, and the film
+    ends up captioned "So you just tool." where the speaker said "So you can
+    just open this tool." Nothing errors; the words are simply gone.
+
+    So: when the correction is one-for-one -- which every case-and-punctuation
+    fix is -- each word keeps ITS OWN times exactly. Otherwise the replacement
+    is laid out along the SPOKEN time only, walking the old words' spans and
+    skipping the gaps between them, so no word can ever land in a silence.
+    """
+    if not new:
+        return []
+    if len(new) == len(old):
+        return [{"text": t, "start": w["start"], "end": w["end"]}
+                for t, w in zip(new, old)]
+
+    spans = [(w["start"], w["end"]) for w in old]
+    spoken = sum(e - s for s, e in spans) or 1e-6
+
+    def at(p):
+        acc = 0.0
+        for s, e in spans:
+            d = e - s
+            if p <= acc + d:
+                return s + max(0.0, min(p - acc, d))
+            acc += d
+        return spans[-1][1]
+
+    lens = [len(t) for t in new]
+    total = float(sum(lens)) or 1.0
+    out, pos = [], 0.0
+    for k, tok in enumerate(new):
+        a = at(pos)
+        pos += spoken * lens[k] / total
+        b = spans[-1][1] if k == len(new) - 1 else at(pos)
+        out.append({"text": tok, "start": a, "end": max(b, a + 0.01)})
+    return out
+
+
+def apply_corrections(words, specs, verbose=False):
+    """Rewrite what the model heard into what was said.
+
+    An ASR transcript is not a draft you get to re-run cheaply -- large-v3 on a
+    CPU is most of an hour -- and a handful of its mistakes are the ones that
+    end up burned into a picture: a duplicated word, a sentence the model left
+    unpunctuated and uncapitalised, a name that came out wrong on one of its
+    three appearances. Those are per-video facts, so they live in the video's
+    manifest, matched by QUOTING what is currently there:
+
+        {"find": "request for for tenancy approval",
+         "replace": "Request for Tenancy Approval",
+         "why": "he says 'for' twice"}
+
+    Every occurrence is corrected unless `nth` names one. An empty `replace`
+    deletes the words. Timing is preserved exactly: the replacement spans the
+    same interval the original did, split across its words in proportion to
+    their length, so a correction can never drift the captions after it.
+
+    A `find` that matches nothing is a FAILURE, not a no-op -- a correction
+    that silently stops applying after a re-transcription is how a fix gets
+    lost without anyone noticing.
+    """
+    for spec in specs or []:
+        phrase = spec["find"]
+        repl = spec.get("replace", "")
+        nth = spec.get("nth")
+        hits, at = 0, 0
+        while True:
+            # Search from AFTER the last replacement, never from the top. Most
+            # corrections only change case and punctuation, which fold() throws
+            # away -- so the corrected text still matches its own `find`, and
+            # restarting the search would loop forever.
+            span = find_span(words[at:], phrase,
+                             nth=(nth if nth is not None else 0))
+            if span is None:
+                break
+            i, j = span[0] + at, span[1] + at
+            new = repl.split()
+            words[i:j + 1] = _retime(words[i:j + 1], new)
+            hits += 1
+            at = i + len(new)
+            if nth is not None:
+                break
+        if not hits:
+            sys.exit("corrections: %r matches nothing in the transcript -- it "
+                     "has already been fixed, or the transcript changed under "
+                     "it" % phrase)
+        if verbose:
+            print("  corrected %dx %r -> %r" % (hits, phrase, repl))
+    return words
 
 
 def hhmmss(t):

@@ -1,0 +1,28 @@
+Flattening a PDF turns a fillable form into a plain one. The boxes, checkboxes and dropdowns stop being editable, and whatever they were showing is printed onto the page instead. Nothing moves, nothing is redrawn, and the text stays selectable.
+
+This video walks through the case where that is genuinely useful: a document packet made of several forms, where some pages already carry fillable fields and others are completely flat. Because the packet already contains fields, automatic flat-to-fillable conversion can skip the flat pages. Flatten the whole packet first and you get one consistent document — then Instafill can make all of it fillable in one pass.
+
+▶ Free Flatten PDF tool: https://instafill.ai/tools/flatten-pdf
+No watermark, no hidden costs, unlimited files up to 10 MB each.
+
+CHAPTERS
+00:00 A packet with three forms — two fillable, one flat
+00:37 Why form packets arrive half fillable, half flat
+01:16 Why automatic field detection can skip the flat pages
+01:33 Flatten the whole packet first — the free tool
+02:13 Upload the flat packet to Instafill
+02:48 Review the fields — the whole packet is fillable
+
+THE PACKET IN THIS DEMO
+A Housing Choice Voucher tenancy packet a property manager might assemble: a Request for Tenancy Approval (RFTA), a lead-based paint disclosure, and a W-9.
+
+WHEN FLATTENING HELPS
+• Lock answers into a form before you send it out
+• Turn a packet assembled from several sources into one consistent document
+• Stop a mix of fillable and flat pages from confusing automatic field detection
+• Keep the layout untouched and the text selectable
+
+ABOUT INSTAFILL
+Instafill.ai fills PDF forms with AI. Upload a form, and it finds the fields and fills them for you — one form or a batch. https://instafill.ai
+
+#FlattenPDF #PDF #FillablePDF #PDFforms #Instafill #W9 #PropertyManagement #AItools
