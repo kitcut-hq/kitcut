@@ -26,7 +26,7 @@
     "caption text": "projects/flatten-pdf/tighten.json -> corrections[]",
     "caption look": "config/presets/instafill.json",
     "end card": "projects/flatten-pdf/cards/outro.json + image_overlays[0] in tighten.json",
-    "title / description / chapters": "projects/flatten-pdf/{title,description,chapters}.txt",
+    "title / description / chapters / tags": "projects/flatten-pdf/{title,description,chapters,tags}.txt",
     "manifest-clips-vertical": "projects/flatten-pdf/clips-vertical.json",
     "card-01": "projects/flatten-pdf/cards/01-free-tool.json",
     "card-02": "projects/flatten-pdf/cards/02-whole-packet.json",
