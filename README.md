@@ -171,6 +171,54 @@ A vertical manifest adds three keys to the ordinary one:
   by cutting and concatenating segments, so it still costs one encode. Captions
   and the badge composite on top, so they are never letterboxed with the shot.
 
+### A short out of a screen recording: `crop_rect`, `place` and `mask`
+
+Face-tracking has nothing to track in a screencast, and the 9:16 window it would
+crop to is 607 px of a 1280 px browser — unreadable. So a clip may instead name
+the **rectangle to keep** on the source, which is fitted to the canvas width and
+placed on a background. `crop_rect` and `place` sit on the manifest (one framing
+usually serves the batch) and a clip overrides either.
+
+```json
+"crop_rect": [215, 72, 900, 535],
+"place": {
+  "y": 544,
+  "background": "#0B0D10",
+  "mask": [ { "rect": [12, 488, 190, 186], "mode": "delogo" } ]
+}
+```
+
+- **`crop_rect` is `[x, y, w, h]` on the source**, and it takes precedence over
+  `crop_box`, `crop_keys` and the reframe sidecar (the sidecar is not even
+  loaded when the manifest sets a rect). `place.y` is the picture's top on the
+  output canvas; omit it and it centres. `place.background` is `blur` (a blurred
+  blow-up of the frame, as in `pad`) or any colour — **a white browser page
+  blurs to a white void, so a screencast wants a flat dark ground**, which also
+  gives the picture an edge and leaves the lower third free for captions.
+- **`mask` removes things before anything else looks at them**, which is what
+  makes the rect free to be chosen for readability. Measured on real frames
+  here, only `delogo` — the default — actually disappears: it interpolates the
+  rectangle from its own border pixels, so over a flat page background the patch
+  *is* that background. `blur` turned a dark webcam into a grey smudge, and
+  copying a neighbouring strip duplicated the buttons beside it. Both are kept
+  for regions delogo cannot reach.
+- **This is what a re-voiced screencast needs.** Replacing the sound makes a
+  burned-in caption card contradict the new voice and a webcam PiP's lips
+  disagree with it. The caption card and the taskbar sit below the rect, so the
+  crop drops them; the webcam shares a band with the buttons the demo is about,
+  so masking it is the only way to keep both.
+- **Verify it on the render, with a detector, not an eyeball.** A stray talking
+  head in a re-voiced short is the one failure nobody forgives. YuNet found the
+  webcam in 30/30 sampled source frames and 0/80 sampled frames across the two
+  finished shorts — and the source number is the half that makes the zero mean
+  anything.
+- **`place.pan`** moves the window over time as `[[t, [x, y]], ...]`, linear
+  between keys and held flat past both ends. The window keeps ONE size: `crop`
+  evaluates `w`/`h` once and only `x`/`y` per frame, so a window that changes
+  size cannot be done in this pass at all.
+- **`--list` prices the framing** — rect, output size, placement, zoom factor,
+  pan keys and mask count — without encoding anything.
+
 ## The handle badge
 
 A camera glyph above an `@handle`, hopping between anchor points on a timer and
@@ -742,18 +790,26 @@ kept segment and per blur rect, which is the check that costs nothing.
 This is the same trap as the name label's `at` being *film* time. Once segments
 are dropped and others run at 19x, a window measured against a source timecode
 no longer lands where it was measured. Rather than map every window through the
-cut, the blur runs **upstream of the trim**, so a rect verified against a source
-frame stays verified.
+cut, the **mask** is painted upstream of the trim — the tracked mask stream
+plus one white `drawbox` per hand rect, `enable`-gated in source time — so a
+rect verified against a source frame stays verified. The mask is then cut on
+exactly the boundaries the picture is cut on, and the one gaussian runs
+**after** the trim, on the frames that survive.
 
-The order inside the pass is deliberate: `scale → blur → trim → concat → pad`.
-Scaling first makes the blur run at 1080p instead of 4K; blurring before the trim
-keeps the windows in source time; padding after the concat means the canvas is
-applied once.
+The order inside the pass is deliberate: `scale → paint mask → trim → concat →
+blur → pad`. Scaling first makes everything run at 1080p instead of 4K; the
+first version blurred before the trim, which kept the windows in source time
+but spent the gaussian on all 47 minutes of footage to keep 8 — measured on 60 s
+of a real proxy producing the same 10 s: 8.4 s before the cut, 3.5 s after it
+(KI-021). Padding after the concat means the canvas is applied once. `box` and
+`pixelate` rects stay per-rect and upstream, because a crop is cheap and a
+mosaic has to be built at the rect's own scale.
 
-`mode: "pixelate"` is the default rather than a soft blur, because a soft blur
-reads as a focus artefact and invites someone to try to sharpen it back. It is a
-`crop → scale down → scale up with `neighbor`` per rect, `enable`-gated to its
-window.
+`mode: "blur"` is the default — the user's words were "blur, not black out" —
+and it is one downscale/gblur/upscale of the whole frame shown through the
+mask, so rect count adds nothing to per-frame cost. `pixelate` remains as a
+per-rect mode for a field that should read as deliberately hidden: a `crop →
+scale down → scale up with `neighbor``, `enable`-gated to its window.
 
 ### Finding what to blur, instead of scrubbing for it
 
@@ -2116,6 +2172,8 @@ absolute path written into a script, a skill or these docs.
 | `scripts/track-blur.py` | follow a secret's own pixels through a recording; emit the blur mask; `--recall` measures it |
 | `scripts/redaction-review.py` | the before/after sheet of every redaction; the stop before a render |
 | `scripts/render-gate.py` | search the secrets' pixels on the finished film; `--patch` the manifest |
+| `scripts/_runlog.py` | the run log writer: one JSONL record per stage, flushed as it happens |
+| `scripts/run-log.py` | the run log reader: what ran, how long, and how it ended |
 | `scripts/import-footage.py` | desktop + phone captures into a project, ordered by real capture start |
 | `scripts/screencast-pipeline.py` | the twelve stages in order, cached, with two stops (the sheet, the draft) |
 | `scripts/review-ingest.py` | the user's narrated review recording → remarks mapped to source frames |

@@ -162,6 +162,165 @@ def vertical_chain(crop_filter, pads, out_w, out_h, blur_h=480):
     return ";".join(parts), "vcomp"
 
 
+def norm_colour(c):
+    """`#13BA82` is what a brand file and a designer both write; ffmpeg wants
+    `0x13BA82`. Names (`black`, `white`) and `0x` forms are passed through."""
+    c = str(c).strip()
+    return "0x" + c[1:] if c.startswith("#") else c
+
+
+def ramp_expr(pts, lo, hi):
+    """Piecewise-linear value in t from [[t, v], ...], held flat past both ends.
+
+    The same shape as crop_x_expr, but it returns the value itself rather than a
+    centre converted to an edge, and it is used for both axes -- a screen
+    recording pans in y (a scroll) as often as in x.
+    """
+    pts = sorted((float(t), min(max(float(v), lo), hi)) for t, v in pts)
+    e = "%g" % pts[-1][1]
+    for i in range(len(pts) - 2, -1, -1):
+        (t0, v0), (t1, v1) = pts[i], pts[i + 1]
+        span = max(t1 - t0, 1e-3)
+        e = "if(lt(t,%g),(%g+(%g)*(t-%g)),%s)" % (
+            t1, v0, (v1 - v0) / span, t0, e)
+    return "if(lt(t,%g),%g,%s)" % (pts[0][0], pts[0][1], e)
+
+
+def mask_chain(masks, src_w, src_h, src_label="0:v"):
+    """Blur or fill named source rectangles before anything else looks at them.
+
+    A screen recording that is about to be re-voiced carries things that must
+    not survive the edit: a webcam PiP whose lips will not match the new voice,
+    a burned-in caption card whose words will contradict it. Cropping them out
+    works only when they sit outside the region worth keeping, and a webcam in
+    the bottom-left corner usually does not -- it shares a band with the buttons
+    the demo is about. Masking first decouples the two decisions, so the rect
+    can be chosen for readability alone.
+
+    `delogo` is the default and, measured on real frames here, the only mode
+    that actually disappears: it interpolates the rectangle from its own border
+    pixels, so over a flat page background the patch is that background. A heavy
+    blur of a dark webcam is a grey smudge, and copying a neighbouring strip
+    duplicates whatever happens to be in it -- both were tried and both showed.
+    Keep `blur` and `fill` for a region delogo cannot reach (one larger than a
+    handful of pixels from a matching edge).
+    """
+    parts, label, n = [], src_label, 0
+    for spec in masks:
+        mx, my, mw, mh = (int(v) for v in spec["rect"])
+        mx = even(min(max(mx, 0), max(src_w - 2, 0)))
+        my = even(min(max(my, 0), max(src_h - 2, 0)))
+        mw = even(min(mw, src_w - mx))
+        mh = even(min(mh, src_h - my))
+        if mw < 2 or mh < 2:
+            continue
+        out = "mk%d" % n
+        mode = spec.get("mode", "delogo")
+        if mode == "delogo":
+            # delogo refuses a box touching the frame edge -- it has no border
+            # to interpolate from there -- so hold it one pixel inside.
+            dx, dy = max(mx, 1), max(my, 1)
+            dw = min(mw, src_w - dx - 1)
+            dh = min(mh, src_h - dy - 1)
+            parts.append("[%s]delogo=x=%d:y=%d:w=%d:h=%d[%s]"
+                         % (label, dx, dy, dw, dh, out))
+        elif mode == "fill":
+            parts.append("[%s]drawbox=%d:%d:%d:%d:color=%s:t=fill[%s]"
+                         % (label, mx, my, mw, mh,
+                            norm_colour(spec.get("color", "white")), out))
+        else:
+            parts.append("[%s]split=2[mb%d][mm%d]" % (label, n, n))
+            parts.append("[mb%d]crop=%d:%d:%d:%d,boxblur=%d:3[mp%d]"
+                         % (n, mw, mh, mx, my, int(spec.get("blur", 25)), n))
+            parts.append("[mm%d][mp%d]overlay=%d:%d[%s]" % (n, n, mx, my, out))
+        label, n = out, n + 1
+    return parts, label, n
+
+
+def rect_chain(rect, place, src_w, src_h, out_w, out_h, blur_h=480):
+    """Fit a named source rectangle into the vertical frame, on a background.
+
+    A screen recording has no 9:16 window worth cropping to. Its readable region
+    is wider than it is tall, so `crop_box` -- which spends height first and
+    keeps a 607px-wide slice of a browser -- produces something nobody can read.
+    And what must LEAVE the frame is chosen by where it sits, not by where a
+    subject is: a burned-in caption card that would contradict a new voice-over,
+    a webcam PiP whose lips will not match it, a taskbar.
+
+    So the manifest names the rectangle to keep. It is scaled to the canvas
+    width and placed at `place.y`, over either a blurred blow-up of the frame or
+    a flat colour. Returns the chain, its output label, and the geometry, so
+    --list can price the framing without encoding anything.
+    """
+    rx, ry, rw, rh = (int(v) for v in rect)
+    rx = min(max(rx, 0), max(src_w - 2, 0))
+    ry = min(max(ry, 0), max(src_h - 2, 0))
+    rw = even(min(rw, src_w - rx))
+    rh = even(min(rh, src_h - ry))
+    rx, ry = even(rx), even(ry)
+    if rw < 2 or rh < 2:
+        sys.exit("crop_rect %s has no area inside the %dx%d source"
+                 % (rect, src_w, src_h))
+    fit_h = even(rh * out_w / float(rw))
+    if fit_h > out_h:
+        sys.exit("crop_rect %s is %dx%d; scaled to %d wide it is %d tall, which "
+                 "does not fit the %dx%d canvas -- widen the rect or lose height"
+                 % (rect, rw, rh, out_w, fit_h, out_w, out_h))
+    y = place.get("y")
+    y = (out_h - fit_h) / 2.0 if y is None else float(y)
+    y = even(min(max(y, 0), out_h - fit_h))
+    bg = place.get("background", "blur")
+    if bg == "blur":
+        # out of focus by definition, so blur it small and scale it up
+        blur_w = int(round(blur_h * out_w / float(out_h)))
+        bgf = ("[bgs]scale=-2:%d,crop=%d:%d,boxblur=10:2,scale=%d:%d,setsar=1[bgv]"
+               % (blur_h, blur_w, blur_h, out_w, out_h))
+    else:
+        # drawbox over a scaled copy of the frame, rather than a `color` source:
+        # a lavfi source never ends, and the overlay would then need shortest=1
+        # to stop the render running forever.
+        bgf = ("[bgs]scale=%d:%d,drawbox=0:0:%d:%d:color=%s:t=fill,setsar=1[bgv]"
+               % (out_w, out_h, out_w, out_h, norm_colour(bg)))
+    # A pan keeps ONE window size and moves it. crop's w/h evaluate once and
+    # only its x/y are per-frame, so a window that changes SIZE cannot be done
+    # in this pass at all -- which is also why the rect is fixed and the
+    # framing is chosen to hold across the whole clip.
+    pan = place.get("pan")
+    if pan:
+        px = [(t, v[0]) for t, v in pan]
+        py = [(t, v[1]) for t, v in pan]
+        xf = _handle.esc(ramp_expr(px, 0, src_w - rw))
+        yf = _handle.esc(ramp_expr(py, 0, src_h - rh))
+        crop_f = "crop=%d:%d:x=%s:y=%s" % (rw, rh, xf, yf)
+    else:
+        crop_f = "crop=%d:%d:%d:%d" % (rw, rh, rx, ry)
+    mparts, msrc, nmask = mask_chain(place.get("mask") or [], src_w, src_h)
+    parts = mparts + [
+        "[%s]split=2[bgs][fgs]" % msrc,
+        bgf,
+        "[fgs]%s,scale=%d:%d:flags=lanczos,setsar=1[fgv]"
+        % (crop_f, out_w, fit_h),
+        "[bgv][fgv]overlay=0:%d[vcomp]" % y,
+    ]
+    return ";".join(parts), "vcomp", (rw, rh, rx, ry, fit_h, y, bg,
+                                      len(pan or []), nmask)
+
+
+def clip_rect(clip, m):
+    """The rect and placement for a clip: its own, else the manifest's default.
+
+    One rect usually serves a whole batch -- the intruders sit in the same place
+    in every shot of one recording -- so the manifest carries it and a clip only
+    overrides when its framing genuinely differs.
+    """
+    rect = clip.get("crop_rect", m.get("crop_rect"))
+    if not rect:
+        return None, {}
+    place = dict(m.get("place") or {})
+    place.update(clip.get("place") or {})
+    return rect, place
+
+
 def build_captions(clip, words_path, style, start, end, w, h, fps, tmpdir,
                    verify=True, samples=24, overlays=None, fontsdir="fonts"):
     """Render an ASS for just this clip's span, rebased to t=0.
@@ -480,7 +639,7 @@ def main():
     # Face-tracked crop centres from auto-reframe.py, if that has been run.
     reframe = {}
     rpath = m.get("reframe") or (os.path.splitext(args.manifest)[0] + ".reframe.json")
-    if vert and os.path.exists(rpath):
+    if vert and not m.get("crop_rect") and os.path.exists(rpath):
         reframe = json.load(open(rpath, encoding="utf-8"))
         print("reframe %s (%d clips)" % (rpath, len(reframe)))
     if vert:
@@ -536,6 +695,14 @@ def main():
               % (clip["id"], hhmmss(start), hhmmss(end), end - start,
                  "" if not dubdir else ("dub:ok  " if dub_ok else "dub:MISSING"),
                  clip.get("title", "")))
+        rect, place = clip_rect(clip, m) if vert else (None, {})
+        if rect:
+            _, _, geo = rect_chain(rect, place, src_w, src_h, out_w, out_h)
+            print("  rect %dx%d+%d+%d -> %dx%d at y=%d on %s  (%.2fx)%s"
+                  % (geo[0], geo[1], geo[2], geo[3], out_w, geo[4], geo[5],
+                     geo[6], out_w / float(geo[0]),
+                     ("  pan %d keys" % geo[7] if geo[7] else "")
+                     + ("  %d mask(s)" % geo[8] if geo[8] else "")))
         for spec in (clip.get("image_overlays") or img_default):
             print("  %s" % _imgoverlay.describe(spec, img_preset_doc,
                                                 end - start))
@@ -554,7 +721,16 @@ def main():
             continue
         print("cutting %s ..." % os.path.basename(dst), flush=True)
         parts, last = [], None
-        if vert:
+        rect, place = clip_rect(clip, m) if vert else (None, {})
+        if rect:
+            chain, last, geo = rect_chain(rect, place, src_w, src_h,
+                                          out_w, out_h)
+            parts.append(chain)
+            print("  rect %dx%d+%d+%d -> %dx%d at y=%d on %s%s"
+                  % (geo[0], geo[1], geo[2], geo[3], out_w, geo[4], geo[5],
+                     geo[6], "  pan %d keys" % geo[7] if geo[7] else "")
+                  + ("  %d mask(s)" % geo[8] if geo[8] else ""))
+        elif vert:
             cw, ch, cx, cy = crop_box(clip, src_w, src_h, out_w, out_h)
             entry = clip.get("crop_keys") or reframe.get(clip["id"])
             # the sidecar is either a bare key list (pan/shot) or {keys, pad}
@@ -656,7 +832,10 @@ def main():
             sidecars={"clip": os.path.splitext(dst)[0] + ".json",
                       "dub-audio": dub_wav, "dub-words": dub_words},
             burned=[b for b in (
-                "9:16 crop per reframe sidecar" if m.get("vertical") else None,
+                ("source rect %s fitted to %d wide on %s"
+                 % (tuple(rect), out_w, place.get("background", "blur"))
+                 if rect else "9:16 crop per reframe sidecar")
+                if m.get("vertical") else None,
                 "word-synced captions, style %s" % caps["style"] if caps else None,
                 "handle badge %s" % (m.get("handle") or {}).get("text")
                 if (m.get("handle") or {}).get("text") else None,

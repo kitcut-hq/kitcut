@@ -1,0 +1,59 @@
+<!--
+  Stacked blocks: each line is its own filled slab, left-aligned, tight.
+  The end-card archetype, and the one built for a WIPE -- the reveal edge
+  crosses a line's type and its background together, which is what makes it
+  read as a reveal rather than a fade. Any number of lines.
+
+  Styles: kicker (small, ink slab), hero (large, paper slab), accent (accent
+  slab), body (paper slab, medium), ghost (no slab, paper type with a shadow).
+-->
+<meta charset="utf-8">
+<title></title>
+<style>
+  @font-face { font-family: "Brand"; font-weight: 700;
+               src: url("file:///C:/instafill/video-editing/fonts/Montserrat-Bold.ttf") format("truetype"); }
+  @font-face { font-family: "Brand"; font-weight: 500;
+               src: url("file:///C:/instafill/video-editing/fonts/Montserrat-Medium.ttf") format("truetype"); }
+
+  html, body { margin: 0; background: transparent; }
+
+  .card {
+    display: inline-block;
+    padding: 24px;
+    font-family: "Brand", "Segoe UI", sans-serif;
+    text-align: left;
+  }
+  .row { display: block; }
+  .row + .row { margin-top: 10px; }
+
+  .line {
+    display: inline-block;
+    padding: 10px 22px 14px;
+    line-height: 0.95;
+    white-space: nowrap;
+    font-weight: 700;
+    letter-spacing: -1px;
+    border-radius: 0px;
+  }
+
+  .kicker { background: #050608;   color: #FFFFFF;      font-size: 54px;
+            letter-spacing: 6px; }
+  .hero   { background: #FFFFFF; color: #050608;        font-size: 132px; }
+  .accent { background: #13BA82;color: #041B12; font-size: 50px;
+            letter-spacing: 2px; }
+  .body   { background: #FFFFFF; color: #050608;        font-size: 64px; }
+  .ghost  { background: transparent; color: #FFFFFF;    font-size: 64px;
+            text-shadow: 0 4px 24px rgba(0,0,0,.75); }
+
+  .em { color: #13BA82; }
+</style>
+
+<div class="card">
+
+  <div class="row"><span class="line kicker" style="">FLAT PAGES IN YOUR PACKET?</span></div>
+
+  <div class="row"><span class="line hero" style="">Make it all fillable</span></div>
+
+  <div class="row"><span class="line accent" style="">instafill.ai</span></div>
+
+</div>

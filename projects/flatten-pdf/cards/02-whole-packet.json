@@ -1,0 +1,10 @@
+{
+  "_comment": "Hook card for the payoff short. Same shape and brand as 01 so the pair reads as one channel; the words carry the different promise.",
+  "template": "stacked-blocks",
+  "brand": "instafill",
+  "lines": [
+    {"style": "kicker", "text": "FLAT PAGES IN YOUR PACKET?"},
+    {"style": "hero",   "text": "Make it all fillable"},
+    {"style": "accent", "text": "instafill.ai"}
+  ]
+}

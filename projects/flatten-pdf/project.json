@@ -1,0 +1,62 @@
+{
+  "v": 1,
+  "id": "flatten-pdf",
+  "intent": "Two vertical shorts cut out of our own published screencast youtu.be/6LQnRd0JxGU (@instafill_ai, 3:21, 'How to flatten a PDF for free'). The end goal is a scripted ElevenLabs voice-over REPLACING the original narration, which is live, non-native and halting. Stage 1 (done) is picture only: framing, hook cards and badge settled, source audio left on as a reference track, no captions -- those get rebuilt from the voice-over's own word timings. Stage 2 is the voice-over.",
+  "pipelines": [
+    "shorts"
+  ],
+  "inputs": {
+    "source": "projects/flatten-pdf/sources/flatten-pdf.mp4",
+    "audio": "projects/flatten-pdf/audio/flatten-pdf.16k.mono.wav",
+    "words": "projects/flatten-pdf/transcripts/flatten-pdf.words.json",
+    "_source_note": "720p, which is all YouTube serves: the 1080p rendition was not processed yet (checked across the web/tv/ios/web_safari/mweb/android_vr player clients). The YouTube token cannot help -- Data API v3 has no video-download endpoint, and Studio's 'Download original' has no API surface. No master on this machine; the on-screen clock and the Instafill account say it was recorded on a teammate's. The framing is chosen so 720p is enough: the rect is 900-1280px wide at source and lands at 1080 wide, so the picture is never upscaled more than 1.2x."
+  },
+  "controls": {
+    "manifest-clips-vertical": "projects/flatten-pdf/clips-vertical.json",
+    "card-01": "projects/flatten-pdf/cards/01-free-tool.json",
+    "card-02": "projects/flatten-pdf/cards/02-whole-packet.json",
+    "caption-style": "config/presets/red-card-vertical.json",
+    "handle-style": "config/handles/vertical.json",
+    "overlay-preset": "config/overlays/end-card.json"
+  },
+  "deliverables": {
+    "projects/flatten-pdf/outputs/shorts/flatten-pdf-01-free-tool.mp4": {
+      "status": "current",
+      "built_utc": "2026-09-01T19:05:52Z",
+      "kind": "short",
+      "script": "scripts/cut-clips.py",
+      "manifest": "projects/flatten-pdf/clips-vertical.json",
+      "burned": [
+        "source rect (215, 72, 900, 535) fitted to 1080 wide on #0B0D10",
+        "handle badge @instafill_ai",
+        "image overlay '01-free-tool.json' wipe in at 0.3s for 4.2s"
+      ],
+      "sidecars": {
+        "clip": "projects/flatten-pdf/outputs/shorts/flatten-pdf-01-free-tool.json"
+      }
+    },
+    "projects/flatten-pdf/outputs/shorts/flatten-pdf-02-whole-packet.mp4": {
+      "status": "current",
+      "built_utc": "2026-09-01T19:07:02Z",
+      "kind": "short",
+      "script": "scripts/cut-clips.py",
+      "manifest": "projects/flatten-pdf/clips-vertical.json",
+      "burned": [
+        "source rect (0, 72, 1280, 535) fitted to 1080 wide on #0B0D10",
+        "handle badge @instafill_ai",
+        "image overlay '02-whole-packet.json' wipe in at 0.3s for 4.2s"
+      ],
+      "sidecars": {
+        "clip": "projects/flatten-pdf/outputs/shorts/flatten-pdf-02-whole-packet.json"
+      }
+    }
+  },
+  "notes": [
+    "Both shorts carry the SOURCE audio as a reference track and no captions. Neither is the deliverable look: stage 2 replaces the audio with a scripted voice-over via cut-clips.py --dub and rebuilds the captions from its word timings, into new files tagged -vo. These two are never overwritten.",
+    "Three things had to leave the picture and all three are gone, verified on the render: the burned-in caption card (source y 612-660) and the taskbar (y 682+) fall below the rect; the webcam PiP (x 21-183, y 498-660) sits INSIDE it, in the same band as the buttons the demo is about, so it is masked with delogo instead. YuNet found a face in 30/30 sampled source frames and 0/80 sampled frames across the two renders.",
+    "Moments were picked on the PICTURE, not the transcript -- with the sound being replaced the original speech boundaries do not bind the cut. Short 1 drops the landing hero (91-115, 23 static seconds of a page being read aloud, and its headline starts at source x=82 where this window clips it). Short 2 drops 150-168, a progress bar that goes from 1% to done without visibly moving; it opens 3s before the status chip flips to 'Ready for Review' at 167.75s, measured off the chip's hue.",
+    "Already public on the original, so left alone: the Forms list shows real user data (Eugene Smirnov, real form names) and short 2's file dialog shows the Downloads folder. scan-pii.py + track-blur.py can blur them on request.",
+    "Source has its own branded end card wiping in at ~192s; short 2 ends at 191 to stay clear of it."
+  ],
+  "updated_utc": "2026-09-01T19:07:02Z"
+}

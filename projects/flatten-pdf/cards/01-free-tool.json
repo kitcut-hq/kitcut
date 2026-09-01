@@ -1,0 +1,10 @@
+{
+  "_comment": "Hook card for the free-tool short. stacked-blocks because the wipe travels along its hard left edges; the URL is the call to action, so it takes the accent slab.",
+  "template": "stacked-blocks",
+  "brand": "instafill",
+  "lines": [
+    {"style": "kicker", "text": "FREE, NO WATERMARK"},
+    {"style": "hero",   "text": "Flatten a PDF"},
+    {"style": "accent", "text": "instafill.ai/tools/flatten-pdf"}
+  ]
+}

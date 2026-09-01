@@ -244,6 +244,69 @@ canvas:
   `handles/vertical.json` is authored on 1080x1920 with anchors that stay clear
   of the caption card (below y≈1450).
 
+## A short out of a SCREEN RECORDING — do not face-track it
+
+If the source is a screencast, stop before `auto-reframe.py`: there is no
+subject to track, and the 9:16 window it would crop to is 607 px of a 1280 px
+browser, which nobody can read. Name the **rectangle to keep** instead.
+
+```json
+"crop_rect": [215, 72, 900, 535],
+"place": {
+  "y": 544,
+  "background": "#0B0D10",
+  "mask": [ { "rect": [12, 488, 190, 186], "mode": "delogo" } ]
+}
+```
+
+`crop_rect` is `[x, y, w, h]` on the source; it beats `crop_x`/`crop_keys` and
+the reframe sidecar, which is not even loaded when the manifest sets one. The
+rect is scaled to the canvas width and placed at `place.y` (omit to centre).
+`place.pan` — `[[t, [x, y]], ...]` — moves the window, but it keeps ONE size:
+`crop` evaluates `w`/`h` once, only `x`/`y` per frame.
+
+**Work in this order, and none of it costs an encode:**
+
+1. **Find what must leave the frame.** A screen recording made for YouTube
+   usually carries a webcam PiP, burned-in captions and a taskbar. All three
+   are wrong in a short, and *fatal* if the sound is being replaced: the old
+   captions contradict the new voice and the PiP's lips disagree with it.
+2. **Drop what sits outside the readable region, mask what sits inside it.**
+   The caption card and the taskbar are below the content, so the rect's height
+   drops them. The webcam is bottom-left, in the same band as the buttons the
+   demo is about — cropping around it costs you the demo, so mask it. Masking
+   first is what frees the rect to be chosen for readability alone.
+3. **Use `delogo`** (the default). Measured on real frames: it interpolates the
+   rectangle from its own borders, so over a flat page background it *is* that
+   background. `blur` made a dark webcam a grey smudge; copying a neighbouring
+   strip duplicated the buttons next to it.
+4. **Give it a flat dark ground, not `blur`.** A white browser page blurs to a
+   white void and the picture has no edge against it.
+5. **Centre the window on the page's own centre**, not on the action — a web
+   page re-centres its content between beats, and a window centred anywhere
+   else reads as a mis-framing on half of them. Then check the widest beat: if
+   a headline or a file name is clipped at the frame edge, either widen the
+   window or start the clip after that beat.
+6. **Price it with `--list`**, which prints rect, output size, placement, zoom
+   factor, pan keys and mask count.
+
+**Two things a screencast short gets wrong that a talking head does not:**
+
+- **A progress bar is dead air.** One of these shorts had 30 seconds of an
+  "Adding fields" status that went from 1% to done without visibly moving.
+  Find the moment the state actually changes and start there — track the chip's
+  hue across sampled frames rather than guessing, then let the voice-over carry
+  the setup you cut.
+- **The picture keeps moving after the point is made.** Sample the last few
+  seconds: a clip that runs two seconds long lands on an unrelated page.
+
+**Verify the removals on the RENDER, with a detector.** A stray talking head in
+a re-voiced short is the one failure nobody forgives, and an eyeball on four
+frames does not cover a 26-second clip. Sweep with the YuNet under
+`models/face/` — and sweep the SOURCE with the same settings too, because a
+detector that finds nothing everywhere has proved nothing. Here: 30/30 sampled
+source frames had the webcam, 0/80 across the two finished shorts.
+
 ## Step 4 — verify before declaring done
 
 The cutter already asserts output duration against the plan. Additionally:

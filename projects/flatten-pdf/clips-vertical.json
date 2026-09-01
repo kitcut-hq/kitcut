@@ -1,0 +1,120 @@
+{
+  "_comment": "Two vertical shorts out of the flatten-PDF screencast. The source is a screen recording, so there is no subject to face-track and no 9:16 window worth cropping to: the manifest names the RECTANGLE to keep instead, and it is fitted to the canvas width and placed. Three things in the source must not survive the edit -- a webcam PiP whose lips will not match the voice-over that replaces the sound, a burned-in caption card whose words would contradict it, and the Windows taskbar. The taskbar and the caption card are below the rect; the webcam sits inside it, in the same band as the buttons the demo is about, so it is masked first (delogo) rather than cropped around. Boundaries are numeric because this cut is led by the PICTURE, not by what the original speaker happened to be saying.",
+  "source": "projects/flatten-pdf/sources/flatten-pdf.mp4",
+  "words": "projects/flatten-pdf/transcripts/flatten-pdf.words.json",
+  "outdir": "projects/flatten-pdf/outputs/shorts",
+  "prefix": "flatten-pdf",
+  "tmp": "projects/flatten-pdf/temp",
+  "vertical": {
+    "width": 1080,
+    "height": 1920
+  },
+  "crop_rect": [
+    60,
+    72,
+    1160,
+    535
+  ],
+  "place": {
+    "_note": "y is the top of the picture on the 1920-tall canvas. The rect is a window on the 1280x720 source: y 72..607 drops the browser tab/URL chrome at the top and clears the burned caption card (y 612-660) and the taskbar (y 682+) at the bottom. The background is brand ink rather than a blurred blow-up: the source is a white browser page, so a blur of it is a white void the picture has no edge against.",
+    "y": 600,
+    "background": "#0B0D10",
+    "mask": [
+      {
+        "_note": "the circular webcam PiP, bottom-left. delogo interpolates it away from its own border pixels; a blur left a grey smudge and a copied neighbouring strip duplicated the buttons next to it.",
+        "rect": [
+          12,
+          488,
+          190,
+          186
+        ],
+        "mode": "delogo"
+      }
+    ]
+  },
+  "captions": {
+    "style": "config/presets/red-card-vertical.json",
+    "samples": 24
+  },
+  "handle": {
+    "text": "@instafill_ai",
+    "preset": "config/handles/vertical.json"
+  },
+  "overlay_preset": "config/overlays/end-card.json",
+  "clips": [
+    {
+      "id": "01-free-tool",
+      "title": "Flatten any PDF free in seconds",
+      "_beats": "115.5 'This tool is completely free... no watermark and no hidden costs' -> 116.5 pick the packet -> 119 it lands in the drop zone -> 121 Flattening -> 122 'Flattened. 97 form fields merged into the page.' -> 128 Download -> 133 the flat PDF open, the W-9 with its boxes gone. Starts at 115.5 and not earlier: until 115.4 the page is still on the landing hero, whose headline starts at source x=82 and is clipped by this window. Ends at 136: by 137 the picture has moved on to an unrelated page.",
+      "start": 115.5,
+      "end": 136.0,
+      "image_overlays": [
+        {
+          "card": "projects/flatten-pdf/cards/01-free-tool.json",
+          "at": 0.3,
+          "dur": 4.2,
+          "layout": {
+            "corner": "top",
+            "width_frac": 0.8,
+            "margin_y_px": 100
+          },
+          "in": {
+            "type": "wipe",
+            "dur": 0.9
+          },
+          "out": {
+            "type": "fade",
+            "dur": 0.5
+          }
+        }
+      ],
+      "crop_rect": [
+        215,
+        72,
+        900,
+        535
+      ],
+      "place": {
+        "y": 545
+      },
+      "_note_rect": "centred near the browser page's own centre (x=640 of 1280) rather than on the action, because the page re-centres its content between beats. x=215 and not 190: the site logo's last two letters ended at source x=212 and read as a clipped word at the frame edge."
+    },
+    {
+      "id": "02-whole-packet",
+      "title": "Make a whole form packet fillable, flat pages included",
+      "_beats": "164.5 the packet still 'Adding fields' -> 167.75 the status chip flips to 'Ready for Review' (measured off the chip's hue, not guessed) -> 176 'Your PDF was a flat document. Fillable fields were added automatically.' -> 178-190 every page under field boxes. Starts at 164.5 and not 142: 150-168 is a progress bar that moves from 1% to done without visibly moving, 30 static seconds a short cannot carry. Ends at 191, before the source's own end card wipes in at ~192.",
+      "start": 164.5,
+      "end": 191.0,
+      "image_overlays": [
+        {
+          "card": "projects/flatten-pdf/cards/02-whole-packet.json",
+          "at": 0.3,
+          "dur": 4.2,
+          "layout": {
+            "corner": "top",
+            "width_frac": 0.8,
+            "margin_y_px": 100
+          },
+          "in": {
+            "type": "wipe",
+            "dur": 0.9
+          },
+          "out": {
+            "type": "fade",
+            "dur": 0.5
+          }
+        }
+      ],
+      "crop_rect": [
+        0,
+        72,
+        1280,
+        535
+      ],
+      "place": {
+        "y": 580
+      },
+      "_note_rect": "full source width, unlike short 1: the dashboard puts file names hard against the left edge and its buttons hard against the right, so any narrower window cuts one or the other. The webcam is inside this window and is removed by the mask, not by the crop -- which is the whole reason the mask exists."
+    }
+  ]
+}
