@@ -503,6 +503,7 @@ which cannot encode the glyphs at all.
 | `sources/` `audio/` `transcripts/` `outputs/` `temp/` | legacy shared content dirs, gitignored; new work lives under `projects/` |
 | `docs/product-strategy.md` | how this repo becomes a product: the audience, the licensed-plugin model, install/update/routing mechanics, the learning flywheel. Read it before designing anything customer-facing |
 | `docs/shorts-strategy.md` | the shorts market examined on its own: competitors, prices, the free/open-source floor, what local-first and privacy-first are really worth, and the go-to-market that follows. Read it with the strategy doc before positioning anything on shorts |
+| `docs/shorts-gtm-playbooks.md` | how the competitors and the adjacent local-first tools actually got users — affiliates, free-tool SEO, build-in-public, open source, plugin shelves — which of those our install permits, and the 90-day sequence that follows |
 
 ## House rules
 

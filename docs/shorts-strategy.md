@@ -313,7 +313,9 @@ enforced and should not be attempted). A site licence at $2–10k/yr for the
 regulated buyer, where the deliverable includes the `--no-network` receipt.
 COGS ≈ 0: their GPU, their footage, their Claude subscription.
 
-**Channels, ranked, with the reason:**
+**Channels, ranked, with the reason** (the evidence for each — what Submagic,
+OpusClip, Screen Studio, AutoPod and the open-source clippers actually did, and
+which of it our install permits — is in `docs/shorts-gtm-playbooks.md`)**:**
 
 1. **Direct to agencies.** They are countable (retainer guides list them), they
    already spend $3–8k/mo on labour, and a tool that raises throughput at a fixed
