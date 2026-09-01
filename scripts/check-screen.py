@@ -20,6 +20,7 @@ Invoke as:  python scripts/check-screen.py
 """
 import sys
 import os
+import json
 import importlib.util
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -179,10 +180,71 @@ def cut_arithmetic():
     check("half the frame is masked out", int(keep.sum()), 500)
 
 
+def pipeline_pieces():
+    print("\nscan-pii: rules re-applied to cached OCR lines")
+    sp = load("scan-pii")
+    frames = [{"t": 4.0, "carried": False, "lines": [
+        {"box": [0.1, 0.2, 0.1, 0.02], "text": "+38 (066) 431-4978", "conf": 0.9},
+        {"box": [0.1, 0.3, 0.1, 0.02], "text": "Замовлення #1806413786", "conf": 0.9}]},
+              {"t": 8.0, "carried": True, "lines": [
+        {"box": [0.1, 0.2, 0.1, 0.02], "text": "+38 (066) 431-4978", "conf": 0.9}]}]
+    hits = sp.apply_rules(frames)
+    check("a phone on two cached frames is two hits", len(hits), 2)
+    check("an order number is not a card", any(h["kind"] == "card" for h in hits), False)
+    check("hits keep the cached frame time", sorted(h["t"] for h in hits), [4.0, 8.0])
+
+    print("\ntrack-blur: recall harness on a synthetic timeline")
+    tb = load("track-blur")
+    info = {"w": 1000, "h": 500, "fps": 10.0}
+    # boxes on frames 40..59 covering (100..300, 100..120); nothing elsewhere
+    runs = [[0, 39, []], [40, 59, [[100, 100, 300, 120, "phone:0661234567"]]], [60, 99, []]]
+    check("boxes_at inside a run", len(tb.boxes_at(runs, 45)), 1)
+    check("boxes_at outside every run", len(tb.boxes_at(runs, 70)), 0)
+    import tempfile
+    d = tempfile.mkdtemp()
+    pii = os.path.join(d, "x.pii.json")
+    with open(pii, "w", encoding="utf-8") as f:
+        json.dump({"src": "fake/src.mp4", "sample_fps": 0.25, "hits": [
+            {"t": 4.0, "kind": "phone", "text": "0661234567", "rect": [0.1, 0.2, 0.2, 0.04], "conf": 0.9},
+            {"t": 8.0, "kind": "phone", "text": "0661234567", "rect": [0.5, 0.5, 0.2, 0.04], "conf": 0.9},
+        ]}, f)
+    per, misses = tb.recall(runs, [pii], "fake/src.mp4", info, [], {"phone"})
+    check("covered hit at 4 s counts (slot-tolerant: frames 40..70)", per["phone:0661234567"][1], 1)
+    check("uncovered hit at 8 s is a miss", len(misses), 1)
+    hand = [{"rect": [0.5, 0.5, 0.2, 0.04], "when": [6.0, 10.0]}]
+    per2, misses2 = tb.recall(runs, [pii], "fake/src.mp4", info, [], {"phone"}, hand_rects=hand)
+    check("a hand rect active at the time counts as coverage", len(misses2), 0)
+    # an OCR line that carries its label: the number is half the line, and a
+    # box over the number alone (half the line's area) must count as covered
+    pii2 = os.path.join(d, "y.pii.json")
+    with open(pii2, "w", encoding="utf-8") as f:
+        json.dump({"src": "fake/src.mp4", "sample_fps": 0.25, "hits": [
+            {"t": 4.0, "kind": "phone", "text": "Телефон: 0661234567",
+             "rect": [0.1, 0.2, 0.2, 0.04], "conf": 0.9}]}, f)
+    half = [[0, 99, [[200, 100, 300, 120, "k"]]]]
+    check("a labelled line needs only its digits covered",
+          tb.recall(half, [pii2], "fake/src.mp4", info, [], {"phone"})[0]["phone:0661234567"][1], 1)
+    check("...but a bare number still needs most of its box",
+          tb.recall(half, [pii], "fake/src.mp4", info, [], {"phone"})[0]["phone:0661234567"][1], 0)
+
+    print("\nscreen-cut: piece key ignores what does not touch the pixels")
+    sc = load("screen-cut")
+    plan = {"path": __file__, "segments": [{"start": 0, "end": 1, "speed": 1.0, "out": 1}],
+            "src": {"blur": []}}
+    a = sc.piece_key(plan, dict(sc.DEFAULTS, speed=6.0))
+    b = sc.piece_key(plan, dict(sc.DEFAULTS, speed=19.0, min_drop=9))
+    check("speed/min_drop are plan inputs, not piece inputs", a, b)
+    c = sc.piece_key(plan, dict(sc.DEFAULTS, cq=15))
+    check("cq changes the key", a == c, False)
+    check("a blur rect changes the key",
+          a == sc.piece_key(dict(plan, src={"blur": [{"rect": [0, 0, 1, 1]}]}), dict(sc.DEFAULTS)), False)
+
+
 def main():
     print("check-screen: silent-screencast pipeline self-test\n")
     pii_rules()
     cut_arithmetic()
+    pipeline_pieces()
     print()
     if FAILS:
         print(f"{len(FAILS)} FAILURE(S):")

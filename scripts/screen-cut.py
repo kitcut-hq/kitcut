@@ -41,6 +41,9 @@ import os
 import json
 import argparse
 import subprocess
+import hashlib
+import glob
+import time
 import shutil
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -280,13 +283,65 @@ def esc(p):
     return p.replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
 
 
-def blur_chain(blurs, cw, ch, label_in, label_out, cfg):
-    """Rect blurs in SOURCE time, on the already-scaled frame.
+def masked_blur(blurs, cw, ch, label_in, label_out, cfg):
+    """Blur the frame ONCE and composite it back through a rect mask.
 
-    Each rect is its own crop/blur/overlay pair rather than one masked pass,
-    because the rects have different lifetimes and overlay's `enable` is the
-    only per-time gate that costs nothing outside its window.
+    The obvious construction -- one crop / blur / overlay per rect -- is
+    quadratic in the wrong thing: 138 rects meant 138 split-crop-blur-overlay
+    chains, every one of them running on every frame whether its `enable`
+    window was open or not, and the render crawled at 0.0024x (a 56-hour ETA
+    for eight minutes of film). Rect count must not multiply per-frame work.
+
+    So: blur the whole frame once, paint a black-and-white mask with one
+    drawbox per rect (drawbox is nearly free and `enable` gates it in time),
+    and alphamerge the blurred copy over the clean one through that mask. Cost
+    is one blur plus N cheap boxes instead of N blurs.
+
+    The blur itself is a downscale / gblur / upscale rather than a full-res
+    boxblur: the gaussian then runs on 1/64th of the pixels, and bicubic back
+    up hides the grid that a plain scale-down/scale-up would leave. It reads as
+    a blur, not as a mosaic and not as a censor bar.
+
+    The mask is derived from the VIDEO (drawbox over a filled black frame),
+    never from a `color` source -- an infinite source makes alphamerge wait for
+    a frame that never stops coming, which is the same trap the looped-PNG
+    mask hit in the shorts pipeline.
     """
+    parts = []
+    d = int(cfg.get("blur_downscale", 8))
+    sigma = float(cfg.get("blur_sigma", 3.0))
+    parts.append(f"[{label_in}]split=3[bl_clean][bl_src][bl_mk]")
+    parts.append(f"[bl_src]scale=iw/{d}:ih/{d}:flags=area,"
+                 f"gblur=sigma={sigma},"
+                 f"scale={cw}:{ch}:flags=bicubic[bl_blur]")
+    cur = "bl_mk"
+    parts.append(f"[{cur}]drawbox=x=0:y=0:w=iw:h=ih:color=black:t=fill[bl_m0]")
+    cur = "bl_m0"
+    for i, b in enumerate(blurs):
+        x, y, w, h = b["rect"]
+        px = max(0, int(round(x * cw)))
+        py = max(0, int(round(y * ch)))
+        pw = max(4, int(round(w * cw)))
+        ph = max(4, int(round(h * ch)))
+        nxt = f"bl_m{i + 1}"
+        parts.append(f"[{cur}]drawbox=x={px}:y={py}:w={pw}:h={ph}:"
+                     f"color=white:t=fill" + gate(b) + f"[{nxt}]")
+        cur = nxt
+    parts.append(f"[bl_blur][{cur}]alphamerge[bl_a]")
+    parts.append(f"[bl_clean][bl_a]overlay=shortest=1[{label_out}]")
+    return parts, label_out
+
+
+def blur_chain(blurs, cw, ch, label_in, label_out, cfg):
+    """Rect redaction in SOURCE time, on the already-scaled frame.
+
+    `blur` mode goes through masked_blur() -- one blur for the whole frame.
+    `box` and `pixelate` stay per-rect, because they are cheap enough per rect
+    and a mosaic has to be built at the rect's own scale.
+    """
+    mode = cfg.get("blur_mode", "blur")
+    if blurs and all((b.get("mode") or mode) == "blur" for b in blurs):
+        return masked_blur(blurs, cw, ch, label_in, label_out, cfg)
     parts = []
     cur = label_in
     for i, b in enumerate(blurs):
@@ -296,9 +351,28 @@ def blur_chain(blurs, cw, ch, label_in, label_out, cfg):
         pw = max(8, int(round(w * cw)) // 2 * 2)
         ph = max(8, int(round(h * ch)) // 2 * 2)
         strength = int(b.get("strength", 12))
-        mode = b.get("mode") or cfg.get("blur_mode", "box")
+        mode = b.get("mode") or cfg.get("blur_mode", "blur")
         nxt = f"{label_out}{i}"
-        if mode == "box":
+        if mode == "blur":
+            # A real blur, which is what "blur the card number" means. boxblur
+            # with power 3 approximates a gaussian and is far cheaper than
+            # gblur; the radius is tied to the rect's own height so a one-line
+            # field and a whole panel both end up equally unreadable.
+            # boxblur caps each plane's radius at half its own smaller side,
+            # and in yuv420p the CHROMA plane is half size -- so a radius that
+            # is legal for luma is rejected for chroma ("Invalid chroma_param
+            # radius value 21, must be >= 0 and <= 16") and the whole render
+            # dies. Clamp the two separately.
+            side = min(pw, ph)
+            lr = max(1, min(side // 3, (side - 1) // 2))
+            cr = max(1, min(lr, (side // 2 - 1) // 2))
+            parts.append(f"[{cur}]split[{nxt}a][{nxt}b]")
+            parts.append(f"[{nxt}b]crop={pw}:{ph}:{px}:{py},"
+                         f"boxblur=luma_radius={lr}:luma_power=3:"
+                         f"chroma_radius={cr}:chroma_power=3[{nxt}c]")
+            parts.append(f"[{nxt}a][{nxt}c]overlay=x={px}:y={py}"
+                         + gate(b) + f"[{nxt}]")
+        elif mode == "box":
             parts.append(f"[{cur}]drawbox=x={px}:y={py}:w={pw}:h={ph}:"
                          f"color={b.get('color', cfg.get('box_color', 'black'))}"
                          f":t=fill" + gate(b) + f"[{nxt}]")
@@ -347,6 +421,28 @@ def build_filter(plan, cfg, idx):
     else:
         parts = [f"[{idx}:v]scale={vw}:{vh}:flags=lanczos,setsar=1[s{idx}]"]
     cur = f"s{idx}"
+    if plan.get("mask_listing"):
+        # Tracked redaction: track-blur.py followed the secret's own pixels
+        # through the source and wrote a mask stream; the frame is blurred
+        # ONCE and shown through that mask, so the blur lands wherever the
+        # field actually is -- scrolled, repeated, or back after a page
+        # change -- and rect count adds nothing to per-frame cost. No
+        # `shortest` on the overlay and no early-ending mask: alphamerge
+        # pairs frames one-to-one and a short mask stalls the graph (the
+        # looped-PNG trap), which is why track-blur writes the mask longer
+        # than the source.
+        d = int(cfg.get("blur_downscale", 8))
+        sigma = float(cfg.get("blur_sigma", 3.0))
+        fps_in = plan["info"]["fps"] or cfg["fps"]
+        parts.append(f"[{cur}]split[tk{idx}c][tk{idx}b]")
+        parts.append(f"[tk{idx}b]scale=iw/{d}:ih/{d}:flags=area,"
+                     f"gblur=sigma={sigma},"
+                     f"scale={vw}:{vh}:flags=bicubic[tk{idx}bl]")
+        parts.append(f"[1:v]fps={fps_in:.4f},scale={vw}:{vh}:flags=neighbor,"
+                     f"format=gray[tk{idx}m]")
+        parts.append(f"[tk{idx}bl][tk{idx}m]alphamerge[tk{idx}a]")
+        parts.append(f"[tk{idx}c][tk{idx}a]overlay[tk{idx}]")
+        cur = f"tk{idx}"
     blurs = plan["src"].get("blur") or []
     if blurs:
         bp, cur = blur_chain(blurs, vw, vh, cur, f"b{idx}_", cfg)
@@ -472,8 +568,11 @@ def source_cmd(plan, cfg, out_path, prog=None):
     cmd = ["ffmpeg", "-v", "error", "-stats", "-nostdin", "-y"]
     if prog:
         cmd += ["-progress", prog]
-    cmd += ["-i", plan["path"],
-            "-filter_complex_script", gpath, "-map", "[out]", "-an",
+    cmd += ["-i", plan["path"]]
+    if plan.get("mask_listing"):
+        # input 1: the tracked blur mask, a concat of still PNGs
+        cmd += ["-f", "concat", "-safe", "0", "-i", plan["mask_listing"]]
+    cmd += ["-filter_complex_script", gpath, "-map", "[out]", "-an",
             "-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr",
             "-cq", str(cfg.get("cq", 21)), "-b:v", "0",
             "-pix_fmt", "yuv420p", "-movflags", "+faststart", out_path]
@@ -487,40 +586,131 @@ def run_ffmpeg(cmd, what):
         raise SystemExit(f"ffmpeg failed on {what} ({r.returncode}):\n{tail}")
 
 
-def render(plans, cfg, out_path, dry=False, prog=None):
-    """Render each source, then join them without re-encoding."""
+# Config keys a piece's pixels actually depend on. Anything not listed here --
+# --target, --list formatting, the output path -- must not invalidate a cache
+# entry, or nothing is ever reused.
+PIECE_CFG_KEYS = ("canvas", "fps", "cq", "backdrop", "blur_mode", "box_color",
+                  "speed_badge", "badge_font")
+
+
+def piece_key(plan, cfg):
+    """A content address for one rendered piece.
+
+    Everything that changes the pixels goes in: the input file's identity, the
+    cut this source resolved to (segments AND their speeds), its blur list, and
+    the global look settings. Nothing else does -- the join is a stream copy
+    and the badge is drawn in this source's own local time, so a piece has no
+    dependency on any other piece.
+
+    The input is identified by size and mtime rather than by hashing gigabytes:
+    a proxy that is rebuilt gets a new mtime, and that is the only way these
+    files change.
+    """
+    try:
+        st = os.stat(plan["path"])
+        ident = [os.path.basename(plan["path"]), st.st_size, int(st.st_mtime)]
+    except OSError:
+        ident = [plan["path"], -1, -1]
+    mask_ident = None
+    if plan.get("mask_listing"):
+        try:
+            st = os.stat(plan["mask_listing"])
+            mask_ident = [st.st_size, int(st.st_mtime)]
+        except OSError:
+            mask_ident = ["missing"]
+    payload = {
+        "input": ident,
+        "segments": plan["segments"],
+        "blur": plan["src"].get("blur") or [],
+        "mask": mask_ident,
+        "cfg": {k: cfg.get(k) for k in PIECE_CFG_KEYS},
+    }
+    blob = json.dumps(payload, sort_keys=True, ensure_ascii=False,
+                      separators=(",", ":"))
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:12]
+
+
+def render(plans, cfg, out_path, dry=False, prog=None, rebuild=False,
+           keep_stale=False):
+    """Render each source, then join them without re-encoding.
+
+    Pieces are CONTENT-ADDRESSED: the filename carries the hash of everything
+    that determines it, so "has this already been rendered" is just "does that
+    file exist". Editing one source's blur rects re-renders one piece and
+    re-joins in seconds instead of re-encoding the whole film.
+
+    A cached piece is still probed against its planned duration before it is
+    trusted -- a truncated file from an interrupted run has the right name and
+    the wrong contents, and silently concatenating it would be worse than
+    rebuilding it.
+    """
     piece_dir = os.path.join(os.path.dirname(out_path), "..", "temp", "cut")
     piece_dir = os.path.normpath(piece_dir)
     os.makedirs(piece_dir, exist_ok=True)
     total_out = sum(p["out_s"] for p in plans)
+
     pieces = []
-    for i, p in enumerate(plans):
+    for p in plans:
         base = os.path.splitext(os.path.basename(p["path"]))[0]
-        dst = os.path.join(piece_dir, f"{i:02d}-{base}.mp4")
+        key = piece_key(p, cfg)
+        dst = os.path.join(piece_dir, f"{base}.{key}.mp4")
         cmd, nodes = source_cmd(p, cfg, dst, prog)
-        pieces.append((p, dst, cmd, nodes))
+        pieces.append({"plan": p, "dst": dst, "cmd": cmd, "nodes": nodes,
+                       "key": key})
+
+    def usable(pc):
+        if rebuild or not os.path.exists(pc["dst"]):
+            return False
+        try:
+            got = probe(pc["dst"])["duration"]
+        except Exception:
+            return False
+        return abs(got - pc["plan"]["out_s"]) <= max(1.0, pc["plan"]["out_s"] * 0.02)
+
+    for pc in pieces:
+        pc["cached"] = usable(pc)
 
     if dry:
-        for p, dst, cmd, nodes in pieces:
-            print(f"  {os.path.basename(p['path'])[:38]:<38} "
-                  f"{len(p['segments']):>4} segs  {nodes:>4} filter nodes -> "
-                  f"{os.path.basename(dst)}")
-        print(f"\n  then concat demuxer, -c copy -> {os.path.basename(out_path)}")
+        for pc in pieces:
+            p = pc["plan"]
+            print(f"  {os.path.basename(p['path'])[:36]:<36} "
+                  f"{len(p['segments']):>4} segs  {pc['nodes']:>4} nodes  "
+                  f"{'REUSE' if pc['cached'] else 'build'}  {pc['key']}")
+        n = sum(1 for pc in pieces if not pc["cached"])
+        print(f"\n  {n} of {len(pieces)} piece(s) to build, "
+              f"then concat demuxer -c copy -> {os.path.basename(out_path)}")
         return None
 
-    for i, (p, dst, cmd, nodes) in enumerate(pieces, 1):
-        print(f"  [{i}/{len(pieces)}] {os.path.basename(p['path'])[:40]:<40} "
+    todo = [pc for pc in pieces if not pc["cached"]]
+    reused = len(pieces) - len(todo)
+    if reused:
+        print(f"  reusing {reused} unchanged piece(s)")
+    for i, pc in enumerate(todo, 1):
+        p = pc["plan"]
+        print(f"  [{i}/{len(todo)}] {os.path.basename(p['path'])[:40]:<40} "
               f"{fmt(p['out_s']):>7}")
-        run_ffmpeg(cmd, os.path.basename(p["path"]))
+        run_ffmpeg(pc["cmd"], os.path.basename(p["path"]))
 
     listing = os.path.join(piece_dir, "concat.txt")
     with open(listing, "w", encoding="utf-8") as f:
-        for _, dst, _, _ in pieces:
-            f.write(f"file '{dst.replace(chr(92), '/')}'\n")
+        for pc in pieces:
+            f.write(f"file '{pc['dst'].replace(chr(92), '/')}'\n")
     print(f"  joining {len(pieces)} pieces (stream copy)")
     run_ffmpeg(["ffmpeg", "-v", "error", "-nostdin", "-y",
                 "-f", "concat", "-safe", "0", "-i", listing,
                 "-c", "copy", "-movflags", "+faststart", out_path], "concat")
+
+    if not keep_stale:
+        live = {pc["dst"] for pc in pieces}
+        live |= {os.path.splitext(pc["dst"])[0] + ".filtergraph.txt"
+                 for pc in pieces}
+        live.add(listing)
+        for f in glob.glob(os.path.join(piece_dir, "*")):
+            if os.path.normpath(f) not in {os.path.normpath(x) for x in live}:
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
     return total_out
 
 
@@ -590,6 +780,16 @@ def main():
                          "to the manifest entry that should have covered it.")
     ap.add_argument("--no-proxy", action="store_true",
                     help="read the original sources even where a proxy exists")
+    ap.add_argument("--smoke", action="store_true",
+                    help="render ~30 s of the busiest source through the FULL "
+                         "graph and check its duration; run before every full "
+                         "render. Seven ffmpeg failures in one session were "
+                         "each found by a full-film render after a 5-10 minute "
+                         "wait; every one of them shows up here in a minute.")
+    ap.add_argument("--rebuild", action="store_true",
+                    help="re-render every piece, ignoring the cache")
+    ap.add_argument("--keep-stale", action="store_true",
+                    help="keep pieces from previous renders in temp/cut")
     ap.add_argument("--target", metavar="M:SS",
                     help="solve for the speeds that land on this runtime, "
                          "keeping the panel:work ratio the manifest asks for")
@@ -634,6 +834,15 @@ def main():
         p["source_path"] = _env.resolve(s["path"])
         p["is_proxy"] = chosen != p["source_path"]
         p["info"] = probe(p["path"])
+        # tracked-blur mask, if track-blur.py has run for this source
+        track = s.get("track")
+        if track:
+            listing = os.path.join(_env.resolve(track), "masks.txt")
+            if os.path.exists(listing):
+                p["mask_listing"] = listing
+            else:
+                print(f"  track masks missing for "
+                      f"{os.path.basename(s['path'])}: {listing}")
         plans.append(p)
 
     tot_in = sum(p["window"][1] - p["window"][0] for p in plans)
@@ -673,13 +882,18 @@ def main():
     if args.sheet:
         sheet(plans, cfg, _env.resolve(args.sheet))
 
+    if args.smoke:
+        smoke(plans, cfg, man, mpath)
+        return
+
     if args.list or args.sweep or args.sheet or args.where:
         return
 
     out = _env.resolve(args.out or man["output"])
     os.makedirs(os.path.dirname(out), exist_ok=True)
     if args.dry_run:
-        render(plans, cfg, out, dry=True)
+        render(plans, cfg, out, dry=True, rebuild=args.rebuild,
+               keep_stale=args.keep_stale)
         return
 
     total_out = sum(p["out_s"] for p in plans)
@@ -692,7 +906,8 @@ def main():
     prog = _progress.begin(job, total_out, _project.norm(out), kind="screen-cut")
     try:
         print(f"\n  rendering {fmt(total_out)} -> {out}")
-        render(plans, cfg, out, prog=prog)
+        render(plans, cfg, out, prog=prog, rebuild=args.rebuild,
+               keep_stale=args.keep_stale)
     finally:
         _progress.end(job)
 
@@ -710,6 +925,46 @@ def main():
                     "speed_badge": bool(cfg.get("speed_badge")),
                     "speed": cfg["speed"], "audio": "none (silent sources)"},
             note=f"{fmt(tot_in)} of sources -> {fmt(got)}")
+
+
+def smoke(plans, cfg, man, mpath, seconds=30.0):
+    """A slice of the busiest source through the whole graph, then a probe.
+
+    "Busiest" means most redaction work: a tracked mask stream counts for a
+    lot, hand rects count each. The slice keeps the first segments of that
+    source until ~30 s of OUTPUT is reached, so trims, speeds, the mask
+    input, hand blurs, the badge and the encoder all run exactly as the full
+    render would -- only shorter.
+    """
+    def busy(p):
+        # a tracked mask stream is the expensive, failure-prone path; it must
+        # win over any number of hand rects (15 rects picked the handheld clip
+        # once, and the smoke never touched alphamerge)
+        return (100 if p.get("mask_listing") else 0) + len(p["src"].get("blur") or [])
+    p = max(plans, key=busy)
+    segs, out = [], 0.0
+    for s in p["segments"]:
+        segs.append(s)
+        out += s["out"]
+        if out >= seconds:
+            break
+    sp = dict(p, segments=segs, out_s=out)
+    sdir = os.path.join(os.path.dirname(mpath), "temp", "smoke")
+    os.makedirs(sdir, exist_ok=True)
+    dst = os.path.join(sdir, os.path.splitext(os.path.basename(p["path"]))[0] + ".mp4")
+    cmd, nodes = source_cmd(sp, cfg, dst)
+    print(f"\n  smoke: {os.path.basename(p['path'])}  {len(segs)} segment(s), "
+          f"{nodes} filter nodes, {'mask stream, ' if p.get('mask_listing') else ''}"
+          f"{len(p['src'].get('blur') or [])} hand rect(s) -> {fmt(out)}")
+    t0 = time.time()
+    run_ffmpeg(cmd, "smoke")
+    got = probe(dst)["duration"]
+    ok = abs(got - out) <= max(1.0, out * 0.02)
+    print(f"  smoke: rendered {fmt(got)} in {time.time() - t0:.0f}s "
+          f"({got / max(0.01, time.time() - t0):.2f}x realtime)  "
+          f"{'ok' if ok else 'FAIL: planned ' + fmt(out)}  -> {dst}")
+    if not ok:
+        raise SystemExit(1)
 
 
 def where(plans, cfg, times):

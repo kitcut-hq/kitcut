@@ -560,12 +560,43 @@ That breaks every silence-driven decision in that pipeline. `min_silence`,
 nothing" when the audio never crosses any threshold. Measure the picture
 instead.
 
+### One command, eleven stages, one stop
+
 ```powershell
-python scripts/screen-activity.py --src projects/<id>/sources/<f>.mp4 --list --probe-motion
-python scripts/scan-pii.py        --src projects/<id>/sources/<f>.mp4 --report --emit
-python scripts/screen-cut.py      --manifest projects/<id>/screen.json --list --sweep
-python scripts/screen-cut.py      --manifest projects/<id>/screen.json --target 8:00 --sheet projects/<id>/temp/sheet
-python scripts/screen-cut.py      --manifest projects/<id>/screen.json --target 8:00
+python scripts/screencast-pipeline.py --project <id> --target 8:00
+python scripts/screencast-pipeline.py --project <id> --target 8:00 --approve --upload unlisted
+```
+
+The first edit of this kind took six hours as ~40 hand-typed commands; the
+retro is `docs/retro-books-giveaway.md`. The pipeline runs the same work in
+the only order that does not waste it, and every stage fingerprints its inputs
+into `temp/pipeline/<stage>.json` so a rerun after one manifest edit costs one
+piece and one gate:
+
+| stage | script | what it guarantees |
+|---|---|---|
+| import | `import-footage.py` | desktop + phone captures found, duplicates dropped, ordered by real capture start, audio checked |
+| proxies | `make-proxies.py` | everything after reads the working size, once |
+| activity | `screen-activity.py` | per-region motion; the panel divider *found* (`--find-panel`) |
+| ocr | `scan-pii.py` | every sampled frame read **once**, cached; rules are a second pass |
+| track | `track-blur.py` | each secret's pixels followed; templates pooled across the session |
+| recall | `track-blur.py --recall` | the tracker measured against the OCR hits; **stops below the bar** |
+| review | `redaction-review.py` | **the stop**: a before/after sheet of every redaction; nothing renders unapproved |
+| smoke | `screen-cut.py --smoke` | 30 s of the busiest source through the full graph, in a minute |
+| render | `screen-cut.py` | content-addressed pieces, stream-copy join |
+| gate | `render-gate.py` | the secrets' own pixels searched on the *render*; `--patch` and loop |
+| upload | `yt-upload.py` | unlisted, only after a clean gate and an approved look |
+
+The individual tools remain usable on their own; the pipeline is what makes
+the order and the caching un-forgettable.
+
+```powershell
+python scripts/screen-activity.py --src <proxy> --list --probe-motion
+python scripts/scan-pii.py        --src <proxy> --out temp/pii/<base>.pii.json --report
+python scripts/track-blur.py      --src <proxy> --outdir temp/track/<base> --manifest <screen.json> --recall
+python scripts/screen-cut.py      --manifest <screen.json> --list --sweep
+python scripts/screen-cut.py      --manifest <screen.json> --target 8:00 --smoke
+python scripts/render-gate.py     --manifest <screen.json> --target 8:00 --patch
 ```
 
 ### Activity is measured per region, not per frame
@@ -769,10 +800,79 @@ Why this is safe rather than a quality trade:
 - Screen text is where H.264 hurts most, so the proxy is encoded at `cq 16` and
   `--verify` scores it against the source frame by frame rather than assuming.
 
-**Where a proxy does not help, and it matters:** OCR. Text recognition is
-resolution-bound, so shrinking first costs recall on the single most expensive
-step in the pipeline. `scan-pii.py` reads the **originals**; the lever there is
-fewer frames (`--skip-static`), not smaller ones.
+**OCR reads the proxies too.** An earlier version of this section claimed OCR
+needed the originals because text recognition is resolution-bound. It is — but
+the scan runs at 1600 px wide and the proxy is 1818 px, so nothing is lost, and
+decoding 4K for it was pure cost. The lever on OCR time is fewer frames
+(`--skip-static`) and the per-frame cache, not larger ones.
+
+### Blur follows the pixels, not the clock
+
+A blur rectangle anchored to a **time window** is the wrong primitive, and
+every leak this project chased came from that one mismatch: scan-pii reports
+"this phone number is at (x,y) around t=204", the page scrolls, the field
+moves, the rect does not. The blur lands on the wrong rows and the secret
+stays sharp somewhere else. Widening rects, merging rows, blanketing whole
+panels — all of it was compensation for anchoring to the wrong thing.
+
+The right primitive is standard, and editors call it **tracked redaction**:
+detect once, then track. A screen recording is the *easy case* for it,
+because a browser renders the same text pixel-identically every frame it
+appears — no lighting, no noise, no perspective. So:
+
+```powershell
+python scripts/track-blur.py --src <proxy> --pii <pii.json> --outdir <trackdir> --manifest <screen.json> --list
+```
+
+`track-blur.py` cuts each secret scan-pii found out of the frame as a pixel
+**template**, then finds those pixels in every frame with normalized
+cross-correlation (`cv2.matchTemplate`). Wherever they are — scrolled,
+repeated twice on screen, back after a page change — that is where the blur
+goes, sized exactly to the match. Content-anchored, and minimal by
+construction. The manifest points a source at its track dir with `track`, and
+`screen-cut.py` feeds the resulting mask stream as a second input: the frame
+is blurred **once** and shown through the mask, so box count adds nothing to
+per-frame filter cost.
+
+The cost model is what makes it fast: unchanged frames reuse the previous
+boxes (60–80 % of a screencast); a tracked instance is re-found in a local
+window; only a lost template pays a full-frame sweep, at half scale, and only
+every 15th frame once it has gone cold. A 55-second clip tracks in 26 s.
+
+Three findings that are now constants in the script, all verified on the
+Privat24 clip:
+
+- **Match across scale.** The app draws the same account number at list,
+  detail and form sizes, and NCC only matches its own size. A template is
+  searched at ×0.75 / ×1.0 / ×1.3, and one variant is kept per rendered
+  height that OCR saw.
+- **Refuse tiny templates.** A 39×11 "UA39" patch carries so little structure
+  it cleared 0.90 NCC against a *face*. Anything under 48 px wide or 12 σ of
+  contrast is not evidence and is dropped at collection; the wider templates
+  on the same row cover it.
+- **The mask stream must outlive the source.** `alphamerge` pairs frames
+  one-to-one; a mask that ends early stalls the graph exactly like the
+  looped-PNG alpha in the shorts pipeline. The concat listing is written
+  seconds longer than the source on purpose.
+- **Pool the templates across recordings.** One session's secrets cross its
+  recordings: the card number typed into the Claude panel in one capture was
+  OCR-read only in *another*, so a per-source pool left it sharp exactly where
+  it mattered. `--pii` takes every same-geometry scan at once; the pixels are
+  still cut from the file each hit was found in, at working resolution.
+
+And the honest boundary, written down so nobody re-learns it: tracking loses
+where the pixels themselves change — text the user *selects* (white-on-blue
+does not match a template captured black-on-white), a window-switcher
+thumbnail rendering a title at arbitrary scale, a photographed screen
+(handheld footage: 14 % recall), and anything OCR never saw, which has no
+template at all. Those cases carry hand `blur` rects in the manifest, each
+with its reason. Tracking is the tool for consistently-rendered browser
+footage; it does not replace looking at the frames.
+
+The masks are one PNG per stretch of stable boxes — a still page costs one
+PNG however long it holds — turned into a stream by the concat demuxer.
+Hand-measured `blur` rects still work and ride the same pass; they are for
+what OCR cannot see at all (the monobank card faces).
 
 ### The arithmetic and the rules have their own test
 
@@ -1965,6 +2065,11 @@ absolute path written into a script, a skill or these docs.
 | `scripts/screen-cut.py` | cut/speed/blur silent screen recordings into one film |
 | `scripts/scan-pii.py` | OCR a recording for card numbers, CVVs, IBANs, phones and addresses |
 | `scripts/make-proxies.py` | transcode a manifest's sources once, at the working size |
+| `scripts/track-blur.py` | follow a secret's own pixels through a recording; emit the blur mask; `--recall` measures it |
+| `scripts/redaction-review.py` | the before/after sheet of every redaction; the stop before a render |
+| `scripts/render-gate.py` | search the secrets' pixels on the finished film; `--patch` the manifest |
+| `scripts/import-footage.py` | desktop + phone captures into a project, ordered by real capture start |
+| `scripts/screencast-pipeline.py` | the eleven stages in order, cached, with one stop |
 | `scripts/check-screen.py` | silent-screencast self-test; no GPU, no files, no OCR |
 | `scripts/shot-detect.py` | read an edit back off a finished film: where it cuts, and on which angle |
 | `scripts/split-cameras.py` | conform a programme, then rebuild the camera tapes it was cut from |
@@ -2008,6 +2113,38 @@ Of those, `transcripts/` is the only expensive artifact (minutes of GPU time);
 everything in `temp/` regenerates in seconds.
 
 ## Gotchas worth knowing
+
+- **The `fps` filter labels the slot, not the frame.** `-vf fps=0.25` emits,
+  for the output frame stamped 16 s, whichever input frame fell inside that
+  4-second slot — and rewrites its timestamp to 16.0. A template cut at exactly
+  16.0 landed on a Notepad window instead of the spreadsheet cell OCR had read
+  at ~20 s; tracker recall was 46 % on frames it had cut its own templates
+  from. Sample with `select=not(mod(n\,STEP))` and read the frame's own
+  `pts_time` from `showinfo` (`scan-pii.py`).
+- **Reading a child's stderr before its stdout deadlocks.** Waiting for the
+  `showinfo` line before reading the frame bytes blocks ffmpeg on a stdout
+  nobody drains, while this side waits for a line ffmpeg has not reached.
+  Read the frame first; the log line for it is already out.
+- **A filtergraph on the command line has a 32 KB ceiling on Windows**, and it
+  fails as `WinError 206: The filename or extension is too long`, which names
+  the wrong thing entirely. Use `-filter_complex_script` (`screen-cut.py`).
+- **`concat` over ten file inputs buffers the nine it is not reading**: 2.8 GB
+  RSS and output frozen at 25 MB. Render per source; join with the concat
+  demuxer and `-c copy`.
+- **Per-rect blur chains are quadratic in the wrong thing.** 138 rects as 138
+  split/crop/blur/overlay chains ran at 0.0024× — a 56-hour ETA. Blur the frame
+  once and composite it back through one mask (`masked_blur`, or the tracked
+  mask stream).
+- **Pixelate costs 17× a filled box** (35 s vs 2 s per 10 s of video at 18
+  rects), because each mosaic is its own scale-down/scale-up per frame.
+- **`boxblur` caps chroma radius at half the luma cap** in yuv420p —
+  `Invalid chroma_param radius value 21, must be >= 0 and <= 16` kills the
+  render. Clamp the two planes separately.
+- **`drawtext` with no `fontfile` dies on Windows** (`Fontconfig error: Cannot
+  load default config file`). Always pass a font.
+- **`_progress.begin()` returns the path ffmpeg must be given as `-progress`.**
+  Declaring the job without wiring it leaves the status line reading an empty
+  file and reporting "stalled" for the whole encode.
 
 These are load-bearing; `docs/karaoke-captions.md` has the full list with
 evidence.

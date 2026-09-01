@@ -31,1752 +31,860 @@
     "speed_badge": true,
     "cq": 21,
     "backdrop": "blur",
-    "_backdrop_why": "portrait phone clips fill a landscape canvas with a blurred, darkened copy of their own frame instead of black bars; ignored where the frame already covers 90% of the canvas"
+    "_backdrop_why": "portrait phone clips fill a landscape canvas with a blurred, darkened copy of their own frame instead of black bars; ignored where the frame already covers 90% of the canvas",
+    "blur_mode": "blur",
+    "_blur_mode_why": "a real blur, not a filled box and not a mosaic. Blur the sensitive field; never wipe a region.",
+    "blur_downscale": 8,
+    "blur_sigma": 3.0
   },
   "sources": [
     {
       "_why": "08:37 -- monobank on the phone: the card list, and opening a new card. NOT Privat24, despite the ask saying so; the second clip is the Privat24 one.",
-      "_blur_why": "scan-pii found NOTHING here and the clip is full of card numbers. The PANs sit on a dark stylised card face in a display font and the OCR did not read them at all -- which is exactly why a clean report is not a clearance. These rects are measured by hand off a fraction grid (scripts/screen-activity.py --probe-motion has no say here) and gated to the screens that actually carry numbers, so the card-type picker in between stays visible.",
+      "_blur_why": "blurred fields only, from temp/pii/screen-20260831-083709-1788190581246.pii.json; padded 0.006/0.01 -- enough not to clip a glyph",
       "path": "projects/books-giveaway/sources/screen-20260831-083709-1788190581246.mp4",
       "activity": "projects/books-giveaway/temp/screen-20260831-083709-1788190581246.activity.json",
-      "blur": [
+      "proxy": "projects/books-giveaway/temp/proxy/screen-20260831-083709-1788190581246.mp4",
+      "blur_extra": [
         {
-          "_why": "main screen: gift balance 229.13, balance 0.00, PAN 4441 **** **** 7789",
+          "_why": "PAN 4441 **** **** 7789 on the card face",
           "rect": [
-            0.0,
-            0.1,
-            1.0,
-            0.44
-          ],
-          "when": [
-            4.0,
-            16.0
-          ]
-        },
-        {
-          "_why": "'Усi картки': last-4 of three cards and their balances",
-          "rect": [
-            0.0,
             0.12,
-            1.0,
-            0.46
+            0.405,
+            0.76,
+            0.052
           ],
           "when": [
-            28.0,
-            38.0
+            4,
+            16
           ]
         },
         {
-          "_why": "USD card screen: balance 803.05, PAN 4441 **** **** 8596",
+          "_why": "account balance",
           "rect": [
-            0.0,
-            0.1,
-            1.0,
-            0.44
+            0.27,
+            0.258,
+            0.46,
+            0.062
           ],
           "when": [
-            41.0,
-            49.0
+            4,
+            16
           ]
         },
         {
-          "_why": "operations list: merchant names and amounts",
+          "_why": "top-bar amount",
           "rect": [
-            0.0,
-            0.7,
-            1.0,
-            0.28
+            0.59,
+            0.132,
+            0.18,
+            0.042
           ],
           "when": [
-            41.0,
-            49.0
+            4,
+            49
+          ]
+        },
+        {
+          "_why": "card last-4",
+          "rect": [
+            0.35,
+            0.172,
+            0.16,
+            0.048
+          ],
+          "when": [
+            28,
+            38
+          ]
+        },
+        {
+          "_why": "card last-4",
+          "rect": [
+            0.81,
+            0.172,
+            0.16,
+            0.048
+          ],
+          "when": [
+            28,
+            38
+          ]
+        },
+        {
+          "_why": "balance",
+          "rect": [
+            0.05,
+            0.277,
+            0.34,
+            0.058
+          ],
+          "when": [
+            28,
+            38
+          ]
+        },
+        {
+          "_why": "balance",
+          "rect": [
+            0.51,
+            0.277,
+            0.26,
+            0.058
+          ],
+          "when": [
+            28,
+            38
+          ]
+        },
+        {
+          "_why": "card last-4",
+          "rect": [
+            0.35,
+            0.352,
+            0.16,
+            0.048
+          ],
+          "when": [
+            28,
+            38
+          ]
+        },
+        {
+          "_why": "balance",
+          "rect": [
+            0.05,
+            0.452,
+            0.3,
+            0.058
+          ],
+          "when": [
+            28,
+            38
+          ]
+        },
+        {
+          "_why": "PAN 4441 **** **** 8596 on the card face",
+          "rect": [
+            0.12,
+            0.405,
+            0.76,
+            0.052
+          ],
+          "when": [
+            41,
+            49
+          ]
+        },
+        {
+          "_why": "USD balance",
+          "rect": [
+            0.27,
+            0.258,
+            0.46,
+            0.062
+          ],
+          "when": [
+            41,
+            49
+          ]
+        },
+        {
+          "_why": "transaction amounts",
+          "rect": [
+            0.76,
+            0.772,
+            0.22,
+            0.165
+          ],
+          "when": [
+            41,
+            49
           ]
         }
       ],
-      "proxy": "projects/books-giveaway/temp/proxy/screen-20260831-083709-1788190581246.mp4",
-      "blur_extra": []
+      "blur": [
+        {
+          "_why": "PAN 4441 **** **** 7789 on the card face",
+          "rect": [
+            0.12,
+            0.405,
+            0.76,
+            0.052
+          ],
+          "when": [
+            4,
+            16
+          ]
+        },
+        {
+          "_why": "account balance",
+          "rect": [
+            0.27,
+            0.258,
+            0.46,
+            0.062
+          ],
+          "when": [
+            4,
+            16
+          ]
+        },
+        {
+          "_why": "top-bar amount",
+          "rect": [
+            0.59,
+            0.132,
+            0.18,
+            0.042
+          ],
+          "when": [
+            4,
+            49
+          ]
+        },
+        {
+          "_why": "card last-4",
+          "rect": [
+            0.35,
+            0.172,
+            0.16,
+            0.048
+          ],
+          "when": [
+            28,
+            38
+          ]
+        },
+        {
+          "_why": "card last-4",
+          "rect": [
+            0.81,
+            0.172,
+            0.16,
+            0.048
+          ],
+          "when": [
+            28,
+            38
+          ]
+        },
+        {
+          "_why": "balance",
+          "rect": [
+            0.05,
+            0.277,
+            0.34,
+            0.058
+          ],
+          "when": [
+            28,
+            38
+          ]
+        },
+        {
+          "_why": "balance",
+          "rect": [
+            0.51,
+            0.277,
+            0.26,
+            0.058
+          ],
+          "when": [
+            28,
+            38
+          ]
+        },
+        {
+          "_why": "card last-4",
+          "rect": [
+            0.35,
+            0.352,
+            0.16,
+            0.048
+          ],
+          "when": [
+            28,
+            38
+          ]
+        },
+        {
+          "_why": "balance",
+          "rect": [
+            0.05,
+            0.452,
+            0.3,
+            0.058
+          ],
+          "when": [
+            28,
+            38
+          ]
+        },
+        {
+          "_why": "PAN 4441 **** **** 8596 on the card face",
+          "rect": [
+            0.12,
+            0.405,
+            0.76,
+            0.052
+          ],
+          "when": [
+            41,
+            49
+          ]
+        },
+        {
+          "_why": "USD balance",
+          "rect": [
+            0.27,
+            0.258,
+            0.46,
+            0.062
+          ],
+          "when": [
+            41,
+            49
+          ]
+        },
+        {
+          "_why": "transaction amounts",
+          "rect": [
+            0.76,
+            0.772,
+            0.22,
+            0.165
+          ],
+          "when": [
+            41,
+            49
+          ]
+        }
+      ],
+      "track": false,
+      "_track_why": "hand rects, not tracking: phone-bank screens render one number in several fonts and a handheld shot is photographed pixels -- NCC recall was 14% there"
     },
     {
       "_why": "08:38 -- Privat24: the new Universal card (0499) and the 10 000 UAH transfer that funds it.",
-      "_blur_why": "Both IBANs, both masked PANs, the 132 420.45 source balance, the USD card, the recipient name and the transaction history. Hand-measured; the OCR caught the IBANs here but not the card faces.",
+      "_blur_why": "hand-measured, time-gated, verified on proof frames. Tracking is NOT used here: the app renders the same number in several fonts/sizes across views and a missed template match is a leak; the screens are static, so time windows are sound on this clip.",
       "path": "projects/books-giveaway/sources/screen-20260831-083827-1788190653366.mp4",
       "activity": "projects/books-giveaway/temp/screen-20260831-083827-1788190653366.activity.json",
+      "proxy": "projects/books-giveaway/temp/proxy/screen-20260831-083827-1788190653366.mp4",
       "blur": [
         {
-          "_why": "the entire Privat24 app body for the whole clip. Banded rects kept missing: a dense scan of the render found '10 000.00 UAH' at y 0.38 and again at y 0.68 at times no band covered. Every screen in this clip carries an amount, an IBAN or a PAN; the status bar and the bottom nav are enough to keep it legible as a banking app.",
+          "_why": "new card face: PAN 0499, expiry 11/27, balance",
           "rect": [
             0.0,
-            0.075,
+            0.02,
             1.0,
-            0.835
+            0.34
+          ],
+          "when": [
+            4.0,
+            22.0
+          ]
+        },
+        {
+          "_why": "USD card + 1 066.35 balance",
+          "rect": [
+            0.0,
+            0.1,
+            1.0,
+            0.4
+          ],
+          "when": [
+            14.0,
+            23.0
+          ]
+        },
+        {
+          "_why": "history: TEXACO, Airbnb, card *4699 and their amounts",
+          "rect": [
+            0.0,
+            0.52,
+            1.0,
+            0.42
+          ],
+          "when": [
+            14.0,
+            23.0
+          ]
+        },
+        {
+          "_why": "transfer + confirmation: both IBANs, both PANs, balances, recipient name",
+          "rect": [
+            0.0,
+            0.13,
+            1.0,
+            0.42
+          ],
+          "when": [
+            18.0,
+            46.0
+          ]
+        },
+        {
+          "_why": "funded card face and balance",
+          "rect": [
+            0.0,
+            0.02,
+            1.0,
+            0.36
+          ],
+          "when": [
+            44.0,
+            55.0
+          ]
+        },
+        {
+          "_why": "history line naming the source card",
+          "rect": [
+            0.0,
+            0.56,
+            1.0,
+            0.3
+          ],
+          "when": [
+            44.0,
+            55.0
           ]
         }
       ],
-      "proxy": "projects/books-giveaway/temp/proxy/screen-20260831-083827-1788190653366.mp4",
       "blur_extra": [
         {
-          "_why": "the entire Privat24 app body for the whole clip. Banded rects kept missing: a dense scan of the render found '10 000.00 UAH' at y 0.38 and again at y 0.68 at times no band covered. Every screen in this clip carries an amount, an IBAN or a PAN; the status bar and the bottom nav are enough to keep it legible as a banking app.",
+          "_why": "new card face: PAN 0499, expiry 11/27, balance",
           "rect": [
             0.0,
-            0.075,
+            0.02,
             1.0,
-            0.835
+            0.34
+          ],
+          "when": [
+            4.0,
+            22.0
+          ]
+        },
+        {
+          "_why": "USD card + 1 066.35 balance",
+          "rect": [
+            0.0,
+            0.1,
+            1.0,
+            0.4
+          ],
+          "when": [
+            14.0,
+            23.0
+          ]
+        },
+        {
+          "_why": "history: TEXACO, Airbnb, card *4699 and their amounts",
+          "rect": [
+            0.0,
+            0.52,
+            1.0,
+            0.42
+          ],
+          "when": [
+            14.0,
+            23.0
+          ]
+        },
+        {
+          "_why": "transfer + confirmation: both IBANs, both PANs, balances, recipient name",
+          "rect": [
+            0.0,
+            0.13,
+            1.0,
+            0.42
+          ],
+          "when": [
+            18.0,
+            46.0
+          ]
+        },
+        {
+          "_why": "funded card face and balance",
+          "rect": [
+            0.0,
+            0.02,
+            1.0,
+            0.36
+          ],
+          "when": [
+            44.0,
+            55.0
+          ]
+        },
+        {
+          "_why": "history line naming the source card",
+          "rect": [
+            0.0,
+            0.56,
+            1.0,
+            0.3
+          ],
+          "when": [
+            44.0,
+            55.0
           ]
         }
-      ]
+      ],
+      "track": false,
+      "_track_why": "hand rects, not tracking: phone-bank screens render one number in several fonts and a handheld shot is photographed pixels -- NCC recall was 14% there"
     },
     {
       "_why": "08:59 -- the Threads post and its comments; Claude collects who asked for what.",
       "path": "projects/books-giveaway/sources/desktop-085957.mp4",
       "activity": "projects/books-giveaway/temp/desktop-085957.activity.json",
-      "blur": [
-        {
-          "_why": "the whole Claude panel body. Point rects cannot be made safe here: the panel SCROLLS, so a record's box at one sampled moment is empty a few seconds later, and scanning the render found a full '(Харків, НП 11, 0935630503, ...)' at a height no rect reached. Pixelate rather than a box so the panel still reads as an AI working -- one chain per source is cheap; it was 18 of them that cost 35s per 10s.",
-          "rect": [
-            0.742,
-            0.075,
-            0.258,
-            0.815
-          ],
-          "mode": "pixelate",
-          "strength": 22
-        }
-      ],
-      "_blur_why": "generated by scan-pii.py from temp/pii/desktop-085957.pii.json, re-validated against the current rules, and grown by 0.075/0.055 of the frame so the record around each readable field is covered too",
+      "_blur_why": "blurred fields only, from temp/pii/desktop-085957.pii.json; padded 0.006/0.01 -- enough not to clip a glyph",
       "proxy": "projects/books-giveaway/temp/proxy/desktop-085957.mp4",
-      "blur_extra": [
-        {
-          "_why": "the whole Claude panel body. Point rects cannot be made safe here: the panel SCROLLS, so a record's box at one sampled moment is empty a few seconds later, and scanning the render found a full '(Харків, НП 11, 0935630503, ...)' at a height no rect reached. Pixelate rather than a box so the panel still reads as an AI working -- one chain per source is cheap; it was 18 of them that cost 35s per 10s.",
-          "rect": [
-            0.742,
-            0.075,
-            0.258,
-            0.815
-          ],
-          "mode": "pixelate",
-          "strength": 22
-        }
-      ]
+      "blur": [],
+      "track": "projects/books-giveaway/temp/track/desktop-085957"
     },
     {
       "_why": "10:46 -- DMs and the spreadsheet of commenters and addresses.",
       "path": "projects/books-giveaway/sources/desktop-104620.mp4",
       "activity": "projects/books-giveaway/temp/desktop-104620.activity.json",
-      "blur": [
-        {
-          "_why": "phone x5: 0939589090",
-          "rect": [
-            0.2786,
-            0.4172,
-            0.2303,
-            0.1645
-          ],
-          "when": [
-            192.0,
-            224.0
-          ]
-        },
-        {
-          "_why": "phone x1: 0939589090",
-          "rect": [
-            0.2793,
-            0.3762,
-            0.2284,
-            0.1508
-          ],
-          "when": [
-            212.0,
-            228.0
-          ]
-        },
-        {
-          "_why": "phone x4: 0939589090",
-          "rect": [
-            0.2786,
-            0.3151,
-            0.2303,
-            0.1551
-          ],
-          "when": [
-            216.0,
-            244.0
-          ]
-        },
-        {
-          "_why": "phone x1: 57,0939589090,CrpeJIbyeHkoMapinI3pHk:JIiHHBi",
-          "rect": [
-            0.6149,
-            0.5183,
-            0.3851,
-            0.1519
-          ],
-          "when": [
-            228.0,
-            244.0
-          ]
-        },
-        {
-          "_why": "the whole Claude panel body. Point rects cannot be made safe here: the panel SCROLLS, so a record's box at one sampled moment is empty a few seconds later, and scanning the render found a full '(Харків, НП 11, 0935630503, ...)' at a height no rect reached. Pixelate rather than a box so the panel still reads as an AI working -- one chain per source is cheap; it was 18 of them that cost 35s per 10s.",
-          "rect": [
-            0.742,
-            0.075,
-            0.258,
-            0.815
-          ],
-          "mode": "pixelate",
-          "strength": 22
-        }
-      ],
-      "_blur_why": "generated by scan-pii.py from temp/pii/desktop-104620.pii.json, re-validated against the current rules, and grown by 0.075/0.055 of the frame so the record around each readable field is covered too",
+      "_blur_why": "blurred fields only, from temp/pii/desktop-104620.pii.json; padded 0.006/0.01 -- enough not to clip a glyph",
       "proxy": "projects/books-giveaway/temp/proxy/desktop-104620.mp4",
-      "blur_extra": [
-        {
-          "_why": "the whole Claude panel body. Point rects cannot be made safe here: the panel SCROLLS, so a record's box at one sampled moment is empty a few seconds later, and scanning the render found a full '(Харків, НП 11, 0935630503, ...)' at a height no rect reached. Pixelate rather than a box so the panel still reads as an AI working -- one chain per source is cheap; it was 18 of them that cost 35s per 10s.",
-          "rect": [
-            0.742,
-            0.075,
-            0.258,
-            0.815
-          ],
-          "mode": "pixelate",
-          "strength": 22
-        }
-      ]
+      "blur": [],
+      "track": "projects/books-giveaway/temp/track/desktop-104620"
     },
     {
       "_why": "10:49",
       "path": "projects/books-giveaway/sources/desktop-104945.mp4",
       "activity": "projects/books-giveaway/temp/desktop-104945.activity.json",
+      "_blur_why": "blurred fields only, from temp/pii/desktop-104945.pii.json; padded 0.006/0.01 -- enough not to clip a glyph",
+      "proxy": "projects/books-giveaway/temp/proxy/desktop-104945.mp4",
       "blur": [
         {
-          "_why": "expiry x3: 11/27",
+          "_why": "PAN 4149 **** **** 0499 + 11/27 + CVV 753. The user SELECTS this text, and white-on-blue pixels do not NCC-match the template captured black-on-white -- tracking misses exactly while it is highlighted. Hand rect over the block for the whole clip.",
           "rect": [
-            0.2755,
-            0.3467,
-            0.2034,
-            0.1572
-          ],
-          "when": [
-            16.0,
-            40.0
+            0.35,
+            0.37,
+            0.125,
+            0.075
           ]
         },
         {
-          "_why": "card x1: 4149*******0499",
+          "_why": "full IBAN UA39 3052 99... printed beside it; OCR never produced a hit here, so no template exists to track",
           "rect": [
-            0.2761,
-            0.3141,
-            0.2677,
-            0.1582
-          ],
-          "when": [
-            24.0,
-            40.0
+            0.475,
+            0.415,
+            0.215,
+            0.05
           ]
-        },
-        {
-          "_why": "phone x2: +38-073-716-11-31",
-          "rect": [
-            0.1861,
-            0.8319,
-            0.2696,
-            0.1519
-          ],
-          "when": [
-            4.0,
-            28.0
-          ]
-        },
-        {
-          "_why": "balance x1: 10 000.00 UAH",
-          "rect": [
-            0.2761,
-            0.4541,
-            0.2659,
-            0.1582
-          ],
-          "when": [
-            24.0,
-            40.0
-          ]
-        },
-        {
-          "_why": "the whole Privat24 card panel. scan-pii MISSED the IBAN printed here in full (UA39 305299 ...) even though its rule matches that string -- the box was either below the confidence floor or not on a sampled frame. The generated rects stopped ~0.01 of the frame short of it. Panel measured by hand off the render preview.",
-          "rect": [
-            0.34,
-            0.27,
-            0.56,
-            0.42
-          ],
-          "when": [
-            8.0,
-            45.0
-          ]
-        },
-        {
-          "_why": "the whole Claude panel body. Point rects cannot be made safe here: the panel SCROLLS, so a record's box at one sampled moment is empty a few seconds later, and scanning the render found a full '(Харків, НП 11, 0935630503, ...)' at a height no rect reached. Pixelate rather than a box so the panel still reads as an AI working -- one chain per source is cheap; it was 18 of them that cost 35s per 10s.",
-          "rect": [
-            0.742,
-            0.075,
-            0.258,
-            0.815
-          ],
-          "mode": "pixelate",
-          "strength": 22
         }
       ],
-      "_blur_why": "generated by scan-pii.py from temp/pii/desktop-104945.pii.json, re-validated against the current rules, and grown by 0.075/0.055 of the frame so the record around each readable field is covered too",
+      "track": "projects/books-giveaway/temp/track/desktop-104945",
       "blur_extra": [
         {
-          "_why": "the whole Privat24 card panel. scan-pii MISSED the IBAN printed here in full (UA39 305299 ...) even though its rule matches that string -- the box was either below the confidence floor or not on a sampled frame. The generated rects stopped ~0.01 of the frame short of it. Panel measured by hand off the render preview.",
+          "_why": "PAN 4149 **** **** 0499 + 11/27 + CVV 753. The user SELECTS this text, and white-on-blue pixels do not NCC-match the template captured black-on-white -- tracking misses exactly while it is highlighted. Hand rect over the block for the whole clip.",
           "rect": [
-            0.34,
-            0.27,
-            0.56,
-            0.42
-          ],
-          "when": [
-            8.0,
-            45.0
+            0.35,
+            0.37,
+            0.125,
+            0.075
           ]
         },
         {
-          "_why": "the whole Claude panel body. Point rects cannot be made safe here: the panel SCROLLS, so a record's box at one sampled moment is empty a few seconds later, and scanning the render found a full '(Харків, НП 11, 0935630503, ...)' at a height no rect reached. Pixelate rather than a box so the panel still reads as an AI working -- one chain per source is cheap; it was 18 of them that cost 35s per 10s.",
+          "_why": "full IBAN UA39 3052 99... printed beside it; OCR never produced a hit here, so no template exists to track",
           "rect": [
-            0.742,
-            0.075,
-            0.258,
-            0.815
-          ],
-          "mode": "pixelate",
-          "strength": 22
+            0.475,
+            0.415,
+            0.215,
+            0.05
+          ]
         }
-      ],
-      "proxy": "projects/books-giveaway/temp/proxy/desktop-104945.mp4",
-      "skip": true,
-      "_skip_why": "Privat24 card-details page: carries the full PAN in plain text (4149 4390 2701 0499) plus expiry and the IBAN. 10 s of an 8-minute film, and the 'I made a card' beat is already told by the two phone clips. Cutting it removes the highest-risk frames outright instead of relying on a rect landing correctly."
+      ]
     },
     {
       "_why": "10:51",
       "path": "projects/books-giveaway/sources/desktop-105144.mp4",
       "activity": "projects/books-giveaway/temp/desktop-105144.activity.json",
+      "_blur_why": "blurred fields only, from temp/pii/desktop-105144.pii.json; padded 0.006/0.01 -- enough not to clip a glyph",
+      "proxy": "projects/books-giveaway/temp/proxy/desktop-105144.mp4",
       "blur": [
         {
-          "_why": "card x1: *4149439027010499-Notepad",
+          "_why": "Alt-Tab switcher: the Notepad card renders '*4149439027010499 - Notepad' as its TITLE and shows the PAN in its thumbnail, both at thumbnail scale no template matches. Covers title + body of that card while the switcher is up.",
           "rect": [
-            0.5436,
-            0.1593,
-            0.2846,
-            0.154
-          ],
-          "when": [
-            20.0,
-            36.0
-          ]
-        },
-        {
-          "_why": "card x1: 4149439027010499",
-          "rect": [
-            0.6742,
-            0.7246,
-            0.259,
-            0.1572
-          ],
-          "when": [
-            32.0,
-            48.0
-          ]
-        },
-        {
-          "_why": "expiry x1: 11/27",
-          "rect": [
-            0.6749,
-            0.7467,
-            0.1971,
-            0.154
-          ],
-          "when": [
-            32.0,
-            48.0
-          ]
-        },
-        {
-          "_why": "card x2: 4149439027010499",
-          "rect": [
-            0.7293,
-            0.313,
-            0.2584,
-            0.1551
-          ],
-          "when": [
-            36.0,
-            56.0
-          ]
-        },
-        {
-          "_why": "expiry x2: 11/27",
-          "rect": [
-            0.7293,
-            0.3319,
-            0.1978,
-            0.1572
-          ],
-          "when": [
-            36.0,
-            56.0
-          ]
-        },
-        {
-          "_why": "phone x3: (KviB,BiuieHH57,0939589090,",
-          "rect": [
-            0.6768,
-            0.5383,
-            0.3202,
-            0.1551
-          ],
-          "when": [
-            0.0,
-            16.0
-          ]
-        },
-        {
-          "_why": "phone x3: (KwiB,BiuileHH57,0939589090",
-          "rect": [
-            0.6774,
-            0.5056,
-            0.3178,
-            0.1656
-          ],
-          "when": [
-            4.0,
-            60.0
-          ]
-        },
-        {
-          "_why": "phone x2: 0685080138",
-          "rect": [
-            0.688,
-            0.3183,
-            0.2984,
-            0.1551
-          ],
-          "when": [
-            8.0,
-            64.0
-          ]
-        },
-        {
-          "_why": "phone x2: (KHiB,BiuiIeHH57,0939589090",
-          "rect": [
-            0.6774,
-            0.4814,
-            0.319,
-            0.1508
-          ],
-          "when": [
-            16.0,
-            44.0
-          ]
-        },
-        {
-          "_why": "phone x1: (KniB,BiuieHH57,0939589090,",
-          "rect": [
-            0.6774,
-            0.5004,
-            0.3184,
-            0.1519
+            0.605,
+            0.22,
+            0.145,
+            0.1
           ],
           "when": [
             24.0,
-            40.0
+            42.0
           ]
-        },
-        {
-          "_why": "phone x1: (KviB, BiieHH 57,0939589090,",
-          "rect": [
-            0.6768,
-            0.4004,
-            0.3196,
-            0.1551
-          ],
-          "when": [
-            32.0,
-            48.0
-          ]
-        },
-        {
-          "_why": "the whole Claude panel body. Point rects cannot be made safe here: the panel SCROLLS, so a record's box at one sampled moment is empty a few seconds later, and scanning the render found a full '(Харків, НП 11, 0935630503, ...)' at a height no rect reached. Pixelate rather than a box so the panel still reads as an AI working -- one chain per source is cheap; it was 18 of them that cost 35s per 10s.",
-          "rect": [
-            0.742,
-            0.075,
-            0.258,
-            0.815
-          ],
-          "mode": "pixelate",
-          "strength": 22
         }
       ],
-      "_blur_why": "generated by scan-pii.py from temp/pii/desktop-105144.pii.json, re-validated against the current rules, and grown by 0.075/0.055 of the frame so the record around each readable field is covered too",
-      "proxy": "projects/books-giveaway/temp/proxy/desktop-105144.mp4",
+      "track": "projects/books-giveaway/temp/track/desktop-105144",
       "blur_extra": [
         {
-          "_why": "the whole Claude panel body. Point rects cannot be made safe here: the panel SCROLLS, so a record's box at one sampled moment is empty a few seconds later, and scanning the render found a full '(Харків, НП 11, 0935630503, ...)' at a height no rect reached. Pixelate rather than a box so the panel still reads as an AI working -- one chain per source is cheap; it was 18 of them that cost 35s per 10s.",
+          "_why": "Alt-Tab switcher: the Notepad card renders '*4149439027010499 - Notepad' as its TITLE and shows the PAN in its thumbnail, both at thumbnail scale no template matches. Covers title + body of that card while the switcher is up.",
           "rect": [
-            0.742,
-            0.075,
-            0.258,
-            0.815
+            0.605,
+            0.22,
+            0.145,
+            0.1
           ],
-          "mode": "pixelate",
-          "strength": 22
+          "when": [
+            24.0,
+            42.0
+          ]
         }
-      ],
-      "skip": true,
-      "_skip_why": "same PAN again, this time in a Notepad WINDOW TITLE (*4149439027010499 - Notepad) as well as the page. 8 s of planning footage; nothing in the story depends on it."
+      ]
     },
     {
       "_why": "11:05 -- first orders.",
       "path": "projects/books-giveaway/sources/desktop-110556.mp4",
       "activity": "projects/books-giveaway/temp/desktop-110556.activity.json",
-      "blur": [
-        {
-          "_why": "phone x2: 0935630503",
-          "rect": [
-            0.7417,
-            0.4046,
-            0.2309,
-            0.1729
-          ],
-          "when": [
-            84.0,
-            104.0
-          ]
-        },
-        {
-          "_why": "phone x1: 0935630503",
-          "rect": [
-            0.7417,
-            0.4088,
-            0.2303,
-            0.1551
-          ],
-          "when": [
-            156.0,
-            172.0
-          ]
-        },
-        {
-          "_why": "phone x1: AJIboHa,0935630503,XapkiBHII11.",
-          "rect": [
-            0.6768,
-            0.5119,
-            0.3232,
-            0.1519
-          ],
-          "when": [
-            244.0,
-            260.0
-          ]
-        },
-        {
-          "_why": "phone x1: AJIboHa,0935630503,XapkiBHII11.",
-          "rect": [
-            0.6768,
-            0.2193,
-            0.3232,
-            0.1519
-          ],
-          "when": [
-            248.0,
-            264.0
-          ]
-        },
-        {
-          "_why": "phone x1: AlIboHa, 0935630503,XapkiB HII11.",
-          "rect": [
-            0.6755,
-            0.4625,
-            0.3245,
-            0.1561
-          ],
-          "when": [
-            268.0,
-            284.0
-          ]
-        },
-        {
-          "_why": "phone x2: AJlboHa, 0935630503,XapkiB HII11.",
-          "rect": [
-            0.6761,
-            0.573,
-            0.3239,
-            0.154
-          ],
-          "when": [
-            272.0,
-            292.0
-          ]
-        },
-        {
-          "_why": "phone x1: AlboHa,0935630503,XapkiBHII11",
-          "rect": [
-            0.6761,
-            0.3551,
-            0.3239,
-            0.1519
-          ],
-          "when": [
-            280.0,
-            296.0
-          ]
-        },
-        {
-          "_why": "the whole Claude panel body. Point rects cannot be made safe here: the panel SCROLLS, so a record's box at one sampled moment is empty a few seconds later, and scanning the render found a full '(Харків, НП 11, 0935630503, ...)' at a height no rect reached. Pixelate rather than a box so the panel still reads as an AI working -- one chain per source is cheap; it was 18 of them that cost 35s per 10s.",
-          "rect": [
-            0.742,
-            0.075,
-            0.258,
-            0.815
-          ],
-          "mode": "pixelate",
-          "strength": 22
-        }
-      ],
-      "_blur_why": "generated by scan-pii.py from temp/pii/desktop-110556.pii.json, re-validated against the current rules, and grown by 0.075/0.055 of the frame so the record around each readable field is covered too",
+      "_blur_why": "blurred fields only, from temp/pii/desktop-110556.pii.json; padded 0.006/0.01 -- enough not to clip a glyph",
       "proxy": "projects/books-giveaway/temp/proxy/desktop-110556.mp4",
-      "blur_extra": [
-        {
-          "_why": "the whole Claude panel body. Point rects cannot be made safe here: the panel SCROLLS, so a record's box at one sampled moment is empty a few seconds later, and scanning the render found a full '(Харків, НП 11, 0935630503, ...)' at a height no rect reached. Pixelate rather than a box so the panel still reads as an AI working -- one chain per source is cheap; it was 18 of them that cost 35s per 10s.",
-          "rect": [
-            0.742,
-            0.075,
-            0.258,
-            0.815
-          ],
-          "mode": "pixelate",
-          "strength": 22
-        }
-      ]
+      "blur": [],
+      "track": "projects/books-giveaway/temp/track/desktop-110556"
     },
     {
       "_why": "11:17 -- handheld cutaway of the same session, shot on the phone. Its creation_time is UTC (18:17Z), which is 11:17 local, so it belongs here and not at the end where a filename sort puts it.",
-      "_blur_why": "The camera MOVES, so the per-frame boxes scan-pii reported (seven of them, all the same two fields) are useless as rects. One generous rect per field, unioned over the whole clip, is the only thing that stays on target through a handheld drift.",
+      "_blur_why": "blurred fields only, from temp/pii/PXL_20260831_181726168.pii.json; padded 0.006/0.01 -- enough not to clip a glyph",
       "path": "projects/books-giveaway/sources/PXL_20260831_181726168.mp4",
       "activity": "projects/books-giveaway/temp/PXL_20260831_181726168.activity.json",
+      "blur_extra": [],
       "blur": [
         {
-          "_why": "the whole checkout column: recipient name, phone, email, and the Nova Poshta branch with its street address near the bottom of the frame. Covering only the top of the form left the branch line visible.",
+          "_why": "phone: +38 (066) 317-5125",
           "rect": [
-            0.02,
-            0.13,
-            0.57,
-            0.8
+            0.4091,
+            0.3733,
+            0.0547,
+            0.0357
+          ],
+          "when": [
+            -2.5,
+            2.5
           ]
         },
         {
-          "_why": "Claude panel repeating the same order: name, phone, branch",
+          "_why": "email: agamanuk@gmafl.com",
           "rect": [
-            0.58,
-            0.14,
-            0.4,
-            0.52
+            0.3169,
+            0.4243,
+            0.0604,
+            0.0348
+          ],
+          "when": [
+            -2.5,
+            2.5
+          ]
+        },
+        {
+          "_why": "email: agamanuk@gmail.com",
+          "rect": [
+            0.3148,
+            0.4243,
+            0.061,
+            0.0348
+          ],
+          "when": [
+            -0.5,
+            4.5
+          ]
+        },
+        {
+          "_why": "phone: +38 (066)317-3125",
+          "rect": [
+            0.332,
+            0.3261,
+            0.0771,
+            0.0404
+          ],
+          "when": [
+            1.5,
+            6.5
+          ]
+        },
+        {
+          "_why": "email: agamanuk@gmail.com",
+          "rect": [
+            0.1872,
+            0.4094,
+            0.0917,
+            0.0413
+          ],
+          "when": [
+            1.5,
+            6.5
+          ]
+        },
+        {
+          "_why": "phone: +38(066)317-3125",
+          "rect": [
+            0.2544,
+            0.2419,
+            0.088,
+            0.0441
+          ],
+          "when": [
+            3.5,
+            8.5
+          ]
+        },
+        {
+          "_why": "email: agamanuk@gmail.com",
+          "rect": [
+            0.0779,
+            0.3261,
+            0.1084,
+            0.0422
+          ],
+          "when": [
+            3.5,
+            8.5
+          ]
+        },
+        {
+          "_why": "phone: +38(066)317-3125",
+          "rect": [
+            0.2612,
+            0.3122,
+            0.0849,
+            0.0422
+          ],
+          "when": [
+            5.5,
+            10.5
+          ]
+        },
+        {
+          "_why": "email: agamanuk@gmail.com",
+          "rect": [
+            0.0909,
+            0.3909,
+            0.1047,
+            0.0422
+          ],
+          "when": [
+            5.5,
+            10.5
+          ]
+        },
+        {
+          "_why": "phone: +38(066)317-3125",
+          "rect": [
+            0.2466,
+            0.3317,
+            0.0828,
+            0.0422
+          ],
+          "when": [
+            7.5,
+            12.5
+          ]
+        },
+        {
+          "_why": "email: agamanuk@gmail.com",
+          "rect": [
+            0.0789,
+            0.4067,
+            0.1031,
+            0.0431
+          ],
+          "when": [
+            7.5,
+            12.5
+          ]
+        },
+        {
+          "_why": "phone: +38(066)317-3125",
+          "rect": [
+            0.2581,
+            0.3085,
+            0.0828,
+            0.0413
+          ],
+          "when": [
+            9.5,
+            14.5
+          ]
+        },
+        {
+          "_why": "email: agamanuk@gmail.com",
+          "rect": [
+            0.0924,
+            0.3872,
+            0.1016,
+            0.0413
+          ],
+          "when": [
+            9.5,
+            14.5
+          ]
+        },
+        {
+          "_why": "phone: +38 (066)317-3125",
+          "rect": [
+            0.2706,
+            0.2946,
+            0.0823,
+            0.0413
+          ],
+          "when": [
+            11.5,
+            16.5
+          ]
+        },
+        {
+          "_why": "email: agamanuk@gmail.com",
+          "rect": [
+            0.1065,
+            0.3724,
+            0.1011,
+            0.0413
+          ],
+          "when": [
+            11.5,
+            16.5
           ]
         }
       ],
-      "blur_extra": []
+      "track": false,
+      "_track_why": "hand rects, not tracking: phone-bank screens render one number in several fonts and a handheld shot is photographed pixels -- NCC recall was 14% there"
     },
     {
       "_why": "11:21 -- the bulk of the ordering.",
       "path": "projects/books-giveaway/sources/desktop-112123.mp4",
       "activity": "projects/books-giveaway/temp/desktop-112123.activity.json",
-      "blur": [
-        {
-          "_why": "card x1: .... 4699",
-          "rect": [
-            0.2974,
-            0.3993,
-            0.2234,
-            0.1561
-          ],
-          "when": [
-            132.0,
-            148.0
-          ]
-        },
-        {
-          "_why": "phone x1: +38 (066) 431-4978",
-          "rect": [
-            0.7074,
-            0.3119,
-            0.2121,
-            0.1477
-          ],
-          "when": [
-            76.0,
-            92.0
-          ]
-        },
-        {
-          "_why": "email x18: agamanuk@gmail.com (6yia",
-          "rect": [
-            0.7411,
-            0.3256,
-            0.2589,
-            0.1572
-          ],
-          "when": [
-            124.0,
-            208.0
-          ]
-        },
-        {
-          "_why": "phone x10: +380664314978",
-          "rect": [
-            0.2868,
-            0.5804,
-            0.2509,
-            0.154
-          ],
-          "when": [
-            164.0,
-            216.0
-          ]
-        },
-        {
-          "_why": "phone x19: +380664314978",
-          "rect": [
-            0.2793,
-            0.6319,
-            0.2577,
-            0.1635
-          ],
-          "when": [
-            204.0,
-            304.0
-          ]
-        },
-        {
-          "_why": "phone x2: 066-431-49-78",
-          "rect": [
-            0.2793,
-            0.673,
-            0.2396,
-            0.1508
-          ],
-          "when": [
-            236.0,
-            256.0
-          ]
-        },
-        {
-          "_why": "phone x2: 066-431-49-78",
-          "rect": [
-            0.2793,
-            0.5541,
-            0.2396,
-            0.1519
-          ],
-          "when": [
-            292.0,
-            312.0
-          ]
-        },
-        {
-          "_why": "phone x5: 066-431-49-78",
-          "rect": [
-            0.2793,
-            0.4951,
-            0.2402,
-            0.1519
-          ],
-          "when": [
-            300.0,
-            332.0
-          ]
-        },
-        {
-          "_why": "phone x2: 066-431-49-78",
-          "rect": [
-            0.2793,
-            0.3762,
-            0.2402,
-            0.1508
-          ],
-          "when": [
-            320.0,
-            340.0
-          ]
-        },
-        {
-          "_why": "phone x15: 066-431-49-78",
-          "rect": [
-            0.2793,
-            0.2277,
-            0.2402,
-            0.1519
-          ],
-          "when": [
-            328.0,
-            400.0
-          ]
-        },
-        {
-          "_why": "phone x14: -380664314978",
-          "rect": [
-            0.5086,
-            0.733,
-            0.199,
-            0.1456
-          ],
-          "when": [
-            328.0,
-            396.0
-          ]
-        },
-        {
-          "_why": "email x1: agamanuk@gmail.com",
-          "rect": [
-            0.0,
-            0.6225,
-            0.2959,
-            0.1582
-          ],
-          "when": [
-            436.0,
-            452.0
-          ]
-        },
-        {
-          "_why": "phone x1: +38 (066)317-3125",
-          "rect": [
-            0.1742,
-            0.5098,
-            0.2709,
-            0.1551
-          ],
-          "when": [
-            436.0,
-            452.0
-          ]
-        },
-        {
-          "_why": "email x13: agamanuk@gmail.com",
-          "rect": [
-            0.0,
-            0.3077,
-            0.2971,
-            0.1593
-          ],
-          "when": [
-            440.0,
-            504.0
-          ]
-        },
-        {
-          "_why": "phone x13: +38 (066) 317-3125",
-          "rect": [
-            0.173,
-            0.1909,
-            0.2734,
-            0.1614
-          ],
-          "when": [
-            440.0,
-            504.0
-          ]
-        },
-        {
-          "_why": "email x1: agamanuk@gmail.com",
-          "rect": [
-            0.7405,
-            0.3141,
-            0.2595,
-            0.1603
-          ],
-          "when": [
-            524.0,
-            540.0
-          ]
-        },
-        {
-          "_why": "phone x1: +38 (066) 317-3125",
-          "rect": [
-            0.7417,
-            0.2804,
-            0.2565,
-            0.154
-          ],
-          "when": [
-            524.0,
-            540.0
-          ]
-        },
-        {
-          "_why": "phone x11: +380663173125",
-          "rect": [
-            0.2799,
-            0.573,
-            0.3902,
-            0.1614
-          ],
-          "when": [
-            564.0,
-            644.0
-          ]
-        },
-        {
-          "_why": "phone x3: +380663173125",
-          "rect": [
-            0.2861,
-            0.6319,
-            0.2502,
-            0.1519
-          ],
-          "when": [
-            580.0,
-            604.0
-          ]
-        },
-        {
-          "_why": "phone x1: M.CyMM, H14,AaHW/eHkoOkcaHa,0663173125",
-          "rect": [
-            0.2805,
-            0.6035,
-            0.3896,
-            0.1519
-          ],
-          "when": [
-            596.0,
-            612.0
-          ]
-        },
-        {
-          "_why": "phone x1: M.CyMw, H14,AaHWJeHko OkcaHa, 0663173125",
-          "rect": [
-            0.2799,
-            0.6667,
-            0.3902,
-            0.154
-          ],
-          "when": [
-            600.0,
-            616.0
-          ]
-        },
-        {
-          "_why": "phone x2: M.CyMW, H14,AaHW/eHko OkcaHa, 0663173125",
-          "rect": [
-            0.2799,
-            0.4614,
-            0.3902,
-            0.1551
-          ],
-          "when": [
-            632.0,
-            652.0
-          ]
-        },
-        {
-          "_why": "phone x7: M. CyMW, H 14, AaHW/eHko OkcaHa, 0663173125",
-          "rect": [
-            0.2799,
-            0.4014,
-            0.3902,
-            0.1551
-          ],
-          "when": [
-            640.0,
-            680.0
-          ]
-        },
-        {
-          "_why": "phone x2: M.CyMM,H14,AaHW/eHkoOkcaHa,0663173125",
-          "rect": [
-            0.2805,
-            0.2835,
-            0.389,
-            0.1519
-          ],
-          "when": [
-            668.0,
-            688.0
-          ]
-        },
-        {
-          "_why": "phone x6: -380663175125",
-          "rect": [
-            0.5086,
-            0.7319,
-            0.2002,
-            0.1466
-          ],
-          "when": [
-            676.0,
-            712.0
-          ]
-        },
-        {
-          "_why": "the whole Claude panel body. Point rects cannot be made safe here: the panel SCROLLS, so a record's box at one sampled moment is empty a few seconds later, and scanning the render found a full '(Харків, НП 11, 0935630503, ...)' at a height no rect reached. Pixelate rather than a box so the panel still reads as an AI working -- one chain per source is cheap; it was 18 of them that cost 35s per 10s.",
-          "rect": [
-            0.742,
-            0.075,
-            0.258,
-            0.815
-          ],
-          "mode": "pixelate",
-          "strength": 22
-        }
-      ],
-      "_blur_why": "generated by scan-pii.py from temp/pii/desktop-112123.pii.json, re-validated against the current rules, and grown by 0.075/0.055 of the frame so the record around each readable field is covered too",
+      "_blur_why": "blurred fields only, from temp/pii/desktop-112123.pii.json; padded 0.006/0.01 -- enough not to clip a glyph",
       "proxy": "projects/books-giveaway/temp/proxy/desktop-112123.mp4",
-      "blur_extra": [
-        {
-          "_why": "the whole Claude panel body. Point rects cannot be made safe here: the panel SCROLLS, so a record's box at one sampled moment is empty a few seconds later, and scanning the render found a full '(Харків, НП 11, 0935630503, ...)' at a height no rect reached. Pixelate rather than a box so the panel still reads as an AI working -- one chain per source is cheap; it was 18 of them that cost 35s per 10s.",
-          "rect": [
-            0.742,
-            0.075,
-            0.258,
-            0.815
-          ],
-          "mode": "pixelate",
-          "strength": 22
-        }
-      ]
+      "blur": [],
+      "track": "projects/books-giveaway/temp/track/desktop-112123"
     },
     {
       "_why": "11:50 -- the rest of the orders and the payments.",
       "path": "projects/books-giveaway/sources/desktop-115024.mp4",
       "activity": "projects/books-giveaway/temp/desktop-115024.activity.json",
-      "blur": [
-        {
-          "_why": "card x1: .... 4699",
-          "rect": [
-            0.2974,
-            0.3993,
-            0.2234,
-            0.1561
-          ],
-          "when": [
-            236.0,
-            252.0
-          ]
-        },
-        {
-          "_why": "email x10: agamanuk@gmail.com",
-          "rect": [
-            0.0,
-            0.3077,
-            0.2971,
-            0.1593
-          ],
-          "when": [
-            16.0,
-            68.0
-          ]
-        },
-        {
-          "_why": "phone x10: +38 (099) 676-7726",
-          "rect": [
-            0.173,
-            0.1919,
-            0.274,
-            0.1603
-          ],
-          "when": [
-            16.0,
-            68.0
-          ]
-        },
-        {
-          "_why": "email x9: agamanuk@gmail.com",
-          "rect": [
-            0.7411,
-            0.2983,
-            0.2589,
-            0.174
-          ],
-          "when": [
-            84.0,
-            136.0
-          ]
-        },
-        {
-          "_why": "phone x4: +380996767726",
-          "rect": [
-            0.2868,
-            0.5804,
-            0.2509,
-            0.154
-          ],
-          "when": [
-            104.0,
-            132.0
-          ]
-        },
-        {
-          "_why": "phone x3: +380996767726",
-          "rect": [
-            0.2861,
-            0.6319,
-            0.2502,
-            0.1519
-          ],
-          "when": [
-            120.0,
-            144.0
-          ]
-        },
-        {
-          "_why": "phone x1: 0996767726",
-          "rect": [
-            0.2793,
-            0.7604,
-            0.2359,
-            0.1519
-          ],
-          "when": [
-            140.0,
-            156.0
-          ]
-        },
-        {
-          "_why": "phone x6: 099 6767726",
-          "rect": [
-            0.2786,
-            0.6656,
-            0.2377,
-            0.154
-          ],
-          "when": [
-            144.0,
-            184.0
-          ]
-        },
-        {
-          "_why": "phone x2: 0996767726",
-          "rect": [
-            0.2793,
-            0.4941,
-            0.2359,
-            0.1519
-          ],
-          "when": [
-            180.0,
-            200.0
-          ]
-        },
-        {
-          "_why": "phone x1: -380996767726",
-          "rect": [
-            0.5086,
-            0.5646,
-            0.1978,
-            0.1445
-          ],
-          "when": [
-            200.0,
-            216.0
-          ]
-        },
-        {
-          "_why": "phone x3: +380506181192",
-          "rect": [
-            0.2868,
-            0.5804,
-            0.2509,
-            0.154
-          ],
-          "when": [
-            256.0,
-            280.0
-          ]
-        },
-        {
-          "_why": "phone x9: +380506181192",
-          "rect": [
-            0.2786,
-            0.6183,
-            0.2584,
-            0.1845
-          ],
-          "when": [
-            268.0,
-            320.0
-          ]
-        },
-        {
-          "_why": "phone x1: 0506181192",
-          "rect": [
-            0.2793,
-            0.713,
-            0.2277,
-            0.1519
-          ],
-          "when": [
-            288.0,
-            304.0
-          ]
-        },
-        {
-          "_why": "phone x1: 0506181192",
-          "rect": [
-            0.2786,
-            0.5298,
-            0.229,
-            0.1551
-          ],
-          "when": [
-            308.0,
-            324.0
-          ]
-        },
-        {
-          "_why": "phone x1: 0506181192",
-          "rect": [
-            0.2793,
-            0.4719,
-            0.2284,
-            0.1508
-          ],
-          "when": [
-            312.0,
-            328.0
-          ]
-        },
-        {
-          "_why": "phone x1: 0506181192",
-          "rect": [
-            0.2786,
-            0.3509,
-            0.2296,
-            0.1551
-          ],
-          "when": [
-            316.0,
-            332.0
-          ]
-        },
-        {
-          "_why": "phone x6: 0506181192",
-          "rect": [
-            0.2786,
-            0.2025,
-            0.2296,
-            0.1551
-          ],
-          "when": [
-            320.0,
-            356.0
-          ]
-        },
-        {
-          "_why": "phone x6: -380506181192",
-          "rect": [
-            0.5086,
-            0.733,
-            0.2002,
-            0.1466
-          ],
-          "when": [
-            320.0,
-            356.0
-          ]
-        },
-        {
-          "_why": "email x6: agamanuk@gmail.com",
-          "rect": [
-            0.0,
-            0.293,
-            0.2971,
-            0.174
-          ],
-          "when": [
-            368.0,
-            404.0
-          ]
-        },
-        {
-          "_why": "phone x6: +38 (093) 958-9090",
-          "rect": [
-            0.1736,
-            0.1804,
-            0.2727,
-            0.1698
-          ],
-          "when": [
-            368.0,
-            404.0
-          ]
-        },
-        {
-          "_why": "phone x1: +38 (093)958-9090",
-          "rect": [
-            0.7417,
-            0.2741,
-            0.2583,
-            0.154
-          ],
-          "when": [
-            396.0,
-            412.0
-          ]
-        },
-        {
-          "_why": "phone x2: +380939589090",
-          "rect": [
-            0.2868,
-            0.5804,
-            0.2509,
-            0.154
-          ],
-          "when": [
-            416.0,
-            436.0
-          ]
-        },
-        {
-          "_why": "phone x5: +380939589090",
-          "rect": [
-            0.2861,
-            0.6319,
-            0.2509,
-            0.1519
-          ],
-          "when": [
-            424.0,
-            456.0
-          ]
-        },
-        {
-          "_why": "phone x3: 0939589090",
-          "rect": [
-            0.2793,
-            0.3404,
-            0.2284,
-            0.1519
-          ],
-          "when": [
-            444.0,
-            468.0
-          ]
-        },
-        {
-          "_why": "phone x2: 0939589090",
-          "rect": [
-            0.2786,
-            0.2498,
-            0.2303,
-            0.1551
-          ],
-          "when": [
-            456.0,
-            476.0
-          ]
-        },
-        {
-          "_why": "phone x4: -380999581090",
-          "rect": [
-            0.5086,
-            0.733,
-            0.199,
-            0.1456
-          ],
-          "when": [
-            484.0,
-            512.0
-          ]
-        },
-        {
-          "_why": "email x3: agamanuk@gmail.com",
-          "rect": [
-            0.0,
-            0.3077,
-            0.2971,
-            0.1593
-          ],
-          "when": [
-            524.0,
-            548.0
-          ]
-        },
-        {
-          "_why": "phone x3: +38 (068) 508-0138",
-          "rect": [
-            0.1736,
-            0.1951,
-            0.2727,
-            0.1551
-          ],
-          "when": [
-            524.0,
-            548.0
-          ]
-        },
-        {
-          "_why": "phone x5: +380685080138",
-          "rect": [
-            0.2786,
-            0.5762,
-            0.259,
-            0.1582
-          ],
-          "when": [
-            552.0,
-            616.0
-          ]
-        },
-        {
-          "_why": "phone x2: +380685080138",
-          "rect": [
-            0.2861,
-            0.6319,
-            0.2509,
-            0.1519
-          ],
-          "when": [
-            564.0,
-            584.0
-          ]
-        },
-        {
-          "_why": "phone x2: 0685080138",
-          "rect": [
-            0.2793,
-            0.7183,
-            0.229,
-            0.1519
-          ],
-          "when": [
-            572.0,
-            592.0
-          ]
-        },
-        {
-          "_why": "phone x4: 0685080138",
-          "rect": [
-            0.2786,
-            0.6867,
-            0.2303,
-            0.1551
-          ],
-          "when": [
-            580.0,
-            608.0
-          ]
-        },
-        {
-          "_why": "phone x3: 0685080138",
-          "rect": [
-            0.2793,
-            0.5172,
-            0.229,
-            0.1519
-          ],
-          "when": [
-            604.0,
-            628.0
-          ]
-        },
-        {
-          "_why": "phone x2: 0685080138",
-          "rect": [
-            0.2793,
-            0.2498,
-            0.229,
-            0.1519
-          ],
-          "when": [
-            616.0,
-            636.0
-          ]
-        },
-        {
-          "_why": "phone x2: -380685080138",
-          "rect": [
-            0.5086,
-            0.733,
-            0.199,
-            0.1456
-          ],
-          "when": [
-            616.0,
-            636.0
-          ]
-        },
-        {
-          "_why": "phone x1: 0685080138",
-          "rect": [
-            0.2786,
-            0.2256,
-            0.2303,
-            0.1551
-          ],
-          "when": [
-            624.0,
-            640.0
-          ]
-        },
-        {
-          "_why": "phone x1: -380685080138",
-          "rect": [
-            0.5086,
-            0.7098,
-            0.1978,
-            0.1445
-          ],
-          "when": [
-            624.0,
-            640.0
-          ]
-        },
-        {
-          "_why": "phone x5: -380685080138",
-          "rect": [
-            0.5074,
-            0.6656,
-            0.2015,
-            0.1477
-          ],
-          "when": [
-            628.0,
-            680.0
-          ]
-        },
-        {
-          "_why": "phone x5: 0685080138",
-          "rect": [
-            0.2793,
-            0.1835,
-            0.229,
-            0.1508
-          ],
-          "when": [
-            644.0,
-            676.0
-          ]
-        },
-        {
-          "_why": "email x11: agamanuk@gmail.com",
-          "rect": [
-            0.0,
-            0.3025,
-            0.2971,
-            0.1593
-          ],
-          "when": [
-            704.0,
-            760.0
-          ]
-        },
-        {
-          "_why": "phone x11: +38 (068) 547-1765",
-          "rect": [
-            0.1724,
-            0.1856,
-            0.2746,
-            0.1624
-          ],
-          "when": [
-            704.0,
-            760.0
-          ]
-        },
-        {
-          "_why": "phone x1: +38 (068) 547-1765",
-          "rect": [
-            0.7417,
-            0.4951,
-            0.2571,
-            0.1551
-          ],
-          "when": [
-            780.0,
-            796.0
-          ]
-        },
-        {
-          "_why": "phone x1: +380685471765",
-          "rect": [
-            0.2868,
-            0.5804,
-            0.2509,
-            0.154
-          ],
-          "when": [
-            820.0,
-            836.0
-          ]
-        },
-        {
-          "_why": "phone x2: +380685471765",
-          "rect": [
-            0.2861,
-            0.6319,
-            0.2502,
-            0.1519
-          ],
-          "when": [
-            824.0,
-            844.0
-          ]
-        },
-        {
-          "_why": "phone x2: 0685471765",
-          "rect": [
-            0.2786,
-            0.6941,
-            0.2296,
-            0.1551
-          ],
-          "when": [
-            832.0,
-            852.0
-          ]
-        },
-        {
-          "_why": "phone x3: 0685471765",
-          "rect": [
-            0.2786,
-            0.6646,
-            0.2296,
-            0.154
-          ],
-          "when": [
-            840.0,
-            864.0
-          ]
-        },
-        {
-          "_why": "phone x1: 0685471765",
-          "rect": [
-            0.2793,
-            0.5172,
-            0.2284,
-            0.1519
-          ],
-          "when": [
-            852.0,
-            868.0
-          ]
-        },
-        {
-          "_why": "phone x1: 0685471765",
-          "rect": [
-            0.2793,
-            0.3488,
-            0.2284,
-            0.1519
-          ],
-          "when": [
-            856.0,
-            872.0
-          ]
-        },
-        {
-          "_why": "phone x2: -380685471765",
-          "rect": [
-            0.5086,
-            0.7319,
-            0.1984,
-            0.1456
-          ],
-          "when": [
-            860.0,
-            880.0
-          ]
-        },
-        {
-          "_why": "phone x1: 0685471765",
-          "rect": [
-            0.2786,
-            0.2488,
-            0.2296,
-            0.1551
-          ],
-          "when": [
-            864.0,
-            880.0
-          ]
-        },
-        {
-          "_why": "phone x1: -380664314978",
-          "rect": [
-            0.5086,
-            0.6541,
-            0.199,
-            0.1456
-          ],
-          "when": [
-            872.0,
-            888.0
-          ]
-        },
-        {
-          "_why": "phone x5: -380664514978",
-          "rect": [
-            0.5086,
-            0.6298,
-            0.199,
-            0.1456
-          ],
-          "when": [
-            876.0,
-            908.0
-          ]
-        },
-        {
-          "_why": "the whole Claude panel body. Point rects cannot be made safe here: the panel SCROLLS, so a record's box at one sampled moment is empty a few seconds later, and scanning the render found a full '(Харків, НП 11, 0935630503, ...)' at a height no rect reached. Pixelate rather than a box so the panel still reads as an AI working -- one chain per source is cheap; it was 18 of them that cost 35s per 10s.",
-          "rect": [
-            0.742,
-            0.075,
-            0.258,
-            0.815
-          ],
-          "mode": "pixelate",
-          "strength": 22
-        },
-        {
-          "_why": "recipient phone that survived the source scan; rect mapped back from the render scan and padded",
-          "rect": [
-            0.2853,
-            0.2478,
-            0.2267,
-            0.1389
-          ],
-          "when": [
-            864.4,
-            892.4
-          ]
-        }
-      ],
-      "_blur_why": "generated by scan-pii.py from temp/pii/desktop-115024.pii.json, re-validated against the current rules, and grown by 0.075/0.055 of the frame so the record around each readable field is covered too",
+      "_blur_why": "blurred fields only, from temp/pii/desktop-115024.pii.json; padded 0.006/0.01 -- enough not to clip a glyph",
       "proxy": "projects/books-giveaway/temp/proxy/desktop-115024.mp4",
-      "blur_extra": [
-        {
-          "_why": "the whole Claude panel body. Point rects cannot be made safe here: the panel SCROLLS, so a record's box at one sampled moment is empty a few seconds later, and scanning the render found a full '(Харків, НП 11, 0935630503, ...)' at a height no rect reached. Pixelate rather than a box so the panel still reads as an AI working -- one chain per source is cheap; it was 18 of them that cost 35s per 10s.",
-          "rect": [
-            0.742,
-            0.075,
-            0.258,
-            0.815
-          ],
-          "mode": "pixelate",
-          "strength": 22
-        },
-        {
-          "_why": "recipient phone that survived the source scan; rect mapped back from the render scan and padded",
-          "rect": [
-            0.2853,
-            0.2478,
-            0.2267,
-            0.1389
-          ],
-          "when": [
-            864.4,
-            892.4
-          ]
-        }
-      ]
+      "blur": [],
+      "track": "projects/books-giveaway/temp/track/desktop-115024"
     }
-  ]
+  ],
+  "benign_text": [
+    "668-35-95",
+    "668-3595",
+    "668-35-93",
+    "668-35-99",
+    "668-3593",
+    "0737161131",
+    "073716 1131",
+    "38073716",
+    "3807371611",
+    "0000 0000 0000 0000",
+    "0000000000000000",
+    "example@domain.com",
+    "store@ababahalamaha.com",
+    "4699"
+  ],
+  "_benign_why": "store support numbers printed in every header/footer, empty-form placeholders, and the masked PAN the user cleared. track-blur.py reads this list."
 }

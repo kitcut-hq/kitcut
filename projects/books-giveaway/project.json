@@ -79,18 +79,20 @@
     "cut": "cut.* in the manifest; --target M:SS solves keep_speed and speed together",
     "blur": "sources[].blur -- desktop entries generated from temp/pii/*.pii.json, phone entries measured by hand",
     "regions": "regions.main / regions.panel; the Edge side-panel divider is x=0.748",
-    "activity": "temp/*.activity.json, rebuilt by screen-activity.py if a source changes"
+    "activity": "temp/*.activity.json, rebuilt by screen-activity.py if a source changes",
+    "redaction": "TRACKED, not time-windowed: scripts/track-blur.py follows each secret's own pixels (NCC template matching, pooled --pii across all desktop scans) and writes mask streams under temp/track/<base>/; sources[].track points at them and screen-cut blurs the frame once through the mask. Hand rects remain in sources[].blur/blur_extra for what templates cannot see: selected (recolored) text, window-switcher thumbnails, fields OCR missed, stylised card faces, and the handheld clip (NCC recall 14% on a photographed screen).",
+    "blur_mode": "cut.blur_mode='blur' -- a real gaussian via downscale/gblur/upscale; never boxes, never pixelate mosaic, never whole regions"
   },
   "deliverables": {
     "projects/books-giveaway/outputs/books-giveaway.mp4": {
       "status": "current",
-      "built_utc": "2026-08-31T22:27:56Z",
+      "built_utc": "2026-09-01T00:24:29Z",
       "kind": "film",
-      "script": "scripts/yt-upload.py",
+      "script": "scripts/screen-cut.py",
       "manifest": "projects/books-giveaway/screen.json",
       "burned": {
         "cut": "activity-driven",
-        "blur_rects": 101,
+        "blur_rects": 36,
         "speed_badge": true,
         "speed": 19.072265625,
         "audio": "none (silent sources)"
@@ -106,7 +108,8 @@
     "Rendered with -an on purpose: every source is silent and the voice-over is stage 2.",
     "scan-pii.py found NOTHING in the monobank clip while two full PANs were on screen -- its report is a net, not a clearance.",
     "The user chose 8:00 from a priced menu and 'blur everything but keep the city name'.",
-    "The render-pipeline test manifest (temp/rendertest.json) was a throwaway for proving the filtergraph end to end before spending a full encode; its deliverable entry was removed as it is not a render of this video."
+    "The render-pipeline test manifest (temp/rendertest.json) was a throwaway for proving the filtergraph end to end before spending a full encode; its deliverable entry was removed as it is not a render of this video.",
+    "User: blur, never black-out; never wipe whole screens or panels; the Claude chat stays readable except the sensitive field itself; uploads unlisted."
   ],
-  "updated_utc": "2026-08-31T22:27:56Z"
+  "updated_utc": "2026-09-01T00:24:29Z"
 }

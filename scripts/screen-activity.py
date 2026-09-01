@@ -239,6 +239,38 @@ def fmt(t):
     return f"{int(t) // 60}:{t % 60:04.1f}"
 
 
+def find_panel(path, samples=(0.1, 0.25, 0.4, 0.55, 0.7, 0.85), width=960):
+    """Where a side panel's divider sits, as a fraction of the frame width.
+
+    The strongest long vertical edge in the right half of ONE frame is not
+    the answer -- a dialog or a scrollbar wins on any single timestamp, and
+    this gave three different values on one recording. Across six timestamps
+    the divider is the one edge that never moves, so the MODE of the per-frame
+    argmax is what gets returned. On the books-giveaway footage that was
+    x=0.748 on every recording that had the Edge side panel open.
+    """
+    import collections
+    dur = probe(path)["duration"]
+    hits = collections.Counter()
+    for pct in samples:
+        out = subprocess.run(
+            ["ffmpeg", "-v", "error", "-nostdin", "-ss", f"{dur * pct:.2f}",
+             "-i", path, "-frames:v", "1", "-vf", f"scale={width}:-2",
+             "-pix_fmt", "gray", "-f", "rawvideo", "-"],
+            capture_output=True).stdout
+        h = len(out) // width
+        if h < 10:
+            continue
+        a = np.frombuffer(out[:h * width], np.uint8).reshape(h, width).astype(np.int16)
+        band = a[int(h * 0.2):int(h * 0.85)]
+        g = np.abs(np.diff(band, axis=1)).mean(0)
+        x0, x1 = int(width * 0.60), int(width * 0.98)
+        hits[round((int(np.argmax(g[x0:x1])) + x0) / width, 3)] += 1
+    if not hits:
+        raise SystemExit(f"could not read frames from {path}")
+    return hits.most_common(1)[0][0]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", required=True, help="video to measure")
@@ -260,7 +292,32 @@ def main():
     ap.add_argument("--delta", type=int, default=PIXEL_DELTA)
     ap.add_argument("--still", type=float, default=STILL)
     ap.add_argument("--min-still", type=float, default=MIN_STILL)
+    ap.add_argument("--find-panel", action="store_true",
+                    help="locate the vertical divider of a side panel (mode of "
+                         "the strongest long vertical edge across six frames) "
+                         "and print the regions it implies")
+    ap.add_argument("--write-regions", metavar="MANIFEST",
+                    help="with --find-panel: write main/panel regions into this manifest")
     args = ap.parse_args()
+
+    if args.find_panel:
+        x = find_panel(_env.resolve(args.src))
+        print(f"{os.path.basename(args.src)}  panel divider x={x:.3f}")
+        regions = {"main": [0, 0, round(x, 3), 0.98],
+                   "panel": [round(x, 3), 0, round(1 - x, 3), 0.98]}
+        print("  regions:", json.dumps(regions))
+        if args.write_regions:
+            mp = _env.resolve(args.write_regions)
+            man = json.load(open(mp, encoding="utf-8"))
+            man["regions"] = dict(man.get("regions") or {}, **regions)
+            man["regions"]["_comment"] = (
+                f"x={x:.3f}: side-panel divider found by screen-activity.py "
+                f"--find-panel (mode of the strongest vertical edge across six "
+                f"timestamps of {os.path.basename(args.src)})")
+            with open(mp, "w", encoding="utf-8") as f:
+                json.dump(man, f, ensure_ascii=False, indent=2)
+            print(f"  wrote regions into {args.write_regions}")
+        return
 
     src = _env.resolve(args.src)
     info = probe(src)
@@ -278,6 +335,10 @@ def main():
         name, _, spec = s.partition("=")
         regions[name] = [float(v) for v in spec.split(",")]
     for name, rect in (man.get("regions") or {}).items():
+        # a manifest region block carries prose too (_comment); only a
+        # four-number list is a rectangle
+        if name.startswith("_") or not isinstance(rect, list) or len(rect) != 4:
+            continue
         regions.setdefault(name, rect)
 
     print(f"{os.path.basename(src)}  {info['width']}x{info['height']}  "

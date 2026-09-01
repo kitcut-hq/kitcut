@@ -165,116 +165,177 @@ def sample_times(path, fps):
     return dur, [i / fps for i in range(n)]
 
 
-def frames(path, fps, width):
-    """Yield (t, BGR ndarray) sampled at `fps`, scaled to `width` wide."""
-    import cv2
-    dur, _ = sample_times(path, fps)
+def frames_of(path, fps, width):
+    """Yield (pts_time, BGR ndarray) sampled at `fps`, scaled to `width` wide.
+
+    The time is the frame's REAL presentation time, read from `showinfo`, not
+    the sample index divided by the rate. The difference is the single
+    costliest bug of the first edit: ffmpeg's fps filter emits, for the slot
+    labelled 16 s, whichever input frame falls inside that 4-second slot --
+    and a template cut at exactly 16.0 landed on a Notepad window instead of
+    the spreadsheet cell OCR had read at ~20 s. Blank crops, garbage
+    templates, 46% recall, 183 leaks on the render. showinfo's pts_time is
+    the frame that was actually read.
+    """
+    import cv2  # noqa: F401 -- keeps the import local like the callers
+    import threading
+    import queue
     info = subprocess.run(
         ["ffprobe", "-v", "error", "-select_streams", "v:0",
          "-show_entries", "stream=width,height", "-of", "json", path],
         check=True, capture_output=True, text=True).stdout
     st = json.loads(info)["streams"][0]
     h = max(2, int(round(width * st["height"] / st["width"])) // 2 * 2)
+    # `select` every STEP-th frame, not `fps=`: the fps filter REWRITES
+    # timestamps onto its output grid, so showinfo after it would report
+    # k/fps again -- the very number that was wrong. select keeps the input
+    # frame's own pts, and -fps_mode passthrough keeps the muxer from
+    # duplicating frames to fill the gaps.
+    rate = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=avg_frame_rate", "-of", "csv=p=0", path],
+        capture_output=True, text=True).stdout.strip()
+    num, _, den = rate.partition("/")
+    src_fps = float(num) / float(den) if den and float(den) else 30.0
+    step = max(1, int(round(src_fps / fps)))
     p = subprocess.Popen(
-        ["ffmpeg", "-v", "error", "-nostdin", "-hwaccel", "cuda", "-i", path,
-         "-vf", f"fps={fps},scale={width}:{h}", "-pix_fmt", "bgr24",
-         "-f", "rawvideo", "-"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        ["ffmpeg", "-v", "info", "-nostdin", "-hwaccel", "cuda", "-i", path,
+         "-vf", f"select=not(mod(n\,{step})),scale={width}:{h},showinfo",
+         "-fps_mode", "passthrough", "-pix_fmt", "bgr24",
+         "-f", "rawvideo", "-"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    times = queue.Queue()
+
+    def pump():
+        for raw in p.stderr:
+            ln = raw.decode("utf-8", "replace")
+            m = re.search(r"showinfo.*n:\s*(\d+).*?pts_time:\s*([\d.]+)", ln)
+            if m:
+                times.put(float(m.group(2)))
+        times.put(None)
+
+    threading.Thread(target=pump, daemon=True).start()
     n = width * h * 3
     i = 0
     while True:
+        # Read the FRAME first, then its time. Waiting on the time first
+        # deadlocked: ffmpeg blocks writing the frame to a stdout nobody is
+        # reading, while this side waits for a log line ffmpeg has not
+        # reached. The showinfo line for a frame is emitted before the muxer
+        # writes it, so once the bytes are here the time is too.
         buf = p.stdout.read(n)
         if len(buf) < n:
             break
-        yield i / fps, np.frombuffer(buf, np.uint8).reshape(h, width, 3)
+        try:
+            t = times.get(timeout=5.0)
+        except queue.Empty:
+            t = None
+        if t is None:
+            t = i / fps
+        yield t, np.frombuffer(buf, np.uint8).reshape(h, width, 3)
         i += 1
     p.stdout.close()
     p.wait()
 
 
-def scan(path, fps=SAMPLE_FPS, width=OCR_WIDTH, only=None, extra=None,
-         skip_static=0.004):
-    """OCR the sampled frames and match every rule against every line.
+def ocr_pass(path, fps=SAMPLE_FPS, width=OCR_WIDTH, skip_static=0.004):
+    """Read every sampled frame ONCE and keep everything the OCR said.
 
-    OCR is the whole cost here -- on CPU, a 1920-wide frame of 4K screen text
-    takes seconds, and 47 minutes at one frame per two seconds is hours. But a
-    screencast holds still: on this footage 80% of samples are pixel-identical
-    to the one before, and re-reading them buys nothing.
+    OCR is the whole cost of this tool -- seconds per frame on CPU -- and the
+    first session paid it THREE times over 47 minutes of footage because the
+    rules changed after each scan and only the matching hits had been kept.
+    So this pass persists the raw lines (box, text, confidence) per frame, and
+    the rules become a second pass that costs seconds. A rule tweak is now a
+    re-read of a JSON file, not a 30-minute re-OCR.
 
-    So a frame close enough to the last frame that was actually read is
-    SKIPPED, and the previous frame's hits are re-stamped at the current time
-    instead. Timing stays honest -- a field that is on screen for a minute
-    still reports a minute-long window -- and the OCR call count drops with
-    the stillness of the recording rather than with its length.
+    A frame close enough to the last frame that was actually read is SKIPPED
+    and the previous frame's lines are re-stamped at the current time --
+    timing stays honest, and the OCR call count drops with the stillness of
+    the recording rather than with its length.
     """
     from rapidocr_onnxruntime import RapidOCR
+    import cv2
     ocr = RapidOCR()
-    rs = [r for r in rules() if not only or r[0] in only]
-    # User rules ride the same pass. The expensive half of this tool is the
-    # OCR, not the matching, so "where does each book appear" costs nothing
-    # extra once the frames are being read anyway.
-    for name, pat in (extra or {}).items():
-        rx = re.compile(pat, re.I)
-        rs.append((name, "find", lambda t, low, rx=rx: bool(rx.search(t))))
-    hits = []
-    nframes = 0
+    frames = []
     nread = 0
     last_gray = None
-    last_hits = []
-    for t, img in frames(path, fps, width):
-        nframes += 1
-        import cv2
+    last_lines = []
+    for t, img in frames_of(path, fps, width):
         small = cv2.resize(img, (320, max(2, 320 * img.shape[0] // img.shape[1])),
                            interpolation=cv2.INTER_AREA)
         gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY).astype(np.int16)
         if last_gray is not None and skip_static:
-            moved = float((np.abs(gray - last_gray) > 10).mean())
-            if moved < skip_static:
-                # unchanged: carry the previous reading forward at this time,
-                # so the window a field is visible for stays accurate
-                for h in last_hits:
-                    hits.append(dict(h, t=round(t, 2)))
+            if float((np.abs(gray - last_gray) > 10).mean()) < skip_static:
+                frames.append({"t": round(t, 2), "carried": True,
+                               "lines": last_lines})
                 continue
         last_gray = gray
         nread += 1
         res, _ = ocr(img)
-        last_hits = []
-        if not res:
-            continue
         H, W = img.shape[:2]
-        for box, text, conf in res:
-            # RapidOCR hands the score back as a STRING, so a bare `conf < 0.4`
-            # raises rather than filtering. Coerce, do not trust.
+        lines = []
+        for box, text, conf in (res or []):
+            # RapidOCR hands the score back as a STRING; coerce, do not trust.
             try:
                 conf = float(conf)
             except (TypeError, ValueError):
                 conf = 0.0
             if conf < 0.4 or not text.strip():
                 continue
+            xs = [pt[0] for pt in box]
+            ys = [pt[1] for pt in box]
+            lines.append({"box": [min(xs) / W, min(ys) / H,
+                                  (max(xs) - min(xs)) / W, (max(ys) - min(ys)) / H],
+                          "text": text.strip()[:80], "conf": round(conf, 3)})
+        last_lines = lines
+        frames.append({"t": round(t, 2), "carried": False, "lines": lines})
+        if len(frames) % 30 == 0:
+            print(f"    ...{t:7.1f}s  {nread}/{len(frames)} frames read",
+                  file=sys.stderr)
+    print(f"    OCR read {nread} of {len(frames)} sampled frames "
+          f"({100 * (1 - nread / max(1, len(frames))):.0f}% skipped as unchanged)",
+          file=sys.stderr)
+    return frames
+
+
+def apply_rules(frames, only=None, extra=None):
+    """The cheap half: every rule against every cached line. Seconds."""
+    rs = [r for r in rules() if not only or r[0] in only]
+    for name, pat in (extra or {}).items():
+        rx = re.compile(pat, re.I)
+        rs.append((name, "find", lambda t, low, rx=rx: bool(rx.search(t))))
+    hits = []
+    for fr in frames:
+        for ln in fr["lines"]:
+            text = ln["text"]
             low = text.lower()
             for name, sev, test in rs:
                 try:
                     ok = test(text, low)
                 except Exception:
                     ok = False
-                if not ok:
-                    continue
-                xs = [pt[0] for pt in box]
-                ys = [pt[1] for pt in box]
-                h = {
-                    "t": round(t, 2), "kind": name, "severity": sev,
-                    "text": text.strip()[:60], "conf": round(float(conf), 3),
-                    "rect": [min(xs) / W, min(ys) / H,
-                             (max(xs) - min(xs)) / W, (max(ys) - min(ys)) / H],
-                }
-                hits.append(h)
-                last_hits.append(h)
-        if nframes % 30 == 0:
-            print(f"    ...{t:7.1f}s  {len(hits)} hit(s), "
-                  f"{nread}/{nframes} frames read", file=sys.stderr)
-    print(f"    OCR read {nread} of {nframes} sampled frames "
-          f"({100 * (1 - nread / max(1, nframes)):.0f}% skipped as unchanged)",
-          file=sys.stderr)
-    return hits, nframes
+                if ok:
+                    hits.append({"t": fr["t"], "kind": name, "severity": sev,
+                                 "text": text[:60], "conf": ln["conf"],
+                                 "rect": list(ln["box"])})
+    return hits
+
+
+def scan(path, fps=SAMPLE_FPS, width=OCR_WIDTH, only=None, extra=None,
+         skip_static=0.004, cache=None, from_cache=False):
+    """OCR once (or load the cache), then apply the rules."""
+    if from_cache and cache and os.path.exists(cache):
+        frames = json.load(open(cache, encoding="utf-8"))["frames"]
+        print(f"    rules re-applied to cached OCR ({len(frames)} frames)",
+              file=sys.stderr)
+    else:
+        frames = ocr_pass(path, fps, width, skip_static)
+        if cache:
+            os.makedirs(os.path.dirname(cache), exist_ok=True)
+            with open(cache, "w", encoding="utf-8") as f:
+                json.dump({"src": _env.resolve(path), "sample_fps": fps,
+                           "width": width, "frames": frames}, f,
+                          ensure_ascii=False)
+    return apply_rules(frames, only, extra), len(frames)
 
 
 def merge(hits, gap=6.0, pad=PAD):
@@ -353,7 +414,14 @@ def main():
     ap.add_argument("--skip-static", type=float, default=0.004,
                     help="skip OCR on a frame this close to the last one read; "
                          "0 disables. This is what makes a 47-minute scan "
-                         "finish -- see scan().")
+                         "finish -- see ocr_pass().")
+    ap.add_argument("--ocr-cache", metavar="PATH",
+                    help="where the raw OCR lines are kept (default: next to "
+                         "--out, under ../ocr/<base>.ocr.json). Written on "
+                         "every OCR run; read back by --from-cache")
+    ap.add_argument("--from-cache", action="store_true",
+                    help="skip the OCR entirely and re-apply the rules to the "
+                         "cached lines -- seconds instead of half an hour")
     args = ap.parse_args()
 
     src = _env.resolve(args.src)
@@ -361,7 +429,16 @@ def main():
     extra = dict(m.split("=", 1) for m in args.match)
     print(f"scanning {os.path.basename(src)} at {args.fps} fps ...",
           file=sys.stderr)
-    hits, n = scan(src, args.fps, args.width, only, extra, args.skip_static)
+    cache = args.ocr_cache
+    if not cache and args.out:
+        base = os.path.splitext(os.path.basename(src))[0]
+        cache = os.path.join(os.path.dirname(_env.resolve(args.out)), "..",
+                             "ocr", base + ".ocr.json")
+        cache = os.path.normpath(cache)
+    if args.from_cache and not (cache and os.path.exists(cache)):
+        raise SystemExit(f"--from-cache: no cache at {cache}; run once without it")
+    hits, n = scan(src, args.fps, args.width, only, extra, args.skip_static,
+                   cache=cache, from_cache=args.from_cache)
     groups = merge(hits, args.gap)
 
     print(f"\n{os.path.basename(src)}: {len(hits)} hit(s) in {n} sampled "

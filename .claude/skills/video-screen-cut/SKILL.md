@@ -12,13 +12,31 @@ for recordings with **no usable audio at all**, where the picture is the only
 signal and the voice-over is added afterwards.
 
 ```powershell
-# from the repo root
-python scripts/screen-activity.py --src projects/<id>/sources/<f>.mp4 --list --probe-motion
-python scripts/scan-pii.py        --src projects/<id>/sources/<f>.mp4 --report --emit
-python scripts/screen-cut.py      --manifest projects/<id>/screen.json --list --sweep
-python scripts/screen-cut.py      --manifest projects/<id>/screen.json --target 8:00 --sheet projects/<id>/temp/sheet
-python scripts/screen-cut.py      --manifest projects/<id>/screen.json --target 8:00
+# from the repo root -- this is the whole job
+python scripts/screencast-pipeline.py --project <id> --target 8:00            # stops at the review sheet
+python scripts/screencast-pipeline.py --project <id> --target 8:00 --approve --upload unlisted
 ```
+
+**Run the pipeline, not the scripts.** The first edit of this kind took six
+hours as forty hand-typed commands (`docs/retro-books-giveaway.md`); the
+pipeline runs import → proxies → activity → ocr → track → **recall** →
+**review (STOP)** → smoke → render → gate → upload, caches every stage, and
+refuses to render a look nobody has approved or a tracker whose recall is
+below the bar. The individual scripts below are for diagnosis and for adding
+capability, and each still has its free mode.
+
+Three rules the pipeline enforces, learned the expensive way:
+
+1. **Never render a look the user has not seen.** The review sheet
+   (`temp/review/redaction-sheet.jpg`) is the stop. Blur, not boxes; fields,
+   not regions; the AI panel stays readable except the sensitive field.
+2. **Never adopt a detector you have not measured.** `track-blur --recall`
+   scores the tracker against the OCR hits in seconds; the first tracker
+   scored 27 % on frames it had cut its own templates from, and three renders
+   went out before anyone asked.
+3. **The gate reads the render, and closes the loop.** `render-gate.py`
+   searches the secrets' own pixels on the output and `--patch`es the manifest
+   for anything it finds; a sparse OCR "looks clean" is not a gate.
 
 The worked example is `projects/books-giveaway/screen.json`. README has the
 reference under "A screencast with no soundtrack at all".
@@ -89,9 +107,10 @@ interchangeable, so there is no "apply the decisions to the big one" step. The
 scale to 1080p has to happen anyway; doing it once is less resampling, and
 `screen-cut.py` skips the scale filter when the input already matches.
 
-**Do not proxy for `scan-pii.py`.** OCR is resolution-bound, so shrinking costs
-recall on the most expensive step. Scan the originals; use `--skip-static` to
-cut the frame count instead.
+OCR reads the proxies as well — the scan runs at 1600 px wide and the proxy is
+wider, so the earlier "scan the originals" advice was wrong and cost a 4K
+decode for nothing. `--skip-static` and the per-frame OCR cache
+(`--ocr-cache` / `--from-cache`) are the levers on OCR time.
 
 ## Measure the picture, per region
 
@@ -143,10 +162,31 @@ Three things that decide whether it works:
   the previous reading is re-stamped at the current time, so windows stay
   accurate while the call count drops with the stillness, not the length.
 
-Blur runs **in source time, upstream of the trim** — same trap as the name
-label's film-time `at`. A window verified against a source frame stays verified
-after the cut moves everything. Default `mode` is `pixelate`, not blur: a soft
-blur reads as a focus artefact and invites someone to try to sharpen it back.
+**Redaction is TRACKED, not time-windowed.** A rect anchored to a time window
+is the wrong primitive — the page scrolls, the field moves, the rect does not,
+and the blur lands on the wrong rows. Every leak this pipeline chased before
+tracking existed came from that mismatch. Instead:
+
+```powershell
+python scripts/track-blur.py --src <proxy> --pii <pii.json> --outdir <trackdir> --manifest <screen.json>
+```
+
+captures each secret's own pixels as a template and finds them per frame with
+NCC (`cv2.matchTemplate`) — the standard "tracked redaction" of video editors,
+and screen recordings are its easy case since a browser renders text
+pixel-identically. Point the source's `track` key at the outdir;
+`screen-cut.py` blurs the frame once and shows it through the tracked mask, so
+box count adds nothing to per-frame cost. Blur as little as possible falls out
+for free: the mask is exactly the matched pixels plus 6 px.
+
+Three hard-won constants live in the script: match at three SCALES (an app
+draws the same number at list/detail/form sizes and NCC only matches its own);
+refuse templates under 48 px wide or 12 σ contrast (a 39×11 patch cleared 0.90
+against a face); and write the mask stream LONGER than the source (a short
+mask stalls `alphamerge` exactly like the looped-PNG alpha trap).
+
+Hand `blur` rects remain for what OCR cannot read at all — stylised card
+faces — and run in source time, upstream of the trim, same as ever.
 
 - **The country code is optional.** Requiring `+38` let a panel summary reading
   `(Київ, відділення 57, 0939589090, Стрельченко Марія …)` straight through —

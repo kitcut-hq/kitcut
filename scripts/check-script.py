@@ -89,6 +89,8 @@ EXCEPTIONS = {
         "argparse": "same bargain as check-dub.py: one button, no files, no "
                     "GPU, no OCR -- it tests the PII rules and the cut "
                     "arithmetic in memory",
+        "record": "self-test harness; the only files it writes are fixture "
+                  "JSONs under %TEMP% for the recall harness",
     },
     "make-proxies.py": {
         "record": "a proxy is an intermediate, not a deliverable: it lives "

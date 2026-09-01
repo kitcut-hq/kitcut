@@ -172,3 +172,88 @@ resolution-bound.
 pinned to beats. At 3.18x the pages stay readable because each is on screen
 15-40 s, but nothing guarantees it. `hold_1x` windows on the source are the
 lever; `--target` deliberately does not scale them.
+- 22:34 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 45:38.3 of sources -> 7:42.0
+- 22:34 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 45:38.3 of sources -> 7:42.0
+- 23:07 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 47:14.4 of sources -> 8:00.4
+- 23:08 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 47:14.4 of sources -> 8:00.4
+- 23:10 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 47:14.4 of sources -> 8:00.4
+
+### The redaction pivot: track the pixels, not the clock
+
+The user called out both the look and the architecture in one message: black
+boxes instead of blur, wiped screens instead of covered fields, and "it seems
+we start from nothing each frame -- isn't this a standard task?" It is. The
+standard name is **tracked redaction**, and the standard algorithm is template
+matching: capture the secret's own pixels once, find them per frame with NCC
+(`cv2.matchTemplate`), blur exactly what matched. `track-blur.py` implements
+it; a source's `track` key points screen-cut at the mask stream, and the frame
+is blurred once and shown through the mask.
+
+What the verification frames taught, in order:
+
+- **Scale.** Privat24 draws the same account number at list/detail/form sizes
+  and NCC only matches its own size -- templates are now searched at three
+  scales, one variant kept per rendered height OCR saw.
+- **Trust.** A 39x11 "UA39" patch cleared 0.90 NCC against a FACE. Templates
+  under 48 px wide or 12 sigma contrast are refused at collection.
+- **Where tracking honestly loses.** (1) Selected text: white-on-blue does not
+  match a template captured black-on-white, so the PAN went sharp exactly
+  while the user highlighted it. (2) The Alt-Tab switcher renders a window
+  TITLE carrying the PAN at thumbnail scale. (3) A field OCR never hit has no
+  template at all (the full IBAN on the card page). Those three cases carry
+  hand rects in the manifest, with the reason on each.
+- **Division of labour that stuck:** tracking for desktop browser footage
+  (consistent rendering; 70% of frames carry boxes on the busiest source),
+  hand time-gated rects for the two phone-bank clips (static screens, few
+  fields, multiple render styles) and the handheld clip (photographed screen,
+  NCC recall 14% -- per-hit time rects instead).
+
+Cost model that makes it fast: unchanged frames are skipped outright (87-93%
+of a desktop screencast), tracked instances re-found in a local window, full
+sweeps only for lost templates at half scale. 47 minutes of footage tracks in
+about six.
+
+User decisions this pass: blur, never black boxes or pixelate mosaic; never
+wipe a whole region or panel; the Claude chat stays readable except the
+sensitive field itself; uploads go up UNLISTED (memory saved).
+- 23:50 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 47:14.4 of sources -> 8:00.4
+
+**Template pooling, the last structural fix.** The full PAN typed into the
+Claude panel in `desktop-110556` rendered sharp: that recording's own OCR
+never read it (tiny grey panel text at 4K), so its tracker had no template --
+while `desktop-105144`'s scan had read the same digits in Notepad. Secrets
+cross recordings; template pools must too. track-blur's `--pii` now takes all
+same-geometry scans pooled, cutting each template's pixels from the file the
+hit was found in. THR also dropped 0.88 -> 0.86: a near-miss blur is a few
+pixels off (cosmetic), a near-miss rejection is a leak.
+
+## 2026-09-01
+- 00:24 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 47:14.4 of sources -> 8:00.4
+
+### Post-mortem tooling, and the bug under everything
+
+The retro is `docs/retro-books-giveaway.md`. Building the recall harness
+(`track-blur.py --recall`) took an hour and paid for the whole day: the first
+number it printed was **26.9%** on a source whose own OCR hits were the
+templates. Three hypotheses fell (half-scale prefilter; template chosen by
+height only; template chosen without width) and each moved it a few points.
+Then a direct experiment -- cut the template from the frame OCR named, and
+self-match it there -- gave std 0.0: the crop was blank. The OCR hit was
+right; its TIMESTAMP was the sample slot, not the frame. ffmpeg's fps filter
+emits, for the slot labelled 16 s, whichever input frame fell inside that
+4-second slot, and scan-pii labelled it 16.0. Every template was cut up to
+4 s away from the frame that carried the text. Recall 46% -> 92% from that
+one fix; the 183-leak render is explained by it too.
+
+`scan-pii` now samples with `select` and reads the real pts from `showinfo`
+(the fps filter would REWRITE the timestamps onto its grid, which is the very
+number that was wrong), and reading the frame before its time avoids the
+stdout/stderr deadlock that hung the first version. The tracker tolerates the
+old labels by probing the slot and taking the crop with the most structure,
+so the existing scans did not need re-OCR -- but the pipeline re-OCRs anyway
+because the rules file changed, and writes the per-frame cache this time.
+
+New: `screencast-pipeline.py` (eleven stages, cached, one stop),
+`import-footage.py`, `redaction-review.py`, `render-gate.py --patch`,
+`screen-cut.py --smoke`, `screen-activity.py --find-panel`, the OCR cache.
+Phone clips are `track: false` in the manifest: hand rects there.
