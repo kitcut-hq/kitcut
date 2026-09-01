@@ -12,8 +12,9 @@ This runs the same stages in the only order that does not waste work:
   ocr       read every sampled frame ONCE (cached); rules are a cheap pass
   track     follow each secret's pixels; POOLED across the session's sources
   recall    measure the tracker against the OCR hits -- below 98%, stop here
-  review    the STOP: a before/after sheet of every redaction; approve or not
+  review    the first STOP: a before/after sheet of every redaction
   smoke     30 s of the busiest source through the full graph; a minute
+  draft     the second STOP: the riskiest minute at half resolution, in motion
   render    per-source pieces, content-addressed, joined by stream copy
   gate      the secrets' own pixels searched on the render; --patch and loop
   upload    unlisted, only after the gate is clean and the look approved
@@ -26,6 +27,7 @@ Invoke as:  python scripts/screencast-pipeline.py --project <id> --target 8:00
 """
 import sys
 import os
+import re
 import json
 import time
 import glob
@@ -48,7 +50,29 @@ for _s in (sys.stdout, sys.stderr):
         pass
 
 STAGES = ["import", "proxies", "activity", "ocr", "track", "recall", "review",
-          "smoke", "render", "gate", "upload"]
+          "smoke", "draft", "render", "gate", "upload"]
+
+
+def known_issues(stages):
+    """Every `open` and `limitation` entry in docs/known-issues.md that touches
+    one of the stages about to run. Printed at start so the register is seen
+    on every run rather than remembered on some of them."""
+    path = os.path.join(ROOT, "docs", "known-issues.md")
+    if not os.path.exists(path):
+        return []
+    out = []
+    rx = re.compile(r"^### (KI-\d+) · (\w+) · ([\w,]+) · (.+?)\s*$")
+    for ln in open(path, encoding="utf-8"):
+        m = rx.match(ln)
+        if not m:
+            continue
+        kid, status, tags, title = m.groups()
+        if status not in ("open", "limitation"):
+            continue
+        hit = set(tags.split(",")) & (set(stages) | {"all"}) or "all" in tags
+        if hit:
+            out.append((kid, status, tags, title))
+    return out
 
 
 def fmt(t):
@@ -285,7 +309,9 @@ class Pipeline:
             tdir = os.path.join(self.tdir, "track", self.base(s))
             jobs.append(([os.path.join(HERE, "track-blur.py"), "--src",
                           self.rel(self.proxy_or_src(s)), "--outdir", self.rel(tdir),
-                          "--manifest", self.rel(self.mpath)], f"track {self.base(s)}"))
+                          "--manifest", self.rel(self.mpath),
+                          "--threads", str(max(1, (os.cpu_count() or 4) // max(1, self.args.jobs)))],
+                         f"track {self.base(s)}"))
             for s2 in m["sources"]:
                 if s2["path"] == s["path"]:
                     s2["track"] = self.rel(tdir)
@@ -336,6 +362,35 @@ class Pipeline:
         self.run(self.cut_argv() + ["--smoke"], "smoke")
         return "ran", ""
 
+    def draft_sig(self):
+        tracks = [os.path.join(_env.resolve(s["track"]), "track.json")
+                  for s in self.sources() if s.get("track")]
+        return stat_sig([self.mpath] + tracks)
+
+    def st_draft(self):
+        """The second stop: a half-resolution risk trailer for a human.
+
+        The review sheet shows stills; this shows motion -- blur following a
+        scroll, a speed ramp, a join. Around a minute of the riskiest moments
+        at half resolution renders in well under a minute. The final only
+        starts once this exact cut has been approved.
+        """
+        sig = self.draft_sig()
+        flag = os.path.join(self.state_dir, "draft.approved")
+        if os.path.exists(flag) and open(flag, encoding="utf-8").read().strip() == sig \
+                and not self.args.force_draft:
+            return "approved", ""
+        self.run(self.cut_argv() + ["--hot", "--draft"], "draft")
+        m = self.man()
+        base, ext = os.path.splitext(m["output"])
+        out = _env.resolve(f"{base}-hot-draft{ext}")
+        if self.args.approve_draft:
+            with open(flag, "w", encoding="utf-8") as f:
+                f.write(sig)
+            return "approved", "with --approve-draft"
+        raise SystemExit(f"\n  STOP: watch the draft trailer\n    {out}\n"
+                         f"  then rerun with --approve-draft (or change the manifest and rerun).")
+
     def st_render(self):
         self.run(self.cut_argv(), "render")
         return "ran", ""
@@ -376,6 +431,11 @@ class Pipeline:
         stop_at = STAGES.index(self.args.stop) if self.args.stop else len(STAGES) - 1
         print(f"{self.pid}: stages {STAGES[start_at]} -> {STAGES[stop_at]}"
               f"{'  target ' + self.args.target if self.args.target else ''}")
+        kis = known_issues(STAGES[start_at:stop_at + 1])
+        if kis:
+            print("  known issues for these stages (docs/known-issues.md):")
+            for kid, status, tags, title in kis:
+                print(f"    {kid} {status:<10} {title}")
         t_all = time.time()
         for i, stage in enumerate(STAGES):
             if i < start_at or i > stop_at:
@@ -405,6 +465,10 @@ def main():
                     help="re-run this stage even if its inputs are unchanged")
     ap.add_argument("--approve", action="store_true",
                     help="you have looked at the review sheet: record approval and go on")
+    ap.add_argument("--approve-draft", action="store_true",
+                    help="you have watched the draft trailer: record approval and render the final")
+    ap.add_argument("--force-draft", action="store_true",
+                    help="re-render the draft even if this cut was approved")
     ap.add_argument("--upload", choices=["unlisted", "private", "public"],
                     help="upload after a clean gate; unlisted is the review default")
     ap.add_argument("--title")

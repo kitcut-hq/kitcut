@@ -67,9 +67,12 @@ KINDS = {"card", "cvv", "expiry", "iban", "phone", "email", "balance"}
 THR = 0.86            # NCC score to accept a match at full resolution; a
                       # near-miss blur lands a few pixels off (cosmetic), a
                       # near-miss REJECTION is a leak, so err low
-THR_HALF = 0.80       # looser at half scale; a hit is refined at full res
+THR_HALF = 0.80       # (unused since the coarse-first rewrite; kept for the record)
+THR_COARSE = 0.50     # permissive half-scale prefilter; full resolution decides
+MAX_CAND = 6          # coarse candidates confirmed per template per sweep
 DILATE = 6            # pixels added around every matched box
 COLD_EVERY = 15       # frames between full searches for a long-unseen template
+COLD_FOREIGN = 60     # ...and for one only pooled in from another recording
 CHANGE_SKIP = 0.0006  # frame-diff fraction below which nothing is re-searched
 MAX_INSTANCES = 8     # same secret shown more than this is a listing, not a leak
 
@@ -91,9 +94,6 @@ MIN_TPL_STD = 12.0
 #   recall keeps; the face-shaped 0.90 false positive does not clear 0.93.
 SMALL_TPL_AREA = 800
 THR_SMALL = 0.93
-#   SIZE ROUTE. Below this height a template is searched at full resolution,
-#   never through the half-scale prefilter -- see full_search().
-SMALL_TPL_H = 24
 
 
 def probe(path):
@@ -230,12 +230,16 @@ def collect_templates(src, pii_paths, benign, kinds, info):
                     continue
                 img = patch if s == 1.0 else cv2.resize(patch, (sw, sh))
                 variants.append({
-                    "img": img,
+                    "img": img, "scale": s,
                     "half": cv2.resize(img, (max(2, sw // 2), max(2, sh // 2))),
                 })
             templates.append({
                 "key": key, "kind": h["kind"], "text": h["text"][:40],
                 "img": patch, "variants": variants,
+                # seen by THIS recording's OCR, or only pooled in from another
+                "own": any(os.path.basename(x.get("_src", "")) == os.path.basename(src)
+                           or os.path.basename(x.get("_src", "")).replace("/temp/proxy/", "/sources/")
+                           == os.path.basename(src) for x in hits),
             })
     return templates
 
@@ -250,7 +254,7 @@ def nms(points, w, h):
     return out
 
 
-def full_search(frame_half, frame, tpl):
+def full_search(frame_half, frame, tpl, scales=None):
     """Full-frame sweep per SCALE VARIANT. Returns [(x, y, w, h)] -- the size
     comes back too, because a match at 0.75x is a smaller region than the
     template it came from.
@@ -265,34 +269,40 @@ def full_search(frame_half, frame, tpl):
     searched at FULL resolution directly (a 100x15 template over 1818x1080 is
     ~30 ms), and only tall ones take the half-scale shortcut.
     """
+    # COARSE-FIRST, for every template. The earlier answer to small text --
+    # search it at full resolution -- was correct and unaffordable: with ~90
+    # pooled templates x3 scales, a lost-template sweep became hundreds of
+    # full-frame NCCs, tracking took 82 minutes and the gate made no progress
+    # in fourteen. The half-scale prefilter's only failing was its threshold:
+    # a 13 px line at half scale is 6 px, and the phase difference between
+    # resizing a crop and resizing the frame drops NCC to ~0.5-0.7 -- still
+    # far above noise. So the prefilter is PERMISSIVE (0.5) and keeps a few
+    # candidates, and full resolution decides. One quarter-size NCC plus a
+    # handful of tiny confirmations per template, small or large.
     hits = []
     for v in tpl["variants"]:
-        H, W = v["img"].shape
-        if H < SMALL_TPL_H:
-            if frame.shape[0] <= H or frame.shape[1] <= W:
-                continue
-            thr = THR_SMALL if W * H < SMALL_TPL_AREA else THR
-            r = cv2.matchTemplate(frame, v["img"], cv2.TM_CCOEFF_NORMED)
-            ys, xs = np.where(r >= thr)
-            for x, y, _ in nms([(x, y, r[y, x]) for x, y in zip(xs, ys)], W, H):
-                hits.append((int(x), int(y), W, H))
+        if scales is not None and v.get("scale", 1.0) not in scales:
             continue
+        H, W = v["img"].shape
         th, tw = v["half"].shape
         if frame_half.shape[0] <= th or frame_half.shape[1] <= tw:
             continue
         r = cv2.matchTemplate(frame_half, v["half"], cv2.TM_CCOEFF_NORMED)
-        ys, xs = np.where(r >= THR_HALF)
-        cand = nms([(x, y, r[y, x]) for x, y in zip(xs, ys)], tw, th)
+        ys, xs = np.where(r >= THR_COARSE)
+        cand = nms([(x, y, r[y, x]) for x, y in zip(xs, ys)], tw, th)[:MAX_CAND]
+        thr = THR_SMALL if W * H < SMALL_TPL_AREA else THR
         for cx, cy, _ in cand:
-            x0, y0 = cx * 2, cy * 2
-            win = frame[max(0, y0 - 8):y0 + H + 8, max(0, x0 - 8):x0 + W + 8]
+            x0, y0 = int(cx) * 2, int(cy) * 2
+            # the coarse position is off by up to a pixel of phase each way
+            # at half scale, so confirm in a window a little wider than that
+            win = frame[max(0, y0 - 10):y0 + H + 10, max(0, x0 - 10):x0 + W + 10]
             if win.shape[0] < H or win.shape[1] < W:
                 continue
             rr = cv2.matchTemplate(win, v["img"], cv2.TM_CCOEFF_NORMED)
             _, score, _, loc = cv2.minMaxLoc(rr)
-            if score >= THR:
-                hits.append((max(0, x0 - 8) + loc[0],
-                             max(0, y0 - 8) + loc[1], W, H))
+            if score >= thr:
+                hits.append((max(0, x0 - 10) + loc[0],
+                             max(0, y0 - 10) + loc[1], W, H))
     # de-duplicate across scales: two variants can claim the same spot
     return nms4(hits)
 
@@ -355,9 +365,27 @@ def track(src, templates, info, verbose=True):
                     stats["local"] += 1
             # a lost or never-seen template gets a full sweep -- every frame
             # while warm, every COLD_EVERY frames once it has gone quiet
-            warm = (i - last_seen[tid]) < info["fps"] * 3
-            if not kept and (warm or i % COLD_EVERY == 0 or moved > 0.10):
-                kept = full_search(fr_half, fr, t)
+            # Who gets swept, and how hard. The sweeps are the whole cost:
+            # 3,217 of them on 247 changed frames of a one-minute clip, most
+            # for templates pooled in from OTHER recordings that never appear
+            # here. So a template this recording's own OCR saw is patrolled
+            # every 15 frames and a foreign one every 60; and only a template
+            # that was on screen within the last 3 s gets the scale variants
+            # (a zoom transition is what they are for), the rest search at
+            # its own scale only.
+            own = t.get("own", True)
+            warm = (i - last_seen[tid]) < info["fps"] * 1.0
+            big = moved > 0.10          # a page change or a scroll
+            small = moved < 0.02        # a caret, a spinner, a hover
+            due = i % (COLD_EVERY if own else COLD_FOREIGN) == 0
+            # a lost template is swept on its patrol tick; a warm one (seen
+            # within the last second) on any real change; an own one also on
+            # every page change. Nothing is swept for a caret blink, and a
+            # foreign template never rides a page change -- its patrol is
+            # enough. Scale variants only for a warm template on a big change,
+            # which is what a zoom transition looks like.
+            if not kept and (due or (not small and (warm or (big and own)))):
+                kept = full_search(fr_half, fr, t, None if (warm and big) else (1.0,))
                 stats["full"] += 1
             if kept:
                 last_seen[tid] = i
@@ -528,7 +556,12 @@ def main():
                          "hits and print the misses; no tracking, seconds")
     ap.add_argument("--recall-min", type=float, default=0.98,
                     help="exit non-zero when overall recall is below this")
+    ap.add_argument("--threads", type=int, default=0,
+                    help="OpenCV threads for this process; the pipeline sets "
+                         "cores/jobs so five workers do not fight over sixteen cores")
     args = ap.parse_args()
+    if args.threads > 0:
+        cv2.setNumThreads(args.threads)
 
     src = _env.resolve(args.src)
     info = probe(src)

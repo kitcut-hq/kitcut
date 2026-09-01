@@ -67,16 +67,16 @@ DEFAULTS = {
     "keep_speed": 1.0,        # how fast to run the working stretches
     "air": 0.30,              # seconds of stillness kept at each join, for breath
     "speed_badge": True,
-    # A filled box, not a pixelate, and both halves of that are measured.
-    # SPEED: 18 rects on one source cost 35 s per 10 s of video as pixelate
-    # chains and 2 s as drawbox -- 17x, because each pixelate rect is its own
-    # split / crop / scale-down / scale-up / overlay and the whole chain runs
-    # per frame whether its `enable` window is open or not.
-    # SAFETY: a box has nothing left to reconstruct. Pixelation of known-format
-    # text is not a one-way function.
-    "blur_mode": "box",
+    # A real blur, applied once to the whole frame and shown through a mask
+    # (masked_blur / the tracked mask stream). The user's words: "blur, not
+    # black out; never wipe a whole region". `box` and `pixelate` remain as
+    # per-rect modes -- a box costs 17x less than a pixelate chain at 18 rects
+    # (2 s vs 35 s per 10 s of video) -- but neither is the default look.
+    "blur_mode": "blur",
+    "blur_downscale": 8,
+    "blur_sigma": 3.0,
     "box_color": "0x15151C",
-    "backdrop": "0x101014",
+    "backdrop": "blur",
     # drawtext with no fontfile falls back to fontconfig, which on Windows
     # cannot load a default config and kills the render. Never leave it unset.
     "badge_font": "fonts/Montserrat-Bold.ttf",
@@ -84,6 +84,8 @@ DEFAULTS = {
 
 
 def fmt(t):
+    # round to a tenth FIRST, or 479.96 prints as "7:60.0"
+    t = round(t, 1)
     return f"{int(t) // 60}:{t % 60:04.1f}"
 
 
@@ -573,7 +575,7 @@ def source_cmd(plan, cfg, out_path, prog=None):
         # input 1: the tracked blur mask, a concat of still PNGs
         cmd += ["-f", "concat", "-safe", "0", "-i", plan["mask_listing"]]
     cmd += ["-filter_complex_script", gpath, "-map", "[out]", "-an",
-            "-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr",
+            "-c:v", "h264_nvenc", "-preset", cfg.get("nvenc_preset", "p5"), "-rc", "vbr",
             "-cq", str(cfg.get("cq", 21)), "-b:v", "0",
             "-pix_fmt", "yuv420p", "-movflags", "+faststart", out_path]
     return cmd, len(parts)
@@ -590,7 +592,7 @@ def run_ffmpeg(cmd, what):
 # --target, --list formatting, the output path -- must not invalidate a cache
 # entry, or nothing is ever reused.
 PIECE_CFG_KEYS = ("canvas", "fps", "cq", "backdrop", "blur_mode", "box_color",
-                  "speed_badge", "badge_font")
+                  "speed_badge", "badge_font", "nvenc_preset")
 
 
 def piece_key(plan, cfg):
@@ -644,7 +646,11 @@ def render(plans, cfg, out_path, dry=False, prog=None, rebuild=False,
     the wrong contents, and silently concatenating it would be worse than
     rebuilding it.
     """
-    piece_dir = os.path.join(os.path.dirname(out_path), "..", "temp", "cut")
+    # drafts and ranges get their own piece dir: the stale-piece cleanup
+    # below deletes anything not in the current set, and a draft must not
+    # throw away the final's pieces (or the reverse)
+    piece_dir = os.path.join(os.path.dirname(out_path), "..", "temp",
+                             cfg.get("piece_dir", "cut"))
     piece_dir = os.path.normpath(piece_dir)
     os.makedirs(piece_dir, exist_ok=True)
     total_out = sum(p["out_s"] for p in plans)
@@ -778,6 +784,19 @@ def main():
                          "transform between them; repeatable. This is how a "
                          "leak found by scanning the render gets traced back "
                          "to the manifest entry that should have covered it.")
+    ap.add_argument("--draft", action="store_true",
+                    help="half-resolution, fast-preset render for a human to "
+                         "review; ~4x faster than the final. Every rect is a "
+                         "fraction of the frame, so a draft is a valid review "
+                         "of the redaction; what it cannot judge is fine text "
+                         "legibility, which the final and the gate cover.")
+    ap.add_argument("--range", metavar="M:SS-M:SS",
+                    help="render only this stretch of FILM time (mapped back "
+                         "through the cut), for reviewing one issue")
+    ap.add_argument("--hot", action="store_true",
+                    help="render only the risky moments: the first appearance "
+                         "of every tracked secret and every hand rect, a few "
+                         "seconds each, joined -- a risk trailer of about a minute")
     ap.add_argument("--no-proxy", action="store_true",
                     help="read the original sources even where a proxy exists")
     ap.add_argument("--smoke", action="store_true",
@@ -889,6 +908,27 @@ def main():
     if args.list or args.sweep or args.sheet or args.where:
         return
 
+    # A draft, a range or a hot trailer is a different deliverable from the
+    # film: different pixels, different name, its own piece cache. It never
+    # overwrites the output the manifest names.
+    variant = ""
+    if args.hot:
+        plans = clip_to_ranges(plans, hot_ranges(plans))
+        variant += "-hot"
+    elif args.range:
+        a, b = (parse_hms(x) for x in args.range.split("-", 1))
+        plans = clip_to_ranges(plans, [(a, b)])
+        variant += f"-{fmt(a).replace(':', 'm')}-{fmt(b).replace(':', 'm')}"
+    if args.draft:
+        cw, ch = cfg["canvas"]
+        cfg = dict(cfg, canvas=[cw // 2 // 2 * 2, ch // 2 // 2 * 2],
+                   cq=max(cfg.get("cq", 21), 28), nvenc_preset="p1")
+        variant += "-draft"
+    if variant and not args.out:
+        base, ext = os.path.splitext(man["output"])
+        man["output"] = f"{base}{variant}{ext}"
+        cfg["piece_dir"] = "cut" + variant
+
     out = _env.resolve(args.out or man["output"])
     os.makedirs(os.path.dirname(out), exist_ok=True)
     if args.dry_run:
@@ -898,7 +938,7 @@ def main():
 
     total_out = sum(p["out_s"] for p in plans)
     pid = os.path.basename(_project.find_project_dir(out) or "")
-    job = pid or "screen-cut"
+    job = (pid or "screen-cut") + variant   # a draft must not clobber the film's progress
     # begin() RETURNS the path ffmpeg must write to; declaring the job without
     # wiring -progress leaves render-status.py reading an empty file, which it
     # correctly reports as "stalled" for the whole encode. Cleared in a finally,
@@ -920,7 +960,7 @@ def main():
         blurs = sum(len(p["src"].get("blur") or []) for p in plans)
         _project.record(
             pid, "screen-cut", out=out, script=__file__, argv=sys.argv[1:],
-            kind="film", manifest=mpath,
+            kind=("draft" if variant else "film"), manifest=mpath,
             burned={"cut": "activity-driven", "blur_rects": blurs,
                     "speed_badge": bool(cfg.get("speed_badge")),
                     "speed": cfg["speed"], "audio": "none (silent sources)"},
@@ -965,6 +1005,87 @@ def smoke(plans, cfg, man, mpath, seconds=30.0):
           f"{'ok' if ok else 'FAIL: planned ' + fmt(out)}  -> {dst}")
     if not ok:
         raise SystemExit(1)
+
+
+def film_time_of(plans, plan, src_t):
+    """Source time -> film time, or None if the cut dropped that moment."""
+    t = 0.0
+    for p in plans:
+        for s in p["segments"]:
+            if p is plan and s["start"] <= src_t < s["end"]:
+                return t + (src_t - s["start"]) / s["speed"]
+            t += s["out"]
+    return None
+
+
+def hot_ranges(plans, lead=2.0, tail=3.0, cap=75.0):
+    """Film-time windows around the risky moments: every tracked secret's
+    first appearance in each source, and every hand rect's midpoint.
+
+    A reviewer finds the problems in the twenty moments that matter, not by
+    watching eight minutes; this picks those moments the way the review
+    sheet does and hands them to the render as a trailer.
+    """
+    wins = []
+    for p in plans:
+        tj = os.path.join(os.path.dirname(p["mask_listing"]), "track.json") \
+            if p.get("mask_listing") else None
+        if tj and os.path.exists(tj):
+            d = json.load(open(tj, encoding="utf-8"))
+            fps = float(d.get("fps") or p["info"]["fps"] or 30)
+            seen = set()
+            for f0, f1, boxes in d.get("runs") or []:
+                for *_xy, key in boxes:
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    ft = film_time_of(plans, p, f0 / fps)
+                    if ft is not None:
+                        wins.append((max(0.0, ft - lead), ft + tail))
+        for b in p["src"].get("blur") or []:
+            w = b.get("when") or [p["window"][0], p["window"][1]]
+            ft = film_time_of(plans, p, (w[0] + w[1]) / 2.0)
+            if ft is not None:
+                wins.append((max(0.0, ft - lead), ft + tail))
+    wins.sort()
+    merged = []
+    for a, b in wins:
+        if merged and a <= merged[-1][1] + 0.5:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], b))
+        else:
+            merged.append((a, b))
+    out, total = [], 0.0
+    for a, b in merged:
+        if total >= cap:
+            break
+        out.append((a, min(b, a + (cap - total))))
+        total += out[-1][1] - out[-1][0]
+    return out
+
+
+def clip_to_ranges(plans, ranges):
+    """Keep only the parts of every plan that fall inside the FILM-time
+    ranges, splitting segments at the boundaries. Pieces stay per source, so
+    the render path is unchanged; sources with nothing left drop out."""
+    out = []
+    t = 0.0
+    for p in plans:
+        segs = []
+        for s in p["segments"]:
+            f0, f1 = t, t + s["out"]
+            for a, b in ranges:
+                lo, hi = max(f0, a), min(f1, b)
+                if hi - lo <= 0.05:
+                    continue
+                st = s["start"] + (lo - f0) * s["speed"]
+                en = s["start"] + (hi - f0) * s["speed"]
+                segs.append({"start": round(st, 3), "end": round(en, 3),
+                             "speed": s["speed"], "out": round((en - st) / s["speed"], 3)})
+            t = f1
+        if segs:
+            q = dict(p, segments=segs, out_s=sum(x["out"] for x in segs))
+            out.append(q)
+    return out
 
 
 def where(plans, cfg, times):

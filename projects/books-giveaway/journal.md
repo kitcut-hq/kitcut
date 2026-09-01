@@ -287,3 +287,39 @@ thread per worker process. Next task after this upload.
 Also: never pipe a long run through `tail` into a log -- it kept only the
 last 40 lines of the pipeline output, and the per-source recall table had to
 be re-run to be read. The pipeline now writes its own log file.
+- 04:37 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 47:13.4 of sources -> 7:60.0
+- 04:46 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway-hot-draft.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00 --hot --draft) -- 47:13.4 of sources -> 1:15.1
+
+### Draft stage, the register, and the tracker's cost model
+
+Two asks from the user this evening, both structural:
+
+1. **A knowledge base of known issues and limitations** so mistakes are not
+   repeated. `docs/known-issues.md` is the register -- id, status
+   (`limitation` / `open` / `fixed`), stage, symptom, cause, fix -- seeded
+   with seventeen entries from this project. The pipeline prints the open
+   ones and the limitations for the stages it is about to run, so it is seen
+   on every run; `check-screen.py` parses the header shape.
+2. **Lightweight renders before the full one.** `screen-cut.py --draft`
+   (half resolution, fast preset) and `--hot` / `--range` (film-time
+   windows mapped back through the cut) are separate levers; the pipeline's
+   new `draft` stage renders `--hot --draft` -- the riskiest minute at half
+   resolution, 1:15 in 99 s here -- and stops for approval before the final.
+   The 30 s smoke stays at final settings: its job is the graph and the
+   encoder, which a draft cannot validate. Redaction is resolution-independent
+   (fractions), so a draft is a valid review of the blur.
+
+**The gate stalled** on the first full run: fourteen minutes with no
+progress, for the same reason tracking took 82 minutes (KI-005). Fixing the
+tracker's cost model on the 60-second test source, recall held at 92.6%
+throughout:
+
+    full-res search for small templates       131 s   3217 sweeps
+    coarse-first (0.50 prefilter + confirm)    105 s   3217
+    foreign templates on a slow patrol,
+      scale variants only when warm            57 s   2577
+    no sweeps on caret-blink frames, warm 1 s,
+      foreign never on a page change            42 s   1299
+
+The gate now searches at native scale only (the render is at proxy scale,
+and a secret at another size is already its own template).

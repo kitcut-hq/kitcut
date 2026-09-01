@@ -175,7 +175,9 @@ def main():
     for t, fr in gray_stream(render, cw, ch, args.fps):
         fr_half = cv2.resize(fr, (cw // 2, ch // 2))
         for tpl in all_tpls:
-            for x, y, w, h in tb.full_search(fr_half, fr, tpl):
+            # the render is at proxy scale, so a secret at another size is
+            # already its own template; the zoom-transition scales are not needed
+            for x, y, w, h in tb.full_search(fr_half, fr, tpl, scales=(1.0,)):
                 hits.append({"t": round(t, 2), "kind": tpl["kind"], "key": tpl["key"],
                              "text": tpl["text"], "via": "template",
                              "rect": [x / cw, y / ch, w / cw, h / ch]})

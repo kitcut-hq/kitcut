@@ -560,7 +560,7 @@ That breaks every silence-driven decision in that pipeline. `min_silence`,
 nothing" when the audio never crosses any threshold. Measure the picture
 instead.
 
-### One command, eleven stages, one stop
+### One command, twelve stages, two stops
 
 ```powershell
 python scripts/screencast-pipeline.py --project <id> --target 8:00
@@ -583,12 +583,40 @@ piece and one gate:
 | recall | `track-blur.py --recall` | the tracker measured against the OCR hits; **stops below the bar** |
 | review | `redaction-review.py` | **the stop**: a before/after sheet of every redaction; nothing renders unapproved |
 | smoke | `screen-cut.py --smoke` | 30 s of the busiest source through the full graph, in a minute |
+| draft | `screen-cut.py --hot --draft` | **the second stop**: a half-resolution trailer of the riskiest minute, for a human to watch |
 | render | `screen-cut.py` | content-addressed pieces, stream-copy join |
 | gate | `render-gate.py` | the secrets' own pixels searched on the *render*; `--patch` and loop |
 | upload | `yt-upload.py` | unlisted, only after a clean gate and an approved look |
 
 The individual tools remain usable on their own; the pipeline is what makes
 the order and the caching un-forgettable.
+
+### Drafts: proof cheaper than the product
+
+The render is the product, not the proof. Two levers, kept separate because
+they answer different questions:
+
+- `--draft` — half resolution, fast encoder preset, ~4× faster. Every rect in
+  this pipeline is a fraction of the frame, so a draft is a *valid* review of
+  the redaction; what it cannot judge is fine text legibility, which the final
+  and the gate cover.
+- `--range 2:00-3:00` or `--hot` — a stretch of *film* time mapped back
+  through the cut, or the risky moments (every secret's first appearance and
+  every hand rect, a few seconds each, ~a minute). For reviewing one issue.
+
+They combine (`--hot --draft` is the pipeline's `draft` stage), write to their
+own output name and their own piece cache, and never touch the film the
+manifest names. The 30-second `--smoke` stays at final settings on purpose —
+its job is the filter graph and the encoder, which a draft cannot validate.
+
+### The register: `docs/known-issues.md`
+
+One entry per thing that bit us or that the tools cannot do — id, status
+(`limitation` / `open` / `fixed`), stage, symptom, cause, fix. It is the
+canonical home; Gotchas below keeps the prose for traps in tools we do not
+control, and journals and retros link to it by id. The pipeline **reads it at
+start** and prints every open issue and limitation for the stages it is about
+to run, so the register is seen on every run rather than remembered on some.
 
 ### The reviewer's recording is an input
 
@@ -2089,7 +2117,7 @@ absolute path written into a script, a skill or these docs.
 | `scripts/redaction-review.py` | the before/after sheet of every redaction; the stop before a render |
 | `scripts/render-gate.py` | search the secrets' pixels on the finished film; `--patch` the manifest |
 | `scripts/import-footage.py` | desktop + phone captures into a project, ordered by real capture start |
-| `scripts/screencast-pipeline.py` | the eleven stages in order, cached, with one stop |
+| `scripts/screencast-pipeline.py` | the twelve stages in order, cached, with two stops (the sheet, the draft) |
 | `scripts/review-ingest.py` | the user's narrated review recording → remarks mapped to source frames |
 | `scripts/check-screen.py` | silent-screencast self-test; no GPU, no files, no OCR |
 | `scripts/shot-detect.py` | read an edit back off a finished film: where it cuts, and on which angle |

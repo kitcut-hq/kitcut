@@ -86,13 +86,13 @@
   "deliverables": {
     "projects/books-giveaway/outputs/books-giveaway.mp4": {
       "status": "current",
-      "built_utc": "2026-09-01T00:24:29Z",
+      "built_utc": "2026-09-01T04:37:36Z",
       "kind": "film",
       "script": "scripts/screen-cut.py",
       "manifest": "projects/books-giveaway/screen.json",
       "burned": {
         "cut": "activity-driven",
-        "blur_rects": 36,
+        "blur_rects": 4,
         "speed_badge": true,
         "speed": 19.072265625,
         "audio": "none (silent sources)"
@@ -101,6 +101,20 @@
         "url": "https://youtu.be/gkSgIQKfgMc",
         "privacy": "private",
         "sidecar": "projects/books-giveaway/outputs/books-giveaway.youtube.json"
+      }
+    },
+    "projects/books-giveaway/outputs/books-giveaway-hot-draft.mp4": {
+      "status": "current",
+      "built_utc": "2026-09-01T04:46:36Z",
+      "kind": "draft",
+      "script": "scripts/screen-cut.py",
+      "manifest": "projects/books-giveaway/screen.json",
+      "burned": {
+        "cut": "activity-driven",
+        "blur_rects": 4,
+        "speed_badge": true,
+        "speed": 19.072265625,
+        "audio": "none (silent sources)"
       }
     }
   },
@@ -111,7 +125,7 @@
     "The render-pipeline test manifest (temp/rendertest.json) was a throwaway for proving the filtergraph end to end before spending a full encode; its deliverable entry was removed as it is not a render of this video.",
     "User: blur, never black-out; never wipe whole screens or panels; the Claude chat stays readable except the sensitive field itself; uploads unlisted."
   ],
-  "updated_utc": "2026-09-01T04:30:48Z",
+  "updated_utc": "2026-09-01T04:46:36Z",
   "review": {
     "fingerprint": "8c9ce85e4859af6a",
     "approved_utc": "2026-09-01T04:30:48Z",

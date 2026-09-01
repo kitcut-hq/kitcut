@@ -240,11 +240,30 @@ def pipeline_pieces():
           a == sc.piece_key(dict(plan, src={"blur": [{"rect": [0, 0, 1, 1]}]}), dict(sc.DEFAULTS)), False)
 
 
+def known_issues_register():
+    print("\ndocs/known-issues.md: every entry parses, ids are unique")
+    import re
+    path = os.path.join(HERE, "..", "docs", "known-issues.md")
+    rx = re.compile(r"^### (KI-\d+) · (open|limitation|fixed) · ([\w,]+) · (.+?)\s*$")
+    ids, bad = [], []
+    for ln in open(path, encoding="utf-8"):
+        if ln.startswith("### "):
+            m = rx.match(ln)
+            if m:
+                ids.append(m.group(1))
+            else:
+                bad.append(ln.strip()[:60])
+    check("every ### header has the fixed shape", bad, [])
+    check("ids are unique", len(ids), len(set(ids)))
+    check("the register is not empty", len(ids) > 0, True)
+
+
 def main():
     print("check-screen: silent-screencast pipeline self-test\n")
     pii_rules()
     cut_arithmetic()
     pipeline_pieces()
+    known_issues_register()
     print()
     if FAILS:
         print(f"{len(FAILS)} FAILURE(S):")

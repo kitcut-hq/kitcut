@@ -25,6 +25,17 @@ refuses to render a look nobody has approved or a tracker whose recall is
 below the bar. The individual scripts below are for diagnosis and for adding
 capability, and each still has its free mode.
 
+Before designing anything here, read `docs/known-issues.md` — the register of
+what the tools cannot do (`limitation`), what is known and unfixed (`open`),
+and what already bit us (`fixed`, kept for the symptom→cause lookup). The
+pipeline prints the relevant entries at start; when you hit something new,
+add an entry with the fixed header shape (`check-screen.py` parses it).
+
+The pipeline stops **twice**: at the redaction sheet (stills) and at the
+draft trailer (`--hot --draft`: the riskiest minute at half resolution,
+motion). The final render starts only after both are approved. Proof must be
+cheaper than the product, or nobody waits for it.
+
 Three rules the pipeline enforces, learned the expensive way:
 
 1. **Never render a look the user has not seen.** The review sheet

@@ -391,7 +391,7 @@ it tests the frame arithmetic with no GPU and no files.
 **7. Silent screencast** — one film out of screen recordings that carry **no
 usable sound** (a Game Bar capture with no microphone writes a digitally silent
 track, `-91 dB` mean *and* max), with the sensitive fields blurred and the
-voice-over added later. Eleven stages, one command, one stop:
+voice-over added later. Twelve stages, one command, two stops:
 
 ```powershell
 python scripts/screencast-pipeline.py --project <id> --target 8:00            # stops at the review sheet
@@ -403,9 +403,16 @@ motion; the panel divider *found*) → `scan-pii.py` (OCR once, cached) →
 `track-blur.py` (each secret's own pixels followed, templates pooled across
 the session) → **`--recall`** (the tracker measured against the OCR hits;
 stops below the bar) → **`redaction-review.py`** (a before/after sheet;
-nothing renders unapproved) → `screen-cut.py --smoke` → `screen-cut.py`
-(content-addressed pieces, stream-copy join) → `render-gate.py` (the secrets'
-pixels searched on the *render*; `--patch` and loop) → `yt-upload.py`.
+nothing renders unapproved) → `screen-cut.py --smoke` → **`screen-cut.py
+--hot --draft`** (the second stop: the riskiest minute at half resolution,
+for a human to watch) → `screen-cut.py` (content-addressed pieces,
+stream-copy join) → `render-gate.py` (the secrets' pixels searched on the
+*render*; `--patch` and loop) → `yt-upload.py`.
+
+`docs/known-issues.md` is the register — what the tools cannot do, what is
+known and unfixed, what already bit us. The pipeline prints the entries for
+the stages it is about to run; read it before designing anything here, and
+add an entry when something new bites.
 
 Three rules it enforces, each learned at a cost of an hour or more
 (`docs/retro-books-giveaway.md`): **never render a look the user has not
