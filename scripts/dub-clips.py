@@ -143,6 +143,66 @@ def segment(words, max_dur=4.0, min_dur=0.9):
     return out
 
 
+def plan_from_script(clip, path, start, end):
+    """A plan whose slots come from a written narration, not from a transcript.
+
+    `build_plan` segments what the original speaker said and lays the new lines
+    on their pauses. That is right for a dub -- the mouth on screen is still
+    moving -- and wrong for a voice-over that REPLACES the sound, because the
+    old rhythm is usually the thing being fixed. Here the slots are declared
+    against the picture instead:
+
+        [ {"t": 0.4, "text": "...", "tight": "..."}, ... ]
+
+    `t` is seconds from the start of the clip. A line runs until the next one
+    begins (less a breath), or to the end of the clip if it is the last. `dur`
+    may be given to end a line earlier than that.
+
+    Units are marked `free`, which tells `fit_unit` not to draw a short line out
+    to fill its slot: with no mouth on screen, a line that finishes early is a
+    pause, not a hole.
+    """
+    with open(path, encoding="utf-8") as f:
+        script = json.load(f)
+    if isinstance(script, dict):
+        script = script["lines"]
+    if not script:
+        sys.exit("%s: %s has no lines" % (clip["id"], path))
+    dur = end - start
+    rows = sorted(({"t": float(r["t"]), "text": r["text"].strip(),
+                    "tight": (r.get("tight") or "").strip(),
+                    "dur": r.get("dur")} for r in script),
+                  key=lambda r: r["t"])
+    if rows[0]["t"] < -1e-6:
+        sys.exit("%s: first line starts at %.2fs, before the clip"
+                 % (clip["id"], rows[0]["t"]))
+    if rows[-1]["t"] >= dur:
+        sys.exit("%s: a line starts at %.2fs but the clip is %.2fs long"
+                 % (clip["id"], rows[-1]["t"], dur))
+    units = []
+    for n, r in enumerate(rows):
+        nxt = rows[n + 1]["t"] if n + 1 < len(rows) else dur
+        room = max(nxt - r["t"] - MIN_GAP, 0.35)
+        slot = min(float(r["dur"]), room) if r["dur"] else room
+        units.append({
+            "i": n + 1,
+            "t0": round(r["t"], 3),
+            "t1": round(r["t"] + slot, 3),
+            "dur": round(slot, 3),
+            # nothing may run into the next line, so hard and dur are the same
+            # here -- unlike a dub, there is no following silence to borrow
+            "hard": round(slot, 3),
+            "free": True,
+            "text": r["text"],
+        })
+    return ({"clip": clip["id"], "start": round(start, 3), "end": round(end, 3),
+             "duration": round(dur, 3), "units": units, "source": "script",
+             "script": path,
+             "context": " ".join(u["text"] for u in units)},
+            [{"i": u["i"], "text": u["text"], "tight": r["tight"] or u["text"]}
+             for u, r in zip(units, rows)])
+
+
 def build_plan(clip, words, start, end, max_dur, min_dur):
     sel = [w for w in words if w["start"] >= start - 1e-6 and w["end"] <= end + 1e-6]
     if not sel:
@@ -236,7 +296,7 @@ def fit_unit(u, tr, voice, backend="edge"):
                 rate = _tts.rate_for(nat_used, hard, backend=backend)
                 audio, marks = say(text, rate)
                 note = "tight+rate%+.0f%%" % rate
-    elif nat < slot * 0.80:
+    elif nat < slot * 0.80 and not u.get("free"):
         # too short: her mouth is still moving, so draw the delivery out rather
         # than leaving a hole of silence under a talking face
         rate = max(slow_rate, _tts.rate_for(nat, slot, backend=backend))
@@ -368,6 +428,11 @@ def main():
     ap.add_argument("--translation",
                     help="a hand-written translation json for ONE clip; "
                          "implies the retune round will not rewrite it")
+    ap.add_argument("--script",
+                    help="a written voice-over for ONE clip, timed against the "
+                         "PICTURE: [{\"t\": 0.4, \"text\": \"...\"}, ...]. "
+                         "Slots come from this instead of the speaker's pauses, "
+                         "and nothing is translated")
     ap.add_argument("--src-lang", default="Ukrainian")
     ap.add_argument("--dst-lang", default="English")
     ap.add_argument("--max-dur", type=float, default=4.0,
@@ -398,6 +463,16 @@ def main():
     if args.translation and args.retranslate:
         sys.exit("--translation and --retranslate contradict each other: one "
                  "supplies the text, the other throws text away")
+    if args.script:
+        if args.translation:
+            sys.exit("--script and --translation both supply the lines; pick one")
+        # A written voice-over has nothing to translate, and the retune round
+        # must not quietly rewrite words a human chose. `manual` makes retune
+        # report which slots overran and change nothing -- which is the signal
+        # to edit the script, not a failure.
+        if args.engine != "manual":
+            print("   --script implies --engine manual (nothing to translate)")
+            args.engine = "manual"
 
     with open(args.manifest, encoding="utf-8") as f:
         m = json.load(f)
@@ -408,6 +483,11 @@ def main():
     os.makedirs(args.outdir, exist_ok=True)
     wanted = set(x.strip() for x in args.only.split(",")) if args.only else None
     selected = [c for c in m["clips"] if not wanted or c["id"] in wanted]
+    if args.script and len(selected) != 1:
+        # the lines are timed against ONE clip's picture; spreading them over a
+        # second clip would speak them over footage they were not written for
+        sys.exit("--script is written for one clip's timeline, but %d clips are "
+                 "selected -- narrow it with --only" % len(selected))
     if args.translation and len(selected) > 1:
         sys.exit("--translation is one clip's script; select that clip with "
                  "--only (got %d clips)" % len(selected))
@@ -424,8 +504,10 @@ def main():
         wjson = "%s.%s.words.json" % (stem, tag)
 
         if args.plan_only:               # before the skip: re-planning an
-            plan = build_plan(clip, words, start, end,      # already-rendered
-                              args.max_dur, args.min_dur)   # clip is the point
+            plan = (plan_from_script(clip, args.script, start, end)[0]
+                    if args.script else
+                    build_plan(clip, words, start, end,     # already-rendered
+                               args.max_dur, args.min_dur))  # clip is the point
             with open("%s.%s.plan.json" % (stem, tag), "w",
                       encoding="utf-8") as f:
                 json.dump(plan, f, ensure_ascii=False, indent=2)
@@ -451,7 +533,11 @@ def main():
             continue
 
         print("== %s  %.2f-%.2f (%.2fs)" % (clip["id"], start, end, end - start))
-        plan = build_plan(clip, words, start, end, args.max_dur, args.min_dur)
+        script_rows = None
+        if args.script:
+            plan, script_rows = plan_from_script(clip, args.script, start, end)
+        else:
+            plan = build_plan(clip, words, start, end, args.max_dur, args.min_dur)
         with open("%s.%s.plan.json" % (stem, tag), "w", encoding="utf-8") as f:
             json.dump(plan, f, ensure_ascii=False, indent=2)
         durs = sorted(u["dur"] for u in plan["units"])
@@ -469,7 +555,11 @@ def main():
                 json.dump({"fingerprint": fp, "rows": rows}, f,
                           ensure_ascii=False, indent=2)
 
-        if args.translation:
+        if script_rows is not None:
+            # the script IS the lines; there is nothing to translate and
+            # nothing to cache, so the fingerprint dance is skipped entirely
+            rows = script_rows
+        elif args.translation:
             with open(args.translation, encoding="utf-8") as f:
                 data = json.load(f)
             rows = data["rows"] if isinstance(data, dict) else data

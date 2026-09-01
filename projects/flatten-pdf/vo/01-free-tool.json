@@ -1,0 +1,37 @@
+[
+  {
+    "t": 0.4,
+    "text": "Flattening turns a fillable PDF into a plain one.",
+    "tight": "Flattening makes a fillable PDF plain."
+  },
+  {
+    "t": 3.8,
+    "text": "Drop in your file.",
+    "tight": "Drop your file in."
+  },
+  {
+    "t": 6.0,
+    "text": "Ninety-seven form fields, merged into the page in seconds.",
+    "tight": "Ninety-seven form fields, merged in seconds."
+  },
+  {
+    "t": 9.7,
+    "text": "Download the flat copy. Your original is left alone.",
+    "tight": "Download the flat copy; the original is untouched."
+  },
+  {
+    "t": 13.0,
+    "text": "Open it, and every box is gone.",
+    "tight": "Open it: the boxes are gone."
+  },
+  {
+    "t": 15.5,
+    "text": "Nothing else moved, and the text is still selectable.",
+    "tight": "Nothing else moved. The text stays selectable."
+  },
+  {
+    "t": 18.4,
+    "text": "Free, unlimited, no watermark.",
+    "tight": "Free, no watermark."
+  }
+]

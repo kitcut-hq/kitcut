@@ -165,6 +165,58 @@ the prompt or `--words-per-sec`, not by widening the rate clamps.
 The render step separately proves caption sync on sampled frames (`sync probes:
 24/24 correct`) and asserts output duration against the plan. Don't skip it.
 
+## A WRITTEN voice-over, not a translation — `--script`
+
+If the task is "replace the sound" rather than "translate it", do not reach for
+the translation path. `build_plan` lays the new lines on the *original
+speaker's* pauses, which is right for a dub and wrong here: the old rhythm is
+usually the thing being fixed.
+
+```json
+[ {"t": 0.4, "text": "Flattening turns a fillable PDF into a plain one."},
+  {"t": 6.0, "text": "Ninety-seven form fields, merged into the page in seconds.",
+              "tight": "Ninety-seven form fields, merged in seconds."} ]
+```
+
+```powershell
+python scripts/dub-clips.py --manifest projects/<id>/clips-vertical.json --only <clip-id> `
+    --script projects/<id>/vo/<clip-id>.json --tts elevenlabs --voice brian `
+    --tag vo --outdir projects/<id>/outputs/dub --plan-only
+```
+
+`t` is seconds from the clip's start; a line runs until the next begins, or to
+the clip's end. `--script` implies `--engine manual` and covers one clip.
+
+**Write the lines to the picture, and get the picture first.** Sample the
+RENDERED clip every one or two seconds, identify each beat, and put a line on
+each. Do not write against the transcript — the whole reason the sound is being
+replaced is that the old narration is not what you want said.
+
+**The gate is different from a dub's, and using the dub's gate will mislead
+you.** `sync` measures agreement with the original speech, which a voice-over
+deliberately discards; it read 79% on a take where every line was right. Accept
+when:
+
+1. **every slot reports `natural`** — no `rate±%`, no `tight` fallback, nothing
+   squeezed. A rate change means the line does not fit and will sound rushed;
+   ElevenLabs caps at +20% and it is audible.
+2. **nothing overruns the clip** — `place()` warns loudly if it does.
+3. **the spoken words are the written words.** Transcribe the generated wav with
+   `transcribe-words.py` and diff it against the script. A TTS engine can garble
+   a numeral or an abbreviation and no fit number will notice. (Expect Whisper to
+   write "97" where you wrote "Ninety-seven" — that is a match, not a fault.)
+
+**Two things about timing that cost a pass each:**
+
+- **A neural voice reads faster than a words-per-second estimate.** The first
+  pass came in short on all seven slots — about 4 words/second for Brian against
+  the 3.2 the planner assumes. That is fine, not a failure: script slots are
+  marked `free`, so `fit_unit` leaves the slack as a pause instead of drawling
+  the line out the way it would under a moving mouth.
+- **The tail has no slack, and re-timing just moves the squeeze along.** Three
+  lines over the last 7.4 s needed 7.3 s of speech, so every nudge pushed the
+  problem to a neighbour. Shorten a line rather than re-timing a fourth time.
+
 ## Traps
 
 - **edge-tts defaults to `SentenceBoundary`.** Ask for `boundary="WordBoundary"`

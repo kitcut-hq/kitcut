@@ -69,3 +69,57 @@ and skipping segmentation. Everything after that (fit → place → words.json �
 `cut-clips.py --dub`) works unchanged. Voice is Brian, chosen by the user;
 audition with `dub-tts.py --say` before a batch. Render to tag `vo`, which makes
 new files and leaves these two alone.
+- 19:20 dub scripts/dub-clips.py -> projects/flatten-pdf/outputs/dub/flatten-pdf-01-free-tool.vo.wav (--manifest projects/flatten-pdf/clips-vertical.json --only 01-free-tool --script projects/flatten-pdf/vo/01-free-tool.json --tts elevenlabs --voice brian --tag vo --outdir projects/flatten-pdf/outputs) -- sync 77.0%, elevenlabs/nPczCjzI2devNBz1zQrb
+- 19:21 dub scripts/dub-clips.py -> projects/flatten-pdf/outputs/dub/flatten-pdf-01-free-tool.vo.wav (--manifest projects/flatten-pdf/clips-vertical.json --only 01-free-tool --script projects/flatten-pdf/vo/01-free-tool.json --tts elevenlabs --voice brian --tag vo --outdir projects/flatten-pdf/outputs) -- sync 78.1%, elevenlabs/nPczCjzI2devNBz1zQrb
+- 19:21 dub scripts/dub-clips.py -> projects/flatten-pdf/outputs/dub/flatten-pdf-01-free-tool.vo.wav (--manifest projects/flatten-pdf/clips-vertical.json --only 01-free-tool --script projects/flatten-pdf/vo/01-free-tool.json --tts elevenlabs --voice brian --tag vo --outdir projects/flatten-pdf/outputs) -- sync 80.3%, elevenlabs/nPczCjzI2devNBz1zQrb
+- 19:22 dub scripts/dub-clips.py -> projects/flatten-pdf/outputs/dub/flatten-pdf-01-free-tool.vo.wav (--manifest projects/flatten-pdf/clips-vertical.json --only 01-free-tool --script projects/flatten-pdf/vo/01-free-tool.json --tts elevenlabs --voice brian --tag vo --outdir projects/flatten-pdf/outputs) -- sync 79.3%, elevenlabs/nPczCjzI2devNBz1zQrb
+- 19:23 render scripts/cut-clips.py -> projects/flatten-pdf/outputs/shorts/flatten-pdf-01-free-tool-vo.mp4 (--manifest projects/flatten-pdf/clips-vertical.json --only 01-free-tool --dub projects/flatten-pdf/outputs/dub --dub-tag vo)
+
+### Session note — stage 2 on short 1: voice-over, captions, publish package
+
+Asked to take short 1 through to publish-ready. Done and dry-run verified;
+**not uploaded** — waiting on the go-ahead.
+
+**`dub-clips.py` grew `--script`.** `build_plan()` derives every slot from the
+original speaker's pauses, which is right for a dub and wrong for a voice-over
+that replaces the sound — the old rhythm is the thing being fixed. `--script`
+takes `[{"t":…, "text":…, "tight":…}]` timed against the picture, implies
+`--engine manual`, and refuses unless `--only` narrows to one clip. Everything
+downstream is untouched.
+
+**Script units are `free`, and that mattered.** `fit_unit` draws a short line out
+to fill its slot, because dead air under a moving mouth is worse than a slightly
+long line. Nothing is lip-syncing here, so that stretch is just a drawl —
+`free` skips it and the slack stays a pause. Brian reads at roughly 4 words/sec
+against the planner's 3.2, so the first pass came in short on all seven slots and
+would otherwise have been drawled end to end.
+
+**Do not gate a written voice-over on `sync`.** It measures agreement with the
+ORIGINAL speech, which a voice-over deliberately discards, and it read 79.3% on
+a take where every line is right. The gate used instead: all seven slots report
+`natural` (no rate change, no `tight` fallback, nothing squeezed), nothing
+overruns, and the spoken words are the written ones — verified by transcribing
+the generated wav with faster-whisper and diffing it against the script. Exact,
+word for word (Whisper writes "97" where the script says "Ninety-seven"; that is
+its numeral normalisation, not a mispronunciation).
+
+**Three re-timing passes, and the reason is worth remembering.** The last three
+lines needed 7.3 s of speech in 7.4 s of clip, so every nudge moved the squeeze
+to a neighbour: line 7 fell back to `tight`, then line 6 took a +17% rate, then
+line 7 again. The fix was to SHORTEN line 5, not to re-time a fourth time. Do not
+let ElevenLabs run at its +20% cap — it is audible.
+
+**Beats were read off the RENDERED clip**, sampled every 1-2 s, not off the
+transcript. Clip time: 0.5 the free-tool page, 2.0 the file dialog, 5.0 the file
+in the drop zone and flattening, 6.0 the green "Flattened. 97 form fields merged
+into the page" with Download, 13.0 the flat PDF open, 14-20 its pages with the
+boxes gone.
+
+**Publish package** is in `description-01.txt` and recorded in `project.json`;
+the dry-run asserted the token points at Instafill / @instafill_ai /
+UCa57I5DFqulQaoMR_0H--kA. Privacy unlisted.
+
+**Left for next time:** short 2 is still stage 1 — picture only, source audio, no
+captions. Same treatment when wanted; its beats are the status flip at 3.25 s
+into the clip, the "flat document / fields added automatically" modal, then the
+field-covered pages.

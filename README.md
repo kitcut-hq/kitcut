@@ -375,6 +375,54 @@ A cached translation records a fingerprint of the plan and engine it was made
 for. Change `--max-dur`, `--min-dur`, `--engine` or the target language and the
 reuse is refused instead of mapping old lines onto new slots by index.
 
+### A written voice-over that replaces the sound: `--script`
+
+`build_plan` derives every slot from the *original speaker's* pauses. That is
+right for a dub — the mouth on screen is still moving — and wrong when the point
+of the exercise is to replace a narration, because the old rhythm is usually the
+thing being fixed. `--script` supplies the slots directly, timed against the
+**picture**:
+
+```json
+[ {"t": 0.4,  "text": "Flattening turns a fillable PDF into a plain one."},
+  {"t": 6.0,  "text": "Ninety-seven form fields, merged into the page in seconds.",
+               "tight": "Ninety-seven form fields, merged in seconds."} ]
+```
+
+```powershell
+python scripts/dub-clips.py --manifest projects/<id>/clips-vertical.json --only <clip-id> `
+    --script projects/<id>/vo/<clip-id>.json --tts elevenlabs --voice brian `
+    --tag vo --outdir projects/<id>/outputs/dub --plan-only
+```
+
+`t` is seconds from the start of the clip; a line runs until the next one begins
+(less a breath), or to the end of the clip. Everything downstream is unchanged —
+rate fitting, placement, loudnorm, the faster-whisper-shaped `.words.json`, and
+`cut-clips.py --dub`, which replaces the audio outright and rebuilds the captions
+from the voice-over's own timings.
+
+- **`--script` implies `--engine manual`.** There is nothing to translate, and
+  the retune round must not quietly rewrite words a human chose — it reports
+  which slots overran and changes nothing, which is the signal to edit the
+  script. It is for ONE clip, so it refuses unless `--only` narrows to one.
+- **Script slots are `free`, and a short line is a pause, not a hole.** The dub
+  path draws a short line out to fill its slot, because dead air under a moving
+  mouth reads worse than a slightly long line. With nothing lip-syncing, that
+  same stretch is just a drawl, so `fit_unit` skips it for script units.
+- **`sync` in the report does not apply here.** It measures agreement with the
+  original speech, which a voice-over deliberately discards; it read 79% on a
+  perfectly good take. The gate for a written voice-over is instead: every line
+  reports **`natural`** (no rate change, no `tight` fallback, nothing squeezed),
+  no slot overruns the clip, and the spoken words are the written ones.
+- **Verify the words by transcribing the voice-over back.** A TTS engine can
+  garble a numeral or an abbreviation and the fit report will not notice. Run
+  `transcribe-words.py` over the generated wav and diff it against the script —
+  it is local, free, and it is the only check that reads what was actually said.
+- **Expect to re-time two or three passes.** A neural voice reads faster than a
+  words-per-second estimate, so the first pass comes in short everywhere; then
+  the tail turns out to have no slack and each fix moves the squeeze along.
+  Shorten a line rather than letting ElevenLabs run at its +20% speed cap.
+
 ## A screencast out of two recordings
 
 A screen capture and a phone pointed at your face are two clocks and one story.
