@@ -88,7 +88,7 @@ For brand colours, sample the channel thumbnail: mask to saturated pixels
 | `pop.enabled`, `pop.scale`, `pop.rise_ms`, `pop.settle_ms` | scale pop on the active word |
 | `grouping.*` | words per card, pause/sentence breaks, max duration |
 | `timing.*` | lead-in, hold-out, min highlight, fade |
-| `render.*` | encoder, preset, cq, bitrate caps |
+| `render.*` | encoder, preset, cq, bitrate caps — authored for NVENC; on a machine without an NVIDIA card pass `--encoder libx264` instead of editing the preset (the NVENC flags are translated, not passed) |
 
 ## Dodging the source's own graphics
 

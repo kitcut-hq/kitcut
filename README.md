@@ -57,6 +57,14 @@ Three presets ship: `red-card` (solid red info-card, yellow spotlight),
 `red-card-vertical` (the same styling re-authored for a 9:16 canvas, used by
 the shorts pipeline) and `eu-navy` (EU-flag blue, star-yellow spotlight).
 
+**No NVIDIA card?** `run-captions.py --encoder libx264` (and the same flag on
+`cut-clips.py`) renders on CPU. The flag exists because the render blocks are
+authored for NVENC, whose `-rc vbr -cq -spatial-aq` flags kill libx264 on
+sight — `_overlay.cpu_encoder_args()` translates instead: `cq` becomes `crf`,
+the `p1–p7` ladder becomes x264's named presets, and the NVENC-only quality
+knobs are dropped rather than mis-scaled. Captions and shorts are the only
+pipelines with a CPU path; screen-cut and the multicam renders need NVENC.
+
 ### Deriving a style from a reference
 
 Measure, don't eyeball. Pull a few seconds of the reference, extract frames, and

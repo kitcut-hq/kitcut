@@ -24,6 +24,7 @@ from importlib import import_module
 _outline = import_module("transcript-outline")   # hyphen: not importable by name
 _handle = import_module("handle-overlay")
 _imgoverlay = import_module("image-overlay")
+import _overlay
 import _progress
 import _project
 
@@ -557,11 +558,15 @@ def cut(src, dst, start, dur, render, copy, overlay=None, pre_chain=None,
                     "-map", "[%s]" % label, "-map", amap]
         else:
             args = ["-map", "0:v:0", "-map", amap]
-        args += ["-c:v", render["encoder"], "-preset", render["preset"],
-                 "-rc", "vbr", "-cq", str(render["cq"]),
-                 # NVENC ignores -cq unless the average bitrate target is unset
-                 "-b:v", "0", "-maxrate", render["maxrate"], "-bufsize", render["bufsize"],
-                 "-pix_fmt", "yuv420p",
+        if _overlay.is_gpu_encoder(render["encoder"]):
+            args += ["-c:v", render["encoder"], "-preset", render["preset"],
+                     "-rc", "vbr", "-cq", str(render["cq"]),
+                     # NVENC ignores -cq unless the average bitrate target is unset
+                     "-b:v", "0", "-maxrate", render["maxrate"], "-bufsize", render["bufsize"]]
+        else:
+            # NVENC-only flags kill libx264 on sight; translate instead
+            args += _overlay.cpu_encoder_args(render)
+        args += ["-pix_fmt", "yuv420p",
                  "-c:a", "aac", "-b:a", render["audio_bitrate"], "-ac", "2"]
     tmp = dst + ".part.mp4"
     # -ss goes BEFORE -i so it seeks the input: ffmpeg decodes from the
@@ -623,6 +628,8 @@ def main():
                     help="crop to 1080x1920 (overrides the manifest)")
     ap.add_argument("--no-vertical", action="store_true", help="keep the source framing")
     ap.add_argument("--caption-style", help="burn captions using this preset")
+    ap.add_argument("--encoder", help="override render.encoder -- libx264 "
+                                      "renders on CPU for machines with no NVENC")
     ap.add_argument("--no-captions", action="store_true", help="skip burning captions")
     ap.add_argument("--no-verify", action="store_true",
                     help="skip the caption sync proof (not recommended)")
@@ -700,6 +707,8 @@ def main():
         except (OSError, ValueError):
             pass
     render.update(m.get("render", {}))
+    if args.encoder:
+        render["encoder"] = args.encoder
 
     # When anything precedes the badge, [0:v] is already consumed by that chain
     # and the badge has to composite onto its tail instead.

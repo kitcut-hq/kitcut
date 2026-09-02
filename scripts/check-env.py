@@ -170,9 +170,10 @@ try:
         # cut-clips.py and the caption presets default to h264_nvenc, so
         # "environment OK" with this warning still means zero renders succeed
         # until the encoder is changed -- say so, with the fix
-        warn("h264_nvenc missing -- every render defaults to it; set "
-             "render.encoder to libx264 in the manifest or preset to encode "
-             "on CPU")
+        warn("h264_nvenc missing -- every render defaults to it; captions and "
+             "shorts encode on CPU with --encoder libx264 (or render.encoder "
+             "in the manifest/preset); screen-cut and multicam renders "
+             "need NVENC")
     flt = subprocess.run(["ffmpeg", "-hide_banner", "-filters"],
                          capture_output=True, text=True).stdout
     # rubberband time-stretches without shifting pitch; atempo is the fallback

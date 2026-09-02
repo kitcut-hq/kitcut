@@ -99,6 +99,8 @@ the manifest reads like the edit decisions that were made:
 - Pads never eat a neighbouring word — when the transcript says speech continues
   inside the pad, the boundary meets it halfway. So don't hand-tune pads per
   clip; the defaults are right.
+- No NVIDIA card → `--encoder libx264` encodes on CPU (the manifest's NVENC
+  render block is translated, cq→crf, not passed through).
 - Cuts re-encode (NVENC) and are frame-accurate. `--copy` stream-copies —
   instant but keyframe-snapped, and it cannot burn in the handle.
 
