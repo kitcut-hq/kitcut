@@ -44,7 +44,7 @@ README; the re-edit entry point is the `video-project` skill.
 
 The label composes. `screencast-cut.py` reads `name_labels` from the manifest
 and overlays the card **after its concat**, inside the film's existing single
-NVENC pass:
+encode pass:
 
 ```json
 "name_labels": [

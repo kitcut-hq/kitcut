@@ -52,7 +52,7 @@ README; the re-edit entry point is the `video-project` skill.
 ## Do not re-encode a finished film to put a card on it
 
 The overlay composes. `screencast-cut.py` and `cut-clips.py` both read
-`image_overlays` and apply it inside the render's existing single NVENC pass:
+`image_overlays` and apply it inside the render's existing single encode pass:
 
 ```json
 "overlay_preset": "config/overlays/end-card.json",

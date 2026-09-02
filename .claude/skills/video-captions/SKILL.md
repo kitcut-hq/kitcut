@@ -1,6 +1,6 @@
 ---
 name: video-captions
-description: Add word-synced burned-in captions ("real time transcript" subtitles) to a video from a YouTube URL or local file. Transcribes locally with faster-whisper, generates a styled ASS subtitle file with per-word highlighting, and burns it in with NVENC. Use when asked to add subtitles, captions, or transcripts to a video, or to restyle existing caption output.
+description: Add word-synced burned-in captions ("real time transcript" subtitles) to a video from a YouTube URL or local file. Transcribes locally with faster-whisper, generates a styled ASS subtitle file with per-word highlighting, and burns it in in one GPU-accelerated pass. Use when asked to add subtitles, captions, or transcripts to a video, or to restyle existing caption output.
 ---
 
 # Word-synced burned-in captions
@@ -100,7 +100,7 @@ fitted around — read that before widening `layout.max_line_width_px`.
 | `pop.enabled`, `pop.scale`, `pop.rise_ms`, `pop.settle_ms` | scale pop on the active word |
 | `grouping.*` | words per card, pause/sentence breaks, max duration |
 | `timing.*` | lead-in, hold-out, min highlight, fade |
-| `render.*` | encoder, preset, cq, bitrate caps — authored for NVENC; on a machine without an NVIDIA card pass `--encoder libx264` instead of editing the preset (the NVENC flags are translated, not passed) |
+| `render.*` | encoder, preset/speed, cq, bitrate caps — translated per encoder family by `_encode.py`; a preset naming an encoder this machine cannot run is substituted, and `--encoder <name>` picks one explicitly for a run |
 
 ## Dodging the source's own graphics
 
@@ -164,7 +164,17 @@ order) and refuses to report success if any check fails.
 - **Never seek with plain `-ss` when burning subtitles** — it rebases PTS to 0 so
   libass renders the wrong lines. Use `--preview`, which regenerates a shifted ASS.
 - **`-b:v 0` is required with `-cq`** or NVENC ignores the quality target and text
-  goes mushy.
+  goes mushy. NVENC's alone -- AMF (`qvbr`) and x264 (`crf`) already carry a
+  quality target, and `_encode.py` emits it for the nvenc family only.
+- **The encoder is a setting, not a hardcoded key.** A preset or manifest
+  states an intent (`cq`, `preset`/`speed`, `maxrate`, `bufsize`) and
+  `scripts/_encode.py` renders it into whichever family the chosen encoder
+  belongs to -- NVENC, AMF (AMD), QSV or libx264. Never write `-preset p5`
+  or `-rc vbr` at a call site: `p5` is NVENC's word and AMF and x264 exit on
+  `invalid preset 'p5'`. Which encoder is `render.encoder` -> `$VIDEDIT_ENCODER`
+  -> the first one that actually encodes a frame on this machine; one a
+  committed file names but the machine cannot run is substituted loudly.
+  Run `python scripts/check-encode.py` after touching any encoder path.
 - **Keep filter paths relative** and run ffmpeg from the workspace root.
 - **Never invoke `yt-dlp` (or any console script) as a bare command.** The shim on
   PATH hardcodes the interpreter that installed it, so when that Python is removed

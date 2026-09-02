@@ -37,6 +37,8 @@ the fitting, retune and word-mark logic with no API calls, so it costs nothing
 and catches what only a paid run would otherwise reach. `check-multicam.py` is
 the same idea for the multicam round trip: no GPU, no files, and it covers the
 frame arithmetic a render would otherwise have to find for you.
+`check-encode.py` is the third: it proves the ffmpeg keys each encoder is
+handed are keys that encoder takes, on colour bars, in about ten seconds.
 
 After writing or changing **any** script, run
 `python scripts/check-script.py --changed` — it enforces the conventions
@@ -61,12 +63,52 @@ joins `base` (default `ROOT`: config, fonts and models are tooling, not work).
 Ten scripts each had their own copy; there is one now, and a hardcoded absolute
 path is a FAIL.
 
-Eight files are **platform, not video** — `_env.py`, `_progress.py`,
-`_project.py`, `check-env.py`, `check-script.py`, `project-scan.py`,
-`render-status.py`, `statusline.py`. None may import anything from this repo
-outside that list, and the last three must be stdlib-only. The checker enforces
-both. This is what keeps lifting the platform out a move rather than a rewrite
-(see `docs/product-strategy.md`).
+Ten files are **platform, not video** — `_encode.py`, `_env.py`,
+`_progress.py`, `_project.py`, `check-encode.py`, `check-env.py`,
+`check-script.py`, `project-scan.py`, `render-status.py`, `statusline.py`.
+None may import anything from this repo outside that list, and
+`_progress.py`, `render-status.py` and `statusline.py` must be stdlib-only.
+The checker enforces both. This is what keeps lifting the platform out a move
+rather than a rewrite (see `docs/product-strategy.md`).
+
+### The encoder is a setting, and `_encode.py` is where it lands
+
+**Never spell `-preset`, `-rc`, `-cq`, `-crf` or `-b:v` at a call site.** A
+render script builds its video arguments with `_encode.video_args(cfg)` and
+its audio with `_encode.audio_args(cfg)`, and merges its config through
+`_encode.resolve()` first. `check-script.py`'s spend check keys off
+`_encode.video_args`, so a script that hand-rolls an encoder line also loses
+its free-mode requirement.
+
+A manifest states an intent — `cq`, `speed`/`preset`, `maxrate`, `bufsize` —
+and `_encode` renders it into the chosen encoder's family: `nvenc`
+(`-preset p5 -rc vbr -cq N -b:v 0`), `amf` (`-quality balanced -rc qvbr
+-qvbr_quality_level N`), `software` (`-preset medium -crf N`), `qsv`. Speed
+rides NVENC's p1..p7 scale because every committed preset already speaks it,
+so `"preset": "p5"` is translated rather than passed to an encoder that would
+reject it. `profile`/`level` follow the **codec**, a different axis: H.264
+values, `main` on HEVC, level dropped there.
+
+**A smaller quality number always means a better picture** — that is the
+contract `cq` carries, and each family expresses it in its own terms. AMF's
+`-qvbr_quality_level` runs the OTHER way (measured: level 10 → VMAF 81.9,
+level 46 → VMAF 94.6), so `_encode.amf_quality()` inverts it. Passing it
+through made every AMF render quietly worse than its manifest asked for, and
+the smaller file read as efficiency rather than as loss. `check-encode.py`
+asserts the direction per family now.
+
+Which encoder: `render.encoder` → `$VIDEDIT_ENCODER` → the first of
+`h264_nvenc`/`h264_amf`/`h264_qsv`/`libx264` that **encodes a frame here**.
+One a committed file names but this box cannot run is substituted loudly; one
+named explicitly fails instead. Availability is never read off
+`ffmpeg -encoders` — that lists what the build supports, and a full Windows
+build lists NVENC on a machine with no NVIDIA driver.
+
+After touching `_encode.py` or any render script's encoder path, run
+`python scripts/check-encode.py` — it costs ten seconds, and its live half
+hands every encoder this machine has the exact arguments a clip, a conform and
+a caption pass would send it. That is what caught `-profile:v high` reaching
+HEVC.
 
 ### Why the environment is like this
 
@@ -358,7 +400,24 @@ its own NVENC pass, so finishing a multicam film is not a re-encode of it. Give
 a finished render its own manifest and output name: burning graphics changes
 pixels, so it is no longer frame-comparable to the programme.
 
+**Real tapes must be put on one grid first.** `angle-cut.py` trims by frame
+number and concatenates, so every tape needs one rate and one size — and it
+used to read both off the *reference* tape without checking the others, which
+renders a silently wrong film from a 60 fps webcam beside a 30 fps phone. It
+refuses a mismatched set now; `conform-tapes.py` fixes it, choosing `regrid` /
+`decimate` / `refuse` by arithmetic and printing which. Its default target is
+the lowest **claimed** rate, because measured rates are drift and drift breaks
+an exact 2:1 decimation.
+
+**The onset cross-check in `sync-audio.py` only applies to tapes fed from one
+recorder.** Cameras with their own mics in a live room are audible from their
+first sample, so every onset is ~0 and the "disagreement" it reports equals the
+offset itself — it fires hardest when the correlation is most right. It now
+detects a rolling start and reports the second opinion as unavailable instead
+of refusing. The correlation and its z-score are the measurement.
+
 ```powershell
+python scripts/conform-tapes.py --tapes <a> <b> --outdir projects/<id>/tapes --id <id> --list
 python scripts/split-cameras.py  --manifest projects/<id>/multicam-sim.json --conform-only
 python scripts/shot-detect.py    --src projects/<id>/temp/program.mp4 --list --sheets
 python scripts/split-cameras.py  --manifest projects/<id>/multicam-sim.json
@@ -546,6 +605,8 @@ which cannot encode the glyphs at all.
 | path | what |
 |---|---|
 | `scripts/` | all tooling; `_env.py` first, then the pipeline scripts |
+| `scripts/_encode.py` | the one place encoder keys are chosen; `check-encode.py` is its test |
+| `scripts/conform-tapes.py` | put N real recordings onto one frame rate and size before a frame-addressed cut |
 | `scripts/tighten-cut.py` | one already-composited recording: shorten its pauses, drop its stumbles, remove the parts you name |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |

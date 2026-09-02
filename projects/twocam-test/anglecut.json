@@ -1,0 +1,66 @@
+{
+  "_comment": "Two real cameras of one person: a laptop webcam (the good picture) and a phone lying low against a window (a silhouette). The phone is the master clock -- it brackets the webcam at both ends.",
+  "id": "twocam-test",
+  "cameras": [
+    {
+      "id": "webcam",
+      "file": "projects/twocam-test/tapes/webcam.mp4"
+    },
+    {
+      "id": "phone",
+      "file": "projects/twocam-test/tapes/phone.mp4"
+    }
+  ],
+  "reference": "webcam",
+  "sync": "projects/twocam-test/twocam-test.anglesync.json",
+  "audio_from": "webcam",
+  "outdir": "projects/twocam-test/outputs",
+  "render": {
+    "cq": 19
+  },
+  "_reference": "the webcam is the reference and the audio source: it is the good picture and the closer microphone (-33.7 dB mean against the phone's -36.7).",
+  "anchor": {
+    "webcam": 34,
+    "phone": 84
+  },
+  "_anchor": "declared, not picture_start: that route looks for an opening HELD frame, which only a synthetic tape has. Real footage rolls from the first frame. webcam 34 = t 1.13s, just ahead of the first word at 1.30s; phone 84 = 34 + the 50-frame stagger the sound measured (1.6818s x 30fps = 50.45).",
+  "plan": [
+    {
+      "camera": "webcam",
+      "start": 0,
+      "end": 122,
+      "why": "open on the camera that can see him"
+    },
+    {
+      "camera": "phone",
+      "start": 122,
+      "end": 161,
+      "why": "short cutaway on the pause at 4.83"
+    },
+    {
+      "camera": "webcam",
+      "start": 161,
+      "end": 270,
+      "why": "back for the next run of speech"
+    },
+    {
+      "camera": "phone",
+      "start": 270,
+      "end": 308,
+      "why": "short cutaway on the pause at 9.88"
+    },
+    {
+      "camera": "webcam",
+      "start": 308,
+      "end": 462,
+      "why": "back across the long pause"
+    },
+    {
+      "camera": "phone",
+      "start": 462,
+      "end": 516,
+      "why": "close on the wide"
+    }
+  ],
+  "_plan": "cuts land on pauses measured with silencedetect on the webcam track, not on a timer -- an alternation on a metronome reads as a slideshow. Phone segments are the three longest pauses."
+}

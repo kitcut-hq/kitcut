@@ -1,0 +1,70 @@
+{
+  "v": 1,
+  "id": "twocam-test",
+  "intent": "First real render on this machine, and the first exercise of the AMD/AMF encoder path. A 17s talking head shot simultaneously on a laptop webcam and a phone, cut between the two, captioned in English and dubbed from Ukrainian.",
+  "pipelines": [
+    "multicam-switch",
+    "dub",
+    "captions"
+  ],
+  "inputs": {
+    "webcam": "sources/2026-08-31 15-30-38.mkv",
+    "phone": "sources/video_2026-08-31_15-33-02.mp4",
+    "words": "projects/twocam-test/transcripts/twocam-test.words.json"
+  },
+  "controls": {
+    "manifest": "projects/twocam-test/anglecut.json",
+    "clips": "projects/twocam-test/clips.json",
+    "sync": "projects/twocam-test/twocam-test.anglesync.json",
+    "caption-style": "config/presets/red-card.json"
+  },
+  "deliverables": {
+    "projects/twocam-test/outputs/twocam-test-anglecut.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-31T15:13:50Z",
+      "kind": "anglecut",
+      "script": "scripts/angle-cut.py",
+      "manifest": "projects/twocam-test/anglecut.json",
+      "burned": [
+        "6 segments switching between 2 cameras full frame",
+        "audio taken whole from webcam -- no joins",
+        "anchored by declared frames"
+      ],
+      "sidecars": {
+        "sync": "projects/twocam-test/twocam-test.anglesync.json"
+      }
+    },
+    "projects/twocam-test/outputs/dub/twocam-test-full.en.wav": {
+      "status": "current",
+      "built_utc": "2026-08-31T14:13:23Z",
+      "kind": "dub-audio",
+      "script": "scripts/dub-clips.py",
+      "manifest": "projects/twocam-test/clips.json",
+      "sidecars": {
+        "plan": "projects/twocam-test/outputs/dub/twocam-test-full.en.plan.json",
+        "translation": "projects/twocam-test/outputs/dub/twocam-test-full.en.translation.json",
+        "report": "projects/twocam-test/outputs/dub/twocam-test-full.en.dub.json",
+        "words": "projects/twocam-test/outputs/dub/twocam-test-full.en.words.json"
+      }
+    },
+    "projects/twocam-test/outputs/twocam-test-full-en.mp4": {
+      "status": "current",
+      "built_utc": "2026-08-31T15:14:12Z",
+      "kind": "short-dubbed",
+      "script": "scripts/cut-clips.py",
+      "manifest": "projects/twocam-test/clips.json",
+      "burned": [
+        "word-synced captions, style config/presets/red-card.json",
+        "dubbed audio .en"
+      ],
+      "sidecars": {
+        "clip": "projects/twocam-test/outputs/twocam-test-full-en.json",
+        "dub-audio": "projects/twocam-test/outputs/dub/twocam-test-full.en.wav",
+        "dub-words": "projects/twocam-test/outputs/dub/twocam-test-full.en.words.json"
+      }
+    }
+  },
+  "notes": "The phone is unusable as a picture: it lay low pointing at a window and the subject is a silhouette in all 707 frames -- no frame shows the face. It is kept as three short cutaways (25% of the film) because switching between devices is the thing being tested. Re-shoot with the phone facing the light before using this angle for anything real.",
+  "updated_utc": "2026-08-31T15:14:12Z",
+  "title": "Two-camera test: webcam + phone, dubbed to English"
+}

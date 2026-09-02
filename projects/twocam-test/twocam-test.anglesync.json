@@ -1,0 +1,46 @@
+{
+  "_comment": "N-track audio alignment by scripts/sync-audio.py. offset is seconds of THIS tape relative to the reference: the same moment sits offset seconds later into it, and is exact. audio_start is an approximate second opinion -- where the tape becomes audible, which is a little after it starts -- and must not be used to anchor a cut.",
+  "id": "twocam-test",
+  "reference": "webcam",
+  "fps_num": 30,
+  "fps_den": 1,
+  "fps": 30.0,
+  "rate": 8000,
+  "config": {
+    "onset_db": -100.0,
+    "min_confidence": 8.0,
+    "max_residual_ms": 5.0,
+    "max_onset_drift_ms": 60.0,
+    "onset_head_s": 0.25
+  },
+  "tracks": [
+    {
+      "id": "webcam",
+      "file": "projects/twocam-test/tapes/webcam.mp4",
+      "offset_s": 0.0,
+      "offset_frames": 0.0,
+      "confidence": null,
+      "audio_start_s": 0.0,
+      "audio_start_frames": 0,
+      "onset_check": "n/a-rolling-start"
+    },
+    {
+      "id": "phone",
+      "file": "projects/twocam-test/tapes/phone.mp4",
+      "offset_s": 1.68175,
+      "offset_frames": 50.4525,
+      "confidence": 137.913,
+      "audio_start_s": 0.01,
+      "audio_start_frames": 0,
+      "onset_check": "n/a-rolling-start"
+    }
+  ],
+  "pairwise_offset_s": {
+    "webcam->webcam": 0.0,
+    "webcam->phone": -1.68175,
+    "phone->webcam": 1.68175,
+    "phone->phone": 0.0
+  },
+  "worst_three_way_residual_ms": 0.0,
+  "notes": []
+}

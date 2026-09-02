@@ -1391,6 +1391,43 @@ film — sync, decide, render — measured across the four: 0.46× to 0.57× rea
 The decide step (speaker embeddings, CPU) is ~85% of it; the NVENC render is
 roughly fifteen times faster than realtime.
 
+### Real tapes are not on one grid, and nothing used to check
+
+`angle-cut.py` trims every tape **by frame number** and concatenates the
+pieces, so all of them must share one frame rate and one frame size.
+Synthetic tapes do by construction. Real ones never do — a phone, a webcam and
+a mirrorless are three rates and three sizes, and the phone is usually not even
+on the rate it claims.
+
+Nothing checked it. The rate and size were read off the **reference** tape and
+applied to all of them, so a 60 fps webcam beside a 30 fps phone is addressed
+at half speed on one of the two and the film is silently wrong. `angle-cut.py`
+now refuses a mismatched set and names the offender; `conform-tapes.py` is what
+fixes it.
+
+```powershell
+python scripts/conform-tapes.py --tapes a.mkv b.mp4 --outdir projects/<id>/tapes --id <id> --list
+python scripts/conform-tapes.py --tapes a.mkv b.mp4 --outdir projects/<id>/tapes --id <id>
+```
+
+Three routes to a target rate, chosen by arithmetic and printed, never guessed:
+
+| route | when | how |
+|---|---|---|
+| `regrid` | already at the target within `--rate-tol` (a phone claiming 30, delivering 30.03) | `setpts` by frame index; count asserted **unchanged** |
+| `decimate` | an exact integer multiple (60 → 30) | `select` every k-th frame; count asserted to `ceil(n/k)` |
+| `refuse` | anything else (50 → 30, 23.976 → 30) | resampling those invents or drops frames unevenly — a decision for a person |
+
+The default target is the **lowest claimed rate**, not the lowest measured one,
+and that distinction is load-bearing: measured rates are drift, and taking
+drift as the target is how a clean 2:1 decimation stops looking like one.
+Measured here — a webcam at 59.933 and a phone at 30.034. Against the phone's
+*measured* 30.034 the ratio is 1.9952, which misses 2 by more than the
+tolerance and refuses the whole tape; against a clean **30** both land, one by
+regrid and one by decimate. Size is `scale`+`pad`, letterboxed and never
+cropped: a tape is evidence, and a crop throws away picture the edit might
+want while a pad is at least visible.
+
 ### Conform first, or a one-frame error has somewhere to hide
 
 A file off the internet is usually a little variable — this one averaged
@@ -2421,8 +2458,8 @@ Needed on the machine itself:
 
 - **Python 3.13** (`py -3.13`). Package versions are pinned in `requirements.txt`.
 - **`ffmpeg`/`ffprobe`.** libass is required and `check-env.py` fails without
-  it; rubberband and NVENC are warnings, because a dub can fit without the
-  stretcher and a manifest can name `libx264` instead of `h264_nvenc`.
+  it; rubberband is a warning, because a dub can fit without the stretcher.
+  Any working H.264 encoder will do — see **## Which encoder** below.
 - **Optional NVIDIA GPU.** CUDA needs `nvidia-cublas-cu12`, since ctranslate2
   bundles cuDNN but not cuBLAS; `check-env.py` counts the DLLs it can see,
   because without them transcription silently drops to CPU and runs ~3x slower.
@@ -2499,6 +2536,96 @@ real interpreter under a *different* pid — so `Popen(...).pid` is not the pid
 that holds the card. The lock records `os.getpid()` from inside the working
 process, which is always the right one; a test asserting against Popen's pid is
 asserting the wrong thing.
+## Which encoder
+
+Nothing in the pipeline scripts spells an encoder key any more. A manifest or
+preset states an *intent* — quality, speed, bitrate ceiling — and
+`scripts/_encode.py` renders it into whatever family the chosen encoder
+belongs to:
+
+| | speed | rate control |
+|---|---|---|
+| `*_nvenc` | `-preset p5` | `-rc vbr -cq N -b:v 0` |
+| `*_amf` | `-quality balanced` | `-rc qvbr -qvbr_quality_level N` |
+| `lib*` | `-preset medium` | `-crf N` |
+| `*_qsv` | `-preset medium` | `-global_quality N -look_ahead 1` |
+
+This is why the split exists. Every render script used to spell
+`-c:v <encoder> -preset p5 -rc vbr -cq 21 -b:v 0` inline, six times over, next
+to an encoder that was *configurable*. So setting `render.encoder` to
+`libx264` on a machine with no NVIDIA card did not help: `-preset p5` and
+`-rc vbr` travelled with it, and both x264 and AMF die on
+`invalid preset 'p5'`. The encoder was a setting and the keys around it were
+not, which made the setting a lie.
+
+**Speed is carried on NVENC's p1..p7 scale**, because every preset and
+manifest committed here already speaks it. A `"preset": "p5"` written before
+any of this still means p5 — it is *translated* into the target family rather
+than ignored, and it is never passed through to an encoder that would reject
+it.
+
+**Quality is one number across all four, and smaller always means better.**
+That is the contract `cq` carries — it is what `-cq` and `-crf` already mean —
+and each family is responsible for expressing it in its own terms. Three of
+the four take it as written. **AMF's `-qvbr_quality_level` runs backwards**, so
+`_encode.amf_quality()` inverts it (`51 - cq`); see `## Gotchas`, where the
+measured curve is. Getting this wrong is invisible from the outside, because
+too *little* quality makes a *smaller* file and small files look like a win.
+
+**`profile` and `level` follow the codec, not the family** — a separate axis.
+The values in these configs (`high`, `4.2`) are H.264 ones, so on HEVC the
+profile becomes `main` and the level is dropped rather than guessed:
+`libx265` wants `4.2` and `hevc_amf` wants the integer `126`, and a
+compatibility hint is not worth a units bug. `check-encode.py` found this by
+rendering a caption pass through `hevc_amf` and getting `Invalid argument`.
+
+### Which one you get
+
+Resolution is `render.encoder` in the manifest or preset → `$VIDEDIT_ENCODER`
+→ the first of `h264_nvenc`, `h264_amf`, `h264_qsv`, `libx264` that **actually
+encodes a frame here**. Same shape as `_env.workspace()`: the assumption gets
+one home.
+
+An encoder a *committed file* names but this machine cannot run is
+**substituted, loudly**, naming the key to edit for permanence — those files
+are read on machines their author never saw, and twenty minutes into a
+filtergraph is the wrong moment to learn the box has no NVIDIA card. One named
+explicitly (`--encoder`, `$VIDEDIT_ENCODER`, or `$VIDEDIT_ENCODER_STRICT=1`)
+is honoured strictly and fails instead: you asked for that one by name. Every
+`--list` / `--plan` prints the encoder line it would send, so the choice is
+legible before it is paid for.
+
+```powershell
+python scripts/check-encode.py                 # the self-test, ~10s, no project
+python scripts/check-encode.py --table-only    # the mapping only, no ffmpeg
+```
+
+`check-encode.py` is the third one-button self-test beside `check-dub.py` and
+`check-multicam.py`, and it has a half the others do not: it hands **every
+encoder this machine can run** the exact argument list a clip, a conform and a
+caption pass would send it, and requires a file out the other end. A table
+test agrees with whatever the table says; ffmpeg does not, which is how the
+HEVC profile bug surfaced within a minute of the test existing.
+
+Run it after touching `_encode.py` or any render script's encoder path.
+
+### On the AMD box this was written against
+
+`h264_amf` and `hevc_amf` both work; there is no NVENC (no `nvcuda.dll`).
+Two things were measured rather than assumed, and both are recorded in
+`_encode.py`:
+
+- **AMF's tuning block is deliberately empty.** `-vbaq 1 -preanalysis 1` cost
+  26% more wall clock (7.26 s against 5.76 s on 5 s of 1080p30) and moved the
+  output by 8 bytes in 3.09 Mbps — VCN 1.0 ignores both. Re-measure on RDNA
+  before adding them back.
+- **No `-bf` on AMF.** This GPU answers `-bf 3` with *"The current GPU in use
+  does not support H.264 B-frame encoding"*, proceeds without them, and the
+  flag buys nothing but a warning.
+
+`-b:v 0` stays NVENC-only, where it is load-bearing (see `## Gotchas`); AMF
+and x264 already have a quality target and do not want a zero-bitrate VBR one
+next to it.
 
 ### Where things live: ROOT, workspace, and one resolver
 
@@ -2534,6 +2661,8 @@ absolute path written into a script, a skill or these docs.
 | `scripts/_env.py` | re-execs every script into `.venv`; import it first. Also the one path resolver and the ROOT/workspace split |
 | `scripts/setup-python.ps1` | builds/repairs the environment, idempotent |
 | `scripts/check-env.py` | the doctor — run this when an import breaks |
+| `scripts/_encode.py` | the one place encoder keys are chosen: an intent in, one family's vocabulary out |
+| `scripts/check-encode.py` | encoder self-test; proves the keys each encoder is sent are keys it takes |
 | `scripts/check-dub.py` | dub self-test; no key, no TTS calls, no cost |
 | `scripts/run-captions.py` | the orchestrator — start here |
 | `scripts/transcribe-words.py` | faster-whisper → word-level JSON | (`--hotwords-file` for brand names it has never seen)
@@ -2578,6 +2707,7 @@ absolute path written into a script, a skill or these docs.
 | `scripts/tighten-cut.py` | one already-composited recording: shorten its pauses, drop its stumbles, remove the parts you name |
 | `scripts/shot-detect.py` | read an edit back off a finished film: where it cuts, and on which angle |
 | `scripts/split-cameras.py` | conform a programme, then rebuild the camera tapes it was cut from |
+| `scripts/conform-tapes.py` | put N recordings from different devices onto one frame rate and size, provably |
 | `scripts/sync-audio.py` | line up N tapes that share a soundtrack, by FFT correlation |
 | `scripts/angle-cut.py` | cut one film out of N synchronised cameras, switching full frame |
 | `scripts/compare-videos.py` | score one film against another frame by frame, and pass or fail it |
@@ -2783,7 +2913,52 @@ evidence.
   words. The selector pins the original track.
 - **Never seek with plain `-ss` when burning subtitles** — it rebases PTS to 0 so
   libass renders the wrong lines. Use `--preview`, which regenerates a shifted ASS.
-- **`-b:v 0` is required with `-cq`** or NVENC ignores the quality target.
+- **`-b:v 0` is required with `-cq`** or NVENC ignores the quality target. It
+  is NVENC's alone: AMF's `qvbr` and x264's `crf` already carry a quality
+  target, so `_encode.py` emits it for the nvenc family only.
+- **AMF's quality scale runs BACKWARDS from every other encoder here.** `-cq`,
+  `-crf` and a raw QP all mean "smaller number, better picture". AMF's
+  `-qvbr_quality_level` means the opposite. Measured on this Vega 10 by VMAF
+  against a crf-12 reference, 20 s of 1080p30 of real footage:
+
+  | `qvbr_quality_level` | VMAF | size |
+  |---|---|---|
+  | 10 | 81.92 | 505 KB |
+  | 21 | 88.26 | 1130 KB |
+  | 28 | 91.68 | 1527 KB |
+  | 34 | 92.87 | 1875 KB |
+  | 40 | 93.64 | 2240 KB |
+  | 46 | 94.55 | 2781 KB |
+
+  Monotonic across the range, and inverted. Handing the manifest's number
+  straight over — which `_encode.py` did at first — makes `cq: 16`, the value a
+  conform uses *because* it wants the highest quality, ask AMF for nearly its
+  lowest. Every AMF render came out quietly worse than asked, and the symptom
+  reads as a *virtue*: the file is smaller, which looks like efficiency rather
+  than loss. `amf_quality()` inverts it, and `check-encode.py` now asserts the
+  direction on every family — that cq 16 really does ask for better pictures
+  than cq 30, whatever key the family spells it with.
+- **`ffmpeg -encoders` lists what the BUILD supports, not what this machine
+  can do.** A full Windows build lists `h264_nvenc` whether or not an NVIDIA
+  driver was ever installed — so the string test `check-env.py` used to run
+  passed on an AMD box and reported "environment OK" while every render died
+  with `Cannot load nvcuda.dll`. A doctor whose test the broken machine passes
+  is worse than no doctor. Encoders are probed by **encoding a frame**, cached
+  against the ffmpeg version.
+- **A probe frame that is too small reports a working card as broken** — the
+  same lie the other way round. A hardware encoder refuses a frame under its
+  alignment with the same "could not open encoder" it gives a missing driver.
+  Measured on this Vega 10: 64x64 fails, **160x120 fails** (120 is not a
+  multiple of 16), 128x128 and 176x144 pass. `_encode.PROBE_SIZE` is 320x240
+  and is a measured floor, not a round number — do not shrink it to make the
+  probe cheaper.
+- **A `preset` is a per-family word, not a universal one.** `p5` is NVENC's;
+  AMF's are `speed`/`balanced`/`quality`/`high_quality`; x264's are
+  `medium`/`slow`/... . Give AMF or x264 a `p5` and it exits on
+  `invalid preset 'p5'` before a frame is read. Worse, AMF's *numbers* are not
+  portable either — `h264_amf`'s presets run 0..3 and `hevc_amf`'s run 0..15,
+  so `-quality 2` means different things on the two. `_encode.py` passes AMF
+  presets by **name**, which both accept.
 - **`crop` has no `eval` option** — that is `scale`/`overlay`/`drawtext`. Its
   `x`/`y` are flagged runtime-tunable and already re-evaluated per frame, which
   is what lets the vertical crop pan. Passing `eval=frame` is a hard error.
