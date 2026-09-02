@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment": "Shipped to the tester copy as .claude/settings.json by make-tester-repo.py. The allow-list is what makes the product feel like a product: without it every script invocation is a permission prompt, and a first session is forty of them.",
+  "statusLine": {
+    "type": "command",
+    "command": "python scripts/statusline.py",
+    "refreshInterval": 3
+  },
+  "permissions": {
+    "allow": [
+      "Bash(python scripts/*)",
+      "Bash(ffmpeg *)",
+      "Bash(ffprobe *)",
+      "Bash(powershell -ExecutionPolicy Bypass -File scripts/setup-python.ps1*)"
+    ]
+  }
+}

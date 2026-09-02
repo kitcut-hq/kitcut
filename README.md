@@ -2696,3 +2696,34 @@ went for their `config/video-specs.template.json`, a hand-authored per-video
 project document, when `projects/<id>/project.json` replaced the idea: no script
 ever read or wrote the template, so it silently rotted, which is the failure
 mode the project files are designed against (see `## Projects`).
+
+<!-- dev-only: tester-export -->
+## Sharing the tooling: the tester copy
+
+The dev repo cannot be handed to an outside tester: it carries the business
+docs, every project journal with our publish history, and manifests that quote
+fragments of the very secrets the redaction pipelines blur.
+`make-tester-repo.py` builds the copy that can be handed out — an **allowlist**
+(scripts, config, fonts, skills, the reference docs), never an excludelist, so
+nothing leaks that the script never read. `docs/tester-quickstart.md` ships as
+the copy's `QUICKSTART.md`; `config/tester/settings.json` ships as its
+`.claude/settings.json`, permission allow-list pre-seeded so a first session is
+not forty prompts; the content dirs are recreated empty.
+
+```powershell
+python scripts/make-tester-repo.py --list          # what ships, what never does
+python scripts/make-tester-repo.py --out ..\kitcut-beta
+```
+
+Three self-checks make the copy prove itself before it exists: CLAUDE.md is
+scrubbed of references to the excluded docs by **exact-match replacements that
+FAIL when the map's text drifts**; any region fenced by the dev-only HTML
+comment markers in a shipped markdown file (like this section) is dropped —
+and never write those markers literally *inside* such a region, the inner
+close ends it early, which is how this paragraph's first draft shipped its
+own tail; and the finished tree is scanned for excluded paths, forbidden
+strings and surviving markers — a mention that survives fails the build
+rather than shipping. A rebuild into a copy that
+already has its `.venv`/`.git` is allowed, so iterating does not cost a
+reinstall.
+<!-- /dev-only -->
