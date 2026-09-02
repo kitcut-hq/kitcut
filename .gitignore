@@ -80,3 +80,6 @@ models/
 # Points the tooling at a working directory outside the repo (see
 # _env.workspace()). One machine-local path; never shared.
 .workspace
+
+# machine-local Claude Code overrides (absolute interpreter path)
+.claude/settings.local.json
