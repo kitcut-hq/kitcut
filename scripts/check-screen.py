@@ -61,29 +61,32 @@ def pii_rules():
     sp = load("scan-pii")
     rules = {n: f for n, s, f in sp.rules()}
     cases = [
-        # (text, kind, expected) -- all seen on real frames from books-giveaway
-        ("4149 4390 2701 0499", "card", True),
-        ("4441 **** **** 7789", "card", True),
-        ("---- 2527428", "card", True),
-        ("Замовлення #1806413786", "card", False),
-        ("https://www.threads.com/messages/t/2239405853520443/", "card", False),
-        ("UA57 ---- 2527428", "iban", True),
+        # (text, kind, expected) -- the SHAPES seen on real frames from
+        # books-giveaway, with every value replaced by a synthetic one. The
+        # rules are shape rules, so the fixtures cost nothing by being fake --
+        # and this file ships to anyone the tooling is shared with.
+        ("4111 1111 1111 1111", "card", True),
+        ("4111 **** **** 1111", "card", True),
+        ("---- 1111111", "card", True),
+        ("Замовлення #1234567890", "card", False),
+        ("https://www.threads.com/messages/t/1234567890123456/", "card", False),
+        ("UA57 ---- 1111111", "iban", True),
         # OCR splits a masked IBAN across boxes and hands back the head on its
         # own. That head IS the account, so it is a hit, not a false positive.
         ("UA39", "iban", True),
         ("UA", "iban", False),
-        ("agamanuk@gmail.com", "email", True),
-        ("Ел. пошта agamanuk@gmail.com", "email", True),
-        ("pMEAHyrOCbAo@gorokhovsky.FoTOBMionJaTMTW10AWTqyWxKHMKOK3caiT",
+        ("someone@example.com", "email", True),
+        ("Ел. пошта someone@example.com", "email", True),
+        ("pMEAHyrOCbAo@nGaRbLeD.FoTOBMionJaTMTW10AWTqyWxKHMKOK3caiT",
          "email", False),
-        ("+38 (066) 317-3125", "phone", True),
-        ("+380664134978", "phone", True),
+        ("+38 (050) 123-4567", "phone", True),
+        ("+380501234567", "phone", True),
         # The national form, with no +38. This one reached a proof frame with
         # a name and a delivery branch beside it before the rule covered it.
-        ("Київ, відділення 57, 0939589090, Стрельченко Марія", "phone", True),
-        ("066 431 4978", "phone", True),
+        ("Київ, відділення 57, 0501234567, Тестенко Тест", "phone", True),
+        ("050 123 4567", "phone", True),
         # ...but a long digit run is an id, not a phone
-        ("1788200601981963", "phone", False),
+        ("1234567890123456", "phone", False),
         ("132 420.45 UAH", "balance", True),
         ("1 190 грн", "balance", False),
         ("CVV2 / CVC2 123", "cvv", True),
@@ -94,10 +97,10 @@ def pii_rules():
         check(f"{kind}: {text[:40]}", got, want)
 
     print("\nscan-pii: Luhn")
-    check("Luhn accepts a real PAN", sp.luhn("4149439027010499"), True)
-    check("Luhn rejects the same with two digits swapped",
-          sp.luhn("4149439027010949"), False)
-    check("Luhn rejects a 10-digit order number", sp.luhn("1806413786"), False)
+    check("Luhn accepts a real PAN", sp.luhn("4111111111111111"), True)
+    check("Luhn rejects the same with one digit mistyped",
+          sp.luhn("4111111111111112"), False)
+    check("Luhn rejects a 10-digit order number", sp.luhn("1234567890"), False)
 
     print("\nscan-pii: merge pads and unions overlapping hits")
     hits = [
@@ -185,7 +188,7 @@ def pipeline_pieces():
     sp = load("scan-pii")
     frames = [{"t": 4.0, "carried": False, "lines": [
         {"box": [0.1, 0.2, 0.1, 0.02], "text": "+38 (066) 431-4978", "conf": 0.9},
-        {"box": [0.1, 0.3, 0.1, 0.02], "text": "Замовлення #1806413786", "conf": 0.9}]},
+        {"box": [0.1, 0.3, 0.1, 0.02], "text": "Замовлення #1234567890", "conf": 0.9}]},
               {"t": 8.0, "carried": True, "lines": [
         {"box": [0.1, 0.2, 0.1, 0.02], "text": "+38 (066) 431-4978", "conf": 0.9}]}]
     hits = sp.apply_rules(frames)

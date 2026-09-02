@@ -33,10 +33,17 @@ ROOT = _env.ROOT
 # Directories copied whole (minus SKIP patterns) and single files, all
 # repo-relative. Everything not named here stays behind by construction --
 # an allowlist cannot leak what it never read.
-SHIP_DIRS = ["scripts", "config", "fonts", ".claude/skills"]
+# config/ is listed subdirectory by subdirectory, NOT whole: config/chapters
+# holds the chapter lists of our own published videos (ids, titles, the lot),
+# and config/clips + config/screencast were per-video manifests before
+# projects/ existed. A blanket "config" shipped all three.
+SHIP_DIRS = ["scripts", "fonts", ".claude/skills",
+             "config/cards", "config/handles", "config/labels",
+             "config/overlays", "config/presets"]
 SHIP_FILES = [
     "requirements.txt", ".env.template", ".gitignore",
     "README.md", "CLAUDE.md",
+    "config/caption-style.json", "config/elevenlabs-voices.json",
     "docs/known-issues.md", "docs/ffmpeg-recipes.md",
     "docs/karaoke-captions.md", "docs/retro-books-giveaway.md",
 ]
@@ -47,12 +54,30 @@ SHIP_AS = {
 }
 # recreated empty: the tester's own work lives here
 EMPTY_DIRS = ["projects", "sources", "audio", "transcripts", "outputs", "temp"]
-SKIP = ["__pycache__", "*.pyc", "make-tester-repo.py",
+SKIP = ["__pycache__", "*.pyc",
+        # both exporters name the excluded docs in their own constants,
+        # which is exactly what the forbidden-string scan hunts for
+        "make-tester-repo.py", "make-tester-history.py",
         "config/tester"]  # tester/ lands via SHIP_AS, not as itself
 
 # Strings that must not survive anywhere in the copy: the business docs stay
-# behind, so nothing shipped may point a reader at them.
-FORBIDDEN = ["product-strategy", "market-shorts"]
+# behind, so nothing shipped may point a reader at them. The last three were
+# deleted from the dev repo before the export existed and are here because
+# HISTORY still carries them -- an export that keeps commits must scan for
+# what the working tree no longer has.
+FORBIDDEN = ["product-strategy", "market-shorts", "shorts-strategy",
+             "shorts-gtm-playbooks", "claude-native-channel"]
+
+# Paths that must never appear in ANY commit of a history-preserving export.
+# Deleted files still live in old commits, so this list is longer than what
+# a working-tree copy would need; make-tester-history.py consumes it.
+NEVER_IN_HISTORY = [
+    "docs/product-strategy.md", "docs/market-shorts-2026.md",
+    "docs/shorts-strategy.md", "docs/shorts-gtm-playbooks.md",
+    "docs/claude-native-channel.md",
+    "projects", "config/chapters", "config/clips", "config/screencast",
+    "config/video-specs.template.json",
+]
 
 # CLAUDE.md is the map, and the map names the excluded docs. Each entry is
 # (exact old text, replacement); a pattern that stops matching is a build
@@ -161,9 +186,12 @@ def build(outdir, pairs):
 def verify(outdir):
     """The copy proves itself: nothing excluded exists, nothing points at it."""
     problems = []
-    for rel in ("docs/product-strategy.md", "docs/market-shorts-2026.md",
-                ".env", ".yt-oauth", "models", "scripts/make-tester-repo.py"):
-        if os.path.exists(os.path.join(outdir, rel)):
+    for rel in NEVER_IN_HISTORY + [".env", ".yt-oauth", "models",
+                                   "scripts/make-tester-repo.py",
+                                   "scripts/make-tester-history.py"]:
+        p = os.path.join(outdir, rel)
+        if os.path.exists(p) and (rel != "projects" or
+                                  [x for x in os.listdir(p) if x != ".gitkeep"]):
             problems.append("excluded path shipped: %s" % rel)
     for cur, dirs, files in os.walk(outdir):
         dirs[:] = [x for x in dirs if x not in (".venv", ".git")]

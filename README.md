@@ -957,7 +957,7 @@ Two things it taught us on this footage:
 - **Match the mask's shape, not its glyph.** Privat24 draws a bullet; this OCR
   model returns `----`, another returns `****`, a third drops it. Requiring the
   full 27-character IBAN found *nothing* — the field is always drawn part-masked
-  (`UA57 ---- 2527428`). The prefix plus any digits is the real signature.
+  (`UA57 ---- 1111111`). The prefix plus any digits is the real signature.
 
 `--match NAME=REGEX` rides the same pass, because the expensive half is the OCR,
 not the matching — so "where does each order confirmation appear" costs nothing
@@ -965,10 +965,11 @@ once the frames are being read anyway.
 
 A third lesson cost a proof frame to find: **the country code is optional.**
 The first phone rule required `+38`, and a Claude panel summary reading
-`(Київ, відділення 57, 0939589090, Стрельченко Марія — «Іздрик…», 430 грн)`
+`(Київ, відділення 57, 0XXXXXXXXX, <recipient name> — «Іздрик…», 430 грн)`
 sailed through it — city, branch, phone and full name, in the clear, in the
 national `0XX` form. A Ukrainian mobile is 0 plus nine digits however it is
-punctuated, and `check-screen.py` now holds that exact string.
+punctuated, and `check-screen.py` holds that shape as a fixture (with
+synthetic values: the fixtures test shapes, and this file is shared).
 
 **It is a net, not a clearance.** OCR misses rotated, low-contrast and
 partly-scrolled text, and it cannot know that a first name plus a Nova Poshta
