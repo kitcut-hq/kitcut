@@ -30,11 +30,13 @@
       ],
       "sidecars": {
         "clip": "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-01-hunting-our-engineers.json"
-      }
+      },
+      "checked_utc": "2026-09-02T05:20:45Z",
+      "note": "Manifest edited after this render, non-materially for this clip: a `hook` phrase was declared for the new hook gate, and the other clip was replaced."
     },
     "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-dont-wait-to-be-mobilised.mp4": {
-      "status": "current",
-      "built_utc": "2026-09-02T05:02:14Z",
+      "status": "deleted",
+      "built_utc": "2026-09-02T05:10:51Z",
       "kind": "short",
       "script": "scripts/cut-clips.py",
       "manifest": "projects/SKv9fUHeckE/clips-vertical.json",
@@ -44,9 +46,26 @@
       ],
       "sidecars": {
         "clip": "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-dont-wait-to-be-mobilised.json"
-      }
+      },
+      "note": "Replaced by 02-civilian-contract. Its hook could only be reached fast by cutting mid-flow, which put a mouth-open frame at 0; cutting on the segment's real silence put the hook 6.7 s in, which the hook gate now refuses."
+    },
+    "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-civilian-contract.mp4": {
+      "status": "current",
+      "built_utc": "2026-09-02T05:19:43Z",
+      "kind": "short",
+      "script": "scripts/cut-clips.py",
+      "manifest": "projects/SKv9fUHeckE/clips-vertical.json",
+      "burned": [
+        "9:16 crop per reframe sidecar",
+        "word-synced captions, style config/presets/red-card-vertical.json"
+      ],
+      "sidecars": {
+        "clip": "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-civilian-contract.json"
+      },
+      "checked_utc": "2026-09-02T05:20:45Z",
+      "note": "Manifest edited after this render, non-materially for this clip: a `hook` phrase was declared for the new hook gate, and the other clip was replaced."
     }
   },
   "notes": [],
-  "updated_utc": "2026-09-02T05:02:14Z"
+  "updated_utc": "2026-09-02T05:20:45Z"
 }

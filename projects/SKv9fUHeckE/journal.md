@@ -68,3 +68,40 @@ silent with 0.54 s of air before the first word.
 
 Both renders: 24/24 caption sync probes, 100% face detection, no `pad`
 letterboxing, window jumps aligned to the camera cuts within 0.01 s.
+- 05:10 render scripts/cut-clips.py -> projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-dont-wait-to-be-mobilised.mp4 (--manifest projects/SKv9fUHeckE/clips-vertical.json --only 02-dont-wait-to-be-mobilised --force)
+- 05:16 render scripts/cut-clips.py -> projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-civilian-contract.mp4 (--manifest projects/SKv9fUHeckE/clips-vertical.json --only 02-civilian-contract)
+- 05:16 render scripts/cut-clips.py -> projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-civilian-contract.mp4 (--manifest projects/SKv9fUHeckE/clips-vertical.json --only 02-civilian-contract --force)
+- 05:18 render scripts/cut-clips.py -> projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-civilian-contract.mp4 (--manifest projects/SKv9fUHeckE/clips-vertical.json --only 02-civilian-contract --force)
+- 05:19 render scripts/cut-clips.py -> projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-civilian-contract.mp4 (--manifest projects/SKv9fUHeckE/clips-vertical.json --only 02-civilian-contract --force)
+
+## 2026-09-01 (later) — the hook gate, after making the same mistake twice
+
+The user called it out: two clips in a row shipped with a slow opening. Every
+check in the pipeline passed both — settled frame, silent lead-in, no mid-word
+cut — and both were still unwatchable, because nothing measured *when the point
+arrives*. That is now a gate in `cut-clips.py`, not a habit.
+
+**Every clip declares `hook`, and the render refuses if it lands later than
+3.0 s.** Validated retroactively against the two real failures: the first
+shipped opening scores 32.6 s, the second 6.7 s, and both also trip a
+filler-opener warning that names the phrase. `hook_ok` downgrades the timing
+failure with a stated reason; nothing excuses a missing hook.
+
+**Clip 02 was replaced, and the reason is the useful part.** The "if you have
+already been mobilised" answer could not satisfy both standing rules at once:
+its hook was reachable fast only by cutting mid-flow, which put a mouth-open
+frame at 0, and cutting on the segment's real 0.72 s silence put the hook 6.7 s
+in. A fast hook and a settled frame were **5 s apart in that material**. So the
+material changed rather than the rules: the next answer (civilian contracts
+without mobilisation) has a real 0.68 s silence, a settled frame and its hook
+2.2 s in. To find such places, scan the WHOLE audio for real silences and read
+what follows each -- the transcript's gaps are not silences and cannot be used
+for this.
+
+Two smaller things worth keeping. The final start moved 1693.45 -> 1693.52 for
+the CAPTION, not the picture: the filler 'Ну,' ends at 1693.50, so an earlier
+cut pulled it into the first caption group and frame 0 shipped a card reading a
+word the viewer never hears. **Check the first card, not only the first frame.**
+And `auto-reframe` must be re-run before the render whenever a boundary moves,
+not after -- doing it in the wrong order renders against a stale sidecar whose
+keys are offset from the new start.

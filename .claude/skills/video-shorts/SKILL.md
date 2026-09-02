@@ -423,6 +423,39 @@ in the open ones and the score was reading head pose, not lips. Eight frames
 from one shot separating for the wrong reason will not survive the next video.
 Doing it properly needs a lip-contour model and a labelled set across films.
 
+## The hook gate — mandatory, and it blocks the render
+
+**Every clip must declare `hook`: the exact phrase that makes a viewer stay.**
+`cut-clips.py` resolves it in the transcript and refuses to encode if it lands
+more than 3.0 s after the first frame. There is no way to skip it; a stated
+reason in `hook_ok` downgrades the timing failure to a warning, and nothing
+downgrades a missing hook.
+
+```json
+{ "id": "01-...", "hook": "дуже полюють за нашими інженерами", ... }
+```
+
+This exists because the same mistake shipped **twice in a row**, and every other
+check passed both times — settled frame, silent lead-in, no mid-word cut, and a
+clip nobody would watch:
+
+| shipped opening | hook landed | what the viewer got first |
+|---|---|---|
+| `Можна так зробити…` | **32.6 s** | a back-reference to a calculation that was cut away |
+| `Якщо ми говоримо конкретно про ту ситуацію, яку зараз ми проговорюємо…` | **6.7 s** | a pronoun pointing at a question the viewer never heard |
+
+Both now FAIL the gate, and both trip the filler-opener warning by name. Naming
+the hook is most of the value: **a clip whose hook cannot be written down as a
+phrase does not have one**, and the boundaries are wrong.
+
+**When a fast hook and a settled frame are incompatible, change the material,
+not the rule.** They are separate constraints and both are real — an opening
+mouth-open on a vowel is never acceptable, and neither is 6 s of run-up. On
+`SKv9fUHeckE` those two were 5 s apart in one segment, so that segment was
+dropped for the next answer, where a genuine 0.68 s silence and a 2.2 s hook
+coincide. Find the segments where they coincide by scanning the audio for real
+silences and reading what follows each one; do not negotiate between the rules.
+
 ## Reading somebody else's source before you cut it
 
 Three properties of a third-party video decide what you are allowed to pick, and

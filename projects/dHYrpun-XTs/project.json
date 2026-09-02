@@ -19,7 +19,7 @@
       "sidecars": {
         "clip": "projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-01-brain-vs-chip.json"
       },
-      "checked_utc": "2026-09-02T03:44:52Z",
+      "checked_utc": "2026-09-02T05:20:45Z",
       "notes": [
         "Manifest edited after this render, non-material: added open_ok (a recorded review of the opening frame) and prose notes. No boundary, pad or styling key controlling this render changed."
       ],
@@ -27,7 +27,8 @@
         "url": "https://youtu.be/fcvw2ID7yNc",
         "privacy": "unlisted",
         "sidecar": "projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-01-brain-vs-chip.youtube.json"
-      }
+      },
+      "note": "Manifest edited after this render, non-materially for this clip: a `hook` phrase was declared for the new hook gate. Boundaries unchanged."
     },
     "projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-02-nvidia-hugging-face.mp4": {
       "status": "current",
@@ -42,7 +43,7 @@
       "sidecars": {
         "clip": "projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-02-nvidia-hugging-face.json"
       },
-      "checked_utc": "2026-09-02T03:56:32Z",
+      "checked_utc": "2026-09-02T05:20:45Z",
       "notes": [
         "Manifest edited after this render, non-material: added open_ok (a recorded review of the opening frame) and prose notes. No boundary, pad or styling key controlling this render changed.",
         "Manifest edited after this render for clip 01 only (its start moved to the hook). No key controlling THIS render changed."
@@ -51,9 +52,10 @@
         "url": "https://youtu.be/WI1kOto13qc",
         "privacy": "unlisted",
         "sidecar": "projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-02-nvidia-hugging-face.youtube.json"
-      }
+      },
+      "note": "Manifest edited after this render, non-materially for this clip: a `hook` phrase was declared for the new hook gate. Boundaries unchanged."
     }
   },
   "notes": [],
-  "updated_utc": "2026-09-02T04:06:00Z"
+  "updated_utc": "2026-09-02T05:20:45Z"
 }

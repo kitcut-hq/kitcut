@@ -29,7 +29,8 @@
         "tail": 0.35
       },
       "open_ok": "Zero lead-in silence by construction -- there is no pause within 13 s to sit in. Frame 0 chosen from a contact sheet instead: mouth closed, head rising to camera, immediately before the hook word. Verified on the render.",
-      "_bounds_note": "371.50 -> 403.94 before the tail pad, ~32.8 s."
+      "_bounds_note": "371.50 -> 403.94 before the tail pad, ~32.8 s.",
+      "hook": "видає 3 ,3 токени за секунду"
     },
     {
       "id": "02-nvidia-hugging-face",
@@ -41,7 +42,8 @@
       "pad": {
         "head": 0.0,
         "tail": 0.35
-      }
+      },
+      "hook": "за 12 ,9 мільярдів доларів"
     }
   ],
   "tmp": "projects/dHYrpun-XTs/temp"

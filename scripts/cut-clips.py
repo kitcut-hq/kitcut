@@ -357,6 +357,83 @@ def build_captions(clip, words_path, style, start, end, w, h, fps, tmpdir,
     return ass
 
 
+HOOK_MAX_S = 3.0
+
+# Openers that promise nothing. A clip beginning with one of these is spending
+# the only seconds it has on throat-clearing or on a back-reference to a
+# question the viewer never heard. Ukrainian, because that is what this repo
+# cuts; the list is a PROMPT to look, not a verdict, and it never blocks a
+# render on its own -- the hook-timing gate below is the thing with teeth.
+FILLER_OPENERS = (
+    "якщо ми говоримо", "знову ж таки", "давайте так", "ну давайте",
+    "мені здається", "в цілому", "можна так зробити", "дивіться",
+    "я б сказав", "якщо чесно", "з одного боку", "тут мабуть",
+    "окей", "тобто", "ну я", "коротше",
+)
+
+
+def hook_gate(clip, words, start):
+    """Does this clip reach its point fast enough to survive a feed?
+
+    THE MISTAKE THIS EXISTS TO STOP, made twice in a row on real clips: an
+    opening that is technically clean -- settled frame, silent lead-in, no
+    mid-word cut -- and still worthless, because the first seven seconds say
+    nothing. 'Можна так зробити' spent 7 s back-referencing a calculation the
+    viewer never saw. 'Якщо ми говоримо конкретно про ту ситуацію, яку зараз ми
+    проговорюємо' spent 6.5 s on a pronoun pointing at a question that was cut
+    away. Nobody waits. Every other check in this pipeline passed both.
+
+    So the hook is not left to taste: each clip must NAME it, and it must land
+    within HOOK_MAX_S of the first frame. Naming it is most of the value --
+    a clip whose hook cannot be written down as a phrase in the transcript does
+    not have one, and that is worth discovering before an encode rather than
+    after an upload.
+
+    Returns (errors, warnings). An error blocks the render.
+    """
+    errs, warns = [], []
+    hook = clip.get("hook")
+    if not hook:
+        errs.append(
+            "no `hook` declared. Name the phrase that makes a viewer stay -- the "
+            "claim, number or turn that IS the point -- and put it in the clip as "
+            "\"hook\": \"<exact words>\". If you cannot name one, the clip does not "
+            "have a hook and the boundaries are wrong, not the check.")
+        return errs, warns
+
+    hit = _outline.find(words, hook)
+    if hit is None:
+        errs.append("hook phrase not found in the transcript: %r" % hook)
+        return errs, warns
+
+    lead = hit[0] - start
+    if lead < -1e-6:
+        errs.append("hook at %.2f is BEFORE the clip starts (%.2f) -- the clip "
+                    "opens past its own hook." % (hit[0], start))
+    elif lead > HOOK_MAX_S:
+        why = clip.get("hook_ok")
+        msg = ("hook lands %.1fs in (%.2f), past the %.1fs limit. That is the "
+               "slow-opening failure: everything before it is run-up the viewer "
+               "will not wait through. Move the start onto the hook."
+               % (lead, hit[0], HOOK_MAX_S))
+        if why:
+            warns.append(msg + " ACCEPTED: %s" % why)
+        else:
+            errs.append(msg + " If it is genuinely right, record why in "
+                              "\"hook_ok\": \"<reason>\".")
+
+    opening = _outline.fold(" ".join(
+        w.get("text", "") for w in words
+        if start - 1e-6 <= w["start"] <= start + 4.0))
+    for f in FILLER_OPENERS:
+        if opening.startswith(_outline.fold(f)):
+            warns.append("opens on filler (%r). Openers like this promise "
+                         "nothing -- check the first two seconds earn attention."
+                         % f)
+            break
+    return errs, warns
+
+
 def resolve(clip, words, pad_head, pad_tail):
     """Return (start, end) in seconds, padded but never into a neighbouring word.
 
@@ -663,6 +740,7 @@ def main():
         if (img_default or any(c.get("image_overlays") for c in m["clips"])) \
         else {}
 
+    hook_failed = False
     for clip in m["clips"]:
         if wanted and clip["id"] not in wanted:
             continue
@@ -679,6 +757,21 @@ def main():
                              float(cp.get("tail", pad_tail)))
         if end > src_dur:
             sys.exit("%s: end %.2f is past the source (%.2f)" % (clip["id"], end, src_dur))
+        # The hook gate runs BEFORE the encode, like the caption-sync check --
+        # a slow opening is not worth a render, and finding out after upload is
+        # how this shipped twice. See hook_gate() for what it is protecting.
+        herrs, hwarns = hook_gate(clip, words, start)
+        for w in hwarns:
+            print("  %s: HOOK WARN -- %s" % (clip["id"], w))
+        for e in herrs:
+            print("  %s: HOOK FAIL -- %s" % (clip["id"], e))
+        if herrs:
+            # --list prices decisions and must show every clip, so it reports
+            # and carries on; anything that would encode stops here.
+            hook_failed = True
+            if not args.list:
+                sys.exit("%s: refusing to render; fix the opening, not the check"
+                         % clip["id"])
         name = "%s-%s" % (prefix, clip["id"]) if prefix else clip["id"]
         dub_wav = dub_words = None
         absent = []
