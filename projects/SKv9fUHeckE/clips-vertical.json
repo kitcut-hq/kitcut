@@ -1,0 +1,45 @@
+{
+  "_comment": "Two vertical shorts cut from DOU DefTech (final episode of season 1) as a test of the shorts pipeline. Third-party footage from the DOU channel, so NO handle badge -- branding someone else's video with our handle would be wrong, and a clean cut is the better control for a capability test anyway. THE SOURCE ALREADY CARRIES BURNED-IN UKRAINIAN SUBTITLES, BUT ONLY OVER THE HOST'S OFF-CAMERA QUESTIONS. Measured, not assumed: the y=850..1050 band reads 0.0280 near-white pixels under a host question and exactly 0.0000 in every guest-speaking sample tested across all four candidate ranges. That matters because a 9:16 window is 607 px of a 1920 px frame, so full-width burned-in text would be sliced into unreadable fragments AND our own caption card would land on top of it. So every clip here is guest-only speech. That constraint, not editorial taste, is what eliminated the two other strong candidates: 'what happens if Delta goes down' (payoff 'we are talking about a price in lives, not money') and 'do the russians have an analogue of Delta' -- in both, the hook lives in the host's subtitled question, and in the second the guest says only 'they' throughout, so the clip would be 45 s about an unnamed subject.",
+  "source": "projects/SKv9fUHeckE/sources/SKv9fUHeckE-1080p.mp4",
+  "words": "projects/SKv9fUHeckE/transcripts/SKv9fUHeckE.words.json",
+  "outdir": "projects/SKv9fUHeckE/outputs/shorts-vertical",
+  "prefix": "SKv9fUHeckE-v",
+  "pad": {
+    "head": 0.15,
+    "tail": 0.35
+  },
+  "vertical": {
+    "width": 1080,
+    "height": 1920
+  },
+  "captions": {
+    "style": "config/presets/red-card-vertical.json",
+    "samples": 24
+  },
+  "clips": [
+    {
+      "id": "01-hunting-our-engineers",
+      "title": "Our Partners Are Hunting Ukraine's Military Software Engineers",
+      "_why": "The best short in the video and it is not close -- it is the claim DOU put in its own title. Opens on the hook with no wind-up ('our partners are really hunting our engineers'), names who they want (veterans who have left the service and carry both combat experience and an IT background), states the risk, then answers it: the one thing that cannot be exported is the pace of change, because a partner adapting in calmer conditions loses exactly that time. Closes on the strongest line in the segment -- we are the only ones of them currently fighting an active war.",
+      "start_text": "Вони, наші партнери, дуже полюють",
+      "end_before_text": "Виклики, які були умовно",
+      "_open_note": "Cut at 1003.88, chosen from the AUDIO and not from the transcript, because here the transcript lies. It reports 'є.' ending at 1003.44 and so claims a 0.48 s gap before the hook word -- but the waveform is continuous speech at -12..-15 dB RMS right through it: whisper truncates word ENDS, and 'є' actually runs to about 1003.74. There is NO silence anywhere between 1003.16 and 1008; the nearest real gaps are 40-60 ms dips at 1002.98 and 1003.12, inside the previous words. So a silent lead-in was never available and the head pad was picked to land on the quietest instant instead: RMS bottoms out at -21.8 dB at 1003.88, against -16.5 dB as 'Вони' begins at 1003.92 and -12 dB in the speech before. head 0.04 puts frame 0 exactly there. Picture checked on a frame-by-frame sheet across 1003.68-1003.96: the speaker never closes his mouth in that window either, and 1003.88 is the calmest of the eight -- lips nearly together, head still, eyes up to the interviewer.",
+      "_bounds_note": "1003.92 -> 1071.50 before pads, ~67.7 s. The tail is a genuine zero: 'є.' ends at 1071.50 and 'Виклики,' begins at 1071.50 with no gap at all, because the speaker runs straight into the next sentence. end_before_text is the right tool for that -- it cuts flush before the next thought by design, which is why check-openings.py reports a thin tail here as intended rather than as a defect. NOTE the anchor phrase must carry 'були умовно': the word 'виклики' also appears at 1070.32 inside this clip, and only the longer phrase is unique.",
+      "pad": {
+        "head": 0.04,
+        "tail": 0.35
+      },
+      "open_ok": "No silent lead-in exists at any cut point near this hook -- the speaker runs the sentence straight into it. 1003.88 is the measured RMS minimum and the calmest frame of the eight around it; both checked, on the audio and on the picture, before rendering."
+    },
+    {
+      "id": "02-dont-wait-to-be-mobilised",
+      "title": "If You've Already Been Mobilised, That's the Worst Case",
+      "_why": "The most useful thing in the video for DOU's own audience of Ukrainian IT people, and it is advice rather than a quotable line, which is why it survives being lifted out. Once someone has been mobilised they are assigned to a unit immediately, and pulling them across to Delta afterwards is described as super-rare and super-hard. The payoff is the direct instruction: do not wait for it to happen to you, decide in advance how you are going to join and contribute.",
+      "start_text": "Якщо ми говоримо конкретно про ту ситуацію",
+      "end_before_text": "А можна якось контриб",
+      "_open_note": "Accepted weakness, chosen with the alternatives on the table: the hook lands about 6 s in, at 'найгірший варіант', and the first clause back-references the host's question ('the situation we are discussing'). The two alternatives were worse for this slot -- 'even we internally lag behind the battlefield' has a better first two seconds but is the second half of clip 1, which would put both shorts inside the same 70 seconds of a 30-minute video, and the pay-more/knowledge-leak answer is only 18 s and hedged. Opening frame is settled: 0.40 s pause before the cut, mouth closed, hands folded, checked on the source.",
+      "_bounds_note": "1638.40 -> 1680.86 before pads, ~42.6 s. The zero tail is deliberate, not thin: 'перемогу.' ends at 1680.86 and the host's next question opens on 'А' at exactly 1680.86 with no gap, so end_before_text cuts flush ahead of it -- which is also what keeps the host's burned-in subtitle out of frame. Verified: the caption band still reads 0.0000 at 1681 and 1682, so nothing enters within the tail pad."
+    }
+  ],
+  "tmp": "projects/SKv9fUHeckE/temp"
+}

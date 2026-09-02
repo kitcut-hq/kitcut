@@ -493,9 +493,13 @@ def main():
                  "--only (got %d clips)" % len(selected))
 
     for clip in selected:
-        # the SAME resolver the video cut uses, so audio and picture agree to the
-        # millisecond about where this clip starts
-        start, end = _cut.resolve(clip, words, pad_head, pad_tail)
+        # the SAME resolver AND the same per-clip pad override the video cut
+        # uses, so audio and picture agree to the millisecond about where this
+        # clip starts -- without the override this drifts by the pad difference
+        cp = clip.get("pad", {})
+        start, end = _cut.resolve(clip, words,
+                                  float(cp.get("head", pad_head)),
+                                  float(cp.get("tail", pad_tail)))
         stem = os.path.join(args.outdir,
                             ("%s-%s" % (prefix, clip["id"])) if prefix else clip["id"])
         if os.path.dirname(stem):        # a prefix may carry a subdirectory

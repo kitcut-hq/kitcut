@@ -666,7 +666,17 @@ def main():
     for clip in m["clips"]:
         if wanted and clip["id"] not in wanted:
             continue
-        start, end = resolve(clip, words, pad_head, pad_tail)
+        # A clip may override the manifest's pad. It has to: the manifest pad is
+        # a sane default for the video, while the head pad is exactly the knob
+        # that places a single opening frame, and that is decided per clip from
+        # the waveform. This was silently ignored until it bit -- check-openings
+        # honoured the per-clip pad and this did not, so the checker and the
+        # renderer disagreed about where a clip began and the check passed on a
+        # start that never shipped.
+        cp = clip.get("pad", {})
+        start, end = resolve(clip, words,
+                             float(cp.get("head", pad_head)),
+                             float(cp.get("tail", pad_tail)))
         if end > src_dur:
             sys.exit("%s: end %.2f is past the source (%.2f)" % (clip["id"], end, src_dur))
         name = "%s-%s" % (prefix, clip["id"]) if prefix else clip["id"]

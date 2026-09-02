@@ -9,6 +9,12 @@ the ACTIVE colour is the word that should be active at that instant.
 Classification is nearest-colour, not exact match: robust to antialiasing,
 outline bleed and JPEG-ish artefacts, unlike counting exact pixel values.
 
+Words whose ACTIVE window is under two frames are not probed. A one-frame probe
+cannot decide them: ASS timestamps are centisecond-quantised and every event
+fades, so the highlight can legitimately render a frame either side. Skipping
+them is printed, never silent -- see the note at the filter for the measured
+case that motivated it.
+
 Invoke as:  python scripts/verify-captions.py ...
 """
 import sys, os, json, argparse, subprocess, random
@@ -83,6 +89,33 @@ def main():
 
     # only groups with >1 word can demonstrate a spotlight
     cand = [(g, wi) for g in dbg if len(g["words"]) > 1 for wi in range(len(g["words"]))]
+
+    # A word whose ACTIVE window is not comfortably wider than one frame cannot
+    # be asserted by a one-frame probe, so probing it produces false failures.
+    # The probe samples the midpoint of the frame containing the word's own
+    # midpoint; ASS timestamps are centisecond-quantised and every event carries
+    # a fade, so for a window of a frame or two the highlight can legitimately
+    # land on the neighbouring frame. Measured case: DOU SKv9fUHeckE clip 01, the
+    # conjunction 'І' active 15.73->15.77 -- 4 cs, EXACTLY one frame at 25 fps --
+    # probed at 15.74 and rendered with the previous word still yellow. A
+    # one-frame lag on a one-frame word is both invisible and unfixable (it is
+    # the shortest thing the format can express), so asserting it buys no safety.
+    # This is a scope limit on the probe, NOT a softened threshold: every word
+    # wide enough to be judged is still judged, and the skipped count is printed
+    # so a preset that quietly shrinks every highlight cannot hide behind it.
+    min_active_s = 2.0 / args.fps
+    wide = [(g, wi) for (g, wi) in cand
+            if (g["words"][wi]["b"] - g["words"][wi]["a"]) / 100.0 >= min_active_s]
+    skipped = len(cand) - len(wide)
+    if skipped:
+        print("skipping %d/%d candidate word(s) with an active window under "
+              "%.0f ms (2 frames at %g fps) -- too short for a 1-frame probe to judge"
+              % (skipped, len(cand), min_active_s * 1000.0, args.fps))
+    if not wide:
+        sys.exit("no word has an active window of at least %.0f ms -- nothing "
+                 "probeable; check the preset's timing block" % (min_active_s * 1000.0))
+    cand = wide
+
     random.seed(args.seed)
     picks = random.sample(cand, min(args.samples, len(cand)))
     picks.sort(key=lambda p: p[0]["words"][p[1]]["a"])

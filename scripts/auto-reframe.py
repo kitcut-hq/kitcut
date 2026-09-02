@@ -338,7 +338,14 @@ def main():
     for clip in m["clips"]:
         if wanted and clip["id"] not in wanted:
             continue
-        start, end = _cut.resolve(clip, words, pad_head, pad_tail)
+        # Honour a per-clip pad override, exactly as cut-clips.py does. The
+        # sidecar's key times are CLIP-relative, so if this resolved a different
+        # start than the renderer, every key would be offset by the difference
+        # and the window would re-centre late at each camera cut.
+        cp = clip.get("pad", {})
+        start, end = _cut.resolve(clip, words,
+                                  float(cp.get("head", pad_head)),
+                                  float(cp.get("tail", pad_tail)))
         cw, ch, _, _ = _cut.crop_box(clip, src_w, src_h, out_w, out_h)
         x_lo, x_hi = cw / 2.0, src_w - cw / 2.0
 

@@ -423,8 +423,66 @@ in the open ones and the score was reading head pose, not lips. Eight frames
 from one shot separating for the wrong reason will not survive the next video.
 Doing it properly needs a lip-contour model and a labelled set across films.
 
+## Reading somebody else's source before you cut it
+
+Three properties of a third-party video decide what you are allowed to pick, and
+all three are cheap to measure. Do it before choosing episodes, not after.
+
+- **Burned-in subtitles.** Many channels burn captions on part of their footage.
+  A 9:16 window is 607 px of a 1920 px frame, so full-width burned-in text is
+  sliced into fragments AND your own caption card lands on top of it. Measure the
+  fraction of near-white pixels in the caption band across sampled frames rather
+  than eyeballing four of them. On DOU `SKv9fUHeckE` only the host's off-camera
+  questions are subtitled: the band reads 0.0280 under a question and exactly
+  0.0000 during every guest answer. That made "guest-only" a hard constraint on
+  episode choice and killed two otherwise-excellent clips whose hook lived in the
+  host's question. **A clip built on an unsubtitled off-camera question also
+  fails for a second reason:** the guest answers in pronouns, so the short is a
+  minute about an unnamed "they".
+- **How many cameras.** `scene>0.25` finds nothing when two cameras shoot the
+  same person in the same room — it missed all seven cuts in a 68 s clip. Frame
+  differencing finds them instantly (median 0.36, cuts >12).
+- **Then judge the reframe plan against those cuts, not by its jumps.** A
+  ±140 px window snap looks like a defect and is not one if it lands on a camera
+  cut, because the whole picture changes at that instant. All eleven jumps across
+  two clips landed within 0.01 s of a real cut. Check alignment; do not "fix"
+  the jumps.
+
+## The transcript is not evidence of silence
+
+faster-whisper truncates word **ends**. A "gap" between one word's end and the
+next word's start therefore routinely contains speech, and a head pad placed by
+that number opens mid-phrase while every transcript-based check reports a
+comfortable "ok". Measured: the transcript claimed 0.48 s of lead-in before a
+hook word while the waveform ran at -12 dB RMS straight through it. Word
+*starts* line up with the audio well; it is the ends that drift.
+
+`check-openings.py` now measures the waveform as well and flags the
+disagreement. When there is genuinely no silence to cut into — a speaker who
+runs a sentence into the next — place the head pad on the **RMS minimum** and
+record it in `open_ok`:
+
+```powershell
+python scripts/check-openings.py --manifest projects/<id>/clips-vertical.json
+#   audio  frame 0 is SILENT, 0.54s of air before the first word
+#   audio  frame 0 lands in SPEECH -- reviewed and accepted: <why>
+```
+
+Decode raw PCM to measure this. `volumedetect` after an `-ss` seek on a
+compressed source returns decoder-priming garbage — it reported -1.2 dB peaks
+inside a pause that is really at -40 dB.
+
 ## Traps (all hit for real)
 
+- **A per-clip `pad` is honoured by the renderer, the reframer and the
+  checker — but was silently ignored by the first two until 2026-09.** If you
+  are reading an older manifest, a clip's `pad.head` may not be what actually
+  shipped; `--list` prints the resolved start, so trust that over the manifest.
+- **A caption-sync probe cannot judge a word shorter than two frames.** At
+  25 fps a 40 ms word is exactly one frame, and cs-quantised ASS plus a 70 ms
+  fade can put the highlight on either side of it. Such words are skipped and
+  the count is printed. Raising `min_active_ms` does NOT fix it when the word is
+  the last of its caption group — the group end clamps the highlight regardless.
 - **`crop` has no `eval` option** — that is `scale`/`overlay`/`drawtext`. Its
   `x`/`y` are flagged runtime-tunable and already re-evaluated every frame,
   which is what makes the pan work. Passing `eval=frame` is a hard error.

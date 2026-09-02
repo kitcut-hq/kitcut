@@ -1,0 +1,52 @@
+{
+  "v": 1,
+  "id": "SKv9fUHeckE",
+  "intent": "Two vertical shorts cut from DOU DefTech (final episode of season 1) as a test of the shorts pipeline. Third-party footage from the DOU channel -- NOT Instafill content, so no handle badge.",
+  "pipelines": [
+    "shorts"
+  ],
+  "inputs": {
+    "source_url": "https://youtu.be/SKv9fUHeckE",
+    "channel": "DOU (@DOU_youtube)",
+    "title": "Чому софт у війську недооцінюють і хто полює на українських інженерів | DOU DefTech",
+    "guest": "Artem Martynenko, Chief Strategy Officer, Delta",
+    "language": "uk",
+    "duration_s": 1809.65,
+    "video": "1920x1080 @ 25 fps",
+    "source": "projects/SKv9fUHeckE/sources/SKv9fUHeckE-1080p.mp4",
+    "words": "projects/SKv9fUHeckE/transcripts/SKv9fUHeckE.words.json"
+  },
+  "controls": {},
+  "deliverables": {
+    "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-01-hunting-our-engineers.mp4": {
+      "status": "current",
+      "built_utc": "2026-09-02T05:01:07Z",
+      "kind": "short",
+      "script": "scripts/cut-clips.py",
+      "manifest": "projects/SKv9fUHeckE/clips-vertical.json",
+      "burned": [
+        "9:16 crop per reframe sidecar",
+        "word-synced captions, style config/presets/red-card-vertical.json"
+      ],
+      "sidecars": {
+        "clip": "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-01-hunting-our-engineers.json"
+      }
+    },
+    "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-dont-wait-to-be-mobilised.mp4": {
+      "status": "current",
+      "built_utc": "2026-09-02T05:02:14Z",
+      "kind": "short",
+      "script": "scripts/cut-clips.py",
+      "manifest": "projects/SKv9fUHeckE/clips-vertical.json",
+      "burned": [
+        "9:16 crop per reframe sidecar",
+        "word-synced captions, style config/presets/red-card-vertical.json"
+      ],
+      "sidecars": {
+        "clip": "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-dont-wait-to-be-mobilised.json"
+      }
+    }
+  },
+  "notes": [],
+  "updated_utc": "2026-09-02T05:02:14Z"
+}
