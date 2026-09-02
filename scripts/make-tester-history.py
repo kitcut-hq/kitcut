@@ -77,6 +77,10 @@ REDACT = ([row.rstrip("\n").encode() for row, _ in _tester.SCRUB_CLAUDE_MD
            # Real values that lived in check-screen.py's fixtures and the
            # README until they were made synthetic. They are gone from the
            # tree; history is where they would otherwise survive.
+           # bare too: older commits wrote it as "*4149… - Notepad", which no
+           # full-number literal matches. Mapped to the test PAN's prefix so
+           # the sentence still reads.
+           (b"4149", b"4111"),
            b"4149 4390 2701 0499", b"4149439027010499", b"4149439027010949",
            b"4441 **** **** 7789", b"2527428", b"agamanuk@gmail.com",
            b"+38 (066) 317-3125", b"+380664134978", b"066 431 4978",
@@ -207,8 +211,11 @@ def build(outdir):
         paths += ["--path", p]
     repl = os.path.join(outdir, ".redact.txt")
     with open(repl, "wb") as f:
+        # an entry is either the text to delete, or (text, replacement) where
+        # deleting outright would leave the sentence broken
         for lit in REDACT:
-            f.write(b"literal:" + lit + b"==>\n")
+            pat, sub = lit if isinstance(lit, tuple) else (lit, b"")
+            f.write(b"literal:" + pat + b"==>" + sub + b"\n")
     msg_cb = (
         "rules = %r\n"
         "low = message.lower()\n"
