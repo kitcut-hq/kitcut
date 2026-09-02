@@ -73,14 +73,24 @@ REDACT = ([row.rstrip("\n").encode() for row, _ in _tester.SCRUB_CLAUDE_MD
            b"docs/product-strategy.md", b"docs/market-shorts-2026.md",
            b"docs/shorts-strategy.md", b"docs/shorts-gtm-playbooks.md",
            b"docs/claude-native-channel.md",
-           b"(see ``)."])   # leftover when the filename went first
+           b"(see ``).",   # leftover when the filename went first
+           # Real values that lived in check-screen.py's fixtures and the
+           # README until they were made synthetic. They are gone from the
+           # tree; history is where they would otherwise survive.
+           b"4149 4390 2701 0499", b"4149439027010499", b"4149439027010949",
+           b"4441 **** **** 7789", b"2527428", b"agamanuk@gmail.com",
+           b"+38 (066) 317-3125", b"+380664134978", b"066 431 4978",
+           b"0939589090", b"\xd0\xa1\xd1\x82\xd1\x80\xd0\xb5\xd0\xbb\xd1"
+           b"\x8c\xd1\x87\xd0\xb5\xd0\xbd\xd0\xba\xd0\xbe"])  # the recipient's surname
 
 # Business prose that must not survive in ANY blob. This is the check that
 # catches a row whose wording changed between commits -- a filename list
 # cannot, because the filename is exactly what redaction removes.
 BLOB_TERMS = [b"licensed-plugin", b"learning flywheel", b"go-to-market",
               b"GTM playbook", b"shorts/clipping market", b"paying ICP",
-              b"customer-facing", b"logo churn"]
+              b"customer-facing", b"logo churn",
+              # the fixture values, checked the same way
+              b"4149", b"2527428", b"agamanuk", b"0939589090"]
 
 # A commit whose message mentions the business work is rewritten wholesale:
 # the subject is what a reader sees in `git log`, and half a sentence about

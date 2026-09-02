@@ -2712,9 +2712,26 @@ the copy's `QUICKSTART.md`; `config/tester/settings.json` ships as its
 not forty prompts; the content dirs are recreated empty.
 
 ```powershell
-python scripts/make-tester-repo.py --list          # what ships, what never does
-python scripts/make-tester-repo.py --out ..\kitcut-beta
+python scripts/make-tester-repo.py --list             # what ships, what never does
+python scripts/make-tester-repo.py --out ..\kitcut     # the tree, no history
+python scripts/make-tester-history.py --list          # commits kept, text redacted
+python scripts/make-tester-history.py --out ..\kitcut  # the tree AND the history
 ```
+
+**`make-tester-history.py` is the one to use** — the commits are the record of
+how the tooling was built and they are worth handing over. A plain clone cannot
+do it: every excluded file still sits in the commit that added it, so the
+history would ship what the tree does not. It rewrites all 79 commits with
+`git-filter-repo` against the *same allowlist* (imported from the tree
+exporter, so the two cannot drift), drops both exporters — they name the
+excluded docs in their own constants — and redacts the text that points at what
+stayed behind. Three failures found while building it, each now a check:
+blanking a filename left CLAUDE.md's **summary** of the excluded doc in place,
+so whole table rows go; a commit message's **body** spelled out the business
+plan while its subject looked innocent, so full messages are scanned and a
+flagged one that is neither rewritten nor explicitly reviewed FAILS the build;
+and `config/` shipped wholesale, which included the chapter list of every video
+we have published.
 
 Three self-checks make the copy prove itself before it exists: CLAUDE.md is
 scrubbed of references to the excluded docs by **exact-match replacements that
