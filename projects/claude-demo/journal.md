@@ -67,3 +67,8 @@ Uploaded the finished render(s) to the @instafill_ai channel as **unlisted**, wi
 description in each saying what the AI did and which capabilities the film demonstrates.
 Description sources are in `temp/ytdesc/`; the video ids are in the `.youtube.json`
 sidecars beside each render.
+
+## 2026-09-02
+Marked `outputs/claude-demo.mp4` superseded in project.json -- the labelled render is
+the published one; the unlabelled file stays on disk as the pre-label master. This
+clears the doctor's AMBIGUOUS (two current screencast renders).

@@ -1,0 +1,57 @@
+{
+  "v": 1,
+  "id": "neaCnEawvbk",
+  "intent": "",
+  "pipelines": [],
+  "inputs": {},
+  "controls": {},
+  "deliverables": {
+    "projects/neaCnEawvbk/outputs/shorts-vertical/neaCnEawvbk-v-01-500-fields.mp4": {
+      "status": "current",
+      "built_utc": "2026-09-01T23:08:52Z",
+      "kind": "short",
+      "script": "scripts/cut-clips.py",
+      "manifest": "projects/neaCnEawvbk/clips-vertical.json",
+      "burned": [
+        "source rect (320, 60, 1600, 880) fitted to 1080 wide on #0B0D10",
+        "word-synced captions, style config/presets/red-card-vertical.json",
+        "handle badge @instafill_ai"
+      ],
+      "sidecars": {
+        "clip": "projects/neaCnEawvbk/outputs/shorts-vertical/neaCnEawvbk-v-01-500-fields.json"
+      }
+    },
+    "projects/neaCnEawvbk/outputs/shorts-vertical/neaCnEawvbk-v-02-45-minutes-to-two.mp4": {
+      "status": "current",
+      "built_utc": "2026-09-01T23:11:53Z",
+      "kind": "short",
+      "script": "scripts/cut-clips.py",
+      "manifest": "projects/neaCnEawvbk/clips-vertical.json",
+      "burned": [
+        "source rect (320, 60, 1600, 880) fitted to 1080 wide on #0B0D10",
+        "word-synced captions, style config/presets/red-card-vertical.json",
+        "handle badge @instafill_ai"
+      ],
+      "sidecars": {
+        "clip": "projects/neaCnEawvbk/outputs/shorts-vertical/neaCnEawvbk-v-02-45-minutes-to-two.json"
+      }
+    },
+    "projects/neaCnEawvbk/outputs/shorts-vertical/neaCnEawvbk-v-03-manual-bpo-risk.mp4": {
+      "status": "current",
+      "built_utc": "2026-09-01T23:15:27Z",
+      "kind": "short",
+      "script": "scripts/cut-clips.py",
+      "manifest": "projects/neaCnEawvbk/clips-vertical.json",
+      "burned": [
+        "source rect (320, 60, 1600, 880) fitted to 1080 wide on #0B0D10",
+        "word-synced captions, style config/presets/red-card-vertical.json",
+        "handle badge @instafill_ai"
+      ],
+      "sidecars": {
+        "clip": "projects/neaCnEawvbk/outputs/shorts-vertical/neaCnEawvbk-v-03-manual-bpo-risk.json"
+      }
+    }
+  },
+  "notes": [],
+  "updated_utc": "2026-09-01T23:15:27Z"
+}

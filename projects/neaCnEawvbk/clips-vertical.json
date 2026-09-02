@@ -1,0 +1,53 @@
+{
+  "_comment": "Three vertical shorts selected for a clean hook/payoff arc. This is a screencast, so each clip uses a readable content crop instead of face tracking. The crop starts just past the lower-left webcam and ends above the taskbar, removing both cleanly without an in-frame blur patch.",
+  "source": "projects/neaCnEawvbk/sources/neaCnEawvbk.mp4",
+  "words": "projects/neaCnEawvbk/transcripts/neaCnEawvbk.words.json",
+  "outdir": "projects/neaCnEawvbk/outputs/shorts-vertical",
+  "prefix": "neaCnEawvbk-v",
+  "pad": {
+    "head": 0.12,
+    "tail": 0.3
+  },
+  "vertical": {
+    "width": 1080,
+    "height": 1920
+  },
+  "captions": {
+    "style": "config/presets/red-card-vertical.json",
+    "samples": 24
+  },
+  "handle": {
+    "text": "@instafill_ai",
+    "preset": "config/handles/vertical.json"
+  },
+  "place": {
+    "y": 370,
+    "background": "#0B0D10"
+  },
+  "clips": [
+    {
+      "id": "01-500-fields",
+      "title": "This BPO Has 500+ Fields",
+      "start_text": "As you can see, it's a three page form",
+      "end": 128.539,
+      "_end_note": "The next word starts on the exact same timestamp as 'field' ends; stop 1 ms earlier so the next caption card cannot leak into this cut.",
+      "crop_rect": [320, 60, 1600, 880]
+    },
+    {
+      "id": "02-45-minutes-to-two",
+      "title": "45 Minutes of BPO Entry, Done in Under Two",
+      "start_text": "filling out a BPO form this usually takes under two minutes",
+      "end_before_text": "I will just put my document",
+      "crop_rect": [320, 60, 1600, 880]
+    },
+    {
+      "id": "03-manual-bpo-risk",
+      "title": "Why Manual BPO Entry Gets Reports Kicked Back",
+      "start_text": "So if you're doing this manually",
+      "end": 512.469,
+      "_end_note": "The next word starts on the exact same timestamp as 'AI' ends; stop 1 ms earlier so the next caption card cannot leak into this cut.",
+      "crop_rect": [320, 60, 1600, 880]
+    }
+  ],
+  "tmp": "projects/neaCnEawvbk/temp"
+}

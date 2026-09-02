@@ -36,7 +36,7 @@
       "script": "scripts/yt-upload.py"
     },
     "projects/claude-demo/outputs/claude-demo.mp4": {
-      "status": "current",
+      "status": "superseded",
       "built_utc": "2026-08-27T06:22:12Z",
       "kind": "screencast",
       "manifest": "projects/claude-demo/screencast.json",
@@ -52,7 +52,7 @@
         "name label 'Oleksandr Gamaniuk' at 2.0s film time for 5.5s",
         "image overlay 'end-card.html' wipe in at 439.4s to the end, over a B&W/blur/dim treatment"
       ],
-      "_why": "Current film: one NVENC pass carrying the pause cut, the camera PiP, the opening bookend, the lower third and the Instafill end card (image_overlays, wiped on over a B&W/blur/dim treatment). Supersedes claude-demo-labelled.mp4. The published upload 7FBUWAmJfu4 predates the end card.",
+      "_why": "claude-demo-labelled.mp4 is the same cut plus the name label and is the render that was published; this unlabelled one is kept only as the pre-label master.",
       "script": "scripts/screencast-cut.py",
       "sidecars": {
         "sync": "projects/claude-demo/claude-demo.sync.json",
