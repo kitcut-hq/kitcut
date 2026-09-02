@@ -86,13 +86,13 @@
   "deliverables": {
     "projects/books-giveaway/outputs/books-giveaway.mp4": {
       "status": "current",
-      "built_utc": "2026-09-01T04:37:36Z",
+      "built_utc": "2026-09-01T17:56:11Z",
       "kind": "film",
       "script": "scripts/screen-cut.py",
       "manifest": "projects/books-giveaway/screen.json",
       "burned": {
         "cut": "activity-driven",
-        "blur_rects": 4,
+        "blur_rects": 58,
         "speed_badge": true,
         "speed": 19.072265625,
         "audio": "none (silent sources)"
@@ -104,14 +104,29 @@
       }
     },
     "projects/books-giveaway/outputs/books-giveaway-hot-draft.mp4": {
-      "status": "current",
-      "built_utc": "2026-09-01T04:46:36Z",
+      "status": "superseded",
+      "built_utc": "2026-09-01T05:06:44Z",
       "kind": "draft",
       "script": "scripts/screen-cut.py",
       "manifest": "projects/books-giveaway/screen.json",
       "burned": {
         "cut": "activity-driven",
         "blur_rects": 4,
+        "speed_badge": true,
+        "speed": 19.072265625,
+        "audio": "none (silent sources)"
+      },
+      "_why": "Half-resolution review draft of the riskiest minute; served its purpose. The film-time redaction route (film-redact.py) and the final published film replaced it -- the manifest gained blur_extra rects after this was built, so it is stale by design, not in error."
+    },
+    "projects/books-giveaway/temp/film/base.mp4": {
+      "status": "current",
+      "built_utc": "2026-09-01T19:13:27Z",
+      "kind": "draft",
+      "script": "scripts/screen-cut.py",
+      "manifest": "projects/books-giveaway/screen.json",
+      "burned": {
+        "cut": "activity-driven",
+        "blur_rects": 0,
         "speed_badge": true,
         "speed": 19.072265625,
         "audio": "none (silent sources)"
@@ -125,7 +140,7 @@
     "The render-pipeline test manifest (temp/rendertest.json) was a throwaway for proving the filtergraph end to end before spending a full encode; its deliverable entry was removed as it is not a render of this video.",
     "User: blur, never black-out; never wipe whole screens or panels; the Claude chat stays readable except the sensitive field itself; uploads unlisted."
   ],
-  "updated_utc": "2026-09-01T04:46:36Z",
+  "updated_utc": "2026-09-02T05:52:34Z",
   "review": {
     "fingerprint": "8c9ce85e4859af6a",
     "approved_utc": "2026-09-01T04:30:48Z",

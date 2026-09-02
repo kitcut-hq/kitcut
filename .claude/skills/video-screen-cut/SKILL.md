@@ -47,7 +47,12 @@ Three rules the pipeline enforces, learned the expensive way:
    went out before anyone asked.
 3. **The gate reads the render, and closes the loop.** `render-gate.py`
    searches the secrets' own pixels on the output and `--patch`es the manifest
-   for anything it finds; a sparse OCR "looks clean" is not a gate.
+   for anything it finds; a sparse OCR "looks clean" is not a gate. Two
+   things it must keep doing (KI-022): sample by the frame's **own** pts
+   (`frames_of`, never `fps=` — the label is the slot, and at 19x a
+   half-second of label is nine seconds of source), and turn each hit into
+   the **span** it is sharp for before mapping it back. A loop that patches
+   the same rect twice is not converging; it is patching the wrong seconds.
 
 The worked example is `projects/books-giveaway/screen.json`. README has the
 reference under "A screencast with no soundtrack at all".
@@ -227,6 +232,62 @@ missed something.
 
 A handheld shot of a screen needs **one generous rect per field**, not the
 per-frame boxes the scanner reports — the camera moves, so union them.
+
+## When the secrets are the film, redact the film instead
+
+Source-time tracking is the default and stays right when secrets are
+occasional. Check before you commit to it: **how much of the finished film has
+a secret on screen?** Under about a fifth, track the sources. Over it, the
+mapping from source time back to film time — through the cut, the speed change
+and the pad — becomes the thing you spend the day debugging. On
+`books-giveaway` it was 31 % (148 s of 480 s), 133 of 160 gate hits were inside
+the 3x stretches, and one gate round cost 2 h 16 m.
+
+The film-time route removes the mapping rather than debugging it:
+
+```powershell
+python scripts/screen-cut.py  --manifest projects/<id>/screen.json --target 8:00 --no-redact
+python scripts/film-redact.py --project <id> --states --detect -j 8
+python scripts/redaction-review.py --manifest projects/<id>/screen.json --states --html
+python scripts/film-redact.py --project <id> --blur
+python scripts/film-redact.py --project <id> --gate
+```
+
+Four things to know before you run it:
+
+- **The unit of work is the screen state.** 14,400 frames, ~500 real changes;
+  `--states` writes one representative frame per state (1,330 here) and
+  detection runs on those. Ask ffmpeg for a frame by TIME, never by index —
+  `select`'s counter restarts when the decoder re-initialises.
+- **Price it honestly: 2.7 s per rep frame.** One process does 0.37 rep/s and
+  eight do 0.44 — the OCR is memory-bound, so `-j` buys 19 %, not 8x. Quote
+  ~50 minutes for a 1,330-state film and do not promise six.
+- **Set the OCR threads in the constructor.** onnxruntime ignores
+  `OMP_NUM_THREADS` and friends; unbounded, eight workers oversubscribe the
+  cores and run *slower than one process*. That is `--threads` (KI-024).
+- **Launch it detached and let it checkpoint.** It resumes every 25 reps, so
+  an interruption costs a minute, not the run — and it must not be launched
+  under anything that will time out and kill it (KI-025).
+
+**What the detector cannot read still needs a rect.** Film time gets its own
+escape hatch, `film_blur` on the manifest, in the film's own seconds:
+
+```json
+"film_blur": [
+  {"rect": [0.41, 0.22, 0.18, 0.05], "when": [131.0, 148.5],
+   "why": "card face drawn as artwork; no text for OCR to find"}
+]
+```
+
+`mask_runs()` unions those into every state their window overlaps, a review
+decision never clears one, and the approval fingerprint covers the list — so
+adding a rect un-approves the look instead of slipping in behind it. The gate
+cannot help here: it asks whether *detected* boxes are blurred, and nothing
+detected these (KI-026).
+
+The review is not optional here either: `redaction-review.py --states` shows
+before/after from the film's own frames, once per kind of secret, and writes
+the `decisions.json` that `--blur` honours.
 
 ## Hold, or the film strobes
 

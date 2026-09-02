@@ -43,9 +43,7 @@
       "_blur_why": "review pass 1: the full-width bands hid the selfie and the card-creation story this clip exists to show. Tracking measures its own recall now; hand rects only where --recall says they are needed.",
       "path": "projects/books-giveaway/sources/screen-20260831-083709-1788190581246.mp4",
       "activity": "projects/books-giveaway/temp/screen-20260831-083709-1788190581246.activity.json",
-      "proxy": "projects/books-giveaway/temp/proxy/screen-20260831-083709-1788190581246.mp4",
-      "blur_extra": [],
-      "blur": []
+      "proxy": "projects/books-giveaway/temp/proxy/screen-20260831-083709-1788190581246.mp4"
     },
     {
       "_why": "08:38 -- Privat24: the new Universal card (0499) and the 10 000 UAH transfer that funds it.",
@@ -53,9 +51,141 @@
       "path": "projects/books-giveaway/sources/screen-20260831-083827-1788190653366.mp4",
       "activity": "projects/books-giveaway/temp/screen-20260831-083827-1788190653366.activity.json",
       "proxy": "projects/books-giveaway/temp/proxy/screen-20260831-083827-1788190653366.mp4",
-      "blur": [],
-      "blur_extra": [],
-      "track": "projects/books-giveaway/temp/track/screen-20260831-083827-1788190653366"
+      "track": "projects/books-giveaway/temp/track/screen-20260831-083827-1788190653366",
+      "blur_extra": [
+        {
+          "_why": "render-gate: iban:81 sharp in the film at 0:24.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.7729,
+            0.5085,
+            0.0926,
+            0.0302
+          ],
+          "when": [
+            26.8,
+            28.8
+          ]
+        },
+        {
+          "_why": "render-gate: card:2527428 sharp in the film at 0:24.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.4568,
+            0.3433,
+            0.2178,
+            0.0389
+          ],
+          "when": [
+            14.1,
+            41.5
+          ]
+        },
+        {
+          "_why": "render-gate: iban:58 sharp in the film at 0:24.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.8213,
+            0.5067,
+            0.1781,
+            0.0356
+          ],
+          "when": [
+            14.1,
+            41.5
+          ]
+        },
+        {
+          "_why": "render-gate: card:0499394687233 sharp in the film at 0:28.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.4568,
+            0.2289,
+            0.5203,
+            0.0378
+          ],
+          "when": [
+            26.8,
+            54.2
+          ]
+        },
+        {
+          "_why": "render-gate: card:0499 sharp in the film at 0:32.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.1742,
+            0.3133,
+            0.1806,
+            0.0422
+          ],
+          "when": [
+            39.5,
+            66.9
+          ]
+        }
+      ],
+      "blur": [
+        {
+          "_why": "render-gate: iban:81 sharp in the film at 0:24.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.7729,
+            0.5085,
+            0.0926,
+            0.0302
+          ],
+          "when": [
+            26.8,
+            28.8
+          ]
+        },
+        {
+          "_why": "render-gate: card:2527428 sharp in the film at 0:24.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.4568,
+            0.3433,
+            0.2178,
+            0.0389
+          ],
+          "when": [
+            14.1,
+            41.5
+          ]
+        },
+        {
+          "_why": "render-gate: iban:58 sharp in the film at 0:24.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.8213,
+            0.5067,
+            0.1781,
+            0.0356
+          ],
+          "when": [
+            14.1,
+            41.5
+          ]
+        },
+        {
+          "_why": "render-gate: card:0499394687233 sharp in the film at 0:28.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.4568,
+            0.2289,
+            0.5203,
+            0.0378
+          ],
+          "when": [
+            26.8,
+            54.2
+          ]
+        },
+        {
+          "_why": "render-gate: card:0499 sharp in the film at 0:32.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.1742,
+            0.3133,
+            0.1806,
+            0.0422
+          ],
+          "when": [
+            39.5,
+            66.9
+          ]
+        }
+      ]
     },
     {
       "_why": "08:59 -- the Threads post and its comments; Claude collects who asked for what.",
@@ -63,7 +193,6 @@
       "activity": "projects/books-giveaway/temp/desktop-085957.activity.json",
       "_blur_why": "blurred fields only, from temp/pii/desktop-085957.pii.json; padded 0.006/0.01 -- enough not to clip a glyph",
       "proxy": "projects/books-giveaway/temp/proxy/desktop-085957.mp4",
-      "blur": [],
       "track": "projects/books-giveaway/temp/track/desktop-085957"
     },
     {
@@ -72,8 +201,89 @@
       "activity": "projects/books-giveaway/temp/desktop-104620.activity.json",
       "_blur_why": "blurred fields only, from temp/pii/desktop-104620.pii.json; padded 0.006/0.01 -- enough not to clip a glyph",
       "proxy": "projects/books-giveaway/temp/proxy/desktop-104620.mp4",
-      "blur": [],
-      "track": "projects/books-giveaway/temp/track/desktop-104620"
+      "track": "projects/books-giveaway/temp/track/desktop-104620",
+      "blur_extra": [
+        {
+          "_why": "render-gate: phone:0939589090 sharp in the film at 1:49.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.4733,
+            0.0681,
+            0.0404
+          ],
+          "when": [
+            212.8,
+            219.2
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0939589090 sharp in the film at 1:51.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.4298,
+            0.0681,
+            0.0413
+          ],
+          "when": [
+            220.3,
+            225.4
+          ]
+        },
+        {
+          "_why": "render-gate: phone:5709395890903 sharp in the film at 1:55.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.6953,
+            0.6539,
+            0.2474,
+            0.0376
+          ],
+          "when": [
+            234.1,
+            236.9
+          ]
+        }
+      ],
+      "blur": [
+        {
+          "_why": "render-gate: phone:0939589090 sharp in the film at 1:49.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.4733,
+            0.0681,
+            0.0404
+          ],
+          "when": [
+            212.8,
+            219.2
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0939589090 sharp in the film at 1:51.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.4298,
+            0.0681,
+            0.0413
+          ],
+          "when": [
+            220.3,
+            225.4
+          ]
+        },
+        {
+          "_why": "render-gate: phone:5709395890903 sharp in the film at 1:55.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.6953,
+            0.6539,
+            0.2474,
+            0.0376
+          ],
+          "when": [
+            234.1,
+            236.9
+          ]
+        }
+      ]
     },
     {
       "_why": "10:49",
@@ -101,27 +311,7 @@
           ]
         }
       ],
-      "track": "projects/books-giveaway/temp/track/desktop-104945",
-      "blur_extra": [
-        {
-          "_why": "PAN 4149 **** **** 0499 + 11/27 + CVV 753. The user SELECTS this text, and white-on-blue pixels do not NCC-match the template captured black-on-white -- tracking misses exactly while it is highlighted. Hand rect over the block for the whole clip.",
-          "rect": [
-            0.35,
-            0.37,
-            0.125,
-            0.075
-          ]
-        },
-        {
-          "_why": "full IBAN UA39 3052 99... printed beside it; OCR never produced a hit here, so no template exists to track",
-          "rect": [
-            0.475,
-            0.415,
-            0.215,
-            0.05
-          ]
-        }
-      ]
+      "track": "projects/books-giveaway/temp/track/desktop-104945"
     },
     {
       "_why": "10:51",
@@ -131,32 +321,123 @@
       "proxy": "projects/books-giveaway/temp/proxy/desktop-105144.mp4",
       "blur": [
         {
-          "_why": "Alt-Tab switcher: the Notepad card renders '*4149439027010499 - Notepad' as its TITLE and shows the PAN in its thumbnail, both at thumbnail scale no template matches. Covers title + body of that card while the switcher is up.",
+          "_why": "Alt-Tab switcher: the Notepad card renders '*4149439027010499 - Notepad' as its TITLE and shows the PAN in its thumbnail, both at thumbnail scale no template matches. Covers title + body of that card while the switcher is up. REVIEW 2: the rect missed the window TITLE, which spells the PAN in full; widened up and left to cover title + thumbnail.",
           "rect": [
-            0.605,
-            0.22,
-            0.145,
-            0.1
+            0.355,
+            0.185,
+            0.235,
+            0.155
           ],
           "when": [
             24.0,
             42.0
+          ]
+        },
+        {
+          "_why": "render-gate: phone:570939589090 sharp in the film at 2:07.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.7575,
+            0.5761,
+            0.1567,
+            0.0385
+          ],
+          "when": [
+            13.2,
+            18.0
+          ]
+        },
+        {
+          "_why": "render-gate: phone:570939589090 sharp in the film at 2:10.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.7575,
+            0.5567,
+            0.1567,
+            0.0376
+          ],
+          "when": [
+            27.3,
+            29.6
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0935630503 sharp in the film at 2:14.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.7652,
+            0.3094,
+            0.1204,
+            0.0413
+          ],
+          "when": [
+            58.2,
+            60.4
+          ]
+        },
+        {
+          "_why": "render-gate: card:4149439027010499 sharp in the film at 2:08.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3798,
+            0.2178,
+            0.1216,
+            0.0378
+          ],
+          "when": [
+            3.7,
+            31.2
           ]
         }
       ],
       "track": "projects/books-giveaway/temp/track/desktop-105144",
       "blur_extra": [
         {
-          "_why": "Alt-Tab switcher: the Notepad card renders '*4149439027010499 - Notepad' as its TITLE and shows the PAN in its thumbnail, both at thumbnail scale no template matches. Covers title + body of that card while the switcher is up.",
+          "_why": "render-gate: phone:570939589090 sharp in the film at 2:07.0; span mapped back through the cut and the pad",
           "rect": [
-            0.605,
-            0.22,
-            0.145,
-            0.1
+            0.7575,
+            0.5761,
+            0.1567,
+            0.0385
           ],
           "when": [
-            24.0,
-            42.0
+            13.2,
+            18.0
+          ]
+        },
+        {
+          "_why": "render-gate: phone:570939589090 sharp in the film at 2:10.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.7575,
+            0.5567,
+            0.1567,
+            0.0376
+          ],
+          "when": [
+            27.3,
+            29.6
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0935630503 sharp in the film at 2:14.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.7652,
+            0.3094,
+            0.1204,
+            0.0413
+          ],
+          "when": [
+            58.2,
+            60.4
+          ]
+        },
+        {
+          "_why": "render-gate: card:4149439027010499 sharp in the film at 2:08.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3798,
+            0.2178,
+            0.1216,
+            0.0378
+          ],
+          "when": [
+            3.7,
+            31.2
           ]
         }
       ]
@@ -167,29 +448,69 @@
       "activity": "projects/books-giveaway/temp/desktop-110556.activity.json",
       "_blur_why": "blurred fields only, from temp/pii/desktop-110556.pii.json; padded 0.006/0.01 -- enough not to clip a glyph",
       "proxy": "projects/books-giveaway/temp/proxy/desktop-110556.mp4",
-      "blur": [],
-      "track": "projects/books-giveaway/temp/track/desktop-110556"
+      "track": "projects/books-giveaway/temp/track/desktop-110556",
+      "blur_extra": [
+        {
+          "_why": "render-gate: phone:0935630503 sharp in the film at 2:38.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.791,
+            0.6289,
+            0.0681,
+            0.0404
+          ],
+          "when": [
+            283.2,
+            288.9
+          ]
+        },
+        {
+          "_why": "render-gate: phone:093563050311 sharp in the film at 2:38.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.7558,
+            0.628,
+            0.1638,
+            0.0413
+          ],
+          "when": [
+            283.2,
+            288.9
+          ]
+        }
+      ],
+      "blur": [
+        {
+          "_why": "render-gate: phone:0935630503 sharp in the film at 2:38.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.791,
+            0.6289,
+            0.0681,
+            0.0404
+          ],
+          "when": [
+            283.2,
+            288.9
+          ]
+        },
+        {
+          "_why": "render-gate: phone:093563050311 sharp in the film at 2:38.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.7558,
+            0.628,
+            0.1638,
+            0.0413
+          ],
+          "when": [
+            283.2,
+            288.9
+          ]
+        }
+      ]
     },
     {
       "_why": "11:17 -- handheld cutaway of the same session, shot on the phone. Its creation_time is UTC (18:17Z), which is 11:17 local, so it belongs here and not at the end where a filename sort puts it.",
       "_blur_why": "review pass 1: the full-width bands hid the selfie and the card-creation story this clip exists to show. Tracking measures its own recall now; hand rects only where --recall says they are needed.",
       "path": "projects/books-giveaway/sources/PXL_20260831_181726168.mp4",
       "activity": "projects/books-giveaway/temp/PXL_20260831_181726168.activity.json",
-      "blur_extra": [
-        {
-          "_why": "recall miss at 8 s: '+38 (066) 317-3125' in the checkout form on the photographed screen while the camera moves; the template exists but NCC does not hold through the motion. One field, one window.",
-          "rect": [
-            0.22,
-            0.27,
-            0.22,
-            0.12
-          ],
-          "when": [
-            0.0,
-            22.0
-          ]
-        }
-      ],
       "blur": [
         {
           "_why": "recall miss at 8 s: '+38 (066) 317-3125' in the checkout form on the photographed screen while the camera moves; the template exists but NCC does not hold through the motion. One field, one window.",
@@ -213,8 +534,375 @@
       "activity": "projects/books-giveaway/temp/desktop-112123.activity.json",
       "_blur_why": "blurred fields only, from temp/pii/desktop-112123.pii.json; padded 0.006/0.01 -- enough not to clip a glyph",
       "proxy": "projects/books-giveaway/temp/proxy/desktop-112123.mp4",
-      "blur": [],
-      "track": "projects/books-giveaway/temp/track/desktop-112123"
+      "track": "projects/books-giveaway/temp/track/desktop-112123",
+      "blur_extra": [
+        {
+          "_why": "render-gate: phone:380664314978 sharp in the film at 3:27.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3664,
+            0.3474,
+            0.5516,
+            0.3792
+          ],
+          "when": [
+            175.2,
+            242.0
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380664314978 sharp in the film at 3:48.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5892,
+            0.79,
+            0.0357,
+            0.0302
+          ],
+          "when": [
+            350.4,
+            353.7
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380664314978 sharp in the film at 3:51.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.7891,
+            0.0368,
+            0.032
+          ],
+          "when": [
+            378.4,
+            396.1
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0664314978 sharp in the film at 3:33.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.7261,
+            0.078,
+            0.0404
+          ],
+          "when": [
+            242.6,
+            253.0
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0664314978 sharp in the film at 3:39.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.4298,
+            0.0799,
+            0.308
+          ],
+          "when": [
+            285.0,
+            340.5
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0664314978 sharp in the film at 3:51.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.2807,
+            0.0799,
+            0.0415
+          ],
+          "when": [
+            378.4,
+            408.9
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380664514978 sharp in the film at 3:48.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5892,
+            0.79,
+            0.0357,
+            0.0302
+          ],
+          "when": [
+            350.4,
+            353.7
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380664514978 sharp in the film at 3:51.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.7891,
+            0.0368,
+            0.0311
+          ],
+          "when": [
+            378.4,
+            396.1
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380664314979 sharp in the film at 3:52.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.79,
+            0.0368,
+            0.0311
+          ],
+          "when": [
+            392.1,
+            396.1
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380663173125 sharp in the film at 3:59.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.2531,
+            0.5622,
+            0.111,
+            0.0459
+          ],
+          "when": [
+            442.0,
+            448.0
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380663173125 sharp in the film at 4:07.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.2531,
+            0.2474,
+            0.111,
+            0.0459
+          ],
+          "when": [
+            482.7,
+            510.2
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380663173125 sharp in the film at 4:13.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.8224,
+            0.5974,
+            0.0934,
+            0.0404
+          ],
+          "when": [
+            528.6,
+            530.6
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380663173125 sharp in the film at 4:25.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3664,
+            0.6363,
+            0.0888,
+            0.0926
+          ],
+          "when": [
+            571.8,
+            614.6
+          ]
+        },
+        {
+          "_why": "render-gate: phone:140663173125 sharp in the film at 4:29.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3592,
+            0.2881,
+            0.2293,
+            0.4117
+          ],
+          "when": [
+            601.8,
+            758.8
+          ]
+        }
+      ],
+      "blur": [
+        {
+          "_why": "render-gate: phone:380664314978 sharp in the film at 3:27.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3664,
+            0.3474,
+            0.5516,
+            0.3792
+          ],
+          "when": [
+            175.2,
+            242.0
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380664314978 sharp in the film at 3:48.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5892,
+            0.79,
+            0.0357,
+            0.0302
+          ],
+          "when": [
+            350.4,
+            353.7
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380664314978 sharp in the film at 3:51.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.7891,
+            0.0368,
+            0.032
+          ],
+          "when": [
+            378.4,
+            396.1
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0664314978 sharp in the film at 3:33.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.7261,
+            0.078,
+            0.0404
+          ],
+          "when": [
+            242.6,
+            253.0
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0664314978 sharp in the film at 3:39.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.4298,
+            0.0799,
+            0.308
+          ],
+          "when": [
+            285.0,
+            340.5
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0664314978 sharp in the film at 3:51.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.2807,
+            0.0799,
+            0.0415
+          ],
+          "when": [
+            378.4,
+            408.9
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380664514978 sharp in the film at 3:48.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5892,
+            0.79,
+            0.0357,
+            0.0302
+          ],
+          "when": [
+            350.4,
+            353.7
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380664514978 sharp in the film at 3:51.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.7891,
+            0.0368,
+            0.0311
+          ],
+          "when": [
+            378.4,
+            396.1
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380664314979 sharp in the film at 3:52.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.79,
+            0.0368,
+            0.0311
+          ],
+          "when": [
+            392.1,
+            396.1
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380663173125 sharp in the film at 3:59.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.2531,
+            0.5622,
+            0.111,
+            0.0459
+          ],
+          "when": [
+            442.0,
+            448.0
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380663173125 sharp in the film at 4:07.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.2531,
+            0.2474,
+            0.111,
+            0.0459
+          ],
+          "when": [
+            482.7,
+            510.2
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380663173125 sharp in the film at 4:13.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.8224,
+            0.5974,
+            0.0934,
+            0.0404
+          ],
+          "when": [
+            528.6,
+            530.6
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380663173125 sharp in the film at 4:25.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3664,
+            0.6363,
+            0.0888,
+            0.0926
+          ],
+          "when": [
+            571.8,
+            614.6
+          ]
+        },
+        {
+          "_why": "render-gate: phone:140663173125 sharp in the film at 4:29.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3592,
+            0.2881,
+            0.2293,
+            0.4117
+          ],
+          "when": [
+            601.8,
+            758.8
+          ]
+        }
+      ]
     },
     {
       "_why": "11:50 -- the rest of the orders and the payments.",
@@ -222,8 +910,687 @@
       "activity": "projects/books-giveaway/temp/desktop-115024.activity.json",
       "_blur_why": "blurred fields only, from temp/pii/desktop-115024.pii.json; padded 0.006/0.01 -- enough not to clip a glyph",
       "proxy": "projects/books-giveaway/temp/proxy/desktop-115024.mp4",
-      "blur": [],
-      "track": "projects/books-giveaway/temp/track/desktop-115024"
+      "track": "projects/books-giveaway/temp/track/desktop-115024",
+      "blur_extra": [
+        {
+          "_why": "render-gate: phone:380996767726 sharp in the film at 4:47.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.2531,
+            0.2483,
+            0.111,
+            0.0441
+          ],
+          "when": [
+            24.0,
+            26.7
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380996767726 sharp in the film at 4:53.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.2531,
+            0.2483,
+            0.111,
+            0.0441
+          ],
+          "when": [
+            60.8,
+            65.1
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380996767726 sharp in the film at 5:06.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3664,
+            0.3196,
+            0.5516,
+            0.4061
+          ],
+          "when": [
+            109.8,
+            141.4
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0996767726 sharp in the film at 5:12.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3581,
+            0.7502,
+            0.076,
+            0.1052
+          ],
+          "when": [
+            134.4,
+            161.9
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0996767726 sharp in the film at 5:16.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3581,
+            0.5483,
+            0.0759,
+            0.2136
+          ],
+          "when": [
+            165.3,
+            195.4
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380506181192 sharp in the film at 5:35.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3664,
+            0.3557,
+            0.55,
+            0.37
+          ],
+          "when": [
+            261.6,
+            289.0
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380506181192 sharp in the film at 5:51.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.79,
+            0.0379,
+            0.032
+          ],
+          "when": [
+            345.8,
+            353.8
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0506181192 sharp in the film at 5:41.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3581,
+            0.702,
+            0.0681,
+            0.0431
+          ],
+          "when": [
+            291.1,
+            298.3
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0506181192 sharp in the film at 5:44.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3581,
+            0.4057,
+            0.0694,
+            0.3109
+          ],
+          "when": [
+            301.5,
+            328.9
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0506181192 sharp in the film at 5:51.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3581,
+            0.2576,
+            0.0681,
+            0.0431
+          ],
+          "when": [
+            345.8,
+            353.8
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380939589090 sharp in the film at 6:01.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.2531,
+            0.2344,
+            0.6674,
+            0.4945
+          ],
+          "when": [
+            367.9,
+            522.4
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0939589090 sharp in the film at 6:14.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.3056,
+            0.0688,
+            0.1294
+          ],
+          "when": [
+            452.9,
+            483.3
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380959581090 sharp in the film at 6:21.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.79,
+            0.0379,
+            0.032
+          ],
+          "when": [
+            499.6,
+            510.9
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380685080138 sharp in the film at 6:29.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.2536,
+            0.252,
+            0.3712,
+            0.5673
+          ],
+          "when": [
+            492.4,
+            647.0
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380685080138 sharp in the film at 6:50.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.7224,
+            0.0362,
+            0.0302
+          ],
+          "when": [
+            648.6,
+            676.4
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380685080138 sharp in the film at 7:29.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5875,
+            0.6169,
+            0.039,
+            0.033
+          ],
+          "when": [
+            873.0,
+            880.8
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0685080138 sharp in the film at 6:39.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.3039,
+            0.0681,
+            0.5098
+          ],
+          "when": [
+            574.8,
+            631.4
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0685080138 sharp in the film at 6:50.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.2372,
+            0.0681,
+            0.0413
+          ],
+          "when": [
+            649.4,
+            673.7
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380685471765 sharp in the film at 7:02.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.2525,
+            0.2419,
+            0.1121,
+            0.047
+          ],
+          "when": [
+            731.5,
+            759.8
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380685471765 sharp in the film at 7:11.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.8218,
+            0.5317,
+            0.0956,
+            0.0394
+          ],
+          "when": [
+            789.1,
+            791.2
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380685471765 sharp in the film at 7:20.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3664,
+            0.6363,
+            0.0895,
+            0.0894
+          ],
+          "when": [
+            818.1,
+            845.5
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380685471765 sharp in the film at 7:28.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.7881,
+            0.0362,
+            0.0311
+          ],
+          "when": [
+            865.4,
+            874.7
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0685471765 sharp in the film at 7:23.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.453,
+            0.0676,
+            0.3376
+          ],
+          "when": [
+            837.7,
+            866.6
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380664314978 sharp in the film at 7:31.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.6863,
+            0.0368,
+            0.0552
+          ],
+          "when": [
+            879.2,
+            902.8
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380664314979 sharp in the film at 7:31.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.6863,
+            0.0368,
+            0.0552
+          ],
+          "when": [
+            879.2,
+            902.8
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380664514978 sharp in the film at 7:31.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.6863,
+            0.0368,
+            0.0552
+          ],
+          "when": [
+            879.2,
+            902.8
+          ]
+        }
+      ],
+      "blur": [
+        {
+          "_why": "render-gate: phone:380996767726 sharp in the film at 4:47.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.2531,
+            0.2483,
+            0.111,
+            0.0441
+          ],
+          "when": [
+            24.0,
+            26.7
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380996767726 sharp in the film at 4:53.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.2531,
+            0.2483,
+            0.111,
+            0.0441
+          ],
+          "when": [
+            60.8,
+            65.1
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380996767726 sharp in the film at 5:06.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3664,
+            0.3196,
+            0.5516,
+            0.4061
+          ],
+          "when": [
+            109.8,
+            141.4
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0996767726 sharp in the film at 5:12.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3581,
+            0.7502,
+            0.076,
+            0.1052
+          ],
+          "when": [
+            134.4,
+            161.9
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0996767726 sharp in the film at 5:16.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3581,
+            0.5483,
+            0.0759,
+            0.2136
+          ],
+          "when": [
+            165.3,
+            195.4
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380506181192 sharp in the film at 5:35.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3664,
+            0.3557,
+            0.55,
+            0.37
+          ],
+          "when": [
+            261.6,
+            289.0
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380506181192 sharp in the film at 5:51.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.79,
+            0.0379,
+            0.032
+          ],
+          "when": [
+            345.8,
+            353.8
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0506181192 sharp in the film at 5:41.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3581,
+            0.702,
+            0.0681,
+            0.0431
+          ],
+          "when": [
+            291.1,
+            298.3
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0506181192 sharp in the film at 5:44.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3581,
+            0.4057,
+            0.0694,
+            0.3109
+          ],
+          "when": [
+            301.5,
+            328.9
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0506181192 sharp in the film at 5:51.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3581,
+            0.2576,
+            0.0681,
+            0.0431
+          ],
+          "when": [
+            345.8,
+            353.8
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380939589090 sharp in the film at 6:01.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.2531,
+            0.2344,
+            0.6674,
+            0.4945
+          ],
+          "when": [
+            367.9,
+            522.4
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0939589090 sharp in the film at 6:14.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.3056,
+            0.0688,
+            0.1294
+          ],
+          "when": [
+            452.9,
+            483.3
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380959581090 sharp in the film at 6:21.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.79,
+            0.0379,
+            0.032
+          ],
+          "when": [
+            499.6,
+            510.9
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380685080138 sharp in the film at 6:29.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.2536,
+            0.252,
+            0.3712,
+            0.5673
+          ],
+          "when": [
+            492.4,
+            647.0
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380685080138 sharp in the film at 6:50.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.7224,
+            0.0362,
+            0.0302
+          ],
+          "when": [
+            648.6,
+            676.4
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380685080138 sharp in the film at 7:29.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5875,
+            0.6169,
+            0.039,
+            0.033
+          ],
+          "when": [
+            873.0,
+            880.8
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0685080138 sharp in the film at 6:39.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.3039,
+            0.0681,
+            0.5098
+          ],
+          "when": [
+            574.8,
+            631.4
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0685080138 sharp in the film at 6:50.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.2372,
+            0.0681,
+            0.0413
+          ],
+          "when": [
+            649.4,
+            673.7
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380685471765 sharp in the film at 7:02.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.2525,
+            0.2419,
+            0.1121,
+            0.047
+          ],
+          "when": [
+            731.5,
+            759.8
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380685471765 sharp in the film at 7:11.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.8218,
+            0.5317,
+            0.0956,
+            0.0394
+          ],
+          "when": [
+            789.1,
+            791.2
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380685471765 sharp in the film at 7:20.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3664,
+            0.6363,
+            0.0895,
+            0.0894
+          ],
+          "when": [
+            818.1,
+            845.5
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380685471765 sharp in the film at 7:28.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.7881,
+            0.0362,
+            0.0311
+          ],
+          "when": [
+            865.4,
+            874.7
+          ]
+        },
+        {
+          "_why": "render-gate: phone:0685471765 sharp in the film at 7:23.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.3587,
+            0.453,
+            0.0676,
+            0.3376
+          ],
+          "when": [
+            837.7,
+            866.6
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380664314978 sharp in the film at 7:31.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.6863,
+            0.0368,
+            0.0552
+          ],
+          "when": [
+            879.2,
+            902.8
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380664314979 sharp in the film at 7:31.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.6863,
+            0.0368,
+            0.0552
+          ],
+          "when": [
+            879.2,
+            902.8
+          ]
+        },
+        {
+          "_why": "render-gate: phone:380664514978 sharp in the film at 7:31.0; span mapped back through the cut and the pad",
+          "rect": [
+            0.5886,
+            0.6863,
+            0.0368,
+            0.0552
+          ],
+          "when": [
+            879.2,
+            902.8
+          ]
+        }
+      ]
     }
   ],
   "benign_text": [
@@ -248,8 +1615,7 @@
     "cvv",
     "expiry",
     "iban",
-    "phone",
-    "email"
+    "phone"
   ],
-  "_blur_kinds_why": "review pass 1: 'I'm not against showing these balances' -- and blurring them in some frames but not others was the inconsistency complained about. Names and delivery branches are not in the list either: this OCR cannot read Cyrillic names, so claiming to cover them would be a promise the tool cannot keep."
+  "_blur_kinds_why": "review pass 1: 'I'm not against showing these balances' -- and blurring them in some frames but not others was the inconsistency complained about. Names and delivery branches are not in the list either: this OCR cannot read Cyrillic names, so claiming to cover them would be a promise the tool cannot keep. Review pass 2: 'email — no blur needed' (agamanuk@gmail.com is the user's own address)."
 }

@@ -219,6 +219,71 @@ usually serves the batch) and a clip overrides either.
 - **`--list` prices the framing** — rect, output size, placement, zoom factor,
   pan keys and mask count — without encoding anything.
 
+## Where a short opens
+
+**The hook comes first and the frame second, and getting that backwards is the
+expensive mistake.** A short has about two seconds to earn the watch. On
+`dHYrpun-XTs` a bad opening frame was fixed by moving the start back one
+sentence — which bought a closed mouth at the price of seven seconds of
+back-reference to a calculation made *before the clip began*. Frame perfect,
+short ruined, re-cut a third time. Find the first concrete self-contained claim,
+cut there, and only then place the exact frame within the couple of frames
+around that word. If a better frame costs the hook, keep the hook.
+
+**Check the render's caption, not only its picture.** A head that lands inside
+the previous word appears in the first caption card as a word the viewer never
+properly hears — that is how a cut 0.06 s inside `кажуть,` was caught, after the
+picture alone had looked fine. `check-openings.py` now flags any boundary that
+falls inside a word's transcript span unconditionally — that one is mechanical,
+and no `open_ok` excuses it. Word boundaries are in the transcript, so land in
+the gap *between* them (`кажуть,` ends 371.56, `людина` starts 371.58 → start at
+371.57). A numeric `"start"` is the right tool: `resolve()` skips the pad block
+when there is no `start_text` anchor, so the value lands frame-exact.
+
+A clip that starts mid-word — mouth half open, eyes down, a hand frozen
+mid-gesture — reads as a botched cut, and it is the first thing anyone sees.
+Nothing else here catches it: the caption-sync probes and the duration assert
+both pass, because nothing about such a clip is out of sync or the wrong length.
+It is only ugly.
+
+```powershell
+python scripts/check-openings.py --manifest projects/<id>/clips-vertical.json
+python scripts/check-openings.py --manifest ... --sheet     # then LOOK at the png
+```
+
+It measures **lead-in silence** — the gap between the previous word's end and
+the cut — and flags anything under 0.20 s. Watch for the halving: `resolve()`
+pads meet speech halfway, so a 0.24 s gap in the transcript becomes ~0.12 s of
+actual lead-in.
+
+**The number decides less than you would like.** A mouth stays open across a
+short gap, so silence is not evidence the picture is settled; and some speakers
+never stop. On `dHYrpun-XTs` the largest pause in the 37 seconds around one clip
+was 0.28 s, so no boundary in reach was clean and the start had to be chosen by
+picture. `--sheet` contact-sheets every frame inside the nearby pauses, plus the
+first eight frames of the render as shipped.
+
+That is how the clip was fixed. Opening on the phrase that carried the idea put
+frame 0 mid-word; every frame of the 360.38–360.62 gap was mouth-open, and every
+frame of an earlier 0.28 s gap was mouth-closed and facing camera. The start
+moved back one sentence **for the picture, not for the words** — which is not a
+decision the phrase-matching boundary logic can ever make for you.
+
+A short lead-in that has been looked at and accepted is recorded on the clip as
+`"open_ok": "<why>"`, so the check keeps its teeth instead of being tuned away —
+the same bargain `checked_utc` strikes with the project doctor.
+
+**A mouth-openness detector was tried and rejected**; do not re-attempt it
+blind. YuNet's five landmarks give mouth *corners* but no lip contour, so
+openness has to come from how dark the mouth region is. Measured against eight
+frames already judged by eye, that score separated them cleanly and *backwards*
+— closed mouths read darker (0.33–0.47) than open ones (0.11–0.18), because the
+speaker was looking down in the open frames and the score was reading head pose
+and shadow rather than lips. Eight frames from one shot, separating for the
+wrong reason, is the same shape of mistake as the redaction tracker that scored
+27% on frames it cut its own templates from. Doing it properly needs a
+lip-contour model and a labelled set across several films.
+
 ## The handle badge
 
 A camera glyph above an `@handle`, hopping between anchor points on a timer and
@@ -1025,6 +1090,89 @@ The masks are one PNG per stretch of stable boxes — a still page costs one
 PNG however long it holds — turned into a stream by the concat demuxer.
 Hand-measured `blur` rects still work and ride the same pass; they are for
 what OCR cannot see at all (the monobank card faces).
+
+### Redact the film, not the footage: `film-redact.py`
+
+Tracking in **source** time is right for a film that is mostly its footage.
+It stopped being right for this one, and the numbers said so before any
+argument did: a readable secret is on screen for **148 of the film's 480 s**
+(31 %), 133 of 160 gate hits sat in the stretches running at 3x, and one
+round of render → gate → patch cost **2 h 16 m**. Secrets were not a few
+patches on this film; they were its normal state.
+
+Worse, every serious bug lived in one place — the **mapping** from source
+time back to film time, through the cut, the speed change and the pad. Twice
+the `fps` filter labelled a sampling slot rather than a frame (KI-006,
+KI-022); at 19x, half a second of mislabelling is nine seconds of source, so
+the gate patched windows the secret was never in and four rounds converged on
+nothing.
+
+So the film-time pipeline removes the mapping instead of debugging it:
+
+```powershell
+python scripts/screen-cut.py  --manifest projects/<id>/screen.json --target 8:00 --no-redact
+python scripts/film-redact.py --project <id> --states --detect -j 8
+python scripts/redaction-review.py --manifest projects/<id>/screen.json --states --html
+python scripts/film-redact.py --project <id> --blur
+python scripts/film-redact.py --project <id> --gate
+```
+
+Cut the film unredacted, then work on the film itself. One timebase, no
+mapping, and a gate that asks the answerable question — *is every box we
+found actually blurred on the render* — instead of re-scanning 14,400 frames
+for secrets it has already located.
+
+**The unit of work is the screen state, not the frame.** The film has 14,400
+frames and about 500 page-scale changes; detecting on every frame is 28x the
+work for the same answer. `--states` segments the film into runs showing the
+same thing — 1,330 of them here, in 1:56 — writes one representative frame
+per state, and `--detect` OCRs those. The boxes then carry across the state's
+whole run, and `--blur` paints one mask per stretch of identical boxes.
+
+Two traps found while building the segmenter, both worth the reader's time:
+`select`'s frame counter **restarts when the decoder re-initialises** (it does,
+at the portrait phone clip), so a frame must be asked for by TIME and never by
+index; and piping full-resolution frames out of ffmpeg to write them in Python
+is 89 GB of pipe for this film — let ffmpeg write the PNGs itself, which does
+700 in 28 s.
+
+**What detection actually costs, measured rather than hoped.** 2.7 s per rep
+frame (0.86–4.36 s over ten reps spread across the film). One process alone
+manages 0.37 rep/s; **eight workers manage 0.44** — 19 % more, not eight
+times more, because the OCR model is memory-bound and not core-bound. Two
+things follow. Do not size `-j` as though it scaled: `--jobs 8 --threads 1` is
+about the ceiling this machine has. And onnxruntime **ignores** `OMP_NUM_THREADS`
+and every other thread environment variable — its pool must be set in the
+constructor (`--threads`, KI-024), and left unset each of eight workers opens
+a pool per core and the pool runs *slower than one process*.
+
+An hour of OCR will be interrupted, so `--detect` checkpoints every 25 reps
+and resumes where it stopped (`--fresh` to start over), and it should be
+launched detached rather than under anything with a timeout. Losing 17 minutes
+of finished work to a killed run is a fixable mistake and only had to happen
+once (KI-025).
+
+**What the detector cannot read still needs a rect.** Film time gets its own
+escape hatch, `film_blur` on the manifest, in the film's own seconds:
+
+```json
+"film_blur": [
+  {"rect": [0.41, 0.22, 0.18, 0.05], "when": [131.0, 148.5],
+   "why": "card face drawn as artwork; no text for OCR to find"}
+]
+```
+
+`mask_runs()` unions those into every state their window overlaps, a review
+decision never clears one, and the approval fingerprint covers the list — so
+adding a rect un-approves the look instead of slipping in behind it. The gate
+cannot help here: it asks whether *detected* boxes are blurred, and nothing
+detected these (KI-026).
+
+Nothing renders unreviewed here either: `redaction-review.py --states` builds
+the same before/after sheet from the film's own states and detections, asks
+once per KIND of secret rather than once per appearance, and `film-redact.py
+--blur` honours the `decisions.json` it produces — a state marked *clear* is a
+false positive and keeps its pixels.
 
 ### The arithmetic and the rules have their own test
 
@@ -2155,6 +2303,60 @@ It is in `requirements.txt` and in the doctor's probe list now. The ONNX
 *models* under `models/` remain a manual download — see the multicam-switch
 skill.
 
+### One heavy run at a time: the GPU lock
+
+The card is 4 GB and a `large-v3` load is 2-3 GB of it, so it fits exactly one.
+Three `transcribe-words.py` runs were once started inside two minutes by
+sessions working in this repo at the same time, and all three thrashed: the GPU
+read 100% busy and 3.9/4.0 GB used for twenty minutes while **none** of them
+wrote a transcript. Nothing errored — that is what made it expensive. There was
+no failure to read, only three jobs each permanently nearly done, and finding
+out took a `Get-CimInstance` sweep of every python process's command line.
+
+So a GPU run now takes a lock first and the rest queue behind it. Serialising
+beats refusing: the same work still gets done, one at a time, which is the only
+way any of it finishes.
+
+```powershell
+python scripts/gpu-lock.py                 # who holds it (free; the default)
+python scripts/gpu-lock.py --list          # every lock under temp/locks/
+python scripts/gpu-lock.py --clear         # drop it, but only if it is dead
+```
+
+`transcribe-words.py` takes it automatically and only on a CUDA rung, so an
+explicit `--device cpu` run never queues. `--gpu-wait` sets how long to queue
+(default 2 h; `0` refuses immediately) and `--no-gpu-lock` skips it, which is
+only ever right when you know the card is free.
+
+**The lock survives its holder being killed, which is how these runs usually
+end.** A kill runs no `atexit` and no `finally`, so the file outlives the
+process — and a lock nobody can release would fence off the card forever, which
+is worse than the deadlock it replaced. The defence is that liveness is checked
+on every contended acquire rather than trusted to the holder: a dead pid is
+stolen, not waited on. Pid reuse is the residual hole, so a lock held past
+`MAX_AGE_S` (6 h) is stale whatever its pid claims. A holder also only ever
+deletes *its own* lock, because a stale token must not remove the file of
+whoever legitimately took it afterwards.
+
+`--clear` refuses a live holder on purpose; breaking it would put a second job
+on the card, which is the whole thing being prevented. `--force` is for when you
+have already killed the holder yourself and the liveness check disagrees.
+
+`scripts/check-gpulock.py` proves all of it with no GPU and no files outside a
+temp dir — including by really spawning a holder, really hard-killing it, and
+checking the next acquirer gets in. Run it after touching `_gpulock.py`:
+
+```powershell
+python scripts/check-gpulock.py
+```
+
+One thing it caught that is worth keeping: under `_env` the running interpreter
+is the venv's `python.exe`, and on Windows that can be a shim which launches the
+real interpreter under a *different* pid — so `Popen(...).pid` is not the pid
+that holds the card. The lock records `os.getpid()` from inside the working
+process, which is always the right one; a test asserting against Popen's pid is
+asserting the wrong thing.
+
 ### Where things live: ROOT, workspace, and one resolver
 
 Two ideas, deliberately separated even though they currently name the same
@@ -2222,6 +2424,10 @@ absolute path written into a script, a skill or these docs.
 | `scripts/render-gate.py` | search the secrets' pixels on the finished film; `--patch` the manifest |
 | `scripts/_runlog.py` | the run log writer: one JSONL record per stage, flushed as it happens |
 | `scripts/run-log.py` | the run log reader: what ran, how long, and how it ended |
+| `scripts/_gpulock.py` | the single-run GPU lock: one heavy job on the 4 GB card, dead holders stolen rather than waited on |
+| `scripts/gpu-lock.py` | the lock reader: who holds the card, and `--clear` when the holder is gone |
+| `scripts/check-gpulock.py` | lock self-test incl. a real spawn/kill/recover cycle; no GPU, no files |
+| `scripts/check-openings.py` | does a short open on a settled face? lead-in silence + contact sheets; no encode |
 | `scripts/import-footage.py` | desktop + phone captures into a project, ordered by real capture start |
 | `scripts/screencast-pipeline.py` | the twelve stages in order, cached, with two stops (the sheet, the draft) |
 | `scripts/review-ingest.py` | the user's narrated review recording → remarks mapped to source frames |

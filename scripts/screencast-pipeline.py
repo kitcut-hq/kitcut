@@ -38,6 +38,7 @@ import subprocess
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 import _project  # noqa: E402
+import _runlog  # noqa: E402
 
 ROOT = _env.ROOT
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -101,6 +102,9 @@ class Pipeline:
         self.state_dir = os.path.join(self.tdir, "pipeline")
         os.makedirs(self.state_dir, exist_ok=True)
         self.timings = []
+        # Opened by go(); a stage helper may note a fact before then, so
+        # note() tolerates its absence.
+        self.log = None
 
     # -- manifest helpers -------------------------------------------------
     def man(self):
@@ -143,11 +147,26 @@ class Pipeline:
             json.dump({"sig": sig, "secs": round(secs, 1), "note": note,
                        "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}, f)
 
+    def note(self, stage, text, **kw):
+        """Record a fact in the run log as well as on screen.
+
+        Stage timings alone do not answer "how did it end" -- the gate's hit
+        count, the recall table and the piece cache's reuse are the answers,
+        and they used to exist only in a terminal scrollback.
+        """
+        if self.log:
+            self.log.note(stage, text, **kw)
+
     def run(self, argv, what, ok_codes=(0,)):
         """A stage subprocess with its output streamed, never captured."""
         print(f"    $ {' '.join(os.path.basename(a) if i == 1 else a for i, a in enumerate(argv))}",
               flush=True)
+        t0 = time.time()
         r = subprocess.run([PY] + argv, cwd=ROOT)
+        if self.log:
+            self.log.write('cmd', stage=what,
+                           argv=[os.path.basename(argv[0])] + list(argv[1:]),
+                           rc=r.returncode, secs=round(time.time() - t0, 1))
         if r.returncode not in ok_codes:
             raise SystemExit(f"\n  stage failed: {what} (exit {r.returncode})")
         return r.returncode
@@ -393,23 +412,78 @@ class Pipeline:
 
     def st_render(self):
         self.run(self.cut_argv(), "render")
+        try:
+            m = self.man()
+            out = _env.resolve(m["output"])
+            self.note("render", f"{os.path.basename(out)} "
+                                f"{os.path.getsize(out) / 1e6:.0f} MB",
+                      output=self.rel(out),
+                      rects=sum(len(s.get("blur") or []) for s in m.get("sources", [])))
+        except (OSError, KeyError, ValueError):
+            pass
         return "ran", ""
 
+    def gate_state(self):
+        """(hits, distinct secrets) from the gate's own output file."""
+        try:
+            g = json.load(open(os.path.join(self.tdir, "gate.json"), encoding="utf-8"))
+        except (OSError, ValueError):
+            return None, None
+        return len(g.get("hits") or []), len(g.get("secrets") or [])
+
     def st_gate(self):
+        # Every round's verdict goes in the run log, because "did it converge,
+        # and on what" is the question asked hours later -- and because a loop
+        # that reports the SAME count three times is not converging, which is
+        # only visible when the counts sit next to each other (KI-022).
+        #
+        # OCR runs on the FIRST round and on the round that declares the film
+        # clean, never on the ones in between. Measured on this film: pass A
+        # (templates) 58 min, pass B (OCR) 73 min -- so OCR every round made a
+        # four-round loop a nine-hour job. Pass B exists to catch a secret that
+        # has no template; that set does not change when a rect is patched, so
+        # re-reading it each round buys nothing. A template-only round that
+        # comes back clean is NOT trusted: it is re-run with OCR before the
+        # gate reports clean, so the acceptance test is always the full one.
+        counts = []
         for rnd in range(1, self.args.gate_rounds + 1):
+            last = rnd == self.args.gate_rounds
+            full = rnd == 1 or last
             argv = [os.path.join(HERE, "render-gate.py"), "--manifest", self.rel(self.mpath)]
             if self.args.target:
                 argv += ["--target", self.args.target]
-            if rnd < self.args.gate_rounds:
+            if not full:
+                argv += ["--ocr-fps", "0"]
+            if not last:
                 argv.append("--patch")
             rc = self.run(argv, f"gate round {rnd}", ok_codes=(0, 1))
+            hits, secrets = self.gate_state()
+            if rc == 0 and not full:
+                # clean on templates alone: confirm with the full gate before
+                # anybody calls the film publishable
+                print(f"\n  gate round {rnd}: clean on templates; confirming with OCR")
+                self.note("gate", f"round {rnd}: clean on templates, confirming with OCR",
+                          round=rnd, hits=hits, secrets=secrets)
+                argv = [a for a in argv if a not in ("--ocr-fps", "0", "--patch")]
+                rc = self.run(argv, f"gate round {rnd} (confirm)", ok_codes=(0, 1))
+                hits, secrets = self.gate_state()
+            counts.append(hits)
+            self.note("gate", f"round {rnd}: {hits} hit(s), {secrets} distinct secret(s)"
+                              f"{'' if full or rc else ' [templates only]'}"
+                              f"{' -- CLEAN' if rc == 0 else ''}",
+                      round=rnd, hits=hits, secrets=secrets, rc=rc, ocr=full)
             if rc == 0:
                 return "clean", f"round {rnd}"
-            if rnd < self.args.gate_rounds:
+            if len(counts) >= 3 and counts[-1] == counts[-2] == counts[-3]:
+                self.note("gate", f"not converging: {counts[-1]} hits three rounds "
+                                  f"running; the patches are not landing on the leak")
+            if not last:
                 print(f"\n  gate round {rnd}: leaks patched into the manifest; re-rendering")
                 self.run(self.cut_argv(), f"render after gate {rnd}")
         raise SystemExit(f"\n  STOP: the gate still finds secrets after "
-                         f"{self.args.gate_rounds} round(s). See temp/gate.json.")
+                         f"{self.args.gate_rounds} round(s) "
+                         f"(hits per round: {', '.join(str(c) for c in counts)}). "
+                         f"See temp/gate.json.")
 
     def st_upload(self):
         if not self.args.upload:
@@ -437,6 +511,15 @@ class Pipeline:
             for kid, status, tags, title in kis:
                 print(f"    {kid} {status:<10} {title}")
         t_all = time.time()
+        # The log is closed by the context manager, so a failed stage
+        # (SystemExit), a Ctrl-C and a crash each leave an `end` line saying
+        # which -- a missing one would read as 'still running'.
+        with _runlog.RunLog(self.pdir, argv=sys.argv[1:],
+                            stages=STAGES[start_at:stop_at + 1]) as log:
+            self.log = log
+            self._loop(start_at, stop_at, t_all)
+
+    def _loop(self, start_at, stop_at, t_all):
         for i, stage in enumerate(STAGES):
             if i < start_at or i > stop_at:
                 continue
@@ -448,11 +531,13 @@ class Pipeline:
             if state == "ran" and note:
                 self.mark(stage, note, secs)
             self.timings.append((stage, state, secs))
+            self.log.stage(stage, state, secs, note=note if state != 'ran' else '')
             print(f"  [{i + 1:>2}/{len(STAGES)}] {stage:<9} {state:<9} {fmt(secs):>7}"
                   f"{'  ' + note if note and state != 'ran' else ''}")
         print(f"\n  total {fmt(time.time() - t_all)}")
         for stage, state, secs in self.timings:
             print(f"    {stage:<9} {state:<9} {fmt(secs):>7}")
+        print(f"\n  run log: python scripts/run-log.py --project {self.pid}")
 
 
 def main():

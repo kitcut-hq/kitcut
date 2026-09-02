@@ -323,3 +323,103 @@ throughout:
 
 The gate now searches at native scale only (the render is at proxy scale,
 and a secret at another size is already its own template).
+- 05:06 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway-hot-draft.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00 --hot --draft) -- 47:13.4 of sources -> 1:15.1
+- 05:33 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 47:13.4 of sources -> 8:00.0
+- 05:54 render-gate -- 49 hit(s), 18 secret(s) on books-giveaway.mp4; patched 31 rect(s)
+- 06:13 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 47:13.4 of sources -> 8:00.0
+- 06:33 render-gate -- 9 hit(s), 5 secret(s) on books-giveaway.mp4; patched 5 rect(s)
+- 06:49 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 47:13.4 of sources -> 8:00.0
+- 07:09 render-gate -- 9 hit(s), 5 secret(s) on books-giveaway.mp4; patched 5 rect(s)
+- 07:23 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 47:13.4 of sources -> 8:00.0
+- 07:43 render-gate -- 9 hit(s), 5 secret(s) on books-giveaway.mp4
+- 15:06 render-gate -- 13 hit(s), 10 secret(s) on books-giveaway.mp4
+- 15:32 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 47:13.4 of sources -> 8:00.0
+- 17:48 render-gate -- 160 hit(s), 27 secret(s) on books-giveaway.mp4; patched 54 rect(s)
+- 17:56 screen-cut scripts/screen-cut.py -> projects/books-giveaway/outputs/books-giveaway.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00) -- 47:13.4 of sources -> 8:00.0
+- 19:13 screen-cut scripts/screen-cut.py -> projects/books-giveaway/temp/film/base.mp4 (--manifest projects/books-giveaway/screen.json --target 8:00 --no-redact) -- 47:13.4 of sources -> 8:00.0
+
+## 2026-09-01 — the architecture changed, and then Python broke
+
+Stepped back from the source-time tracker after the numbers said the approach
+was wrong, not just slow: a secret is on screen for 148 s of the 480 s film
+(31 %), 133 of 160 leaks sit in the 3x working stretches, and one gate round
+cost 2 h 16 m. The mapping from source time to film time was where every bad
+bug lived. New shape, approved: cut the film unredacted, segment it into
+screen states, detect and blur in FILM time, gate by asking whether the boxes
+we already found are actually blurred.
+
+Where it got to before the machine stopped it:
+- `screen-cut.py --no-redact` -> `temp/film/base.mp4`, 8:00 rendered in ~3 min.
+- `film-redact.py --states` -> 1,330 states in 1:56, every rep frame verified
+  against its own timestamp. Two real bugs found on the way: `select`'s frame
+  counter restarts when the decoder re-initialises (the portrait phone clip at
+  159.67 s), so frames must be asked for by TIME; and piping full-res frames
+  is 89 GB, so ffmpeg writes the PNGs itself (700 in 28 s).
+- OCR measured at **1.75 s/rep**, not the 14-36 s I had been quoting from the
+  old gate -- that figure was its broken decode, not OCR. Detection is ~6 min
+  on 8 workers.
+- Then the Store Python's execution alias broke (KI-023) and nothing would run.
+
+Next session: reboot first, `python -c "import sys; print(sys.version)"`, then
+`film-redact.py --project books-giveaway --detect -j 8`. base.mp4, states.json
+and all 1,330 reps are on disk and still valid -- do not rebuild them.
+
+### The interpreter stopped being a risk, and detection got an honest price
+
+Picked the film-time work back up. Everything the previous session left was
+intact and still valid — `base.mp4`, `states.json`, all 1,330 reps — and
+nothing was rebuilt.
+
+**KI-023 came back, and this time it named its trigger.** The Store Python's
+execution alias broke a second time, immediately after a pool of eight workers
+was killed mid-run; both breakages followed exactly that event. Once it breaks
+it stays broken, because the status line spawns `python` every three seconds,
+each failed spawn still opens the package, and `Add-AppxPackage -Register`
+then loses the race every time (five attempts, `0x80073D02` each). A reboot
+cures it and the next killed pool brings it back — so the dependency is gone
+instead: python.org **3.13.15** via winget, `.venv` repointed at it by
+rewriting `pyvenv.cfg`, dead alias stubs moved out of `WindowsApps`. Same
+`cp313` ABI, so `site-packages` came across untouched — no multi-GB reinstall,
+and `check-env.py` passes end to end. Do **not** copy the base `python.exe`
+into `.venv\Scripts`; it then cannot find `python313.dll` and dies with
+`0xC0000135`. The venv's own redirector reads `pyvenv.cfg`, so the cfg is the
+whole job. `_env.bootstrap()` earned its keep here: with the aliases gone,
+`python scripts/x.py` still worked, entering through the leftover 3.11 and
+landing in 3.13.15.
+
+**Detection had two defects and both are fixed.** A first re-run was killed at
+17 minutes and lost every one of the ~200 reps it had OCR'd, because a shard
+wrote its results once, at the end (KI-025). Shards now checkpoint every 25
+reps through a temp file and an `os.replace`, record what they have `done`, and
+resume; an interruption costs a minute per worker. The run is launched
+detached, not under anything that can time it out.
+
+**And the pool was slower than no pool at all** (KI-024). Eight workers managed
+0.21 rep/s against 0.37 for a single unthreaded process. onnxruntime does not
+read `OMP_NUM_THREADS` or any other thread variable — the parent set four of
+them and every worker still opened a pool per core, 8:1 oversubscription. Proof
+they did nothing: 3.28 s/rep with them set to 2, 3.54 s unset. The budget has
+to go in the constructor, `RapidOCR(intra_op_num_threads=n)`, now `--threads`
+and defaulting to 1.
+
+The honest numbers, measured on ten reps spread across the film rather than
+assumed: **2.7 s/rep** (0.86–4.36 s), one process 0.37 rep/s, eight workers
+**0.44** — 19 % more, not eight times, because the model is memory-bound. The
+"1.75 s/rep, ~6 min" in the note above was optimistic; a 1,330-state film is
+about **50 minutes** of detection and the script now says so before it starts.
+
+**New: `redaction-review.py --states`**, the acceptance test the film-time
+route was missing. Same before/after tiles, built from the film's own rep
+frames and detections, with the mask painted exactly as `--blur` will paint it
+(same 6 px dilation, same 9×9 feather). It asks once per KIND of secret rather
+than once per appearance, and writes the `decisions.json` that `--blur`
+honours, so a false positive can be cleared without touching a manifest.
+README and the skill carry the whole route; `check-script.py --all` and
+`check-screen.py` pass.
+
+
+## 2026-09-02
+Marked `outputs/books-giveaway-hot-draft.mp4` superseded in project.json: it was the
+half-res human-review stop, and the film-redact route plus the final published film
+replaced it. The doctor's STALE on it was by design (blur_extra landed after), not a
+missed re-render. Nothing else changed; the current film is untouched.

@@ -50,6 +50,28 @@ EXCEPTIONS = {
                "dependency-free watch tool starts instantly",
         "argparse": "one job, no options: print what is rendering",
     },
+    "run-log.py": {
+        "env": "stdlib on purpose: this is what you read when a run died, and "
+               "a broken venv is one of the reasons it can have died",
+    },
+    "_runlog.py": {
+        "env": "stdlib on purpose: written by every stage and read by a tool "
+               "that must work without the venv; see run-log.py",
+    },
+    "_gpulock.py": {
+        "env": "stdlib on purpose: the single-run lock is taken before the "
+               "venv's heavy imports and read by gpu-lock.py, which must work "
+               "when a wedged run is what you are diagnosing",
+    },
+    "gpu-lock.py": {
+        "env": "stdlib on purpose: this is what you read when the card is "
+               "wedged, and a broken venv is one of the things that wedges it",
+        "record": "a lock reader produces no deliverable",
+    },
+    "check-openings.py": {
+        "record": "the PNGs it writes are contact sheets under temp/ for a "
+                  "human to look at, not renders; it never encodes anything",
+    },
     "name-label.py": {
         "record": "standalone --video burn is the lost-source fallback; the "
                   "pipeline path records when screencast-cut.py renders",
@@ -120,18 +142,23 @@ PLATFORM = {
     "_env.py": "interpreter bootstrap, .env, path and workspace resolution",
     "_progress.py": "render progress plumbing",
     "_project.py": "project record writer",
+    "_runlog.py": "the run log writer",
     "check-env.py": "the doctor",
     "check-script.py": "this checker",
     "project-scan.py": "project scaffolder and doctor",
     "render-status.py": "the render watch tool",
+    "run-log.py": "the run log reader",
     "statusline.py": "the status line reader",
 }
 
-# These three run on every status-line refresh, or as a watch tool that must
-# start instantly, so they import nothing outside the standard library -- an
-# _env re-exec would spawn a subprocess per refresh. CLAUDE.md says so; this
-# makes it a check rather than a promise.
-STDLIB_ONLY = ("_progress.py", "render-status.py", "statusline.py")
+# These run on every status-line refresh, or as a watch tool that must start
+# instantly, so they import nothing outside the standard library -- an _env
+# re-exec would spawn a subprocess per refresh. The run log is here for a
+# second reason: it is what you read when a run died, and the venv is one of
+# the things that can be why. CLAUDE.md says so; this makes it a check rather
+# than a promise.
+STDLIB_ONLY = ("_progress.py", "_runlog.py", "_gpulock.py", "gpu-lock.py",
+               "render-status.py", "run-log.py", "statusline.py")
 
 # An absolute path belonging to one machine. Two segments are required so the
 # drive-letter gotcha both this file's neighbours and the README explain

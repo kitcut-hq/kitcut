@@ -240,6 +240,111 @@ def pipeline_pieces():
           a == sc.piece_key(dict(plan, src={"blur": [{"rect": [0, 0, 1, 1]}]}), dict(sc.DEFAULTS)), False)
 
 
+def graph_blurs_after_the_cut():
+    """build_filter(): one gaussian, after the trims, on a mask cut on the
+    same boundaries -- the shape KI-021 asks for. A regression here is a
+    silent 2-3x on every render, or a mask one frame out of step."""
+    print("")
+    print("screen-cut: the graph paints the mask in source time and blurs after the cut")
+    sc = load("screen-cut")
+    cfg = dict(sc.DEFAULTS)
+    segs = [{"start": 0.0, "end": 1.0, "speed": 1.0, "out": 1.0},
+            {"start": 2.5, "end": 4.0, "speed": 3.0, "out": 0.5},
+            {"start": 9.0, "end": 9.5, "speed": 1.0, "out": 0.5}]
+    soft = [{"rect": [0.1, 0.1, 0.2, 0.05], "when": [0.0, 3.0]},
+            {"rect": [0.5, 0.6, 0.1, 0.05], "when": [9.0, 9.5]}]
+    box = [{"rect": [0.3, 0.3, 0.1, 0.1], "mode": "box", "when": [0.0, 1.0]}]
+    plan = {"path": "fake/src.mp4", "segments": segs, "src": {"blur": soft + box},
+            "info": {"width": 1818, "height": 1080, "fps": 30.0},
+            "mask_listing": "fake/masks.txt"}
+    parts, vw, vh = sc.build_filter(plan, cfg, 0)
+    first_concat = next(i for i, x in enumerate(parts) if "concat=n=3" in x)
+    gauss = [i for i, x in enumerate(parts) if "gblur=sigma=3.0" in x]
+    check("exactly one gaussian for mask + soft rects", len(gauss), 1)
+    check("...and it runs after the cut", gauss[0] > first_concat, True)
+    trims = lambda tag: [x.split(",")[0].split("]")[1] for x in parts
+                         if x.startswith(f"[{tag}0_") and "trim=start=" in x]
+    check("the mask is cut on the picture's boundaries", trims("mt"), trims("t"))
+    check("both streams are cut into every segment", len(trims("t")), 3)
+    white = [x for x in parts if "color=white" in x]
+    check("every soft rect is painted onto the mask", len(white), 2)
+    check("...gated to its source-time window", all("between(t" in x for x in white), True)
+    boxi = next(i for i, x in enumerate(parts) if f"color={cfg['box_color']}" in x)
+    check("a box rect stays per-rect, before the cut", boxi < first_concat, True)
+    check("the mask stream is the second input", any("[1:v]" in x for x in parts), True)
+    check("output is the padded source label", parts[-1].endswith("[v0]"), True)
+
+    # no tracker, one soft rect: the mask comes from the video, not a color source
+    plan2 = dict(plan, src={"blur": soft[:1]})
+    plan2.pop("mask_listing")
+    parts2, _, _ = sc.build_filter(plan2, cfg, 0)
+    check("untracked: the mask is a black frame derived from the video",
+          any("drawbox=x=0:y=0:w=iw:h=ih:color=black" in x for x in parts2), True)
+    check("untracked: no second input is referenced", any("[1:v]" in x for x in parts2), False)
+    check("untracked: still one gaussian, after the cut",
+          [i > next(i for i, x in enumerate(parts2) if "concat=n=3" in x)
+           for i, x in enumerate(parts2) if "gblur=sigma=3.0" in x], [True])
+
+    # nothing to redact: no mask, no gaussian, no alphamerge
+    plan3 = dict(plan, src={"blur": []})
+    plan3.pop("mask_listing")
+    parts3, _, _ = sc.build_filter(plan3, cfg, 0)
+    check("nothing to redact: no gaussian at all", any("gblur=sigma=3.0" in x for x in parts3), False)
+    check("nothing to redact: no alphamerge", any("alphamerge" in x for x in parts3), False)
+
+
+def run_log_survives_a_crash():
+    """A killed run must still say it was killed.
+
+    The whole point of the run log is the case where nobody was watching, so
+    the format has to survive the process dying mid-write: JSONL, flushed per
+    line, with an `end` record written by the context manager on the way out
+    for every exit path.
+    """
+    print("")
+    print("_runlog: a run records how it ended, on every exit path")
+    import tempfile, json as _json
+    rl = load("_runlog")
+    d = tempfile.mkdtemp(prefix="runlog-")
+
+    with rl.RunLog(d, argv=["--project", "x"], stages=["render", "gate"]) as log:
+        log.stage("render", "ran", 12.5)
+        log.note("gate", "round 1: 9 hit(s)", round=1, hits=9)
+    recs = rl.read(rl.latest(d)[0])
+    check("first record names the run", recs[0]["ev"], "run")
+    check("the stage is recorded", [r["stage"] for r in recs if r["ev"] == "stage"], ["render"])
+    check("the note keeps its numbers", [r["hits"] for r in recs if r["ev"] == "note"], [9])
+    check("a clean exit ends 'ok'", rl.summary(recs)[0], "ok")
+
+    try:
+        with rl.RunLog(d) as log:
+            log.stage("render", "ran", 1.0)
+            raise SystemExit("STOP: the gate still finds secrets")
+    except SystemExit:
+        pass
+    recs = rl.read(rl.latest(d)[0])
+    check("a failed stage ends 'stopped'", rl.summary(recs)[0], "stopped")
+    check("...and keeps the reason", "still finds secrets" in rl.summary(recs)[2], True)
+
+    try:
+        with rl.RunLog(d) as log:
+            raise ZeroDivisionError("boom")
+    except ZeroDivisionError:
+        pass
+    check("a crash ends 'failed'", rl.summary(rl.read(rl.latest(d)[0]))[0], "failed")
+
+    # a run killed outright: no end line at all, and that must not read as ok
+    log = rl.RunLog(d)
+    log.stage("track", "ran", 3.0)
+    recs = rl.read(log.path)
+    check("no end record reads as 'running', not 'ok'", rl.summary(recs)[0], "running")
+
+    # a half-written last line is skipped, not fatal
+    with open(log.path, "a", encoding="utf-8") as f:
+        f.write('{"ev": "stage", "stage": "gate"')
+    check("a truncated last line is skipped", len(rl.read(log.path)), len(recs))
+
+
 def known_issues_register():
     print("\ndocs/known-issues.md: every entry parses, ids are unique")
     import re
@@ -258,11 +363,116 @@ def known_issues_register():
     check("the register is not empty", len(ids) > 0, True)
 
 
+def frame_change_matches_numpy():
+    """frame_change() must equal the numpy spelling it replaced, exactly.
+
+    It is 13x faster and it decides which frames the tracker looks at, so a
+    drift here would silently change what gets blurred. Compare the two on
+    frames shaped like real screen content -- a static page, a caret blink,
+    a scroll, a page change -- not on noise, where everything differs.
+    """
+    print("")
+    print("track-blur: the fast frame-change equals the numpy original")
+    import numpy as np
+    tb = load("track-blur")
+    rng = np.random.default_rng(7)
+    h, w = 240, 400
+    page = rng.integers(0, 255, (h, w), dtype=np.uint8)
+
+    def ref(fr, prev):
+        return float((np.abs(fr.astype(np.int16) - prev.astype(np.int16)) > 12).mean())
+
+    cases = {}
+    cases["identical frames"] = (page, page.copy())
+    caret = page.copy()
+    caret[10:20, 30:33] = 255
+    cases["a caret blink"] = (page, caret)
+    cases["a scroll"] = (page, np.roll(page, -7, axis=0))
+    cases["a page change"] = (page, rng.integers(0, 255, (h, w), dtype=np.uint8))
+    band = page.copy()
+    band[100:140, :] = 255
+    cases["one changed band"] = (page, band)
+    # a difference of exactly the threshold must fall the same side on both
+    edge = np.clip(page.astype(np.int16) + 12, 0, 255).astype(np.uint8)
+    cases["a delta of exactly 12 (the boundary)"] = (page, edge)
+
+    for label, (a, b) in cases.items():
+        check(label, tb.frame_change(b, a), ref(b, a))
+
+    # ...and the skip decision itself, which is what actually gates the work
+    same = all((tb.frame_change(b, a) < tb.CHANGE_SKIP) ==
+               (ref(b, a) < tb.CHANGE_SKIP) for a, b in cases.values())
+    check("every CHANGE_SKIP decision agrees", same, True)
+
+
+def film_time_redaction():
+    """film-redact: the state -> mask union, and the hand-rect escape hatch.
+
+    A rect missed here is a secret on YouTube, and the union rule is exactly
+    the arithmetic a render cannot check for you: mask_runs coalesces states
+    that blur the same pixels, so an off-by-one in the overlap test shows up
+    as a stretch of film with no blur and nothing else wrong.
+    """
+    fr = load("film-redact")
+    print("")
+    print("film-redact: hand rects are unioned by film-time overlap")
+    hand = [{"rect": [0.1, 0.2, 0.3, 0.05], "when": [10.0, 20.0], "why": "art"},
+            {"rect": [0.5, 0.5, 0.1, 0.1], "why": "whole film"}]
+    check("inside the window", len(fr.hand_boxes(hand, 12.0, 13.0)), 2)
+    check("before it", [b["rect"][0] for b in fr.hand_boxes(hand, 0.0, 5.0)], [0.5])
+    check("after it", [b["rect"][0] for b in fr.hand_boxes(hand, 25.0, 26.0)], [0.5])
+    check("a state STRADDLING the start is covered",
+          len(fr.hand_boxes(hand, 9.5, 10.5)), 2)
+    check("a state ending exactly at t0 is not",
+          len(fr.hand_boxes(hand, 5.0, 10.0)), 1)
+    check("a rect with no window covers the whole film",
+          len(fr.hand_boxes(hand, 999.0, 1000.0)), 1)
+    check("the tile carries its reason, never the secret",
+          fr.hand_boxes(hand, 12.0, 13.0)[0]["text"], "art")
+
+    print("")
+    print("film-redact: mask runs coalesce states that blur the same pixels")
+    import tempfile
+    states = [{"i0": 0, "i1": 29, "kind": "page", "t": 0.0, "dur": 1.0},
+              {"i0": 30, "i1": 59, "kind": "page", "t": 1.0, "dur": 1.0},
+              {"i0": 60, "i1": 89, "kind": "page", "t": 2.0, "dur": 1.0}]
+    per = {"0": [{"rect": [0.1, 0.1, 0.2, 0.05], "kind": "card"}],
+           "1": [{"rect": [0.1, 0.1, 0.2, 0.05], "kind": "card"}]}
+    info = {"w": 320, "h": 180, "fps": 30.0}
+    with tempfile.TemporaryDirectory() as td:
+        runs, _ = fr.mask_runs(states, per, {}, info, td)
+        check("two states with the same boxes make ONE run", len(runs), 2)
+        check("...and it spans both", (runs[0]["i0"], runs[0]["i1"]), (0, 59))
+        # A cleared state becomes empty, so it coalesces with the empty state
+        # AFTER it -- fewer runs, not more. That is the whole point of keying
+        # a run on its pixels: a still page costs one PNG however long it holds.
+        runs, _ = fr.mask_runs(states, per, {"1": "clear"}, info, td)
+        check("a cleared state joins the empty one next to it", len(runs), 2)
+        check("...and only the first state is still blurred",
+              (runs[0]["i0"], runs[0]["i1"], len(runs[0]["key"])), (0, 29, 1))
+        check("...leaving the rest clear", len(runs[1]["key"]), 0)
+        runs, _ = fr.mask_runs(states, per, {"0": "clear", "1": "clear"},
+                               info, td)
+        check("clearing every box leaves one empty run", len(runs), 1)
+        hand = [{"rect": [0.5, 0.5, 0.1, 0.1], "when": [0.0, 3.0], "why": "art"}]
+        runs, _ = fr.mask_runs(states, per, {"1": "clear"}, info, td, hand=hand)
+        check("a hand rect outlives the clear that dropped the detection",
+              [len(r["key"]) for r in runs], [2, 1])
+        runs, _ = fr.mask_runs(states, per, {"0": "clear", "1": "clear"},
+                               info, td, hand=hand)
+        check("...and a review cannot clear it away at all",
+              [len(r["key"]) for r in runs], [1])
+
+
 def main():
     print("check-screen: silent-screencast pipeline self-test\n")
     pii_rules()
     cut_arithmetic()
     pipeline_pieces()
+    frame_change_matches_numpy()
+    film_time_redaction()
+    graph_blurs_after_the_cut()
+    run_log_survives_a_crash()
     known_issues_register()
     print()
     if FAILS:

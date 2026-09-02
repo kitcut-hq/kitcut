@@ -403,10 +403,12 @@ def gate(b):
 def build_filter(plan, cfg, idx):
     """One source -> one filtergraph producing [vN] on the output canvas.
 
-    Order matters and is not arbitrary: scale, then blur, then trim. Scaling
-    first makes the blur run at 1080p rather than 4K; blurring before the trim
-    keeps every blur window in SOURCE time, which is the only timebase a human
-    can verify a rect against.
+    Order matters and is not arbitrary: scale, paint the mask, trim, THEN
+    blur. Scaling first makes everything run at 1080p rather than 4K. The
+    mask is painted before the trim so every rect window stays in SOURCE
+    time -- the only timebase a human can verify a rect against -- and is
+    cut on the same boundaries as the picture; the gaussian then runs only
+    on the frames that survive the cut (KI-021).
     """
     cw, ch = cfg["canvas"]
     info = plan["info"]
@@ -423,44 +425,87 @@ def build_filter(plan, cfg, idx):
     else:
         parts = [f"[{idx}:v]scale={vw}:{vh}:flags=lanczos,setsar=1[s{idx}]"]
     cur = f"s{idx}"
-    if plan.get("mask_listing"):
-        # Tracked redaction: track-blur.py followed the secret's own pixels
-        # through the source and wrote a mask stream; the frame is blurred
-        # ONCE and shown through that mask, so the blur lands wherever the
-        # field actually is -- scrolled, repeated, or back after a page
-        # change -- and rect count adds nothing to per-frame cost. No
-        # `shortest` on the overlay and no early-ending mask: alphamerge
-        # pairs frames one-to-one and a short mask stalls the graph (the
-        # looped-PNG trap), which is why track-blur writes the mask longer
-        # than the source.
-        d = int(cfg.get("blur_downscale", 8))
-        sigma = float(cfg.get("blur_sigma", 3.0))
-        fps_in = plan["info"]["fps"] or cfg["fps"]
-        parts.append(f"[{cur}]split[tk{idx}c][tk{idx}b]")
-        parts.append(f"[tk{idx}b]scale=iw/{d}:ih/{d}:flags=area,"
-                     f"gblur=sigma={sigma},"
-                     f"scale={vw}:{vh}:flags=bicubic[tk{idx}bl]")
-        parts.append(f"[1:v]fps={fps_in:.4f},scale={vw}:{vh}:flags=neighbor,"
-                     f"format=gray[tk{idx}m]")
-        parts.append(f"[tk{idx}bl][tk{idx}m]alphamerge[tk{idx}a]")
-        parts.append(f"[tk{idx}c][tk{idx}a]overlay[tk{idx}]")
-        cur = f"tk{idx}"
     blurs = plan["src"].get("blur") or []
-    if blurs:
-        bp, cur = blur_chain(blurs, vw, vh, cur, f"b{idx}_", cfg)
+    mode = cfg.get("blur_mode", "blur")
+    soft = [b for b in blurs if (b.get("mode") or mode) == "blur"]
+    hard = [b for b in blurs if (b.get("mode") or mode) != "blur"]
+    if hard:
+        # box / pixelate stay per rect and in source time: a crop is cheap,
+        # and a mosaic has to be built at the rect's own scale
+        bp, cur = blur_chain(hard, vw, vh, cur, f"b{idx}_", cfg)
         parts += bp
 
+    # Soft redaction -- the tracked mask stream and every hand rect in `blur`
+    # mode -- is ONE mask and ONE gaussian, and the gaussian runs AFTER the
+    # cut. The first version blurred before trimming so that every rect
+    # window stayed in source time; that is still true of the MASK (it is
+    # painted here, in source time, and cut on exactly the segment
+    # boundaries the picture is cut on), but the blur itself was running
+    # over all 47 minutes of footage to keep 8. Measured on 60 s of a real
+    # proxy producing the same 10 s: blur-before-cut 8.4 s, blur-after-cut
+    # 3.5 s (KI-021). Two chains -- the tracked mask and the hand rects each
+    # brought their own full-frame gaussian -- took a gate round from 6:30
+    # to 17 minutes; now there is one, on the frames that survive.
+    #
+    # The tracked mask is a per-frame stream, so cutting it with the same
+    # trim/setpts keeps the pairing exact with no time remapping. Where no
+    # tracker ran, the mask is a black frame DERIVED FROM THE VIDEO (never a
+    # `color` source: an infinite source makes alphamerge wait forever --
+    # the looped-PNG trap). drawbox paints straight onto the gray stream
+    # and writes 255, checked; a yuv white would be 235 and let 8 % of the
+    # sharp text through.
+    tracked = bool(plan.get("mask_listing"))
+    fps_in = plan["info"]["fps"] or cfg["fps"]
+    mcur = None
+    if tracked or soft:
+        if tracked:
+            parts.append(f"[1:v]fps={fps_in:.4f},scale={vw}:{vh}:flags=neighbor,"
+                         f"format=gray[m{idx}_0]")
+        else:
+            parts.append(f"[{cur}]split[{cur}v][m{idx}_src]")
+            cur = f"{cur}v"
+            parts.append(f"[m{idx}_src]drawbox=x=0:y=0:w=iw:h=ih:color=black:t=fill,"
+                         f"format=gray[m{idx}_0]")
+        mcur = f"m{idx}_0"
+        for i, b in enumerate(soft):
+            x, y, w, h = b["rect"]
+            px = max(0, int(round(x * vw)))
+            py = max(0, int(round(y * vh)))
+            pw = max(4, int(round(w * vw)))
+            ph = max(4, int(round(h * vh)))
+            nxt = f"m{idx}_{i + 1}"
+            parts.append(f"[{mcur}]drawbox=x={px}:y={py}:w={pw}:h={ph}:"
+                         f"color=white:t=fill" + gate(b) + f"[{nxt}]")
+            mcur = nxt
+
     segs = plan["segments"]
-    parts.append(f"[{cur}]split={len(segs)}" +
-                 "".join(f"[t{idx}_{i}]" for i in range(len(segs))))
-    outs = []
-    for i, s in enumerate(segs):
-        sp = s["speed"]
-        pts = "PTS-STARTPTS" if sp == 1.0 else f"(PTS-STARTPTS)/{sp}"
-        parts.append(f"[t{idx}_{i}]trim=start={s['start']}:end={s['end']},"
-                     f"setpts={pts}[c{idx}_{i}]")
-        outs.append(f"[c{idx}_{i}]")
-    parts.append("".join(outs) + f"concat=n={len(segs)}:v=1:a=0[p{idx}]")
+
+    def cut(label_in, tag, label_out):
+        """trim/setpts/concat one stream on the plan's segments."""
+        parts.append(f"[{label_in}]split={len(segs)}" +
+                     "".join(f"[{tag}{idx}_{i}]" for i in range(len(segs))))
+        outs = []
+        for i, s in enumerate(segs):
+            sp = s["speed"]
+            pts = "PTS-STARTPTS" if sp == 1.0 else f"(PTS-STARTPTS)/{sp}"
+            parts.append(f"[{tag}{idx}_{i}]trim=start={s['start']}:end={s['end']},"
+                         f"setpts={pts}[{tag}c{idx}_{i}]")
+            outs.append(f"[{tag}c{idx}_{i}]")
+        parts.append("".join(outs) + f"concat=n={len(segs)}:v=1:a=0[{label_out}]")
+
+    cut(cur, "t", f"p{idx}")
+    pcur = f"p{idx}"
+    if mcur:
+        cut(mcur, "mt", f"pm{idx}")
+        d = int(cfg.get("blur_downscale", 8))
+        sigma = float(cfg.get("blur_sigma", 3.0))
+        parts.append(f"[{pcur}]split[bl{idx}c][bl{idx}b]")
+        parts.append(f"[bl{idx}b]scale=iw/{d}:ih/{d}:flags=area,"
+                     f"gblur=sigma={sigma},"
+                     f"scale={vw}:{vh}:flags=bicubic[bl{idx}bl]")
+        parts.append(f"[bl{idx}bl][pm{idx}]alphamerge[bl{idx}a]")
+        parts.append(f"[bl{idx}c][bl{idx}a]overlay[pb{idx}]")
+        pcur = f"pb{idx}"
     # Fill the canvas HERE, per source, not once after the cross-source
     # concat: `concat` refuses inputs of differing size, and this film mixes a
     # 3840x2280 desktop capture (-> 1818x1080) with a 1008x2244 phone screen
@@ -473,14 +518,14 @@ def build_filter(plan, cfg, idx):
         # a deliberate treatment instead of a mistake. Only where it is worth
         # it: on a 1818x1080 desktop frame the bars are 51 px and a gblur pass
         # over the whole canvas would be spent on almost nothing.
-        parts.append(f"[p{idx}]split[f{idx}][g{idx}]")
+        parts.append(f"[{pcur}]split[f{idx}][g{idx}]")
         parts.append(f"[g{idx}]scale={cw}:{ch}:force_original_aspect_ratio=increase,"
                      f"crop={cw}:{ch},gblur=sigma=32,eq=brightness=-0.18[gb{idx}]")
         parts.append(f"[gb{idx}][f{idx}]overlay=(W-w)/2:(H-h)/2,"
                      f"setsar=1[v{idx}]")
     else:
         color = cfg["backdrop"] if cfg.get("backdrop") != "blur" else "0x101014"
-        parts.append(f"[p{idx}]pad={cw}:{ch}:(ow-iw)/2:(oh-ih)/2:"
+        parts.append(f"[{pcur}]pad={cw}:{ch}:(ow-iw)/2:(oh-ih)/2:"
                      f"color={color},setsar=1[v{idx}]")
     return parts, vw, vh
 
@@ -591,6 +636,9 @@ def run_ffmpeg(cmd, what):
 # Config keys a piece's pixels actually depend on. Anything not listed here --
 # --target, --list formatting, the output path -- must not invalidate a cache
 # entry, or nothing is ever reused.
+# Bump when build_filter() changes what pixels it produces for the same plan,
+# or a cached piece from the old graph is silently reused next to a new one.
+GRAPH_VERSION = 2
 PIECE_CFG_KEYS = ("canvas", "fps", "cq", "backdrop", "blur_mode", "box_color",
                   "speed_badge", "badge_font", "nvenc_preset")
 
@@ -621,6 +669,7 @@ def piece_key(plan, cfg):
         except OSError:
             mask_ident = ["missing"]
     payload = {
+        "graph": GRAPH_VERSION,
         "input": ident,
         "segments": plan["segments"],
         "blur": plan["src"].get("blur") or [],
@@ -799,6 +848,12 @@ def main():
                          "seconds each, joined -- a risk trailer of about a minute")
     ap.add_argument("--no-proxy", action="store_true",
                     help="read the original sources even where a proxy exists")
+    ap.add_argument("--no-redact", action="store_true",
+                    help="cut the film with NOTHING hidden -- no hand rects, "
+                         "no tracked mask -- into temp/film/base.mp4. This is "
+                         "the input to film-redact.py, which detects and blurs "
+                         "in FILM time; it is never the deliverable, so it is "
+                         "written under temp/ and its own piece cache.")
     ap.add_argument("--smoke", action="store_true",
                     help="render ~30 s of the busiest source through the FULL "
                          "graph and check its duration; run before every full "
@@ -853,15 +908,25 @@ def main():
         p["source_path"] = _env.resolve(s["path"])
         p["is_proxy"] = chosen != p["source_path"]
         p["info"] = probe(p["path"])
-        # tracked-blur mask, if track-blur.py has run for this source
-        track = s.get("track")
-        if track:
-            listing = os.path.join(_env.resolve(track), "masks.txt")
-            if os.path.exists(listing):
-                p["mask_listing"] = listing
-            else:
-                print(f"  track masks missing for "
-                      f"{os.path.basename(s['path'])}: {listing}")
+        if args.no_redact:
+            # The base film for FILM-TIME redaction (film-redact.py): the cut,
+            # with nothing hidden. Redacting here means detecting in source
+            # time and mapping every hit back through the cut, the pad and a
+            # 3x/19x speed change -- the mapping that produced this pipeline's
+            # worst bugs (KI-022). Cut first, redact the film itself, and
+            # there is one timebase and no mapping at all.
+            p["src"] = dict(p["src"])
+            p["src"].pop("blur", None)
+        else:
+            # tracked-blur mask, if track-blur.py has run for this source
+            track = s.get("track")
+            if track:
+                listing = os.path.join(_env.resolve(track), "masks.txt")
+                if os.path.exists(listing):
+                    p["mask_listing"] = listing
+                else:
+                    print(f"  track masks missing for "
+                          f"{os.path.basename(s['path'])}: {listing}")
         plans.append(p)
 
     tot_in = sum(p["window"][1] - p["window"][0] for p in plans)
@@ -924,7 +989,13 @@ def main():
         cfg = dict(cfg, canvas=[cw // 2 // 2 * 2, ch // 2 // 2 * 2],
                    cq=max(cfg.get("cq", 21), 28), nvenc_preset="p1")
         variant += "-draft"
-    if variant and not args.out:
+    if args.no_redact:
+        variant += "-base"
+        cfg["piece_dir"] = "cut-base"
+        if not args.out:
+            man["output"] = os.path.join(os.path.dirname(mpath), "temp",
+                                         "film", "base.mp4").replace("\\", "/")
+    elif variant and not args.out:
         base, ext = os.path.splitext(man["output"])
         man["output"] = f"{base}{variant}{ext}"
         cfg["piece_dir"] = "cut" + variant

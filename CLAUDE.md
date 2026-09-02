@@ -409,6 +409,31 @@ for a human to watch) → `screen-cut.py` (content-addressed pieces,
 stream-copy join) → `render-gate.py` (the secrets' pixels searched on the
 *render*; `--patch` and loop) → `yt-upload.py`.
 
+**When the secrets are the film, redact the film instead.** Measure first:
+how much of the finished cut has a secret on screen? Under a fifth, track the
+sources as above. Over it — 31 % on `books-giveaway` — the mapping from source
+time back through the cut, the speed change and the pad is where the day goes,
+and two separate bugs already lived there. `film-redact.py` removes the
+mapping: cut unredacted, segment the film into screen states, detect and blur
+in film time, and gate by asking whether the boxes already found are blurred.
+
+```powershell
+python scripts/screen-cut.py  --manifest projects/<id>/screen.json --target 8:00 --no-redact
+python scripts/film-redact.py --project <id> --states --detect -j 8
+python scripts/redaction-review.py --manifest projects/<id>/screen.json --states --html
+python scripts/film-redact.py --project <id> --blur
+python scripts/film-redact.py --project <id> --gate
+```
+
+The unit of work is the **screen state**, not the frame: 14,400 frames, ~1,330
+states, one OCR per state. Price it honestly — **2.7 s/rep**, and eight
+workers buy 19 % over one because the model is memory-bound, so a film like
+this is ~50 minutes of detection. Set the OCR threads in the constructor;
+onnxruntime ignores every thread env var and unbounded workers run slower than
+one process (KI-024). Launch it detached and let it checkpoint (KI-025).
+`film_blur` on the manifest is the escape hatch for what OCR cannot read, in
+film seconds, and no review decision clears it (KI-026).
+
 `docs/known-issues.md` is the register — what the tools cannot do, what is
 known and unfixed, what already bit us. The pipeline prints the entries for
 the stages it is about to run; read it before designing anything here, and
@@ -425,7 +450,7 @@ frame's own time), and a filtergraph on the Windows command line dies at
 32 KB as `WinError 206`.
 
 After touching any of `screen-activity.py`, `screen-cut.py`, `scan-pii.py`,
-`track-blur.py`, `render-gate.py` or `redaction-review.py`, run
+`track-blur.py`, `render-gate.py`, `film-redact.py` or `redaction-review.py`, run
 `python scripts/check-screen.py` — the PII rules against the strings that came
 off real frames, the cut arithmetic, the recall harness, no GPU, no OCR.
 
