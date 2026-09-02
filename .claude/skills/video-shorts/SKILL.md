@@ -53,8 +53,12 @@ python scripts/transcript-outline.py projects/<id>/transcripts/<id>.words.json -
 
 What makes a good as-is short (no editing pass to save it later):
 
-- **Self-contained arc** — opens on the start of a thought, closes on a payoff
-  or punchline. Never open mid-sentence.
+- **Open on the HOOK, not on the start of the thought.** The first spoken words
+  must be a concrete, self-contained claim — a number, a name, a surprising
+  statement. Setup, wind-up and back-reference to earlier context are dead air:
+  a short has ~2 s to earn the watch, and "the start of the thought" is usually
+  several sentences of it. Closes on a payoff or punchline. Never open
+  mid-sentence.
 - **60–90 s** for talking-head content; under 60 s for a single gag/story.
 - Prefer segments with emotion, concrete numbers, a strong visual, or a
   controversial thesis — those carry a clip with zero extra editing.
@@ -180,6 +184,20 @@ Only `crop_keys` (inline `[[t, x], ...]`) overrides the sidecar. `crop_x` and
 `crop_pad` do **not** — where a sidecar entry exists it wins, and `cut-clips.py`
 prints a note if a clip sets one anyway. Override by editing the sidecar
 itself, as above.
+
+**A re-run of `auto-reframe.py` wipes those sidecar edits** — it now WARNs
+about each pad it is overwriting, but it cannot merge them back: sidecar times
+are in CLIP time, so the moment a clip's boundary moves, every hand-tuned time
+in its entry means something else. One film had the same letterbox override
+silently destroyed three times in a session before the warning existed. After
+any regen, re-apply overrides by hand, recomputed against the clip's new start.
+
+The other reason to letterbox besides "no face": a **full-width graphic
+insert** — the host steps aside and a news card takes half the frame. The
+tracker follows the face correctly, which is exactly wrong: measure the card
+(it was 641 px here, wider than the 607 px window), letterbox the span with a
+`pad` entry, and neutralise the runaway x keys inside it so a frame-off pad
+edge still shows the host.
 
 `--mode compare` needs scenedetect; without it the comparison refuses rather
 than printing a table (it used to print one full of zeros and exit 0).
@@ -319,6 +337,91 @@ The cutter already asserts output duration against the plan. Additionally:
    ffmpeg -v error -ss 6 -i projects/<id>/outputs/shorts/<clip>.mp4 -frames:v 1 -vf scale=760:-1 -y temp/chk.png
    ```
 3. Check both ends of one clip for clipped words (frame at t=0.2 and t=dur-0.2).
+
+### The opening is a HOOK problem first, a frame problem second
+
+**Never buy a settled opening frame with dead air.** A short has about two
+seconds to earn the watch; nobody waits through a wind-up for the point. This
+ordering is not optional, and it is easy to get backwards — on `dHYrpun-XTs` the
+opening frame was fixed by moving the start back one sentence, which bought a
+closed mouth at the cost of ~7 s of back-reference to a calculation made *before
+the clip*. The frame was perfect and the short was worse. It had to be re-cut a
+third time.
+
+The order to work in:
+
+1. **Find where the hook is** — the first concrete, self-contained claim. Cut
+   there. Everything before it that only makes sense with earlier context is
+   dead air, however fluent it sounds.
+2. **Then** place the exact frame, within the couple of frames around that word.
+3. Only if no acceptable frame exists near the hook, consider moving — and if
+   moving costs a hook, keep the hook.
+
+**Check the render's CAPTION, not just its picture.** A head that lands inside
+the previous word shows up in the first caption card as a word the viewer never
+properly hears — that is how a cut 0.06 s inside `кажуть,` was caught here,
+after the picture alone had looked fine. `--sheet` writes the render's first
+eight frames with captions burned in for exactly this.
+
+Word boundaries are in the transcript, so use them: land in the gap *between*
+words (`кажуть,` ends 371.56, `людина` starts 371.58 → start at 371.57). A
+numeric `"start"` is the right tool, because `resolve()` skips the pad block
+entirely when there is no `start_text` anchor, so the value lands frame-exact.
+
+### Always check the opening — picture AND sound
+
+**Never ship a short that opens mid-word with a half-open mouth.** It is the
+first thing a viewer sees, it reads as a botched cut, and *nothing else in the
+pipeline catches it*: caption-sync probes and the duration assert both pass on
+such a clip, because nothing about it is out of sync or the wrong length.
+
+```powershell
+python scripts/check-openings.py --manifest projects/<id>/clips-vertical.json
+python scripts/check-openings.py --manifest ... --sheet     # then LOOK at the png
+```
+
+It flags a **boundary inside a word** unconditionally — a cut 0.06 s into a
+word shipped from here before that check existed; the picture looked fine and
+only the render's first caption card, carrying a word from the previous
+sentence, gave it away. No `open_ok` excuses this one: unlike a short lead-in
+there is no judgement call to make. (A deliberate stop-1-ms-early end, used
+when two transcript words share a timestamp, is inside the check's epsilon and
+does not flag.)
+
+It also measures the **lead-in silence** (the gap between the previous word's
+end and the cut) and flags anything under 0.20 s. Remember `resolve()` pads
+meet speech halfway, so a 0.24 s transcript gap yields only ~0.12 s of lead-in.
+
+**Silence is not proof, and the numbers often cannot decide it.** A mouth stays
+open across a short gap, and some speakers never pause at all — on `dHYrpun-XTs`
+the largest gap in the 37 s around one clip was 0.28 s, so no boundary there was
+clean on silence and every candidate had to be looked at. `--sheet` contact-
+sheets every frame inside the nearby pauses plus the first 8 frames of the
+render as shipped; pick a frame with the mouth closed, face toward camera and
+the gesture settled, then set that clip's `pad.head` to land on it.
+
+That is exactly how one clip here was fixed: opening on the phrase that carried
+the idea put frame 0 mid-word — mouth open, eyes down, hand frozen mid-gesture —
+while every frame of an earlier 0.28 s gap was settled. The start moved back one
+sentence **for the picture, not for the words**.
+
+A short lead-in you have looked at and accepted goes in the manifest as
+`"open_ok": "<why>"`, so the check keeps its teeth and stops crying wolf:
+
+```json
+{ "id": "01-…", "start_text": "…",
+  "pad": { "head": 0.2, "tail": 0.35 },
+  "open_ok": "0.14 s lead-in, but no pause >0.28 s anywhere near; frame 0 checked by eye" }
+```
+
+**A mouth-openness detector was tried and rejected**, and is worth not
+re-attempting blind. YuNet's 5 landmarks give mouth *corners* but no lip
+contour, so openness has to be inferred from darkness. Scored against eight
+frames already judged by eye it separated them cleanly and **backwards** —
+closed mouths read darker than open ones, because the speaker was looking down
+in the open ones and the score was reading head pose, not lips. Eight frames
+from one shot separating for the wrong reason will not survive the next video.
+Doing it properly needs a lip-contour model and a labelled set across films.
 
 ## Traps (all hit for real)
 

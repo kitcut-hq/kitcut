@@ -405,6 +405,21 @@ def main():
     old = {}
     if os.path.exists(out):
         old = json.load(open(out, encoding="utf-8"))
+    # The sidecar exists to be edited (a cleared false pad, a letterboxed
+    # graphic insert, a neutralised key), and a regen throws those edits away.
+    # It cannot merge them back either: entries are in CLIP time, so the moment
+    # a clip's boundary moves every hand-tuned time in it means something else.
+    # What it can do is say what it is about to destroy, loudly -- one film here
+    # had the same letterbox override silently wiped three times in a session.
+    for cid, entry in sorted(result.items()):
+        prev = old.get(cid)
+        if isinstance(prev, dict) and isinstance(entry, dict):
+            if prev.get("pad") and prev["pad"] != entry.get("pad", []):
+                print("WARNING %s: overwriting pad %s with %s -- if that pad "
+                      "was a manual override (a letterboxed graphic insert, a "
+                      "cleared false pad), re-apply it, in the clip's NEW time "
+                      "base if its start moved" % (cid, prev["pad"],
+                                                   entry.get("pad", [])))
     old.update(result)
     json.dump(old, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     print("wrote %s" % out)

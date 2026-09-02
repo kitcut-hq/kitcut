@@ -1,0 +1,48 @@
+{
+  "_comment": "Two vertical shorts cut from DOU News #265 as a test of the shorts pipeline. Third-party footage, so NO handle badge -- branding someone else's video with our handle would be wrong, and a clean cut is the better control for a capability test anyway. The show is a locked-off talking head separated by full-frame branded DOU interstitial cards; those cards carry no face, so any clip spanning one risks a false 'pad' (letterbox) decision from auto-reframe. Both clips were chosen to sit inside a single segment, and both avoid the two sponsor reads (the picnic promo at 06:55-07:25 and the donation drive at 14:11-15:01).",
+  "source": "projects/dHYrpun-XTs/sources/dHYrpun-XTs-1080p.mp4",
+  "words": "projects/dHYrpun-XTs/transcripts/dHYrpun-XTs.words.json",
+  "outdir": "projects/dHYrpun-XTs/outputs/shorts-vertical",
+  "prefix": "dHYrpun-XTs-v",
+  "pad": {
+    "head": 0.15,
+    "tail": 0.35
+  },
+  "vertical": {
+    "width": 1080,
+    "height": 1920
+  },
+  "captions": {
+    "style": "config/presets/red-card-vertical.json",
+    "samples": 24
+  },
+  "clips": [
+    {
+      "id": "01-brain-vs-chip",
+      "title": "The Human Brain Is 22x More Efficient Than Nvidia's Best Chip",
+      "_why": "Opens on the hook and pays it off: a human runs at 3.3 tokens/second on a 20 W brain, which works out at ~690 tokens per calorie, making the brain 22x more efficient per unit of energy than a B300. Closes on the host's own delight. Sits inside the OpenAI-chip segment (02:53-06:47), no interstitial, no sponsor read.",
+      "start": 371.57,
+      "end_text": "Я в абсолютному захваті",
+      "_open_note": "THE OPENING IS A HOOK PROBLEM FIRST AND A FRAME PROBLEM SECOND. Two earlier starts were both wrong for the same reason -- they bought a settled frame with dead air. Starting at 'Можна так зробити' (357.54) opened on ~7 s of back-reference to a calculation made before the clip: nothing a viewer can hold on to, and nobody waits that long. Starting at 'І ось ми отримаємо' (360.62) was better but still led with the dry chip baseline. 371.57 opens on the hook word and the first line is already a concrete claim. Numeric, not start_text, because an explicit start bypasses the pad (resolve() skips the pad block when anchor_a is None) and this needs frame precision: the host never pauses -- ZERO gaps >=0.15 s between 365 s and 378 s -- so the head cannot be placed by silence at all. 371.57 sits in the 0.02 s gap between 'кажуть,' (ends 371.56) and 'людина' (starts 371.58). An earlier attempt at 371.50 was WRONG for a reason only the render showed: it cut 0.06 s INTO 'кажуть,', so the audio opened mid-syllable and the first caption card carried a word from the previous sentence. Check the render's caption, not just its picture -- a mid-word head shows up there first.",
+      "pad": {
+        "head": 0.0,
+        "tail": 0.35
+      },
+      "open_ok": "Zero lead-in silence by construction -- there is no pause within 13 s to sit in. Frame 0 chosen from a contact sheet instead: mouth closed, head rising to camera, immediately before the hook word. Verified on the render.",
+      "_bounds_note": "371.50 -> 403.94 before the tail pad, ~32.8 s."
+    },
+    {
+      "id": "02-nvidia-hugging-face",
+      "title": "Nvidia Is Paying 80x Revenue for Hugging Face",
+      "_why": "News hook with hard numbers and a clean payoff: $12.9B, one of the biggest buys in the company's history, against roughly $150M revenue -- 80x. Ends before the sentence that hands off to the next story.",
+      "start_text": "Інвідія домовилась про купівлю",
+      "end_before_text": "Бо про це якраз наступна новина",
+      "_bounds_note": "901.35 -> 977.75 before pads, ~76 s. The DOU interstitial card sits at 900 s and the transition flashes at 901 s (frame stddev 45 -> 24 -> 89 -> 33, settling static from 902 s), so the default 0.15 s head pad opens on the tail of that wipe. Check the reframe plan here: those faceless transition frames are exactly what produces a false 'pad' letterbox at the head.",
+      "pad": {
+        "head": 0.0,
+        "tail": 0.35
+      }
+    }
+  ],
+  "tmp": "projects/dHYrpun-XTs/temp"
+}

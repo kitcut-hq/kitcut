@@ -1,0 +1,5 @@
+The human brain produces ~690 tokens per calorie. Nvidia's best inference chip? About 30. That makes the brain roughly 22x more energy-efficient at generating tokens.
+
+Fragment from DOU News #265 by DOU. Full episode: https://www.youtube.com/watch?v=dHYrpun-XTs
+
+#Shorts #AI #Nvidia

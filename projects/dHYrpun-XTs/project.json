@@ -1,0 +1,59 @@
+{
+  "v": 1,
+  "id": "dHYrpun-XTs",
+  "intent": "",
+  "pipelines": [],
+  "inputs": {},
+  "controls": {},
+  "deliverables": {
+    "projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-01-brain-vs-chip.mp4": {
+      "status": "current",
+      "built_utc": "2026-09-02T04:05:43Z",
+      "kind": "short",
+      "script": "scripts/yt-upload.py",
+      "manifest": "projects/dHYrpun-XTs/clips-vertical.json",
+      "burned": [
+        "9:16 crop per reframe sidecar",
+        "word-synced captions, style config/presets/red-card-vertical.json"
+      ],
+      "sidecars": {
+        "clip": "projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-01-brain-vs-chip.json"
+      },
+      "checked_utc": "2026-09-02T03:44:52Z",
+      "notes": [
+        "Manifest edited after this render, non-material: added open_ok (a recorded review of the opening frame) and prose notes. No boundary, pad or styling key controlling this render changed."
+      ],
+      "published": {
+        "url": "https://youtu.be/fcvw2ID7yNc",
+        "privacy": "unlisted",
+        "sidecar": "projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-01-brain-vs-chip.youtube.json"
+      }
+    },
+    "projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-02-nvidia-hugging-face.mp4": {
+      "status": "current",
+      "built_utc": "2026-09-02T04:06:00Z",
+      "kind": "short",
+      "script": "scripts/yt-upload.py",
+      "manifest": "projects/dHYrpun-XTs/clips-vertical.json",
+      "burned": [
+        "9:16 crop per reframe sidecar",
+        "word-synced captions, style config/presets/red-card-vertical.json"
+      ],
+      "sidecars": {
+        "clip": "projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-02-nvidia-hugging-face.json"
+      },
+      "checked_utc": "2026-09-02T03:56:32Z",
+      "notes": [
+        "Manifest edited after this render, non-material: added open_ok (a recorded review of the opening frame) and prose notes. No boundary, pad or styling key controlling this render changed.",
+        "Manifest edited after this render for clip 01 only (its start moved to the hook). No key controlling THIS render changed."
+      ],
+      "published": {
+        "url": "https://youtu.be/WI1kOto13qc",
+        "privacy": "unlisted",
+        "sidecar": "projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-02-nvidia-hugging-face.youtube.json"
+      }
+    }
+  },
+  "notes": [],
+  "updated_utc": "2026-09-02T04:06:00Z"
+}

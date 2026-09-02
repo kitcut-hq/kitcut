@@ -14,10 +14,11 @@ The header below makes the script survive a bare `python script.py` anyway.
 
 Invoke as:  python scripts/transcribe-words.py <audio.wav> --out <id>.words.json
 """
-import sys, os, json, argparse, time
+import sys, os, json, argparse, time, atexit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _gpulock  # noqa: E402 -- stdlib sibling; one large-v3 on the card at a time
 
 # _env handles the poisoned path and UTF-8 stdio (layers 1 and 2).
 # --- ctranslate2 bundles its own libiomp5md.dll
@@ -61,6 +62,36 @@ if not any(_fw.startswith(p) for p in _own):
              "Invoke as: python" % _fw)
 
 
+def take_gpu_lock(args):
+    """Queue behind any other GPU run, saying who we are waiting for.
+
+    Waiting beats failing: the work still gets done, just serialised. What it
+    must never do is wait silently -- a job with no output is indistinguishable
+    from the deadlock this exists to prevent, which is how the original
+    three-way pile-up went twenty minutes undiagnosed.
+    """
+    project = None
+    parts = os.path.normpath(os.path.abspath(args.audio)).split(os.sep)
+    if "projects" in parts:
+        i = parts.index("projects")
+        if i + 1 < len(parts):
+            project = parts[i + 1]
+
+    def waiting(held, _waited):
+        print("GPU busy -- %s" % _gpulock.describe(held), flush=True)
+        print("  queueing (up to %.0f min; --no-gpu-lock overrides, "
+              "--gpu-wait 0 refuses)" % (args.gpu_wait / 60.0), flush=True)
+
+    token = _gpulock.acquire("gpu", tool="transcribe-words", project=project,
+                             wait=args.gpu_wait, on_wait=waiting)
+    if token is None:
+        held = _gpulock.read("gpu")
+        sys.exit("REFUSED: %s\nAnother run holds the card. Check it with "
+                 "`python scripts/gpu-lock.py`." % _gpulock.describe(held))
+    atexit.register(_gpulock.release, token, "gpu")
+    return token
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("audio")
@@ -74,6 +105,12 @@ def main():
                          "language -- a wrong forced language produces a fluent "
                          "transcript of the wrong words with no error anywhere.")
     ap.add_argument("--beam-size", type=int, default=5)
+    ap.add_argument("--gpu-wait", type=float, default=7200.0,
+                    help="seconds to queue behind another GPU run before "
+                         "giving up (default 2h; 0 = refuse immediately)")
+    ap.add_argument("--no-gpu-lock", action="store_true",
+                    help="skip the single-run lock. Only when you know the "
+                         "card is free -- two large-v3 on 4 GB finish neither.")
     args = ap.parse_args()
 
     print(f"faster-whisper {faster_whisper.__version__} / ctranslate2 {ctranslate2.__version__}")
@@ -87,6 +124,13 @@ def main():
         if args.compute_type != "int8":
             ladder.append(("cuda", "int8"))
         ladder.append(("cpu", "int8"))
+
+    # One large-v3 on the card at a time. Only a CUDA rung contends for it, so
+    # an explicit --device cpu run is never made to queue. Released via atexit
+    # rather than a `with` so the ladder below keeps its indentation; a hard
+    # kill skips that, which is exactly what _gpulock's stale detection covers.
+    if not args.no_gpu_lock and any(d == "cuda" for d, _ in ladder):
+        take_gpu_lock(args)
 
     last_err = None
     for device, ctype in ladder:
