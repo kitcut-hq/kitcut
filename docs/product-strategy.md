@@ -7,6 +7,14 @@ next session (or the next person) does not have to re-derive it.
 The product name is undecided. `InstaCut` appears below as a placeholder in paths
 and commands; it is an example, not a decision. See *Open questions*.
 
+**Read `docs/market-shorts-2026.md` alongside this.** It is the evidence base this
+document lacked — the shorts/clipping market researched with sources on
+2026-09-01. It supports parts of the reasoning here (§6 rejects a shorts SaaS;
+the category's 15%/mo churn and free platform-native floor say why), and it
+redirects others: local-first does **not** sell to shorts buyers as a privacy
+pitch, only as an economic one, and the on-prem privacy money is in redaction —
+pipeline 7's territory, not pipeline 2's.
+
 ---
 
 ## The one-page version
