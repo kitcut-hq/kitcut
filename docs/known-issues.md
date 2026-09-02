@@ -46,7 +46,7 @@ tracked field in a regular layout, or accept (the user did, 2026-08-31 —
 
 ### KI-003 · limitation · track · Window-switcher thumbnails render secrets at arbitrary scale
 
-**Symptom.** Alt-Tab shows a Notepad card titled `*4149… - Notepad` and the
+**Symptom.** Alt-Tab shows a Notepad card titled `*4111… - Notepad` and the
 PAN in its thumbnail; neither matches a template.
 **Cause.** Thumbnail scale is not one of the three scales searched, and the
 title text is a different font.

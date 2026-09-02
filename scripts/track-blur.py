@@ -170,7 +170,7 @@ def collect_templates(src, pii_paths, benign, kinds, info):
         # OCR line actually carried. Bucketing by height alone and taking the
         # widest was the recall killer the harness exposed (30.8%): the widest
         # line holding a phone number is the panel sentence that CONTAINS it
-        # -- "Київ, відділення 57, 0939589090, Стрельченко Марія" -- and that
+        # -- "Київ, відділення 57, 0XXXXXXXXX, <recipient>" -- and that
         # patch can never match the bare number in a spreadsheet cell or a
         # form field. Same digits, different surroundings, one template. Now
         # each surrounding gets its own.

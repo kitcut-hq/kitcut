@@ -107,7 +107,7 @@ def rules():
     def phone(t, low):
         # The +38 prefix is OPTIONAL, and leaving it mandatory is how a full
         # record reached a proof frame: a Claude panel summary read
-        # "(Київ, відділення 57, 0939589090, Стрельченко Марія ...)" -- the
+        # "(Київ, відділення 57, 0XXXXXXXXX, <recipient> ...)" -- the
         # national 0XX form, with the name and the delivery branch beside it,
         # and the rule did not fire. A Ukrainian mobile is 0 plus nine digits
         # however it is punctuated.
@@ -117,7 +117,7 @@ def rules():
 
     def iban(t, low):
         # A Ukrainian IBAN is UA + 2 check digits + 25 more, but it is almost
-        # always drawn part-masked ("UA57 ---- 2527428"), so requiring the full
+        # always drawn part-masked ("UA57 ---- 1111111"), so requiring the full
         # 27 finds nothing. The prefix plus any digits is the real signature.
         return bool(re.search(r"\bUA\s?\d{2}\b", t)) and \
             bool(re.search(r"\d", t.split("UA", 1)[-1]))

@@ -205,7 +205,7 @@ Hand `blur` rects remain for what OCR cannot read at all — stylised card
 faces — and run in source time, upstream of the trim, same as ever.
 
 - **The country code is optional.** Requiring `+38` let a panel summary reading
-  `(Київ, відділення 57, 0939589090, Стрельченко Марія …)` straight through —
+  `(Київ, відділення 57, 0XXXXXXXXX, <recipient> …)` straight through —
   city, branch, phone and full name, in the national `0XX` form.
 
 **It is a net, not a clearance.** OCR misses rotated, low-contrast and
