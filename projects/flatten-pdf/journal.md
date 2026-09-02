@@ -202,3 +202,47 @@ classification only lands once `processingDetails.processingStatus` reaches
 Unlisted was deliberate (standing preference: a review link that opens for
 others). It does mean the Short will not appear in the Shorts feed — that needs
 public.
+
+## 2026-09-02
+
+### Session note — publish recorded after the fact, 2026-09-02
+
+The film went up on @instafill_ai as https://youtu.be/6LQnRd0JxGU on the
+evening of 2026-09-01, with the title, description, chapters and tags from the
+committed .txt files, plus a thumbnail. All of it through the YouTube web UI —
+`yt-upload.py` was never run. `project.json` therefore said "Not published yet"
+for a day while the video was live, which is exactly the failure the project
+file exists to prevent. It is recorded now, marked as hand-uploaded so nobody
+mistakes the block for something the API confirmed.
+
+**Two gaps that belong to the NEXT video, not this one.** First, going through
+`yt-upload.py` writes the `.youtube.json` sidecar and reads the title and
+privacy back, so the record is machine-checked rather than reported. Second,
+`yt-upload.py` has no thumbnail support at all — grep it, there is nothing —
+so this video's thumbnail exists only on YouTube and cannot be rebuilt from
+here. `make-card.py` already has the templates to make a reproducible one.
+
+**Background noise was not removed**, and it was not an oversight in the edit:
+the repo has no denoiser. Zero hits for `afftdn`, `arnndn` or `anlmdn` across
+`scripts/`, `config/` and the skills. What `tighten.json` carries is
+`highpass: 85` (the rumble a laptop mic picks off a desk) and `loudnorm` —
+levelling, not denoising. Deliberately NOT retrofitted here: this video is
+published and fine.
+
+When it is built, the constraint that matters is that **silence detection must
+keep running on the raw audio**. `silence_db: -34` was fitted against this
+recording's actual noise floor; denoise before `silencedetect` and the whole
+keep-list moves, which re-cuts a film nobody asked to re-cut. Denoise belongs
+on the render's audio branch only, and before `loudnorm` — the README already
+records that `loudnorm` lifts room tone, so cleaning up after it means
+removing what was just amplified. It should be opt-in per manifest, so a
+missing `audio.denoise` key leaves every existing project byte-identical, and
+it needs an audition mode that prints the measured noise floor before and
+after on real spans, because strength is the kind of thing that gets guessed
+and then eats consonants.
+
+Also worth knowing: the audio filter chain is duplicated between
+`tighten-cut.py:368` and `screencast-cut.py:527` — the same lines, copied.
+That is the situation `_encode.py` was created to end. Lift it into an
+`_audio.py` first, or the denoiser lands in one pipeline and silently not the
+other.
