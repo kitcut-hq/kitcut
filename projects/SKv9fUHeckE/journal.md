@@ -105,3 +105,23 @@ word the viewer never hears. **Check the first card, not only the first frame.**
 And `auto-reframe` must be re-run before the render whenever a boundary moves,
 not after -- doing it in the wrong order renders against a stale sidecar whose
 keys are offset from the new start.
+- 05:36 publish scripts/yt-upload.py -> projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-01-hunting-our-engineers.mp4 (projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-01-hunting-our-engineers.mp4 --title Our Partners Are Hunting Ukraine's Military Software Engineers --description-file projects/SKv9fUHeckE/d) https://youtu.be/Np11eia-3mY -- uploaded Our Partners Are Hunting Ukraine's Military Software Engineers
+- 05:36 publish scripts/yt-upload.py -> projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-civilian-contract.mp4 (projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-civilian-contract.mp4 --title You Can Work on Delta Without Being Mobilised --description-file projects/SKv9fUHeckE/description-shorts.txt) https://youtu.be/Rxjd5uqtjtI -- uploaded You Can Work on Delta Without Being Mobilised
+
+## 2026-09-01 (later still) — published to @kitcut-hq, and per-channel grants
+
+All four shorts (these two plus dHYrpun-XTs's two) uploaded unlisted to KitCut
+(@kitcut-hq, UC2PK9SXpePZSRkT3LqiOgeg) and confirmed as real Shorts.
+
+**Two YouTube traps, both cost a round trip.** Google's OAuth channel chooser
+lists BRAND ACCOUNT names while YouTube lists CHANNEL names, so a renamed
+channel is invisible: KitCut appears there as **TRNDS**. The first consent
+landed on the personal channel instead and the upload refused on the channel
+assertion, which is exactly what that assertion is for.
+
+**Grants are now per channel**: `.yt-oauth/token-<handle>.json`, chosen by
+`--channel`, with `--reauth` forcing a fresh consent for a channel this machine
+has never used. Before this, one token.json meant authorising a second channel
+burned the first -- and the misfire above would have destroyed a working
+@instafill_ai grant. It did not: .env is only written for the unlabelled
+default, so a named channel cannot overwrite it.

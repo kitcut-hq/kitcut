@@ -130,23 +130,55 @@ def _save_to_env(creds):
         f.write("\n".join(out))
 
 
-def credentials():
+def channel_token(handle):
+    """Where the grant for one channel lives.
+
+    One Google login can own several channels, and a grant points at exactly
+    one of them. Keeping them in a single token.json meant every switch between
+    channels burned the previous grant and needed a fresh consent, so a token is
+    filed under the handle it was proved to point at: `.yt-oauth/token-<h>.json`.
+    The bare token.json stays as the unlabelled default, which is what an
+    existing checkout already has.
+    """
+    h = (handle or "").lstrip("@").strip().lower()
+    if not h:
+        return TOKEN
+    safe = "".join(c for c in h if c.isalnum() or c in "-_.")
+    return os.path.join(OAUTH_DIR, "token-%s.json" % safe)
+
+
+def credentials(handle=None, reauth=False):
     """A usable credential, preferring .env over the cached token file.
 
     .env is where this repo already keeps secrets, and a refresh token there
     survives deleting .yt-oauth/ -- which is the documented fix for a wrong
     channel, and used to throw away the grant along with the mistake.
+
+    With `handle`, a per-channel token file is used and .env is consulted only
+    when no such file exists -- otherwise the single .env refresh token would
+    win for every channel and quietly send uploads to whichever one it belongs
+    to. yt-upload.py asserts the channel afterwards regardless, so a mismatch
+    refuses rather than misfiles.
     """
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
 
-    creds = _env_credentials()
+    token_path = channel_token(handle)
+    creds = None
+    # `reauth` forces a fresh consent and files it under the handle. Without it
+    # a named channel with no token of its own would fall back to .env, get a
+    # perfectly valid grant for a DIFFERENT channel, and be refused by the
+    # channel assertion -- correct, but with no way to ever authorise the new
+    # one. This is that way.
+    if not reauth:
+        if not (handle and os.path.exists(token_path)):
+            creds = _env_credentials()
     if creds:
         creds.refresh(Request())        # no access token is stored; mint one
         return creds
 
-    if os.path.exists(TOKEN):
-        creds = Credentials.from_authorized_user_file(TOKEN, SCOPES)
+    if os.path.exists(token_path) and not reauth:
+        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
     if creds and creds.expired and creds.refresh_token:
         creds.refresh(Request())
     elif not creds or not creds.valid:
@@ -161,9 +193,13 @@ def credentials():
         creds = flow.run_local_server(port=0, access_type="offline",
                                       prompt="consent")
     os.makedirs(OAUTH_DIR, exist_ok=True)
-    with open(TOKEN, "w", encoding="utf-8") as f:
+    with open(token_path, "w", encoding="utf-8") as f:
         f.write(creds.to_json())
-    _save_to_env(creds)
+    # .env holds ONE refresh token and is the fallback for the unlabelled
+    # default. Writing a per-channel grant there would make it the answer for
+    # every channel, which is the bug this split exists to remove.
+    if not handle:
+        _save_to_env(creds)
     return creds
 
 

@@ -127,3 +127,5 @@ sidecar pad it overwrites instead of silently destroying overrides (bit three
 times today). Hook-first episode selection is in the skill's step 1 and the
 README. The sidecar cannot auto-merge overrides -- entries are in clip time,
 so a moved boundary re-times them; re-apply by hand after any regen.
+- 05:35 publish scripts/yt-upload.py -> projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-01-brain-vs-chip.mp4 (projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-01-brain-vs-chip.mp4 --title The Human Brain Is 22x More Efficient Than Nvidia's Best Chip --description-file projects/dHYrpun-XTs/descriptio) https://youtu.be/nn69tcqiAwc -- uploaded The Human Brain Is 22x More Efficient Than Nvidia's Best Chip
+- 05:35 publish scripts/yt-upload.py -> projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-02-nvidia-hugging-face.mp4 (projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-02-nvidia-hugging-face.mp4 --title Nvidia Is Paying 80x Revenue for Hugging Face --description-file projects/dHYrpun-XTs/description-shorts.t) https://youtu.be/vvrpRY3w1sY -- uploaded Nvidia Is Paying 80x Revenue for Hugging Face

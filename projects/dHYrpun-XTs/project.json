@@ -8,7 +8,7 @@
   "deliverables": {
     "projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-01-brain-vs-chip.mp4": {
       "status": "current",
-      "built_utc": "2026-09-02T04:05:43Z",
+      "built_utc": "2026-09-02T05:35:41Z",
       "kind": "short",
       "script": "scripts/yt-upload.py",
       "manifest": "projects/dHYrpun-XTs/clips-vertical.json",
@@ -24,7 +24,7 @@
         "Manifest edited after this render, non-material: added open_ok (a recorded review of the opening frame) and prose notes. No boundary, pad or styling key controlling this render changed."
       ],
       "published": {
-        "url": "https://youtu.be/fcvw2ID7yNc",
+        "url": "https://youtu.be/nn69tcqiAwc",
         "privacy": "unlisted",
         "sidecar": "projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-01-brain-vs-chip.youtube.json"
       },
@@ -32,7 +32,7 @@
     },
     "projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-02-nvidia-hugging-face.mp4": {
       "status": "current",
-      "built_utc": "2026-09-02T04:06:00Z",
+      "built_utc": "2026-09-02T05:35:51Z",
       "kind": "short",
       "script": "scripts/yt-upload.py",
       "manifest": "projects/dHYrpun-XTs/clips-vertical.json",
@@ -49,7 +49,7 @@
         "Manifest edited after this render for clip 01 only (its start moved to the hook). No key controlling THIS render changed."
       ],
       "published": {
-        "url": "https://youtu.be/WI1kOto13qc",
+        "url": "https://youtu.be/vvrpRY3w1sY",
         "privacy": "unlisted",
         "sidecar": "projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-02-nvidia-hugging-face.youtube.json"
       },
@@ -57,5 +57,5 @@
     }
   },
   "notes": [],
-  "updated_utc": "2026-09-02T05:20:45Z"
+  "updated_utc": "2026-09-02T05:35:51Z"
 }

@@ -20,9 +20,9 @@
   "deliverables": {
     "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-01-hunting-our-engineers.mp4": {
       "status": "current",
-      "built_utc": "2026-09-02T05:01:07Z",
+      "built_utc": "2026-09-02T05:36:04Z",
       "kind": "short",
-      "script": "scripts/cut-clips.py",
+      "script": "scripts/yt-upload.py",
       "manifest": "projects/SKv9fUHeckE/clips-vertical.json",
       "burned": [
         "9:16 crop per reframe sidecar",
@@ -32,7 +32,12 @@
         "clip": "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-01-hunting-our-engineers.json"
       },
       "checked_utc": "2026-09-02T05:20:45Z",
-      "note": "Manifest edited after this render, non-materially for this clip: a `hook` phrase was declared for the new hook gate, and the other clip was replaced."
+      "note": "Manifest edited after this render, non-materially for this clip: a `hook` phrase was declared for the new hook gate, and the other clip was replaced.",
+      "published": {
+        "url": "https://youtu.be/Np11eia-3mY",
+        "privacy": "unlisted",
+        "sidecar": "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-01-hunting-our-engineers.youtube.json"
+      }
     },
     "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-dont-wait-to-be-mobilised.mp4": {
       "status": "deleted",
@@ -51,9 +56,9 @@
     },
     "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-civilian-contract.mp4": {
       "status": "current",
-      "built_utc": "2026-09-02T05:19:43Z",
+      "built_utc": "2026-09-02T05:36:08Z",
       "kind": "short",
-      "script": "scripts/cut-clips.py",
+      "script": "scripts/yt-upload.py",
       "manifest": "projects/SKv9fUHeckE/clips-vertical.json",
       "burned": [
         "9:16 crop per reframe sidecar",
@@ -63,9 +68,14 @@
         "clip": "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-civilian-contract.json"
       },
       "checked_utc": "2026-09-02T05:20:45Z",
-      "note": "Manifest edited after this render, non-materially for this clip: a `hook` phrase was declared for the new hook gate, and the other clip was replaced."
+      "note": "Manifest edited after this render, non-materially for this clip: a `hook` phrase was declared for the new hook gate, and the other clip was replaced.",
+      "published": {
+        "url": "https://youtu.be/Rxjd5uqtjtI",
+        "privacy": "unlisted",
+        "sidecar": "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-02-civilian-contract.youtube.json"
+      }
     }
   },
   "notes": [],
-  "updated_utc": "2026-09-02T05:20:45Z"
+  "updated_utc": "2026-09-02T05:36:08Z"
 }

@@ -58,10 +58,13 @@ def check_channel(yt, want):
     if want:
         w = want.lstrip("@").lower()
         if w not in (handle, title.lower()):
-            sys.exit("token points at '%s' (@%s), not %r -- refusing to upload. "
-                     "Delete .yt-oauth/ and the YOUTUBE_* lines in .env to "
-                     "re-grant against the right channel."
-                     % (title, handle, want))
+            sys.exit("token points at '%s' (@%s), not %r -- refusing to upload.\n"
+                     "Re-grant just this channel: delete %s (if present), then rerun\n"
+                     "with --reauth --channel %s. At Google's chooser pick the BRAND\n"
+                     "account, not the personal one -- and note the chooser lists the\n"
+                     "BRAND ACCOUNT name, which a renamed channel no longer matches."
+                     % (title, handle, want,
+                        os.path.relpath(_yt.channel_token(want), _env.ROOT), want))
     return cid
 
 
@@ -75,6 +78,8 @@ def main():
     ap.add_argument("--privacy", default="unlisted", choices=PRIVACY)
     ap.add_argument("--category", default="28", help="28 = Science & Technology")
     ap.add_argument("--channel", help="handle or title the token MUST point at")
+    ap.add_argument("--reauth", action="store_true",
+                    help="force a new Google consent and file the grant under --channel; use when adding a channel this machine has never uploaded to")
     ap.add_argument("--made-for-kids", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
@@ -108,7 +113,9 @@ def main():
     print("  title:   %s" % args.title)
     print("  privacy: %s" % args.privacy)
 
-    creds = _yt.credentials()
+    # pass the channel so the grant filed under that handle is used --
+    # one login can own several channels and each grant points at one.
+    creds = _yt.credentials(args.channel, reauth=args.reauth)
     yt = service(creds)
     check_channel(yt, args.channel)
 
