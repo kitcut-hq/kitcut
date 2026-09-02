@@ -27,6 +27,7 @@ import sys, os, json, argparse, subprocess, time, shutil, hashlib, struct
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _encode  # noqa: E402 -- the one place encoder keys are chosen
 import _project  # noqa: E402
 import _overlay  # noqa: E402 -- encoder arg translation (GPU vs CPU)
 
@@ -43,6 +44,15 @@ PY = _env.PY
 YTDLP = PY + ["-m", "yt_dlp"]
 ENV = _env.ENV
 STAGES = ["download", "audio", "transcribe", "overlays", "ass", "verify", "render"]
+
+# The caption render is the one that asks for the extra quality knobs --
+# `tuning` turns on whatever the chosen encoder family actually has (NVENC's
+# spatial/temporal AQ and lookahead; nothing on AMF, where it was measured to
+# cost 26% and change the output by 8 bytes). No "encoder": _encode picks one
+# that runs here, and a caption preset naming one overrides it.
+CAPTION_RENDER = {"speed": 6, "cq": 20, "maxrate": "20M", "bufsize": "40M",
+                  "tuning": True, "aq_strength": 12, "gop": 120,
+                  "profile": "high", "level": "4.2"}
 
 
 def sh(cmd, **kw):
@@ -312,9 +322,14 @@ def main():
     maybe_stop("verify")
 
     # ---- render ---------------------------------------------------------
-    R = style_cfg.get("render", {})
+    # The caption presets carry an encoding intent (p6/cq20 and the AQ knobs);
+    # CAPTION_RENDER is the floor under a preset that leaves any of it out.
+    # An encoder named on the command line is honoured strictly; one a
+    # committed preset names but this box cannot run is substituted.
+    R = dict(CAPTION_RENDER, **style_cfg.get("render", {}))
     if args.encoder:
-        R = dict(R, encoder=args.encoder)
+        R["encoder"] = args.encoder
+    R = _encode.resolve(R, strict_encoder=bool(args.encoder))
     acodec = probe(src_mp4, "stream=codec_name", "a:0")
     audio = (["-c:a", "copy"] if acodec and acodec[0] == "aac"
              else ["-c:a", "aac", "-b:a", "192k", "-ar", "48000"])
@@ -338,23 +353,11 @@ def main():
         pre = ["-ss", str(s), "-t", str(dsec)]
         render_out = base + "outputs/%s-preview.mp4" % vid
 
-    enc = R.get("encoder", "h264_nvenc")
-    if _overlay.is_gpu_encoder(enc):
-        vcodec = ["-c:v", enc,
-                  "-preset", R.get("preset", "p6"), "-tune", "hq",
-                  "-rc", "vbr", "-cq", str(R.get("cq", 20)), "-b:v", "0",
-                  "-maxrate", R.get("maxrate", "20M"),
-                  "-bufsize", R.get("bufsize", "40M"),
-                  "-rc-lookahead", "32", "-spatial-aq", "1",
-                  "-aq-strength", str(R.get("aq_strength", 12)), "-temporal-aq", "1"]
-    else:
-        # NVENC-only flags kill libx264 on sight; translate instead of passing
-        vcodec = _overlay.cpu_encoder_args(R)
     sh(["ffmpeg", "-hide_banner", "-loglevel", "error", "-stats", "-y"]
-       + pre + ["-i", src_mp4, "-vf", vf] + vcodec +
-       ["-bf", "3", "-g", "120", "-profile:v", "high", "-level", "4.2",
-        "-pix_fmt", "yuv420p", "-fps_mode", "passthrough",
-        "-movflags", "+faststart"] + audio + [render_out])
+       + pre + ["-i", src_mp4, "-vf", vf]
+       + _encode.video_args(R)
+       + ["-fps_mode", "passthrough",
+          "-movflags", "+faststart"] + audio + [render_out])
     mark("rendered")
 
     # ---- post-render checks + manifest (full renders only) --------------

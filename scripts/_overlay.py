@@ -138,33 +138,3 @@ def probe(path):
     return int(s["width"]), int(s["height"]), fps, dur
 
 
-# NVENC's p1-p7 speed ladder mapped onto x264's named presets, so a render
-# block authored for the GPU still means something when an --encoder override
-# or a manifest points it at the CPU.
-NVENC_TO_X264_PRESET = {"p1": "ultrafast", "p2": "superfast", "p3": "veryfast",
-                        "p4": "faster", "p5": "fast", "p6": "medium",
-                        "p7": "slow"}
-
-
-def is_gpu_encoder(name):
-    """True for the NVENC family; everything else takes the CPU branch."""
-    return "nvenc" in (name or "h264_nvenc")
-
-
-def cpu_encoder_args(render, cq=20, preset="p6", maxrate="20M", bufsize="40M"):
-    """The -c:v block for a CPU encode of a render config authored for NVENC.
-
-    -rc vbr, -cq, -spatial-aq and friends are NVENC private options: libx264
-    dies on the first of them, so check-env.py's old advice "set
-    render.encoder to libx264" could never actually work. The translation
-    lives here, once: cq becomes crf (same 0-51 scale and the same intent),
-    the p1-p7 ladder becomes x264's named presets, and the NVENC-only quality
-    knobs are dropped rather than mis-scaled (x264's aq-strength runs 0-3,
-    not 0-15; its default is the right answer).
-    """
-    p = render.get("preset", preset)
-    return ["-c:v", render.get("encoder", "libx264"),
-            "-preset", NVENC_TO_X264_PRESET.get(p, p),
-            "-crf", str(render.get("crf", render.get("cq", cq))),
-            "-maxrate", str(render.get("maxrate", maxrate)),
-            "-bufsize", str(render.get("bufsize", bufsize))]

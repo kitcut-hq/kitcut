@@ -4,7 +4,11 @@
 Run this first whenever a script fails with an import or DLL error. It checks
 the three things that have actually broken on this machine: a stray PYTHONPATH
 pulling in another Python's compiled extensions, a venv that pip left
-half-populated, and missing ffmpeg features (NVENC, rubberband).
+half-populated, and missing ffmpeg features (rubberband, libass).
+
+The video encoders are probed by encoding a frame rather than by reading
+`ffmpeg -encoders`, because a full Windows build lists h264_nvenc on a machine
+with no NVIDIA driver and every render on it then fails.
 
     python scripts/check-env.py
 
@@ -16,6 +20,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _encode  # noqa: E402 -- platform: the encoder-key resolver
 
 
 ROOT = _env.ROOT
@@ -162,18 +167,50 @@ for tool in ("ffmpeg", "ffprobe"):
     except Exception:
         bad("%s not on PATH" % tool)
 try:
-    enc = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"],
-                         capture_output=True, text=True).stdout
-    if "h264_nvenc" in enc:
-        ok("h264_nvenc (GPU encoding)")
+    # Probed by ENCODING A FRAME, not by grepping `ffmpeg -encoders`. That list
+    # says what the build supports, and a full Windows build supports NVENC
+    # whether or not an NVIDIA driver was ever installed -- on the AMD machine
+    # this check was rewritten for it listed h264_nvenc and every render died
+    # with "Cannot load nvcuda.dll". A doctor whose test the broken machine
+    # passes is worse than no doctor.
+    good = _encode.available()
+    for cand in _encode.CANDIDATES:
+        fam = _encode.family_of(cand)
+        if cand in good:
+            ok("%-12s encodes a frame (%s)" % (cand, fam))
+        else:
+            print("  - %-12s not usable here (%s)" % (cand, fam))
+    if not good:
+        bad("no video encoder can encode a frame -- nothing here can render. "
+            "Check the ffmpeg build and the GPU driver")
+    elif _encode.family_of(good[0]) == "software":
+        # true but slow, and worth saying out loud before someone starts a
+        # feature-length render and assumes it has hung
+        warn("only CPU encoding is available (%s) -- renders run several times "
+             "slower than on a GPU, but they are correct" % good[0])
     else:
-        # cut-clips.py and the caption presets default to h264_nvenc, so
-        # "environment OK" with this warning still means zero renders succeed
-        # until the encoder is changed -- say so, with the fix
-        warn("h264_nvenc missing -- every render defaults to it; captions and "
-             "shorts encode on CPU with --encoder libx264 (or render.encoder "
-             "in the manifest/preset); screen-cut and multicam renders "
-             "need NVENC")
+        ok("default encoder: %s -- manifests and presets naming an encoder "
+           "this machine cannot run are substituted with it, and _encode.py "
+           "translates their preset/rate keys into its family. Set "
+           "render.encoder (or $%s) to make a choice permanent"
+           % (good[0], _encode.ENCODER_VAR))
+        if "h264_nvenc" not in good:
+            # only the pipelines that build their arguments with _encode.py
+            # get the substitution above; screen-cut.py, film-redact.py and
+            # make-proxies.py still spell NVENC by hand, so on this machine
+            # they are the renders that will not run
+            warn("h264_nvenc missing -- captions, shorts, tighten, screencast "
+                 "and multicam substitute %s, but screen-cut, film-redact and "
+                 "make-proxies still name NVENC directly and need it"
+                 % good[0])
+    stale = [e for e in ("h264_nvenc", "h264_amf", "libx264")
+             if e not in good and e in subprocess.run(
+                 ["ffmpeg", "-hide_banner", "-encoders"],
+                 capture_output=True, text=True).stdout]
+    if stale:
+        print("  note: %s %s in the ffmpeg build but fail(s) to open -- "
+              "compiled in, no driver behind it"
+              % (", ".join(stale), "is" if len(stale) == 1 else "are"))
     flt = subprocess.run(["ffmpeg", "-hide_banner", "-filters"],
                          capture_output=True, text=True).stdout
     # rubberband time-stretches without shifting pitch; atempo is the fallback
@@ -186,13 +223,19 @@ except Exception as e:
     bad("could not query ffmpeg: %s" % e)
 
 print("== gpu ==")
+# Two different questions, and conflating them is what the encoder warning
+# above used to do. nvidia-smi answers "can faster-whisper use CUDA" -- an
+# AMD card cannot, whatever it does for video. Whether anything can ENCODE is
+# already answered above, by encoding.
 try:
     out = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total",
                           "--format=csv,noheader"],
                          capture_output=True, text=True, check=True).stdout.strip()
-    ok(out)
+    ok("%s -- CUDA transcription available" % out)
 except Exception:
-    warn("no nvidia-smi; encoding and transcription fall back to CPU")
+    warn("no nvidia-smi: faster-whisper runs on CPU. Pass --device cpu "
+         "--compute-type int8 and a distil model; see README ## Setup. GPU "
+         "*encoding* is a separate question and is answered above")
 
 print()
 if FAIL:
