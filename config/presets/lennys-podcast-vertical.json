@@ -1,0 +1,103 @@
+{
+  "_comment": "Lenny's Podcast's own Shorts caption, measured off three of their published shorts (N_3pPQp7CkQ, lPpEynndz-w, tlTKTV40Mqg) at native 1080x1920: a square-cornered black box at ~55% opacity, white bold SENTENCE CASE (never uppercase -- that is the tell), 3-5 words, one line, parked high enough to clear the Shorts UI. Authored on a 1920x1080 canvas like every preset here, so each value is the 1080x1920 measurement / 1.7778; rendering it to 1080x1920 scales it back and reproduces the measurement. The ONE deliberate departure from their look is states.active: they run a flat static block with no per-word highlight, and the moving spotlight is the upgrade the pitch is about. Its colour is not invented -- it is sampled from the campfire in their own logo bug.",
+  "canvas": {
+    "play_res_x": 1920,
+    "play_res_y": 1080
+  },
+  "font": {
+    "family": "Montserrat",
+    "file": "fonts/Montserrat-Bold.ttf",
+    "spacing": 0,
+    "fudge": 1.0,
+    "bold": 1,
+    "fontsdir": "fonts",
+    "cap_height_px": 25
+  },
+  "text": {
+    "uppercase": false,
+    "apostrophe": "’",
+    "strip_trailing": "",
+    "word_gap_ratio": 1.0,
+    "outline_px": 0,
+    "outline_colour": "#000000",
+    "shadow_px": 0,
+    "shadow_colour": "#000000",
+    "capitalize_i": true
+  },
+  "card": {
+    "colour": "#000000",
+    "alpha": 115,
+    "corner_radius_px": 0,
+    "pad_x_px": 16,
+    "pad_y_px": 18,
+    "collision_gap_px": 16,
+    "enabled": true
+  },
+  "layout": {
+    "anchor_x": 960,
+    "bottom_margin_px": 339,
+    "max_line_width_px": 470,
+    "max_lines": 2,
+    "line_height_px": 38
+  },
+  "states": {
+    "base": {
+      "colour": "#FFFFFF"
+    },
+    "active": {
+      "colour": "#F0B018"
+    },
+    "spoken": {
+      "colour": "#FFFFFF"
+    }
+  },
+  "grouping": {
+    "max_words": 4,
+    "gap_break_s": 0.45,
+    "break_on_sentence_end": true,
+    "max_group_duration_s": 2.5
+  },
+  "timing": {
+    "lead_in_ms": 60,
+    "hold_out_ms": 140,
+    "min_active_ms": 40,
+    "min_gap_between_groups_ms": 40,
+    "active_extends_to_next_word": true,
+    "fade_ms": 70
+  },
+  "pop": {
+    "enabled": false,
+    "scale": 112,
+    "rise_ms": 70,
+    "settle_ms": 110
+  },
+  "render": {
+    "encoder": "h264_nvenc",
+    "preset": "p6",
+    "cq": 20,
+    "maxrate": "20M",
+    "bufsize": "40M",
+    "aq_strength": 12
+  },
+  "_measured": {
+    "source": "youtube.com/shorts/N_3pPQp7CkQ, /lPpEynndz-w, /tlTKTV40Mqg -- native 1080x1920",
+    "box_y": "1210 to 1318 => 109 px tall",
+    "box_opacity": "inside/outside brightness 62/138 and 65/140 over a bright shoulder => ~55% black => ASS alpha 115",
+    "cap_height_px_at_1920h": 45,
+    "derived_pad_y_px_at_1920h": "(109 - 45) / 2 = 32  =>  32 / 1.7778 = 18",
+    "derived_pad_x_px_at_1920h": "~27.5  =>  27.5 / 1.7778 = 16",
+    "bottom_margin_px_at_1920h": "1920 - 1318 = 602  =>  602 / 1.7778 = 339",
+    "widest_line_px_at_1080w": 702,
+    "case": "sentence case, as spoken -- not uppercase",
+    "logo_flame": "#F08820 dominant, #F0B018 core (sampled where the bug sits on a bright wall, tlTKTV40Mqg)",
+    "what_they_do_NOT_do": "no per-word highlight, no pop, no rule, no outline -- a flat static block per line",
+    "grouping_swept": "max_words x max_line_width_px swept on clip 01 with the builder's wrap/orphan counters. The shipped-then-fixed setting (5 x 400) was the WORST cell: 67% of cards wrapped and 7 orphaned a single word onto its own line -- 'the models are going / to'. 4 x 470 gives 4% wrapped, 0 orphans, 3.9 words/card; 3 x 470 gives 0% but cards change too fast. Chose 4 x 470.",
+    "punctuation": "They KEEP it. Contact strip off lPpEynndz-w shows 'in the right direction.', 'press Tab,\"', 'to take this thing next?', 'that power of intuition,'. So strip_trailing is EMPTY here -- the ',' it inherited from red-card was stripping commas they keep.",
+    "lines_per_card": "always one, 3-5 words, in every frame sampled"
+  },
+  "overlays": {
+    "colour": "#FF0000",
+    "auto": false,
+    "_note": "Colour of the SOURCE video's own lower-third graphics to dodge (not your card colour). Targeted mode is reliable; auto is experimental and false-positives on saturated props."
+  }
+}

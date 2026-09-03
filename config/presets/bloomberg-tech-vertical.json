@@ -1,0 +1,99 @@
+{
+  "_comment": "Vertical 9:16 cut of bloomberg-tech.json. Sizes are the broadcast measurement scaled by 26/42, which keeps the PROPORTIONS that make it read as Bloomberg (pad_y = 0.67 cap, rule = 0.33 cap, square corners) while fitting a 1080-wide frame. In the 9:16 cut this card IS the Bloomberg banner -- the source's own banner is outside the crop. bottom_margin_px 816 puts the card ABOVE the speaker's head, and that is measured, not a taste: clearing Bloomberg's own lower third forces crop_zoom up to ~1.7, which magnifies the face until the face box reaches y~1345 while the Shorts UI starts around y~1540 -- a 174 px two-line card does not fit between them. Below-the-face and above-the-Shorts-UI are mutually exclusive at this framing, so the card goes above. Verify with scripts/check-caption-space.py after ANY crop change; the first render of this preset sat straight across two speakers' mouths.",
+  "canvas": {
+    "play_res_x": 1920,
+    "play_res_y": 1080
+  },
+  "font": {
+    "family": "Montserrat",
+    "file": "fonts/Montserrat-Bold.ttf",
+    "spacing": 0,
+    "fudge": 1.0,
+    "bold": 1,
+    "fontsdir": "fonts",
+    "cap_height_px": 26
+  },
+  "text": {
+    "uppercase": true,
+    "apostrophe": "’",
+    "strip_trailing": ",",
+    "word_gap_ratio": 1.0,
+    "outline_px": 0,
+    "outline_colour": "#000000",
+    "shadow_px": 0,
+    "shadow_colour": "#000000"
+  },
+  "card": {
+    "colour": "#FFFFFF",
+    "alpha": 0,
+    "corner_radius_px": 0,
+    "pad_x_px": 16,
+    "pad_y_px": 17,
+    "collision_gap_px": 16,
+    "enabled": true,
+    "rule": {
+      "colour": "#0BFFB2",
+      "px": 9,
+      "side": "bottom"
+    }
+  },
+  "layout": {
+    "anchor_x": 960,
+    "bottom_margin_px": 816,
+    "max_line_width_px": 560,
+    "max_lines": 2,
+    "line_height_px": 38
+  },
+  "states": {
+    "base": {
+      "colour": "#000000"
+    },
+    "active": {
+      "colour": "#E09000"
+    },
+    "spoken": {
+      "colour": "#000000"
+    }
+  },
+  "grouping": {
+    "max_words": 3,
+    "gap_break_s": 0.45,
+    "break_on_sentence_end": true,
+    "max_group_duration_s": 3.0
+  },
+  "timing": {
+    "lead_in_ms": 60,
+    "hold_out_ms": 140,
+    "min_active_ms": 40,
+    "min_gap_between_groups_ms": 40,
+    "active_extends_to_next_word": true,
+    "fade_ms": 70
+  },
+  "pop": {
+    "enabled": false,
+    "scale": 112,
+    "rise_ms": 70,
+    "settle_ms": 110
+  },
+  "render": {
+    "encoder": "h264_nvenc",
+    "preset": "p6",
+    "cq": 20,
+    "maxrate": "20M",
+    "bufsize": "40M",
+    "aq_strength": 12
+  },
+  "_measured": {
+    "_note": "The measurements themselves live in bloomberg-tech.json; these are those numbers x 26/42.",
+    "shorts_safe_area": "Lenny's Podcast parks its box 602 px above the frame bottom, which is the right number for a LOOSE framing and is what this preset used to use. It is wrong here: at this crop 602 px lands on the mouth. Kept as the reference point, not as the setting.",
+    "uppercase_cost": "uppercase runs ~15% wider than sentence case, which is why max_words is 3 here against 4 in the sentence-case Lenny preset",
+    "caption_space": "face box bottom reaches y=1345 and mouth landmarks y=1130..1215 at crop_zoom 1.556-1.714; card top at 816 -> ~296, card bottom ~470, face top >= 519",
+    "grouping_swept": "Swept with the builder's wrap/orphan counters on clip 02. 4 words x width 500 -- what this shipped with -- wrapped 35% of cards and orphaned 10 single words onto their own line. 3 x 560 gives 4% and 2. Uppercase runs ~15% wider than sentence case, so 3 words is its natural cap here, not 4. Width 560 is clamped by the builder to 0.94*frame - 2*pad_x = 958 px, which is why 560 and 620 measure identically.",
+    "punctuation": "UNMEASURABLE from their broadcast: the banner shows single headlines ('NVIDIA IN ADVANCED TALKS FOR HUGGING FACE'), which never carry running-speech punctuation, so there is nothing to copy. strip_trailing ',' is therefore a CHOICE inherited from red-card, kept because stripped commas fit the headline register the uppercase card imitates. Not an oversight -- unlike the Lenny preset, where the same inheritance contradicted a measurable habit and was removed."
+  },
+  "overlays": {
+    "colour": "#FF0000",
+    "auto": false,
+    "_note": "Colour of the SOURCE video's own lower-third graphics to dodge (not your card colour). Targeted mode is reliable; auto is experimental and false-positives on saturated props."
+  }
+}
