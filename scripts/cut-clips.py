@@ -761,7 +761,11 @@ def main():
     rpath = m.get("reframe") or (os.path.splitext(args.manifest)[0] + ".reframe.json")
     if vert and not m.get("crop_rect") and os.path.exists(rpath):
         reframe = json.load(open(rpath, encoding="utf-8"))
-        print("reframe %s (%d clips)" % (rpath, len(reframe)))
+        # "_"-prefixed keys are hand-edit markers (see merge_sidecar in
+        # auto-reframe.py), not clips -- counting them reported 3 clips
+        # for a 2-clip sidecar carrying a file-level _comment.
+        print("reframe %s (%d clips)" % (
+            rpath, sum(1 for k in reframe if not k.startswith("_"))))
     if vert:
         print("vertical %dx%d from %dx%d" % (out_w, out_h, src_w, src_h))
     if caps:
