@@ -195,13 +195,16 @@ try:
            "render.encoder (or $%s) to make a choice permanent"
            % (good[0], _encode.ENCODER_VAR))
         if "h264_nvenc" not in good:
-            # Encoding is covered by the substitution above. Decoding is a
-            # separate question and nothing translates it: faster-whisper and
-            # the NVDEC paths still want the card.
+            # Encoding is covered by the substitution above, and GPU decode is
+            # now probed and dropped by _encode.decode_args() rather than
+            # reaching ffmpeg and failing the INPUT. Transcription is the one
+            # axis nothing here translates: faster-whisper falls back to CPU
+            # on its own, and is slower for it.
             print("  note: h264_nvenc is not available -- every render "
-                  "pipeline substitutes %s, but GPU *decode* (-hwaccel cuda) "
-                  "and CUDA transcription still need an NVIDIA card"
-                  % good[0])
+                  "pipeline substitutes %s and GPU decode is dropped "
+                  "automatically, so the pipelines are correct here; CUDA "
+                  "transcription still wants an NVIDIA card and falls back "
+                  "to the CPU without one" % good[0])
     stale = [e for e in ("h264_nvenc", "h264_amf", "libx264")
              if e not in good and e in subprocess.run(
                  ["ffmpeg", "-hide_banner", "-encoders"],

@@ -106,6 +106,19 @@ named explicitly fails instead. Availability is never read off
 `ffmpeg -encoders` — that lists what the build supports, and a full Windows
 build lists NVENC on a machine with no NVIDIA driver.
 
+**Decoding is the other axis, and `_encode.decode_args()` owns it.** `-hwaccel
+cuda` is NVDEC on the **input**; everything above is NVENC on the output, and
+nothing translates between them. On a box with no NVIDIA driver the flag fails
+the *input*, which reads as a corrupt source file rather than a missing card.
+**Never spell `-hwaccel cuda` at a call site** — ask `_encode.decode_args()`,
+which probes by decoding a frame it encoded itself (`ffmpeg -hwaccels` lists
+what the build has, the same lie `-encoders` tells) and returns nothing when
+NVDEC is absent. It is not read off the encoder: NVENC and NVDEC ship on
+different silicon and a card can have one without the other. Eight call sites
+spelled it inline and four had no fallback, so `scan-pii.py` and
+`film-redact.py` could not read a frame on an AMD box while every render on
+that box was fine.
+
 After touching `_encode.py` or any render script's encoder path, run
 `python scripts/check-encode.py` — it costs ten seconds, and its live half
 hands every encoder this machine has the exact arguments a clip, a conform and

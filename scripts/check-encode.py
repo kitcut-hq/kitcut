@@ -234,6 +234,33 @@ def test_live(tmp):
             print("  skip %s -- not usable on this machine" % enc)
 
 
+def test_decode():
+    """The input axis: -hwaccel cuda is NVDEC, not NVENC.
+
+    The bug this guards is not a wrong flag, it is a flag that reaches a
+    machine with no NVIDIA driver and fails the INPUT -- which reads as a
+    corrupt source file, not a missing card. Four call sites had no fallback
+    at all, so scan-pii.py and film-redact.py could not read a frame on an AMD
+    box while every render on that box was fine.
+    """
+    print("== decode: the input axis ==")
+    got = _encode.decode_args()
+    check("decode_args is empty or exactly the cuda pair",
+          got == [] or got == ["-hwaccel", "cuda"], repr(got))
+    check("decode_args agrees with the probe",
+          bool(got) == _encode.nvdec_usable(), repr(got))
+    check("no cuda flags without a working NVDEC",
+          _encode.nvdec_usable() or got == [], repr(got))
+    # The two capabilities ship on different silicon, so this must be its own
+    # probe and not read off the encoder -- but where NVENC is absent because
+    # there is no driver at all, NVDEC cannot be there either.
+    if not _encode.available(("h264_nvenc",)):
+        check("no NVENC here, so no NVDEC either",
+              not _encode.nvdec_usable(),
+              "decode probed usable while the encoder is not")
+    print("   decode: %s" % (" ".join(got) if got else "software (no NVDEC)"))
+
+
 def test_resolve():
     print("== resolve ==")
     good = _encode.available()
@@ -263,6 +290,7 @@ def main():
     test_audio_and_describe()
     if not args.table_only:
         test_resolve()
+        test_decode()
         tmp = tempfile.mkdtemp(prefix="videdit-encode-")
         try:
             test_live(tmp)

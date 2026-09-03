@@ -15,6 +15,7 @@ import sys, os, json, argparse, subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _encode  # noqa: E402
 
 
 import numpy as np
@@ -35,7 +36,7 @@ def src_dims(src):
 def decode(src, fps, sh, hwaccel=True):
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error"]
     if hwaccel:
-        cmd += ["-hwaccel", "cuda"]
+        cmd += _encode.decode_args()
     cmd += ["-i", src, "-vf", "fps=%g,scale=%d:%d" % (fps, SW, sh),
             "-fps_mode", "passthrough", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
     return subprocess.Popen(cmd, stdout=subprocess.PIPE, env=ENV)

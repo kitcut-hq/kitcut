@@ -37,6 +37,7 @@ import sys, os, json, argparse, subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _encode  # noqa: E402
 
 from importlib import import_module  # noqa: E402
 
@@ -165,7 +166,7 @@ def scan(src, w, h, hwaccel=True):
     ah = int(round(AW * h / float(w))) // 2 * 2
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin"]
     if hwaccel:
-        cmd += ["-hwaccel", "cuda"]
+        cmd += _encode.decode_args()
     cmd += ["-i", src, "-vf", "scale=%d:%d" % (AW, ah),
             "-fps_mode", "passthrough", "-an",
             "-f", "rawvideo", "-pix_fmt", "gray", "-"]
@@ -317,7 +318,7 @@ def collect_frames(src, targets, w, h_src, w_src, hwaccel=True):
     ah = int(round(w * h_src / float(w_src))) // 2 * 2
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin"]
     if hwaccel:
-        cmd += ["-hwaccel", "cuda"]
+        cmd += _encode.decode_args()
     cmd += ["-i", src, "-vf", "scale=%d:%d" % (w, ah),
             "-fps_mode", "passthrough", "-an",
             "-f", "rawvideo", "-pix_fmt", "bgr24", "-"]

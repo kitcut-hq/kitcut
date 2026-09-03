@@ -37,6 +37,7 @@ import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _encode  # noqa: E402
 import numpy as np  # noqa: E402
 
 ROOT = _env.ROOT
@@ -199,7 +200,7 @@ def frames_of(path, fps, width):
     src_fps = float(num) / float(den) if den and float(den) else 30.0
     step = max(1, int(round(src_fps / fps)))
     p = subprocess.Popen(
-        ["ffmpeg", "-v", "info", "-nostdin", "-hwaccel", "cuda", "-i", path,
+        ["ffmpeg", "-v", "info", "-nostdin"] + _encode.decode_args() + ["-i", path,
          "-vf", f"select=not(mod(n\,{step})),scale={width}:{h},showinfo",
          "-fps_mode", "passthrough", "-pix_fmt", "bgr24",
          "-f", "rawvideo", "-"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)

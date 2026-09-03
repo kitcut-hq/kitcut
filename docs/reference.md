@@ -2627,12 +2627,31 @@ encoder key" true rather than aspirational. `screen-cut.py` still reads the
 `nvenc_preset` key its committed manifests use — it is translated, not
 ignored, exactly like `p5` above.
 
-`make-proxies.py` also passed `-hwaccel cuda`, and that is a **different
-axis**: NVDEC on the input, not NVENC on the output, and nothing translates
-it. On a machine with no NVIDIA driver it fails the *input*, which reads as a
-broken source file rather than a missing card. It is now conditioned on the
-resolved encoder actually being NVENC. `check-env.py` says the same thing in
-one line: encoding substitutes, GPU decode and CUDA transcription do not.
+`-hwaccel cuda` is a **different axis**: NVDEC on the input, not NVENC on the
+output, and nothing translates it. On a machine with no NVIDIA driver it fails
+the *input*, which reads as a broken source file rather than a missing card.
+
+Eight call sites spelled it inline. Three (`screen-activity.py`,
+`shot-detect.py`, `detect-overlays.py`) retried in software and were merely
+wasting an attempt; `make-proxies.py` inferred it from the encoder; the four
+in `scan-pii.py` and `film-redact.py` had **no fallback at all**, so on an AMD
+box the PII scan and the film redaction could not read a frame while every
+render on that box was fine. All eight ask `_encode.decode_args()` now, and
+`check-script.py` FAILs a script that spells the flag itself — the same rule
+the encoder keys get, for the same reason.
+
+The probe is a real decode, not a capability string: `ffmpeg -hwaccels` lists
+what the build has, which is the lie `-encoders` tells about NVENC, so
+`nvdec_usable()` encodes a few frames and decodes one of them back through
+`-hwaccel cuda`, cached against the ffmpeg version. It is deliberately **not**
+read off the encoder — NVENC and NVDEC ship on different silicon and a card
+can have one without the other — though `check-encode.py` does assert that a
+box with no NVENC has no NVDEC either, because that case is a missing driver.
+
+`check-env.py` says where the line now falls: encoding substitutes, GPU decode
+is dropped automatically, and CUDA transcription is the one axis left that
+wants the card — `transcribe-words.py` falls back to the CPU on its own, and
+is slower for it.
 
 ### On the AMD box this was written against
 
@@ -2775,6 +2794,17 @@ everything in `temp/` regenerates in seconds.
 
 ## Gotchas worth knowing
 
+- **`-hwaccel cuda` fails the INPUT, so a missing card reads as a broken
+  source file.** It is NVDEC on the input and a different axis from the NVENC
+  keys on the output; nothing translates between them, and a build that lists
+  `cuda` under `ffmpeg -hwaccels` lists it on a machine that has never had an
+  NVIDIA driver — the same lie `-encoders` tells. Eight call sites spelled the
+  flag inline; the four in `scan-pii.py` and `film-redact.py` had no fallback,
+  so on an AMD box the redaction pipeline could not read a frame while every
+  render on that box was fine. Ask `_encode.decode_args()`, which probes by
+  decoding a frame it encoded itself and returns nothing when NVDEC is absent.
+  Do not infer it from the encoder: NVENC and NVDEC ship on different silicon
+  and a card can have one without the other.
 - **The `fps` filter labels the slot, not the frame.** `-vf fps=0.25` emits,
   for the output frame stamped 16 s, whichever input frame fell inside that
   4-second slot — and rewrites its timestamp to 16.0. A template cut at exactly

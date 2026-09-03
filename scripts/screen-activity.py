@@ -54,6 +54,7 @@ import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _encode  # noqa: E402
 import numpy as np  # noqa: E402
 import cv2  # noqa: E402
 
@@ -101,13 +102,17 @@ def decode_gray(path, fps, width, hwaccel=True):
     def build(hw):
         cmd = ["ffmpeg", "-v", "error", "-nostdin"]
         if hw:
-            cmd += ["-hwaccel", "cuda"]
+            cmd += _encode.decode_args()
         cmd += ["-i", path,
                 "-vf", f"fps={fps},scale={width}:{h}",
                 "-pix_fmt", "gray", "-f", "rawvideo", "-"]
         return cmd
 
-    for hw in ([True, False] if hwaccel else [False]):
+    # decode_args() already answers whether NVDEC exists, so the hardware rung
+    # is only worth attempting when it does -- otherwise the two rungs build
+    # the identical command and the file is decoded twice to learn nothing.
+    hw_first = hwaccel and bool(_encode.decode_args())
+    for hw in ([True, False] if hw_first else [False]):
         p = subprocess.Popen(build(hw), stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
         n = width * h

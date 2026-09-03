@@ -11,6 +11,7 @@ What it enforces (FAIL) and what it flags (warn):
     FAIL  entry script without a module docstring
     FAIL  entry script that never imports _env, or imports third-party first
     FAIL  os.execve anywhere (spawns-not-replaces on Windows; exit code lost)
+    FAIL  -hwaccel cuda spelled at a call site (ask _encode.decode_args)
     FAIL  writing PYTHONPATH (the variable this repo spent a day exorcising)
     FAIL  an absolute machine path in a string literal (or, under --all, in a
           skill or the reference) -- it is wrong everywhere but one machine
@@ -113,6 +114,9 @@ EXCEPTIONS = {
         "free": "the whole script is the free mode -- it prices what a render "
                 "would send each encoder without rendering one; --table-only "
                 "drops even the two-second probes",
+        "hwaccel": "it is the test for decode_args() and asserts on the exact "
+                   "flag pair, which is the one place the literal belongs "
+                   "outside _encode.py",
     },
     "check-screen.py": {
         "argparse": "same bargain as check-dub.py: one button, no files, no "
@@ -320,6 +324,12 @@ def check(path):
                                 "never calls _project.record() -- the render "
                                 "will be invisible to the next session"))
 
+    if re.search(r'["\']-hwaccel["\']\s*,\s*["\']cuda["\']', src) \
+            and base != "_encode.py" and not skip("hwaccel"):
+        out.append(("FAIL", "spells -hwaccel cuda at a call site -- it is "
+                            "NVDEC on the INPUT, so on a box with no NVIDIA "
+                            "driver it fails the source file rather than the "
+                            "encoder; ask _encode.decode_args()"))
     if re.search(r"os\.execve\s*\(", src):
         out.append(("FAIL", "os.execve spawns-not-replaces on Windows; use "
                             "subprocess.run + sys.exit(rc)"))

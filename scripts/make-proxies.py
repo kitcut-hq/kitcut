@@ -171,11 +171,11 @@ def main():
             print(f"\n  {os.path.basename(src)} -> {vw}x{vh} ...")
             render = _encode.resolve({"preset": "p7", "cq": args.cq})
             cmd = ["ffmpeg", "-v", "error", "-stats", "-nostdin", "-y"]
-            # -hwaccel cuda is NVDEC, a separate question from the encoder --
-            # and on a machine with no NVIDIA driver it fails the input, not
-            # the output, so it has to go when NVENC does.
-            if _encode.family_of(render["encoder"]) == "nvenc":
-                cmd += ["-hwaccel", "cuda"]
+            # -hwaccel cuda is NVDEC, a separate question from the encoder
+            # -- and on a machine with no NVIDIA driver it fails the input,
+            # not the output. _encode probes the decoder itself rather than
+            # reading it off the encoder: the two ship on different silicon.
+            cmd += _encode.decode_args()
             cmd += (["-i", src,
                      "-vf", f"scale={vw}:{vh}:flags=lanczos,setsar=1", "-an"]
                     + _encode.video_args(render)

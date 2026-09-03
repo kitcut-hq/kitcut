@@ -39,6 +39,7 @@ import os
 import sys
 import json
 import subprocess
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -341,12 +342,16 @@ def usable(encoder, recheck=False):
     cache = _load_cache()
     if not recheck and encoder in cache["encoders"]:
         return cache["encoders"][encoder]
-    p = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error",
-         "-f", "lavfi", "-i", "color=c=black:s=%s:r=25:d=0.08" % PROBE_SIZE,
-         "-c:v", encoder, "-frames:v", "1", "-f", "null", "-"],
-        env=ENV, capture_output=True, text=True)
-    got = p.returncode == 0 and "rror" not in (p.stderr or "")
+    try:
+        p = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error",
+             "-f", "lavfi", "-i", "color=c=black:s=%s:r=25:d=0.08" % PROBE_SIZE,
+             "-c:v", encoder, "-frames:v", "1", "-f", "null", "-"],
+            env=ENV, capture_output=True, text=True)
+    except OSError:
+        got = False                 # no ffmpeg at all: cannot encode, and
+    else:                           # default_encoder() still needs a name
+        got = p.returncode == 0 and "rror" not in (p.stderr or "")
     cache["encoders"][encoder] = got
     _save_cache()
     return got
@@ -377,6 +382,77 @@ def default_encoder():
 
 def strict():
     return bool((os.environ.get(STRICT_VAR) or "").strip())
+
+
+# --------------------------------------------------------------------------
+# decoding, which is a different axis from encoding
+# --------------------------------------------------------------------------
+# `-hwaccel cuda` is NVDEC on the INPUT; the encoder keys above are NVENC on
+# the output. Nothing translates between them, and a missing driver fails the
+# *input*, which surfaces as a broken source file rather than a missing card
+# -- eight call sites spelled it inline and four had no fallback at all, so
+# scan-pii.py and film-redact.py could not read a frame on an AMD box while
+# every render on that box was fine.
+#
+# It is probed the way an encoder is, and for the same reason: `ffmpeg
+# -hwaccels` lists what the BUILD has, and a full Windows build lists cuda on
+# a machine that has never seen an NVIDIA driver. NVENC's availability is not
+# the test either -- the two capabilities ship on different silicon and a card
+# can have one without the other -- so this decodes a real frame.
+
+
+def nvdec_usable(recheck=False):
+    """Can this machine actually DECODE through `-hwaccel cuda`?
+
+    Answered by decoding one frame of a file this function encodes, because a
+    lavfi source is generated rather than decoded and would let `-hwaccel`
+    pass on a box with no driver at all. Cached against the ffmpeg version
+    beside the encoder probes.
+    """
+    cache = _load_cache()
+    probes = cache.setdefault("decoders", {})
+    if not recheck and "cuda" in probes:
+        return probes["cuda"]
+    got = False
+    enc = next((e for e in available()), None)
+    if enc:
+        tmp = os.path.join(tempfile.gettempdir(),
+                           "_encode-nvdec-probe-%d.mp4" % os.getpid())
+        try:                        # OSError: no ffmpeg -- no hwaccel either
+            made = subprocess.run(
+                ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                 "-f", "lavfi",
+                 "-i", "color=c=black:s=%s:r=25:d=0.2" % PROBE_SIZE,
+                 "-c:v", enc, "-frames:v", "5", tmp],
+                env=ENV, capture_output=True, text=True)
+            if made.returncode == 0 and os.path.exists(tmp):
+                p = subprocess.run(
+                    ["ffmpeg", "-hide_banner", "-loglevel", "error",
+                     "-hwaccel", "cuda", "-i", tmp,
+                     "-frames:v", "1", "-f", "null", "-"],
+                    env=ENV, capture_output=True, text=True)
+                got = p.returncode == 0 and "rror" not in (p.stderr or "")
+        except OSError:
+            got = False
+        finally:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+    probes["cuda"] = got
+    _save_cache()
+    return got
+
+
+def decode_args(recheck=False):
+    """The input-side hardware-decode flags for this machine, or none.
+
+    Never spell `-hwaccel cuda` at a call site -- ask here, the same way a
+    render asks video_args() rather than spelling `-preset`. A caller that
+    keeps its own software retry loses nothing: this only ever removes an
+    attempt that was going to fail.
+    """
+    return ["-hwaccel", "cuda"] if nvdec_usable(recheck) else []
 
 
 # --------------------------------------------------------------------------
