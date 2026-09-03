@@ -399,6 +399,15 @@ def main():
     for clip in m["clips"]:
         if wanted and clip["id"] not in wanted:
             continue
+        # A clip with a named crop_rect is fitted whole over a fill by
+        # rect_chain; there is no 9:16 window to pan, so cut-clips never reads
+        # a sidecar entry for it. Tracking it anyway spends face detection to
+        # write a key list nothing will use -- and leaves an entry that reads
+        # as if the clip were tracked.
+        if clip.get("crop_rect", m.get("crop_rect")):
+            print("%-20s skipped -- crop_rect is fixed, nothing to track"
+                  % clip["id"])
+            continue
         # Honour a per-clip pad override, exactly as cut-clips.py does. The
         # sidecar's key times are CLIP-relative, so if this resolved a different
         # start than the renderer, every key would be offset by the difference
