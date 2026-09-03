@@ -6,9 +6,18 @@ The stage this enforces: before a clips manifest exists, the picker writes
 its quote, its hook, answers to the four hook tests, a picture note, and a
 verdict with reasoning. This tool then does the half a machine can do: it
 resolves every phrase in the transcript, prices every hook offset against the
-3.0s gate, checks durations, and REFUSES the shortlist when the process was
-skipped -- too few candidates, no rejects (a shortlist with no rejects is a
-decision, not a selection), unanswered tests, or phrases that do not resolve.
+3.0s gate, prints every duration, and REFUSES the shortlist only when the
+process was skipped on a candidate -- unanswered tests, phrases that do not
+resolve, a span that runs backwards, a pick whose hook fails the gate with no
+stated hook_ok reason.
+
+What it deliberately does NOT police: how many candidates, how many picks,
+how many rejects, or how long a clip is. The user says what they want -- one
+named moment, ten shorts, a 3-minute short, or none at all ("nothing here
+carries a short" is a valid shortlist) -- and an optional top-level "wanted"
+field records that ask verbatim. The one smell it still flags, as a WARNING,
+is multiple picks with nothing documented as losing: when everything
+considered was chosen, the "selection" was a decision wearing a list.
 
 Why staged at all: on 2026-09-03 the all-at-once flow picked twice from one
 Bloomberg episode and both picks were rejected by the user after rendering --
@@ -47,11 +56,17 @@ _outline = import_module("transcript-outline")
 
 TESTS = ("disagree", "audience", "ends_on_claim", "falsifiable")
 HOOK_MAX_S = 3.0          # must match cut-clips.py's gate
-MIN_CANDIDATES = 5        # fewer than this is a hunch, not a selection
-MIN_REJECTS = 2           # no documented rejects = alternatives never priced
+
+# Deliberately NO minimum candidate count, NO minimum rejects, NO pick quota:
+# how many shorts come out of a video is the USER'S call -- one named moment,
+# ten, or none at all ("nothing here carries a short" is a valid shortlist).
+# The tool verifies the process around whatever the user asked for: quotes
+# that resolve, tests that are answered, prices that are printed. Thin
+# comparison (every candidate picked, nothing documented as losing) is
+# reported as a warning, never a refusal.
 
 
-def check_candidate(c, words, errs):
+def check_candidate(c, words, errs, warns):
     cid = c.get("id", "?")
     for k in ("id", "start_text", "hook", "verdict", "why"):
         if not str(c.get(k, "")).strip():
@@ -91,20 +106,24 @@ def check_candidate(c, words, errs):
                         "plays twice, and the matcher takes the first hit; "
                         "anchor on words unique to the body instance"
                         % (cid, row["dur"]))
-        elif (c.get("verdict") in ("pick", "backup")
-                and not 10.0 <= row["dur"] <= 75.0):
-            # a reject documents consideration and needs real quotes, not
-            # renderable boundaries -- only what might ship must fit a short
-            errs.append("%s: %.1fs is outside the 10-75s a short can carry"
-                        % (cid, row["dur"]))
+        # No length opinion beyond that: the duration column is a printed
+        # fact, and the target length is the user's (a 3-minute short is a
+        # valid ask -- platform ceilings moved and will move again). Even
+        # cut-clips renders whatever span the manifest declares.
     if s and h:
         row["hook_at"] = h[0] - s[0]
         if row["hook_at"] < 0:
             errs.append("%s: hook resolves BEFORE the start" % cid)
         elif row["hook_at"] > HOOK_MAX_S and c.get("verdict") == "pick":
-            errs.append("%s: hook +%.1fs fails the %.1fs gate -- re-anchor "
-                        "or reject; do not carry it to the manifest"
-                        % (cid, row["hook_at"], HOOK_MAX_S))
+            # mirrors the render gate exactly, hook_ok escape included --
+            # otherwise cut-clips just refuses the same clip one stage later
+            if str(c.get("hook_ok", "")).strip():
+                warns.append("%s: hook +%.1fs past the gate, carried on "
+                             "hook_ok: %s" % (cid, row["hook_at"], c["hook_ok"]))
+            else:
+                errs.append("%s: hook +%.1fs fails the %.1fs gate -- "
+                            "re-anchor, reject, or state a hook_ok reason"
+                            % (cid, row["hook_at"], HOOK_MAX_S))
     return row
 
 
@@ -117,26 +136,29 @@ def main():
     sl = json.load(open(_env.resolve(args.shortlist), encoding="utf-8"))
     words = _outline.load_words(_env.resolve(sl["source_words"]))
     cands = sl.get("candidates") or []
-    errs, rows = [], []
+    errs, warns, rows = [], [], []
     for c in cands:
-        rows.append(check_candidate(c, words, errs))
+        rows.append(check_candidate(c, words, errs, warns))
 
     verdicts = [c.get("verdict") for c in cands]
-    if len(cands) < MIN_CANDIDATES:
-        errs.append("only %d candidate(s) -- a selection needs at least %d "
-                    "considered, including the ones that lose"
-                    % (len(cands), MIN_CANDIDATES))
-    if verdicts.count("reject") < MIN_REJECTS:
-        errs.append("only %d reject(s) documented -- if nothing lost, "
-                    "nothing was compared" % verdicts.count("reject"))
-    if verdicts.count("pick") == 0:
-        errs.append("no candidate marked pick")
+    # count facts, not quotas: the user decides how many shorts a video owes.
+    # The one smell worth flagging is picks with no losers -- when everything
+    # considered was chosen, the "selection" was a decision wearing a list.
+    if verdicts.count("pick") > 1 and not (verdicts.count("reject")
+                                           or verdicts.count("backup")):
+        warns.append("every candidate is a pick and nothing is documented as "
+                     "losing -- fine if the user named these moments, thin "
+                     "if the shortlist was supposed to compare")
 
+    if sl.get("wanted"):
+        print("wanted: %s" % sl["wanted"])
     print("%-28s %-7s %6s %9s" % ("candidate", "verdict", "dur", "hook"))
     for r in sorted(rows, key=lambda r: r.get("hook_at", 99)):
         print("%-28s %-7s %5.1fs %8s"
               % (r["id"], r["verdict"], r.get("dur", -1),
                  ("+%.1fs" % r["hook_at"]) if "hook_at" in r else "?"))
+    for w in warns:
+        print("WARN %s" % w)
     if errs:
         print()
         for e in errs:

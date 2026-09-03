@@ -182,7 +182,10 @@ What makes a good as-is short (no editing pass to save it later):
   a short has ~2 s to earn the watch, and "the start of the thought" is usually
   several sentences of it. Closes on a payoff or punchline. Never open
   mid-sentence.
-- **60–90 s** for talking-head content; under 60 s for a single gag/story.
+- **Length is the user's call, not a rule.** When they name a length or a
+  count, that wins — platforms take up to 3 minutes now. Absent an ask,
+  60–90 s suits talking-head content and under 60 s a single gag/story; say
+  which default you used so it can be overridden.
 - Prefer segments with emotion, concrete numbers, a strong visual, or a
   controversial thesis — those carry a clip with zero extra editing.
 - **Skip the video's intro** (it never stands alone) and **skip sponsor reads**;
@@ -205,10 +208,18 @@ note, and a verdict (`pick`/`backup`/`reject`) with reasoning — then run:
 python scripts/shortlist-moments.py --shortlist projects/<id>/shortlist.json
 ```
 
-It resolves every phrase, prices every hook against the gate, and refuses a
-shortlist with fewer than 5 candidates or fewer than 2 documented rejects —
-if nothing lost, nothing was compared. Only candidates marked `pick` go into
-the manifest; `backup`s are the bench for when a pick dies on review.
+It resolves every phrase, prices every hook against the gate, prints every
+duration, and refuses only skipped process — an unanswered test, a phrase
+that does not resolve, a span that runs backwards, a pick past the hook gate
+with no `hook_ok` reason. **It has no opinion on counts or length**: how
+many shorts a video owes and how long they run is the user's ask, recorded
+verbatim in the optional top-level `wanted` field — one named moment, ten
+shorts, a 3-minute short, or the honest "nothing here carries a short" are
+all valid shortlists. The bar it holds is comparison, not quantity: multiple
+picks with nothing documented as losing draws a warning, because when
+everything considered was chosen, the selection was a decision wearing a
+list. Only candidates marked `pick` go into the manifest; `backup`s are the
+bench for when a pick dies on review.
 
 Why mandatory: on one Bloomberg episode the pick-inside-the-flow approach
 shipped two rejected shorts in a row (an anchor posing a question; a Treasury

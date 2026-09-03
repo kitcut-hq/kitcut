@@ -2558,7 +2558,7 @@ absolute path written into a script, a skill or these docs.
 | `scripts/check-caption-space.py` | is the caption card sitting on the speaker's face? reads the RENDER, per caption group |
 | `scripts/measure-caption-band.py` | where does a channel park its caption card? temporal median over their own shorts — a single frame cannot tell a caption from a black turtleneck |
 | `scripts/audit-caption-glue.py` | which shipped renders carry split punctuation ("60 ,000") inside their actual window? free, per deliverable |
-| `scripts/shortlist-moments.py` | verify a real SELECTION happened before any short is cut: resolves and prices every shortlist candidate, refuses one with no documented rejects |
+| `scripts/shortlist-moments.py` | verify a real SELECTION happened before any short is cut: resolves and prices every shortlist candidate; no opinion on counts or length — the user says what they want |
 | `scripts/check-shorts.py` | shorts-path self-test: hook gate, pads, crop windows, grouping typography, caption-space geometry; no GPU, no encode |
 | `scripts/import-footage.py` | desktop + phone captures into a project, ordered by real capture start |
 | `scripts/screencast-pipeline.py` | the twelve stages in order, cached, with two stops (the sheet, the draft) |
