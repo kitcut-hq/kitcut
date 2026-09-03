@@ -59,7 +59,8 @@
     "max_words": 3,
     "gap_break_s": 0.45,
     "break_on_sentence_end": true,
-    "max_group_duration_s": 3.0
+    "max_group_duration_s": 3.0,
+    "wrap": "none"
   },
   "timing": {
     "lead_in_ms": 60,
@@ -89,7 +90,8 @@
     "uppercase_cost": "uppercase runs ~15% wider than sentence case, which is why max_words is 3 here against 4 in the sentence-case Lenny preset",
     "caption_space": "face box bottom reaches y=1345 and mouth landmarks y=1130..1215 at crop_zoom 1.556-1.714; card top at 816 -> ~296, card bottom ~470, face top >= 519",
     "grouping_swept": "Swept with the builder's wrap/orphan counters on clip 02. 4 words x width 500 -- what this shipped with -- wrapped 35% of cards and orphaned 10 single words onto their own line. 3 x 560 gives 4% and 2. Uppercase runs ~15% wider than sentence case, so 3 words is its natural cap here, not 4. Width 560 is clamped by the builder to 0.94*frame - 2*pad_x = 958 px, which is why 560 and 620 measure identically.",
-    "punctuation": "UNMEASURABLE from their broadcast: the banner shows single headlines ('NVIDIA IN ADVANCED TALKS FOR HUGGING FACE'), which never carry running-speech punctuation, so there is nothing to copy. strip_trailing ',' is therefore a CHOICE inherited from red-card, kept because stripped commas fit the headline register the uppercase card imitates. Not an oversight -- unlike the Lenny preset, where the same inheritance contradicted a measurable habit and was removed."
+    "punctuation": "UNMEASURABLE from their broadcast: the banner shows single headlines ('NVIDIA IN ADVANCED TALKS FOR HUGGING FACE'), which never carry running-speech punctuation, so there is nothing to copy. strip_trailing ',' is therefore a CHOICE inherited from red-card, kept because stripped commas fit the headline register the uppercase card imitates. Not an oversight -- unlike the Lenny preset, where the same inheritance contradicted a measurable habit and was removed.",
+    "wrap_policy": "wrap 'none' is measured, not taste: Bloomberg's own strap is a single-line banner (e.g. 'HUMANOID ROBOTS ENTER SCALE-UP ERA: BARCLAYS'), so a card here never wraps -- grouping carries fewer words instead. This retires the per-clip max_words sweep the 'HORRENDOUS JOB / HORRENDOUS' defect forced (2026-09-03): widening was dead (scale_style clamps max_line_width_px to 0.94*W - 2*pad_x), and per-clip numbers are the anti-pattern docs/todo.md diagnoses."
   },
   "overlays": {
     "colour": "#FF0000",

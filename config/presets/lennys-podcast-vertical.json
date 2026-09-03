@@ -35,7 +35,7 @@
   },
   "layout": {
     "anchor_x": 960,
-    "bottom_margin_px": 339,
+    "bottom_margin_px": 270,
     "max_line_width_px": 470,
     "max_lines": 2,
     "line_height_px": 38
@@ -55,7 +55,8 @@
     "max_words": 4,
     "gap_break_s": 0.45,
     "break_on_sentence_end": true,
-    "max_group_duration_s": 2.5
+    "max_group_duration_s": 2.5,
+    "wrap": "no_orphan"
   },
   "timing": {
     "lead_in_ms": 60,
@@ -93,7 +94,9 @@
     "what_they_do_NOT_do": "no per-word highlight, no pop, no rule, no outline -- a flat static block per line",
     "grouping_swept": "max_words x max_line_width_px swept on clip 01 with the builder's wrap/orphan counters. The shipped-then-fixed setting (5 x 400) was the WORST cell: 67% of cards wrapped and 7 orphaned a single word onto its own line -- 'the models are going / to'. 4 x 470 gives 4% wrapped, 0 orphans, 3.9 words/card; 3 x 470 gives 0% but cards change too fast. Chose 4 x 470.",
     "punctuation": "They KEEP it. Contact strip off lPpEynndz-w shows 'in the right direction.', 'press Tab,\"', 'to take this thing next?', 'that power of intuition,'. So strip_trailing is EMPTY here -- the ',' it inherited from red-card was stripping commas they keep.",
-    "lines_per_card": "always one, 3-5 words, in every frame sampled"
+    "lines_per_card": "always one, 3-5 words, in every frame sampled",
+    "wrap_policy": "wrap 'no_orphan' is measured off their own shorts: their caption block legitimately wraps to two lines, but never strands a single word -- our 'the models are going / to' orphan (2026-09-03) was off-style. layout() rebalances the last line; groups are untouched.",
+    "caption_band": "measure-caption-band.py over their three cached shorts (48 frames each, temporal dark-card+light-text signal): text-band bottom sits 628 px above the frame bottom in N_3pPQp7CkQ and lPpEynndz-w, but 498 px in tlTKTV40Mqg -- the short from THIS episode's tight talking-head framing, where the face is large and 628 would chase the chin. Our renders at the old 339 (=602 output) measured 622 with the same tool: position matched their cross-episode median exactly, and still read awkward, because our face-tracked crop is tight like tlTKTV40Mqg, not loose like the other two. So the preset follows their same-framing choice: 270 authoring = 480 output card bottom, text band ~500 from bottom, matching their 498, ~100 px clear of the Shorts UI band, and buying ~120 px more chin clearance. Re-measure with the tool after any crop change; do not average their shorts without checking which framing each was made for."
   },
   "overlays": {
     "colour": "#FF0000",
