@@ -578,6 +578,45 @@ Both now FAIL the gate, and both trip the filler-opener warning by name. Naming
 the hook is most of the value: **a clip whose hook cannot be written down as a
 phrase does not have one**, and the boundaries are wrong.
 
+**A hook is a CLAIM somebody makes, not a question an anchor poses.** The gate
+measures *when* the hook lands; it cannot tell you the hook is worthless. A news
+panel is the trap, because its wind-up is grammatical, confident and completely
+empty. Bloomberg Tech's headline segment opened
+
+> "But really the question here is what happens to Hugging Face if Nvidia owns it"
+
+which passes every structural check and is not a hook: it is hedged (*really the
+question here is*), it is meta — a question ABOUT the story rather than a
+statement of it — and there is nothing in it for a scroller to agree or disagree
+with. Its one real claim, "arguably Hugging Face's greatest value is that
+everybody uses it", sat at 0:12. Three tests, all free:
+
+- **Could a viewer disagree with the first sentence?** If not, it is set-up.
+- **Is the speaker addressing an audience, or the person next to them?**
+  Studio cross-talk is not a short. "So Rachel, real quick, is this imminent"
+  ran through the middle of that same clip; a handoff mid-clip is a dead 3 s.
+- **Does it end on the claim or trail off?** That one closed on "it sounds
+  like, like, it is pretty imminent" — a hedge on a hedge.
+
+The replacement is the same episode's Treasury Secretary soundbite: one speaker,
+addressing a room, "the labs themselves have done a horrendous job — horrendous
+job — of explaining themselves to the American people."
+
+**Rank the alternatives by where their payoff lands before you argue about
+them.** It is a transcript search, it costs nothing, and it turns taste into a
+table. For that episode: Bessent +7.5 s as spoken, Dell "considered dead"
++1.8 s, Uber micro-teams +5.0 s, Ian King "wants more customers" +12.7 s.
+
+**Re-anchoring usually beats rejecting.** A soundbite whose payoff is buried
+behind parallel clauses can often be entered mid-sentence at a point that still
+reads as a whole sentence — "the labs themselves have done a horrendous job"
+moved +7.5 s to +2.9 s and changed not one word of his. What you may NOT do is
+redeclare the hook as a longer phrase that starts earlier: that scores +1.4 s by
+moving the goalposts rather than the cut, and the gate is then measuring
+nothing. **Then let the picture decide.** Of the four candidates above, the
+SpaceX/Cognition exchange died on a two-box and the Hugging Face segment had
+already died on one.
+
 **When a fast hook and a settled frame are incompatible, change the material,
 not the rule.** They are separate constraints and both are real — an opening
 mouth-open on a vowel is never acceptable, and neither is 6 s of run-up. On
