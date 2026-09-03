@@ -1,85 +1,75 @@
-# KitCut — tester quickstart
+# KitCut — start here
 
-Thanks for testing. This is a set of AI-driven video pipelines that run
-entirely on your machine: burned-in word-synced captions, vertical shorts cut
-out of long videos, dubbing, multicam edits. You drive them by talking to
-Claude Code in this folder — a plain request like "add captions to this video"
-finds the right pipeline on its own.
+KitCut turns raw footage into finished video on your own computer — burned-in
+word-synced captions, vertical shorts cut out of long videos, dubs, multicam
+edits. You don't operate it; you tell Claude what you want, and Claude
+operates it. Nothing is uploaded anywhere: transcription, tracking and
+rendering all happen on your machine.
 
-Nothing leaves your machine: transcription, face tracking and rendering are
-all local. The only network use is downloading models on first run.
+## Set up (one time, ~15 minutes)
 
-## You need
+You do two things by hand. Claude does everything else.
 
-- **Windows 10/11.**
-- **An NVIDIA GPU is recommended** (fast transcription + GPU encode). Without
-  one, captions and shorts still work — add `--encoder libx264` and expect
-  slower renders. The screen-recording and multicam pipelines need NVIDIA for
-  now.
-- **~10 GB free disk** (Python environment + models + working files).
+1. **Install Claude Code** — https://claude.com/claude-code — and sign in
+   with your Claude account.
+2. **Open this folder in Claude Code** and say:
 
-## Install (once, ~10 minutes)
+   > **Set this up.**
 
-1. **Python 3.13** — `winget install Python.Python.3.13`
-   (or from python.org — keep "py launcher" checked).
-2. **ffmpeg, the *full* build** — `winget install Gyan.FFmpeg`, then open a
-   NEW terminal. Full matters: the essentials build lacks filters the
-   pipelines rely on.
-3. **Git** — `winget install Git.Git` (if you don't have it).
-4. **Claude Code** — https://claude.com/claude-code, install and sign in.
-5. In this folder:
+   Claude will check your machine, install what's missing (it asks before
+   installing anything), build the environment, and finish by rendering a
+   small test video for you to watch. If it asks you to close and reopen
+   Claude Code partway through, that's normal — reopen this folder and say
+   "continue setup."
 
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts/setup-python.ps1
-   python scripts/check-env.py
-   ```
+   The first run also downloads the speech-recognition model (a few GB,
+   one time) — not a hang, just a download.
 
-   `check-env.py` is the doctor: it names anything missing and the fix.
-   Warnings about API keys are fine — you need no key for this test.
+## Use it
 
-## First render: captions on your own video
+Say what you want, with the real path of one of your videos — or drag the
+file into the window:
 
-Open a terminal in this folder, run `claude`, and say:
+> Add captions to C:\Users\you\Videos\demo.mp4
 
-> Add captions to C:\path\to\your-video.mp4
+> Cut three vertical shorts out of C:\Users\you\Videos\webinar.mp4
 
-Or run it directly:
+Claude tells you where every finished file lands. Captions and shorts are
+the two flows we most want tested on your real footage.
 
-```powershell
-python scripts/run-captions.py --input "C:\path\to\your-video.mp4" --style config/presets/red-card.json
-```
+Good to know:
 
-No NVIDIA? Add `--encoder libx264` to either form.
+- **An NVIDIA graphics card is recommended.** Without one, captions and
+  shorts still work (renders take a few times longer); the screen-recording
+  and multicam pipelines currently need NVIDIA.
+- **No accounts or API keys are needed** for anything above. If Claude
+  mentions missing keys, they're for optional features — skip them.
+- **Skip YouTube uploading** for this test; it needs its own setup.
 
-The first run downloads the transcription model (a few GB, one time). A
-16-minute video takes about 9 minutes on a laptop RTX GPU; the output lands in
-`outputs/`.
+## Updating
 
-## Then: shorts
+Say:
 
-Ask Claude in this folder:
+> Update KitCut.
 
-> Cut three vertical shorts out of C:\path\to\your-video.mp4
+Your own projects and rendered videos stay put — updates only touch the
+tooling. One ask: don't commit anything into this folder's git history;
+it belongs to KitCut, and your work lives beside it untouched.
 
-It reads the transcript, picks self-contained episodes, face-tracks the crop
-so the subject stays in frame, and re-renders the captions at vertical size.
-This is the flow we most want tested on real footage.
+## When something goes wrong
 
-## Skip for this test
+That's the test working — please tell us. Say to Claude:
 
-- **YouTube upload** — needs your own Google OAuth setup; out of scope.
-- **ElevenLabs voices** — a paid key; the free `--tts edge` voice works.
-- **Multicam angle switching** — needs a separate model download; ask us if
-  you want to try it.
+> Run the doctor.
 
-## When something breaks
+…and send us what it prints, plus what you had asked for and the last
+screen of output. And tell us when a result merely *looks wrong* even
+though nothing errored — a caption out of sync, a crop that cuts off a
+face, a short that opens mid-word. That feedback is worth the most.
 
-That is the test working. Send us:
+---
 
-1. What you asked for (the sentence, or the command).
-2. The last ~20 lines of console output.
-3. The output of `python scripts/check-env.py`.
-
-And tell us where a result looked wrong even though nothing errored — a
-caption out of sync, a crop that cuts a face, a short that opens mid-word.
-That feedback is worth the most.
+*For technical users: the manual path is `scripts/setup-python.ps1` then
+`python scripts/check-env.py`, prerequisites are Python 3.13, git, and
+ffmpeg (Gyan full build), and every pipeline script answers `--help`. The
+README documents everything in depth.*
