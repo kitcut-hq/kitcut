@@ -19,7 +19,11 @@
     "handle-style": "config/handles/vertical.json",
     "overlay-preset": "config/overlays/end-card.json",
     "vo-script-01": "projects/flatten-pdf/vo/01-free-tool.json",
-    "description-01": "projects/flatten-pdf/description-01.txt"
+    "description-01": "projects/flatten-pdf/description-01.txt",
+    "manifest": "projects/flatten-pdf/clips-vertical.json",
+    "overlay-style": "config/overlays/end-card.json",
+    "overlay-1": "projects/flatten-pdf/cards/01-free-tool.json",
+    "overlay-2": "projects/flatten-pdf/cards/02-whole-packet.json"
   },
   "deliverables": {
     "projects/flatten-pdf/outputs/shorts/flatten-pdf-01-free-tool.mp4": {
@@ -100,5 +104,5 @@
     "Source has its own branded end card wiping in at ~192s; short 2 ends at 191 to stay clear of it.",
     "Short 2 (02-whole-packet.mp4) is still stage 1: picture only, source audio, no captions."
   ],
-  "updated_utc": "2026-09-01T19:30:35Z"
+  "updated_utc": "2026-09-03T17:56:52Z"
 }

@@ -13,7 +13,9 @@
     "sync": "projects/claude-demo/claude-demo.sync.json",
     "manifest": "projects/claude-demo/screencast.json",
     "description": "projects/claude-demo/description.txt",
-    "label-style": "config/labels/lower-third.json"
+    "label-style": "config/labels/lower-third.json",
+    "overlay-style": "config/overlays/end-card.json",
+    "overlay-1": "projects/claude-demo/assets/end-card.html"
   },
   "deliverables": {
     "projects/claude-demo/outputs/claude-demo-labelled.mp4": {
@@ -60,7 +62,7 @@
       }
     }
   },
-  "updated_utc": "2026-08-31T04:40:42Z",
+  "updated_utc": "2026-09-03T17:56:52Z",
   "title": "Відеоредагування через Claude Code — огляд пайплайнів",
   "intent": "Screen recording of a Claude Code session plus an iPhone take of Oleksandr narrating; multicam pipeline (camera is the master clock), published unlisted on @instafill_ai.",
   "pipelines": [

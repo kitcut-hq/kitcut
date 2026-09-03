@@ -3,8 +3,15 @@
   "id": "neaCnEawvbk",
   "intent": "",
   "pipelines": [],
-  "inputs": {},
-  "controls": {},
+  "inputs": {
+    "source": "projects/neaCnEawvbk/sources/neaCnEawvbk.mp4",
+    "words": "projects/neaCnEawvbk/transcripts/neaCnEawvbk.words.json"
+  },
+  "controls": {
+    "manifest": "projects/neaCnEawvbk/clips-vertical.json",
+    "caption-style": "config/presets/red-card-vertical.json",
+    "handle-style": "config/handles/vertical.json"
+  },
   "deliverables": {
     "projects/neaCnEawvbk/outputs/shorts-vertical/neaCnEawvbk-v-01-500-fields.mp4": {
       "status": "current",
@@ -53,5 +60,5 @@
     }
   },
   "notes": [],
-  "updated_utc": "2026-09-01T23:15:27Z"
+  "updated_utc": "2026-09-03T17:56:52Z"
 }

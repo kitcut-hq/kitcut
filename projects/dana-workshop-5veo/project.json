@@ -19,5 +19,5 @@
     "shot-detect.py did NOT refuse this single-camera film. Frame fingerprints failed (within 0.0513 >= between 0.0448), face identity then reported \"2 angles, within 0.119, between n/a\" and the guard (failed = between is not None and within >= between) passes when between is None. A one-person screencast therefore gets a 27-shot, 2-angle shot list that would have driven split-cameras.py to build two phantom tapes.",
     "Channel format mix from the 68 listed videos: mostly solo talking-head (8-25 min), some remote-call interviews, this workshop screencast, one meditation (117 min), one city vlog. Their top video (48k views, the OpenAI interview) is a single-frame remote-call recording with burned glossary cards top-right (term + definition) -- makeable with make-card.py + image-overlay.py."
   ],
-  "updated_utc": "2026-08-31T16:25:41Z"
+  "updated_utc": "2026-09-03T17:56:52Z"
 }

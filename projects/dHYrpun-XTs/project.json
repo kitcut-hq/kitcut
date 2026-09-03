@@ -3,8 +3,15 @@
   "id": "dHYrpun-XTs",
   "intent": "",
   "pipelines": [],
-  "inputs": {},
-  "controls": {},
+  "inputs": {
+    "source": "projects/dHYrpun-XTs/sources/dHYrpun-XTs-1080p.mp4",
+    "words": "projects/dHYrpun-XTs/transcripts/dHYrpun-XTs.words.json"
+  },
+  "controls": {
+    "reframe": "projects/dHYrpun-XTs/clips-vertical.reframe.json",
+    "manifest": "projects/dHYrpun-XTs/clips-vertical.json",
+    "caption-style": "config/presets/red-card-vertical.json"
+  },
   "deliverables": {
     "projects/dHYrpun-XTs/outputs/shorts-vertical/dHYrpun-XTs-v-01-brain-vs-chip.mp4": {
       "status": "current",
@@ -57,5 +64,5 @@
     }
   },
   "notes": [],
-  "updated_utc": "2026-09-02T05:35:51Z"
+  "updated_utc": "2026-09-03T17:56:52Z"
 }
