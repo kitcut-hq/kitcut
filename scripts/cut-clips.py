@@ -322,6 +322,38 @@ def clip_rect(clip, m):
     return rect, place
 
 
+def clip_style(caps, clip, tmpdir):
+    """The preset this clip renders with, patched if the clip overrides layout.
+
+    A preset carries a caption POSITION, and a position is only safe relative to
+    a FRAMING -- so two clips in one manifest can legitimately need different
+    ones. Here clip 01 is a boxed studio shot with room above the head and clip
+    02 is a full-frame close-up letterboxed over a blurred fill, and no single
+    `bottom_margin_px` serves both. Splitting the manifest or cloning the preset
+    would both hide that the two are the same style at different heights.
+
+    Only `layout` keys are overridable: colour, font and grouping are what makes
+    a preset a channel's style, and a clip that wants those wants its own preset.
+    The patched copy is written to tmp under the clip id, so the committed preset
+    stays the single source of the style.
+    """
+    over = {k: v for k, v in caps.items() if k in ("bottom_margin_px",
+                                                   "max_lines",
+                                                   "max_line_width_px")}
+    if not over:
+        return caps["style"]
+    with open(os.path.join(ROOT, caps["style"]), encoding="utf-8") as f:
+        cfg = json.load(f)
+    cfg["layout"].update(over)
+    cfg["_clip_override"] = "%s: %s" % (clip["id"], ", ".join(
+        "%s=%s" % kv for kv in sorted(over.items())))
+    out = os.path.join(tmpdir, "%s.style.json" % clip["id"])
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(cfg, f, indent=1, ensure_ascii=False)
+    print("  caption layout override -- %s" % cfg["_clip_override"])
+    return os.path.relpath(out, ROOT).replace("\\", "/")
+
+
 def build_captions(clip, words_path, style, start, end, w, h, fps, tmpdir,
                    verify=True, samples=24, overlays=None, fontsdir="fonts"):
     """Render an ASS for just this clip's span, rebased to t=0.
@@ -627,6 +659,8 @@ def main():
     ap.add_argument("--vertical", action="store_true",
                     help="crop to 1080x1920 (overrides the manifest)")
     ap.add_argument("--no-vertical", action="store_true", help="keep the source framing")
+    ap.add_argument("--no-caption-space-check", action="store_true",
+                    help="skip the post-render face/caption collision check")
     ap.add_argument("--caption-style", help="burn captions using this preset")
     ap.add_argument("--encoder", help="override render.encoder -- libx264 "
                                       "renders on CPU for machines with no NVENC")
@@ -827,6 +861,7 @@ def main():
                  % "\n  ".join(missing_dub))
 
     failed = []
+    encoded = []
     for clip, start, end, dst, dub_wav, dub_words, _ok in plan:
         if os.path.exists(dst) and not args.force:
             print("skip (exists) %s" % dst)
@@ -872,13 +907,15 @@ def main():
         if caps:
             # captions are drawn AFTER the crop, so they are sized for the frame
             # the viewer sees rather than cropped along with the source pixels
+            cl_caps = dict(caps, **(clip.get("captions") or {}))
+            style = clip_style(cl_caps, clip, tmpdir)
             ass = build_captions(clip, dub_words or m["words"],
-                                 caps["style"], start, end,
+                                 style, start, end,
                                  out_w, out_h, fps, tmpdir,
                                  verify=not args.no_verify,
-                                 samples=int(caps.get("samples", 24)),
-                                 overlays=caps.get("overlays"),
-                                 fontsdir=caps.get("fontsdir", "fonts"))
+                                 samples=int(cl_caps.get("samples", 24)),
+                                 overlays=cl_caps.get("overlays"),
+                                 fontsdir=cl_caps.get("fontsdir", "fonts"))
             # captions go on top of the composite, so they are never letterboxed
             # along with the shot underneath them
             parts.append("[%s]ass=filename=%s:fontsdir=%s:shaping=simple[%s]"
@@ -954,9 +991,40 @@ def main():
                 "dubbed audio .%s" % dub_tag if dub_wav else None) if b]
             + [_imgoverlay.describe(s, img_preset_doc, end - start)
                for s in (clip.get("image_overlays") or img_default)])
+        encoded.append(clip["id"])
     if failed:
         sys.exit("locked by another program, not replaced: %s\n(each finished "
                  "render is beside its target as .part.mp4)" % ", ".join(failed))
+
+    # The render checking ITSELF is the point: a card across the speaker's
+    # mouth shipped through 24/24 sync probes, a passing hook gate and two
+    # rounds of eyeballed frames, because the guard that would have caught it
+    # was a separate script nobody was obliged to run. Vertical only (that is
+    # where the crop magnifies faces into the caption band) and skipped for
+    # dubbed cuts, whose captions are timed from the dub words this checker
+    # does not read.
+    if encoded and vert and caps and not dubdir \
+            and not args.no_caption_space_check:
+        det = os.path.join(ROOT, "models", "face",
+                           "face_detection_yunet_2023mar.onnx")
+        if not os.path.exists(det):
+            print("caption-space check SKIPPED -- no face model under "
+                  "models/face/ (download commands in the video-multicam-"
+                  "switch skill); run scripts/check-caption-space.py "
+                  "somewhere one exists before publishing")
+        else:
+            print("caption space: checking the render against the speakers' "
+                  "faces ...", flush=True)
+            r = subprocess.run(PY + ["scripts/check-caption-space.py",
+                                     "--manifest", args.manifest,
+                                     "--only", ",".join(encoded)],
+                               cwd=ROOT, env=ENV)
+            if r.returncode:
+                sys.exit("caption-space check FAILED. The renders above exist "
+                         "but a caption card sits on a face -- fix the "
+                         "placement or the framing (decision tree: `## Where "
+                         "the caption card goes` in the README), or record a "
+                         "reviewed exception in the clip's caption_space_ok.")
 
 
 if __name__ == "__main__":
