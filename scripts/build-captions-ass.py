@@ -122,6 +122,29 @@ class Metrics:
         return sorted(self._notdef)
 
 
+def _cap_i(t, apo):
+    """The English pronoun "I", however faster-whisper felt about it that second.
+
+    Whisper's casing is per-segment and inconsistent: this repo's Lenny's
+    Podcast transcript has 312 correctly capitalised "I" and 78 lowercase ones
+    from the same speaker in the same recording. One of them landed in a caption
+    card in a pitch deliverable -- "equally wrong and i'm" -- which reads as our
+    sloppiness, not the ASR's.
+
+    Deliberately narrow: the standalone pronoun and its contractions only, never
+    sentence-initial capitalisation in general, which cannot be done from a word
+    list without knowing where sentences start. Opt-in via `text.capitalize_i`
+    because it is English-only and this repo also cuts Ukrainian.
+    """
+    core = t.rstrip(".,!?;:…\"')")
+    if not core or core[0] != "i":
+        return t
+    rest = core[1:]
+    if rest and not (rest[0] == apo and rest[1:].lower() in ("m", "ll", "ve", "d")):
+        return t
+    return "I" + t[1:]
+
+
 # ---------------------------------------------------------------- ingest
 def sanitize(words, cfg):
     tcfg = cfg["text"]
@@ -134,6 +157,8 @@ def sanitize(words, cfg):
         strip = tcfg.get("strip_trailing", "")
         while strip and t and t[-1] in strip:
             t = t[:-1]
+        if tcfg.get("capitalize_i"):
+            t = _cap_i(t, apo)
         if tcfg.get("uppercase"):
             t = t.upper()
         if not t:
@@ -229,7 +254,7 @@ def layout(group, cfg, m, bottom_margin=None):
     card_h = ink_h + 2 * pad_y
     if bottom_margin is None:
         bottom_margin = L["bottom_margin_px"]
-    card_bottom = cfg["canvas"]["play_res_y"] - bottom_margin
+    card_bottom = cfg["canvas"]["play_res_y"] - bottom_margin - rule_below(cfg)
     card_top = card_bottom - card_h
 
     widths = [sum(m.width(texts[j]) for j in ln) + sp * (len(ln) - 1) for ln in lines]
@@ -312,6 +337,29 @@ def rounded_rect(w, h, r):
         f(r), f(r))
 
 
+def rule_below(cfg):
+    """Height the card's rule adds BELOW the card -- 0 unless one is configured.
+
+    `card.rule` draws a solid strip the full width of the card, which is how a
+    broadcast lower third reads as itself: Bloomberg Tech's banner is a white
+    slab with a 14 px mint strip under it, and without the strip the same white
+    slab is just a white slab.
+
+    `layout.bottom_margin_px` stays the distance from the frame bottom to the
+    bottom of the WHOLE graphic, rule included -- otherwise adding a rule would
+    silently push every caption up by its thickness, and a preset's margin would
+    no longer mean what it says. A top rule sits above the card and so costs
+    nothing here.
+    """
+    K = cfg.get("card") or {}
+    if not K.get("enabled", True):
+        return 0.0
+    R = K.get("rule") or {}
+    if R.get("side", "bottom") != "bottom":
+        return 0.0
+    return float(R.get("px", 0) or 0)
+
+
 def lift_for_overlays(g0_cs, g1_cs, cfg, m, overlays):
     """If the SOURCE already has its own graphic where this card would sit, lift
     the card clear of it. Returns an effective bottom margin (px).
@@ -369,6 +417,11 @@ def build(words, cfg, m, overlays=None):
     base_c = ass_colour(S["base"]["colour"])
     act_c = ass_colour(S["active"]["colour"])
     card_c = ass_colour(cfg["card"]["colour"], cfg["card"].get("alpha", 0))
+    RU = cfg["card"].get("rule") or {}
+    rule_px = float(RU.get("px", 0) or 0)
+    rule_side = RU.get("side", "bottom")
+    rule_c = ass_colour(RU.get("colour", cfg["card"]["colour"]),
+                        RU.get("alpha", cfg["card"].get("alpha", 0)))
     fade = T["fade_ms"]
     fam, fsz, fsp = cfg["font"]["family"], m.size, cfg["font"].get("spacing", 0)
     bold = cfg["font"].get("bold", 0)
@@ -430,6 +483,11 @@ def build(words, cfg, m, overlays=None):
             ev.append("Dialogue: 0,%s,%s,Card,,0,0,0,,{%san7%spos(%.1f,%.1f)%sbord0%sshad0%sfad(%d,%d)%s1c%s%sp1}%s{%sp0}"
                       % (fmt_cs(g0), fmt_cs(g1), BS, BS, cx0, cy0, BS, BS, BS, fade, fade,
                          BS, card_c, BS, rounded_rect(cw, ch, cfg["card"]["corner_radius_px"]), BS))
+            if rule_px > 0:
+                ry = cy0 + ch if rule_side == "bottom" else cy0 - rule_px
+                ev.append("Dialogue: 0,%s,%s,Card,,0,0,0,,{%san7%spos(%.1f,%.1f)%sbord0%sshad0%sfad(%d,%d)%s1c%s%sp1}%s{%sp0}"
+                          % (fmt_cs(g0), fmt_cs(g1), BS, BS, cx0, ry, BS, BS, BS, fade, fade,
+                             BS, rule_c, BS, rounded_rect(cw, rule_px, 0), BS))
 
         for k, w in enumerate(grp):
             p = placed[k]
@@ -454,6 +512,7 @@ def build(words, cfg, m, overlays=None):
                           % (fmt_cs(b), fmt_cs(g1), spoken_style, pos, fd(b, g1), w["text"]))
 
         dbg.append(dict(gi=gi, g0=g0, g1=g1, card=[cx0, cy0, cw, ch], lifted=bm,
+                        rule=[rule_px, rule_side],
                         words=[dict(t=grp[k]["text"], cx=placed[k]["cx"], cy=placed[k]["cy"],
                                     w=m.width(grp[k]["text"]),
                                     a=bounds[k][0], b=bounds[k][1])
@@ -461,11 +520,36 @@ def build(words, cfg, m, overlays=None):
     return header, ev, dbg, groups
 
 
+def wrap_stats(dbg):
+    """(cards that wrapped to >1 line, cards that orphaned a single word).
+
+    Grouping failure is TYPOGRAPHIC: a group one word too wide for its line
+    wraps, and the wrap strands that word alone on the second line -- "the
+    models are going / to". selfcheck() cannot see it (nothing is mistimed,
+    off-canvas or overlapping), so these two numbers exist to be swept against
+    grouping.max_words x layout.max_line_width_px before an encode. Both
+    channel presets in config/ originally shipped on the worst cell of their
+    own sweep. A two-word card on two lines is not counted as an orphan: with
+    one word per line there is no "own line" for either to be stranded on.
+    """
+    wrapped = orphan = 0
+    for d in dbg:
+        rows = {}
+        for w in d["words"]:
+            rows.setdefault(round(w["cy"]), []).append(w)
+        if len(rows) > 1:
+            wrapped += 1
+            if len(d["words"]) > 2 and min(len(r) for r in rows.values()) == 1:
+                orphan += 1
+    return wrapped, orphan
+
+
 def selfcheck(dbg, cfg):
     """Structural assertions. Proves the timing arithmetic is sound; says nothing
     about whether the timings match the audio (that is the frame probe's job)."""
     errs = []
     px = cfg["canvas"]["play_res_x"]
+    py = cfg["canvas"]["play_res_y"]
     for d in dbg:
         if d["g1"] <= d["g0"]:
             errs.append("group %d: non-positive duration" % d["gi"])
@@ -479,6 +563,16 @@ def selfcheck(dbg, cfg):
         cx0, cy0, cw, ch = d["card"]
         if cx0 < 0 or cx0 + cw > px:
             errs.append("group %d: card off-canvas (x=%.0f w=%.0f)" % (d["gi"], cx0, cw))
+        # A rule is drawn OUTSIDE the card box, so the card fitting the frame is
+        # no longer proof that the graphic does. A rule half off the bottom edge
+        # would render as a thinner rule and look like a styling choice.
+        rpx, rside = d.get("rule") or [0, "bottom"]
+        top = cy0 - (rpx if rside == "top" else 0)
+        bot = cy0 + ch + (rpx if rside == "bottom" else 0)
+        if top < 0 or bot > py:
+            errs.append("group %d: card+rule off-canvas vertically "
+                        "(top=%.0f bottom=%.0f, frame %d) -- lower "
+                        "layout.bottom_margin_px or the rule" % (d["gi"], top, bot, py))
     for i in range(1, len(dbg)):
         if dbg[i]["g0"] < dbg[i - 1]["g1"]:
             errs.append(
@@ -523,6 +617,8 @@ def scale_style(cfg, W, H):
     for k in ("corner_radius_px", "pad_x_px", "pad_y_px", "collision_gap_px"):
         if k in K:
             K[k] = K[k] * f
+    if K.get("rule") and K["rule"].get("px"):
+        K["rule"]["px"] = K["rule"]["px"] * f
     TX = cfg["text"]
     for k in ("outline_px", "shadow_px"):
         if k in TX:
@@ -616,6 +712,16 @@ def main():
     print("words %d | groups %d | events %d | %.2f MB"
           % (len(words), len(groups), len(ev), os.path.getsize(args.out) / 1e6))
     print("words/group avg %.1f max %d" % (sum(sizes) / max(1, len(sizes)), max(sizes)))
+    # Grouping is a tuned pair (max_words vs max_line_width_px) and the way it
+    # goes wrong is TYPOGRAPHIC, not structural, so selfcheck cannot see it: a
+    # group one word too wide for its line wraps, and the wrap orphans that word
+    # onto a line of its own. "the models are going / to" passed every check
+    # this repo had and still read as broken. These two numbers price a
+    # grouping change without spending an encode -- sweep them, do not guess.
+    wrapped, orphan = wrap_stats(dbg)
+    print("cards wrapping to >1 line %d/%d (%.0f%%) | of those, %d orphan a "
+          "single word onto its own line"
+          % (wrapped, len(dbg), 100.0 * wrapped / max(1, len(dbg)), orphan))
     print("first card %.2fs, last ends %.2fs" % (dbg[0]["g0"] / 100.0, dbg[-1]["g1"] / 100.0))
     if overlays is not None:
         base_m = cfg["layout"]["bottom_margin_px"]
