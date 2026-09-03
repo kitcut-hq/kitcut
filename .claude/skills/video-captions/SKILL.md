@@ -57,6 +57,14 @@ README; the re-edit entry point is the `video-project` skill.
 
 ## Deriving a style from a reference video
 
+For a **channel** we are cutting for, this is not optional and the full
+procedure — what to measure, which measurement lies to you, the Shorts safe
+area, and the 1.7778 conversion — is `## Step 0` in the `video-shorts` skill.
+Worked examples: `config/presets/bloomberg-tech.json` (measured off a broadcast
+frame) and `config/presets/lennys-podcast-vertical.json` (measured off the
+channel's own published shorts).
+
+
 ```powershell
 .venv/Scripts/python.exe -m yt_dlp --download-sections "*MM:SS-MM:SS" -f "<vfmt>+<afmt>" -o "temp/ref.%(ext)s" "<URL>"
 ffmpeg -i temp/ref.mp4 -vf "fps=5" -q:v 3 "temp/ref/f_%03d.jpg"
@@ -81,7 +89,8 @@ For brand colours, sample the channel thumbnail: mask to saturated pixels
 | `text.uppercase`, `text.apostrophe`, `text.strip_trailing` | text transforms |
 | `text.outline_px` / `outline_colour`, `shadow_px` / `shadow_colour` | stroke + drop shadow |
 | `card.enabled` | `false` = no background card, text only |
-| `card.colour`, `card.alpha`, `card.corner_radius_px`, `card.pad_x_px`, `card.pad_y_px` | the card |
+| `card.colour`, `card.alpha`, `card.corner_radius_px`, `card.pad_x_px`, `card.pad_y_px` | the card (`alpha` is the ASS byte: 0 opaque, 255 invisible) |
+| `card.rule.colour` / `px` / `side` | a solid strip the full card width, `"bottom"` (default) or `"top"` — the accent bar that makes a broadcast lower third read as itself. `bottom_margin_px` measures to the bottom of the **whole** graphic, rule included |
 | `card.collision_gap_px` | clearance when dodging the source's own graphics |
 | `layout.anchor_x`, `bottom_margin_px`, `max_lines`, `max_line_width_px`, `line_height_px` | placement |
 | `states.base` / `states.active` / `states.spoken` | **`spoken == base` → moving spotlight; `spoken == active` → progressive karaoke fill** |

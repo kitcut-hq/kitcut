@@ -108,6 +108,13 @@ python scripts/auto-reframe.py --manifest projects/<id>/clips-vertical.json
 python scripts/cut-clips.py --manifest projects/<id>/clips-vertical.json
 ```
 
+After touching any of `cut-clips.py`, `build-captions-ass.py` or
+`check-caption-space.py`, run `python scripts/check-shorts.py` — the hook
+gate, pad resolution, crop windows, grouping typography and caption-space
+geometry against values frozen from real footage and real shipped defects; no
+GPU, no encode, seconds. Both bugs ever found in the caption-space guard were
+guard rot this test now pins.
+
 **3. Dub** — translate a clip into another language, keeping its cadence.
 `dub-clips.py` (segment → translate → fit → mix) → `cut-clips.py --dub`
 
@@ -536,6 +543,21 @@ These come from how the repo is actually used — follow them without being aske
 - **Leave tooling behind, not just output.** A task ends as a config-driven
   script plus an example config, a README section, and an updated skill, then
   committed. Never hardcode styling or boundaries into a script.
+- **A channel's own style is part of the deliverable.** Before cutting for a
+  channel we have not cut for before, measure their look off their own frames
+  and commit `config/presets/<channel>.json` with a `_measured` block naming the
+  frames and the numbers. Never reach for `red-card` on someone else's footage.
+  When the job is a pitch, record what they already publish — length, views,
+  caption treatment, what they do *not* do — **before** cutting, or "better than
+  theirs" is a claim nobody can check afterwards. Procedure: `## Step 0` in the
+  `video-shorts` skill.
+- **A caption position is only safe relative to a framing.** After any crop
+  change, run `python scripts/check-caption-space.py --manifest <m>` — it reads
+  the render and fails when the card sits on the speaker's face. Sweep
+  `grouping.max_words` against `layout.max_line_width_px` with the wrap/orphan
+  counters the caption builder prints; both shipped presets had the worst cell
+  of their own sweep. Neither defect is visible to any structural check, and
+  spot-checking frames by eye misses both — that is what these two exist for.
 - **Verify before spending an encode.** `cut-clips.py` proves caption sync on
   sampled frames and asserts the output duration before it renders. Keep that
   property; it is what caught a clip rendering 463s instead of 55s.

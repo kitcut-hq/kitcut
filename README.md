@@ -43,6 +43,7 @@ to change how captions look.
 | `font.bold` | 1 requests weight 700 |
 | `text.uppercase`, `apostrophe`, `outline_px`, `shadow_px` | text treatment |
 | `card.enabled`, `colour`, `alpha`, `corner_radius_px`, `pad_*_px` | the background card |
+| `card.rule.colour` / `px` / `side` | a solid strip the full width of the card, above or below it — a broadcast lower third's accent bar |
 | `layout.anchor_x`, `bottom_margin_px`, `max_lines`, `max_line_width_px` | placement |
 | `states.base` / `active` / `spoken` | `spoken == base` → spotlight; `spoken == active` → progressive karaoke fill |
 | `pop.*` | scale animation on the active word |
@@ -53,9 +54,23 @@ to change how captions look.
 Presets are authored on a 1920x1080 canvas and every pixel value is scaled
 automatically to the actual video, so 720p / 1440p / vertical all work.
 
-Three presets ship: `red-card` (solid red info-card, yellow spotlight),
-`red-card-vertical` (the same styling re-authored for a 9:16 canvas, used by
-the shorts pipeline) and `eu-navy` (EU-flag blue, star-yellow spotlight).
+`card.rule` exists because an accent bar is what makes a broadcast lower third
+read as itself — Bloomberg Tech's banner is a white slab with a 14 px mint strip
+under it, and the same slab without the strip is just a white box.
+`layout.bottom_margin_px` stays the distance to the bottom of the **whole**
+graphic, rule included, so adding one does not silently lift every caption.
+
+Six presets ship. Two are house styles: `red-card` (solid red info-card, yellow
+spotlight) and `red-card-vertical` (the same re-authored for 9:16, used by the
+shorts pipeline). Four are **channel styles**, each measured off that channel's
+own frames rather than invented — `eu-navy` (Europeiska Pravda: EU-flag blue,
+star-yellow spotlight), `bloomberg-tech` and `bloomberg-tech-vertical` (the
+white banner, square corners, mint rule, amber spotlight), and
+`lennys-podcast-vertical` (55%-opacity black box, white sentence case, campfire
+spotlight). Every channel preset carries a `_measured` block naming the frames
+it came from and the numbers read off them; that block is the difference between
+a style and a guess. See **Deriving a channel's style** in the `video-shorts`
+skill for the procedure.
 
 **No NVIDIA card?** `run-captions.py --encoder libx264` (and the same flag on
 `cut-clips.py`) renders on CPU. The flag exists because the render blocks are
@@ -64,6 +79,39 @@ sight — `_overlay.cpu_encoder_args()` translates instead: `cq` becomes `crf`,
 the `p1–p7` ladder becomes x264's named presets, and the NVENC-only quality
 knobs are dropped rather than mis-scaled. Captions and shorts are the only
 pipelines with a CPU path; screen-cut and the multicam renders need NVENC.
+
+### Grouping is a tuned pair, and it fails typographically
+
+`grouping.max_words` and `layout.max_line_width_px` are one setting in two
+numbers: a group one word too wide for its line wraps, and the wrap orphans that
+word onto a line of its own. `selfcheck` cannot see it — nothing is out of sync,
+off-canvas or overlapping — so it ships. "the models are going / **to**" did.
+
+The builder prices it, so sweep instead of guessing:
+
+```
+cards wrapping to >1 line 1/25 (4%) | of those, 0 orphan a single word onto its own line
+```
+
+Measured on the two channel presets, the shipped-then-fixed settings were in
+both cases the *worst* cell of their sweep:
+
+| preset | was | wrapped / orphans | now | wrapped / orphans |
+|---|---|---|---|---|
+| `lennys-podcast-vertical` (sentence case) | 5 words × 400 | 67% / 7 | **4 × 470** | 4% / 0 |
+| `bloomberg-tech-vertical` (uppercase) | 4 words × 500 | 35% / 10 | **3 × 560** | 4% / 2 |
+
+**Uppercase runs ~15% wider**, which is why the same frame takes 4 words in
+sentence case and 3 in caps. And `max_line_width_px` is clamped to
+`0.94 × frame − 2 × pad_x`, so past that point widening it measures identically
+and the only lever left is `max_words`.
+
+Two smaller things worth copying rather than rediscovering: `strip_trailing`
+should match what the channel actually does — Lenny's keep every comma and full
+stop, so the `","` inherited from `red-card` was stripping punctuation they
+keep — and `text.capitalize_i` fixes the English pronoun, because Whisper's
+casing is per-segment and inconsistent (312 correct "I" against 78 lowercase
+from one speaker in one recording; one of them landed in a caption card).
 
 ### Deriving a style from a reference
 
@@ -226,6 +274,76 @@ usually serves the batch) and a clip overrides either.
   size cannot be done in this pass at all.
 - **`--list` prices the framing** — rect, output size, placement, zoom factor,
   pan keys and mask count — without encoding anything.
+
+## Where the caption card goes
+
+**A caption position is only safe relative to a FRAMING.** `bottom_margin_px` is
+a distance from the frame bottom, not a promise about what is there: 602 px
+lands on the chest of a loose podcast two-shot and across the mouth of a tight
+news close-up. So the moment a crop changes, the placement is stale — and on
+`g-YDNJcyuck` the crop changed twice to clear a broadcast lower third, magnified
+the face, and put the card straight over two speakers' mouths. It passed every
+check that existed: frame-accurate cut, right duration, 24/24 caption-sync
+probes, hook inside 3 s, settled opening frame. Nothing was looking at the video
+and the captions in the same coordinate system.
+
+**`cut-clips.py` now runs this itself** after rendering any vertical captioned
+manifest — the guard being a separate script nobody was obliged to run is how
+the defect shipped. A failing check fails the run (the renders stay on disk for
+inspection); `--no-caption-space-check` opts out, a machine without the YuNet
+model under `models/face/` gets a loud skip, and dubbed cuts are skipped because
+their captions are timed from dub words this checker does not read. Standalone
+runs are for re-checking without an encode:
+
+```powershell
+python scripts/check-caption-space.py --manifest projects/<id>/clips-vertical.json
+python scripts/check-caption-space.py --manifest ... --list   # every frame, exit 0
+```
+
+It reads the **render** — deriving where the card will land from the manifest
+means re-deriving the crop, which is where two separate bugs already lived
+(`docs/retro-books-giveaway.md`). Per caption group it takes the card rectangle
+from `build-captions-ass.py --debug-out` and the face box and mouth landmarks
+from YuNet, both in output pixels, and intersects them. FAIL is the mouth
+covered or ≥15% of the face; a reviewed exception goes in the clip's
+`caption_space_ok`, like `open_ok` and `checked_utc` elsewhere. The checker
+resolves the style through the same per-clip override path the render uses
+(`clip_style`) — its first version rebuilt geometry from the bare preset and
+reported +319 px of clearance for a card position that was not on the video,
+which is a guard passing for the wrong reason. To regression-prove it after
+changing it: copy a manifest whose renders exist, force the known-bad margin on
+one clip via a per-clip `captions` override, and run the checker against the
+existing renders — same footage, same faces, so it must reproduce the shipped
+failure (MOUTH covered, exit 1) without an encode. It did.
+
+Three things it taught that no amount of looking would have:
+
+- **Its confidence floor must be LOWER than a detector's, not equal.** A face
+  the card is sitting on is a partly occluded face, so the frames the check
+  exists to catch are the ones the detector is least sure about. The worst frame
+  scored **0.67** and was silently skipped at `shot-detect.py`'s 0.7, while every
+  well-behaved frame scored 0.72–0.80. A check that fails open on its own worst
+  case is worse than none, so it also warns when a third of sampled frames have
+  no face at all.
+- **Test a band, not the landmark.** YuNet's mouth point is the midpoint of the
+  two corners; the lower lip and chin run ~10% of the face height below it. The
+  shipped frame had the landmark at y 1163 and the card top at y 1173 — a 10 px
+  "miss" that a viewer reads as the mouth being gone.
+- **Sometimes there is no safe placement, and that is the finding.** On a tight
+  close-up the card must clear the face box (bottom y≈1345) while staying above
+  the Shorts UI (y≈1540): a 174 px two-line card does not fit between them.
+  Above the head is then the only option — and where the subject fills the frame
+  top to bottom, even that fails and the *framing* has to change. That is what
+  `crop_pad` letterboxing is for: the full source frame over a blurred fill
+  keeps the channel's own graphics intact and unsliced and opens clear space
+  under the band for the card.
+
+Two clips in one manifest can therefore need different placements. A clip may
+carry its own `captions` block overriding `bottom_margin_px`, `max_lines` or
+`max_line_width_px`; cut-clips patches a copy of the preset into `temp/` and
+says so. Only `layout` keys are overridable — colour, font and grouping are what
+make a preset a channel's style, and a clip that wants those wants its own
+preset.
 
 ## Where a short opens
 
@@ -2437,6 +2555,8 @@ absolute path written into a script, a skill or these docs.
 | `scripts/gpu-lock.py` | the lock reader: who holds the card, and `--clear` when the holder is gone |
 | `scripts/check-gpulock.py` | lock self-test incl. a real spawn/kill/recover cycle; no GPU, no files |
 | `scripts/check-openings.py` | does a short open on a settled face? lead-in silence + contact sheets; no encode |
+| `scripts/check-caption-space.py` | is the caption card sitting on the speaker's face? reads the RENDER, per caption group |
+| `scripts/check-shorts.py` | shorts-path self-test: hook gate, pads, crop windows, grouping typography, caption-space geometry; no GPU, no encode |
 | `scripts/import-footage.py` | desktop + phone captures into a project, ordered by real capture start |
 | `scripts/screencast-pipeline.py` | the twelve stages in order, cached, with two stops (the sheet, the draft) |
 | `scripts/review-ingest.py` | the user's narrated review recording → remarks mapped to source frames |
@@ -2483,6 +2603,27 @@ Of those, `transcripts/` is the only expensive artifact (minutes of GPU time);
 everything in `temp/` regenerates in seconds.
 
 ## Gotchas worth knowing
+
+- **A 9:16 crop does not remove the source's own lower third — it slices it.**
+  Going 16:9 → 9:16 spends width, not height, so a broadcast banner at the
+  bottom of the source survives the crop with its text cut mid-word. The first
+  Bloomberg Tech short read `ED TALKS FOR HUGGING` across the bottom and cut the
+  `Ian King` name card in half, under our own caption card — two competing lower
+  thirds, one of them broken. Fix it in the crop, not with the overlay-dodge:
+  `overlays.colour` only *lifts* our card clear of theirs, it cannot delete
+  theirs. Measure where their graphics start (Bloomberg's name card steps in at
+  source y=697, the banner's white at y=920), then set `crop_zoom` and `crop_y`
+  so the window ends above it. And check whether the shot is boxed: a studio
+  frame has its background above the video box too (top edge at y=63 here), so
+  the window has to start below that or a hard band lands across the top.
+
+- **The tracker will pan across the seam of a two-box shot.** `auto-reframe.py`
+  classifies an interview two-shot as `pan` and interpolates between the two
+  faces, which walks the window off one subject and onto the gap, ending with
+  half of each box in frame. It is not a `pad` case, so nothing warns you.
+  Review any shot where the x keys move a long way in a short time, find the
+  real cut (a centre-column brightness step: 66 → 93 between two seconds here),
+  and hold the window static on one subject in the `.reframe.json` sidecar.
 
 - **The `fps` filter labels the slot, not the frame.** `-vf fps=0.25` emits,
   for the output frame stamped 16 s, whichever input frame fell inside that
