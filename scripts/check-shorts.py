@@ -206,6 +206,30 @@ def grouping_typography():
           _bca.wrap_stats([{"words": [{"cy": 100}, {"cy": 100},
                                       {"cy": 100}, {"cy": 168}]}]), (1, 1))
 
+    # grouping.wrap: the policy that retires per-clip max_words sweeps.
+    # Same words, same shipped-defect settings (5 x 400) that orphan above --
+    # the policy alone must fix them, because a channel style should not need
+    # a hand sweep per clip to stop stranding words.
+    cfg = _cfg(5, 711.0)
+    cfg["grouping"]["wrap"] = "no_orphan"
+    no_w, no_o = stats(cfg)
+    check("no_orphan: the orphaning setting stops orphaning", no_o, 0)
+    check("no_orphan: card count unchanged -- widow fix, not a regroup",
+          no_w >= 0 and _count_groups(cfg, m), _count_groups(_cfg(5, 711.0), m))
+    cfg = _cfg(5, 711.0)
+    cfg["grouping"]["wrap"] = "none"
+    none_w, none_o = stats(cfg)
+    check("none: nothing wraps at all", (none_w, none_o), (0, 0))
+    cfg = _cfg(5, 711.0)
+    cfg["grouping"]["wrap"] = "allow"
+    check("allow is the current behaviour, spelled out",
+          stats(cfg), (bad_w, bad_o))
+
+
+def _count_groups(cfg, m):
+    words = _bca.sanitize(WORDS_ENVELOPE, cfg)
+    return len(_bca.group_words(words, cfg, m))
+
 
 def caption_space_geometry():
     print("== caption-space geometry ==")
@@ -245,6 +269,8 @@ def clip_style_override():
     tmp = tempfile.mkdtemp(prefix="check-shorts-")
     try:
         style = "config/presets/lennys-podcast-vertical.json"
+        with open(os.path.join(_env.ROOT, style), encoding="utf-8") as f:
+            committed_margin = json.load(f)["layout"]["bottom_margin_px"]
         # no override -> the committed preset itself, untouched
         check("no override returns the preset path",
               _cut.clip_style({"style": style}, {"id": "t"}, tmp), style)
@@ -270,7 +296,7 @@ def clip_style_override():
               cfg["grouping"]["gap_break_s"], 0.45)
         with open(os.path.join(_env.ROOT, style), encoding="utf-8") as f:
             check("the committed preset is untouched",
-                  json.load(f)["layout"]["bottom_margin_px"], 339)
+                  json.load(f)["layout"]["bottom_margin_px"], committed_margin)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -384,6 +410,60 @@ def suffix_glue():
           [w["text"] for w in out], ["time"])
 
 
+def loader_glue():
+    """The glue rule lives at the shared loader, and it is provably safe there.
+
+    fold() strips whitespace and index() concatenates words with no separator,
+    so a phrase resolves to the same span whether the transcript arrives raw
+    or glued -- which is what lets load_words() glue for EVERY consumer
+    (captions, start_text/end_text/hook anchors, dub units, outlines) without
+    breaking a single existing manifest.
+    """
+    print("== loader glue: one rule, every consumer, matching invariant ==")
+    _ol = import_module("transcript-outline")
+    raw = [
+        dict(text="see",  start=1.0, end=1.2, probability=0.9),
+        dict(text="about", start=1.2, end=1.5, probability=0.9),
+        dict(text="60",   start=1.5, end=1.9, probability=0.9),
+        dict(text=",000", start=1.9, end=2.4, probability=0.5),
+        dict(text="new",  start=2.4, end=2.7, probability=0.9),
+        dict(text="robots", start=2.7, end=3.2, probability=0.9),
+    ]
+    glued = _ol.glue_words(raw)
+    check("suffix merged in the raw envelope",
+          [w["text"] for w in glued],
+          ["see", "about", "60,000", "new", "robots"])
+    check("merged window spans both tokens",
+          (glued[2]["start"], glued[2]["end"]), (1.5, 2.4))
+    check("merged probability is the lower one", glued[2]["probability"], 0.5)
+    check("idempotent: gluing a glued list is a no-op",
+          _ol.glue_words(glued), glued)
+    # matching invariance: a phrase quoted either way resolves to the same
+    # START always (start_text and hook anchor on starts), and to the same END
+    # whenever the phrase does not stop mid-merged-word
+    for phrase in ("about 60", "about 60,000", "60,000 new"):
+        check("find(%r) start invariant" % phrase,
+              _ol.find(raw, phrase)[0], _ol.find(glued, phrase)[0])
+    for phrase in ("about 60,000", "60,000 new"):
+        check("find(%r) end invariant" % phrase,
+              _ol.find(raw, phrase)[1], _ol.find(glued, phrase)[1])
+    # the one permitted difference, pinned so it stays deliberate: a phrase
+    # ending inside a merged word extends its end to the merged word's end --
+    # an end_text of "...about 60" should not cut in the middle of "60,000"
+    check("end extends to cover the merged word, never shrinks",
+          (_ol.find(raw, "about 60")[1], _ol.find(glued, "about 60")[1]),
+          (1.9, 2.4))
+    # the negative family survives the loader too: a standalone dash is a word
+    dash = [dict(text="тут", start=1.0, end=1.3),
+            dict(text="–", start=1.3, end=1.4),
+            dict(text="це", start=1.4, end=1.7)]
+    check("standalone dash is not merged by the loader",
+          [w["text"] for w in _ol.glue_words(dash)], ["тут", "–", "це"])
+    # one definition of the rule: the caption builder re-exports it
+    check("builder and loader share one glues_back",
+          _bca.glues_back is _ol.glues_back, True)
+
+
 def main():
     argparse.ArgumentParser(
         description="Shorts render-path self-test -- no GPU, no encode, "
@@ -392,7 +472,7 @@ def main():
     for fn in (crop_window_arithmetic, resolve_pads, hook_gate,
                grouping_typography, caption_space_geometry,
                clip_style_override, sidecar_merge, capitalize_i,
-               suffix_glue):
+               suffix_glue, loader_glue):
         fn()
         print()
     if FAILS:

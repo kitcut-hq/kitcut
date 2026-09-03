@@ -22,6 +22,62 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
 
 
+# Whisper emits punctuation as its OWN word wherever it did not decode a space
+# before it: "60" + ",000", "U" + ".S.", "60" + "%", "go" + "-to". Joining
+# words with spaces then puts a space inside the number -- "60 ,000" shipped
+# on a caption card, and a dub sent "60 ,000" to its translator. The repair
+# lives HERE, in the one loader every consumer shares, so captions, phrase
+# anchors, outlines and dub units all see the same text. The raw words.json
+# on disk stays verbatim ASR output; nothing is migrated.
+#
+# Gluing cannot break phrase matching: fold() strips whitespace and index()
+# concatenates words with no separator, so "60"+",000" and "60,000" build the
+# identical haystack. check-shorts.py pins that invariance.
+#
+# The glue set is measured, not assumed -- 358 such tokens across this repo's
+# transcripts. Two families look like punctuation and must KEEP their space,
+# which is why "glue anything that starts with punctuation" is the wrong rule:
+# 57 standalone en/em dashes in the Ukrainian transcripts, where the dash is a
+# word, and 19 opening guillemets («Дельта»). A leading "$" needs nothing --
+# "$14" already arrives whole. Accepted risk, zero cases in the corpus: a
+# genuinely negative number ("-20" meaning minus twenty) would weld onto the
+# word before it; every leading-hyphen token measured is a suffix.
+GLUE_BACK = ",.!?;:%)]}»…&-'’”"
+# ...and of those, only "%" is still glue when it stands alone. A lone "&" is
+# "Point & Figure"; a lone "-" is a dash. A suffix is a suffix only if it has
+# something after the punctuation.
+GLUE_SOLO_OK = "%"
+
+
+def glues_back(tok, apo=""):
+    """True when tok is a suffix of the word before it, joined with no space."""
+    if not tok:
+        return False
+    c = tok[0]
+    if c not in GLUE_BACK and (not apo or c != apo):
+        return False
+    return len(tok) > 1 or c in GLUE_SOLO_OK
+
+
+def glue_words(words):
+    """Merge whisper's suffix tokens into the word before them, in the raw
+    envelope. The merged word spans both timing windows (a caption spotlight
+    on "60,000" must stay lit while ",000" is being said) and keeps the lower
+    probability. Idempotent: a glued list has no suffix tokens left."""
+    out = []
+    for w in words:
+        if out and glues_back(w["text"]):
+            p = out[-1]
+            p["text"] += w["text"]
+            p["end"] = max(p["end"], w["end"])
+            if "probability" in w or "probability" in p:
+                p["probability"] = min(p.get("probability", 1.0),
+                                       w.get("probability", 1.0))
+            continue
+        out.append(dict(w))
+    return out
+
+
 def load_words(path):
     d = json.load(open(path, encoding="utf-8"))
     words = d["words"] if isinstance(d, dict) else d
@@ -31,10 +87,13 @@ def load_words(path):
         t = w.get("text", w.get("word"))
         if t is None:
             continue
-        out.append({"text": t, "start": float(w["start"]), "end": float(w["end"])})
+        rec = {"text": t, "start": float(w["start"]), "end": float(w["end"])}
+        if "probability" in w:
+            rec["probability"] = w["probability"]
+        out.append(rec)
     if not out:
         sys.exit("no words in %s" % path)
-    return out
+    return glue_words(out)
 
 
 def fold(s, loose=True):

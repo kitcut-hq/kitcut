@@ -146,39 +146,23 @@ def _cap_i(t, apo):
 
 
 # ---------------------------------------------------------------- ingest
-# Whisper emits punctuation as its OWN word wherever it did not decode a space
-# before it: "60" + ",000", "U" + ".S.", "60" + "%", "go" + "-to". Every word
-# here is drawn as its own positioned event, so joining them the obvious way
-# put a space inside the number and shipped "60 ,000" onto a card.
-#
-# The glue set is measured, not assumed -- 358 such tokens across this repo's
-# transcripts (scripts/check-shorts.py pins the shape). Two families look like
-# punctuation and must KEEP their space, which is why "glue anything that
-# starts with punctuation" is the wrong rule: 57 standalone en/em dashes in the
-# Ukrainian transcripts, where the dash is a word, and 19 opening guillemets
-# («Дельта»). A leading "$" needs nothing -- "$14" already arrives whole.
-GLUE_BACK = ",.!?;:%)]}»…&-'’”"
-# ...and of those, only "%" is still glue when it stands alone. A lone "&" is
-# "Point & Figure"; a lone "-" is a dash. A suffix is a suffix only if it has
-# something after the punctuation.
-GLUE_SOLO_OK = "%"
-
-
-def glues_back(tok, apo=""):
-    """True when tok is a suffix of the word before it, joined with no space."""
-    if not tok:
-        return False
-    c = tok[0]
-    if c not in GLUE_BACK and (not apo or c != apo):
-        return False
-    return len(tok) > 1 or c in GLUE_SOLO_OK
+# The punctuation-glue RULE lives in transcript-outline.py, next to the loader
+# that applies it for every consumer (captions, phrase anchors, dub units).
+# One definition; this module only re-exports it for its own backstop below.
+glues_back = _outline.glues_back
 
 
 def glue_suffixes(out, strip=""):
-    """Merge suffix tokens into the word they belong to, spanning both windows.
+    """Backstop for word lists that never passed through _outline.load_words.
 
-    The merged word stays lit for as long as both tokens were spoken, which is
-    what keeps the per-word spotlight on "60,000" honest.
+    The loader already glues, and gluing is idempotent (a glued list has no
+    suffix tokens left), so on the normal path this is a no-op. It stays
+    because sanitize() also receives lists built in memory -- fixtures, dub
+    word envelopes assembled by other scripts -- and because the apostrophe
+    variants have been normalised to cfg's apostrophe by the time we run,
+    which the raw-envelope loader cannot know about. The merged word stays lit
+    for as long as both tokens were spoken, which is what keeps the per-word
+    spotlight on "60,000" honest.
     """
     merged = []
     for w in out:
@@ -272,6 +256,17 @@ def group_words(words, cfg, m):
     maxw = g["max_words"]
     max_line = cfg["layout"]["max_line_width_px"]
     max_lines = cfg["layout"]["max_lines"]
+    # grouping.wrap is a CHANNEL property, measured off their own graphics:
+    # "allow" wraps freely (default -- existing presets byte-identical),
+    # "no_orphan" wraps but never strands a single word on the last line
+    # (layout() rebalances), and "none" -- a single-line-strap style like
+    # Bloomberg's banner -- never wraps at all: grouping itself refuses any
+    # group needing a second line, so long words simply carry fewer per card.
+    # This replaces hand-sweeping max_words per clip, which is the
+    # "hand-chosen number validated after the encode" failure docs/todo.md
+    # diagnoses. max_words stays the cap; the words decide the rest.
+    if g.get("wrap", "allow") == "none":
+        max_lines = 1
 
     groups, cur = [], []
     for w in words:
@@ -301,6 +296,19 @@ def layout(group, cfg, m, bottom_margin=None):
     if lines is None:
         lines = [list(range(len(texts)))]
     sp = m.space * cfg["text"].get("word_gap_ratio", 1.0)
+    # "no_orphan": greedy wrapping stuffs the first line and can strand a
+    # single word on the last -- "the models are going / to", the shipped
+    # Lenny defect. Classic widow fixing: pull one word down whenever the
+    # rebalanced last line still fits. The group is untouched, so timing,
+    # count and reading order are exactly what "allow" would give.
+    if cfg["grouping"].get("wrap") == "no_orphan":
+        while len(lines) >= 2 and len(lines[-1]) == 1 and len(lines[-2]) >= 2:
+            cand = [lines[-2][-1]] + lines[-1]
+            w = sum(m.width(texts[j]) for j in cand) + sp * (len(cand) - 1)
+            if w > L["max_line_width_px"]:
+                break
+            lines[-1] = cand
+            lines[-2] = lines[-2][:-1]
     lh = L["line_height_px"]
     n = len(lines)
 
@@ -599,6 +607,40 @@ def wrap_stats(dbg):
     return wrapped, orphan
 
 
+def sweep_grouping(words, cfg, m):
+    """Price grouping without an encode: max_words x line-width, on the words
+    that will actually render. Both shipped presets sat on the worst cell of
+    their own sweep until somebody ran one; this makes running one a flag.
+
+    The width axis is swept around the style's post-scale value, so on a
+    vertical canvas the whole column usually comes out identical -- that is
+    the scale_style clamp (0.94*W minus the card pads) binding, and it is the
+    table telling you width is a dead knob here: carry fewer words instead.
+    """
+    base_w = cfg["layout"]["max_line_width_px"]
+    base_mw = cfg["grouping"]["max_words"]
+    policy = cfg["grouping"].get("wrap", "allow")
+    print("%d words | wrap policy %r | style width %.0f px (post-scale)"
+          % (len(words), policy, base_w))
+    print("%6s %9s | %5s %7s %7s | %s" % ("words", "width", "cards",
+                                          "wrapped", "orphans", "widest card"))
+    for mw in (2, 3, 4, 5):
+        for frac in (0.8, 1.0, 1.2):
+            trial = json.loads(json.dumps(cfg))
+            trial["grouping"]["max_words"] = mw
+            trial["layout"]["max_line_width_px"] = base_w * frac
+            groups = group_words(words, trial, m)
+            dbg, widest = [], 0.0
+            for grp in groups:
+                placed, card = layout(grp, trial, m)
+                dbg.append({"words": [{"cy": p["cy"]} for p in placed]})
+                widest = max(widest, card[2])
+            wr, orp = wrap_stats(dbg)
+            mark = "  <-- style" if (mw == base_mw and frac == 1.0) else ""
+            print("%6d %9.0f | %5d %7d %7d | %6.0f%s"
+                  % (mw, base_w * frac, len(groups), wr, orp, widest, mark))
+
+
 def selfcheck(dbg, cfg):
     """Structural assertions. Proves the timing arithmetic is sound; says nothing
     about whether the timings match the audio (that is the frame probe's job)."""
@@ -686,7 +728,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--words", required=True)
     ap.add_argument("--style", required=True)
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", default=None,
+                    help="output .ass (required unless --sweep)")
+    ap.add_argument("--sweep", action="store_true",
+                    help="price grouping instead of building: the max_words x "
+                         "line-width table of cards/wraps/orphans for these "
+                         "words under this style. Free -- writes nothing. A "
+                         "flat width column means the scale_style clamp is "
+                         "binding and width is a dead knob; carry fewer words.")
     ap.add_argument("--debug-out", default=None)
     ap.add_argument("--overlays", default=None,
                     help="detect-overlays.py json; lifts cards clear of the "
@@ -699,6 +748,8 @@ def main():
                          "mismatches the video makes libass silently rescale "
                          "everything -- this makes the adjustment explicit instead.")
     args = ap.parse_args()
+    if not args.out and not args.sweep:
+        ap.error("--out is required (or use --sweep to price grouping)")
 
     cfg = json.load(open(args.style, encoding="utf-8"))
     if args.scale_to:
@@ -731,6 +782,10 @@ def main():
 
     if not words:
         sys.exit("no words in range")
+
+    if args.sweep:
+        sweep_grouping(words, cfg, m)
+        return
 
     overlays = None
     if args.overlays:
