@@ -2604,6 +2604,37 @@ everything in `temp/` regenerates in seconds.
 
 ## Gotchas worth knowing
 
+- **Whisper emits punctuation as its own word, and a caption card joins words
+  with a space.** The transcript for a number is `"60"` then `","000"`; for an
+  abbreviation it is `"U"` then `".S."`; a percentage arrives as a bare `"%"`;
+  a hyphenated word splits at the hyphen. Every word here is drawn as its own
+  positioned event, so the obvious join shipped `60 ,000` and `15 ,000` onto a
+  Bloomberg short, and `U .S.` behind it. `glue_suffixes()` in
+  `build-captions-ass.py` merges a suffix token into the word before it,
+  spanning both timing windows so the spotlight stays honest.
+  **Do not "glue anything that starts with punctuation".** Measured across this
+  repo's nine transcripts there are 358 such tokens, and two families are
+  words: 57 standalone en/em dashes (Ukrainian punctuation, spaces on both
+  sides) and 19 opening guillemets (`«Дельта»`). A lone `&` is `Point & Figure`
+  and a lone `-` is a dash; the same characters *attached* to something
+  (`&A`, `-to`) are suffixes. `%` is the one glue character that is still glue
+  when it stands alone. `$14` needs nothing — it already arrives whole.
+  `check-shorts.py` pins all of it, negatives included.
+
+- **`max_line_width_px` above ~539 does nothing on a vertical cut.**
+  `scale_style()` scales it by the height ratio and then clamps it to
+  `0.94*W - 2*pad_x` — 958 px on a 1080-wide frame — because the card, not the
+  text, is what must fit. Going landscape → vertical multiplies by 1.78 while
+  the frame gets *narrower*, so any authored value over about 539 hits the
+  clamp and every larger number is the same number. A grouping sweep whose
+  width column is completely flat is not a bug in the sweep; it means you are
+  already at the clamp and the only remaining knob is `grouping.max_words`.
+  That is why `max_words` is the one grouping key `clip_style()` lets a clip
+  override: "horrendous job, horrendous job of explaining themselves" wrapped
+  its hook card to `HORRENDOUS JOB / HORRENDOUS` at the preset's 3, and no
+  width could have saved it.
+
+
 - **A 9:16 crop does not remove the source's own lower third — it slices it.**
   Going 16:9 → 9:16 spends width, not height, so a broadcast banner at the
   bottom of the source survives the crop with its text cut mid-word. The first

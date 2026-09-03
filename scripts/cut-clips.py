@@ -332,25 +332,35 @@ def clip_style(caps, clip, tmpdir):
     `bottom_margin_px` serves both. Splitting the manifest or cloning the preset
     would both hide that the two are the same style at different heights.
 
-    Only `layout` keys are overridable: colour, font and grouping are what makes
-    a preset a channel's style, and a clip that wants those wants its own preset.
-    The patched copy is written to tmp under the clip id, so the committed preset
-    stays the single source of the style.
+    `grouping.max_words` is overridable for the same reason, and it is the only
+    grouping key that is: how many words fit on a card is a property of THIS
+    CLIP'S WORDS, not of the channel. Bloomberg's 3-per-card is right for
+    "60,000 new humanoid robots" and wrong for "horrendous job, horrendous job
+    of explaining themselves" -- the second wrapped its hook card to
+    "HORRENDOUS JOB / HORRENDOUS", and no width setting could save it, because
+    scale_style already clamps max_line_width_px to 0.94*W minus the card pads.
+    Widening is not available; carrying fewer words is. Swept on the clip: 3
+    words wrapped 1 card of 21 and orphaned it, 2 words wrapped none of 31.
+
+    Colour and font stay locked -- those ARE the channel's style, and a clip
+    that wants them wants its own preset. The patched copy is written to tmp
+    under the clip id, so the committed preset stays the single source.
     """
-    over = {k: v for k, v in caps.items() if k in ("bottom_margin_px",
-                                                   "max_lines",
-                                                   "max_line_width_px")}
+    LAYOUT = ("bottom_margin_px", "max_lines", "max_line_width_px")
+    GROUPING = ("max_words",)
+    over = {k: v for k, v in caps.items() if k in LAYOUT + GROUPING}
     if not over:
         return caps["style"]
     with open(os.path.join(ROOT, caps["style"]), encoding="utf-8") as f:
         cfg = json.load(f)
-    cfg["layout"].update(over)
+    cfg["layout"].update({k: v for k, v in over.items() if k in LAYOUT})
+    cfg["grouping"].update({k: v for k, v in over.items() if k in GROUPING})
     cfg["_clip_override"] = "%s: %s" % (clip["id"], ", ".join(
         "%s=%s" % kv for kv in sorted(over.items())))
     out = os.path.join(tmpdir, "%s.style.json" % clip["id"])
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(cfg, f, indent=1, ensure_ascii=False)
-    print("  caption layout override -- %s" % cfg["_clip_override"])
+    print("  caption override -- %s" % cfg["_clip_override"])
     return os.path.relpath(out, ROOT).replace("\\", "/")
 
 

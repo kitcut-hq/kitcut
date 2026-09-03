@@ -146,6 +146,60 @@ def _cap_i(t, apo):
 
 
 # ---------------------------------------------------------------- ingest
+# Whisper emits punctuation as its OWN word wherever it did not decode a space
+# before it: "60" + ",000", "U" + ".S.", "60" + "%", "go" + "-to". Every word
+# here is drawn as its own positioned event, so joining them the obvious way
+# put a space inside the number and shipped "60 ,000" onto a card.
+#
+# The glue set is measured, not assumed -- 358 such tokens across this repo's
+# transcripts (scripts/check-shorts.py pins the shape). Two families look like
+# punctuation and must KEEP their space, which is why "glue anything that
+# starts with punctuation" is the wrong rule: 57 standalone en/em dashes in the
+# Ukrainian transcripts, where the dash is a word, and 19 opening guillemets
+# («Дельта»). A leading "$" needs nothing -- "$14" already arrives whole.
+GLUE_BACK = ",.!?;:%)]}»…&-'’”"
+# ...and of those, only "%" is still glue when it stands alone. A lone "&" is
+# "Point & Figure"; a lone "-" is a dash. A suffix is a suffix only if it has
+# something after the punctuation.
+GLUE_SOLO_OK = "%"
+
+
+def glues_back(tok, apo=""):
+    """True when tok is a suffix of the word before it, joined with no space."""
+    if not tok:
+        return False
+    c = tok[0]
+    if c not in GLUE_BACK and (not apo or c != apo):
+        return False
+    return len(tok) > 1 or c in GLUE_SOLO_OK
+
+
+def glue_suffixes(out, strip=""):
+    """Merge suffix tokens into the word they belong to, spanning both windows.
+
+    The merged word stays lit for as long as both tokens were spoken, which is
+    what keeps the per-word spotlight on "60,000" honest.
+    """
+    merged = []
+    for w in out:
+        if merged and glues_back(w["text"], w.get("apo", "")):
+            p = merged[-1]
+            p["text"] += w["text"]
+            p["raw"] = (p["raw"] + w["raw"]).strip()
+            p["e"] = max(p["e"], w["e"])
+            p["prob"] = min(p["prob"], w["prob"])
+            continue
+        merged.append(w)
+    # strip_trailing is a per-token setting, so re-apply it to the word the
+    # merge actually produced rather than to the halves it was made of.
+    if strip:
+        for w in merged:
+            while w["text"] and w["text"][-1] in strip:
+                w["text"] = w["text"][:-1]
+        merged = [w for w in merged if w["text"]]
+    return merged
+
+
 def sanitize(words, cfg):
     tcfg = cfg["text"]
     apo = tcfg["apostrophe"]
@@ -168,7 +222,8 @@ def sanitize(words, cfg):
         if e_cs <= s_cs:
             e_cs = s_cs + 1
         out.append(dict(text=t, raw=w["text"].strip(), s=s_cs, e=e_cs,
-                        prob=w.get("probability", 1.0)))
+                        prob=w.get("probability", 1.0), apo=apo))
+    out = glue_suffixes(out, tcfg.get("strip_trailing", ""))
     # Words must not overlap, and the reason is not tidiness. A word whose end
     # equals its start gets the synthetic centisecond above -- and if the NEXT
     # word starts at that same instant, that centisecond is stolen from it: the

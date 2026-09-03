@@ -256,8 +256,18 @@ def clip_style_override():
             cfg = json.load(f)
         check("margin override lands in the copy",
               cfg["layout"]["bottom_margin_px"], 190)
-        check("non-layout keys are ignored -- colour stays the preset's",
+        check("non-overridable keys are ignored -- colour stays the preset's",
               cfg["card"]["colour"], "#000000")
+        # grouping.max_words IS overridable -- it is a property of the clip's
+        # words, not the channel. Everything else in grouping is not.
+        out = _cut.clip_style({"style": style, "max_words": 2,
+                               "gap_break_s": 9.9}, {"id": "t"}, tmp)
+        with open(os.path.join(_env.ROOT, out), encoding="utf-8") as f:
+            cfg = json.load(f)
+        check("max_words override lands in the copy",
+              cfg["grouping"]["max_words"], 2)
+        check("other grouping keys are still ignored",
+              cfg["grouping"]["gap_break_s"], 0.45)
         with open(os.path.join(_env.ROOT, style), encoding="utf-8") as f:
             check("the committed preset is untouched",
                   json.load(f)["layout"]["bottom_margin_px"], 339)
@@ -313,6 +323,67 @@ def capitalize_i():
           "I%sm" % apo)
 
 
+def suffix_glue():
+    """Whisper's own punctuation tokens, and the two families that must NOT glue.
+
+    Every case here is a real token pair counted in this repo's transcripts:
+    358 punctuation-leading tokens across 9 files. "60 ,000" reached a shipped
+    Bloomberg short. The negatives matter more than the positives -- a rule of
+    "glue anything starting with punctuation" passes all the numbers and then
+    silently welds 57 standalone Ukrainian dashes onto the preceding word.
+    """
+    print("== suffix glue: whisper splits punctuation into its own token ==")
+    apo = "’"
+    cfg = _cfg(6, 4000.0)   # wide: this section is about text, not wrapping
+
+    def joined(*toks):
+        ws = [dict(text=t, start=i * 1.0, end=i * 1.0 + 0.5)
+              for i, t in enumerate(toks)]
+        return " ".join(w["text"] for w in _bca.sanitize(ws, cfg))
+
+    # --- glue: the shipped defect and its family
+    check("60 + ,000 -> 60,000", joined("60", ",000", "NEW"), "60,000 NEW")
+    check("15 + ,000 -> 15,000", joined("15", ",000"), "15,000")
+    check("U + .S. -> U.S.", joined("U", ".S.", "and"), "U.S. and")
+    check("$12 + .9 -> $12.9", joined("$12", ".9", "billion"), "$12.9 billion")
+    check("solo % glues", joined("60", "%", "of"), "60% of")
+    check("WorkOS + .com", joined("WorkOS", ".com"), "WorkOS.com")
+    check("hyphen suffix", joined("go", "-to", "move"), "go-to move")
+    check("chained hyphens", joined("end", "-to", "-end"), "end-to-end")
+    check("number range", joined("15", "-20"), "15-20")
+    check("cyrillic hyphen", joined("по", "-перше"),
+          "по-перше")
+    check("attached ampersand", joined("M", "&A", "deal"), "M&A deal")
+
+    # --- do NOT glue: these look like punctuation and are words
+    check("en dash keeps its spaces",
+          joined("тут", "–", "це"),
+          "тут – це")
+    check("em dash keeps its spaces", joined("a", "—", "b"), "a — b")
+    check("opening guillemet keeps its space",
+          joined("систем", "«Дельта»,"),
+          "систем «Дельта»,")
+    check("solo ampersand is a word", joined("Point", "&", "Figure"),
+          "Point & Figure")
+    check("$14 already whole", joined("totaling", "$14"), "totaling $14")
+    check("nothing to glue onto at the start", joined(",000", "x"), ",000 x")
+
+    # --- the merged word must stay lit for BOTH tokens, or the spotlight lies
+    ws = [dict(text="60", start=1.0, end=1.4),
+          dict(text=",000", start=1.4, end=2.1)]
+    out = _bca.sanitize(ws, cfg)
+    check("merged window spans both tokens", (len(out), out[0]["s"], out[0]["e"]),
+          (1, 100, 210))
+
+    # --- strip_trailing applies to the word the merge produced, not its halves
+    scfg = _cfg(6, 4000.0)
+    scfg["text"]["strip_trailing"] = ","
+    out = _bca.sanitize([dict(text="time", start=1.0, end=1.2),
+                         dict(text=",", start=1.2, end=1.3)], scfg)
+    check("strip_trailing re-applied after merge",
+          [w["text"] for w in out], ["time"])
+
+
 def main():
     argparse.ArgumentParser(
         description="Shorts render-path self-test -- no GPU, no encode, "
@@ -320,7 +391,8 @@ def main():
     ).parse_args()
     for fn in (crop_window_arithmetic, resolve_pads, hook_gate,
                grouping_typography, caption_space_geometry,
-               clip_style_override, sidecar_merge, capitalize_i):
+               clip_style_override, sidecar_merge, capitalize_i,
+               suffix_glue):
         fn()
         print()
     if FAILS:
