@@ -33,7 +33,7 @@ python scripts/image-overlay.py --video projects/<id>/outputs/film.mp4 `
 The worked example is the `image_overlays` block in
 `projects/claude-demo/screencast.json` with its page at
 `projects/claude-demo/assets/end-card.html`. Animation, layout and treatment
-defaults live in `config/overlays/end-card.json`; the README section is
+defaults live in `config/overlays/end-card.json`; `docs/reference.md` section is
 "An image overlay, and end cards".
 
 ## The project folder comes first
@@ -47,7 +47,7 @@ lands: the finishing scripts record renders themselves; if you ran ffmpeg by
 hand or a script printed "PROJECT FILE NOT UPDATED", record the deliverable and
 journal line yourself. End an editing session by appending a short prose note to
 `journal.md` addressed to the next session. Details: `## Projects` in the
-README; the re-edit entry point is the `video-project` skill.
+`docs/reference.md`; the re-edit entry point is the `video-project` skill.
 
 ## Do not re-encode a finished film to put a card on it
 

@@ -41,7 +41,7 @@ themselves; if you ran ffmpeg by hand or a script printed
 End an editing session by appending a short prose note to `journal.md`
 addressed to the next session: what was asked, which knob changed, why, and
 anything it should not have to rediscover. Details: `## Projects` in the
-README; the re-edit entry point is the `video-project` skill.
+`docs/reference.md`; the re-edit entry point is the `video-project` skill.
 
 ## Step 1 — analyze: pick the episodes
 

@@ -72,4 +72,4 @@ face, a short that opens mid-word. That feedback is worth the most.
 *For technical users: the manual path is `scripts/setup-python.ps1` then
 `python scripts/check-env.py`, prerequisites are Python 3.13, git, and
 ffmpeg (Gyan full build), and every pipeline script answers `--help`. The
-README documents everything in depth.*
+`docs/reference.md` documents everything in depth.*

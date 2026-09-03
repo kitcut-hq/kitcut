@@ -13,7 +13,7 @@ What it enforces (FAIL) and what it flags (warn):
     FAIL  os.execve anywhere (spawns-not-replaces on Windows; exit code lost)
     FAIL  writing PYTHONPATH (the variable this repo spent a day exorcising)
     FAIL  an absolute machine path in a string literal (or, under --all, in a
-          skill or the README) -- it is wrong everywhere but one machine
+          skill or the reference) -- it is wrong everywhere but one machine
     FAIL  a platform file importing something outside the platform, or one of
           the three stdlib-only files importing anything third-party
     warn  docstring without an "Invoke as:" line
@@ -22,7 +22,7 @@ What it enforces (FAIL) and what it flags (warn):
           (--list/--plan/--dry-run/--plan-only/--frame/--card-only/--check)
     warn  a script that produces deliverables but never calls _project.record
     warn  backslashes in path literals (the ass filter eats them)
-    warn  script not mentioned in README.md
+    warn  script not mentioned in docs/reference.md
 
 Known deliberate exceptions are listed in EXCEPTIONS with the reason printed,
 so a skipped check is a documented decision, not a blind spot.
@@ -87,12 +87,12 @@ EXCEPTIONS = {
                   "cut-clips.py record when the overlay rides a real render",
     },
     "generate-voiceover.py": {
-        "record": "legacy, predates the pipelines (see README ## Legacy)",
+        "record": "legacy, predates the pipelines (see docs/reference.md ## Legacy)",
         "free": "legacy",
         "invoke": "legacy",
     },
     "transcribe-audio.py": {
-        "record": "legacy, predates the pipelines (see README ## Legacy)",
+        "record": "legacy, predates the pipelines (see docs/reference.md ## Legacy)",
         "invoke": "legacy",
     },
     "transcribe-words.py": {
@@ -161,7 +161,7 @@ STDLIB_ONLY = ("_progress.py", "_runlog.py", "_gpulock.py", "gpu-lock.py",
                "render-status.py", "run-log.py", "statusline.py")
 
 # An absolute path belonging to one machine. Two segments are required so the
-# drive-letter gotcha both this file's neighbours and the README explain
+# drive-letter gotcha both this file's neighbours and docs/reference.md explain
 # ("ass=filename=C:/x.ass" parses as an option C) is not mistaken for one.
 ABSPATH = re.compile(r"(?<![\w:])(?:[A-Za-z]:[\\/]{1,2}[\w.$-]+[\\/][\w.$-]"
                      r"|/(?:Users|home|Volumes)/\w)")
@@ -348,9 +348,9 @@ def check(path):
         out.append(("warn", "backslash in a path literal -- the ass filter "
                             "eats them; forward slashes everywhere"))
 
-    readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
+    readme = open(os.path.join(ROOT, "docs", "reference.md"), encoding="utf-8").read()
     if entry and base not in readme:
-        out.append(("warn", "not mentioned in README.md -- the SDK contract "
+        out.append(("warn", "not mentioned in docs/reference.md -- the SDK contract "
                             "says the change is not done until the docs say "
                             "what the code does"))
     return out
@@ -405,7 +405,7 @@ def main():
         # the form the repo actually shipped ten of.
         docs = sorted(glob.glob(os.path.join(ROOT, ".claude", "skills", "*",
                                              "SKILL.md")))
-        docs += [os.path.join(ROOT, f) for f in ("README.md", "CLAUDE.md")]
+        docs += [os.path.join(ROOT, f) for f in ("README.md", "CLAUDE.md", "docs/reference.md")]
         for d in docs:
             if not os.path.exists(d):
                 continue

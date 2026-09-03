@@ -39,7 +39,7 @@ themselves; if you ran ffmpeg by hand or a script printed
 End an editing session by appending a short prose note to `journal.md`
 addressed to the next session: what was asked, which knob changed, why, and
 anything it should not have to rediscover. Details: `## Projects` in the
-README; the re-edit entry point is the `video-project` skill.
+`docs/reference.md`; the re-edit entry point is the `video-project` skill.
 
 ## Always do these two things first
 
@@ -216,7 +216,7 @@ Break any of those and YouTube renders no chapters **without reporting an
 error**, which looks exactly like a failed update.
 
 Writing needs the channel owner's OAuth consent (an API key cannot edit a
-video); the one-time console setup is in the README, and the token caches to
+video); the one-time console setup is in `docs/reference.md`, and the token caches to
 `.yt-oauth/`. **You cannot complete that consent on the user's behalf** — if
 `.yt-oauth/client_secret.json` is missing, hand them the steps and the exact
 command rather than trying to work around it. The update preserves the rest of

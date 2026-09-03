@@ -119,7 +119,7 @@ Green on two of three → licensed plugin + NLE export first, thin client second
 Not the scripts. Any agent can write ffmpeg scripts tomorrow. If copying the repo
 killed the business, the business was already dead. What is genuinely ours:
 
-- **The gotcha library.** Every trap in the README cost real hours and is
+- **The gotcha library.** Every trap in `docs/reference.md` cost real hours and is
   invisible until it burns you (`aselect` passing every audio frame; the phone's
   lying rotation tag; `shortest=1` on the looped mask; never measuring silence on
   the rendered file; conform before measuring; NVENC not re-encoding an identical

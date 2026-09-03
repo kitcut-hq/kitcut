@@ -42,7 +42,7 @@ SHIP_DIRS = ["scripts", "fonts", ".claude/skills",
              "config/overlays", "config/presets"]
 SHIP_FILES = [
     "requirements.txt", ".env.template", ".gitignore",
-    "README.md", "CLAUDE.md",
+    "README.md", "CLAUDE.md", "docs/reference.md",
     "config/caption-style.json", "config/elevenlabs-voices.json",
     "docs/known-issues.md", "docs/ffmpeg-recipes.md",
     "docs/karaoke-captions.md", "docs/retro-books-giveaway.md",

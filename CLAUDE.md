@@ -7,7 +7,7 @@ that were never in sync, and the upload afterwards. The repo is **tooling only**
 — every source video, audio file, transcript and render is gitignored
 third-party content.
 
-Full detail lives in `README.md` and the skills under `.claude/skills/`. This
+Full detail lives in `docs/reference.md` (the technical reference; the root README is the human overview) and the skills under `.claude/skills/`. This
 file is the map.
 
 Nothing here is a one-off. A task that ends in a rendered file and no reusable
@@ -190,7 +190,7 @@ compares it against the device, because the shell creates the destination file
 instantly and a truncated take still probes clean — it just reports a shorter
 duration.
 
-Four traps, all with evidence in the README gotchas: **`aselect` passes every
+Four traps, all with evidence in the reference gotchas (`docs/reference.md ## Gotchas`): **`aselect` passes every
 audio frame** on this ffmpeg, so cutting uses `trim`/`atrim`; a phone's
 **rotation tag can be wrong**, and `-noautorotate` copies the bogus matrix onto
 the output, so `camera_rotate` drives `-display_rotation` instead; a looped PNG
@@ -214,7 +214,7 @@ is not a re-encode of it.
 pauses it removed are already off the clock. `--frame T` composites the card
 onto the real frame at T and writes a PNG, which is the placement check that
 costs nothing; run it before an encode. Style is `config/labels/lower-third.json`,
-every value measured off the reference clip (see the README table) rather than
+every value measured off the reference clip (see the table in `docs/reference.md`) rather than
 chosen. A label past the end of the film would fail **silently** — `enable`
 never turns true — so the runtime is asserted against it.
 
@@ -335,7 +335,7 @@ python scripts/angle-cut.py      --manifest projects/<id>/anglecut.json --list
 python scripts/compare-videos.py --rendered <cut>.mp4 --reference <program>.mp4
 ```
 
-Four things here cost real time to learn, all in the README gotchas: **conform
+Four things here cost real time to learn, all in the reference gotchas (`docs/reference.md ## Gotchas`): **conform
 before measuring** (a download is rarely on the frame rate it claims, and `fps=`
 duplicates and drops — use `setpts` by frame index and assert the count);
 **NVENC does not re-encode an identical frame identically**, so `freezedetect`
@@ -480,7 +480,7 @@ python scripts/project-scan.py --all --check     # doctor: stale/missing/unrecor
 The doctor's `STALE` means a controlling manifest changed after the render —
 either re-render or, if the edit was non-material (a path fix), acknowledge it
 with `checked_utc` on the deliverable. `--check` runs in seconds; run it before
-and after touching a project. Schema detail: `## Projects` in the README. The
+and after touching a project. Schema detail: `## Projects` in `docs/reference.md`. The
 previous attempt at this — `config/video-specs.template.json` — died because no
 tool read or wrote it; that is why the writers live inside the render scripts.
 
@@ -534,7 +534,7 @@ which cannot encode the glyphs at all.
 These come from how the repo is actually used — follow them without being asked.
 
 - **Leave tooling behind, not just output.** A task ends as a config-driven
-  script plus an example config, a README section, and an updated skill, then
+  script plus an example config, a `docs/reference.md` section, and an updated skill, then
   committed. Never hardcode styling or boundaries into a script.
 - **Verify before spending an encode.** `cut-clips.py` proves caption sync on
   sampled frames and asserts the output duration before it renders. Keep that
@@ -549,7 +549,7 @@ These come from how the repo is actually used — follow them without being aske
   seconds of dead air in a film; pricing four settings took no encode at all.
   A new tool is not finished until you can ask it what a choice costs.
 - **Record traps with the reason,** not just the fix — see `## Gotchas` in the
-  README, which is where the ffmpeg and libass landmines are written down.
+  `docs/reference.md`, which is where the ffmpeg and libass landmines are written down.
 - **Read the project file before editing a video; record after.** A change
   request starts at `projects/<id>/project.json` and `journal.md`, not at the
   filesystem. Wired scripts record renders and uploads; everything else — a
@@ -558,7 +558,7 @@ These come from how the repo is actually used — follow them without being aske
 - **The scripts are an SDK, not a fixed appliance.** The human never reads
   them; you are their only caller and their maintainer. When a task does not
   fit an existing script, extend the script or write a new one — and the change
-  is not done until `_project.record()` still tells the truth, the README says
+  is not done until `_project.record()` still tells the truth, `docs/reference.md` says
   what the code does, the affected skill teaches it, and
   `python scripts/check-script.py --changed` passes (the check-script skill
   is the full review).
