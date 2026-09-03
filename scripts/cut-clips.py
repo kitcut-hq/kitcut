@@ -851,9 +851,17 @@ def main():
         sys.exit("nothing to do")
 
     for clip, start, end, dst, _dw, _dj, dub_ok in plan:
-        print("%-20s %s -> %s  %5.1fs %s %s"
-              % (clip["id"], hhmmss(start), hhmmss(end), end - start,
-                 "" if not dubdir else ("dub:ok  " if dub_ok else "dub:MISSING"),
+        # Price the hook for PASSING clips too, not only failures: picking an
+        # opening means ranking candidates by where their payoff lands, and
+        # --list is where that table comes from -- write the candidates into
+        # the manifest and read the offsets, no encode.
+        hook_at = ""
+        hit = _outline.find(words, clip["hook"]) if clip.get("hook") else None
+        if hit is not None and hit[0] >= start:
+            hook_at = "hook +%.1fs  " % (hit[0] - start)
+        print("%-20s %s -> %s  %5.1fs  %s%s%s"
+              % (clip["id"], hhmmss(start), hhmmss(end), end - start, hook_at,
+                 "" if not dubdir else ("dub:ok  " if dub_ok else "dub:MISSING  "),
                  clip.get("title", "")))
         rect, place = clip_rect(clip, m) if vert else (None, {})
         if rect:

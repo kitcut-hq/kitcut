@@ -194,6 +194,34 @@ Verify each candidate boundary before writing the manifest:
 python scripts/transcript-outline.py projects/<id>/transcripts/<id>.words.json --find "exact phrase"
 ```
 
+### Step 1b — the selection is a STAGE, not a moment of taste
+
+Do not go from the outline straight to a manifest. Write
+`projects/<id>/shortlist.json` first — every candidate seriously considered,
+each with its quotes, its hook, answers to the four hook tests, a picture
+note, and a verdict (`pick`/`backup`/`reject`) with reasoning — then run:
+
+```powershell
+python scripts/shortlist-moments.py --shortlist projects/<id>/shortlist.json
+```
+
+It resolves every phrase, prices every hook against the gate, and refuses a
+shortlist with fewer than 5 candidates or fewer than 2 documented rejects —
+if nothing lost, nothing was compared. Only candidates marked `pick` go into
+the manifest; `backup`s are the bench for when a pick dies on review.
+
+Why mandatory: on one Bloomberg episode the pick-inside-the-flow approach
+shipped two rejected shorts in a row (an anchor posing a question; a Treasury
+Secretary saying nothing falsifiable), while the candidate that survived had
+been the top of the payoff table all along. Both bad picks fail the four
+tests ON PAPER — the stage makes writing that paper mandatory, and the
+comparison run that proved it also caught, in one afternoon: a hook quoted
+from a short's TITLE instead of the transcript, two "already mined" shorts
+that belonged to a different episode entirely, and two spans silently
+anchored to the cold-open trailer's copy of the quote (a first-match phrase
+resolver takes the trailer, and the same trap applies to `resolve()` in
+cut-clips — anchor on words unique to the body instance).
+
 ## Step 2 — the manifest
 
 `projects/<id>/clips.json`. Boundaries are **quoted speech**, not timecodes, so
@@ -597,15 +625,30 @@ everybody uses it", sat at 0:12. Three tests, all free:
   ran through the middle of that same clip; a handoff mid-clip is a dead 3 s.
 - **Does it end on the claim or trail off?** That one closed on "it sounds
   like, like, it is pretty imminent" — a hedge on a hedge.
+- **Does the first sentence contain something falsifiable — a number, a name,
+  an event?** This is the test that matters, and it was learned the expensive
+  way: the first replacement for that clip was a Treasury Secretary telling a
+  room the AI industry has "done a horrendous job, horrendous job of
+  explaining themselves" and needs "a big reset" — which passes all three
+  tests above and was rejected on review as "blabla nothing specific",
+  correctly. It contains no number, no name, no event; it is a complaint
+  about *messaging*, meta all the way down. A politician can deliver empty
+  content with perfect form. "Dell was considered dead, or almost a dinosaur"
+  passes: a named company, a dated reversal, and the numbers follow.
 
-The replacement is the same episode's Treasury Secretary soundbite: one speaker,
-addressing a room, "the labs themselves have done a horrendous job — horrendous
-job — of explaining themselves to the American people."
+The clip that finally shipped is the same episode's Dell answer — falsifiable
+from its first sentence, revenue up 110 % inside it, one held shot.
 
 **Rank the alternatives by where their payoff lands before you argue about
-them.** It is a transcript search, it costs nothing, and it turns taste into a
-table. For that episode: Bessent +7.5 s as spoken, Dell "considered dead"
-+1.8 s, Uber micro-teams +5.0 s, Ian King "wants more customers" +12.7 s.
+them.** It costs nothing and it turns taste into a table: write the
+candidates into the manifest and run `cut-clips.py --list` — it prints
+`hook +X.Xs` for every passing clip, not just gate failures. For that
+episode: Dell "considered dead" +1.8 s, Uber micro-teams +5.0 s, Bessent
++7.5 s, Ian King "wants more customers" +12.7 s. Then apply the
+falsifiability test BEFORE re-anchoring anything — it would have eliminated
+Bessent at the table stage, before a render was spent. Typography prices the
+same way: `build-captions-ass.py --sweep` prints the max_words × width table
+for the words that will actually render.
 
 **Re-anchoring usually beats rejecting.** A soundbite whose payoff is buried
 behind parallel clauses can often be entered mid-sentence at a point that still

@@ -2556,6 +2556,9 @@ absolute path written into a script, a skill or these docs.
 | `scripts/check-gpulock.py` | lock self-test incl. a real spawn/kill/recover cycle; no GPU, no files |
 | `scripts/check-openings.py` | does a short open on a settled face? lead-in silence + contact sheets; no encode |
 | `scripts/check-caption-space.py` | is the caption card sitting on the speaker's face? reads the RENDER, per caption group |
+| `scripts/measure-caption-band.py` | where does a channel park its caption card? temporal median over their own shorts — a single frame cannot tell a caption from a black turtleneck |
+| `scripts/audit-caption-glue.py` | which shipped renders carry split punctuation ("60 ,000") inside their actual window? free, per deliverable |
+| `scripts/shortlist-moments.py` | verify a real SELECTION happened before any short is cut: resolves and prices every shortlist candidate, refuses one with no documented rejects |
 | `scripts/check-shorts.py` | shorts-path self-test: hook gate, pads, crop windows, grouping typography, caption-space geometry; no GPU, no encode |
 | `scripts/import-footage.py` | desktop + phone captures into a project, ordered by real capture start |
 | `scripts/screencast-pipeline.py` | the twelve stages in order, cached, with two stops (the sheet, the draft) |
@@ -2609,9 +2612,16 @@ everything in `temp/` regenerates in seconds.
   abbreviation it is `"U"` then `".S."`; a percentage arrives as a bare `"%"`;
   a hyphenated word splits at the hyphen. Every word here is drawn as its own
   positioned event, so the obvious join shipped `60 ,000` and `15 ,000` onto a
-  Bloomberg short, and `U .S.` behind it. `glue_suffixes()` in
-  `build-captions-ass.py` merges a suffix token into the word before it,
-  spanning both timing windows so the spotlight stays honest.
+  Bloomberg short, and `U .S.` behind it — and a dub sent `60 ,000` to its
+  translator. The repair therefore lives in the ONE loader every consumer
+  shares — `glue_words()` in `transcript-outline.py`, applied by
+  `load_words()` — so captions, phrase anchors, dub units and outlines all see
+  the same text; the raw `words.json` on disk stays verbatim ASR output.
+  Gluing cannot break `start_text`/`hook` matching: `fold()` strips
+  whitespace and punctuation and `index()` concatenates with no separator, so
+  raw and glued words build the identical haystack (pinned in
+  `check-shorts.py`). The merged word spans both timing windows so the
+  caption spotlight stays honest.
   **Do not "glue anything that starts with punctuation".** Measured across this
   repo's nine transcripts there are 358 such tokens, and two families are
   words: 57 standalone en/em dashes (Ukrainian punctuation, spaces on both
@@ -2626,13 +2636,19 @@ everything in `temp/` regenerates in seconds.
   `0.94*W - 2*pad_x` — 958 px on a 1080-wide frame — because the card, not the
   text, is what must fit. Going landscape → vertical multiplies by 1.78 while
   the frame gets *narrower*, so any authored value over about 539 hits the
-  clamp and every larger number is the same number. A grouping sweep whose
-  width column is completely flat is not a bug in the sweep; it means you are
-  already at the clamp and the only remaining knob is `grouping.max_words`.
-  That is why `max_words` is the one grouping key `clip_style()` lets a clip
-  override: "horrendous job, horrendous job of explaining themselves" wrapped
-  its hook card to `HORRENDOUS JOB / HORRENDOUS` at the preset's 3, and no
-  width could have saved it.
+  clamp and every larger number is the same number. Run
+  `build-captions-ass.py --sweep` (with `--words --style --scale-to --range`)
+  to see the table for the words that will actually render — a flat width
+  column is the clamp binding, not a bug in the sweep. The structural answer
+  is `grouping.wrap` in the preset, a CHANNEL property measured off their own
+  graphics: `"none"` for a single-line-strap style like Bloomberg's (grouping
+  refuses any card needing a second line, so long words carry fewer per
+  card), `"no_orphan"` where two-line cards are on-style but a stranded
+  single word is not (`layout()` pulls a word down — classic widow fixing),
+  `"allow"` for the old behaviour. "HORRENDOUS JOB / HORRENDOUS" and "the
+  models are going / to" both shipped before the policy existed; per-clip
+  `max_words` overrides through `clip_style()` remain for the rare clip that
+  genuinely differs from its channel.
 
 
 - **A 9:16 crop does not remove the source's own lower third — it slices it.**
