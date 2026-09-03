@@ -1,0 +1,6 @@
+00:00 A packet with three forms — two fillable, one flat
+00:37 Why form packets arrive half fillable, half flat
+01:16 Why automatic field detection can skip the flat pages
+01:33 Flatten the whole packet first — the free tool
+02:13 Upload the flat packet to Instafill
+02:48 Review the fields — the whole packet is fillable

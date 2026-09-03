@@ -54,7 +54,10 @@ ENV = _env.ENV
 RATE = 8000                 # 0.125 ms a sample: far finer than a frame
 WIN = 80                    # 10 ms onset window
 DEFAULT_SYNC = {"onset_db": -100.0, "min_confidence": 8.0,
-                "max_residual_ms": 5.0, "max_onset_drift_ms": 60.0}
+                "max_residual_ms": 5.0, "max_onset_drift_ms": 60.0,
+                # A tape whose sound starts this close to its own first sample
+                # was ROLLING before the programme did -- see rolling_start().
+                "onset_head_s": 0.25}
 
 
 def run(cmd, **kw):
@@ -104,6 +107,32 @@ def onset(a, db):
     if hit.size == 0:
         return None, float(r.max())
     return int(hit[0]) * WIN, float(r[:hit[0]].max() if hit[0] else 0.0)
+
+
+def rolling_start(astart, head_s):
+    """True when this tape's onset is its own beginning rather than an event.
+
+    The onset cross-check is only meaningful when every tape carries the SAME
+    soundtrack from ONE recorder -- a multicam rig fed off a board, or the
+    synthetic tapes the round trip builds. Then "where it becomes audible" is
+    a property of the mix, lands equally late on all of them, and the
+    difference of two onsets is the same quantity the correlation measures,
+    arrived at independently. That is what makes it worth reporting.
+
+    Cameras with their own microphones in a room that is already live break
+    the premise completely. Each tape is audible from its first sample, so
+    every onset is ~0 regardless of the true stagger, and the "disagreement"
+    the check then reports is exactly the offset itself -- it fires hardest
+    when the correlation is most right. Measured here: a webcam and a phone
+    1.68 s apart, onsets 0.0000 s and 0.0100 s, drift reported as -1671.75 ms
+    against a correlation confident at z=137.9 and independently confirmed to
+    18 ms by envelope correlation.
+
+    So detect the premise instead of loosening the threshold: an onset within
+    head_s of the tape's own start measures the file, not the programme, and
+    the second opinion is unavailable rather than negative.
+    """
+    return astart is not None and astart / float(RATE) <= head_s
 
 
 def xcorr(a, b):
@@ -181,7 +210,12 @@ def main():
     for _, p in cams:
         if not os.path.exists(p):
             sys.exit("no such file: %s" % _project.norm(p))
-    ref = args.reference or cams[0][0]
+    # The manifest's own `reference` counts. angle-cut.py refuses a sync whose
+    # reference is not the one its manifest names, so ignoring the key here
+    # meant setting it produced a sync that the very next command rejected --
+    # with a message about a mismatch neither file looked responsible for.
+    ref = args.reference or (m.get("reference") if args.manifest else None) \
+        or cams[0][0]
     if ref not in [c for c, _ in cams]:
         sys.exit("--reference %s is not one of %s"
                  % (ref, ", ".join(c for c, _ in cams)))
@@ -212,18 +246,27 @@ def main():
         pair[(c, c)] = (0, float("inf"))
 
     print("\n  tape    offset      frames   conf   audio starts   onset-vs-corr")
-    tracks, bad = [], []
+    tracks, bad, rolled = [], [], set()
     for c, p in cams:
         k, z = pair[(c, ref)]
         off = k / float(RATE)
         astart = ons[c]
         delta = ""
+        rolling = rolling_start(astart, cfg["onset_head_s"]) or \
+            rolling_start(ons[ref], cfg["onset_head_s"])
         if astart is not None and ons[ref] is not None:
             d_ms = 1000.0 * ((astart - ons[ref]) / float(RATE) - off)
-            delta = "%+7.2f ms" % d_ms
-            if abs(d_ms) > cfg["max_onset_drift_ms"]:
-                bad.append("%s: onset and correlation disagree by %.2f ms"
-                           % (c, d_ms))
+            if rolling:
+                # Not a pass and not a failure: the instrument does not apply
+                # to this shoot. Saying so beats both a silent tick and a
+                # refusal that fires hardest when the correlation is right.
+                delta = "n/a rolling"
+                rolled.add(c)
+            else:
+                delta = "%+7.2f ms" % d_ms
+                if abs(d_ms) > cfg["max_onset_drift_ms"]:
+                    bad.append("%s: onset and correlation disagree by %.2f ms"
+                               % (c, d_ms))
         if z < cfg["min_confidence"]:
             bad.append("%s: correlation peak is mush (z=%.1f)" % (c, z))
         print("  %-5s %+9.4f s %+8.2f  %5.1f   %12s   %s"
@@ -238,6 +281,7 @@ def main():
             "audio_start_s": None if astart is None else round(astart / float(RATE), 6),
             "audio_start_frames": None if astart is None else
                 int(round(astart / float(RATE) * fps)),
+            "onset_check": "n/a-rolling-start" if rolling else "compared",
         })
 
     resid, worst_r = {}, 0.0
@@ -248,6 +292,14 @@ def main():
                 if abs(r) > abs(worst_r):
                     worst_r = r
             resid["%s->%s" % (a, b)] = round(pair[(a, b)][0] / float(RATE), 6)
+    if rolled:
+        print("\n  onset second opinion unavailable for %s: each was already "
+              "recording sound at its own first sample, so its onset measures "
+              "where the FILE starts, not where the programme does. That is "
+              "the normal case for cameras with their own microphones, and it "
+              "leaves the correlation (and its confidence) as the measurement."
+              % ", ".join(sorted(rolled)))
+
     print("\nworst three-way residual %+.3f ms (offset a->b plus b->c must equal "
           "a->c)" % (1000.0 * worst_r / RATE))
     if abs(worst_r) / float(RATE) * 1000.0 > cfg["max_residual_ms"]:

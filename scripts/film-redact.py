@@ -48,6 +48,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 import numpy as np  # noqa: E402
 import cv2  # noqa: E402
+import _encode  # noqa: E402
 import _project  # noqa: E402
 
 ROOT = _env.ROOT
@@ -613,11 +614,10 @@ def blur_cmd(base, listing, info, out, cq=21, preset="p5", prog=None):
     cmd = ["ffmpeg", "-v", "error", "-stats", "-nostdin", "-y"]
     if prog:
         cmd += ["-progress", prog]
-    cmd += ["-i", base, "-f", "concat", "-safe", "0", "-i", listing,
-            "-filter_complex_script", gpath, "-map", "[out]", "-an",
-            "-c:v", "h264_nvenc", "-preset", preset, "-rc", "vbr",
-            "-cq", str(cq), "-b:v", "0", "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart", out]
+    cmd += (["-i", base, "-f", "concat", "-safe", "0", "-i", listing,
+             "-filter_complex_script", gpath, "-map", "[out]", "-an"]
+            + _encode.video_args(_encode.resolve({"preset": preset, "cq": cq}))
+            + ["-movflags", "+faststart", out])
     return cmd
 
 

@@ -1,0 +1,10 @@
+{
+  "_comment": "End card for the flatten-PDF demo. stacked-blocks because the overlay reveals with a left-to-right wipe and the slabs give that wipe a hard edge to travel along. The last line is the tool's own URL, not the channel handle: the video's whole job is to send somebody to that page, and a viewer who has to search for it usually does not.",
+  "template": "stacked-blocks",
+  "brand": "instafill",
+  "lines": [
+    {"style": "kicker", "text": "FREE, NO WATERMARK"},
+    {"style": "hero",   "text": "Flatten a PDF"},
+    {"style": "accent", "text": "instafill.ai/tools/flatten-pdf"}
+  ]
+}

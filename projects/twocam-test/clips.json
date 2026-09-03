@@ -1,0 +1,13 @@
+{
+  "_comment": "The dub + captions pass over the two-camera cut. One clip = the whole film, so cut-clips.py is used as a finisher rather than as a cutter.",
+  "source": "projects/twocam-test/outputs/twocam-test-anglecut.mp4",
+  "words": "projects/twocam-test/transcripts/twocam-test.words.json",
+  "outdir": "projects/twocam-test/outputs",
+  "prefix": "twocam-test",
+  "captions": { "style": "config/presets/red-card.json", "samples": 20 },
+  "render": { "cq": 20 },
+  "clips": [
+    { "id": "full", "title": "Two-camera test, dubbed to English",
+      "start": 0.0, "end": 17.2 }
+  ]
+}

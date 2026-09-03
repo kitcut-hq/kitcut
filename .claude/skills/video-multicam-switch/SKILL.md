@@ -6,7 +6,7 @@ description: Cut a film out of several cameras that shot the same event, switchi
 # Cutting between cameras, and proving the cut is right
 
 Two jobs in one set of scripts. `angle-cut.py` is a real multicam cutter: N
-synchronised cameras, switching full frame, one NVENC pass. The rest is a test
+synchronised cameras, switching full frame, one encode pass. The rest is a test
 harness that can take a finished film somebody else cut, rebuild the tapes it
 must have come from, re-cut it here, and score the result against the original.
 

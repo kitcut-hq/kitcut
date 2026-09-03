@@ -34,6 +34,7 @@ import subprocess
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 import numpy as np  # noqa: E402
+import _encode  # noqa: E402
 
 ROOT = _env.ROOT
 
@@ -168,13 +169,17 @@ def main():
             print(f"\n  {os.path.basename(src)}: have {rel}")
         else:
             print(f"\n  {os.path.basename(src)} -> {vw}x{vh} ...")
-            cmd = ["ffmpeg", "-v", "error", "-stats", "-nostdin", "-y",
-                   "-hwaccel", "cuda", "-i", src,
-                   "-vf", f"scale={vw}:{vh}:flags=lanczos,setsar=1",
-                   "-an",
-                   "-c:v", "h264_nvenc", "-preset", "p7", "-rc", "vbr",
-                   "-cq", str(args.cq), "-b:v", "0", "-pix_fmt", "yuv420p",
-                   "-movflags", "+faststart", dst]
+            render = _encode.resolve({"preset": "p7", "cq": args.cq})
+            cmd = ["ffmpeg", "-v", "error", "-stats", "-nostdin", "-y"]
+            # -hwaccel cuda is NVDEC, a separate question from the encoder --
+            # and on a machine with no NVIDIA driver it fails the input, not
+            # the output, so it has to go when NVENC does.
+            if _encode.family_of(render["encoder"]) == "nvenc":
+                cmd += ["-hwaccel", "cuda"]
+            cmd += (["-i", src,
+                     "-vf", f"scale={vw}:{vh}:flags=lanczos,setsar=1", "-an"]
+                    + _encode.video_args(render)
+                    + ["-movflags", "+faststart", dst])
             r = subprocess.run(cmd, stderr=subprocess.PIPE, text=True)
             if r.returncode != 0:
                 tail = "\n".join((r.stderr or "").strip().splitlines()[-15:])

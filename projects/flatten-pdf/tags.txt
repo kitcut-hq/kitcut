@@ -1,0 +1,13 @@
+flatten pdf, how to flatten a pdf, flatten pdf online, flatten pdf free, flatten pdf without acrobat, pdf flattener, remove form fields from pdf, flatten fillable pdf, make pdf not editable, lock pdf form fields, make pdf fillable, fillable pdf, pdf form filler, free pdf tools, w9 form, request for tenancy approval, housing choice voucher, property management forms, instafill, instafill ai, ai pdf form filler
+
+# YouTube caps this field at 500 characters, commas included; the list
+# above is 412. Order carries a little weight, so it runs in four bands:
+#   1-6   the phrase somebody actually types when they want this tool
+#   7-10  the job they are trying to do, in their own words
+#  11-14  the adjacent job the video also answers (making a PDF fillable)
+#  15-18  the forms and the audience that are actually on screen
+#  19-21  brand and category
+#
+# Tags are a weak signal next to the title, the description and what people
+# click. Do not pad this to 500 with near-duplicates -- they dilute rather
+# than add. Every entry here appears in the video or on the tool's page.

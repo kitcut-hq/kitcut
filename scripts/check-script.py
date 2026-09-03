@@ -107,6 +107,13 @@ EXCEPTIONS = {
         "argparse": "same bargain as check-dub.py: one button, no files, no "
                     "GPU -- it tests the round-trip arithmetic in memory",
     },
+    "check-encode.py": {
+        "record": "self-test harness; its clips are colour bars in a scratch "
+                  "dir under %TEMP% and are deleted on the way out",
+        "free": "the whole script is the free mode -- it prices what a render "
+                "would send each encoder without rendering one; --table-only "
+                "drops even the two-second probes",
+    },
     "check-screen.py": {
         "argparse": "same bargain as check-dub.py: one button, no files, no "
                     "GPU, no OCR -- it tests the PII rules and the cut "
@@ -140,6 +147,8 @@ STDLIB = set(sys.stdlib_module_names) | {"__future__"}
 # checked at commit time instead of discovered on extraction day.
 PLATFORM = {
     "_env.py": "interpreter bootstrap, .env, path and workspace resolution",
+    "_encode.py": "encoder-family key resolution",
+    "check-encode.py": "the encoder self-test",
     "_progress.py": "render progress plumbing",
     "_project.py": "project record writer",
     "_runlog.py": "the run log writer",
@@ -169,9 +178,13 @@ ABSPATH = re.compile(r"(?<![\w:])(?:[A-Za-z]:[\\/]{1,2}[\w.$-]+[\\/][\w.$-]"
 FREE_FLAGS = ("--list", "--plan", "--dry-run", "--plan-only", "--frame",
               "--card-only", "--check", "--verify", "--stop-after")
 
-# things only a script that spends money or minutes contains
-SPEND = re.compile(r"h264_nvenc|videos\(\)\s*\.insert|elevenlabs|"
-                   r"MediaFileUpload|faster_whisper|WhisperModel")
+# things only a script that spends money or minutes contains.
+# _encode.video_args is here because the encoder name it replaced -- the
+# literal "h264_nvenc" -- used to be the tell, and moving the keys into one
+# module would otherwise have quietly switched this check off for every render
+# script in the repo.
+SPEND = re.compile(r"h264_nvenc|_encode\.video_args|videos\(\)\s*\.insert|"
+                   r"elevenlabs|MediaFileUpload|faster_whisper|WhisperModel")
 DELIVER = re.compile(r'\.mp4"|\.mp4\'|shutil\.move|MediaFileUpload')
 
 

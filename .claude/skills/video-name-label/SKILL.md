@@ -44,7 +44,7 @@ anything it should not have to rediscover. Details: `## Projects` in the
 
 The label composes. `screencast-cut.py` reads `name_labels` from the manifest
 and overlays the card **after its concat**, inside the film's existing single
-NVENC pass:
+encode pass:
 
 ```json
 "name_labels": [

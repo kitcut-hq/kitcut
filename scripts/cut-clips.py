@@ -20,6 +20,7 @@ import sys, os, json, argparse, subprocess, shutil, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 from importlib import import_module
+import _encode  # noqa: E402 -- the one place encoder keys are chosen
 
 _outline = import_module("transcript-outline")   # hyphen: not importable by name
 _handle = import_module("handle-overlay")
@@ -31,8 +32,12 @@ import _project
 
 ENV = _env.ENV
 
+# No "encoder" here on purpose: _encode.default_encoder() picks one that
+# actually runs on this machine, and a manifest or caption preset that names
+# one overrides it. "speed" is family-neutral -- _encode renders p5 into
+# whatever the chosen encoder calls it.
 DEFAULT_RENDER = {
-    "encoder": "h264_nvenc", "preset": "p5", "cq": 21,
+    "speed": 5, "cq": 21,
     "maxrate": "16M", "bufsize": "32M", "audio_bitrate": "192k",
 }
 
@@ -558,16 +563,7 @@ def cut(src, dst, start, dur, render, copy, overlay=None, pre_chain=None,
                     "-map", "[%s]" % label, "-map", amap]
         else:
             args = ["-map", "0:v:0", "-map", amap]
-        if _overlay.is_gpu_encoder(render["encoder"]):
-            args += ["-c:v", render["encoder"], "-preset", render["preset"],
-                     "-rc", "vbr", "-cq", str(render["cq"]),
-                     # NVENC ignores -cq unless the average bitrate target is unset
-                     "-b:v", "0", "-maxrate", render["maxrate"], "-bufsize", render["bufsize"]]
-        else:
-            # NVENC-only flags kill libx264 on sight; translate instead
-            args += _overlay.cpu_encoder_args(render)
-        args += ["-pix_fmt", "yuv420p",
-                 "-c:a", "aac", "-b:a", render["audio_bitrate"], "-ac", "2"]
+        args += _encode.video_args(render) + _encode.audio_args(render)
     tmp = dst + ".part.mp4"
     # -ss goes BEFORE -i so it seeks the input: ffmpeg decodes from the
     # preceding keyframe and discards what precedes it, landing the cut on the
@@ -707,8 +703,13 @@ def main():
         except (OSError, ValueError):
             pass
     render.update(m.get("render", {}))
+    # ...and then the machine gets a say: an encoder the preset names but this
+    # box cannot run is substituted here, before a filtergraph is built, not
+    # discovered by ffmpeg twenty minutes into the encode. One named on the
+    # command line is honoured strictly instead -- you asked for that one.
     if args.encoder:
         render["encoder"] = args.encoder
+    render = _encode.resolve(render, strict_encoder=bool(args.encoder))
 
     # When anything precedes the badge, [0:v] is already consumed by that chain
     # and the badge has to composite onto its tail instead.
@@ -819,6 +820,8 @@ def main():
             print("  %s" % _imgoverlay.describe(spec, img_preset_doc,
                                                 end - start))
     if args.list:
+        print("")
+        print("  encoder: %s" % _encode.describe(render))
         return                           # --list promises to cut nothing, so a
                                          # missing dub is information, not an error
     if missing_dub:

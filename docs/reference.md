@@ -62,9 +62,29 @@ to change how captions look.
 Presets are authored on a 1920x1080 canvas and every pixel value is scaled
 automatically to the actual video, so 720p / 1440p / vertical all work.
 
-Three presets ship: `red-card` (solid red info-card, yellow spotlight),
+Four presets ship: `red-card` (solid red info-card, yellow spotlight),
 `red-card-vertical` (the same styling re-authored for a 9:16 canvas, used by
-the shorts pipeline) and `eu-navy` (EU-flag blue, star-yellow spotlight).
+the shorts pipeline), `eu-navy` (EU-flag blue, star-yellow spotlight) and
+`instafill` (near-black slab at 12% transparency, sentence case, mint spotlight).
+
+`red-card` and `instafill` are the two ends of a real choice, and it is not a
+taste one. `red-card` was measured off a news channel: a saturated slab in
+uppercase, designed to be read on a phone at arm's length over a talking head.
+Put it on a **screen recording** and it competes with the product it is pointing
+at — the frame is already busy, mostly white, and full of the UI the viewer is
+supposed to be looking at. `instafill` is the screencast answer: the slab
+recedes (near-black, 12% transparent), the type is sentence case rather than
+uppercase (word shape is what makes a line readable at a glance, and uppercase
+throws it away), the lines are narrower, and the spotlight is the brand mint
+`#13BA82` — the same token `config/cards/brands/instafill.json` and the lower
+third use, so captions, a name label and an end card on one film read as one
+channel rather than three.
+
+Its `_geometry` block records what the placement was fitted around: a webcam
+bubble in the bottom-left corner and the Windows taskbar along the bottom.
+`bottom_margin_px` and `max_line_width_px` are the two numbers that keep the
+card clear of both, and widening the line past ~1150 makes it collide with the
+bubble.
 
 **No NVIDIA card?** `run-captions.py --encoder libx264` (and the same flag on
 `cut-clips.py`) renders on CPU. The flag exists because the render blocks are
@@ -1208,6 +1228,120 @@ track. A stutter or a missed PAN otherwise costs an encode to discover.
 `-an`, deliberately. The sources are silent, and the voice-over is recorded
 against the finished cut; muxing a silent AAC track just invites a later pass to
 mix onto it and produce nothing.
+## Tightening one recording that is already composited
+
+`screencast-cut.py` needs two tapes. Most screen recorders hand you one — screen,
+webcam bubble and narration already burned together, one clock, nothing to sync.
+That recording is usually 20–30% dead air, because talking to a screen while
+operating it is not a fluent activity. `tighten-cut.py` is the subtractive pass
+for that file: it shortens the pauses, swallows the stumbles, and takes out the
+parts you name, in one encode.
+
+```powershell
+# price the decision -- prints the plan and a pause sweep, encodes nothing
+python scripts/tighten-cut.py --manifest projects/<id>/tighten.json --list
+
+# render
+python scripts/tighten-cut.py --manifest projects/<id>/tighten.json
+```
+
+It never re-frames, never composites and never speeds anything up. It removes
+three kinds of time, and nothing else:
+
+| what | how it is decided |
+|---|---|
+| pauses | a silence longer than `min_silence` is **shortened to** `keep_pause`, not deleted |
+| fillers | an "um" that leans on a pause is swallowed by that pause; one in mid-phrase is left alone |
+| removals | a span you name by quoting what is said inside it |
+
+### A pause is shortened, not deleted
+
+The obvious design — drop every silence over a threshold — produces a film that
+sounds like a ransom note. Speech has rhythm, and the pause before a new idea is
+doing work. So the knob is what **survives**: `keep_pause` is how much of every
+long silence is left, split evenly across the join so the cut lands in the middle
+of room tone rather than against a word. One number, and it degrades gracefully —
+set it to 2s and nothing is cut at all.
+
+`--list` prices it on the real file:
+
+```
+  63 silences >= 0.80s at -34dB inside the film (94.2s of 294.3s)
+  64 segments, 3:45.10 of 4:54.30 kept (24% removed)
+  segment length: shortest 0.40s | median 2.43s | longest 13.80s (a cut every 3.6s)
+
+  pause sweep (min_silence x keep_pause -> runtime)
+    min_sil  keep         cuts  removed runtime
+    0.60     0.30           85    84.0s 3:30.28
+    0.80     0.45           63    65.9s 3:48.41
+    1.50     0.60           26    40.5s 4:13.84
+```
+
+**Read the segment line, not just the runtime.** A cut is a jump for whatever is
+moving in the frame, and on a screencast the only thing moving is the webcam
+bubble. Runtime cannot see that; "a cut every 3.6s" and "shortest 0.40s" can.
+
+### Fillers only go where a pause already is
+
+Cutting an "um" out of the middle of a phrase costs an audible seam and buys a
+third of a second. Cutting one that is already sitting against a pause costs
+nothing, because the join was happening there anyway. `fillers.reach` is how
+close to a dropped span a filler must be to qualify; the rest are left in.
+
+### The removal you cannot detect
+
+Every demo has a line no detector can find, because it is perfectly fluent
+speech that simply should not be in the film — "let me pause the video while
+this runs", a false start, a sentence you said better the second time. Those are
+named, and named by **quoting them**, so the manifest survives a re-transcription:
+
+```json
+"remove": [
+  {"from_text": "let's wait a few seconds",
+   "to_text":   "it's almost done yeah",
+   "why": "waiting for the conversion, plus the aside about pausing the video"}
+]
+```
+
+`pad_in` / `pad_out` (0.25s each by default) take the breath on either side with
+it — leaving the pause that framed a removed sentence is what makes a removal
+audible.
+
+### The joins are ramped, and the transcript comes with
+
+Each segment's audio gets a `join_fade_ms` ramp (12ms) at both ends. Room tone
+spliced to room tone at a different phase **clicks**, and a click is the one
+artefact that makes an edit audible to somebody who was not looking for it. 12ms
+is below the threshold of hearing as a fade and above it as a click.
+
+The word transcript is remapped through the keep-list and written as
+`<out>.words.json`, in the envelope `transcribe-words.py` produces. The remap is
+exact — a cut only deletes, so a surviving word is the same word displaced by
+however much was removed before it — which means the tightened film can be
+captioned without paying for a second transcription:
+
+```powershell
+python scripts/tighten-cut.py --manifest projects/<id>/tighten.json
+cp projects/<id>/outputs/<id>-tight.words.json projects/<id>/transcripts/<id>-tight.words.json
+python scripts/run-captions.py --input projects/<id>/outputs/<id>-tight.mp4 `
+    --id <id>-tight --project <id> --style config/presets/instafill.json
+```
+
+`run-captions.py` is resumable and skips a stage whose artifact exists, so the
+transcript being already in place is all it takes for the ASR stage to be free.
+
+### Name labels and end cards ride along
+
+`name_labels` and `image_overlays` work exactly as they do in
+`screencast-cut.py` — same keys, same presets, applied after the concat so their
+`at` is **film time**, and inside the same encode. A negative `at` on an overlay
+still counts back from the end, so an end card survives a re-cut.
+
+### What it checks before shipping
+
+Duration against the keep-list, audio not silent, and every label and overlay
+proved to start before the film ends — the failure that is otherwise silent,
+because `enable` simply never turns true and the card never appears.
 
 ## Cutting between cameras, and proving the cut is right
 
@@ -1265,6 +1399,43 @@ nothing in the audio predicts any of it.
 film — sync, decide, render — measured across the four: 0.46× to 0.57× realtime.
 The decide step (speaker embeddings, CPU) is ~85% of it; the NVENC render is
 roughly fifteen times faster than realtime.
+
+### Real tapes are not on one grid, and nothing used to check
+
+`angle-cut.py` trims every tape **by frame number** and concatenates the
+pieces, so all of them must share one frame rate and one frame size.
+Synthetic tapes do by construction. Real ones never do — a phone, a webcam and
+a mirrorless are three rates and three sizes, and the phone is usually not even
+on the rate it claims.
+
+Nothing checked it. The rate and size were read off the **reference** tape and
+applied to all of them, so a 60 fps webcam beside a 30 fps phone is addressed
+at half speed on one of the two and the film is silently wrong. `angle-cut.py`
+now refuses a mismatched set and names the offender; `conform-tapes.py` is what
+fixes it.
+
+```powershell
+python scripts/conform-tapes.py --tapes a.mkv b.mp4 --outdir projects/<id>/tapes --id <id> --list
+python scripts/conform-tapes.py --tapes a.mkv b.mp4 --outdir projects/<id>/tapes --id <id>
+```
+
+Three routes to a target rate, chosen by arithmetic and printed, never guessed:
+
+| route | when | how |
+|---|---|---|
+| `regrid` | already at the target within `--rate-tol` (a phone claiming 30, delivering 30.03) | `setpts` by frame index; count asserted **unchanged** |
+| `decimate` | an exact integer multiple (60 → 30) | `select` every k-th frame; count asserted to `ceil(n/k)` |
+| `refuse` | anything else (50 → 30, 23.976 → 30) | resampling those invents or drops frames unevenly — a decision for a person |
+
+The default target is the **lowest claimed rate**, not the lowest measured one,
+and that distinction is load-bearing: measured rates are drift, and taking
+drift as the target is how a clean 2:1 decimation stops looking like one.
+Measured here — a webcam at 59.933 and a phone at 30.034. Against the phone's
+*measured* 30.034 the ratio is 1.9952, which misses 2 by more than the
+tolerance and refuses the whole tape; against a clean **30** both land, one by
+regrid and one by decimate. Size is `scale`+`pad`, letterboxed and never
+cropped: a tape is evidence, and a crop throws away picture the edit might
+want while a pad is at least visible.
 
 ### Conform first, or a one-frame error has somewhere to hide
 
@@ -2296,8 +2467,8 @@ Needed on the machine itself:
 
 - **Python 3.13** (`py -3.13`). Package versions are pinned in `requirements.txt`.
 - **`ffmpeg`/`ffprobe`.** libass is required and `check-env.py` fails without
-  it; rubberband and NVENC are warnings, because a dub can fit without the
-  stretcher and a manifest can name `libx264` instead of `h264_nvenc`.
+  it; rubberband is a warning, because a dub can fit without the stretcher.
+  Any working H.264 encoder will do — see **## Which encoder** below.
 - **Optional NVIDIA GPU.** CUDA needs `nvidia-cublas-cu12`, since ctranslate2
   bundles cuDNN but not cuBLAS; `check-env.py` counts the DLLs it can see,
   because without them transcription silently drops to CPU and runs ~3x slower.
@@ -2374,6 +2545,112 @@ real interpreter under a *different* pid — so `Popen(...).pid` is not the pid
 that holds the card. The lock records `os.getpid()` from inside the working
 process, which is always the right one; a test asserting against Popen's pid is
 asserting the wrong thing.
+## Which encoder
+
+Nothing in the pipeline scripts spells an encoder key any more. A manifest or
+preset states an *intent* — quality, speed, bitrate ceiling — and
+`scripts/_encode.py` renders it into whatever family the chosen encoder
+belongs to:
+
+| | speed | rate control |
+|---|---|---|
+| `*_nvenc` | `-preset p5` | `-rc vbr -cq N -b:v 0` |
+| `*_amf` | `-quality balanced` | `-rc qvbr -qvbr_quality_level N` |
+| `lib*` | `-preset medium` | `-crf N` |
+| `*_qsv` | `-preset medium` | `-global_quality N -look_ahead 1` |
+
+This is why the split exists. Every render script used to spell
+`-c:v <encoder> -preset p5 -rc vbr -cq 21 -b:v 0` inline, six times over, next
+to an encoder that was *configurable*. So setting `render.encoder` to
+`libx264` on a machine with no NVIDIA card did not help: `-preset p5` and
+`-rc vbr` travelled with it, and both x264 and AMF die on
+`invalid preset 'p5'`. The encoder was a setting and the keys around it were
+not, which made the setting a lie.
+
+**Speed is carried on NVENC's p1..p7 scale**, because every preset and
+manifest committed here already speaks it. A `"preset": "p5"` written before
+any of this still means p5 — it is *translated* into the target family rather
+than ignored, and it is never passed through to an encoder that would reject
+it.
+
+**Quality is one number across all four, and smaller always means better.**
+That is the contract `cq` carries — it is what `-cq` and `-crf` already mean —
+and each family is responsible for expressing it in its own terms. Three of
+the four take it as written. **AMF's `-qvbr_quality_level` runs backwards**, so
+`_encode.amf_quality()` inverts it (`51 - cq`); see `## Gotchas`, where the
+measured curve is. Getting this wrong is invisible from the outside, because
+too *little* quality makes a *smaller* file and small files look like a win.
+
+**`profile` and `level` follow the codec, not the family** — a separate axis.
+The values in these configs (`high`, `4.2`) are H.264 ones, so on HEVC the
+profile becomes `main` and the level is dropped rather than guessed:
+`libx265` wants `4.2` and `hevc_amf` wants the integer `126`, and a
+compatibility hint is not worth a units bug. `check-encode.py` found this by
+rendering a caption pass through `hevc_amf` and getting `Invalid argument`.
+
+### Which one you get
+
+Resolution is `render.encoder` in the manifest or preset → `$VIDEDIT_ENCODER`
+→ the first of `h264_nvenc`, `h264_amf`, `h264_qsv`, `libx264` that **actually
+encodes a frame here**. Same shape as `_env.workspace()`: the assumption gets
+one home.
+
+An encoder a *committed file* names but this machine cannot run is
+**substituted, loudly**, naming the key to edit for permanence — those files
+are read on machines their author never saw, and twenty minutes into a
+filtergraph is the wrong moment to learn the box has no NVIDIA card. One named
+explicitly (`--encoder`, `$VIDEDIT_ENCODER`, or `$VIDEDIT_ENCODER_STRICT=1`)
+is honoured strictly and fails instead: you asked for that one by name. Every
+`--list` / `--plan` prints the encoder line it would send, so the choice is
+legible before it is paid for.
+
+```powershell
+python scripts/check-encode.py                 # the self-test, ~10s, no project
+python scripts/check-encode.py --table-only    # the mapping only, no ffmpeg
+```
+
+`check-encode.py` is the third one-button self-test beside `check-dub.py` and
+`check-multicam.py`, and it has a half the others do not: it hands **every
+encoder this machine can run** the exact argument list a clip, a conform and a
+caption pass would send it, and requires a file out the other end. A table
+test agrees with whatever the table says; ffmpeg does not, which is how the
+HEVC profile bug surfaced within a minute of the test existing.
+
+Run it after touching `_encode.py` or any render script's encoder path.
+
+### Encoding is not decoding
+
+`screen-cut.py`, `film-redact.py` and `make-proxies.py` were written while
+this was in flight and each spelled `-c:v h264_nvenc -preset p5 -rc vbr -cq N`
+by hand; they go through `_encode` now, which is what keeps "nothing spells an
+encoder key" true rather than aspirational. `screen-cut.py` still reads the
+`nvenc_preset` key its committed manifests use — it is translated, not
+ignored, exactly like `p5` above.
+
+`make-proxies.py` also passed `-hwaccel cuda`, and that is a **different
+axis**: NVDEC on the input, not NVENC on the output, and nothing translates
+it. On a machine with no NVIDIA driver it fails the *input*, which reads as a
+broken source file rather than a missing card. It is now conditioned on the
+resolved encoder actually being NVENC. `check-env.py` says the same thing in
+one line: encoding substitutes, GPU decode and CUDA transcription do not.
+
+### On the AMD box this was written against
+
+`h264_amf` and `hevc_amf` both work; there is no NVENC (no `nvcuda.dll`).
+Two things were measured rather than assumed, and both are recorded in
+`_encode.py`:
+
+- **AMF's tuning block is deliberately empty.** `-vbaq 1 -preanalysis 1` cost
+  26% more wall clock (7.26 s against 5.76 s on 5 s of 1080p30) and moved the
+  output by 8 bytes in 3.09 Mbps — VCN 1.0 ignores both. Re-measure on RDNA
+  before adding them back.
+- **No `-bf` on AMF.** This GPU answers `-bf 3` with *"The current GPU in use
+  does not support H.264 B-frame encoding"*, proceeds without them, and the
+  flag buys nothing but a warning.
+
+`-b:v 0` stays NVENC-only, where it is load-bearing (see `## Gotchas`); AMF
+and x264 already have a quality target and do not want a zero-bitrate VBR one
+next to it.
 
 ### Where things live: ROOT, workspace, and one resolver
 
@@ -2409,9 +2686,11 @@ absolute path written into a script, a skill or these docs.
 | `scripts/_env.py` | re-execs every script into `.venv`; import it first. Also the one path resolver and the ROOT/workspace split |
 | `scripts/setup-python.ps1` | builds/repairs the environment, idempotent |
 | `scripts/check-env.py` | the doctor — run this when an import breaks |
+| `scripts/_encode.py` | the one place encoder keys are chosen: an intent in, one family's vocabulary out |
+| `scripts/check-encode.py` | encoder self-test; proves the keys each encoder is sent are keys it takes |
 | `scripts/check-dub.py` | dub self-test; no key, no TTS calls, no cost |
 | `scripts/run-captions.py` | the orchestrator — start here |
-| `scripts/transcribe-words.py` | faster-whisper → word-level JSON |
+| `scripts/transcribe-words.py` | faster-whisper → word-level JSON | (`--hotwords-file` for brand names it has never seen)
 | `scripts/detect-overlays.py` | finds the source's own lower-third graphics |
 | `scripts/build-captions-ass.py` | words + preset → styled ASS |
 | `scripts/verify-captions.py` | proves sync by probing rendered frames |
@@ -2450,8 +2729,10 @@ absolute path written into a script, a skill or these docs.
 | `scripts/screencast-pipeline.py` | the twelve stages in order, cached, with two stops (the sheet, the draft) |
 | `scripts/review-ingest.py` | the user's narrated review recording → remarks mapped to source frames |
 | `scripts/check-screen.py` | silent-screencast self-test; no GPU, no files, no OCR |
+| `scripts/tighten-cut.py` | one already-composited recording: shorten its pauses, drop its stumbles, remove the parts you name |
 | `scripts/shot-detect.py` | read an edit back off a finished film: where it cuts, and on which angle |
 | `scripts/split-cameras.py` | conform a programme, then rebuild the camera tapes it was cut from |
+| `scripts/conform-tapes.py` | put N recordings from different devices onto one frame rate and size, provably |
 | `scripts/sync-audio.py` | line up N tapes that share a soundtrack, by FFT correlation |
 | `scripts/angle-cut.py` | cut one film out of N synchronised cameras, switching full frame |
 | `scripts/compare-videos.py` | score one film against another frame by frame, and pass or fail it |
@@ -2471,6 +2752,7 @@ absolute path written into a script, a skill or these docs.
 | `projects/<id>/` | one video: metadata + manifests committed, content gitignored — see `## Projects` |
 | `config/presets/` | all visual styling |
 | `config/chapters/` | legacy chapter lists for already-published channel videos; new projects keep `chapters.txt` in their folder |
+| `config/vocab/` | hotword lists — the brand names and acronyms an ASR model has never seen |
 | `config/labels/` | the lower-third name label's styling |
 | `config/handles/` | handle-badge styling and motion |
 | `config/overlays/` | image-overlay animation, layout and background treatment |
@@ -2548,6 +2830,46 @@ evidence.
   the variable before installing and finishes with `pip check`; `_env.py` clears
   it for every child process. This is handled now: run scripts as plain
   `python scripts/<name>.py`.
+- **A brand name Whisper has never heard becomes three different words, and
+  captions burn that in.** One 5-minute demo produced "Instafili", "Instafil"
+  and "Instafield" for the same product, plus "flat and PDF" for *flatten PDF*
+  and "W994" for *W-9*. Patching the transcript afterwards is the wrong end of
+  the problem — the timings belong to words the model actually decoded. Feed the
+  vocabulary in first: `transcribe-words.py --hotwords-file config/vocab/<x>.txt`.
+  It uses faster-whisper's `hotwords`, **not** `initial_prompt`, because
+  `condition_on_previous_text` is off here (it caps a repetition loop at one
+  window) and that also stops `initial_prompt` reaching past the first 30
+  seconds. Keep the list to words the model gets wrong: every hotword nudges the
+  decoder, so padding it with ordinary English makes the transcript worse.
+- **A transcript correction that spans a pause deletes words two passes
+  later.** Spreading the replacement evenly from the phrase's first word to its
+  last puts words INSIDE the silences the phrase contains; the pause cut then
+  removes those silences, the remap drops every word sitting in one, and the
+  film is captioned "So you just tool." where the speaker said "So you can just
+  open this tool." Nothing errors — the words are simply gone, and you only see
+  it by reading the finished transcript. `transcript-outline.apply_corrections`
+  retimes one-for-one where the word count matches (every case-and-punctuation
+  fix does), and otherwise lays the replacement along **spoken time only**,
+  walking the old words' spans and skipping the gaps.
+- **The caption sync probe could fail a provably correct ASS.** It sampled a box
+  of ±(font size)/2 around each word's centre, and in any tight-leading preset
+  the font size exceeds the line spacing — so on a two-line card the box for a
+  word on line 1 reached down into line 2 and read the spotlight colour from the
+  word underneath it. `verify-captions.py` clamps the box to 45% of the measured
+  line gap now. If a probe ever disagrees with you, read the `Dialogue:` lines
+  covering that timestamp first: the ASS is the ground truth, not the probe.
+- **A flat bitrate floor is not a quality check.** `run-captions.py` used to fail
+  any render under 1.5 Mbps as evidence that `-cq` had been ignored. A 720p
+  screen recording of mostly-static pages legitimately encodes to 0.6 Mbps with
+  the form text still pin-sharp, and the check failed a good render. What it is
+  really trying to catch collapses the output far below whatever the **source**
+  cost, so the test is now both: absolutely low AND under half the source's rate.
+- **Room tone spliced to room tone clicks.** A pause cut joins two samples of
+  the same quiet room at different phases, and the discontinuity is audible even
+  though neither side is. `tighten-cut.py` ramps `join_fade_ms` (12ms) into and
+  out of every segment — below the threshold of hearing as a fade, above it as a
+  click. This is the artefact that makes an edit audible to somebody who was not
+  looking for one.
 - **A name label past the end of the film fails silently.** The overlay's
   `enable` expression simply never turns true; ffmpeg reports nothing, the
   render succeeds, and the card is not in it. `screencast-cut.py` checks every
@@ -2616,7 +2938,52 @@ evidence.
   words. The selector pins the original track.
 - **Never seek with plain `-ss` when burning subtitles** — it rebases PTS to 0 so
   libass renders the wrong lines. Use `--preview`, which regenerates a shifted ASS.
-- **`-b:v 0` is required with `-cq`** or NVENC ignores the quality target.
+- **`-b:v 0` is required with `-cq`** or NVENC ignores the quality target. It
+  is NVENC's alone: AMF's `qvbr` and x264's `crf` already carry a quality
+  target, so `_encode.py` emits it for the nvenc family only.
+- **AMF's quality scale runs BACKWARDS from every other encoder here.** `-cq`,
+  `-crf` and a raw QP all mean "smaller number, better picture". AMF's
+  `-qvbr_quality_level` means the opposite. Measured on this Vega 10 by VMAF
+  against a crf-12 reference, 20 s of 1080p30 of real footage:
+
+  | `qvbr_quality_level` | VMAF | size |
+  |---|---|---|
+  | 10 | 81.92 | 505 KB |
+  | 21 | 88.26 | 1130 KB |
+  | 28 | 91.68 | 1527 KB |
+  | 34 | 92.87 | 1875 KB |
+  | 40 | 93.64 | 2240 KB |
+  | 46 | 94.55 | 2781 KB |
+
+  Monotonic across the range, and inverted. Handing the manifest's number
+  straight over — which `_encode.py` did at first — makes `cq: 16`, the value a
+  conform uses *because* it wants the highest quality, ask AMF for nearly its
+  lowest. Every AMF render came out quietly worse than asked, and the symptom
+  reads as a *virtue*: the file is smaller, which looks like efficiency rather
+  than loss. `amf_quality()` inverts it, and `check-encode.py` now asserts the
+  direction on every family — that cq 16 really does ask for better pictures
+  than cq 30, whatever key the family spells it with.
+- **`ffmpeg -encoders` lists what the BUILD supports, not what this machine
+  can do.** A full Windows build lists `h264_nvenc` whether or not an NVIDIA
+  driver was ever installed — so the string test `check-env.py` used to run
+  passed on an AMD box and reported "environment OK" while every render died
+  with `Cannot load nvcuda.dll`. A doctor whose test the broken machine passes
+  is worse than no doctor. Encoders are probed by **encoding a frame**, cached
+  against the ffmpeg version.
+- **A probe frame that is too small reports a working card as broken** — the
+  same lie the other way round. A hardware encoder refuses a frame under its
+  alignment with the same "could not open encoder" it gives a missing driver.
+  Measured on this Vega 10: 64x64 fails, **160x120 fails** (120 is not a
+  multiple of 16), 128x128 and 176x144 pass. `_encode.PROBE_SIZE` is 320x240
+  and is a measured floor, not a round number — do not shrink it to make the
+  probe cheaper.
+- **A `preset` is a per-family word, not a universal one.** `p5` is NVENC's;
+  AMF's are `speed`/`balanced`/`quality`/`high_quality`; x264's are
+  `medium`/`slow`/... . Give AMF or x264 a `p5` and it exits on
+  `invalid preset 'p5'` before a frame is read. Worse, AMF's *numbers* are not
+  portable either — `h264_amf`'s presets run 0..3 and `hevc_amf`'s run 0..15,
+  so `-quality 2` means different things on the two. `_encode.py` passes AMF
+  presets by **name**, which both accept.
 - **`crop` has no `eval` option** — that is `scale`/`overlay`/`drawtext`. Its
   `x`/`y` are flagged runtime-tunable and already re-evaluated per frame, which
   is what lets the vertical crop pan. Passing `eval=frame` is a hard error.

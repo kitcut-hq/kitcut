@@ -1,21 +1,36 @@
 {
   "v": 1,
   "id": "flatten-pdf",
-  "intent": "Two vertical shorts cut out of our own published screencast youtu.be/6LQnRd0JxGU (@instafill_ai, 3:21, 'How to flatten a PDF for free'). The end goal is a scripted ElevenLabs voice-over REPLACING the original narration, which is live, non-native and halting. Stage 1 (done) is picture only: framing, hook cards and badge settled, source audio left on as a reference track, no captions -- those get rebuilt from the voice-over's own word timings. Stage 2 is the voice-over.",
+  "intent": "One product demo for the @instafill_ai channel and the shorts cut out of it. The film: a 3:21 demo -- flatten a mixed PDF packet with the free Flatten PDF tool, then let Instafill make the whole packet fillable -- tightened down from a 4:54 one-file screen recording and published as youtu.be/6LQnRd0JxGU. The shorts: two vertical cuts taken from that published film, whose end goal is a scripted ElevenLabs voice-over REPLACING the original narration, which is live, non-native and halting. Stage 1 (done) is picture only: framing, hook cards and badge settled, source audio left on as a reference track, no captions -- those get rebuilt from the voice-over's own word timings. Stage 2 is the voice-over.",
   "pipelines": [
-    "shorts"
+    "tighten",
+    "captions",
+    "image-overlay",
+    "publish",
+    "shorts",
+    "dub"
   ],
   "inputs": {
-    "source": "projects/flatten-pdf/sources/flatten-pdf.mp4",
-    "audio": "projects/flatten-pdf/audio/flatten-pdf.16k.mono.wav",
-    "words": "projects/flatten-pdf/transcripts/flatten-pdf.words.json",
-    "_source_note": "720p, which is all YouTube serves: the 1080p rendition was not processed yet (checked across the web/tv/ios/web_safari/mweb/android_vr player clients). The YouTube token cannot help -- Data API v3 has no video-download endpoint, and Studio's 'Download original' has no API surface. No master on this machine; the on-screen clock and the Instafill account say it was recorded on a teammate's. The framing is chosen so 720p is enough: the rect is 900-1280px wide at source and lands at 1080 wide, so the picture is never upscaled more than 1.2x."
+    "source": "projects/flatten-pdf/sources/flatten-pdf-raw.mp4",
+    "source_note": "the raw recorder output the user dropped in outputs/ (1280x720, VFR averaging 30.02 fps, 4:54, webcam bubble and narration already burned in - so screencast-cut.py does not apply, there is only one clock). This is the master the film was cut from.",
+    "words": "projects/flatten-pdf/transcripts/flatten-pdf.lv3.words.json",
+    "words_note": "large-v3 on CPU with --hotwords-file config/vocab/instafill.txt. The distil-large-v3 pass without hotwords is kept beside it as flatten-pdf.words.json and should NOT be used: it spells the product \"Instafili\"/\"Instafil\"/\"Instafield\" and the tool \"flat and PDF\".",
+    "shorts-source": "projects/flatten-pdf/sources/flatten-pdf.mp4",
+    "shorts-audio": "projects/flatten-pdf/audio/flatten-pdf.16k.mono.wav",
+    "shorts-words": "projects/flatten-pdf/transcripts/flatten-pdf.words.json",
+    "_shorts_source_note": "The shorts were cut from the PUBLISHED film pulled back down from YouTube, not from the master above -- 720p, which is all YouTube serves: the 1080p rendition was not processed yet (checked across the web/tv/ios/web_safari/mweb/android_vr player clients). The YouTube token cannot help -- Data API v3 has no video-download endpoint, and Studio's 'Download original' has no API surface. The framing is chosen so 720p is enough: the rect is 900-1280px wide at source and lands at 1080 wide, so the picture is never upscaled more than 1.2x. Next time cut the shorts from outputs/flatten-pdf-tight-captioned.mp4, which is on this disk at full quality."
   },
   "controls": {
+    "cut": "projects/flatten-pdf/tighten.json -> cut.min_silence / cut.keep_pause",
+    "removals": "projects/flatten-pdf/tighten.json -> remove[] (quoted, with why)",
+    "caption text": "projects/flatten-pdf/tighten.json -> corrections[]",
+    "caption look": "config/presets/instafill.json",
+    "end card": "projects/flatten-pdf/cards/outro.json + image_overlays[0] in tighten.json",
+    "title / description / chapters / tags": "projects/flatten-pdf/{title,description,chapters,tags}.txt",
     "manifest-clips-vertical": "projects/flatten-pdf/clips-vertical.json",
     "card-01": "projects/flatten-pdf/cards/01-free-tool.json",
     "card-02": "projects/flatten-pdf/cards/02-whole-packet.json",
-    "caption-style": "config/presets/red-card-vertical.json",
+    "caption-style-shorts": "config/presets/red-card-vertical.json",
     "handle-style": "config/handles/vertical.json",
     "overlay-preset": "config/overlays/end-card.json",
     "vo-script-01": "projects/flatten-pdf/vo/01-free-tool.json",
@@ -88,17 +103,66 @@
         "privacy": "unlisted",
         "sidecar": "projects/flatten-pdf/outputs/shorts/flatten-pdf-01-free-tool-vo.youtube.json"
       }
+    },
+    "projects/flatten-pdf/outputs/flatten-pdf-tight.mp4": {
+      "status": "current",
+      "built_utc": "2026-09-01T15:25:52Z",
+      "kind": "tighten",
+      "script": "scripts/tighten-cut.py",
+      "manifest": "projects/flatten-pdf/tighten.json",
+      "burned": [
+        "pause cut: silences over 0.70s shortened to 0.35s (64 segments, 31% of the source removed)",
+        "removed 0:45.25 -> 1:00.23: 14.5s of a sentence that never arrives -- he means to say which of the three forms already have fields and loses it. Whisper's own confidence collapses here (0.22 on 'W', 0.34 on 'all', 0.39 on 'them'), which is the tell. Pause-cutting alone would have made this WORSE: it compresses the hesitation into five seconds of captioned gibberish. The point it was making survives in 'two of these forms have already fillable fields' just before it.",
+        "removed 3:52.45 -> 4:12.46: The wait for the conversion to finish, and the aside about pausing the video that goes with it -- 20s, of which 14s is dead. No detector finds this: 'we'll pause the video' is perfectly fluent speech that simply must not be in a published demo. The join lands on 'It's ready for review', so the conversion finishing reads as a cut rather than as a wait.",
+        "image overlay 'outro.json' wipe in at 192.4s to the end, over a B&W/blur/dim treatment"
+      ],
+      "sidecars": {
+        "words": "projects/flatten-pdf/outputs/flatten-pdf-tight.words.json"
+      }
+    },
+    "projects/flatten-pdf/outputs/flatten-pdf-tight-captioned.mp4": {
+      "status": "current",
+      "built_utc": "2026-09-01T15:27:42Z",
+      "kind": "captioned",
+      "script": "scripts/run-captions.py",
+      "burned": [
+        "word-synced captions, style config/presets/instafill.json"
+      ],
+      "sidecars": {
+        "render-manifest": "projects/flatten-pdf/outputs/flatten-pdf-tight.manifest.json",
+        "words": "projects/flatten-pdf/transcripts/flatten-pdf-tight.words.json"
+      },
+      "published": {
+        "url": "https://youtu.be/6LQnRd0JxGU",
+        "video_id": "6LQnRd0JxGU",
+        "channel": "@instafill_ai",
+        "privacy": "not read back -- uploaded by hand, so nothing here confirms it",
+        "sidecar": null,
+        "how": "YouTube web UI, not scripts/yt-upload.py. There is therefore no .youtube.json sidecar and no machine-read-back of title/privacy; this block is what the operator reported, not what the API returned. Use yt-upload.py next time and this records itself.",
+        "metadata": {
+          "title": "projects/flatten-pdf/title.txt (first line)",
+          "description": "projects/flatten-pdf/description.txt",
+          "chapters": "projects/flatten-pdf/chapters.txt -- pasted inside the description; yt-set-chapters.py was not run",
+          "tags": "projects/flatten-pdf/tags.txt",
+          "thumbnail": "MADE BY HAND, OUTSIDE THIS REPO. Nothing here can regenerate it. make-card.py could produce a reproducible one -- see the note below."
+        }
+      }
     }
   },
   "notes": [
+    "SHIP THIS ONE: projects/flatten-pdf/outputs/flatten-pdf-tight-captioned.mp4 is the film -- flatten-pdf-tight.mp4 is the intermediate (cut + end card, no captions) and is kept only because run-captions.py reads it.",
+    "PUBLISHED 2026-09-01 as https://youtu.be/6LQnRd0JxGU on @instafill_ai. This is the channel's real video, not a test -- do not re-render or re-upload it without being asked.",
+    "Two gaps the hand-upload left, both for NEXT video rather than this one: (a) yt-upload.py + yt-set-chapters.py were bypassed, so no sidecar exists and privacy was never read back; (b) yt-upload.py has no thumbnail support at all, so the thumbnail lives only on YouTube and cannot be rebuilt here.",
+    "Background noise was NOT removed -- the repo has no denoiser (no afftdn / arnndn / anlmdn anywhere). tighten.json's audio block is highpass=85 (desk rumble) plus loudnorm, which is levelling, not denoising. Requested for the NEXT video; deliberately not retrofitted onto this one.",
+    "No name label on the film: the speaker's title was never confirmed, and a lower third is burned in. Add name_labels to tighten.json and re-run both passes if it is wanted - the label preset wants layout.corner bottom-right here, because the webcam bubble already occupies the bottom-left.",
     "Both shorts carry the SOURCE audio as a reference track and no captions. Neither is the deliverable look: stage 2 replaces the audio with a scripted voice-over via cut-clips.py --dub and rebuilds the captions from its word timings, into new files tagged -vo. These two are never overwritten.",
     "Short 1 published UNLISTED as a YouTube Short: https://youtu.be/hmHbL-66G-o (2026-09-01). Confirmed a Short, not a regular video: youtube.com/shorts/hmHbL-66G-o serves 200, where a non-Short 303-redirects to /watch. It qualified on format alone (1080x1920, 20.5s) -- there is no API flag for Shorts. Note the redirect was still 303 for the first couple of minutes after upload: the classification lands only once processingStatus reaches 'succeeded', so re-check before concluding it failed. Unlisted means it will NOT appear in the Shorts feed -- flip to public for that.",
     "Short 1 is voiced and captioned and ready to publish: outputs/shorts/flatten-pdf-01-free-tool-vo.mp4, 20.5s, ElevenLabs Brian, seven lines written to the picture via dub-clips.py --script. All seven fit `natural` -- no rate change, no tight fallback, nothing squeezed -- which is the gate for a written voice-over. `sync 79.3%` in the .dub.json does NOT apply: it measures agreement with the original speech, which a voice-over throws away. The spoken words were verified by transcribing the wav back and diffing against the script: exact, word for word.",
     "Three things had to leave the picture and all three are gone, verified on the render: the burned-in caption card (source y 612-660) and the taskbar (y 682+) fall below the rect; the webcam PiP (x 21-183, y 498-660) sits INSIDE it, in the same band as the buttons the demo is about, so it is masked with delogo instead. YuNet found a face in 30/30 sampled source frames and 0/80 sampled frames across the two renders.",
     "Moments were picked on the PICTURE, not the transcript -- with the sound being replaced the original speech boundaries do not bind the cut. Short 1 drops the landing hero (91-115, 23 static seconds of a page being read aloud, and its headline starts at source x=82 where this window clips it). Short 2 drops 150-168, a progress bar that goes from 1% to done without visibly moving; it opens 3s before the status chip flips to 'Ready for Review' at 167.75s, measured off the chip's hue.",
-    "Already public on the original, so left alone: the Forms list shows real user data (Eugene Smirnov, real form names) and short 2's file dialog shows the Downloads folder. scan-pii.py + track-blur.py can blur them on request.",
+    "Already public on the original, so left alone: the Forms list shows real user data (real names, real form names) and short 2's file dialog shows the Downloads folder. scan-pii.py + track-blur.py can blur them on request.",
     "Source has its own branded end card wiping in at ~192s; short 2 ends at 191 to stay clear of it.",
     "Short 2 (02-whole-packet.mp4) is still stage 1: picture only, source audio, no captions."
   ],
-  "updated_utc": "2026-09-01T19:30:35Z"
+  "updated_utc": "2026-09-02T00:00:00Z"
 }

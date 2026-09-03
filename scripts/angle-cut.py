@@ -46,6 +46,7 @@ import sys, os, json, argparse, subprocess, shutil
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _encode  # noqa: E402 -- the one place encoder keys are chosen
 from importlib import import_module  # noqa: E402
 
 import _progress  # noqa: E402
@@ -59,7 +60,9 @@ _imgoverlay = import_module("image-overlay")
 ROOT = _env.ROOT
 ENV = _env.ENV
 
-DEFAULT_RENDER = {"encoder": "h264_nvenc", "preset": "p5", "cq": 18,
+# No "encoder": _encode picks one this machine can actually run, and a
+# manifest that names one overrides it. "speed" is family-neutral.
+DEFAULT_RENDER = {"speed": 5, "cq": 18,
                   "maxrate": "40M", "bufsize": "80M", "audio_bitrate": "192k"}
 DEFAULT_ANCHOR = {"still": 0.0015, "tolerance_frames": 1, "min_margin": 3.0}
 # Finding a HELD stretch is a stricter job than finding where the opening freeze
@@ -292,7 +295,7 @@ def main():
     with open(rel(args.manifest), encoding="utf-8") as f:
         m = json.load(f)
     pid = _project.project_id(m, rel(args.manifest))
-    render = dict(DEFAULT_RENDER, **(m.get("render") or {}))
+    render = _encode.resolve(dict(DEFAULT_RENDER, **(m.get("render") or {})))
     acfg = dict(DEFAULT_ANCHOR, **(m.get("anchor_cfg") or {}))
 
     # Graphics are validated before anything is decoded: a missing PNG or a
@@ -340,6 +343,27 @@ def main():
     w, h, num, den = probe_video(files[ref])
     spf = den / float(num)
     n_prog = max(b for _, _, b in plan)
+
+    # Every tape is trimmed BY FRAME NUMBER against this one grid and the
+    # pieces are concatenated, so a tape on a different rate is addressed at
+    # the wrong speed and a tape of a different size cannot concat at all.
+    # Both were read off the reference and applied to all of them without ever
+    # being checked -- a 60 fps webcam beside a 30 fps phone renders a silently
+    # wrong film. scripts/conform-tapes.py is what puts real recordings from
+    # different devices onto one grid.
+    odd = []
+    for c in cams:
+        cw, ch, cn, cd = probe_video(files[c])
+        if (cw, ch) != (w, h):
+            odd.append("%s is %dx%d, reference %s is %dx%d"
+                       % (c, cw, ch, ref, w, h))
+        if cn * den != cd * num:
+            odd.append("%s is %g fps, reference %s is %g fps"
+                       % (c, cn / float(cd), ref, num / float(den)))
+    if odd:
+        sys.exit("the tapes are not on one grid, so a frame number does not "
+                 "mean the same thing on each:\n  %s\nrun scripts/conform-"
+                 "tapes.py over them first" % "\n  ".join(odd))
 
     # Anchoring uses each instrument where it is strong. The picture gives ONE
     # absolute anchor, taken from the tape whose opening hold breaks most
@@ -473,6 +497,7 @@ def main():
                      _imgoverlay.describe(spec, img_preset_doc, runtime)))
 
     if args.list:
+        print("  encoder: %s" % _encode.describe(render))
         return
 
     # Sample boundaries round to the nearest sample where 48 kHz does not
@@ -566,13 +591,9 @@ def main():
     cmd += ["-filter_complex", graph, "-map", "[vout]", "-map", "[aout]",
             "-r", "%d/%d" % (num, den), "-fps_mode", "cfr",
             "-video_track_timescale", str(num),
-            "-c:v", render["encoder"], "-preset", render["preset"],
-            "-rc", "vbr", "-cq", str(render["cq"]), "-b:v", "0",
-            "-maxrate", render["maxrate"], "-bufsize", render["bufsize"],
-            "-pix_fmt", "yuv420p",
-            "-c:a", "aac", "-b:a", render["audio_bitrate"],
-            "-ar", str(a_rate), "-ac", "2",
-            "-movflags", "+faststart", "-y", tmp]
+            ] + _encode.video_args(render) \
+          + _encode.audio_args(render, rate=a_rate) \
+          + ["-movflags", "+faststart", "-y", tmp]
     print("\nrendering %s" % _project.norm(dst))
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, env=ENV)

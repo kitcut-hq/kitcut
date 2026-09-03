@@ -37,6 +37,13 @@ No dragging files. KitCut finds the session's recordings on your PC and on a con
 - **Captions timed from the dub.**
 - **Replace a narration with a written script**, timed to the picture.
 
+### Tightening one recording
+- **For a recording that arrives already finished**: screen, webcam and narration burned together, nothing to sync.
+- **Shortens every long pause** instead of deleting it, so the result doesn't sound spliced.
+- **Swallows the "um"s** that lean on a pause.
+- **Removes a passage you name by quoting it**, so it survives a re-transcription.
+- **Captions the tightened film for free**, transcript remapped through the cut.
+
 ### Screen recording + camera
 - **Syncs a screen recording with a phone take** that were never in sync, proven with paired frames.
 - **Cuts pauses** only where the speaker is silent *and* the screen is still.
@@ -90,12 +97,12 @@ No dragging files. KitCut finds the session's recordings on your PC and on a con
 | | |
 |---|---|
 | OS | Windows |
-| GPU | NVIDIA recommended. Captions, shorts, dubbing run without one, slower. Screen-recording and multi-camera films need it. |
+| GPU | Optional. KitCut finds the fastest encoder your machine has — NVIDIA, AMD or Intel — and falls back to software, which is slower but works everywhere. |
 | Accounts | None. YouTube publishing and the premium dub voice are the only exceptions. |
 
 ## Not yet
 
-Colour grading. Filler-word removal. Mac.
+Colour grading. Mac.
 
 ## Technical reference
 
