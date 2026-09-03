@@ -285,6 +285,63 @@ def to_keys(times, xs, x_lo, x_hi, dead, min_gap):
     return keys
 
 
+def merge_sidecar(old, result, force):
+    """Merge fresh tracker output into an existing sidecar WITHOUT destroying
+    hand edits. Returns (merged, refused_msgs, warn_msgs).
+
+    The sidecar exists to be edited -- a cleared false pad, a letterboxed
+    graphic insert, a window pinned through a two-box seam -- and a regen used
+    to throw those edits away with a WARNING at best. It cannot merge them
+    back either: entries are in CLIP time, so the moment a clip's boundary
+    moves every hand-tuned time in them means something else. What it can do
+    is refuse. The rule matches the repo's prose-marker convention
+    (`_comment`, `_why`, `_pad_why` -- what `project-scan.py` promises never
+    to touch):
+
+      * an entry carrying any `_`-prefixed key is HAND-EDITED -> kept, the
+        fresh result for that clip is dropped, and the refusal says so;
+      * a `_`-prefixed key at the TOP of the sidecar marks the whole file ->
+        every existing entry is kept;
+      * `--force-regen` overrides both, because after a boundary change the
+        right move IS to regenerate and then re-apply the edit in the new
+        time base.
+
+    One film had the same letterbox override silently wiped three times in a
+    session; another sidecar in this repo carries `"_pad_why"` today and would
+    have been wiped by the next innocent regen.
+    """
+    file_marked = any(k.startswith("_") for k in old)
+    merged, refused, warns = dict(old), [], []
+    for cid, entry in sorted(result.items()):
+        prev = old.get(cid)
+        marked = isinstance(prev, dict) and any(
+            k.startswith("_") for k in prev)
+        if prev is not None and (marked or file_marked) and not force:
+            why = ""
+            if isinstance(prev, dict):
+                for k in sorted(prev):
+                    if k.startswith("_") and isinstance(prev[k], str):
+                        why = " -- %s: %.80s" % (k, prev[k])
+                        break
+            if not why and file_marked:
+                for k in sorted(old):
+                    if k.startswith("_") and isinstance(old[k], str):
+                        why = " -- file: %.80s" % old[k]
+                        break
+            refused.append("%s: hand-edited, keeping the existing entry "
+                           "(--force-regen overwrites; re-apply the edit in "
+                           "the clip's NEW time base after)%s" % (cid, why))
+            continue
+        if isinstance(prev, dict) and isinstance(entry, dict) \
+                and prev.get("pad") and prev["pad"] != entry.get("pad", []):
+            warns.append("%s: overwriting pad %s with %s -- if that pad was "
+                         "a manual override, re-apply it, in the clip's NEW "
+                         "time base if its start moved"
+                         % (cid, prev["pad"], entry.get("pad", [])))
+        merged[cid] = entry
+    return merged, refused, warns
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifest", required=True)
@@ -299,6 +356,10 @@ def main():
     ap.add_argument("--deadband", type=float, default=26.0,
                     help="source px a key must move to be worth emitting")
     ap.add_argument("--min-gap", type=float, default=0.6, help="seconds between keys")
+    ap.add_argument("--force-regen", action="store_true",
+                    help="overwrite sidecar entries carrying hand-edit "
+                         "markers (_comment, _pad_why, ...) instead of "
+                         "keeping them")
     ap.add_argument("--mode", choices=("pan", "shot", "hybrid", "compare"), default="hybrid",
                     help="pan: smooth track. shot: one static framing per shot. "
                          "hybrid: per shot pick static/pan, letterbox shots with "
@@ -412,24 +473,16 @@ def main():
     old = {}
     if os.path.exists(out):
         old = json.load(open(out, encoding="utf-8"))
-    # The sidecar exists to be edited (a cleared false pad, a letterboxed
-    # graphic insert, a neutralised key), and a regen throws those edits away.
-    # It cannot merge them back either: entries are in CLIP time, so the moment
-    # a clip's boundary moves every hand-tuned time in it means something else.
-    # What it can do is say what it is about to destroy, loudly -- one film here
-    # had the same letterbox override silently wiped three times in a session.
-    for cid, entry in sorted(result.items()):
-        prev = old.get(cid)
-        if isinstance(prev, dict) and isinstance(entry, dict):
-            if prev.get("pad") and prev["pad"] != entry.get("pad", []):
-                print("WARNING %s: overwriting pad %s with %s -- if that pad "
-                      "was a manual override (a letterboxed graphic insert, a "
-                      "cleared false pad), re-apply it, in the clip's NEW time "
-                      "base if its start moved" % (cid, prev["pad"],
-                                                   entry.get("pad", [])))
-    old.update(result)
-    json.dump(old, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-    print("wrote %s" % out)
+    merged, refused, warns = merge_sidecar(old, result, args.force_regen)
+    for w in warns:
+        print("WARNING %s" % w)
+    for r in refused:
+        print("REFUSED %s" % r)
+    json.dump(merged, open(out, "w", encoding="utf-8"),
+              ensure_ascii=False, indent=2)
+    print("wrote %s%s" % (out, "  (%d entr%s kept, not regenerated)"
+                          % (len(refused), "y" if len(refused) == 1 else "ies")
+                          if refused else ""))
 
 
 if __name__ == "__main__":
