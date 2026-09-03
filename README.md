@@ -2609,6 +2609,22 @@ HEVC profile bug surfaced within a minute of the test existing.
 
 Run it after touching `_encode.py` or any render script's encoder path.
 
+### Encoding is not decoding
+
+`screen-cut.py`, `film-redact.py` and `make-proxies.py` were written while
+this was in flight and each spelled `-c:v h264_nvenc -preset p5 -rc vbr -cq N`
+by hand; they go through `_encode` now, which is what keeps "nothing spells an
+encoder key" true rather than aspirational. `screen-cut.py` still reads the
+`nvenc_preset` key its committed manifests use — it is translated, not
+ignored, exactly like `p5` above.
+
+`make-proxies.py` also passed `-hwaccel cuda`, and that is a **different
+axis**: NVDEC on the input, not NVENC on the output, and nothing translates
+it. On a machine with no NVIDIA driver it fails the *input*, which reads as a
+broken source file rather than a missing card. It is now conditioned on the
+resolved encoder actually being NVENC. `check-env.py` says the same thing in
+one line: encoding substitutes, GPU decode and CUDA transcription do not.
+
 ### On the AMD box this was written against
 
 `h264_amf` and `hevc_amf` both work; there is no NVENC (no `nvcuda.dll`).

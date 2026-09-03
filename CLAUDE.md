@@ -63,12 +63,14 @@ joins `base` (default `ROOT`: config, fonts and models are tooling, not work).
 Ten scripts each had their own copy; there is one now, and a hardcoded absolute
 path is a FAIL.
 
-Ten files are **platform, not video** — `_encode.py`, `_env.py`,
-`_progress.py`, `_project.py`, `check-encode.py`, `check-env.py`,
-`check-script.py`, `project-scan.py`, `render-status.py`, `statusline.py`.
-None may import anything from this repo outside that list, and
-`_progress.py`, `render-status.py` and `statusline.py` must be stdlib-only.
-The checker enforces both. This is what keeps lifting the platform out a move
+Twelve files are **platform, not video** — `_encode.py`, `_env.py`,
+`_progress.py`, `_project.py`, `_runlog.py`, `check-encode.py`,
+`check-env.py`, `check-script.py`, `project-scan.py`, `render-status.py`,
+`run-log.py`, `statusline.py`. None may import anything from this repo outside
+that list, and `_progress.py`, `_runlog.py`, `_gpulock.py`, `gpu-lock.py`,
+`render-status.py`, `run-log.py` and `statusline.py` must be stdlib-only.
+The checker enforces both — `check-script.py`'s `PLATFORM` and `STDLIB_ONLY`
+are the lists this paragraph is describing. This is what keeps lifting the platform out a move
 rather than a rewrite (see `docs/product-strategy.md`).
 
 ### The encoder is a setting, and `_encode.py` is where it lands
@@ -131,7 +133,7 @@ Don't reintroduce it, and don't use `os.execve` to re-exec on Windows — it
 spawns rather than replaces, so the parent dies abnormally and the exit code is
 lost. `_env.bootstrap()` uses `subprocess.run` and propagates the status.
 
-## The seven pipelines
+## The eight pipelines
 
 Everything is manifest-driven. Nothing hardcodes a timecode, a colour or a font
 size; per-video decisions live in the project's manifests under
@@ -479,7 +481,7 @@ After touching any of `shot-detect.py`, `split-cameras.py`, `sync-audio.py`,
 `python scripts/check-multicam.py` —
 it tests the frame arithmetic with no GPU and no files.
 
-**7. Silent screencast** — one film out of screen recordings that carry **no
+**8. Silent screencast** — one film out of screen recordings that carry **no
 usable sound** (a Game Bar capture with no microphone writes a digitally silent
 track, `-91 dB` mean *and* max), with the sensitive fields blurred and the
 voice-over added later. Twelve stages, one command, two stops:

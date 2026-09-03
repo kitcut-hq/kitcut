@@ -195,14 +195,13 @@ try:
            "render.encoder (or $%s) to make a choice permanent"
            % (good[0], _encode.ENCODER_VAR))
         if "h264_nvenc" not in good:
-            # only the pipelines that build their arguments with _encode.py
-            # get the substitution above; screen-cut.py, film-redact.py and
-            # make-proxies.py still spell NVENC by hand, so on this machine
-            # they are the renders that will not run
-            warn("h264_nvenc missing -- captions, shorts, tighten, screencast "
-                 "and multicam substitute %s, but screen-cut, film-redact and "
-                 "make-proxies still name NVENC directly and need it"
-                 % good[0])
+            # Encoding is covered by the substitution above. Decoding is a
+            # separate question and nothing translates it: faster-whisper and
+            # the NVDEC paths still want the card.
+            print("  note: h264_nvenc is not available -- every render "
+                  "pipeline substitutes %s, but GPU *decode* (-hwaccel cuda) "
+                  "and CUDA transcription still need an NVIDIA card"
+                  % good[0])
     stale = [e for e in ("h264_nvenc", "h264_amf", "libx264")
              if e not in good and e in subprocess.run(
                  ["ffmpeg", "-hide_banner", "-encoders"],

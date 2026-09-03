@@ -49,6 +49,7 @@ import shutil
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 import numpy as np  # noqa: E402
+import _encode  # noqa: E402
 import _project  # noqa: E402
 import _progress  # noqa: E402
 
@@ -619,10 +620,16 @@ def source_cmd(plan, cfg, out_path, prog=None):
     if plan.get("mask_listing"):
         # input 1: the tracked blur mask, a concat of still PNGs
         cmd += ["-f", "concat", "-safe", "0", "-i", plan["mask_listing"]]
-    cmd += ["-filter_complex_script", gpath, "-map", "[out]", "-an",
-            "-c:v", "h264_nvenc", "-preset", cfg.get("nvenc_preset", "p5"), "-rc", "vbr",
-            "-cq", str(cfg.get("cq", 21)), "-b:v", "0",
-            "-pix_fmt", "yuv420p", "-movflags", "+faststart", out_path]
+    # `nvenc_preset` is the key the committed manifests use and still reads;
+    # _encode translates it into whatever family the machine's encoder belongs
+    # to, so this pipeline is no longer NVIDIA-only.
+    render = _encode.resolve({"encoder": cfg.get("encoder"),
+                              "preset": cfg.get("preset",
+                                                cfg.get("nvenc_preset", "p5")),
+                              "cq": cfg.get("cq", 21)})
+    cmd += (["-filter_complex_script", gpath, "-map", "[out]", "-an"]
+            + _encode.video_args(render)
+            + ["-movflags", "+faststart", out_path])
     return cmd, len(parts)
 
 
