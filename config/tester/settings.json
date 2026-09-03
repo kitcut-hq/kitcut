@@ -13,5 +13,17 @@
       "Bash(ffprobe *)",
       "Bash(powershell -ExecutionPolicy Bypass -File scripts/setup-python.ps1*)"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/session-probe.ps1"
+          }
+        ]
+      }
+    ]
   }
 }

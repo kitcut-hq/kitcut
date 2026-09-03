@@ -12,13 +12,13 @@ You do two things by hand. Claude does everything else.
 
 1. **Install Claude Code** — https://claude.com/claude-code — and sign in
    with your Claude account.
-2. **Open this folder in Claude Code** and say:
+2. **Open this folder in Claude Code.** Claude notices the folder isn't set
+   up yet and offers to do it — say yes. (If it doesn't offer, just say:
+   **"Set this up."**)
 
-   > **Set this up.**
-
-   Claude will check your machine, install what's missing (it asks before
-   installing anything), build the environment, and finish by rendering a
-   small test video for you to watch. If it asks you to close and reopen
+   It checks your machine, installs what's missing (asking before
+   installing anything), builds the environment, and finishes by rendering
+   a small test video for you to watch. If it asks you to close and reopen
    Claude Code partway through, that's normal — reopen this folder and say
    "continue setup."
 
