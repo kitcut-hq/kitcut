@@ -2223,7 +2223,7 @@ exists to prevent.
 and no session anywhere else does. It shows the session, not the work:
 
 ```
-video-editing | ⎇ main | Fable 5 (1M context) | effort: xhigh | ctx: 33% (334k) | 5h: 26% 2h58m | wk: 60% 2d18h
+kitcut | ⎇ main | Fable 5 (1M context) | effort: xhigh | ctx: 33% (334k) | 5h: 26% 2h58m | wk: 60% 2d18h
 ```
 
 Everything on it comes from the JSON Claude Code feeds the command on stdin

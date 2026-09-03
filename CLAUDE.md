@@ -490,7 +490,7 @@ tool read or wrote it; that is why the writers live inside the render scripts.
 — project-scoped, session facts only:
 
 ```
-video-editing | ⎇ main | Fable 5 (1M context) | effort: xhigh | ctx: 33% (334k) | 5h: 26% 2h58m | wk: 60% 2d18h
+kitcut | ⎇ main | Fable 5 (1M context) | effort: xhigh | ctx: 33% (334k) | 5h: 26% 2h58m | wk: 60% 2d18h
 ```
 
 Render progress used to live there too and was reverted — it belongs to a
