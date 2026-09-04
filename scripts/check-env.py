@@ -87,11 +87,25 @@ for mod, why in [
     ("av", "audio decode for faster-whisper"),
     ("sherpa_onnx", "speaker embeddings for the multicam auto-switch"),
 ]:
-    try:
-        m = __import__(mod)
-        ok("%-15s %-9s (%s)" % (mod, getattr(m, "__version__", "") or "-", why))
-    except Exception as e:
-        bad("%-15s %s: %s -- %s" % (mod, type(e).__name__, str(e)[:60], why))
+    # One interpreter per import: cv2 and av (which faster_whisper pulls in)
+    # bundle different FFmpeg builds and register the same AVFoundation classes,
+    # so macOS warns about duplicate objc classes in a process holding both.
+    if (
+        r := subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import sys;print(getattr(__import__(sys.argv[1]),'__version__','') or '-')",
+                mod,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    ).returncode == 0:
+        ok("%-15s %-9s (%s)" % (mod, r.stdout.strip() or "-", why))
+    else:
+        bad("%-15s %s -- %s" % (mod, (r.stderr.strip().splitlines() or ["failed"])[-1][:70], why))
 
 try:
     import cv2
