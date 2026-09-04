@@ -81,6 +81,7 @@ node_modules/
 # IDE
 .vscode/
 .idea/
+.serena/
 
 # Speaker models for auto-switch.py -- 200 MB, downloaded not authored
 models/
