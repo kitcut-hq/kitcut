@@ -16,9 +16,10 @@ not, which made the configuration a lie.
 So: a manifest states quality, speed and bitrate ceilings, and this module
 renders them into whichever family the encoder belongs to.
 
-    nvenc     -preset p5   -rc vbr  -cq N -b:v 0
-    amf       -quality quality      -rc qvbr -qvbr_quality_level N
-    software  -preset medium        -crf N
+    nvenc         -preset p5   -rc vbr  -cq N -b:v 0
+    amf           -quality quality      -rc qvbr -qvbr_quality_level N
+    videotoolbox  -q:v N                (this family has no speed key at all)
+    software      -preset medium        -crf N
 
 `speed` is carried on NVENC's own p1..p7 scale, because every preset and
 manifest already committed to this repo speaks it. A `preset` of `p5` written
@@ -58,8 +59,11 @@ STRICT_VAR = "VIDEDIT_ENCODER_STRICT"
 # Tried in order when nothing names an encoder. h264 before hevc because every
 # consumer of these renders (YouTube, the comparators, the browsers) takes it,
 # and hardware before software because a film is minutes either way on a GPU
-# and the better part of an hour on a CPU.
-CANDIDATES = ("h264_nvenc", "h264_amf", "h264_qsv", "libx264")
+# and the better part of an hour on a CPU. VideoToolbox holds that lead on real
+# footage at equal VMAF; on a clean synthetic clip it disappears, so testsrc
+# cannot settle this order.
+CANDIDATES = ("h264_nvenc", "h264_amf", "h264_qsv", "h264_videotoolbox",
+              "libx264")
 
 DEFAULT_SPEED = 5               # p5: what every render script defaulted to
 DEFAULT_QUALITY = 21
@@ -82,15 +86,20 @@ def family_of(encoder):
     """
     e = (encoder or "").strip().lower()
     for suffix, fam in (("_nvenc", "nvenc"), ("_amf", "amf"),
-                        ("_qsv", "qsv"), ("_vaapi", "vaapi")):
+                        ("_qsv", "qsv"), ("_vaapi", "vaapi"),
+                        ("_videotoolbox", "videotoolbox")):
+
         if e.endswith(suffix):
             return fam
+
     if e.startswith("lib") or e in ("mpeg4", "h264", "hevc"):
         return "software"
+
     raise ValueError(
         "unknown encoder %r -- this module knows the *_nvenc, *_amf, *_qsv, "
-        "*_vaapi and lib* families. Add it to family_of() and to SPEED/RATE "
-        "below rather than spelling its keys at a call site." % encoder)
+        "*_vaapi and *_videotoolbox families, and lib*/mpeg4/h264/hevc as "
+        "software. Add it to family_of() and to SPEED/RATE below rather than "
+        "spelling its keys at a call site." % encoder)
 
 
 # A speed tier, 1 (fastest) to 7 (slowest/best), rendered into each family's
@@ -113,6 +122,10 @@ SPEED = {
                                        "medium" if t == 5 else
                                        "slow" if t == 6 else "veryslow")],
     "vaapi":    lambda t: [],           # VAAPI has no portable speed control
+    # VideoToolbox has no speed control: no preset ladder, and -prio_speed,
+    # -realtime and -spatial_aq leave the output identical. A tier has nothing
+    # to translate into for this family, so no speed key is emitted.
+    "videotoolbox": lambda t: [],
     "software": lambda t: ["-preset", {1: "ultrafast", 2: "veryfast",
                                        3: "faster", 4: "fast", 5: "medium",
                                        6: "slow", 7: "slower"}[t]],
@@ -160,10 +173,31 @@ def amf_quality(q):
     return max(0, min(QP_MAX, QP_MAX - int(q)))
 
 
+def videotoolbox_quality(q: int) -> int:
+    """VideoToolbox's -q:v from this repo's QP-shaped number, INVERTED.
+
+    Returns 1..100, clamped, so a cq outside 0..51 saturates instead of leaving
+    the scale.
+
+    There is no -cq and no -crf here. Constant quality is the generic `-q:v`,
+    so `ffmpeg -h encoder=h264_videotoolbox` does not list it among the
+    encoder's own options. It runs 1..100 with BIGGER meaning better, the same
+    way round as AMF and the opposite of the rest.
+
+    The two constants are anchors against libx264 rather than a stretch of
+    1..100 to fit, because what a manifest means by `cq: 21` is "what crf 21
+    looked like". By VMAF against the source, `-q:v 62` matches crf 21 within
+    0.3 either way on clean and on grainy 1080p, and `-q:v 69` sits just under
+    crf 16. That is 1.4 points of -q:v per point of cq.
+    """
+    return max(1, min(100, round(62 + 1.4 * (21 - int(q)))))
+
+
 RATE = {
     "nvenc":    lambda q: ["-rc", "vbr", "-cq", str(q), "-b:v", "0"],
     "amf":      lambda q: ["-rc", "qvbr",
                            "-qvbr_quality_level", str(amf_quality(q))],
+    "videotoolbox": lambda q: ["-q:v", str(videotoolbox_quality(q))],
     "qsv":      lambda q: ["-global_quality", str(q), "-look_ahead", "1"],
     "vaapi":    lambda q: ["-rc_mode", "CQP", "-qp", str(q)],
     "software": lambda q: ["-crf", str(q)],
@@ -188,6 +222,7 @@ TUNING = {
     "amf":      lambda aq: [],
     "qsv":      lambda aq: [],
     "vaapi":    lambda aq: [],
+    "videotoolbox": lambda aq: [],
     "software": lambda aq: ["-bf", "3"],
 }
 

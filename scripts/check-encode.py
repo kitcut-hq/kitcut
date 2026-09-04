@@ -63,7 +63,10 @@ def test_families():
     for enc, want in (("h264_nvenc", "nvenc"), ("hevc_nvenc", "nvenc"),
                       ("h264_amf", "amf"), ("hevc_amf", "amf"),
                       ("av1_amf", "amf"), ("h264_qsv", "qsv"),
-                      ("h264_vaapi", "vaapi"), ("libx264", "software"),
+                      ("h264_vaapi", "vaapi"),
+                      ("h264_videotoolbox", "videotoolbox"),
+                      ("hevc_videotoolbox", "videotoolbox"),
+                      ("libx264", "software"),
                       ("libx265", "software")):
         check("%s -> %s" % (enc, want), _encode.family_of(enc) == want,
               "got %s" % _encode.family_of(enc))
@@ -100,15 +103,22 @@ def test_no_key_crosses_a_family():
 
     nv = _encode.video_args(dict(cfg, encoder="h264_nvenc"))
     amf = _encode.video_args(dict(cfg, encoder="h264_amf"))
+    vt = _encode.video_args(dict(cfg, encoder="h264_videotoolbox"))
     x264 = _encode.video_args(dict(cfg, encoder="libx264"))
 
     # THE regression. A committed manifest says "p5"; AMF and x264 must never
     # see it, and must not silently lose the speed setting either.
     check("p5 does not reach AMF", "p5" not in amf)
     check("p5 does not reach libx264", "p5" not in x264)
+    check("p5 does not reach VideoToolbox", "p5" not in vt)
     check("AMF still gets a speed", "-quality" in amf)
     check("libx264 still gets a speed", "-preset" in x264)
     check("p5 does reach NVENC", "p5" in nv)
+    # VideoToolbox has no speed key for a tier to translate into, so video_args
+    # emits none. SPEED ignores its tier argument for this family, so the one
+    # config below stands for every tier.
+    check("VideoToolbox is given no speed key at all",
+          "-preset" not in vt and "-quality" not in vt)
 
     check("-rc vbr is NVENC-only",
           "-rc" in nv and nv[nv.index("-rc") + 1] == "vbr"
@@ -120,11 +130,13 @@ def test_no_key_crosses_a_family():
           and "-crf" not in amf)
     check("-qvbr_quality_level is AMF-only", "-qvbr_quality_level" in amf
           and "-qvbr_quality_level" not in nv)
+    check("-q:v is VideoToolbox-only", "-q:v" in vt and "-q:v" not in nv
+          and "-q:v" not in amf and "-q:v" not in x264)
     # README ## Gotchas: without it NVENC ignores -cq entirely. It is also
     # meaningless to the other two, which already have a quality target.
     check("-b:v 0 is NVENC-only",
           nv[nv.index("-b:v") + 1] == "0" and "-b:v" not in amf
-          and "-b:v" not in x264)
+          and "-b:v" not in vt and "-b:v" not in x264)
     check("the quality number survives into every family",
           "21" in nv and "21" in x264
           and str(_encode.amf_quality(21)) in amf)
@@ -133,25 +145,36 @@ def test_no_key_crosses_a_family():
     # number must mean a better picture on EVERY family, which on AMF means
     # the emitted quality level has to go UP as the asked-for number goes down.
     print("== better quality is always a smaller number ==")
-    for enc in ("h264_nvenc", "h264_amf", "libx264"):
+    INVERTED = {"amf": "-qvbr_quality_level", "videotoolbox": "-q:v"}
+
+    for enc in ("h264_nvenc", "h264_amf", "h264_videotoolbox", "libx264"):
         hi = _encode.video_args({"encoder": enc, "cq": 16})   # want better
         lo = _encode.video_args({"encoder": enc, "cq": 30})   # want worse
         fam = _encode.family_of(enc)
-        if fam == "amf":
-            a = int(hi[hi.index("-qvbr_quality_level") + 1])
-            b = int(lo[lo.index("-qvbr_quality_level") + 1])
-            ok = a > b          # inverted scale: better quality is a HIGHER level
-        else:
+        inverted = (key := INVERTED.get(fam)) is not None
+
+        if not inverted:
             key = "-cq" if fam == "nvenc" else "-crf"
-            a = int(hi[hi.index(key) + 1])
-            b = int(lo[lo.index(key) + 1])
-            ok = a < b
-        check("%s: cq 16 asks for better pictures than cq 30" % enc, ok,
+
+        a = int(hi[hi.index(key) + 1])
+        b = int(lo[lo.index(key) + 1])
+        check("%s: cq 16 asks for better pictures than cq 30" % enc,
+              a > b if inverted else a < b,
               "cq16 emitted %d, cq30 emitted %d" % (a, b))
+
+    check("the loop above covers every family in _encode.RATE",
+          set(_encode.RATE) - {"qsv", "vaapi"} ==
+          {"nvenc", "amf", "videotoolbox", "software"})
     check("AMF inverts rather than passing through",
           _encode.amf_quality(16) == 35 and _encode.amf_quality(21) == 30)
     check("AMF quality level stays inside 0..51",
           _encode.amf_quality(-5) <= 51 and _encode.amf_quality(99) >= 0)
+    check("VideoToolbox inverts rather than passing through",
+          _encode.videotoolbox_quality(21) == 62
+          and _encode.videotoolbox_quality(16) == 69)
+    check("VideoToolbox -q:v stays inside 1..100",
+          1 <= _encode.videotoolbox_quality(-5) <= 100
+          and 1 <= _encode.videotoolbox_quality(99) <= 100)
     check("NVENC tuning is emitted", "-spatial-aq" in nv and "-tune" in nv)
     # Measured, not assumed: -vbaq/-preanalysis cost 26% and did nothing on
     # VCN 1.0, and this GPU has no H.264 B-frames at all.

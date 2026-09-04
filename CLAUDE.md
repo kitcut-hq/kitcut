@@ -85,24 +85,31 @@ its free-mode requirement.
 A manifest states an intent — `cq`, `speed`/`preset`, `maxrate`, `bufsize` —
 and `_encode` renders it into the chosen encoder's family: `nvenc`
 (`-preset p5 -rc vbr -cq N -b:v 0`), `amf` (`-quality balanced -rc qvbr
--qvbr_quality_level N`), `software` (`-preset medium -crf N`), `qsv`. Speed
-rides NVENC's p1..p7 scale because every committed preset already speaks it,
-so `"preset": "p5"` is translated rather than passed to an encoder that would
-reject it. `profile`/`level` follow the **codec**, a different axis: H.264
-values, `main` on HEVC, level dropped there.
+-qvbr_quality_level N`), `videotoolbox` (`-q:v N`, and nothing else — it has
+no preset ladder, and `-prio_speed`/`-realtime`/`-spatial_aq` were each
+measured to produce a byte-identical file), `software` (`-preset medium -crf
+N`), `qsv`. Speed rides NVENC's p1..p7 scale because every committed preset
+already speaks it, so `"preset": "p5"` is translated rather than passed to an
+encoder that would reject it. `profile`/`level` follow the **codec**, a
+different axis: H.264 values, `main` on HEVC, level dropped there.
 
 **A smaller quality number always means a better picture** — that is the
-contract `cq` carries, and each family expresses it in its own terms. AMF's
-`-qvbr_quality_level` runs the OTHER way (measured: level 10 → VMAF 81.9,
-level 46 → VMAF 94.6), so `_encode.amf_quality()` inverts it. Passing it
-through made every AMF render quietly worse than its manifest asked for, and
-the smaller file read as efficiency rather than as loss. `check-encode.py`
-asserts the direction per family now.
+contract `cq` carries, and each family expresses it in its own terms. **Two of
+them run the OTHER way.** AMF's `-qvbr_quality_level` does (measured: level 10
+→ VMAF 81.9, level 46 → VMAF 94.6), so `_encode.amf_quality()` inverts it;
+passing it through made every AMF render quietly worse than its manifest asked
+for, and the smaller file read as efficiency rather than as loss. VideoToolbox's
+`-q:v` runs 1..100 the same way round, so `_encode.videotoolbox_quality()`
+inverts it too, anchored on libx264 rather than stretched to fit, because
+`cq: 21` means "what crf 21 looked like" (crf 21 → VMAF 97.4, `-q:v 62` → 97.3;
+crf 16 → 98.8, `-q:v 69` → 98.2). `check-encode.py` asserts the direction per
+family, and asserts that the list of families it tests still covers
+`_encode.RATE`.
 
 Which encoder: `render.encoder` → `$VIDEDIT_ENCODER` → the first of
-`h264_nvenc`/`h264_amf`/`h264_qsv`/`libx264` that **encodes a frame here**.
-One a committed file names but this box cannot run is substituted loudly; one
-named explicitly fails instead. Availability is never read off
+`h264_nvenc`/`h264_amf`/`h264_qsv`/`h264_videotoolbox`/`libx264` that
+**encodes a frame here**. One a committed file names but this box cannot run
+is substituted loudly; one named explicitly fails instead. Availability is never read off
 `ffmpeg -encoders` — that lists what the build supports, and a full Windows
 build lists NVENC on a machine with no NVIDIA driver.
 

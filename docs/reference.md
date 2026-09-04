@@ -2673,6 +2673,7 @@ belongs to:
 |---|---|---|
 | `*_nvenc` | `-preset p5` | `-rc vbr -cq N -b:v 0` |
 | `*_amf` | `-quality balanced` | `-rc qvbr -qvbr_quality_level N` |
+| `*_videotoolbox` | *nothing: it has none* | `-q:v N` |
 | `lib*` | `-preset medium` | `-crf N` |
 | `*_qsv` | `-preset medium` | `-global_quality N -look_ahead 1` |
 
@@ -2690,13 +2691,20 @@ any of this still means p5 — it is *translated* into the target family rather
 than ignored, and it is never passed through to an encoder that would reject
 it.
 
-**Quality is one number across all four, and smaller always means better.**
+**Quality is one number across all five, and smaller always means better.**
 That is the contract `cq` carries — it is what `-cq` and `-crf` already mean —
-and each family is responsible for expressing it in its own terms. Three of
-the four take it as written. **AMF's `-qvbr_quality_level` runs backwards**, so
-`_encode.amf_quality()` inverts it (`51 - cq`); see `## Gotchas`, where the
-measured curve is. Getting this wrong is invisible from the outside, because
-too *little* quality makes a *smaller* file and small files look like a win.
+and each family is responsible for expressing it in its own terms. **Two of
+the five run backwards.** AMF's `-qvbr_quality_level` does, so
+`_encode.amf_quality()` inverts it (`51 - cq`); VideoToolbox's `-q:v` runs
+1..100 the same way round, so `_encode.videotoolbox_quality()` inverts it too.
+See `## Gotchas`, where both measured curves are. Getting this wrong is
+invisible from the outside, because too *little* quality makes a *smaller* file
+and small files look like a win.
+
+VideoToolbox is also the one family with **no speed control at all** — no
+preset ladder, and its three lookalikes (`-prio_speed`, `-realtime`,
+`-spatial_aq`) were each measured to return a byte-identical file in the same
+time. A speed tier reaching it is dropped rather than invented.
 
 **`profile` and `level` follow the codec, not the family** — a separate axis.
 The values in these configs (`high`, `4.2`) are H.264 ones, so on HEVC the
@@ -2708,9 +2716,12 @@ rendering a caption pass through `hevc_amf` and getting `Invalid argument`.
 ### Which one you get
 
 Resolution is `render.encoder` in the manifest or preset → `$VIDEDIT_ENCODER`
-→ the first of `h264_nvenc`, `h264_amf`, `h264_qsv`, `libx264` that **actually
-encodes a frame here**. Same shape as `_env.workspace()`: the assumption gets
-one home.
+→ the first of `h264_nvenc`, `h264_amf`, `h264_qsv`, `h264_videotoolbox`,
+`libx264` that **actually encodes a frame here**. Same shape as
+`_env.workspace()`: the assumption gets one home. Hardware sits ahead of
+software throughout: on an M-series Mac, 30 s of grainy 1080p30 took 6.6 s
+through VideoToolbox against 35.6 s through `libx264 -preset medium`, for a
+slightly better VMAF at 111 MB against 260 MB.
 
 An encoder a *committed file* names but this machine cannot run is
 **substituted, loudly**, naming the key to edit for permanence — those files
@@ -3180,7 +3191,27 @@ evidence.
   reads as a *virtue*: the file is smaller, which looks like efficiency rather
   than loss. `amf_quality()` inverts it, and `check-encode.py` now asserts the
   direction on every family — that cq 16 really does ask for better pictures
-  than cq 30, whatever key the family spells it with.
+  than cq 30, whatever key the family spells it with. It also asserts that the
+  list of families it walks still covers `_encode.RATE`, so a family added
+  without a direction test fails rather than passing unexamined.
+- **VideoToolbox runs backwards too, and its quality key is not in its own
+  option list.** There is no `-cq` and no `-crf` on `h264_videotoolbox`;
+  constant quality is the generic `-q:v`, which `ffmpeg -h
+  encoder=h264_videotoolbox` does not print at all because it is
+  AVCodecContext's `global_quality`. It runs 1..100 with **bigger meaning
+  better**. The mapping is anchored on libx264 rather than stretched to fill
+  the range, because what a manifest means by `cq: 21` is "what crf 21 looked
+  like" — measured by VMAF on clean 1080p and on the same clip with grain:
+
+  | | clean | grainy |
+  |---|---|---|
+  | `crf 21` | 97.38 | 96.93 |
+  | `-q:v 62` | 97.32 | 97.21 |
+  | `crf 16` | 98.77 | |
+  | `-q:v 69` | 98.20 | |
+
+  which puts the slope at 1.4 points of `-q:v` per point of `cq`. On the grainy
+  clip the VideoToolbox file was less than half the size at the better score.
 - **`ffmpeg -encoders` lists what the BUILD supports, not what this machine
   can do.** A full Windows build lists `h264_nvenc` whether or not an NVIDIA
   driver was ever installed — so the string test `check-env.py` used to run
@@ -3195,13 +3226,18 @@ evidence.
   multiple of 16), 128x128 and 176x144 pass. `_encode.PROBE_SIZE` is 320x240
   and is a measured floor, not a round number — do not shrink it to make the
   probe cheaper.
-- **A `preset` is a per-family word, not a universal one.** `p5` is NVENC's;
-  AMF's are `speed`/`balanced`/`quality`/`high_quality`; x264's are
-  `medium`/`slow`/... . Give AMF or x264 a `p5` and it exits on
-  `invalid preset 'p5'` before a frame is read. Worse, AMF's *numbers* are not
-  portable either — `h264_amf`'s presets run 0..3 and `hevc_amf`'s run 0..15,
-  so `-quality 2` means different things on the two. `_encode.py` passes AMF
-  presets by **name**, which both accept.
+- **A `preset` is a per-family word, not a universal one — and one family has
+  no such word at all.** `p5` is NVENC's; AMF's are
+  `speed`/`balanced`/`quality`/`high_quality`; x264's are `medium`/`slow`/... .
+  Give AMF or x264 a `p5` and it exits on `invalid preset 'p5'` before a frame
+  is read. Worse, AMF's *numbers* are not portable either — `h264_amf`'s
+  presets run 0..3 and `hevc_amf`'s run 0..15, so `-quality 2` means different
+  things on the two. `_encode.py` passes AMF presets by **name**, which both
+  accept. VideoToolbox has no preset ladder in any spelling, and the three
+  options that look like one are no-ops: `-prio_speed 1`, `-realtime 1` and
+  `-spatial_aq 1` each produced a byte-identical file in the same 1.44 s on an
+  M-series. Its speed entry is empty for that reason, not by oversight — the
+  same kind of measurement as AMF's empty tuning block above.
 - **`crop` has no `eval` option** — that is `scale`/`overlay`/`drawtext`. Its
   `x`/`y` are flagged runtime-tunable and already re-evaluated per frame, which
   is what lets the vertical crop pan. Passing `eval=frame` is a hard error.
