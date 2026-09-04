@@ -152,8 +152,7 @@ def detect_shots(src, start, dur, threshold=27.0):
 
     Returns [0.0, ...] always, so callers can treat the result as shot starts.
     """
-    from scenedetect import open_video, SceneManager, ContentDetector
-    from scenedetect.frame_timecode import FrameTimecode
+    from scenedetect import FrameTimecode, open_video, SceneManager, ContentDetector
 
     video = open_video(src)
     fps = video.frame_rate
@@ -163,7 +162,7 @@ def detect_shots(src, start, dur, threshold=27.0):
     sm.detect_scenes(video=video, duration=FrameTimecode(dur, fps))
     cuts = [0.0]
     for s, _ in sm.get_scene_list():
-        t = s.get_seconds() - start
+        t = s.seconds - start
         if 0.25 < t < dur - 0.25:  # a shot shorter than that is a flash
             cuts.append(t)
     return sorted(set(round(c, 3) for c in cuts))
