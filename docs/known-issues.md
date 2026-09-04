@@ -421,3 +421,30 @@ measured working with the warning present.
 **Evidence.** yt-dlp 2026.08.19 on macOS, `g-YDNJcyuck`: the 1080p avc1 rung is
 absent from `-F` without a runtime and present with `--js-runtimes bun`.
 
+### KI-028 · limitation · all · cv2 and av bundle different FFmpeg builds, and macOS says so
+
+**Symptom.** On macOS every script that ends up holding both `cv2` and `av`
+prints two lines before it does anything: `objc[...]: Class AVFFrameReceiver is
+implemented in both .../cv2/.dylibs/libavdevice.61.3.100.dylib and
+.../av/.dylibs/libavdevice.62.3.102.dylib ... This may cause spurious casting
+failures and mysterious crashes.` Nothing has actually failed because of it.
+**Cause.** The two wheels vendor different FFmpeg majors -- OpenCV ships 7.x,
+PyAV ships 8.x -- and both register the same AVFoundation Objective-C classes.
+The Objective-C runtime allows only one implementation per class name and warns
+on the second. Windows has no such runtime, which is why this never appeared
+before. Measured: `cv2` alone is silent, `faster_whisper` alone is silent, the
+pair warns.
+**Reach.** Wider than it first looks. `faster_whisper` imports `av`, and so does
+`scenedetect` -- at import time, while registering its backends, before any
+`open_video` call -- so `auto-reframe.py` triggers it too. Passing
+`backend="opencv"` does not help: `av` is already loaded by then.
+**Workaround.** None in this repo's code beyond process isolation, which
+`check-env.py` now does for its own import probe because a doctor may as well
+be quiet. Removing it for real means aligning the two wheels on one FFmpeg
+major (pinning `av` down to a 7.x build, which faster-whisper may refuse) or
+building `av` against a system FFmpeg. Neither is worth a warning that has not
+yet cost a render.
+**Evidence.** macOS 15 arm64, opencv-python 4.14.0.94, av 18.1.0,
+scenedetect 0.7.1; `auto-reframe.py` on `bbg-nvidia-hf` warns and then completes
+with faces found in 186/186 and 158/160 sampled frames.
+
