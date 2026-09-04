@@ -402,3 +402,22 @@ un-approves the look rather than slipping in behind it.
 It cannot tell you a hand rect is missing, because nothing detected it — that
 is what the review sheet is for.
 
+### KI-027 · limitation · import · yt-dlp needs a JavaScript runtime to reach video streams
+
+**Symptom.** Every yt-dlp call warns "No supported JavaScript runtime could be
+found. Only deno is enabled by default". Captions and chapters still come back,
+so the warning reads as cosmetic; a format listing is quietly missing the
+high-bitrate video streams.
+**Cause.** YouTube keeps its signature and `n`-parameter logic inside the player
+JavaScript. yt-dlp no longer reimplements that in Python, it runs the player, so
+a JS engine is a hard requirement for stream URLs. Without one the formats that
+survive are throttled, and the path is deprecated upstream.
+**Workaround.** `--js-runtimes bun` (or `node`). Only `deno` is enabled by
+default and `requirements.txt` installs none of the three, so the runtime is an
+undeclared external dependency. Not needed for what this repo actually asks
+yt-dlp for: `yt-fetch-transcripts.py`, `yt-audit-chapters.py` and
+`chapter-thumbs.py` want captions, chapters and metadata, and all three were
+measured working with the warning present.
+**Evidence.** yt-dlp 2026.08.19 on macOS, `g-YDNJcyuck`: the 1080p avc1 rung is
+absent from `-F` without a runtime and present with `--js-runtimes bun`.
+
