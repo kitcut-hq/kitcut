@@ -2870,6 +2870,85 @@ evidence.
   fail with EACCES on Windows, discarding a finished encode over a file lock.
   `cut-clips.py` waits it out.
 
+## Update history
+
+What changed and which capability it touched. Fixes that only a maintainer
+would care about are left to `git log`.
+
+```
+2026-09-03
+  shorts     Picking the moments became its own stage: candidates shortlisted
+             with reasoning, quotes resolved and hook timing priced BEFORE
+             anything is cut. Two rejected picks would have died on paper.
+  shorts     A caption card sitting on the speaker's face is refused. The
+             guard reads the render and runs after every vertical cut.
+  captions   Whisper's split punctuation glued at the shared word loader --
+             "60 ,000" reads "60,000" in captions, dub units and phrase
+             anchors alike. It had been shipping on every captioned video.
+  captions   grouping.wrap: a channel's own wrapping policy ends cards that
+             strand a single word on a line of their own.
+  shorts     Caption position measured off the channel's published shorts
+             instead of eyeballed -- a still frame cannot tell a caption box
+             from a black turtleneck.
+  shorts     check-shorts.py, the self-test this path never had. No GPU.
+
+2026-09-02
+  platform   Setup is something Claude performs, not something the user is
+             told to run.
+
+2026-09-01
+  captions   CPU encoder fallback -- captions and shorts render on a machine
+             with no NVENC.
+  shorts     Hook gate: a clip whose hook arrives late is refused rather than
+             rendered. It had shipped twice.
+  screen     film-redact -- when the secrets ARE the film, redact the finished
+             cut instead of mapping back through it.
+  publish    One OAuth grant per channel, so authorising a second never burns
+             the first.
+  platform   make-tester-repo -- the copy of this repo a stranger can be given.
+
+2026-08-31
+  screen     New pipeline: a film out of screen recordings carrying no sound
+             at all -- sensitive fields tracked and blurred, voice-over added
+             later, twelve stages behind one command, two review stops.
+  multicam   Count the PEOPLE at the shoot, not the clusters: held-out score
+             49.5% -> 63.9%, and it needed no tuning.
+
+2026-08-30
+  platform   Tooling and the user's work split behind one resolver, with the
+             platform boundary enforced by the checker rather than by habit.
+
+2026-08-27
+  multicam   New pipeline: cut between cameras that shot one event, tested by
+             rebuilding somebody else's finished film and scoring the re-cut
+             frame by frame. Six films, stage 1 exact on all six.
+  multicam   Stage 2 chooses the cut from the soundtrack alone -- 73-87% of
+             the timeline on the same camera as the human editor.
+  multicam   Angles identified by WHO is in frame, for the studio case where
+             every camera shares one backdrop.
+
+2026-08-26
+  screencast New pipeline: one film out of a screen recording plus the camera
+             take beside it -- offset measured and proved, dead air dropped,
+             camera composited as a PiP.
+  projects   Every video gets a folder that remembers what was done to it:
+             project.json for current state, journal.md for history.
+  graphics   Name labels, image overlays and designed cards, each burned
+             inside the pass that was already happening.
+  publish    Chapter markers written and audited from what a video says.
+  platform   check-script.py, the status line, and a render progress reader.
+
+2026-08-25
+  captions   The beginning: word-synced burned-in captions, with sync proven
+             on sampled frames before an encode is spent.
+  shorts     Shorts cut by quoting what is said rather than by timecode;
+             vertical 9:16 with a face-tracked crop; animated handle badge.
+  dub        New pipeline: translate a clip and keep its cadence -- segment at
+             real pauses, fit each line to its slot, retune what will not fit.
+  platform   A user-level PYTHONPATH was loading another Python's packages;
+             every script now re-execs into .venv with a clean environment.
+```
+
 ## Legacy
 
 `scripts/transcribe-audio.py` (OpenAI Whisper API) and
