@@ -25,6 +25,7 @@ import atexit
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 import _gpulock  # noqa: E402 -- stdlib sibling; one large-v3 on the card at a time
+from _types import ModelName  # noqa: E402 -- stdlib sibling; erased at runtime
 
 # _env handles the poisoned path and UTF-8 stdio (layers 1 and 2).
 # --- ctranslate2 bundles its own libiomp5md.dll
@@ -105,6 +106,18 @@ def take_gpu_lock(args):
         )
     atexit.register(_gpulock.release, token, "gpu")
     return token
+
+
+def _uncached_model_error(model: ModelName) -> str:
+    """Name the `hf download` that would put `model` in the cache."""
+    if "/" not in (repo := model):
+        distil = "distil-" if repo.startswith("distil-") else ""
+        repo = f"Systran/faster-{distil}whisper-{repo.removeprefix('distil-')}"
+
+    return (
+        f"FATAL: model {model!r} is not in the local Hugging Face cache, and this "
+        f"script never downloads one.\nFetch it once:  hf download {repo}"
+    )
 
 
 def main():
@@ -201,6 +214,12 @@ def main():
             break
         except (RuntimeError, OSError) as e:
             msg = str(e).lower()
+
+            # local_files_only never downloads, so a model absent from the cache
+            # arrives as a huggingface_hub traceback about disabled traffic.
+            if "cached snapshot" in msg or "local_files_only" in msg:
+                sys.exit(_uncached_model_error(ModelName(args.model)))
+
             if device != "cpu" and any(
                 k in msg for k in ("cuda", "cublas", "cudnn", "out of memory", "library")
             ):

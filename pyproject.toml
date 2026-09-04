@@ -29,4 +29,6 @@ ignore = [
     "RUF100",
     # Fights `ruff format`, on ruff's own advice.
     "COM812",
+    # Nothing here is packaged or distributed, so no file carries a header.
+    "CPY001",
 ]
