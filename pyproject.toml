@@ -1,0 +1,15 @@
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    # These three delete or reorder the `_env` bootstrap, which every script
+    # imports for its side effect and never names again.
+    "F401",
+    "I001",
+    "RUF100",
+    # Fights `ruff format`, on ruff's own advice.
+    "COM812",
+]
