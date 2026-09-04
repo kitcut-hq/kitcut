@@ -1,0 +1,87 @@
+{
+  "_note": "Selection stage for Bloomberg Tech 09/02/2026 (g-YDNJcyuck). Written before any manifest, so the comparison is on paper. Anchors are quoted from the ASR transcript, which mangles some proper nouns (Nvidia -> 'Invidia', Rachel Metz -> 'Retro Metz'); anchors deliberately avoid those words.",
+  "wanted": "A couple of YouTube Shorts. No length named, so the 45-75s talking-head default applies; say so if it should be overridden.",
+  "source_words": "projects/bbg-nvidia-hf/transcripts/bbg-nvidia-hf.words.json",
+  "candidates": [
+    {
+      "id": "01-cognition-47b",
+      "title": "Cognition doubles its valuation in four months",
+      "start_text": "Cognition just raised at a $26 billion valuation in May",
+      "hook": "Cognition just raised at a $26 billion valuation in May",
+      "end_text": "So that's one of the things that's really driving a lot of interest here",
+      "verdict": "pick",
+      "why": "Two numbers that move on their own: 26 to 47 billion in four months, and ARR 492 to 900 million over the same period. The reporter states both as reporting, not opinion, and the segment closes on the revenue figure rather than on a question.",
+      "tests": {
+        "disagree": "Yes -- a 47B valuation on ~900M ARR is a ~52x multiple, and plenty of people will say that is a bubble print. The clip does not argue either side, which is what makes the comment section work.",
+        "audience": "Anyone following AI startup funding or the coding-agent race; the numbers are legible without knowing what Cognition builds.",
+        "ends_on_claim": "Yes -- ends on the ARR jump being what drives investor interest, a statement rather than a hand-off.",
+        "falsifiable": "Yes -- valuation, round size and ARR are all specific figures attributed to Bloomberg reporting and checkable."
+      },
+      "picture": "Studio two-shot at the desk, reporter to camera-left. Bloomberg's own lower third runs under the speakers, so the 9:16 crop must clear it -- that is exactly what pushed crop_zoom up on this episode and forced the caption card above the head (bottom_margin_px 816 in the preset)."
+    },
+    {
+      "id": "02-uber-micro-teams",
+      "title": "Uber cuts 3,300 roles to kill its micro-teams",
+      "start_text": "is looking to cut about 3,300 roles in its latest restructuring",
+      "hook": "is looking to cut about 3,300 roles in its latest restructuring",
+      "end_text": "make the organization simpler and faster",
+      "verdict": "pick",
+      "why": "A layoff number plus the mechanism behind it, which is the rarer half: teams with one or two reports get merged, leaving 20% fewer managers. The 'micro-teams' detail is concrete and travels well beyond Uber.",
+      "tests": {
+        "disagree": "Yes -- flattening management is either overdue or a euphemism for cuts, depending on who is watching, and the memo quote about coordination versus building is the line people will argue about.",
+        "audience": "Tech workers and managers well outside Uber; every large org has the micro-team problem.",
+        "ends_on_claim": "Yes -- closes on the stated purpose, a simpler and faster organization, not on a question to the next guest.",
+        "falsifiable": "Yes -- 3,300 roles, 10% of global staff and 20% fewer managers are all countable, sourced to a CEO email Bloomberg viewed."
+      },
+      "picture": "Reporter at the desk, single speaker for most of the span, so the crop can sit tighter and the caption card has a cleaner background than the two-shot."
+    },
+    {
+      "id": "03-nvidia-retention-billion",
+      "title": "The extra billion is to stop the talent walking",
+      "start_text": "reporting that includes an extra sort of billion dollars of retention",
+      "hook": "reporting that includes an extra sort of billion dollars of retention",
+      "end_text": "That was about keeping the staff",
+      "verdict": "reject",
+      "why": "Strongest single idea in the episode -- a billion dollars exists purely so the acquired team does not quit -- but the span that states it runs about 15 seconds and the sentences on either side are the anchor's question and a topic change. Padding it out means opening on 'what does that include?', which is the anchor-question hook the skill rejects outright. Rejected on length, not on content.",
+      "tests": {
+        "disagree": "Yes -- retention pools of that size read as either sensible or as evidence the price is really about people, not product.",
+        "audience": "Anyone watching AI M&A; the 'you are buying the staff' framing is widely portable.",
+        "ends_on_claim": "Yes, but too soon -- the claim lands roughly 12 seconds in and there is nothing after it.",
+        "falsifiable": "Partly -- the billion is attributed to sources, and the deal total is public, so the retention split is checkable only via the reporting itself."
+      },
+      "picture": "Three-box: two guests plus the anchor. The skill's own note on this episode is that boxed shots have killed candidates before, and a 9:16 crop of a three-box either loses a speaker or shrinks all of them."
+    },
+    {
+      "id": "04-spacex-rebuffed",
+      "title": "SpaceX tried to buy Cognition and was turned down",
+      "start_text": "SpaceX had approached cognition in recent",
+      "hook": "SpaceX had approached cognition in recent",
+      "end_text": "driven investor interest into cognition",
+      "verdict": "backup",
+      "why": "Better story than 01 on narrative alone -- a rejected acquisition plus a much larger comparison deal -- but it is told as background to the funding round, so it leans on context the viewer does not have. Kept as the bench pick if 01 fails caption-space review, since it sits in the same segment and the same framing.",
+      "tests": {
+        "disagree": "Yes -- turning down SpaceX is either conviction or a mistake, and viewers split on that predictably.",
+        "audience": "Startup and VC watchers; needs slightly more prior context than 01 or 02.",
+        "ends_on_claim": "Weakly -- ends on investor interest continuing, which is a softer close than 01's revenue figure.",
+        "falsifiable": "Yes -- the approach, the refusal and the comparison acquisition are all attributed to prior Bloomberg reporting."
+      },
+      "picture": "Same desk two-shot as 01, so the framing question is already answered by whatever 01 measures."
+    },
+    {
+      "id": "05-dell-32-trillion",
+      "title": "$32 trillion of data centre spending by 2050",
+      "start_text": "look at today's big number, which is $32 trillion",
+      "hook": "look at today's big number, which is $32 trillion",
+      "end_text": "Dell will definitely benefit",
+      "verdict": "reject",
+      "why": "The biggest number in the episode and the weakest claim behind it: it is a projection to 2050, and the guest herself notes the previous survey said something very different for 2030. A short built on it would be a forecast presented as news, which is the kind of pick that gets the channel argued with for the wrong reason. Also runs long and is split across an interview exchange rather than one answer.",
+      "tests": {
+        "disagree": "Yes, but on the wrong axis -- people would argue with the forecast's credibility rather than with the point being made.",
+        "audience": "Investors; narrower than 01 or 02 and dependent on caring about Dell specifically.",
+        "ends_on_claim": "Yes -- ends on Dell benefiting, though that is the guest's opinion rather than reporting.",
+        "falsifiable": "No -- a 2050 projection cannot be checked, and the guest openly contrasts it with an earlier, much smaller estimate."
+      },
+      "picture": "Guest via remote video box beside the anchor; the remote feed is softer than the studio camera and crops worse at 9:16."
+    }
+  ]
+}
