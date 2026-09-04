@@ -30,6 +30,7 @@ import sys, os, json, argparse, subprocess, shutil
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _encode  # noqa: E402 -- the one place encoder keys are chosen
 from importlib import import_module  # noqa: E402
 
 _outline = import_module("transcript-outline")
@@ -40,7 +41,9 @@ import _project  # noqa: E402
 
 ROOT = _env.ROOT
 
-DEFAULT_RENDER = {"encoder": "h264_nvenc", "preset": "p5", "cq": 21,
+# No "encoder": _encode picks one this machine can actually run, and a
+# manifest that names one overrides it. "speed" is family-neutral.
+DEFAULT_RENDER = {"speed": 5, "cq": 21,
                   "maxrate": "16M", "bufsize": "32M", "audio_bitrate": "192k"}
 DEFAULT_CUT = {"min_silence": 1.5, "air": 0.4, "silence_db": -34,
                "freeze_db": -60, "require_frozen": True, "min_drop": 0.5}
@@ -697,7 +700,7 @@ def main():
     pip = dict(DEFAULT_PIP, **(m.get("pip") or {}))
     cut = dict(DEFAULT_CUT, **(m.get("cut") or {}))
     audio_cfg = m.get("audio") or {}
-    render = dict(DEFAULT_RENDER, **(m.get("render") or {}))
+    render = _encode.resolve(dict(DEFAULT_RENDER, **(m.get("render") or {})))
     fps = int(canvas["fps"])
     name_specs = m.get("name_labels") or []
     for spec in name_specs:
@@ -779,6 +782,8 @@ def main():
         "%s (%s)" % (a["layout"], hhmmss(act_dur(a))) for a in acts))
 
     if args.list:
+        print("")
+        print("  encoder: %s" % _encode.describe(render))
         print("")
         print("  camera in       out      len   layout   what is said there")
         for a, b, layout in keeps:
@@ -959,13 +964,9 @@ def main():
            + inputs
            + ["-filter_complex", graph, "-map", "[vout]", "-map", "[aout]",
               "-r", str(fps),
-              "-c:v", render["encoder"], "-preset", render["preset"],
-              "-rc", "vbr", "-cq", str(render["cq"]),
-              # NVENC ignores -cq unless the average bitrate target is unset
-              "-b:v", "0", "-maxrate", render["maxrate"],
-              "-bufsize", render["bufsize"], "-pix_fmt", "yuv420p",
-              "-c:a", "aac", "-b:a", render["audio_bitrate"], "-ac", "2",
-              "-movflags", "+faststart", "-y", tmp])
+              ]
+           + _encode.video_args(render) + _encode.audio_args(render)
+           + ["-movflags", "+faststart", "-y", tmp])
 
     print("")
     print("  rendering %s ..." % os.path.relpath(dst, ROOT))

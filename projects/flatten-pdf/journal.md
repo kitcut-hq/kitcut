@@ -4,6 +4,63 @@ after each editing session, append a short prose note: what was asked,
 which knob changed, why, and anything the next session should not rediscover.
 
 ## 2026-09-01
+- 14:34 project created
+- 15:08 render scripts/tighten-cut.py -> projects/flatten-pdf/outputs/flatten-pdf-tight.mp4 (--manifest projects/flatten-pdf/tighten.json)
+- 15:18 render scripts/run-captions.py -> projects/flatten-pdf/outputs/flatten-pdf-tight-captioned.mp4 (--input projects/flatten-pdf/outputs/flatten-pdf-tight.mp4 --id flatten-pdf-tight --project flatten-pdf --style config/presets/instafill.json --no-overlays --force render)
+- 15:23 render scripts/tighten-cut.py -> projects/flatten-pdf/outputs/flatten-pdf-tight.mp4 (--manifest projects/flatten-pdf/tighten.json --force)
+- 15:25 render scripts/tighten-cut.py -> projects/flatten-pdf/outputs/flatten-pdf-tight.mp4 (--manifest projects/flatten-pdf/tighten.json --force)
+- 15:27 render scripts/run-captions.py -> projects/flatten-pdf/outputs/flatten-pdf-tight-captioned.mp4 (--input projects/flatten-pdf/outputs/flatten-pdf-tight.mp4 --id flatten-pdf-tight --project flatten-pdf --style config/presets/instafill.json --no-overlays --force ass)
+
+### Session note — first edit, 2026-09-01
+
+**Asked for:** cut the "ekaying" and the long silences out of a raw screen
+recording, remove the bit near the end where he says he will pause the video,
+add captions that do not look like the red ones from last time, and prepare
+everything needed to publish on @instafill_ai.
+
+**What the material actually was.** One file, 4:54, 1280x720, VFR averaging
+30.02 fps, with the browser, the round webcam bubble and the narration already
+composited by the recorder. `screencast-cut.py` cannot touch that — it lays a
+film out in camera time against a *separate* screen recording. So this session
+wrote `scripts/tighten-cut.py`, the subtractive pass for a single clock, and
+the `video-tighten` skill that teaches it.
+
+**The cut.** 42% of the source was silence over 0.5s. `min_silence 0.7 /
+keep_pause 0.35`, picked off the `--list` sweep: 0.6/0.30 buys another six
+seconds and starts making the webcam bubble jump faster than the eye forgives.
+Two named removals do the rest — the 14.5s where he tries to say which forms
+are already fillable and never lands it (Whisper's own confidence collapses
+there, 0.22 on one word), and the 20s wait plus "we'll pause the video". Result
+3:21, 31% off.
+
+**Do not re-transcribe with the default settings.** The first pass
+(distil-large-v3, no hotwords) spelled the product three different ways and
+called the tool "flat and PDF". `--hotwords-file config/vocab/instafill.txt`
+with `large-v3` fixed it; that flag was added this session. It is ~45 minutes
+on this CPU, which is why the transcript is committed-adjacent and why
+`corrections[]` exists rather than a re-run.
+
+**Two bugs this film found, both now fixed in the tooling:**
+- `apply_corrections` first spread replacement words evenly across the phrase's
+  whole span. A phrase contains pauses; words landed in them; the pause cut
+  then deleted the pauses and the words with them, and the film was captioned
+  "So you just tool." for "So you can just open this tool." Retiming is
+  one-for-one where the word count matches, and walks spoken time only where it
+  does not.
+- `verify-captions.py` sampled a box ±fsize/2 around each word, which on a
+  two-line card reaches into the line below and reads its colour. It failed a
+  provably correct ASS. The box is clamped to its own line now.
+
+**Captions:** `config/presets/instafill.json`, written this session. Near-black
+slab at 12% transparency, sentence case, mint `#13BA82` spotlight. `red-card`
+was measured off a news channel and fights a screen recording for attention —
+that is what "the red ones looked unprofessional" was actually about. The
+geometry is fitted around the webcam bubble (x<190) and the taskbar (y>682);
+`_geometry` in the preset records both.
+
+**Next session:** the film is rendered and not published. `title.txt`,
+`description.txt` and `chapters.txt` are ready; `yt-upload.py` has not been run
+and no name label was added (his title was never confirmed).
 - 18:45 project created
 - 18:59 render scripts/cut-clips.py -> projects/flatten-pdf/outputs/shorts/flatten-pdf-01-free-tool.mp4 (--manifest projects/flatten-pdf/clips-vertical.json --no-captions)
 - 18:59 render scripts/cut-clips.py -> projects/flatten-pdf/outputs/shorts/flatten-pdf-02-whole-packet.mp4 (--manifest projects/flatten-pdf/clips-vertical.json --no-captions)
@@ -145,3 +202,47 @@ classification only lands once `processingDetails.processingStatus` reaches
 Unlisted was deliberate (standing preference: a review link that opens for
 others). It does mean the Short will not appear in the Shorts feed — that needs
 public.
+
+## 2026-09-02
+
+### Session note — publish recorded after the fact, 2026-09-02
+
+The film went up on @instafill_ai as https://youtu.be/6LQnRd0JxGU on the
+evening of 2026-09-01, with the title, description, chapters and tags from the
+committed .txt files, plus a thumbnail. All of it through the YouTube web UI —
+`yt-upload.py` was never run. `project.json` therefore said "Not published yet"
+for a day while the video was live, which is exactly the failure the project
+file exists to prevent. It is recorded now, marked as hand-uploaded so nobody
+mistakes the block for something the API confirmed.
+
+**Two gaps that belong to the NEXT video, not this one.** First, going through
+`yt-upload.py` writes the `.youtube.json` sidecar and reads the title and
+privacy back, so the record is machine-checked rather than reported. Second,
+`yt-upload.py` has no thumbnail support at all — grep it, there is nothing —
+so this video's thumbnail exists only on YouTube and cannot be rebuilt from
+here. `make-card.py` already has the templates to make a reproducible one.
+
+**Background noise was not removed**, and it was not an oversight in the edit:
+the repo has no denoiser. Zero hits for `afftdn`, `arnndn` or `anlmdn` across
+`scripts/`, `config/` and the skills. What `tighten.json` carries is
+`highpass: 85` (the rumble a laptop mic picks off a desk) and `loudnorm` —
+levelling, not denoising. Deliberately NOT retrofitted here: this video is
+published and fine.
+
+When it is built, the constraint that matters is that **silence detection must
+keep running on the raw audio**. `silence_db: -34` was fitted against this
+recording's actual noise floor; denoise before `silencedetect` and the whole
+keep-list moves, which re-cuts a film nobody asked to re-cut. Denoise belongs
+on the render's audio branch only, and before `loudnorm` — the README already
+records that `loudnorm` lifts room tone, so cleaning up after it means
+removing what was just amplified. It should be opt-in per manifest, so a
+missing `audio.denoise` key leaves every existing project byte-identical, and
+it needs an audition mode that prints the measured noise floor before and
+after on real spans, because strength is the kind of thing that gets guessed
+and then eats consonants.
+
+Also worth knowing: the audio filter chain is duplicated between
+`tighten-cut.py:368` and `screencast-cut.py:527` — the same lines, copied.
+That is the situation `_encode.py` was created to end. Lift it into an
+`_audio.py` first, or the denoiser lands in one pipeline and silently not the
+other.

@@ -1,0 +1,19 @@
+# Names and terms Whisper has never seen, fed to transcribe-words.py --hotwords-file.
+# One per line. Keep it to words the model actually gets wrong: every hotword
+# nudges the decoder, so a long list of ordinary English makes the transcript
+# worse, not better.
+Instafill
+Instafill.ai
+flatten
+flattened
+fillable
+flat-to-fillable
+PDF
+W-9
+RFTA
+Request for Tenancy Approval
+Housing Choice Voucher
+lead-based paint disclosure
+form packet
+form fields
+dashboard

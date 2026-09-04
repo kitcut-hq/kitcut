@@ -54,7 +54,7 @@ Three rules the pipeline enforces, learned the expensive way:
    the **span** it is sharp for before mapping it back. A loop that patches
    the same rect twice is not converging; it is patching the wrong seconds.
 
-The worked example is `projects/books-giveaway/screen.json`. README has the
+The worked example is `projects/books-giveaway/screen.json`. `docs/reference.md` has the
 reference under "A screencast with no soundtrack at all".
 
 ## The project folder comes first

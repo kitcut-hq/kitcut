@@ -127,12 +127,22 @@ def main():
         t = (w["a"] + w["b"]) / 2.0 / 100.0
         img = probe(args.ass, args.fontsdir, t, args.tmp, args.fps, tuple(size))
 
+        # Half-height of a word's sampling box. fsize is the NOMINAL font size,
+        # which is taller than the line spacing in any tight-leading preset --
+        # so on a two-line card the box for a word on line 1 reaches down into
+        # line 2 and reads its colour. That made a correct ASS fail: the probe
+        # sampled the mint spotlight from the word underneath and reported the
+        # wrong word highlighted. Clamp the box to stay inside its own line.
+        rows = sorted({round(ww["cy"], 1) for ww in g["words"]})
+        gap = min((b - a for a, b in zip(rows, rows[1:])), default=fsize)
+        half = min(fsize / 2.0, gap * 0.45)
+
         scores = []
         for j, ww in enumerate(g["words"]):
             x0 = int(ww["cx"] - ww["w"] / 2) - 2
             x1 = int(ww["cx"] + ww["w"] / 2) + 2
-            y0 = int(ww["cy"] - fsize / 2)
-            y1 = int(ww["cy"] + fsize / 2)
+            y0 = int(ww["cy"] - half)
+            y1 = int(ww["cy"] + half)
             box = img[max(0, y0):y1, max(0, x0):x1]
             if box.size == 0:
                 scores.append(1e9); continue

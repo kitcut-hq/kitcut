@@ -1,6 +1,6 @@
 ---
 name: video-shorts
-description: Extract shorts/episodes from a long video, optionally reframed to vertical 9:16, and stamp them with an animated Instagram-handle badge. Reads the word-level transcript to pick self-contained episodes, resolves cut boundaries by quoting what is said (not by timecodes), face-tracks the crop window so the subject stays in frame, re-renders captions at vertical size, and burns everything in one NVENC pass. Use when asked to make shorts, extract clips or episodes from a video, to make a video vertical for Reels/Shorts/TikTok, or to add a social-handle watermark to clips.
+description: Extract shorts/episodes from a long video, optionally reframed to vertical 9:16, and stamp them with an animated Instagram-handle badge. Reads the word-level transcript to pick self-contained episodes, resolves cut boundaries by quoting what is said (not by timecodes), face-tracks the crop window so the subject stays in frame, re-renders captions at vertical size, and burns everything in one encode pass. Use when asked to make shorts, extract clips or episodes from a video, to make a video vertical for Reels/Shorts/TikTok, or to add a social-handle watermark to clips.
 ---
 
 # Shorts out of a long video, with a handle badge
@@ -41,7 +41,7 @@ themselves; if you ran ffmpeg by hand or a script printed
 End an editing session by appending a short prose note to `journal.md`
 addressed to the next session: what was asked, which knob changed, why, and
 anything it should not have to rediscover. Details: `## Projects` in the
-README; the re-edit entry point is the `video-project` skill.
+`docs/reference.md`; the re-edit entry point is the `video-project` skill.
 
 ## Step 0 — derive the channel's own style
 
@@ -261,9 +261,10 @@ the manifest reads like the edit decisions that were made:
 - Pads never eat a neighbouring word — when the transcript says speech continues
   inside the pad, the boundary meets it halfway. So don't hand-tune pads per
   clip; the defaults are right.
-- No NVIDIA card → `--encoder libx264` encodes on CPU (the manifest's NVENC
-  render block is translated, cq→crf, not passed through).
-- Cuts re-encode (NVENC) and are frame-accurate. `--copy` stream-copies —
+- No NVIDIA card → nothing to edit: `_encode.py` substitutes an encoder this
+  machine can run and translates the manifest's render block into its family
+  (cq→crf on software, and so on). `--encoder <name>` picks one for a run.
+- Cuts re-encode and are frame-accurate. `--copy` stream-copies —
   instant but keyframe-snapped, and it cannot burn in the handle.
 
 ## Step 3 — the handle badge
@@ -759,6 +760,16 @@ inside a pause that is really at -40 dB.
   silently ran to the end of the source. `-ss` before the source input, `-t`
   after all inputs. The duration assert is what catches this class of bug.
 - **`-b:v 0` is required with `-cq`** or NVENC ignores the quality target.
+  NVENC's alone; `_encode.py` emits it for the nvenc family only.
+- **The encoder is a setting, not a hardcoded key.** A preset or manifest
+  states an intent (`cq`, `preset`/`speed`, `maxrate`, `bufsize`) and
+  `scripts/_encode.py` renders it into whichever family the chosen encoder
+  belongs to -- NVENC, AMF (AMD), QSV or libx264. Never write `-preset p5`
+  or `-rc vbr` at a call site: `p5` is NVENC's word and AMF and x264 exit on
+  `invalid preset 'p5'`. Which encoder is `render.encoder` -> `$VIDEDIT_ENCODER`
+  -> the first one that actually encodes a frame on this machine; one a
+  committed file names but the machine cannot run is substituted loudly.
+  Run `python scripts/check-encode.py` after touching any encoder path.
 - **The environment is fixed; run scripts as plain `python scripts/<name>.py`.** A machine-wide `PYTHONPATH` used to point at another Python install and break `import faster_whisper` -- and a venv did not help, because `PYTHONPATH` is prepended inside one too. It has been removed, and every script now imports `scripts/_env.py` first, which re-execs into `.venv` with a clean environment and forces UTF-8 stdio on this cp1252 console. Run `python scripts/check-env.py` if an import ever breaks again.
 - **Bare `yt-dlp` prints nothing under Git Bash** on this machine; always
   `.venv/Scripts/python.exe -m yt_dlp`.

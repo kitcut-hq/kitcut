@@ -6,7 +6,7 @@ description: Cut a film out of several cameras that shot the same event, switchi
 # Cutting between cameras, and proving the cut is right
 
 Two jobs in one set of scripts. `angle-cut.py` is a real multicam cutter: N
-synchronised cameras, switching full frame, one NVENC pass. The rest is a test
+synchronised cameras, switching full frame, one encode pass. The rest is a test
 harness that can take a finished film somebody else cut, rebuild the tapes it
 must have come from, re-cut it here, and score the result against the original.
 
@@ -17,7 +17,7 @@ Do not confuse this with `video-multicam`, which is `screencast-cut.py` —
 a screen recording plus a camera, **composited** into one picture. This one
 **chooses between** pictures. Different problem, different script.
 
-README reference: "Cutting between cameras, and proving the cut is right".
+`docs/reference.md` reference: "Cutting between cameras, and proving the cut is right".
 Worked examples: `projects/a16z-altman/` (4 angles, the original),
 `a16z-bornstein` (3), `a16z-agents` (2, with an off-camera speaker),
 `a16z-sinofsky` (2, a single monologue), `up-interview-1` (13 angles, an hour

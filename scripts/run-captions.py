@@ -27,6 +27,7 @@ import sys, os, json, argparse, subprocess, time, shutil, hashlib, struct
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _encode  # noqa: E402 -- the one place encoder keys are chosen
 import _project  # noqa: E402
 import _overlay  # noqa: E402 -- encoder arg translation (GPU vs CPU)
 
@@ -43,6 +44,15 @@ PY = _env.PY
 YTDLP = PY + ["-m", "yt_dlp"]
 ENV = _env.ENV
 STAGES = ["download", "audio", "transcribe", "overlays", "ass", "verify", "render"]
+
+# The caption render is the one that asks for the extra quality knobs --
+# `tuning` turns on whatever the chosen encoder family actually has (NVENC's
+# spatial/temporal AQ and lookahead; nothing on AMF, where it was measured to
+# cost 26% and change the output by 8 bytes). No "encoder": _encode picks one
+# that runs here, and a caption preset naming one overrides it.
+CAPTION_RENDER = {"speed": 6, "cq": 20, "maxrate": "20M", "bufsize": "40M",
+                  "tuning": True, "aq_strength": 12, "gop": 120,
+                  "profile": "high", "level": "4.2"}
 
 
 def sh(cmd, **kw):
@@ -312,9 +322,14 @@ def main():
     maybe_stop("verify")
 
     # ---- render ---------------------------------------------------------
-    R = style_cfg.get("render", {})
+    # The caption presets carry an encoding intent (p6/cq20 and the AQ knobs);
+    # CAPTION_RENDER is the floor under a preset that leaves any of it out.
+    # An encoder named on the command line is honoured strictly; one a
+    # committed preset names but this box cannot run is substituted.
+    R = dict(CAPTION_RENDER, **style_cfg.get("render", {}))
     if args.encoder:
-        R = dict(R, encoder=args.encoder)
+        R["encoder"] = args.encoder
+    R = _encode.resolve(R, strict_encoder=bool(args.encoder))
     acodec = probe(src_mp4, "stream=codec_name", "a:0")
     audio = (["-c:a", "copy"] if acodec and acodec[0] == "aac"
              else ["-c:a", "aac", "-b:a", "192k", "-ar", "48000"])
@@ -338,23 +353,11 @@ def main():
         pre = ["-ss", str(s), "-t", str(dsec)]
         render_out = base + "outputs/%s-preview.mp4" % vid
 
-    enc = R.get("encoder", "h264_nvenc")
-    if _overlay.is_gpu_encoder(enc):
-        vcodec = ["-c:v", enc,
-                  "-preset", R.get("preset", "p6"), "-tune", "hq",
-                  "-rc", "vbr", "-cq", str(R.get("cq", 20)), "-b:v", "0",
-                  "-maxrate", R.get("maxrate", "20M"),
-                  "-bufsize", R.get("bufsize", "40M"),
-                  "-rc-lookahead", "32", "-spatial-aq", "1",
-                  "-aq-strength", str(R.get("aq_strength", 12)), "-temporal-aq", "1"]
-    else:
-        # NVENC-only flags kill libx264 on sight; translate instead of passing
-        vcodec = _overlay.cpu_encoder_args(R)
     sh(["ffmpeg", "-hide_banner", "-loglevel", "error", "-stats", "-y"]
-       + pre + ["-i", src_mp4, "-vf", vf] + vcodec +
-       ["-bf", "3", "-g", "120", "-profile:v", "high", "-level", "4.2",
-        "-pix_fmt", "yuv420p", "-fps_mode", "passthrough",
-        "-movflags", "+faststart"] + audio + [render_out])
+       + pre + ["-i", src_mp4, "-vf", vf]
+       + _encode.video_args(R)
+       + ["-fps_mode", "passthrough",
+          "-movflags", "+faststart"] + audio + [render_out])
     mark("rendered")
 
     # ---- post-render checks + manifest (full renders only) --------------
@@ -367,9 +370,21 @@ def main():
         problems = []
         if abs(odur - dur) > 0.5:
             problems.append("duration %.2fs vs source %.2fs" % (odur, dur))
-        if obr < 1_500_000:
-            problems.append("bitrate %.1f Mbps suspiciously low -- was -b:v 0 dropped? "
-                            "(-cq is silently ignored without it)" % (obr / 1e6))
+        # A flat 1.5 Mbps floor was wrong on its own: a 720p screen recording of
+        # mostly-static pages legitimately encodes to 0.6 Mbps at cq 20, with
+        # form text still pin-sharp, and the check failed a render that was
+        # fine. What the floor is really trying to catch is the quality target
+        # not reaching the encoder at all -- and that collapses the output far
+        # below whatever the SOURCE cost, whatever the content was. So require
+        # both: absolutely low, AND a fraction of the source.
+        sbr = int(probe(src_mp4, "format=bit_rate")[0] or 0)
+        if obr < 1_500_000 and (not sbr or obr < 0.5 * sbr):
+            problems.append("bitrate %.1f Mbps against a %.1f Mbps source, too "
+                            "low for %s -- on NVENC this is -b:v 0 having been "
+                            "dropped, which makes -cq silently ignored; "
+                            "elsewhere check the quality target reached the "
+                            "encoder at all (_encode.describe prints what was "
+                            "sent)" % (obr / 1e6, sbr / 1e6, R.get("encoder")))
         if not fast:
             problems.append("faststart missing (box order: %s)" % boxes)
         if problems:

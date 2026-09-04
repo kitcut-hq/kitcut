@@ -1,6 +1,6 @@
 ---
 name: video-captions
-description: Add word-synced burned-in captions ("real time transcript" subtitles) to a video from a YouTube URL or local file. Transcribes locally with faster-whisper, generates a styled ASS subtitle file with per-word highlighting, and burns it in with NVENC. Use when asked to add subtitles, captions, or transcripts to a video, or to restyle existing caption output.
+description: Add word-synced burned-in captions ("real time transcript" subtitles) to a video from a YouTube URL or local file. Transcribes locally with faster-whisper, generates a styled ASS subtitle file with per-word highlighting, and burns it in in one GPU-accelerated pass. Use when asked to add subtitles, captions, or transcripts to a video, or to restyle existing caption output.
 ---
 
 # Word-synced burned-in captions
@@ -39,7 +39,7 @@ themselves; if you ran ffmpeg by hand or a script printed
 End an editing session by appending a short prose note to `journal.md`
 addressed to the next session: what was asked, which knob changed, why, and
 anything it should not have to rediscover. Details: `## Projects` in the
-README; the re-edit entry point is the `video-project` skill.
+`docs/reference.md`; the re-edit entry point is the `video-project` skill.
 
 ## Always do these two things first
 
@@ -80,6 +80,18 @@ For brand colours, sample the channel thumbnail: mask to saturated pixels
 
 `config/presets/*.json` — every visual choice lives here.
 
+**Pick the preset for the footage, not by habit.** `red-card` (and its vertical
+twin) was measured off a news channel: a saturated slab in uppercase, built to
+be read over a talking head on a phone. Put it on a **screen recording** and it
+fights the UI the video is pointing at — the frame is already busy, mostly
+white, and full of what the viewer is supposed to be looking at.
+`config/presets/instafill.json` is the screencast answer: near-black slab at 12%
+transparency, sentence case (word shape is what makes a line readable at a
+glance; uppercase throws it away), narrower lines, and the brand mint `#13BA82`
+as the spotlight, so captions, a name label and an end card read as one channel.
+Its `_geometry` block records the webcam bubble and taskbar its placement was
+fitted around — read that before widening `layout.max_line_width_px`.
+
 | Key | Effect |
 |---|---|
 | `font.family` / `font.file` / `font.fontsdir` | typeface; family must match the file's real family name |
@@ -97,7 +109,7 @@ For brand colours, sample the channel thumbnail: mask to saturated pixels
 | `pop.enabled`, `pop.scale`, `pop.rise_ms`, `pop.settle_ms` | scale pop on the active word |
 | `grouping.*` | words per card, pause/sentence breaks, max duration |
 | `timing.*` | lead-in, hold-out, min highlight, fade |
-| `render.*` | encoder, preset, cq, bitrate caps — authored for NVENC; on a machine without an NVIDIA card pass `--encoder libx264` instead of editing the preset (the NVENC flags are translated, not passed) |
+| `render.*` | encoder, preset/speed, cq, bitrate caps — translated per encoder family by `_encode.py`; a preset naming an encoder this machine cannot run is substituted, and `--encoder <name>` picks one explicitly for a run |
 
 ## Dodging the source's own graphics
 
@@ -161,7 +173,17 @@ order) and refuses to report success if any check fails.
 - **Never seek with plain `-ss` when burning subtitles** — it rebases PTS to 0 so
   libass renders the wrong lines. Use `--preview`, which regenerates a shifted ASS.
 - **`-b:v 0` is required with `-cq`** or NVENC ignores the quality target and text
-  goes mushy.
+  goes mushy. NVENC's alone -- AMF (`qvbr`) and x264 (`crf`) already carry a
+  quality target, and `_encode.py` emits it for the nvenc family only.
+- **The encoder is a setting, not a hardcoded key.** A preset or manifest
+  states an intent (`cq`, `preset`/`speed`, `maxrate`, `bufsize`) and
+  `scripts/_encode.py` renders it into whichever family the chosen encoder
+  belongs to -- NVENC, AMF (AMD), QSV or libx264. Never write `-preset p5`
+  or `-rc vbr` at a call site: `p5` is NVENC's word and AMF and x264 exit on
+  `invalid preset 'p5'`. Which encoder is `render.encoder` -> `$VIDEDIT_ENCODER`
+  -> the first one that actually encodes a frame on this machine; one a
+  committed file names but the machine cannot run is substituted loudly.
+  Run `python scripts/check-encode.py` after touching any encoder path.
 - **Keep filter paths relative** and run ffmpeg from the workspace root.
 - **Never invoke `yt-dlp` (or any console script) as a bare command.** The shim on
   PATH hardcodes the interpreter that installed it, so when that Python is removed
@@ -225,7 +247,7 @@ Break any of those and YouTube renders no chapters **without reporting an
 error**, which looks exactly like a failed update.
 
 Writing needs the channel owner's OAuth consent (an API key cannot edit a
-video); the one-time console setup is in the README, and the token caches to
+video); the one-time console setup is in `docs/reference.md`, and the token caches to
 `.yt-oauth/`. **You cannot complete that consent on the user's behalf** — if
 `.yt-oauth/client_secret.json` is missing, hand them the steps and the exact
 command rather than trying to work around it. The update preserves the rest of

@@ -11,9 +11,10 @@ What it enforces (FAIL) and what it flags (warn):
     FAIL  entry script without a module docstring
     FAIL  entry script that never imports _env, or imports third-party first
     FAIL  os.execve anywhere (spawns-not-replaces on Windows; exit code lost)
+    FAIL  -hwaccel cuda spelled at a call site (ask _encode.decode_args)
     FAIL  writing PYTHONPATH (the variable this repo spent a day exorcising)
     FAIL  an absolute machine path in a string literal (or, under --all, in a
-          skill or the README) -- it is wrong everywhere but one machine
+          skill or the reference) -- it is wrong everywhere but one machine
     FAIL  a platform file importing something outside the platform, or one of
           the three stdlib-only files importing anything third-party
     warn  docstring without an "Invoke as:" line
@@ -22,7 +23,7 @@ What it enforces (FAIL) and what it flags (warn):
           (--list/--plan/--dry-run/--plan-only/--frame/--card-only/--check)
     warn  a script that produces deliverables but never calls _project.record
     warn  backslashes in path literals (the ass filter eats them)
-    warn  script not mentioned in README.md
+    warn  script not mentioned in docs/reference.md
 
 Known deliberate exceptions are listed in EXCEPTIONS with the reason printed,
 so a skipped check is a documented decision, not a blind spot.
@@ -87,12 +88,12 @@ EXCEPTIONS = {
                   "cut-clips.py record when the overlay rides a real render",
     },
     "generate-voiceover.py": {
-        "record": "legacy, predates the pipelines (see README ## Legacy)",
+        "record": "legacy, predates the pipelines (see docs/reference.md ## Legacy)",
         "free": "legacy",
         "invoke": "legacy",
     },
     "transcribe-audio.py": {
-        "record": "legacy, predates the pipelines (see README ## Legacy)",
+        "record": "legacy, predates the pipelines (see docs/reference.md ## Legacy)",
         "invoke": "legacy",
     },
     "transcribe-words.py": {
@@ -106,6 +107,16 @@ EXCEPTIONS = {
     "check-multicam.py": {
         "argparse": "same bargain as check-dub.py: one button, no files, no "
                     "GPU -- it tests the round-trip arithmetic in memory",
+    },
+    "check-encode.py": {
+        "record": "self-test harness; its clips are colour bars in a scratch "
+                  "dir under %TEMP% and are deleted on the way out",
+        "free": "the whole script is the free mode -- it prices what a render "
+                "would send each encoder without rendering one; --table-only "
+                "drops even the two-second probes",
+        "hwaccel": "it is the test for decode_args() and asserts on the exact "
+                   "flag pair, which is the one place the literal belongs "
+                   "outside _encode.py",
     },
     "check-screen.py": {
         "argparse": "same bargain as check-dub.py: one button, no files, no "
@@ -140,6 +151,8 @@ STDLIB = set(sys.stdlib_module_names) | {"__future__"}
 # checked at commit time instead of discovered on extraction day.
 PLATFORM = {
     "_env.py": "interpreter bootstrap, .env, path and workspace resolution",
+    "_encode.py": "encoder-family key resolution",
+    "check-encode.py": "the encoder self-test",
     "_progress.py": "render progress plumbing",
     "_project.py": "project record writer",
     "_runlog.py": "the run log writer",
@@ -161,7 +174,7 @@ STDLIB_ONLY = ("_progress.py", "_runlog.py", "_gpulock.py", "gpu-lock.py",
                "render-status.py", "run-log.py", "statusline.py")
 
 # An absolute path belonging to one machine. Two segments are required so the
-# drive-letter gotcha both this file's neighbours and the README explain
+# drive-letter gotcha both this file's neighbours and docs/reference.md explain
 # ("ass=filename=C:/x.ass" parses as an option C) is not mistaken for one.
 ABSPATH = re.compile(r"(?<![\w:])(?:[A-Za-z]:[\\/]{1,2}[\w.$-]+[\\/][\w.$-]"
                      r"|/(?:Users|home|Volumes)/\w)")
@@ -169,9 +182,13 @@ ABSPATH = re.compile(r"(?<![\w:])(?:[A-Za-z]:[\\/]{1,2}[\w.$-]+[\\/][\w.$-]"
 FREE_FLAGS = ("--list", "--plan", "--dry-run", "--plan-only", "--frame",
               "--card-only", "--check", "--verify", "--stop-after")
 
-# things only a script that spends money or minutes contains
-SPEND = re.compile(r"h264_nvenc|videos\(\)\s*\.insert|elevenlabs|"
-                   r"MediaFileUpload|faster_whisper|WhisperModel")
+# things only a script that spends money or minutes contains.
+# _encode.video_args is here because the encoder name it replaced -- the
+# literal "h264_nvenc" -- used to be the tell, and moving the keys into one
+# module would otherwise have quietly switched this check off for every render
+# script in the repo.
+SPEND = re.compile(r"h264_nvenc|_encode\.video_args|videos\(\)\s*\.insert|"
+                   r"elevenlabs|MediaFileUpload|faster_whisper|WhisperModel")
 DELIVER = re.compile(r'\.mp4"|\.mp4\'|shutil\.move|MediaFileUpload')
 
 
@@ -307,6 +324,12 @@ def check(path):
                                 "never calls _project.record() -- the render "
                                 "will be invisible to the next session"))
 
+    if re.search(r'["\']-hwaccel["\']\s*,\s*["\']cuda["\']', src) \
+            and base != "_encode.py" and not skip("hwaccel"):
+        out.append(("FAIL", "spells -hwaccel cuda at a call site -- it is "
+                            "NVDEC on the INPUT, so on a box with no NVIDIA "
+                            "driver it fails the source file rather than the "
+                            "encoder; ask _encode.decode_args()"))
     if re.search(r"os\.execve\s*\(", src):
         out.append(("FAIL", "os.execve spawns-not-replaces on Windows; use "
                             "subprocess.run + sys.exit(rc)"))
@@ -348,9 +371,9 @@ def check(path):
         out.append(("warn", "backslash in a path literal -- the ass filter "
                             "eats them; forward slashes everywhere"))
 
-    readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
+    readme = open(os.path.join(ROOT, "docs", "reference.md"), encoding="utf-8").read()
     if entry and base not in readme:
-        out.append(("warn", "not mentioned in README.md -- the SDK contract "
+        out.append(("warn", "not mentioned in docs/reference.md -- the SDK contract "
                             "says the change is not done until the docs say "
                             "what the code does"))
     return out
@@ -405,7 +428,7 @@ def main():
         # the form the repo actually shipped ten of.
         docs = sorted(glob.glob(os.path.join(ROOT, ".claude", "skills", "*",
                                              "SKILL.md")))
-        docs += [os.path.join(ROOT, f) for f in ("README.md", "CLAUDE.md")]
+        docs += [os.path.join(ROOT, f) for f in ("README.md", "CLAUDE.md", "docs/reference.md")]
         for d in docs:
             if not os.path.exists(d):
                 continue

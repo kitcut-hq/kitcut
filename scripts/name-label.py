@@ -26,6 +26,7 @@ import sys, os, json, argparse, subprocess, shutil
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _encode  # noqa: E402 -- the one place encoder keys are chosen
 
 from PIL import Image, ImageDraw
 import _overlay
@@ -268,7 +269,9 @@ def main():
     ap.add_argument("--width", type=int, default=1920, help="with --card-only")
     ap.add_argument("--height", type=int, default=1080, help="with --card-only")
     ap.add_argument("--cq", default="21")
-    ap.add_argument("--encoder", default="h264_nvenc")
+    ap.add_argument("--encoder", default=None,
+                    help="default: the best one this machine can run "
+                         "(see _encode.py)")
     args = ap.parse_args()
 
     specs = load_specs(args)
@@ -335,15 +338,19 @@ def main():
         trim = ["-ss", "%.3f" % a, "-to", "%.3f" % b]
         out = os.path.splitext(out)[0] + "-clip.mp4"
 
+    # One place decides the encoder keys; these preview burns get the
+    # same treatment as a pipeline render.
+    rcfg = _encode.resolve({"encoder": args.encoder, "cq": args.cq,
+                            "speed": 5, "maxrate": "16M",
+                            "bufsize": "32M"})
     cmd = ["ffmpeg", "-hide_banner", "-v", "error", "-nostdin", "-i", args.video]
     for p in pngs:
         cmd += ["-loop", "1", "-framerate", "%g" % fps, "-i", p]
     cmd += ["-filter_complex", fc, "-map", "[%s]" % out_label, "-map", "0:a:0?"]
     cmd += trim
-    cmd += ["-c:v", args.encoder, "-preset", "p5", "-rc", "vbr",
-            "-cq", str(args.cq), "-b:v", "0", "-maxrate", "16M",
-            "-bufsize", "32M", "-pix_fmt", "yuv420p", "-r", "%g" % fps,
-            "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-y", out]
+    cmd += (_encode.video_args(rcfg) + ["-r", "%g" % fps]
+            + _encode.audio_args(rcfg)
+            + ["-movflags", "+faststart", "-y", out])
     if subprocess.run(cmd, env=ENV).returncode:
         sys.exit("ffmpeg failed for %s" % out)
 

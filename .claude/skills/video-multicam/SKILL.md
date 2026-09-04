@@ -1,6 +1,6 @@
 ---
 name: video-multicam
-description: Cut a film out of a screen recording plus a separate camera take of the person narrating, when the two are unsynchronised and the screen recording has no usable audio. Measures the offset between the recordings and proves it with paired frames, drops the pauses where the speaker is silent AND the screen is static, and composites the camera as a square picture-in-picture over the screen in one NVENC pass, opening and closing full-frame on the camera where the screen was not yet rolling. Use when asked to sync a screen recording with a phone/camera recording, to cut the dead air or long pauses out of a screencast, to put a webcam or talking head in the corner of a screen capture, or to turn a demo recording into an edited video.
+description: Cut a film out of a screen recording plus a separate camera take of the person narrating, when the two are unsynchronised and the screen recording has no usable audio. Measures the offset between the recordings and proves it with paired frames, drops the pauses where the speaker is silent AND the screen is static, and composites the camera as a square picture-in-picture over the screen in one encode pass, opening and closing full-frame on the camera where the screen was not yet rolling. Use when asked to sync a screen recording with a phone/camera recording, to cut the dead air or long pauses out of a screencast, to put a webcam or talking head in the corner of a screen capture, or to turn a demo recording into an edited video.
 ---
 
 # A film out of a screen recording and a camera take
@@ -17,7 +17,7 @@ python scripts/screencast-cut.py --manifest projects/<id>/screencast.json --list
 python scripts/screencast-cut.py --manifest projects/<id>/screencast.json
 ```
 
-The worked example is `projects/claude-demo/screencast.json`. README has the
+The worked example is `projects/claude-demo/screencast.json`. `docs/reference.md` has the
 reference under "A screencast out of two recordings".
 
 ## The project folder comes first
@@ -33,7 +33,7 @@ themselves; if you ran ffmpeg by hand or a script printed
 End an editing session by appending a short prose note to `journal.md`
 addressed to the next session: what was asked, which knob changed, why, and
 anything it should not have to rediscover. Details: `## Projects` in the
-README; the re-edit entry point is the `video-project` skill.
+`docs/reference.md`; the re-edit entry point is the `video-project` skill.
 
 ## Get the footage off the phone first
 
@@ -156,7 +156,7 @@ Default privacy is `unlisted` — the end you can widen later.
 ## Do not
 
 - **Do not use `select`/`aselect` to drop spans.** `aselect` passes every audio
-  frame on this ffmpeg. See the gotcha in README.
+  frame on this ffmpeg. See the gotcha in `docs/reference.md`.
 - **Do not cut on silence alone.** The long wait while output streams is the one
   silence the viewer needs. `require_frozen` is why the rule works.
 - **Do not trust a rendered duration you did not assert.** The bug that made a

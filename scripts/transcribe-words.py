@@ -111,7 +111,28 @@ def main():
     ap.add_argument("--no-gpu-lock", action="store_true",
                     help="skip the single-run lock. Only when you know the "
                          "card is free -- two large-v3 on 4 GB finish neither.")
+    # Names the model has never seen come back as something it has: a product
+    # called Instafill lands as "Instafili", "Instafil" and "Instafield" in one
+    # transcript. Burned captions make that everybody's problem, so the vocabulary
+    # goes in BEFORE the transcription rather than being patched after it.
+    # hotwords, not initial_prompt: condition_on_previous_text is off here (it
+    # caps a repetition loop at one window), which also means initial_prompt only
+    # reaches the FIRST 30-second window. hotwords is re-applied to every one.
+    ap.add_argument("--hotwords", default=None,
+                    help="comma- or space-separated names the model should "
+                         "expect (brands, acronyms, form numbers)")
+    ap.add_argument("--hotwords-file", default=None,
+                    help="a file of the same, one per line; blank lines and "
+                         "# comments ignored")
     args = ap.parse_args()
+
+    if args.hotwords_file:
+        with open(args.hotwords_file, encoding="utf-8") as f:
+            terms = [l.strip() for l in f
+                     if l.strip() and not l.lstrip().startswith("#")]
+        args.hotwords = ", ".join(([args.hotwords] if args.hotwords else []) + terms)
+    if args.hotwords:
+        print(f"hotwords: {args.hotwords}")
 
     print(f"faster-whisper {faster_whisper.__version__} / ctranslate2 {ctranslate2.__version__}")
     t0 = time.time()
@@ -172,6 +193,7 @@ def transcribe_once(model, args, t0):
         condition_on_previous_text=False,
         repetition_penalty=1.05,
         word_timestamps=True,
+        hotwords=args.hotwords or None,
         hallucination_silence_threshold=2.0,
         vad_filter=True,
         vad_parameters=dict(
@@ -207,6 +229,7 @@ def write_output(args, info, words, raw_segs, t0):
     out = dict(file=args.audio, duration=float(info.duration), language=info.language,
                language_probability=float(info.language_probability),
                model=args.model, compute_type=args.compute_type,
+               hotwords=args.hotwords,
                text=" ".join(w["text"] for w in words), words=words)
 
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)

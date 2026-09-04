@@ -459,6 +459,28 @@ def loader_glue():
             dict(text="це", start=1.4, end=1.7)]
     check("standalone dash is not merged by the loader",
           [w["text"] for w in _ol.glue_words(dash)], ["тут", "–", "це"])
+
+    # rejoin() is the UNION of two independently written rules -- a suffix
+    # token joining backwards, and a word left hanging on a trailing hyphen.
+    # Each family is pinned here because each was invisible to the other's
+    # author: the comma case reached a shipped card, the trailing-hyphen case
+    # reached a different one, and a later edit that keeps only one rule
+    # passes every other test in this file.
+    def joined(*toks):
+        ws = [dict(text=t, start=i * 1.0, end=i * 1.0 + 0.5)
+              for i, t in enumerate(toks)]
+        return " ".join(w["text"] for w in _ol.rejoin(ws))
+
+    check("suffix rule: comma", joined("60", ",000"), "60,000")
+    check("suffix rule: solo percent", joined("60", "%", "of"), "60% of")
+    check("suffix rule: ampersand", joined("M", "&A"), "M&A")
+    check("hanging-hyphen rule", joined("flat-", "to"), "flat-to")
+    check("dotted name", joined("Instafill", ".ai"), "Instafill.ai")
+    check("hyphen + digit", joined("W", "-9"), "W-9")
+    check("chained fragments", joined("flat", "-to", "-fillable"),
+          "flat-to-fillable")
+    check("glue_words is rejoin, one function", _ol.glue_words is _ol.rejoin,
+          True)
     # one definition of the rule: the caption builder re-exports it
     check("builder and loader share one glues_back",
           _bca.glues_back is _ol.glues_back, True)

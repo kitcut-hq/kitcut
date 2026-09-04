@@ -48,6 +48,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 import numpy as np  # noqa: E402
 import cv2  # noqa: E402
+import _encode  # noqa: E402
 import _project  # noqa: E402
 
 ROOT = _env.ROOT
@@ -131,7 +132,7 @@ def gray_stream(path, w, h):
     INDEX is the timebase -- no pts parsing, and none of the `fps`-filter
     slot-labelling trouble that cost this pipeline two separate bugs."""
     p = subprocess.Popen(
-        ["ffmpeg", "-v", "error", "-nostdin", "-hwaccel", "cuda", "-i", path,
+        ["ffmpeg", "-v", "error", "-nostdin"] + _encode.decode_args() + ["-i", path,
          "-vf", f"scale={w}:{h}", "-pix_fmt", "gray", "-f", "rawvideo", "-"],
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     n = w * h
@@ -306,7 +307,7 @@ def write_reps(path, info, states, reps_dir, verbose=True):
     with open(gpath, "w", encoding="utf-8") as f:
         f.write(f"[0:v]select='{expr}',showinfo[out]")
     r = subprocess.run(
-        ["ffmpeg", "-v", "info", "-nostdin", "-y", "-hwaccel", "cuda", "-i", path,
+        ["ffmpeg", "-v", "info", "-nostdin", "-y"] + _encode.decode_args() + ["-i", path,
          "-filter_complex_script", gpath, "-map", "[out]",
          "-fps_mode", "passthrough", "-start_number", "0",
          os.path.join(raw, "f_%05d.png")],
@@ -613,11 +614,10 @@ def blur_cmd(base, listing, info, out, cq=21, preset="p5", prog=None):
     cmd = ["ffmpeg", "-v", "error", "-stats", "-nostdin", "-y"]
     if prog:
         cmd += ["-progress", prog]
-    cmd += ["-i", base, "-f", "concat", "-safe", "0", "-i", listing,
-            "-filter_complex_script", gpath, "-map", "[out]", "-an",
-            "-c:v", "h264_nvenc", "-preset", preset, "-rc", "vbr",
-            "-cq", str(cq), "-b:v", "0", "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart", out]
+    cmd += (["-i", base, "-f", "concat", "-safe", "0", "-i", listing,
+             "-filter_complex_script", gpath, "-map", "[out]", "-an"]
+            + _encode.video_args(_encode.resolve({"preset": preset, "cq": cq}))
+            + ["-movflags", "+faststart", out])
     return cmd
 
 
@@ -638,7 +638,7 @@ def gate_boxes(render, info, states, per_state, reps_dir):
     want = {s["rep"]: n for n, s in enumerate(states) if per_state.get(str(n))}
     hits, ratios = [], []
     p = subprocess.Popen(
-        ["ffmpeg", "-v", "error", "-nostdin", "-hwaccel", "cuda", "-i", render,
+        ["ffmpeg", "-v", "error", "-nostdin"] + _encode.decode_args() + ["-i", render,
          "-pix_fmt", "gray", "-f", "rawvideo", "-"],
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     n = info["w"] * info["h"]

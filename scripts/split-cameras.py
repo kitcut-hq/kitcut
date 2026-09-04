@@ -46,6 +46,7 @@ import sys, os, json, argparse, subprocess, shutil, random
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _encode  # noqa: E402 -- the one place encoder keys are chosen
 
 from importlib import import_module  # noqa: E402
 
@@ -58,9 +59,11 @@ ROOT = _env.ROOT
 ENV = _env.ENV
 
 DEFAULT_STAGGER = {"seed": 1, "head_s": [1.0, 6.0], "tail_s": [0.5, 4.0]}
-DEFAULT_CONFORM = {"encoder": "h264_nvenc", "preset": "p5", "cq": 16,
+# No "encoder": _encode picks one this machine can actually run, and a
+# manifest that names one overrides it. "speed" is family-neutral.
+DEFAULT_CONFORM = {"speed": 5, "cq": 16,
                    "maxrate": "40M", "bufsize": "80M", "audio_bitrate": "256k"}
-DEFAULT_RENDER = {"encoder": "h264_nvenc", "preset": "p5", "cq": 16,
+DEFAULT_RENDER = {"speed": 5, "cq": 16,
                   "maxrate": "40M", "bufsize": "80M", "audio_bitrate": "192k"}
 DEFAULT_VERIFY = {"match_max": 0.020, "samples_per_span": 12, "peak_db": -60}
 SR = 48000                      # every raw is resampled to this
@@ -162,11 +165,7 @@ def conform(src, dst, cfg, fps_num, fps_den):
            "-i", src,
            "-vf", "setpts=N*%d/%d/TB" % (fps_den, fps_num),
            "-fps_mode", "passthrough", "-video_track_timescale", str(fps_num),
-           "-c:v", cfg["encoder"], "-preset", cfg["preset"],
-           "-rc", "vbr", "-cq", str(cfg["cq"]), "-b:v", "0",
-           "-maxrate", cfg["maxrate"], "-bufsize", cfg["bufsize"],
-           "-pix_fmt", "yuv420p",
-           "-c:a", "aac", "-b:a", cfg["audio_bitrate"], "-ar", str(SR), "-ac", "2",
+           ] + _encode.video_args(cfg) + _encode.audio_args(cfg, rate=SR) + [
            "-movflags", "+faststart", "-y", tmp]
     p = subprocess.run(cmd, capture_output=True, text=True, env=ENV)
     if p.returncode != 0:
@@ -243,11 +242,7 @@ def render_raw(program, dst, live, n_frames, head, tail, cfg, fps_num, fps_den,
            "-filter_complex", graph, "-map", "[vout]", "-map", "[aout]",
            "-r", "%d/%d" % (fps_num, fps_den), "-fps_mode", "cfr",
            "-video_track_timescale", str(fps_num),
-           "-c:v", cfg["encoder"], "-preset", cfg["preset"],
-           "-rc", "vbr", "-cq", str(cfg["cq"]), "-b:v", "0",
-           "-maxrate", cfg["maxrate"], "-bufsize", cfg["bufsize"],
-           "-pix_fmt", "yuv420p",
-           "-c:a", "aac", "-b:a", cfg["audio_bitrate"], "-ar", str(SR), "-ac", "2",
+           ] + _encode.video_args(cfg) + _encode.audio_args(cfg, rate=SR) + [
            "-movflags", "+faststart", "-y", tmp]
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, env=ENV)
@@ -332,8 +327,8 @@ def main():
         m = json.load(f)
     pid = _project.project_id(m, rel(args.manifest))
     stagger = dict(DEFAULT_STAGGER, **(m.get("stagger") or {}))
-    conf_cfg = dict(DEFAULT_CONFORM, **(m.get("conform") or {}))
-    render = dict(DEFAULT_RENDER, **(m.get("render") or {}))
+    conf_cfg = _encode.resolve(dict(DEFAULT_CONFORM, **(m.get("conform") or {})))
+    render = _encode.resolve(dict(DEFAULT_RENDER, **(m.get("render") or {})))
     v = dict(DEFAULT_VERIFY, **(m.get("verify") or {}))
 
     src = rel(m["source"])
@@ -389,6 +384,8 @@ def main():
               % (c, head * spf, tail * spf, hhmmss(total * spf), total,
                  100.0 * lf / total, 100.0 * (total - lf) / total, len(live[c])))
     if args.plan:
+        print("\n  encoder: %s" % _encode.describe(render))
+        print("  conform: %s" % _encode.describe(conf_cfg))
         print("\n  cam   #   live span (programme time)        frozen after")
         for c in cams:
             gaps = gaps_of(live[c], n_frames)

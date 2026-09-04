@@ -2,7 +2,7 @@
 
 The register. One entry per thing that bit us or that the tools cannot do,
 with a fixed shape so a person and a script can both read it. This is the
-canonical home; `README.md ## Gotchas` keeps the prose for traps in tools we
+canonical home; `docs/reference.md ## Gotchas` keeps the prose for traps in tools we
 do not control (ffmpeg, libass, YouTube), project journals keep the history,
 `docs/retro-*.md` keep the post-mortems — all three link here by id.
 
