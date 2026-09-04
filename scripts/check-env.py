@@ -109,22 +109,38 @@ for _root in _env.site_roots():
                 n_dll += len([f for f in os.listdir(_bin) if f.lower().endswith(".dll")])
 (ok if n_dll else warn)("%d CUDA DLLs on the package path (GPU transcription)" % n_dll)
 
-# The two pins whose comments in requirements.txt say "load-bearing": drift
-# here is exactly what pip check cannot see.
+# opencv-python and nvidia-cublas-cu12, the pins requirements.txt calls
+# load-bearing: drift here is exactly what pip check cannot see. A pin carrying
+# an environment marker is only checked where it actually installs. The CUDA
+# wheels have no macOS build, so demanding them there is a failure the machine
+# cannot fix.
 print("== pins ==")
+
 try:
     import importlib.metadata as _md
+    from packaging.markers import Marker as _Marker
+
     _pins = {}
+
     with open(os.path.join(ROOT, "requirements.txt"), encoding="utf-8") as _f:
         for _line in _f:
             _line = _line.split("#")[0].strip()
+
             if "==" in _line:
                 _k, _, _v = _line.partition("==")
-                _pins[_k.strip().lower()] = _v.strip()
+                _v, _, _mk = _v.partition(";")
+                _pins[_k.strip().lower()] = (_v.strip(), _mk.strip())
+
     for _pkg in ("opencv-python", "nvidia-cublas-cu12"):
-        _want = _pins.get(_pkg)
+        _want, _mk = _pins.get(_pkg, (None, ""))
+
         if not _want:
             continue
+
+        if _mk and not _Marker(_mk).evaluate():
+            print("  - %s %s is not for this platform (%s)" % (_pkg, _want, _mk))
+            continue
+
         try:
             _have = _md.version(_pkg)
         except _md.PackageNotFoundError:
