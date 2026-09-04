@@ -4,8 +4,9 @@
 document is built yet — it is the reasoning and the execution detail, kept so the
 next session (or the next person) does not have to re-derive it.
 
-The product name is undecided. `InstaCut` appears below as a placeholder in paths
-and commands; it is an example, not a decision. See *Open questions*.
+The product is named **KitCut** — settled 2026-09-03, after the namespace was
+re-searched against the editor-as-employee brief. It appears below in paths and
+commands (`kitcut` on PATH, `~\.kitcut\`). The reasoning is in *Open questions*.
 
 **Read `docs/market-shorts-2026.md` alongside this.** It is the evidence base this
 document lacked — the shorts/clipping market researched with sources on
@@ -345,7 +346,7 @@ plugin root  (${CLAUDE_PLUGIN_ROOT})      scripts, skills, default configs, pinn
 the studio   (chosen at setup, e.g. D:\Studio)
                                           projects/<id>/, footage, renders, .env, workspace
                                           CLAUDE.md, pre-set permissions. The customer's world.
-the pointer  (~\.instacut\config.json)    where the studio is, license, consent flags.
+the pointer  (~\.kitcut\config.json)      where the studio is, license, consent flags.
 ```
 
 The separation makes updates safe (they cannot touch footage), uninstall harmless
@@ -388,7 +389,7 @@ kit lives in their studio; our defaults update underneath it.
 
 ### The launcher — sugar, never a requirement
 
-- **`instacut` on PATH**: opens Claude in the studio. For terminal people.
+- **`kitcut` on PATH**: opens Claude in the studio. For terminal people.
 - **A desktop shortcut for everyone else.** Windows passes files dragged onto a
   shortcut as arguments, so the editor **drags three camera files onto the icon**;
   the wrapper stages them into `studio\inbox\` and launches Claude with "new
@@ -678,13 +679,22 @@ free tier, being single-file and fully automatic.
 12. Version stamp in `_project.record()`; skill-readable changelog.
 13. Trigger-phrase battery as a release gate.
 14. Stripe checkout + webhook worker (invite/revoke, welcome email).
-15. Launcher: `instacut` on PATH + drag-and-drop desktop shortcut.
+15. Launcher: `kitcut` on PATH + drag-and-drop desktop shortcut.
 16. Landing page fronted by the debug-overlay video; Discord.
 
 ## 14. Open questions
 
-- **Name.** The brief changed: this is not a "shorts/cut" tool, it is an
-  editor-as-employee. That reopens the namespace the earlier search exhausted.
+- **Name — settled 2026-09-03: KitCut.** The brief had changed (an
+  editor-as-employee, not a "shorts/cut" tool), so the namespace was re-searched
+  against it: ~750 domains across film-crew roles, post-production vocabulary,
+  maker compounds, craft nouns and coinages. Not one single real word was free on
+  `.com`, `.net` or `.ai`, and exactly one `.com` came back available in 179
+  checks. Nothing beat the incumbent, so KitCut stands. Accepted costs: no `.com`
+  (a 30-year Japanese retailer holds it, and does not appear to be selling), and
+  permanent search leakage to CapCut, which category-qualified queries resolve to.
+  Tolerable because §11's channels are HN, YouTube, the marketplace and outbound —
+  none of them search. Hold `kitcut.ai` + `kitcut.net`; revisit only if search
+  becomes a channel we actually intend to use.
 - **Will you be the face?** Content-led distribution needs one. If not, lean harder
   on the benchmark/HN and partner-led channels.
 - **Hours per week available** — caps the design-partner/service load.
