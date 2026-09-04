@@ -91,12 +91,14 @@ def main():
     if branch:
         seg.append(c("⎇ " + branch, "92"))
 
+    # display_name may already carry the window ("Opus 5 (1M context)") -- only
+    # append ours when it does not, or the segment says it twice.
     model = (payload.get("model") or {}).get("display_name")
     cw = payload.get("context_window") or {}
     size = cw.get("context_window_size")
     if model:
         seg.append(c("%s (%s context)" % (model, kfmt(size))
-                     if size else model, "95"))
+                     if size and "context)" not in model else model, "95"))
 
     effort = (payload.get("effort") or {}).get("level")
     if effort:
