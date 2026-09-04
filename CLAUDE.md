@@ -49,6 +49,17 @@ judgement half a grep cannot do. The corpus passes clean; keep it that way.
 `--all` also scans the skills and these docs for absolute paths, because a
 skill is read by an agent on a machine that is not this one.
 
+After **any** edit to **any** Python file here, lint and format it:
+
+```powershell
+python -m ruff check <path>       # <path> or . for the whole repo
+python -m ruff format <path>
+```
+
+Config is `pyproject.toml`. ruff is pinned in `requirements-dev.txt`, which
+`setup-python.ps1` does not read — `uv pip install -r requirements-dev.txt`.
+After `--fix`, run `check-script.py --all` and the `check-*.py` suite.
+
 ### Tooling, work, and the one resolver
 
 `_env.ROOT` is where the **tooling** lives; `_env.workspace()` is where the
@@ -698,7 +709,8 @@ These come from how the repo is actually used — follow them without being aske
   them; you are their only caller and their maintainer. When a task does not
   fit an existing script, extend the script or write a new one — and the change
   is not done until `_project.record()` still tells the truth, `docs/reference.md` says
-  what the code does, the affected skill teaches it, and
+  what the code does, the affected skill teaches it, `ruff check` and
+  `ruff format` are clean on it, and
   `python scripts/check-script.py --changed` passes (the check-script skill
   is the full review).
 
