@@ -17,7 +17,12 @@ one-frame gap between them.
 
 Invoke as:  python scripts/build-captions-ass.py ...
 """
-import sys, os, json, argparse, unicodedata
+
+import sys
+import os
+import json
+import argparse
+import unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -25,15 +30,15 @@ from importlib import import_module
 
 from fontTools.ttLib import TTFont
 
-_outline = import_module("transcript-outline")   # shared words-envelope loader
+_outline = import_module("transcript-outline")  # shared words-envelope loader
 
-BS = chr(92)          # dodge backslash-escaping pain, as shorts/bpo/captions.py does
+BS = chr(92)  # dodge backslash-escaping pain, as shorts/bpo/captions.py does
 SENT_END = ".!?…"
 
 
 # ---------------------------------------------------------------- helpers
 def fmt_cs(c):
-    c = max(0, int(c))       # safety net: ASS cannot express negative time
+    c = max(0, int(c))  # safety net: ASS cannot express negative time
     h, c = divmod(c, 360000)
     m, c = divmod(c, 6000)
     s, c = divmod(c, 100)
@@ -56,7 +61,8 @@ class Metrics:
     """Width measurement via raw hmtx advances -- matches unhinted FreeType, which
     is what libass uses. PIL is deliberately NOT used: it has no HarfBuzz here
     (raqm False), so it returns hinted integer advances that drift up to 0.5px
-    per glyph and do not accumulate linearly."""
+    per glyph and do not accumulate linearly.
+    """
 
     def __init__(self, path, size=None, spacing=0.0, fudge=1.0, cap_height_px=None):
         self.f = TTFont(path)
@@ -88,7 +94,7 @@ class Metrics:
 
     @property
     def px(self):
-        """units -> pixels scale factor as libass actually applies it"""
+        """Units -> pixels scale factor as libass actually applies it"""
         return self.size / self.den
 
     def _adv(self, ch):
@@ -111,9 +117,10 @@ class Metrics:
         return self.cap * self.px
 
     def cy_for_cap_center(self, cap_center_y):
-        """libass \\an5 centres the font's LINE box, not the cap box. The line box
+        """Libass \\an5 centres the font's LINE box, not the cap box. The line box
         is exactly `size` px tall (that is what the win-metric scaling means), so
-        solve for the \\pos y that puts the cap box centre where we want it."""
+        solve for the \\pos y that puts the cap box centre where we want it.
+        """
         baseline_from_top = self.win_asc * self.px
         # cap_center = (cy - size/2) + baseline_from_top - cap_px/2
         return cap_center_y + self.size / 2.0 - baseline_from_top + self.cap_px / 2.0
@@ -205,8 +212,16 @@ def sanitize(words, cfg):
         e_cs = int(round(w["end"] * 100))
         if e_cs <= s_cs:
             e_cs = s_cs + 1
-        out.append(dict(text=t, raw=w["text"].strip(), s=s_cs, e=e_cs,
-                        prob=w.get("probability", 1.0), apo=apo))
+        out.append(
+            dict(
+                text=t,
+                raw=w["text"].strip(),
+                s=s_cs,
+                e=e_cs,
+                prob=w.get("probability", 1.0),
+                apo=apo,
+            )
+        )
     out = glue_suffixes(out, tcfg.get("strip_trailing", ""))
     # Words must not overlap, and the reason is not tidiness. A word whose end
     # equals its start gets the synthetic centisecond above -- and if the NEXT
@@ -221,8 +236,7 @@ def sanitize(words, cfg):
     # Ordering by the previous END rather than the previous START is what makes
     # this a no-op on a well-formed transcript and a repair on a degenerate one.
     for i in range(1, len(out)):
-        if out[i]["s"] < out[i - 1]["e"]:
-            out[i]["s"] = out[i - 1]["e"]
+        out[i]["s"] = max(out[i]["s"], out[i - 1]["e"])
         if out[i]["e"] <= out[i]["s"]:
             out[i]["e"] = out[i]["s"] + 1
     return out
@@ -272,10 +286,12 @@ def group_words(words, cfg, m):
     for w in words:
         trial = cur + [w]
         too_wide = wrap_lines([x["text"] for x in trial], m, max_line, max_lines) is None
-        if cur and (too_wide
-                    or len(trial) > maxw
-                    or w["s"] - cur[-1]["e"] > gap_cs
-                    or w["e"] - cur[0]["s"] > maxdur):
+        if cur and (
+            too_wide
+            or len(trial) > maxw
+            or w["s"] - cur[-1]["e"] > gap_cs
+            or w["e"] - cur[0]["s"] > maxdur
+        ):
             groups.append(cur)
             cur = [w]
         else:
@@ -349,7 +365,7 @@ def state_windows(group, cfg, prev_end, next_start):
     if prev_end is not None:
         g0 = max(g0, prev_end + min_gap)
     g0 = min(g0, group[0]["s"])
-    g0 = max(0, g0)          # ASS has no negative timestamps
+    g0 = max(0, g0)  # ASS has no negative timestamps
     g1 = group[-1]["e"] + hold
     if next_start is not None:
         g1 = min(g1, next_start - min_gap)
@@ -390,14 +406,34 @@ def rounded_rect(w, h, r):
     def f(v):
         return ("%.1f" % v).rstrip("0").rstrip(".")
 
-    return ("m %s 0 l %s 0 b %s 0 %s 0 %s %s "
-            "l %s %s b %s %s %s %s %s %s "
-            "l %s %s b 0 %s 0 %s 0 %s "
-            "l 0 %s b 0 0 0 0 %s 0") % (
-        f(r), f(w - r), f(w), f(w), f(w), f(r),
-        f(w), f(h - r), f(w), f(h), f(w), f(h), f(w - r), f(h),
-        f(r), f(h), f(h), f(h), f(h - r),
-        f(r), f(r))
+    return (
+        "m %s 0 l %s 0 b %s 0 %s 0 %s %s "
+        "l %s %s b %s %s %s %s %s %s "
+        "l %s %s b 0 %s 0 %s 0 %s "
+        "l 0 %s b 0 0 0 0 %s 0"
+    ) % (
+        f(r),
+        f(w - r),
+        f(w),
+        f(w),
+        f(w),
+        f(r),
+        f(w),
+        f(h - r),
+        f(w),
+        f(h),
+        f(w),
+        f(h),
+        f(w - r),
+        f(h),
+        f(r),
+        f(h),
+        f(h),
+        f(h),
+        f(h - r),
+        f(r),
+        f(r),
+    )
 
 
 def rule_below(cfg):
@@ -466,13 +502,25 @@ def pop_tags(P, dur_ms):
     scale = P.get("scale", 112)
     rise = int(P.get("rise_ms", 70))
     settle = int(P.get("settle_ms", 110))
-    if rise + settle > dur_ms:                       # never overrun the event
+    if rise + settle > dur_ms:  # never overrun the event
         total = max(1.0, float(rise + settle))
         rise = int(rise * dur_ms / total)
         settle = int(settle * dur_ms / total)
-    return ("%sfscx100%sfscy100%st(0,%d,%sfscx%s%sfscy%s)%st(%d,%d,%sfscx100%sfscy100)"
-            % (BS, BS, BS, rise, BS, _num(scale), BS, _num(scale),
-               BS, rise, rise + settle, BS, BS))
+    return "%sfscx100%sfscy100%st(0,%d,%sfscx%s%sfscy%s)%st(%d,%d,%sfscx100%sfscy100)" % (
+        BS,
+        BS,
+        BS,
+        rise,
+        BS,
+        _num(scale),
+        BS,
+        _num(scale),
+        BS,
+        rise,
+        rise + settle,
+        BS,
+        BS,
+    )
 
 
 def build(words, cfg, m, overlays=None):
@@ -483,8 +531,9 @@ def build(words, cfg, m, overlays=None):
     RU = cfg["card"].get("rule") or {}
     rule_px = float(RU.get("px", 0) or 0)
     rule_side = RU.get("side", "bottom")
-    rule_c = ass_colour(RU.get("colour", cfg["card"]["colour"]),
-                        RU.get("alpha", cfg["card"].get("alpha", 0)))
+    rule_c = ass_colour(
+        RU.get("colour", cfg["card"]["colour"]), RU.get("alpha", cfg["card"].get("alpha", 0))
+    )
     fade = T["fade_ms"]
     fam, fsz, fsp = cfg["font"]["family"], m.size, cfg["font"].get("spacing", 0)
     bold = cfg["font"].get("bold", 0)
@@ -516,10 +565,35 @@ def build(words, cfg, m, overlays=None):
         "\n"
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
-    ) % (C["play_res_x"], C["play_res_y"],
-         fam, fsz, base_c, base_c, out_c, sha_c, bold, fsp, out_w, sha_w,
-         fam, fsz, act_c, act_c, out_c, sha_c, bold, fsp, out_w, sha_w,
-         fam, fsz, card_c, card_c, card_c)
+    ) % (
+        C["play_res_x"],
+        C["play_res_y"],
+        fam,
+        fsz,
+        base_c,
+        base_c,
+        out_c,
+        sha_c,
+        bold,
+        fsp,
+        out_w,
+        sha_w,
+        fam,
+        fsz,
+        act_c,
+        act_c,
+        out_c,
+        sha_c,
+        bold,
+        fsp,
+        out_w,
+        sha_w,
+        fam,
+        fsz,
+        card_c,
+        card_c,
+        card_c,
+    )
 
     # A distinct "already spoken" style is only needed when it differs from the
     # pending colour. spoken==base gives a moving spotlight; spoken==active gives
@@ -531,7 +605,8 @@ def build(words, cfg, m, overlays=None):
         header = header.replace(
             "\n[Events]",
             "\nStyle: Spok,%s,%s,%s,%s,%s,%s,%d,0,0,0,100,100,%s,0,1,%s,%s,5,0,0,0,1\n\n[Events]"
-            % (fam, fsz, spoken_c, spoken_c, out_c, sha_c, bold, fsp, out_w, sha_w))
+            % (fam, fsz, spoken_c, spoken_c, out_c, sha_c, bold, fsp, out_w, sha_w),
+        )
 
     groups = group_words(words, cfg, m)
     ev, dbg = [], []
@@ -543,14 +618,50 @@ def build(words, cfg, m, overlays=None):
         placed, (cx0, cy0, cw, ch) = layout(grp, cfg, m, bottom_margin=bm)
 
         if cfg["card"].get("enabled", True):
-            ev.append("Dialogue: 0,%s,%s,Card,,0,0,0,,{%san7%spos(%.1f,%.1f)%sbord0%sshad0%sfad(%d,%d)%s1c%s%sp1}%s{%sp0}"
-                      % (fmt_cs(g0), fmt_cs(g1), BS, BS, cx0, cy0, BS, BS, BS, fade, fade,
-                         BS, card_c, BS, rounded_rect(cw, ch, cfg["card"]["corner_radius_px"]), BS))
+            ev.append(
+                "Dialogue: 0,%s,%s,Card,,0,0,0,,{%san7%spos(%.1f,%.1f)%sbord0%sshad0%sfad(%d,%d)%s1c%s%sp1}%s{%sp0}"
+                % (
+                    fmt_cs(g0),
+                    fmt_cs(g1),
+                    BS,
+                    BS,
+                    cx0,
+                    cy0,
+                    BS,
+                    BS,
+                    BS,
+                    fade,
+                    fade,
+                    BS,
+                    card_c,
+                    BS,
+                    rounded_rect(cw, ch, cfg["card"]["corner_radius_px"]),
+                    BS,
+                )
+            )
             if rule_px > 0:
                 ry = cy0 + ch if rule_side == "bottom" else cy0 - rule_px
-                ev.append("Dialogue: 0,%s,%s,Card,,0,0,0,,{%san7%spos(%.1f,%.1f)%sbord0%sshad0%sfad(%d,%d)%s1c%s%sp1}%s{%sp0}"
-                          % (fmt_cs(g0), fmt_cs(g1), BS, BS, cx0, ry, BS, BS, BS, fade, fade,
-                             BS, rule_c, BS, rounded_rect(cw, rule_px, 0), BS))
+                ev.append(
+                    "Dialogue: 0,%s,%s,Card,,0,0,0,,{%san7%spos(%.1f,%.1f)%sbord0%sshad0%sfad(%d,%d)%s1c%s%sp1}%s{%sp0}"
+                    % (
+                        fmt_cs(g0),
+                        fmt_cs(g1),
+                        BS,
+                        BS,
+                        cx0,
+                        ry,
+                        BS,
+                        BS,
+                        BS,
+                        fade,
+                        fade,
+                        BS,
+                        rule_c,
+                        BS,
+                        rounded_rect(cw, rule_px, 0),
+                        BS,
+                    )
+                )
 
         for k, w in enumerate(grp):
             p = placed[k]
@@ -565,21 +676,48 @@ def build(words, cfg, m, overlays=None):
                 return ("%sfad(%d,%d)" % (BS, i_, o_)) if (i_ or o_) else ""
 
             if a > g0:
-                ev.append("Dialogue: 1,%s,%s,Base,,0,0,0,,{%s%s}%s"
-                          % (fmt_cs(g0), fmt_cs(a), pos, fd(g0, a), w["text"]))
-            ev.append("Dialogue: 1,%s,%s,Act,,0,0,0,,{%s%s%s}%s"
-                      % (fmt_cs(a), fmt_cs(b), pos, fd(a, b),
-                         pop_tags(P, (b - a) * 10) if pop_on else "", w["text"]))
+                ev.append(
+                    "Dialogue: 1,%s,%s,Base,,0,0,0,,{%s%s}%s"
+                    % (fmt_cs(g0), fmt_cs(a), pos, fd(g0, a), w["text"])
+                )
+            ev.append(
+                "Dialogue: 1,%s,%s,Act,,0,0,0,,{%s%s%s}%s"
+                % (
+                    fmt_cs(a),
+                    fmt_cs(b),
+                    pos,
+                    fd(a, b),
+                    pop_tags(P, (b - a) * 10) if pop_on else "",
+                    w["text"],
+                )
+            )
             if b < g1:
-                ev.append("Dialogue: 1,%s,%s,%s,,0,0,0,,{%s%s}%s"
-                          % (fmt_cs(b), fmt_cs(g1), spoken_style, pos, fd(b, g1), w["text"]))
+                ev.append(
+                    "Dialogue: 1,%s,%s,%s,,0,0,0,,{%s%s}%s"
+                    % (fmt_cs(b), fmt_cs(g1), spoken_style, pos, fd(b, g1), w["text"])
+                )
 
-        dbg.append(dict(gi=gi, g0=g0, g1=g1, card=[cx0, cy0, cw, ch], lifted=bm,
-                        rule=[rule_px, rule_side],
-                        words=[dict(t=grp[k]["text"], cx=placed[k]["cx"], cy=placed[k]["cy"],
-                                    w=m.width(grp[k]["text"]),
-                                    a=bounds[k][0], b=bounds[k][1])
-                               for k in range(len(grp))]))
+        dbg.append(
+            dict(
+                gi=gi,
+                g0=g0,
+                g1=g1,
+                card=[cx0, cy0, cw, ch],
+                lifted=bm,
+                rule=[rule_px, rule_side],
+                words=[
+                    dict(
+                        t=grp[k]["text"],
+                        cx=placed[k]["cx"],
+                        cy=placed[k]["cy"],
+                        w=m.width(grp[k]["text"]),
+                        a=bounds[k][0],
+                        b=bounds[k][1],
+                    )
+                    for k in range(len(grp))
+                ],
+            )
+        )
     return header, ev, dbg, groups
 
 
@@ -620,10 +758,14 @@ def sweep_grouping(words, cfg, m):
     base_w = cfg["layout"]["max_line_width_px"]
     base_mw = cfg["grouping"]["max_words"]
     policy = cfg["grouping"].get("wrap", "allow")
-    print("%d words | wrap policy %r | style width %.0f px (post-scale)"
-          % (len(words), policy, base_w))
-    print("%6s %9s | %5s %7s %7s | %s" % ("words", "width", "cards",
-                                          "wrapped", "orphans", "widest card"))
+    print(
+        "%d words | wrap policy %r | style width %.0f px (post-scale)"
+        % (len(words), policy, base_w)
+    )
+    print(
+        "%6s %9s | %5s %7s %7s | %s"
+        % ("words", "width", "cards", "wrapped", "orphans", "widest card")
+    )
     for mw in (2, 3, 4, 5):
         for frac in (0.8, 1.0, 1.2):
             trial = json.loads(json.dumps(cfg))
@@ -637,13 +779,16 @@ def sweep_grouping(words, cfg, m):
                 widest = max(widest, card[2])
             wr, orp = wrap_stats(dbg)
             mark = "  <-- style" if (mw == base_mw and frac == 1.0) else ""
-            print("%6d %9.0f | %5d %7d %7d | %6.0f%s"
-                  % (mw, base_w * frac, len(groups), wr, orp, widest, mark))
+            print(
+                "%6d %9.0f | %5d %7d %7d | %6.0f%s"
+                % (mw, base_w * frac, len(groups), wr, orp, widest, mark)
+            )
 
 
 def selfcheck(dbg, cfg):
     """Structural assertions. Proves the timing arithmetic is sound; says nothing
-    about whether the timings match the audio (that is the frame probe's job)."""
+    about whether the timings match the audio (that is the frame probe's job).
+    """
     errs = []
     px = cfg["canvas"]["play_res_x"]
     py = cfg["canvas"]["play_res_y"]
@@ -667,17 +812,19 @@ def selfcheck(dbg, cfg):
         top = cy0 - (rpx if rside == "top" else 0)
         bot = cy0 + ch + (rpx if rside == "bottom" else 0)
         if top < 0 or bot > py:
-            errs.append("group %d: card+rule off-canvas vertically "
-                        "(top=%.0f bottom=%.0f, frame %d) -- lower "
-                        "layout.bottom_margin_px or the rule" % (d["gi"], top, bot, py))
+            errs.append(
+                "group %d: card+rule off-canvas vertically "
+                "(top=%.0f bottom=%.0f, frame %d) -- lower "
+                "layout.bottom_margin_px or the rule" % (d["gi"], top, bot, py)
+            )
     for i in range(1, len(dbg)):
         if dbg[i]["g0"] < dbg[i - 1]["g1"]:
             errs.append(
                 "group %d starts at %dcs, before group %d ends at %dcs "
                 "(%dcs overlap) -- raise timing.min_active_ms or lower "
                 "grouping.max_words; they are a tuned pair"
-                % (i, dbg[i]["g0"], i - 1, dbg[i - 1]["g1"],
-                   dbg[i - 1]["g1"] - dbg[i]["g0"]))
+                % (i, dbg[i]["g0"], i - 1, dbg[i - 1]["g1"], dbg[i - 1]["g1"] - dbg[i]["g0"])
+            )
     return errs
 
 
@@ -685,9 +832,10 @@ def scale_style(cfg, W, H):
     """Adapt a preset authored for one canvas (typically 1920x1080) to the actual
     video dimensions. Scales every pixel-denominated knob by the height ratio and
     re-centres the anchor. Exactly a no-op when dimensions already match, so the
-    common case stays byte-identical to the hand-verified output."""
+    common case stays byte-identical to the hand-verified output.
+    """
     C = cfg["canvas"]
-    if (W, H) == (C["play_res_x"], C["play_res_y"]):
+    if (C["play_res_x"], C["play_res_y"]) == (W, H):
         return
     f = H / float(C["play_res_y"])
     F = cfg["font"]
@@ -708,8 +856,7 @@ def scale_style(cfg, W, H):
     # vertical scales by x1.78 while the frame gets NARROWER, so this is exactly
     # where it bites.
     _pad_x = cfg["card"].get("pad_x_px", 0) * f
-    L["max_line_width_px"] = min(L["max_line_width_px"] * f,
-                                 0.94 * W - 2 * _pad_x)
+    L["max_line_width_px"] = min(L["max_line_width_px"] * f, 0.94 * W - 2 * _pad_x)
     K = cfg["card"]
     for k in ("corner_radius_px", "pad_x_px", "pad_y_px", "collision_gap_px"):
         if k in K:
@@ -728,25 +875,36 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--words", required=True)
     ap.add_argument("--style", required=True)
-    ap.add_argument("--out", default=None,
-                    help="output .ass (required unless --sweep)")
-    ap.add_argument("--sweep", action="store_true",
-                    help="price grouping instead of building: the max_words x "
-                         "line-width table of cards/wraps/orphans for these "
-                         "words under this style. Free -- writes nothing. A "
-                         "flat width column means the scale_style clamp is "
-                         "binding and width is a dead knob; carry fewer words.")
+    ap.add_argument("--out", default=None, help="output .ass (required unless --sweep)")
+    ap.add_argument(
+        "--sweep",
+        action="store_true",
+        help="price grouping instead of building: the max_words x "
+        "line-width table of cards/wraps/orphans for these "
+        "words under this style. Free -- writes nothing. A "
+        "flat width column means the scale_style clamp is "
+        "binding and width is a dead knob; carry fewer words.",
+    )
     ap.add_argument("--debug-out", default=None)
-    ap.add_argument("--overlays", default=None,
-                    help="detect-overlays.py json; lifts cards clear of the "
-                         "source video's own lower-third graphics")
+    ap.add_argument(
+        "--overlays",
+        default=None,
+        help="detect-overlays.py json; lifts cards clear of the "
+        "source video's own lower-third graphics",
+    )
     ap.add_argument("--range", nargs=2, type=float, default=None, metavar=("T0", "T1"))
     ap.add_argument("--time-offset", type=float, default=0.0)
-    ap.add_argument("--scale-to", nargs=2, type=int, default=None, metavar=("W", "H"),
-                    help="actual video dimensions; pixel-tuned style values are "
-                         "scaled from the preset's canvas to these. A PlayRes that "
-                         "mismatches the video makes libass silently rescale "
-                         "everything -- this makes the adjustment explicit instead.")
+    ap.add_argument(
+        "--scale-to",
+        nargs=2,
+        type=int,
+        default=None,
+        metavar=("W", "H"),
+        help="actual video dimensions; pixel-tuned style values are "
+        "scaled from the preset's canvas to these. A PlayRes that "
+        "mismatches the video makes libass silently rescale "
+        "everything -- this makes the adjustment explicit instead.",
+    )
     args = ap.parse_args()
     if not args.out and not args.sweep:
         ap.error("--out is required (or use --sweep to price grouping)")
@@ -756,14 +914,23 @@ def main():
         scale_style(cfg, *args.scale_to)
 
     F = cfg["font"]
-    m = Metrics(F["file"], F.get("size"), F.get("spacing", 0), F.get("fudge", 1.0),
-                cap_height_px=F.get("cap_height_px"))
+    m = Metrics(
+        F["file"],
+        F.get("size"),
+        F.get("spacing", 0),
+        F.get("fudge", 1.0),
+        cap_height_px=F.get("cap_height_px"),
+    )
     if not F.get("size"):
-        print("font size %d derived from cap_height_px=%s (%s: cap %d, winAsc+winDesc %d)"
-              % (m.size, F.get("cap_height_px"), m.family, m.cap, m.den))
+        print(
+            "font size %d derived from cap_height_px=%s (%s: cap %d, winAsc+winDesc %d)"
+            % (m.size, F.get("cap_height_px"), m.family, m.cap, m.den)
+        )
     if m.family != cfg["font"]["family"]:
-        print("WARNING: ASS Fontname '%s' != file family '%s' -- libass may substitute"
-              % (cfg["font"]["family"], m.family))
+        print(
+            "WARNING: ASS Fontname '%s' != file family '%s' -- libass may substitute"
+            % (cfg["font"]["family"], m.family)
+        )
 
     # the shared loader takes the faster-whisper envelope OR a bare list, so
     # a hand-built transcript is no longer a TypeError three calls deep
@@ -808,8 +975,7 @@ def main():
         # Fatal, and BEFORE writing: an off-canvas card or an overlapping active
         # window is broken output. Printing a warning and rendering anyway wastes
         # a full encode and, worse, can ship a defect that looks deliberate.
-        sys.exit("SELFCHECK: %d problem(s) -- refusing to write %s"
-                 % (len(errs), args.out))
+        sys.exit("SELFCHECK: %d problem(s) -- refusing to write %s" % (len(errs), args.out))
 
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8", newline="") as f:
@@ -819,8 +985,10 @@ def main():
             json.dump(dbg, f, ensure_ascii=False)
 
     sizes = [len(g) for g in groups]
-    print("words %d | groups %d | events %d | %.2f MB"
-          % (len(words), len(groups), len(ev), os.path.getsize(args.out) / 1e6))
+    print(
+        "words %d | groups %d | events %d | %.2f MB"
+        % (len(words), len(groups), len(ev), os.path.getsize(args.out) / 1e6)
+    )
     print("words/group avg %.1f max %d" % (sum(sizes) / max(1, len(sizes)), max(sizes)))
     # Grouping is a tuned pair (max_words vs max_line_width_px) and the way it
     # goes wrong is TYPOGRAPHIC, not structural, so selfcheck cannot see it: a
@@ -829,18 +997,21 @@ def main():
     # this repo had and still read as broken. These two numbers price a
     # grouping change without spending an encode -- sweep them, do not guess.
     wrapped, orphan = wrap_stats(dbg)
-    print("cards wrapping to >1 line %d/%d (%.0f%%) | of those, %d orphan a "
-          "single word onto its own line"
-          % (wrapped, len(dbg), 100.0 * wrapped / max(1, len(dbg)), orphan))
+    print(
+        "cards wrapping to >1 line %d/%d (%.0f%%) | of those, %d orphan a "
+        "single word onto its own line"
+        % (wrapped, len(dbg), 100.0 * wrapped / max(1, len(dbg)), orphan)
+    )
     print("first card %.2fs, last ends %.2fs" % (dbg[0]["g0"] / 100.0, dbg[-1]["g1"] / 100.0))
     if overlays is not None:
         base_m = cfg["layout"]["bottom_margin_px"]
         lift = [d for d in dbg if d["lifted"] != base_m]
-        print("cards lifted clear of source graphics: %d of %d (%d overlay ranges)"
-              % (len(lift), len(dbg), len(overlays)))
+        print(
+            "cards lifted clear of source graphics: %d of %d (%d overlay ranges)"
+            % (len(lift), len(dbg), len(overlays))
+        )
         if lift:
-            print("  lift margins used: %s"
-                  % sorted(set(d["lifted"] for d in lift)))
+            print("  lift margins used: %s" % sorted(set(d["lifted"] for d in lift)))
 
 
 if __name__ == "__main__":

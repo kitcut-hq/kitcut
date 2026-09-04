@@ -50,7 +50,13 @@ teeth and the reviewed exception is recorded next to the thing it excuses.
 Invoke as:  python scripts/check-caption-space.py --manifest projects/<id>/clips-vertical.json
             python scripts/check-caption-space.py --manifest ... --list
 """
-import sys, os, json, argparse, importlib, subprocess
+
+import sys
+import os
+import json
+import argparse
+import importlib
+import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -58,7 +64,7 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 import cv2
 import numpy as np
 
-_cut = importlib.import_module("cut-clips")      # hyphen: see CLAUDE.md
+_cut = importlib.import_module("cut-clips")  # hyphen: see CLAUDE.md
 _outline = importlib.import_module("transcript-outline")
 _project = importlib.import_module("_project")
 
@@ -83,7 +89,7 @@ DET_MODEL = "models/face/face_detection_yunet_2023mar.onnx"
 
 
 def load(path):
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -95,29 +101,50 @@ def card_groups(clip, words_path, style, start, end, w, h, tmpdir, fontsdir):
     """
     dbg = os.path.join(tmpdir, "%s.capspace.json" % clip["id"]).replace("\\", "/")
     ass = os.path.join(tmpdir, "%s.capspace.ass" % clip["id"]).replace("\\", "/")
-    cmd = _cut.PY + ["scripts/build-captions-ass.py",
-                     "--words", words_path, "--style", style,
-                     "--out", ass, "--debug-out", dbg,
-                     "--scale-to", str(w), str(h),
-                     "--range", "%.3f" % start, "%.3f" % end,
-                     "--time-offset", "%.3f" % start]
+    cmd = _cut.PY + [
+        "scripts/build-captions-ass.py",
+        "--words",
+        words_path,
+        "--style",
+        style,
+        "--out",
+        ass,
+        "--debug-out",
+        dbg,
+        "--scale-to",
+        str(w),
+        str(h),
+        "--range",
+        "%.3f" % start,
+        "%.3f" % end,
+        "--time-offset",
+        "%.3f" % start,
+    ]
     if subprocess.run(cmd, cwd=ROOT, env=_cut.ENV).returncode:
         sys.exit("%s: could not rebuild caption geometry" % clip["id"])
-    d = load(dbg)          # a bare list of groups, rebased to clip t=0
+    d = load(dbg)  # a bare list of groups, rebased to clip t=0
     out = []
     for g in d:
         cx0, cy0, cw, ch = g["card"]
-        out.append(dict(gi=g["gi"], t0=g["g0"] / 100.0, t1=g["g1"] / 100.0,
-                        card=(float(cx0), float(cy0), float(cw), float(ch)),
-                        text=" ".join(w["t"] for w in g.get("words", []))))
+        out.append(
+            dict(
+                gi=g["gi"],
+                t0=g["g0"] / 100.0,
+                t1=g["g1"] / 100.0,
+                card=(float(cx0), float(cy0), float(cw), float(ch)),
+                text=" ".join(w["t"] for w in g.get("words", [])),
+            )
+        )
     return out
 
 
 def detector(w, h):
     p = _env.resolve(DET_MODEL)
     if not os.path.exists(p):
-        sys.exit("no face model at %s -- see the video-multicam-switch skill "
-                 "for the download command" % _project.norm(p))
+        sys.exit(
+            "no face model at %s -- see the video-multicam-switch skill "
+            "for the download command" % _project.norm(p)
+        )
     return cv2.FaceDetectorYN_create(p, "", (int(w), int(h)), DET_SCORE)
 
 
@@ -132,8 +159,7 @@ def best_face(det, frame):
         return None
     f = max(faces, key=lambda r: r[-1])
     box = (float(f[0]), float(f[1]), float(f[2]), float(f[3]))
-    mouth = ((float(f[10]) + float(f[12])) / 2.0,
-             (float(f[11]) + float(f[13])) / 2.0)
+    mouth = ((float(f[10]) + float(f[12])) / 2.0, (float(f[11]) + float(f[13])) / 2.0)
     return box, mouth
 
 
@@ -184,8 +210,11 @@ def judge(groups, video, samples):
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     det = detector(w, h)
-    pick = groups if len(groups) <= samples else [
-        groups[i] for i in np.linspace(0, len(groups) - 1, samples).astype(int)]
+    pick = (
+        groups
+        if len(groups) <= samples
+        else [groups[i] for i in np.linspace(0, len(groups) - 1, samples).astype(int)]
+    )
     rows = []
     for g in pick:
         # Midpoint of the group: the card is fully up, past its fade.
@@ -199,10 +228,17 @@ def judge(groups, video, samples):
             rows.append(dict(g, t=t, face=None))
             continue
         box, mouth = got
-        rows.append(dict(g, t=t, face=box, mouth=mouth,
-                         frac=overlap_frac(g["card"], box),
-                         mouth_hit=mouth_covered(g["card"], mouth, box[3]),
-                         clearance=gap(g["card"], box)))
+        rows.append(
+            dict(
+                g,
+                t=t,
+                face=box,
+                mouth=mouth,
+                frac=overlap_frac(g["card"], box),
+                mouth_hit=mouth_covered(g["card"], mouth, box[3]),
+                clearance=gap(g["card"], box),
+            )
+        )
     cap.release()
     return rows, (w, h)
 
@@ -211,42 +247,59 @@ def report(cid, rows, size, verbose):
     """Print the worst of it, and return (fails, warns)."""
     seen = [r for r in rows if r.get("face")]
     if not seen:
-        print("  %-28s no face found in %d sampled frame(s) -- nothing to judge"
-              % (cid, len(rows)))
+        print("  %-28s no face found in %d sampled frame(s) -- nothing to judge" % (cid, len(rows)))
         return 0, 0
     blind = (len(rows) - len(seen)) / float(max(1, len(rows)))
     mouth = [r for r in seen if r["mouth_hit"]]
     eaten = [r for r in seen if not r["mouth_hit"] and r["frac"] >= FACE_FRAC]
-    graze = [r for r in seen if not r["mouth_hit"] and r["frac"] < FACE_FRAC
-             and r["clearance"] < 0]
+    graze = [r for r in seen if not r["mouth_hit"] and r["frac"] < FACE_FRAC and r["clearance"] < 0]
     worst = max(seen, key=lambda r: r["frac"])
-    print("  %-28s %d/%d frames with a face | worst cover %.0f%% of the face "
-          "at %.1fs | min clearance %+.0f px"
-          % (cid, len(seen), len(rows), 100 * worst["frac"], worst["t"],
-             min(r["clearance"] for r in seen)))
+    print(
+        "  %-28s %d/%d frames with a face | worst cover %.0f%% of the face "
+        "at %.1fs | min clearance %+.0f px"
+        % (
+            cid,
+            len(seen),
+            len(rows),
+            100 * worst["frac"],
+            worst["t"],
+            min(r["clearance"] for r in seen),
+        )
+    )
     if verbose:
         for r in seen:
-            tag = ("MOUTH" if r["mouth_hit"]
-                   else "EATEN" if r["frac"] >= FACE_FRAC
-                   else "graze" if r["clearance"] < 0 else "ok")
-            print("      %6.2fs  %-5s  cover %3.0f%%  clearance %+5.0f px  %s"
-                  % (r["t"], tag, 100 * r["frac"], r["clearance"],
-                     r["text"][:46]))
+            tag = (
+                "MOUTH"
+                if r["mouth_hit"]
+                else "EATEN"
+                if r["frac"] >= FACE_FRAC
+                else "graze"
+                if r["clearance"] < 0
+                else "ok"
+            )
+            print(
+                "      %6.2fs  %-5s  cover %3.0f%%  clearance %+5.0f px  %s"
+                % (r["t"], tag, 100 * r["frac"], r["clearance"], r["text"][:46])
+            )
     for r in mouth[:3]:
-        print("      FAIL  %.2fs the card covers the MOUTH (card top %.0f, "
-              "mouth y %.0f)" % (r["t"], r["card"][1], r["mouth"][1]))
+        print(
+            "      FAIL  %.2fs the card covers the MOUTH (card top %.0f, "
+            "mouth y %.0f)" % (r["t"], r["card"][1], r["mouth"][1])
+        )
     for r in eaten[:3]:
-        print("      FAIL  %.2fs the card covers %.0f%% of the face"
-              % (r["t"], 100 * r["frac"]))
+        print("      FAIL  %.2fs the card covers %.0f%% of the face" % (r["t"], 100 * r["frac"]))
     if graze:
-        print("      warn  %d frame(s) put the card inside the face box "
-              "(chin); nearest miss %+.0f px"
-              % (len(graze), min(r["clearance"] for r in graze)))
+        print(
+            "      warn  %d frame(s) put the card inside the face box "
+            "(chin); nearest miss %+.0f px" % (len(graze), min(r["clearance"] for r in graze))
+        )
     extra = 0
     if blind >= BLIND_FRAC:
-        print("      warn  no face in %.0f%% of sampled frames -- this check "
-              "fails OPEN when the detector misses, so go and look at those "
-              "frames before trusting a pass" % (100 * blind))
+        print(
+            "      warn  no face in %.0f%% of sampled frames -- this check "
+            "fails OPEN when the detector misses, so go and look at those "
+            "frames before trusting a pass" % (100 * blind)
+        )
         extra = 1
     return len(mouth) + len(eaten), len(graze) + extra
 
@@ -255,11 +308,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--only", help="comma-separated clip ids")
-    ap.add_argument("--samples", type=int, default=16,
-                    help="caption groups sampled per clip")
-    ap.add_argument("--list", action="store_true",
-                    help="report every sampled frame and always exit 0 -- "
-                         "prices a placement change without blocking on it")
+    ap.add_argument("--samples", type=int, default=16, help="caption groups sampled per clip")
+    ap.add_argument(
+        "--list",
+        action="store_true",
+        help="report every sampled frame and always exit 0 -- "
+        "prices a placement change without blocking on it",
+    )
     args = ap.parse_args()
 
     mp = _env.resolve(args.manifest)
@@ -279,8 +334,7 @@ def main():
     only = set((args.only or "").split(",")) if args.only else None
 
     print("captions %s" % caps["style"])
-    print("fail when the card covers the mouth, or >= %.0f%% of the face\n"
-          % (100 * FACE_FRAC))
+    print("fail when the card covers the mouth, or >= %.0f%% of the face\n" % (100 * FACE_FRAC))
 
     fails = warns = skipped = 0
     for clip in m["clips"]:
@@ -293,8 +347,7 @@ def main():
             skipped += 1
             continue
         cp = clip.get("pad", {})
-        start, end = _cut.resolve(clip, wl, float(cp.get("head", ph)),
-                                  float(cp.get("tail", pt)))
+        start, end = _cut.resolve(clip, wl, float(cp.get("head", ph)), float(cp.get("tail", pt)))
         cap = cv2.VideoCapture(rendered)
         w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -309,8 +362,9 @@ def main():
         # reason, which is worse than no guard.
         cl_caps = dict(caps, **(clip.get("captions") or {}))
         style = _cut.clip_style(cl_caps, clip, tmpdir)
-        groups = card_groups(clip, words, style, start, end, w, h,
-                             tmpdir, m.get("fontsdir", "fonts"))
+        groups = card_groups(
+            clip, words, style, start, end, w, h, tmpdir, m.get("fontsdir", "fonts")
+        )
         rows, size = judge(groups, rendered, args.samples)
         f, wn = report(clip["id"], rows, size, args.list)
         why = clip.get("caption_space_ok")
@@ -320,15 +374,16 @@ def main():
         fails += f
         warns += wn
 
-    print("\n%d fail, %d warn%s" % (fails, warns,
-                                    ", %d not rendered" % skipped if skipped else ""))
+    print("\n%d fail, %d warn%s" % (fails, warns, ", %d not rendered" % skipped if skipped else ""))
     if fails and not args.list:
-        print("\nThe card is on the face. Fix the PLACEMENT against THIS "
-              "framing -- `layout.bottom_margin_px` in the preset, or a preset "
-              "of its own for this crop. Do not reuse a margin measured on a "
-              "looser shot, which is what caused this. If the framing has been "
-              "reviewed and accepted, record why in the clip's "
-              "\"caption_space_ok\".")
+        print(
+            "\nThe card is on the face. Fix the PLACEMENT against THIS "
+            "framing -- `layout.bottom_margin_px` in the preset, or a preset "
+            "of its own for this crop. Do not reuse a margin measured on a "
+            "looser shot, which is what caused this. If the framing has been "
+            "reviewed and accepted, record why in the clip's "
+            '"caption_space_ok".'
+        )
         sys.exit(1)
 
 

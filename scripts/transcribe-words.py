@@ -14,7 +14,13 @@ The header below makes the script survive a bare `python script.py` anyway.
 
 Invoke as:  python scripts/transcribe-words.py <audio.wav> --out <id>.words.json
 """
-import sys, os, json, argparse, time, atexit
+
+import sys
+import os
+import json
+import argparse
+import time
+import atexit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -53,13 +59,16 @@ if _dirs:
     os.environ["PATH"] = os.pathsep.join(_dirs) + os.pathsep + os.environ.get("PATH", "")
 
 from faster_whisper import WhisperModel
-import faster_whisper, ctranslate2
+import faster_whisper
+import ctranslate2
 
 _fw = os.path.normcase(os.path.abspath(faster_whisper.__file__))
 if not any(_fw.startswith(p) for p in _own):
-    sys.exit("FATAL: faster_whisper resolved outside this interpreter's "
-             "site-packages (%s) -- a stale PYTHONPATH is shadowing it. "
-             "Invoke as: python" % _fw)
+    sys.exit(
+        "FATAL: faster_whisper resolved outside this interpreter's "
+        "site-packages (%s) -- a stale PYTHONPATH is shadowing it. "
+        "Invoke as: python" % _fw
+    )
 
 
 def take_gpu_lock(args):
@@ -79,15 +88,21 @@ def take_gpu_lock(args):
 
     def waiting(held, _waited):
         print("GPU busy -- %s" % _gpulock.describe(held), flush=True)
-        print("  queueing (up to %.0f min; --no-gpu-lock overrides, "
-              "--gpu-wait 0 refuses)" % (args.gpu_wait / 60.0), flush=True)
+        print(
+            "  queueing (up to %.0f min; --no-gpu-lock overrides, "
+            "--gpu-wait 0 refuses)" % (args.gpu_wait / 60.0),
+            flush=True,
+        )
 
-    token = _gpulock.acquire("gpu", tool="transcribe-words", project=project,
-                             wait=args.gpu_wait, on_wait=waiting)
+    token = _gpulock.acquire(
+        "gpu", tool="transcribe-words", project=project, wait=args.gpu_wait, on_wait=waiting
+    )
     if token is None:
         held = _gpulock.read("gpu")
-        sys.exit("REFUSED: %s\nAnother run holds the card. Check it with "
-                 "`python scripts/gpu-lock.py`." % _gpulock.describe(held))
+        sys.exit(
+            "REFUSED: %s\nAnother run holds the card. Check it with "
+            "`python scripts/gpu-lock.py`." % _gpulock.describe(held)
+        )
     atexit.register(_gpulock.release, token, "gpu")
     return token
 
@@ -100,17 +115,27 @@ def main():
     ap.add_argument("--model", default="large-v3")
     ap.add_argument("--compute-type", default="int8_float16")
     ap.add_argument("--device", default="cuda")
-    ap.add_argument("--language", default=None,
-                    help="ISO code; omit to autodetect. Do NOT default this to a "
-                         "language -- a wrong forced language produces a fluent "
-                         "transcript of the wrong words with no error anywhere.")
+    ap.add_argument(
+        "--language",
+        default=None,
+        help="ISO code; omit to autodetect. Do NOT default this to a "
+        "language -- a wrong forced language produces a fluent "
+        "transcript of the wrong words with no error anywhere.",
+    )
     ap.add_argument("--beam-size", type=int, default=5)
-    ap.add_argument("--gpu-wait", type=float, default=7200.0,
-                    help="seconds to queue behind another GPU run before "
-                         "giving up (default 2h; 0 = refuse immediately)")
-    ap.add_argument("--no-gpu-lock", action="store_true",
-                    help="skip the single-run lock. Only when you know the "
-                         "card is free -- two large-v3 on 4 GB finish neither.")
+    ap.add_argument(
+        "--gpu-wait",
+        type=float,
+        default=7200.0,
+        help="seconds to queue behind another GPU run before "
+        "giving up (default 2h; 0 = refuse immediately)",
+    )
+    ap.add_argument(
+        "--no-gpu-lock",
+        action="store_true",
+        help="skip the single-run lock. Only when you know the "
+        "card is free -- two large-v3 on 4 GB finish neither.",
+    )
     # Names the model has never seen come back as something it has: a product
     # called Instafill lands as "Instafili", "Instafil" and "Instafield" in one
     # transcript. Burned captions make that everybody's problem, so the vocabulary
@@ -118,18 +143,22 @@ def main():
     # hotwords, not initial_prompt: condition_on_previous_text is off here (it
     # caps a repetition loop at one window), which also means initial_prompt only
     # reaches the FIRST 30-second window. hotwords is re-applied to every one.
-    ap.add_argument("--hotwords", default=None,
-                    help="comma- or space-separated names the model should "
-                         "expect (brands, acronyms, form numbers)")
-    ap.add_argument("--hotwords-file", default=None,
-                    help="a file of the same, one per line; blank lines and "
-                         "# comments ignored")
+    ap.add_argument(
+        "--hotwords",
+        default=None,
+        help="comma- or space-separated names the model should "
+        "expect (brands, acronyms, form numbers)",
+    )
+    ap.add_argument(
+        "--hotwords-file",
+        default=None,
+        help="a file of the same, one per line; blank lines and # comments ignored",
+    )
     args = ap.parse_args()
 
     if args.hotwords_file:
         with open(args.hotwords_file, encoding="utf-8") as f:
-            terms = [l.strip() for l in f
-                     if l.strip() and not l.lstrip().startswith("#")]
+            terms = [l.strip() for l in f if l.strip() and not l.lstrip().startswith("#")]
         args.hotwords = ", ".join(([args.hotwords] if args.hotwords else []) + terms)
     if args.hotwords:
         print(f"hotwords: {args.hotwords}")
@@ -157,19 +186,26 @@ def main():
     for device, ctype in ladder:
         try:
             print(f"loading {args.model} ({ctype}) on {device} ...", flush=True)
-            model = WhisperModel(args.model, device=device, device_index=0,
-                                 compute_type=ctype, local_files_only=True,
-                                 cpu_threads=8, num_workers=1)
-            print(f"  loaded in {time.time()-t0:.1f}s", flush=True)
+            model = WhisperModel(
+                args.model,
+                device=device,
+                device_index=0,
+                compute_type=ctype,
+                local_files_only=True,
+                cpu_threads=8,
+                num_workers=1,
+            )
+            print(f"  loaded in {time.time() - t0:.1f}s", flush=True)
             info, words, raw_segs = transcribe_once(model, args, t0)
-            args.compute_type = ctype        # record what actually ran
+            args.compute_type = ctype  # record what actually ran
             break
         except (RuntimeError, OSError) as e:
             msg = str(e).lower()
-            if device != "cpu" and any(k in msg for k in
-                                       ("cuda", "cublas", "cudnn", "out of memory", "library")):
+            if device != "cpu" and any(
+                k in msg for k in ("cuda", "cublas", "cudnn", "out of memory", "library")
+            ):
                 print(f"  {device}/{ctype} failed ({e}); falling back ...", flush=True)
-                model = None                 # release VRAM before the next rung
+                model = None  # release VRAM before the next rung
                 last_err = e
                 continue
             raise
@@ -182,8 +218,11 @@ def main():
 def transcribe_once(model, args, t0):
     segments, info = model.transcribe(
         args.audio,
-        language=args.language, task="transcribe",
-        beam_size=args.beam_size, best_of=args.beam_size, patience=1.0,
+        language=args.language,
+        task="transcribe",
+        beam_size=args.beam_size,
+        best_of=args.beam_size,
+        patience=1.0,
         temperature=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
         compression_ratio_threshold=2.4,
         log_prob_threshold=-1.0,
@@ -212,25 +251,49 @@ def transcribe_once(model, args, t0):
     words, raw_segs = [], []
     last_report = 0.0
     for seg in segments:
-        raw_segs.append(dict(id=seg.id, start=seg.start, end=seg.end, text=seg.text,
-                             avg_logprob=seg.avg_logprob, no_speech_prob=seg.no_speech_prob,
-                             compression_ratio=seg.compression_ratio, temperature=seg.temperature))
-        for w in (seg.words or []):
-            words.append(dict(text=w.word.strip(), start=float(w.start),
-                              end=float(w.end), duration=float(w.end - w.start),
-                              probability=float(w.probability)))
+        raw_segs.append(
+            dict(
+                id=seg.id,
+                start=seg.start,
+                end=seg.end,
+                text=seg.text,
+                avg_logprob=seg.avg_logprob,
+                no_speech_prob=seg.no_speech_prob,
+                compression_ratio=seg.compression_ratio,
+                temperature=seg.temperature,
+            )
+        )
+        for w in seg.words or []:
+            words.append(
+                dict(
+                    text=w.word.strip(),
+                    start=float(w.start),
+                    end=float(w.end),
+                    duration=float(w.end - w.start),
+                    probability=float(w.probability),
+                )
+            )
         if seg.end - last_report >= 60:
             last_report = seg.end
-            print(f"  {seg.end/60:5.1f} min | {len(words)} words | {time.time()-t0:.0f}s elapsed", flush=True)
+            print(
+                f"  {seg.end / 60:5.1f} min | {len(words)} words | {time.time() - t0:.0f}s elapsed",
+                flush=True,
+            )
     return info, words, raw_segs
 
 
 def write_output(args, info, words, raw_segs, t0):
-    out = dict(file=args.audio, duration=float(info.duration), language=info.language,
-               language_probability=float(info.language_probability),
-               model=args.model, compute_type=args.compute_type,
-               hotwords=args.hotwords,
-               text=" ".join(w["text"] for w in words), words=words)
+    out = dict(
+        file=args.audio,
+        duration=float(info.duration),
+        language=info.language,
+        language_probability=float(info.language_probability),
+        model=args.model,
+        compute_type=args.compute_type,
+        hotwords=args.hotwords,
+        text=" ".join(w["text"] for w in words),
+        words=words,
+    )
 
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
@@ -239,7 +302,7 @@ def write_output(args, info, words, raw_segs, t0):
         with open(args.raw_out, "w", encoding="utf-8") as f:
             json.dump(dict(segments=raw_segs), f, ensure_ascii=False, indent=1)
 
-    print(f"DONE {len(words)} words -> {args.out} in {time.time()-t0:.0f}s")
+    print(f"DONE {len(words)} words -> {args.out} in {time.time() - t0:.0f}s")
     if words:
         print(f"last word ends at {words[-1]['end']:.1f}s (audio {info.duration:.1f}s)")
 

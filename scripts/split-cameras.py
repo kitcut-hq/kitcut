@@ -42,7 +42,14 @@ what the finished re-cut is scored against.
 
 Invoke as:  python scripts/split-cameras.py --manifest projects/<id>/multicam-sim.json
 """
-import sys, os, json, argparse, subprocess, shutil, random
+
+import sys
+import os
+import json
+import argparse
+import subprocess
+import shutil
+import random
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -53,7 +60,7 @@ from importlib import import_module  # noqa: E402
 import _progress  # noqa: E402
 import _project  # noqa: E402
 
-_shots = import_module("shot-detect")   # hyphen: not importable by name
+_shots = import_module("shot-detect")  # hyphen: not importable by name
 
 ROOT = _env.ROOT
 ENV = _env.ENV
@@ -61,17 +68,20 @@ ENV = _env.ENV
 DEFAULT_STAGGER = {"seed": 1, "head_s": [1.0, 6.0], "tail_s": [0.5, 4.0]}
 # No "encoder": _encode picks one this machine can actually run, and a
 # manifest that names one overrides it. "speed" is family-neutral.
-DEFAULT_CONFORM = {"speed": 5, "cq": 16,
-                   "maxrate": "40M", "bufsize": "80M", "audio_bitrate": "256k"}
-DEFAULT_RENDER = {"speed": 5, "cq": 16,
-                  "maxrate": "40M", "bufsize": "80M", "audio_bitrate": "192k"}
+DEFAULT_CONFORM = {
+    "speed": 5,
+    "cq": 16,
+    "maxrate": "40M",
+    "bufsize": "80M",
+    "audio_bitrate": "256k",
+}
+DEFAULT_RENDER = {"speed": 5, "cq": 16, "maxrate": "40M", "bufsize": "80M", "audio_bitrate": "192k"}
 DEFAULT_VERIFY = {"match_max": 0.020, "samples_per_span": 12, "peak_db": -60}
-SR = 48000                      # every raw is resampled to this
+SR = 48000  # every raw is resampled to this
 
 
 def run(cmd, **kw):
-    return subprocess.run(cmd, check=True, capture_output=True, text=True,
-                          env=ENV, **kw)
+    return subprocess.run(cmd, check=True, capture_output=True, text=True, env=ENV, **kw)
 
 
 def hhmmss(t):
@@ -83,9 +93,20 @@ def rel(p):
 
 
 def probe_video(path):
-    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-               "-show_entries", "stream=width,height,r_frame_rate",
-               "-of", "json", path]).stdout
+    out = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,r_frame_rate",
+            "-of",
+            "json",
+            path,
+        ]
+    ).stdout
     s = json.loads(out)["streams"][0]
     num, den = (int(x) for x in s["r_frame_rate"].split("/"))
     return int(s["width"]), int(s["height"]), num, den
@@ -93,16 +114,43 @@ def probe_video(path):
 
 def count_frames(path):
     """Packets, not decoded frames: same answer, seconds instead of minutes."""
-    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-               "-count_packets", "-show_entries", "stream=nb_read_packets",
-               "-of", "csv=p=0", path]).stdout
+    out = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-count_packets",
+            "-show_entries",
+            "stream=nb_read_packets",
+            "-of",
+            "csv=p=0",
+            path,
+        ]
+    ).stdout
     return int(out.strip().rstrip(","))
 
 
 def peak_db(path):
-    p = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", path,
-                        "-vn", "-af", "volumedetect", "-f", "null", "-"],
-                       capture_output=True, text=True, env=ENV)
+    p = subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-i",
+            path,
+            "-vn",
+            "-af",
+            "volumedetect",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture_output=True,
+        text=True,
+        env=ENV,
+    )
     for line in (p.stderr or "").splitlines():
         if "max_volume:" in line:
             try:
@@ -125,7 +173,7 @@ def layout(live, n_frames, head, tail):
     out.append((0, head + live[0][0], ("hold", live[0][0])))
     for i, (a, b) in enumerate(live):
         out.append((head + a, head + b, ("live", a)))
-        end = (live[i + 1][0] if i + 1 < n else n_frames + tail)
+        end = live[i + 1][0] if i + 1 < n else n_frames + tail
         if end > b:
             out.append((head + b, head + end, ("hold", b - 1)))
     return [(x, y, k) for x, y, k in out if y > x]
@@ -133,7 +181,8 @@ def layout(live, n_frames, head, tail):
 
 def sample_frames(a, b, k):
     """Both edges always, then spread the rest: an off-by-one shows up at a
-    boundary long before it shows up in the middle of a shot."""
+    boundary long before it shows up in the middle of a shot.
+    """
     if b - a <= k:
         return list(range(a, b))
     inner = [a + int(round(i * (b - a - 1) / float(k - 1))) for i in range(k)]
@@ -161,19 +210,35 @@ def conform(src, dst, cfg, fps_num, fps_den):
     """
     os.makedirs(os.path.dirname(dst) or ".", exist_ok=True)
     tmp = dst + ".part.mp4"
-    cmd = ["ffmpeg", "-hide_banner", "-nostats", "-loglevel", "warning",
-           "-i", src,
-           "-vf", "setpts=N*%d/%d/TB" % (fps_den, fps_num),
-           "-fps_mode", "passthrough", "-video_track_timescale", str(fps_num),
-           ] + _encode.video_args(cfg) + _encode.audio_args(cfg, rate=SR) + [
-           "-movflags", "+faststart", "-y", tmp]
+    cmd = (
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-loglevel",
+            "warning",
+            "-i",
+            src,
+            "-vf",
+            "setpts=N*%d/%d/TB" % (fps_den, fps_num),
+            "-fps_mode",
+            "passthrough",
+            "-video_track_timescale",
+            str(fps_num),
+        ]
+        + _encode.video_args(cfg)
+        + _encode.audio_args(cfg, rate=SR)
+        + ["-movflags", "+faststart", "-y", tmp]
+    )
     p = subprocess.run(cmd, capture_output=True, text=True, env=ENV)
     if p.returncode != 0:
         sys.exit("conform failed:\n%s" % (p.stderr or "")[-3000:])
     want, got = count_frames(src), count_frames(tmp)
     if got != want:
-        sys.exit("conform changed the frame count: %d -> %d. The grid is wrong; "
-                 "nothing downstream can be trusted." % (want, got))
+        sys.exit(
+            "conform changed the frame count: %d -> %d. The grid is wrong; "
+            "nothing downstream can be trusted." % (want, got)
+        )
     shutil.move(tmp, dst)
     return dst
 
@@ -223,27 +288,47 @@ def build_graph(live, n_frames, head, tail, fps_num, fps_den):
         ch.append("%sconcat=n=%d:v=1:a=0[vout]" % ("".join(segs), n))
 
     total = head + n_frames + tail
-    ch.append("[0:a]aresample=%d,aformat=sample_fmts=fltp:sample_rates=%d:"
-              "channel_layouts=stereo,adelay=%dS:all=1,apad,"
-              "atrim=end_sample=%d,asetpts=PTS-STARTPTS[aout]"
-              % (SR, SR, samples_at(head, fps_num, fps_den),
-                 samples_at(total, fps_num, fps_den)))
+    ch.append(
+        "[0:a]aresample=%d,aformat=sample_fmts=fltp:sample_rates=%d:"
+        "channel_layouts=stereo,adelay=%dS:all=1,apad,"
+        "atrim=end_sample=%d,asetpts=PTS-STARTPTS[aout]"
+        % (SR, SR, samples_at(head, fps_num, fps_den), samples_at(total, fps_num, fps_den))
+    )
     return ";".join(ch), total
 
 
-def render_raw(program, dst, live, n_frames, head, tail, cfg, fps_num, fps_den,
-               job):
+def render_raw(program, dst, live, n_frames, head, tail, cfg, fps_num, fps_den, job):
     graph, total = build_graph(live, n_frames, head, tail, fps_num, fps_den)
     tmp = dst + ".part.mp4"
-    prog = _progress.begin(job, total * fps_den / float(fps_num),
-                           os.path.relpath(dst, ROOT))
-    cmd = ["ffmpeg", "-hide_banner", "-nostats", "-loglevel", "warning",
-           "-progress", prog, "-i", program,
-           "-filter_complex", graph, "-map", "[vout]", "-map", "[aout]",
-           "-r", "%d/%d" % (fps_num, fps_den), "-fps_mode", "cfr",
-           "-video_track_timescale", str(fps_num),
-           ] + _encode.video_args(cfg) + _encode.audio_args(cfg, rate=SR) + [
-           "-movflags", "+faststart", "-y", tmp]
+    prog = _progress.begin(job, total * fps_den / float(fps_num), os.path.relpath(dst, ROOT))
+    cmd = (
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-loglevel",
+            "warning",
+            "-progress",
+            prog,
+            "-i",
+            program,
+            "-filter_complex",
+            graph,
+            "-map",
+            "[vout]",
+            "-map",
+            "[aout]",
+            "-r",
+            "%d/%d" % (fps_num, fps_den),
+            "-fps_mode",
+            "cfr",
+            "-video_track_timescale",
+            str(fps_num),
+        ]
+        + _encode.video_args(cfg)
+        + _encode.audio_args(cfg, rate=SR)
+        + ["-movflags", "+faststart", "-y", tmp]
+    )
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, env=ENV)
     finally:
@@ -253,8 +338,7 @@ def render_raw(program, dst, live, n_frames, head, tail, cfg, fps_num, fps_den,
     return tmp, total
 
 
-def verify_raw(tmp, want_frames, want_dims, live, n_frames, head, tail,
-               fps_num, fps_den, v, psigs):
+def verify_raw(tmp, want_frames, want_dims, live, n_frames, head, tail, fps_num, fps_den, v, psigs):
     """Everything that must be true of a tape before it is allowed to exist.
 
     The check that matters is not "is it static here" but "is THIS frame the
@@ -285,8 +369,7 @@ def verify_raw(tmp, want_frames, want_dims, live, n_frames, head, tail,
     tiles = layout(live, n_frames, head, tail)
     tiled = sum(y - x for x, y, _ in tiles)
     if tiled != want_frames:
-        problems.append("the layout tiles %d frames but the tape is %d"
-                        % (tiled, want_frames))
+        problems.append("the layout tiles %d frames but the tape is %d" % (tiled, want_frames))
     for (x1, y1, _), (x2, _, _) in zip(tiles, tiles[1:]):
         if y1 != x2:
             problems.append("layout is not gapless at frame %d" % y1)
@@ -306,19 +389,20 @@ def verify_raw(tmp, want_frames, want_dims, live, n_frames, head, tail,
     for kind in ("live", "hold"):
         d, i = worst[kind]
         if d > v["match_max"]:
-            problems.append("%s frame %d is not the programme frame it should "
-                            "be (fingerprint distance %.4f > %.4f)"
-                            % (kind, i, d, v["match_max"]))
+            problems.append(
+                "%s frame %d is not the programme frame it should "
+                "be (fingerprint distance %.4f > %.4f)" % (kind, i, d, v["match_max"])
+            )
     return problems, worst["live"][0], worst["hold"][0]
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--manifest", required=True)
-    ap.add_argument("--conform-only", action="store_true",
-                    help="write the CFR programme and stop")
-    ap.add_argument("--plan", action="store_true",
-                    help="print the tape layout and its cost, encode nothing")
+    ap.add_argument("--conform-only", action="store_true", help="write the CFR programme and stop")
+    ap.add_argument(
+        "--plan", action="store_true", help="print the tape layout and its cost, encode nothing"
+    )
     ap.add_argument("--only", help="build just this camera id")
     ap.add_argument("--force", action="store_true", help="overwrite existing raws")
     args = ap.parse_args()
@@ -339,13 +423,19 @@ def main():
         if os.path.exists(program) and not args.force and args.conform_only:
             print("programme already conformed: %s" % _project.norm(program))
         else:
-            print("conforming %s -> %s (%d/%d)"
-                  % (m["source"], _project.norm(program), fps_num, fps_den))
+            print(
+                "conforming %s -> %s (%d/%d)"
+                % (m["source"], _project.norm(program), fps_num, fps_den)
+            )
             conform(src, program, conf_cfg, fps_num, fps_den)
             print("  %d frames, frame for frame" % count_frames(program))
-            _project.record(pid, "conform", script=__file__, argv=sys.argv[1:],
-                            note="CFR %d/%d programme from %s"
-                                 % (fps_num, fps_den, m["source"]))
+            _project.record(
+                pid,
+                "conform",
+                script=__file__,
+                argv=sys.argv[1:],
+                note="CFR %d/%d programme from %s" % (fps_num, fps_den, m["source"]),
+            )
     if args.conform_only:
         return
 
@@ -354,35 +444,46 @@ def main():
     n_frames = shots["n_frames"]
     got = count_frames(program)
     if got != n_frames:
-        sys.exit("the shot list was read off %d frames but the programme has %d "
-                 "-- re-run shot-detect.py on %s"
-                 % (n_frames, got, _project.norm(program)))
+        sys.exit(
+            "the shot list was read off %d frames but the programme has %d "
+            "-- re-run shot-detect.py on %s" % (n_frames, got, _project.norm(program))
+        )
     w, h, num, den = probe_video(program)
     spf = den / float(num)
 
     cams = [c["id"] for c in shots["cameras"]]
-    live = {c: [(s["start"], s["end"]) for s in shots["shots"] if s["camera"] == c]
-            for c in cams}
+    live = {c: [(s["start"], s["end"]) for s in shots["shots"] if s["camera"] == c] for c in cams}
 
     rnd = random.Random(stagger["seed"])
     pads = {}
-    for c in cams:                                  # order is stable: sorted ids
+    for c in cams:  # order is stable: sorted ids
         head = int(round(rnd.uniform(*stagger["head_s"]) / spf))
         tail = int(round(rnd.uniform(*stagger["tail_s"]) / spf))
         pads[c] = (head, tail)
 
     outdir = rel(m.get("outdir", "projects/%s/raws" % pid))
-    print("programme %s  %dx%d  %d frames  %s  (%d/%d)"
-          % (_project.norm(program), w, h, n_frames, hhmmss(n_frames * spf),
-             num, den))
+    print(
+        "programme %s  %dx%d  %d frames  %s  (%d/%d)"
+        % (_project.norm(program), w, h, n_frames, hhmmss(n_frames * spf), num, den)
+    )
     print("\n  cam    head    tail    total  frames   live  frozen  shots")
     for c in cams:
         head, tail = pads[c]
         total = head + n_frames + tail
         lf = sum(b - a for a, b in live[c])
-        print("  %-5s %6.2f  %6.2f  %7s  %6d  %5.1f%%  %5.1f%%  %5d"
-              % (c, head * spf, tail * spf, hhmmss(total * spf), total,
-                 100.0 * lf / total, 100.0 * (total - lf) / total, len(live[c])))
+        print(
+            "  %-5s %6.2f  %6.2f  %7s  %6d  %5.1f%%  %5.1f%%  %5d"
+            % (
+                c,
+                head * spf,
+                tail * spf,
+                hhmmss(total * spf),
+                total,
+                100.0 * lf / total,
+                100.0 * (total - lf) / total,
+                len(live[c]),
+            )
+        )
     if args.plan:
         print("\n  encoder: %s" % _encode.describe(render))
         print("  conform: %s" % _encode.describe(conf_cfg))
@@ -391,31 +492,49 @@ def main():
             gaps = gaps_of(live[c], n_frames)
             for i, (a, b) in enumerate(live[c]):
                 nxt = next((y - x for x, y in gaps if x == b), 0)
-                print("  %-5s %2d  %8s %8s  %5d-%-5d  %8s"
-                      % (c, i, hhmmss(a * spf), hhmmss(b * spf), a, b,
-                         hhmmss(nxt * spf) if nxt else "-"))
+                print(
+                    "  %-5s %2d  %8s %8s  %5d-%-5d  %8s"
+                    % (
+                        c,
+                        i,
+                        hhmmss(a * spf),
+                        hhmmss(b * spf),
+                        a,
+                        b,
+                        hhmmss(nxt * spf) if nxt else "-",
+                    )
+                )
         tot = sum(pads[c][0] + n_frames + pads[c][1] for c in cams)
-        print("\nwould encode %d frames across %d tapes (%s of output)"
-              % (tot, len(cams), hhmmss(tot * spf)))
+        print(
+            "\nwould encode %d frames across %d tapes (%s of output)"
+            % (tot, len(cams), hhmmss(tot * spf))
+        )
         return
 
     os.makedirs(outdir, exist_ok=True)
-    truth = {"_comment": "Ground truth for the multicam round-trip test, written "
-                         "by scripts/split-cameras.py. Frame indices; live spans "
-                         "are in PROGRAMME frames, pads are in that tape's own "
-                         "frames. The pipeline under test must never read this "
-                         "-- only the harness that scores it.",
-             "id": pid, "program": _project.norm(program),
-             "shots": _project.norm(rel(m["shots"])),
-             "fps_num": num, "fps_den": den, "n_frames": n_frames,
-             "width": w, "height": h, "sample_rate": SR,
-             "stagger": stagger, "cameras": []}
+    truth = {
+        "_comment": "Ground truth for the multicam round-trip test, written "
+        "by scripts/split-cameras.py. Frame indices; live spans "
+        "are in PROGRAMME frames, pads are in that tape's own "
+        "frames. The pipeline under test must never read this "
+        "-- only the harness that scores it.",
+        "id": pid,
+        "program": _project.norm(program),
+        "shots": _project.norm(rel(m["shots"])),
+        "fps_num": num,
+        "fps_den": den,
+        "n_frames": n_frames,
+        "width": w,
+        "height": h,
+        "sample_rate": SR,
+        "stagger": stagger,
+        "cameras": [],
+    }
 
     print("\nfingerprinting the programme once, to check every tape against")
     _, psigs = _shots.scan(program, w, h)
     if len(psigs) != n_frames:
-        sys.exit("decoded %d frames from the programme, expected %d"
-                 % (len(psigs), n_frames))
+        sys.exit("decoded %d frames from the programme, expected %d" % (len(psigs), n_frames))
 
     built = []
     for c in cams:
@@ -426,25 +545,34 @@ def main():
         if os.path.exists(dst) and not args.force:
             sys.exit("%s exists -- pass --force to rebuild" % _project.norm(dst))
         print("\n%s: %d + %d + %d frames" % (c, head, n_frames, tail))
-        tmp, total = render_raw(program, dst, live[c], n_frames, head, tail,
-                                render, num, den, "split-%s-%s" % (pid, c))
-        problems, wlive, whold = verify_raw(tmp, total, (w, h), live[c],
-                                            n_frames, head, tail, num, den,
-                                            v, psigs)
+        tmp, total = render_raw(
+            program, dst, live[c], n_frames, head, tail, render, num, den, "split-%s-%s" % (pid, c)
+        )
+        problems, wlive, whold = verify_raw(
+            tmp, total, (w, h), live[c], n_frames, head, tail, num, den, v, psigs
+        )
         if problems:
-            sys.exit("%s is wrong, leaving %s in place:\n  %s"
-                     % (c, _project.norm(tmp), "\n  ".join(problems)))
+            sys.exit(
+                "%s is wrong, leaving %s in place:\n  %s"
+                % (c, _project.norm(tmp), "\n  ".join(problems))
+            )
         shutil.move(tmp, dst)
-        print("  ok: %d frames; worst fingerprint distance from the programme "
-              "%.4f live, %.4f held (limit %.4f)"
-              % (total, wlive, whold, v["match_max"]))
+        print(
+            "  ok: %d frames; worst fingerprint distance from the programme "
+            "%.4f live, %.4f held (limit %.4f)" % (total, wlive, whold, v["match_max"])
+        )
         built.append(dst)
         truth["cameras"].append(
-            {"id": c, "file": _project.norm(dst),
-             "head_pad_frames": head, "tail_pad_frames": tail,
-             "total_frames": total,
-             "head_pad_s": round(head * spf, 6),
-             "live_spans": [[a, b] for a, b in live[c]]})
+            {
+                "id": c,
+                "file": _project.norm(dst),
+                "head_pad_frames": head,
+                "tail_pad_frames": tail,
+                "total_frames": total,
+                "head_pad_s": round(head * spf, 6),
+                "live_spans": [[a, b] for a, b in live[c]],
+            }
+        )
 
     # Truth must describe EVERY camera: a --only rebuild keeps the existing
     # sidecar (same seed, same pads, so it stays true), and refuses to invent
@@ -453,8 +581,10 @@ def main():
     tpath = os.path.join(os.path.dirname(rel(args.manifest)), "%s.truth.json" % pid)
     if args.only:
         if not os.path.exists(tpath):
-            sys.exit("no %s -- build the full set once before rebuilding a "
-                     "single tape" % _project.norm(tpath))
+            sys.exit(
+                "no %s -- build the full set once before rebuilding a "
+                "single tape" % _project.norm(tpath)
+            )
     else:
         with open(tpath, "w", encoding="utf-8") as f:
             json.dump(truth, f, indent=2)
@@ -462,13 +592,21 @@ def main():
         print("\nwrote %s" % _project.norm(tpath))
 
     for dst in built:
-        _project.record(pid, "sim-raw", out=dst, script=__file__,
-                        argv=sys.argv[1:], kind="sim-raw",
-                        manifest=args.manifest,
-                        sidecars={"truth": tpath, "shots": rel(m["shots"])},
-                        burned=["synthetic camera raw: real frames where the cut "
-                                "used this angle, last live frame held elsewhere",
-                                "programme audio, staggered by this tape's head pad"])
+        _project.record(
+            pid,
+            "sim-raw",
+            out=dst,
+            script=__file__,
+            argv=sys.argv[1:],
+            kind="sim-raw",
+            manifest=args.manifest,
+            sidecars={"truth": tpath, "shots": rel(m["shots"])},
+            burned=[
+                "synthetic camera raw: real frames where the cut "
+                "used this angle, last live frame held elsewhere",
+                "programme audio, staggered by this tape's head pad",
+            ],
+        )
 
 
 if __name__ == "__main__":

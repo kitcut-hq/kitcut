@@ -24,6 +24,7 @@ made it. `run-log.py` is the reader.
 Stdlib only, and no `_env` import: the reader must stay cheap enough to run
 from a status line or a watch loop without a venv re-exec.
 """
+
 import os
 import io
 import json
@@ -56,10 +57,16 @@ class RunLog:
         self.run, self.path = run, path
         self.t0 = time.time()
         self.ended = False
-        self._f = io.open(self.path, "a", encoding="utf-8", newline="\n")
-        self.write("run", schema=SCHEMA, run=self.run, tool=tool,
-                   argv=list(argv or []), stages=list(stages or []),
-                   pid=os.getpid())
+        self._f = open(self.path, "a", encoding="utf-8", newline="\n")
+        self.write(
+            "run",
+            schema=SCHEMA,
+            run=self.run,
+            tool=tool,
+            argv=list(argv or []),
+            stages=list(stages or []),
+            pid=os.getpid(),
+        )
 
     def write(self, ev, **kw):
         kw["ev"] = ev
@@ -74,8 +81,7 @@ class RunLog:
             pass
 
     def stage(self, stage, state, secs, note="", **kw):
-        self.write("stage", stage=stage, state=state,
-                   secs=round(secs, 1), note=note, **kw)
+        self.write("stage", stage=stage, state=state, secs=round(secs, 1), note=note, **kw)
 
     def note(self, stage, text, **kw):
         """A fact worth keeping that is not a stage boundary -- a gate round's
@@ -88,8 +94,7 @@ class RunLog:
         if self.ended:
             return
         self.ended = True
-        self.write("end", outcome=outcome, note=note,
-                   secs=round(time.time() - self.t0, 1), **kw)
+        self.write("end", outcome=outcome, note=note, secs=round(time.time() - self.t0, 1), **kw)
         try:
             self._f.close()
         except OSError:
@@ -117,7 +122,7 @@ def read(path):
     """Every parseable line. A truncated last line is skipped, not fatal."""
     out = []
     try:
-        with io.open(path, encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             for ln in f:
                 ln = ln.strip()
                 if not ln:

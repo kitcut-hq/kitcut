@@ -35,7 +35,13 @@ second transcription -- and the remap is exact, because a cut only deletes.
 
 Invoke as:  python scripts/tighten-cut.py --manifest projects/<id>/tighten.json --list
 """
-import sys, os, json, argparse, subprocess, shutil
+
+import sys
+import os
+import json
+import argparse
+import subprocess
+import shutil
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -52,13 +58,21 @@ ROOT = _env.ROOT
 
 # No "encoder": _encode picks one this machine can actually run, and a manifest
 # that names one overrides it. "speed" is family-neutral.
-DEFAULT_RENDER = {"speed": 5, "cq": 20, "maxrate": "12M", "bufsize": "24M",
-                  "audio_bitrate": "192k"}
-DEFAULT_CUT = {"min_silence": 1.0, "keep_pause": 0.45, "silence_db": -34,
-               "min_drop": 0.30, "join_fade_ms": 12}
-DEFAULT_FILLERS = {"enabled": True, "words": ["um", "uh", "erm", "uhm", "mm",
-                                              "hmm", "ah", "eh"],
-                   "pad": 0.06, "max_dur": 1.0, "reach": 0.45}
+DEFAULT_RENDER = {"speed": 5, "cq": 20, "maxrate": "12M", "bufsize": "24M", "audio_bitrate": "192k"}
+DEFAULT_CUT = {
+    "min_silence": 1.0,
+    "keep_pause": 0.45,
+    "silence_db": -34,
+    "min_drop": 0.30,
+    "join_fade_ms": 12,
+}
+DEFAULT_FILLERS = {
+    "enabled": True,
+    "words": ["um", "uh", "erm", "uhm", "mm", "hmm", "ah", "eh"],
+    "pad": 0.06,
+    "max_dur": 1.0,
+    "reach": 0.45,
+}
 DEFAULT_AUDIO = {"loudnorm": "I=-16:TP=-1.5:LRA=11"}
 
 
@@ -75,8 +89,15 @@ def rel(p):
 
 
 def probe(path, entries, stream=None):
-    cmd = ["ffprobe", "-v", "error", "-show_entries", entries,
-           "-of", "default=noprint_wrappers=1:nokey=1"]
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        entries,
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+    ]
     if stream:
         cmd += ["-select_streams", stream]
     return run(cmd + [path]).stdout.split()
@@ -125,10 +146,22 @@ def detect_spans(cmd, start_key, dur_key):
 
 def silent_spans(src, db, min_dur):
     return detect_spans(
-        ["ffmpeg", "-hide_banner", "-nostats", "-i", src, "-vn",
-         "-af", "silencedetect=noise=%ddB:d=%.3f" % (db, min_dur),
-         "-f", "null", "-"],
-        "silence_start:", "silence_duration:")
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-i",
+            src,
+            "-vn",
+            "-af",
+            "silencedetect=noise=%ddB:d=%.3f" % (db, min_dur),
+            "-f",
+            "null",
+            "-",
+        ],
+        "silence_start:",
+        "silence_duration:",
+    )
 
 
 def merge(spans, gap=0.0):
@@ -205,12 +238,10 @@ def resolve_removals(specs, words, a, b):
                     sys.exit("remove[%d] needs %s (or numeric from/to)" % (i, key))
             hit_a = _outline.find(words, spec["from_text"], nth=int(spec.get("nth", 0)))
             if hit_a is None:
-                sys.exit("remove[%d].from_text not in transcript: %r"
-                         % (i, spec["from_text"]))
+                sys.exit("remove[%d].from_text not in transcript: %r" % (i, spec["from_text"]))
             hit_b = _outline.find(words, spec["to_text"], nth=int(spec.get("nth_to", 0)))
             if hit_b is None:
-                sys.exit("remove[%d].to_text not in transcript: %r"
-                         % (i, spec["to_text"]))
+                sys.exit("remove[%d].to_text not in transcript: %r" % (i, spec["to_text"]))
             x, y = hit_a[0], hit_b[1]
         # Take the breath on either side with it -- leaving the pause that
         # framed a removed sentence is what makes a removal audible.
@@ -219,8 +250,7 @@ def resolve_removals(specs, words, a, b):
         if y <= x:
             sys.exit("remove[%d] resolves to an empty or backwards span" % i)
         if y < a or x > b:
-            sys.exit("remove[%d] resolves to %s..%s, outside the film"
-                     % (i, hhmmss(x), hhmmss(y)))
+            sys.exit("remove[%d] resolves to %s..%s, outside the film" % (i, hhmmss(x), hhmmss(y)))
         out.append((max(x, a), min(y, b), spec.get("why", "")))
     return out
 
@@ -250,12 +280,13 @@ def plan_cuts(m, cut, words, film_a, film_b, src, verbose=True):
     min_sil = float(cut["min_silence"])
     keep = float(cut["keep_pause"])
     min_drop = float(cut.get("min_drop", 0.30))
-    sil = intersect(silent_spans(src, int(cut["silence_db"]), min_sil),
-                    film_a, film_b)
+    sil = intersect(silent_spans(src, int(cut["silence_db"]), min_sil), film_a, film_b)
     if verbose:
         tot = sum(b - a for a, b in sil)
-        print("  %d silences >= %.2fs at %ddB inside the film (%.1fs of %.1fs)"
-              % (len(sil), min_sil, cut["silence_db"], tot, film_b - film_a))
+        print(
+            "  %d silences >= %.2fs at %ddB inside the film (%.1fs of %.1fs)"
+            % (len(sil), min_sil, cut["silence_db"], tot, film_b - film_a)
+        )
 
     drops = []
     for a, b in sil:
@@ -280,12 +311,18 @@ def plan_cuts(m, cut, words, film_a, film_b, src, verbose=True):
     removals = resolve_removals(m.get("remove"), words, film_a, film_b)
     drops = merge(drops + [(x, y) for x, y, _ in removals])
     if verbose:
-        print("  pauses %.1fs | fillers %.1fs (%d) | named removals %.1fs (%d)"
-              % (pause_drop, filler_drop, len(fillers),
-                 sum(y - x for x, y, _ in removals), len(removals)))
+        print(
+            "  pauses %.1fs | fillers %.1fs (%d) | named removals %.1fs (%d)"
+            % (
+                pause_drop,
+                filler_drop,
+                len(fillers),
+                sum(y - x for x, y, _ in removals),
+                len(removals),
+            )
+        )
         for x, y, why in removals:
-            print("      remove %s -> %s  (%.1fs)  %s"
-                  % (hhmmss(x), hhmmss(y), y - x, why))
+            print("      remove %s -> %s  (%.1fs)  %s" % (hhmmss(x), hhmmss(y), y - x, why))
     return drops, removals
 
 
@@ -293,7 +330,7 @@ def keeps_from(drops, film_a, film_b, fps):
     keeps = []
     for a, b in subtract(film_a, film_b, drops):
         a, b = quantise(a, fps), quantise(b, fps)
-        if b - a >= 1.5 / fps:          # a one-frame keep is a flash, not a shot
+        if b - a >= 1.5 / fps:  # a one-frame keep is a flash, not a shot
             keeps.append((a, b))
     return keeps
 
@@ -320,8 +357,7 @@ def remap_words(words, keeps):
             e = min(w["end"], b) - a + off
             if e - s < 0.01:
                 continue
-            out.append({"text": w["text"], "start": round(s, 3),
-                        "end": round(e, 3)})
+            out.append({"text": w["text"], "start": round(s, 3), "end": round(e, 3)})
             break
     return out
 
@@ -340,8 +376,10 @@ def build_graph(keeps, fps, audio_cfg, fade_ms, label_fc="", label_out=None):
     ch = []
     for i, (a, b) in enumerate(keeps):
         d = b - a
-        ch.append("[0:v]trim=start=%.4f:end=%.4f,setpts=PTS-STARTPTS,"
-                  "fps=%s,format=yuv420p,setsar=1[v%d]" % (a, b, fps, i))
+        ch.append(
+            "[0:v]trim=start=%.4f:end=%.4f,setpts=PTS-STARTPTS,"
+            "fps=%s,format=yuv420p,setsar=1[v%d]" % (a, b, fps, i)
+        )
         af = ["atrim=start=%.4f:end=%.4f" % (a, b), "asetpts=PTS-STARTPTS"]
         # Ramp each seam. Room tone spliced to room tone at a different phase
         # clicks, and a click is what makes an edit audible.
@@ -377,9 +415,23 @@ def build_graph(keeps, fps, audio_cfg, fade_ms, label_fc="", label_out=None):
 
 
 def _peak_db(path):
-    p = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", path,
-                        "-vn", "-af", "volumedetect", "-f", "null", "-"],
-                       capture_output=True, text=True)
+    p = subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-i",
+            path,
+            "-vn",
+            "-af",
+            "volumedetect",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture_output=True,
+        text=True,
+    )
     for line in (p.stderr or "").splitlines():
         if "max_volume:" in line:
             try:
@@ -403,18 +455,23 @@ def sweep(m, cut, words, film_a, film_b, src):
             c = dict(cut, min_silence=min_sil, keep_pause=keep)
             drops, _ = plan_cuts(m, c, words, film_a, film_b, src, verbose=False)
             gone = sum(y - x for x, y in drops)
-            print("    %-8.2f %-8.2f %8d %7.1fs %7s"
-                  % (min_sil, keep, len(drops), gone, hhmmss(full - gone)))
+            print(
+                "    %-8.2f %-8.2f %8d %7.1fs %7s"
+                % (min_sil, keep, len(drops), gone, hhmmss(full - gone))
+            )
 
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Shorten the pauses and drop the stumbles in one recording.")
+        description="Shorten the pauses and drop the stumbles in one recording."
+    )
     ap.add_argument("--manifest", required=True)
-    ap.add_argument("--list", action="store_true",
-                    help="print the plan and the pause sweep; encode nothing")
-    ap.add_argument("--plan", action="store_true",
-                    help="also write <manifest>.cuts.json, a keep-list")
+    ap.add_argument(
+        "--list", action="store_true", help="print the plan and the pause sweep; encode nothing"
+    )
+    ap.add_argument(
+        "--plan", action="store_true", help="also write <manifest>.cuts.json, a keep-list"
+    )
     ap.add_argument("--out", help="output path (default outdir/<id>-tight.mp4)")
     ap.add_argument("--force", action="store_true", help="overwrite the output")
     args = ap.parse_args()
@@ -440,16 +497,17 @@ def main():
             sys.exit("every image_overlays entry needs at least at")
         given = [k for k in _imgoverlay.SOURCES if spec.get(k)]
         if len(given) != 1:
-            sys.exit("every image_overlays entry needs exactly one of %s -- got %s"
-                     % ("/".join(_imgoverlay.SOURCES), ", ".join(given) or "none"))
+            sys.exit(
+                "every image_overlays entry needs exactly one of %s -- got %s"
+                % ("/".join(_imgoverlay.SOURCES), ", ".join(given) or "none")
+            )
 
     words = _outline.load_words(rel(m["words"])) if m.get("words") else []
     # Corrections run BEFORE anything reads the transcript, so `remove` and
     # `film.start_text` quote the corrected wording -- one spelling of every
     # phrase in the manifest, not two.
     if words and m.get("corrections"):
-        words = _outline.apply_corrections(words, m["corrections"],
-                                           verbose=args.list)
+        words = _outline.apply_corrections(words, m["corrections"], verbose=args.list)
     dur = probe_duration(src)
     fps = float(m.get("fps") or probe_fps(src))
     film_a = resolve_bound(m, words, "start_text", 0.0)
@@ -458,63 +516,86 @@ def main():
         sys.exit("film.end is not after film.start")
     film_a, film_b = quantise(max(0.0, film_a), fps), quantise(min(dur, film_b), fps)
 
-    print("%s | %s source at %gfps | film %s -> %s"
-          % (mid, hhmmss(dur), fps, hhmmss(film_a), hhmmss(film_b)))
+    print(
+        "%s | %s source at %gfps | film %s -> %s"
+        % (mid, hhmmss(dur), fps, hhmmss(film_a), hhmmss(film_b))
+    )
     drops, removals = plan_cuts(m, cut, words, film_a, film_b, src)
     keeps = keeps_from(drops, film_a, film_b, fps)
     runtime = sum(b - a for a, b in keeps)
-    print("  %d segments, %s of %s kept (%.0f%% removed)"
-          % (len(keeps), hhmmss(runtime), hhmmss(film_b - film_a),
-             100.0 * (1 - runtime / (film_b - film_a))))
+    print(
+        "  %d segments, %s of %s kept (%.0f%% removed)"
+        % (
+            len(keeps),
+            hhmmss(runtime),
+            hhmmss(film_b - film_a),
+            100.0 * (1 - runtime / (film_b - film_a)),
+        )
+    )
     # A cut is a jump for whatever is moving in the frame -- on a screencast
     # that is the webcam bubble. Segments are how often that happens, and the
     # shortest one is the flash you cannot un-see. Worth printing before an
     # encode, because neither is visible in the runtime.
     if keeps:
         lens = sorted(b - a for a, b in keeps)
-        print("  segment length: shortest %.2fs | median %.2fs | longest %.2fs "
-              "(a cut every %.1fs on average)"
-              % (lens[0], lens[len(lens) // 2], lens[-1],
-                 runtime / max(1, len(keeps) - 1)))
+        print(
+            "  segment length: shortest %.2fs | median %.2fs | longest %.2fs "
+            "(a cut every %.1fs on average)"
+            % (lens[0], lens[len(lens) // 2], lens[-1], runtime / max(1, len(keeps) - 1))
+        )
 
     # A label past the end of the cut film is not an error ffmpeg reports:
     # `enable` simply never turns true and the card silently never appears. The
     # runtime is only known here, after the cut, so this is where it is caught.
     for spec in name_specs:
         if float(spec["at"]) >= runtime:
-            sys.exit("name label %r starts at %.1fs but the film runs %.1fs"
-                     % (spec["name"], float(spec["at"]), runtime))
-    img_preset_doc = json.load(open(
-        _imgoverlay._overlay.repo_path(img_preset), encoding="utf-8")) \
-        if img_specs else {}
+            sys.exit(
+                "name label %r starts at %.1fs but the film runs %.1fs"
+                % (spec["name"], float(spec["at"]), runtime)
+            )
+    img_preset_doc = (
+        json.load(open(_imgoverlay._overlay.repo_path(img_preset), encoding="utf-8"))
+        if img_specs
+        else {}
+    )
     for i, spec in enumerate(img_specs):
         # A negative `at` means "this many seconds before the end", which only
         # becomes a number once the cut is planned. An end card is written that
         # way on purpose -- re-cutting the film moves it automatically.
         at, _dur = _imgoverlay.resolve_window(spec, img_preset_doc, runtime)
         if at >= runtime:
-            sys.exit("image overlay %d starts at %.1fs but the film runs %.1fs"
-                     % (i, at, runtime))
+            sys.exit("image overlay %d starts at %.1fs but the film runs %.1fs" % (i, at, runtime))
     if args.list and (name_specs or img_specs):
         print("\n  graphics (film time):")
         for spec in name_specs:
-            print("  %8.2f %8.2f   %s -- %s"
-                  % (float(spec["at"]),
-                     float(spec["at"]) + float(spec.get("dur", 5.5)),
-                     spec["name"], spec.get("title", "")))
+            print(
+                "  %8.2f %8.2f   %s -- %s"
+                % (
+                    float(spec["at"]),
+                    float(spec["at"]) + float(spec.get("dur", 5.5)),
+                    spec["name"],
+                    spec.get("title", ""),
+                )
+            )
         for spec in img_specs:
             at, d = _imgoverlay.resolve_window(spec, img_preset_doc, runtime)
-            print("  %8.2f %8.2f   %s"
-                  % (at, at + d,
-                     _imgoverlay.describe(spec, img_preset_doc, runtime)))
+            print(
+                "  %8.2f %8.2f   %s"
+                % (at, at + d, _imgoverlay.describe(spec, img_preset_doc, runtime))
+            )
 
     if args.plan or args.list:
         cuts_path = os.path.splitext(mpath)[0] + ".cuts.json"
-        doc = {"id": mid, "fps": fps, "film": [film_a, film_b],
-               "runtime": round(runtime, 3),
-               "keeps": [[round(a, 4), round(b, 4)] for a, b in keeps],
-               "removals": [{"from": round(x, 3), "to": round(y, 3), "why": w}
-                            for x, y, w in removals]}
+        doc = {
+            "id": mid,
+            "fps": fps,
+            "film": [film_a, film_b],
+            "runtime": round(runtime, 3),
+            "keeps": [[round(a, 4), round(b, 4)] for a, b in keeps],
+            "removals": [
+                {"from": round(x, 3), "to": round(y, 3), "why": w} for x, y, w in removals
+            ],
+        }
         if args.plan:
             json.dump(doc, open(cuts_path, "w", encoding="utf-8"), indent=1)
             print("  wrote %s" % os.path.relpath(cuts_path, ROOT))
@@ -526,8 +607,7 @@ def main():
     os.makedirs(outdir, exist_ok=True)
     dst = rel(args.out) if args.out else os.path.join(outdir, "%s-tight.mp4" % mid)
     if os.path.exists(dst) and not args.force:
-        sys.exit("%s exists; pass --force to overwrite"
-                 % os.path.relpath(dst, ROOT))
+        sys.exit("%s exists; pass --force to overwrite" % os.path.relpath(dst, ROOT))
 
     vw, vh = (int(x) for x in probe(src, "stream=width,height", "v:0")[:2])
     tmpdir = rel(m.get("tmpdir") or os.path.join(os.path.dirname(mpath), "temp"))
@@ -535,8 +615,15 @@ def main():
     label_fc, label_out = "", None
     if name_specs:
         pngs, label_fc, label_out = _namelabel.prepare(
-            m.get("label_preset", _namelabel.DEFAULT_PRESET), name_specs,
-            vw, vh, tmpdir, tag=mid, base="vcat", first_input=nxt)
+            m.get("label_preset", _namelabel.DEFAULT_PRESET),
+            name_specs,
+            vw,
+            vh,
+            tmpdir,
+            tag=mid,
+            base="vcat",
+            first_input=nxt,
+        )
         for png in pngs:
             inputs += ["-loop", "1", "-framerate", str(fps), "-i", png]
             nxt += 1
@@ -545,25 +632,35 @@ def main():
     # third rather than under it.
     if img_specs:
         pngs, img_fc, img_out = _imgoverlay.prepare(
-            img_preset, img_specs, vw, vh, tmpdir, tag=mid,
-            base=(label_out or "vcat"), first_input=nxt, runtime=runtime)
+            img_preset,
+            img_specs,
+            vw,
+            vh,
+            tmpdir,
+            tag=mid,
+            base=(label_out or "vcat"),
+            first_input=nxt,
+            runtime=runtime,
+        )
         for png in pngs:
             inputs += ["-loop", "1", "-framerate", str(fps), "-i", png]
             nxt += 1
         label_fc = ";".join(x for x in (label_fc, img_fc) if x)
         label_out = img_out
 
-    graph = build_graph(keeps, fps, audio_cfg, float(cut.get("join_fade_ms", 12)),
-                        label_fc, label_out)
+    graph = build_graph(
+        keeps, fps, audio_cfg, float(cut.get("join_fade_ms", 12)), label_fc, label_out
+    )
     tmp = dst + ".part.mp4"
     prog = _progress.begin(mid, runtime, os.path.relpath(dst, ROOT))
-    cmd = (["ffmpeg", "-hide_banner", "-nostats", "-loglevel", "warning",
-            "-progress", prog]
-           + inputs
-           + ["-filter_complex", graph, "-map", "[vout]", "-map", "[aout]",
-              "-r", str(fps)]
-           + _encode.video_args(render) + _encode.audio_args(render)
-           + ["-movflags", "+faststart", "-y", tmp])
+    cmd = (
+        ["ffmpeg", "-hide_banner", "-nostats", "-loglevel", "warning", "-progress", prog]
+        + inputs
+        + ["-filter_complex", graph, "-map", "[vout]", "-map", "[aout]", "-r", str(fps)]
+        + _encode.video_args(render)
+        + _encode.audio_args(render)
+        + ["-movflags", "+faststart", "-y", tmp]
+    )
     print("\n  rendering %s ..." % os.path.relpath(dst, ROOT))
     try:
         p = subprocess.run(cmd, capture_output=True, text=True)
@@ -575,13 +672,11 @@ def main():
 
     got = probe_duration(tmp)
     if abs(got - runtime) > max(2.0 / fps, 0.5):
-        sys.stderr.write("output is %.2fs, the keep-list predicted %.2fs\n"
-                         % (got, runtime))
+        sys.stderr.write("output is %.2fs, the keep-list predicted %.2fs\n" % (got, runtime))
         sys.exit("duration assertion failed; %s left in place" % tmp)
     peak = _peak_db(tmp)
     if peak is None or peak < -60:
-        sys.exit("rendered audio is silent (peak %s dB); refusing to ship it"
-                 % peak)
+        sys.exit("rendered audio is silent (peak %s dB); refusing to ship it" % peak)
     shutil.move(tmp, dst)
 
     wout = os.path.splitext(dst)[0] + ".words.json"
@@ -592,38 +687,62 @@ def main():
         # that is not the problem.
         moved = remap_words(words, keeps)
         src_doc = json.load(open(rel(m["words"]), encoding="utf-8"))
-        json.dump({"file": os.path.relpath(dst, ROOT), "duration": round(got, 3),
-                   "language": src_doc.get("language", "en"),
-                   "language_probability":
-                       float(src_doc.get("language_probability", 1.0)),
-                   "model": "remapped by tighten-cut.py from %s"
-                            % src_doc.get("model", "?"),
-                   "source_words": _project.norm(rel(m["words"])),
-                   "text": " ".join(w["text"] for w in moved), "words": moved},
-                  open(wout, "w", encoding="utf-8"), ensure_ascii=False)
-    print("  %s  %s  %.1f MB  audio peak %.1f dB"
-          % (os.path.relpath(dst, ROOT), hhmmss(got),
-             os.path.getsize(dst) / 1e6, peak))
+        json.dump(
+            {
+                "file": os.path.relpath(dst, ROOT),
+                "duration": round(got, 3),
+                "language": src_doc.get("language", "en"),
+                "language_probability": float(src_doc.get("language_probability", 1.0)),
+                "model": "remapped by tighten-cut.py from %s" % src_doc.get("model", "?"),
+                "source_words": _project.norm(rel(m["words"])),
+                "text": " ".join(w["text"] for w in moved),
+                "words": moved,
+            },
+            open(wout, "w", encoding="utf-8"),
+            ensure_ascii=False,
+        )
+    print(
+        "  %s  %s  %.1f MB  audio peak %.1f dB"
+        % (os.path.relpath(dst, ROOT), hhmmss(got), os.path.getsize(dst) / 1e6, peak)
+    )
     if words:
-        print("  %s  remapped word transcript (feed it to run-captions.py)"
-              % os.path.relpath(wout, ROOT))
+        print(
+            "  %s  remapped word transcript (feed it to run-captions.py)"
+            % os.path.relpath(wout, ROOT)
+        )
 
     _project.record(
-        _project.project_id(m, args.manifest), "render",
-        out=dst, script=__file__, argv=sys.argv[1:], kind="tighten",
+        _project.project_id(m, args.manifest),
+        "render",
+        out=dst,
+        script=__file__,
+        argv=sys.argv[1:],
+        kind="tighten",
         manifest=args.manifest,
         sidecars={"words": wout if words else None},
-        burned=(["pause cut: silences over %.2fs shortened to %.2fs "
-                 "(%d segments, %.0f%% of the source removed)"
-                 % (cut["min_silence"], cut["keep_pause"], len(keeps),
-                    100.0 * (1 - runtime / (film_b - film_a)))]
-                + ["removed %s -> %s: %s" % (hhmmss(x), hhmmss(y), w or "no reason given")
-                   for x, y, w in removals]
-                + ["name label '%s' at %ss film time for %ss"
-                   % (s.get("name"), s.get("at"), s.get("dur"))
-                   for s in name_specs]
-                + [_imgoverlay.describe(s, img_preset_doc, runtime)
-                   for s in img_specs]))
+        burned=(
+            [
+                "pause cut: silences over %.2fs shortened to %.2fs "
+                "(%d segments, %.0f%% of the source removed)"
+                % (
+                    cut["min_silence"],
+                    cut["keep_pause"],
+                    len(keeps),
+                    100.0 * (1 - runtime / (film_b - film_a)),
+                )
+            ]
+            + [
+                "removed %s -> %s: %s" % (hhmmss(x), hhmmss(y), w or "no reason given")
+                for x, y, w in removals
+            ]
+            + [
+                "name label '%s' at %ss film time for %ss"
+                % (s.get("name"), s.get("at"), s.get("dur"))
+                for s in name_specs
+            ]
+            + [_imgoverlay.describe(s, img_preset_doc, runtime) for s in img_specs]
+        ),
+    )
 
 
 if __name__ == "__main__":

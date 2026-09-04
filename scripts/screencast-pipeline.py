@@ -25,6 +25,7 @@ edit costs one piece and one gate, not a morning.
 
 Invoke as:  python scripts/screencast-pipeline.py --project <id> --target 8:00
 """
+
 import sys
 import os
 import re
@@ -50,14 +51,27 @@ for _s in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
-STAGES = ["import", "proxies", "activity", "ocr", "track", "recall", "review",
-          "smoke", "draft", "render", "gate", "upload"]
+STAGES = [
+    "import",
+    "proxies",
+    "activity",
+    "ocr",
+    "track",
+    "recall",
+    "review",
+    "smoke",
+    "draft",
+    "render",
+    "gate",
+    "upload",
+]
 
 
 def known_issues(stages):
     """Every `open` and `limitation` entry in docs/known-issues.md that touches
     one of the stages about to run. Printed at start so the register is seen
-    on every run rather than remembered on some of them."""
+    on every run rather than remembered on some of them.
+    """
     path = os.path.join(ROOT, "docs", "known-issues.md")
     if not os.path.exists(path):
         return []
@@ -144,8 +158,15 @@ class Pipeline:
 
     def mark(self, stage, sig, secs, note=""):
         with open(self.done_path(stage), "w", encoding="utf-8") as f:
-            json.dump({"sig": sig, "secs": round(secs, 1), "note": note,
-                       "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}, f)
+            json.dump(
+                {
+                    "sig": sig,
+                    "secs": round(secs, 1),
+                    "note": note,
+                    "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                },
+                f,
+            )
 
     def note(self, stage, text, **kw):
         """Record a fact in the run log as well as on screen.
@@ -159,14 +180,20 @@ class Pipeline:
 
     def run(self, argv, what, ok_codes=(0,)):
         """A stage subprocess with its output streamed, never captured."""
-        print(f"    $ {' '.join(os.path.basename(a) if i == 1 else a for i, a in enumerate(argv))}",
-              flush=True)
+        print(
+            f"    $ {' '.join(os.path.basename(a) if i == 1 else a for i, a in enumerate(argv))}",
+            flush=True,
+        )
         t0 = time.time()
         r = subprocess.run([PY] + argv, cwd=ROOT)
         if self.log:
-            self.log.write('cmd', stage=what,
-                           argv=[os.path.basename(argv[0])] + list(argv[1:]),
-                           rc=r.returncode, secs=round(time.time() - t0, 1))
+            self.log.write(
+                "cmd",
+                stage=what,
+                argv=[os.path.basename(argv[0])] + list(argv[1:]),
+                rc=r.returncode,
+                secs=round(time.time() - t0, 1),
+            )
         if r.returncode not in ok_codes:
             raise SystemExit(f"\n  stage failed: {what} (exit {r.returncode})")
         return r.returncode
@@ -190,17 +217,25 @@ class Pipeline:
                 self.run(argv, label)
             return
         import concurrent.futures as cf
+
         print(f"    {len(jobs)} job(s) on {workers} worker(s)", flush=True)
         fails = []
         with cf.ThreadPoolExecutor(max_workers=workers) as ex:
-            futs = {ex.submit(subprocess.run, [PY] + argv, cwd=ROOT,
-                              capture_output=True, text=True): (argv, label)
-                    for argv, label in jobs}
+            futs = {
+                ex.submit(subprocess.run, [PY] + argv, cwd=ROOT, capture_output=True, text=True): (
+                    argv,
+                    label,
+                )
+                for argv, label in jobs
+            }
             for fut in cf.as_completed(futs):
                 argv, label = futs[fut]
                 r = fut.result()
-                tail = [ln for ln in (r.stdout or "").splitlines()
-                        if ln.strip() and not ln.lstrip().startswith("...")]
+                tail = [
+                    ln
+                    for ln in (r.stdout or "").splitlines()
+                    if ln.strip() and not ln.lstrip().startswith("...")
+                ]
                 print(f"    -- {label}")
                 for ln in tail[-6:]:
                     print(f"       {ln}")
@@ -229,8 +264,10 @@ class Pipeline:
         sig = stat_sig(srcs + [self.mpath_sources_only()])
         if self.is_done("proxies", sig):
             return "cached", ""
-        self.run([os.path.join(HERE, "make-proxies.py"), "--manifest", self.rel(self.mpath)],
-                 "make-proxies")
+        self.run(
+            [os.path.join(HERE, "make-proxies.py"), "--manifest", self.rel(self.mpath)],
+            "make-proxies",
+        )
         return "ran", sig
 
     def mpath_sources_only(self):
@@ -247,27 +284,54 @@ class Pipeline:
         m = self.man()
         if not (m.get("regions") or {}).get("panel"):
             longest = max(self.sources(), key=lambda s: os.path.getsize(self.proxy_or_src(s)))
-            self.run([os.path.join(HERE, "screen-activity.py"), "--src",
-                      self.rel(self.proxy_or_src(longest)), "--find-panel",
-                      "--write-regions", self.rel(self.mpath)], "find-panel")
+            self.run(
+                [
+                    os.path.join(HERE, "screen-activity.py"),
+                    "--src",
+                    self.rel(self.proxy_or_src(longest)),
+                    "--find-panel",
+                    "--write-regions",
+                    self.rel(self.mpath),
+                ],
+                "find-panel",
+            )
             m = self.man()
         ins = [self.proxy_or_src(s) for s in self.sources()]
-        sig = stat_sig(ins) + hashlib.sha1(json.dumps(m.get("regions"), sort_keys=True)
-                                           .encode()).hexdigest()[:8]
+        sig = (
+            stat_sig(ins)
+            + hashlib.sha1(json.dumps(m.get("regions"), sort_keys=True).encode()).hexdigest()[:8]
+        )
         if self.is_done("activity", sig):
             return "cached", ""
         m = self.man()
         for s in self.sources():
             out = os.path.join(self.tdir, self.base(s) + ".activity.json")
-            argv = [os.path.join(HERE, "screen-activity.py"), "--src",
-                    self.rel(self.proxy_or_src(s)), "--out", self.rel(out)]
+            argv = [
+                os.path.join(HERE, "screen-activity.py"),
+                "--src",
+                self.rel(self.proxy_or_src(s)),
+                "--out",
+                self.rel(out),
+            ]
             # the panel regions were found on a landscape desktop capture; a
             # portrait phone clip has no such panel, and applying the desktop
             # split there would speed up whatever happens in its right strip
             info = subprocess.run(
-                ["ffprobe", "-v", "error", "-select_streams", "v:0",
-                 "-show_entries", "stream=width,height", "-of", "csv=p=0",
-                 self.proxy_or_src(s)], capture_output=True, text=True).stdout
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    "v:0",
+                    "-show_entries",
+                    "stream=width,height",
+                    "-of",
+                    "csv=p=0",
+                    self.proxy_or_src(s),
+                ],
+                capture_output=True,
+                text=True,
+            ).stdout
             w, _, h = info.strip().partition(",")
             if w and h and int(w) >= int(h):
                 argv += ["--ignore-from", self.rel(self.mpath)]
@@ -291,10 +355,20 @@ class Pipeline:
             base = self.base(s)
             out = os.path.join(self.tdir, "pii", base + ".pii.json")
             cache = os.path.join(self.tdir, "ocr", base + ".ocr.json")
-            argv = [os.path.join(HERE, "scan-pii.py"), "--src",
-                    self.rel(self.proxy_or_src(s)), "--out", self.rel(out),
-                    "--ocr-cache", self.rel(cache), "--fps", str(self.args.ocr_fps),
-                    "--width", "1600", "--report"]
+            argv = [
+                os.path.join(HERE, "scan-pii.py"),
+                "--src",
+                self.rel(self.proxy_or_src(s)),
+                "--out",
+                self.rel(out),
+                "--ocr-cache",
+                self.rel(cache),
+                "--fps",
+                str(self.args.ocr_fps),
+                "--width",
+                "1600",
+                "--report",
+            ]
             if os.path.exists(cache):
                 argv.append("--from-cache")
             jobs.append((argv, f"ocr {base}"))
@@ -317,8 +391,11 @@ class Pipeline:
 
     def st_track(self):
         piis = glob.glob(os.path.join(self.tdir, "pii", "*.pii.json"))
-        ins = [self.proxy_or_src(s) for s in self.sources()] + piis + \
-              [os.path.join(HERE, "track-blur.py")]
+        ins = (
+            [self.proxy_or_src(s) for s in self.sources()]
+            + piis
+            + [os.path.join(HERE, "track-blur.py")]
+        )
         sig = stat_sig(ins)
         if self.is_done("track", sig):
             return "cached", ""
@@ -326,11 +403,22 @@ class Pipeline:
         jobs = []
         for s in self.tracked_sources():
             tdir = os.path.join(self.tdir, "track", self.base(s))
-            jobs.append(([os.path.join(HERE, "track-blur.py"), "--src",
-                          self.rel(self.proxy_or_src(s)), "--outdir", self.rel(tdir),
-                          "--manifest", self.rel(self.mpath),
-                          "--threads", str(max(1, (os.cpu_count() or 4) // max(1, self.args.jobs)))],
-                         f"track {self.base(s)}"))
+            jobs.append(
+                (
+                    [
+                        os.path.join(HERE, "track-blur.py"),
+                        "--src",
+                        self.rel(self.proxy_or_src(s)),
+                        "--outdir",
+                        self.rel(tdir),
+                        "--manifest",
+                        self.rel(self.mpath),
+                        "--threads",
+                        str(max(1, (os.cpu_count() or 4) // max(1, self.args.jobs))),
+                    ],
+                    f"track {self.base(s)}",
+                )
+            )
             for s2 in m["sources"]:
                 if s2["path"] == s["path"]:
                     s2["track"] = self.rel(tdir)
@@ -345,31 +433,64 @@ class Pipeline:
         for s in self.tracked_sources():
             if not s.get("track"):
                 continue
-            rc = self.run([os.path.join(HERE, "track-blur.py"), "--src",
-                           self.rel(self.proxy_or_src(s)), "--outdir", s["track"],
-                           "--manifest", self.rel(self.mpath), "--recall",
-                           "--recall-min", str(self.args.recall_min)],
-                          f"recall {self.base(s)}", ok_codes=(0, 1))
+            rc = self.run(
+                [
+                    os.path.join(HERE, "track-blur.py"),
+                    "--src",
+                    self.rel(self.proxy_or_src(s)),
+                    "--outdir",
+                    s["track"],
+                    "--manifest",
+                    self.rel(self.mpath),
+                    "--recall",
+                    "--recall-min",
+                    str(self.args.recall_min),
+                ],
+                f"recall {self.base(s)}",
+                ok_codes=(0, 1),
+            )
             if rc == 1:
                 worst = 0.0
         if worst < 1.0:
-            raise SystemExit(f"\n  STOP: recall below {self.args.recall_min:.0%} on at least one "
-                             f"source. Fix the tracker or add hand rects, then rerun.")
+            raise SystemExit(
+                f"\n  STOP: recall below {self.args.recall_min:.0%} on at least one "
+                f"source. Fix the tracker or add hand rects, then rerun."
+            )
         return "ran", ""
 
     def st_review(self):
-        rc = self.run([os.path.join(HERE, "redaction-review.py"), "--manifest",
-                       self.rel(self.mpath), "--check"], "review --check", ok_codes=(0, 3))
+        rc = self.run(
+            [
+                os.path.join(HERE, "redaction-review.py"),
+                "--manifest",
+                self.rel(self.mpath),
+                "--check",
+            ],
+            "review --check",
+            ok_codes=(0, 3),
+        )
         if rc == 0:
             return "approved", ""
-        self.run([os.path.join(HERE, "redaction-review.py"), "--manifest",
-                  self.rel(self.mpath)], "review sheet", ok_codes=(0, 2))
+        self.run(
+            [os.path.join(HERE, "redaction-review.py"), "--manifest", self.rel(self.mpath)],
+            "review sheet",
+            ok_codes=(0, 2),
+        )
         if self.args.approve:
-            self.run([os.path.join(HERE, "redaction-review.py"), "--manifest",
-                      self.rel(self.mpath), "--approve"], "review --approve")
+            self.run(
+                [
+                    os.path.join(HERE, "redaction-review.py"),
+                    "--manifest",
+                    self.rel(self.mpath),
+                    "--approve",
+                ],
+                "review --approve",
+            )
             return "approved", "with --approve"
-        raise SystemExit("\n  STOP: look at temp/review/redaction-sheet.jpg, then rerun "
-                         "with --approve (or change the manifest and rerun).")
+        raise SystemExit(
+            "\n  STOP: look at temp/review/redaction-sheet.jpg, then rerun "
+            "with --approve (or change the manifest and rerun)."
+        )
 
     def cut_argv(self):
         argv = [os.path.join(HERE, "screen-cut.py"), "--manifest", self.rel(self.mpath)]
@@ -382,8 +503,11 @@ class Pipeline:
         return "ran", ""
 
     def draft_sig(self):
-        tracks = [os.path.join(_env.resolve(s["track"]), "track.json")
-                  for s in self.sources() if s.get("track")]
+        tracks = [
+            os.path.join(_env.resolve(s["track"]), "track.json")
+            for s in self.sources()
+            if s.get("track")
+        ]
         return stat_sig([self.mpath] + tracks)
 
     def st_draft(self):
@@ -396,8 +520,11 @@ class Pipeline:
         """
         sig = self.draft_sig()
         flag = os.path.join(self.state_dir, "draft.approved")
-        if os.path.exists(flag) and open(flag, encoding="utf-8").read().strip() == sig \
-                and not self.args.force_draft:
+        if (
+            os.path.exists(flag)
+            and open(flag, encoding="utf-8").read().strip() == sig
+            and not self.args.force_draft
+        ):
             return "approved", ""
         self.run(self.cut_argv() + ["--hot", "--draft"], "draft")
         m = self.man()
@@ -407,18 +534,22 @@ class Pipeline:
             with open(flag, "w", encoding="utf-8") as f:
                 f.write(sig)
             return "approved", "with --approve-draft"
-        raise SystemExit(f"\n  STOP: watch the draft trailer\n    {out}\n"
-                         f"  then rerun with --approve-draft (or change the manifest and rerun).")
+        raise SystemExit(
+            f"\n  STOP: watch the draft trailer\n    {out}\n"
+            f"  then rerun with --approve-draft (or change the manifest and rerun)."
+        )
 
     def st_render(self):
         self.run(self.cut_argv(), "render")
         try:
             m = self.man()
             out = _env.resolve(m["output"])
-            self.note("render", f"{os.path.basename(out)} "
-                                f"{os.path.getsize(out) / 1e6:.0f} MB",
-                      output=self.rel(out),
-                      rects=sum(len(s.get("blur") or []) for s in m.get("sources", [])))
+            self.note(
+                "render",
+                f"{os.path.basename(out)} {os.path.getsize(out) / 1e6:.0f} MB",
+                output=self.rel(out),
+                rects=sum(len(s.get("blur") or []) for s in m.get("sources", [])),
+            )
         except (OSError, KeyError, ValueError):
             pass
         return "ran", ""
@@ -462,37 +593,61 @@ class Pipeline:
                 # clean on templates alone: confirm with the full gate before
                 # anybody calls the film publishable
                 print(f"\n  gate round {rnd}: clean on templates; confirming with OCR")
-                self.note("gate", f"round {rnd}: clean on templates, confirming with OCR",
-                          round=rnd, hits=hits, secrets=secrets)
+                self.note(
+                    "gate",
+                    f"round {rnd}: clean on templates, confirming with OCR",
+                    round=rnd,
+                    hits=hits,
+                    secrets=secrets,
+                )
                 argv = [a for a in argv if a not in ("--ocr-fps", "0", "--patch")]
                 rc = self.run(argv, f"gate round {rnd} (confirm)", ok_codes=(0, 1))
                 hits, secrets = self.gate_state()
             counts.append(hits)
-            self.note("gate", f"round {rnd}: {hits} hit(s), {secrets} distinct secret(s)"
-                              f"{'' if full or rc else ' [templates only]'}"
-                              f"{' -- CLEAN' if rc == 0 else ''}",
-                      round=rnd, hits=hits, secrets=secrets, rc=rc, ocr=full)
+            self.note(
+                "gate",
+                f"round {rnd}: {hits} hit(s), {secrets} distinct secret(s)"
+                f"{'' if full or rc else ' [templates only]'}"
+                f"{' -- CLEAN' if rc == 0 else ''}",
+                round=rnd,
+                hits=hits,
+                secrets=secrets,
+                rc=rc,
+                ocr=full,
+            )
             if rc == 0:
                 return "clean", f"round {rnd}"
             if len(counts) >= 3 and counts[-1] == counts[-2] == counts[-3]:
-                self.note("gate", f"not converging: {counts[-1]} hits three rounds "
-                                  f"running; the patches are not landing on the leak")
+                self.note(
+                    "gate",
+                    f"not converging: {counts[-1]} hits three rounds "
+                    f"running; the patches are not landing on the leak",
+                )
             if not last:
                 print(f"\n  gate round {rnd}: leaks patched into the manifest; re-rendering")
                 self.run(self.cut_argv(), f"render after gate {rnd}")
-        raise SystemExit(f"\n  STOP: the gate still finds secrets after "
-                         f"{self.args.gate_rounds} round(s) "
-                         f"(hits per round: {', '.join(str(c) for c in counts)}). "
-                         f"See temp/gate.json.")
+        raise SystemExit(
+            f"\n  STOP: the gate still finds secrets after "
+            f"{self.args.gate_rounds} round(s) "
+            f"(hits per round: {', '.join(str(c) for c in counts)}). "
+            f"See temp/gate.json."
+        )
 
     def st_upload(self):
         if not self.args.upload:
             return "skip", "no --upload"
         m = self.man()
         out = _env.resolve(m["output"])
-        argv = [os.path.join(HERE, "yt-upload.py"), self.rel(out),
-                "--title", self.args.title or f"{self.pid} (draft)",
-                "--channel", self.args.channel, "--privacy", self.args.upload]
+        argv = [
+            os.path.join(HERE, "yt-upload.py"),
+            self.rel(out),
+            "--title",
+            self.args.title or f"{self.pid} (draft)",
+            "--channel",
+            self.args.channel,
+            "--privacy",
+            self.args.upload,
+        ]
         desc = os.path.join(self.pdir, "description.txt")
         if os.path.exists(desc):
             argv += ["--description-file", self.rel(desc)]
@@ -503,9 +658,11 @@ class Pipeline:
     def go(self):
         start_at = STAGES.index(self.args.start) if self.args.start else 0
         stop_at = STAGES.index(self.args.stop) if self.args.stop else len(STAGES) - 1
-        print(f"{self.pid}: stages {STAGES[start_at]} -> {STAGES[stop_at]}"
-              f"{'  target ' + self.args.target if self.args.target else ''}")
-        kis = known_issues(STAGES[start_at:stop_at + 1])
+        print(
+            f"{self.pid}: stages {STAGES[start_at]} -> {STAGES[stop_at]}"
+            f"{'  target ' + self.args.target if self.args.target else ''}"
+        )
+        kis = known_issues(STAGES[start_at : stop_at + 1])
         if kis:
             print("  known issues for these stages (docs/known-issues.md):")
             for kid, status, tags, title in kis:
@@ -514,8 +671,9 @@ class Pipeline:
         # The log is closed by the context manager, so a failed stage
         # (SystemExit), a Ctrl-C and a crash each leave an `end` line saying
         # which -- a missing one would read as 'still running'.
-        with _runlog.RunLog(self.pdir, argv=sys.argv[1:],
-                            stages=STAGES[start_at:stop_at + 1]) as log:
+        with _runlog.RunLog(
+            self.pdir, argv=sys.argv[1:], stages=STAGES[start_at : stop_at + 1]
+        ) as log:
             self.log = log
             self._loop(start_at, stop_at, t_all)
 
@@ -531,9 +689,11 @@ class Pipeline:
             if state == "ran" and note:
                 self.mark(stage, note, secs)
             self.timings.append((stage, state, secs))
-            self.log.stage(stage, state, secs, note=note if state != 'ran' else '')
-            print(f"  [{i + 1:>2}/{len(STAGES)}] {stage:<9} {state:<9} {fmt(secs):>7}"
-                  f"{'  ' + note if note and state != 'ran' else ''}")
+            self.log.stage(stage, state, secs, note=note if state != "ran" else "")
+            print(
+                f"  [{i + 1:>2}/{len(STAGES)}] {stage:<9} {state:<9} {fmt(secs):>7}"
+                f"{'  ' + note if note and state != 'ran' else ''}"
+            )
         print(f"\n  total {fmt(time.time() - t_all)}")
         for stage, state, secs in self.timings:
             print(f"    {stage:<9} {state:<9} {fmt(secs):>7}")
@@ -546,32 +706,55 @@ def main():
     ap.add_argument("--target", help="film length, e.g. 8:00 (solves both speeds)")
     ap.add_argument("--start", choices=STAGES, help="first stage to run")
     ap.add_argument("--stop", choices=STAGES, help="last stage to run")
-    ap.add_argument("--force", action="append", default=[], choices=STAGES,
-                    help="re-run this stage even if its inputs are unchanged")
-    ap.add_argument("--approve", action="store_true",
-                    help="you have looked at the review sheet: record approval and go on")
-    ap.add_argument("--approve-draft", action="store_true",
-                    help="you have watched the draft trailer: record approval and render the final")
-    ap.add_argument("--force-draft", action="store_true",
-                    help="re-render the draft even if this cut was approved")
-    ap.add_argument("--upload", choices=["unlisted", "private", "public"],
-                    help="upload after a clean gate; unlisted is the review default")
+    ap.add_argument(
+        "--force",
+        action="append",
+        default=[],
+        choices=STAGES,
+        help="re-run this stage even if its inputs are unchanged",
+    )
+    ap.add_argument(
+        "--approve",
+        action="store_true",
+        help="you have looked at the review sheet: record approval and go on",
+    )
+    ap.add_argument(
+        "--approve-draft",
+        action="store_true",
+        help="you have watched the draft trailer: record approval and render the final",
+    )
+    ap.add_argument(
+        "--force-draft",
+        action="store_true",
+        help="re-render the draft even if this cut was approved",
+    )
+    ap.add_argument(
+        "--upload",
+        choices=["unlisted", "private", "public"],
+        help="upload after a clean gate; unlisted is the review default",
+    )
     ap.add_argument("--title")
     ap.add_argument("--channel", default="@instafill_ai")
     ap.add_argument("--since", help="import: only captures from this date (YYYY-MM-DD)")
-    ap.add_argument("--jobs", "-j", type=int,
-                    default=max(1, min(6, (os.cpu_count() or 4) // 3)),
-                    help="parallel per-source processes for the CPU-bound "
-                         "stages (ocr, track). Default is a third of the "
-                         "cores, capped at 6: onnxruntime already uses "
-                         "several threads per process, so more workers than "
-                         "that mostly contend.")
+    ap.add_argument(
+        "--jobs",
+        "-j",
+        type=int,
+        default=max(1, min(6, (os.cpu_count() or 4) // 3)),
+        help="parallel per-source processes for the CPU-bound "
+        "stages (ocr, track). Default is a third of the "
+        "cores, capped at 6: onnxruntime already uses "
+        "several threads per process, so more workers than "
+        "that mostly contend.",
+    )
     ap.add_argument("--ocr-fps", type=float, default=0.25)
     ap.add_argument("--recall-min", type=float, default=0.98)
-    ap.add_argument("--gate-rounds", type=int, default=3,
-                    help="gate -> patch -> render rounds before giving up")
-    ap.add_argument("--list", action="store_true",
-                    help="show which stages would run and which are cached")
+    ap.add_argument(
+        "--gate-rounds", type=int, default=3, help="gate -> patch -> render rounds before giving up"
+    )
+    ap.add_argument(
+        "--list", action="store_true", help="show which stages would run and which are cached"
+    )
     args = ap.parse_args()
 
     p = Pipeline(args.project, args)

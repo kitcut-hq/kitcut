@@ -14,6 +14,7 @@ are not already cleanly inside it, re-exec into it with PYTHONPATH stripped.
 Running `python scripts/anything.py` with any interpreter then does the right
 thing, and so does a shell that still has the old variable exported.
 """
+
 import os
 import sys
 
@@ -84,10 +85,10 @@ def set_workspace(path):
 def workspace():
     """The directory that holds projects/, most explicit source winning:
 
-        1. set_workspace()      a --workspace flag
-        2. $VIDEDIT_WORKSPACE   a shell, a launcher, or a host program
-        3. <ROOT>/.workspace    a one-line pointer file, for a fixed setup
-        4. ROOT                 the repo itself, which is the case today
+    1. set_workspace()      a --workspace flag
+    2. $VIDEDIT_WORKSPACE   a shell, a launcher, or a host program
+    3. <ROOT>/.workspace    a one-line pointer file, for a fixed setup
+    4. ROOT                 the repo itself, which is the case today
     """
     if _workspace:
         return _workspace
@@ -103,16 +104,19 @@ def workspace():
                     if line:
                         return os.path.abspath(os.path.expanduser(line))
         except OSError:
-            pass                    # an unreadable pointer is not worth dying for
+            pass  # an unreadable pointer is not worth dying for
     return ROOT
 
 
 def add_workspace_arg(ap):
     """Give a parser the flag, so every script spells it the same way."""
-    ap.add_argument("--workspace", metavar="DIR", default=None,
-                    help="directory holding projects/ (default: the repo "
-                         "itself; also $%s, or a .workspace pointer file)"
-                         % WORKSPACE_VAR)
+    ap.add_argument(
+        "--workspace",
+        metavar="DIR",
+        default=None,
+        help="directory holding projects/ (default: the repo "
+        "itself; also $%s, or a .workspace pointer file)" % WORKSPACE_VAR,
+    )
     return ap
 
 
@@ -137,8 +141,7 @@ def clean_env(env=None):
 
 
 def _in_venv(py):
-    return os.path.normcase(os.path.dirname(os.path.dirname(py))) == \
-           os.path.normcase(sys.prefix)
+    return os.path.normcase(os.path.dirname(os.path.dirname(py))) == os.path.normcase(sys.prefix)
 
 
 def site_roots():
@@ -155,8 +158,11 @@ def site_roots():
     def norm(x):
         return os.path.normcase(os.path.abspath(x))
 
-    roots = {norm(x) for x in (sysconfig.get_paths().get("purelib"),
-                               sysconfig.get_paths().get("platlib")) if x}
+    roots = {
+        norm(x)
+        for x in (sysconfig.get_paths().get("purelib"), sysconfig.get_paths().get("platlib"))
+        if x
+    }
     for getter in (lambda: [site.getusersitepackages()], site.getsitepackages):
         try:
             roots.update(norm(x) for x in getter())
@@ -173,22 +179,24 @@ def prune_foreign_site_packages():
     install before any third-party import happens.
     """
     own = site_roots()
-    sys.path[:] = [x for x in sys.path
-                   if "site-packages" not in x.lower()
-                   or os.path.normcase(os.path.abspath(x)) in own]
+    sys.path[:] = [
+        x
+        for x in sys.path
+        if "site-packages" not in x.lower() or os.path.normcase(os.path.abspath(x)) in own
+    ]
 
 
 def bootstrap():
     py = venv_python()
     if py is None:
-        return                                   # not set up yet; run as found
+        return  # not set up yet; run as found
     if _in_venv(py) and not os.environ.get("PYTHONPATH"):
-        return                                   # already clean
+        return  # already clean
     if os.environ.get(_SENTINEL):
-        return                                   # re-exec already tried once
+        return  # re-exec already tried once
     script = os.path.abspath(sys.argv[0]) if sys.argv and sys.argv[0] else ""
     if not os.path.isfile(script):
-        return          # -c, -m or a REPL: nothing to hand to a child
+        return  # -c, -m or a REPL: nothing to hand to a child
     env = clean_env()
     env[_SENTINEL] = "1"
     # NOT os.execve: on Windows that is _execve, which spawns a new process and
@@ -196,6 +204,7 @@ def bootstrap():
     # die abnormally (bash reports a segfault) and the exit code is lost. A
     # subprocess we wait on keeps stdio attached and the status intact.
     import subprocess
+
     sys.stdout.flush()
     sys.stderr.flush()
     r = subprocess.run([py, "-X", "utf8", script] + sys.argv[1:], env=env)

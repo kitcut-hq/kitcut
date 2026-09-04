@@ -17,7 +17,12 @@ as skipped rather than silently guessed.
 Invoke as:  python scripts/audit-caption-glue.py
             python scripts/audit-caption-glue.py --id <project>
 """
-import sys, os, json, glob, argparse
+
+import sys
+import os
+import json
+import glob
+import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -29,7 +34,8 @@ _project = import_module("_project")
 
 def load_raw_words(path):
     """The transcript exactly as whisper wrote it -- no glue. The loader glues
-    now, so the BEFORE picture has to come from the file directly."""
+    now, so the BEFORE picture has to come from the file directly.
+    """
     d = json.load(open(path, encoding="utf-8"))
     words = d["words"] if isinstance(d, dict) else d
     return [w for w in words if isinstance(w, dict) and w.get("text")]
@@ -38,9 +44,15 @@ def load_raw_words(path):
 def merges_in_window(raw, t0, t1):
     span = [w for w in raw if t0 <= w["start"] <= t1]
     glued = _outline.glue_words(span)
-    examples = [g["text"] for g in glued
-                if any(g["text"].endswith(s["text"]) and g["text"] != s["text"]
-                       for s in span if _outline.glues_back(s["text"]))]
+    examples = [
+        g["text"]
+        for g in glued
+        if any(
+            g["text"].endswith(s["text"]) and g["text"] != s["text"]
+            for s in span
+            if _outline.glues_back(s["text"])
+        )
+    ]
     return len(span) - len(glued), examples[:3]
 
 
@@ -50,9 +62,15 @@ def main():
     args = ap.parse_args()
 
     pdir = _project.projects_dir()
-    ids = [args.id] if args.id else sorted(
-        os.path.basename(p) for p in glob.glob(os.path.join(pdir, "*"))
-        if os.path.isfile(os.path.join(p, "project.json")))
+    ids = (
+        [args.id]
+        if args.id
+        else sorted(
+            os.path.basename(p)
+            for p in glob.glob(os.path.join(pdir, "*"))
+            if os.path.isfile(os.path.join(p, "project.json"))
+        )
+    )
 
     dirty, clean, skipped = [], 0, []
     for pid in ids:
@@ -86,24 +104,27 @@ def main():
                 sc = json.load(open(_env.resolve(clip_sc), encoding="utf-8"))
                 t0, t1 = float(sc["start"]), float(sc["end"])
             elif dl.get("kind") == "captions":
-                t0, t1 = 0.0, float("inf")   # whole-video captions
+                t0, t1 = 0.0, float("inf")  # whole-video captions
             else:
                 skipped.append((pid, name, "no clip sidecar on disk"))
                 continue
             n, ex = merges_in_window(raw, t0, t1)
             if n:
-                dirty.append((pid, name, n, ex, dl.get("status", "?"),
-                              dl.get("built_utc", "?")))
+                dirty.append((pid, name, n, ex, dl.get("status", "?"), dl.get("built_utc", "?")))
             else:
                 clean += 1
 
     if dirty:
-        print("deliverables whose window CONTAINS glue-merge sites (a render "
-              "built after the loader fix landed is already clean -- check "
-              "built_utc against the fix commit):")
+        print(
+            "deliverables whose window CONTAINS glue-merge sites (a render "
+            "built after the loader fix landed is already clean -- check "
+            "built_utc against the fix commit):"
+        )
         for pid, name, n, ex, status, built in sorted(dirty, key=lambda r: -r[2]):
-            print("  %-16s %-52s %2d merge(s)  built %s  [%s]  e.g. %s"
-                  % (pid, name, n, built, status, ", ".join(ex) or "-"))
+            print(
+                "  %-16s %-52s %2d merge(s)  built %s  [%s]  e.g. %s"
+                % (pid, name, n, built, status, ", ".join(ex) or "-")
+            )
     print("\n%d dirty | %d clean | %d skipped" % (len(dirty), clean, len(skipped)))
     for pid, name, why in skipped:
         print("  skip %-16s %-52s %s" % (pid, name, why))

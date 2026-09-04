@@ -25,6 +25,7 @@ frame; anything below the SSIM floor is reported rather than shipped.
 
 Invoke as:  python scripts/make-proxies.py --manifest projects/<id>/screen.json --list
 """
+
 import sys
 import os
 import json
@@ -38,29 +39,45 @@ import _encode  # noqa: E402
 
 ROOT = _env.ROOT
 
-CQ = 16          # near-transparent for screen text; --verify checks it
+CQ = 16  # near-transparent for screen text; --verify checks it
 SSIM_FLOOR = 0.985
 
 
 def probe(path):
     out = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "v:0",
-         "-show_entries", "stream=width,height", "-show_entries",
-         "format=duration,size", "-of", "json", path],
-        check=True, capture_output=True, text=True).stdout
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height",
+            "-show_entries",
+            "format=duration,size",
+            "-of",
+            "json",
+            path,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
     d = json.loads(out)
     st = (d.get("streams") or [{}])[0]
     fm = d.get("format") or {}
-    return {"width": int(st.get("width") or 0), "height": int(st.get("height") or 0),
-            "duration": float(fm.get("duration") or 0.0),
-            "size": int(fm.get("size") or 0)}
+    return {
+        "width": int(st.get("width") or 0),
+        "height": int(st.get("height") or 0),
+        "duration": float(fm.get("duration") or 0.0),
+        "size": int(fm.get("size") or 0),
+    }
 
 
 def fit(sw, sh, cw, ch):
     """The size a source lands at inside the canvas, preserving aspect."""
     f = min(cw / sw, ch / sh)
-    return (max(2, int(round(sw * f)) // 2 * 2),
-            max(2, int(round(sh * f)) // 2 * 2))
+    return (max(2, int(round(sw * f)) // 2 * 2), max(2, int(round(sh * f)) // 2 * 2))
 
 
 def human(n):
@@ -72,10 +89,24 @@ def human(n):
 
 def gray_frames(path, fps, width):
     p = subprocess.Popen(
-        ["ffmpeg", "-v", "error", "-nostdin", "-i", path,
-         "-vf", f"fps={fps},scale={width}:-2", "-pix_fmt", "gray",
-         "-f", "rawvideo", "-"], stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL)
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-nostdin",
+            "-i",
+            path,
+            "-vf",
+            f"fps={fps},scale={width}:-2",
+            "-pix_fmt",
+            "gray",
+            "-f",
+            "rawvideo",
+            "-",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
     info = probe(path)
     h = max(2, int(round(width * info["height"] / info["width"])) // 2 * 2)
     n = width * h
@@ -101,8 +132,7 @@ def ssim(a, b):
     va, vb = a.var(), b.var()
     cov = ((a - mu_a) * (b - mu_b)).mean()
     c1, c2 = (0.01 * 255) ** 2, (0.03 * 255) ** 2
-    return ((2 * mu_a * mu_b + c1) * (2 * cov + c2) /
-            ((mu_a ** 2 + mu_b ** 2 + c1) * (va + vb + c2)))
+    return (2 * mu_a * mu_b + c1) * (2 * cov + c2) / ((mu_a**2 + mu_b**2 + c1) * (va + vb + c2))
 
 
 def verify(src, dst, fps=0.2, width=640):
@@ -121,22 +151,28 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--outdir", help="default: <project>/temp/proxy")
-    ap.add_argument("--list", action="store_true",
-                    help="price the transcode; encodes nothing")
-    ap.add_argument("--verify", action="store_true",
-                    help="score each proxy against its source after building")
-    ap.add_argument("--force", action="store_true",
-                    help="rebuild proxies that already exist")
+    ap.add_argument("--list", action="store_true", help="price the transcode; encodes nothing")
+    ap.add_argument(
+        "--verify", action="store_true", help="score each proxy against its source after building"
+    )
+    ap.add_argument("--force", action="store_true", help="rebuild proxies that already exist")
     ap.add_argument("--cq", type=int, default=CQ)
-    ap.add_argument("--write", action="store_true", default=True,
-                    help="record the proxy path on each source in the manifest")
+    ap.add_argument(
+        "--write",
+        action="store_true",
+        default=True,
+        help="record the proxy path on each source in the manifest",
+    )
     args = ap.parse_args()
 
     mpath = _env.resolve(args.manifest)
     man = json.load(open(mpath, encoding="utf-8"))
     cw, ch = (man.get("cut") or {}).get("canvas", [1920, 1080])
-    outdir = _env.resolve(args.outdir) if args.outdir else \
-        os.path.join(os.path.dirname(mpath), "temp", "proxy")
+    outdir = (
+        _env.resolve(args.outdir)
+        if args.outdir
+        else os.path.join(os.path.dirname(mpath), "temp", "proxy")
+    )
     os.makedirs(outdir, exist_ok=True)
 
     rows = []
@@ -154,9 +190,11 @@ def main():
         state = "have" if have else "build"
         if info["width"] == vw and info["height"] == vh:
             state = "native"
-        print(f"  {os.path.basename(src)[:40]:<40} "
-              f"{info['width']}x{info['height']:<7} {vw}x{vh:<7} "
-              f"{human(info['size']):>9} {state:>9}")
+        print(
+            f"  {os.path.basename(src)[:40]:<40} "
+            f"{info['width']}x{info['height']:<7} {vw}x{vh:<7} "
+            f"{human(info['size']):>9} {state:>9}"
+        )
     if args.list:
         return
 
@@ -176,16 +214,19 @@ def main():
             # not the output. _encode probes the decoder itself rather than
             # reading it off the encoder: the two ship on different silicon.
             cmd += _encode.decode_args()
-            cmd += (["-i", src,
-                     "-vf", f"scale={vw}:{vh}:flags=lanczos,setsar=1", "-an"]
-                    + _encode.video_args(render)
-                    + ["-movflags", "+faststart", dst])
+            cmd += (
+                ["-i", src, "-vf", f"scale={vw}:{vh}:flags=lanczos,setsar=1", "-an"]
+                + _encode.video_args(render)
+                + ["-movflags", "+faststart", dst]
+            )
             r = subprocess.run(cmd, stderr=subprocess.PIPE, text=True)
             if r.returncode != 0:
                 tail = "\n".join((r.stderr or "").strip().splitlines()[-15:])
                 raise SystemExit(f"ffmpeg failed ({r.returncode}):\n{tail}")
-            print(f"    {human(probe(dst)['size'])}  "
-                  f"({probe(dst)['size'] / max(1, info['size']) * 100:.0f}% of source)")
+            print(
+                f"    {human(probe(dst)['size'])}  "
+                f"({probe(dst)['size'] / max(1, info['size']) * 100:.0f}% of source)"
+            )
 
         if args.verify:
             got, err = verify(src, dst)
@@ -194,8 +235,7 @@ def main():
                 continue
             mean, worst = got
             flag = "" if worst >= SSIM_FLOOR else "   <- BELOW FLOOR"
-            print(f"    ssim mean {mean:.4f}  worst {worst:.4f}"
-                  f"  (floor {SSIM_FLOOR}){flag}")
+            print(f"    ssim mean {mean:.4f}  worst {worst:.4f}  (floor {SSIM_FLOOR}){flag}")
 
         if args.write:
             s["proxy"] = rel

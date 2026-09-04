@@ -25,6 +25,7 @@ published video here contradicts -- but it is inherited from documentation and
 is NOT independently measured. Treat it with the same suspicion as the rest if
 it ever gets in the way.
 """
+
 import re
 
 # A chapter line as it appears in a description: timestamp, whitespace, title.
@@ -61,26 +62,30 @@ def parse_marks(text):
 def fatal(marks):
     """Reasons YouTube would render nothing. See the module docstring: only
     the count is treated as fatal, and even that is documentation, not
-    measurement."""
+    measurement.
+    """
     if len(marks) < MIN_CHAPTERS:
-        return [f"only {len(marks)} chapters; YouTube documents a minimum of "
-                f"{MIN_CHAPTERS}"]
+        return [f"only {len(marks)} chapters; YouTube documents a minimum of {MIN_CHAPTERS}"]
     return []
 
 
 def advisories(marks):
     """Cosmetic or stylistic notes. NONE of these stop chapters rendering --
-    each was checked against a published video that breaks it and works."""
+    each was checked against a published video that breaks it and works.
+    """
     notes = []
     if marks and marks[0][0] != 0:
-        notes.append(f"first mark is at {fmt_ts(marks[0][0])}; YouTube will "
-                     f"prepend an '<Untitled Chapter 1>' covering the gap")
+        notes.append(
+            f"first mark is at {fmt_ts(marks[0][0])}; YouTube will "
+            f"prepend an '<Untitled Chapter 1>' covering the gap"
+        )
     for (a, la), (b, lb) in zip(marks, marks[1:]):
         if b < a:
             notes.append(f"out of order: {la!r} before {lb!r}")
         elif b - a < MIN_GAP_S:
-            notes.append(f"{b - a}s chapter: {la!r} -> {lb!r} "
-                         f"(renders, but is a very short section)")
+            notes.append(
+                f"{b - a}s chapter: {la!r} -> {lb!r} (renders, but is a very short section)"
+            )
     return notes
 
 
@@ -92,7 +97,7 @@ def find_block(description):
     """
     lines = description.split("\n")
     run_start, best = None, None
-    for i, line in enumerate(lines + [""]):   # sentinel flushes a trailing run
+    for i, line in enumerate(lines + [""]):  # sentinel flushes a trailing run
         if CHAPTER_LINE.match(line):
             if run_start is None:
                 run_start = i
@@ -108,7 +113,7 @@ def block_text(description):
     span = find_block(description)
     if not span:
         return None
-    return "\n".join(description.split("\n")[span[0]:span[1]])
+    return "\n".join(description.split("\n")[span[0] : span[1]])
 
 
 def splice(description, block):
@@ -120,8 +125,8 @@ def splice(description, block):
     lines = description.split("\n")
     span = find_block(description)
     if span:
-        old = "\n".join(lines[span[0]:span[1]])
-        lines[span[0]:span[1]] = block.split("\n")
+        old = "\n".join(lines[span[0] : span[1]])
+        lines[span[0] : span[1]] = block.split("\n")
         return "\n".join(lines), old
     sep = "" if not description.strip() else description.rstrip() + "\n\n"
     return sep + block + "\n", None

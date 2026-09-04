@@ -22,7 +22,12 @@ Invoke as:
   python scripts/yt-upload.py <file> --title "..." --channel @handle --dry-run
   python scripts/yt-upload.py <file> --title "..." --channel @handle
 """
-import sys, os, json, time, argparse
+
+import sys
+import os
+import json
+import time
+import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -39,6 +44,7 @@ CHUNK = 8 * 1024 * 1024
 
 def service(creds):
     from googleapiclient.discovery import build
+
     return build("youtube", "v3", credentials=creds, cache_discovery=False)
 
 
@@ -48,8 +54,7 @@ def which_channel(yt):
     if not items:
         sys.exit("this grant owns no channel")
     sn = items[0]["snippet"]
-    return (items[0]["id"], sn.get("title", ""),
-            (sn.get("customUrl") or "").lstrip("@").lower())
+    return (items[0]["id"], sn.get("title", ""), (sn.get("customUrl") or "").lstrip("@").lower())
 
 
 def check_channel(yt, want):
@@ -58,13 +63,14 @@ def check_channel(yt, want):
     if want:
         w = want.lstrip("@").lower()
         if w not in (handle, title.lower()):
-            sys.exit("token points at '%s' (@%s), not %r -- refusing to upload.\n"
-                     "Re-grant just this channel: delete %s (if present), then rerun\n"
-                     "with --reauth --channel %s. At Google's chooser pick the BRAND\n"
-                     "account, not the personal one -- and note the chooser lists the\n"
-                     "BRAND ACCOUNT name, which a renamed channel no longer matches."
-                     % (title, handle, want,
-                        os.path.relpath(_yt.channel_token(want), _env.ROOT), want))
+            sys.exit(
+                "token points at '%s' (@%s), not %r -- refusing to upload.\n"
+                "Re-grant just this channel: delete %s (if present), then rerun\n"
+                "with --reauth --channel %s. At Google's chooser pick the BRAND\n"
+                "account, not the personal one -- and note the chooser lists the\n"
+                "BRAND ACCOUNT name, which a renamed channel no longer matches."
+                % (title, handle, want, os.path.relpath(_yt.channel_token(want), _env.ROOT), want)
+            )
     return cid
 
 
@@ -78,8 +84,11 @@ def main():
     ap.add_argument("--privacy", default="unlisted", choices=PRIVACY)
     ap.add_argument("--category", default="28", help="28 = Science & Technology")
     ap.add_argument("--channel", help="handle or title the token MUST point at")
-    ap.add_argument("--reauth", action="store_true",
-                    help="force a new Google consent and file the grant under --channel; use when adding a channel this machine has never uploaded to")
+    ap.add_argument(
+        "--reauth",
+        action="store_true",
+        help="force a new Google consent and file the grant under --channel; use when adding a channel this machine has never uploaded to",
+    )
     ap.add_argument("--made-for-kids", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
@@ -102,11 +111,16 @@ def main():
         sys.exit("title is %d chars; YouTube's limit is 100" % len(args.title))
 
     body = {
-        "snippet": {"title": args.title, "description": desc,
-                    "categoryId": args.category,
-                    "tags": [t.strip() for t in args.tags.split(",") if t.strip()]},
-        "status": {"privacyStatus": args.privacy,
-                   "selfDeclaredMadeForKids": bool(args.made_for_kids)},
+        "snippet": {
+            "title": args.title,
+            "description": desc,
+            "categoryId": args.category,
+            "tags": [t.strip() for t in args.tags.split(",") if t.strip()],
+        },
+        "status": {
+            "privacyStatus": args.privacy,
+            "selfDeclaredMadeForKids": bool(args.made_for_kids),
+        },
     }
 
     print("%s  (%.1f MB)" % (os.path.relpath(path, _env.ROOT), size / 1e6))
@@ -124,8 +138,8 @@ def main():
         return
 
     from googleapiclient.http import MediaFileUpload
-    media = MediaFileUpload(path, chunksize=CHUNK, resumable=True,
-                            mimetype="video/mp4")
+
+    media = MediaFileUpload(path, chunksize=CHUNK, resumable=True, mimetype="video/mp4")
     req = yt.videos().insert(part="snippet,status", body=body, media_body=media)
 
     print("\n  uploading ...")
@@ -133,11 +147,11 @@ def main():
     while resp is None:
         try:
             status, resp = req.next_chunk()
-        except Exception as e:                      # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             tries += 1
             if tries > 5:
                 raise
-            wait = 2 ** tries
+            wait = 2**tries
             print("    chunk failed (%s); retry %d in %ds" % (e, tries, wait))
             time.sleep(wait)
             continue
@@ -159,9 +173,10 @@ def main():
         sys.exit("uploaded as %s but the video does not read back" % vid)
     sn, st = items[0]["snippet"], items[0]["status"]
     ok = True
-    for label, want, have in (("title", args.title, sn.get("title")),
-                              ("privacy", args.privacy,
-                               st.get("privacyStatus"))):
+    for label, want, have in (
+        ("title", args.title, sn.get("title")),
+        ("privacy", args.privacy, st.get("privacyStatus")),
+    ):
         mark = "ok" if want == have else "MISMATCH"
         if want != have:
             ok = False
@@ -171,23 +186,37 @@ def main():
 
     side = os.path.splitext(path)[0] + ".youtube.json"
     with open(side, "w", encoding="utf-8") as f:
-        json.dump({"id": vid, "url": url, "title": args.title,
-                   "privacy": args.privacy, "bytes": size,
-                   "uploaded_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ",
-                                                 time.gmtime())},
-                  f, ensure_ascii=False, indent=1)
+        json.dump(
+            {
+                "id": vid,
+                "url": url,
+                "title": args.title,
+                "privacy": args.privacy,
+                "bytes": size,
+                "uploaded_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            },
+            f,
+            ensure_ascii=False,
+            indent=1,
+        )
     print("  %s" % os.path.relpath(side, _env.ROOT))
 
     pid, _doc = _project.find_by_output(path)
     if pid:
-        _project.record(pid, "publish", out=path, script=__file__,
-                        argv=sys.argv[1:],
-                        published={"url": url, "privacy": args.privacy,
-                                   "sidecar": _project.norm(side)},
-                        note="uploaded %s" % args.title)
+        _project.record(
+            pid,
+            "publish",
+            out=path,
+            script=__file__,
+            argv=sys.argv[1:],
+            published={"url": url, "privacy": args.privacy, "sidecar": _project.norm(side)},
+            note="uploaded %s" % args.title,
+        )
     else:
-        print("  note: no project claims this render -- record the upload in "
-              "its projects/<id>/project.json by hand")
+        print(
+            "  note: no project claims this render -- record the upload in "
+            "its projects/<id>/project.json by hand"
+        )
     print("\n%s" % url)
 
 

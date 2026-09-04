@@ -46,7 +46,11 @@ Free by nature -- reads, prices, writes nothing.
 
 Invoke as:  python scripts/shortlist-moments.py --shortlist projects/<id>/shortlist.json
 """
-import sys, os, json, argparse
+
+import sys
+import os
+import json
+import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -55,7 +59,7 @@ from importlib import import_module  # noqa: E402
 _outline = import_module("transcript-outline")
 
 TESTS = ("disagree", "audience", "ends_on_claim", "falsifiable")
-HOOK_MAX_S = 3.0          # must match cut-clips.py's gate
+HOOK_MAX_S = 3.0  # must match cut-clips.py's gate
 
 # Deliberately NO minimum candidate count, NO minimum rejects, NO pick quota:
 # how many shorts come out of a video is the USER'S call -- one named moment,
@@ -78,12 +82,16 @@ def check_candidate(c, words, errs, warns):
     tests = c.get("tests") or {}
     for t in TESTS:
         if not str(tests.get(t, "")).strip():
-            errs.append("%s: test %r unanswered -- the tests are the "
-                        "selection; see the video-shorts skill" % (cid, t))
+            errs.append(
+                "%s: test %r unanswered -- the tests are the "
+                "selection; see the video-shorts skill" % (cid, t)
+            )
     if not str(c.get("picture", "")).strip():
-        errs.append("%s: no picture note -- a pick that has not looked at "
-                    "the footage is half a pick (two-box, b-roll and boxed "
-                    "shots all killed candidates before)" % cid)
+        errs.append(
+            "%s: no picture note -- a pick that has not looked at "
+            "the footage is half a pick (two-box, b-roll and boxed "
+            "shots all killed candidates before)" % cid
+        )
 
     # the mechanical half: resolve and price
     row = dict(id=cid, verdict=c.get("verdict", "?"))
@@ -91,21 +99,23 @@ def check_candidate(c, words, errs, warns):
     ekey = "end_text" if c.get("end_text") else "end_before_text"
     e = _outline.find(words, c[ekey]) if c.get(ekey) else None
     h = _outline.find(words, c["hook"]) if c.get("hook") else None
-    for name, hit, phrase in (("start_text", s, c.get("start_text")),
-                              (ekey, e, c.get(ekey)),
-                              ("hook", h, c.get("hook"))):
+    for name, hit, phrase in (
+        ("start_text", s, c.get("start_text")),
+        (ekey, e, c.get(ekey)),
+        ("hook", h, c.get("hook")),
+    ):
         if phrase and hit is None:
-            errs.append("%s: %s does not resolve in the transcript: %r"
-                        % (cid, name, phrase))
+            errs.append("%s: %s does not resolve in the transcript: %r" % (cid, name, phrase))
     if s and e:
         end = e[0] if ekey == "end_before_text" else e[1]
         row["dur"] = end - s[0]
         if row["dur"] <= 0:
-            errs.append("%s: end resolves BEFORE the start (%.1fs) -- on a "
-                        "podcast with a cold-open trailer the same phrase "
-                        "plays twice, and the matcher takes the first hit; "
-                        "anchor on words unique to the body instance"
-                        % (cid, row["dur"]))
+            errs.append(
+                "%s: end resolves BEFORE the start (%.1fs) -- on a "
+                "podcast with a cold-open trailer the same phrase "
+                "plays twice, and the matcher takes the first hit; "
+                "anchor on words unique to the body instance" % (cid, row["dur"])
+            )
         # No length opinion beyond that: the duration column is a printed
         # fact, and the target length is the user's (a 3-minute short is a
         # valid ask -- platform ceilings moved and will move again). Even
@@ -118,19 +128,22 @@ def check_candidate(c, words, errs, warns):
             # mirrors the render gate exactly, hook_ok escape included --
             # otherwise cut-clips just refuses the same clip one stage later
             if str(c.get("hook_ok", "")).strip():
-                warns.append("%s: hook +%.1fs past the gate, carried on "
-                             "hook_ok: %s" % (cid, row["hook_at"], c["hook_ok"]))
+                warns.append(
+                    "%s: hook +%.1fs past the gate, carried on "
+                    "hook_ok: %s" % (cid, row["hook_at"], c["hook_ok"])
+                )
             else:
-                errs.append("%s: hook +%.1fs fails the %.1fs gate -- "
-                            "re-anchor, reject, or state a hook_ok reason"
-                            % (cid, row["hook_at"], HOOK_MAX_S))
+                errs.append(
+                    "%s: hook +%.1fs fails the %.1fs gate -- "
+                    "re-anchor, reject, or state a hook_ok reason"
+                    % (cid, row["hook_at"], HOOK_MAX_S)
+                )
     return row
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--shortlist", required=True,
-                    help="projects/<id>/shortlist.json")
+    ap.add_argument("--shortlist", required=True, help="projects/<id>/shortlist.json")
     args = ap.parse_args()
 
     sl = json.load(open(_env.resolve(args.shortlist), encoding="utf-8"))
@@ -144,19 +157,26 @@ def main():
     # count facts, not quotas: the user decides how many shorts a video owes.
     # The one smell worth flagging is picks with no losers -- when everything
     # considered was chosen, the "selection" was a decision wearing a list.
-    if verdicts.count("pick") > 1 and not (verdicts.count("reject")
-                                           or verdicts.count("backup")):
-        warns.append("every candidate is a pick and nothing is documented as "
-                     "losing -- fine if the user named these moments, thin "
-                     "if the shortlist was supposed to compare")
+    if verdicts.count("pick") > 1 and not (verdicts.count("reject") or verdicts.count("backup")):
+        warns.append(
+            "every candidate is a pick and nothing is documented as "
+            "losing -- fine if the user named these moments, thin "
+            "if the shortlist was supposed to compare"
+        )
 
     if sl.get("wanted"):
         print("wanted: %s" % sl["wanted"])
     print("%-28s %-7s %6s %9s" % ("candidate", "verdict", "dur", "hook"))
     for r in sorted(rows, key=lambda r: r.get("hook_at", 99)):
-        print("%-28s %-7s %5.1fs %8s"
-              % (r["id"], r["verdict"], r.get("dur", -1),
-                 ("+%.1fs" % r["hook_at"]) if "hook_at" in r else "?"))
+        print(
+            "%-28s %-7s %5.1fs %8s"
+            % (
+                r["id"],
+                r["verdict"],
+                r.get("dur", -1),
+                ("+%.1fs" % r["hook_at"]) if "hook_at" in r else "?",
+            )
+        )
     for w in warns:
         print("WARN %s" % w)
     if errs:
@@ -164,9 +184,11 @@ def main():
         for e in errs:
             print("FAIL %s" % e)
         sys.exit("%d problem(s) -- the selection stage is not done" % len(errs))
-    print("\nshortlist OK: %d candidates, %d pick(s), %d backup(s), "
-          "%d reject(s)" % (len(cands), verdicts.count("pick"),
-                            verdicts.count("backup"), verdicts.count("reject")))
+    print(
+        "\nshortlist OK: %d candidates, %d pick(s), %d backup(s), "
+        "%d reject(s)"
+        % (len(cands), verdicts.count("pick"), verdicts.count("backup"), verdicts.count("reject"))
+    )
 
 
 if __name__ == "__main__":

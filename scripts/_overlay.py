@@ -19,7 +19,11 @@ each module exposes `prepare()` returning (png_paths, filter_complex,
 out_label), which a caller splices onto the tail of its own chain to keep the
 whole render to a single encode.
 """
-import os, sys, json, subprocess
+
+import os
+import sys
+import json
+import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -53,7 +57,7 @@ def font_for_cap_height(path, cap_px):
     while lo <= hi:
         mid = (lo + hi) // 2
         f = ImageFont.truetype(repo_path(path), mid)
-        box = f.getbbox("H")          # (x0, y0, x1, y1) of the glyph ink
+        box = f.getbbox("H")  # (x0, y0, x1, y1) of the glyph ink
         h = box[3] - box[1]
         if h == cap_px:
             return f
@@ -65,13 +69,11 @@ def font_for_cap_height(path, cap_px):
     return best or ImageFont.truetype(repo_path(path), max(4, int(cap_px)))
 
 
-def draw_text_tracked(draw, xy, text, font, fill, tracking,
-                      stroke=0, stroke_fill=None):
+def draw_text_tracked(draw, xy, text, font, fill, tracking, stroke=0, stroke_fill=None):
     """Pillow has no letter-spacing, so place glyph by glyph."""
     x, y = xy
     for ch in text:
-        draw.text((x, y), ch, font=font, fill=fill,
-                  stroke_width=stroke, stroke_fill=stroke_fill)
+        draw.text((x, y), ch, font=font, fill=fill, stroke_width=stroke, stroke_fill=stroke_fill)
         x += draw.textlength(ch, font=font) + tracking
     return x - tracking - xy[0]
 
@@ -83,8 +85,9 @@ def text_width_tracked(draw, text, font, tracking):
 
 
 def esc(expr):
-    """ffmpeg splits filter options on commas, so commas inside an expression
-    have to be escaped. Doing it here means callers write normal expressions."""
+    """Ffmpeg splits filter options on commas, so commas inside an expression
+    have to be escaped. Doing it here means callers write normal expressions.
+    """
     return expr.replace(",", r"\,")
 
 
@@ -113,8 +116,10 @@ def anchor_xy(layout, cw, ch, vid_w, vid_h, scale, sy):
         y = vid_h - ch - my
     else:
         y = (vid_h - ch) / 2.0
-    return (int(round(min(max(x, 0), max(0, vid_w - cw)))),
-            int(round(min(max(y, 0), max(0, vid_h - ch)))))
+    return (
+        int(round(min(max(x, 0), max(0, vid_w - cw)))),
+        int(round(min(max(y, 0), max(0, vid_h - ch)))),
+    )
 
 
 def probe_dims(path):
@@ -124,10 +129,23 @@ def probe_dims(path):
 
 def probe(path):
     """(width, height, fps, duration) for a video, straight from ffprobe."""
-    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-                          "-show_entries", "stream=width,height,r_frame_rate"
-                          ":format=duration", "-of", "json", path],
-                         env=ENV, capture_output=True, text=True)
+    out = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,r_frame_rate:format=duration",
+            "-of",
+            "json",
+            path,
+        ],
+        env=ENV,
+        capture_output=True,
+        text=True,
+    )
     if out.returncode:
         sys.exit("ffprobe failed on %s\n%s" % (path, out.stderr.strip()))
     j = json.loads(out.stdout)
@@ -136,5 +154,3 @@ def probe(path):
     fps = float(num) / float(den or 1)
     dur = float(j.get("format", {}).get("duration") or 0.0)
     return int(s["width"]), int(s["height"]), fps, dur
-
-

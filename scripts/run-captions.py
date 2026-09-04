@@ -23,14 +23,22 @@ scaled automatically to the actual video dimensions.
 
 Invoke as:  python scripts/run-captions.py --url <youtube-url> --style config/presets/red-card.json --project <id>
 """
-import sys, os, json, argparse, subprocess, time, shutil, hashlib, struct
+
+import sys
+import os
+import json
+import argparse
+import subprocess
+import time
+import shutil
+import hashlib
+import struct
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 import _encode  # noqa: E402 -- the one place encoder keys are chosen
 import _project  # noqa: E402
 import _overlay  # noqa: E402 -- encoder arg translation (GPU vs CPU)
-
 
 
 ROOT = _env.ROOT
@@ -50,9 +58,17 @@ STAGES = ["download", "audio", "transcribe", "overlays", "ass", "verify", "rende
 # spatial/temporal AQ and lookahead; nothing on AMF, where it was measured to
 # cost 26% and change the output by 8 bytes). No "encoder": _encode picks one
 # that runs here, and a caption preset naming one overrides it.
-CAPTION_RENDER = {"speed": 6, "cq": 20, "maxrate": "20M", "bufsize": "40M",
-                  "tuning": True, "aq_strength": 12, "gop": 120,
-                  "profile": "high", "level": "4.2"}
+CAPTION_RENDER = {
+    "speed": 6,
+    "cq": 20,
+    "maxrate": "20M",
+    "bufsize": "40M",
+    "tuning": True,
+    "aq_strength": 12,
+    "gop": 120,
+    "profile": "high",
+    "level": "4.2",
+}
 
 
 def sh(cmd, **kw):
@@ -63,8 +79,9 @@ def sh(cmd, **kw):
 
 
 def out(cmd):
-    return subprocess.run(cmd, cwd=ROOT, env=ENV, capture_output=True, text=True,
-                          encoding="utf-8", errors="replace").stdout.strip()
+    return subprocess.run(
+        cmd, cwd=ROOT, env=ENV, capture_output=True, text=True, encoding="utf-8", errors="replace"
+    ).stdout.strip()
 
 
 def probe(path, entries, stream=None):
@@ -112,10 +129,12 @@ def main():
     src.add_argument("--url")
     src.add_argument("--input")
     ap.add_argument("--id", help="slug for artifacts; defaults to the video id / filename")
-    ap.add_argument("--project",
-                    help="put every artifact under projects/<PROJECT>/ (the "
-                         "per-video project folder) instead of the shared "
-                         "top-level dirs")
+    ap.add_argument(
+        "--project",
+        help="put every artifact under projects/<PROJECT>/ (the "
+        "per-video project folder) instead of the shared "
+        "top-level dirs",
+    )
     ap.add_argument("--style", required=True)
     ap.add_argument("--height", type=int, default=1080)
     ap.add_argument("--lang", default=None, help="ASR language code; autodetect if omitted")
@@ -126,16 +145,32 @@ def main():
     ap.add_argument("--force", choices=STAGES, help="rerun this stage and all after it")
     ap.add_argument("--stop-after", choices=STAGES)
     ap.add_argument("--no-overlays", action="store_true")
-    ap.add_argument("--overlay-fps", type=float, default=3.0,
-                    help="sampling rate for source-graphic detection; 2-4 is plenty "
-                         "for graphics that last several seconds")
-    ap.add_argument("--min-free-gb", type=float, default=8.0,
-                    help="abort before starting if the disk has less than this free")
-    ap.add_argument("--encoder", help="override the preset's render.encoder -- "
-                                      "libx264 renders on CPU for machines "
-                                      "with no NVENC")
-    ap.add_argument("--preview", nargs=2, type=float, metavar=("START", "DUR"),
-                    help="render only this window (regenerates a time-shifted ASS)")
+    ap.add_argument(
+        "--overlay-fps",
+        type=float,
+        default=3.0,
+        help="sampling rate for source-graphic detection; 2-4 is plenty "
+        "for graphics that last several seconds",
+    )
+    ap.add_argument(
+        "--min-free-gb",
+        type=float,
+        default=8.0,
+        help="abort before starting if the disk has less than this free",
+    )
+    ap.add_argument(
+        "--encoder",
+        help="override the preset's render.encoder -- "
+        "libx264 renders on CPU for machines "
+        "with no NVENC",
+    )
+    ap.add_argument(
+        "--preview",
+        nargs=2,
+        type=float,
+        metavar=("START", "DUR"),
+        help="render only this window (regenerates a time-shifted ASS)",
+    )
     args = ap.parse_args()
 
     t_start = time.time()
@@ -160,20 +195,22 @@ def main():
 
     free_gb = shutil.disk_usage(ROOT).free / 1e9
     if free_gb < args.min_free_gb:
-        sys.exit("ABORT: only %.1f GB free (need %.1f). A render can die on ENOSPC "
-                 "mid-encode -- and +faststart doubles the output's peak footprint."
-                 % (free_gb, args.min_free_gb))
+        sys.exit(
+            "ABORT: only %.1f GB free (need %.1f). A render can die on ENOSPC "
+            "mid-encode -- and +faststart doubles the output's peak footprint."
+            % (free_gb, args.min_free_gb)
+        )
 
     vid = args.id
     if not vid:
         if args.url:
-            got = out(YTDLP + ["--no-warnings", "--print", "%(id)s",
-                               args.url]).splitlines()
+            got = out(YTDLP + ["--no-warnings", "--print", "%(id)s", args.url]).splitlines()
             if not got:
-                sys.exit("yt-dlp printed nothing for %s -- run "
-                         "scripts/check-env.py, or try the command by hand:\n"
-                         "  %s --print %%(id)s <url>"
-                         % (args.url, " ".join(YTDLP)))
+                sys.exit(
+                    "yt-dlp printed nothing for %s -- run "
+                    "scripts/check-env.py, or try the command by hand:\n"
+                    "  %s --print %%(id)s <url>" % (args.url, " ".join(YTDLP))
+                )
             vid = got[-1]
         else:
             vid = os.path.splitext(os.path.basename(args.input))[0]
@@ -205,12 +242,27 @@ def main():
         # YouTube AI auto-dubs appear as extra audio formats and a naive selector
         # can silently hand you a dubbed language.
         h = args.height
-        fmt = ("bv*[height<=%d][vcodec^=avc1]+ba[format_note*=original]/"
-               "bv*[height<=%d][vcodec^=avc1]+ba/"
-               "bv*[height<=%d]+ba/b[height<=%d]") % (h, h, h, h)
-        sh(YTDLP + ["-f", fmt, "--merge-output-format", "mp4",
-                    "-o", src_mp4, "--write-info-json", "--no-overwrites",
-                    "--no-warnings", "--newline", args.url])
+        fmt = (
+            "bv*[height<=%d][vcodec^=avc1]+ba[format_note*=original]/"
+            "bv*[height<=%d][vcodec^=avc1]+ba/"
+            "bv*[height<=%d]+ba/b[height<=%d]"
+        ) % (h, h, h, h)
+        sh(
+            YTDLP
+            + [
+                "-f",
+                fmt,
+                "--merge-output-format",
+                "mp4",
+                "-o",
+                src_mp4,
+                "--write-info-json",
+                "--no-overwrites",
+                "--no-warnings",
+                "--newline",
+                args.url,
+            ]
+        )
         mark("downloaded")
     else:
         mark("download skipped (exists)")
@@ -225,9 +277,29 @@ def main():
 
     # ---- audio ----------------------------------------------------------
     if do("audio", wav):
-        sh(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", src_mp4,
-            "-vn", "-sn", "-dn", "-map", "0:a:0", "-ac", "1", "-ar", "16000",
-            "-c:a", "pcm_s16le", wav])
+        sh(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                src_mp4,
+                "-vn",
+                "-sn",
+                "-dn",
+                "-map",
+                "0:a:0",
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                "-c:a",
+                "pcm_s16le",
+                wav,
+            ]
+        )
         mark("audio extracted")
     else:
         mark("audio skipped (exists)")
@@ -241,29 +313,47 @@ def main():
 
     procs = {}
     if need_t:
-        cmd = PY + ["scripts/transcribe-words.py", wav, "--out", words,
-                    "--raw-out", base + "temp/%s.asr.raw.json" % vid,
-                    "--model", args.model, "--device", args.device,
-                    "--compute-type", args.compute_type]
+        cmd = PY + [
+            "scripts/transcribe-words.py",
+            wav,
+            "--out",
+            words,
+            "--raw-out",
+            base + "temp/%s.asr.raw.json" % vid,
+            "--model",
+            args.model,
+            "--device",
+            args.device,
+            "--compute-type",
+            args.compute_type,
+        ]
         if args.lang:
             cmd += ["--language", args.lang]
         procs["transcribe"] = (subprocess.Popen(cmd, cwd=ROOT, env=ENV), None)
     if need_o:
         ocfg = style_cfg.get("overlays", {})
-        ocmd = PY + ["scripts/detect-overlays.py", "--src", src_mp4, "--out", overl,
-                     "--fps", str(args.overlay_fps)]
+        ocmd = PY + [
+            "scripts/detect-overlays.py",
+            "--src",
+            src_mp4,
+            "--out",
+            overl,
+            "--fps",
+            str(args.overlay_fps),
+        ]
         if ocfg.get("auto"):
             ocmd += ["--auto"]
         elif ocfg.get("colour"):
             ocmd += ["--colour", ocfg["colour"]]
         if need_t and args.device == "cuda":
-            ocmd += ["--no-hwaccel"]        # leave the GPU to the ASR model
-        olog = open(os.path.join(ROOT, base + "temp/%s.overlays.log" % vid),
-                    "w", encoding="utf-8")
-        procs["overlays"] = (subprocess.Popen(ocmd, cwd=ROOT, env=ENV,
-                                              stdout=olog, stderr=subprocess.STDOUT), olog)
+            ocmd += ["--no-hwaccel"]  # leave the GPU to the ASR model
+        olog = open(os.path.join(ROOT, base + "temp/%s.overlays.log" % vid), "w", encoding="utf-8")
+        procs["overlays"] = (
+            subprocess.Popen(ocmd, cwd=ROOT, env=ENV, stdout=olog, stderr=subprocess.STDOUT),
+            olog,
+        )
 
-    for name in ("transcribe", "overlays"):        # ASR is the long pole; wait it first
+    for name in ("transcribe", "overlays"):  # ASR is the long pole; wait it first
         if name not in procs:
             if name == "overlays" and args.no_overlays:
                 mark("overlays skipped (--no-overlays)")
@@ -274,8 +364,11 @@ def main():
         rc = p.wait()
         if log:
             log.close()
-            for line in open(os.path.join(ROOT, base + "temp/%s.overlays.log" % vid),
-                             encoding="utf-8").read().splitlines()[-4:]:
+            for line in (
+                open(os.path.join(ROOT, base + "temp/%s.overlays.log" % vid), encoding="utf-8")
+                .read()
+                .splitlines()[-4:]
+            ):
                 print("   overlays| " + line)
         if rc != 0:
             sys.exit("FAILED: %s stage (exit %d)" % (name, rc))
@@ -287,11 +380,14 @@ def main():
         sys.exit("transcript %s is empty -- re-run with --force transcribe" % words)
     cov = sum(x["end"] - x["start"] for x in ws) / d["duration"]
     tail = d["duration"] - ws[-1]["end"]
-    print("   %d words | lang %s p=%.2f | coverage %.2f | tail gap %.1fs"
-          % (len(ws), d["language"], d["language_probability"], cov, tail))
+    print(
+        "   %d words | lang %s p=%.2f | coverage %.2f | tail gap %.1fs"
+        % (len(ws), d["language"], d["language_probability"], cov, tail)
+    )
     if tail > 60:
-        print("   WARNING: transcript ends %.0fs before the audio does -- "
-              "possible early stop" % tail)
+        print(
+            "   WARNING: transcript ends %.0fs before the audio does -- possible early stop" % tail
+        )
     if d["language_probability"] < 0.8:
         print("   WARNING: low language confidence -- check this is not a dubbed track")
     maybe_stop("transcribe")
@@ -299,9 +395,20 @@ def main():
 
     # ---- ass ------------------------------------------------------------
     if do("ass", ass):
-        cmd = PY + ["scripts/build-captions-ass.py", "--words", words,
-                    "--style", args.style, "--out", ass, "--debug-out", dbg,
-                    "--scale-to", str(vw), str(vh)]
+        cmd = PY + [
+            "scripts/build-captions-ass.py",
+            "--words",
+            words,
+            "--style",
+            args.style,
+            "--out",
+            ass,
+            "--debug-out",
+            dbg,
+            "--scale-to",
+            str(vw),
+            str(vh),
+        ]
         if overl:
             cmd += ["--overlays", overl]
         sh(cmd)
@@ -311,11 +418,24 @@ def main():
     maybe_stop("ass")
 
     # ---- verify ---------------------------------------------------------
-    r = subprocess.run(PY + ["scripts/verify-captions.py", "--debug", dbg,
-                             "--style", args.style, "--ass", ass,
-                             "--fps", "%.6f" % fps,
-                             "--samples", str(args.samples)],
-                       cwd=ROOT, env=ENV)
+    r = subprocess.run(
+        PY
+        + [
+            "scripts/verify-captions.py",
+            "--debug",
+            dbg,
+            "--style",
+            args.style,
+            "--ass",
+            ass,
+            "--fps",
+            "%.6f" % fps,
+            "--samples",
+            str(args.samples),
+        ],
+        cwd=ROOT,
+        env=ENV,
+    )
     mark("sync verified" if r.returncode == 0 else "SYNC VERIFY FAILED")
     if r.returncode != 0:
         sys.exit("sync verification failed -- refusing to render")
@@ -331,8 +451,11 @@ def main():
         R["encoder"] = args.encoder
     R = _encode.resolve(R, strict_encoder=bool(args.encoder))
     acodec = probe(src_mp4, "stream=codec_name", "a:0")
-    audio = (["-c:a", "copy"] if acodec and acodec[0] == "aac"
-             else ["-c:a", "aac", "-b:a", "192k", "-ar", "48000"])
+    audio = (
+        ["-c:a", "copy"]
+        if acodec and acodec[0] == "aac"
+        else ["-c:a", "aac", "-b:a", "192k", "-ar", "48000"]
+    )
 
     fontsdir = style_cfg["font"].get("fontsdir", "fonts")
     vf = "ass=filename=%s:fontsdir=%s:shaping=simple,format=yuv420p" % (ass, fontsdir)
@@ -341,11 +464,25 @@ def main():
     if args.preview:
         s, dsec = args.preview
         pass_ass = base + "temp/%s.preview.ass" % vid
-        cmd = PY + ["scripts/build-captions-ass.py", "--words", words,
-                    "--style", args.style, "--out", pass_ass,
-                    "--debug-out", base + "temp/%s.preview.debug.json" % vid,
-                    "--scale-to", str(vw), str(vh),
-                    "--range", str(s), str(s + dsec), "--time-offset", str(s)]
+        cmd = PY + [
+            "scripts/build-captions-ass.py",
+            "--words",
+            words,
+            "--style",
+            args.style,
+            "--out",
+            pass_ass,
+            "--debug-out",
+            base + "temp/%s.preview.debug.json" % vid,
+            "--scale-to",
+            str(vw),
+            str(vh),
+            "--range",
+            str(s),
+            str(s + dsec),
+            "--time-offset",
+            str(s),
+        ]
         if overl:
             cmd += ["--overlays", overl]
         sh(cmd)
@@ -353,11 +490,15 @@ def main():
         pre = ["-ss", str(s), "-t", str(dsec)]
         render_out = base + "outputs/%s-preview.mp4" % vid
 
-    sh(["ffmpeg", "-hide_banner", "-loglevel", "error", "-stats", "-y"]
-       + pre + ["-i", src_mp4, "-vf", vf]
-       + _encode.video_args(R)
-       + ["-fps_mode", "passthrough",
-          "-movflags", "+faststart"] + audio + [render_out])
+    sh(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-stats", "-y"]
+        + pre
+        + ["-i", src_mp4, "-vf", vf]
+        + _encode.video_args(R)
+        + ["-fps_mode", "passthrough", "-movflags", "+faststart"]
+        + audio
+        + [render_out]
+    )
     mark("rendered")
 
     # ---- post-render checks + manifest (full renders only) --------------
@@ -379,35 +520,45 @@ def main():
         # both: absolutely low, AND a fraction of the source.
         sbr = int(probe(src_mp4, "format=bit_rate")[0] or 0)
         if obr < 1_500_000 and (not sbr or obr < 0.5 * sbr):
-            problems.append("bitrate %.1f Mbps against a %.1f Mbps source, too "
-                            "low for %s -- on NVENC this is -b:v 0 having been "
-                            "dropped, which makes -cq silently ignored; "
-                            "elsewhere check the quality target reached the "
-                            "encoder at all (_encode.describe prints what was "
-                            "sent)" % (obr / 1e6, sbr / 1e6, R.get("encoder")))
+            problems.append(
+                "bitrate %.1f Mbps against a %.1f Mbps source, too "
+                "low for %s -- on NVENC this is -b:v 0 having been "
+                "dropped, which makes -cq silently ignored; "
+                "elsewhere check the quality target reached the "
+                "encoder at all (_encode.describe prints what was "
+                "sent)" % (obr / 1e6, sbr / 1e6, R.get("encoder"))
+            )
         if not fast:
             problems.append("faststart missing (box order: %s)" % boxes)
         if problems:
             for pr in problems:
                 print("   POST-CHECK FAIL: " + pr)
             sys.exit("output failed post-render checks")
-        print("   post-checks OK: duration %.1fs | %.1f Mbps | faststart | %s"
-              % (odur, obr / 1e6, boxes))
+        print(
+            "   post-checks OK: duration %.1fs | %.1f Mbps | faststart | %s"
+            % (odur, obr / 1e6, boxes)
+        )
         mark("output verified")
 
         manifest = dict(
-            id=vid, url=args.url, source=dict(w=vw, h=vh, fps=fps, duration=dur),
+            id=vid,
+            url=args.url,
+            source=dict(w=vw, h=vh, fps=fps, duration=dur),
             style=dict(path=args.style, md5=md5(os.path.join(ROOT, args.style))),
             words=dict(path=words, md5=md5(os.path.join(ROOT, words)), count=len(ws)),
-            asr=dict(model=args.model, device=args.device,
-                     compute_type=args.compute_type, language=d["language"]),
+            asr=dict(
+                model=args.model,
+                device=args.device,
+                compute_type=args.compute_type,
+                language=d["language"],
+            ),
             versions=dict(
                 yt_dlp=out(YTDLP + ["--version"]),
                 ffmpeg=out(["ffmpeg", "-version"]).splitlines()[0],
             ),
-            argv=sys.argv[1:], timings={n: round(t, 1) for n, t in marks},
-            output=dict(path=render_out, bytes=os.path.getsize(op),
-                        duration=odur, bit_rate=obr),
+            argv=sys.argv[1:],
+            timings={n: round(t, 1) for n, t in marks},
+            output=dict(path=render_out, bytes=os.path.getsize(op), duration=odur, bit_rate=obr),
         )
         mpath = os.path.join(ROOT, base + "outputs/%s.manifest.json" % vid)
         with open(mpath, "w", encoding="utf-8") as f:
@@ -415,10 +566,15 @@ def main():
         print("   manifest: %soutputs/%s.manifest.json" % (base, vid))
 
         _project.record(
-            args.project or vid, "render", out=op, script=__file__,
-            argv=sys.argv[1:], kind="captioned",
+            args.project or vid,
+            "render",
+            out=op,
+            script=__file__,
+            argv=sys.argv[1:],
+            kind="captioned",
             sidecars={"render-manifest": mpath, "words": words},
-            burned=["word-synced captions, style %s" % args.style])
+            burned=["word-synced captions, style %s" % args.style],
+        )
 
     report(marks, render_out)
 

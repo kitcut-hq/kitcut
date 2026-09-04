@@ -35,6 +35,7 @@ acceptance test: a human sees one tile per state.
 
 Invoke as:  python scripts/film-redact.py --project <id> --states --detect
 """
+
 import sys
 import os
 import re
@@ -83,7 +84,7 @@ MAX_STATES = 2000
 # interrupted run loses a minute per worker rather than everything it did.
 CHECKPOINT = 25
 
-DILATE = 6                 # pixels around every detected box
+DILATE = 6  # pixels around every detected box
 BLUR_DOWNSCALE = 8
 BLUR_SIGMA = 3.0
 
@@ -103,8 +104,10 @@ def fmt(t):
 def load(name):
     """Import a hyphenated sibling script by path."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
-        name.replace("-", "_"), os.path.join(HERE, name + ".py"))
+        name.replace("-", "_"), os.path.join(HERE, name + ".py")
+    )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -112,29 +115,52 @@ def load(name):
 
 def probe(path):
     out = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
-         "stream=width,height,avg_frame_rate,r_frame_rate",
-         "-show_entries", "format=duration", "-of", "json", path],
-        check=True, capture_output=True, text=True).stdout
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,avg_frame_rate,r_frame_rate",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            path,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
     d = json.loads(out)
     st = d["streams"][0]
 
     def rate(x):
         n, _, dn = (x or "0/1").partition("/")
         return float(n) / float(dn) if dn and float(dn) else 0.0
+
     fps = rate(st.get("r_frame_rate")) or rate(st.get("avg_frame_rate")) or 30.0
-    return {"w": int(st["width"]), "h": int(st["height"]), "fps": fps,
-            "dur": float(d["format"]["duration"])}
+    return {
+        "w": int(st["width"]),
+        "h": int(st["height"]),
+        "fps": fps,
+        "dur": float(d["format"]["duration"]),
+    }
 
 
 def gray_stream(path, w, h):
     """Every frame, in order, as gray. The film is ours and CFR, so the frame
     INDEX is the timebase -- no pts parsing, and none of the `fps`-filter
-    slot-labelling trouble that cost this pipeline two separate bugs."""
+    slot-labelling trouble that cost this pipeline two separate bugs.
+    """
     p = subprocess.Popen(
-        ["ffmpeg", "-v", "error", "-nostdin"] + _encode.decode_args() + ["-i", path,
-         "-vf", f"scale={w}:{h}", "-pix_fmt", "gray", "-f", "rawvideo", "-"],
-        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        ["ffmpeg", "-v", "error", "-nostdin"]
+        + _encode.decode_args()
+        + ["-i", path, "-vf", f"scale={w}:{h}", "-pix_fmt", "gray", "-f", "rawvideo", "-"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
     n = w * h
     while True:
         buf = p.stdout.read(n)
@@ -147,7 +173,8 @@ def gray_stream(path, w, h):
 
 def frame_change(fr, prev):
     """Fraction of pixels that moved by more than 12 levels; see the twin in
-    track-blur.py for why this is cv2.absdiff and not the numpy spelling."""
+    track-blur.py for why this is cv2.absdiff and not the numpy spelling.
+    """
     d = cv2.absdiff(fr, prev)
     return cv2.countNonZero(cv2.threshold(d, 12, 1, cv2.THRESH_BINARY)[1]) / float(fr.size)
 
@@ -220,19 +247,20 @@ def segment(path, info, drift=DRIFT, verbose=True):
         if m >= PAGE:
             kind = "page"
         elif moved_v >= max(2, run // 4):
-            kind = "scroll"        # most of this state's motion was sliding
+            kind = "scroll"  # most of this state's motion was sliding
         elif d >= drift:
-            kind = "edit"          # text appeared in place
+            kind = "edit"  # text appeared in place
         else:
-            kind = "hold"          # only the max-run cap fired
+            kind = "hold"  # only the max-run cap fired
         cur["kind"] = kind
         states.append(cur)
         cur = {"i0": i, "i1": i, "kind": "page"}
         anchor = fr
         moved_v = 0
         if verbose and len(states) % 100 == 0:
-            print(f"    ...frame {i} ({i / info['fps']:.0f}s) "
-                  f"{len(states)} states", file=sys.stderr)
+            print(
+                f"    ...frame {i} ({i / info['fps']:.0f}s) {len(states)} states", file=sys.stderr
+            )
     if cur:
         states.append(cur)
     return states
@@ -246,8 +274,10 @@ def states_of(path, info, out_json, reps_dir, verbose=True):
         if len(states) <= MAX_STATES:
             break
         drift *= 2.0
-        print(f"  {len(states)} states is more than a human will review; "
-              f"raising the drift threshold to {drift:.4f} and re-segmenting")
+        print(
+            f"  {len(states)} states is more than a human will review; "
+            f"raising the drift threshold to {drift:.4f} and re-segmenting"
+        )
     # A representative frame: the LAST frame of the state. A page change's
     # first frames can still be painting -- a spinner, a half-drawn list --
     # and the secret arrives with the text, not with the navigation.
@@ -261,9 +291,19 @@ def states_of(path, info, out_json, reps_dir, verbose=True):
             os.remove(os.path.join(reps_dir, f))
     write_reps(path, info, states, reps_dir, verbose)
     with open(out_json, "w", encoding="utf-8") as f:
-        json.dump({"film": _project.norm(path), "fps": info["fps"],
-                   "w": info["w"], "h": info["h"], "drift": drift,
-                   "states": states}, f, ensure_ascii=False, indent=1)
+        json.dump(
+            {
+                "film": _project.norm(path),
+                "fps": info["fps"],
+                "w": info["w"],
+                "h": info["h"],
+                "drift": drift,
+                "states": states,
+            },
+            f,
+            ensure_ascii=False,
+            indent=1,
+        )
     return states
 
 
@@ -307,19 +347,34 @@ def write_reps(path, info, states, reps_dir, verbose=True):
     with open(gpath, "w", encoding="utf-8") as f:
         f.write(f"[0:v]select='{expr}',showinfo[out]")
     r = subprocess.run(
-        ["ffmpeg", "-v", "info", "-nostdin", "-y"] + _encode.decode_args() + ["-i", path,
-         "-filter_complex_script", gpath, "-map", "[out]",
-         "-fps_mode", "passthrough", "-start_number", "0",
-         os.path.join(raw, "f_%05d.png")],
-        stderr=subprocess.PIPE, text=True)
+        ["ffmpeg", "-v", "info", "-nostdin", "-y"]
+        + _encode.decode_args()
+        + [
+            "-i",
+            path,
+            "-filter_complex_script",
+            gpath,
+            "-map",
+            "[out]",
+            "-fps_mode",
+            "passthrough",
+            "-start_number",
+            "0",
+            os.path.join(raw, "f_%05d.png"),
+        ],
+        stderr=subprocess.PIPE,
+        text=True,
+    )
     if r.returncode != 0:
         tail = "\n".join((r.stderr or "").strip().splitlines()[-15:])
         raise SystemExit(f"reps failed ({r.returncode}):\n{tail}")
     times = [float(m) for m in re.findall(r"pts_time:([\d.]+)", r.stderr or "")]
     files = sorted(f for f in os.listdir(raw) if f.endswith(".png"))
     if len(times) != len(files):
-        raise SystemExit(f"reps: {len(files)} file(s) but {len(times)} showinfo "
-                         f"line(s); cannot match frames to states")
+        raise SystemExit(
+            f"reps: {len(files)} file(s) but {len(times)} showinfo "
+            f"line(s); cannot match frames to states"
+        )
     # nearest wanted time wins; a duplicate emission loses to the first
     for f in os.listdir(reps_dir):
         if f.startswith("rep_") and f.endswith(".png"):
@@ -331,16 +386,19 @@ def write_reps(path, info, states, reps_dir, verbose=True):
             os.remove(os.path.join(raw, fn))
             continue
         taken[n] = t
-        os.replace(os.path.join(raw, fn),
-                   os.path.join(reps_dir, f"rep_{n:05d}.png"))
+        os.replace(os.path.join(raw, fn), os.path.join(reps_dir, f"rep_{n:05d}.png"))
     missing = [n for n, _ in want if n not in taken]
     if missing:
-        raise SystemExit(f"reps: {len(missing)} state(s) got no frame "
-                         f"(first: state {missing[0]} at "
-                         f"{states[missing[0]]['rep'] / fps:.3f}s)")
+        raise SystemExit(
+            f"reps: {len(missing)} state(s) got no frame "
+            f"(first: state {missing[0]} at "
+            f"{states[missing[0]]['rep'] / fps:.3f}s)"
+        )
     if verbose and len(files) != len(want):
-        print(f"    {len(files)} frames emitted for {len(want)} states; "
-              f"{len(files) - len(want)} duplicate(s) dropped by timestamp")
+        print(
+            f"    {len(files)} frames emitted for {len(want)} states; "
+            f"{len(files) - len(want)} duplicate(s) dropped by timestamp"
+        )
     os.rmdir(raw)
     return len(taken)
 
@@ -366,7 +424,7 @@ def known_secrets(pdir, kinds):
             d = json.load(open(os.path.join(pii, f), encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        for h in (d.get("hits") or []):
+        for h in d.get("hits") or []:
             if h.get("kind") not in kinds:
                 continue
             digits = re.sub(r"\D", "", h.get("text") or "")
@@ -409,41 +467,69 @@ def detect_rep(png, sp, tb, rules_kinds, known, templates, ocr_width):
     H, W = img.shape[:2]
     boxes = []
 
-    small = cv2.resize(img, (ocr_width, max(2, ocr_width * H // W)),
-                       interpolation=cv2.INTER_AREA)
+    small = cv2.resize(img, (ocr_width, max(2, ocr_width * H // W)), interpolation=cv2.INTER_AREA)
     res, _ = sp.OCR(small)
     lines = []
-    for box, text, conf in (res or []):
+    for box, text, conf in res or []:
         try:
             conf = float(conf)
         except (TypeError, ValueError):
             conf = 0.0
         xs = [p[0] for p in box]
         ys = [p[1] for p in box]
-        lines.append({"text": text, "conf": conf,
-                      "box": [min(xs) / small.shape[1], min(ys) / small.shape[0],
-                              (max(xs) - min(xs)) / small.shape[1],
-                              (max(ys) - min(ys)) / small.shape[0]]})
+        lines.append(
+            {
+                "text": text,
+                "conf": conf,
+                "box": [
+                    min(xs) / small.shape[1],
+                    min(ys) / small.shape[0],
+                    (max(xs) - min(xs)) / small.shape[1],
+                    (max(ys) - min(ys)) / small.shape[0],
+                ],
+            }
+        )
 
     hits = sp.apply_rules([{"t": 0.0, "lines": lines}], only=rules_kinds)
     for h in hits:
-        boxes.append({"rect": [round(v, 5) for v in h["rect"]],
-                      "kind": h["kind"], "via": "rule", "text": h["text"][:60]})
+        boxes.append(
+            {
+                "rect": [round(v, 5) for v in h["rect"]],
+                "kind": h["kind"],
+                "via": "rule",
+                "text": h["text"][:60],
+            }
+        )
     for ln in lines:
         kind = match_known(ln["text"], known)
         if kind:
-            boxes.append({"rect": [round(v, 5) for v in ln["box"]],
-                          "kind": kind, "via": "known", "text": ln["text"][:60]})
+            boxes.append(
+                {
+                    "rect": [round(v, 5) for v in ln["box"]],
+                    "kind": kind,
+                    "via": "known",
+                    "text": ln["text"][:60],
+                }
+            )
 
     if templates:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         half = cv2.resize(gray, (W // 2, H // 2))
         for tpl in templates:
             for x, y, w, h in tb.full_search(half, gray, tpl, scales=(1.0,)):
-                boxes.append({"rect": [round(x / W, 5), round(y / H, 5),
-                                       round(w / W, 5), round(h / H, 5)],
-                              "kind": tpl["kind"], "via": "template",
-                              "text": tpl["text"][:60]})
+                boxes.append(
+                    {
+                        "rect": [
+                            round(x / W, 5),
+                            round(y / H, 5),
+                            round(w / W, 5),
+                            round(h / H, 5),
+                        ],
+                        "kind": tpl["kind"],
+                        "via": "template",
+                        "text": tpl["text"][:60],
+                    }
+                )
     return merge_boxes(boxes)
 
 
@@ -506,8 +592,12 @@ def sweep_union(states, per_state):
                         nx0, nx1 = min(cx, x), max(cx + cw, x + w)
                         ny0 = min(c["rect"][1], y)
                         ny1 = max(c["rect"][1] + c["rect"][3], y + h)
-                        c["rect"] = [round(nx0, 5), round(ny0, 5),
-                                     round(nx1 - nx0, 5), round(ny1 - ny0, 5)]
+                        c["rect"] = [
+                            round(nx0, 5),
+                            round(ny0, 5),
+                            round(nx1 - nx0, 5),
+                            round(ny1 - ny0, 5),
+                        ]
                         if b["via"] not in c["via"]:
                             c["via"] += "+" + b["via"]
                         break
@@ -535,9 +625,14 @@ def hand_boxes(hand, t0, t1):
         w = b.get("when")
         if w and (t1 <= float(w[0]) or t0 >= float(w[1])):
             continue
-        out.append({"rect": [float(v) for v in b["rect"]],
-                    "kind": b.get("kind", "hand"), "via": "hand",
-                    "text": b.get("why", "")[:60]})
+        out.append(
+            {
+                "rect": [float(v) for v in b["rect"]],
+                "kind": b.get("kind", "hand"),
+                "via": "hand",
+                "text": b.get("why", "")[:60],
+            }
+        )
     return out
 
 
@@ -602,11 +697,13 @@ def blur_cmd(base, listing, info, out, cq=21, preset="p5", prog=None):
     """
     W, H = info["w"], info["h"]
     d, sig = BLUR_DOWNSCALE, BLUR_SIGMA
-    g = (f"[0:v]split[clean][src];"
-         f"[src]scale=iw/{d}:ih/{d}:flags=area,gblur=sigma={sig},"
-         f"scale={W}:{H}:flags=bicubic[blur];"
-         f"[1:v]fps={info['fps']:.4f},scale={W}:{H}:flags=neighbor,format=gray[m];"
-         f"[blur][m]alphamerge[a];[clean][a]overlay[out]")
+    g = (
+        f"[0:v]split[clean][src];"
+        f"[src]scale=iw/{d}:ih/{d}:flags=area,gblur=sigma={sig},"
+        f"scale={W}:{H}:flags=bicubic[blur];"
+        f"[1:v]fps={info['fps']:.4f},scale={W}:{H}:flags=neighbor,format=gray[m];"
+        f"[blur][m]alphamerge[a];[clean][a]overlay[out]"
+    )
     gpath = os.path.splitext(out)[0] + ".filtergraph.txt"
     os.makedirs(os.path.dirname(gpath), exist_ok=True)
     with open(gpath, "w", encoding="utf-8") as f:
@@ -614,10 +711,25 @@ def blur_cmd(base, listing, info, out, cq=21, preset="p5", prog=None):
     cmd = ["ffmpeg", "-v", "error", "-stats", "-nostdin", "-y"]
     if prog:
         cmd += ["-progress", prog]
-    cmd += (["-i", base, "-f", "concat", "-safe", "0", "-i", listing,
-             "-filter_complex_script", gpath, "-map", "[out]", "-an"]
-            + _encode.video_args(_encode.resolve({"preset": preset, "cq": cq}))
-            + ["-movflags", "+faststart", out])
+    cmd += (
+        [
+            "-i",
+            base,
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            listing,
+            "-filter_complex_script",
+            gpath,
+            "-map",
+            "[out]",
+            "-an",
+        ]
+        + _encode.video_args(_encode.resolve({"preset": preset, "cq": cq}))
+        + ["-movflags", "+faststart", out]
+    )
     return cmd
 
 
@@ -638,9 +750,12 @@ def gate_boxes(render, info, states, per_state, reps_dir):
     want = {s["rep"]: n for n, s in enumerate(states) if per_state.get(str(n))}
     hits, ratios = [], []
     p = subprocess.Popen(
-        ["ffmpeg", "-v", "error", "-nostdin"] + _encode.decode_args() + ["-i", render,
-         "-pix_fmt", "gray", "-f", "rawvideo", "-"],
-        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        ["ffmpeg", "-v", "error", "-nostdin"]
+        + _encode.decode_args()
+        + ["-i", render, "-pix_fmt", "gray", "-f", "rawvideo", "-"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
     n = info["w"] * info["h"]
     i = 0
     while True:
@@ -650,8 +765,7 @@ def gate_boxes(render, info, states, per_state, reps_dir):
         if i in want:
             k = want[i]
             fr = np.frombuffer(buf, np.uint8).reshape(info["h"], info["w"])
-            rep = cv2.imread(os.path.join(reps_dir, f"rep_{k:05d}.png"),
-                             cv2.IMREAD_GRAYSCALE)
+            rep = cv2.imread(os.path.join(reps_dir, f"rep_{k:05d}.png"), cv2.IMREAD_GRAYSCALE)
             for b in per_state[str(k)]:
                 x, y, w, h = b["rect"]
                 x0, y0 = int(x * info["w"]), int(y * info["h"])
@@ -665,10 +779,17 @@ def gate_boxes(render, info, states, per_state, reps_dir):
                 ratio = sharpness(cut) / max(sharpness(ref), 1e-6)
                 ratios.append(ratio)
                 if ratio > SHARP_RATIO:
-                    hits.append({"state": k, "t": round(i / info["fps"], 3),
-                                 "kind": b["kind"], "via": b["via"],
-                                 "text": b.get("text", "")[:60],
-                                 "rect": b["rect"], "sharp_ratio": round(ratio, 3)})
+                    hits.append(
+                        {
+                            "state": k,
+                            "t": round(i / info["fps"], 3),
+                            "kind": b["kind"],
+                            "via": b["via"],
+                            "text": b.get("text", "")[:60],
+                            "rect": b["rect"],
+                            "sharp_ratio": round(ratio, 3),
+                        }
+                    )
         i += 1
     p.stdout.close()
     p.wait()
@@ -678,52 +799,76 @@ def gate_boxes(render, info, states, per_state, reps_dir):
 # --- driver -----------------------------------------------------------------
 def paths(pdir):
     fd = os.path.join(pdir, "temp", "film")
-    return {"dir": fd, "base": os.path.join(fd, "base.mp4"),
-            "states": os.path.join(fd, "states.json"),
-            "reps": os.path.join(fd, "reps"),
-            "detect": os.path.join(fd, "detect.json"),
-            "masks": os.path.join(fd, "masks"),
-            "decisions": os.path.join(fd, "decisions.json")}
+    return {
+        "dir": fd,
+        "base": os.path.join(fd, "base.mp4"),
+        "states": os.path.join(fd, "states.json"),
+        "reps": os.path.join(fd, "reps"),
+        "detect": os.path.join(fd, "detect.json"),
+        "masks": os.path.join(fd, "masks"),
+        "decisions": os.path.join(fd, "decisions.json"),
+    }
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--project", required=True)
     ap.add_argument("--manifest")
-    ap.add_argument("--states", action="store_true",
-                    help="segment the base film into screen states")
-    ap.add_argument("--detect", action="store_true",
-                    help="find every secret on each state's representative frame")
-    ap.add_argument("--blur", action="store_true",
-                    help="one masked pass over the base film -> the deliverable")
-    ap.add_argument("--gate", action="store_true",
-                    help="check the RENDER: is every detected box actually blurred")
-    ap.add_argument("--list", action="store_true",
-                    help="what the current states/detections cost, without doing it")
-    ap.add_argument("--jobs", "-j", type=int,
-                    default=max(1, min(6, (os.cpu_count() or 4) // 3)))
-    ap.add_argument("--ocr-width", type=int, default=1600,
-                    help="OCR resolution. Measured on this film: 1.75 s/rep at "
-                         "1600, 1.58 s at 960 -- width is nearly free, so keep "
-                         "the recall.")
-    ap.add_argument("--shard", metavar="I/N",
-                    help="internal: this worker handles states where k %% N == I")
-    ap.add_argument("--threads", type=int, default=1,
-                    help="OCR intra-op threads PER WORKER. 1 is right when "
-                         "--jobs already fills the cores: onnxruntime scales "
-                         "only 1.24x from one thread to all of them, so the "
-                         "parallelism belongs between processes, not inside "
-                         "them.")
-    ap.add_argument("--fresh", action="store_true",
-                    help="discard any half-finished shard files and re-OCR "
-                         "everything (default is to resume them)")
+    ap.add_argument(
+        "--states", action="store_true", help="segment the base film into screen states"
+    )
+    ap.add_argument(
+        "--detect",
+        action="store_true",
+        help="find every secret on each state's representative frame",
+    )
+    ap.add_argument(
+        "--blur", action="store_true", help="one masked pass over the base film -> the deliverable"
+    )
+    ap.add_argument(
+        "--gate",
+        action="store_true",
+        help="check the RENDER: is every detected box actually blurred",
+    )
+    ap.add_argument(
+        "--list",
+        action="store_true",
+        help="what the current states/detections cost, without doing it",
+    )
+    ap.add_argument("--jobs", "-j", type=int, default=max(1, min(6, (os.cpu_count() or 4) // 3)))
+    ap.add_argument(
+        "--ocr-width",
+        type=int,
+        default=1600,
+        help="OCR resolution. Measured on this film: 1.75 s/rep at "
+        "1600, 1.58 s at 960 -- width is nearly free, so keep "
+        "the recall.",
+    )
+    ap.add_argument(
+        "--shard", metavar="I/N", help="internal: this worker handles states where k %% N == I"
+    )
+    ap.add_argument(
+        "--threads",
+        type=int,
+        default=1,
+        help="OCR intra-op threads PER WORKER. 1 is right when "
+        "--jobs already fills the cores: onnxruntime scales "
+        "only 1.24x from one thread to all of them, so the "
+        "parallelism belongs between processes, not inside "
+        "them.",
+    )
+    ap.add_argument(
+        "--fresh",
+        action="store_true",
+        help="discard any half-finished shard files and re-OCR "
+        "everything (default is to resume them)",
+    )
     ap.add_argument("--cq", type=int, default=21)
     ap.add_argument("--out", help="override the blurred output path")
     args = ap.parse_args()
 
     pdir = os.path.join(_project.projects_dir(), args.project)
-    mpath = _env.resolve(args.manifest) if args.manifest else \
-        os.path.join(pdir, "screen.json")
+    mpath = _env.resolve(args.manifest) if args.manifest else os.path.join(pdir, "screen.json")
     man = json.load(open(mpath, encoding="utf-8"))
     P = paths(pdir)
     kinds = set(man.get("blur_kinds") or ["card", "cvv", "expiry", "iban", "phone"])
@@ -732,10 +877,13 @@ def main():
         raise SystemExit(
             f"no base film at {P['base']}\n"
             f"  build it first:  python scripts/screen-cut.py --manifest "
-            f"{os.path.relpath(mpath, ROOT)} --no-redact")
+            f"{os.path.relpath(mpath, ROOT)} --no-redact"
+        )
     info = probe(P["base"])
-    print(f"{args.project}: base film {fmt(info['dur'])}  "
-          f"{info['w']}x{info['h']} @ {info['fps']:.0f}fps")
+    print(
+        f"{args.project}: base film {fmt(info['dur'])}  "
+        f"{info['w']}x{info['h']} @ {info['fps']:.0f}fps"
+    )
 
     if args.states:
         t0 = time.time()
@@ -743,8 +891,10 @@ def main():
         kc = {}
         for s in states:
             kc[s["kind"]] = kc.get(s["kind"], 0) + 1
-        print(f"  {len(states)} states in {fmt(time.time() - t0)}   "
-              + "  ".join(f"{k}={v}" for k, v in sorted(kc.items())))
+        print(
+            f"  {len(states)} states in {fmt(time.time() - t0)}   "
+            + "  ".join(f"{k}={v}" for k, v in sorted(kc.items()))
+        )
         print(f"  reps -> {os.path.relpath(P['reps'], ROOT)}")
 
     if args.detect:
@@ -764,6 +914,7 @@ def main():
             sp = load("scan-pii")
             tb = load("track-blur")
             from rapidocr_onnxruntime import RapidOCR
+
             # onnxruntime does NOT read OMP_NUM_THREADS or any env var for its
             # intra-op pool (KI-024): it must be told in the constructor. Left
             # to itself every worker opens a pool per core, so eight workers
@@ -782,33 +933,39 @@ def main():
             mine = [k for k in range(len(states)) if k % n == i]
             todo = [k for k in mine if k not in done]
             if done:
-                print(f"    [{i}] resuming: {len(done)} done, {len(todo)} to go",
-                      file=sys.stderr, flush=True)
+                print(
+                    f"    [{i}] resuming: {len(done)} done, {len(todo)} to go",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
             def checkpoint():
                 tmp = part + ".tmp"
                 with open(tmp, "w", encoding="utf-8") as f:
-                    json.dump({"per": per, "done": sorted(done)}, f,
-                              ensure_ascii=False)
-                os.replace(tmp, part)          # atomic: never a half-read file
+                    json.dump({"per": per, "done": sorted(done)}, f, ensure_ascii=False)
+                os.replace(tmp, part)  # atomic: never a half-read file
 
             for c, k in enumerate(todo):
                 png = os.path.join(P["reps"], f"rep_{k:05d}.png")
                 if os.path.exists(png):
-                    boxes = detect_rep(png, sp, tb, kinds, known, [],
-                                       args.ocr_width)
+                    boxes = detect_rep(png, sp, tb, kinds, known, [], args.ocr_width)
                     if boxes:
                         per[str(k)] = boxes
                 done.add(k)
                 if (c + 1) % CHECKPOINT == 0:
                     checkpoint()
-                    print(f"    [{i}] {len(done)}/{len(mine)}  "
-                          f"{sum(len(v) for v in per.values())} box(es)",
-                          file=sys.stderr, flush=True)
+                    print(
+                        f"    [{i}] {len(done)}/{len(mine)}  "
+                        f"{sum(len(v) for v in per.values())} box(es)",
+                        file=sys.stderr,
+                        flush=True,
+                    )
             checkpoint()
-            print(f"  shard {i}/{n}: {len(mine)} reps, "
-                  f"{sum(len(v) for v in per.values())} box(es) in "
-                  f"{fmt(time.time() - t0)}")
+            print(
+                f"  shard {i}/{n}: {len(mine)} reps, "
+                f"{sum(len(v) for v in per.values())} box(es) in "
+                f"{fmt(time.time() - t0)}"
+            )
             return 0
 
         print(f"  {len(known)} known secret digit-string(s) from the source scans")
@@ -819,41 +976,59 @@ def main():
         else:
             for f in glob.glob(P["detect"] + ".[0-9]*"):
                 try:
-                    done0 += len(json.load(open(f, encoding="utf-8"))
-                                 .get("done") or [])
+                    done0 += len(json.load(open(f, encoding="utf-8")).get("done") or [])
                 except (ValueError, OSError):
-                    os.remove(f)          # a torn file from an older format
+                    os.remove(f)  # a torn file from an older format
         # Measured on this machine (8 physical cores / 16 logical), on this
         # film's own reps. ONE process alone: 2.7 s/rep = 0.37 rep/s. EIGHT
         # workers at one OCR thread each: 0.44 rep/s aggregate -- 19 % more,
         # not eight times more, because the model is memory-bound rather than
         # core-bound. Do not promise a speedup the machine will not deliver.
         eta = (len(states) - done0) / (0.37 if args.jobs == 1 else 0.44)
-        print(f"  detecting on {len(states)} rep frame(s) with {args.jobs} "
-              f"worker(s) x {args.threads} thread(s)"
-              + (f", {done0} already done" if done0 else "")
-              + f"  (~{fmt(eta)} at 2.7 s/rep)")
+        print(
+            f"  detecting on {len(states)} rep frame(s) with {args.jobs} "
+            f"worker(s) x {args.threads} thread(s)"
+            + (f", {done0} already done" if done0 else "")
+            + f"  (~{fmt(eta)} at 2.7 s/rep)"
+        )
         # Each worker gets its OWN log: eight workers sharing one stdout wrote
         # nothing but their headers and died invisibly, and an hour went into
         # blaming the wrong thing (KI-023). The thread budget is NOT set here
         # -- onnxruntime ignores these variables and has to be told in its
         # constructor (KI-024); they are set only for the numpy/BLAS side.
-        env = dict(os.environ, OMP_NUM_THREADS=str(args.threads),
-                   OPENBLAS_NUM_THREADS=str(args.threads),
-                   MKL_NUM_THREADS=str(args.threads))
+        env = dict(
+            os.environ,
+            OMP_NUM_THREADS=str(args.threads),
+            OPENBLAS_NUM_THREADS=str(args.threads),
+            MKL_NUM_THREADS=str(args.threads),
+        )
         logs, procs = [], []
         for i in range(args.jobs):
             lp = os.path.join(P["dir"], f"detect.{i}.log")
             lf = open(lp, "w", encoding="utf-8")
             logs.append((lp, lf))
-            procs.append(subprocess.Popen(
-                [sys.executable, os.path.abspath(__file__),
-                 "--project", args.project, "--detect",
-                 "--shard", f"{i}/{args.jobs}",
-                 "--threads", str(args.threads),
-                 "--ocr-width", str(args.ocr_width)]
-                + (["--manifest", args.manifest] if args.manifest else []),
-                cwd=ROOT, stdout=lf, stderr=subprocess.STDOUT, env=env))
+            procs.append(
+                subprocess.Popen(
+                    [
+                        sys.executable,
+                        os.path.abspath(__file__),
+                        "--project",
+                        args.project,
+                        "--detect",
+                        "--shard",
+                        f"{i}/{args.jobs}",
+                        "--threads",
+                        str(args.threads),
+                        "--ocr-width",
+                        str(args.ocr_width),
+                    ]
+                    + (["--manifest", args.manifest] if args.manifest else []),
+                    cwd=ROOT,
+                    stdout=lf,
+                    stderr=subprocess.STDOUT,
+                    env=env,
+                )
+            )
         bad = [p.wait() for p in procs]
         for _, lf in logs:
             lf.close()
@@ -874,35 +1049,35 @@ def main():
             os.remove(f)
         swept = sweep_union(states, per)
         with open(P["detect"], "w", encoding="utf-8") as f:
-            json.dump({"states": len(states), "per_state": per}, f,
-                      ensure_ascii=False, indent=1)
+            json.dump({"states": len(states), "per_state": per}, f, ensure_ascii=False, indent=1)
         nb = sum(len(v) for v in per.values())
         secs = sorted({b["kind"] for v in per.values() for b in v})
         covered = sum(states[int(k)]["dur"] for k in per)
-        print(f"  {nb} box(es) on {len(per)} of {len(states)} states "
-              f"({covered:.0f}s of {info['dur']:.0f}s film) in {fmt(time.time() - t0)}")
-        print(f"  kinds: {', '.join(secs) if secs else 'none'}"
-              f"   scroll states unioned: {swept}")
+        print(
+            f"  {nb} box(es) on {len(per)} of {len(states)} states "
+            f"({covered:.0f}s of {info['dur']:.0f}s film) in {fmt(time.time() - t0)}"
+        )
+        print(f"  kinds: {', '.join(secs) if secs else 'none'}   scroll states unioned: {swept}")
 
     if args.blur:
         for p in (P["states"], P["detect"]):
             if not os.path.exists(p):
-                raise SystemExit(f"missing {os.path.relpath(p, ROOT)}; "
-                                 f"run --states --detect first")
+                raise SystemExit(f"missing {os.path.relpath(p, ROOT)}; run --states --detect first")
         states = json.load(open(P["states"], encoding="utf-8"))["states"]
         per = json.load(open(P["detect"], encoding="utf-8"))["per_state"]
         decisions = {}
         if os.path.exists(P["decisions"]):
             decisions = json.load(open(P["decisions"], encoding="utf-8"))
         hand = man.get("film_blur") or []
-        runs, listing = mask_runs(states, per, decisions, info, P["masks"],
-                                  hand=hand)
+        runs, listing = mask_runs(states, per, decisions, info, P["masks"], hand=hand)
         out = _env.resolve(args.out or man["output"])
         os.makedirs(os.path.dirname(out), exist_ok=True)
         cleared = sum(1 for v in decisions.values() if v == "clear")
-        print(f"  {len(runs)} mask run(s) -> {os.path.relpath(P['masks'], ROOT)}"
-              + (f"   {len(hand)} hand rect(s)" if hand else "")
-              + (f"   {cleared} state(s) cleared by review" if cleared else ""))
+        print(
+            f"  {len(runs)} mask run(s) -> {os.path.relpath(P['masks'], ROOT)}"
+            + (f"   {len(hand)} hand rect(s)" if hand else "")
+            + (f"   {cleared} state(s) cleared by review" if cleared else "")
+        )
         t0 = time.time()
         cmd = blur_cmd(P["base"], listing, info, out, cq=args.cq)
         r = subprocess.run(cmd, stderr=subprocess.PIPE, text=True)
@@ -911,16 +1086,26 @@ def main():
             raise SystemExit(f"blur pass failed ({r.returncode}):\n{tail}")
         got = probe(out)["dur"]
         if abs(got - info["dur"]) > 2.0:
-            raise SystemExit(f"FAIL: base is {fmt(info['dur'])} but the blurred "
-                             f"render is {fmt(got)}")
+            raise SystemExit(
+                f"FAIL: base is {fmt(info['dur'])} but the blurred render is {fmt(got)}"
+            )
         print(f"  blurred {fmt(got)} in {fmt(time.time() - t0)} -> {out}")
-        _project.record(args.project, "film-redact", out=out, script=__file__,
-                        argv=sys.argv[1:], kind="film", manifest=mpath,
-                        burned={"redaction": "film-time, per screen state",
-                                "mask_runs": len(runs),
-                                "boxes": sum(len(v) for v in per.values()),
-                                "hand_rects": len(hand)},
-                        note=f"{len(states)} states, {len(runs)} mask runs")
+        _project.record(
+            args.project,
+            "film-redact",
+            out=out,
+            script=__file__,
+            argv=sys.argv[1:],
+            kind="film",
+            manifest=mpath,
+            burned={
+                "redaction": "film-time, per screen state",
+                "mask_runs": len(runs),
+                "boxes": sum(len(v) for v in per.values()),
+                "hand_rects": len(hand),
+            },
+            note=f"{len(states)} states, {len(runs)} mask runs",
+        )
 
     if args.gate:
         states = json.load(open(P["states"], encoding="utf-8"))["states"]
@@ -931,25 +1116,31 @@ def main():
         t0 = time.time()
         hits, ratios = gate_boxes(out, info, states, per, P["reps"])
         with open(os.path.join(P["dir"], "gate.json"), "w", encoding="utf-8") as f:
-            json.dump({"render": _project.norm(out), "hits": hits}, f,
-                      ensure_ascii=False, indent=1)
+            json.dump({"render": _project.norm(out), "hits": hits}, f, ensure_ascii=False, indent=1)
         nb = sum(len(v) for v in per.values())
-        print(f"  gate: {len(hits)} of {nb} detected box(es) still sharp "
-              f"in {fmt(time.time() - t0)}")
+        print(
+            f"  gate: {len(hits)} of {nb} detected box(es) still sharp in {fmt(time.time() - t0)}"
+        )
         # Show where the threshold actually sits. A detector nobody has
         # measured is the mistake this project already paid for once: if the
         # blurred boxes cluster at 0.02 and the bar is 0.25, the bar is doing
         # nothing, and if they crowd it the next render will flap.
         if ratios:
             q = sorted(ratios)
+
             def pc(f):
                 return q[min(len(q) - 1, int(f * len(q)))]
-            print(f"  sharpness ratio vs the unblurred frame over {len(q)} box(es): "
-                  f"p50 {pc(0.50):.3f}  p90 {pc(0.90):.3f}  p99 {pc(0.99):.3f}  "
-                  f"max {q[-1]:.3f}   (bar {SHARP_RATIO})")
+
+            print(
+                f"  sharpness ratio vs the unblurred frame over {len(q)} box(es): "
+                f"p50 {pc(0.50):.3f}  p90 {pc(0.90):.3f}  p99 {pc(0.99):.3f}  "
+                f"max {q[-1]:.3f}   (bar {SHARP_RATIO})"
+            )
         for h in hits[:15]:
-            print(f"    {fmt(h['t']):>7}  state {h['state']:<5} {h['kind']:<7} "
-                  f"ratio {h['sharp_ratio']:.2f}  {h['text'][:40]}")
+            print(
+                f"    {fmt(h['t']):>7}  state {h['state']:<5} {h['kind']:<7} "
+                f"ratio {h['sharp_ratio']:.2f}  {h['text'][:40]}"
+            )
         if hits:
             return 1
         print("  CLEAN: every detected secret is blurred on the render")
@@ -960,8 +1151,10 @@ def main():
             print(f"  states: {len(d['states'])} (drift={d.get('drift', 0):.4f})")
         if os.path.exists(P["detect"]):
             d = json.load(open(P["detect"], encoding="utf-8"))
-            print(f"  detections: {sum(len(v) for v in d['per_state'].values())} "
-                  f"boxes on {len(d['per_state'])} states")
+            print(
+                f"  detections: {sum(len(v) for v in d['per_state'].values())} "
+                f"boxes on {len(d['per_state'])} states"
+            )
     return 0
 
 

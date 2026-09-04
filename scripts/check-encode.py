@@ -25,6 +25,7 @@ written to a scratch directory under %TEMP%.
 Invoke as:  python scripts/check-encode.py
             python scripts/check-encode.py --table-only   (no ffmpeg at all)
 """
+
 import os
 import sys
 import shutil
@@ -53,28 +54,40 @@ def check(name, cond, detail=""):
 
 def keys(args):
     """Just the option names, so a test can ask what was sent without caring
-    about the values."""
+    about the values.
+    """
     return [a for a in args if a.startswith("-")]
 
 
 # --------------------------------------------------------------------------
 def test_families():
     print("== families ==")
-    for enc, want in (("h264_nvenc", "nvenc"), ("hevc_nvenc", "nvenc"),
-                      ("h264_amf", "amf"), ("hevc_amf", "amf"),
-                      ("av1_amf", "amf"), ("h264_qsv", "qsv"),
-                      ("h264_vaapi", "vaapi"),
-                      ("h264_videotoolbox", "videotoolbox"),
-                      ("hevc_videotoolbox", "videotoolbox"),
-                      ("libx264", "software"),
-                      ("libx265", "software")):
-        check("%s -> %s" % (enc, want), _encode.family_of(enc) == want,
-              "got %s" % _encode.family_of(enc))
+    for enc, want in (
+        ("h264_nvenc", "nvenc"),
+        ("hevc_nvenc", "nvenc"),
+        ("h264_amf", "amf"),
+        ("hevc_amf", "amf"),
+        ("av1_amf", "amf"),
+        ("h264_qsv", "qsv"),
+        ("h264_vaapi", "vaapi"),
+        ("h264_videotoolbox", "videotoolbox"),
+        ("hevc_videotoolbox", "videotoolbox"),
+        ("libx264", "software"),
+        ("libx265", "software"),
+    ):
+        check(
+            "%s -> %s" % (enc, want),
+            _encode.family_of(enc) == want,
+            "got %s" % _encode.family_of(enc),
+        )
     try:
         _encode.family_of("magicenc")
-        check("an unknown encoder is refused", False,
-              "family_of returned instead of raising -- a silent default here "
-              "would emit NVENC keys to something that is not NVENC")
+        check(
+            "an unknown encoder is refused",
+            False,
+            "family_of returned instead of raising -- a silent default here "
+            "would emit NVENC keys to something that is not NVENC",
+        )
     except ValueError:
         check("an unknown encoder is refused", True)
 
@@ -83,23 +96,35 @@ def test_speed():
     print("== speed translation ==")
     # Every vocabulary this repo has committed, onto one scale. p5 is the one
     # that matters: it is written into projects/*/‌*.json today.
-    for value, want in (("p5", 5), ("p6", 6), ("p1", 1), ("p7", 7),
-                        (5, 5), ("medium", 5), ("slow", 6), ("veryfast", 2),
-                        ("balanced", 5), ("quality", 6), ("high_quality", 7),
-                        (None, _encode.DEFAULT_SPEED)):
-        check("speed_tier(%r) == %d" % (value, want),
-              _encode.speed_tier(value) == want,
-              "got %d" % _encode.speed_tier(value))
-    check("out-of-range p9 clamps rather than crashing",
-          _encode.speed_tier("p9") == 7)
-    check("an unknown name falls back to the default",
-          _encode.speed_tier("turbo") == _encode.DEFAULT_SPEED)
+    for value, want in (
+        ("p5", 5),
+        ("p6", 6),
+        ("p1", 1),
+        ("p7", 7),
+        (5, 5),
+        ("medium", 5),
+        ("slow", 6),
+        ("veryfast", 2),
+        ("balanced", 5),
+        ("quality", 6),
+        ("high_quality", 7),
+        (None, _encode.DEFAULT_SPEED),
+    ):
+        check(
+            "speed_tier(%r) == %d" % (value, want),
+            _encode.speed_tier(value) == want,
+            "got %d" % _encode.speed_tier(value),
+        )
+    check("out-of-range p9 clamps rather than crashing", _encode.speed_tier("p9") == 7)
+    check(
+        "an unknown name falls back to the default",
+        _encode.speed_tier("turbo") == _encode.DEFAULT_SPEED,
+    )
 
 
 def test_no_key_crosses_a_family():
     print("== keys stay inside their family ==")
-    cfg = {"cq": 21, "preset": "p5", "maxrate": "16M", "bufsize": "32M",
-           "tuning": True}
+    cfg = {"cq": 21, "preset": "p5", "maxrate": "16M", "bufsize": "32M", "tuning": True}
 
     nv = _encode.video_args(dict(cfg, encoder="h264_nvenc"))
     amf = _encode.video_args(dict(cfg, encoder="h264_amf"))
@@ -117,29 +142,38 @@ def test_no_key_crosses_a_family():
     # VideoToolbox has no speed key for a tier to translate into, so video_args
     # emits none. SPEED ignores its tier argument for this family, so the one
     # config below stands for every tier.
-    check("VideoToolbox is given no speed key at all",
-          "-preset" not in vt and "-quality" not in vt)
+    check("VideoToolbox is given no speed key at all", "-preset" not in vt and "-quality" not in vt)
 
-    check("-rc vbr is NVENC-only",
-          "-rc" in nv and nv[nv.index("-rc") + 1] == "vbr"
-          and ("-rc" not in x264)
-          and amf[amf.index("-rc") + 1] == "qvbr")
-    check("-cq is NVENC-only", "-cq" in nv and "-cq" not in amf
-          and "-cq" not in x264)
-    check("-crf is software-only", "-crf" in x264 and "-crf" not in nv
-          and "-crf" not in amf)
-    check("-qvbr_quality_level is AMF-only", "-qvbr_quality_level" in amf
-          and "-qvbr_quality_level" not in nv)
-    check("-q:v is VideoToolbox-only", "-q:v" in vt and "-q:v" not in nv
-          and "-q:v" not in amf and "-q:v" not in x264)
+    check(
+        "-rc vbr is NVENC-only",
+        "-rc" in nv
+        and nv[nv.index("-rc") + 1] == "vbr"
+        and ("-rc" not in x264)
+        and amf[amf.index("-rc") + 1] == "qvbr",
+    )
+    check("-cq is NVENC-only", "-cq" in nv and "-cq" not in amf and "-cq" not in x264)
+    check("-crf is software-only", "-crf" in x264 and "-crf" not in nv and "-crf" not in amf)
+    check(
+        "-qvbr_quality_level is AMF-only",
+        "-qvbr_quality_level" in amf and "-qvbr_quality_level" not in nv,
+    )
+    check(
+        "-q:v is VideoToolbox-only",
+        "-q:v" in vt and "-q:v" not in nv and "-q:v" not in amf and "-q:v" not in x264,
+    )
     # README ## Gotchas: without it NVENC ignores -cq entirely. It is also
     # meaningless to the other two, which already have a quality target.
-    check("-b:v 0 is NVENC-only",
-          nv[nv.index("-b:v") + 1] == "0" and "-b:v" not in amf
-          and "-b:v" not in vt and "-b:v" not in x264)
-    check("the quality number survives into every family",
-          "21" in nv and "21" in x264
-          and str(_encode.amf_quality(21)) in amf)
+    check(
+        "-b:v 0 is NVENC-only",
+        nv[nv.index("-b:v") + 1] == "0"
+        and "-b:v" not in amf
+        and "-b:v" not in vt
+        and "-b:v" not in x264,
+    )
+    check(
+        "the quality number survives into every family",
+        "21" in nv and "21" in x264 and str(_encode.amf_quality(21)) in amf,
+    )
 
     # The direction is the whole point, and it is what was broken. A smaller
     # number must mean a better picture on EVERY family, which on AMF means
@@ -148,8 +182,8 @@ def test_no_key_crosses_a_family():
     INVERTED = {"amf": "-qvbr_quality_level", "videotoolbox": "-q:v"}
 
     for enc in ("h264_nvenc", "h264_amf", "h264_videotoolbox", "libx264"):
-        hi = _encode.video_args({"encoder": enc, "cq": 16})   # want better
-        lo = _encode.video_args({"encoder": enc, "cq": 30})   # want worse
+        hi = _encode.video_args({"encoder": enc, "cq": 16})  # want better
+        lo = _encode.video_args({"encoder": enc, "cq": 30})  # want worse
         fam = _encode.family_of(enc)
         inverted = (key := INVERTED.get(fam)) is not None
 
@@ -158,30 +192,38 @@ def test_no_key_crosses_a_family():
 
         a = int(hi[hi.index(key) + 1])
         b = int(lo[lo.index(key) + 1])
-        check("%s: cq 16 asks for better pictures than cq 30" % enc,
-              a > b if inverted else a < b,
-              "cq16 emitted %d, cq30 emitted %d" % (a, b))
+        check(
+            "%s: cq 16 asks for better pictures than cq 30" % enc,
+            a > b if inverted else a < b,
+            "cq16 emitted %d, cq30 emitted %d" % (a, b),
+        )
 
-    check("the loop above covers every family in _encode.RATE",
-          set(_encode.RATE) - {"qsv", "vaapi"} ==
-          {"nvenc", "amf", "videotoolbox", "software"})
-    check("AMF inverts rather than passing through",
-          _encode.amf_quality(16) == 35 and _encode.amf_quality(21) == 30)
-    check("AMF quality level stays inside 0..51",
-          _encode.amf_quality(-5) <= 51 and _encode.amf_quality(99) >= 0)
-    check("VideoToolbox inverts rather than passing through",
-          _encode.videotoolbox_quality(21) == 62
-          and _encode.videotoolbox_quality(16) == 69)
-    check("VideoToolbox -q:v stays inside 1..100",
-          1 <= _encode.videotoolbox_quality(-5) <= 100
-          and 1 <= _encode.videotoolbox_quality(99) <= 100)
+    check(
+        "the loop above covers every family in _encode.RATE",
+        set(_encode.RATE) - {"qsv", "vaapi"} == {"nvenc", "amf", "videotoolbox", "software"},
+    )
+    check(
+        "AMF inverts rather than passing through",
+        _encode.amf_quality(16) == 35 and _encode.amf_quality(21) == 30,
+    )
+    check(
+        "AMF quality level stays inside 0..51",
+        _encode.amf_quality(-5) <= 51 and _encode.amf_quality(99) >= 0,
+    )
+    check(
+        "VideoToolbox inverts rather than passing through",
+        _encode.videotoolbox_quality(21) == 62 and _encode.videotoolbox_quality(16) == 69,
+    )
+    check(
+        "VideoToolbox -q:v stays inside 1..100",
+        1 <= _encode.videotoolbox_quality(-5) <= 100
+        and 1 <= _encode.videotoolbox_quality(99) <= 100,
+    )
     check("NVENC tuning is emitted", "-spatial-aq" in nv and "-tune" in nv)
     # Measured, not assumed: -vbaq/-preanalysis cost 26% and did nothing on
     # VCN 1.0, and this GPU has no H.264 B-frames at all.
-    check("AMF tuning is deliberately empty",
-          "-vbaq" not in amf and "-bf" not in amf)
-    check("every family ends on a pixel format",
-          nv[-2] == amf[-2] == x264[-2] == "-pix_fmt")
+    check("AMF tuning is deliberately empty", "-vbaq" not in amf and "-bf" not in amf)
+    check("every family ends on a pixel format", nv[-2] == amf[-2] == x264[-2] == "-pix_fmt")
 
     bare = _encode.video_args({"encoder": "libx264", "cq": 21})
     check("an absent maxrate emits no -maxrate", "-maxrate" not in bare)
@@ -194,17 +236,20 @@ def test_no_key_crosses_a_family():
     h264 = _encode.video_args(dict(pl, encoder="h264_amf"))
     hevc = _encode.video_args(dict(pl, encoder="hevc_amf"))
     x265 = _encode.video_args(dict(pl, encoder="libx265"))
-    check("H.264 keeps profile high and level 4.2",
-          "high" in h264 and "4.2" in h264)
+    check("H.264 keeps profile high and level 4.2", "high" in h264 and "4.2" in h264)
     check("HEVC never sees the H.264 profile 'high'", "high" not in hevc)
     check("HEVC gets a profile it has", "main" in hevc)
-    check("HEVC drops the level rather than guessing its units",
-          "-level" not in hevc and "-level" not in x265)
-    check("codec_of reads the encoder name",
-          _encode.codec_of("h264_amf") == "h264"
-          and _encode.codec_of("libx265") == "hevc"
-          and _encode.codec_of("hevc_nvenc") == "hevc"
-          and _encode.codec_of("av1_amf") == "av1")
+    check(
+        "HEVC drops the level rather than guessing its units",
+        "-level" not in hevc and "-level" not in x265,
+    )
+    check(
+        "codec_of reads the encoder name",
+        _encode.codec_of("h264_amf") == "h264"
+        and _encode.codec_of("libx265") == "hevc"
+        and _encode.codec_of("hevc_nvenc") == "hevc"
+        and _encode.codec_of("av1_amf") == "av1",
+    )
 
 
 def test_audio_and_describe():
@@ -212,11 +257,12 @@ def test_audio_and_describe():
     a = _encode.audio_args({"audio_bitrate": "256k"}, rate=48000)
     check("audio bitrate is carried", "256k" in a)
     check("a sample rate is emitted when asked", "-ar" in a and "48000" in a)
-    check("no sample rate when not asked",
-          "-ar" not in _encode.audio_args({}))
+    check("no sample rate when not asked", "-ar" not in _encode.audio_args({}))
     d = _encode.describe({"encoder": "h264_amf", "cq": 18, "preset": "p5"})
-    check("describe names the encoder and its family",
-          "h264_amf" in d and "amf" in d and "p5" in d and "18" in d)
+    check(
+        "describe names the encoder and its family",
+        "h264_amf" in d and "amf" in d and "p5" in d and "18" in d,
+    )
 
 
 def test_live(tmp):
@@ -224,34 +270,66 @@ def test_live(tmp):
     print("== live: the args a render would really send ==")
     good = _encode.available(_encode.CANDIDATES + ("hevc_amf", "hevc_nvenc"))
     if not good:
-        check("at least one encoder runs here", False,
-              "nothing can encode -- run scripts/check-env.py")
+        check(
+            "at least one encoder runs here",
+            False,
+            "nothing can encode -- run scripts/check-env.py",
+        )
         return
     for enc in good:
         # The three shapes the repo actually renders: a clip, a conform, and
         # the caption pass with its tuning block.
         for label, cfg in (
-                ("clip", {"cq": 21, "preset": "p5", "maxrate": "16M",
-                          "bufsize": "32M"}),
-                ("conform", {"cq": 16, "preset": "p5", "maxrate": "40M",
-                             "bufsize": "80M"}),
-                ("captions", {"cq": 20, "preset": "p6", "maxrate": "20M",
-                              "bufsize": "40M", "tuning": True,
-                              "aq_strength": 12, "gop": 120,
-                              "profile": "high", "level": "4.2"})):
+            ("clip", {"cq": 21, "preset": "p5", "maxrate": "16M", "bufsize": "32M"}),
+            ("conform", {"cq": 16, "preset": "p5", "maxrate": "40M", "bufsize": "80M"}),
+            (
+                "captions",
+                {
+                    "cq": 20,
+                    "preset": "p6",
+                    "maxrate": "20M",
+                    "bufsize": "40M",
+                    "tuning": True,
+                    "aq_strength": 12,
+                    "gop": 120,
+                    "profile": "high",
+                    "level": "4.2",
+                },
+            ),
+        ):
             cfg = dict(cfg, encoder=enc)
             out = os.path.join(tmp, "%s-%s.mp4" % (enc, label))
-            cmd = (["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                    "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=30:d=2",
-                    "-f", "lavfi", "-i", "sine=frequency=440:duration=2"]
-                   + _encode.video_args(cfg) + _encode.audio_args(cfg)
-                   + ["-movflags", "+faststart", out])
+            cmd = (
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "testsrc2=size=640x360:rate=30:d=2",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "sine=frequency=440:duration=2",
+                ]
+                + _encode.video_args(cfg)
+                + _encode.audio_args(cfg)
+                + ["-movflags", "+faststart", out]
+            )
             p = subprocess.run(cmd, env=ENV, capture_output=True, text=True)
             wrote = os.path.exists(out) and os.path.getsize(out) > 1024
-            check("%s / %s renders" % (enc, label),
-                  p.returncode == 0 and wrote,
-                  (p.stderr or "").strip().splitlines()[-1:] and
-                  (p.stderr or "").strip().splitlines()[-1] or "no output file")
+            check(
+                "%s / %s renders" % (enc, label),
+                p.returncode == 0 and wrote,
+                (
+                    (p.stderr or "").strip().splitlines()[-1:]
+                    and (p.stderr or "").strip().splitlines()[-1]
+                )
+                or "no output file",
+            )
     for enc in _encode.CANDIDATES:
         if enc not in good:
             print("  skip %s -- not usable on this machine" % enc)
@@ -268,19 +346,22 @@ def test_decode():
     """
     print("== decode: the input axis ==")
     got = _encode.decode_args()
-    check("decode_args is empty or exactly the cuda pair",
-          got == [] or got == ["-hwaccel", "cuda"], repr(got))
-    check("decode_args agrees with the probe",
-          bool(got) == _encode.nvdec_usable(), repr(got))
-    check("no cuda flags without a working NVDEC",
-          _encode.nvdec_usable() or got == [], repr(got))
+    check(
+        "decode_args is empty or exactly the cuda pair",
+        got == [] or got == ["-hwaccel", "cuda"],
+        repr(got),
+    )
+    check("decode_args agrees with the probe", bool(got) == _encode.nvdec_usable(), repr(got))
+    check("no cuda flags without a working NVDEC", _encode.nvdec_usable() or got == [], repr(got))
     # The two capabilities ship on different silicon, so this must be its own
     # probe and not read off the encoder -- but where NVENC is absent because
     # there is no driver at all, NVDEC cannot be there either.
     if not _encode.available(("h264_nvenc",)):
-        check("no NVENC here, so no NVDEC either",
-              not _encode.nvdec_usable(),
-              "decode probed usable while the encoder is not")
+        check(
+            "no NVENC here, so no NVDEC either",
+            not _encode.nvdec_usable(),
+            "decode probed usable while the encoder is not",
+        )
     print("   decode: %s" % (" ".join(got) if got else "software (no NVDEC)"))
 
 
@@ -291,20 +372,27 @@ def test_resolve():
         return
     # An encoder that cannot run is substituted, because the manifest naming it
     # was committed on somebody else's machine.
-    got = _encode.resolve({"encoder": "definitely_not_an_encoder_nvenc"},
-                          strict_encoder=False)
-    check("an unusable encoder is substituted, not obeyed",
-          got["encoder"] in good, "got %s" % got["encoder"])
-    check("a usable encoder is left alone",
-          _encode.resolve({"encoder": good[0]})["encoder"] == good[0])
-    check("resolve keeps the rest of the config",
-          _encode.resolve({"encoder": good[0], "cq": 17})["cq"] == 17)
+    got = _encode.resolve({"encoder": "definitely_not_an_encoder_nvenc"}, strict_encoder=False)
+    check(
+        "an unusable encoder is substituted, not obeyed",
+        got["encoder"] in good,
+        "got %s" % got["encoder"],
+    )
+    check(
+        "a usable encoder is left alone",
+        _encode.resolve({"encoder": good[0]})["encoder"] == good[0],
+    )
+    check(
+        "resolve keeps the rest of the config",
+        _encode.resolve({"encoder": good[0], "cq": 17})["cq"] == 17,
+    )
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--table-only", action="store_true",
-                    help="skip the ffmpeg runs -- the mapping only")
+    ap.add_argument(
+        "--table-only", action="store_true", help="skip the ffmpeg runs -- the mapping only"
+    )
     args = ap.parse_args()
 
     test_families()

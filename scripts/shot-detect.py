@@ -33,7 +33,12 @@ frame out, and the round-trip test scores joins to the frame.
 
 Invoke as:  python scripts/shot-detect.py --src projects/<id>/temp/program.mp4
 """
-import sys, os, json, argparse, subprocess
+
+import sys
+import os
+import json
+import argparse
+import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -46,7 +51,7 @@ import cv2  # noqa: E402
 
 import _project  # noqa: E402
 
-_thumbs = import_module("chapter-thumbs")   # hyphen: not importable by name
+_thumbs = import_module("chapter-thumbs")  # hyphen: not importable by name
 
 ROOT = _env.ROOT
 ENV = _env.ENV
@@ -71,7 +76,8 @@ SEPARATION_FAILED = (
     "card is up.\n"
     "     Look at --sheets and believe your eyes over the numbers. Telling "
     "these angles apart needs person identity, not appearance -- which this "
-    "script does not do.")
+    "script does not do."
+)
 
 PERSON_SEPARATION_FAILED = (
     "face identity does not separate these angles either: some shot's face "
@@ -79,7 +85,8 @@ PERSON_SEPARATION_FAILED = (
     "means two genuinely similar faces, heavy occlusion, or a film whose "
     "'angles' are not people at all. Look at --sheets; if the clusters look "
     "right to your eyes, --force writes them and the numbers are recorded "
-    "for the record.")
+    "for the record."
+)
 
 NOT_MULTICAM = (
     "there is only one identity in this film, so nothing was measured against "
@@ -89,52 +96,52 @@ NOT_MULTICAM = (
     "every 'angle' is a brightness family of slide. Measured on a 51-minute "
     "Zoom webinar: 26 'cuts', 2 'angles', and not one camera cut in the film. "
     "Look at --sheets before overriding; a tape per phantom angle is hours of "
-    "encoding.")
+    "encoding."
+)
 
 DEFAULT_FACE = {
     "detector": "models/face/face_detection_yunet_2023mar.onnx",
     "recognizer": "models/face/face_recognition_sface_2021dec.onnx",
-    "samples": 5,          # frames sampled per shot; majority decides the count
-    "width": 640,          # decode width for detection
-    "score": 0.7,          # YuNet confidence floor
-    "alike_face": 0.5,     # same person within this cosine distance. Measured:
-                           # same-person max 0.24, different-person min 0.72,
-                           # SFace's published match threshold ~0.64. 0.5 sits
-                           # in the gap with margin on both sides.
+    "samples": 5,  # frames sampled per shot; majority decides the count
+    "width": 640,  # decode width for detection
+    "score": 0.7,  # YuNet confidence floor
+    "alike_face": 0.5,  # same person within this cosine distance. Measured:
+    # same-person max 0.24, different-person min 0.72,
+    # SFace's published match threshold ~0.64. 0.5 sits
+    # in the gap with margin on both sides.
     "layout_split": 0.06,  # same people, but framed differently: mean abs
-                           # difference of the sorted (centre, width) face
-                           # layout that splits one pairing into two cameras.
-                           # Only honoured where the split is decisive.
+    # difference of the sorted (centre, width) face
+    # layout that splits one pairing into two cameras.
+    # Only honoured where the split is decisive.
     "min_id_face": 0.085,  # a face narrower than this fraction of the frame is
-                           # too small to IDENTIFY and stays anonymous: on the
-                           # wide of a four-person studio, per-face identities
-                           # were noise and split one wide camera six ways.
-    "face_second": 0.64,   # SFace's published same-person bar. A single-shot
-                           # "person" inside it of a real person's centroid is
-                           # that person mid-gesture -- an outstretched arm and
-                           # a thrown-back head each cost a phantom camera --
-                           # not a new face at the table.
-    "cast_share": 0.03,    # a person on screen this much of the film is IN the
-                           # show. A camera in a shoot films the people in that
-                           # shoot, so an angle showing nobody from the cast is
-                           # an insert however often it recurs -- which is how
-                           # Queen and Joy Division stopped being cameras.
+    # too small to IDENTIFY and stays anonymous: on the
+    # wide of a four-person studio, per-face identities
+    # were noise and split one wide camera six ways.
+    "face_second": 0.64,  # SFace's published same-person bar. A single-shot
+    # "person" inside it of a real person's centroid is
+    # that person mid-gesture -- an outstretched arm and
+    # a thrown-back head each cost a phantom camera --
+    # not a new face at the table.
+    "cast_share": 0.03,  # a person on screen this much of the film is IN the
+    # show. A camera in a shoot films the people in that
+    # shoot, so an angle showing nobody from the cast is
+    # an insert however often it recurs -- which is how
+    # Queen and Joy Division stopped being cameras.
 }
 
 DEFAULT_DETECT = {
-    "threshold": 0.055,   # mean abs frame difference, 0..1 grey
-    "ratio": 4.0,         # ... and this many times the local median
-    "window": 4,          # ... and the largest within +/- this many frames
-    "median_win": 60,     # frames either side for the local median
-    "alike": 0.055,       # two shots this close are the same angle
-    "split": 0.070,       # ... and one shot whose halves differ by this is two
-    "min_shot": 8,        # frames; shorter than this is a flash, not a shot
+    "threshold": 0.055,  # mean abs frame difference, 0..1 grey
+    "ratio": 4.0,  # ... and this many times the local median
+    "window": 4,  # ... and the largest within +/- this many frames
+    "median_win": 60,  # frames either side for the local median
+    "alike": 0.055,  # two shots this close are the same angle
+    "split": 0.070,  # ... and one shot whose halves differ by this is two
+    "min_shot": 8,  # frames; shorter than this is a flash, not a shot
 }
 
 
 def run(cmd, **kw):
-    return subprocess.run(cmd, check=True, capture_output=True, text=True,
-                          env=ENV, **kw)
+    return subprocess.run(cmd, check=True, capture_output=True, text=True, env=ENV, **kw)
 
 
 def hhmmss(t):
@@ -148,13 +155,29 @@ def probe(src):
     something that is not the grid it was shot on, and every frame index here
     is meant to land on that grid.
     """
-    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-               "-show_entries", "stream=width,height,r_frame_rate",
-               "-of", "json", src]).stdout
+    out = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,r_frame_rate",
+            "-of",
+            "json",
+            src,
+        ]
+    ).stdout
     s = json.loads(out)["streams"][0]
     num, den = (int(x) for x in s["r_frame_rate"].split("/"))
-    return {"width": int(s["width"]), "height": int(s["height"]),
-            "fps_num": num, "fps_den": den, "fps": num / float(den)}
+    return {
+        "width": int(s["width"]),
+        "height": int(s["height"]),
+        "fps_num": num,
+        "fps_den": den,
+        "fps": num / float(den),
+    }
 
 
 def scan(src, w, h, hwaccel=True):
@@ -167,9 +190,20 @@ def scan(src, w, h, hwaccel=True):
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin"]
     if hwaccel:
         cmd += _encode.decode_args()
-    cmd += ["-i", src, "-vf", "scale=%d:%d" % (AW, ah),
-            "-fps_mode", "passthrough", "-an",
-            "-f", "rawvideo", "-pix_fmt", "gray", "-"]
+    cmd += [
+        "-i",
+        src,
+        "-vf",
+        "scale=%d:%d" % (AW, ah),
+        "-fps_mode",
+        "passthrough",
+        "-an",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "gray",
+        "-",
+    ]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, env=ENV)
     nbytes = AW * ah
     diff, sigs, prev = [], [], None
@@ -183,7 +217,7 @@ def scan(src, w, h, hwaccel=True):
         prev = f
     p.stdout.close()
     if p.wait() != 0 and hwaccel:
-        return scan(src, w, h, hwaccel=False)     # no CUDA decoder for this codec
+        return scan(src, w, h, hwaccel=False)  # no CUDA decoder for this codec
     return np.array(diff, dtype=np.float32), np.array(sigs, dtype=np.float32)
 
 
@@ -245,8 +279,9 @@ def resplit(sigs, diff, a, b, d):
     """
     if b - a < 2 * d["min_shot"]:
         return [(a, b)]
-    cand = [i for i in peaks(diff[a:b], d["window"])
-            if d["min_shot"] <= i <= (b - a) - d["min_shot"]]
+    cand = [
+        i for i in peaks(diff[a:b], d["window"]) if d["min_shot"] <= i <= (b - a) - d["min_shot"]
+    ]
     best, best_at = 0.0, None
     for i in sorted(cand, key=lambda i: -diff[a + i])[:16]:
         s = distance(med_sig(sigs, a, a + i), med_sig(sigs, a + i, b))
@@ -260,7 +295,8 @@ def resplit(sigs, diff, a, b, d):
 def cluster(shot_sigs, alike):
     """Group shots into angles. Complete linkage: merge only when EVERY pair
     across the two groups is alike, so a borderline shot cannot chain two
-    distinct angles into one."""
+    distinct angles into one.
+    """
     groups = [[i] for i in range(len(shot_sigs))]
     dist = {}
     for i in range(len(shot_sigs)):
@@ -319,9 +355,20 @@ def collect_frames(src, targets, w, h_src, w_src, hwaccel=True):
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin"]
     if hwaccel:
         cmd += _encode.decode_args()
-    cmd += ["-i", src, "-vf", "scale=%d:%d" % (w, ah),
-            "-fps_mode", "passthrough", "-an",
-            "-f", "rawvideo", "-pix_fmt", "bgr24", "-"]
+    cmd += [
+        "-i",
+        src,
+        "-vf",
+        "scale=%d:%d" % (w, ah),
+        "-fps_mode",
+        "passthrough",
+        "-an",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "bgr24",
+        "-",
+    ]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, env=ENV)
     nbytes = w * ah * 3
     want = set(int(t) for t in targets)
@@ -388,10 +435,11 @@ def person_angles(src, spans, sigs, info, d, fc):
     det_path, rec_path = rel_model(fc["detector"]), rel_model(fc["recognizer"])
     for pth in (det_path, rec_path):
         if not os.path.exists(pth):
-            sys.exit("no face model at %s -- see the video-multicam-switch "
-                     "skill for the two curl commands" % _project.norm(pth))
-    det = cv2.FaceDetectorYN_create(det_path, "", (fc["width"], fc["width"]),
-                                    fc["score"])
+            sys.exit(
+                "no face model at %s -- see the video-multicam-switch "
+                "skill for the two curl commands" % _project.norm(pth)
+            )
+    det = cv2.FaceDetectorYN_create(det_path, "", (fc["width"], fc["width"]), fc["score"])
     rec = cv2.FaceRecognizerSF_create(rec_path, "")
 
     k = int(fc["samples"])
@@ -405,9 +453,11 @@ def person_angles(src, spans, sigs, info, d, fc):
     # re-decoding an hour of AV1 to re-ask the same questions cost ten minutes
     # per grouping-logic iteration before this existed.
     import hashlib
+
     ck = "%s|%d|%d|%.3f" % (os.path.abspath(src), k, fc["width"], fc["score"])
-    cpath = os.path.join(ROOT, "temp", "shot-detect-faces-%s.npz"
-                         % hashlib.md5(ck.encode("utf-8")).hexdigest()[:12])
+    cpath = os.path.join(
+        ROOT, "temp", "shot-detect-faces-%s.npz" % hashlib.md5(ck.encode("utf-8")).hexdigest()[:12]
+    )
     cache = {}
     if os.path.exists(cpath) and os.path.getmtime(cpath) > os.path.getmtime(src):
         try:
@@ -417,8 +467,7 @@ def person_angles(src, spans, sigs, info, d, fc):
         except Exception:
             cache = {}
     missing = {t: s for t, s in frame_shots.items() if t not in cache}
-    for idx, img in collect_frames(src, missing, fc["width"],
-                                   info["height"], info["width"]):
+    for idx, img in collect_frames(src, missing, fc["width"], info["height"], info["width"]):
         det.setInputSize((img.shape[1], img.shape[0]))
         _, faces = det.detect(img)
         found = []
@@ -426,13 +475,13 @@ def person_angles(src, spans, sigs, info, d, fc):
             for f in faces:
                 e = rec.feature(rec.alignCrop(img, f)).ravel()
                 nz = float(np.linalg.norm(e)) or 1.0
-                found.append((float(f[0] + f[2] / 2) / img.shape[1],
-                              float(f[2]) / img.shape[1], e / nz))
+                found.append(
+                    (float(f[0] + f[2] / 2) / img.shape[1], float(f[2]) / img.shape[1], e / nz)
+                )
         cache[idx] = found
     if missing:
         os.makedirs(os.path.dirname(cpath), exist_ok=True)
-        np.savez_compressed(cpath, key=ck,
-                            faces=np.array(cache, dtype=object))
+        np.savez_compressed(cpath, key=ck, faces=np.array(cache, dtype=object))
     for idx, shots_here in frame_shots.items():
         found = cache.get(idx, [])
         for i in shots_here:
@@ -514,7 +563,7 @@ def person_angles(src, spans, sigs, info, d, fc):
             ids = []
             for cx, w, e in byx:
                 if w < fc["min_id_face"]:
-                    ids.append(-2)      # too small to identify: anonymous
+                    ids.append(-2)  # too small to identify: anonymous
                     continue
                 ds = [1.0 - float(e @ c) for c in cents]
                 j = int(np.argmin(ds)) if ds else -1
@@ -524,8 +573,9 @@ def person_angles(src, spans, sigs, info, d, fc):
         if not sets:
             return None, None
         best = max(set(sets), key=sets.count)
-        lay = np.median(np.array([l for s, l in zip(sets, lays)
-                                  if s == best and len(l) == 2 * fam]), axis=0)
+        lay = np.median(
+            np.array([l for s, l in zip(sets, lays) if s == best and len(l) == 2 * fam]), axis=0
+        )
         return best, lay
 
     multis = {}
@@ -539,15 +589,13 @@ def person_angles(src, spans, sigs, info, d, fc):
         lays = [l for _, l in members]
         subgroups = [[m for m, _ in members]]
         if len(members) >= 2:
-            D = np.array([[float(np.abs(a - b).mean()) for b in lays]
-                          for a in lays])
+            D = np.array([[float(np.abs(a - b).mean()) for b in lays] for a in lays])
             groups = _agg_threshold(D, fc["layout_split"])
             if len(groups) > 1:
-                w_ = max((D[np.ix_(g, g)].max() for g in groups if len(g) > 1),
-                         default=0.0)
-                b_ = min(D[np.ix_(g, h)].min()
-                         for x, g in enumerate(groups)
-                         for h in groups[x + 1:])
+                w_ = max((D[np.ix_(g, g)].max() for g in groups if len(g) > 1), default=0.0)
+                b_ = min(
+                    D[np.ix_(g, h)].min() for x, g in enumerate(groups) for h in groups[x + 1 :]
+                )
                 if b_ > 2.0 * max(w_, 1e-6):
                     subgroups = [[members[m][0] for m in g] for g in groups]
         for g in subgroups:
@@ -565,8 +613,7 @@ def person_angles(src, spans, sigs, info, d, fc):
     for i in range(len(spans)):
         if names[i] is None:
             done = [j for j in range(len(spans)) if names[j] is not None]
-            j = min(done, key=lambda j: distance(sigs_of(sigs, spans, i),
-                                                sigs_of(sigs, spans, j)))
+            j = min(done, key=lambda j: distance(sigs_of(sigs, spans, i), sigs_of(sigs, spans, j)))
             names[i] = names[j]
 
     # The b-roll bin: an angle showing nobody from the CAST. A camera in a
@@ -585,8 +632,7 @@ def person_angles(src, spans, sigs, info, d, fc):
         pi = cam_person[gi]
         seen[pi] = seen.get(pi, 0) + sum(spans[i][1] - spans[i][0] for i in g)
     cast = {pi for pi, fr in seen.items() if fr >= fc["cast_share"] * n_total}
-    person_of = {("p", min(g)): cam_person[gi]
-                 for gi, g in enumerate(cams) if g}
+    person_of = {("p", min(g)): cam_person[gi] for gi, g in enumerate(cams) if g}
     for i in range(len(spans)):
         key = names[i]
         if key == ("xtra",):
@@ -601,8 +647,7 @@ def person_angles(src, spans, sigs, info, d, fc):
     if binned:
         name_for(("xtra",), sorted(binned))
 
-    ranked = sorted((k_ for k_ in order if any(n == k_ for n in names)),
-                    key=lambda k_: order[k_])
+    ranked = sorted((k_ for k_ in order if any(n == k_ for n in names)), key=lambda k_: order[k_])
     final = {k_: "cam%d" % (n + 1) for n, k_ in enumerate(ranked)}
     out = [final[k_] for k_ in names]
 
@@ -679,7 +724,8 @@ def group_by_identity(face_sig, alike):
     closest two DIFFERENT people sat at 0.467, and under complete linkage an
     outstretched arm and a thrown-back head each earned a phantom camera.
     Averaging absorbs the stretch; two people merging would need their whole
-    clusters to be near, which the 3.0x centroid margin rules out."""
+    clusters to be near, which the 3.0x centroid margin rules out.
+    """
     keys = sorted(face_sig)
     if not keys:
         return []
@@ -712,9 +758,25 @@ def rel_model(p):
 def frame_png(src, idx, fps_num, fps_den, path, width=320):
     """One frame by index, addressed at the midpoint of its display slot."""
     t = (idx + 0.5) * fps_den / float(fps_num)
-    run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
-         "-ss", "%.4f" % t, "-i", src, "-frames:v", "1",
-         "-vf", "scale=%d:-2" % width, "-y", path])
+    run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-ss",
+            "%.4f" % t,
+            "-i",
+            src,
+            "-frames:v",
+            "1",
+            "-vf",
+            "scale=%d:-2" % width,
+            "-y",
+            path,
+        ]
+    )
     return path
 
 
@@ -726,7 +788,7 @@ def build_shots(diff, sigs, d):
         if b - a >= d["min_shot"]:
             spans.extend(resplit(sigs, diff, a, b, d))
         elif spans:
-            spans[-1] = (spans[-1][0], b)          # a flash belongs to its host
+            spans[-1] = (spans[-1][0], b)  # a flash belongs to its host
         else:
             spans.append((a, b))
     shot_sigs = [med_sig(sigs, a, b) for a, b in spans]
@@ -739,20 +801,29 @@ def main():
     ap.add_argument("--src", required=True, help="the finished video to read")
     ap.add_argument("--id", help="project id; default: the folder under projects/")
     ap.add_argument("--out", help="default projects/<id>/<id>.shots.json")
-    ap.add_argument("--list", action="store_true",
-                    help="print the sweep and the shot table, write nothing")
-    ap.add_argument("--sheets", action="store_true",
-                    help="write one contact sheet per angle into temp/")
+    ap.add_argument(
+        "--list", action="store_true", help="print the sweep and the shot table, write nothing"
+    )
+    ap.add_argument(
+        "--sheets", action="store_true", help="write one contact sheet per angle into temp/"
+    )
     ap.add_argument("--json", action="store_true", help="print the document")
-    ap.add_argument("--force", action="store_true",
-                    help="write the shot list even if the angles do not separate")
-    ap.add_argument("--angle-by", choices=("frame", "person", "auto"),
-                    default="auto",
-                    help="how angles are identified: frame fingerprints, face "
-                         "identity, or frame-first-then-person (default)")
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="write the shot list even if the angles do not separate",
+    )
+    ap.add_argument(
+        "--angle-by",
+        choices=("frame", "person", "auto"),
+        default="auto",
+        help="how angles are identified: frame fingerprints, face "
+        "identity, or frame-first-then-person (default)",
+    )
     for k, v in DEFAULT_DETECT.items():
-        ap.add_argument("--" + k.replace("_", "-"), type=type(v), default=None,
-                        help="default %s" % v)
+        ap.add_argument(
+            "--" + k.replace("_", "-"), type=type(v), default=None, help="default %s" % v
+        )
     args = ap.parse_args()
 
     d = dict(DEFAULT_DETECT)
@@ -765,8 +836,9 @@ def main():
     if not os.path.exists(src):
         sys.exit("no such file: %s" % args.src)
     pdir = _project.find_project_dir(src)
-    pid = args.id or (os.path.basename(pdir) if pdir else
-                      os.path.splitext(os.path.basename(src))[0])
+    pid = args.id or (
+        os.path.basename(pdir) if pdir else os.path.splitext(os.path.basename(src))[0]
+    )
 
     info = probe(src)
     diff, sigs = scan(src, info["width"], info["height"])
@@ -783,16 +855,17 @@ def main():
     majority = None
     if args.angle_by == "person" or (args.angle_by == "auto" and frame_failed):
         if args.angle_by == "auto":
-            print("frame fingerprints do not separate these angles (within "
-                  "%.4f >= between %.4f) -- switching to face identity"
-                  % (within, between))
-        names, majority, within, between = person_angles(
-            src, spans, sigs, info, d, DEFAULT_FACE)
+            print(
+                "frame fingerprints do not separate these angles (within "
+                "%.4f >= between %.4f) -- switching to face identity" % (within, between)
+            )
+        names, majority, within, between = person_angles(src, spans, sigs, info, d, DEFAULT_FACE)
         angle_by = "person"
-        print("angles by face identity: %d angles; identity separation "
-              "within %.3f, between %s"
-              % (len(set(names)), within,
-                 "n/a" if between is None else "%.3f" % between))
+        print(
+            "angles by face identity: %d angles; identity separation "
+            "within %.3f, between %s"
+            % (len(set(names)), within, "n/a" if between is None else "%.3f" % between)
+        )
     failed = between is not None and within >= between
 
     # A film with ONE camera has no between-angle distance at all, and `None`
@@ -806,67 +879,89 @@ def main():
     single = between is None and len(set(names)) > 1
 
     if args.list:
-        print("%s  %d frames  %.4f fps (%d/%d)  %s"
-              % (args.src, n, fps, info["fps_num"], info["fps_den"],
-                 hhmmss(n / fps)))
-        print("\nthreshold sweep (ratio %.1f, window %d) -- pick a plateau:"
-              % (d["ratio"], d["window"]))
+        print(
+            "%s  %d frames  %.4f fps (%d/%d)  %s"
+            % (args.src, n, fps, info["fps_num"], info["fps_den"], hhmmss(n / fps))
+        )
+        print(
+            "\nthreshold sweep (ratio %.1f, window %d) -- pick a plateau:"
+            % (d["ratio"], d["window"])
+        )
         print("  thresh   cuts  shots  angles")
         for t in (0.030, 0.040, 0.050, 0.055, 0.060, 0.070, 0.090, 0.120):
             dd = dict(d, threshold=t)
             sp, ss, nm = build_shots(diff, sigs, dd)
-            print("  %6.3f  %5d  %5d  %6d%s"
-                  % (t, len(find_cuts(diff, dd)), len(sp), len(set(nm)),
-                     "   <- current" if abs(t - d["threshold"]) < 1e-9 else ""))
-        print("\nangle separation (%s): worst within %.4f, closest between %s"
-              % (angle_by, within,
-                 "n/a" if between is None else "%.4f" % between))
+            print(
+                "  %6.3f  %5d  %5d  %6d%s"
+                % (
+                    t,
+                    len(find_cuts(diff, dd)),
+                    len(sp),
+                    len(set(nm)),
+                    "   <- current" if abs(t - d["threshold"]) < 1e-9 else "",
+                )
+            )
+        print(
+            "\nangle separation (%s): worst within %.4f, closest between %s"
+            % (angle_by, within, "n/a" if between is None else "%.4f" % between)
+        )
         if failed:
             print("  !! " + SEPARATION_FAILED)
 
     print("\n  #  cam    start      end     len  frames        peak")
     for i, ((a, b), nm) in enumerate(zip(spans, names)):
-        print("  %2d  %-5s %8s %8s %7.2f  %5d-%-5d  %8.4f"
-              % (i, nm, hhmmss(a / fps), hhmmss(b / fps), (b - a) / fps,
-                 a, b, diff[a] if a else 0.0))
+        print(
+            "  %2d  %-5s %8s %8s %7.2f  %5d-%-5d  %8.4f"
+            % (i, nm, hhmmss(a / fps), hhmmss(b / fps), (b - a) / fps, a, b, diff[a] if a else 0.0)
+        )
     by = {}
     for (a, b), nm in zip(spans, names):
         e = by.setdefault(nm, [0, 0])
         e[0] += 1
         e[1] += b - a
-    print("")
+    print()
     for nm in sorted(by):
-        print("  %-5s %2d shots  %6d frames  %7.2fs  %4.1f%%"
-              % (nm, by[nm][0], by[nm][1], by[nm][1] / fps,
-                 100.0 * by[nm][1] / n))
+        print(
+            "  %-5s %2d shots  %6d frames  %7.2fs  %4.1f%%"
+            % (nm, by[nm][0], by[nm][1], by[nm][1] / fps, 100.0 * by[nm][1] / n)
+        )
 
     doc = {
         "_comment": "Shots and angles read back off a finished video by "
-                    "scripts/shot-detect.py. Frame indices on the source's "
-                    "own grid; end is exclusive. seconds = frame*fps_den/fps_num.",
+        "scripts/shot-detect.py. Frame indices on the source's "
+        "own grid; end is exclusive. seconds = frame*fps_den/fps_num.",
         "source": _project.norm(src),
-        "width": info["width"], "height": info["height"],
-        "fps_num": info["fps_num"], "fps_den": info["fps_den"], "fps": fps,
+        "width": info["width"],
+        "height": info["height"],
+        "fps_num": info["fps_num"],
+        "fps_den": info["fps_den"],
+        "fps": fps,
         "n_frames": n,
         "detect": d,
         "angle_by": angle_by,
         "face": DEFAULT_FACE if angle_by == "person" else None,
-        "separation": {"method": angle_by, "within": round(within, 5),
-                       "between": None if between is None else round(between, 5)},
+        "separation": {
+            "method": angle_by,
+            "within": round(within, 5),
+            "between": None if between is None else round(between, 5),
+        },
         "cuts": [a for a, _ in spans[1:]],
-        "shots": [{"start": a, "end": b, "camera": nm}
-                  for (a, b), nm in zip(spans, names)],
-        "cameras": [{"id": nm,
-                     "n_shots": sum(1 for x in names if x == nm),
-                     "frames": sum(b - a for (a, b), x in zip(spans, names)
-                                   if x == nm)}
-                    for nm in sorted(set(names))],
+        "shots": [{"start": a, "end": b, "camera": nm} for (a, b), nm in zip(spans, names)],
+        "cameras": [
+            {
+                "id": nm,
+                "n_shots": sum(1 for x in names if x == nm),
+                "frames": sum(b - a for (a, b), x in zip(spans, names) if x == nm),
+            }
+            for nm in sorted(set(names))
+        ],
     }
 
     if args.sheets:
         tmp = os.path.join(ROOT, "temp", "shot-detect-%s" % pid)
         os.makedirs(tmp, exist_ok=True)
         from PIL import Image
+
         for nm in sorted(set(names)):
             imgs, labs = [], []
             for i, ((a, b), x) in enumerate(zip(spans, names)):
@@ -890,27 +985,35 @@ def main():
     # interview that mis-clustered into 55, this check is the difference
     # between a warning and fifty-five hours of encoding nobody wanted.
     if failed and not args.force:
-        print("\n!! %s" % (PERSON_SEPARATION_FAILED if angle_by == "person"
-                           else SEPARATION_FAILED))
-        sys.exit("refusing to write a shot list with %d angles that do not "
-                 "separate -- pass --force if you know better" % len(set(names)))
+        print("\n!! %s" % (PERSON_SEPARATION_FAILED if angle_by == "person" else SEPARATION_FAILED))
+        sys.exit(
+            "refusing to write a shot list with %d angles that do not "
+            "separate -- pass --force if you know better" % len(set(names))
+        )
     if single and not args.force:
         print("\n!! %s" % NOT_MULTICAM)
-        sys.exit("refusing to write a %d-angle shot list for a film with one "
-                 "identity in it -- pass --force if you know better"
-                 % len(set(names)))
+        sys.exit(
+            "refusing to write a %d-angle shot list for a film with one "
+            "identity in it -- pass --force if you know better" % len(set(names))
+        )
 
-    out = args.out or (os.path.join(pdir, "%s.shots.json" % pid) if pdir
-                       else os.path.join(ROOT, "temp", "%s.shots.json" % pid))
+    out = args.out or (
+        os.path.join(pdir, "%s.shots.json" % pid)
+        if pdir
+        else os.path.join(ROOT, "temp", "%s.shots.json" % pid)
+    )
     with open(out, "w", encoding="utf-8") as f:
         json.dump(doc, f, indent=2)
         f.write("\n")
-    print("\nwrote %s -- %d shots, %d angles"
-          % (_project.norm(out), len(spans), len(set(names))))
-    _project.record(pid, "shot-detect", script=__file__, argv=sys.argv[1:],
-                    note="%d shots, %d angles, %d cuts from %s"
-                         % (len(spans), len(set(names)), len(doc["cuts"]),
-                            _project.norm(src)))
+    print("\nwrote %s -- %d shots, %d angles" % (_project.norm(out), len(spans), len(set(names))))
+    _project.record(
+        pid,
+        "shot-detect",
+        script=__file__,
+        argv=sys.argv[1:],
+        note="%d shots, %d angles, %d cuts from %s"
+        % (len(spans), len(set(names)), len(doc["cuts"]), _project.norm(src)),
+    )
 
 
 if __name__ == "__main__":

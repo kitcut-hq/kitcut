@@ -60,7 +60,13 @@ against one film are fitted to it. The honest number comes from the next film.
 
 Invoke as:  python scripts/auto-switch.py --manifest projects/<id>/anglecut-auto.json
 """
-import sys, os, json, argparse, subprocess, itertools
+
+import sys
+import os
+import json
+import argparse
+import subprocess
+import itertools
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -75,22 +81,24 @@ SR = 16000
 
 DEFAULT_DIARIZE = {
     "model": "models/diarization/nemo_en_titanet_large.onnx",
-    "segmentation":
-        "models/diarization/sherpa-onnx-pyannote-segmentation-3-0/model.onnx",
-    "window_s": 1.5, "hop_s": 0.5, "silence_rms": 0.005, "threads": 4,
+    "segmentation": "models/diarization/sherpa-onnx-pyannote-segmentation-3-0/model.onnx",
+    "window_s": 1.5,
+    "hop_s": 0.5,
+    "silence_rms": 0.005,
+    "threads": 4,
     "paint": True,
 }
 DEFAULT_GRAMMAR = {
-    "min_shot_s": 1.5,        # never cut faster than this
-    "lead_s": 0.25,           # arrive on the face this early
-    "wide_after_s": 0.0,      # 0 = never break a monologue with the wide
+    "min_shot_s": 1.5,  # never cut faster than this
+    "lead_s": 0.25,  # arrive on the face this early
+    "wide_after_s": 0.0,  # 0 = never break a monologue with the wide
     "wide_dur_s": 4.0,
     "wide_overlap_pct": 0.0,  # 0 = off; see the docstring for why it is off
     "overlap_window_s": 10.0,
-    "wide_between": 0,        # 1 = the film ALTERNATES close-up and wide; see
-                              # alternating(). 0 = follow the speaker.
-    "snap_s": 0.0,            # ... and land each cut in a pause within this
-                              # many seconds of where the rhythm asks for it
+    "wide_between": 0,  # 1 = the film ALTERNATES close-up and wide; see
+    # alternating(). 0 = follow the speaker.
+    "snap_s": 0.0,  # ... and land each cut in a pause within this
+    # many seconds of where the rhythm asks for it
 }
 
 # The grid --sweep walks unless the manifest names another, one entry per
@@ -106,13 +114,13 @@ DEFAULT_SWEEP = {
     "snap_s": [0.0],
 }
 
-WIDE = -2                     # a track value meaning "nobody in particular"
-MAX_EMBED_S = 60.0            # the longest span handed to the speaker model in
-                              # one go -- half its 122.88 s ceiling, see
-                              # embed_span()
-CLUSTER_CAP = 2000            # above this, cluster a sample -- see cluster()
-MIN_VOICE_SHARE = 0.02        # a cluster smaller than this is a cough, not a
-                              # person -- see cluster_people()
+WIDE = -2  # a track value meaning "nobody in particular"
+MAX_EMBED_S = 60.0  # the longest span handed to the speaker model in
+# one go -- half its 122.88 s ceiling, see
+# embed_span()
+CLUSTER_CAP = 2000  # above this, cluster a sample -- see cluster()
+MIN_VOICE_SHARE = 0.02  # a cluster smaller than this is a cough, not a
+# person -- see cluster_people()
 
 
 def rel(p):
@@ -125,11 +133,35 @@ def hhmmss(t):
 
 def audio(path, start_s, dur_s):
     p = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
-         "-ss", "%.6f" % start_s, "-t", "%.6f" % dur_s, "-i", path,
-         "-vn", "-map", "0:a:0", "-f", "f32le", "-acodec", "pcm_f32le",
-         "-ac", "1", "-ar", str(SR), "-"],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=ENV)
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-ss",
+            "%.6f" % start_s,
+            "-t",
+            "%.6f" % dur_s,
+            "-i",
+            path,
+            "-vn",
+            "-map",
+            "0:a:0",
+            "-f",
+            "f32le",
+            "-acodec",
+            "pcm_f32le",
+            "-ac",
+            "1",
+            "-ar",
+            str(SR),
+            "-",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=ENV,
+    )
     if p.returncode != 0:
         sys.exit("no audio from %s:\n%s" % (path, (p.stderr or b"")[-1500:]))
     return np.frombuffer(p.stdout, dtype=np.float32)
@@ -137,13 +169,15 @@ def audio(path, start_s, dur_s):
 
 def extractor(cfg):
     import sherpa_onnx
+
     model = rel(cfg["model"])
     if not os.path.exists(model):
-        sys.exit("no speaker model at %s -- see the video-multicam-switch skill"
-                 % _project.norm(model))
+        sys.exit(
+            "no speaker model at %s -- see the video-multicam-switch skill" % _project.norm(model)
+        )
     return sherpa_onnx.SpeakerEmbeddingExtractor(
-        sherpa_onnx.SpeakerEmbeddingExtractorConfig(
-            model=model, num_threads=int(cfg["threads"])))
+        sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=model, num_threads=int(cfg["threads"]))
+    )
 
 
 def embed_span(ex, chunk):
@@ -166,9 +200,9 @@ def embed_span(ex, chunk):
     step = int(MAX_EMBED_S * SR)
     vs = []
     for st in range(0, max(1, chunk.size), step):
-        piece = chunk[st:st + step]
+        piece = chunk[st : st + step]
         if vs and piece.size < int(0.25 * SR):
-            break                      # a scrap at the tail adds nothing
+            break  # a scrap at the tail adds nothing
         s = ex.create_stream()
         s.accept_waveform(SR, piece)
         s.input_finished()
@@ -183,7 +217,7 @@ def embed(a, cfg, ex):
     w, hop = int(cfg["window_s"] * SR), int(cfg["hop_s"] * SR)
     ts, es = [], []
     for st in range(0, max(0, a.size - w), hop):
-        chunk = a[st:st + w]
+        chunk = a[st : st + w]
         if np.sqrt((chunk.astype(np.float64) ** 2).mean()) < cfg["silence_rms"]:
             continue
         es.append(embed_span(ex, chunk))
@@ -209,17 +243,21 @@ def overlap_track(a, cfg, k, n_frames, fps):
     6.9%, with a median of 0.0%.
     """
     import sherpa_onnx
+
     seg = rel(cfg["segmentation"])
     if not os.path.exists(seg):
         return None
     c = sherpa_onnx.OfflineSpeakerDiarizationConfig(
         segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
-            pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
-                model=seg)),
+            pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(model=seg)
+        ),
         embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(
-            model=rel(cfg["model"]), num_threads=int(cfg["threads"])),
+            model=rel(cfg["model"]), num_threads=int(cfg["threads"])
+        ),
         clustering=sherpa_onnx.FastClusteringConfig(num_clusters=k),
-        min_duration_on=0.2, min_duration_off=0.3)
+        min_duration_on=0.2,
+        min_duration_off=0.3,
+    )
     sd = sherpa_onnx.OfflineSpeakerDiarization(c)
     segs = [(s.start, s.end) for s in sd.process(a).sort_by_start_time()]
     n = np.zeros(n_frames, dtype=np.int16)
@@ -303,8 +341,7 @@ def cluster(E, k, cap=CLUSTER_CAP):
     to clear, and it was hit on the first hour-long film put through.
     """
     n = len(E)
-    idx = (np.arange(n) if n <= cap
-           else np.unique(np.linspace(0, n - 1, cap).astype(int)))
+    idx = np.arange(n) if n <= cap else np.unique(np.linspace(0, n - 1, cap).astype(int))
     S = E[idx]
     m = len(S)
     D = (1.0 - S @ S.T).astype(np.float64)
@@ -339,8 +376,7 @@ def cluster(E, k, cap=CLUSTER_CAP):
             c = S[g].mean(axis=0)
             cents.append(c / (float(np.linalg.norm(c)) or 1.0))
         lab = np.argmax(E @ np.array(cents).T, axis=1).astype(np.int32)
-        groups = [np.nonzero(lab == k_)[0].tolist()
-                  for k_ in range(len(groups))]
+        groups = [np.nonzero(lab == k_)[0].tolist() for k_ in range(len(groups))]
     return lab, groups
 
 
@@ -387,8 +423,7 @@ def separation(E, lab, cap=CLUSTER_CAP):
     measurement anything depends on.
     """
     n = len(E)
-    idx = (np.arange(n) if n <= cap
-           else np.unique(np.linspace(0, n - 1, cap).astype(int)))
+    idx = np.arange(n) if n <= cap else np.unique(np.linspace(0, n - 1, cap).astype(int))
     Es, ls = E[idx], lab[idx]
     D = 1.0 - Es @ Es.T
     within, between = 0.0, None
@@ -472,7 +507,7 @@ def alternating(track, cam_of, wide, g, fps, n_frames, bounds=None):
             plan.append((c, pos, end, why))
         pos, on_wide = end, not on_wide
     out = []
-    for c, a, b, why in plan:                 # a punch-in to the wide is no cut
+    for c, a, b, why in plan:  # a punch-in to the wide is no cut
         if out and out[-1][0] == c:
             out[-1] = (c, out[-1][1], b, out[-1][3])
         elif b > a:
@@ -489,14 +524,16 @@ def grammar(track, cam_of, wide, g, fps, n_frames, hot=None, bounds=None):
     min_shot = max(1, int(round(g["min_shot_s"] * fps)))
 
     if hot is not None and hot.any() and wide:
-        track = np.where(hot, WIDE, track)      # crosstalk wins over the speaker
+        track = np.where(hot, WIDE, track)  # crosstalk wins over the speaker
     runs = runs_of(track)
-    if lead:                                   # arrive early on the new face
-        runs = [(max(0, a - lead) if i else 0, max(0, b - lead) if i + 1 < len(runs)
-                 else n_frames, s) for i, (a, b, s) in enumerate(runs)]
+    if lead:  # arrive early on the new face
+        runs = [
+            (max(0, a - lead) if i else 0, max(0, b - lead) if i + 1 < len(runs) else n_frames, s)
+            for i, (a, b, s) in enumerate(runs)
+        ]
         runs = [(a, b, s) for a, b, s in runs if b > a]
 
-    merged = []                                # absorb anything too short
+    merged = []  # absorb anything too short
     for a, b, s in runs:
         if merged and (b - a) < min_shot:
             merged[-1] = (merged[-1][0], b, merged[-1][2])
@@ -533,14 +570,17 @@ def grammar(track, cam_of, wide, g, fps, n_frames, hot=None, bounds=None):
             # back to, so the rhythm never leaves a two-frame stub behind.
             while b - pos > cut + hold + min_shot:
                 on = pos + cut
-                plan.append((c, pos, on,
-                             why if first else "back to %s after the cutaway" % c))
-                plan.append((wide, on, on + hold,
-                             "cutaway: %s held the frame longer than %.0fs"
-                             % (c, g["wide_after_s"])))
+                plan.append((c, pos, on, why if first else "back to %s after the cutaway" % c))
+                plan.append(
+                    (
+                        wide,
+                        on,
+                        on + hold,
+                        "cutaway: %s held the frame longer than %.0fs" % (c, g["wide_after_s"]),
+                    )
+                )
                 pos, first = on + hold, False
-        plan.append((c, pos, b,
-                     why if first else "back to %s after the cutaway" % c))
+        plan.append((c, pos, b, why if first else "back to %s after the cutaway" % c))
     out = []
     for c, a, b, why in plan:
         if out and out[-1][0] == c:
@@ -564,7 +604,7 @@ def score(plan, ref_shots, n_frames, fps):
         mine[a:b] = c
     theirs = np.empty(n_frames, dtype=object)
     for s in ref_shots:
-        theirs[s["start"]:min(s["end"], n_frames)] = s["camera"]
+        theirs[s["start"] : min(s["end"], n_frames)] = s["camera"]
     same = int(sum(1 for x, y in zip(mine, theirs) if x is not None and x == y))
     per = {}
     for x, y in zip(mine, theirs):
@@ -577,28 +617,31 @@ def score(plan, ref_shots, n_frames, fps):
     mycuts = [a for _, a, _, _ in plan[1:]]
     refcuts = [s["start"] for s in ref_shots[1:]]
     one_s = max(1, int(round(fps)))
-    near = [min(mycuts, key=lambda m: abs(m - r)) - r
-            for r in refcuts if mycuts]
-    back = [min(refcuts, key=lambda r: abs(r - m)) - m
-            for m in mycuts if refcuts]
-    return {"agreement_pct": round(100.0 * same / max(1, n_frames), 2),
-            "per_camera": {k: [v[0], v[1], round(100.0 * v[0] / max(1, v[1]), 1)]
-                           for k, v in sorted(per.items())},
-            "my_cuts": len(mycuts), "reference_cuts": len(refcuts),
-            "cut_offsets": near,
-            "cuts_within_1s": sum(1 for d in near if abs(d) <= one_s),
-            "my_cuts_near_theirs": sum(1 for d in back if abs(d) <= one_s)}
+    near = [min(mycuts, key=lambda m: abs(m - r)) - r for r in refcuts if mycuts]
+    back = [min(refcuts, key=lambda r: abs(r - m)) - m for m in mycuts if refcuts]
+    return {
+        "agreement_pct": round(100.0 * same / max(1, n_frames), 2),
+        "per_camera": {
+            k: [v[0], v[1], round(100.0 * v[0] / max(1, v[1]), 1)] for k, v in sorted(per.items())
+        },
+        "my_cuts": len(mycuts),
+        "reference_cuts": len(refcuts),
+        "cut_offsets": near,
+        "cuts_within_1s": sum(1 for d in near if abs(d) <= one_s),
+        "my_cuts_near_theirs": sum(1 for d in back if abs(d) <= one_s),
+    }
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--manifest", required=True)
-    ap.add_argument("--list", action="store_true",
-                    help="print the speaker track and the plan, write nothing")
-    ap.add_argument("--sweep", action="store_true",
-                    help="price several grammars, write nothing")
-    ap.add_argument("--score", metavar="SHOTS",
-                    help="measure against a reference shot list (reads the answer)")
+    ap.add_argument(
+        "--list", action="store_true", help="print the speaker track and the plan, write nothing"
+    )
+    ap.add_argument("--sweep", action="store_true", help="price several grammars, write nothing")
+    ap.add_argument(
+        "--score", metavar="SHOTS", help="measure against a reference shot list (reads the answer)"
+    )
     ap.add_argument("--out", help="default projects/<id>/<id>.autoplan.json")
     for k, v in DEFAULT_GRAMMAR.items():
         ap.add_argument("--" + k.replace("_", "-"), type=float, default=None)
@@ -617,22 +660,28 @@ def main():
     files = {c["id"]: rel(c["file"]) for c in m["cameras"]}
     anchor = m.get("anchor")
     if not isinstance(anchor, dict):
-        sys.exit("this stage needs explicit `anchor` frames per camera: the "
-                 "picture anchor is derived from a plan, and the plan is what "
-                 "we are about to write")
+        sys.exit(
+            "this stage needs explicit `anchor` frames per camera: the "
+            "picture anchor is derived from a plan, and the plan is what "
+            "we are about to write"
+        )
     film = m.get("film") or {}
     n_frames = int(film.get("frames") or 0)
     if not n_frames:
-        sys.exit("declare film.frames -- the in and out points are given, "
-                 "because what is scored here is the switching, not the trim")
+        sys.exit(
+            "declare film.frames -- the in and out points are given, "
+            "because what is scored here is the switching, not the trim"
+        )
     src = m.get("audio_from") or m.get("reference") or list(files)[0]
     with open(rel(m["sync"]), encoding="utf-8") as f:
         fps = json.load(f)["fps"]
 
     hints = m.get("speakers") or []
     if not hints:
-        sys.exit("declare `speakers`: one {camera, at} per person, naming a "
-                 "moment when that person is talking")
+        sys.exit(
+            "declare `speakers`: one {camera, at} per person, naming a "
+            "moment when that person is talking"
+        )
     # People at the table with no close-up of their own -- a host off camera,
     # a guest the shoot never framed. Declaring them is shoot metadata, and it
     # matters: their voices then cluster separately instead of polluting a
@@ -647,21 +696,26 @@ def main():
     ts, E = embed(a, dcfg, ex)
     lab, groups, k_used, n_big = cluster_people(E, K)
     within, between = separation(E, lab)
-    print("%d windows, %d voices (%d framed); cosine distance within %.3f, "
-          "between %.3f"
-          % (len(ts), K, len(hints), within,
-             between if between is not None else -1))
+    print(
+        "%d windows, %d voices (%d framed); cosine distance within %.3f, "
+        "between %.3f" % (len(ts), K, len(hints), within, between if between is not None else -1)
+    )
     if k_used != K:
-        print("  clustered to %d to get %d voices above %.0f%% -- the extra "
-              "groups are specks, not people" % (k_used, n_big,
-                                                 100 * MIN_VOICE_SHARE))
+        print(
+            "  clustered to %d to get %d voices above %.0f%% -- the extra "
+            "groups are specks, not people" % (k_used, n_big, 100 * MIN_VOICE_SHARE)
+        )
     if n_big < K:
-        print("  !! only %d of %d declared voices clear %.0f%% even at k=%d -- "
-              "either somebody barely speaks here, or two are still merged"
-              % (n_big, K, 100 * MIN_VOICE_SHARE, k_used))
+        print(
+            "  !! only %d of %d declared voices clear %.0f%% even at k=%d -- "
+            "either somebody barely speaks here, or two are still merged"
+            % (n_big, K, 100 * MIN_VOICE_SHARE, k_used)
+        )
     if between is not None and between <= within:
-        print("  !! the voices do not separate -- every cut after this is a "
-              "guess. Try another model or fewer speakers.")
+        print(
+            "  !! the voices do not separate -- every cut after this is a "
+            "guess. Try another model or fewer speakers."
+        )
 
     cam_of = {}
     for hint in hints:
@@ -669,41 +723,55 @@ def main():
         i = int(np.argmin(np.abs(ts - t)))
         k = int(lab[i])
         if k in cam_of:
-            print("  !! %s and %s both resolve to the same voice -- move a hint"
-                  % (cam_of[k], hint["camera"]))
+            print(
+                "  !! %s and %s both resolve to the same voice -- move a hint"
+                % (cam_of[k], hint["camera"])
+            )
         cam_of[k] = hint["camera"]
     for k in sorted(set(lab.tolist())):
         n = int((lab == k).sum())
-        print("  voice %d -> %-5s  %3d windows (%4.1f%%)"
-              % (k, cam_of.get(k, "?"), n, 100.0 * n / len(lab)))
+        print(
+            "  voice %d -> %-5s  %3d windows (%4.1f%%)"
+            % (k, cam_of.get(k, "?"), n, 100.0 * n / len(lab))
+        )
 
     track = speaker_per_frame(ts, lab, n_frames, fps)
 
     got = overlap_track(a, dcfg, max(K, 2), n_frames, fps)
     if got is None:
         over = None
-        print("  no segmentation model -- boundaries stay window-blurred and "
-              "crosstalk cannot be detected")
+        print(
+            "  no segmentation model -- boundaries stay window-blurred and "
+            "crosstalk cannot be detected"
+        )
     else:
         segs, over = got
         pct = 100.0 * float((over > 1).mean())
         if dcfg.get("paint"):
             track = paint(track, segs, a, ex, E, lab, fps, n_frames)
-            print("  %d speech segments painted over the window track; "
-                  "crosstalk on %.1f%% of the film" % (len(segs), pct))
+            print(
+                "  %d speech segments painted over the window track; "
+                "crosstalk on %.1f%% of the film" % (len(segs), pct)
+            )
         else:
-            print("  painting off by manifest; crosstalk on %.1f%% of the film"
-                  % pct)
+            print("  painting off by manifest; crosstalk on %.1f%% of the film" % pct)
 
     # Where speech stops and starts, in frames -- the only places an editor
     # cuts. The alternating grammar snaps its beats to these; nothing else
     # uses them, and without the segmentation model there are none.
-    bounds = np.array(sorted({int(round(x * fps)) for se in (segs if got else [])
-                              for x in se}), dtype=np.int64) if got else None
+    bounds = (
+        np.array(
+            sorted({int(round(x * fps)) for se in (segs if got else []) for x in se}),
+            dtype=np.int64,
+        )
+        if got
+        else None
+    )
 
     def build(gg):
-        return grammar(track, cam_of, wide, gg, fps, n_frames,
-                       contention(over, gg, fps, n_frames), bounds)
+        return grammar(
+            track, cam_of, wide, gg, fps, n_frames, contention(over, gg, fps, n_frames), bounds
+        )
 
     ref = None
     if args.score:
@@ -717,31 +785,37 @@ def main():
         # to this file.
         grid = dict(DEFAULT_SWEEP, **(m.get("sweep") or {}))
         axes = [k for k in DEFAULT_SWEEP if len(grid[k]) > 1] or ["min_shot_s"]
-        print("\n  %s  cuts%s"
-              % ("".join("%13s" % k for k in axes),
-                 "  agree   theirs-hit  mine-near" if ref else ""))
+        print(
+            "\n  %s  cuts%s"
+            % ("".join("%13s" % k for k in axes), "  agree   theirs-hit  mine-near" if ref else "")
+        )
         for combo in itertools.product(*[grid[k] for k in DEFAULT_SWEEP]):
             gg = dict(g, **dict(zip(DEFAULT_SWEEP, combo)))
             pl = build(gg)
             extra = ""
             if ref:
                 sc = score(pl, ref, n_frames, fps)
-                extra = ("  %5.1f%%   %5d/%-4d %5d/%-4d"
-                         % (sc["agreement_pct"], sc["cuts_within_1s"],
-                            sc["reference_cuts"],
-                            sc["my_cuts_near_theirs"], sc["my_cuts"]))
-            print("  %s  %4d%s"
-                  % ("".join("%13.2f" % gg[k] for k in axes), len(pl), extra))
+                extra = "  %5.1f%%   %5d/%-4d %5d/%-4d" % (
+                    sc["agreement_pct"],
+                    sc["cuts_within_1s"],
+                    sc["reference_cuts"],
+                    sc["my_cuts_near_theirs"],
+                    sc["my_cuts"],
+                )
+            print("  %s  %4d%s" % ("".join("%13.2f" % gg[k] for k in axes), len(pl), extra))
         return
 
     plan = build(g)
     print("\n   #  cam      start       end     len")
     for i, (c, x, y, w) in enumerate(plan):
-        print("  %2d  %-5s %8s %9s %7.2f   %s"
-              % (i, c, hhmmss(x / fps), hhmmss(y / fps), (y - x) / fps, w))
-    print("\n%d shots, %d cuts, grammar %s"
-          % (len(plan), len(plan) - 1,
-             ", ".join("%s=%g" % (k, v) for k, v in sorted(g.items()))))
+        print(
+            "  %2d  %-5s %8s %9s %7.2f   %s"
+            % (i, c, hhmmss(x / fps), hhmmss(y / fps), (y - x) / fps, w)
+        )
+    print(
+        "\n%d shots, %d cuts, grammar %s"
+        % (len(plan), len(plan) - 1, ", ".join("%s=%g" % (k, v) for k, v in sorted(g.items())))
+    )
 
     sc = None
     if ref:
@@ -750,39 +824,53 @@ def main():
         print("  same camera on %.2f%% of the timeline" % sc["agreement_pct"])
         for c, (hit, tot, pct) in sorted(sc["per_camera"].items()):
             print("    %-5s %5d of %5d frames  %5.1f%%" % (c, hit, tot, pct))
-        print("  %d cuts against their %d; %d of theirs matched within a second, "
-              "%d of mine sit near one of theirs"
-              % (sc["my_cuts"], sc["reference_cuts"], sc["cuts_within_1s"],
-                 sc["my_cuts_near_theirs"]))
+        print(
+            "  %d cuts against their %d; %d of theirs matched within a second, "
+            "%d of mine sit near one of theirs"
+            % (sc["my_cuts"], sc["reference_cuts"], sc["cuts_within_1s"], sc["my_cuts_near_theirs"])
+        )
 
     if args.list:
         return
 
-    doc = {"_comment": "A camera plan decided from the soundtrack alone by "
-                       "scripts/auto-switch.py -- no shot list, no truth "
-                       "sidecar, no picture. Same shape as a shots.json so "
-                       "angle-cut.py can read it as plan_from.",
-           "id": pid, "fps": fps, "n_frames": n_frames,
-           "diarize": dcfg, "grammar": g,
-           "speakers": {str(k): v for k, v in sorted(cam_of.items())},
-           "separation": {"within": round(within, 4),
-                          "between": None if between is None else round(between, 4)},
-           "score": sc,
-           "cuts": [a for _, a, _, _ in plan[1:]],
-           "shots": [{"start": x, "end": y, "camera": c, "why": w}
-                     for c, x, y, w in plan]}
+    doc = {
+        "_comment": "A camera plan decided from the soundtrack alone by "
+        "scripts/auto-switch.py -- no shot list, no truth "
+        "sidecar, no picture. Same shape as a shots.json so "
+        "angle-cut.py can read it as plan_from.",
+        "id": pid,
+        "fps": fps,
+        "n_frames": n_frames,
+        "diarize": dcfg,
+        "grammar": g,
+        "speakers": {str(k): v for k, v in sorted(cam_of.items())},
+        "separation": {
+            "within": round(within, 4),
+            "between": None if between is None else round(between, 4),
+        },
+        "score": sc,
+        "cuts": [a for _, a, _, _ in plan[1:]],
+        "shots": [{"start": x, "end": y, "camera": c, "why": w} for c, x, y, w in plan],
+    }
     out = args.out or os.path.join(
         _project.find_project_dir(rel(args.manifest)) or os.path.join(ROOT, "temp"),
-        "%s.autoplan.json" % pid)
+        "%s.autoplan.json" % pid,
+    )
     with open(out, "w", encoding="utf-8") as f:
         json.dump(doc, f, indent=2)
         f.write("\n")
     print("\nwrote %s" % _project.norm(out))
-    _project.record(pid, "auto-switch", script=__file__, argv=sys.argv[1:],
-                    note="%d shots from the sound alone%s"
-                         % (len(plan),
-                            "" if not sc else ", %.1f%% agreement with the human edit"
-                            % sc["agreement_pct"]))
+    _project.record(
+        pid,
+        "auto-switch",
+        script=__file__,
+        argv=sys.argv[1:],
+        note="%d shots from the sound alone%s"
+        % (
+            len(plan),
+            "" if not sc else ", %.1f%% agreement with the human edit" % sc["agreement_pct"],
+        ),
+    )
 
 
 if __name__ == "__main__":

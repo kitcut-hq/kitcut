@@ -25,7 +25,14 @@ offset claims is simultaneous, so a human can confirm before an encode is spent.
 
 Invoke as:  python scripts/sync-tracks.py --manifest config/screencast/<id>.json
 """
-import sys, os, json, argparse, subprocess, datetime, hashlib
+
+import sys
+import os
+import json
+import argparse
+import subprocess
+import datetime
+import hashlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -46,11 +53,24 @@ def probe(path):
 
     Rotation is REPORTED, never applied blindly. See the note in rotation_of().
     """
-    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-               "-show_entries", "stream=width,height,avg_frame_rate,duration",
-               "-show_entries", "format=duration,size",
-               "-show_entries", "format_tags=creation_time",
-               "-of", "json", path]).stdout
+    out = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,avg_frame_rate,duration",
+            "-show_entries",
+            "format=duration,size",
+            "-show_entries",
+            "format_tags=creation_time",
+            "-of",
+            "json",
+            path,
+        ]
+    ).stdout
     d = json.loads(out)
     st = (d.get("streams") or [{}])[0]
     fm = d.get("format") or {}
@@ -77,9 +97,20 @@ def rotation_of(path):
     was mounted flat and iOS guessed the orientation wrong. The tag is evidence,
     not instruction -- the manifest decides, and --verify shows the frame.
     """
-    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-               "-show_entries", "stream_side_data=rotation",
-               "-of", "default=noprint_wrappers=1:nokey=1", path]).stdout
+    out = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream_side_data=rotation",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            path,
+        ]
+    ).stdout
     for line in out.splitlines():
         line = line.strip()
         if line:
@@ -116,11 +147,17 @@ def change_signal(path, hz, w, h, noautorotate=False):
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error"]
     if noautorotate:
         cmd.append("-noautorotate")
-    cmd += ["-i", path, "-an",
-            "-vf", "fps=%g,scale=%d:%d,format=gray" % (hz, w, h),
-            "-f", "rawvideo", "-"]
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                         stderr=subprocess.DEVNULL, bufsize=1 << 23)
+    cmd += [
+        "-i",
+        path,
+        "-an",
+        "-vf",
+        "fps=%g,scale=%d:%d,format=gray" % (hz, w, h),
+        "-f",
+        "rawvideo",
+        "-",
+    ]
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=1 << 23)
     n = w * h
     prev, out = None, []
     while True:
@@ -143,17 +180,31 @@ def audio_signal(path, hz, highpass=3000, sr=16000):
     High-passing does not remove speech, but it stops speech from dominating a
     correlation whose only real evidence is typing.
     """
-    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", path, "-vn",
-           "-af", "highpass=f=%d" % highpass,
-           "-ac", "1", "-ar", str(sr), "-f", "s16le", "-"]
-    raw = subprocess.run(cmd, stdout=subprocess.PIPE,
-                         stderr=subprocess.DEVNULL).stdout
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        path,
+        "-vn",
+        "-af",
+        "highpass=f=%d" % highpass,
+        "-ac",
+        "1",
+        "-ar",
+        str(sr),
+        "-f",
+        "s16le",
+        "-",
+    ]
+    raw = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout
     x = np.frombuffer(raw, dtype=np.int16).astype(np.float64)
     step = max(1, int(round(sr / hz)))
     n = len(x) // step
     if n == 0:
         return np.zeros(0)
-    x = x[:n * step].reshape(n, step)
+    x = x[: n * step].reshape(n, step)
     return np.sqrt((x * x).mean(axis=1))
 
 
@@ -179,12 +230,12 @@ def correlate(screen, camera, seed, search, hz):
             n = min(len(s), len(c) - lag)
             if n < hz * 10:
                 continue
-            v = float(np.dot(s[:n], c[lag:lag + n]) / n)
+            v = float(np.dot(s[:n], c[lag : lag + n]) / n)
         else:
             n = min(len(s) + lag, len(c))
             if n < hz * 10:
                 continue
-            v = float(np.dot(s[-lag:-lag + n], c[:n]) / n)
+            v = float(np.dot(s[-lag : -lag + n], c[:n]) / n)
         lags.append(lag)
         scores.append(v)
     if not lags:
@@ -193,8 +244,7 @@ def correlate(screen, camera, seed, search, hz):
     k = int(np.argmax(scores))
     spread = scores.std()
     z = float((scores[k] - scores.mean()) / spread) if spread > 0 else 0.0
-    return lags[k] / float(hz), z, list(zip([l / float(hz) for l in lags],
-                                            scores.tolist()))
+    return lags[k] / float(hz), z, list(zip([l / float(hz) for l in lags], scores.tolist()))
 
 
 def anchor_residuals(anchors, words, offset):
@@ -206,18 +256,23 @@ def anchor_residuals(anchors, words, offset):
     """
     rows = []
     for a in anchors:
-        hit = _outline.find(words, a["text"], loose=not a.get("exact"),
-                            nth=int(a.get("nth", 0)))
+        hit = _outline.find(words, a["text"], loose=not a.get("exact"), nth=int(a.get("nth", 0)))
         if hit is None:
-            rows.append({"text": a["text"], "screen_t": a.get("screen_t"),
-                         "found": False})
+            rows.append({"text": a["text"], "screen_t": a.get("screen_t"), "found": False})
             continue
         spoke_a, spoke_b = hit
         want = float(a["screen_t"]) + offset
-        rows.append({"text": a["text"], "screen_t": float(a["screen_t"]),
-                     "spoken_start": spoke_a, "spoken_end": spoke_b,
-                     "predicted_camera_t": want,
-                     "residual": spoke_a - want, "found": True})
+        rows.append(
+            {
+                "text": a["text"],
+                "screen_t": float(a["screen_t"]),
+                "spoken_start": spoke_a,
+                "spoken_end": spoke_b,
+                "predicted_camera_t": want,
+                "residual": spoke_a - want,
+                "found": True,
+            }
+        )
     return rows
 
 
@@ -248,15 +303,23 @@ def verify_sheet(screen, camera, offset, times, outdir, rotate_camera):
     for t in times:
         dst = os.path.join(outdir, "sync_%07.2f.jpg" % t)
         cam_t = t + offset
-        cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error",
-               "-ss", "%.3f" % t, "-i", screen]
+        cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-ss", "%.3f" % t, "-i", screen]
         if not rotate_camera:
             cmd.append("-noautorotate")
-        cmd += ["-ss", "%.3f" % cam_t, "-i", camera,
-                "-filter_complex",
-                "[0:v]scale=-2:400,setsar=1[a];[1:v]scale=-2:400,setsar=1[b];"
-                "[a][b]hstack=inputs=2",
-                "-frames:v", "1", "-q:v", "4", "-y", dst]
+        cmd += [
+            "-ss",
+            "%.3f" % cam_t,
+            "-i",
+            camera,
+            "-filter_complex",
+            "[0:v]scale=-2:400,setsar=1[a];[1:v]scale=-2:400,setsar=1[b];[a][b]hstack=inputs=2",
+            "-frames:v",
+            "1",
+            "-q:v",
+            "4",
+            "-y",
+            dst,
+        ]
         subprocess.run(cmd, check=True, capture_output=True)
         made.append((t, cam_t, dst))
     return made
@@ -280,18 +343,23 @@ def busiest(signal, hz, k, skip=5.0):
 
 def main():
     ap = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter)
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--manifest", required=True)
-    ap.add_argument("--offset", type=float,
-                    help="force this offset instead of measuring one")
-    ap.add_argument("--no-correlate", action="store_true",
-                    help="skip the screen-change vs key-click pass")
-    ap.add_argument("--verify", action="store_true",
-                    help="write paired frames that prove the offset")
+    ap.add_argument("--offset", type=float, help="force this offset instead of measuring one")
+    ap.add_argument(
+        "--no-correlate", action="store_true", help="skip the screen-change vs key-click pass"
+    )
+    ap.add_argument(
+        "--verify", action="store_true", help="write paired frames that prove the offset"
+    )
     ap.add_argument("--samples", type=int, default=6)
-    ap.add_argument("--min-confidence", type=float, default=6.0,
-                    help="reject a correlation peak below this z-score")
+    ap.add_argument(
+        "--min-confidence",
+        type=float,
+        default=6.0,
+        help="reject a correlation peak below this z-score",
+    )
     ap.add_argument("-o", "--out", help="sidecar path (default beside manifest)")
     args = ap.parse_args()
 
@@ -309,17 +377,26 @@ def main():
     sync = m.get("sync") or {}
     hz = float(sync.get("hz", 10))
     search = float(sync.get("search", 6.0))
-    rotate_camera = (m.get("camera_rotate", "auto") != "none")
+    rotate_camera = m.get("camera_rotate", "auto") != "none"
 
     ps, pc = probe(screen), probe(camera)
     print("screen  %s" % os.path.basename(screen))
-    print("        %dx%d  %.3f fps  %.2fs  start %s"
-          % (ps["width"], ps["height"], ps["fps"], ps["duration"],
-             ps["creation_time"]))
+    print(
+        "        %dx%d  %.3f fps  %.2fs  start %s"
+        % (ps["width"], ps["height"], ps["fps"], ps["duration"], ps["creation_time"])
+    )
     print("camera  %s" % os.path.basename(camera))
-    print("        %dx%d  %.3f fps  %.2fs  start %s  rotation %s"
-          % (pc["width"], pc["height"], pc["fps"], pc["duration"],
-             pc["creation_time"], pc["rotation"]))
+    print(
+        "        %dx%d  %.3f fps  %.2fs  start %s  rotation %s"
+        % (
+            pc["width"],
+            pc["height"],
+            pc["fps"],
+            pc["duration"],
+            pc["creation_time"],
+            pc["rotation"],
+        )
+    )
     if pc["rotation"] and not rotate_camera:
         print("        camera_rotate=none in the manifest, so that tag is IGNORED")
 
@@ -328,10 +405,8 @@ def main():
     seed = None
     if ts and tc:
         seed = (ts - tc).total_seconds()
-        print("\nseed from creation_time %+.3fs  (screen t=0 is camera t=%.3f)"
-              % (seed, seed))
-        notes.append("creation_time seed %+.3fs; whole-second stamps, so +/-1s"
-                     % seed)
+        print("\nseed from creation_time %+.3fs  (screen t=0 is camera t=%.3f)" % (seed, seed))
+        notes.append("creation_time seed %+.3fs; whole-second stamps, so +/-1s" % seed)
     else:
         print("\nno creation_time on one of the inputs")
 
@@ -349,14 +424,14 @@ def main():
         if best is None:
             print("  no usable overlap")
         else:
-            print("  peak %+.3fs  z=%.1f  (seed %+.3fs, delta %+.3fs)"
-                  % (best, z, seed, best - seed))
+            print(
+                "  peak %+.3fs  z=%.1f  (seed %+.3fs, delta %+.3fs)" % (best, z, seed, best - seed)
+            )
             if z >= args.min_confidence:
                 offset, method, confidence = best, "correlate", z
                 notes.append("correlation peak z=%.1f accepted" % z)
             else:
-                print("  z below --min-confidence %.1f, keeping the seed"
-                      % args.min_confidence)
+                print("  z below --min-confidence %.1f, keeping the seed" % args.min_confidence)
                 notes.append("correlation z=%.1f rejected, seed kept" % z)
 
     rows = []
@@ -372,26 +447,29 @@ def main():
             if not r["found"]:
                 print("  NOT FOUND  %r" % r["text"][:50])
                 continue
-            print("  screen %8.2f  spoken %8.2f  residual %+6.2fs  %r"
-                  % (r["screen_t"], r["spoken_start"], r["residual"],
-                     r["text"][:40]))
+            print(
+                "  screen %8.2f  spoken %8.2f  residual %+6.2fs  %r"
+                % (r["screen_t"], r["spoken_start"], r["residual"], r["text"][:40])
+            )
         found = [r for r in rows if r["found"]]
         if found:
             off2, worst, drift = fit_offset(found, offset)
-            print("  fitted offset %+.3fs   worst residual %.2fs%s"
-                  % (off2, worst,
-                     "" if drift is None else "   drift %+.0f ppm" % drift))
+            print(
+                "  fitted offset %+.3fs   worst residual %.2fs%s"
+                % (off2, worst, "" if drift is None else "   drift %+.0f ppm" % drift)
+            )
             offset, method, confidence = off2, "anchors", worst
-            notes.append("fitted from %d anchors, worst residual %.2fs"
-                         % (len(found), worst))
+            notes.append("fitted from %d anchors, worst residual %.2fs" % (len(found), worst))
 
     if offset is None:
         sys.exit("no offset could be determined; pass --offset")
 
     cam_start, cam_end = offset, offset + ps["duration"]
     print("\ncoverage")
-    print("  screen 0.00 .. %.2f  ->  camera %.2f .. %.2f   (camera is %.2f)"
-          % (ps["duration"], cam_start, cam_end, pc["duration"]))
+    print(
+        "  screen 0.00 .. %.2f  ->  camera %.2f .. %.2f   (camera is %.2f)"
+        % (ps["duration"], cam_start, cam_end, pc["duration"])
+    )
     short = 0.0
     if cam_start < -0.001:
         print("  CAMERA STARTS LATE by %.2fs" % (-cam_start))
@@ -401,48 +479,51 @@ def main():
         print("  CAMERA RUNS OUT %.2fs before the screen ends" % short)
         notes.append("camera short by %.2fs at the tail" % short)
     if cam_start >= -0.001 and short <= 0.001:
-        print("  camera covers the whole screen recording "
-              "(%.1fs lead-in, %.1fs tail)"
-              % (cam_start, pc["duration"] - cam_end))
+        print(
+            "  camera covers the whole screen recording "
+            "(%.1fs lead-in, %.1fs tail)" % (cam_start, pc["duration"] - cam_end)
+        )
 
     if args.verify:
         hz2 = 4.0
         times = busiest(change_signal(screen, hz2, 160, 96), hz2, args.samples)
         outdir = os.path.join(ROOT, "temp", "sync-%s" % mid)
-        made = verify_sheet(screen, camera, offset, times, outdir,
-                            rotate_camera)
+        made = verify_sheet(screen, camera, offset, times, outdir, rotate_camera)
         print("\nverify frames (screen | camera) at the busiest screen moments:")
         for t, ct, dst in made:
-            print("  screen %7.2f  camera %7.2f  %s"
-                  % (t, ct, os.path.relpath(dst, ROOT)))
+            print("  screen %7.2f  camera %7.2f  %s" % (t, ct, os.path.relpath(dst, ROOT)))
 
-    out = args.out or os.path.join(os.path.dirname(args.manifest),
-                                   "%s.sync.json" % mid)
+    out = args.out or os.path.join(os.path.dirname(args.manifest), "%s.sync.json" % mid)
     doc = {
         "_comment": "Written by sync-tracks.py. offset is the camera time that "
-                    "lines up with screen t=0: camera_t = screen_t + offset.",
+        "lines up with screen t=0: camera_t = screen_t + offset.",
         "id": mid,
-        "screen": m["screen"], "camera": m["camera"],
-        "screen_probe": ps, "camera_probe": pc,
+        "screen": m["screen"],
+        "camera": m["camera"],
+        "screen_probe": ps,
+        "camera_probe": pc,
         "camera_rotate": m.get("camera_rotate", "auto"),
         "seed_offset": seed,
         "offset": round(float(offset), 4),
         "method": method,
         "confidence": confidence,
         "anchors": rows,
-        "coverage": {"camera_start": round(cam_start, 3),
-                     "camera_end": round(cam_end, 3),
-                     "camera_duration": pc["duration"],
-                     "short_by": round(short, 3)},
+        "coverage": {
+            "camera_start": round(cam_start, 3),
+            "camera_end": round(cam_end, 3),
+            "camera_duration": pc["duration"],
+            "short_by": round(short, 3),
+        },
         "notes": notes,
-        "input_sha1_head": {os.path.basename(screen): sha1_head(screen),
-                            os.path.basename(camera): sha1_head(camera)},
+        "input_sha1_head": {
+            os.path.basename(screen): sha1_head(screen),
+            os.path.basename(camera): sha1_head(camera),
+        },
     }
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
         json.dump(doc, f, ensure_ascii=False, indent=1)
-    print("\noffset %+.3fs by %s -> %s"
-          % (offset, method, os.path.relpath(out, ROOT)))
+    print("\noffset %+.3fs by %s -> %s" % (offset, method, os.path.relpath(out, ROOT)))
 
 
 if __name__ == "__main__":

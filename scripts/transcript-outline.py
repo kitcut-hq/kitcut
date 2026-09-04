@@ -14,12 +14,15 @@ span.
 
 Invoke as:  python scripts/transcript-outline.py ...
 """
-import sys, os, json, argparse, unicodedata
+
+import sys
+import os
+import json
+import argparse
+import unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
-
-
 
 
 # Whisper's tokeniser takes words apart, in two directions, and joining the
@@ -85,8 +88,7 @@ def rejoin(words):
             p["text"] += t
             p["end"] = max(p["end"], w["end"])
             if "probability" in w or "probability" in p:
-                p["probability"] = min(p.get("probability", 1.0),
-                                       w.get("probability", 1.0))
+                p["probability"] = min(p.get("probability", 1.0), w.get("probability", 1.0))
             continue
         out.append(dict(w))
     return out
@@ -116,14 +118,14 @@ def load_words(path):
 
 def fold(s, loose=True):
     """Normalise for matching. Whitespace always goes -- the words carry no
-    spaces of their own, so a spaced query would never match otherwise."""
+    spaces of their own, so a spaced query would never match otherwise.
+    """
     s = unicodedata.normalize("NFC", s)
     s = "".join(ch for ch in s if not ch.isspace())
     if loose:
         s = s.casefold()
         # apostrophes and dashes vary between the ASR output and what you type
-        for a, b in (("’", "'"), ("ʼ", "'"), ("`", "'"),
-                     ("–", "-"), ("—", "-")):
+        for a, b in (("’", "'"), ("ʼ", "'"), ("`", "'"), ("–", "-"), ("—", "-")):
             s = s.replace(a, b)
         s = "".join(ch for ch in s if ch.isalnum() or ch in "'-")
     return s
@@ -186,8 +188,7 @@ def _retime(old, new):
     if not new:
         return []
     if len(new) == len(old):
-        return [{"text": t, "start": w["start"], "end": w["end"]}
-                for t, w in zip(new, old)]
+        return [{"text": t, "start": w["start"], "end": w["end"]} for t, w in zip(new, old)]
 
     spans = [(w["start"], w["end"]) for w in old]
     spoken = sum(e - s for s, e in spans) or 1e-6
@@ -245,21 +246,22 @@ def apply_corrections(words, specs, verbose=False):
             # corrections only change case and punctuation, which fold() throws
             # away -- so the corrected text still matches its own `find`, and
             # restarting the search would loop forever.
-            span = find_span(words[at:], phrase,
-                             nth=(nth if nth is not None else 0))
+            span = find_span(words[at:], phrase, nth=(nth if nth is not None else 0))
             if span is None:
                 break
             i, j = span[0] + at, span[1] + at
             new = repl.split()
-            words[i:j + 1] = _retime(words[i:j + 1], new)
+            words[i : j + 1] = _retime(words[i : j + 1], new)
             hits += 1
             at = i + len(new)
             if nth is not None:
                 break
         if not hits:
-            sys.exit("corrections: %r matches nothing in the transcript -- it "
-                     "has already been fixed, or the transcript changed under "
-                     "it" % phrase)
+            sys.exit(
+                "corrections: %r matches nothing in the transcript -- it "
+                "has already been fixed, or the transcript changed under "
+                "it" % phrase
+            )
         if verbose:
             print("  corrected %dx %r -> %r" % (hits, phrase, repl))
     return words
@@ -289,11 +291,14 @@ def main():
     ap.add_argument("--outline", action="store_true", help="dump timestamped lines")
     ap.add_argument("--chunk", type=float, default=12.0, help="seconds per outline line")
     ap.add_argument("--find", action="append", default=[], metavar="PHRASE")
-    ap.add_argument("--nth", type=int, default=0,
-                    help="use the Nth occurrence (0-based); applies to every "
-                         "--find phrase in the call, not per phrase")
-    ap.add_argument("--exact", action="store_true",
-                    help="match case and punctuation too")
+    ap.add_argument(
+        "--nth",
+        type=int,
+        default=0,
+        help="use the Nth occurrence (0-based); applies to every "
+        "--find phrase in the call, not per phrase",
+    )
+    ap.add_argument("--exact", action="store_true", help="match case and punctuation too")
     ap.add_argument("-o", "--out", help="write the outline here instead of stdout")
     args = ap.parse_args()
 

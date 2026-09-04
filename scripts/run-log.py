@@ -12,6 +12,7 @@ and, more to the point, usable when the venv is the thing that is broken.
 
 Invoke as:  python scripts/run-log.py --project <id> [--list|--follow|--notes]
 """
+
 import os
 import sys
 import time
@@ -28,8 +29,13 @@ for _s in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
-OUTCOME = {"ok": "OK", "failed": "FAILED", "stopped": "STOPPED",
-           "interrupted": "INTERRUPTED", "running": "RUNNING"}
+OUTCOME = {
+    "ok": "OK",
+    "failed": "FAILED",
+    "stopped": "STOPPED",
+    "interrupted": "INTERRUPTED",
+    "running": "RUNNING",
+}
 
 
 def fmt(t):
@@ -57,18 +63,27 @@ def show(path, notes_only=False):
     for r in recs:
         ev = r.get("ev")
         if ev == "stage" and not notes_only:
-            extra = "  ".join(f"{k}={v}" for k, v in r.items()
-                              if k not in ("ev", "t", "utc", "stage", "state", "secs", "note"))
-            print(f"  {fmt(r['t']):>8}  {r['stage']:<10} {r['state']:<9} "
-                  f"{fmt(r['secs']):>8}  {r.get('note', '')}{('  ' + extra) if extra else ''}")
+            extra = "  ".join(
+                f"{k}={v}"
+                for k, v in r.items()
+                if k not in ("ev", "t", "utc", "stage", "state", "secs", "note")
+            )
+            print(
+                f"  {fmt(r['t']):>8}  {r['stage']:<10} {r['state']:<9} "
+                f"{fmt(r['secs']):>8}  {r.get('note', '')}{('  ' + extra) if extra else ''}"
+            )
         elif ev == "note":
-            print(f"  {fmt(r['t']):>8}  {r.get('stage', ''):<10} ·         "
-                  f"{'':>8}  {r.get('text', '')}")
+            print(
+                f"  {fmt(r['t']):>8}  {r.get('stage', ''):<10} ·         "
+                f"{'':>8}  {r.get('text', '')}"
+            )
         elif ev == "end":
-            print(f"\n  {fmt(r['t']):>8}  {OUTCOME.get(r.get('outcome'), '?')}"
-                  f"{('  ' + r['note']) if r.get('note') else ''}")
+            print(
+                f"\n  {fmt(r['t']):>8}  {OUTCOME.get(r.get('outcome'), '?')}"
+                f"{('  ' + r['note']) if r.get('note') else ''}"
+            )
     if outcome == "running":
-        print(f"\n  (no end record: still running, or killed without one)")
+        print("\n  (no end record: still running, or killed without one)")
     return 0 if outcome == "ok" else 1
 
 
@@ -80,16 +95,24 @@ def follow(path):
         for r in recs[seen:]:
             ev = r.get("ev")
             if ev == "stage":
-                print(f"  {fmt(r['t']):>8}  {r['stage']:<10} {r['state']:<9} "
-                      f"{fmt(r['secs']):>8}  {r.get('note', '')}", flush=True)
+                print(
+                    f"  {fmt(r['t']):>8}  {r['stage']:<10} {r['state']:<9} "
+                    f"{fmt(r['secs']):>8}  {r.get('note', '')}",
+                    flush=True,
+                )
             elif ev == "note":
-                print(f"  {fmt(r['t']):>8}  {r.get('stage', ''):<10} ·  "
-                      f"{r.get('text', '')}", flush=True)
+                print(
+                    f"  {fmt(r['t']):>8}  {r.get('stage', ''):<10} ·  {r.get('text', '')}",
+                    flush=True,
+                )
             elif ev == "run":
                 print(f"  {os.path.basename(path)}  $ {' '.join(r.get('argv') or [])}", flush=True)
             elif ev == "end":
-                print(f"\n  {OUTCOME.get(r.get('outcome'), '?')} after {fmt(r['t'])}"
-                      f"{('  ' + r['note']) if r.get('note') else ''}", flush=True)
+                print(
+                    f"\n  {OUTCOME.get(r.get('outcome'), '?')} after {fmt(r['t'])}"
+                    f"{('  ' + r['note']) if r.get('note') else ''}",
+                    flush=True,
+                )
                 return 0 if r.get("outcome") == "ok" else 1
         seen = len(recs)
         time.sleep(2.0)
@@ -117,8 +140,10 @@ def main():
             outcome, secs, _ = _runlog.summary(recs)
             head = recs[0] if recs and recs[0].get("ev") == "run" else {}
             cmd = " ".join(head.get("argv") or [])
-            print(f"{os.path.basename(p)[:-6]:<22} {OUTCOME.get(outcome, outcome):<12} "
-                  f"{fmt(secs):>8}  {cmd[:70]}")
+            print(
+                f"{os.path.basename(p)[:-6]:<22} {OUTCOME.get(outcome, outcome):<12} "
+                f"{fmt(secs):>8}  {cmd[:70]}"
+            )
         return 0
 
     if args.run:

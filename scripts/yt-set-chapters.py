@@ -33,7 +33,13 @@ Invoke as:
   python scripts/yt-set-chapters.py <video-id-or-url> --chapters ... --dry-run
   python scripts/yt-set-chapters.py --video=-qKcpLSk0iU --chapters ...   # id starting with '-'
 """
-import sys, os, re, json, time, argparse
+
+import sys
+import os
+import re
+import json
+import time
+import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -76,8 +82,7 @@ def load_chapters(path):
     return "\n".join(l for _, l in marks)
 
 
-ENV_KEYS = ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET",
-            "YOUTUBE_REFRESH_TOKEN")
+ENV_KEYS = ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN")
 
 
 def _env_credentials():
@@ -91,13 +96,15 @@ def _env_credentials():
     if not all(got.values()):
         return None
     from google.oauth2.credentials import Credentials
+
     return Credentials(
         token=None,
         refresh_token=got["YOUTUBE_REFRESH_TOKEN"],
         client_id=got["YOUTUBE_CLIENT_ID"],
         client_secret=got["YOUTUBE_CLIENT_SECRET"],
         token_uri="https://oauth2.googleapis.com/token",
-        scopes=SCOPES)
+        scopes=SCOPES,
+    )
 
 
 def _save_to_env(creds):
@@ -106,11 +113,13 @@ def _save_to_env(creds):
     lines = []
     if os.path.exists(path):
         lines = open(path, encoding="utf-8").read().split("\n")
-    values = {"YOUTUBE_CLIENT_ID": creds.client_id,
-              "YOUTUBE_CLIENT_SECRET": creds.client_secret,
-              "YOUTUBE_REFRESH_TOKEN": creds.refresh_token}
+    values = {
+        "YOUTUBE_CLIENT_ID": creds.client_id,
+        "YOUTUBE_CLIENT_SECRET": creds.client_secret,
+        "YOUTUBE_REFRESH_TOKEN": creds.refresh_token,
+    }
     if not all(values.values()):
-        return                      # nothing durable to save; keep token.json
+        return  # nothing durable to save; keep token.json
     out, seen = [], set()
     for line in lines:
         key = line.split("=", 1)[0].strip() if "=" in line else ""
@@ -174,7 +183,7 @@ def credentials(handle=None, reauth=False):
         if not (handle and os.path.exists(token_path)):
             creds = _env_credentials()
     if creds:
-        creds.refresh(Request())        # no access token is stored; mint one
+        creds.refresh(Request())  # no access token is stored; mint one
         return creds
 
     if os.path.exists(token_path) and not reauth:
@@ -183,15 +192,17 @@ def credentials(handle=None, reauth=False):
         creds.refresh(Request())
     elif not creds or not creds.valid:
         if not os.path.exists(CLIENT_SECRET):
-            sys.exit(f"no {os.path.relpath(CLIENT_SECRET, _env.ROOT)} -- "
-                     "download an OAuth 'Desktop app' client JSON there "
-                     "(see this script's docstring for the console steps)")
+            sys.exit(
+                f"no {os.path.relpath(CLIENT_SECRET, _env.ROOT)} -- "
+                "download an OAuth 'Desktop app' client JSON there "
+                "(see this script's docstring for the console steps)"
+            )
         from google_auth_oauthlib.flow import InstalledAppFlow
+
         flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET, SCOPES)
         # offline + consent so Google actually returns a refresh token; it
         # withholds one on a repeat grant otherwise, leaving .env unfillable.
-        creds = flow.run_local_server(port=0, access_type="offline",
-                                      prompt="consent")
+        creds = flow.run_local_server(port=0, access_type="offline", prompt="consent")
     os.makedirs(OAUTH_DIR, exist_ok=True)
     with open(token_path, "w", encoding="utf-8") as f:
         f.write(creds.to_json())
@@ -210,19 +221,25 @@ def main():
     # not save you either: it must come after every option, which is not how
     # anyone types it.
     ap.add_argument("video", nargs="?", help="video id or any YouTube URL form")
-    ap.add_argument("--video", dest="video_opt",
-                    help="same thing, for ids that start with '-'")
-    ap.add_argument("--chapters", required=True,
-                    help="config/chapters/<id>.txt, one 'MM:SS Title' per line")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="fetch and show the resulting description; no write")
-    ap.add_argument("--replace", action="store_true",
-                    help="allow overwriting chapters the description already "
-                         "has; without this, an existing block is refused")
-    ap.add_argument("--lint", action="store_true",
-                    help="check the chapters file and stop; no network at all")
-    ap.add_argument("--duration", type=int,
-                    help="with --lint, also flag marks past this many seconds")
+    ap.add_argument("--video", dest="video_opt", help="same thing, for ids that start with '-'")
+    ap.add_argument(
+        "--chapters", required=True, help="config/chapters/<id>.txt, one 'MM:SS Title' per line"
+    )
+    ap.add_argument(
+        "--dry-run", action="store_true", help="fetch and show the resulting description; no write"
+    )
+    ap.add_argument(
+        "--replace",
+        action="store_true",
+        help="allow overwriting chapters the description already "
+        "has; without this, an existing block is refused",
+    )
+    ap.add_argument(
+        "--lint", action="store_true", help="check the chapters file and stop; no network at all"
+    )
+    ap.add_argument(
+        "--duration", type=int, help="with --lint, also flag marks past this many seconds"
+    )
     args = ap.parse_args()
 
     if not (args.video or args.video_opt):
@@ -232,8 +249,7 @@ def main():
 
     if args.lint:
         marks = ch.parse_marks(block)
-        print(f"{len(marks)} chapters, {ch.fmt_ts(marks[0][0])} .. "
-              f"{ch.fmt_ts(marks[-1][0])}")
+        print(f"{len(marks)} chapters, {ch.fmt_ts(marks[0][0])} .. {ch.fmt_ts(marks[-1][0])}")
         if args.duration:
             over = [l for t, l in marks if t >= args.duration]
             for l in over:
@@ -243,6 +259,7 @@ def main():
         return
 
     from googleapiclient.discovery import build
+
     yt = build("youtube", "v3", credentials=credentials())
 
     r = yt.videos().list(part="snippet", id=vid).execute()
@@ -264,29 +281,36 @@ def main():
             f"Only the owning channel can edit it. Delete "
             f"{os.path.relpath(TOKEN, _env.ROOT)} and rerun; at the Google "
             f"consent screen pick the {snippet.get('channelTitle')!r} channel "
-            f"rather than a personal account.")
+            f"rather than a personal account."
+        )
 
     new_desc, replaced = ch.splice(snippet.get("description", ""), block)
     if len(new_desc) > DESCRIPTION_LIMIT:
-        sys.exit(f"resulting description is {len(new_desc)} chars; "
-                 f"YouTube's limit is {DESCRIPTION_LIMIT}")
+        sys.exit(
+            f"resulting description is {len(new_desc)} chars; "
+            f"YouTube's limit is {DESCRIPTION_LIMIT}"
+        )
 
     print(f"video: {snippet['title']!r}")
 
     # Chapters already up there were written by a person and are not
     # recoverable from the API once overwritten. Show them and stop.
     if replaced is not None and replaced != block:
-        print("\n!! this video ALREADY has chapters; the write would replace "
-              f"{len(replaced.splitlines())} of them with "
-              f"{len(block.splitlines())}:\n")
+        print(
+            "\n!! this video ALREADY has chapters; the write would replace "
+            f"{len(replaced.splitlines())} of them with "
+            f"{len(block.splitlines())}:\n"
+        )
         for line in replaced.splitlines():
             print("  - " + line)
         print()
         for line in block.splitlines():
             print("  + " + line)
         if not args.replace:
-            print("\nrefusing to overwrite. Compare them, and pass --replace "
-                  "if the new list really is better.")
+            print(
+                "\nrefusing to overwrite. Compare them, and pass --replace "
+                "if the new list really is better."
+            )
             return
     print("--- resulting description " + "-" * 40)
     print(new_desc)
@@ -302,8 +326,7 @@ def main():
     snippet["description"] = new_desc
     # snippet.title and snippet.categoryId are REQUIRED on update; sending the
     # whole fetched snippet back keeps them and everything else intact.
-    yt.videos().update(part="snippet",
-                       body={"id": vid, "snippet": snippet}).execute()
+    yt.videos().update(part="snippet", body={"id": vid, "snippet": snippet}).execute()
 
     # Read-after-write here is not immediately consistent: a re-fetch straight
     # after a successful update can still return the OLD description, which
@@ -315,11 +338,15 @@ def main():
         check = yt.videos().list(part="snippet", id=vid).execute()
         got = check["items"][0]["snippet"]["description"]
         if block in got:
-            print(f"updated https://youtu.be/{vid} -- verified in re-fetch"
-                  + (f" (after {attempt + 1} reads)" if attempt else ""))
+            print(
+                f"updated https://youtu.be/{vid} -- verified in re-fetch"
+                + (f" (after {attempt + 1} reads)" if attempt else "")
+            )
             return
-    sys.exit("update call succeeded but the description still does not carry "
-             "the chapter block after several reads -- inspect it on YouTube")
+    sys.exit(
+        "update call succeeded but the description still does not carry "
+        "the chapter block after several reads -- inspect it on YouTube"
+    )
 
 
 if __name__ == "__main__":

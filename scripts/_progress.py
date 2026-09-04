@@ -16,7 +16,11 @@ Stdlib only, and deliberately so: the reader runs on every status-line refresh,
 where a `_env` re-exec would cost a subprocess spawn each time. Nothing here
 needs the venv.
 """
-import os, json, time, glob
+
+import os
+import json
+import time
+import glob
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIR = os.path.join(ROOT, "temp", "render-progress")
@@ -28,8 +32,7 @@ STALE_S = 90.0
 
 
 def _paths(job):
-    return (os.path.join(DIR, job + ".json"),
-            os.path.join(DIR, job + ".progress"))
+    return (os.path.join(DIR, job + ".json"), os.path.join(DIR, job + ".progress"))
 
 
 def begin(job, total_s, out_path, kind="render"):
@@ -46,8 +49,16 @@ def begin(job, total_s, out_path, kind="render"):
         except OSError:
             pass
     with open(meta, "w", encoding="utf-8") as f:
-        json.dump({"job": job, "kind": kind, "total": float(total_s),
-                   "out": out_path, "started": time.time()}, f)
+        json.dump(
+            {
+                "job": job,
+                "kind": kind,
+                "total": float(total_s),
+                "out": out_path,
+                "started": time.time(),
+            },
+            f,
+        )
     return prog
 
 
@@ -69,8 +80,11 @@ def _tail(path, n=4096):
 
 def _hhmmss(s):
     s = int(max(0, s))
-    return ("%d:%02d:%02d" % (s // 3600, s // 60 % 60, s % 60)) if s >= 3600 \
+    return (
+        ("%d:%02d:%02d" % (s // 3600, s // 60 % 60, s % 60))
+        if s >= 3600
         else ("%d:%02d" % (s // 60, s % 60))
+    )
 
 
 def read():
@@ -107,7 +121,7 @@ def read():
                         except ValueError:
                             pass
                     elif k == "progress":
-                        finished = (v == "end")
+                        finished = v == "end"
             job["done"] = done
             job["speed"] = speed
             job["finished"] = finished

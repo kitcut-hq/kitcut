@@ -29,7 +29,12 @@ asked to rule out gross corruption.
 
 Invoke as:  python scripts/compare-videos.py --rendered a.mp4 --reference b.mp4
 """
-import sys, os, json, argparse, subprocess
+
+import sys
+import os
+import json
+import argparse
+import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -40,34 +45,38 @@ import cv2  # noqa: E402
 
 import _project  # noqa: E402
 
-_shots = import_module("shot-detect")   # hyphen: not importable by name
+_shots = import_module("shot-detect")  # hyphen: not importable by name
 
 ROOT = _env.ROOT
 ENV = _env.ENV
 
-SW = 320                     # SSIM analysis width
-RATE = 8000                  # audio analysis rate
-DEFAULT_PASS = {"frames_exact": True, "max_shifted": 0, "min_ssim_median": 0.95,
-                "min_ssim_p5": 0.90,
-                # One frame, because that is the shot detector's own precision
-                # -- not a relaxation of frame-exactness, which the shift probe
-                # still holds at zero. Measured: a boundary that is a smooth
-                # plateau rather than a cut peaked at frame 62167 in one film
-                # and 62168 in the other, values differing in the fifth
-                # decimal. A real misalignment moves every cut, not one.
-                "max_cut_offset": 1,
-                "max_audio_offset_ms": 1.0, "max_frozen_frames": 0}
+SW = 320  # SSIM analysis width
+RATE = 8000  # audio analysis rate
+DEFAULT_PASS = {
+    "frames_exact": True,
+    "max_shifted": 0,
+    "min_ssim_median": 0.95,
+    "min_ssim_p5": 0.90,
+    # One frame, because that is the shot detector's own precision
+    # -- not a relaxation of frame-exactness, which the shift probe
+    # still holds at zero. Measured: a boundary that is a smooth
+    # plateau rather than a cut peaked at frame 62167 in one film
+    # and 62168 in the other, values differing in the fifth
+    # decimal. A real misalignment moves every cut, not one.
+    "max_cut_offset": 1,
+    "max_audio_offset_ms": 1.0,
+    "max_frozen_frames": 0,
+}
 # Calibrated against a render known to be pixel-identical to its reference, so
 # every run it reports is a false positive. A looser 0.0015 over half a second
 # called 12.8% of that film frozen -- which was the podcast's own stillness, not
 # the cut's. A held frame scores 0.0000 (worst 0.0005); live footage sits above.
 FROZEN = {"still": 0.0005, "min_run_s": 1.0}
-SHIFT_MARGIN = 0.001         # see the comment where it is used
+SHIFT_MARGIN = 0.001  # see the comment where it is used
 
 
 def run(cmd, **kw):
-    return subprocess.run(cmd, check=True, capture_output=True, text=True,
-                          env=ENV, **kw)
+    return subprocess.run(cmd, check=True, capture_output=True, text=True, env=ENV, **kw)
 
 
 def hhmmss(t):
@@ -79,29 +88,75 @@ def rel(p):
 
 
 def probe(path):
-    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-               "-show_entries", "stream=width,height,r_frame_rate",
-               "-of", "json", path]).stdout
+    out = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,r_frame_rate",
+            "-of",
+            "json",
+            path,
+        ]
+    ).stdout
     s = json.loads(out)["streams"][0]
     num, den = (int(x) for x in s["r_frame_rate"].split("/"))
-    return {"width": int(s["width"]), "height": int(s["height"]),
-            "fps_num": num, "fps_den": den, "fps": num / float(den)}
+    return {
+        "width": int(s["width"]),
+        "height": int(s["height"]),
+        "fps_num": num,
+        "fps_den": den,
+        "fps": num / float(den),
+    }
 
 
 def count_frames(path):
-    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-               "-count_packets", "-show_entries", "stream=nb_read_packets",
-               "-of", "csv=p=0", path]).stdout
+    out = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-count_packets",
+            "-show_entries",
+            "stream=nb_read_packets",
+            "-of",
+            "csv=p=0",
+            path,
+        ]
+    ).stdout
     return int(out.strip().rstrip(","))
 
 
 def frames(path, w, h):
     """Every frame, greyscale float, streamed."""
     p = subprocess.Popen(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
-         "-i", path, "-vf", "scale=%d:%d" % (w, h), "-fps_mode", "passthrough",
-         "-an", "-f", "rawvideo", "-pix_fmt", "gray", "-"],
-        stdout=subprocess.PIPE, env=ENV)
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-i",
+            path,
+            "-vf",
+            "scale=%d:%d" % (w, h),
+            "-fps_mode",
+            "passthrough",
+            "-an",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "gray",
+            "-",
+        ],
+        stdout=subprocess.PIPE,
+        env=ENV,
+    )
     n = w * h
     while True:
         buf = p.stdout.read(n)
@@ -118,7 +173,7 @@ def ssim(a, b):
     Hand-rolled because neither scipy nor scikit-image is installed here, and
     adding either to get fifteen lines of cv2 would be the tail wagging the dog.
     """
-    C1, C2 = 0.01 ** 2, 0.03 ** 2
+    C1, C2 = 0.01**2, 0.03**2
     k, s = (11, 11), 1.5
     mu_a = cv2.GaussianBlur(a, k, s)
     mu_b = cv2.GaussianBlur(b, k, s)
@@ -133,10 +188,31 @@ def ssim(a, b):
 
 def mono(path):
     p = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-i", path,
-         "-vn", "-map", "0:a:0", "-f", "f32le", "-acodec", "pcm_f32le",
-         "-ac", "1", "-ar", str(RATE), "-"],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=ENV)
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-i",
+            path,
+            "-vn",
+            "-map",
+            "0:a:0",
+            "-f",
+            "f32le",
+            "-acodec",
+            "pcm_f32le",
+            "-ac",
+            "1",
+            "-ar",
+            str(RATE),
+            "-",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=ENV,
+    )
     if p.returncode != 0:
         return None
     a = np.frombuffer(p.stdout, dtype=np.float32)
@@ -152,9 +228,9 @@ def audio_align(a, b):
     if k > n // 2:
         k -= n
     if k >= 0:
-        u, v = a[k:], b[:a.size - k]
+        u, v = a[k:], b[: a.size - k]
     else:
-        u, v = a[:b.size + k], b[-k:]
+        u, v = a[: b.size + k], b[-k:]
     m = min(u.size, v.size)
     u, v = u[:m], v[:m]
     ref = float(np.sqrt((v.astype(np.float64) ** 2).mean())) or 1e-12
@@ -194,6 +270,7 @@ def match_cameras(a_sigs, a_names, b_sigs, b_names):
     only coincide by luck. Matching them by fingerprint is what lets the two
     recovered edits be compared at all.
     """
+
     def centre(sigs, names, nm):
         xs = [s for s, x in zip(sigs, names) if x == nm]
         return np.median(np.array(xs), axis=0)
@@ -226,8 +303,9 @@ def main():
     ap.add_argument("--id", help="project id for the report and journal line")
     ap.add_argument("--out", help="default projects/<id>/<id>.compare.json")
     ap.add_argument("--json", action="store_true", help="print the report")
-    ap.add_argument("--no-cuts", action="store_true",
-                    help="skip the shot comparison (two extra decodes)")
+    ap.add_argument(
+        "--no-cuts", action="store_true", help="skip the shot comparison (two extra decodes)"
+    )
     args = ap.parse_args()
 
     ren, ref = rel(args.rendered), rel(args.reference)
@@ -237,19 +315,22 @@ def main():
     bar = dict(DEFAULT_PASS)
     if args.manifest:
         with open(rel(args.manifest), encoding="utf-8") as f:
-            bar.update((json.load(f).get("pass") or {}))
+            bar.update(json.load(f).get("pass") or {})
     d = _project.find_project_dir(ren)
-    pid = args.id or (os.path.basename(d) if d else
-                      os.path.splitext(os.path.basename(ren))[0])
+    pid = args.id or (os.path.basename(d) if d else os.path.splitext(os.path.basename(ren))[0])
 
     ia, ib = probe(ren), probe(ref)
     na, nb = count_frames(ren), count_frames(ref)
     h = int(round(SW * ib["height"] / float(ib["width"]))) // 2 * 2
     fps = ib["fps"]
-    print("rendered  %s  %dx%d  %d frames  %s"
-          % (_project.norm(ren), ia["width"], ia["height"], na, hhmmss(na / fps)))
-    print("reference %s  %dx%d  %d frames  %s"
-          % (_project.norm(ref), ib["width"], ib["height"], nb, hhmmss(nb / fps)))
+    print(
+        "rendered  %s  %dx%d  %d frames  %s"
+        % (_project.norm(ren), ia["width"], ia["height"], na, hhmmss(na / fps))
+    )
+    print(
+        "reference %s  %dx%d  %d frames  %s"
+        % (_project.norm(ref), ib["width"], ib["height"], nb, hhmmss(nb / fps))
+    )
 
     scores, best_at = [], []
     ga, gb = frames(ren, SW, h), frames(ref, SW, h)
@@ -281,17 +362,27 @@ def main():
     shifted = [i for i, v in enumerate(best_at) if v != 0]
 
     p5 = float(np.percentile(scores, 5))
-    print("\nssim over %d compared frames: median %.4f  p5 %.4f  min %.4f @ %s"
-          % (scores.size, float(np.median(scores)), p5,
-             float(scores.min()), hhmmss(int(np.argmin(scores)) / fps)))
+    print(
+        "\nssim over %d compared frames: median %.4f  p5 %.4f  min %.4f @ %s"
+        % (
+            scores.size,
+            float(np.median(scores)),
+            p5,
+            float(scores.min()),
+            hhmmss(int(np.argmin(scores)) / fps),
+        )
+    )
     if p5 < 0.9:
         bad = int((scores < 0.9).sum())
-        print("  !! %d frames (%.1f%%) score below 0.90 -- the MEDIAN IS NOT THE "
-              "STORY here. A film can be 78%% right and still show something "
-              "completely wrong for a fifth of its length."
-              % (bad, 100.0 * bad / scores.size))
-    print("frames whose best match is a NEIGHBOUR, not themselves: %d of %d"
-          % (len(shifted), scores.size))
+        print(
+            "  !! %d frames (%.1f%%) score below 0.90 -- the MEDIAN IS NOT THE "
+            "STORY here. A film can be 78%% right and still show something "
+            "completely wrong for a fifth of its length." % (bad, 100.0 * bad / scores.size)
+        )
+    print(
+        "frames whose best match is a NEIGHBOUR, not themselves: %d of %d"
+        % (len(shifted), scores.size)
+    )
     for i in shifted[:12]:
         print("    frame %5d (%s) matches %+d better" % (i, hhmmss(i / fps), best_at[i]))
     if len(shifted) > 12:
@@ -312,21 +403,23 @@ def main():
         # rendered max 0.000858 against reference 0.000866 over the same
         # frames, the same stillness called two different ways. Asking whether
         # the REFERENCE moves over those frames has no boundary to disagree on.
-        froz = [(a, b) for a, b in frozen_runs(da, fps)
-                if float(db[a:b].mean()) > FROZEN["still"]]
+        froz = [(a, b) for a, b in frozen_runs(da, fps) if float(db[a:b].mean()) > FROZEN["still"]]
         n_froz = sum(b - a for a, b in froz)
-        print("\nfrozen picture in the rendered film that is not frozen in the "
-              "reference: %d frames (%.1f%%) in %d runs"
-              % (n_froz, 100.0 * n_froz / max(1, na), len(froz)))
+        print(
+            "\nfrozen picture in the rendered film that is not frozen in the "
+            "reference: %d frames (%.1f%%) in %d runs"
+            % (n_froz, 100.0 * n_froz / max(1, na), len(froz))
+        )
         for a, b in froz[:8]:
-            print("    %s-%s  %.2fs held" % (hhmmss(a / fps), hhmmss(b / fps),
-                                             (b - a) / fps))
+            print("    %s-%s  %.2fs held" % (hhmmss(a / fps), hhmmss(b / fps), (b - a) / fps))
         if len(froz) > 8:
             print("    ... and %d more" % (len(froz) - 8))
         if n_froz:
-            print("    a frozen run means the cut asked a camera for footage it "
-                  "does not have. In this fixture that is every moment the "
-                  "switcher chose an angle the original editor was not on.")
+            print(
+                "    a frozen run means the cut asked a camera for footage it "
+                "does not have. In this fixture that is every moment the "
+                "switcher chose an angle the original editor was not on."
+            )
         pa, ssa, nma = _shots.build_shots(da, sa, _shots.DEFAULT_DETECT)
         pb, ssb, nmb = _shots.build_shots(db, sb, _shots.DEFAULT_DETECT)
         ca = [a for a, _ in pa[1:]]
@@ -340,87 +433,113 @@ def main():
         worst_join = max((abs(o) for o in matched), default=0)
         for x, o in zip(cb, offs):
             if o is None or abs(o) > 0:
-                print("    reference cut at %5d (%s): rendered %s"
-                      % (x, hhmmss(x / fps), "none" if o is None else "%+d frames" % o))
+                print(
+                    "    reference cut at %5d (%s): rendered %s"
+                    % (x, hhmmss(x / fps), "none" if o is None else "%+d frames" % o)
+                )
         print("    worst matched cut offset: %d frames" % worst_join)
 
         amap = match_cameras(ssa, nma, ssb, nmb)
         la = label_track(pa, nma, min(na, nb))
         lb = label_track(pb, nmb, min(na, nb))
-        same = sum(1 for x, y in zip(la, lb)
-                   if x is not None and amap.get(x, (None,))[0] == y)
+        same = sum(1 for x, y in zip(la, lb) if x is not None and amap.get(x, (None,))[0] == y)
         agree = 100.0 * same / max(1, min(na, nb))
-        print("    angle map: %s"
-              % ", ".join("%s->%s(%.3f)" % (k, v[0], v[1]) for k, v in sorted(amap.items())))
+        print(
+            "    angle map: %s"
+            % ", ".join("%s->%s(%.3f)" % (k, v[0], v[1]) for k, v in sorted(amap.items()))
+        )
         print("    same angle on %.2f%% of the timeline" % agree)
-        cuts_report = {"rendered": ca, "reference": cb,
-                       "offsets": offs, "worst_matched_offset": worst_join,
-                       "angle_map": {k: v[0] for k, v in amap.items()},
-                       "timeline_agreement_pct": round(agree, 3)}
+        cuts_report = {
+            "rendered": ca,
+            "reference": cb,
+            "offsets": offs,
+            "worst_matched_offset": worst_join,
+            "angle_map": {k: v[0] for k, v in amap.items()},
+            "timeline_agreement_pct": round(agree, 3),
+        }
 
     aud = None
     sa_, sb_ = mono(ren), mono(ref)
     if sa_ is not None and sb_ is not None:
         k, resid = audio_align(sa_, sb_)
         ms = 1000.0 * k / RATE
-        print("\naudio: offset %+.3f ms, residual %.1f dB below the reference"
-              % (ms, -resid))
-        aud = {"offset_samples": k, "offset_ms": round(ms, 4),
-               "residual_db": round(resid, 2)}
+        print("\naudio: offset %+.3f ms, residual %.1f dB below the reference" % (ms, -resid))
+        aud = {"offset_samples": k, "offset_ms": round(ms, 4), "residual_db": round(resid, 2)}
 
     fails = []
     if bar["frames_exact"] and na != nb:
         fails.append("frame count %d, reference %d" % (na, nb))
     if len(shifted) > bar["max_shifted"]:
-        fails.append("%d frames are shifted (allowed %d)"
-                     % (len(shifted), bar["max_shifted"]))
+        fails.append("%d frames are shifted (allowed %d)" % (len(shifted), bar["max_shifted"]))
     if float(np.median(scores)) < bar["min_ssim_median"]:
-        fails.append("median ssim %.4f below %.4f"
-                     % (float(np.median(scores)), bar["min_ssim_median"]))
+        fails.append(
+            "median ssim %.4f below %.4f" % (float(np.median(scores)), bar["min_ssim_median"])
+        )
     if p5 < bar["min_ssim_p5"]:
-        fails.append("5th-percentile ssim %.4f below %.4f -- a bad tail the "
-                     "median cannot see" % (p5, bar["min_ssim_p5"]))
+        fails.append(
+            "5th-percentile ssim %.4f below %.4f -- a bad tail the "
+            "median cannot see" % (p5, bar["min_ssim_p5"])
+        )
     n_froz = sum(b - a for a, b in froz)
     if n_froz > bar["max_frozen_frames"]:
-        fails.append("%d frames of frozen picture (allowed %d)"
-                     % (n_froz, bar["max_frozen_frames"]))
+        fails.append(
+            "%d frames of frozen picture (allowed %d)" % (n_froz, bar["max_frozen_frames"])
+        )
     if worst_join is not None and worst_join > bar["max_cut_offset"]:
-        fails.append("a cut is %d frames out (allowed %d)"
-                     % (worst_join, bar["max_cut_offset"]))
+        fails.append("a cut is %d frames out (allowed %d)" % (worst_join, bar["max_cut_offset"]))
     if aud and abs(aud["offset_ms"]) > bar["max_audio_offset_ms"]:
         fails.append("audio is %+.2f ms out" % aud["offset_ms"])
 
-    doc = {"_comment": "Round-trip score by scripts/compare-videos.py.",
-           "id": pid, "rendered": _project.norm(ren),
-           "reference": _project.norm(ref),
-           "frames": {"rendered": na, "reference": nb, "compared": int(scores.size)},
-           "ssim": {"median": round(float(np.median(scores)), 5),
-                    "p5": round(float(np.percentile(scores, 5)), 5),
-                    "min": round(float(scores.min()), 5),
-                    "min_at_frame": int(np.argmin(scores))},
-           "shifted_frames": {"count": len(shifted), "first": shifted[:32]},
-           "frozen": {"frames": n_froz,
-                      "pct": round(100.0 * n_froz / max(1, na), 2),
-                      "runs": [[a, b] for a, b in froz]},
-           "cuts": cuts_report, "audio": aud,
-           "pass_bar": bar, "failures": fails, "verdict": "PASS" if not fails else "FAIL"}
+    doc = {
+        "_comment": "Round-trip score by scripts/compare-videos.py.",
+        "id": pid,
+        "rendered": _project.norm(ren),
+        "reference": _project.norm(ref),
+        "frames": {"rendered": na, "reference": nb, "compared": int(scores.size)},
+        "ssim": {
+            "median": round(float(np.median(scores)), 5),
+            "p5": round(float(np.percentile(scores, 5)), 5),
+            "min": round(float(scores.min()), 5),
+            "min_at_frame": int(np.argmin(scores)),
+        },
+        "shifted_frames": {"count": len(shifted), "first": shifted[:32]},
+        "frozen": {
+            "frames": n_froz,
+            "pct": round(100.0 * n_froz / max(1, na), 2),
+            "runs": [[a, b] for a, b in froz],
+        },
+        "cuts": cuts_report,
+        "audio": aud,
+        "pass_bar": bar,
+        "failures": fails,
+        "verdict": "PASS" if not fails else "FAIL",
+    }
 
     print("\n%s" % ("PASS" if not fails else "FAIL"))
     for f in fails:
         print("  !! %s" % f)
 
-    out = args.out or os.path.join(d or os.path.join(ROOT, "temp"),
-                                   "%s.compare.json" % pid)
+    out = args.out or os.path.join(d or os.path.join(ROOT, "temp"), "%s.compare.json" % pid)
     with open(out, "w", encoding="utf-8") as f:
         json.dump(doc, f, indent=2)
         f.write("\n")
     print("wrote %s" % _project.norm(out))
     if args.json:
         print(json.dumps(doc, indent=2))
-    _project.record(pid, "compare", script=__file__, argv=sys.argv[1:],
-                    note="%s: %s vs %s, median ssim %.4f, %d shifted frames"
-                         % (doc["verdict"], _project.norm(ren), _project.norm(ref),
-                            doc["ssim"]["median"], len(shifted)))
+    _project.record(
+        pid,
+        "compare",
+        script=__file__,
+        argv=sys.argv[1:],
+        note="%s: %s vs %s, median ssim %.4f, %d shifted frames"
+        % (
+            doc["verdict"],
+            _project.norm(ren),
+            _project.norm(ref),
+            doc["ssim"]["median"],
+            len(shifted),
+        ),
+    )
     sys.exit(0 if not fails else 1)
 
 

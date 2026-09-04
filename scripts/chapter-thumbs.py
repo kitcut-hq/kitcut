@@ -36,7 +36,14 @@ Invoke as:
   python scripts/chapter-thumbs.py DlQc-IQ5gZY
   python scripts/chapter-thumbs.py DlQc-IQ5gZY --window 12 --out temp/thumbs
 """
-import sys, os, re, email, argparse, subprocess, io
+
+import sys
+import os
+import re
+import email
+import argparse
+import subprocess
+import io
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -50,14 +57,17 @@ def fetch_storyboard(vid, level, outdir):
     if os.path.exists(out) and os.path.getsize(out) > 0:
         return out
     r = subprocess.run(
-        _env.PY + ["-m", "yt_dlp", "-f", level,
-                   "-o", os.path.join(outdir, f"sb_%(id)s.%(ext)s"), "--", vid],
-        env=_env.ENV, capture_output=True, text=True,
-        encoding="utf-8", errors="replace")
+        _env.PY
+        + ["-m", "yt_dlp", "-f", level, "-o", os.path.join(outdir, "sb_%(id)s.%(ext)s"), "--", vid],
+        env=_env.ENV,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     if not os.path.exists(out):
         tail = [l for l in (r.stderr or "").splitlines() if l.startswith("ERROR")]
-        sys.exit("could not fetch the storyboard: "
-                 + (tail[-1] if tail else "unknown error"))
+        sys.exit("could not fetch the storyboard: " + (tail[-1] if tail else "unknown error"))
     return out
 
 
@@ -70,16 +80,21 @@ def _decode(data):
     hard dependency of this repo, so hand it over rather than fight Pillow.
     """
     from PIL import Image
+
     try:
         return Image.open(io.BytesIO(data)).convert("RGB")
     except Exception:
         pass
-    p = subprocess.run(["ffmpeg", "-v", "error", "-i", "pipe:0",
-                        "-f", "image2", "-c:v", "png", "pipe:1"],
-                       input=data, capture_output=True)
+    p = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", "pipe:0", "-f", "image2", "-c:v", "png", "pipe:1"],
+        input=data,
+        capture_output=True,
+    )
     if p.returncode != 0 or not p.stdout:
-        raise RuntimeError("ffmpeg could not decode a storyboard sheet: "
-                           + p.stderr.decode("utf-8", "replace")[:200])
+        raise RuntimeError(
+            "ffmpeg could not decode a storyboard sheet: "
+            + p.stderr.decode("utf-8", "replace")[:200]
+        )
     return Image.open(io.BytesIO(p.stdout)).convert("RGB")
 
 
@@ -101,9 +116,9 @@ def sheets_from_mhtml(path):
         i = raw.find(b"RIFF", i)
         if i < 0:
             return out
-        size = int.from_bytes(raw[i + 4:i + 8], "little")
-        if raw[i + 8:i + 12] == b"WEBP" and 0 < size < len(raw):
-            out.append(raw[i:i + 8 + size])
+        size = int.from_bytes(raw[i + 4 : i + 8], "little")
+        if raw[i + 8 : i + 12] == b"WEBP" and 0 < size < len(raw):
+            out.append(raw[i : i + 8 + size])
             i += 8 + size
         else:
             i += 4
@@ -119,14 +134,14 @@ def tiles_from_mhtml(path, tile_w, tile_h):
         cols, rows = sheet.width // tile_w, sheet.height // tile_h
         for r in range(rows):
             for c in range(cols):
-                out.append(sheet.crop((c * tile_w, r * tile_h,
-                                       (c + 1) * tile_w, (r + 1) * tile_h)))
+                out.append(sheet.crop((c * tile_w, r * tile_h, (c + 1) * tile_w, (r + 1) * tile_h)))
     return out
 
 
 def signature(img, size=16):
     """Small grayscale fingerprint, for comparing tiles."""
     import numpy as np
+
     g = img.convert("L").resize((size, size))
     a = np.asarray(g, dtype="float32")
     return a / 255.0
@@ -134,21 +149,23 @@ def signature(img, size=16):
 
 def distance(a, b):
     import numpy as np
+
     return float(np.abs(a - b).mean())
 
 
 def detail(img):
     """How much is going on in the frame -- flat slides score near zero."""
     import numpy as np
+
     a = signature(img, 32)
-    return float(np.abs(np.diff(a, axis=0)).mean()
-                 + np.abs(np.diff(a, axis=1)).mean())
+    return float(np.abs(np.diff(a, axis=0)).mean() + np.abs(np.diff(a, axis=1)).mean())
 
 
 def contact_sheet(images, labels, path, cols=4):
     from PIL import Image, ImageDraw
+
     if not images:
-        return
+        return None
     tw, th = images[0].size
     pad = 18
     rows = (len(images) + cols - 1) // cols
@@ -169,24 +186,32 @@ def main():
     ap.add_argument("--chapters", help="defaults to config/chapters/<id>.txt")
     ap.add_argument("--level", default="sb0", help="storyboard format")
     ap.add_argument("--tile", default="320x180", help="tile size of --level")
-    ap.add_argument("--window", type=int, default=10,
-                    help="seconds either side to search for a better frame")
-    ap.add_argument("--dup", type=float, default=0.020,
-                    help="below this is the same frame (see the docstring "
-                         "for the measurements behind this number)")
-    ap.add_argument("--alike", type=float, default=0.060,
-                    help="below this two tiles read the same at thumbnail size")
+    ap.add_argument(
+        "--window", type=int, default=10, help="seconds either side to search for a better frame"
+    )
+    ap.add_argument(
+        "--dup",
+        type=float,
+        default=0.020,
+        help="below this is the same frame (see the docstring "
+        "for the measurements behind this number)",
+    )
+    ap.add_argument(
+        "--alike",
+        type=float,
+        default=0.060,
+        help="below this two tiles read the same at thumbnail size",
+    )
     ap.add_argument("--out", default="temp/thumbs")
     args = ap.parse_args()
 
     vid = args.video
-    cpath = args.chapters or os.path.join(_env.ROOT, "config", "chapters",
-                                          f"{vid}.txt")
+    cpath = args.chapters or os.path.join(_env.ROOT, "config", "chapters", f"{vid}.txt")
     if not os.path.exists(cpath):
         sys.exit(f"no chapters file at {cpath}")
-    marks = ch.parse_marks("".join(
-        l for l in open(cpath, encoding="utf-8")
-        if not l.strip().startswith("#")))
+    marks = ch.parse_marks(
+        "".join(l for l in open(cpath, encoding="utf-8") if not l.strip().startswith("#"))
+    )
 
     tw, th = (int(x) for x in args.tile.split("x"))
     mhtml = fetch_storyboard(vid, args.level, args.out)
@@ -194,17 +219,20 @@ def main():
 
     # The sheet spans the whole video, so the tile spacing follows from the
     # count. Duration comes from the last mark only as a floor, so ask yt-dlp.
-    r = subprocess.run(_env.PY + ["-m", "yt_dlp", "--skip-download",
-                                  "--print", "%(duration)s", "--", vid],
-                       env=_env.ENV, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace")
+    r = subprocess.run(
+        _env.PY + ["-m", "yt_dlp", "--skip-download", "--print", "%(duration)s", "--", vid],
+        env=_env.ENV,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     try:
         duration = float((r.stdout or "").strip())
     except ValueError:
         sys.exit("could not read the video duration")
     step = duration / len(tiles)
-    print(f"{len(tiles)} storyboard tiles over {ch.fmt_ts(duration)} "
-          f"-- one every {step:.1f}s\n")
+    print(f"{len(tiles)} storyboard tiles over {ch.fmt_ts(duration)} -- one every {step:.1f}s\n")
 
     def tile_at(t):
         return tiles[min(len(tiles) - 1, max(0, int(round(t / step))))]
@@ -216,27 +244,24 @@ def main():
     for (t, line), im in zip(marks, picks):
         title = line.split(None, 1)[1] if len(line.split(None, 1)) > 1 else ""
         labels.append(f"{ch.fmt_ts(t)} {title}")
-    sheet = contact_sheet(picks, labels,
-                          os.path.join(args.out, f"{vid}-chapters.png"))
+    sheet = contact_sheet(picks, labels, os.path.join(args.out, f"{vid}-chapters.png"))
 
     dull = []
     for i, (t, line) in enumerate(marks):
         title = line.split(None, 1)[1] if len(line.split(None, 1)) > 1 else ""
-        dists = [(distance(sigs[i], sigs[j]), j)
-                 for j in range(len(marks)) if j != i]
+        dists = [(distance(sigs[i], sigs[j]), j) for j in range(len(marks)) if j != i]
         dups = [j for d, j in dists if d < args.dup]
         alike = [j for d, j in dists if args.dup <= d < args.alike]
         flat = detail(picks[i])
         note = []
         if dups:
-            note.append("the same frame as " + ", ".join(
-                ch.fmt_ts(marks[j][0]) for j in dups[:4]))
+            note.append("the same frame as " + ", ".join(ch.fmt_ts(marks[j][0]) for j in dups[:4]))
         if alike:
-            note.append(f"reads the same at thumbnail size as "
-                        + ", ".join(ch.fmt_ts(marks[j][0])
-                                    for j in alike[:4])
-                        + (f" (+{len(alike) - 4} more)" if len(alike) > 4
-                           else ""))
+            note.append(
+                "reads the same at thumbnail size as "
+                + ", ".join(ch.fmt_ts(marks[j][0]) for j in alike[:4])
+                + (f" (+{len(alike) - 4} more)" if len(alike) > 4 else "")
+            )
         if flat < 0.010:
             note.append(f"very flat image ({flat:.3f})")
         print(f"{ch.fmt_ts(t):>6}  detail {flat:.3f}  {title[:44]}")
@@ -246,8 +271,10 @@ def main():
             dull.append(i)
 
     if dull:
-        print(f"\n{len(dull)} marks would show a dull or duplicate thumbnail. "
-              f"Nearby alternatives within +/-{args.window}s:\n")
+        print(
+            f"\n{len(dull)} marks would show a dull or duplicate thumbnail. "
+            f"Nearby alternatives within +/-{args.window}s:\n"
+        )
         for i in dull:
             t = marks[i][0]
             lo = max(0, t - args.window)
@@ -267,17 +294,23 @@ def main():
             # option, and measuring showed six of nine such proposals moved
             # the mark without making the thumbnail any more distinguishable.
             if best is not None and best_gain >= args.alike:
-                print(f"  {ch.fmt_ts(t)} -> {ch.fmt_ts(best)} "
-                      f"({best - t:+.0f}s, {here:.3f} -> {best_gain:.3f})  "
-                      f"{marks[i][1].split(None, 1)[1][:38]}")
+                print(
+                    f"  {ch.fmt_ts(t)} -> {ch.fmt_ts(best)} "
+                    f"({best - t:+.0f}s, {here:.3f} -> {best_gain:.3f})  "
+                    f"{marks[i][1].split(None, 1)[1][:38]}"
+                )
             else:
-                print(f"  {ch.fmt_ts(t)}    nothing better within "
-                      f"+/-{args.window}s -- the whole stretch looks alike")
+                print(
+                    f"  {ch.fmt_ts(t)}    nothing better within "
+                    f"+/-{args.window}s -- the whole stretch looks alike"
+                )
 
     if sheet:
         print(f"\ncontact sheet: {sheet}")
-    print("Per-chapter thumbnails cannot be uploaded -- moving the mark is the "
-          "only lever. Re-check any nudge with verify-chapters.py.")
+    print(
+        "Per-chapter thumbnails cannot be uploaded -- moving the mark is the "
+        "only lever. Re-check any nudge with verify-chapters.py."
+    )
 
 
 if __name__ == "__main__":

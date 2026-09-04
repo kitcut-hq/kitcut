@@ -43,6 +43,7 @@ the looped-PNG alpha did in the shorts pipeline (see README gotchas).
 
 Invoke as:  python scripts/track-blur.py --src <proxy.mp4> --pii <pii.json> --outdir <dir> --list
 """
+
 import sys
 import os
 import re
@@ -64,17 +65,17 @@ for _s in (sys.stdout, sys.stderr):
         pass
 
 KINDS = {"card", "cvv", "expiry", "iban", "phone", "email", "balance"}
-THR = 0.86            # NCC score to accept a match at full resolution; a
-                      # near-miss blur lands a few pixels off (cosmetic), a
-                      # near-miss REJECTION is a leak, so err low
-THR_HALF = 0.80       # (unused since the coarse-first rewrite; kept for the record)
-THR_COARSE = 0.50     # permissive half-scale prefilter; full resolution decides
-MAX_CAND = 6          # coarse candidates confirmed per template per sweep
-DILATE = 6            # pixels added around every matched box
-COLD_EVERY = 15       # frames between full searches for a long-unseen template
-COLD_FOREIGN = 60     # ...and for one only pooled in from another recording
+THR = 0.86  # NCC score to accept a match at full resolution; a
+# near-miss blur lands a few pixels off (cosmetic), a
+# near-miss REJECTION is a leak, so err low
+THR_HALF = 0.80  # (unused since the coarse-first rewrite; kept for the record)
+THR_COARSE = 0.50  # permissive half-scale prefilter; full resolution decides
+MAX_CAND = 6  # coarse candidates confirmed per template per sweep
+DILATE = 6  # pixels added around every matched box
+COLD_EVERY = 15  # frames between full searches for a long-unseen template
+COLD_FOREIGN = 60  # ...and for one only pooled in from another recording
 CHANGE_SKIP = 0.0006  # frame-diff fraction below which nothing is re-searched
-MAX_INSTANCES = 8     # same secret shown more than this is a listing, not a leak
+MAX_INSTANCES = 8  # same secret shown more than this is a listing, not a leak
 
 # Verified on the Privat24 clip, where the first version failed two ways:
 #
@@ -98,34 +99,82 @@ THR_SMALL = 0.93
 
 def probe(path):
     out = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "v:0",
-         "-show_entries", "stream=width,height,avg_frame_rate",
-         "-show_entries", "format=duration", "-of", "json", path],
-        check=True, capture_output=True, text=True).stdout
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,avg_frame_rate",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            path,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
     d = json.loads(out)
     st = (d.get("streams") or [{}])[0]
     num, _, den = (st.get("avg_frame_rate") or "0/1").partition("/")
-    return {"w": int(st["width"]), "h": int(st["height"]),
-            "fps": float(num) / float(den) if float(den or 0) else 30.0,
-            "dur": float((d.get("format") or {}).get("duration") or 0.0)}
+    return {
+        "w": int(st["width"]),
+        "h": int(st["height"]),
+        "fps": float(num) / float(den) if float(den or 0) else 30.0,
+        "dur": float((d.get("format") or {}).get("duration") or 0.0),
+    }
 
 
 def frame_at(path, t, w, h):
     out = subprocess.run(
-        ["ffmpeg", "-v", "error", "-nostdin", "-ss", f"{t:.2f}", "-i", path,
-         "-frames:v", "1", "-pix_fmt", "gray", "-f", "rawvideo", "-"],
-        capture_output=True).stdout
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-nostdin",
+            "-ss",
+            f"{t:.2f}",
+            "-i",
+            path,
+            "-frames:v",
+            "1",
+            "-pix_fmt",
+            "gray",
+            "-f",
+            "rawvideo",
+            "-",
+        ],
+        capture_output=True,
+    ).stdout
     if len(out) < w * h:
         return None
-    return np.frombuffer(out[:w * h], np.uint8).reshape(h, w)
+    return np.frombuffer(out[: w * h], np.uint8).reshape(h, w)
 
 
 def gray_stream(path, w, h, fps):
     """Every frame, CFR at the container's own rate, so index == time*fps."""
     p = subprocess.Popen(
-        ["ffmpeg", "-v", "error", "-nostdin", "-i", path,
-         "-vf", f"fps={fps}", "-pix_fmt", "gray", "-f", "rawvideo", "-"],
-        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-nostdin",
+            "-i",
+            path,
+            "-vf",
+            f"fps={fps}",
+            "-pix_fmt",
+            "gray",
+            "-f",
+            "rawvideo",
+            "-",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
     n = w * h
     while True:
         buf = p.stdout.read(n)
@@ -178,9 +227,12 @@ def collect_templates(src, pii_paths, benign, kinds, info):
         # monospace) and in the panel (151 px, serif) are different pixels.
         # Height alone put the serif template on the Notepad frames: 1/4.
         def bkey(h):
-            return (int(round(h["rect"][3] * info["h"] / 4)),
-                    int(round(h["rect"][2] * info["w"] / 12)),
-                    re.sub(r"\s+", "", h["text"])[:48])
+            return (
+                int(round(h["rect"][3] * info["h"] / 4)),
+                int(round(h["rect"][2] * info["w"] / 12)),
+                re.sub(r"\s+", "", h["text"])[:48],
+            )
+
         buckets, seen = {}, {}
         for h in hits:
             k = bkey(h)
@@ -215,7 +267,7 @@ def collect_templates(src, pii_paths, benign, kinds, info):
                 fr = frame_at(hsrc, max(0.0, h["t"] + dt_), info["w"], info["h"])
                 if fr is None:
                     continue
-                cand = fr[max(0, py):py + ph, max(0, px):px + pw]
+                cand = fr[max(0, py) : py + ph, max(0, px) : px + pw]
                 if cand.size and cand.std() > best_std:
                     best, best_std = cand, float(cand.std())
                 if best_std >= 40:
@@ -229,18 +281,29 @@ def collect_templates(src, pii_paths, benign, kinds, info):
                 if sw < MIN_TPL_W // 2 or sh < 8:
                     continue
                 img = patch if s == 1.0 else cv2.resize(patch, (sw, sh))
-                variants.append({
-                    "img": img, "scale": s,
-                    "half": cv2.resize(img, (max(2, sw // 2), max(2, sh // 2))),
-                })
-            templates.append({
-                "key": key, "kind": h["kind"], "text": h["text"][:40],
-                "img": patch, "variants": variants,
-                # seen by THIS recording's OCR, or only pooled in from another
-                "own": any(os.path.basename(x.get("_src", "")) == os.path.basename(src)
-                           or os.path.basename(x.get("_src", "")).replace("/temp/proxy/", "/sources/")
-                           == os.path.basename(src) for x in hits),
-            })
+                variants.append(
+                    {
+                        "img": img,
+                        "scale": s,
+                        "half": cv2.resize(img, (max(2, sw // 2), max(2, sh // 2))),
+                    }
+                )
+            templates.append(
+                {
+                    "key": key,
+                    "kind": h["kind"],
+                    "text": h["text"][:40],
+                    "img": patch,
+                    "variants": variants,
+                    # seen by THIS recording's OCR, or only pooled in from another
+                    "own": any(
+                        os.path.basename(x.get("_src", "")) == os.path.basename(src)
+                        or os.path.basename(x.get("_src", "")).replace("/temp/proxy/", "/sources/")
+                        == os.path.basename(src)
+                        for x in hits
+                    ),
+                }
+            )
     return templates
 
 
@@ -295,14 +358,13 @@ def full_search(frame_half, frame, tpl, scales=None):
             x0, y0 = int(cx) * 2, int(cy) * 2
             # the coarse position is off by up to a pixel of phase each way
             # at half scale, so confirm in a window a little wider than that
-            win = frame[max(0, y0 - 10):y0 + H + 10, max(0, x0 - 10):x0 + W + 10]
+            win = frame[max(0, y0 - 10) : y0 + H + 10, max(0, x0 - 10) : x0 + W + 10]
             if win.shape[0] < H or win.shape[1] < W:
                 continue
             rr = cv2.matchTemplate(win, v["img"], cv2.TM_CCOEFF_NORMED)
             _, score, _, loc = cv2.minMaxLoc(rr)
             if score >= thr:
-                hits.append((max(0, x0 - 10) + loc[0],
-                             max(0, y0 - 10) + loc[1], W, H))
+                hits.append((max(0, x0 - 10) + loc[0], max(0, y0 - 10) + loc[1], W, H))
     # de-duplicate across scales: two variants can claim the same spot
     return nms4(hits)
 
@@ -310,8 +372,7 @@ def full_search(frame_half, frame, tpl, scales=None):
 def nms4(hits):
     out = []
     for x, y, w, h in hits:
-        if all(abs(x - ox) > ow * 0.5 or abs(y - oy) > oh * 0.5
-               for ox, oy, ow, oh in out):
+        if all(abs(x - ox) > ow * 0.5 or abs(y - oy) > oh * 0.5 for ox, oy, ow, oh in out):
             out.append((x, y, w, h))
         if len(out) >= MAX_INSTANCES:
             break
@@ -324,7 +385,7 @@ def local_search(frame, tpl, inst, pad=70):
     v = next((v for v in tpl["variants"] if v["img"].shape == (H, W)), None)
     if v is None:
         return None
-    win = frame[max(0, y - pad):y + H + pad, max(0, x - pad):x + W + pad]
+    win = frame[max(0, y - pad) : y + H + pad, max(0, x - pad) : x + W + pad]
     if win.shape[0] < H or win.shape[1] < W:
         return None
     r = cv2.matchTemplate(win, v["img"], cv2.TM_CCOEFF_NORMED)
@@ -359,8 +420,8 @@ def frame_change(fr, prev):
 def track(src, templates, info, verbose=True):
     """Per-frame box lists. The heart of it; see the cost model up top."""
     boxes_per_frame = []
-    instances = {id(t): [] for t in templates}   # template -> [(x, y)]
-    last_seen = {id(t): -10**9 for t in templates}
+    instances = {id(t): [] for t in templates}  # template -> [(x, y)]
+    last_seen = {id(t): -(10**9) for t in templates}
     prev = None
     stats = {"frames": 0, "skipped": 0, "local": 0, "full": 0}
     for i, fr in enumerate(gray_stream(src, info["w"], info["h"], info["fps"])):
@@ -397,8 +458,8 @@ def track(src, templates, info, verbose=True):
             # its own scale only.
             own = t.get("own", True)
             warm = (i - last_seen[tid]) < info["fps"] * 1.0
-            big = moved > 0.10          # a page change or a scroll
-            small = moved < 0.02        # a caret, a spinner, a hover
+            big = moved > 0.10  # a page change or a scroll
+            small = moved < 0.02  # a caret, a spinner, a hover
             due = i % (COLD_EVERY if own else COLD_FOREIGN) == 0
             # a lost template is swept on its patrol tick; a warm one (seen
             # within the last second) on any real change; an own one also on
@@ -415,13 +476,21 @@ def track(src, templates, info, verbose=True):
             for x, y, W, H in kept:
                 # plain ints: matchTemplate hands back numpy int64, which the
                 # json module refuses to serialize when the timeline is saved
-                frame_boxes.append((int(max(0, x - DILATE)), int(max(0, y - DILATE)),
-                                    int(min(info["w"], x + W + DILATE)),
-                                    int(min(info["h"], y + H + DILATE)), t["key"]))
+                frame_boxes.append(
+                    (
+                        int(max(0, x - DILATE)),
+                        int(max(0, y - DILATE)),
+                        int(min(info["w"], x + W + DILATE)),
+                        int(min(info["h"], y + H + DILATE)),
+                        t["key"],
+                    )
+                )
         boxes_per_frame.append(frame_boxes)
         if verbose and i % int(info["fps"] * 30) == 0:
-            print(f"    ...frame {i} ({i / info['fps']:.0f}s) "
-                  f"{len(frame_boxes)} box(es)", file=sys.stderr)
+            print(
+                f"    ...frame {i} ({i / info['fps']:.0f}s) {len(frame_boxes)} box(es)",
+                file=sys.stderr,
+            )
     return boxes_per_frame, stats
 
 
@@ -448,7 +517,7 @@ def write_masks(boxes_per_frame, info, outdir):
         for x0, y0, x1, y1, _key in boxes:
             m[y0:y1, x0:x1] = 255
         if boxes:
-            m = cv2.GaussianBlur(m, (9, 9), 0)   # feathered edge reads as blur
+            m = cv2.GaussianBlur(m, (9, 9), 0)  # feathered edge reads as blur
         name = f"mask_{n:06d}.png"
         cv2.imwrite(os.path.join(outdir, name), m)
         dur = (f1 - f0 + 1) / info["fps"]
@@ -488,15 +557,23 @@ def boxes_at(runs, frame):
 
 def hand_boxes_at(hand_rects, t, info):
     """Manifest hand rects active at time t, as pixel boxes -- the render
-    applies them alongside the tracked mask, so recall must count them."""
+    applies them alongside the tracked mask, so recall must count them.
+    """
     out = []
     for b in hand_rects or []:
         w = b.get("when")
         if w and not (w[0] <= t <= w[1]):
             continue
         x, y, bw, bh = b["rect"]
-        out.append((int(x * info["w"]), int(y * info["h"]),
-                    int((x + bw) * info["w"]), int((y + bh) * info["h"]), "hand"))
+        out.append(
+            (
+                int(x * info["w"]),
+                int(y * info["h"]),
+                int((x + bw) * info["w"]),
+                int((y + bh) * info["h"]),
+                "hand",
+            )
+        )
     return out
 
 
@@ -535,8 +612,9 @@ def recall(runs, pii_paths, src, info, benign, kinds, min_cover=0.8, hand_rects=
             for dt_ in (0.0, period * 0.25, period * 0.5, period * 0.75, period, -period * 0.5):
                 frame = int(round((h["t"] + dt_) * info["fps"]))
                 cov = 0.0
-                for bx0, by0, bx1, by1, _k in (boxes_at(runs, frame)
-                                               + hand_boxes_at(hand_rects, h["t"] + dt_, info)):
+                for bx0, by0, bx1, by1, _k in boxes_at(runs, frame) + hand_boxes_at(
+                    hand_rects, h["t"] + dt_, info
+                ):
                     ix = max(0.0, min(hx1, bx1) - max(hx0, bx0))
                     iy = max(0.0, min(hy1, by1) - max(hy0, by0))
                     cov += ix * iy
@@ -545,42 +623,64 @@ def recall(runs, pii_paths, src, info, benign, kinds, min_cover=0.8, hand_rects=
             # and the tracked box rightly covers only the number, a third of
             # that line. Judge such lines by the digits' share of the box.
             digits = len(re.sub(r"\D", "", h["text"]))
-            need = min_cover if digits >= 0.7 * max(1, len(h["text"].replace(" ", ""))) \
+            need = (
+                min_cover
+                if digits >= 0.7 * max(1, len(h["text"].replace(" ", "")))
                 else min_cover * digits / max(1, len(h["text"].replace(" ", "")))
+            )
             ok = covered / area >= need
             tot, good = per.get(key, (0, 0))
             per[key] = (tot + 1, good + (1 if ok else 0))
             if not ok:
-                misses.append((h["t"], key, h["text"][:40],
-                               round(covered / area, 2)))
+                misses.append((h["t"], key, h["text"][:40], round(covered / area, 2)))
     return per, misses
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", required=True, help="the video the render will read (the proxy)")
-    ap.add_argument("--pii", default="",
-                    help="scan-pii hits: comma-separated, and POOL THEM. One "
-                         "session's secrets cross its recordings -- the card "
-                         "number typed into the Claude panel in one recording "
-                         "was OCR-read only in another, so a per-source pool "
-                         "left it sharp exactly where it mattered. Every "
-                         "same-geometry source should hand its hits to every "
-                         "other.")
+    ap.add_argument(
+        "--pii",
+        default="",
+        help="scan-pii hits: comma-separated, and POOL THEM. One "
+        "session's secrets cross its recordings -- the card "
+        "number typed into the Claude panel in one recording "
+        "was OCR-read only in another, so a per-source pool "
+        "left it sharp exactly where it mattered. Every "
+        "same-geometry source should hand its hits to every "
+        "other.",
+    )
     ap.add_argument("--outdir", required=True)
-    ap.add_argument("--manifest", help="read benign_text from here; with no "
-                    "--pii, also pool every same-geometry source's scan")
+    ap.add_argument(
+        "--manifest",
+        help="read benign_text from here; with no "
+        "--pii, also pool every same-geometry source's scan",
+    )
     ap.add_argument("--kinds", default=",".join(sorted(KINDS)))
-    ap.add_argument("--list", action="store_true",
-                    help="show the templates and price the tracking; touches nothing")
-    ap.add_argument("--recall", action="store_true",
-                    help="score the existing track against this source's OCR "
-                         "hits and print the misses; no tracking, seconds")
-    ap.add_argument("--recall-min", type=float, default=0.98,
-                    help="exit non-zero when overall recall is below this")
-    ap.add_argument("--threads", type=int, default=0,
-                    help="OpenCV threads for this process; the pipeline sets "
-                         "cores/jobs so five workers do not fight over sixteen cores")
+    ap.add_argument(
+        "--list",
+        action="store_true",
+        help="show the templates and price the tracking; touches nothing",
+    )
+    ap.add_argument(
+        "--recall",
+        action="store_true",
+        help="score the existing track against this source's OCR "
+        "hits and print the misses; no tracking, seconds",
+    )
+    ap.add_argument(
+        "--recall-min",
+        type=float,
+        default=0.98,
+        help="exit non-zero when overall recall is below this",
+    )
+    ap.add_argument(
+        "--threads",
+        type=int,
+        default=0,
+        help="OpenCV threads for this process; the pipeline sets "
+        "cores/jobs so five workers do not fight over sixteen cores",
+    )
     args = ap.parse_args()
     if args.threads > 0:
         cv2.setNumThreads(args.threads)
@@ -592,16 +692,21 @@ def main():
         man = json.load(open(_env.resolve(args.manifest), encoding="utf-8"))
         benign = man.get("benign_text") or []
     # the manifest decides what counts as a secret; --kinds still overrides
-    kinds = set(args.kinds.split(",")) if args.kinds != ",".join(sorted(KINDS)) \
+    kinds = (
+        set(args.kinds.split(","))
+        if args.kinds != ",".join(sorted(KINDS))
         else set(man.get("blur_kinds") or KINDS)
+    )
     pii_paths = args.pii.split(",") if args.pii else pool_from_manifest(man, args.manifest, info)
     if not pii_paths:
-        raise SystemExit("no scans to pool: give --pii or a --manifest whose "
-                         "sources have temp/pii/<base>.pii.json")
+        raise SystemExit(
+            "no scans to pool: give --pii or a --manifest whose "
+            "sources have temp/pii/<base>.pii.json"
+        )
 
     # this source's hand rects count as coverage: the render applies them
     hand = []
-    for s in (man.get("sources") or []):
+    for s in man.get("sources") or []:
         names = {os.path.basename(s.get("path", "")), os.path.basename(s.get("proxy") or "")}
         if os.path.basename(src) in names:
             hand = s.get("blur") or []
@@ -614,9 +719,11 @@ def main():
         per, misses = recall(runs, pii_paths, src, info, benign, kinds, hand_rects=hand)
         tot = sum(t for t, _ in per.values())
         good = sum(g for _, g in per.values())
-        print(f"{os.path.basename(src)}  recall {good}/{tot} = "
-              f"{(good / tot * 100) if tot else 100:.1f}%  "
-              f"({len(per)} secret(s), min {args.recall_min * 100:.0f}%)")
+        print(
+            f"{os.path.basename(src)}  recall {good}/{tot} = "
+            f"{(good / tot * 100) if tot else 100:.1f}%  "
+            f"({len(per)} secret(s), min {args.recall_min * 100:.0f}%)"
+        )
         for key, (t, g) in sorted(per.items(), key=lambda kv: kv[1][1] / kv[1][0]):
             flag = "" if g == t else "   <- MISSES"
             print(f"    {key:<28} {g:>3}/{t:<3}{flag}")
@@ -630,8 +737,11 @@ def main():
             tpls = collect_templates(src, pii_paths, benign, kinds, info)
             print("    templates held for the missed secrets:")
             for key in sorted(missed_keys):
-                forms = [f"{t['img'].shape[1]}x{t['img'].shape[0]} '{t['text'][:28]}'"
-                         for t in tpls if t["key"] == key]
+                forms = [
+                    f"{t['img'].shape[1]}x{t['img'].shape[0]} '{t['text'][:28]}'"
+                    for t in tpls
+                    if t["key"] == key
+                ]
                 print(f"      {key:<26} {len(forms)}: " + "; ".join(forms[:4]))
         if tot and good / tot < args.recall_min:
             raise SystemExit(1)
@@ -639,8 +749,10 @@ def main():
 
     templates = collect_templates(src, pii_paths, benign, kinds, info)
     n_secrets = len({t["key"] for t in templates})
-    print(f"{os.path.basename(src)}  {info['w']}x{info['h']} @ {info['fps']:.0f}fps "
-          f"{info['dur']:.0f}s   {n_secrets} secret(s), {len(templates)} template(s)")
+    print(
+        f"{os.path.basename(src)}  {info['w']}x{info['h']} @ {info['fps']:.0f}fps "
+        f"{info['dur']:.0f}s   {n_secrets} secret(s), {len(templates)} template(s)"
+    )
     for t in templates:
         H, W = t["img"].shape
         print(f"    {t['kind']:<8} {W:>4}x{H:<3} {t['text']}")
@@ -654,29 +766,41 @@ def main():
     boxes, stats = track(src, templates, info)
     runs, listing = write_masks(boxes, info, _env.resolve(args.outdir))
     covered = sum(1 for b in boxes if b)
-    print(f"  {stats['frames']} frames: {stats['skipped']} unchanged, "
-          f"{stats['local']} local match(es), {stats['full']} full sweep(s)")
-    print(f"  boxes on {covered} frame(s) ({covered / max(1, len(boxes)) * 100:.0f}%), "
-          f"{len(runs)} mask PNG(s) -> {args.outdir}")
+    print(
+        f"  {stats['frames']} frames: {stats['skipped']} unchanged, "
+        f"{stats['local']} local match(es), {stats['full']} full sweep(s)"
+    )
+    print(
+        f"  boxes on {covered} frame(s) ({covered / max(1, len(boxes)) * 100:.0f}%), "
+        f"{len(runs)} mask PNG(s) -> {args.outdir}"
+    )
 
     # The box timeline is persisted with the template key on every box, so
     # --recall and the review sheet can read it back without re-tracking.
-    with open(os.path.join(_env.resolve(args.outdir), "track.json"), "w",
-              encoding="utf-8") as f:
-        json.dump({"src": src, "fps": info["fps"], "size": [info["w"], info["h"]],
-                   "secrets": n_secrets, "templates": len(templates),
-                   "frames_with_boxes": covered, "masks": len(runs),
-                   "keys": {t["key"]: {"kind": t["kind"], "text": t["text"]}
-                            for t in templates},
-                   "runs": [[f0, f1, [list(b) for b in bx]] for f0, f1, bx in runs]},
-                  f)
+    with open(os.path.join(_env.resolve(args.outdir), "track.json"), "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "src": src,
+                "fps": info["fps"],
+                "size": [info["w"], info["h"]],
+                "secrets": n_secrets,
+                "templates": len(templates),
+                "frames_with_boxes": covered,
+                "masks": len(runs),
+                "keys": {t["key"]: {"kind": t["kind"], "text": t["text"]} for t in templates},
+                "runs": [[f0, f1, [list(b) for b in bx]] for f0, f1, bx in runs],
+            },
+            f,
+        )
 
     per, misses = recall(runs, pii_paths, src, info, benign, kinds, hand_rects=hand)
     tot = sum(t for t, _ in per.values())
     good = sum(g for _, g in per.values())
-    print(f"  recall against this source's OCR hits: {good}/{tot} = "
-          f"{(good / tot * 100) if tot else 100:.1f}%"
-          f"{'' if not tot or good / tot >= args.recall_min else '   <- BELOW ' + str(args.recall_min)}")
+    print(
+        f"  recall against this source's OCR hits: {good}/{tot} = "
+        f"{(good / tot * 100) if tot else 100:.1f}%"
+        f"{'' if not tot or good / tot >= args.recall_min else '   <- BELOW ' + str(args.recall_min)}"
+    )
     for key, (t, g) in sorted(per.items(), key=lambda kv: kv[1][1] / kv[1][0])[:8]:
         if g < t:
             print(f"    {key:<28} {g:>3}/{t:<3}")

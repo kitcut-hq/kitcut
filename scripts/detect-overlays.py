@@ -11,7 +11,12 @@ and a meat counter) needs more than "is there red". A graphic is:
 
 Invoke as:  python scripts/detect-overlays.py ...
 """
-import sys, os, json, argparse, subprocess
+
+import sys
+import os
+import json
+import argparse
+import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -22,13 +27,27 @@ import numpy as np
 
 
 ENV = _env.ENV
-SW = 480                   # analysis width; height follows the source aspect
+SW = 480  # analysis width; height follows the source aspect
 
 
 def src_dims(src):
-    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-                        "-show_entries", "stream=width,height", "-of", "csv=p=0", src],
-                       capture_output=True, text=True, env=ENV)
+    r = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height",
+            "-of",
+            "csv=p=0",
+            src,
+        ],
+        capture_output=True,
+        text=True,
+        env=ENV,
+    )
     w, h = r.stdout.strip().split(",")[:2]
     return int(w), int(h)
 
@@ -37,8 +56,19 @@ def decode(src, fps, sh, hwaccel=True):
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error"]
     if hwaccel:
         cmd += _encode.decode_args()
-    cmd += ["-i", src, "-vf", "fps=%g,scale=%d:%d" % (fps, SW, sh),
-            "-fps_mode", "passthrough", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
+    cmd += [
+        "-i",
+        src,
+        "-vf",
+        "fps=%g,scale=%d:%d" % (fps, SW, sh),
+        "-fps_mode",
+        "passthrough",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-",
+    ]
     return subprocess.Popen(cmd, stdout=subprocess.PIPE, env=ENV)
 
 
@@ -46,8 +76,7 @@ def longest_run(row):
     best = run = 0
     for v in row:
         run = run + 1 if v else 0
-        if run > best:
-            best = run
+        best = max(best, run)
     return best
 
 
@@ -89,17 +118,18 @@ def analyse(frame, y_from, min_run, min_rows, target=None, tol=60, fy=4.0):
     dist = np.abs(band - target.reshape(1, 1, 3)).max(axis=2)
     mask = dist <= tol
 
-    good_rows = [yi for yi in range(band.shape[0])
-                 if mask[yi].any() and longest_run(mask[yi]) >= min_run]
+    good_rows = [
+        yi for yi in range(band.shape[0]) if mask[yi].any() and longest_run(mask[yi]) >= min_run
+    ]
     if len(good_rows) < min_rows:
         return False, None, None
 
     lo, hi = min(good_rows), max(good_rows)
-    block = band[lo:hi + 1]
-    if mask[lo:hi + 1].mean() < 0.25:                 # must be a filled shape
+    block = band[lo : hi + 1]
+    if mask[lo : hi + 1].mean() < 0.25:  # must be a filled shape
         return False, None, None
     bright = (block[:, :, 0] > 200) & (block[:, :, 1] > 200) & (block[:, :, 2] > 200)
-    if bright.sum() < 12:                             # caption text inside it
+    if bright.sum() < 12:  # caption text inside it
         return False, None, None
     return True, int((y_from + lo) * fy), int((y_from + hi) * fy)
 
@@ -109,25 +139,49 @@ def main():
     ap.add_argument("--src", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--fps", type=float, default=4.0)
-    ap.add_argument("--y-from", type=int, default=620, help="y to start scanning (1080p-reference px, auto-scaled)")
-    ap.add_argument("--min-run-px", type=int, default=240, help="min horizontal run (1080p-reference px, auto-scaled)")
-    ap.add_argument("--min-rows-px", type=int, default=28, help="min block height (1080p-reference px, auto-scaled)")
+    ap.add_argument(
+        "--y-from",
+        type=int,
+        default=620,
+        help="y to start scanning (1080p-reference px, auto-scaled)",
+    )
+    ap.add_argument(
+        "--min-run-px",
+        type=int,
+        default=240,
+        help="min horizontal run (1080p-reference px, auto-scaled)",
+    )
+    ap.add_argument(
+        "--min-rows-px",
+        type=int,
+        default=28,
+        help="min block height (1080p-reference px, auto-scaled)",
+    )
     ap.add_argument("--pad", type=float, default=0.6, help="seconds of padding each side")
     ap.add_argument("--merge-gap", type=float, default=1.5)
     ap.add_argument("--no-hwaccel", action="store_true")
-    ap.add_argument("--colour", default="#FF0000",
-                    help="#RRGGBB of the source graphic to hunt for. Targeted mode is "
-                         "the reliable one -- set this to the channel's lower-third "
-                         "colour. Default is the red used by many Ukrainian channels.")
-    ap.add_argument("--auto", action="store_true",
-                    help="EXPERIMENTAL colour-agnostic mode. Produces false positives on "
-                         "footage with large saturated props (armchairs, clothing); "
-                         "verify its output before trusting it.")
-    ap.add_argument("--tol", type=int, default=70,
-                    help="per-channel colour tolerance (Chebyshev)")
-    ap.add_argument("--max-block-px", type=int, default=170,
-                    help="full-res: reject blocks taller than this; a caption bar is "
-                         "short, scene content bleeding to the frame edge is not")
+    ap.add_argument(
+        "--colour",
+        default="#FF0000",
+        help="#RRGGBB of the source graphic to hunt for. Targeted mode is "
+        "the reliable one -- set this to the channel's lower-third "
+        "colour. Default is the red used by many Ukrainian channels.",
+    )
+    ap.add_argument(
+        "--auto",
+        action="store_true",
+        help="EXPERIMENTAL colour-agnostic mode. Produces false positives on "
+        "footage with large saturated props (armchairs, clothing); "
+        "verify its output before trusting it.",
+    )
+    ap.add_argument("--tol", type=int, default=70, help="per-channel colour tolerance (Chebyshev)")
+    ap.add_argument(
+        "--max-block-px",
+        type=int,
+        default=170,
+        help="full-res: reject blocks taller than this; a caption bar is "
+        "short, scene content bleeding to the frame edge is not",
+    )
     args = ap.parse_args()
 
     target = None
@@ -158,7 +212,7 @@ def main():
         fr = np.frombuffer(buf, dtype=np.uint8).reshape(SH, SW, 3)
         present, top, bot = analyse(fr, y_from, min_run, min_rows, target, args.tol, fy)
         if present and (bot - top) > max_block:
-            present = False          # too tall to be a caption bar
+            present = False  # too tall to be a caption bar
         if present:
             hits.append((i / args.fps, top, bot))
         i += 1
@@ -184,16 +238,24 @@ def main():
         e = r["_last"] + 1.0 / args.fps + args.pad
         if e - s < 0.5:
             continue
-        out.append(dict(start=round(s, 2), end=round(e, 2),
-                        top_y=int(r["top_y"]), bottom_y=int(r["bottom_y"])))
+        out.append(
+            dict(
+                start=round(s, 2),
+                end=round(e, 2),
+                top_y=int(r["top_y"]),
+                bottom_y=int(r["bottom_y"]),
+            )
+        )
 
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
 
     print("source-graphic ranges: %d" % len(out))
     for r in out:
-        print("  %7.2f - %7.2f s  (%5.1f s)  y %d..%d"
-              % (r["start"], r["end"], r["end"] - r["start"], r["top_y"], r["bottom_y"]))
+        print(
+            "  %7.2f - %7.2f s  (%5.1f s)  y %d..%d"
+            % (r["start"], r["end"], r["end"] - r["start"], r["top_y"], r["bottom_y"])
+        )
     tot = sum(r["end"] - r["start"] for r in out)
     print("total covered: %.1f s" % tot)
 

@@ -15,7 +15,9 @@ staying dependency-free keeps a hand-run instant.
 
 Invoke as:  python scripts/render-status.py
 """
-import sys, os
+
+import sys
+import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _progress
@@ -46,5 +48,5 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception as e:                     # never blank the status line
+    except Exception as e:  # never blank the status line
         print("render-status: %s" % e)

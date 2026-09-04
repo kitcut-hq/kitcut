@@ -13,7 +13,10 @@ Invoke as:
   python scripts/yt-delete.py <video-id-or-url> [<video-id-or-url> ...] --channel @handle
   python scripts/yt-delete.py <video-id-or-url> ... --channel @handle --yes
 """
-import sys, os, argparse
+
+import sys
+import os
+import argparse
 from importlib import import_module
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -25,15 +28,14 @@ _yt = import_module("yt-set-chapters")
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("videos", nargs="+", help="video id or any YouTube URL form")
-    ap.add_argument("--channel", required=True,
-                     help="handle or title the token MUST point at")
-    ap.add_argument("--yes", action="store_true",
-                     help="actually delete; without this, list only")
+    ap.add_argument("--channel", required=True, help="handle or title the token MUST point at")
+    ap.add_argument("--yes", action="store_true", help="actually delete; without this, list only")
     args = ap.parse_args()
 
     ids = [_yt.video_id(v) for v in args.videos]
 
     from googleapiclient.discovery import build
+
     yt = build("youtube", "v3", credentials=_yt.credentials())
 
     r = yt.channels().list(part="snippet", mine=True).execute()
@@ -45,8 +47,9 @@ def main():
     handle = (sn.get("customUrl") or "").lstrip("@").lower()
     want = args.channel.lstrip("@").lower()
     if want not in (handle, title.lower()):
-        sys.exit(f"token is for '{title}' (@{handle or 'no handle'}), "
-                  f"not '{args.channel}' -- refusing")
+        sys.exit(
+            f"token is for '{title}' (@{handle or 'no handle'}), not '{args.channel}' -- refusing"
+        )
     print(f"  channel: {title}  (@{handle or 'no handle'})")
 
     r = yt.videos().list(part="snippet,status", id=",".join(ids)).execute()

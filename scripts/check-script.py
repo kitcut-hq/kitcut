@@ -32,7 +32,14 @@ Invoke as:  python scripts/check-script.py --changed     (what git sees as new)
             python scripts/check-script.py --all         (the whole corpus)
             python scripts/check-script.py scripts/x.py  (one file)
 """
-import sys, os, re, ast, glob, argparse, subprocess
+
+import sys
+import os
+import re
+import ast
+import glob
+import argparse
+import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -43,49 +50,48 @@ ROOT = _env.ROOT
 EXCEPTIONS = {
     "statusline.py": {
         "env": "status-line reader; must NOT import _env -- a re-exec per "
-               "refresh would spawn a subprocess every second",
+        "refresh would spawn a subprocess every second",
         "argparse": "the status line feeds it JSON on stdin; it takes no flags",
     },
     "render-status.py": {
         "env": "stdlib on purpose: it needs nothing from the venv, and a "
-               "dependency-free watch tool starts instantly",
+        "dependency-free watch tool starts instantly",
         "argparse": "one job, no options: print what is rendering",
     },
     "run-log.py": {
         "env": "stdlib on purpose: this is what you read when a run died, and "
-               "a broken venv is one of the reasons it can have died",
+        "a broken venv is one of the reasons it can have died",
     },
     "_runlog.py": {
         "env": "stdlib on purpose: written by every stage and read by a tool "
-               "that must work without the venv; see run-log.py",
+        "that must work without the venv; see run-log.py",
     },
     "_gpulock.py": {
         "env": "stdlib on purpose: the single-run lock is taken before the "
-               "venv's heavy imports and read by gpu-lock.py, which must work "
-               "when a wedged run is what you are diagnosing",
+        "venv's heavy imports and read by gpu-lock.py, which must work "
+        "when a wedged run is what you are diagnosing",
     },
     "gpu-lock.py": {
         "env": "stdlib on purpose: this is what you read when the card is "
-               "wedged, and a broken venv is one of the things that wedges it",
+        "wedged, and a broken venv is one of the things that wedges it",
         "record": "a lock reader produces no deliverable",
     },
     "check-openings.py": {
         "record": "the PNGs it writes are contact sheets under temp/ for a "
-                  "human to look at, not renders; it never encodes anything",
+        "human to look at, not renders; it never encodes anything",
     },
     "name-label.py": {
         "record": "standalone --video burn is the lost-source fallback; the "
-                  "pipeline path records when screencast-cut.py renders",
+        "pipeline path records when screencast-cut.py renders",
     },
     "handle-overlay.py": {
-        "record": "standalone burn is a preview path; cut-clips.py records "
-                  "the real render",
+        "record": "standalone burn is a preview path; cut-clips.py records the real render",
         "free": "preview tool; the costed path is cut-clips --list",
     },
     "image-overlay.py": {
         "record": "standalone --video burn is the lost-source fallback, the "
-                  "same bargain as name-label.py; screencast-cut.py and "
-                  "cut-clips.py record when the overlay rides a real render",
+        "same bargain as name-label.py; screencast-cut.py and "
+        "cut-clips.py record when the overlay rides a real render",
     },
     "generate-voiceover.py": {
         "record": "legacy, predates the pipelines (see docs/reference.md ## Legacy)",
@@ -98,7 +104,7 @@ EXCEPTIONS = {
     },
     "transcribe-words.py": {
         "free": "its cost IS the product (minutes of ASR); run-captions.py "
-                "skips it whenever the transcript already exists",
+        "skips it whenever the transcript already exists",
     },
     "check-dub.py": {
         "record": "self-test harness; writes only scratch under %TEMP%",
@@ -106,38 +112,36 @@ EXCEPTIONS = {
     },
     "check-multicam.py": {
         "argparse": "same bargain as check-dub.py: one button, no files, no "
-                    "GPU -- it tests the round-trip arithmetic in memory",
+        "GPU -- it tests the round-trip arithmetic in memory",
     },
     "check-encode.py": {
         "record": "self-test harness; its clips are colour bars in a scratch "
-                  "dir under %TEMP% and are deleted on the way out",
+        "dir under %TEMP% and are deleted on the way out",
         "free": "the whole script is the free mode -- it prices what a render "
-                "would send each encoder without rendering one; --table-only "
-                "drops even the two-second probes",
+        "would send each encoder without rendering one; --table-only "
+        "drops even the two-second probes",
         "hwaccel": "it is the test for decode_args() and asserts on the exact "
-                   "flag pair, which is the one place the literal belongs "
-                   "outside _encode.py",
+        "flag pair, which is the one place the literal belongs "
+        "outside _encode.py",
     },
     "check-screen.py": {
         "argparse": "same bargain as check-dub.py: one button, no files, no "
-                    "GPU, no OCR -- it tests the PII rules and the cut "
-                    "arithmetic in memory",
+        "GPU, no OCR -- it tests the PII rules and the cut "
+        "arithmetic in memory",
         "record": "self-test harness; the only files it writes are fixture "
-                  "JSONs under %TEMP% for the recall harness",
+        "JSONs under %TEMP% for the recall harness",
     },
     "make-proxies.py": {
         "record": "a proxy is an intermediate, not a deliverable: it lives "
-                  "under temp/, is regenerated from the source on demand, and "
-                  "is recorded where it belongs -- as the `proxy` key on the "
-                  "manifest source it was built from. screen-cut.py records "
-                  "the film that comes out the other end",
+        "under temp/, is regenerated from the source on demand, and "
+        "is recorded where it belongs -- as the `proxy` key on the "
+        "manifest source it was built from. screen-cut.py records "
+        "the film that comes out the other end",
     },
     "check-env.py": {
         "argparse": "takes no arguments by design -- it is one button",
-        "pythonpath": "it is the doctor for that variable; reading and "
-                      "repairing it is its job",
-        "free": "diagnoses the spend without spending; the whole script is "
-                "the free mode",
+        "pythonpath": "it is the doctor for that variable; reading and repairing it is its job",
+        "free": "diagnoses the spend without spending; the whole script is the free mode",
     },
 }
 
@@ -170,31 +174,50 @@ PLATFORM = {
 # second reason: it is what you read when a run died, and the venv is one of
 # the things that can be why. CLAUDE.md says so; this makes it a check rather
 # than a promise.
-STDLIB_ONLY = ("_progress.py", "_runlog.py", "_gpulock.py", "gpu-lock.py",
-               "render-status.py", "run-log.py", "statusline.py")
+STDLIB_ONLY = (
+    "_progress.py",
+    "_runlog.py",
+    "_gpulock.py",
+    "gpu-lock.py",
+    "render-status.py",
+    "run-log.py",
+    "statusline.py",
+)
 
 # An absolute path belonging to one machine. Two segments are required so the
 # drive-letter gotcha both this file's neighbours and docs/reference.md explain
 # ("ass=filename=C:/x.ass" parses as an option C) is not mistaken for one.
-ABSPATH = re.compile(r"(?<![\w:])(?:[A-Za-z]:[\\/]{1,2}[\w.$-]+[\\/][\w.$-]"
-                     r"|/(?:Users|home|Volumes)/\w)")
+ABSPATH = re.compile(
+    r"(?<![\w:])(?:[A-Za-z]:[\\/]{1,2}[\w.$-]+[\\/][\w.$-]"
+    r"|/(?:Users|home|Volumes)/\w)"
+)
 
-FREE_FLAGS = ("--list", "--plan", "--dry-run", "--plan-only", "--frame",
-              "--card-only", "--check", "--verify", "--stop-after")
+FREE_FLAGS = (
+    "--list",
+    "--plan",
+    "--dry-run",
+    "--plan-only",
+    "--frame",
+    "--card-only",
+    "--check",
+    "--verify",
+    "--stop-after",
+)
 
 # things only a script that spends money or minutes contains.
 # _encode.video_args is here because the encoder name it replaced -- the
 # literal "h264_nvenc" -- used to be the tell, and moving the keys into one
 # module would otherwise have quietly switched this check off for every render
 # script in the repo.
-SPEND = re.compile(r"h264_nvenc|_encode\.video_args|videos\(\)\s*\.insert|"
-                   r"elevenlabs|MediaFileUpload|faster_whisper|WhisperModel")
+SPEND = re.compile(
+    r"h264_nvenc|_encode\.video_args|videos\(\)\s*\.insert|"
+    r"elevenlabs|MediaFileUpload|faster_whisper|WhisperModel"
+)
 DELIVER = re.compile(r'\.mp4"|\.mp4\'|shutil\.move|MediaFileUpload')
 
 
 def is_entry(path):
-    return not os.path.basename(path).startswith("_") \
-        and path.endswith(".py")
+    return not os.path.basename(path).startswith("_") and path.endswith(".py")
 
 
 def imports_in_order(src):
@@ -210,8 +233,7 @@ def imports_in_order(src):
     got = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            got.extend((node.lineno, a.name.split(".")[0])
-                       for a in node.names)
+            got.extend((node.lineno, a.name.split(".")[0]) for a in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module:
             got.append((node.lineno, node.module.split(".")[0]))
     return sorted(got)
@@ -224,8 +246,7 @@ def repo_modules():
     statement, so the scripts reach them through import_module("image-overlay"),
     which the import walker above cannot see.
     """
-    return {os.path.basename(p)[:-3]
-            for p in glob.glob(os.path.join(ROOT, "scripts", "*.py"))}
+    return {os.path.basename(p)[:-3] for p in glob.glob(os.path.join(ROOT, "scripts", "*.py"))}
 
 
 def dynamic_imports(src):
@@ -239,10 +260,18 @@ def dynamic_imports(src):
         if not isinstance(node, ast.Call) or not node.args:
             continue
         fn = node.func
-        name = fn.attr if isinstance(fn, ast.Attribute) else \
-            fn.id if isinstance(fn, ast.Name) else None
-        if name == "import_module" and isinstance(node.args[0], ast.Constant) \
-                and isinstance(node.args[0].value, str):
+        name = (
+            fn.attr
+            if isinstance(fn, ast.Attribute)
+            else fn.id
+            if isinstance(fn, ast.Name)
+            else None
+        )
+        if (
+            name == "import_module"
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        ):
             got.add(node.args[0].value)
     return got
 
@@ -256,8 +285,11 @@ def abspath_hits(text, in_strings_only=False):
     hits = []
     if in_strings_only:
         for node in ast.walk(ast.parse(text)):
-            if isinstance(node, ast.Constant) and isinstance(node.value, str) \
-                    and ABSPATH.search(node.value):
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and ABSPATH.search(node.value)
+            ):
                 hits.append((node.lineno, node.value.strip()[:70]))
     else:
         for i, line in enumerate(text.splitlines(), 1):
@@ -286,102 +318,155 @@ def check(path):
     if entry:
         doc = ast.get_docstring(ast.parse(src))
         if not doc:
-            out.append(("FAIL", "no module docstring -- the docstring is the "
-                                "spec the next session reads first"))
+            out.append(
+                (
+                    "FAIL",
+                    "no module docstring -- the docstring is the spec the next session reads first",
+                )
+            )
         elif "Invoke as" not in doc and not skip("invoke"):
             out.append(("warn", 'docstring has no "Invoke as:" line'))
 
         if not skip("env"):
             env_at = next((ln for ln, mod in imports if mod == "_env"), None)
             if env_at is None:
-                out.append(("FAIL", "never imports _env -- it will run on the "
-                                    "wrong interpreter with a poisoned path"))
+                out.append(
+                    (
+                        "FAIL",
+                        "never imports _env -- it will run on the "
+                        "wrong interpreter with a poisoned path",
+                    )
+                )
             else:
                 for ln, mod in imports:
                     if ln >= env_at:
                         break
                     if mod not in STDLIB and not mod.startswith("_"):
-                        out.append(("FAIL", "imports %r before _env -- the "
-                                            "re-exec must come first" % mod))
+                        out.append(
+                            ("FAIL", "imports %r before _env -- the re-exec must come first" % mod)
+                        )
                         break
         elif any(mod == "_env" for _, mod in imports):
-            out.append(("warn", "imports _env despite the waiver -- check "
-                                "which is stale, the code or the exception"))
+            out.append(
+                (
+                    "warn",
+                    "imports _env despite the waiver -- check "
+                    "which is stale, the code or the exception",
+                )
+            )
 
         if "argparse" not in src and not skip("argparse"):
-            out.append(("warn", "no argparse -- even one-job scripts take "
-                                "--help here"))
+            out.append(("warn", "no argparse -- even one-job scripts take --help here"))
 
         if SPEND.search(src) and not skip("free"):
             if not any(f in src for f in FREE_FLAGS):
-                out.append(("warn", "encodes or spends but ships no free mode "
-                                    "(--list/--plan/--dry-run/...) -- a new "
-                                    "tool is not finished until you can ask "
-                                    "it what a choice costs"))
+                out.append(
+                    (
+                        "warn",
+                        "encodes or spends but ships no free mode "
+                        "(--list/--plan/--dry-run/...) -- a new "
+                        "tool is not finished until you can ask "
+                        "it what a choice costs",
+                    )
+                )
 
         if DELIVER.search(src) and "_project" not in src and not skip("record"):
-            out.append(("warn", "looks like it produces a deliverable but "
-                                "never calls _project.record() -- the render "
-                                "will be invisible to the next session"))
+            out.append(
+                (
+                    "warn",
+                    "looks like it produces a deliverable but "
+                    "never calls _project.record() -- the render "
+                    "will be invisible to the next session",
+                )
+            )
 
-    if re.search(r'["\']-hwaccel["\']\s*,\s*["\']cuda["\']', src) \
-            and base != "_encode.py" and not skip("hwaccel"):
-        out.append(("FAIL", "spells -hwaccel cuda at a call site -- it is "
-                            "NVDEC on the INPUT, so on a box with no NVIDIA "
-                            "driver it fails the source file rather than the "
-                            "encoder; ask _encode.decode_args()"))
+    if (
+        re.search(r'["\']-hwaccel["\']\s*,\s*["\']cuda["\']', src)
+        and base != "_encode.py"
+        and not skip("hwaccel")
+    ):
+        out.append(
+            (
+                "FAIL",
+                "spells -hwaccel cuda at a call site -- it is "
+                "NVDEC on the INPUT, so on a box with no NVIDIA "
+                "driver it fails the source file rather than the "
+                "encoder; ask _encode.decode_args()",
+            )
+        )
     if re.search(r"os\.execve\s*\(", src):
-        out.append(("FAIL", "os.execve spawns-not-replaces on Windows; use "
-                            "subprocess.run + sys.exit(rc)"))
-    if re.search(r'environ\[\s*.PYTHONPATH.\s*\]\s*=', src) \
-            and not skip("pythonpath"):
-        out.append(("FAIL", "writes PYTHONPATH -- see CLAUDE.md for the day "
-                            "that variable cost"))
+        out.append(
+            ("FAIL", "os.execve spawns-not-replaces on Windows; use subprocess.run + sys.exit(rc)")
+        )
+    if re.search(r"environ\[\s*.PYTHONPATH.\s*\]\s*=", src) and not skip("pythonpath"):
+        out.append(("FAIL", "writes PYTHONPATH -- see CLAUDE.md for the day that variable cost"))
     for ln, excerpt in abspath_hits(src, in_strings_only=True):
-        out.append(("FAIL", "line %d hardcodes an absolute path (%s) -- it is "
-                            "wrong on every machine but one; resolve it "
-                            "through _env.resolve() or _env.workspace()"
-                            % (ln, excerpt)))
+        out.append(
+            (
+                "FAIL",
+                "line %d hardcodes an absolute path (%s) -- it is "
+                "wrong on every machine but one; resolve it "
+                "through _env.resolve() or _env.workspace()" % (ln, excerpt),
+            )
+        )
 
     if base in PLATFORM:
         local = {m for _, m in imports}
         local |= dynamic_imports(src)
         known = repo_modules()
-        strays = sorted(m for m in local
-                        if (m in known or m.replace("_", "-") in known)
-                        and m + ".py" not in PLATFORM)
+        strays = sorted(
+            m
+            for m in local
+            if (m in known or m.replace("_", "-") in known) and m + ".py" not in PLATFORM
+        )
         if strays:
-            out.append(("FAIL", "platform file (%s) imports %s from outside "
-                                "the platform -- the platform must not depend "
-                                "on the video pipeline, or lifting it out "
-                                "stops being a move and becomes a rewrite"
-                                % (PLATFORM[base], ", ".join(strays))))
+            out.append(
+                (
+                    "FAIL",
+                    "platform file (%s) imports %s from outside "
+                    "the platform -- the platform must not depend "
+                    "on the video pipeline, or lifting it out "
+                    "stops being a move and becomes a rewrite"
+                    % (PLATFORM[base], ", ".join(strays)),
+                )
+            )
         if base in STDLIB_ONLY:
-            third = sorted({m for _, m in imports
-                            if m not in STDLIB and not m.startswith("_")})
+            third = sorted({m for _, m in imports if m not in STDLIB and not m.startswith("_")})
             if third:
-                out.append(("FAIL", "%s must be stdlib-only but imports %s -- "
-                                    "it runs on every refresh, and anything "
-                                    "needing the venv would re-exec a "
-                                    "subprocess each time"
-                                    % (base, ", ".join(third))))
+                out.append(
+                    (
+                        "FAIL",
+                        "%s must be stdlib-only but imports %s -- "
+                        "it runs on every refresh, and anything "
+                        "needing the venv would re-exec a "
+                        "subprocess each time" % (base, ", ".join(third)),
+                    )
+                )
 
-    if re.search(r'"(?:temp|outputs|projects|sources|audio|transcripts)\\\\',
-                 src):
-        out.append(("warn", "backslash in a path literal -- the ass filter "
-                            "eats them; forward slashes everywhere"))
+    if re.search(r'"(?:temp|outputs|projects|sources|audio|transcripts)\\\\', src):
+        out.append(
+            (
+                "warn",
+                "backslash in a path literal -- the ass filter "
+                "eats them; forward slashes everywhere",
+            )
+        )
 
     readme = open(os.path.join(ROOT, "docs", "reference.md"), encoding="utf-8").read()
     if entry and base not in readme:
-        out.append(("warn", "not mentioned in docs/reference.md -- the SDK contract "
-                            "says the change is not done until the docs say "
-                            "what the code does"))
+        out.append(
+            (
+                "warn",
+                "not mentioned in docs/reference.md -- the SDK contract "
+                "says the change is not done until the docs say "
+                "what the code does",
+            )
+        )
     return out
 
 
 def changed_scripts():
-    p = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT,
-                       capture_output=True, text=True)
+    p = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True)
     got = []
     for line in p.stdout.splitlines():
         f = line[3:].split(" -> ")[-1].strip().strip('"')
@@ -394,10 +479,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("paths", nargs="*", help="specific scripts to check")
     ap.add_argument("--all", action="store_true", help="the whole corpus")
-    ap.add_argument("--changed", action="store_true",
-                    help="scripts git sees as modified or untracked")
-    ap.add_argument("--strict", action="store_true",
-                    help="exit nonzero on warns too")
+    ap.add_argument(
+        "--changed", action="store_true", help="scripts git sees as modified or untracked"
+    )
+    ap.add_argument("--strict", action="store_true", help="exit nonzero on warns too")
     args = ap.parse_args()
 
     if args.all:
@@ -426,18 +511,18 @@ def main():
         # The skills are read by an agent on somebody else's machine, so an
         # absolute path there is the same bug as one in a script -- and it is
         # the form the repo actually shipped ten of.
-        docs = sorted(glob.glob(os.path.join(ROOT, ".claude", "skills", "*",
-                                             "SKILL.md")))
+        docs = sorted(glob.glob(os.path.join(ROOT, ".claude", "skills", "*", "SKILL.md")))
         docs += [os.path.join(ROOT, f) for f in ("README.md", "CLAUDE.md", "docs/reference.md")]
         for d in docs:
             if not os.path.exists(d):
                 continue
             for ln, excerpt in abspath_hits(open(d, encoding="utf-8").read()):
                 fails += 1
-                print("FAIL  %s:%d: absolute path (%s) -- a skill runs on "
-                      "machines that are not this one"
-                      % (os.path.relpath(d, ROOT).replace("\\", "/"), ln,
-                         excerpt))
+                print(
+                    "FAIL  %s:%d: absolute path (%s) -- a skill runs on "
+                    "machines that are not this one"
+                    % (os.path.relpath(d, ROOT).replace("\\", "/"), ln, excerpt)
+                )
         print("ok    %d skills and docs carry no absolute paths" % len(docs))
 
     print("\n%d checked, %d FAIL, %d warn" % (len(paths), fails, warns))

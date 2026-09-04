@@ -18,6 +18,7 @@ runs after a render that may have cost 20 minutes of GPU time, and exiting
 non-zero there would report failure for a success. It prints loudly instead so
 the state can be recorded by hand.
 """
+
 import os
 import sys
 import json
@@ -26,7 +27,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402,F401 -- re-execs into .venv; before any 3rd-party import
 
-ROOT = _env.ROOT                 # where the tooling lives
+ROOT = _env.ROOT  # where the tooling lives
 
 
 def root():
@@ -42,6 +43,7 @@ def root():
 def projects_dir():
     """<workspace>/projects -- the only place these two ideas are joined."""
     return os.path.join(root(), "projects")
+
 
 _PROSE_KEYS = ("_comment", "_why", "intent", "notes")
 
@@ -59,7 +61,7 @@ def norm(path):
     for base in sorted({root(), ROOT}, key=len, reverse=True):
         b = os.path.normpath(base)
         if os.path.normcase(p).startswith(os.path.normcase(b + os.sep)):
-            p = p[len(b) + 1:]
+            p = p[len(b) + 1 :]
             break
     return p.replace("\\", "/")
 
@@ -102,8 +104,11 @@ def project_id(manifest, manifest_path):
     d = find_project_dir(manifest_path)
     if d:
         return os.path.basename(d)
-    return (manifest.get("project") or manifest.get("id")
-            or os.path.splitext(os.path.basename(manifest_path))[0])
+    return (
+        manifest.get("project")
+        or manifest.get("id")
+        or os.path.splitext(os.path.basename(manifest_path))[0]
+    )
 
 
 def find_by_output(path):
@@ -141,11 +146,13 @@ def _journal_append(pid, line, when):
     day = time.strftime("%Y-%m-%d", when)
     head = ""
     if not os.path.exists(p):
-        head = ("# %s -- edit journal\n"
-                "AI notes for future sessions. Scripts append the `- HH:MM` "
-                "event lines;\nafter each editing session, append a short "
-                "prose note: what was asked,\nwhich knob changed, why, and "
-                "anything the next session should not rediscover.\n" % pid)
+        head = (
+            "# %s -- edit journal\n"
+            "AI notes for future sessions. Scripts append the `- HH:MM` "
+            "event lines;\nafter each editing session, append a short "
+            "prose note: what was asked,\nwhich knob changed, why, and "
+            "anything the next session should not rediscover.\n" % pid
+        )
         need_day = True
     else:
         with open(p, encoding="utf-8") as f:
@@ -158,9 +165,19 @@ def _journal_append(pid, line, when):
         f.write(line + "\n")
 
 
-def record(pid, action, out=None, script=None, argv=None, kind=None,
-           manifest=None, sidecars=None, burned=None, published=None,
-           note=None):
+def record(
+    pid,
+    action,
+    out=None,
+    script=None,
+    argv=None,
+    kind=None,
+    manifest=None,
+    sidecars=None,
+    burned=None,
+    published=None,
+    note=None,
+):
     """Record one pipeline event: a journal line, and (if `out` is given) a
     deliverable upsert in project.json with status "current".
 
@@ -171,22 +188,24 @@ def record(pid, action, out=None, script=None, argv=None, kind=None,
     try:
         when = time.gmtime()
         os.makedirs(os.path.join(projects_dir(), pid), exist_ok=True)
-        doc = load(pid) or {"v": 1, "id": pid, "inputs": {}, "controls": {},
-                            "deliverables": {}}
+        doc = load(pid) or {"v": 1, "id": pid, "inputs": {}, "controls": {}, "deliverables": {}}
         doc["updated_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", when)
         if out is not None:
             key = norm(out)
             d = doc.setdefault("deliverables", {}).setdefault(key, {})
             d["status"] = "current"
             d["built_utc"] = doc["updated_utc"]
-            for field, val in (("kind", kind), ("script", script and norm(script)),
-                               ("manifest", manifest and norm(manifest)),
-                               ("burned", burned), ("published", published)):
+            for field, val in (
+                ("kind", kind),
+                ("script", script and norm(script)),
+                ("manifest", manifest and norm(manifest)),
+                ("burned", burned),
+                ("published", published),
+            ):
                 if val is not None:
                     d[field] = val
             if sidecars:
-                d.setdefault("sidecars", {}).update(
-                    {k: norm(v) for k, v in sidecars.items() if v})
+                d.setdefault("sidecars", {}).update({k: norm(v) for k, v in sidecars.items() if v})
         _atomic_write(path_for(pid), doc)
 
         bits = [time.strftime("- %H:%M", when), action]
@@ -202,5 +221,7 @@ def record(pid, action, out=None, script=None, argv=None, kind=None,
             bits.append("-- " + note)
         _journal_append(pid, " ".join(bits), when)
     except Exception as e:  # noqa: BLE001 -- see module docstring
-        print("!! PROJECT FILE NOT UPDATED (%s: %s) -- record this %s in "
-              "projects/%s/ by hand" % (type(e).__name__, e, action, pid))
+        print(
+            "!! PROJECT FILE NOT UPDATED (%s: %s) -- record this %s in "
+            "projects/%s/ by hand" % (type(e).__name__, e, action, pid)
+        )

@@ -39,7 +39,12 @@ cut's decision, and angle-cut.py measures it from the picture.
 
 Invoke as:  python scripts/sync-audio.py --manifest projects/<id>/anglecut.json
 """
-import sys, os, json, argparse, subprocess
+
+import sys
+import os
+import json
+import argparse
+import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -51,18 +56,21 @@ import _project  # noqa: E402
 ROOT = _env.ROOT
 ENV = _env.ENV
 
-RATE = 8000                 # 0.125 ms a sample: far finer than a frame
-WIN = 80                    # 10 ms onset window
-DEFAULT_SYNC = {"onset_db": -100.0, "min_confidence": 8.0,
-                "max_residual_ms": 5.0, "max_onset_drift_ms": 60.0,
-                # A tape whose sound starts this close to its own first sample
-                # was ROLLING before the programme did -- see rolling_start().
-                "onset_head_s": 0.25}
+RATE = 8000  # 0.125 ms a sample: far finer than a frame
+WIN = 80  # 10 ms onset window
+DEFAULT_SYNC = {
+    "onset_db": -100.0,
+    "min_confidence": 8.0,
+    "max_residual_ms": 5.0,
+    "max_onset_drift_ms": 60.0,
+    # A tape whose sound starts this close to its own first sample
+    # was ROLLING before the programme did -- see rolling_start().
+    "onset_head_s": 0.25,
+}
 
 
 def run(cmd, **kw):
-    return subprocess.run(cmd, check=True, capture_output=True, text=True,
-                          env=ENV, **kw)
+    return subprocess.run(cmd, check=True, capture_output=True, text=True, env=ENV, **kw)
 
 
 def hhmmss(t):
@@ -74,22 +82,59 @@ def rel(p):
 
 
 def probe(path):
-    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-               "-show_entries", "stream=width,height,r_frame_rate,duration",
-               "-of", "json", path]).stdout
+    out = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,r_frame_rate,duration",
+            "-of",
+            "json",
+            path,
+        ]
+    ).stdout
     s = json.loads(out)["streams"][0]
     num, den = (int(x) for x in s["r_frame_rate"].split("/"))
-    return {"width": int(s["width"]), "height": int(s["height"]),
-            "fps_num": num, "fps_den": den, "fps": num / float(den)}
+    return {
+        "width": int(s["width"]),
+        "height": int(s["height"]),
+        "fps_num": num,
+        "fps_den": den,
+        "fps": num / float(den),
+    }
 
 
 def mono(path):
     """The whole soundtrack as one float32 vector at RATE."""
     p = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-i", path,
-         "-vn", "-map", "0:a:0", "-f", "f32le", "-acodec", "pcm_f32le",
-         "-ac", "1", "-ar", str(RATE), "-"],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=ENV)
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-i",
+            path,
+            "-vn",
+            "-map",
+            "0:a:0",
+            "-f",
+            "f32le",
+            "-acodec",
+            "pcm_f32le",
+            "-ac",
+            "1",
+            "-ar",
+            str(RATE),
+            "-",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=ENV,
+    )
     if p.returncode != 0:
         sys.exit("no audio from %s:\n%s" % (path, (p.stderr or b"")[-2000:]))
     a = np.frombuffer(p.stdout, dtype=np.float32)
@@ -106,7 +151,7 @@ def onset(a, db):
     hit = np.nonzero(r > thr)[0]
     if hit.size == 0:
         return None, float(r.max())
-    return int(hit[0]) * WIN, float(r[:hit[0]].max() if hit[0] else 0.0)
+    return int(hit[0]) * WIN, float(r[: hit[0]].max() if hit[0] else 0.0)
 
 
 def rolling_start(astart, head_s):
@@ -158,12 +203,29 @@ def xcorr(a, b):
 def nup(paths, times, path, width=320):
     """One frame from each tape at the same synced instant, side by side."""
     from PIL import Image
+
     imgs = []
     for p, t in zip(paths, times):
         png = path + ".%d.png" % len(imgs)
-        run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
-             "-ss", "%.4f" % max(0.0, t), "-i", p, "-frames:v", "1",
-             "-vf", "scale=%d:-2" % width, "-y", png])
+        run(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-nostdin",
+                "-ss",
+                "%.4f" % max(0.0, t),
+                "-i",
+                p,
+                "-frames:v",
+                "1",
+                "-vf",
+                "scale=%d:-2" % width,
+                "-y",
+                png,
+            ]
+        )
         imgs.append(Image.open(png).copy())
         os.remove(png)
     w, h = imgs[0].size
@@ -181,8 +243,13 @@ def main():
     ap.add_argument("--id", help="project id; default: the folder under projects/")
     ap.add_argument("--reference", help="the tape everything is measured against")
     ap.add_argument("--out", help="default projects/<id>/<id>.anglesync.json")
-    ap.add_argument("--verify", type=int, default=0, metavar="N",
-                    help="write N side-by-side frames at synced instants")
+    ap.add_argument(
+        "--verify",
+        type=int,
+        default=0,
+        metavar="N",
+        help="write N side-by-side frames at synced instants",
+    )
     ap.add_argument("--onset-db", type=float, default=None)
     ap.add_argument("--min-confidence", type=float, default=None)
     args = ap.parse_args()
@@ -202,8 +269,7 @@ def main():
         cfg.update({k: v for k, v in (m.get("sync_cfg") or {}).items()})
         pid = args.id or _project.project_id(m, rel(args.manifest))
     else:
-        cams = [(os.path.splitext(os.path.basename(t))[0], rel(t))
-                for t in args.tracks]
+        cams = [(os.path.splitext(os.path.basename(t))[0], rel(t)) for t in args.tracks]
         d = _project.find_project_dir(rel(args.tracks[0]))
         pid = args.id or (os.path.basename(d) if d else "tracks")
 
@@ -214,11 +280,9 @@ def main():
     # reference is not the one its manifest names, so ignoring the key here
     # meant setting it produced a sync that the very next command rejected --
     # with a message about a mismatch neither file looked responsible for.
-    ref = args.reference or (m.get("reference") if args.manifest else None) \
-        or cams[0][0]
+    ref = args.reference or (m.get("reference") if args.manifest else None) or cams[0][0]
     if ref not in [c for c, _ in cams]:
-        sys.exit("--reference %s is not one of %s"
-                 % (ref, ", ".join(c for c, _ in cams)))
+        sys.exit("--reference %s is not one of %s" % (ref, ", ".join(c for c, _ in cams)))
 
     info = probe(cams[0][1])
     fps = info["fps"]
@@ -230,13 +294,15 @@ def main():
         s, floor = onset(sig[c], cfg["onset_db"])
         ons[c] = s
         if s is None:
-            print("  %-5s no onset above %.0f dBFS (loudest %.5f) -- this tape "
-                  "cannot anchor a cut" % (c, cfg["onset_db"], floor))
+            print(
+                "  %-5s no onset above %.0f dBFS (loudest %.5f) -- this tape "
+                "cannot anchor a cut" % (c, cfg["onset_db"], floor)
+            )
 
     names = [c for c, _ in cams]
     pair, worst_conf = {}, None
     for i, a in enumerate(names):
-        for b in names[i + 1:]:
+        for b in names[i + 1 :]:
             k, _, z = xcorr(sig[a], sig[b])
             pair[(a, b)] = (k, z)
             pair[(b, a)] = (-k, z)
@@ -252,8 +318,9 @@ def main():
         off = k / float(RATE)
         astart = ons[c]
         delta = ""
-        rolling = rolling_start(astart, cfg["onset_head_s"]) or \
-            rolling_start(ons[ref], cfg["onset_head_s"])
+        rolling = rolling_start(astart, cfg["onset_head_s"]) or rolling_start(
+            ons[ref], cfg["onset_head_s"]
+        )
         if astart is not None and ons[ref] is not None:
             d_ms = 1000.0 * ((astart - ons[ref]) / float(RATE) - off)
             if rolling:
@@ -265,24 +332,34 @@ def main():
             else:
                 delta = "%+7.2f ms" % d_ms
                 if abs(d_ms) > cfg["max_onset_drift_ms"]:
-                    bad.append("%s: onset and correlation disagree by %.2f ms"
-                               % (c, d_ms))
+                    bad.append("%s: onset and correlation disagree by %.2f ms" % (c, d_ms))
         if z < cfg["min_confidence"]:
             bad.append("%s: correlation peak is mush (z=%.1f)" % (c, z))
-        print("  %-5s %+9.4f s %+8.2f  %5.1f   %12s   %s"
-              % (c, off, off * fps,
-                 z if z != float("inf") else 999.0,
-                 "-" if astart is None else "%.4f s" % (astart / float(RATE)),
-                 delta))
-        tracks.append({
-            "id": c, "file": _project.norm(p),
-            "offset_s": round(off, 6), "offset_frames": round(off * fps, 4),
-            "confidence": None if z == float("inf") else round(z, 3),
-            "audio_start_s": None if astart is None else round(astart / float(RATE), 6),
-            "audio_start_frames": None if astart is None else
-                int(round(astart / float(RATE) * fps)),
-            "onset_check": "n/a-rolling-start" if rolling else "compared",
-        })
+        print(
+            "  %-5s %+9.4f s %+8.2f  %5.1f   %12s   %s"
+            % (
+                c,
+                off,
+                off * fps,
+                z if z != float("inf") else 999.0,
+                "-" if astart is None else "%.4f s" % (astart / float(RATE)),
+                delta,
+            )
+        )
+        tracks.append(
+            {
+                "id": c,
+                "file": _project.norm(p),
+                "offset_s": round(off, 6),
+                "offset_frames": round(off * fps, 4),
+                "confidence": None if z == float("inf") else round(z, 3),
+                "audio_start_s": None if astart is None else round(astart / float(RATE), 6),
+                "audio_start_frames": None
+                if astart is None
+                else int(round(astart / float(RATE) * fps)),
+                "onset_check": "n/a-rolling-start" if rolling else "compared",
+            }
+        )
 
     resid, worst_r = {}, 0.0
     for a in names:
@@ -293,18 +370,23 @@ def main():
                     worst_r = r
             resid["%s->%s" % (a, b)] = round(pair[(a, b)][0] / float(RATE), 6)
     if rolled:
-        print("\n  onset second opinion unavailable for %s: each was already "
-              "recording sound at its own first sample, so its onset measures "
-              "where the FILE starts, not where the programme does. That is "
-              "the normal case for cameras with their own microphones, and it "
-              "leaves the correlation (and its confidence) as the measurement."
-              % ", ".join(sorted(rolled)))
+        print(
+            "\n  onset second opinion unavailable for %s: each was already "
+            "recording sound at its own first sample, so its onset measures "
+            "where the FILE starts, not where the programme does. That is "
+            "the normal case for cameras with their own microphones, and it "
+            "leaves the correlation (and its confidence) as the measurement."
+            % ", ".join(sorted(rolled))
+        )
 
-    print("\nworst three-way residual %+.3f ms (offset a->b plus b->c must equal "
-          "a->c)" % (1000.0 * worst_r / RATE))
+    print(
+        "\nworst three-way residual %+.3f ms (offset a->b plus b->c must equal "
+        "a->c)" % (1000.0 * worst_r / RATE)
+    )
     if abs(worst_r) / float(RATE) * 1000.0 > cfg["max_residual_ms"]:
-        bad.append("the offsets are not self-consistent: %.2f ms round trip"
-                   % (1000.0 * worst_r / RATE))
+        bad.append(
+            "the offsets are not self-consistent: %.2f ms round trip" % (1000.0 * worst_r / RATE)
+        )
 
     if args.verify:
         tmp = os.path.join(ROOT, "temp", "sync-audio-%s" % pid)
@@ -313,45 +395,58 @@ def main():
         base = ons[ref] / float(RATE) if ons[ref] is not None else 0.0
         for i in range(args.verify):
             t = base + (i + 1) * (dur - base) / (args.verify + 1.0)
-            out = nup([p for _, p in cams],
-                      [t + pair[(c, ref)][0] / float(RATE) for c, _ in cams],
-                      os.path.join(tmp, "sync-%02d.png" % i))
+            out = nup(
+                [p for _, p in cams],
+                [t + pair[(c, ref)][0] / float(RATE) for c, _ in cams],
+                os.path.join(tmp, "sync-%02d.png" % i),
+            )
             print("  %s  (reference %s)" % (_project.norm(out), hhmmss(t)))
 
-    doc = {"_comment": "N-track audio alignment by scripts/sync-audio.py. "
-                       "offset is seconds of THIS tape relative to the "
-                       "reference: the same moment sits offset seconds later "
-                       "into it, and is exact. audio_start is an approximate "
-                       "second opinion -- where the tape becomes audible, "
-                       "which is a little after it starts -- and must not be "
-                       "used to anchor a cut.",
-           "id": pid, "reference": ref,
-           "fps_num": info["fps_num"], "fps_den": info["fps_den"], "fps": fps,
-           "rate": RATE, "config": cfg,
-           "tracks": tracks,
-           "pairwise_offset_s": resid,
-           "worst_three_way_residual_ms": round(1000.0 * worst_r / RATE, 4),
-           "notes": []}
+    doc = {
+        "_comment": "N-track audio alignment by scripts/sync-audio.py. "
+        "offset is seconds of THIS tape relative to the "
+        "reference: the same moment sits offset seconds later "
+        "into it, and is exact. audio_start is an approximate "
+        "second opinion -- where the tape becomes audible, "
+        "which is a little after it starts -- and must not be "
+        "used to anchor a cut.",
+        "id": pid,
+        "reference": ref,
+        "fps_num": info["fps_num"],
+        "fps_den": info["fps_den"],
+        "fps": fps,
+        "rate": RATE,
+        "config": cfg,
+        "tracks": tracks,
+        "pairwise_offset_s": resid,
+        "worst_three_way_residual_ms": round(1000.0 * worst_r / RATE, 4),
+        "notes": [],
+    }
 
     if bad:
         doc["notes"] = bad
-        print("")
+        print()
         for b in bad:
             print("  !! %s" % b)
         sys.exit("refusing to write a sync that does not check out")
 
     out = args.out or os.path.join(
         _project.find_project_dir(cams[0][1]) or os.path.join(ROOT, "temp"),
-        "%s.anglesync.json" % pid)
+        "%s.anglesync.json" % pid,
+    )
     with open(out, "w", encoding="utf-8") as f:
         json.dump(doc, f, indent=2)
         f.write("\n")
     print("\nwrote %s" % _project.norm(out))
-    _project.record(pid, "sync-audio", script=__file__, argv=sys.argv[1:],
-                    note="%d tapes aligned on %s, worst confidence %.1f, "
-                         "worst three-way residual %.3f ms"
-                         % (len(cams), ref, worst_conf or 0.0,
-                            1000.0 * worst_r / RATE))
+    _project.record(
+        pid,
+        "sync-audio",
+        script=__file__,
+        argv=sys.argv[1:],
+        note="%d tapes aligned on %s, worst confidence %.1f, "
+        "worst three-way residual %.3f ms"
+        % (len(cams), ref, worst_conf or 0.0, 1000.0 * worst_r / RATE),
+    )
 
 
 if __name__ == "__main__":

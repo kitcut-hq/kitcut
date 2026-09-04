@@ -21,7 +21,12 @@ Two rules, both because of where this runs:
 
 Invoke as:  (the Claude Code status line runs it; not invoked by hand)
 """
-import sys, os, json, time, subprocess
+
+import sys
+import os
+import json
+import time
+import subprocess
 
 # cp1252 cannot encode the branch glyph; reconfigure before the first print.
 try:
@@ -67,9 +72,13 @@ def until(epoch):
 
 def git_branch(cwd):
     try:
-        p = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                           cwd=cwd or None, capture_output=True, text=True,
-                           timeout=2)
+        p = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=cwd or None,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
         return p.stdout.strip() if p.returncode == 0 else ""
     except Exception:
         return ""
@@ -97,8 +106,14 @@ def main():
     cw = payload.get("context_window") or {}
     size = cw.get("context_window_size")
     if model:
-        seg.append(c("%s (%s context)" % (model, kfmt(size))
-                     if size and "context)" not in model else model, "95"))
+        seg.append(
+            c(
+                "%s (%s context)" % (model, kfmt(size))
+                if size and "context)" not in model
+                else model,
+                "95",
+            )
+        )
 
     effort = (payload.get("effort") or {}).get("level")
     if effort:
@@ -109,8 +124,7 @@ def main():
     pct = cw.get("used_percentage")
     used = cw.get("total_input_tokens") or 0
     if pct is not None:
-        seg.append(c("ctx: %d%%%s"
-                     % (pct, " (%s)" % kfmt(used) if used else ""), meter(pct)))
+        seg.append(c("ctx: %d%%%s" % (pct, " (%s)" % kfmt(used) if used else ""), meter(pct)))
 
     rl = payload.get("rate_limits") or {}
     for key, label in (("five_hour", "5h"), ("seven_day", "wk")):
@@ -127,5 +141,5 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception as e:                     # never blank the status line
+    except Exception as e:  # never blank the status line
         print("statusline: %s" % e)

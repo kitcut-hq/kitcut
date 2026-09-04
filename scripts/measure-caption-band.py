@@ -29,7 +29,10 @@ Invoke as:
     python scripts/measure-caption-band.py projects/<id>/temp/ref/*.mp4
     python scripts/measure-caption-band.py a.mp4 b.mp4 --frames 60
 """
-import sys, os, argparse
+
+import sys
+import os
+import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -37,9 +40,9 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 import numpy as np  # noqa: E402
 import cv2  # noqa: E402
 
-AUTHORING_H = 1080.0   # presets are authored on 1920x1080; scale_style scales
-                       # bottom_margin_px by H/1080, so the authoring value is
-                       # the measured output value divided by that ratio.
+AUTHORING_H = 1080.0  # presets are authored on 1920x1080; scale_style scales
+# bottom_margin_px by H/1080, so the authoring value is
+# the measured output value divided by that ratio.
 
 
 def row_caption_signal(frame, x0_frac=0.15, x1_frac=0.85):
@@ -51,7 +54,7 @@ def row_caption_signal(frame, x0_frac=0.15, x1_frac=0.85):
     same row, almost never happens outside a caption.
     """
     h, w = frame.shape[:2]
-    band = frame[:, int(w * x0_frac):int(w * x1_frac)]
+    band = frame[:, int(w * x0_frac) : int(w * x1_frac)]
     luma = cv2.cvtColor(band, cv2.COLOR_BGR2GRAY)
     dark = (luma < 70).mean(axis=1)
     bright = (luma > 190).mean(axis=1)
@@ -84,7 +87,8 @@ def measure(video, n_frames):
 
 def band_from_hits(hits, min_hit):
     """The contiguous run of rows most often caption-like. Returns (y0, y1)
-    of the longest run above threshold, or None when nothing clears it."""
+    of the longest run above threshold, or None when nothing clears it.
+    """
     above = hits >= min_hit
     best, cur_start = None, None
     for y, a in enumerate(above):
@@ -104,13 +108,16 @@ def band_from_hits(hits, min_hit):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("videos", nargs="+", help="the channel's own published shorts")
-    ap.add_argument("--frames", type=int, default=48,
-                    help="frames sampled per video (default 48)")
-    ap.add_argument("--min-hit", type=float, default=0.30,
-                    help="a row must look caption-like in this fraction of "
-                         "frames to count (default 0.30). If nothing clears "
-                         "it the channel likely uses a light card -- measure "
-                         "by hand rather than lowering this blindly.")
+    ap.add_argument("--frames", type=int, default=48, help="frames sampled per video (default 48)")
+    ap.add_argument(
+        "--min-hit",
+        type=float,
+        default=0.30,
+        help="a row must look caption-like in this fraction of "
+        "frames to count (default 0.30). If nothing clears "
+        "it the channel likely uses a light card -- measure "
+        "by hand rather than lowering this blindly.",
+    )
     args = ap.parse_args()
 
     print("caption band per video (dark card + light text, temporal):")
@@ -121,14 +128,17 @@ def main():
         band = band_from_hits(hits, args.min_hit)
         name = os.path.basename(v)
         if band is None:
-            print("  %-24s NO band clears %.2f over %d frames -- light card, "
-                  "burned variety, or no captions" % (name, args.min_hit, used))
+            print(
+                "  %-24s NO band clears %.2f over %d frames -- light card, "
+                "burned variety, or no captions" % (name, args.min_hit, used)
+            )
             continue
         y0, y1 = band
         peak = hits[y0:y1].max()
-        print("  %-24s rows %4d..%4d of %d  (height %3d, from bottom %4d, "
-              "peak presence %2d%%, %d frames)"
-              % (name, y0, y1, h, y1 - y0, h - y1, 100 * peak, used))
+        print(
+            "  %-24s rows %4d..%4d of %d  (height %3d, from bottom %4d, "
+            "peak presence %2d%%, %d frames)" % (name, y0, y1, h, y1 - y0, h - y1, 100 * peak, used)
+        )
         bottoms.append((h - y1, h))
         tops.append(h - y0)
 
@@ -139,12 +149,15 @@ def main():
     out_h = bottoms[0][1]
     authoring = consensus / (out_h / AUTHORING_H)
     print()
-    print("consensus: card bottom sits %d px above the frame bottom (median "
-          "of %d videos)" % (consensus, len(bottoms)))
-    print("preset value: bottom_margin_px %d on the %dx1080 authoring canvas "
-          "(scale_style multiplies by %.4f for %d-tall output)"
-          % (round(authoring), int(AUTHORING_H * 16 / 9), out_h / AUTHORING_H,
-             out_h))
+    print(
+        "consensus: card bottom sits %d px above the frame bottom (median "
+        "of %d videos)" % (consensus, len(bottoms))
+    )
+    print(
+        "preset value: bottom_margin_px %d on the %dx1080 authoring canvas "
+        "(scale_style multiplies by %.4f for %d-tall output)"
+        % (round(authoring), int(AUTHORING_H * 16 / 9), out_h / AUTHORING_H, out_h)
+    )
 
 
 if __name__ == "__main__":

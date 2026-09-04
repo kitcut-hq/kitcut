@@ -15,14 +15,21 @@ re-running after editing one entry only re-renders that entry.
 
 Invoke as:  python scripts/cut-clips.py --manifest config/clips/<id>.json
 """
-import sys, os, json, argparse, subprocess, shutil, time
+
+import sys
+import os
+import json
+import argparse
+import subprocess
+import shutil
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 from importlib import import_module
 import _encode  # noqa: E402 -- the one place encoder keys are chosen
 
-_outline = import_module("transcript-outline")   # hyphen: not importable by name
+_outline = import_module("transcript-outline")  # hyphen: not importable by name
 _handle = import_module("handle-overlay")
 _imgoverlay = import_module("image-overlay")
 import _overlay
@@ -37,8 +44,11 @@ ENV = _env.ENV
 # one overrides it. "speed" is family-neutral -- _encode renders p5 into
 # whatever the chosen encoder calls it.
 DEFAULT_RENDER = {
-    "speed": 5, "cq": 21,
-    "maxrate": "16M", "bufsize": "32M", "audio_bitrate": "192k",
+    "speed": 5,
+    "cq": 21,
+    "maxrate": "16M",
+    "bufsize": "32M",
+    "audio_bitrate": "192k",
 }
 
 
@@ -47,8 +57,11 @@ def run(cmd, **kw):
 
 
 def probe(path):
-    out = run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
-               "-of", "json", path], capture_output=True, text=True)
+    out = run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", path],
+        capture_output=True,
+        text=True,
+    )
     if out.returncode:
         sys.exit("ffprobe failed on %s\n%s" % (path, out.stderr.strip()))
     return float(json.loads(out.stdout)["format"]["duration"])
@@ -62,23 +75,49 @@ def probe_video(path):
     length while the video is a single frame or missing altogether, and every
     duration check still passes. Ask about the picture directly.
     """
-    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-               "-count_packets", "-show_entries",
-               "stream=width,height,nb_read_packets", "-of", "json", path],
-              capture_output=True, text=True)
+    out = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-count_packets",
+            "-show_entries",
+            "stream=width,height,nb_read_packets",
+            "-of",
+            "json",
+            path,
+        ],
+        capture_output=True,
+        text=True,
+    )
     if out.returncode:
         return 0, 0, 0
     streams = json.loads(out.stdout).get("streams") or []
     if not streams:
         return 0, 0, 0
     s = streams[0]
-    return (int(s.get("width") or 0), int(s.get("height") or 0),
-            int(s.get("nb_read_packets") or 0))
+    return (int(s.get("width") or 0), int(s.get("height") or 0), int(s.get("nb_read_packets") or 0))
 
 
 def probe_fps(path):
-    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
-               "stream=r_frame_rate", "-of", "json", path], capture_output=True, text=True)
+    out = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=r_frame_rate",
+            "-of",
+            "json",
+            path,
+        ],
+        capture_output=True,
+        text=True,
+    )
     if out.returncode:
         sys.exit("ffprobe failed on %s" % path)
     num, _, den = json.loads(out.stdout)["streams"][0]["r_frame_rate"].partition("/")
@@ -151,7 +190,10 @@ def vertical_chain(crop_filter, pads, out_w, out_h, blur_h=480):
     """
     if not pads:
         return "[0:v]%s,scale=%d:%d:flags=lanczos,setsar=1[vcomp]" % (
-            crop_filter, out_w, out_h), "vcomp"
+            crop_filter,
+            out_w,
+            out_h,
+        ), "vcomp"
 
     blur_w = int(round(blur_h * out_w / float(out_h)))
     hit = "+".join("between(t,%g,%g)" % (a, b) for a, b in pads)
@@ -170,7 +212,8 @@ def vertical_chain(crop_filter, pads, out_w, out_h, blur_h=480):
 
 def norm_colour(c):
     """`#13BA82` is what a brand file and a designer both write; ffmpeg wants
-    `0x13BA82`. Names (`black`, `white`) and `0x` forms are passed through."""
+    `0x13BA82`. Names (`black`, `white`) and `0x` forms are passed through.
+    """
     c = str(c).strip()
     return "0x" + c[1:] if c.startswith("#") else c
 
@@ -187,8 +230,7 @@ def ramp_expr(pts, lo, hi):
     for i in range(len(pts) - 2, -1, -1):
         (t0, v0), (t1, v1) = pts[i], pts[i + 1]
         span = max(t1 - t0, 1e-3)
-        e = "if(lt(t,%g),(%g+(%g)*(t-%g)),%s)" % (
-            t1, v0, (v1 - v0) / span, t0, e)
+        e = "if(lt(t,%g),(%g+(%g)*(t-%g)),%s)" % (t1, v0, (v1 - v0) / span, t0, e)
     return "if(lt(t,%g),%g,%s)" % (pts[0][0], pts[0][1], e)
 
 
@@ -228,16 +270,18 @@ def mask_chain(masks, src_w, src_h, src_label="0:v"):
             dx, dy = max(mx, 1), max(my, 1)
             dw = min(mw, src_w - dx - 1)
             dh = min(mh, src_h - dy - 1)
-            parts.append("[%s]delogo=x=%d:y=%d:w=%d:h=%d[%s]"
-                         % (label, dx, dy, dw, dh, out))
+            parts.append("[%s]delogo=x=%d:y=%d:w=%d:h=%d[%s]" % (label, dx, dy, dw, dh, out))
         elif mode == "fill":
-            parts.append("[%s]drawbox=%d:%d:%d:%d:color=%s:t=fill[%s]"
-                         % (label, mx, my, mw, mh,
-                            norm_colour(spec.get("color", "white")), out))
+            parts.append(
+                "[%s]drawbox=%d:%d:%d:%d:color=%s:t=fill[%s]"
+                % (label, mx, my, mw, mh, norm_colour(spec.get("color", "white")), out)
+            )
         else:
             parts.append("[%s]split=2[mb%d][mm%d]" % (label, n, n))
-            parts.append("[mb%d]crop=%d:%d:%d:%d,boxblur=%d:3[mp%d]"
-                         % (n, mw, mh, mx, my, int(spec.get("blur", 25)), n))
+            parts.append(
+                "[mb%d]crop=%d:%d:%d:%d,boxblur=%d:3[mp%d]"
+                % (n, mw, mh, mx, my, int(spec.get("blur", 25)), n)
+            )
             parts.append("[mm%d][mp%d]overlay=%d:%d[%s]" % (n, n, mx, my, out))
         label, n = out, n + 1
     return parts, label, n
@@ -265,13 +309,14 @@ def rect_chain(rect, place, src_w, src_h, out_w, out_h, blur_h=480):
     rh = even(min(rh, src_h - ry))
     rx, ry = even(rx), even(ry)
     if rw < 2 or rh < 2:
-        sys.exit("crop_rect %s has no area inside the %dx%d source"
-                 % (rect, src_w, src_h))
+        sys.exit("crop_rect %s has no area inside the %dx%d source" % (rect, src_w, src_h))
     fit_h = even(rh * out_w / float(rw))
     if fit_h > out_h:
-        sys.exit("crop_rect %s is %dx%d; scaled to %d wide it is %d tall, which "
-                 "does not fit the %dx%d canvas -- widen the rect or lose height"
-                 % (rect, rw, rh, out_w, fit_h, out_w, out_h))
+        sys.exit(
+            "crop_rect %s is %dx%d; scaled to %d wide it is %d tall, which "
+            "does not fit the %dx%d canvas -- widen the rect or lose height"
+            % (rect, rw, rh, out_w, fit_h, out_w, out_h)
+        )
     y = place.get("y")
     y = (out_h - fit_h) / 2.0 if y is None else float(y)
     y = even(min(max(y, 0), out_h - fit_h))
@@ -279,14 +324,24 @@ def rect_chain(rect, place, src_w, src_h, out_w, out_h, blur_h=480):
     if bg == "blur":
         # out of focus by definition, so blur it small and scale it up
         blur_w = int(round(blur_h * out_w / float(out_h)))
-        bgf = ("[bgs]scale=-2:%d,crop=%d:%d,boxblur=10:2,scale=%d:%d,setsar=1[bgv]"
-               % (blur_h, blur_w, blur_h, out_w, out_h))
+        bgf = "[bgs]scale=-2:%d,crop=%d:%d,boxblur=10:2,scale=%d:%d,setsar=1[bgv]" % (
+            blur_h,
+            blur_w,
+            blur_h,
+            out_w,
+            out_h,
+        )
     else:
         # drawbox over a scaled copy of the frame, rather than a `color` source:
         # a lavfi source never ends, and the overlay would then need shortest=1
         # to stop the render running forever.
-        bgf = ("[bgs]scale=%d:%d,drawbox=0:0:%d:%d:color=%s:t=fill,setsar=1[bgv]"
-               % (out_w, out_h, out_w, out_h, norm_colour(bg)))
+        bgf = "[bgs]scale=%d:%d,drawbox=0:0:%d:%d:color=%s:t=fill,setsar=1[bgv]" % (
+            out_w,
+            out_h,
+            out_w,
+            out_h,
+            norm_colour(bg),
+        )
     # A pan keeps ONE window size and moves it. crop's w/h evaluate once and
     # only its x/y are per-frame, so a window that changes SIZE cannot be done
     # in this pass at all -- which is also why the rect is fixed and the
@@ -304,12 +359,10 @@ def rect_chain(rect, place, src_w, src_h, out_w, out_h, blur_h=480):
     parts = mparts + [
         "[%s]split=2[bgs][fgs]" % msrc,
         bgf,
-        "[fgs]%s,scale=%d:%d:flags=lanczos,setsar=1[fgv]"
-        % (crop_f, out_w, fit_h),
+        "[fgs]%s,scale=%d:%d:flags=lanczos,setsar=1[fgv]" % (crop_f, out_w, fit_h),
         "[bgv][fgv]overlay=0:%d[vcomp]" % y,
     ]
-    return ";".join(parts), "vcomp", (rw, rh, rx, ry, fit_h, y, bg,
-                                      len(pan or []), nmask)
+    return ";".join(parts), "vcomp", (rw, rh, rx, ry, fit_h, y, bg, len(pan or []), nmask)
 
 
 def clip_rect(clip, m):
@@ -360,8 +413,10 @@ def clip_style(caps, clip, tmpdir):
         cfg = json.load(f)
     cfg["layout"].update({k: v for k, v in over.items() if k in LAYOUT})
     cfg["grouping"].update({k: v for k, v in over.items() if k in GROUPING})
-    cfg["_clip_override"] = "%s: %s" % (clip["id"], ", ".join(
-        "%s=%s" % kv for kv in sorted(over.items())))
+    cfg["_clip_override"] = "%s: %s" % (
+        clip["id"],
+        ", ".join("%s=%s" % kv for kv in sorted(over.items())),
+    )
     out = os.path.join(tmpdir, "%s.style.json" % clip["id"])
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(cfg, f, indent=1, ensure_ascii=False)
@@ -369,8 +424,21 @@ def clip_style(caps, clip, tmpdir):
     return os.path.relpath(out, ROOT).replace("\\", "/")
 
 
-def build_captions(clip, words_path, style, start, end, w, h, fps, tmpdir,
-                   verify=True, samples=24, overlays=None, fontsdir="fonts"):
+def build_captions(
+    clip,
+    words_path,
+    style,
+    start,
+    end,
+    w,
+    h,
+    fps,
+    tmpdir,
+    verify=True,
+    samples=24,
+    overlays=None,
+    fontsdir="fonts",
+):
     """Render an ASS for just this clip's span, rebased to t=0.
 
     --range/--time-offset already exist in the ASS builder, so a clip needs no
@@ -381,11 +449,25 @@ def build_captions(clip, words_path, style, start, end, w, h, fps, tmpdir,
     # ass filter as an escape, so temp\05-x.ass silently becomes temp05-x.ass.
     ass = os.path.join(tmpdir, "%s.captions.ass" % clip["id"]).replace("\\", "/")
     dbg = os.path.join(tmpdir, "%s.captions.debug.json" % clip["id"]).replace("\\", "/")
-    cmd = PY + ["scripts/build-captions-ass.py", "--words", words_path,
-                "--style", style, "--out", ass, "--debug-out", dbg,
-                "--scale-to", str(w), str(h),
-                "--range", "%.3f" % start, "%.3f" % end,
-                "--time-offset", "%.3f" % start]
+    cmd = PY + [
+        "scripts/build-captions-ass.py",
+        "--words",
+        words_path,
+        "--style",
+        style,
+        "--out",
+        ass,
+        "--debug-out",
+        dbg,
+        "--scale-to",
+        str(w),
+        str(h),
+        "--range",
+        "%.3f" % start,
+        "%.3f" % end,
+        "--time-offset",
+        "%.3f" % start,
+    ]
     if overlays:
         cmd += ["--overlays", overlays]
     if subprocess.run(cmd, cwd=ROOT, env=ENV).returncode:
@@ -393,13 +475,28 @@ def build_captions(clip, words_path, style, start, end, w, h, fps, tmpdir,
     if verify:
         # Same guarantee the captions pipeline gives: prove the highlight lands
         # on the right word BEFORE spending an encode on it.
-        r = subprocess.run(PY + ["scripts/verify-captions.py", "--debug", dbg,
-                                 "--style", style, "--ass", ass,
-                                 "--fontsdir", fontsdir,
-                                 "--tmp", os.path.join(
-                                     tmpdir, "_probe_%s.png" % clip["id"]),
-                                 "--fps", "%.6f" % fps, "--samples", str(samples)],
-                           cwd=ROOT, env=ENV)
+        r = subprocess.run(
+            PY
+            + [
+                "scripts/verify-captions.py",
+                "--debug",
+                dbg,
+                "--style",
+                style,
+                "--ass",
+                ass,
+                "--fontsdir",
+                fontsdir,
+                "--tmp",
+                os.path.join(tmpdir, "_probe_%s.png" % clip["id"]),
+                "--fps",
+                "%.6f" % fps,
+                "--samples",
+                str(samples),
+            ],
+            cwd=ROOT,
+            env=ENV,
+        )
         if r.returncode:
             sys.exit("%s: caption sync verification failed" % clip["id"])
     return ass
@@ -413,10 +510,22 @@ HOOK_MAX_S = 3.0
 # cuts; the list is a PROMPT to look, not a verdict, and it never blocks a
 # render on its own -- the hook-timing gate below is the thing with teeth.
 FILLER_OPENERS = (
-    "якщо ми говоримо", "знову ж таки", "давайте так", "ну давайте",
-    "мені здається", "в цілому", "можна так зробити", "дивіться",
-    "я б сказав", "якщо чесно", "з одного боку", "тут мабуть",
-    "окей", "тобто", "ну я", "коротше",
+    "якщо ми говоримо",
+    "знову ж таки",
+    "давайте так",
+    "ну давайте",
+    "мені здається",
+    "в цілому",
+    "можна так зробити",
+    "дивіться",
+    "я б сказав",
+    "якщо чесно",
+    "з одного боку",
+    "тут мабуть",
+    "окей",
+    "тобто",
+    "ну я",
+    "коротше",
 )
 
 
@@ -445,8 +554,9 @@ def hook_gate(clip, words, start):
         errs.append(
             "no `hook` declared. Name the phrase that makes a viewer stay -- the "
             "claim, number or turn that IS the point -- and put it in the clip as "
-            "\"hook\": \"<exact words>\". If you cannot name one, the clip does not "
-            "have a hook and the boundaries are wrong, not the check.")
+            '"hook": "<exact words>". If you cannot name one, the clip does not '
+            "have a hook and the boundaries are wrong, not the check."
+        )
         return errs, warns
 
     hit = _outline.find(words, hook)
@@ -456,28 +566,31 @@ def hook_gate(clip, words, start):
 
     lead = hit[0] - start
     if lead < -1e-6:
-        errs.append("hook at %.2f is BEFORE the clip starts (%.2f) -- the clip "
-                    "opens past its own hook." % (hit[0], start))
+        errs.append(
+            "hook at %.2f is BEFORE the clip starts (%.2f) -- the clip "
+            "opens past its own hook." % (hit[0], start)
+        )
     elif lead > HOOK_MAX_S:
         why = clip.get("hook_ok")
-        msg = ("hook lands %.1fs in (%.2f), past the %.1fs limit. That is the "
-               "slow-opening failure: everything before it is run-up the viewer "
-               "will not wait through. Move the start onto the hook."
-               % (lead, hit[0], HOOK_MAX_S))
+        msg = (
+            "hook lands %.1fs in (%.2f), past the %.1fs limit. That is the "
+            "slow-opening failure: everything before it is run-up the viewer "
+            "will not wait through. Move the start onto the hook." % (lead, hit[0], HOOK_MAX_S)
+        )
         if why:
             warns.append(msg + " ACCEPTED: %s" % why)
         else:
-            errs.append(msg + " If it is genuinely right, record why in "
-                              "\"hook_ok\": \"<reason>\".")
+            errs.append(msg + ' If it is genuinely right, record why in "hook_ok": "<reason>".')
 
-    opening = _outline.fold(" ".join(
-        w.get("text", "") for w in words
-        if start - 1e-6 <= w["start"] <= start + 4.0))
+    opening = _outline.fold(
+        " ".join(w.get("text", "") for w in words if start - 1e-6 <= w["start"] <= start + 4.0)
+    )
     for f in FILLER_OPENERS:
         if opening.startswith(_outline.fold(f)):
-            warns.append("opens on filler (%r). Openers like this promise "
-                         "nothing -- check the first two seconds earn attention."
-                         % f)
+            warns.append(
+                "opens on filler (%r). Openers like this promise "
+                "nothing -- check the first two seconds earn attention." % f
+            )
             break
     return errs, warns
 
@@ -489,6 +602,7 @@ def resolve(clip, words, pad_head, pad_tail):
     being spoken inside the pad, meet it halfway instead -- that keeps the head
     of a clip from opening on the tail of the previous sentence.
     """
+
     def phrase(key):
         hit = _outline.find(words, clip[key])
         if hit is None:
@@ -519,16 +633,13 @@ def resolve(clip, words, pad_head, pad_tail):
         sys.exit("%s: needs end, duration, end_text or end_before_text" % clip["id"])
 
     if anchor_a is not None:
-        prev_end = max([w["end"] for w in words if w["end"] <= anchor_a + 1e-6],
-                       default=0.0)
+        prev_end = max([w["end"] for w in words if w["end"] <= anchor_a + 1e-6], default=0.0)
         start = max(anchor_a - pad_head, min(anchor_a, (prev_end + anchor_a) / 2.0))
     if anchor_b is not None and "end_before_text" in clip:
-        prev_end = max([w["end"] for w in words if w["end"] <= anchor_b + 1e-6],
-                       default=anchor_b)
+        prev_end = max([w["end"] for w in words if w["end"] <= anchor_b + 1e-6], default=anchor_b)
         end = min(anchor_b, max(prev_end, (prev_end + anchor_b) / 2.0) + pad_tail)
     elif anchor_b is not None:
-        next_start = min([w["start"] for w in words if w["start"] >= anchor_b - 1e-6],
-                         default=None)
+        next_start = min([w["start"] for w in words if w["start"] >= anchor_b - 1e-6], default=None)
         end = anchor_b + pad_tail
         if next_start is not None and next_start < end:
             end = (anchor_b + next_start) / 2.0
@@ -538,12 +649,25 @@ def resolve(clip, words, pad_head, pad_tail):
     return max(0.0, start), end
 
 
-def cut(src, dst, start, dur, render, copy, overlay=None, pre_chain=None,
-        base="vbase", dub=None, img=None, fps=None):
-    """overlay is (png_paths, filter_complex, out_label) from handle-overlay;
+def cut(
+    src,
+    dst,
+    start,
+    dur,
+    render,
+    copy,
+    overlay=None,
+    pre_chain=None,
+    base="vbase",
+    dub=None,
+    img=None,
+    fps=None,
+):
+    """Overlay is (png_paths, filter_complex, out_label) from handle-overlay;
     pre_chain is a filter graph ending in [base] that runs before the badge;
     img is the same triple from image-overlay, composited after the badge;
-    dub is a wav to use INSTEAD of the source audio."""
+    dub is a wav to use INSTEAD of the source audio.
+    """
     extra = []
     if copy:
         if overlay or pre_chain or img:
@@ -567,8 +691,9 @@ def cut(src, dst, start, dur, render, copy, overlay=None, pre_chain=None,
             # handle-overlay hardcodes [1:v]..[N:v]; this run's PNGs really do
             # sit at those indices only because nothing was inserted before
             # them. Keep that true, loudly.
-            assert all(("[%d:v]" % (k + 1)) in fc for k in range(len(pngs))), \
+            assert all(("[%d:v]" % (k + 1)) in fc for k in range(len(pngs))), (
                 "badge filter no longer addresses inputs 1..N -- input order changed?"
+            )
         else:
             label = base
         # Image overlays go after the badge PNGs -- both in the input list, for
@@ -586,23 +711,21 @@ def cut(src, dst, start, dur, render, copy, overlay=None, pre_chain=None,
                 # audio still runs the full length and every duration check
                 # still passes. The badge gets away without it only because its
                 # overlay has no shortest=1.
-                extra += ["-loop", "1", "-framerate", "%g" % (fps or 30),
-                          "-i", p]
+                extra += ["-loop", "1", "-framerate", "%g" % (fps or 30), "-i", p]
             n_in += len(pngs)
             chain.append(fc)
         # The dub is appended AFTER the badge PNGs on purpose: handle-overlay
         # addresses those by absolute index ([1:v], [2:v], ...), so slipping an
         # input in ahead of them would quietly repoint the badge at the wav.
-        amap = "0:a:0?"                  # '?': a silent source is not an error
+        amap = "0:a:0?"  # '?': a silent source is not an error
         if dub:
             extra += ["-i", dub]
-            amap = "%d:a:0" % n_in       # mandatory: a dub with no audio
-                                         # stream must fail loudly
+            amap = "%d:a:0" % n_in  # mandatory: a dub with no audio
+            # stream must fail loudly
         if chain:
             # the badge animates on the OUTPUT clock, which -ss rebases to 0,
             # so every clip starts its cycle at the same place
-            args = ["-filter_complex", ";".join(chain),
-                    "-map", "[%s]" % label, "-map", amap]
+            args = ["-filter_complex", ";".join(chain), "-map", "[%s]" % label, "-map", amap]
         else:
             args = ["-map", "0:v:0", "-map", amap]
         args += _encode.video_args(render) + _encode.audio_args(render)
@@ -617,9 +740,24 @@ def cut(src, dst, start, dur, render, copy, overlay=None, pre_chain=None,
     # own duration is the total, since -ss already rebased the output clock.
     job = os.path.splitext(os.path.basename(dst))[0]
     prog = _progress.begin(job, dur, os.path.relpath(dst, ROOT), kind="clip")
-    cmd = (["ffmpeg", "-hide_banner", "-v", "error", "-nostdin",
-            "-progress", prog, "-ss", "%.3f" % start, "-i", src]
-           + extra + args + ["-t", "%.3f" % dur, "-movflags", "+faststart", "-y", tmp])
+    cmd = (
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-v",
+            "error",
+            "-nostdin",
+            "-progress",
+            prog,
+            "-ss",
+            "%.3f" % start,
+            "-i",
+            src,
+        ]
+        + extra
+        + args
+        + ["-t", "%.3f" % dur, "-movflags", "+faststart", "-y", tmp]
+    )
     try:
         rc = run(cmd).returncode
     finally:
@@ -639,12 +777,14 @@ def cut(src, dst, start, dur, render, copy, overlay=None, pre_chain=None,
             return True
         except PermissionError:
             if attempt == 5:
-                print("  %s is still locked; the finished render is at %s"
-                      % (dst, tmp), flush=True)
+                print("  %s is still locked; the finished render is at %s" % (dst, tmp), flush=True)
                 return False
             wait = 5.0 * (attempt + 1)
-            print("  %s is open in another program -- retry %d/5 in %.0fs"
-                  % (os.path.basename(dst), attempt + 1, wait), flush=True)
+            print(
+                "  %s is open in another program -- retry %d/5 in %.0fs"
+                % (os.path.basename(dst), attempt + 1, wait),
+                flush=True,
+            )
             time.sleep(wait)
 
 
@@ -653,33 +793,50 @@ def main():
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--only", help="comma-separated clip ids to build")
     ap.add_argument("--outdir", help="override the manifest outdir")
-    ap.add_argument("--copy", action="store_true",
-                    help="stream-copy instead of re-encoding (fast, keyframe-snapped)")
+    ap.add_argument(
+        "--copy",
+        action="store_true",
+        help="stream-copy instead of re-encoding (fast, keyframe-snapped)",
+    )
     ap.add_argument("--force", action="store_true", help="rebuild existing outputs")
-    ap.add_argument("--list", action="store_true",
-                    help="resolve boundaries and print the plan, cut nothing")
-    ap.add_argument("--handle", help="burn in this social handle, e.g. @name "
-                                     "(overrides the manifest)")
+    ap.add_argument(
+        "--list", action="store_true", help="resolve boundaries and print the plan, cut nothing"
+    )
+    ap.add_argument(
+        "--handle", help="burn in this social handle, e.g. @name (overrides the manifest)"
+    )
     ap.add_argument("--handle-preset", help="override the manifest handle preset")
     ap.add_argument("--no-handle", action="store_true", help="skip the handle badge")
-    ap.add_argument("--vertical", action="store_true",
-                    help="crop to 1080x1920 (overrides the manifest)")
+    ap.add_argument(
+        "--vertical", action="store_true", help="crop to 1080x1920 (overrides the manifest)"
+    )
     ap.add_argument("--no-vertical", action="store_true", help="keep the source framing")
-    ap.add_argument("--no-caption-space-check", action="store_true",
-                    help="skip the post-render face/caption collision check")
+    ap.add_argument(
+        "--no-caption-space-check",
+        action="store_true",
+        help="skip the post-render face/caption collision check",
+    )
     ap.add_argument("--caption-style", help="burn captions using this preset")
-    ap.add_argument("--encoder", help="override render.encoder -- libx264 "
-                                      "renders on CPU for machines with no NVENC")
+    ap.add_argument(
+        "--encoder",
+        help="override render.encoder -- libx264 renders on CPU for machines with no NVENC",
+    )
     ap.add_argument("--no-captions", action="store_true", help="skip burning captions")
-    ap.add_argument("--no-verify", action="store_true",
-                    help="skip the caption sync proof (not recommended)")
-    ap.add_argument("--dub", metavar="DIR",
-                    help="use the dubbed track and translated word timings from "
-                         "this directory (see dub-clips.py) instead of the "
-                         "source audio and transcript")
-    ap.add_argument("--dub-tag",
-                    help="language tag on the dub files and the output name "
-                         "(default: the manifest's dub.tag, else en)")
+    ap.add_argument(
+        "--no-verify", action="store_true", help="skip the caption sync proof (not recommended)"
+    )
+    ap.add_argument(
+        "--dub",
+        metavar="DIR",
+        help="use the dubbed track and translated word timings from "
+        "this directory (see dub-clips.py) instead of the "
+        "source audio and transcript",
+    )
+    ap.add_argument(
+        "--dub-tag",
+        help="language tag on the dub files and the output name "
+        "(default: the manifest's dub.tag, else en)",
+    )
     args = ap.parse_args()
 
     for tool in ("ffmpeg", "ffprobe"):
@@ -730,9 +887,11 @@ def main():
     if args.copy and (vert or caps or (hcfg.get("text") and not args.no_handle)):
         # refuse here, not deep inside cut(): by then a caption build and a
         # 24-frame sync verification have already been paid for
-        sys.exit("--copy cannot crop, caption or brand: stream copy does not "
-                 "filter. Pass --no-vertical --no-captions --no-handle, or "
-                 "drop --copy.")
+        sys.exit(
+            "--copy cannot crop, caption or brand: stream copy does not "
+            "filter. Pass --no-vertical --no-captions --no-handle, or "
+            "drop --copy."
+        )
     if args.copy and dubdir:
         sys.exit("--copy cannot carry a dub: a keyframe-snapped cut desyncs it")
 
@@ -763,10 +922,15 @@ def main():
     if hcfg.get("text") and not args.no_handle:
         # size the badge to the OUTPUT frame, not the source: a vertical crop
         # changes both dimensions under it
-        overlay = _handle.prepare(hcfg.get("preset", _handle.DEFAULT_PRESET),
-                                  hcfg["text"], out_w, out_h, tmpdir, base=base)
-        print("handle %s  (%s)" % (hcfg["text"],
-                                   hcfg.get("preset", _handle.DEFAULT_PRESET)))
+        overlay = _handle.prepare(
+            hcfg.get("preset", _handle.DEFAULT_PRESET),
+            hcfg["text"],
+            out_w,
+            out_h,
+            tmpdir,
+            base=base,
+        )
+        print("handle %s  (%s)" % (hcfg["text"], hcfg.get("preset", _handle.DEFAULT_PRESET)))
     # Face-tracked crop centres from auto-reframe.py, if that has been run.
     reframe = {}
     rpath = m.get("reframe") or (os.path.splitext(args.manifest)[0] + ".reframe.json")
@@ -775,8 +939,7 @@ def main():
         # "_"-prefixed keys are hand-edit markers (see merge_sidecar in
         # auto-reframe.py), not clips -- counting them reported 3 clips
         # for a 2-clip sidecar carrying a file-level _comment.
-        print("reframe %s (%d clips)" % (
-            rpath, sum(1 for k in reframe if not k.startswith("_"))))
+        print("reframe %s (%d clips)" % (rpath, sum(1 for k in reframe if not k.startswith("_"))))
     if vert:
         print("vertical %dx%d from %dx%d" % (out_w, out_h, src_w, src_h))
     if caps:
@@ -793,10 +956,11 @@ def main():
     # end, and one end card can ride every short in the batch.
     img_preset = m.get("overlay_preset", _imgoverlay.DEFAULT_PRESET)
     img_default = m.get("image_overlays") or []
-    img_preset_doc = json.load(open(
-        _imgoverlay._overlay.repo_path(img_preset), encoding="utf-8")) \
-        if (img_default or any(c.get("image_overlays") for c in m["clips"])) \
+    img_preset_doc = (
+        json.load(open(_imgoverlay._overlay.repo_path(img_preset), encoding="utf-8"))
+        if (img_default or any(c.get("image_overlays") for c in m["clips"]))
         else {}
+    )
 
     hook_failed = False
     for clip in m["clips"]:
@@ -810,9 +974,9 @@ def main():
         # renderer disagreed about where a clip began and the check passed on a
         # start that never shipped.
         cp = clip.get("pad", {})
-        start, end = resolve(clip, words,
-                             float(cp.get("head", pad_head)),
-                             float(cp.get("tail", pad_tail)))
+        start, end = resolve(
+            clip, words, float(cp.get("head", pad_head)), float(cp.get("tail", pad_tail))
+        )
         if end > src_dur:
             sys.exit("%s: end %.2f is past the source (%.2f)" % (clip["id"], end, src_dur))
         # The hook gate runs BEFORE the encode, like the caption-sync check --
@@ -828,8 +992,7 @@ def main():
             # and carries on; anything that would encode stops here.
             hook_failed = True
             if not args.list:
-                sys.exit("%s: refusing to render; fix the opening, not the check"
-                         % clip["id"])
+                sys.exit("%s: refusing to render; fix the opening, not the check" % clip["id"])
         name = "%s-%s" % (prefix, clip["id"]) if prefix else clip["id"]
         dub_wav = dub_words = None
         absent = []
@@ -841,8 +1004,9 @@ def main():
             missing_dub += absent
             # a dubbed cut is a different deliverable, not a replacement
             name = "%s-%s" % (name, dub_tag)
-        plan.append((clip, start, end, os.path.join(outdir, name + ".mp4"),
-                     dub_wav, dub_words, not absent))
+        plan.append(
+            (clip, start, end, os.path.join(outdir, name + ".mp4"), dub_wav, dub_words, not absent)
+        )
 
     if wanted:
         missing = wanted - set(c["id"] for c, *_ in plan)
@@ -860,30 +1024,49 @@ def main():
         hit = _outline.find(words, clip["hook"]) if clip.get("hook") else None
         if hit is not None and hit[0] >= start:
             hook_at = "hook +%.1fs  " % (hit[0] - start)
-        print("%-20s %s -> %s  %5.1fs  %s%s%s"
-              % (clip["id"], hhmmss(start), hhmmss(end), end - start, hook_at,
-                 "" if not dubdir else ("dub:ok  " if dub_ok else "dub:MISSING  "),
-                 clip.get("title", "")))
+        print(
+            "%-20s %s -> %s  %5.1fs  %s%s%s"
+            % (
+                clip["id"],
+                hhmmss(start),
+                hhmmss(end),
+                end - start,
+                hook_at,
+                "" if not dubdir else ("dub:ok  " if dub_ok else "dub:MISSING  "),
+                clip.get("title", ""),
+            )
+        )
         rect, place = clip_rect(clip, m) if vert else (None, {})
         if rect:
             _, _, geo = rect_chain(rect, place, src_w, src_h, out_w, out_h)
-            print("  rect %dx%d+%d+%d -> %dx%d at y=%d on %s  (%.2fx)%s"
-                  % (geo[0], geo[1], geo[2], geo[3], out_w, geo[4], geo[5],
-                     geo[6], out_w / float(geo[0]),
-                     ("  pan %d keys" % geo[7] if geo[7] else "")
-                     + ("  %d mask(s)" % geo[8] if geo[8] else "")))
-        for spec in (clip.get("image_overlays") or img_default):
-            print("  %s" % _imgoverlay.describe(spec, img_preset_doc,
-                                                end - start))
+            print(
+                "  rect %dx%d+%d+%d -> %dx%d at y=%d on %s  (%.2fx)%s"
+                % (
+                    geo[0],
+                    geo[1],
+                    geo[2],
+                    geo[3],
+                    out_w,
+                    geo[4],
+                    geo[5],
+                    geo[6],
+                    out_w / float(geo[0]),
+                    ("  pan %d keys" % geo[7] if geo[7] else "")
+                    + ("  %d mask(s)" % geo[8] if geo[8] else ""),
+                )
+            )
+        for spec in clip.get("image_overlays") or img_default:
+            print("  %s" % _imgoverlay.describe(spec, img_preset_doc, end - start))
     if args.list:
-        print("")
+        print()
         print("  encoder: %s" % _encode.describe(render))
-        return                           # --list promises to cut nothing, so a
-                                         # missing dub is information, not an error
+        return  # --list promises to cut nothing, so a
+        # missing dub is information, not an error
     if missing_dub:
-        sys.exit("missing dub artifacts:\n  %s\nrun dub-clips.py for those "
-                 "clips first, or select the dubbed ones with --only"
-                 % "\n  ".join(missing_dub))
+        sys.exit(
+            "missing dub artifacts:\n  %s\nrun dub-clips.py for those "
+            "clips first, or select the dubbed ones with --only" % "\n  ".join(missing_dub)
+        )
 
     failed = []
     encoded = []
@@ -895,13 +1078,23 @@ def main():
         parts, last = [], None
         rect, place = clip_rect(clip, m) if vert else (None, {})
         if rect:
-            chain, last, geo = rect_chain(rect, place, src_w, src_h,
-                                          out_w, out_h)
+            chain, last, geo = rect_chain(rect, place, src_w, src_h, out_w, out_h)
             parts.append(chain)
-            print("  rect %dx%d+%d+%d -> %dx%d at y=%d on %s%s"
-                  % (geo[0], geo[1], geo[2], geo[3], out_w, geo[4], geo[5],
-                     geo[6], "  pan %d keys" % geo[7] if geo[7] else "")
-                  + ("  %d mask(s)" % geo[8] if geo[8] else ""))
+            print(
+                "  rect %dx%d+%d+%d -> %dx%d at y=%d on %s%s"
+                % (
+                    geo[0],
+                    geo[1],
+                    geo[2],
+                    geo[3],
+                    out_w,
+                    geo[4],
+                    geo[5],
+                    geo[6],
+                    "  pan %d keys" % geo[7] if geo[7] else "",
+                )
+                + ("  %d mask(s)" % geo[8] if geo[8] else "")
+            )
         elif vert:
             cw, ch, cx, cy = crop_box(clip, src_w, src_h, out_w, out_h)
             entry = clip.get("crop_keys") or reframe.get(clip["id"])
@@ -911,40 +1104,56 @@ def main():
             else:
                 keys, pads = entry, clip.get("crop_pad") or []
             if keys:
-                if not clip.get("crop_keys") and ("crop_x" in clip
-                                                  or "crop_pad" in clip):
-                    print("  note: the .reframe.json sidecar overrides this "
-                          "clip's crop_x/crop_pad (only crop_keys wins over "
-                          "the sidecar)")
+                if not clip.get("crop_keys") and ("crop_x" in clip or "crop_pad" in clip):
+                    print(
+                        "  note: the .reframe.json sidecar overrides this "
+                        "clip's crop_x/crop_pad (only crop_keys wins over "
+                        "the sidecar)"
+                    )
                 # No eval=frame here: crop has no such option (that is scale and
                 # overlay). Its x/y are flagged runtime-tunable and already
                 # re-evaluated every frame, which is what makes the pan work.
                 crop_f = "crop=%d:%d:x=%s:y=%d" % (
-                    cw, ch, _handle.esc(crop_x_expr(keys, cw / 2.0,
-                                                    src_w - cw / 2.0, cw)), cy)
+                    cw,
+                    ch,
+                    _handle.esc(crop_x_expr(keys, cw / 2.0, src_w - cw / 2.0, cw)),
+                    cy,
+                )
             else:
                 crop_f = "crop=%d:%d:%d:%d" % (cw, ch, cx, cy)
             chain, last = vertical_chain(crop_f, pads, out_w, out_h)
             parts.append(chain)
             if pads:
-                print("  letterboxing %d shot(s), %.0f%% of the clip"
-                      % (len(pads), 100.0 * sum(b - a for a, b in pads) / (end - start)))
+                print(
+                    "  letterboxing %d shot(s), %.0f%% of the clip"
+                    % (len(pads), 100.0 * sum(b - a for a, b in pads) / (end - start))
+                )
         if caps:
             # captions are drawn AFTER the crop, so they are sized for the frame
             # the viewer sees rather than cropped along with the source pixels
             cl_caps = dict(caps, **(clip.get("captions") or {}))
             style = clip_style(cl_caps, clip, tmpdir)
-            ass = build_captions(clip, dub_words or m["words"],
-                                 style, start, end,
-                                 out_w, out_h, fps, tmpdir,
-                                 verify=not args.no_verify,
-                                 samples=int(cl_caps.get("samples", 24)),
-                                 overlays=cl_caps.get("overlays"),
-                                 fontsdir=cl_caps.get("fontsdir", "fonts"))
+            ass = build_captions(
+                clip,
+                dub_words or m["words"],
+                style,
+                start,
+                end,
+                out_w,
+                out_h,
+                fps,
+                tmpdir,
+                verify=not args.no_verify,
+                samples=int(cl_caps.get("samples", 24)),
+                overlays=cl_caps.get("overlays"),
+                fontsdir=cl_caps.get("fontsdir", "fonts"),
+            )
             # captions go on top of the composite, so they are never letterboxed
             # along with the shot underneath them
-            parts.append("[%s]ass=filename=%s:fontsdir=%s:shaping=simple[%s]"
-                         % (last or "0:v", ass, caps.get("fontsdir", "fonts"), base))
+            parts.append(
+                "[%s]ass=filename=%s:fontsdir=%s:shaping=simple[%s]"
+                % (last or "0:v", ass, caps.get("fontsdir", "fonts"), base)
+            )
         elif last:
             parts.append("[%s]null[%s]" % (last, base))
         pre_chain = ";".join(parts) if parts else None
@@ -956,14 +1165,32 @@ def main():
         if img_specs and not args.copy:
             img_base = overlay[2] if overlay else (base if parts else "0:v")
             pngs, ifc, iout = _imgoverlay.prepare(
-                img_preset, img_specs, out_w, out_h, tmpdir,
-                tag=clip["id"], base=img_base,
+                img_preset,
+                img_specs,
+                out_w,
+                out_h,
+                tmpdir,
+                tag=clip["id"],
+                base=img_base,
                 first_input=1 + (len(overlay[0]) if overlay else 0),
-                runtime=end - start)
+                runtime=end - start,
+            )
             img = (pngs, ifc, iout)
 
-        if not cut(src, dst, start, end - start, render, args.copy, overlay,
-                   pre_chain, base, dub_wav, img, fps):
+        if not cut(
+            src,
+            dst,
+            start,
+            end - start,
+            render,
+            args.copy,
+            overlay,
+            pre_chain,
+            base,
+            dub_wav,
+            img,
+            fps,
+        ):
             failed.append(dst)
             continue
         got, want = probe(dst), end - start
@@ -971,8 +1198,10 @@ def main():
             if abs(got - want) > 0.5:
                 # -ss with -c copy snaps to the preceding keyframe; running a
                 # GOP long is what stream copy costs, not a broken render
-                print("  note: %.2fs vs %.2fs requested -- stream copy snaps "
-                      "to keyframes" % (got, want))
+                print(
+                    "  note: %.2fs vs %.2fs requested -- stream copy snaps "
+                    "to keyframes" % (got, want)
+                )
         elif abs(got - want) > 0.5:
             sys.exit("%s: duration %.2fs, expected %.2fs" % (dst, got, want))
 
@@ -981,45 +1210,73 @@ def main():
         # and the duration check above waves it straight through.
         vw, vh, frames = probe_video(dst)
         if not vw:
-            sys.exit("%s: no video stream -- the filter graph produced audio "
-                     "only" % dst)
+            sys.exit("%s: no video stream -- the filter graph produced audio only" % dst)
         if not args.copy and (vw, vh) != (out_w, out_h):
             sys.exit("%s: %dx%d, expected %dx%d" % (dst, vw, vh, out_w, out_h))
         if frames < max(2, int(got * 0.5)):
-            sys.exit("%s: %d video frames for %.2fs -- something bounded the "
-                     "graph early (a non-looped image input under shortest=1 "
-                     "does exactly this)" % (dst, frames, got))
+            sys.exit(
+                "%s: %d video frames for %.2fs -- something bounded the "
+                "graph early (a non-looped image input under shortest=1 "
+                "does exactly this)" % (dst, frames, got)
+            )
 
-        meta = dict(clip, source=src, start=round(start, 3), end=round(end, 3),
-                    duration=round(got, 3), stream_copy=bool(args.copy),
-                    dub=dub_wav, dub_words=dub_words,
-                    render=None if args.copy else render)
-        with open(os.path.splitext(dst)[0] + ".json", "w",
-                  encoding="utf-8") as f:
+        meta = dict(
+            clip,
+            source=src,
+            start=round(start, 3),
+            end=round(end, 3),
+            duration=round(got, 3),
+            stream_copy=bool(args.copy),
+            dub=dub_wav,
+            dub_words=dub_words,
+            render=None if args.copy else render,
+        )
+        with open(os.path.splitext(dst)[0] + ".json", "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
         print("  %s  %.2fs  %.1f MB" % (dst, got, os.path.getsize(dst) / 1e6))
         _project.record(
-            _project.project_id(m, args.manifest), "render",
-            out=dst, script=__file__, argv=sys.argv[1:],
+            _project.project_id(m, args.manifest),
+            "render",
+            out=dst,
+            script=__file__,
+            argv=sys.argv[1:],
             kind="short-dubbed" if dub_wav else "short",
             manifest=args.manifest,
-            sidecars={"clip": os.path.splitext(dst)[0] + ".json",
-                      "dub-audio": dub_wav, "dub-words": dub_words},
-            burned=[b for b in (
-                ("source rect %s fitted to %d wide on %s"
-                 % (tuple(rect), out_w, place.get("background", "blur"))
-                 if rect else "9:16 crop per reframe sidecar")
-                if m.get("vertical") else None,
-                "word-synced captions, style %s" % caps["style"] if caps else None,
-                "handle badge %s" % (m.get("handle") or {}).get("text")
-                if (m.get("handle") or {}).get("text") else None,
-                "dubbed audio .%s" % dub_tag if dub_wav else None) if b]
-            + [_imgoverlay.describe(s, img_preset_doc, end - start)
-               for s in (clip.get("image_overlays") or img_default)])
+            sidecars={
+                "clip": os.path.splitext(dst)[0] + ".json",
+                "dub-audio": dub_wav,
+                "dub-words": dub_words,
+            },
+            burned=[
+                b
+                for b in (
+                    (
+                        "source rect %s fitted to %d wide on %s"
+                        % (tuple(rect), out_w, place.get("background", "blur"))
+                        if rect
+                        else "9:16 crop per reframe sidecar"
+                    )
+                    if m.get("vertical")
+                    else None,
+                    "word-synced captions, style %s" % caps["style"] if caps else None,
+                    "handle badge %s" % (m.get("handle") or {}).get("text")
+                    if (m.get("handle") or {}).get("text")
+                    else None,
+                    "dubbed audio .%s" % dub_tag if dub_wav else None,
+                )
+                if b
+            ]
+            + [
+                _imgoverlay.describe(s, img_preset_doc, end - start)
+                for s in (clip.get("image_overlays") or img_default)
+            ],
+        )
         encoded.append(clip["id"])
     if failed:
-        sys.exit("locked by another program, not replaced: %s\n(each finished "
-                 "render is beside its target as .part.mp4)" % ", ".join(failed))
+        sys.exit(
+            "locked by another program, not replaced: %s\n(each finished "
+            "render is beside its target as .part.mp4)" % ", ".join(failed)
+        )
 
     # The render checking ITSELF is the point: a card across the speaker's
     # mouth shipped through 24/24 sync probes, a passing hook gate and two
@@ -1028,28 +1285,37 @@ def main():
     # where the crop magnifies faces into the caption band) and skipped for
     # dubbed cuts, whose captions are timed from the dub words this checker
     # does not read.
-    if encoded and vert and caps and not dubdir \
-            and not args.no_caption_space_check:
-        det = os.path.join(ROOT, "models", "face",
-                           "face_detection_yunet_2023mar.onnx")
+    if encoded and vert and caps and not dubdir and not args.no_caption_space_check:
+        det = os.path.join(ROOT, "models", "face", "face_detection_yunet_2023mar.onnx")
         if not os.path.exists(det):
-            print("caption-space check SKIPPED -- no face model under "
-                  "models/face/ (download commands in the video-multicam-"
-                  "switch skill); run scripts/check-caption-space.py "
-                  "somewhere one exists before publishing")
+            print(
+                "caption-space check SKIPPED -- no face model under "
+                "models/face/ (download commands in the video-multicam-"
+                "switch skill); run scripts/check-caption-space.py "
+                "somewhere one exists before publishing"
+            )
         else:
-            print("caption space: checking the render against the speakers' "
-                  "faces ...", flush=True)
-            r = subprocess.run(PY + ["scripts/check-caption-space.py",
-                                     "--manifest", args.manifest,
-                                     "--only", ",".join(encoded)],
-                               cwd=ROOT, env=ENV)
+            print("caption space: checking the render against the speakers' faces ...", flush=True)
+            r = subprocess.run(
+                PY
+                + [
+                    "scripts/check-caption-space.py",
+                    "--manifest",
+                    args.manifest,
+                    "--only",
+                    ",".join(encoded),
+                ],
+                cwd=ROOT,
+                env=ENV,
+            )
             if r.returncode:
-                sys.exit("caption-space check FAILED. The renders above exist "
-                         "but a caption card sits on a face -- fix the "
-                         "placement or the framing (decision tree: `## Where "
-                         "the caption card goes` in the README), or record a "
-                         "reviewed exception in the clip's caption_space_ok.")
+                sys.exit(
+                    "caption-space check FAILED. The renders above exist "
+                    "but a caption card sits on a face -- fix the "
+                    "placement or the framing (decision tree: `## Where "
+                    "the caption card goes` in the README), or record a "
+                    "reviewed exception in the clip's caption_space_ok."
+                )
 
 
 if __name__ == "__main__":

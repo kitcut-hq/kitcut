@@ -22,7 +22,12 @@ Invoke as:
   python scripts/verify-chapters.py config/chapters/<id>.txt
   python scripts/verify-chapters.py "config/chapters/*.txt"
 """
-import sys, os, glob, json, argparse
+
+import sys
+import os
+import glob
+import json
+import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -32,8 +37,10 @@ import _ytchapters as ch  # noqa: E402
 def load_words(path):
     d = json.load(open(path, encoding="utf-8"))
     words = d["words"] if isinstance(d, dict) else d
-    return [{"t": float(w["start"]), "e": float(w["end"]),
-             "x": w.get("text", w.get("word", ""))} for w in words]
+    return [
+        {"t": float(w["start"]), "e": float(w["end"]), "x": w.get("text", w.get("word", ""))}
+        for w in words
+    ]
 
 
 def at(words, t):
@@ -46,24 +53,26 @@ def at(words, t):
 
 
 def review(chapters_path, words_path, width):
-    marks = ch.parse_marks("".join(
-        l for l in open(chapters_path, encoding="utf-8")
-        if not l.strip().startswith("#")))
+    marks = ch.parse_marks(
+        "".join(l for l in open(chapters_path, encoding="utf-8") if not l.strip().startswith("#"))
+    )
     words = load_words(words_path)
     end = words[-1]["e"] if words else 0
     errors = 0
 
-    print(f"\n{'=' * 78}\n{os.path.basename(chapters_path)}  "
-          f"{len(marks)} marks, speech ends {ch.fmt_ts(end)}\n")
+    print(
+        f"\n{'=' * 78}\n{os.path.basename(chapters_path)}  "
+        f"{len(marks)} marks, speech ends {ch.fmt_ts(end)}\n"
+    )
     for t, line in marks:
         title = line.split(None, 1)[1] if len(line.split(None, 1)) > 1 else ""
         i, gap = at(words, t)
         print(f"  {ch.fmt_ts(t):>6}  {title}")
         if i is None:
-            print(f"          !! ERROR: past the end of the speech")
+            print("          !! ERROR: past the end of the speech")
             errors += 1
             continue
-        said = " ".join(w["x"] for w in words[i:i + 24])
+        said = " ".join(w["x"] for w in words[i : i + 24])
         print(f"          [{gap:4.2f}s] {said[:width]}")
     return errors
 

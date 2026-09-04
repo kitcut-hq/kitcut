@@ -26,6 +26,7 @@ minute of it is a fact this script now knows:
 
 Invoke as:  python scripts/import-footage.py --project <id> --since 2026-08-31 --dry-run
 """
+
 import sys
 import os
 import re
@@ -60,25 +61,54 @@ def head_hash(path, n=5_000_000):
 
 def probe(path):
     out = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-         "-show_entries", "format_tags=creation_time",
-         "-show_entries", "stream=codec_type", "-of", "json", path],
-        capture_output=True, text=True).stdout
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-show_entries",
+            "format_tags=creation_time",
+            "-show_entries",
+            "stream=codec_type",
+            "-of",
+            "json",
+            path,
+        ],
+        capture_output=True,
+        text=True,
+    ).stdout
     try:
         d = json.loads(out)
     except ValueError:
         return {"duration": 0.0, "creation_time": None, "has_audio": False}
     fm = d.get("format") or {}
-    return {"duration": float(fm.get("duration") or 0.0),
-            "creation_time": (fm.get("tags") or {}).get("creation_time"),
-            "has_audio": any(s.get("codec_type") == "audio" for s in d.get("streams", []))}
+    return {
+        "duration": float(fm.get("duration") or 0.0),
+        "creation_time": (fm.get("tags") or {}).get("creation_time"),
+        "has_audio": any(s.get("codec_type") == "audio" for s in d.get("streams", [])),
+    }
 
 
 def audio_level(path):
     """(mean_dB, max_dB) or None when there is no audio stream at all."""
-    r = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", path, "-vn",
-                        "-af", "volumedetect", "-f", "null", "-"],
-                       capture_output=True, text=True)
+    r = subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-i",
+            path,
+            "-vn",
+            "-af",
+            "volumedetect",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture_output=True,
+        text=True,
+    )
     mean = max_ = None
     for ln in r.stderr.splitlines():
         m = re.search(r"mean_volume:\s*(-?[\d.]+)", ln)
@@ -102,18 +132,24 @@ def start_time(path, info):
     m = re.match(r"Recording (\d{4})-(\d{2})-(\d{2}) (\d{2})(\d{2})(\d{2})", name)
     if m:
         stop = dt.datetime(*map(int, m.groups()), tzinfo=local_tz())
-        return (stop - dt.timedelta(seconds=info["duration"]), "desktop",
-                f"Game Bar names a capture for when it STOPPED ({stop:%H:%M:%S}); "
-                f"start = stop - {info['duration']:.0f}s")
+        return (
+            stop - dt.timedelta(seconds=info["duration"]),
+            "desktop",
+            f"Game Bar names a capture for when it STOPPED ({stop:%H:%M:%S}); "
+            f"start = stop - {info['duration']:.0f}s",
+        )
     m = re.match(r"screen-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})", name)
     if m:
         st = dt.datetime(*map(int, m.groups()), tzinfo=local_tz())
         return st, "phone-screen", "Android screen recording: filename is the local START"
     m = re.match(r"PXL_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})", name)
     if m:
-        utc = dt.datetime(*map(int, m.groups()), tzinfo=dt.timezone.utc)
-        return (utc.astimezone(local_tz()), "phone-camera",
-                f"PXL filename is UTC ({utc:%H:%M:%S}Z); converted to local")
+        utc = dt.datetime(*map(int, m.groups()), tzinfo=dt.UTC)
+        return (
+            utc.astimezone(local_tz()),
+            "phone-camera",
+            f"PXL filename is UTC ({utc:%H:%M:%S}Z); converted to local",
+        )
     ct = info.get("creation_time")
     if ct:
         try:
@@ -143,7 +179,7 @@ def windows_captures(videos_dir, since):
     return keep, dropped
 
 
-PS_LIST = r'''
+PS_LIST = r"""
 $shell = New-Object -ComObject Shell.Application
 $dev = $shell.NameSpace(17).Items() | Where-Object { $_.Name -eq '%(phone)s' }
 if (-not $dev) { exit 2 }
@@ -155,9 +191,9 @@ function Walk($f, $sub) {
 }
 Walk $int @('Movies')
 Walk $int @('DCIM','Camera')
-'''
+"""
 
-PS_COPY = r'''
+PS_COPY = r"""
 $shell = New-Object -ComObject Shell.Application
 $dev = $shell.NameSpace(17).Items() | Where-Object { $_.Name -eq '%(phone)s' }
 $int = ($dev.GetFolder.Items() | Where-Object { $_.IsFolder } | Select-Object -First 1).GetFolder
@@ -172,15 +208,18 @@ for ($i = 0; $i -lt 900; $i++) {
   if (Test-Path $p) { $s = (Get-Item $p).Length; if ($s -eq $prev -and $s -gt 0) { break }; $prev = $s }
 }
 "copied $prev"
-'''
+"""
 
 
 def phone_files(phone, since):
     """[(subfolder, name)] on the phone that belong to the session."""
     if os.name != "nt":
         return []
-    r = subprocess.run(["powershell", "-NoProfile", "-Command", PS_LIST % {"phone": phone}],
-                       capture_output=True, text=True)
+    r = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", PS_LIST % {"phone": phone}],
+        capture_output=True,
+        text=True,
+    )
     if r.returncode == 2:
         print(f"  phone '{phone}' not connected; skipping")
         return []
@@ -199,10 +238,16 @@ def phone_files(phone, since):
 
 
 def phone_copy(phone, sub, name, dest):
-    r = subprocess.run(["powershell", "-NoProfile", "-Command",
-                        PS_COPY % {"phone": phone, "sub": sub, "name": name,
-                                   "dest": dest.replace("/", "\\")}],
-                       capture_output=True, text=True)
+    r = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            PS_COPY % {"phone": phone, "sub": sub, "name": name, "dest": dest.replace("/", "\\")},
+        ],
+        capture_output=True,
+        text=True,
+    )
     return r.stdout.strip()
 
 
@@ -210,13 +255,20 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--project", required=True)
     ap.add_argument("--videos-dir", default=os.path.join(os.path.expanduser("~"), "Videos"))
-    ap.add_argument("--phone", default="Pixel 9 Pro XL",
-                    help="MTP device name as it appears under This PC; '' to skip")
+    ap.add_argument(
+        "--phone",
+        default="Pixel 9 Pro XL",
+        help="MTP device name as it appears under This PC; '' to skip",
+    )
     ap.add_argument("--since", help="only files from this date on (YYYY-MM-DD); default today")
-    ap.add_argument("--move", action="store_true",
-                    help="move the desktop captures instead of copying them")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="list, order and audio-check; copy nothing, write nothing")
+    ap.add_argument(
+        "--move", action="store_true", help="move the desktop captures instead of copying them"
+    )
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="list, order and audio-check; copy nothing, write nothing",
+    )
     args = ap.parse_args()
 
     since = dt.date.fromisoformat(args.since) if args.since else dt.date.today()
@@ -227,13 +279,17 @@ def main():
     for p, orig in dropped:
         print(f"  duplicate dropped: {os.path.basename(p)} == {os.path.basename(orig)}")
     phone = phone_files(args.phone, since) if args.phone else []
-    print(f"{args.project}: {len(keep)} desktop capture(s), {len(phone)} phone file(s) "
-          f"since {since}")
+    print(
+        f"{args.project}: {len(keep)} desktop capture(s), {len(phone)} phone file(s) since {since}"
+    )
 
     if not args.dry_run:
         if not os.path.exists(os.path.join(pdir, "project.json")):
-            subprocess.run([sys.executable, os.path.join(HERE, "project-scan.py"),
-                            "--init", args.project], cwd=ROOT, check=True)
+            subprocess.run(
+                [sys.executable, os.path.join(HERE, "project-scan.py"), "--init", args.project],
+                cwd=ROOT,
+                check=True,
+            )
         os.makedirs(sdir, exist_ok=True)
 
     entries = []
@@ -254,8 +310,16 @@ def main():
     rows = []
     for p in entries:
         if p.startswith("phone:"):
-            rows.append({"path": p, "start": None, "kind": "phone", "why": "not copied (dry run)",
-                         "dur": 0.0, "audio": "?"})
+            rows.append(
+                {
+                    "path": p,
+                    "start": None,
+                    "kind": "phone",
+                    "why": "not copied (dry run)",
+                    "dur": 0.0,
+                    "audio": "?",
+                }
+            )
             continue
         info = probe(p)
         st, kind, why = start_time(p, info)
@@ -268,46 +332,78 @@ def main():
             audio = f"ambient only ({lvl[0]:.0f} dB mean)"
         else:
             audio = f"speech-level ({lvl[0]:.0f} dB mean)"
-        rows.append({"path": p, "start": st, "kind": kind, "why": why,
-                     "dur": info["duration"], "audio": audio})
-    rows.sort(key=lambda r: (r["start"] is None, r["start"] or dt.datetime.max.replace(
-        tzinfo=local_tz())))
+        rows.append(
+            {
+                "path": p,
+                "start": st,
+                "kind": kind,
+                "why": why,
+                "dur": info["duration"],
+                "audio": audio,
+            }
+        )
+    rows.sort(
+        key=lambda r: (r["start"] is None, r["start"] or dt.datetime.max.replace(tzinfo=local_tz()))
+    )
 
     print(f"\n  {'#':>2} {'start':<8} {'len':>7} {'kind':<13} {'audio':<26} file")
     for i, r in enumerate(rows, 1):
         st = r["start"].strftime("%H:%M:%S") if r["start"] else "?"
-        print(f"  {i:>2} {st:<8} {r['dur'] / 60:>4.0f}:{r['dur'] % 60:04.1f} {r['kind']:<13} "
-              f"{r['audio']:<26} {os.path.basename(r['path'])}")
-    silent = sum(1 for r in rows if r["audio"].startswith("digital") or r["audio"].startswith("no audio"))
-    print(f"\n  {silent}/{len(rows)} carry no usable sound -> "
-          f"{'silent-screencast pipeline (screencast-pipeline.py)' if silent >= len(rows) / 2 else 'a spoken cut may be possible'}")
+        print(
+            f"  {i:>2} {st:<8} {r['dur'] / 60:>4.0f}:{r['dur'] % 60:04.1f} {r['kind']:<13} "
+            f"{r['audio']:<26} {os.path.basename(r['path'])}"
+        )
+    silent = sum(
+        1 for r in rows if r["audio"].startswith("digital") or r["audio"].startswith("no audio")
+    )
+    print(
+        f"\n  {silent}/{len(rows)} carry no usable sound -> "
+        f"{'silent-screencast pipeline (screencast-pipeline.py)' if silent >= len(rows) / 2 else 'a spoken cut may be possible'}"
+    )
 
     if args.dry_run:
         return
 
     mpath = os.path.join(pdir, "screen.json")
-    man = json.load(open(mpath, encoding="utf-8")) if os.path.exists(mpath) else {
-        "_comment": "silent screen recordings cut into one film by screencast-pipeline.py",
-        "id": args.project,
-        "output": _project.norm(os.path.join(pdir, "outputs", args.project + ".mp4")),
-        "benign_text": [],
-        "cut": {"canvas": [1920, 1080], "fps": 30, "blur_mode": "blur",
-                "backdrop": "blur", "speed_badge": True, "cq": 21},
-        "sources": [],
-    }
+    man = (
+        json.load(open(mpath, encoding="utf-8"))
+        if os.path.exists(mpath)
+        else {
+            "_comment": "silent screen recordings cut into one film by screencast-pipeline.py",
+            "id": args.project,
+            "output": _project.norm(os.path.join(pdir, "outputs", args.project + ".mp4")),
+            "benign_text": [],
+            "cut": {
+                "canvas": [1920, 1080],
+                "fps": 30,
+                "blur_mode": "blur",
+                "backdrop": "blur",
+                "speed_badge": True,
+                "cq": 21,
+            },
+            "sources": [],
+        }
+    )
     have = {s["path"] for s in man["sources"]}
     for r in rows:
         rel = _project.norm(r["path"])
         if rel in have:
             continue
-        man["sources"].append({
-            "_why": f"{r['start']:%H:%M:%S} local -- {r['why']}; audio: {r['audio']}",
-            "path": rel, "blur": []})
+        man["sources"].append(
+            {
+                "_why": f"{r['start']:%H:%M:%S} local -- {r['why']}; audio: {r['audio']}",
+                "path": rel,
+                "blur": [],
+            }
+        )
     with open(mpath, "w", encoding="utf-8") as f:
         json.dump(man, f, ensure_ascii=False, indent=2)
-    _project.record(args.project, "import-footage",
-                    note=f"{len(rows)} source(s) imported and ordered by capture start; "
-                         f"{silent} silent; {len(dropped)} duplicate(s) dropped")
+    _project.record(
+        args.project,
+        "import-footage",
+        note=f"{len(rows)} source(s) imported and ordered by capture start; "
+        f"{silent} silent; {len(dropped)} duplicate(s) dropped",
+    )
     print(f"\n  wrote {len(man['sources'])} source(s) into {_project.norm(mpath)}")
 
 

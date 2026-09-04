@@ -17,7 +17,15 @@ is never touched, so this is safe to run while a transcription is in flight.
 
 Invoke as:  python scripts/check-gpulock.py [-v]
 """
-import sys, os, json, time, shutil, tempfile, argparse, subprocess
+
+import sys
+import os
+import json
+import time
+import shutil
+import tempfile
+import argparse
+import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -29,7 +37,11 @@ VERBOSE = False
 
 
 def ok(name, cond, detail=""):
-    print(("  PASS  " if cond else "  FAIL  ") + name + (" -- " + detail if detail and (VERBOSE or not cond) else ""))
+    print(
+        ("  PASS  " if cond else "  FAIL  ")
+        + name
+        + (" -- " + detail if detail and (VERBOSE or not cond) else "")
+    )
     if not cond:
         FAILED.append(name)
     return cond
@@ -44,6 +56,7 @@ def sandbox():
 
 # --------------------------------------------------------------- basic cycle
 
+
 def test_cycle():
     print("acquire / release")
     tok = _gpulock.acquire("t", tool="a")
@@ -52,12 +65,12 @@ def test_cycle():
     ok("a second acquire is refused", _gpulock.acquire("t", tool="b", wait=0) is None)
     _gpulock.release(tok, "t")
     ok("release frees it", not os.path.exists(_gpulock.lock_path("t")))
-    ok("acquire works again after release",
-       _gpulock.acquire("t", tool="c") is not None)
+    ok("acquire works again after release", _gpulock.acquire("t", tool="c") is not None)
     _gpulock.release(_gpulock.read("t"), "t")
 
 
 # ------------------------------------------------- the case the user asked for
+
 
 def test_dead_pid_is_stolen():
     print("killed holder (synthetic: a pid that cannot exist)")
@@ -68,16 +81,24 @@ def test_dead_pid_is_stolen():
     while _gpulock.alive(dead):
         dead -= 2
     with open(path, "w", encoding="utf-8") as f:
-        json.dump({"schema": 1, "pid": dead, "tool": "killed",
-                   "started_epoch": time.time(),
-                   "started_utc": "2026-01-01T00:00:00Z"}, f)
-    ok("a dead holder reads as stale",
-       _gpulock.stale(_gpulock.read("t")) is not None,
-       str(_gpulock.stale(_gpulock.read("t"))))
+        json.dump(
+            {
+                "schema": 1,
+                "pid": dead,
+                "tool": "killed",
+                "started_epoch": time.time(),
+                "started_utc": "2026-01-01T00:00:00Z",
+            },
+            f,
+        )
+    ok(
+        "a dead holder reads as stale",
+        _gpulock.stale(_gpulock.read("t")) is not None,
+        str(_gpulock.stale(_gpulock.read("t"))),
+    )
     tok = _gpulock.acquire("t", tool="next", wait=0)
     ok("the next run steals it without waiting", tok is not None)
-    ok("the stealer now owns it",
-       (_gpulock.read("t") or {}).get("pid") == os.getpid())
+    ok("the stealer now owns it", (_gpulock.read("t") or {}).get("pid") == os.getpid())
     _gpulock.release(tok, "t")
 
 
@@ -110,23 +131,27 @@ def test_real_kill():
     # the one the worker reports for itself, because that is the process
     # acquire() recorded and the process actually holding VRAM.
     worker = None
-    for _ in range(100):          # the file can exist a moment before it fills
+    for _ in range(100):  # the file can exist a moment before it fills
         try:
             worker = int(open(marker, encoding="utf-8").read().strip())
             break
         except ValueError:
             time.sleep(0.05)
     rec = _gpulock.read("t")
-    ok("the lock names the worker's own pid", rec and rec.get("pid") == worker,
-       "lock=%s worker=%s popen=%s" % (rec and rec.get("pid"), worker, p.pid))
-    ok("while it lives, we are refused",
-       _gpulock.acquire("t", tool="me", wait=0) is None)
+    ok(
+        "the lock names the worker's own pid",
+        rec and rec.get("pid") == worker,
+        "lock=%s worker=%s popen=%s" % (rec and rec.get("pid"), worker, p.pid),
+    )
+    ok("while it lives, we are refused", _gpulock.acquire("t", tool="me", wait=0) is None)
 
-    p.kill()                      # no atexit, no finally -- the real failure
+    p.kill()  # no atexit, no finally -- the real failure
     p.wait(timeout=30)
-    ok("the lock file survives the kill (nobody released it)",
-       os.path.exists(_gpulock.lock_path("t")))
-    for _ in range(150):          # the OS can take a moment to reap the pid
+    ok(
+        "the lock file survives the kill (nobody released it)",
+        os.path.exists(_gpulock.lock_path("t")),
+    )
+    for _ in range(150):  # the OS can take a moment to reap the pid
         if not _gpulock.alive(worker):
             break
         time.sleep(0.1)
@@ -140,13 +165,22 @@ def test_age_backstop():
     print("pid reuse backstop")
     path = _gpulock.lock_path("t")
     os.makedirs(_gpulock.locks_dir(), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:      # our own live pid ...
-        json.dump({"schema": 1, "pid": os.getpid(), "tool": "ancient",
-                   "started_epoch": time.time() - (_gpulock.MAX_AGE_S + 60),
-                   "started_utc": "2026-01-01T00:00:00Z"}, f)
-    ok("a live pid holding it past the age cap is still stale",
-       _gpulock.stale(_gpulock.read("t")) is not None,
-       str(_gpulock.stale(_gpulock.read("t"))))
+    with open(path, "w", encoding="utf-8") as f:  # our own live pid ...
+        json.dump(
+            {
+                "schema": 1,
+                "pid": os.getpid(),
+                "tool": "ancient",
+                "started_epoch": time.time() - (_gpulock.MAX_AGE_S + 60),
+                "started_utc": "2026-01-01T00:00:00Z",
+            },
+            f,
+        )
+    ok(
+        "a live pid holding it past the age cap is still stale",
+        _gpulock.stale(_gpulock.read("t")) is not None,
+        str(_gpulock.stale(_gpulock.read("t"))),
+    )
     ok("and it is stealable", _gpulock.acquire("t", tool="x", wait=0) is not None)
     _gpulock.release(_gpulock.read("t"), "t")
 
@@ -155,12 +189,10 @@ def test_release_is_owned():
     print("a holder only releases its own lock")
     tok = _gpulock.acquire("t", tool="first")
     _gpulock.release(tok, "t")
-    other = _gpulock.acquire("t", tool="second")      # someone else now owns it
-    _gpulock.release(tok, "t")                        # the old token tries again
-    ok("a stale token cannot delete the new owner's lock",
-       os.path.exists(_gpulock.lock_path("t")))
-    ok("the new owner is intact",
-       (_gpulock.read("t") or {}).get("tool") == "second")
+    other = _gpulock.acquire("t", tool="second")  # someone else now owns it
+    _gpulock.release(tok, "t")  # the old token tries again
+    ok("a stale token cannot delete the new owner's lock", os.path.exists(_gpulock.lock_path("t")))
+    ok("the new owner is intact", (_gpulock.read("t") or {}).get("tool") == "second")
     _gpulock.release(other, "t")
 
 
@@ -171,14 +203,23 @@ def test_queue_then_proceed():
         dead -= 2
     os.makedirs(_gpulock.locks_dir(), exist_ok=True)
     with open(_gpulock.lock_path("t"), "w", encoding="utf-8") as f:
-        json.dump({"schema": 1, "pid": dead, "tool": "gone",
-                   "started_epoch": time.time(),
-                   "started_utc": "x"}, f)
+        json.dump(
+            {
+                "schema": 1,
+                "pid": dead,
+                "tool": "gone",
+                "started_epoch": time.time(),
+                "started_utc": "x",
+            },
+            f,
+        )
     t0 = time.time()
     tok = _gpulock.acquire("t", tool="waiter", wait=30, poll=0.2)
-    ok("a dead holder is stolen immediately, not waited out",
-       tok is not None and time.time() - t0 < 5,
-       "%.2fs" % (time.time() - t0))
+    ok(
+        "a dead holder is stolen immediately, not waited out",
+        tok is not None and time.time() - t0 < 5,
+        "%.2fs" % (time.time() - t0),
+    )
     _gpulock.release(tok, "t")
 
 
@@ -202,17 +243,22 @@ def main():
     d = sandbox()
     print("sandbox: %s\n" % d)
     try:
-        for t in (test_cycle, test_dead_pid_is_stolen, test_real_kill,
-                  test_age_backstop, test_release_is_owned,
-                  test_queue_then_proceed, test_describe):
+        for t in (
+            test_cycle,
+            test_dead_pid_is_stolen,
+            test_real_kill,
+            test_age_backstop,
+            test_release_is_owned,
+            test_queue_then_proceed,
+            test_describe,
+        ):
             t()
             print()
     finally:
         _gpulock.ROOT = os.path.dirname(SCRIPTS)
         shutil.rmtree(d, ignore_errors=True)
 
-    ok("the real gpu.lock was not touched",
-       os.path.exists(_gpulock.lock_path("gpu")) == before)
+    ok("the real gpu.lock was not touched", os.path.exists(_gpulock.lock_path("gpu")) == before)
 
     print("\n%s" % ("FAILED: " + ", ".join(FAILED) if FAILED else "all checks passed"))
     return 1 if FAILED else 0

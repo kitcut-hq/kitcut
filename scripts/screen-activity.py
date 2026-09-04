@@ -46,6 +46,7 @@ this exists to remove.
 
 Invoke as:  python scripts/screen-activity.py --src projects/<id>/sources/<f>.mp4 --list
 """
+
 import sys
 import os
 import json
@@ -65,18 +66,31 @@ ROOT = _env.ROOT
 # of a 4K plane, so an hour of footage measures in seconds of numpy.
 FPS = 6.0
 WIDTH = 320
-PIXEL_DELTA = 10        # 0-255; below this a pixel counts as unchanged
-STILL = 0.004           # fraction of pixels moving, below which a frame is still
-MIN_STILL = 1.2         # seconds; a still run shorter than this is not worth cutting
+PIXEL_DELTA = 10  # 0-255; below this a pixel counts as unchanged
+STILL = 0.004  # fraction of pixels moving, below which a frame is still
+MIN_STILL = 1.2  # seconds; a still run shorter than this is not worth cutting
 
 
 def probe(path):
     out = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "v:0",
-         "-show_entries", "stream=width,height,avg_frame_rate",
-         "-show_entries", "format=duration",
-         "-of", "json", path],
-        check=True, capture_output=True, text=True).stdout
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,avg_frame_rate",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            path,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
     d = json.loads(out)
     st = (d.get("streams") or [{}])[0]
     num, _, den = (st.get("avg_frame_rate") or "0/1").partition("/")
@@ -103,18 +117,25 @@ def decode_gray(path, fps, width, hwaccel=True):
         cmd = ["ffmpeg", "-v", "error", "-nostdin"]
         if hw:
             cmd += _encode.decode_args()
-        cmd += ["-i", path,
-                "-vf", f"fps={fps},scale={width}:{h}",
-                "-pix_fmt", "gray", "-f", "rawvideo", "-"]
+        cmd += [
+            "-i",
+            path,
+            "-vf",
+            f"fps={fps},scale={width}:{h}",
+            "-pix_fmt",
+            "gray",
+            "-f",
+            "rawvideo",
+            "-",
+        ]
         return cmd
 
     # decode_args() already answers whether NVDEC exists, so the hardware rung
     # is only worth attempting when it does -- otherwise the two rungs build
     # the identical command and the file is decoded twice to learn nothing.
     hw_first = hwaccel and bool(_encode.decode_args())
-    for hw in ([True, False] if hw_first else [False]):
-        p = subprocess.Popen(build(hw), stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
+    for hw in [True, False] if hw_first else [False]:
+        p = subprocess.Popen(build(hw), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         n = width * h
         i = 0
         got = False
@@ -131,7 +152,7 @@ def decode_gray(path, fps, width, hwaccel=True):
         if got:
             return
         if hw:
-            print(f"  nvdec decode produced nothing, retrying on cpu", file=sys.stderr)
+            print("  nvdec decode produced nothing, retrying on cpu", file=sys.stderr)
         else:
             raise SystemExit(f"decode failed: {err.strip()[:400]}")
 
@@ -157,8 +178,9 @@ def rect_slice(r, w, h):
     return slice(y0, y1), slice(x0, x1)
 
 
-def measure(path, fps=FPS, width=WIDTH, delta=PIXEL_DELTA, ignore=None,
-            probe_motion=False, regions=None):
+def measure(
+    path, fps=FPS, width=WIDTH, delta=PIXEL_DELTA, ignore=None, probe_motion=False, regions=None
+):
     """Activity per sample: the fraction of unmasked pixels that moved.
 
     `regions` is {name: [x, y, w, h]} in frame fractions; each gets its own
@@ -197,12 +219,9 @@ def measure(path, fps=FPS, width=WIDTH, delta=PIXEL_DELTA, ignore=None,
                 gh, gw = fr.shape[0] // grid[0], fr.shape[1] // grid[1]
                 for a in range(grid[0]):
                     for b in range(grid[1]):
-                        cells[a, b] += d[a * gh:(a + 1) * gh,
-                                         b * gw:(b + 1) * gw].mean()
+                        cells[a, b] += d[a * gh : (a + 1) * gh, b * gw : (b + 1) * gw].mean()
         prev = fr
-    return (np.array(act, float),
-            {k: np.array(v, float) for k, v in per.items()},
-            cells)
+    return (np.array(act, float), {k: np.array(v, float) for k, v in per.items()}, cells)
 
 
 def runs(act, fps, still, min_still):
@@ -240,9 +259,16 @@ def sweep(act, fps, dur, stills, min_stills):
         for m in min_stills:
             rr = runs(act, fps, s, m)
             dead = sum(b - a for a, b in rr)
-            rows.append({"still": s, "min_still": m, "runs": len(rr),
-                         "dead_s": dead, "kept_s": dur - dead,
-                         "longest_s": max((b - a for a, b in rr), default=0.0)})
+            rows.append(
+                {
+                    "still": s,
+                    "min_still": m,
+                    "runs": len(rr),
+                    "dead_s": dead,
+                    "kept_s": dur - dead,
+                    "longest_s": max((b - a for a, b in rr), default=0.0),
+                }
+            )
     return rows
 
 
@@ -261,19 +287,37 @@ def find_panel(path, samples=(0.1, 0.25, 0.4, 0.55, 0.7, 0.85), width=960):
     x=0.748 on every recording that had the Edge side panel open.
     """
     import collections
+
     dur = probe(path)["duration"]
     hits = collections.Counter()
     for pct in samples:
         out = subprocess.run(
-            ["ffmpeg", "-v", "error", "-nostdin", "-ss", f"{dur * pct:.2f}",
-             "-i", path, "-frames:v", "1", "-vf", f"scale={width}:-2",
-             "-pix_fmt", "gray", "-f", "rawvideo", "-"],
-            capture_output=True).stdout
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-nostdin",
+                "-ss",
+                f"{dur * pct:.2f}",
+                "-i",
+                path,
+                "-frames:v",
+                "1",
+                "-vf",
+                f"scale={width}:-2",
+                "-pix_fmt",
+                "gray",
+                "-f",
+                "rawvideo",
+                "-",
+            ],
+            capture_output=True,
+        ).stdout
         h = len(out) // width
         if h < 10:
             continue
-        a = np.frombuffer(out[:h * width], np.uint8).reshape(h, width).astype(np.int16)
-        band = a[int(h * 0.2):int(h * 0.85)]
+        a = np.frombuffer(out[: h * width], np.uint8).reshape(h, width).astype(np.int16)
+        band = a[int(h * 0.2) : int(h * 0.85)]
         g = np.abs(np.diff(band, axis=1)).mean(0)
         x0, x1 = int(width * 0.60), int(width * 0.98)
         hits[round((int(np.argmax(g[x0:x1])) + x0) / width, 3)] += 1
@@ -286,36 +330,56 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", required=True, help="video to measure")
     ap.add_argument("--out", help="write the activity track here (JSON)")
-    ap.add_argument("--list", action="store_true",
-                    help="price still thresholds; measures, encodes nothing")
-    ap.add_argument("--probe-motion", action="store_true",
-                    help="name the frame regions that move while the screen is still")
-    ap.add_argument("--ignore", action="append", default=[],
-                    help="x,y,w,h in FRACTIONS of the frame, excluded from the "
-                         "difference; repeatable. Use for spinners and clocks.")
+    ap.add_argument(
+        "--list", action="store_true", help="price still thresholds; measures, encodes nothing"
+    )
+    ap.add_argument(
+        "--probe-motion",
+        action="store_true",
+        help="name the frame regions that move while the screen is still",
+    )
+    ap.add_argument(
+        "--ignore",
+        action="append",
+        default=[],
+        help="x,y,w,h in FRACTIONS of the frame, excluded from the "
+        "difference; repeatable. Use for spinners and clocks.",
+    )
     ap.add_argument("--ignore-from", help="manifest whose sources[].ignore to use")
-    ap.add_argument("--region", action="append", default=[],
-                    help="name=x,y,w,h in FRACTIONS; repeatable. Each gets its "
-                         "own activity track so the cut can tell the work area "
-                         "apart from a side panel that is merely streaming.")
+    ap.add_argument(
+        "--region",
+        action="append",
+        default=[],
+        help="name=x,y,w,h in FRACTIONS; repeatable. Each gets its "
+        "own activity track so the cut can tell the work area "
+        "apart from a side panel that is merely streaming.",
+    )
     ap.add_argument("--fps", type=float, default=FPS)
     ap.add_argument("--width", type=int, default=WIDTH)
     ap.add_argument("--delta", type=int, default=PIXEL_DELTA)
     ap.add_argument("--still", type=float, default=STILL)
     ap.add_argument("--min-still", type=float, default=MIN_STILL)
-    ap.add_argument("--find-panel", action="store_true",
-                    help="locate the vertical divider of a side panel (mode of "
-                         "the strongest long vertical edge across six frames) "
-                         "and print the regions it implies")
-    ap.add_argument("--write-regions", metavar="MANIFEST",
-                    help="with --find-panel: write main/panel regions into this manifest")
+    ap.add_argument(
+        "--find-panel",
+        action="store_true",
+        help="locate the vertical divider of a side panel (mode of "
+        "the strongest long vertical edge across six frames) "
+        "and print the regions it implies",
+    )
+    ap.add_argument(
+        "--write-regions",
+        metavar="MANIFEST",
+        help="with --find-panel: write main/panel regions into this manifest",
+    )
     args = ap.parse_args()
 
     if args.find_panel:
         x = find_panel(_env.resolve(args.src))
         print(f"{os.path.basename(args.src)}  panel divider x={x:.3f}")
-        regions = {"main": [0, 0, round(x, 3), 0.98],
-                   "panel": [round(x, 3), 0, round(1 - x, 3), 0.98]}
+        regions = {
+            "main": [0, 0, round(x, 3), 0.98],
+            "panel": [round(x, 3), 0, round(1 - x, 3), 0.98],
+        }
         print("  regions:", json.dumps(regions))
         if args.write_regions:
             mp = _env.resolve(args.write_regions)
@@ -324,7 +388,8 @@ def main():
             man["regions"]["_comment"] = (
                 f"x={x:.3f}: side-panel divider found by screen-activity.py "
                 f"--find-panel (mode of the strongest vertical edge across six "
-                f"timestamps of {os.path.basename(args.src)})")
+                f"timestamps of {os.path.basename(args.src)})"
+            )
             with open(mp, "w", encoding="utf-8") as f:
                 json.dump(man, f, ensure_ascii=False, indent=2)
             print(f"  wrote regions into {args.write_regions}")
@@ -352,11 +417,14 @@ def main():
             continue
         regions.setdefault(name, rect)
 
-    print(f"{os.path.basename(src)}  {info['width']}x{info['height']}  "
-          f"{fmt(info['duration'])}  ignore={len(ignore)} rect(s)"
-          f"{'  regions=' + ','.join(regions) if regions else ''}")
-    act, per, cells = measure(src, args.fps, args.width, args.delta, ignore,
-                              args.probe_motion, regions)
+    print(
+        f"{os.path.basename(src)}  {info['width']}x{info['height']}  "
+        f"{fmt(info['duration'])}  ignore={len(ignore)} rect(s)"
+        f"{'  regions=' + ','.join(regions) if regions else ''}"
+    )
+    act, per, cells = measure(
+        src, args.fps, args.width, args.delta, ignore, args.probe_motion, regions
+    )
     dur = act.size / args.fps
 
     if args.probe_motion and cells is not None:
@@ -367,34 +435,39 @@ def main():
         for share, a, b in flat[:6]:
             if share < 0.02:
                 break
-            print(f"    x={b/8:.3f} y={a/8:.3f} w=0.125 h=0.125   {share*100:5.1f}%"
-                  f"   --ignore {b/8:.3f},{a/8:.3f},0.125,0.125")
+            print(
+                f"    x={b / 8:.3f} y={a / 8:.3f} w=0.125 h=0.125   {share * 100:5.1f}%"
+                f"   --ignore {b / 8:.3f},{a / 8:.3f},0.125,0.125"
+            )
 
     if per and args.list:
         print("\n  share of runtime each region is the ONLY thing moving:")
         names = list(per)
         for k in names:
             others = [per[o] for o in names if o != k]
-            alone = (per[k] >= args.still)
+            alone = per[k] >= args.still
             for o in others:
-                alone &= (o < args.still)
-            print(f"    {k:<10} active {(per[k] >= args.still).mean()*100:5.1f}%"
-                  f"   alone {alone.mean()*100:5.1f}%")
+                alone &= o < args.still
+            print(
+                f"    {k:<10} active {(per[k] >= args.still).mean() * 100:5.1f}%"
+                f"   alone {alone.mean() * 100:5.1f}%"
+            )
         quiet = np.ones(act.size, bool)
         for k in names:
-            quiet &= (per[k] < args.still)
-        print(f"    {'(nothing)':<10} {' ' * 14}{quiet.mean()*100:5.1f}%")
+            quiet &= per[k] < args.still
+        print(f"    {'(nothing)':<10} {' ' * 14}{quiet.mean() * 100:5.1f}%")
 
     if args.list:
         stills = [0.001, 0.002, 0.004, 0.008, 0.015]
         min_stills = [0.8, 1.2, 2.0, 3.0]
         print(f"\n  {'still':>7} {'min':>5} {'runs':>5} {'dead':>8} {'kept':>8} {'longest':>8}")
         for r in sweep(act, args.fps, dur, stills, min_stills):
-            mark = " <-" if (r["still"] == args.still and
-                             r["min_still"] == args.min_still) else ""
-            print(f"  {r['still']:>7.3f} {r['min_still']:>5.1f} {r['runs']:>5} "
-                  f"{fmt(r['dead_s']):>8} {fmt(r['kept_s']):>8} "
-                  f"{fmt(r['longest_s']):>8}{mark}")
+            mark = " <-" if (r["still"] == args.still and r["min_still"] == args.min_still) else ""
+            print(
+                f"  {r['still']:>7.3f} {r['min_still']:>5.1f} {r['runs']:>5} "
+                f"{fmt(r['dead_s']):>8} {fmt(r['kept_s']):>8} "
+                f"{fmt(r['longest_s']):>8}{mark}"
+            )
 
         rr = runs(act, args.fps, args.still, args.min_still)
         print(f"\n  longest still runs at still={args.still} min_still={args.min_still}:")
@@ -405,18 +478,22 @@ def main():
         out = _env.resolve(args.out)
         os.makedirs(os.path.dirname(out), exist_ok=True)
         with open(out, "w", encoding="utf-8") as f:
-            json.dump({
-                "src": _env.resolve(src),
-                "duration": info["duration"],
-                "sample_fps": args.fps,
-                "width": args.width,
-                "delta": args.delta,
-                "ignore": ignore,
-                "regions": regions,
-                "activity": [round(v, 6) for v in act.tolist()],
-                "region_activity": {k: [round(x, 6) for x in v.tolist()]
-                                    for k, v in per.items()},
-            }, f)
+            json.dump(
+                {
+                    "src": _env.resolve(src),
+                    "duration": info["duration"],
+                    "sample_fps": args.fps,
+                    "width": args.width,
+                    "delta": args.delta,
+                    "ignore": ignore,
+                    "regions": regions,
+                    "activity": [round(v, 6) for v in act.tolist()],
+                    "region_activity": {
+                        k: [round(x, 6) for x in v.tolist()] for k, v in per.items()
+                    },
+                },
+                f,
+            )
         print(f"\n  wrote {args.out}  ({act.size} samples)")
 
 

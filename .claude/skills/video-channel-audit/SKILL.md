@@ -59,7 +59,7 @@ archive, screen recordings. Read the transition matrix too:
 
 ```python
 seq = [s["camera"] for s in json.load(open("projects/<id>/<id>.shots.json"))["shots"]]
-collections.Counter(zip(seq, seq[1:]))       # what follows what
+collections.Counter(zip(seq, seq[1:]))  # what follows what
 ```
 
 Write the capability table from what you find, each row marked have / partial /
@@ -101,7 +101,7 @@ fewer than `K` voices clear the bar, sweep `k` yourself before believing
 anything downstream:
 
 ```python
-lab, _ = auto.cluster(E, k)      # one embedding pass, several k
+lab, _ = auto.cluster(E, k)  # one embedding pass, several k
 ```
 
 A cluster that splits into two large shares as `k` rises was two people all

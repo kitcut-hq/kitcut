@@ -23,6 +23,7 @@ manifest is edited by the person or the gate, not by this.
 
 Invoke as:  python scripts/review-ingest.py --manifest projects/<id>/screen.json --recording <review.mp4> --target 8:00
 """
+
 import sys
 import os
 import re
@@ -48,7 +49,8 @@ for _s in (sys.stdout, sys.stderr):
 
 def load(name):
     spec = importlib.util.spec_from_file_location(
-        name.replace("-", "_"), os.path.join(HERE, name + ".py"))
+        name.replace("-", "_"), os.path.join(HERE, name + ".py")
+    )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -64,17 +66,29 @@ def transcribe(rec, outdir, language):
     raw = os.path.join(outdir, "review.raw.json")
     words = os.path.join(outdir, "review.words.json")
     if not os.path.exists(raw):
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", rec, "-vn", "-ac", "1",
-                        "-ar", "16000", wav], check=True)
-        argv = [sys.executable, os.path.join(HERE, "transcribe-words.py"), wav,
-                "--out", words, "--raw-out", raw]
+        subprocess.run(
+            ["ffmpeg", "-v", "error", "-y", "-i", rec, "-vn", "-ac", "1", "-ar", "16000", wav],
+            check=True,
+        )
+        argv = [
+            sys.executable,
+            os.path.join(HERE, "transcribe-words.py"),
+            wav,
+            "--out",
+            words,
+            "--raw-out",
+            raw,
+        ]
         if language:
             argv += ["--language", language]
         subprocess.run(argv, check=True, cwd=ROOT)
     d = json.load(open(raw, encoding="utf-8"))
     segs = d.get("segments") if isinstance(d, dict) else d
-    return [{"start": float(s["start"]), "end": float(s["end"]),
-             "text": s["text"].strip()} for s in segs if s.get("text", "").strip()]
+    return [
+        {"start": float(s["start"]), "end": float(s["end"]), "text": s["text"].strip()}
+        for s in segs
+        if s.get("text", "").strip()
+    ]
 
 
 def group_remarks_by_silence(segs, gap=2.5):
@@ -93,20 +107,39 @@ def read_timecode(rec, t, crop):
     """OCR the player's timecode from the corner at time t -> film seconds."""
     from rapidocr_onnxruntime import RapidOCR
     import numpy as np
+
     x, y, w, h = crop
     out = subprocess.run(
-        ["ffmpeg", "-v", "error", "-nostdin", "-ss", f"{t:.2f}", "-i", rec,
-         "-frames:v", "1", "-vf", f"crop=iw*{w}:ih*{h}:iw*{x}:ih*{y},scale=760:-2",
-         "-pix_fmt", "bgr24", "-f", "rawvideo", "-"], capture_output=True).stdout
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-nostdin",
+            "-ss",
+            f"{t:.2f}",
+            "-i",
+            rec,
+            "-frames:v",
+            "1",
+            "-vf",
+            f"crop=iw*{w}:ih*{h}:iw*{x}:ih*{y},scale=760:-2",
+            "-pix_fmt",
+            "bgr24",
+            "-f",
+            "rawvideo",
+            "-",
+        ],
+        capture_output=True,
+    ).stdout
     if not out:
         return None
     # width 760; height follows the crop's aspect
     hh = len(out) // (760 * 3)
-    img = np.frombuffer(out[:hh * 760 * 3], np.uint8).reshape(hh, 760, 3)
+    img = np.frombuffer(out[: hh * 760 * 3], np.uint8).reshape(hh, 760, 3)
     if not hasattr(read_timecode, "ocr"):
         read_timecode.ocr = RapidOCR()
     res, _ = read_timecode.ocr(img)
-    for _box, text, _conf in (res or []):
+    for _box, text, _conf in res or []:
         m = re.search(r"(\d{1,2}):(\d{2})\s*/\s*\d{1,2}:\d{2}", text)
         if m:
             return int(m.group(1)) * 60 + int(m.group(2))
@@ -133,7 +166,9 @@ def locate(plans, film_t):
     for p in plans:
         for seg in p["segments"]:
             if t <= film_t < t + seg["out"]:
-                return os.path.basename(p["source_path"]), seg["start"] + (film_t - t) * seg["speed"]
+                return os.path.basename(p["source_path"]), seg["start"] + (film_t - t) * seg[
+                    "speed"
+                ]
             t += seg["out"]
     return None, None
 
@@ -141,14 +176,22 @@ def locate(plans, film_t):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifest", required=True)
-    ap.add_argument("--recording", required=True, help="the user's screen recording of their review")
+    ap.add_argument(
+        "--recording", required=True, help="the user's screen recording of their review"
+    )
     ap.add_argument("--target", help="the --target the reviewed film was rendered with")
-    ap.add_argument("--language", default="uk", help="spoken language of the review; '' to autodetect")
-    ap.add_argument("--timecode-crop", default="0.02,0.91,0.22,0.07",
-                    help="x,y,w,h fractions of the recording where the player's "
-                         "timecode sits (default: bottom-left, as in Edge's viewer)")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="transcribe and map, print the table, write nothing")
+    ap.add_argument(
+        "--language", default="uk", help="spoken language of the review; '' to autodetect"
+    )
+    ap.add_argument(
+        "--timecode-crop",
+        default="0.02,0.91,0.22,0.07",
+        help="x,y,w,h fractions of the recording where the player's "
+        "timecode sits (default: bottom-left, as in Edge's viewer)",
+    )
+    ap.add_argument(
+        "--dry-run", action="store_true", help="transcribe and map, print the table, write nothing"
+    )
     args = ap.parse_args()
 
     sc = load("screen-cut")
@@ -178,7 +221,11 @@ def main():
         sg["film_t"] = read_timecode(rec, min(sg["end"], sg["start"] + 0.8), crop)
     remarks = []
     for sg in segs:
-        if remarks and sg["film_t"] == remarks[-1]["film_t"]                 and sg["start"] - remarks[-1]["end"] <= 12.0:
+        if (
+            remarks
+            and sg["film_t"] == remarks[-1]["film_t"]
+            and sg["start"] - remarks[-1]["end"] <= 12.0
+        ):
             remarks[-1]["end"] = sg["end"]
             remarks[-1]["text"] += " " + sg["text"]
         else:
@@ -188,10 +235,16 @@ def main():
     rows = []
     for r in remarks:
         film_t = r["film_t"]
-        src, st = (locate(plans, film_t) if film_t is not None else (None, None))
-        rows.append({"said_at": round(r["start"], 1), "film_t": film_t,
-                     "source": src, "source_t": round(st, 1) if st is not None else None,
-                     "text": r["text"]})
+        src, st = locate(plans, film_t) if film_t is not None else (None, None)
+        rows.append(
+            {
+                "said_at": round(r["start"], 1),
+                "film_t": film_t,
+                "source": src,
+                "source_t": round(st, 1) if st is not None else None,
+                "text": r["text"],
+            }
+        )
 
     print(f"\n  {'said':>6} {'film':>6} {'source @ time':<40} remark")
     for w in rows:
@@ -208,16 +261,21 @@ def main():
     stamp = time.strftime("%Y-%m-%d %H:%M")
     with open(notes, "a", encoding="utf-8") as f:
         f.write(f"\n\n## Review pass ingested {stamp} — `{os.path.basename(rec)}`\n\n")
-        f.write("| said at | film | source @ source time | remark | disposition |\n|---|---|---|---|---|\n")
+        f.write(
+            "| said at | film | source @ source time | remark | disposition |\n|---|---|---|---|---|\n"
+        )
         for w in rows:
             film = fmt(w["film_t"]) if w["film_t"] is not None else "?"
             src = f"`{w['source']}` @ {fmt(w['source_t'])}" if w["source"] else "—"
             f.write(f"| {fmt(w['said_at'])} | {film} | {src} | {w['text']} | |\n")
         f.write("\nDisposition column is for the editor: what changed because of each row.\n")
     pid = os.path.basename(pdir)
-    _project.record(pid, "review-ingest",
-                    note=f"{len(rows)} remark(s) from {os.path.basename(rec)} mapped to sources; "
-                         f"see review-notes.md")
+    _project.record(
+        pid,
+        "review-ingest",
+        note=f"{len(rows)} remark(s) from {os.path.basename(rec)} mapped to sources; "
+        f"see review-notes.md",
+    )
     print(f"\n  appended {len(rows)} row(s) to {_project.norm(notes)}")
 
 
