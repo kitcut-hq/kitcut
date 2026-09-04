@@ -694,3 +694,21 @@ These come from how the repo is actually used — follow them without being aske
   what the code does, the affected skill teaches it, and
   `python scripts/check-script.py --changed` passes (the check-script skill
   is the full review).
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues on `kitcut-hq/kitcut`, driven through the `gh` CLI.
+See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Lowercase, spaces not hyphens: `needs triage`, `needs info`, `ready for agent`,
+`ready for human`, `wontfix`, plus the category and routing ones.
+See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root, both created
+lazily when there is something real to record. See `docs/agents/domain.md`.
