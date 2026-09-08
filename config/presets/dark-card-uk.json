@@ -1,5 +1,5 @@
 {
- "_comment": "Instafill.ai product captions, Ukrainian. Identical to instafill.json in every visual token -- same near-black slab, same mint spotlight, same amber emphasis, same sentence case -- and differs in exactly one number: layout.max_line_width_px is 1296 rather than 1080. Ukrainian words are materially longer than the English the parent preset was measured on, and at 1080 the SAME six-word groups wrap. Kept as a separate file rather than widened in the parent so that existing English renders stay reproducible.",
+ "_comment": "Dark-slab captions for Cyrillic, sized for a screen recording or a talking head rather than a social short. Near-black card at 12% transparency instead of a saturated one, because a busy frame is already competing for attention and a dark slab recedes behind it; sentence case, not uppercase, because mixed case carries word shape and a tutorial that shouts is a tutorial nobody finishes. Two highlight colours: a moving spotlight on the word being said, and a separate emphasis colour that holds on the phrases an --emphasis-file names. Swap the four colours for your own and it is your channel's preset. The one number tuned specifically for Cyrillic is layout.max_line_width_px at 1296 -- see _measured.",
  "canvas": {
   "play_res_x": 1920,
   "play_res_y": 1080
@@ -50,7 +50,7 @@
    "colour": "#FFFFFF"
   },
   "emphasis": {
-   "_comment": "The talk's main points, named per video in an --emphasis-file and marked for the whole life of their card. Amber rather than another mint: the mint is already the moving spotlight, so re-using it would make 'this is the point' and 'this is the word being said' the same signal. Against #0B0F14 at 30% this clears WCAG AA for large text, and against the white base text it reads as a second class of word rather than a louder one.",
+   "_comment": "The talk's main points, named per video in an --emphasis-file and marked for the whole life of their card. A DIFFERENT hue from states.active on purpose: the active colour is already the moving spotlight, so reusing it would make 'this is the point' and 'this is the word being said' the same signal and neither would read. Check the pair against the card, not against the base text.",
    "colour": "#FFC53D"
   }
  },
@@ -92,10 +92,10 @@
   "why_max_line_1080": "1080 on the 1920 canvas scales to 720px at 720p, centred on x=640, so the card spans x 280..1000 and never reaches the webcam bubble at x<190. Widening this past ~1150 makes them collide."
  },
  "_measured": {
-  "source": "1108 words of unrehearsed Ukrainian speech -- the cut-remapped transcript of a 7:40 talking-head briefing, scaled to 1280x720",
+  "source": "1108 words of unrehearsed Ukrainian speech -- the cut-remapped transcript of a 7:40 talking-head recording, scaled to 1280x720",
   "method": "python scripts/build-captions-ass.py --sweep, then the four candidate cells built and their wrap/orphan counters read",
   "sweep": {
-   "max_words=6, width=1080 (parent preset)": "219 cards, 37 wrapped, 33 orphans",
+   "max_words=6, width=1080 (the English-tuned parent)": "219 cards, 37 wrapped, 33 orphans",
    "max_words=5, width=1080": "257 cards, 10 wrapped, 10 orphans",
    "max_words=4, width=1080": "304 cards, 1 wrapped, 1 orphan",
    "max_words=5, width=1296": "257 cards, 0 wrapped, 0 orphans",

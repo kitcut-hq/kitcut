@@ -153,9 +153,9 @@ check(
 print("")
 print("== emphasis marks every occurrence, and never fails silently ==")
 cfg = json.load(
-    open(os.path.join(_env.ROOT, "config", "presets", "instafill-uk.json"), encoding="utf-8")
+    open(os.path.join(_env.ROOT, "config", "presets", "dark-card-uk.json"), encoding="utf-8")
 )
-truthy("the Ukrainian preset declares an emphasis colour", "emphasis" in cfg["states"])
+truthy("the Cyrillic preset declares an emphasis colour", "emphasis" in cfg["states"])
 check(
     "emphasis is NOT the spotlight colour -- one signal cannot mean two things",
     cfg["states"]["emphasis"]["colour"] == cfg["states"]["active"]["colour"],

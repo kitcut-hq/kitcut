@@ -715,7 +715,7 @@ which cannot encode the glyphs at all.
 | `docs/retro-books-giveaway.md` | where six hours went on the first silent-screencast edit, and the rule that now prevents each loss |
 | `projects/<id>/` | one video: `project.json`, `journal.md`, its manifests + sidecars (committed), and its `sources/ audio/ transcripts/ outputs/ temp/` (gitignored) |
 | `config/presets/` | caption styling |
-| `config/vocab/` | ASR hotword lists: brand names and acronyms Whisper has never seen, per language (`instafill.txt`, `instafill-uk.txt`) |
+| `config/vocab/` | ASR hotword lists per language: the acronyms and code-switched English Whisper has never seen. Names, clients and your own brands go in a gitignored `*.local.txt` beside them, never in a committed list — this repo is public |
 | `config/labels/` | the lower-third name label |
 | `config/overlays/` | image-overlay animation, layout and background treatment |
 | `config/cards/` | card design: `templates/` the shape, `brands/` the look |

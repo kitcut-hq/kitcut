@@ -165,19 +165,19 @@ Two rules make it survive:
   looks again. Quote what the transcript says *after* the manifest's
   `corrections`.
 - **Emphasis and the spotlight must not be the same colour.** On
-  `instafill-uk.json` the spotlight is the brand mint and emphasis is amber; if
-  emphasis reused the mint, "this is the point" and "this is the current word"
-  would be one signal and neither would read. Pick emphasis against the *card*,
-  not against the base text.
+  `dark-card-uk.json` the spotlight is mint and emphasis is amber; if emphasis
+  reused the mint, "this is the point" and "this is the current word" would be
+  one signal and neither would read. Pick emphasis against the *card*, not
+  against the base text.
 
 One phrase every ~40 s of finished film is a good density — dense enough to
 carry a skim, sparse enough that the colour still means something.
 
-Ukrainian needed its own preset for the reason the table above predicts:
-`instafill-uk.json` is `instafill.json` with `max_line_width_px` 1080 → **1296**
-and nothing else. Ukrainian words are materially longer than the English the
-parent was measured on, and at 1080 the same six-word groups wrapped 37 of 219
-cards and orphaned 33. Widening the line beat carrying fewer words: 6 × 1296
+Cyrillic needed its own preset for the reason the table above predicts:
+`dark-card-uk.json` widens `max_line_width_px` to **1296** and changes nothing
+else. Ukrainian words are materially longer than the English its parent style
+was measured on, and at 1080 the same six-word groups wrapped 37 of 219 cards
+and orphaned 33. Widening the line beat carrying fewer words: 6 × 1296
 gives 219 cards and 1 orphan, where 4 × 1080 also reaches ~0 orphans but at 304
 cards — a card change every 1.5 s instead of every 2.1 s, and on a static
 talking head the card is the only thing moving.
