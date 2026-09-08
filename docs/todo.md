@@ -9,7 +9,33 @@ that has not happened yet.
 
 ---
 
-## 1. Make shorts predictable: the roadmap
+## 1. Hand an edit to DaVinci Resolve, and take one back
+
+**Researched 2026-09-08, written up in `docs/davinci-resolve.md`** — the answer
+is yes through interchange files and no through Resolve's own project files, and
+the research already ran the export once against a committed keep-list. What is
+not built yet:
+
+- **`resolve-export.py`** — a manifest's plan (not a `.cuts.json` sidecar; the
+  keep-list is 22.5 s short of the film on `claude-demo`, because bookends live
+  in the manifest) to `.otio` / `.edl` / FCP7 `.xml`, plus `.srt` from the same
+  `words.json` the caption builder reads, plus our `_why` notes and named
+  removals as timeline **markers**. `--list` prices it and prints what each
+  format drops.
+- **`resolve-import.py`** — the direction worth more: a human fine-trims in
+  Resolve free, exports OTIO/EDL/XML, and we render it with NVENC, the captions,
+  the labels, the redaction and the project record.
+- **`check-resolve.py`** — keep-list → timeline → keep-list, frame counts and
+  markers asserted per format, no Resolve and no encode, on `check-multicam.py`'s
+  pattern.
+
+Write `.otio` (plain JSON, stable schema) and EDL by hand so nothing new lands in
+`requirements.txt`; keep `opentimelineio` to the checker if it is wanted at all.
+The five traps the trial run already found — media `available_range` required by
+FCP7 XML, EDL's out-of-band frame rate and truncated reel names, the silently
+dropped speed ramp — are in §4 of the doc; do not rediscover them.
+
+## 2. Make shorts predictable: the roadmap
 
 **The diagnosis, from the 2026-09-03 session** (four shorts, two channels,
 every defect the user or a late check caught): each failure was either a
@@ -92,7 +118,7 @@ Sequencing: 1e first (it protects everything else while it is built), then
 1f/1g/1h as they land. Each obeys the house rules: free mode, README section,
 skill update, `check-script.py --changed` clean.
 
-## 2. Vertical presets sit inside the YouTube Shorts UI
+## 3. Vertical presets sit inside the YouTube Shorts UI
 
 `config/presets/red-card-vertical.json` uses `bottom_margin_px: 170`, which
 scales to **302 px** from the bottom of a 1080x1920 frame. The Shorts UI (title,
@@ -107,7 +133,7 @@ silently — every already-rendered short that used it goes STALE — so this wa
 a deliberate pass with `project-scan.py --all --check` and a journal note per
 project, not a one-line edit.
 
-## 3. `_gpulock` reports the wrong hold time
+## 4. `_gpulock` reports the wrong hold time
 
 `acquire()` builds the lock record — including `started_epoch` — **before** the
 retry loop, so a run that queued for 20 minutes and then took the card reports
@@ -119,7 +145,7 @@ Harmless for the 6 h `MAX_AGE_S` staleness backstop, but `gpu-lock.py` is the
 thing you read when a run is wedged, and it is currently lying to you in exactly
 that situation. Fix: stamp `started_epoch` at the moment `_write_new` succeeds.
 
-## 4. Carry the channel's own logo bug into the cut
+## 5. Carry the channel's own logo bug into the cut
 
 Lenny's shorts carry their campfire logo top-left and the sponsor bug top-right,
 both burned into the 1920x1080 source at x 25..145 and x 1750..1900. No 9:16
