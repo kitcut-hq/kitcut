@@ -158,34 +158,54 @@ ever shows it composited. Worth doing properly (key it where it sits on the flat
 grey column, verify the alpha the way `html-to-image.py` does) rather than
 shipping a grey box behind a logo.
 
-## 6. The Resolve live-API branch: decided, kept, not merged
+## 6. The Resolve live API: decided against, and what to keep if that changes
 
 Two sessions built toward the same thing at once. **Resolved in favour of
-interchange**, which is what `resolve-export.py` and `docs/davinci-resolve.md`
-above are: OTIO leads, EDL is the universal fallback, FCP7 XML carries paths,
-SRT carries the words, and all of it works in the **free** edition.
+interchange** -- `resolve-export.py` and `docs/davinci-resolve.md` above: OTIO
+leads, EDL is the universal fallback, FCP7 XML carries paths, SRT carries the
+words, and all of it works in the **free** edition.
 
-The other answer is on `claude/resolve-live-api`: `_resolve.py` +
-`resolve-edit.py`, which drive the running application through `fusionscript`
-and fall back to FCPXML. It is **not merged and should not be**, for a measured
-reason rather than a stylistic one: **external scripting is Studio-only.**
-Resolve 21.1's notes say "Advanced scripting now requires DaVinci Resolve
-Studio", and on the free 21.1, `scriptapp("Resolve")` returns `None` from both
-the project venv and Blackmagic's bundled `ResolvePython`. A live mode nobody on
-the free edition can reach is a maintenance cost with no user, and the 21.1 MCP
-server sits behind the same licence.
+The other answer drove the running application through `fusionscript`. It is not
+merged and its branch is gone; the commit is kept as the tag
+**`archive/resolve-live-api`** (`git show archive/resolve-live-api`) so nothing
+was destroyed, but treat it as a reference, not a starting point -- Resolve's API
+moves, and the facts below are the expensive part, not the code.
 
-Two things on that branch are worth taking **if a Studio machine ever justifies
-the live API**, and both are easy to lose by rewriting from Blackmagic's docs:
+**Why it was rejected, measured rather than argued:** external scripting is
+**Studio-only**. Resolve 21.1's notes say "Advanced scripting now requires
+DaVinci Resolve Studio", and on the free 21.1 `scriptapp("Resolve")` returns
+`None` from both this repo's venv and Blackmagic's own bundled `ResolvePython`.
+A live mode nobody on the free edition can reach is a maintenance cost with no
+user, and the 21.1 MCP server sits behind the same licence. **Never tell a
+free-edition operator to switch external scripting on** -- their build has no
+such preference, and sending them to look for it costs their trust in whatever
+you say next. That mistake was made in the session that wrote this.
 
-- It reaches the API **without setting `PYTHONPATH`**. The vendor README tells
-  you to export it; CLAUDE.md documents what that variable cost this repo. The
-  `Modules/` shim only loads `fusionscript` from a known file, so `_resolve.py`
-  loads that extension directly by path. Any future live-API code must keep this.
-- `why_not_connected()` separates "not installed", "not running" and "refusing",
-  because `scriptapp()` returns the same `None` for all three — and names the
-  edition, so a free-edition operator is not sent hunting for a Preferences
-  toggle their build does not have. That mistake was made and corrected here.
+**If a Studio machine ever justifies the live API, three things are worth
+rebuilding rather than rediscovering:**
 
-Do not open a third implementation. If the live API is ever wanted, start from
-that branch.
+1. **Reach the API without setting `PYTHONPATH`.** Blackmagic's README tells you
+   to export `RESOLVE_SCRIPT_API`, `RESOLVE_SCRIPT_LIB` and `PYTHONPATH`. Do not
+   export the third -- CLAUDE.md documents the day that variable cost this repo,
+   and `_env.py` exists to undo it. The `Modules/DaVinciResolveScript.py` shim it
+   wants on the path does nothing but load the `fusionscript` extension from a
+   known file, so load it directly instead:
+   `importlib.machinery.ExtensionFileLoader("fusionscript", <path to
+   fusionscript.dll/.so>)`, then `spec_from_loader` / `module_from_spec` /
+   `exec_module`, then `mod.scriptapp("Resolve")`. Probe the per-OS install
+   paths with `os.path.exists()` and let `$RESOLVE_SCRIPT_LIB` override. The
+   extension loads fine into the project venv, so the bundled interpreter (which
+   has no pip, and so cannot see this repo's dependencies) is not needed.
+2. **Diagnose a failed connection three ways.** `scriptapp()` returns the same
+   `None` whether Resolve is absent, still starting, or refusing -- so check for
+   the library, then for the process, and only then report a refusal, naming the
+   edition. One `None` and three causes is otherwise an unanswerable support
+   question.
+3. **Resolve's `endFrame` is INCLUSIVE.** A half-open `[start, end)` range in
+   seconds becomes `endFrame = last frame`, not one past it. Getting it wrong
+   lengthens every segment by a frame, and on a 68-segment timeline that is
+   nearly three seconds of drift that surfaces only as late audio ten minutes
+   in. Convert in exactly one function and pin it with a fake media pool, the
+   way `check-resolve.py` pins the interchange arithmetic.
+
+Do not open a third implementation.
