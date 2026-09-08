@@ -151,15 +151,65 @@ def main():
         )
     cand = wide
 
+    # Second scope limit, for the same reason as the first and measured the same
+    # way. Classification here is NEAREST-COLOUR, and that is only meaningful
+    # while the card is at full opacity. Inside a group's fade every word is a
+    # blend toward the card, and the blend is not linear in the metric this uses:
+    # a dimmed white word can sit closer to the mint reference than a dimmed
+    # mint one does to white, so argmin picks a base word and reports a
+    # mismatch on a file that is correct.
+    #
+    # Measured case, on a Ukrainian talking-head briefing: group 54, the word
+    # 'неї' active 117.19->117.27 -- 80 ms, exactly two frames, so the filter
+    # above keeps it -- and its whole window lies inside the 90 ms fade-in,
+    # because it is the first word of its card. The rendered frame at 117.23
+    # shows 'неї' correctly in mint; only the classifier could not read it.
+    # 249 of 250 probes passed and the one failure was this.
+    #
+    # So: a word whose active window is entirely inside a fade is not probed,
+    # and any word that merely OVERLAPS one is probed at an instant outside it.
+    # Nothing is softened -- every word that can be judged is still judged, and
+    # both skip counts are printed.
+    fade_s = float(cfg["timing"].get("fade_ms", 0)) / 1000.0
+    if fade_s > 0:
+
+        def probe_at(g, wi):
+            """When to sample this word, or None if the fades leave no instant."""
+            w = g["words"][wi]
+            a, b = w["a"] / 100.0, w["b"] / 100.0
+            lo = max(a, g["g0"] / 100.0 + fade_s)
+            hi = min(b, g["g1"] / 100.0 - fade_s)
+            if hi - lo < 1.0 / args.fps:
+                return None
+            return (lo + hi) / 2.0
+
+        timed = [(g, wi, probe_at(g, wi)) for (g, wi) in cand]
+        keep = [(g, wi, t) for (g, wi, t) in timed if t is not None]
+        lost = len(timed) - len(keep)
+        if lost:
+            print(
+                "skipping %d/%d candidate word(s) whose active window lies "
+                "inside the %.0f ms card fade -- nearest-colour classification "
+                "is not valid while the card is not at full opacity"
+                % (lost, len(timed), fade_s * 1000.0)
+            )
+        if not keep:
+            sys.exit(
+                "every word's highlight falls inside the card fade; nothing "
+                "probeable. Lower timing.fade_ms or lengthen the groups."
+            )
+        cand = keep
+    else:
+        cand = [(g, wi, (g["words"][wi]["a"] + g["words"][wi]["b"]) / 200.0) for (g, wi) in cand]
+
     random.seed(args.seed)
     picks = random.sample(cand, min(args.samples, len(cand)))
     picks.sort(key=lambda p: p[0]["words"][p[1]]["a"])
 
     ok = fail = 0
     failures = []
-    for g, wi in picks:
+    for g, wi, t in picks:
         w = g["words"][wi]
-        t = (w["a"] + w["b"]) / 2.0 / 100.0
         img = probe(args.ass, args.fontsdir, t, args.tmp, args.fps, tuple(size))
 
         # Half-height of a word's sampling box. fsize is the NOMINAL font size,

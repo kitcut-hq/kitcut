@@ -131,3 +131,46 @@ piece is getting a clean transparent PNG of the bug out of footage that only
 ever shows it composited. Worth doing properly (key it where it sits on the flat
 grey column, verify the alpha the way `html-to-image.py` does) rather than
 shipping a grey box behind a logo.
+
+## 5. One Resolve handoff, not two
+
+Two sessions built toward the same thing at once. On
+`claude/davinci-editor-file-compat-60sd57` there is `resolve-export.py` plus
+`docs/davinci-resolve.md`, which researched what Resolve's files actually are
+(`.drp` is a ZIP of XML whose interesting half is an undocumented hex blob) and
+concluded, correctly, that **interchange is the door**: OTIO leads, EDL is the
+universal fallback, FCP7 XML carries paths, SRT carries the words. On
+`claude/resolve-live-api` there is `_resolve.py` + `resolve-edit.py`, which
+drives the running application through `fusionscript` and falls back to writing
+FCPXML.
+
+**Reconcile before either lands on main.** The export branch is the better
+foundation and should be the one that merges:
+
+- It leads with **OTIO**, which loses the least (clips, tracks, timing, markers,
+  metadata). The live branch writes FCPXML only.
+- It carries **markers** from `name_labels` / `image_overlays`, and **refuses**
+  when the keep-list alone is not the film — on `claude-demo` that gap is 22.5 s
+  of opening bookend, which would otherwise be a surprise inside Resolve.
+- It states what each format **drops** in `--list`, which is the honest report
+  to run before promising anybody an editable file.
+
+What the live branch has that is worth salvaging is narrow and mostly negative:
+
+- `_resolve.py` reaches the API **without setting PYTHONPATH**, by loading
+  `fusionscript` from its path. Blackmagic's own README tells you to export that
+  variable; this repo has a docstring about what that cost. If any live-API code
+  ever lands, it must keep this property.
+- `why_not_connected()` distinguishes "not installed", "not running" and
+  "refusing", because `scriptapp()` returns the same `None` for all three.
+
+And the reason the live half should probably **not** land at all: **external
+scripting is Studio-only.** Resolve 21.1's release notes say "Advanced scripting
+now requires DaVinci Resolve Studio", and measured on the free 21.1 here,
+`scriptapp("Resolve")` returns `None` from both our venv and the bundled
+`ResolvePython`. A LIVE mode nobody on the free edition can reach is a
+maintenance cost with no user. The 21.1 MCP server is behind the same licence.
+
+Decide it deliberately: merge the export branch, take the PYTHONPATH-free
+loader and the three-way diagnosis if a Studio machine ever justifies them, and
+delete the rest rather than leaving two half-answers in the tree.

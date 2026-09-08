@@ -76,6 +76,13 @@ EXCEPTIONS = {
         "wedged, and a broken venv is one of the things that wedges it",
         "record": "a lock reader produces no deliverable",
     },
+    "check-zoom.py": {
+        "argparse": "same bargain as check-dub.py: one button, no files, no "
+        "GPU -- it tests the Zoom folder rules and the emphasis "
+        "matcher in memory",
+        "record": "self-test harness; the only files it writes are Zoom-folder "
+        "fixtures in a TemporaryDirectory that is removed on the way out",
+    },
     "check-openings.py": {
         "record": "the PNGs it writes are contact sheets under temp/ for a "
         "human to look at, not renders; it never encodes anything",
@@ -400,15 +407,16 @@ def check(path):
         )
     if re.search(r"environ\[\s*.PYTHONPATH.\s*\]\s*=", src) and not skip("pythonpath"):
         out.append(("FAIL", "writes PYTHONPATH -- see CLAUDE.md for the day that variable cost"))
-    for ln, excerpt in abspath_hits(src, in_strings_only=True):
-        out.append(
-            (
-                "FAIL",
-                "line %d hardcodes an absolute path (%s) -- it is "
-                "wrong on every machine but one; resolve it "
-                "through _env.resolve() or _env.workspace()" % (ln, excerpt),
+    if not skip("abspath"):
+        for ln, excerpt in abspath_hits(src, in_strings_only=True):
+            out.append(
+                (
+                    "FAIL",
+                    "line %d hardcodes an absolute path (%s) -- it is "
+                    "wrong on every machine but one; resolve it "
+                    "through _env.resolve() or _env.workspace()" % (ln, excerpt),
+                )
             )
-        )
 
     if base in PLATFORM:
         local = {m for _, m in imports}

@@ -141,6 +141,47 @@ keep — and `text.capitalize_i` fixes the English pronoun, because Whisper's
 casing is per-segment and inconsistent (312 correct "I" against 78 lowercase
 from one speaker in one recording; one of them landed in a caption card).
 
+### Highlighting the main points, not just the current word
+
+The spotlight moves word by word and says *"this is being said now"*. It cannot
+say *"this is the sentence that matters"*. `states.emphasis` is the second axis:
+
+```powershell
+python scripts/run-captions.py --input <film> --style <preset> \
+    --emphasis-file projects/<id>/emphasis.txt
+```
+
+`emphasis.txt` is one phrase per line (JSON list or `{"phrases": […]}` also
+work); the preset supplies the colour. Every word a phrase covers wears the
+emphasis colour **for the whole life of its card** — before and after the
+spotlight passes over it — so a viewer skimming a nine-minute briefing can see
+where the decisions are without waiting for the highlight to arrive.
+
+Two rules make it survive:
+
+- **A phrase that matches nothing is a failure, not a no-op.** Borrowed from
+  `apply_corrections()` for the same reason: a highlight list that quietly stops
+  applying after a re-transcription is worse than no highlights, because nobody
+  looks again. Quote what the transcript says *after* the manifest's
+  `corrections`.
+- **Emphasis and the spotlight must not be the same colour.** On
+  `instafill-uk.json` the spotlight is the brand mint and emphasis is amber; if
+  emphasis reused the mint, "this is the point" and "this is the current word"
+  would be one signal and neither would read. Pick emphasis against the *card*,
+  not against the base text.
+
+One phrase every ~40 s of finished film is a good density — dense enough to
+carry a skim, sparse enough that the colour still means something.
+
+Ukrainian needed its own preset for the reason the table above predicts:
+`instafill-uk.json` is `instafill.json` with `max_line_width_px` 1080 → **1296**
+and nothing else. Ukrainian words are materially longer than the English the
+parent was measured on, and at 1080 the same six-word groups wrapped 37 of 219
+cards and orphaned 33. Widening the line beat carrying fewer words: 6 × 1296
+gives 219 cards and 1 orphan, where 4 × 1080 also reaches ~0 orphans but at 304
+cards — a card change every 1.5 s instead of every 2.1 s, and on a static
+talking head the card is the only thing moving.
+
 ### Deriving a style from a reference
 
 Measure, don't eyeball. Pull a few seconds of the reference, extract frames, and
@@ -1459,6 +1500,63 @@ still counts back from the end, so an end card survives a re-cut.
 Duration against the keep-list, audio not silent, and every label and overlay
 proved to start before the film ends — the failure that is otherwise silent,
 because `enable` simply never turns true and the card never appears.
+
+## A Zoom recording, and a talk recorded in parts
+
+A Zoom local recording is a FOLDER, not a file, and `zoom-import.py` exists
+because four things about that folder are not guessable.
+
+```powershell
+python scripts/zoom-import.py --since 2026-09-01                     # what is on this machine
+python scripts/zoom-import.py --project <id> --meeting "<folder>" --list
+python scripts/zoom-import.py --project <id> --join --meeting "<a>" --meeting "<b>"
+```
+
+**`recording.conf` is the authority, not the glob.** It is JSON —
+`{"items":[{"video":…,"audio":…,"process":100}], "magic_number":…}` — and
+`process` is a *percentage*. Below 100 means Zoom has not finished converting:
+the folder then holds `double_click_to_convert_NN.zoom` plus `video*.mp4.tmp`,
+and **the .tmp probes clean as a short, valid mp4**. One such folder here holds
+a 181 MB `.zoom` next to a 551 KB stub of a 30-minute meeting. Globbing imports
+the stub. An unconverted folder is refused, with the percentage in the message.
+
+**The sidecar `audio<magic>.m4a` is the same mix as the mp4's own track.**
+Measured, not assumed: decoded to 16 kHz mono, the first 60 s of both files have
+identical MD5s. It is never muxed in — adding it as a second track doubles the
+voice. It is a fallback for a damaged mp4 and a cheap transcription input.
+The only genuinely separate audio Zoom writes is `Audio Record/`, per
+participant, and only when that was switched on; a separately recorded screen
+share is `as<magic>.mp4`. Both are reported, never inferred.
+
+**`creation_time` on the mp4 is when Zoom finished CONVERTING.** Measured here:
+a take whose folder is stamped `10:26:31` local (= 17:26:31Z) carries
+`creation_time` 17:36:00Z — ten minutes later, and the gap is the conversion.
+The folder NAME, `YYYY-MM-DD HH.MM.SS <topic>` in local time, is the only honest
+capture start, so parts are ordered by that. Ordering Zoom parts by
+`creation_time` orders them by how fast each one encoded.
+
+**A talk in parts is one film.** Zoom opens a new folder every time the host
+stops and restarts, so `--meeting` repeats and `--join` concatenates. The parts
+carry identical encoder settings, so the concat demuxer joins them stream-copied
+— seconds, no generation loss — and the result's duration is asserted against
+the sum of the parts to within a frame, because a discontinuity otherwise
+produces a film silently missing half a part. Joining is what buys the whole
+downstream **one clock**: the cut, the word transcript, the caption times and
+the Resolve timeline all address the same file, and no stage carries an offset.
+
+A Zoom talking head then goes through `tighten-cut.py` (above) — one clock,
+subtractive, nothing to sync.
+
+### What it checks before shipping
+
+`check-zoom.py` is the self-test, and it runs in seconds with no GPU and no
+files: the folder rules against the shapes real recordings have — including
+the unconverted folder whose `.tmp` probes clean — the folder-name ordering,
+and the emphasis matcher's two rules. Run it after touching `zoom-import.py`
+or the emphasis half of `build-captions-ass.py`.
+
+Handing the resulting cut to DaVinci Resolve as an editable timeline is a
+separate piece of work, in flight on its own branch; see `docs/todo.md`.
 
 ## Cutting between cameras, and proving the cut is right
 

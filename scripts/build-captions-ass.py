@@ -242,6 +242,63 @@ def sanitize(words, cfg):
     return out
 
 
+def mark_emphasis(words, phrases, verbose=False):
+    """Flag the words a caller named as the talk's main points.
+
+    The spotlight already moves word by word, but it says only "this is being
+    said now" -- it cannot say "this is the sentence that matters". Emphasis is
+    the second axis: a named phrase keeps a distinct colour for the whole time
+    its card is up, before and after the spotlight passes over it, so a viewer
+    skimming a nine-minute briefing can see where the decisions are.
+
+    Phrases are matched the way every other quoted phrase in this repo is --
+    _outline.fold() over the concatenated words, so punctuation, case and
+    apostrophe style do not have to be guessed at, and a phrase survives a
+    re-transcription that re-punctuates the line.
+
+    EVERY occurrence is marked, and a phrase that matches NOTHING is a failure
+    rather than a no-op. That rule is borrowed from apply_corrections() for the
+    same reason: a list of highlights that quietly stops applying after the
+    transcript changes is worse than no highlights, because nobody looks again.
+    """
+    if not phrases:
+        return 0, []
+    hay, owner = _outline.index(words, loose=True)
+    hit = 0
+    missed = []
+    for phrase in phrases:
+        needle = _outline.fold(phrase, loose=True)
+        if not needle:
+            continue
+        pos, n = hay.find(needle), 0
+        while pos >= 0:
+            for i in range(owner[pos], owner[pos + len(needle) - 1] + 1):
+                words[i]["emph"] = True
+            n += 1
+            pos = hay.find(needle, pos + 1)
+        if n:
+            hit += n
+            if verbose:
+                print("   emphasis x%d: %s" % (n, phrase))
+        else:
+            missed.append(phrase)
+    return hit, missed
+
+
+def load_emphasis(path):
+    """A phrase list: JSON array, {"phrases": [...]}, or one phrase per line."""
+    raw = open(path, encoding="utf-8").read()
+    try:
+        doc = json.loads(raw)
+    except ValueError:
+        return [
+            ln.strip() for ln in raw.splitlines() if ln.strip() and not ln.strip().startswith("#")
+        ]
+    if isinstance(doc, dict):
+        doc = doc.get("phrases") or doc.get("emphasis") or []
+    return [str(x).strip() for x in doc if str(x).strip()]
+
+
 # ---------------------------------------------------------------- wrapping
 def wrap_lines(texts, m, max_w, max_lines):
     """Greedy wrap. Returns list of lists of indices, or None if it will not fit."""
@@ -608,6 +665,20 @@ def build(words, cfg, m, overlays=None):
             % (fam, fsz, spoken_c, spoken_c, out_c, sha_c, bold, fsp, out_w, sha_w),
         )
 
+    # Emphasis is a SECOND axis over the spotlight, not a replacement for it:
+    # an emphasised word wears the emphasis colour while it is pending and
+    # again once spoken, and the active spotlight still sweeps across it. So a
+    # named main point is legible for the whole life of its card, which is the
+    # point -- a viewer skimming does not get to wait for the spotlight.
+    emph_on = any(w.get("emph") for w in words) and "emphasis" in S
+    emph_c = ass_colour(S.get("emphasis", S["active"])["colour"])
+    if emph_on:
+        header = header.replace(
+            "\n[Events]",
+            "\nStyle: Emph,%s,%s,%s,%s,%s,%s,%d,0,0,0,100,100,%s,0,1,%s,%s,5,0,0,0,1\n\n[Events]"
+            % (fam, fsz, emph_c, emph_c, out_c, sha_c, bold, fsp, out_w, sha_w),
+        )
+
     groups = group_words(words, cfg, m)
     ev, dbg = [], []
     for gi, grp in enumerate(groups):
@@ -675,10 +746,13 @@ def build(words, cfg, m, overlays=None):
                 o_ = fade if en == g1 else 0
                 return ("%sfad(%d,%d)" % (BS, i_, o_)) if (i_ or o_) else ""
 
+            pend_st = "Emph" if (emph_on and w.get("emph")) else "Base"
+            spok_st = "Emph" if (emph_on and w.get("emph")) else spoken_style
+
             if a > g0:
                 ev.append(
-                    "Dialogue: 1,%s,%s,Base,,0,0,0,,{%s%s}%s"
-                    % (fmt_cs(g0), fmt_cs(a), pos, fd(g0, a), w["text"])
+                    "Dialogue: 1,%s,%s,%s,,0,0,0,,{%s%s}%s"
+                    % (fmt_cs(g0), fmt_cs(a), pend_st, pos, fd(g0, a), w["text"])
                 )
             ev.append(
                 "Dialogue: 1,%s,%s,Act,,0,0,0,,{%s%s%s}%s"
@@ -694,7 +768,7 @@ def build(words, cfg, m, overlays=None):
             if b < g1:
                 ev.append(
                     "Dialogue: 1,%s,%s,%s,,0,0,0,,{%s%s}%s"
-                    % (fmt_cs(b), fmt_cs(g1), spoken_style, pos, fd(b, g1), w["text"])
+                    % (fmt_cs(b), fmt_cs(g1), spok_st, pos, fd(b, g1), w["text"])
                 )
 
         dbg.append(
@@ -892,6 +966,14 @@ def main():
         help="detect-overlays.py json; lifts cards clear of the "
         "source video's own lower-third graphics",
     )
+    ap.add_argument(
+        "--emphasis-file",
+        default=None,
+        help="phrases naming the talk's main points (JSON list, "
+        "{'phrases': [...]}, or one per line). Every word they cover wears "
+        "states.emphasis for the whole card, so a key line reads before and "
+        "after the spotlight reaches it. A phrase that matches nothing is an error.",
+    )
     ap.add_argument("--range", nargs=2, type=float, default=None, metavar=("T0", "T1"))
     ap.add_argument("--time-offset", type=float, default=0.0)
     ap.add_argument(
@@ -949,6 +1031,23 @@ def main():
 
     if not words:
         sys.exit("no words in range")
+
+    if args.emphasis_file:
+        if "emphasis" not in cfg["states"]:
+            sys.exit(
+                "--emphasis-file needs states.emphasis.colour in %s -- the "
+                "phrases say WHICH words matter, the preset says how a "
+                "channel shows that" % args.style
+            )
+        phrases = load_emphasis(args.emphasis_file)
+        hits, missed = mark_emphasis(words, phrases, verbose=True)
+        if missed:
+            sys.exit(
+                "emphasis phrase(s) matched nothing in this transcript, so "
+                "they would silently do nothing:\n  %s\nQuote what the "
+                "transcript actually says (after any corrections)." % "\n  ".join(missed)
+            )
+        print("emphasis: %d occurrence(s) of %d phrase(s)" % (hits, len(phrases)))
 
     if args.sweep:
         sweep_grouping(words, cfg, m)

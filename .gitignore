@@ -33,6 +33,12 @@ projects/*/outputs/
 projects/*/temp/
 projects/*/raws/
 
+# Private hotword lists. The people and clients in a recording are the most
+# valuable ASR hotwords there are and the least shareable thing in the repo,
+# so they live beside the committed vocabularies and never travel with them.
+# transcribe-words.py --hotwords-file is repeatable so both can be passed.
+config/vocab/*.local.txt
+
 # Belt and braces: these must not slip in from anywhere
 *.mp4
 *.mov

@@ -10,6 +10,11 @@ you have a screen capture and a *separate* camera/phone take that need syncing
 and compositing, use `video-multicam` (`screencast-cut.py`). If the ask is to
 pull short clips *out* of a long video, use `video-shorts` (`cut-clips.py`).
 
+If the file came out of **Zoom**, or the recording arrived as **two or more
+parts**, start at `video-zoom` — it wraps this pipeline with `zoom-import.py` in
+front, because a Zoom recording is a folder rather than a file and its parts
+must be joined onto one clock before any of this runs.
+
 ```powershell
 # from the repo root
 python scripts/tighten-cut.py --manifest projects/<id>/tighten.json --list

@@ -162,16 +162,29 @@ def main():
         help="comma- or space-separated names the model should "
         "expect (brands, acronyms, form numbers)",
     )
+    # Repeatable, and that is the point rather than a convenience: the vocabulary
+    # a project needs is usually a COMMITTED generic list (product names, the
+    # jargon of the domain) plus a PRIVATE one (the people and clients in this
+    # particular recording). Those have different homes -- the first belongs in
+    # config/vocab/ and is shared with everyone using these scripts, the second
+    # must never reach a shared repo. One flag that takes one file forces them
+    # into one file, and the private half then rides along into git. Two files.
     ap.add_argument(
         "--hotwords-file",
+        action="append",
         default=None,
-        help="a file of the same, one per line; blank lines and # comments ignored",
+        metavar="FILE",
+        help="a file of the same, one per line; blank lines and # comments "
+        "ignored. Repeatable: pass the shared list and a private, "
+        "gitignored *.local.txt of names",
     )
     args = ap.parse_args()
 
     if args.hotwords_file:
-        with open(args.hotwords_file, encoding="utf-8") as f:
-            terms = [l.strip() for l in f if l.strip() and not l.lstrip().startswith("#")]
+        terms = []
+        for path in args.hotwords_file:
+            with open(path, encoding="utf-8") as f:
+                terms += [l.strip() for l in f if l.strip() and not l.lstrip().startswith("#")]
         args.hotwords = ", ".join(([args.hotwords] if args.hotwords else []) + terms)
     if args.hotwords:
         print(f"hotwords: {args.hotwords}")

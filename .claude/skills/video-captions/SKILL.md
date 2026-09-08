@@ -111,6 +111,31 @@ fitted around — read that before widening `layout.max_line_width_px`.
 | `timing.*` | lead-in, hold-out, min highlight, fade |
 | `render.*` | encoder, preset/speed, cq, bitrate caps — translated per encoder family by `_encode.py`; a preset naming an encoder this machine cannot run is substituted, and `--encoder <name>` picks one explicitly for a run |
 
+## Highlighting the main points
+
+The per-word spotlight says *"this is being said now"*. It cannot say *"this is
+the sentence that matters"*. When the ask is to highlight key points, main
+points or takeaways, that is `states.emphasis` plus an emphasis file — not a
+hand-made overlay and not a second pass:
+
+```powershell
+python scripts/run-captions.py --input <film> --style <preset>     --emphasis-file projects/<id>/emphasis.txt
+```
+
+One phrase per line (a JSON list or `{"phrases": [...]}` also works). Every word
+a phrase covers keeps the emphasis colour for the **whole life of its card**,
+before and after the spotlight reaches it, so the point reads to someone
+skimming. About one phrase per 40 s of finished film.
+
+Two rules, both load-bearing:
+
+- **A phrase that matches nothing fails the build.** Quote what the transcript
+  says *after* any `corrections`. A highlight list that silently stops applying
+  after a re-transcription is worse than none, because nobody looks again.
+- **Emphasis must not reuse the spotlight colour.** Otherwise "this is the
+  point" and "this is the current word" become one signal and neither reads.
+  Pick it against the card, not against the base text.
+
 ## Dodging the source's own graphics
 
 `detect-overlays.py` finds lower-third graphics already burned into the source so

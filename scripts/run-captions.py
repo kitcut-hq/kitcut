@@ -136,6 +136,13 @@ def main():
         "top-level dirs",
     )
     ap.add_argument("--style", required=True)
+    ap.add_argument(
+        "--emphasis-file",
+        default=None,
+        help="phrases naming the talk's main points; the words they "
+        "cover keep states.emphasis for their whole card "
+        "(see build-captions-ass.py --emphasis-file)",
+    )
     ap.add_argument("--height", type=int, default=1080)
     ap.add_argument("--lang", default=None, help="ASR language code; autodetect if omitted")
     ap.add_argument("--model", default="large-v3")
@@ -411,6 +418,8 @@ def main():
         ]
         if overl:
             cmd += ["--overlays", overl]
+        if args.emphasis_file:
+            cmd += ["--emphasis-file", args.emphasis_file]
         sh(cmd)
         mark("captions built")
     else:
@@ -485,6 +494,8 @@ def main():
         ]
         if overl:
             cmd += ["--overlays", overl]
+        if args.emphasis_file:
+            cmd += ["--emphasis-file", args.emphasis_file]
         sh(cmd)
         vf = "ass=filename=%s:fontsdir=%s:shaping=simple,format=yuv420p" % (pass_ass, fontsdir)
         pre = ["-ss", str(s), "-t", str(dsec)]

@@ -164,7 +164,7 @@ Don't reintroduce it, and don't use `os.execve` to re-exec on Windows — it
 spawns rather than replaces, so the parent dies abnormally and the exit code is
 lost. `_env.bootstrap()` uses `subprocess.run` and propagates the status.
 
-## The eight pipelines
+## The nine pipelines
 
 Everything is manifest-driven. Nothing hardcodes a timecode, a colour or a font
 size; per-video decisions live in the project's manifests under
@@ -585,6 +585,51 @@ After touching any of `screen-activity.py`, `screen-cut.py`, `scan-pii.py`,
 `python scripts/check-screen.py` — the PII rules against the strings that came
 off real frames, the cut arithmetic, the recall harness, no GPU, no OCR.
 
+**9. Zoom** — a Zoom local recording, or a talk the host stopped and restarted
+so it arrived as several folders, cut into one film.
+`zoom-import.py` → `tighten-cut.py` → `run-captions.py`
+
+```powershell
+python scripts/zoom-import.py --since 2026-09-01                 # survey, copies nothing
+python scripts/zoom-import.py --project <id> --join --meeting "<a>" --meeting "<b>"
+```
+
+A Zoom recording is a **folder**, and four things about it are not guessable, so
+`zoom-import.py` checks all four. `recording.conf` is the authority and its
+`process` is a percentage — below 100 the folder holds a `.zoom` stub and a
+`video*.mp4.tmp` that **probes clean as a short valid mp4**, so an unconverted
+folder is refused rather than silently imported (one measured here is a 551 KB
+stub of a 30-minute meeting). The sidecar `audio<magic>.m4a` is the **same mix**
+as the mp4's own track — identical MD5 at 16 kHz mono — so muxing it in doubles
+the voice. `creation_time` is when Zoom finished **converting**, not capture
+start (measured: folder stamped 10:26:31 local, stamp ten minutes later), so
+parts are ordered by the folder NAME. And `--join` stream-copies the parts end
+to end, asserting the total against the sum, which is what gives the cut, the
+transcript, the captions and any exported timeline **one clock**.
+
+**Names never go in a committed hotword list.** People and clients are the
+highest-value ASR hotwords there are and the least shareable thing in the repo,
+so `transcribe-words.py --hotwords-file` is **repeatable**: pass the committed
+domain vocabulary and a gitignored `config/vocab/*.local.txt` of names as two
+files. One flag taking one file forces them into one file, and the private half
+then rides along into git.
+
+**Highlighting the main points is a caption feature, not an overlay.**
+`--emphasis-file` (on `run-captions.py` and `build-captions-ass.py`) names
+phrases that hold `states.emphasis` for their whole card while the spotlight
+still sweeps, so a key line reads to someone skimming. A phrase that matches
+nothing is a **failure**, for the same reason `corrections` are: a highlight
+list that quietly stops applying is worse than none. Emphasis must not reuse the
+spotlight colour or the two signals collapse into one.
+
+After touching `zoom-import.py` or the emphasis half of
+`build-captions-ass.py`, run `python scripts/check-zoom.py` — the Zoom folder
+rules against the shapes real recordings have, the folder-name ordering and the
+emphasis matcher; no GPU, no files.
+
+**Handing an edit to DaVinci Resolve is a separate, in-flight piece of work**
+and deliberately not here yet. See `docs/todo.md`.
+
 ## Projects: the memory that outlives the session
 
 Each video is a folder, `projects/<id>/`: its manifests and two committed
@@ -648,13 +693,15 @@ which cannot encode the glyphs at all.
 | `scripts/_encode.py` | the one place encoder keys are chosen; `check-encode.py` is its test |
 | `scripts/conform-tapes.py` | put N real recordings onto one frame rate and size before a frame-addressed cut |
 | `scripts/tighten-cut.py` | one already-composited recording: shorten its pauses, drop its stumbles, remove the parts you name |
+| `scripts/zoom-import.py` | Zoom local recordings -> a project; `--join` puts a talk recorded in parts on one clock |
+| `scripts/check-zoom.py` | the Zoom/emphasis self-test: folder rules, part ordering, phrase matching |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
 | `scripts/screencast-pipeline.py` | the silent-screencast job as one cached, checkpointed command; the stage scripts it drives are listed under pipeline 7 |
 | `docs/retro-books-giveaway.md` | where six hours went on the first silent-screencast edit, and the rule that now prevents each loss |
 | `projects/<id>/` | one video: `project.json`, `journal.md`, its manifests + sidecars (committed), and its `sources/ audio/ transcripts/ outputs/ temp/` (gitignored) |
 | `config/presets/` | caption styling |
-| `config/vocab/` | ASR hotword lists: brand names and acronyms Whisper has never seen |
+| `config/vocab/` | ASR hotword lists: brand names and acronyms Whisper has never seen, per language (`instafill.txt`, `instafill-uk.txt`) |
 | `config/labels/` | the lower-third name label |
 | `config/overlays/` | image-overlay animation, layout and background treatment |
 | `config/cards/` | card design: `templates/` the shape, `brands/` the look |
