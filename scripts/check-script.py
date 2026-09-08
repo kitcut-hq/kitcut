@@ -76,6 +76,23 @@ EXCEPTIONS = {
         "wedged, and a broken venv is one of the things that wedges it",
         "record": "a lock reader produces no deliverable",
     },
+    "_resolve.py": {
+        "abspath": "the paths are where BLACKMAGIC installs Resolve, per OS -- "
+        "vendor constants, not workspace paths, so _env.resolve() has "
+        "nothing to resolve them against. They are candidates probed "
+        "with os.path.exists() and $RESOLVE_SCRIPT_LIB overrides all",
+        "record": "it builds timelines and hands back a render status; "
+        "resolve-edit.py is what records the deliverable",
+        "free": "a library module: the priced mode is resolve-edit.py --list",
+        "argparse": "library module, not a command",
+        "invoke": "library module, not a command",
+    },
+    "check-zoom-resolve.py": {
+        "argparse": "same bargain as check-zoom.py: one button, no files, no "
+        "GPU and no running Resolve",
+        "record": "self-test harness; its fixtures live in a "
+        "TemporaryDirectory that is removed on the way out",
+    },
     "check-zoom.py": {
         "argparse": "same bargain as check-dub.py: one button, no files, no "
         "GPU -- it tests the Zoom folder rules and the emphasis "

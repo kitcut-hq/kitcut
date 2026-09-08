@@ -1558,6 +1558,66 @@ or the emphasis half of `build-captions-ass.py`.
 Handing the resulting cut to DaVinci Resolve as an editable timeline is a
 separate piece of work, in flight on its own branch; see `docs/todo.md`.
 
+## Handing an edit to DaVinci Resolve (branch only — see `docs/todo.md` #5)
+
+**Do not build on this section without reading `docs/todo.md` #5 first.** Two
+sessions answered the same question at once. The other answer,
+`resolve-export.py` on `claude/davinci-editor-file-compat`, leads with OTIO,
+carries markers, and refuses when the keep-list alone is not the film; it is the
+better foundation. This one drives the running application, and its central
+premise is measured to be **wrong for most operators**.
+
+`resolve-edit.py` lays a computed keep-list out in Resolve as a media pool, a
+timeline cut to frame and a subtitle track:
+
+```powershell
+python scripts/resolve-edit.py --manifest projects/<id>/tighten.json --list
+python scripts/resolve-edit.py --manifest projects/<id>/tighten.json
+```
+
+### The premise that does not hold: LIVE mode is Studio-only
+
+`scriptapp("Resolve")` returns the same `None` whether Resolve is absent, still
+starting, or refusing — so `_resolve.why_not_connected()` tells the three apart
+by looking for the process. But the refusing case is not a preference somebody
+forgot to set. **External scripting is a DaVinci Resolve Studio feature.** 21.1's
+release notes say "Advanced scripting now requires DaVinci Resolve Studio", and
+measured on the free 21.1 here, `scriptapp("Resolve")` returns `None` from both
+the project venv and Blackmagic's own bundled `ResolvePython`. A LIVE mode
+nobody on the free edition can reach is a maintenance cost with no user.
+
+Never tell a free-edition operator to flip a Preferences toggle. Their edition
+does not have one, and the search costs them time they then discount your next
+answer by.
+
+### The two things here worth keeping either way
+
+**It reaches the API without setting `PYTHONPATH`.** Blackmagic's own README
+tells you to export it; CLAUDE.md documents what that variable cost this repo.
+The `Modules/` shim it wants on the path does nothing but load `fusionscript`
+from a known file, so `_resolve.py` loads that extension directly by path. Any
+future live-API code must keep this property. The bundled `ResolvePython` is not
+needed either — it has no pip, so it cannot see this repo's dependencies.
+
+**Resolve's `endFrame` is inclusive.** A half-open `[start, end)` range in
+seconds becomes `endFrame = last frame`, not one past it. Getting that wrong
+lengthens every segment by one frame, and the drift only shows up as late audio
+ten minutes in. `_resolve.secs_to_frames()` and `build_timeline()` do the
+conversion in one place.
+
+### What travels, and what does not
+
+The subtitle track is grouped by the caption builder's own grouping
+(`build-captions-ass.group_words`, same style file), so the editable subtitles
+say the same words in the same chunks as any burned-in captions. But the **look**
+does not travel: Resolve imports SRT, VTT, TTML and XML subtitles and **not
+ASS**, and ASS is what carries the per-word spotlight and the emphasis colour.
+A film that wants highlighted captions is rendered by `run-captions.py`; the
+Resolve project carries the same cut plus a plain SRT.
+
+`check-zoom-resolve.py` on this branch is `check-zoom.py` plus the frame
+arithmetic and FCPXML assertions.
+
 ## Cutting between cameras, and proving the cut is right
 
 `screencast-cut.py` composites two tracks into one picture. `angle-cut.py`
