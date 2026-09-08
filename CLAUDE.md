@@ -40,6 +40,11 @@ frame arithmetic a render would otherwise have to find for you.
 `check-encode.py` is the third: it proves the ffmpeg keys each encoder is
 handed are keys that encoder takes, on colour bars, in about ten seconds.
 
+`check-resolve.py` is the fourth: it proves the DaVinci Resolve interchange
+writers — the film-time model, the bookend guard, the OTIO schema, drop-frame
+timecode — against keep-lists built in memory, with no Resolve, no media and
+no encode.
+
 After writing or changing **any** script, run
 `python scripts/check-script.py --changed` — it enforces the conventions
 (_env bootstrap, docstring, free mode, `_project.record()` on deliverables,
@@ -649,6 +654,7 @@ which cannot encode the glyphs at all.
 | `scripts/conform-tapes.py` | put N real recordings onto one frame rate and size before a frame-addressed cut |
 | `scripts/tighten-cut.py` | one already-composited recording: shorten its pauses, drop its stumbles, remove the parts you name |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
+| `scripts/resolve-export.py` | the cut as an OTIO/EDL/FCP7 XML timeline plus an SRT, for DaVinci Resolve (free edition); `check-resolve.py` is its test, `docs/davinci-resolve.md` the research behind it |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
 | `scripts/screencast-pipeline.py` | the silent-screencast job as one cached, checkpointed command; the stage scripts it drives are listed under pipeline 7 |
 | `docs/retro-books-giveaway.md` | where six hours went on the first silent-screencast edit, and the rule that now prevents each loss |
@@ -658,6 +664,7 @@ which cannot encode the glyphs at all.
 | `config/labels/` | the lower-third name label |
 | `config/overlays/` | image-overlay animation, layout and background treatment |
 | `config/cards/` | card design: `templates/` the shape, `brands/` the look |
+| `config/resolve/` | interchange export defaults: which formats, the SRT grouping, the marker colours |
 | `config/handles/` | the animated handle badge |
 | `config/chapters/` | legacy chapter lists for already-published channel videos; new projects keep `chapters.txt` in their folder |
 | `sources/` `audio/` `transcripts/` `outputs/` `temp/` | legacy shared content dirs, gitignored; new work lives under `projects/` |

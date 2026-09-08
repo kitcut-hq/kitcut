@@ -110,6 +110,10 @@ EXCEPTIONS = {
         "record": "self-test harness; writes only scratch under %TEMP%",
         "argparse": "takes no arguments by design -- it is one button",
     },
+    "check-resolve.py": {
+        "record": "self-test harness; the .mp4 names in it are fixtures for "
+        "keep-lists built in memory, and it writes only scratch under %TEMP%",
+    },
     "check-multicam.py": {
         "argparse": "same bargain as check-dub.py: one button, no files, no "
         "GPU -- it tests the round-trip arithmetic in memory",

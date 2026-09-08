@@ -9,31 +9,31 @@ that has not happened yet.
 
 ---
 
-## 1. Hand an edit to DaVinci Resolve, and take one back
+## 1. Take an edit BACK from DaVinci Resolve
 
-**Researched 2026-09-08, written up in `docs/davinci-resolve.md`** — the answer
-is yes through interchange files and no through Resolve's own project files, and
-the research already ran the export once against a committed keep-list. What is
-not built yet:
+**Half of this landed 2026-09-08.** `resolve-export.py` writes the cut as
+`.otio` / `.edl` / FCP7 `.xml` / `.srt` with the decisions as markers,
+`check-resolve.py` pins it (56 checks, no Resolve, no media), and
+`config/resolve/export.json` carries the defaults. The research is
+`docs/davinci-resolve.md`; the reference section is "Handing an edit to DaVinci
+Resolve"; the skill is `video-resolve`.
 
-- **`resolve-export.py`** — a manifest's plan (not a `.cuts.json` sidecar; the
-  keep-list is 22.5 s short of the film on `claude-demo`, because bookends live
-  in the manifest) to `.otio` / `.edl` / FCP7 `.xml`, plus `.srt` from the same
-  `words.json` the caption builder reads, plus our `_why` notes and named
-  removals as timeline **markers**. `--list` prices it and prints what each
-  format drops.
-- **`resolve-import.py`** — the direction worth more: a human fine-trims in
-  Resolve free, exports OTIO/EDL/XML, and we render it with NVENC, the captions,
-  the labels, the redaction and the project record.
-- **`check-resolve.py`** — keep-list → timeline → keep-list, frame counts and
-  markers asserted per format, no Resolve and no encode, on `check-multicam.py`'s
-  pattern.
+What is still open, and it is the more valuable direction:
 
-Write `.otio` (plain JSON, stable schema) and EDL by hand so nothing new lands in
-`requirements.txt`; keep `opentimelineio` to the checker if it is wanted at all.
-The five traps the trial run already found — media `available_range` required by
-FCP7 XML, EDL's out-of-band frame rate and truncated reel names, the silently
-dropped speed ramp — are in §4 of the doc; do not rediscover them.
+- **`resolve-import.py`** — a human fine-trims in Resolve (free), exports
+  `.otio`, and we render it here with NVENC, the captions, the labels, the
+  redaction and the project record. Resolve becomes the front end for what a
+  person is better at, and the finishing stays where it is gated and recorded.
+  Start with `.otio` only (plain JSON, exact) and refuse EDL by name: an EDL
+  carries no media paths, so a keep-list built from one is a guess.
+- **Verify the export against a real Resolve.** Nothing here has opened one.
+  Five questions in `docs/davinci-resolve.md` §7 need a machine with Resolve
+  on it — chiefly whether OTIO import honours markers, relinks by path, and
+  what it does with a `LinearTimeWarp` (which is what decides whether
+  `screen-cut.py`'s speed ramps can travel at all).
+- **Speed ramps.** `screen-cut.py` produces 6x segments and the exporter does
+  not write them yet; the shape is a `LinearTimeWarp` on the clip, and it is
+  worth writing only once the question above is answered.
 
 ## 2. Make shorts predictable: the roadmap
 
