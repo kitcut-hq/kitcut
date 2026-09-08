@@ -48,6 +48,7 @@ import io
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 import _ytchapters as ch  # noqa: E402
+import _project  # noqa: E402
 
 
 def fetch_storyboard(vid, level, outdir):
@@ -183,7 +184,7 @@ def contact_sheet(images, labels, path, cols=4):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("video", help="video id")
-    ap.add_argument("--chapters", help="defaults to config/chapters/<id>.txt")
+    ap.add_argument("--chapters", help="defaults to projects/<id>/chapters.txt")
     ap.add_argument("--level", default="sb0", help="storyboard format")
     ap.add_argument("--tile", default="320x180", help="tile size of --level")
     ap.add_argument(
@@ -206,7 +207,19 @@ def main():
     args = ap.parse_args()
 
     vid = args.video
-    cpath = args.chapters or os.path.join(_env.ROOT, "config", "chapters", f"{vid}.txt")
+    # A video's chapters live with the rest of its metadata, in its project
+    # folder. config/chapters/ was the shared location before projects/
+    # existed and is still accepted, so an older checkout keeps working.
+    cpath = args.chapters
+    if not cpath:
+        for cand in (
+            os.path.join(_project.projects_dir(), vid, "chapters.txt"),
+            os.path.join(_env.ROOT, "config", "chapters", f"{vid}.txt"),
+        ):
+            if os.path.exists(cand):
+                cpath = cand
+                break
+        cpath = cpath or os.path.join(_project.projects_dir(), vid, "chapters.txt")
     if not os.path.exists(cpath):
         sys.exit(f"no chapters file at {cpath}")
     marks = ch.parse_marks(

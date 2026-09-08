@@ -85,7 +85,7 @@ twin) was measured off a news channel: a saturated slab in uppercase, built to
 be read over a talking head on a phone. Put it on a **screen recording** and it
 fights the UI the video is pointing at — the frame is already busy, mostly
 white, and full of what the viewer is supposed to be looking at.
-`config/presets/instafill.json` is the screencast answer: near-black slab at 12%
+`config/presets/dark-card.json` is the screencast answer: near-black slab at 12%
 transparency, sentence case (word shape is what makes a line readable at a
 glance; uppercase throws it away), narrower lines, and the brand mint `#13BA82`
 as the spotlight, so captions, a name label and an end card read as one channel.

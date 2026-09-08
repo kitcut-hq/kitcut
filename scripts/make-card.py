@@ -5,7 +5,7 @@ spec, a layout template and a brand.
 `image-overlay.py` will burn any PNG onto a film. This is the other half: where
 that PNG comes from when nobody has one. A card is described as data
 
-    {"template": "stacked-blocks", "brand": "instafill",
+    {"template": "stacked-blocks", "brand": "mint",
      "lines": [{"text": "INSTAFILL.AI", "style": "hero"}]}
 
 and this turns it into an HTML page and then a transparent PNG. Nothing about
@@ -48,7 +48,7 @@ ROOT = _overlay.ROOT
 
 TEMPLATE_DIR = "config/cards/templates"
 BRAND_DIR = "config/cards/brands"
-DEFAULT_BRAND = "instafill"
+DEFAULT_BRAND = "mint"
 
 
 # ---------------------------------------------------------------- templating

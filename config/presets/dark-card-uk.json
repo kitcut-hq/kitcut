@@ -95,7 +95,7 @@
   "source": "1108 words of unrehearsed Ukrainian speech -- the cut-remapped transcript of a 7:40 talking-head recording, scaled to 1280x720",
   "method": "python scripts/build-captions-ass.py --sweep, then the four candidate cells built and their wrap/orphan counters read",
   "sweep": {
-   "max_words=6, width=1080 (the English-tuned parent)": "219 cards, 37 wrapped, 33 orphans",
+   "max_words=6, width=1080 (dark-card.json, the English-tuned parent)": "219 cards, 37 wrapped, 33 orphans",
    "max_words=5, width=1080": "257 cards, 10 wrapped, 10 orphans",
    "max_words=4, width=1080": "304 cards, 1 wrapped, 1 orphan",
    "max_words=5, width=1296": "257 cards, 0 wrapped, 0 orphans",

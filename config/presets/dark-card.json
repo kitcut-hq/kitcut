@@ -1,5 +1,5 @@
 {
- "_comment": "Instafill.ai product captions, for a screen recording rather than a social short. Four deliberate departures from red-card.json, which was measured off somebody else's channel and reads as a news chyron: (1) the slab is near-black at 12% transparency instead of saturated red -- a screen demo is already a busy, mostly-white frame, and a red bar competes with the very UI the video is pointing at, while a dark one recedes behind it; (2) sentence case, not uppercase -- a tutorial that shouts is a tutorial nobody finishes, and mixed case carries word shape, which is what makes a line readable at a glance; (3) the spotlight is the brand mint #13BA82, the same token config/cards/brands/instafill.json and the lower third use, so captions, a name label and an end card on one film read as one channel; (4) narrower lines and fewer words per group, because the frame under them is content the viewer needs to see.",
+ "_comment": "Dark-slab product captions, for a screen recording rather than a social short. Four deliberate departures from red-card.json, which was measured off a news-style channel and reads as a chyron: (1) the slab is near-black at 12% transparency instead of saturated -- a screen demo is already a busy, mostly-white frame, and a coloured bar competes with the very UI the video is pointing at, while a dark one recedes behind it; (2) sentence case, not uppercase -- a tutorial that shouts is a tutorial nobody finishes, and mixed case carries word shape, which is what makes a line readable at a glance; (3) the spotlight is the same accent as config/cards/brands/mint.json and the lower third, so captions, a name label and an end card on one film read as one channel; (4) narrower lines and fewer words per group, because the frame under them is content the viewer needs to see. dark-card-uk.json is this preset widened for Cyrillic.",
  "canvas": {
   "play_res_x": 1920,
   "play_res_y": 1080
@@ -50,7 +50,7 @@
    "colour": "#FFFFFF"
   },
   "emphasis": {
-   "_comment": "The talk's main points, named per video in an --emphasis-file and marked for the whole life of their card. Amber rather than another mint: the mint is already the moving spotlight, so re-using it would make 'this is the point' and 'this is the word being said' the same signal. Against #0B0F14 at 30% this clears WCAG AA for large text, and against the white base text it reads as a second class of word rather than a louder one.",
+   "_comment": "The talk's main points, named per video in an --emphasis-file and marked for the whole life of their card. A DIFFERENT hue from states.active on purpose: the active colour is already the moving spotlight, so reusing it would make 'this is the point' and 'this is the word being said' the same signal and neither would read.",
    "colour": "#FFC53D"
   }
  },

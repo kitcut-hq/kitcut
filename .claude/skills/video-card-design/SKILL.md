@@ -32,7 +32,7 @@ wrong, it is the spec.
 ```json
 {
   "template": "stacked-blocks",
-  "brand": "instafill",
+  "brand": "mint",
   "lines": [
     {"style": "kicker", "text": "ВІДЕО ЗІБРАНЕ ТУЛІНГОМ"},
     {"style": "hero",   "text": "INSTAFILL<span class='em'>.AI</span>"},

@@ -1,5 +1,5 @@
 {
-  "_comment": "Instafill.ai. A brand is only these tokens -- copy this file, change the four colours and the two font paths, and every template draws that company's card instead. The mint is the same #13BA82 the lower-third accent uses, so a card, a label and a badge on one film read as one channel.",
+  "_comment": "A mint-accent brand on near-black ink. A brand is only these tokens -- copy this file, change the four colours and the two font paths, and every template draws that company's card instead. Keep one accent across cards, lower thirds and badges: that is what makes a film read as one channel rather than three.",
   "ink": "#050608",
   "paper": "#FFFFFF",
   "accent": "#13BA82",

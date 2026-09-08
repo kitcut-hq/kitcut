@@ -69,10 +69,11 @@ under it, and the same slab without the strip is just a white box.
 `layout.bottom_margin_px` stays the distance to the bottom of the **whole**
 graphic, rule included, so adding one does not silently lift every caption.
 
-Seven presets ship. Three are house styles: `red-card` (solid red info-card,
+Eight presets ship. Four are house styles: `red-card` (solid red info-card,
 yellow spotlight), `red-card-vertical` (the same re-authored for 9:16, used by
-the shorts pipeline) and `instafill` (near-black slab at 12% transparency,
-sentence case, mint spotlight). Four are **channel styles**, each measured off
+the shorts pipeline), `dark-card` (near-black slab at 12% transparency,
+sentence case, mint spotlight) and `dark-card-uk` (the same, widened for
+Cyrillic). Four are **channel styles**, each measured off
 that channel's own frames rather than invented — `eu-navy` (Europeiska Pravda:
 EU-flag blue, star-yellow spotlight), `bloomberg-tech` and
 `bloomberg-tech-vertical` (white banner, square corners, mint rule, amber
@@ -82,16 +83,16 @@ block naming the frames it came from and the numbers read off them; that block
 is the difference between a style and a guess. See **Deriving a channel's
 style** in the `video-shorts` skill for the procedure.
 
-`red-card` and `instafill` are the two ends of a real choice, and it is not a
+`red-card` and `dark-card` are the two ends of a real choice, and it is not a
 taste one. `red-card` was measured off a news channel: a saturated slab in
 uppercase, designed to be read on a phone at arm's length over a talking head.
 Put it on a **screen recording** and it competes with the product it is pointing
 at — the frame is already busy, mostly white, and full of the UI the viewer is
-supposed to be looking at. `instafill` is the screencast answer: the slab
+supposed to be looking at. `dark-card` is the screencast answer: the slab
 recedes, the type is sentence case rather than uppercase (word shape is what
 makes a line readable at a glance, and uppercase throws it away), the lines are
-narrower, and the spotlight is the brand mint `#13BA82` — the same token
-`config/cards/brands/instafill.json` and the lower third use, so captions, a
+narrower, and the spotlight is the accent mint `#13BA82` — the same token
+`config/cards/brands/mint.json` and the lower third use, so captions, a
 name label and an end card on one film read as one channel rather than three.
 
 Its `_geometry` block records what the placement was fitted around: a webcam
@@ -1482,7 +1483,7 @@ captioned without paying for a second transcription:
 python scripts/tighten-cut.py --manifest projects/<id>/tighten.json
 cp projects/<id>/outputs/<id>-tight.words.json projects/<id>/transcripts/<id>-tight.words.json
 python scripts/run-captions.py --input projects/<id>/outputs/<id>-tight.mp4 `
-    --id <id>-tight --project <id> --style config/presets/instafill.json
+    --id <id>-tight --project <id> --style config/presets/dark-card.json
 ```
 
 `run-captions.py` is resumable and skips a stage whose artifact exists, so the
@@ -2340,7 +2341,7 @@ template makes the same brand another kind of card.
 ```json
 {
   "template": "stacked-blocks",
-  "brand": "instafill",
+  "brand": "mint",
   "lines": [
     {"style": "kicker", "text": "ВІДЕО ЗІБРАНЕ ТУЛІНГОМ"},
     {"style": "hero",   "text": "INSTAFILL<span class='em'>.AI</span>"},
@@ -2501,9 +2502,9 @@ description:
 ```powershell
 python scripts/transcribe-words.py audio/<id>.m4a --out transcripts/<id>.words.json --language en
 python scripts/transcript-outline.py transcripts/<id>.words.json --outline   # read, pick boundaries
-# write config/chapters/<id>.txt as "MM:SS Title" lines, then:
-python scripts/yt-set-chapters.py <id> --chapters config/chapters/<id>.txt --dry-run
-python scripts/yt-set-chapters.py <id> --chapters config/chapters/<id>.txt
+# write projects/<id>/chapters.txt as "MM:SS Title" lines, then:
+python scripts/yt-set-chapters.py <id> --chapters projects/<id>/chapters.txt --dry-run
+python scripts/yt-set-chapters.py <id> --chapters projects/<id>/chapters.txt
 ```
 
 Picking the boundaries is editorial and stays a human/model judgement — the
@@ -3091,7 +3092,6 @@ absolute path written into a script, a skill or these docs.
 | `scripts/project-scan.py` | bootstrap and doctor for project files |
 | `projects/<id>/` | one video: metadata + manifests committed, content gitignored — see `## Projects` |
 | `config/presets/` | all visual styling |
-| `config/chapters/` | legacy chapter lists for already-published channel videos; new projects keep `chapters.txt` in their folder |
 | `config/vocab/` | hotword lists — the brand names and acronyms an ASR model has never seen |
 | `config/labels/` | the lower-third name label's styling |
 | `config/handles/` | handle-badge styling and motion |

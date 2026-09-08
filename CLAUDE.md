@@ -382,7 +382,7 @@ work as they do in `screencast-cut.py`, inside the same pass.
 
 **Brand names go in before the transcription, not after.** One demo gave
 "Instafili"/"Instafil"/"Instafield" for the same product. `transcribe-words.py
---hotwords-file config/vocab/instafill.txt` fixes it at the source; patching
+--hotwords-file config/vocab/product.local.txt` fixes it at the source; patching
 afterwards leaves the timings attached to words that were never decoded.
 
 **6. Publish** — upload it, then give it chapters.
@@ -721,7 +721,6 @@ which cannot encode the glyphs at all.
 | `config/cards/` | card design: `templates/` the shape, `brands/` the look |
 | `config/resolve/` | interchange export defaults: which formats, the SRT grouping, the marker colours |
 | `config/handles/` | the animated handle badge |
-| `config/chapters/` | legacy chapter lists for already-published channel videos; new projects keep `chapters.txt` in their folder |
 | `sources/` `audio/` `transcripts/` `outputs/` `temp/` | legacy shared content dirs, gitignored; new work lives under `projects/` |
 | `docs/product-strategy.md` | how this repo becomes a product: the audience, the licensed-plugin model, install/update/routing mechanics, the learning flywheel. Read it before designing anything customer-facing |
 | `docs/market-shorts-2026.md` | what the AI shorts/clipping market actually looks like, researched 2026-09-01 with sources: who died, who is healthy, the GTM playbooks and what each produces, who pays, and where local-first does and does not matter. Findings only, no recommendation — read it before re-arguing the shorts question from priors |

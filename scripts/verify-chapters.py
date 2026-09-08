@@ -19,8 +19,8 @@ printed as context and nothing more.
 The one genuine error it does enforce is a mark past the end of the speech.
 
 Invoke as:
-  python scripts/verify-chapters.py config/chapters/<id>.txt
-  python scripts/verify-chapters.py "config/chapters/*.txt"
+  python scripts/verify-chapters.py projects/<id>/chapters.txt
+  python scripts/verify-chapters.py "projects/*/chapters.txt"
 """
 
 import sys

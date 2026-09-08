@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Put a chapter list into a YouTube video's description.
 
-Reads a chapters file (one `MM:SS Title` per line, `config/chapters/<id>.txt`),
+Reads a chapters file (one `MM:SS Title` per line, `projects/<id>/chapters.txt`),
 checks it, then patches the video's description through the Data API --
 replacing a previous chapter block if one exists, appending otherwise. The rest
 of the description is preserved byte for byte; `videos.update` replaces the
@@ -29,7 +29,7 @@ compares the two up front and says so.
      as a fallback, so deleting that directory no longer costs the grant.
 
 Invoke as:
-  python scripts/yt-set-chapters.py <video-id-or-url> --chapters config/chapters/<id>.txt
+  python scripts/yt-set-chapters.py <video-id-or-url> --chapters projects/<id>/chapters.txt
   python scripts/yt-set-chapters.py <video-id-or-url> --chapters ... --dry-run
   python scripts/yt-set-chapters.py --video=-qKcpLSk0iU --chapters ...   # id starting with '-'
 """
@@ -223,7 +223,7 @@ def main():
     ap.add_argument("video", nargs="?", help="video id or any YouTube URL form")
     ap.add_argument("--video", dest="video_opt", help="same thing, for ids that start with '-'")
     ap.add_argument(
-        "--chapters", required=True, help="config/chapters/<id>.txt, one 'MM:SS Title' per line"
+        "--chapters", required=True, help="projects/<id>/chapters.txt, one 'MM:SS Title' per line"
     )
     ap.add_argument(
         "--dry-run", action="store_true", help="fetch and show the resulting description; no write"
