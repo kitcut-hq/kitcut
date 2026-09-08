@@ -15,7 +15,7 @@ or a forum is marked with its source, and what could not be tested on this box
 |---|---|
 | Hand a kitcut edit to Resolve as an editable timeline? | **Yes**, through interchange files — OTIO, EDL, FCP7 XML — plus SRT for captions. Free edition included. Proven here on a real committed keep-list (§4). |
 | Read an edit back out of Resolve and render it with our tooling? | **Yes**, same formats in reverse. Nothing new to learn; the parse is the write in reverse. |
-| Write Resolve's own project files — `.drp`, `.drt`, the disk database? | **No.** Undocumented ZIP-of-XML with proprietary binary blobs inside. There is no supported writer and no reason to become one (§2). |
+| Write Resolve's own project files — `.drp`, `.drt`, the disk database? | **Edit yes, author no.** A `.drp` is a plain ZIP of UTF-8 XML: a rescue-class edit (delete a payload, retarget a path, rename) is mechanical and proven. Building a *new* timeline in it is not, because the parts that carry an edit are hex-encoded blobs with no published schema (§2). |
 | Drive the running application (build timelines, apply blurs, render)? | **Studio only.** External scripting is a paid-edition feature, and 21.1 (released 2026-09-07) narrowed it further while adding a native MCP server — also Studio (§3.3). |
 
 The load-bearing sentence: **we exchange decisions with Resolve, we do not edit
@@ -29,8 +29,8 @@ can write in a few hundred lines.
 
 | file | what it is | can we write it? |
 |---|---|---|
-| `.drp` | DaVinci Resolve Project. A ZIP container (`50 4b 03 04`) holding `project.xml`, per-media-pool XML and `Gallery.xml`; **all clip effects are a proprietary binary blob** in `<EffectFiltersBA>`, and the XML uses Resolve's `::` namespace convention | **No.** Reverse-engineered by third parties for *rescue* (`koosoli/DaVinci-Resolve-DRP-Toolkit`, `hfiguiere/drp-extractor`), not for authoring. Corruption of the effect blob is a documented crash cause |
-| `.drt` | one timeline out of a project; the same ZIP-of-XML minus `Gallery.xml` | **No** — same format, same reason. But Resolve **imports** it, so it is a target if the format is ever documented |
+| `.drp` | DaVinci Resolve Project. A **plain ZIP** (`50 4b 03 04`) of UTF-8 XML: `project.xml`, `Gallery.xml`, `SeqContainer/<uuid>.xml` (one per timeline) and `MediaPool/**/MpFolder.xml`. Tags carry Resolve's `Ns::Tag` convention (`ListMgt::Sm2TiVideoClip`), clips are addressed by a `DbId` attribute, and the payloads — `EffectFiltersBA`, `CompositionBA`, `FieldsBlob` — are **hex text wrapping an undocumented structure** | **For surgical repair, yes** (§2) — that is what `koosoli/DaVinci-Resolve-DRP-Toolkit` and `hfiguiere/drp-extractor` do. **For authoring our edits, no** |
+| `.drt` | one timeline out of a project; the same ZIP-of-XML minus `Gallery.xml` | Same answer, same reason. Resolve **imports** it, so it would be the authoring target if the blob schema were ever published — and OTIO makes that pointless |
 | disk database | a folder (`Resolve Disk Database/Resolve Projects/Users/guest/Projects/...`) with a SQLite `project.db` per project | **No.** Blackmagic's own guidance is to back it up through the app's database utility, never by hand, and never to touch it while Resolve is running |
 | `.drx`, `.drfx`, `.setting`, `.comp`, `.dctl` | grade, effect bundle, Fusion macro/composition, colour transform | Not researched in depth. `.dctl` is plain text and `.comp`/`.setting` are Lua-ish tables, so both are writable in principle — relevant only if we ever want to ship a *look* rather than an *edit* |
 | `.otio` `.edl` `.xml` `.fcpxml` `.aaf` `.adl` | interchange, none of them Resolve-proprietary | **Yes — this is the door.** Resolve imports all of these (Media Pool → Timelines → Import, or File → Import) |
@@ -41,22 +41,72 @@ have a Python implementation we can lean on.
 
 ---
 
-## 2. Why writing `.drp` is the wrong target even if we cracked it
+## 2. Inside a `.drp`: what is text, what is a blob, and what that permits
 
-Three reasons, in order of how much they cost to ignore:
+Read off the two open-source parsers' own code, not off a blog. `.drp` is opened
+with `zipfile.ZipFile(path).extractall()` and written back with a plain
+`ZIP_DEFLATED` re-zip of the edited tree — **no signature, no manifest, no
+checksum anyone has hit**. Inside:
 
-1. **The interesting half is binary.** Our edits are not just cuts — they are a
-   PiP composite, a crop window, a blur that follows a moving field, a karaoke
-   caption. In a `.drp` every one of those lives inside `<EffectFiltersBA>`, the
-   blob nobody has published a schema for.
-2. **It breaks on every release.** A format with no public schema is a format
-   Blackmagic re-shapes whenever it likes; a project file we wrote for 21.1
-   is an unbounded liability against 21.2.
+```
+project.xml                     project-level settings
+Gallery.xml                     stills (absent from a .drt)
+SeqContainer/<uuid>.xml         one file per timeline: tracks, clips, effects
+MediaPool/**/MpFolder.xml       bins; Sm2Timeline records name each sequence
+```
+
+The XML is UTF-8 text a text editor can open, with two quirks: tag names carry
+Resolve's `Ns::Tag` convention (`<ListMgt::Sm2TiVideoClip DbId="...">`), which is
+not legal XML namespacing and makes stock parsers choke until the `::` is
+substituted out; and objects reference each other by `DbId`, so the file is a
+graph, not a tree.
+
+**Field by field, this is the answer to "binary or editable":**
+
+| field | form | what you can do with it |
+|---|---|---|
+| `Name`, `MediaFilePath`, `DbId`, track/clip structure | **plain text in the XML** | read, edit, retarget, rename. A relink is a search-and-replace |
+| `EffectFiltersBA` | **hex text**, an opaque serialised Edit/Color-page effect stack (size is `len(hex)//2`) | delete it (`<EffectFiltersBA/>`), copy it verbatim between clips, diff it by hash. Not compose it |
+| `CompositionBA` | same, for the clip's Fusion composition | same |
+| `FieldsBlob` | hex text again, but partly **UTF-16LE strings** — the timeline-UUID mapping is recovered by decoding it and regexing for a UUID | read strings out of it. Writing into it means honouring length prefixes in a format nobody has published |
+
+So the honest phrasing is **not "binary, closed"**. It is: *the container and the
+skeleton are open text; the parts that carry an edit's meaning are hex-wrapped
+structures with no schema.* Everything the community actually does with a `.drp`
+is therefore **subtractive or substitutive**:
+
+- **Rescue** — a project that crashes Resolve on open usually has one oversized
+  or corrupt effect payload. Find the clip by `DbId`, replace its
+  `<EffectFiltersBA>…</EffectFiltersBA>` with `<EffectFiltersBA/>`, re-zip. The
+  clip loses its effects; the project opens. This is a documented, working fix,
+  and it is irreversible for that clip.
+- **Downgrade** — strip Studio-only metadata (Dolby Vision, HDR10+) so the free
+  edition will open a Studio project. Note the toolkit's own `downgrade.py`
+  describes itself as "a working template" that strips `DolbyVision` tags —
+  thinner than its README suggests. Third-party `.drp` tooling is early; measure
+  it before trusting it.
+- **Relink / rename / diff** — plain-text fields, plain-text edits.
+
+**And what it does not permit, which is what we would want it for.** To put a
+kitcut cut into a `.drp` we would have to *synthesise* clip records with valid
+`DbId`s wired into the media-pool graph, and any effect we care about — the PiP
+transform, a blur, a caption — exists only as a blob we cannot write. So the
+verdict from §1 stands, now for a stated reason rather than as a slogan:
+
+1. **The interesting half is a blob.** Deleting one is easy; authoring one is
+   the whole problem.
+2. **Nothing pins the format.** No public schema means Blackmagic may reshape it
+   in 21.2, and a project file we generated is then a liability we own.
 3. **There is nothing to gain.** Everything a `.drp` would carry that an OTIO
-   carries too — clips, tracks, timings, markers, media references — is already
-   in the OTIO. What it carries *extra* is exactly the part we cannot write.
+   carries too — clips, tracks, timings, markers, media references — is in the
+   OTIO already, and Resolve imports that on the supported path, in the free
+   edition.
 
----
+If we ever *do* want `.drp` surgery — a client hands us a crashing project, or a
+hundred projects need their media relinked — that is a small, honest job: unzip,
+regex or ElementTree the text, re-zip, and never touch a blob's insides. It is a
+different job from editing video, and it should stay a separate script if it is
+ever written.
 
 ## 3. The three doors that are open
 
@@ -264,6 +314,6 @@ re-costing once somebody here actually has 21.1 Studio, and worth nothing before
 - [Newsshooter: DaVinci Resolve 21.1](https://www.newsshooter.com/2026/09/07/blackmagic-design-davinci-resolve-21-1/) and [RedShark: 21.1 new features](https://www.redsharknews.com/davinci-resolve-21.1-new-features-release) — native MCP server, "advanced scripting now requires Studio"
 - [Blackmagic Design: DaVinci Resolve 21 announcement](https://www.blackmagicdesign.com/media/release/20260414-01)
 - [Resolve 18.6 manual: Import AAF, EDL, XML](https://www.steakunderwater.com/VFXPedia/__man/Resolve18-6/DaVinciResolve18_Manual_files/part1399.htm), [Exporting to OTIO](https://www.steakunderwater.com/VFXPedia/__man/Resolve18-6/DaVinciResolve18_Manual_files/part4004.htm), [Exporting an EDL](https://www.steakunderwater.com/VFXPedia/__man/Resolve18-6/DaVinciResolve18_Manual_files/part4007.htm), [Importing Subtitles and Captions](https://www.steakunderwater.com/VFXPedia/__man/Resolve18-6/DaVinciResolve18_Manual_files/part1280.htm)
-- [DRP toolkit (ZIP container, `EffectFiltersBA` binary blob)](https://github.com/koosoli/DaVinci-Resolve-DRP-Toolkit), [drp-extractor](https://github.com/hfiguiere/drp-extractor), [fileformat.com on .drp](https://docs.fileformat.com/video/drp/)
+- The `.drp` internals in §2 were read off source, not off a blog: [`core/engine.py`](https://github.com/koosoli/DaVinci-Resolve-DRP-Toolkit/blob/main/drp_toolkit/core/engine.py) (zip extract/re-zip, `SeqContainer`/`MediaPool` layout, `FieldsBlob` hex → UTF-16LE), [`core/parser.py`](https://github.com/koosoli/DaVinci-Resolve-DRP-Toolkit/blob/main/drp_toolkit/core/parser.py) (the `::` substitution, `strip_clip_effects_text`), [`core/models.py`](https://github.com/koosoli/DaVinci-Resolve-DRP-Toolkit/blob/main/drp_toolkit/core/models.py) (`DRPEffect.from_hex`, `size = len(hex)//2`) and [`plugins/downgrade.py`](https://github.com/koosoli/DaVinci-Resolve-DRP-Toolkit/blob/main/drp_toolkit/plugins/downgrade.py) ("a working template"), read 2026-09-08; plus [drp-extractor](https://github.com/hfiguiere/drp-extractor) and [fileformat.com on .drp](https://docs.fileformat.com/video/drp/)
 - [The Post Flow: where Resolve saves projects (disk database, `project.db`)](https://thepostflow.com/post-production/post-production-workflows/resolve-project-file-locations/)
 - [OpenTimelineIO](https://github.com/AcademySoftwareFoundation/OpenTimelineIO) — 0.18.1, adapters split into `otio-cmx3600-adapter` / `otio-fcp-adapter`
