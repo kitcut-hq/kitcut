@@ -106,10 +106,9 @@ Say what is true rather than promising the app. Two facts decide every answer:
   subtitles, but not ASS — and ASS is what carries the per-word spotlight and
   the emphasis colour. Resolve draws its own subtitle in its own style.
 
-Handing the cut over as an editable timeline (OTIO/EDL/FCPXML + SRT) is real and
-works in the free edition, but it is **separate, in-flight work** — check
-`docs/todo.md` and the open branches before writing anything new for it, so a
-third implementation does not appear.
+Handing the cut over as an editable timeline (OTIO/EDL/FCP7 XML + SRT) is real,
+works in the free edition, and already exists: `resolve-export.py`, with the
+`video-resolve` skill. Use that — do not write a second exporter.
 
 ## Before you call it done
 

@@ -1555,8 +1555,9 @@ the unconverted folder whose `.tmp` probes clean — the folder-name ordering,
 and the emphasis matcher's two rules. Run it after touching `zoom-import.py`
 or the emphasis half of `build-captions-ass.py`.
 
-Handing the resulting cut to DaVinci Resolve as an editable timeline is a
-separate piece of work, in flight on its own branch; see `docs/todo.md`.
+Handing the resulting cut to DaVinci Resolve as an editable timeline is
+`resolve-export.py` — see "Handing an edit to DaVinci Resolve" below, and
+`docs/davinci-resolve.md` for what Resolve's own files are and are not.
 
 ## Cutting between cameras, and proving the cut is right
 
@@ -2402,6 +2403,95 @@ the worked example.
 > argument to the running instance, opens a window and exits 0. `--check` reads
 > the version-numbered folder Chromium installs beside its exe instead, so a
 > free check stays free.
+
+## Handing an edit to DaVinci Resolve
+
+A finished render is a flat clip: somebody who wants to *change* the edit needs
+the decisions, not the pixels. `resolve-export.py` writes those decisions as an
+interchange file Resolve opens — in the **free edition**, with no scripting
+permission and no licence.
+
+```powershell
+# what would be exported, what each format drops, and nothing written
+python scripts/resolve-export.py --manifest projects/<id>/tighten.json --list
+
+# the timeline, the EDL and the subtitles
+python scripts/resolve-export.py --manifest projects/<id>/tighten.json --format all
+
+# one format, somewhere else
+python scripts/resolve-export.py --manifest projects/<id>/screencast.json `
+    --format otio --outdir projects/<id>/handover
+```
+
+In Resolve: Media Pool right-click → Timelines → Import → OpenTimelineIO (or
+AAF/EDL/XML), and File → Import → Subtitle for the `.srt`.
+
+The input is the keep-list the cutter already writes — `<manifest>.cuts.json`
+from `tighten-cut.py --plan`, `<id>.cuts.json` from `screencast-cut.py` — plus
+the manifest, for the media paths, the bookends and the windows that become
+markers. Both keep-list dialects are read; nothing else needs to know which
+cutter ran.
+
+### What travels, and what does not
+
+| | |
+|---|---|
+| `otio` | leads. Two video tracks, an audio track, per-clip media paths, markers with their notes. Plain JSON against a published schema, written by hand so nothing new lands in `requirements.txt` |
+| `edl` | the universal fallback. One video track, no paths (Resolve conforms by reel and timecode), no markers |
+| `fcpxml` | FCP7 XML. Carries paths like `otio`, but **every media reference needs a duration**, so it is the one format that cannot be written without reading the sources — it refuses by name rather than writing a file Resolve rejects |
+| `srt` | the words, remapped onto film time from the same transcript the caption builder reads |
+
+**Cut decisions travel; pixels do not.** The PiP transform, the crop window, the
+caption card, the redaction blurs and the loudnorm are renders, and a render is
+what Resolve would import as a flat clip anyway. `--list` prints that list
+rather than hiding it — run it before promising anybody an editable file.
+
+The timeline is laid out as the film reads: **V1 is the picture** (screen where
+the cut says `pip`, camera where it says `full`), **V2 is what sits over it**
+(the PiP, or a bookend's b-roll), **A1 is the sound**. So V1 alone is already a
+watchable rough cut, and the only thing missing from V2 is the transform.
+
+Every editorial decision the repo already records rides along as a **marker**:
+each named removal with the reason the manifest gave for it, each name label,
+each image overlay at the place it was burned. The reasoning arrives with the
+cut instead of staying behind in a manifest nobody else can read.
+
+### Five traps, four of them measured
+
+- **A keep-list is not the film.** On `claude-demo` the keeps run 427.867s
+  against a 450.367s render: the 22.5s difference is the opening bookend, which
+  lives in the manifest. The exporter builds bookends as clips and **refuses**
+  when the timeline still under-runs the keep-list's own stated runtime;
+  `--skip-bookends` exports the body alone and says so.
+- **An EDL does not state its frame rate.** It travels out of band, so the
+  import dialog has to be told. At 29.97 and 59.94 the timecode must also be
+  **drop-frame** (`;` and `FCM: DROP FRAME`) or it drifts ~3.6s an hour.
+- **CMX3600 reel names are 8 characters.** `IMG_2695.MOV` becomes `IMG2695`.
+  That is the format, not a bug — it is why `otio` leads.
+- **Resolve has no ASS importer.** It reads SRT, VTT, TTML and XML, and draws
+  its own subtitle: the card, the outline and the per-word highlight do not
+  travel. The SRT grouping in `config/resolve/export.json` is therefore tuned
+  for reading, not for burning — a 3-word karaoke card is right burned in and
+  unreadable as a Resolve subtitle.
+- **Speed changes are half-portable.** OTIO carries a `LinearTimeWarp`; the
+  FCP7 XML adapter drops it silently (measured). Whether Resolve honours the
+  OTIO one is untested here — nothing in this repo has opened Resolve.
+
+Styling and defaults are `config/resolve/export.json`: which formats `--format
+all` writes, the SRT grouping, the marker colours. Per-video decisions stay in
+the project's own manifest, as everywhere else.
+
+After touching `resolve-export.py`, run `python scripts/check-resolve.py` — 56
+checks over the film-time model, the bookend guard, the OTIO schema, EDL record
+continuity and drop-frame timecode, the FCP7 XML refusal and the SRT remap. No
+Resolve, no media, no encode, about a second.
+
+**What is deliberately not built:** writing Resolve's own project files. A
+`.drp` is a plain ZIP of UTF-8 XML whose clip effects are hex-wrapped structures
+with no published schema — editable enough to *rescue* a crashing project, not
+enough to author one. The evidence, the field-by-field breakdown and the
+Studio-only scripting/MCP situation are in
+[`docs/davinci-resolve.md`](davinci-resolve.md).
 
 ## Chapter markers on a published video
 

@@ -9,7 +9,33 @@ that has not happened yet.
 
 ---
 
-## 1. Make shorts predictable: the roadmap
+## 1. Take an edit BACK from DaVinci Resolve
+
+**Half of this landed 2026-09-08.** `resolve-export.py` writes the cut as
+`.otio` / `.edl` / FCP7 `.xml` / `.srt` with the decisions as markers,
+`check-resolve.py` pins it (56 checks, no Resolve, no media), and
+`config/resolve/export.json` carries the defaults. The research is
+`docs/davinci-resolve.md`; the reference section is "Handing an edit to DaVinci
+Resolve"; the skill is `video-resolve`.
+
+What is still open, and it is the more valuable direction:
+
+- **`resolve-import.py`** — a human fine-trims in Resolve (free), exports
+  `.otio`, and we render it here with NVENC, the captions, the labels, the
+  redaction and the project record. Resolve becomes the front end for what a
+  person is better at, and the finishing stays where it is gated and recorded.
+  Start with `.otio` only (plain JSON, exact) and refuse EDL by name: an EDL
+  carries no media paths, so a keep-list built from one is a guess.
+- **Verify the export against a real Resolve.** Nothing here has opened one.
+  Five questions in `docs/davinci-resolve.md` §7 need a machine with Resolve
+  on it — chiefly whether OTIO import honours markers, relinks by path, and
+  what it does with a `LinearTimeWarp` (which is what decides whether
+  `screen-cut.py`'s speed ramps can travel at all).
+- **Speed ramps.** `screen-cut.py` produces 6x segments and the exporter does
+  not write them yet; the shape is a `LinearTimeWarp` on the clip, and it is
+  worth writing only once the question above is answered.
+
+## 2. Make shorts predictable: the roadmap
 
 **The diagnosis, from the 2026-09-03 session** (four shorts, two channels,
 every defect the user or a late check caught): each failure was either a
@@ -92,7 +118,7 @@ Sequencing: 1e first (it protects everything else while it is built), then
 1f/1g/1h as they land. Each obeys the house rules: free mode, README section,
 skill update, `check-script.py --changed` clean.
 
-## 2. Vertical presets sit inside the YouTube Shorts UI
+## 3. Vertical presets sit inside the YouTube Shorts UI
 
 `config/presets/red-card-vertical.json` uses `bottom_margin_px: 170`, which
 scales to **302 px** from the bottom of a 1080x1920 frame. The Shorts UI (title,
@@ -107,7 +133,7 @@ silently — every already-rendered short that used it goes STALE — so this wa
 a deliberate pass with `project-scan.py --all --check` and a journal note per
 project, not a one-line edit.
 
-## 3. `_gpulock` reports the wrong hold time
+## 4. `_gpulock` reports the wrong hold time
 
 `acquire()` builds the lock record — including `started_epoch` — **before** the
 retry loop, so a run that queued for 20 minutes and then took the card reports
@@ -119,7 +145,7 @@ Harmless for the 6 h `MAX_AGE_S` staleness backstop, but `gpu-lock.py` is the
 thing you read when a run is wedged, and it is currently lying to you in exactly
 that situation. Fix: stamp `started_epoch` at the moment `_write_new` succeeds.
 
-## 4. Carry the channel's own logo bug into the cut
+## 5. Carry the channel's own logo bug into the cut
 
 Lenny's shorts carry their campfire logo top-left and the sponsor bug top-right,
 both burned into the 1920x1080 source at x 25..145 and x 1750..1900. No 9:16
@@ -132,45 +158,34 @@ ever shows it composited. Worth doing properly (key it where it sits on the flat
 grey column, verify the alpha the way `html-to-image.py` does) rather than
 shipping a grey box behind a logo.
 
-## 5. One Resolve handoff, not two
+## 6. The Resolve live-API branch: decided, kept, not merged
 
-Two sessions built toward the same thing at once. On
-`claude/davinci-editor-file-compat-60sd57` there is `resolve-export.py` plus
-`docs/davinci-resolve.md`, which researched what Resolve's files actually are
-(`.drp` is a ZIP of XML whose interesting half is an undocumented hex blob) and
-concluded, correctly, that **interchange is the door**: OTIO leads, EDL is the
-universal fallback, FCP7 XML carries paths, SRT carries the words. On
-`claude/resolve-live-api` there is `_resolve.py` + `resolve-edit.py`, which
-drives the running application through `fusionscript` and falls back to writing
-FCPXML.
+Two sessions built toward the same thing at once. **Resolved in favour of
+interchange**, which is what `resolve-export.py` and `docs/davinci-resolve.md`
+above are: OTIO leads, EDL is the universal fallback, FCP7 XML carries paths,
+SRT carries the words, and all of it works in the **free** edition.
 
-**Reconcile before either lands on main.** The export branch is the better
-foundation and should be the one that merges:
+The other answer is on `claude/resolve-live-api`: `_resolve.py` +
+`resolve-edit.py`, which drive the running application through `fusionscript`
+and fall back to FCPXML. It is **not merged and should not be**, for a measured
+reason rather than a stylistic one: **external scripting is Studio-only.**
+Resolve 21.1's notes say "Advanced scripting now requires DaVinci Resolve
+Studio", and on the free 21.1, `scriptapp("Resolve")` returns `None` from both
+the project venv and Blackmagic's bundled `ResolvePython`. A live mode nobody on
+the free edition can reach is a maintenance cost with no user, and the 21.1 MCP
+server sits behind the same licence.
 
-- It leads with **OTIO**, which loses the least (clips, tracks, timing, markers,
-  metadata). The live branch writes FCPXML only.
-- It carries **markers** from `name_labels` / `image_overlays`, and **refuses**
-  when the keep-list alone is not the film — on `claude-demo` that gap is 22.5 s
-  of opening bookend, which would otherwise be a surprise inside Resolve.
-- It states what each format **drops** in `--list`, which is the honest report
-  to run before promising anybody an editable file.
+Two things on that branch are worth taking **if a Studio machine ever justifies
+the live API**, and both are easy to lose by rewriting from Blackmagic's docs:
 
-What the live branch has that is worth salvaging is narrow and mostly negative:
+- It reaches the API **without setting `PYTHONPATH`**. The vendor README tells
+  you to export it; CLAUDE.md documents what that variable cost this repo. The
+  `Modules/` shim only loads `fusionscript` from a known file, so `_resolve.py`
+  loads that extension directly by path. Any future live-API code must keep this.
+- `why_not_connected()` separates "not installed", "not running" and "refusing",
+  because `scriptapp()` returns the same `None` for all three — and names the
+  edition, so a free-edition operator is not sent hunting for a Preferences
+  toggle their build does not have. That mistake was made and corrected here.
 
-- `_resolve.py` reaches the API **without setting PYTHONPATH**, by loading
-  `fusionscript` from its path. Blackmagic's own README tells you to export that
-  variable; this repo has a docstring about what that cost. If any live-API code
-  ever lands, it must keep this property.
-- `why_not_connected()` distinguishes "not installed", "not running" and
-  "refusing", because `scriptapp()` returns the same `None` for all three.
-
-And the reason the live half should probably **not** land at all: **external
-scripting is Studio-only.** Resolve 21.1's release notes say "Advanced scripting
-now requires DaVinci Resolve Studio", and measured on the free 21.1 here,
-`scriptapp("Resolve")` returns `None` from both our venv and the bundled
-`ResolvePython`. A LIVE mode nobody on the free edition can reach is a
-maintenance cost with no user. The 21.1 MCP server is behind the same licence.
-
-Decide it deliberately: merge the export branch, take the PYTHONPATH-free
-loader and the three-way diagnosis if a Studio machine ever justifies them, and
-delete the rest rather than leaving two half-answers in the tree.
+Do not open a third implementation. If the live API is ever wanted, start from
+that branch.

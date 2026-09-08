@@ -76,6 +76,17 @@ afterwards against what was asked for. That applies to all of it.
 - **YouTube upload**, confirmed on the right channel, unlisted by default.
 - **Chapters from the transcript**, plus an audit of which videos lack them.
 
+### Handover to another editor
+- **Give the edit away, not just the file**: the cut exports as an
+  OpenTimelineIO timeline, an EDL or FCP7 XML that **DaVinci Resolve opens in
+  its free edition** — two video tracks, the audio, the media paths, plus an
+  SRT of the words.
+- **The reasoning travels with it**: every removal, name label and end card
+  arrives as a marker carrying the note that explains it.
+- **It says what it cannot carry** before you promise anyone an editable file —
+  the composite, the crop and the caption look are pixels, and pixels stay in
+  the render.
+
 ### Memory
 - **Every render has a record**: what is on it, which setting controls it,
   where it went, and a journal of why.

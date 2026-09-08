@@ -40,6 +40,11 @@ frame arithmetic a render would otherwise have to find for you.
 `check-encode.py` is the third: it proves the ffmpeg keys each encoder is
 handed are keys that encoder takes, on colour bars, in about ten seconds.
 
+`check-resolve.py` is the fourth: it proves the DaVinci Resolve interchange
+writers — the film-time model, the bookend guard, the OTIO schema, drop-frame
+timecode — against keep-lists built in memory, with no Resolve, no media and
+no encode.
+
 After writing or changing **any** script, run
 `python scripts/check-script.py --changed` — it enforces the conventions
 (_env bootstrap, docstring, free mode, `_project.record()` on deliverables,
@@ -627,8 +632,16 @@ After touching `zoom-import.py` or the emphasis half of
 rules against the shapes real recordings have, the folder-name ordering and the
 emphasis matcher; no GPU, no files.
 
-**Handing an edit to DaVinci Resolve is a separate, in-flight piece of work**
-and deliberately not here yet. See `docs/todo.md`.
+**To hand the cut to DaVinci Resolve**, `resolve-export.py` writes it as an
+OTIO/EDL/FCP7 XML timeline plus an SRT — interchange, which works in the **free**
+edition. Do not reach for the scripting API instead: it is Studio-only (21.1's
+notes: "Advanced scripting now requires DaVinci Resolve Studio"), and measured
+on the free 21.1 here `scriptapp("Resolve")` returns `None` from both this venv
+and Blackmagic's own bundled interpreter. The caption LOOK does not travel
+either — Resolve imports SRT/VTT/TTML/XML subtitles and not ASS, so the per-word
+spotlight and the emphasis colour stay with the burn-in pass.
+`docs/davinci-resolve.md` is the research; `docs/todo.md` #6 records the
+live-API branch and what is worth salvaging from it.
 
 ## Projects: the memory that outlives the session
 
@@ -696,6 +709,7 @@ which cannot encode the glyphs at all.
 | `scripts/zoom-import.py` | Zoom local recordings -> a project; `--join` puts a talk recorded in parts on one clock |
 | `scripts/check-zoom.py` | the Zoom/emphasis self-test: folder rules, part ordering, phrase matching |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
+| `scripts/resolve-export.py` | the cut as an OTIO/EDL/FCP7 XML timeline plus an SRT, for DaVinci Resolve (free edition); `check-resolve.py` is its test, `docs/davinci-resolve.md` the research behind it |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
 | `scripts/screencast-pipeline.py` | the silent-screencast job as one cached, checkpointed command; the stage scripts it drives are listed under pipeline 7 |
 | `docs/retro-books-giveaway.md` | where six hours went on the first silent-screencast edit, and the rule that now prevents each loss |
@@ -705,11 +719,13 @@ which cannot encode the glyphs at all.
 | `config/labels/` | the lower-third name label |
 | `config/overlays/` | image-overlay animation, layout and background treatment |
 | `config/cards/` | card design: `templates/` the shape, `brands/` the look |
+| `config/resolve/` | interchange export defaults: which formats, the SRT grouping, the marker colours |
 | `config/handles/` | the animated handle badge |
 | `config/chapters/` | legacy chapter lists for already-published channel videos; new projects keep `chapters.txt` in their folder |
 | `sources/` `audio/` `transcripts/` `outputs/` `temp/` | legacy shared content dirs, gitignored; new work lives under `projects/` |
 | `docs/product-strategy.md` | how this repo becomes a product: the audience, the licensed-plugin model, install/update/routing mechanics, the learning flywheel. Read it before designing anything customer-facing |
 | `docs/market-shorts-2026.md` | what the AI shorts/clipping market actually looks like, researched 2026-09-01 with sources: who died, who is healthy, the GTM playbooks and what each produces, who pays, and where local-first does and does not matter. Findings only, no recommendation — read it before re-arguing the shorts question from priors |
+| `docs/davinci-resolve.md` | whether we can interoperate with DaVinci Resolve, researched 2026-09-08: its project files (`.drp`, the disk database) are closed and not ours to write; OTIO/EDL/FCP7 XML + SRT are the door, and work in the free edition; external scripting and the new 21.1 MCP server are Studio-only. Includes a measured export of a real keep-list and what each format drops |
 
 ## House rules
 
