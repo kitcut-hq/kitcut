@@ -1502,7 +1502,7 @@ On bpo-realtor every difference was number formatting, apart from one
 "and"→"in" that ElevenLabs actually said.
 
 **A vertical short from the same takes** is one more manifest (`canvas: [1080, 1920]`,
-`projects/bpo-realtor/shorts/s1.json`):
+`config/examples/edl-short.example.json`):
 
 - An EDL entry may carry `crop: [x, y, w, h]` in source pixels. It runs after
   paint and blur, so their rects stay in full-source pixels. Keep every crop at

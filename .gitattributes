@@ -8,7 +8,7 @@
 #
 # Everything a project can legitimately commit and that is not source code is
 # named here. Renders and footage stay gitignored; these are the small assets
-# that ARE kept, for the reason in projects/bpo-realtor/project.json.
+# that ARE kept, because a video's claims should be measured off the document it shows.
 *.pdf   binary
 *.png   binary
 *.jpg   binary

@@ -1,6 +1,6 @@
 {
-  "_comment": "Thumbnail in the channel's house style (read off the last six public uploads, 2026-09-23): dark purple field, Anton headline with one phrase on a yellow slab, the form tilted on the right, a yellow time badge, a yellow strip, logo top-left. The title angle is Oleksandr's: real estate agents + automate paperwork.",
-  "logo": "projects/bpo-realtor/assets/logo.png",
+  "_comment": "Thumbnail spec for make-thumbnail.py: a dark field, a condensed headline with one phrase on a yellow slab, the form tilted on the right, a round time badge and a caption strip. Words, frame grab and colours are data.",
+  "logo": "projects/<id>/assets/logo.png",
   "headline": [
     {
       "text": "REAL ESTATE",
@@ -18,7 +18,7 @@
     }
   ],
   "sub": "with AI  ·  a 534-field BPO",
-  "image": "projects/bpo-realtor/assets/thumb-grid.png",
+  "image": "projects/<id>/assets/thumb-grid.png",
   "crop": [
     205,
     228,

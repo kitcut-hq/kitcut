@@ -40,7 +40,7 @@ it held. Zoom accents (`zooms`) can also frame something out of shot, such as a
 warning banner. Check that the counter card does not cover the thing being
 zoomed on. Phone footage not rolled with the take is B-roll: say so in its
 `_why`. README: "A film cut by hand from a few takes". Worked example:
-`projects/bpo-realtor/edit.json`.
+`config/examples/edl-film.example.json`.
 
 ```powershell
 # from the repo root -- this is the whole job

@@ -1,7 +1,7 @@
 {
   "_comment": "Short S1 '534 fields in 1:50', 1080x1920, cut from the same takes as the film. Each crop holds a WHOLE element (the grid, the file list, the progress panel, the form, a whole column block) -- review 1 used one 5:4 crop everywhere and cut columns and words in half (user: 'some screens don't fit'). The picture box therefore changes height between shots; it stays centred between the title band and the captions. Voice: vo/s1.json.",
-  "id": "bpo-realtor",
-  "output": "projects/bpo-realtor/outputs/shorts/bpo-realtor-s1.mp4",
+  "id": "<id>",
+  "output": "projects/<id>/outputs/shorts/<id>-s1.mp4",
   "canvas": [
     1080,
     1920
@@ -13,19 +13,19 @@
   "counter_style": "config/overlays/elapsed-counter-vertical.json",
   "sources": {
     "take1": {
-      "path": "projects/bpo-realtor/sources/take1-form.mp4",
+      "path": "projects/<id>/sources/take1-form.mp4",
       "bg": "#ece6fd"
     },
     "take3": {
-      "path": "projects/bpo-realtor/sources/take3-upload-take4-fill.mp4",
+      "path": "projects/<id>/sources/take3-upload-take4-fill.mp4",
       "bg": "#ece6fd"
     },
     "take5": {
-      "path": "projects/bpo-realtor/sources/take5-results.mp4",
+      "path": "projects/<id>/sources/take5-results.mp4",
       "bg": "#ece6fd"
     },
     "phone": {
-      "path": "projects/bpo-realtor/sources/phone.mp4",
+      "path": "projects/<id>/sources/phone.mp4",
       "rotate": 180,
       "bg": "#ece6fd"
     }
@@ -153,7 +153,7 @@
       "_why": "the same $392,000 on the listing -- Cursorful's steady zoom, framed on 'Residential $392,000' and the details column so no word is cut (the unzoomed listing is on screen for only ~1 s)"
     },
     {
-      "card": "projects/bpo-realtor/cards/checklist.json",
+      "card": "projects/<id>/cards/checklist.json",
       "style": "config/cards/checklist/window-vertical.json",
       "_why": "end card with the logo"
     }
@@ -170,7 +170,7 @@
   ],
   "image_overlays": [
     {
-      "card": "projects/bpo-realtor/cards/short-title.json",
+      "card": "projects/<id>/cards/short-title.json",
       "at": 0.0,
       "dur": 11.0,
       "layout": {
@@ -190,7 +190,7 @@
       "_why": "the claim, above the picture; steps aside at 11.0 for the counter, which takes this band during the fill"
     },
     {
-      "card": "projects/bpo-realtor/cards/short-title.json",
+      "card": "projects/<id>/cards/short-title.json",
       "at": 26.0,
       "dur": 7.1,
       "layout": {
@@ -211,21 +211,22 @@
     }
   ],
   "audio": {
-    "voice": "projects/bpo-realtor/outputs/dub/bpo-realtor-s1.vo.wav",
-    "music": "projects/bpo-realtor/audio/When You're Alone - Dyalla.mp3",
+    "voice": "projects/<id>/outputs/dub/<id>-s1.vo.wav",
+    "music": "projects/<id>/audio/music.mp3",
     "music_db": -18,
     "music_fade_in": 0.4,
     "music_fade_out": 2.0,
     "lufs": -14
   },
   "captions": {
-    "words": "projects/bpo-realtor/outputs/dub/bpo-realtor-s1.vo.words.json",
+    "words": "projects/<id>/outputs/dub/<id>-s1.vo.words.json",
     "style": "config/presets/vertical-band-dark.json",
     "display": {
       "five hundred and thirty-four": "534",
       "one minute fifty": "1:50",
       "three ninety-two": "$392,000",
-      "instafill dot ai": "instafill.ai"
+      "example dot com": "example.com"
     }
-  }
+  },
+  "_example": "A worked vertical short from the same takes: 1080x1920, a crop per shot holding a whole screen element, a title card via image_overlays, the counter taking the title band during the wait, captions below."
 }

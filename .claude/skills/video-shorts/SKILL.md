@@ -831,6 +831,6 @@ short the same way: a second manifest with `canvas: [1080, 1920]`, a `crop`
 per EDL entry (one aspect for all, so the picture box holds still), a title card
 via `image_overlays`, and `counter_style: config/overlays/elapsed-counter-vertical.json`.
 Voice it with `dub-clips.py --script` over its own picture-only render, exactly
-like the film. Worked example: `projects/bpo-realtor/shorts/s1.json`. Check a
+like the film. Worked example: `config/examples/edl-short.example.json`. Check a
 contact sheet for the counter colliding with captions and for a crop that
 reveals something the long cut framed out.
