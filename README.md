@@ -2179,6 +2179,42 @@ the worked example.
 > the version-numbered folder Chromium installs beside its exe instead, so a
 > free check stays free.
 
+## Connecting a YouTube channel
+
+Everything that publishes -- `yt-upload.py`, `yt-set-chapters.py`,
+`yt-audit-chapters.py` -- rides one `youtube.force-ssl` grant. Creating that
+grant used to be a side effect of the first real command, which is a bad place
+to discover that Google's chooser handed you a personal account instead of the
+brand account that owns the videos: the fix is a re-consent, and you find out
+mid-publish. `yt-connect.py` is that step on its own.
+
+```powershell
+python scripts/yt-connect.py --check                        # free: am I connected, and as whom?
+python scripts/yt-connect.py --channel @instafill_ai        # connect, asserting the channel
+python scripts/yt-connect.py --channel @instafill_ai --reauth   # force a fresh consent
+```
+
+Once per machine, before the first run:
+
+1. Google Cloud Console -> any project -> **enable "YouTube Data API v3"**.
+2. **OAuth consent screen**: User type External; add the channel's Google
+   account as a Test user. Then **press "Publish app"** -- while the screen is
+   in *Testing*, Google expires every refresh token after **seven days**, and
+   publishing then fails weekly with `invalid_grant`. The unverified-app
+   warning that replaces it is about other people's data; this grant only ever
+   touches your own channel.
+3. **Credentials -> OAuth client ID -> Desktop app**, download the JSON.
+4. Save it as `.yt-oauth/client_secret.json` (gitignored).
+5. Run `--channel`. A browser opens: pick the **brand account** that owns the
+   channel, not the personal login it sits under.
+
+The grant is filed per channel (`.yt-oauth/token-<handle>.json`), so a second
+channel does not burn the first one's consent. A grant that comes back for the
+wrong channel is **deleted rather than filed** -- keeping it would make every
+later run confidently wrong. The channel is asserted by handle and reported by
+**id**, because an owner can rename a handle and cannot change an id; the id is
+what belongs in a project file.
+
 ## Chapter markers on a published video
 
 Turn a transcript into YouTube chapters, then write them into the video's own
@@ -2687,6 +2723,7 @@ absolute path written into a script, a skill or these docs.
 | `scripts/verify-captions.py` | proves sync by probing rendered frames |
 | `scripts/transcript-outline.py` | skim a transcript; find the time of a phrase |
 | `scripts/_ytchapters.py` | chapter-marker rules, and what YouTube really enforces |
+| `scripts/yt-connect.py` | connect this checkout to a channel, and prove which one |
 | `scripts/yt-set-chapters.py` | write chapter markers into a video's description |
 | `scripts/yt-audit-chapters.py` | which videos on a channel actually show chapters |
 | `scripts/cut-clips.py` | manifest → standalone clips cut out of a long video |
@@ -2731,6 +2768,7 @@ absolute path written into a script, a skill or these docs.
 | `scripts/debug-notes.py` | burn a running commentary onto a film: what the cut did here, and why |
 | `scripts/check-multicam.py` | multicam self-test; no GPU, no files, no cost |
 | `scripts/import-iphone.ps1` | pull footage off a phone over MTP, verified by byte count |
+| `scripts/yt-connect.py` | establish the OAuth grant on its own, and assert the channel |
 | `scripts/yt-upload.py` | upload a render to YouTube, channel-guarded and verified |
 | `scripts/yt-delete.py` | delete videos from YouTube, channel-guarded, dry-run by default |
 | `scripts/yt-fetch-transcripts.py` | pull audio + word transcripts for published channel videos |
