@@ -9,28 +9,41 @@ Three things decide everything below, so they come first:
 2. **Two cameras.** The screen (Cursorful) and a phone on a stand filming the
    desk and your hands. The phone runs continuously and is never touched.
 3. **No face.** A written voice-over over a filmed face is a lip-sync problem
-   by construction, and the phone is pointed at paper, not at you.
+   by construction, and the phone is pointed at your hands, not at you.
 
 ---
 
 ## Part 0 — why there is a second camera at all
 
 A second angle used for decoration is worse than no second angle. This one has
-a job:
+a job: it shows that a person is doing this, and it gives the cut somewhere to
+breathe at the two moments that matter.
 
-> On the screen: 534 fields. On the desk: the same three sheets of paper
-> somebody fills in by hand.
+**The hand is the subject of this shot, not the screen.** The screen already
+exists in the recording, sharp and clean. Filming it a second time only adds
+moire, reflections, and an exposure that reads the bright screen and leaves
+the hands in shadow. So the laptop display enters the top of the frame at an
+angle and is **cut off and unreadable**; hands and keyboard own the rest.
 
-So **print `assets/forms/BPO_TEMPLATE_Standard.pdf` on three sheets** and put
-them on the desk before you start. The phone films your hand turning those
-pages. That is the shot — the physical weight of the thing the software
-removes.
+    +----------------------------------+
+    |   \  edge of the screen, angled,  |  <- top third: screen,
+    |    \ cropped by the frame         |     cropped, not readable
+    |-----\--------------------------   |
+    |      keyboard                    |  <- bottom two thirds:
+    |         [hand] on trackpad/mouse |     hands and keyboard
+    +----------------------------------+
 
-The cutaways are **punctuation, 2–3 seconds each**, in three places: when the
-paper form is the subject, at the moment of Submit, and at the end. A product
-demo that spends half its runtime on a hand is a lifestyle advert.
+Cutaways are **2-3 seconds each**, in two places: the moment of **Submit**, and
+the moment the finished report appears. A product demo that spends half its
+runtime on a hand is a lifestyle advert.
 
----
+> An earlier version of this plan put a **printed copy of the form** on the
+> desk and filmed a hand turning its three pages. That is a better shot and it
+> is kept here for whenever a printer is available -- "534 fields on screen,
+> three sheets of paper in a hand" is the whole argument in one image. It was
+> dropped only because there was no printer. Blank A4 as a stand-in was
+> considered and refused: blank paper is not this form, and a viewer reads the
+> difference as staging.
 
 ## Part 1 — what the previous BPO video got wrong
 
@@ -69,17 +82,28 @@ solved by not filming a face.
 
 ### The phone
 
-- On a small stand or propped against something solid, to the side, framing
-  **the desk, the printed form and your hands**. Your face out of frame.
-- **1080p, 30 fps.**
+- **Landscape, 1080p, 30 fps.** Landscape because the film is 16:9 and a
+  vertical insert can only be pillarboxed or cropped. 1080p because the shot
+  lives for two seconds. 30 fps to match the screen recording.
+- **To the side of the laptop, about 45 degrees, 50-70 cm away**, a little
+  above desk height -- the view of somebody sitting beside you watching your
+  hands.
+- **Propped against something solid** -- books, a mug, a box. Not hand-held:
+  a shake is obvious in a two-second insert.
+- Frame it as in Part 0: hands and keyboard fill the bottom two thirds, the
+  screen only clips in at the top.
+- **Lock focus and exposure on the hands.** On iPhone, press and hold on the
+  hands until `AE/AF LOCK` appears. Without it autofocus hunts every time a
+  hand moves.
+- **Light from the front.** A window behind the laptop turns the hands into a
+  silhouette.
+- Face out of frame.
+- **Check with a 5-second test:** play it back, and if the text on the laptop
+  screen is readable, there is too much screen in the shot -- move the phone.
 - **Press record once, before take 1, and stop it only after take 5.** Do not
-  start and stop it per take. One continuous file is what lets `sync-tracks.py`
-  line the two cameras up by itself.
-- Do not move the phone once it is rolling.
-
-### The paper
-
-- The three printed pages of the BPO form, squared up on the desk.
+  start and stop it per take, and do not move it once it is rolling. One
+  continuous file is what lets `sync-tracks.py` line the two cameras up by
+  itself.
 
 ---
 
@@ -118,8 +142,7 @@ take4-fill.mp4       take5-result.mp4
 3. Page 2. When **III. COMPETITIVE CLOSED SALES** is fully in frame, **stop and
    hold 3 s**. That grid is the image the whole video is built around.
 4. Page 3. Hold **2 s**.
-5. Now look at the phone: turn the three printed pages, one at a time, about
-   **6 s**. (The screen keeps recording; it does not matter what it shows.)
+5. Stop recording.
 
 ### Take 2 — the documents (~30 s)
 
@@ -142,8 +165,8 @@ recording.
    appears anywhere, **hold 4 s** on it.
 3. Start filling the form out, and add the **eight** documents — all eight at
    once, not one by one. Hold **4 s** when they are listed.
-4. **Submit.** Hold **3 s**. (This is cutaway #2 — keep your hands visible to
-   the phone for a moment.)
+4. **Submit.** Hold **3 s**, and keep your hand resting where the phone can
+   see it -- this is cutaway #1.
 
 ### Take 4 — the fill
 
@@ -157,7 +180,8 @@ deliberate rather than broken.
 
 *The numbers are in the right cells — and you can check.*
 
-1. The filled form. Hold **3 s**.
+1. The filled form. Hold **3 s** — hand visible to the phone again, cutaway
+   #2.
 2. Scroll to **III. COMPETITIVE CLOSED SALES**, framed so the SUBJECT column
    and all three COMPARABLE columns are visible. Hold **5 s**.
 3. **The verification shot — the most persuasive ten seconds in the video.**
