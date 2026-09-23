@@ -2247,6 +2247,33 @@ Templates use a very small mustache (`{{x}}`, `{{{x}}}` raw, `{{#x}}…{{/x}}`
 for a list or flag, `{{^x}}…{{/x}}` for its absence). That is deliberately not
 a real template language: a card that needs logic wants a new template.
 
+### An animated checklist end screen: `checklist-card.py`
+
+A full-frame card for the end of a demo. The headline rises in, then each line's box
+pops, the text slides in beside it, and a tick draws itself into the box, one
+line after another. The call to action comes last. It is drawn by Pillow from
+`t`, so a `--png T` still is exactly the frame the render will contain.
+
+```powershell
+python scripts/checklist-card.py --spec projects/<id>/cards/checklist.json --style config/cards/checklist/window.json --list
+python scripts/checklist-card.py --spec ... --style ... --png          # final state
+python scripts/checklist-card.py --spec ... --style ... --sheet        # a strip across the animation
+```
+
+The words are the spec (`headline`, `items`, `cta`). The look and the timing
+are the style: `window` is a white window on the recorder's lavender, `plain`
+is type straight on the backdrop, and `chips` has dark lines in the counter
+card's colour. Put it in a film as an `edl-cut.py` entry,
+`{"card": <spec>, "style": <style>}`. It is rendered once and cached, then
+plays as a source. Draw shapes on their own layer: `ImageDraw` on an RGBA
+image **replaces** pixels rather than blending, and a "clear" fill wrote an
+opaque green box before its tick was due.
+
+For captions on a Cursorful-framed film, `instafill-band-light` and
+`instafill-band-dark` set one line low, in the lavender band under the window
+(bottom margin 44 of the 140 px band), so a caption never covers the app. The
+dark one uses the counter card's colour and radius.
+
 ### Writing the page by hand
 
 Two rules, both enforced rather than assumed:

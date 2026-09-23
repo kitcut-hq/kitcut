@@ -49,6 +49,11 @@ wrong, it is the spec.
 Specs go in `projects/<id>/cards/` and are **committed** — the spec is the
 control, and the PNG regenerates from it into `temp/`.
 
+**A checklist that ticks in line by line** (an end screen that lists what the
+film proved) is not a make-card template, because it animates per line. Use
+`scripts/checklist-card.py` (spec + style, `--png`/`--sheet` to review) and put
+it in the film as an `edl-cut.py` entry `{"card": ..., "style": ...}`.
+
 ## Choosing a template
 
 | template | reach for it when | animate with |

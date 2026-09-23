@@ -112,6 +112,12 @@ def load(mpath):
     segs = []
     frame = 0
     for i, e in enumerate(m.get("edl") or []):
+        if e.get("card"):
+            # A generated full-frame card (checklist-card.py). It is rendered
+            # to a clip, cached on its spec + style + canvas, and from here on
+            # it is just another source played 0 -> its own length.
+            e = dict(e, src=card_source(e, srcs, (cw, ch), fps, m, mpath), **{"from": 0})
+            e["to"] = srcs[e["src"]]["dur"]
         if e["src"] not in srcs:
             sys.exit("edl[%d]: unknown source %r" % (i, e["src"]))
         s = srcs[e["src"]]
@@ -131,6 +137,28 @@ def load(mpath):
     if not segs:
         sys.exit("the manifest has no edl entries")
     return m, srcs, segs, (cw, ch), fps, frame
+
+
+def card_source(e, srcs, canvas, fps, m, mpath):
+    """Render (or reuse) a checklist card clip and register it as a source."""
+    import hashlib
+    from importlib import import_module
+    ck = import_module("checklist-card")
+    spec, style = ck.load(e["card"], e["style"])
+    key = "card-" + hashlib.sha1(json.dumps([spec, style, canvas, fps], sort_keys=True)
+                                 .encode()).hexdigest()[:10]
+    if key not in srcs:
+        mid = m.get("id") or os.path.basename(os.path.dirname(os.path.abspath(mpath)))
+        d = os.path.join(_project.projects_dir(), mid, "temp", "edl")
+        os.makedirs(d, exist_ok=True)
+        clip = os.path.join(d, key + ".mp4")
+        if not os.path.exists(clip):
+            print("  drawing card %s (%s) ..." % (e["card"], os.path.basename(e["style"])))
+            ck.render_clip(spec, style, tuple(canvas), fps, clip)
+        w, h, sfps, dur = _overlay.probe(clip)
+        srcs[key] = {"key": key, "path": rel(clip), "abspath": clip, "w": w, "h": h,
+                     "fps": sfps, "dur": dur, "bg": "#000000"}
+    return key
 
 
 def seg_at(segs, g):

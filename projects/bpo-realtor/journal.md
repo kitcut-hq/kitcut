@@ -149,3 +149,26 @@ reached across the phone cutaway and magnified it.
 **Texts:** voiceover.md -- timed script, titles, description, chapters,
 thumbnail, three short concepts. Not yet approved. The full-film voice-over is
 still the missing capability (dub-clips --script is per clip).
+- 16:08 render scripts/edl-cut.py -> projects/bpo-realtor/outputs/previews/endcard-window.mp4 (--manifest projects/bpo-realtor/temp/endcard-window.json)
+- 16:09 render scripts/edl-cut.py -> projects/bpo-realtor/outputs/previews/endcard-plain.mp4 (--manifest projects/bpo-realtor/temp/endcard-plain.json)
+- 16:10 render scripts/edl-cut.py -> projects/bpo-realtor/outputs/previews/endcard-chips.mp4 (--manifest projects/bpo-realtor/temp/endcard-chips.json)
+
+### Session note -- end-card, caption and music options (nothing chosen yet)
+
+**Ask:** an end screen in the video's backdrop colour with checkboxes ticking
+in one by one; maybe captions; maybe background music; show options.
+
+**End card:** new scripts/checklist-card.py (words: cards/checklist.json;
+looks: config/cards/checklist/{window,plain,chips}.json). Previews in
+outputs/previews/endcard-*.mp4 (the film's last 6 s + the card) and *.png.
+Wired into edl-cut.py as an EDL entry {"card","style"} -- NOT yet in edit.json;
+add it after the user picks a look. Lines are only what the film showed (no
+hand-time claim, no market value).
+
+**Captions:** need the voice-over audio first (words come from it, not from
+ASR on a silent film). Previews used the draft script at 2.5 words/s, so the
+group splits in outputs/previews/captions-compare.png are not real. Three
+looks: instafill (existing, sits on the window edge), instafill-band-light,
+instafill-band-dark (both in the lavender band under the window).
+
+**Music:** proposed only -- nothing downloaded or generated.
