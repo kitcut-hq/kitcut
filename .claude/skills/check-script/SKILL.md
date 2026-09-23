@@ -25,9 +25,9 @@ third-party import; no `os.execve`; no writing `PYTHONPATH`; no absolute
 machine path in a string literal; and the platform boundary (below). It flags
 (warn): no `Invoke as:` line, no argparse, a script that encodes or spends with
 no free mode, a deliverable-producer that never calls `_project.record()`,
-backslash path literals, and a script the README does not mention.
+backslash path literals, and a script `docs/reference.md` does not mention.
 
-`--all` additionally scans every `SKILL.md`, the README and CLAUDE.md for
+`--all` additionally scans every `SKILL.md`, `docs/reference.md` and CLAUDE.md for
 absolute paths, because a skill is read by an agent on a machine that is not
 this one — the repo shipped ten `cd C:\...` lines that way before this check
 existed.
@@ -84,10 +84,10 @@ Walk these by reading the script, not by pattern-matching:
   dimensions, rotation, audio peak) is what caught a 463s render of a 55s
   clip and a silent film. New encode paths need an equivalent.
 - **Do the docs say what the code does?** The SDK contract: a tooling change
-  is not done until the README section, the affected skill, and (if it makes
+  is not done until `docs/reference.md` section, the affected skill, and (if it makes
   deliverables) `_project.record()` agree with the code. Touching `dub-*.py`
   also means running `python scripts/check-dub.py`.
-- **Are new traps recorded with their reason** in the README `## Gotchas`,
+- **Are new traps recorded with their reason** in `docs/reference.md` `## Gotchas`,
   not just fixed?
 
 ## 4. When a new convention appears

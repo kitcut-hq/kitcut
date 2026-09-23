@@ -220,7 +220,7 @@
   },
   "captions": {
     "words": "projects/bpo-realtor/outputs/dub/bpo-realtor-s1.vo.words.json",
-    "style": "config/presets/instafill-vertical-dark.json",
+    "style": "config/presets/vertical-band-dark.json",
     "display": {
       "five hundred and thirty-four": "534",
       "one minute fifty": "1:50",

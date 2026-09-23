@@ -16,9 +16,10 @@ not, which made the configuration a lie.
 So: a manifest states quality, speed and bitrate ceilings, and this module
 renders them into whichever family the encoder belongs to.
 
-    nvenc     -preset p5   -rc vbr  -cq N -b:v 0
-    amf       -quality quality      -rc qvbr -qvbr_quality_level N
-    software  -preset medium        -crf N
+    nvenc         -preset p5   -rc vbr  -cq N -b:v 0
+    amf           -quality quality      -rc qvbr -qvbr_quality_level N
+    videotoolbox  -q:v N                (this family has no speed key at all)
+    software      -preset medium        -crf N
 
 `speed` is carried on NVENC's own p1..p7 scale, because every preset and
 manifest already committed to this repo speaks it. A `preset` of `p5` written
@@ -35,10 +36,12 @@ render on it fails.
 
 Invoke as:  import _encode  (a library; scripts/check-encode.py is its test)
 """
+
 import os
 import sys
 import json
 import subprocess
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -57,10 +60,12 @@ STRICT_VAR = "VIDEDIT_ENCODER_STRICT"
 # Tried in order when nothing names an encoder. h264 before hevc because every
 # consumer of these renders (YouTube, the comparators, the browsers) takes it,
 # and hardware before software because a film is minutes either way on a GPU
-# and the better part of an hour on a CPU.
-CANDIDATES = ("h264_nvenc", "h264_amf", "h264_qsv", "libx264")
+# and the better part of an hour on a CPU. VideoToolbox holds that lead on real
+# footage at equal VMAF; on a clean synthetic clip it disappears, so testsrc
+# cannot settle this order.
+CANDIDATES = ("h264_nvenc", "h264_amf", "h264_qsv", "h264_videotoolbox", "libx264")
 
-DEFAULT_SPEED = 5               # p5: what every render script defaulted to
+DEFAULT_SPEED = 5  # p5: what every render script defaulted to
 DEFAULT_QUALITY = 21
 
 # The frame usable() encodes to prove an encoder really runs. See its
@@ -72,6 +77,7 @@ PROBE_SIZE = "320x240"
 # families
 # --------------------------------------------------------------------------
 
+
 def family_of(encoder):
     """Which key vocabulary this encoder speaks.
 
@@ -80,16 +86,25 @@ def family_of(encoder):
     the vendor's wrapper, not of the codec.
     """
     e = (encoder or "").strip().lower()
-    for suffix, fam in (("_nvenc", "nvenc"), ("_amf", "amf"),
-                        ("_qsv", "qsv"), ("_vaapi", "vaapi")):
+    for suffix, fam in (
+        ("_nvenc", "nvenc"),
+        ("_amf", "amf"),
+        ("_qsv", "qsv"),
+        ("_vaapi", "vaapi"),
+        ("_videotoolbox", "videotoolbox"),
+    ):
         if e.endswith(suffix):
             return fam
+
     if e.startswith("lib") or e in ("mpeg4", "h264", "hevc"):
         return "software"
+
     raise ValueError(
         "unknown encoder %r -- this module knows the *_nvenc, *_amf, *_qsv, "
-        "*_vaapi and lib* families. Add it to family_of() and to SPEED/RATE "
-        "below rather than spelling its keys at a call site." % encoder)
+        "*_vaapi and *_videotoolbox families, and lib*/mpeg4/h264/hevc as "
+        "software. Add it to family_of() and to SPEED/RATE below rather than "
+        "spelling its keys at a call site." % encoder
+    )
 
 
 # A speed tier, 1 (fastest) to 7 (slowest/best), rendered into each family's
@@ -101,20 +116,44 @@ def family_of(encoder):
 # ffmpeg 9.0.1 -- `ffmpeg -h encoder=hevc_amf` lists quality=0, balanced=5,
 # speed=10, high_quality=15.
 SPEED = {
-    "nvenc":    lambda t: ["-preset", "p%d" % t],
-    "amf":      lambda t: ["-quality", ("speed" if t <= 2 else
-                                        "balanced" if t <= 5 else
-                                        "quality" if t == 6 else
-                                        "high_quality")],
-    "qsv":      lambda t: ["-preset", ("veryfast" if t <= 2 else
-                                       "faster" if t == 3 else
-                                       "fast" if t == 4 else
-                                       "medium" if t == 5 else
-                                       "slow" if t == 6 else "veryslow")],
-    "vaapi":    lambda t: [],           # VAAPI has no portable speed control
-    "software": lambda t: ["-preset", {1: "ultrafast", 2: "veryfast",
-                                       3: "faster", 4: "fast", 5: "medium",
-                                       6: "slow", 7: "slower"}[t]],
+    "nvenc": lambda t: ["-preset", "p%d" % t],
+    "amf": lambda t: [
+        "-quality",
+        ("speed" if t <= 2 else "balanced" if t <= 5 else "quality" if t == 6 else "high_quality"),
+    ],
+    "qsv": lambda t: [
+        "-preset",
+        (
+            "veryfast"
+            if t <= 2
+            else "faster"
+            if t == 3
+            else "fast"
+            if t == 4
+            else "medium"
+            if t == 5
+            else "slow"
+            if t == 6
+            else "veryslow"
+        ),
+    ],
+    "vaapi": lambda t: [],  # VAAPI has no portable speed control
+    # VideoToolbox has no speed control: no preset ladder, and -prio_speed,
+    # -realtime and -spatial_aq leave the output identical. A tier has nothing
+    # to translate into for this family, so no speed key is emitted.
+    "videotoolbox": lambda t: [],
+    "software": lambda t: [
+        "-preset",
+        {
+            1: "ultrafast",
+            2: "veryfast",
+            3: "faster",
+            4: "fast",
+            5: "medium",
+            6: "slow",
+            7: "slower",
+        }[t],
+    ],
 }
 
 # Quality-targeted rate control. The number a manifest writes is QP-shaped and
@@ -159,12 +198,32 @@ def amf_quality(q):
     return max(0, min(QP_MAX, QP_MAX - int(q)))
 
 
+def videotoolbox_quality(q: int) -> int:
+    """VideoToolbox's -q:v from this repo's QP-shaped number, INVERTED.
+
+    Returns 1..100, clamped, so a cq outside 0..51 saturates instead of leaving
+    the scale.
+
+    There is no -cq and no -crf here. Constant quality is the generic `-q:v`,
+    so `ffmpeg -h encoder=h264_videotoolbox` does not list it among the
+    encoder's own options. It runs 1..100 with BIGGER meaning better, the same
+    way round as AMF and the opposite of the rest.
+
+    The two constants are anchors against libx264 rather than a stretch of
+    1..100 to fit, because what a manifest means by `cq: 21` is "what crf 21
+    looked like". By VMAF against the source, `-q:v 62` matches crf 21 within
+    0.3 either way on clean and on grainy 1080p, and `-q:v 69` sits just under
+    crf 16. That is 1.4 points of -q:v per point of cq.
+    """
+    return max(1, min(100, round(62 + 1.4 * (21 - int(q)))))
+
+
 RATE = {
-    "nvenc":    lambda q: ["-rc", "vbr", "-cq", str(q), "-b:v", "0"],
-    "amf":      lambda q: ["-rc", "qvbr",
-                           "-qvbr_quality_level", str(amf_quality(q))],
-    "qsv":      lambda q: ["-global_quality", str(q), "-look_ahead", "1"],
-    "vaapi":    lambda q: ["-rc_mode", "CQP", "-qp", str(q)],
+    "nvenc": lambda q: ["-rc", "vbr", "-cq", str(q), "-b:v", "0"],
+    "amf": lambda q: ["-rc", "qvbr", "-qvbr_quality_level", str(amf_quality(q))],
+    "videotoolbox": lambda q: ["-q:v", str(videotoolbox_quality(q))],
+    "qsv": lambda q: ["-global_quality", str(q), "-look_ahead", "1"],
+    "vaapi": lambda q: ["-rc_mode", "CQP", "-qp", str(q)],
     "software": lambda q: ["-crf", str(q)],
 }
 
@@ -181,12 +240,24 @@ RATE = {
 # with "The current GPU in use does not support H.264 B-frame encoding",
 # proceeds without them, and the flag buys nothing but a warning.
 TUNING = {
-    "nvenc":    lambda aq: ["-tune", "hq", "-rc-lookahead", "32",
-                            "-spatial-aq", "1", "-aq-strength", str(aq),
-                            "-temporal-aq", "1", "-bf", "3"],
-    "amf":      lambda aq: [],
-    "qsv":      lambda aq: [],
-    "vaapi":    lambda aq: [],
+    "nvenc": lambda aq: [
+        "-tune",
+        "hq",
+        "-rc-lookahead",
+        "32",
+        "-spatial-aq",
+        "1",
+        "-aq-strength",
+        str(aq),
+        "-temporal-aq",
+        "1",
+        "-bf",
+        "3",
+    ],
+    "amf": lambda aq: [],
+    "qsv": lambda aq: [],
+    "vaapi": lambda aq: [],
+    "videotoolbox": lambda aq: [],
     "software": lambda aq: ["-bf", "3"],
 }
 
@@ -199,11 +270,22 @@ TUNING = {
 # scale. The point is that a committed `"preset": "p5"` keeps meaning p5 after
 # the encoder changes under it, instead of reaching an encoder that rejects it.
 _TIERS = {
-    "ultrafast": 1, "superfast": 1, "fastest": 1,
-    "veryfast": 2, "speed": 2, "faster": 3, "fast": 4,
-    "medium": 5, "balanced": 5,
-    "slow": 6, "quality": 6,
-    "slower": 7, "veryslow": 7, "placebo": 7, "high_quality": 7, "best": 7,
+    "ultrafast": 1,
+    "superfast": 1,
+    "fastest": 1,
+    "veryfast": 2,
+    "speed": 2,
+    "faster": 3,
+    "fast": 4,
+    "medium": 5,
+    "balanced": 5,
+    "slow": 6,
+    "quality": 6,
+    "slower": 7,
+    "veryslow": 7,
+    "placebo": 7,
+    "high_quality": 7,
+    "best": 7,
 }
 
 
@@ -247,8 +329,7 @@ def profile_args(encoder, profile, level):
         # of what an H.264 "high" was asking for here (8-bit 4:2:0). Level is
         # left off: libx265 wants "4.2" and hevc_amf wants an integer 126, and
         # a hint is not worth a units bug.
-        out += ["-profile:v",
-                "main10" if str(profile).lower() == "main10" else "main"]
+        out += ["-profile:v", "main10" if str(profile).lower() == "main10" else "main"]
     return out
 
 
@@ -270,8 +351,7 @@ def speed_tier(value, default=DEFAULT_SPEED):
         return max(1, min(7, int(v)))
     if v in _TIERS:
         return _TIERS[v]
-    sys.stderr.write("note: unknown speed preset %r -- using p%d\n"
-                     % (value, default))
+    sys.stderr.write("note: unknown speed preset %r -- using p%d\n" % (value, default))
     return default
 
 
@@ -289,8 +369,9 @@ def _cache_path():
 def _ffmpeg_id():
     """Something that changes when the ffmpeg build does, so the cache expires."""
     try:
-        out = subprocess.run(["ffmpeg", "-hide_banner", "-version"], env=ENV,
-                             capture_output=True, text=True).stdout
+        out = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-version"], env=ENV, capture_output=True, text=True
+        ).stdout
         return out.splitlines()[0].strip()
     except Exception:
         return "?"
@@ -317,7 +398,7 @@ def _save_cache():
         with open(_cache_path(), "w", encoding="utf-8") as f:
             json.dump(_probe_cache, f, indent=2)
     except OSError:
-        pass                        # a cache that will not persist is not fatal
+        pass  # a cache that will not persist is not fatal
 
 
 def usable(encoder, recheck=False):
@@ -341,12 +422,33 @@ def usable(encoder, recheck=False):
     cache = _load_cache()
     if not recheck and encoder in cache["encoders"]:
         return cache["encoders"][encoder]
-    p = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error",
-         "-f", "lavfi", "-i", "color=c=black:s=%s:r=25:d=0.08" % PROBE_SIZE,
-         "-c:v", encoder, "-frames:v", "1", "-f", "null", "-"],
-        env=ENV, capture_output=True, text=True)
-    got = p.returncode == 0 and "rror" not in (p.stderr or "")
+    try:
+        p = subprocess.run(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=black:s=%s:r=25:d=0.08" % PROBE_SIZE,
+                "-c:v",
+                encoder,
+                "-frames:v",
+                "1",
+                "-f",
+                "null",
+                "-",
+            ],
+            env=ENV,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        got = False  # no ffmpeg at all: cannot encode, and
+    else:  # default_encoder() still needs a name
+        got = p.returncode == 0 and "rror" not in (p.stderr or "")
     cache["encoders"][encoder] = got
     _save_cache()
     return got
@@ -380,8 +482,109 @@ def strict():
 
 
 # --------------------------------------------------------------------------
+# decoding, which is a different axis from encoding
+# --------------------------------------------------------------------------
+# `-hwaccel cuda` is NVDEC on the INPUT; the encoder keys above are NVENC on
+# the output. Nothing translates between them, and a missing driver fails the
+# *input*, which surfaces as a broken source file rather than a missing card
+# -- eight call sites spelled it inline and four had no fallback at all, so
+# scan-pii.py and film-redact.py could not read a frame on an AMD box while
+# every render on that box was fine.
+#
+# It is probed the way an encoder is, and for the same reason: `ffmpeg
+# -hwaccels` lists what the BUILD has, and a full Windows build lists cuda on
+# a machine that has never seen an NVIDIA driver. NVENC's availability is not
+# the test either -- the two capabilities ship on different silicon and a card
+# can have one without the other -- so this decodes a real frame.
+
+
+def nvdec_usable(recheck=False):
+    """Can this machine actually DECODE through `-hwaccel cuda`?
+
+    Answered by decoding one frame of a file this function encodes, because a
+    lavfi source is generated rather than decoded and would let `-hwaccel`
+    pass on a box with no driver at all. Cached against the ffmpeg version
+    beside the encoder probes.
+    """
+    cache = _load_cache()
+    probes = cache.setdefault("decoders", {})
+    if not recheck and "cuda" in probes:
+        return probes["cuda"]
+    got = False
+    enc = next((e for e in available()), None)
+    if enc:
+        tmp = os.path.join(tempfile.gettempdir(), "_encode-nvdec-probe-%d.mp4" % os.getpid())
+        try:  # OSError: no ffmpeg -- no hwaccel either
+            made = subprocess.run(
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "color=c=black:s=%s:r=25:d=0.2" % PROBE_SIZE,
+                    "-c:v",
+                    enc,
+                    "-frames:v",
+                    "5",
+                    tmp,
+                ],
+                env=ENV,
+                capture_output=True,
+                text=True,
+            )
+            if made.returncode == 0 and os.path.exists(tmp):
+                p = subprocess.run(
+                    [
+                        "ffmpeg",
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
+                        "-hwaccel",
+                        "cuda",
+                        "-i",
+                        tmp,
+                        "-frames:v",
+                        "1",
+                        "-f",
+                        "null",
+                        "-",
+                    ],
+                    env=ENV,
+                    capture_output=True,
+                    text=True,
+                )
+                got = p.returncode == 0 and "rror" not in (p.stderr or "")
+        except OSError:
+            got = False
+        finally:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+    probes["cuda"] = got
+    _save_cache()
+    return got
+
+
+def decode_args(recheck=False):
+    """The input-side hardware-decode flags for this machine, or none.
+
+    Never spell `-hwaccel cuda` at a call site -- ask here, the same way a
+    render asks video_args() rather than spelling `-preset`. A caller that
+    keeps its own software retry loses nothing: this only ever removes an
+    attempt that was going to fail.
+    """
+    return ["-hwaccel", "cuda"] if nvdec_usable(recheck) else []
+
+
+# --------------------------------------------------------------------------
 # the one place the keys are chosen
 # --------------------------------------------------------------------------
+
 
 def resolve(cfg, strict_encoder=None):
     """A render config whose `encoder` is one this machine can actually run.
@@ -402,17 +605,22 @@ def resolve(cfg, strict_encoder=None):
     if usable(want):
         return cfg
     if strict() if strict_encoder is None else strict_encoder:
-        sys.exit("encoder %s cannot run on this machine -- it is in the "
-                 "ffmpeg build but fails to open. Working encoders here: %s"
-                 % (want, ", ".join(available()) or "none"))
+        sys.exit(
+            "encoder %s cannot run on this machine -- it is in the "
+            "ffmpeg build but fails to open. Working encoders here: %s"
+            % (want, ", ".join(available()) or "none")
+        )
     got = available()
     if not got:
-        sys.exit("no usable video encoder: none of %s can encode a frame. "
-                 "Run scripts/check-env.py." % ", ".join(CANDIDATES))
+        sys.exit(
+            "no usable video encoder: none of %s can encode a frame. "
+            "Run scripts/check-env.py." % ", ".join(CANDIDATES)
+        )
     sys.stderr.write(
         "note: encoder %s cannot run here -- using %s instead. Set "
         "render.encoder in the manifest or preset, or $%s, to make it "
-        "permanent.\n" % (want, got[0], ENCODER_VAR))
+        "permanent.\n" % (want, got[0], ENCODER_VAR)
+    )
     cfg["encoder"] = got[0]
     return cfg
 
@@ -459,7 +667,8 @@ def video_args(cfg):
 
 def audio_args(cfg, rate=None, channels=2):
     """The audio side, which no family has an opinion about -- here so a call
-    site has one thing to call rather than two."""
+    site has one thing to call rather than two.
+    """
     out = ["-c:a", "aac", "-b:a", str(cfg.get("audio_bitrate", "192k"))]
     if rate:
         out += ["-ar", str(rate)]
@@ -471,6 +680,10 @@ def describe(cfg):
     enc = cfg.get("encoder") or default_encoder()
     tier = speed_tier(cfg.get("preset", cfg.get("speed")))
     return "%s (%s) speed p%d  q%s  ceiling %s/%s" % (
-        enc, family_of(enc), tier,
+        enc,
+        family_of(enc),
+        tier,
         cfg.get("cq", cfg.get("quality", DEFAULT_QUALITY)),
-        cfg.get("maxrate", "-"), cfg.get("bufsize", "-"))
+        cfg.get("maxrate", "-"),
+        cfg.get("bufsize", "-"),
+    )

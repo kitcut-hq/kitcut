@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Transcribe audio file to text with word-level timestamps.
+"""Transcribe audio file to text with word-level timestamps.
 
 Uses OpenAI Whisper API for accurate speech-to-text with word-level precision.
 This is useful for syncing voiceovers to video frames.
@@ -46,8 +45,7 @@ def load_env():
 
 
 def transcribe_audio(file_path, model="whisper-1", language=None):
-    """
-    Transcribe audio file using OpenAI Whisper API.
+    """Transcribe audio file using OpenAI Whisper API.
 
     Args:
         file_path: Path to audio file (.mp3, .m4a, .wav, .flac, .ogg)
@@ -56,6 +54,7 @@ def transcribe_audio(file_path, model="whisper-1", language=None):
 
     Returns:
         dict with transcript and word-level timestamps
+
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -63,7 +62,10 @@ def transcribe_audio(file_path, model="whisper-1", language=None):
         api_key = env_vars.get("OPENAI_API_KEY")
 
     if not api_key:
-        print("Error: OPENAI_API_KEY not set. Add to .env or export as environment variable.", file=sys.stderr)
+        print(
+            "Error: OPENAI_API_KEY not set. Add to .env or export as environment variable.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     if not Path(file_path).exists():
@@ -79,7 +81,7 @@ def transcribe_audio(file_path, model="whisper-1", language=None):
     params = {
         "model": model,
         "response_format": "verbose_json",
-        "timestamp_granularities[]": "word"
+        "timestamp_granularities[]": "word",
     }
 
     if language:
@@ -103,17 +105,19 @@ def format_output(transcript_data, include_raw=False):
         "file": transcript_data.get("text", ""),
         "duration": transcript_data.get("duration"),
         "language": transcript_data.get("language", "unknown"),
-        "words": []
+        "words": [],
     }
 
     if "words" in transcript_data:
         for word in transcript_data["words"]:
-            result["words"].append({
-                "text": word["word"],
-                "start": round(word["start"], 3),
-                "end": round(word["end"], 3),
-                "duration": round(word["end"] - word["start"], 3)
-            })
+            result["words"].append(
+                {
+                    "text": word["word"],
+                    "start": round(word["start"], 3),
+                    "end": round(word["end"], 3),
+                    "duration": round(word["end"] - word["start"], 3),
+                }
+            )
 
     if include_raw:
         result["_raw"] = transcript_data
@@ -123,7 +127,7 @@ def format_output(transcript_data, include_raw=False):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Transcribe audio with word-level timestamps using OpenAI Whisper"
+        description="Transcribe audio with word-level timestamps using OpenAI Whisper",
     )
     parser.add_argument("file", help="Audio file path (.m4a, .mp3, .wav, .flac, .ogg)")
     parser.add_argument("--model", default="whisper-1", help="Whisper model (default: whisper-1)")

@@ -60,10 +60,10 @@ lost sources only — it costs a generation (see the name-label skill's warning)
 | "what is on this video?" | nothing — read `project.json` | answer from `burned`, `published`, and the journal; do not re-derive from the files |
 
 If the ask fits no row, that is not a dead end — it is a missing knob. Add the
-knob: a manifest key, script support behind it, a README paragraph, a row in
+knob: a manifest key, script support behind it, a `docs/reference.md` paragraph, a row in
 this table. The scripts are an SDK you maintain, not a fixed appliance (see
 `## House rules` in CLAUDE.md). A change is done when the code, the metadata
-writer, the README and the skill all say the same thing.
+writer, `docs/reference.md` and the skill all say the same thing.
 
 ## Worked example: "move the name label 2 seconds later"
 

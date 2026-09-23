@@ -7,7 +7,7 @@ that were never in sync, and the upload afterwards. The repo is **tooling only**
 — every source video, audio file, transcript and render is gitignored
 third-party content.
 
-Full detail lives in `README.md` and the skills under `.claude/skills/`. This
+Full detail lives in `docs/reference.md` (the technical reference; the root README is the human overview) and the skills under `.claude/skills/`. This
 file is the map.
 
 Nothing here is a one-off. A task that ends in a rendered file and no reusable
@@ -40,6 +40,11 @@ frame arithmetic a render would otherwise have to find for you.
 `check-encode.py` is the third: it proves the ffmpeg keys each encoder is
 handed are keys that encoder takes, on colour bars, in about ten seconds.
 
+`check-resolve.py` is the fourth: it proves the DaVinci Resolve interchange
+writers — the film-time model, the bookend guard, the OTIO schema, drop-frame
+timecode — against keep-lists built in memory, with no Resolve, no media and
+no encode.
+
 After writing or changing **any** script, run
 `python scripts/check-script.py --changed` — it enforces the conventions
 (_env bootstrap, docstring, free mode, `_project.record()` on deliverables,
@@ -48,6 +53,17 @@ deliberate exception with its reason. The check-script skill carries the
 judgement half a grep cannot do. The corpus passes clean; keep it that way.
 `--all` also scans the skills and these docs for absolute paths, because a
 skill is read by an agent on a machine that is not this one.
+
+After **any** edit to **any** Python file here, lint and format it:
+
+```powershell
+python -m ruff check <path>       # <path> or . for the whole repo
+python -m ruff format <path>
+```
+
+Config is `pyproject.toml`. ruff is pinned in `requirements-dev.txt`, which
+`setup-python.ps1` does not read — `uv pip install -r requirements-dev.txt`.
+After `--fix`, run `check-script.py --all` and the `check-*.py` suite.
 
 ### Tooling, work, and the one resolver
 
@@ -85,26 +101,46 @@ its free-mode requirement.
 A manifest states an intent — `cq`, `speed`/`preset`, `maxrate`, `bufsize` —
 and `_encode` renders it into the chosen encoder's family: `nvenc`
 (`-preset p5 -rc vbr -cq N -b:v 0`), `amf` (`-quality balanced -rc qvbr
--qvbr_quality_level N`), `software` (`-preset medium -crf N`), `qsv`. Speed
-rides NVENC's p1..p7 scale because every committed preset already speaks it,
-so `"preset": "p5"` is translated rather than passed to an encoder that would
-reject it. `profile`/`level` follow the **codec**, a different axis: H.264
-values, `main` on HEVC, level dropped there.
+-qvbr_quality_level N`), `videotoolbox` (`-q:v N`, and nothing else — it has
+no preset ladder, and `-prio_speed`/`-realtime`/`-spatial_aq` were each
+measured to produce a byte-identical file), `software` (`-preset medium -crf
+N`), `qsv`. Speed rides NVENC's p1..p7 scale because every committed preset
+already speaks it, so `"preset": "p5"` is translated rather than passed to an
+encoder that would reject it. `profile`/`level` follow the **codec**, a
+different axis: H.264 values, `main` on HEVC, level dropped there.
 
 **A smaller quality number always means a better picture** — that is the
-contract `cq` carries, and each family expresses it in its own terms. AMF's
-`-qvbr_quality_level` runs the OTHER way (measured: level 10 → VMAF 81.9,
-level 46 → VMAF 94.6), so `_encode.amf_quality()` inverts it. Passing it
-through made every AMF render quietly worse than its manifest asked for, and
-the smaller file read as efficiency rather than as loss. `check-encode.py`
-asserts the direction per family now.
+contract `cq` carries, and each family expresses it in its own terms. **Two of
+them run the OTHER way.** AMF's `-qvbr_quality_level` does (measured: level 10
+→ VMAF 81.9, level 46 → VMAF 94.6), so `_encode.amf_quality()` inverts it;
+passing it through made every AMF render quietly worse than its manifest asked
+for, and the smaller file read as efficiency rather than as loss. VideoToolbox's
+`-q:v` runs 1..100 the same way round, so `_encode.videotoolbox_quality()`
+inverts it too, anchored on libx264 rather than stretched to fit, because
+`cq: 21` means "what crf 21 looked like" (crf 21 → VMAF 97.4, `-q:v 62` → 97.3;
+crf 16 → 98.8, `-q:v 69` → 98.2). `check-encode.py` asserts the direction per
+family, and asserts that the list of families it tests still covers
+`_encode.RATE`.
 
 Which encoder: `render.encoder` → `$VIDEDIT_ENCODER` → the first of
-`h264_nvenc`/`h264_amf`/`h264_qsv`/`libx264` that **encodes a frame here**.
-One a committed file names but this box cannot run is substituted loudly; one
-named explicitly fails instead. Availability is never read off
+`h264_nvenc`/`h264_amf`/`h264_qsv`/`h264_videotoolbox`/`libx264` that
+**encodes a frame here**. One a committed file names but this box cannot run
+is substituted loudly; one named explicitly fails instead. Availability is never read off
 `ffmpeg -encoders` — that lists what the build supports, and a full Windows
 build lists NVENC on a machine with no NVIDIA driver.
+
+**Decoding is the other axis, and `_encode.decode_args()` owns it.** `-hwaccel
+cuda` is NVDEC on the **input**; everything above is NVENC on the output, and
+nothing translates between them. On a box with no NVIDIA driver the flag fails
+the *input*, which reads as a corrupt source file rather than a missing card.
+**Never spell `-hwaccel cuda` at a call site** — ask `_encode.decode_args()`,
+which probes by decoding a frame it encoded itself (`ffmpeg -hwaccels` lists
+what the build has, the same lie `-encoders` tells) and returns nothing when
+NVDEC is absent. It is not read off the encoder: NVENC and NVDEC ship on
+different silicon and a card can have one without the other. Eight call sites
+spelled it inline and four had no fallback, so `scan-pii.py` and
+`film-redact.py` could not read a frame on an AMD box while every render on
+that box was fine.
 
 After touching `_encode.py` or any render script's encoder path, run
 `python scripts/check-encode.py` — it costs ten seconds, and its live half
@@ -133,7 +169,7 @@ Don't reintroduce it, and don't use `os.execve` to re-exec on Windows — it
 spawns rather than replaces, so the parent dies abnormally and the exit code is
 lost. `_env.bootstrap()` uses `subprocess.run` and propagates the status.
 
-## The eight pipelines
+## The nine pipelines
 
 Everything is manifest-driven. Nothing hardcodes a timecode, a colour or a font
 size; per-video decisions live in the project's manifests under
@@ -151,6 +187,13 @@ python scripts/cut-clips.py --manifest projects/<id>/clips-vertical.json --list
 python scripts/auto-reframe.py --manifest projects/<id>/clips-vertical.json
 python scripts/cut-clips.py --manifest projects/<id>/clips-vertical.json
 ```
+
+After touching any of `cut-clips.py`, `build-captions-ass.py` or
+`check-caption-space.py`, run `python scripts/check-shorts.py` — the hook
+gate, pad resolution, crop windows, grouping typography and caption-space
+geometry against values frozen from real footage and real shipped defects; no
+GPU, no encode, seconds. Both bugs ever found in the caption-space guard were
+guard rot this test now pins.
 
 **3. Dub** — translate a clip into another language, keeping its cadence.
 `dub-clips.py` (segment → translate → fit → mix) → `cut-clips.py --dub`
@@ -234,7 +277,7 @@ compares it against the device, because the shell creates the destination file
 instantly and a truncated take still probes clean — it just reports a shorter
 duration.
 
-Four traps, all with evidence in the README gotchas: **`aselect` passes every
+Four traps, all with evidence in the reference gotchas (`docs/reference.md ## Gotchas`): **`aselect` passes every
 audio frame** on this ffmpeg, so cutting uses `trim`/`atrim`; a phone's
 **rotation tag can be wrong**, and `-noautorotate` copies the bogus matrix onto
 the output, so `camera_rotate` drives `-display_rotation` instead; a looped PNG
@@ -258,7 +301,7 @@ is not a re-encode of it.
 pauses it removed are already off the clock. `--frame T` composites the card
 onto the real frame at T and writes a PNG, which is the placement check that
 costs nothing; run it before an encode. Style is `config/labels/lower-third.json`,
-every value measured off the reference clip (see the README table) rather than
+every value measured off the reference clip (see the table in `docs/reference.md`) rather than
 chosen. A label past the end of the film would fail **silently** — `enable`
 never turns true — so the runtime is asserted against it.
 
@@ -339,7 +382,7 @@ work as they do in `screencast-cut.py`, inside the same pass.
 
 **Brand names go in before the transcription, not after.** One demo gave
 "Instafili"/"Instafil"/"Instafield" for the same product. `transcribe-words.py
---hotwords-file config/vocab/instafill.txt` fixes it at the source; patching
+--hotwords-file config/vocab/product.local.txt` fixes it at the source; patching
 afterwards leaves the timings attached to words that were never decoded.
 
 **6. Publish** — upload it, then give it chapters.
@@ -428,7 +471,7 @@ python scripts/angle-cut.py      --manifest projects/<id>/anglecut.json --list
 python scripts/compare-videos.py --rendered <cut>.mp4 --reference <program>.mp4
 ```
 
-Four things here cost real time to learn, all in the README gotchas: **conform
+Four things here cost real time to learn, all in the reference gotchas (`docs/reference.md ## Gotchas`): **conform
 before measuring** (a download is rarely on the frame rate it claims, and `fps=`
 duplicates and drops — use `setpts` by frame index and assert the count);
 **NVENC does not re-encode an identical frame identically**, so `freezedetect`
@@ -547,6 +590,59 @@ After touching any of `screen-activity.py`, `screen-cut.py`, `scan-pii.py`,
 `python scripts/check-screen.py` — the PII rules against the strings that came
 off real frames, the cut arithmetic, the recall harness, no GPU, no OCR.
 
+**9. Zoom** — a Zoom local recording, or a talk the host stopped and restarted
+so it arrived as several folders, cut into one film.
+`zoom-import.py` → `tighten-cut.py` → `run-captions.py`
+
+```powershell
+python scripts/zoom-import.py --since 2026-09-01                 # survey, copies nothing
+python scripts/zoom-import.py --project <id> --join --meeting "<a>" --meeting "<b>"
+```
+
+A Zoom recording is a **folder**, and four things about it are not guessable, so
+`zoom-import.py` checks all four. `recording.conf` is the authority and its
+`process` is a percentage — below 100 the folder holds a `.zoom` stub and a
+`video*.mp4.tmp` that **probes clean as a short valid mp4**, so an unconverted
+folder is refused rather than silently imported (one measured here is a 551 KB
+stub of a 30-minute meeting). The sidecar `audio<magic>.m4a` is the **same mix**
+as the mp4's own track — identical MD5 at 16 kHz mono — so muxing it in doubles
+the voice. `creation_time` is when Zoom finished **converting**, not capture
+start (measured: folder stamped 10:26:31 local, stamp ten minutes later), so
+parts are ordered by the folder NAME. And `--join` stream-copies the parts end
+to end, asserting the total against the sum, which is what gives the cut, the
+transcript, the captions and any exported timeline **one clock**.
+
+**Names never go in a committed hotword list.** People and clients are the
+highest-value ASR hotwords there are and the least shareable thing in the repo,
+so `transcribe-words.py --hotwords-file` is **repeatable**: pass the committed
+domain vocabulary and a gitignored `config/vocab/*.local.txt` of names as two
+files. One flag taking one file forces them into one file, and the private half
+then rides along into git.
+
+**Highlighting the main points is a caption feature, not an overlay.**
+`--emphasis-file` (on `run-captions.py` and `build-captions-ass.py`) names
+phrases that hold `states.emphasis` for their whole card while the spotlight
+still sweeps, so a key line reads to someone skimming. A phrase that matches
+nothing is a **failure**, for the same reason `corrections` are: a highlight
+list that quietly stops applying is worse than none. Emphasis must not reuse the
+spotlight colour or the two signals collapse into one.
+
+After touching `zoom-import.py` or the emphasis half of
+`build-captions-ass.py`, run `python scripts/check-zoom.py` — the Zoom folder
+rules against the shapes real recordings have, the folder-name ordering and the
+emphasis matcher; no GPU, no files.
+
+**To hand the cut to DaVinci Resolve**, `resolve-export.py` writes it as an
+OTIO/EDL/FCP7 XML timeline plus an SRT — interchange, which works in the **free**
+edition. Do not reach for the scripting API instead: it is Studio-only (21.1's
+notes: "Advanced scripting now requires DaVinci Resolve Studio"), and measured
+on the free 21.1 here `scriptapp("Resolve")` returns `None` from both this venv
+and Blackmagic's own bundled interpreter. The caption LOOK does not travel
+either — Resolve imports SRT/VTT/TTML/XML subtitles and not ASS, so the per-word
+spotlight and the emphasis colour stay with the burn-in pass.
+`docs/davinci-resolve.md` is the research; `docs/todo.md` #6 records the
+live-API branch and what is worth salvaging from it.
+
 ## Projects: the memory that outlives the session
 
 Each video is a folder, `projects/<id>/`: its manifests and two committed
@@ -573,7 +669,7 @@ python scripts/project-scan.py --all --check     # doctor: stale/missing/unrecor
 The doctor's `STALE` means a controlling manifest changed after the render —
 either re-render or, if the edit was non-material (a path fix), acknowledge it
 with `checked_utc` on the deliverable. `--check` runs in seconds; run it before
-and after touching a project. Schema detail: `## Projects` in the README. The
+and after touching a project. Schema detail: `## Projects` in `docs/reference.md`. The
 previous attempt at this — `config/video-specs.template.json` — died because no
 tool read or wrote it; that is why the writers live inside the render scripts.
 
@@ -610,32 +706,51 @@ which cannot encode the glyphs at all.
 | `scripts/_encode.py` | the one place encoder keys are chosen; `check-encode.py` is its test |
 | `scripts/conform-tapes.py` | put N real recordings onto one frame rate and size before a frame-addressed cut |
 | `scripts/tighten-cut.py` | one already-composited recording: shorten its pauses, drop its stumbles, remove the parts you name |
+| `scripts/zoom-import.py` | Zoom local recordings -> a project; `--join` puts a talk recorded in parts on one clock |
+| `scripts/check-zoom.py` | the Zoom/emphasis self-test: folder rules, part ordering, phrase matching |
 | `scripts/checklist-card.py` | an animated checklist end screen (ticks drawn one by one), words in the project, look in `config/cards/checklist/`; `edl-cut.py` plays it as an EDL entry |
 | `scripts/make-thumbnail.py` | a 1280x720 YouTube thumbnail in the channel's house style from a spec; `yt-upload.py --thumbnail` sets it |
 | `scripts/edl-cut.py` | a film from hand-chosen ranges of a few silent takes, with an elapsed counter driven by SOURCE time so it stays true over a sped-up wait |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
+| `scripts/resolve-export.py` | the cut as an OTIO/EDL/FCP7 XML timeline plus an SRT, for DaVinci Resolve (free edition); `check-resolve.py` is its test, `docs/davinci-resolve.md` the research behind it |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
 | `scripts/screencast-pipeline.py` | the silent-screencast job as one cached, checkpointed command; the stage scripts it drives are listed under pipeline 7 |
 | `docs/retro-books-giveaway.md` | where six hours went on the first silent-screencast edit, and the rule that now prevents each loss |
 | `projects/<id>/` | one video: `project.json`, `journal.md`, its manifests + sidecars (committed), and its `sources/ audio/ transcripts/ outputs/ temp/` (gitignored) |
 | `config/presets/` | caption styling |
-| `config/vocab/` | ASR hotword lists: brand names and acronyms Whisper has never seen |
+| `config/vocab/` | ASR hotword lists per language: the acronyms and code-switched English Whisper has never seen. Names, clients and your own brands go in a gitignored `*.local.txt` beside them, never in a committed list — this repo is public |
 | `config/labels/` | the lower-third name label |
 | `config/overlays/` | image-overlay animation, layout and background treatment |
 | `config/cards/` | card design: `templates/` the shape, `brands/` the look |
+| `config/resolve/` | interchange export defaults: which formats, the SRT grouping, the marker colours |
 | `config/handles/` | the animated handle badge |
-| `config/chapters/` | legacy chapter lists for already-published channel videos; new projects keep `chapters.txt` in their folder |
 | `sources/` `audio/` `transcripts/` `outputs/` `temp/` | legacy shared content dirs, gitignored; new work lives under `projects/` |
 | `docs/product-strategy.md` | how this repo becomes a product: the audience, the licensed-plugin model, install/update/routing mechanics, the learning flywheel. Read it before designing anything customer-facing |
 | `docs/market-shorts-2026.md` | what the AI shorts/clipping market actually looks like, researched 2026-09-01 with sources: who died, who is healthy, the GTM playbooks and what each produces, who pays, and where local-first does and does not matter. Findings only, no recommendation — read it before re-arguing the shorts question from priors |
+| `docs/davinci-resolve.md` | whether we can interoperate with DaVinci Resolve, researched 2026-09-08: its project files (`.drp`, the disk database) are closed and not ours to write; OTIO/EDL/FCP7 XML + SRT are the door, and work in the free edition; external scripting and the new 21.1 MCP server are Studio-only. Includes a measured export of a real keep-list and what each format drops |
 
 ## House rules
 
 These come from how the repo is actually used — follow them without being asked.
 
 - **Leave tooling behind, not just output.** A task ends as a config-driven
-  script plus an example config, a README section, and an updated skill, then
+  script plus an example config, a `docs/reference.md` section, and an updated skill, then
   committed. Never hardcode styling or boundaries into a script.
+- **A channel's own style is part of the deliverable.** Before cutting for a
+  channel we have not cut for before, measure their look off their own frames
+  and commit `config/presets/<channel>.json` with a `_measured` block naming the
+  frames and the numbers. Never reach for `red-card` on someone else's footage.
+  When the job is a pitch, record what they already publish — length, views,
+  caption treatment, what they do *not* do — **before** cutting, or "better than
+  theirs" is a claim nobody can check afterwards. Procedure: `## Step 0` in the
+  `video-shorts` skill.
+- **A caption position is only safe relative to a framing.** After any crop
+  change, run `python scripts/check-caption-space.py --manifest <m>` — it reads
+  the render and fails when the card sits on the speaker's face. Sweep
+  `grouping.max_words` against `layout.max_line_width_px` with the wrap/orphan
+  counters the caption builder prints; both shipped presets had the worst cell
+  of their own sweep. Neither defect is visible to any structural check, and
+  spot-checking frames by eye misses both — that is what these two exist for.
 - **Verify before spending an encode.** `cut-clips.py` proves caption sync on
   sampled frames and asserts the output duration before it renders. Keep that
   property; it is what caught a clip rendering 463s instead of 55s.
@@ -649,7 +764,7 @@ These come from how the repo is actually used — follow them without being aske
   seconds of dead air in a film; pricing four settings took no encode at all.
   A new tool is not finished until you can ask it what a choice costs.
 - **Record traps with the reason,** not just the fix — see `## Gotchas` in the
-  README, which is where the ffmpeg and libass landmines are written down.
+  `docs/reference.md`, which is where the ffmpeg and libass landmines are written down.
 - **Read the project file before editing a video; record after.** A change
   request starts at `projects/<id>/project.json` and `journal.md`, not at the
   filesystem. Wired scripts record renders and uploads; everything else — a
@@ -658,7 +773,26 @@ These come from how the repo is actually used — follow them without being aske
 - **The scripts are an SDK, not a fixed appliance.** The human never reads
   them; you are their only caller and their maintainer. When a task does not
   fit an existing script, extend the script or write a new one — and the change
-  is not done until `_project.record()` still tells the truth, the README says
-  what the code does, the affected skill teaches it, and
+  is not done until `_project.record()` still tells the truth, `docs/reference.md` says
+  what the code does, the affected skill teaches it, `ruff check` and
+  `ruff format` are clean on it, and
   `python scripts/check-script.py --changed` passes (the check-script skill
   is the full review).
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues on `kitcut-hq/kitcut`, driven through the `gh` CLI.
+See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Lowercase, spaces not hyphens: `needs triage`, `needs info`, `ready for agent`,
+`ready for human`, `wontfix`, plus the category and routing ones.
+See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root, both created
+lazily when there is something real to record. See `docs/agents/domain.md`.

@@ -24,13 +24,20 @@ Engines:
 
 Invoke as:  python scripts/dub-translate.py --help  (usually driven in-process by dub-clips.py)
 """
-import sys, os, json, argparse, subprocess, re, shutil
+
+import sys
+import os
+import json
+import argparse
+import subprocess
+import re
+import shutil
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
 ENV = _env.ENV
-BATCH = 20          # slots per request: enough context, short enough to stay accurate
+BATCH = 20  # slots per request: enough context, short enough to stay accurate
 
 PROMPT = """You are dubbing a %(src)s video into %(dst)s.
 
@@ -71,10 +78,11 @@ Reply with ONLY a JSON array, no prose and no code fence:
 def build_prompt(units, context, src="Ukrainian", dst="English", wps=3.2):
     slots = []
     for u in units:
-        slots.append('[%d] %.1fs (aim for about %d words): %s'
-                     % (u["i"], u["dur"], max(2, int(round(u["dur"] * wps))), u["text"]))
-    return PROMPT % {"src": src, "dst": dst, "context": context,
-                     "slots": "\n".join(slots)}
+        slots.append(
+            "[%d] %.1fs (aim for about %d words): %s"
+            % (u["i"], u["dur"], max(2, int(round(u["dur"] * wps))), u["text"])
+        )
+    return PROMPT % {"src": src, "dst": dst, "context": context, "slots": "\n".join(slots)}
 
 
 def _extract_json(s):
@@ -85,7 +93,7 @@ def _extract_json(s):
     tried as the start of a real JSON value until one parses as a list.
     """
     s = s.strip()
-    s = re.sub(r"^```(?:json)?\s*|\s*```$", "", s, flags=re.M).strip()
+    s = re.sub(r"^```(?:json)?\s*|\s*```$", "", s, flags=re.MULTILINE).strip()
     dec = json.JSONDecoder()
     i = s.find("[")
     while i >= 0:
@@ -93,8 +101,7 @@ def _extract_json(s):
             val, _ = dec.raw_decode(s, i)
             # it has to be OUR array: prose like "I kept slot [1] short" parses
             # as a perfectly good JSON list of one integer
-            if isinstance(val, list) and val and all(isinstance(x, dict)
-                                                     for x in val):
+            if isinstance(val, list) and val and all(isinstance(x, dict) for x in val):
                 return val
         except ValueError:
             pass
@@ -112,11 +119,17 @@ def _via_claude(prompt, model=None):
     # the prompt goes on stdin, not argv: Windows caps a command line at ~32k
     # characters and a long clip blows straight past that
     try:
-        r = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
-                           encoding="utf-8", env=ENV, timeout=300)
+        r = subprocess.run(
+            cmd,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=ENV,
+            timeout=300,
+        )
     except subprocess.TimeoutExpired:
-        sys.exit("claude CLI produced nothing for 300s -- try again, or use "
-                 "--engine openai")
+        sys.exit("claude CLI produced nothing for 300s -- try again, or use --engine openai")
     except OSError as e:
         # a Unix-style extensionless shim on PATH resolves via shutil.which but
         # CreateProcess cannot run it (WinError 193)
@@ -131,11 +144,17 @@ def _via_openai(prompt, model="gpt-4o"):
     if not key:
         sys.exit("OPENAI_API_KEY is not set -- use --engine claude or manual")
     import httpx
-    r = httpx.post("https://api.openai.com/v1/chat/completions",
-                   headers={"Authorization": "Bearer %s" % key},
-                   json={"model": model, "temperature": 0.3,
-                         "messages": [{"role": "user", "content": prompt}]},
-                   timeout=180)
+
+    r = httpx.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={"Authorization": "Bearer %s" % key},
+        json={
+            "model": model,
+            "temperature": 0.3,
+            "messages": [{"role": "user", "content": prompt}],
+        },
+        timeout=180,
+    )
     r.raise_for_status()
     return _extract_json(r.json()["choices"][0]["message"]["content"])
 
@@ -148,8 +167,10 @@ def _ask(prompt, engine, model=None):
     paid for dozens of TTS renders -- one retry is cheap insurance.
     """
     if engine == "manual":
-        sys.exit("--engine manual has no model to ask -- pass the hand-written "
-                 "file via --translation instead")
+        sys.exit(
+            "--engine manual has no model to ask -- pass the hand-written "
+            "file via --translation instead"
+        )
     for attempt in (0, 1):
         try:
             if engine == "claude":
@@ -161,28 +182,42 @@ def _ask(prompt, engine, model=None):
             print("  reply was not JSON, asking once more ...", flush=True)
 
 
-def translate(units, context, engine="claude", src="Ukrainian", dst="English",
-              wps=3.2, model=None, verbose=True):
+def translate(
+    units,
+    context,
+    engine="claude",
+    src="Ukrainian",
+    dst="English",
+    wps=3.2,
+    model=None,
+    verbose=True,
+):
     """Returns [{i, text, tight}] covering every unit, in order."""
     if engine == "manual":
-        sys.exit("--engine manual needs a hand-written translation: pass "
-                 "--translation <file> (dub-clips.py) or --from-json "
-                 "(dub-translate.py)")
+        sys.exit(
+            "--engine manual needs a hand-written translation: pass "
+            "--translation <file> (dub-clips.py) or --from-json "
+            "(dub-translate.py)"
+        )
     out = {}
     for k in range(0, len(units), BATCH):
-        batch = units[k:k + BATCH]
+        batch = units[k : k + BATCH]
         prompt = build_prompt(batch, context, src, dst, wps)
         if verbose:
-            print("  translating slots %d-%d via %s ..."
-                  % (batch[0]["i"], batch[-1]["i"], engine), flush=True)
+            print(
+                "  translating slots %d-%d via %s ..." % (batch[0]["i"], batch[-1]["i"], engine),
+                flush=True,
+            )
         rows = _ask(prompt, engine, model)
         for r in rows:
             try:
                 i = int(r["i"])
             except (KeyError, TypeError, ValueError):
                 continue
-            out[i] = {"text": str(r.get("text", "")).strip(),
-                      "tight": str(r.get("tight", "") or r.get("text", "")).strip()}
+            out[i] = {
+                "text": str(r.get("text", "")).strip(),
+                "tight": str(r.get("tight", "") or r.get("text", "")).strip(),
+            }
     missing = [u["i"] for u in units if not out.get(u["i"], {}).get("text")]
     if missing:
         sys.exit("translation is missing slots: %s" % missing)
@@ -190,8 +225,11 @@ def translate(units, context, engine="claude", src="Ukrainian", dst="English",
     if lazy and verbose:
         # tight==text disables the fitter's shorter-rewrite fallback for that
         # slot, which matters most on ElevenLabs where rate headroom is small
-        print("  note: %d slot(s) came back without a distinct tight variant: %s"
-              % (len(lazy), sorted(lazy)), flush=True)
+        print(
+            "  note: %d slot(s) came back without a distinct tight variant: %s"
+            % (len(lazy), sorted(lazy)),
+            flush=True,
+        )
     return [dict(out[u["i"]], i=u["i"]) for u in units]
 
 
@@ -229,8 +267,19 @@ Reply with ONLY a JSON array, no prose and no code fence:
 """
 
 
-def retune(units, fits, rows, context, engine="claude", src="Ukrainian",
-           dst="English", wps=3.2, model=None, short=0.85, verbose=True):
+def retune(
+    units,
+    fits,
+    rows,
+    context,
+    engine="claude",
+    src="Ukrainian",
+    dst="English",
+    wps=3.2,
+    model=None,
+    short=0.85,
+    verbose=True,
+):
     """Re-ask for only the lines that measurement showed do not fit.
 
     Returns a new rows list. The first pass is a guess at how long a sentence
@@ -249,26 +298,39 @@ def retune(units, fits, rows, context, engine="claude", src="Ukrainian",
     if not todo:
         return rows, 0
     if engine == "manual":
-        print("  %d slot(s) do not fit (%s) but --engine manual: retune "
-              "skipped; edit the translation file and re-run"
-              % (len(todo), ", ".join(str(u["i"]) for u, _, _ in todo)),
-              flush=True)
+        print(
+            "  %d slot(s) do not fit (%s) but --engine manual: retune "
+            "skipped; edit the translation file and re-run"
+            % (len(todo), ", ".join(str(u["i"]) for u, _, _ in todo)),
+            flush=True,
+        )
         return rows, 0
 
     slots = []
     for u, f, want in todo:
         target = max(2, int(round(u["dur"] * wps)))
-        slots.append("[%d] %s -- slot %.1fs, spoken it took %.1fs, aim for about "
-                     "%d words.\n     current: %s\n     current tight: %s"
-                     "\n     %s: %s"
-                     % (u["i"], want, u["dur"], f["final"], target,
-                        by_i[u["i"]]["text"], by_i[u["i"]].get("tight", ""),
-                        src, u["text"]))
-    prompt = RETUNE % {"src": src, "dst": dst, "context": context,
-                       "slots": "\n".join(slots)}
+        slots.append(
+            "[%d] %s -- slot %.1fs, spoken it took %.1fs, aim for about "
+            "%d words.\n     current: %s\n     current tight: %s"
+            "\n     %s: %s"
+            % (
+                u["i"],
+                want,
+                u["dur"],
+                f["final"],
+                target,
+                by_i[u["i"]]["text"],
+                by_i[u["i"]].get("tight", ""),
+                src,
+                u["text"],
+            )
+        )
+    prompt = RETUNE % {"src": src, "dst": dst, "context": context, "slots": "\n".join(slots)}
     if verbose:
-        print("  retuning %d slot(s): %s"
-              % (len(todo), ", ".join(str(u["i"]) for u, _, _ in todo)), flush=True)
+        print(
+            "  retuning %d slot(s): %s" % (len(todo), ", ".join(str(u["i"]) for u, _, _ in todo)),
+            flush=True,
+        )
     fixed = _ask(prompt, engine, model)
     wanted = {u["i"] for u, _, _ in todo}
     n = dropped = 0
@@ -285,12 +347,11 @@ def retune(units, fits, rows, context, engine="claude", src="Ukrainian",
         if i in by_i and str(r.get("text", "")).strip():
             by_i[i]["text"] = str(r["text"]).strip()
             t = str(r.get("tight", "")).strip()
-            if t:                      # keep the old tight rather than tight=text:
-                by_i[i]["tight"] = t   # losing it disables the fitter's fallback
+            if t:  # keep the old tight rather than tight=text:
+                by_i[i]["tight"] = t  # losing it disables the fitter's fallback
             n += 1
     if dropped and verbose:
-        print("  discarded %d unrequested slot(s) from the retune reply"
-              % dropped, flush=True)
+        print("  discarded %d unrequested slot(s) from the retune reply" % dropped, flush=True)
     return [by_i[int(r["i"])] for r in rows], n
 
 
@@ -300,11 +361,18 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--engine", default="claude", choices=["claude", "openai", "manual"])
     ap.add_argument("--model")
-    ap.add_argument("--from-json", "--translation", dest="from_json",
-                    help="manual engine: the hand-written array to use "
-                         "(same file dub-clips.py takes as --translation)")
-    ap.add_argument("--print-prompt", action="store_true",
-                    help="dump the prompt and exit, to paste somewhere else")
+    ap.add_argument(
+        "--from-json",
+        "--translation",
+        dest="from_json",
+        help="manual engine: the hand-written array to use "
+        "(same file dub-clips.py takes as --translation)",
+    )
+    ap.add_argument(
+        "--print-prompt",
+        action="store_true",
+        help="dump the prompt and exit, to paste somewhere else",
+    )
     ap.add_argument("--src-lang", default="Ukrainian")
     ap.add_argument("--dst-lang", default="English")
     ap.add_argument("--words-per-sec", type=float, default=3.2)
@@ -315,8 +383,7 @@ def main():
     units, context = plan["units"], plan["context"]
 
     if args.print_prompt:
-        print(build_prompt(units, context, args.src_lang, args.dst_lang,
-                           args.words_per_sec))
+        print(build_prompt(units, context, args.src_lang, args.dst_lang, args.words_per_sec))
         return
     if args.engine == "manual":
         if not args.from_json:
@@ -324,16 +391,29 @@ def main():
         with open(args.from_json, encoding="utf-8") as f:
             rows = json.load(f)
         by_i = {int(r["i"]): r for r in rows if "i" in r}
-        missing = [u["i"] for u in units
-                   if not str((by_i.get(u["i"]) or {}).get("text", "")).strip()]
+        missing = [
+            u["i"] for u in units if not str((by_i.get(u["i"]) or {}).get("text", "")).strip()
+        ]
         if missing:
             sys.exit("translation is missing slots: %s" % missing)
-        result = [{"i": u["i"], "text": by_i[u["i"]]["text"].strip(),
-                   "tight": (by_i[u["i"]].get("tight") or by_i[u["i"]]["text"]).strip()}
-                  for u in units]
+        result = [
+            {
+                "i": u["i"],
+                "text": by_i[u["i"]]["text"].strip(),
+                "tight": (by_i[u["i"]].get("tight") or by_i[u["i"]]["text"]).strip(),
+            }
+            for u in units
+        ]
     else:
-        result = translate(units, context, args.engine, args.src_lang,
-                           args.dst_lang, args.words_per_sec, args.model)
+        result = translate(
+            units,
+            context,
+            args.engine,
+            args.src_lang,
+            args.dst_lang,
+            args.words_per_sec,
+            args.model,
+        )
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:

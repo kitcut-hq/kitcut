@@ -18,7 +18,13 @@ Modes, cheapest first:
 
 Invoke as:  python scripts/project-scan.py --id claude-demo --list
 """
-import sys, os, json, glob, time, argparse
+
+import sys
+import os
+import json
+import glob
+import time
+import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -56,7 +62,7 @@ def scan(pid):
     """A fresh mechanical view of one project folder."""
     pdir = os.path.join(_project.projects_dir(), pid)
     inputs, controls, deliverables = {}, {}, {}
-    manifests = []                      # (path, kind, doc)
+    manifests = []  # (path, kind, doc)
 
     for p in sorted(glob.glob(os.path.join(pdir, "*.json"))):
         base = os.path.basename(p)
@@ -72,23 +78,30 @@ def scan(pid):
         elif classify_manifest(doc):
             manifests.append((p, classify_manifest(doc), doc))
     for p, _, _ in manifests:
-        role = "manifest" if len(manifests) == 1 else \
-            "manifest-" + os.path.splitext(os.path.basename(p))[0]
+        role = (
+            "manifest"
+            if len(manifests) == 1
+            else "manifest-" + os.path.splitext(os.path.basename(p))[0]
+        )
         controls[role] = norm(p)
-    for name, role in (("chapters.txt", "chapters"),
-                       ("description.txt", "description")):
+    for name, role in (("chapters.txt", "chapters"), ("description.txt", "description")):
         p = os.path.join(pdir, name)
         if os.path.exists(p):
             controls[role] = norm(p)
 
     outdirs = {os.path.join(pdir, "outputs")}
     for _, kind, m in manifests:
-        for key, role in (("screen", "screen"), ("camera", "camera"),
-                          ("source", "source"), ("words", "words")):
+        for key, role in (
+            ("screen", "screen"),
+            ("camera", "camera"),
+            ("source", "source"),
+            ("words", "words"),
+        ):
             if m.get(key):
                 inputs.setdefault(role, norm(m[key]))
-        for be in (m.get("bookends") or {}).get("open", []) + \
-                  (m.get("bookends") or {}).get("close", []):
+        for be in (m.get("bookends") or {}).get("open", []) + (m.get("bookends") or {}).get(
+            "close", []
+        ):
             if be.get("source"):
                 inputs["bookend-" + be.get("id", "clip")] = norm(be["source"])
             for i, br in enumerate(be.get("broll") or []):
@@ -99,18 +112,18 @@ def scan(pid):
         if (m.get("captions") or {}).get("style"):
             controls.setdefault("caption-style", norm(m["captions"]["style"]))
         if m.get("label_preset") or m.get("name_labels"):
-            controls.setdefault("label-style",
-                                norm(m.get("label_preset",
-                                           "config/labels/lower-third.json")))
+            controls.setdefault(
+                "label-style", norm(m.get("label_preset", "config/labels/lower-third.json"))
+            )
         if (m.get("handle") or {}).get("preset"):
             controls.setdefault("handle-style", norm(m["handle"]["preset"]))
         img_specs = list(m.get("image_overlays") or [])
         for c in m.get("clips") or []:
             img_specs += list(c.get("image_overlays") or [])
         if m.get("overlay_preset") or img_specs:
-            controls.setdefault("overlay-style",
-                                norm(m.get("overlay_preset",
-                                           "config/overlays/end-card.json")))
+            controls.setdefault(
+                "overlay-style", norm(m.get("overlay_preset", "config/overlays/end-card.json"))
+            )
         for i, spec in enumerate(img_specs):
             # The page or spec an overlay is drawn from is a CONTROL, not an
             # input: editing it is how the card is changed, and the PNG
@@ -123,8 +136,7 @@ def scan(pid):
                 inputs.setdefault("overlay-%d" % (i + 1), norm(spec["image"]))
 
     for od in sorted(outdirs):
-        for p in sorted(glob.glob(os.path.join(od, "**", "*.*"),
-                                  recursive=True)):
+        for p in sorted(glob.glob(os.path.join(od, "**", "*.*"), recursive=True)):
             ext = os.path.splitext(p)[1].lower()
             if ext == ".mp4":
                 deliverables[norm(p)] = deliverable_for(p, pid, manifests)
@@ -144,21 +156,28 @@ def deliverable_for(p, pid, manifests):
     owner = None
     best = -1
     for mp, kind, m in manifests:
-        pre = m.get("id", "") if kind == "screencast" else \
-            (m["prefix"] + "-" if m.get("prefix") else "")
+        pre = (
+            m.get("id", "")
+            if kind == "screencast"
+            else (m["prefix"] + "-" if m.get("prefix") else "")
+        )
         if not pre or not base.startswith(pre):
             continue
         if kind == "clips":
             # the remainder must be a clip id (a dub tag may follow it) --
             # the captioned MASTER also starts with the prefix and is not a clip
-            rest = base[len(pre):]
-            if not any(rest == c["id"] or rest.startswith(c["id"] + "-")
-                       for c in m.get("clips", []) if c.get("id")):
+            rest = base[len(pre) :]
+            if not any(
+                rest == c["id"] or rest.startswith(c["id"] + "-")
+                for c in m.get("clips", [])
+                if c.get("id")
+            ):
                 continue
         score = len(pre)
         od = m.get("outdir")
-        if od and os.path.normcase(os.path.normpath(os.path.join(ROOT, od))) \
-                == os.path.normcase(os.path.normpath(os.path.dirname(p))):
+        if od and os.path.normcase(os.path.normpath(os.path.join(ROOT, od))) == os.path.normcase(
+            os.path.normpath(os.path.dirname(p))
+        ):
             score += 1000
         if score > best:
             best, owner = score, (mp, kind, m)
@@ -177,13 +196,11 @@ def deliverable_for(p, pid, manifests):
         if sd.get("dub"):
             d["kind"] = "short-dubbed"
             d.setdefault("sidecars", {})["dub-words"] = norm(sd.get("dub_words", ""))
-            burned = burned + ["dubbed audio: %s (scanned)"
-                               % os.path.basename(sd["dub"])]
+            burned = burned + ["dubbed audio: %s (scanned)" % os.path.basename(sd["dub"])]
     yt = stem + ".youtube.json"
     if os.path.exists(yt):
         y = jload(yt) or {}
-        d["published"] = {"url": y.get("url"), "privacy": y.get("privacy"),
-                          "sidecar": norm(yt)}
+        d["published"] = {"url": y.get("url"), "privacy": y.get("privacy"), "sidecar": norm(yt)}
     runman = os.path.join(ROOT, "outputs", "%s.manifest.json" % pid)
     if d.get("kind") == "captioned":
         for cand in (stem + ".manifest.json", runman):
@@ -197,11 +214,14 @@ def deliverable_for(p, pid, manifests):
 
 def dub_deliverable_for(p):
     stem = os.path.splitext(p)[0]
-    d = {"status": "current", "kind": "dub-audio",
-         "built_utc": utc(os.path.getmtime(p))}
+    d = {"status": "current", "kind": "dub-audio", "built_utc": utc(os.path.getmtime(p))}
     sc = {}
-    for suff, role in ((".plan.json", "plan"), (".translation.json", "translation"),
-                       (".dub.json", "report"), (".words.json", "words")):
+    for suff, role in (
+        (".plan.json", "plan"),
+        (".translation.json", "translation"),
+        (".dub.json", "report"),
+        (".words.json", "words"),
+    ):
         if os.path.exists(stem + suff):
             sc[role] = norm(stem + suff)
     if sc:
@@ -213,19 +233,22 @@ def screencast_burned(m):
     out = []
     cut = m.get("cut") or {}
     if cut.get("min_silence") is not None:
-        out.append("pause cut per cuts.json (min_silence %s) (scanned)"
-                   % cut["min_silence"])
+        out.append("pause cut per cuts.json (min_silence %s) (scanned)" % cut["min_silence"])
     pip = m.get("pip") or {}
     if pip:
-        out.append("camera PiP %s %spx (scanned)"
-                   % (pip.get("corner", "?"), pip.get("size_px", "?")))
+        out.append(
+            "camera PiP %s %spx (scanned)" % (pip.get("corner", "?"), pip.get("size_px", "?"))
+        )
     for be in (m.get("bookends") or {}).get("open", []):
-        out.append("opening bookend %s%s (scanned)"
-                   % (be.get("id", "clip"),
-                      " + b-roll" if be.get("broll") else ""))
+        out.append(
+            "opening bookend %s%s (scanned)"
+            % (be.get("id", "clip"), " + b-roll" if be.get("broll") else "")
+        )
     for lb in m.get("name_labels") or []:
-        out.append("name label '%s' at %ss film time for %ss (scanned)"
-                   % (lb.get("name"), lb.get("at"), lb.get("dur")))
+        out.append(
+            "name label '%s' at %ss film time for %ss (scanned)"
+            % (lb.get("name"), lb.get("at"), lb.get("dur"))
+        )
     out += image_overlay_burned(m)
     return out
 
@@ -242,11 +265,14 @@ def image_overlay_burned(m, specs=None):
     for spec in (m.get("image_overlays") or []) if specs is None else specs:
         at = float(spec.get("at", 0))
         when = ("%.1fs before the end" % -at) if at < 0 else ("%.1fs" % at)
-        out.append("image overlay '%s' at %s%s (scanned)"
-                   % (os.path.basename(spec.get("image") or spec.get("html")
-                                       or spec.get("card") or "?"), when,
-                      ", over a treated background"
-                      if spec.get("background") is not None else ""))
+        out.append(
+            "image overlay '%s' at %s%s (scanned)"
+            % (
+                os.path.basename(spec.get("image") or spec.get("html") or spec.get("card") or "?"),
+                when,
+                ", over a treated background" if spec.get("background") is not None else "",
+            )
+        )
     return out
 
 
@@ -255,8 +281,7 @@ def clips_burned(m):
     if m.get("vertical"):
         out.append("9:16 crop per reframe sidecar (scanned)")
     if m.get("captions"):
-        out.append("word-synced captions, style %s (scanned)"
-                   % m["captions"].get("style", "?"))
+        out.append("word-synced captions, style %s (scanned)" % m["captions"].get("style", "?"))
     if (m.get("handle") or {}).get("text"):
         out.append("handle badge %s (scanned)" % m["handle"]["text"])
     out += image_overlay_burned(m)
@@ -315,16 +340,18 @@ def check(pid, doc):
                 ok = max(d["built_utc"], d.get("checked_utc", ""))
                 mp = os.path.join(ROOT, man)
                 if os.path.exists(mp) and utc(os.path.getmtime(mp)) > ok:
-                    finds.append("STALE %s -- %s edited after this render"
-                                 % (key, man))
+                    finds.append("STALE %s -- %s edited after this render" % (key, man))
         yt = os.path.join(ROOT, os.path.splitext(key)[0] + ".youtube.json")
         if os.path.exists(yt) and not d.get("published"):
-            finds.append("UNRECORDED UPLOAD %s -- %s exists but no published "
-                         "block" % (key, norm(yt)))
+            finds.append(
+                "UNRECORDED UPLOAD %s -- %s exists but no published block" % (key, norm(yt))
+            )
     for kind, keys in currents.items():
         if kind in ("screencast", "captioned") and len(keys) > 1:
-            finds.append("AMBIGUOUS %d current %s renders (%s) -- mark the "
-                         "superseded ones" % (len(keys), kind, ", ".join(keys)))
+            finds.append(
+                "AMBIGUOUS %d current %s renders (%s) -- mark the "
+                "superseded ones" % (len(keys), kind, ", ".join(keys))
+            )
     return finds
 
 
@@ -333,22 +360,34 @@ def init(pid):
     for d in CONTENT_DIRS:
         os.makedirs(os.path.join(pdir, d), exist_ok=True)
     if not os.path.exists(_project.path_for(pid)):
-        _project._atomic_write(_project.path_for(pid),
-                               {"v": 1, "id": pid, "intent": "",
-                                "pipelines": [], "inputs": {}, "controls": {},
-                                "deliverables": {}, "notes": [],
-                                "updated_utc": utc(time.time())})
-    _project._journal_append(pid, "- %s project created"
-                             % time.strftime("%H:%M", time.gmtime()),
-                             time.gmtime())
+        _project._atomic_write(
+            _project.path_for(pid),
+            {
+                "v": 1,
+                "id": pid,
+                "intent": "",
+                "pipelines": [],
+                "inputs": {},
+                "controls": {},
+                "deliverables": {},
+                "notes": [],
+                "updated_utc": utc(time.time()),
+            },
+        )
+    _project._journal_append(
+        pid, "- %s project created" % time.strftime("%H:%M", time.gmtime()), time.gmtime()
+    )
     print("projects/%s/ ready" % pid)
 
 
 def all_ids():
     if not os.path.isdir(_project.projects_dir()):
         return []
-    return sorted(d for d in os.listdir(_project.projects_dir())
-                  if os.path.isdir(os.path.join(_project.projects_dir(), d)))
+    return sorted(
+        d
+        for d in os.listdir(_project.projects_dir())
+        if os.path.isdir(os.path.join(_project.projects_dir(), d))
+    )
 
 
 def main():
@@ -356,10 +395,12 @@ def main():
     ap.add_argument("--id", help="project id (folder name under projects/)")
     ap.add_argument("--init", metavar="ID", help="create a new project skeleton")
     ap.add_argument("--all", action="store_true", help="every project")
-    ap.add_argument("--list", action="store_true",
-                    help="print what a scan would change; write nothing")
-    ap.add_argument("--check", action="store_true",
-                    help="doctor the file(s) against the filesystem")
+    ap.add_argument(
+        "--list", action="store_true", help="print what a scan would change; write nothing"
+    )
+    ap.add_argument(
+        "--check", action="store_true", help="doctor the file(s) against the filesystem"
+    )
     _env.add_workspace_arg(ap)
     args = ap.parse_args()
     _env.set_workspace(args.workspace)
@@ -396,13 +437,14 @@ def main():
                 print("%s: ok" % pid)
             continue
         inputs, controls, deliverables, _ = scan(pid)
-        doc = merge(json.loads(json.dumps(old)) if old else None,
-                    pid, inputs, controls, deliverables)
+        doc = merge(
+            json.loads(json.dumps(old)) if old else None, pid, inputs, controls, deliverables
+        )
         if args.list:
-            before = json.dumps(old, ensure_ascii=False, indent=2,
-                                sort_keys=True) if old else "(none)"
-            after = json.dumps(doc, ensure_ascii=False, indent=2,
-                               sort_keys=True)
+            before = (
+                json.dumps(old, ensure_ascii=False, indent=2, sort_keys=True) if old else "(none)"
+            )
+            after = json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True)
             if before == after:
                 print("%s: no changes" % pid)
             else:
@@ -410,17 +452,25 @@ def main():
                     o = (old or {}).get(sec, {})
                     n = doc.get(sec, {})
                     for k in sorted(set(n) - set(o)):
-                        print("%s: + %s.%s = %s" % (pid, sec, k,
-                                                    json.dumps(n[k], ensure_ascii=False)[:120]))
+                        print(
+                            "%s: + %s.%s = %s"
+                            % (pid, sec, k, json.dumps(n[k], ensure_ascii=False)[:120])
+                        )
                     for k in sorted(set(o) & set(n)):
                         if o[k] != n[k]:
                             print("%s: ~ %s.%s" % (pid, sec, k))
             continue
         _project._atomic_write(_project.path_for(pid), doc)
-        print("projects/%s/project.json: %d inputs, %d controls, "
-              "%d deliverables" % (pid, len(doc.get("inputs", {})),
-                                   len(doc.get("controls", {})),
-                                   len(doc.get("deliverables", {}))))
+        print(
+            "projects/%s/project.json: %d inputs, %d controls, "
+            "%d deliverables"
+            % (
+                pid,
+                len(doc.get("inputs", {})),
+                len(doc.get("controls", {})),
+                len(doc.get("deliverables", {})),
+            )
+        )
     if bad:
         sys.exit(1)
 

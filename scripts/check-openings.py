@@ -57,12 +57,18 @@ rather than remembered by whoever ran it.
 Invoke as:  python scripts/check-openings.py --manifest projects/<id>/clips.json
             python scripts/check-openings.py --manifest ... --sheet
 """
-import sys, os, json, argparse, importlib, subprocess
+
+import sys
+import os
+import json
+import argparse
+import importlib
+import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
-_cut = importlib.import_module("cut-clips")      # hyphen: see CLAUDE.md
+_cut = importlib.import_module("cut-clips")  # hyphen: see CLAUDE.md
 _outline = importlib.import_module("transcript-outline")
 
 # Below this much silence before the cut, the clip is very likely to open on the
@@ -75,7 +81,7 @@ GAP_MIN = 0.15
 
 
 def load(path):
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -109,19 +115,36 @@ def audio_rms(src, t0, t1, hop=0.02, sr=16000):
     at -40 dB.
     """
     import numpy as np
+
     t0 = max(0.0, t0)
     raw = subprocess.run(
-        ["ffmpeg", "-v", "error", "-ss", "%.3f" % t0, "-i", src,
-         "-t", "%.3f" % (t1 - t0), "-ac", "1", "-ar", str(sr),
-         "-f", "s16le", "-"],
-        capture_output=True).stdout
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-ss",
+            "%.3f" % t0,
+            "-i",
+            src,
+            "-t",
+            "%.3f" % (t1 - t0),
+            "-ac",
+            "1",
+            "-ar",
+            str(sr),
+            "-f",
+            "s16le",
+            "-",
+        ],
+        capture_output=True,
+    ).stdout
     a = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
     n = int(hop * sr)
     if len(a) < n:
         return np.array([]), np.array([])
     k = len(a) // n
-    frames = a[:k * n].reshape(k, n)
-    rms = np.sqrt((frames ** 2).mean(axis=1))
+    frames = a[: k * n].reshape(k, n)
+    rms = np.sqrt((frames**2).mean(axis=1))
     return t0 + np.arange(k) * hop, 20.0 * np.log10(np.maximum(rms, 1e-6))
 
 
@@ -148,6 +171,7 @@ def audio_lead_in(src, cut, ref_a, ref_b, span=2.5):
     cannot make everything count as speech.
     """
     import numpy as np
+
     _, ref = audio_rms(src, ref_a, min(ref_b, ref_a + 60.0))
     if ref.size == 0:
         return None, None, None
@@ -192,6 +216,7 @@ def sheet(src, times, dst, crop=None, cols=4, tile=190):
     """Contact-sheet the given source times. Returns dst or None."""
     import numpy as np
     from PIL import Image
+
     tmp = os.path.join(os.path.dirname(dst), "_sheet_tmp")
     os.makedirs(tmp, exist_ok=True)
     vf = "scale=%d:-1" % tile
@@ -200,9 +225,24 @@ def sheet(src, times, dst, crop=None, cols=4, tile=190):
     ims = []
     for i, t in enumerate(times):
         p = os.path.join(tmp, "t%02d.png" % i)
-        subprocess.run(["ffmpeg", "-v", "error", "-ss", "%.3f" % t, "-i", src,
-                        "-frames:v", "1", "-vf", vf, "-y", p],
-                       check=False)
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-ss",
+                "%.3f" % t,
+                "-i",
+                src,
+                "-frames:v",
+                "1",
+                "-vf",
+                vf,
+                "-y",
+                p,
+            ],
+            check=False,
+        )
         if os.path.exists(p):
             ims.append(Image.open(p).convert("RGB"))
     if not ims:
@@ -220,13 +260,16 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--only", default=None, help="one clip id, or a comma list")
-    ap.add_argument("--sheet", action="store_true",
-                    help="write contact sheets of the candidate start frames")
+    ap.add_argument(
+        "--sheet", action="store_true", help="write contact sheets of the candidate start frames"
+    )
     ap.add_argument("--lead-min", type=float, default=LEAD_MIN)
-    ap.add_argument("--fps", type=float, default=None,
-                    help="source fps; probed when omitted")
-    ap.add_argument("--no-audio", action="store_true",
-                    help="skip the waveform lead-in measurement (transcript only)")
+    ap.add_argument("--fps", type=float, default=None, help="source fps; probed when omitted")
+    ap.add_argument(
+        "--no-audio",
+        action="store_true",
+        help="skip the waveform lead-in measurement (transcript only)",
+    )
     args = ap.parse_args()
 
     mp = _env.resolve(args.manifest)
@@ -248,9 +291,7 @@ def main():
         if only and clip["id"] not in only:
             continue
         cp = clip.get("pad", {})
-        start, end = _cut.resolve(clip, words,
-                                  float(cp.get("head", ph)),
-                                  float(cp.get("tail", pt)))
+        start, end = _cut.resolve(clip, words, float(cp.get("head", ph)), float(cp.get("tail", pt)))
         lead = silence_before(words, start)
         tail = silence_after(words, end)
         # A short lead-in is a suspicion, not a defect: a speaker who never
@@ -267,23 +308,28 @@ def main():
         w = inside_word(words, start)
         if w:
             flagged += 1
-            print("   FLAG -- start %.2f is INSIDE the word %r (%.2f..%.2f): "
-                  "the audio opens mid-syllable. Move it into the gap before "
-                  "%.2f or after %.2f."
-                  % (start, w.get("text", "?"), w["start"], w["end"],
-                     w["start"], w["end"]))
+            print(
+                "   FLAG -- start %.2f is INSIDE the word %r (%.2f..%.2f): "
+                "the audio opens mid-syllable. Move it into the gap before "
+                "%.2f or after %.2f."
+                % (start, w.get("text", "?"), w["start"], w["end"], w["start"], w["end"])
+            )
         w = inside_word(words, end)
         if w:
             flagged += 1
-            print("   FLAG -- end %.2f is INSIDE the word %r (%.2f..%.2f): "
-                  "the last word is chopped."
-                  % (end, w.get("text", "?"), w["start"], w["end"]))
+            print(
+                "   FLAG -- end %.2f is INSIDE the word %r (%.2f..%.2f): "
+                "the last word is chopped." % (end, w.get("text", "?"), w["start"], w["end"])
+            )
         if lead < args.lead_min and seen:
-            print("   lead-in  %6.2fs  short, but reviewed: %s"
-                  % (lead, seen if isinstance(seen, str) else "accepted"))
+            print(
+                "   lead-in  %6.2fs  short, but reviewed: %s"
+                % (lead, seen if isinstance(seen, str) else "accepted")
+            )
         else:
-            print("   lead-in  %6.2fs  %s" % (lead, "FLAG -- likely opens mid-word"
-                                              if bad else "ok"))
+            print(
+                "   lead-in  %6.2fs  %s" % (lead, "FLAG -- likely opens mid-word" if bad else "ok")
+            )
         # ...and now the same question asked of the waveform, which is the only
         # one of the two that cannot be wrong. A transcript gap the audio does
         # not agree with is worse than a short one, because it reads as "ok".
@@ -292,18 +338,24 @@ def main():
             if in_sil is None:
                 print("   audio    ------  could not decode; skipping")
             elif in_sil:
-                print("   audio    frame 0 is SILENT, %.2fs of air before the first word "
-                      "(silence < %.0f dBFS)" % (post, thr))
+                print(
+                    "   audio    frame 0 is SILENT, %.2fs of air before the first word "
+                    "(silence < %.0f dBFS)" % (post, thr)
+                )
             elif seen:
-                print("   audio    frame 0 lands in SPEECH -- reviewed and accepted: %s"
-                      % (seen if isinstance(seen, str) else "accepted"))
+                print(
+                    "   audio    frame 0 lands in SPEECH -- reviewed and accepted: %s"
+                    % (seen if isinstance(seen, str) else "accepted")
+                )
             else:
                 flagged += 1
-                print("   FLAG -- frame 0 lands in SPEECH (RMS above %.0f dBFS), so this "
-                      "opens mid-phrase, whatever the transcript says: it claims %.2fs of "
-                      "lead-in here. whisper truncates word ENDS, so a transcript gap can "
-                      "be speech. Place the cut on the waveform's local minimum and check "
-                      "the frame." % (thr, lead))
+                print(
+                    "   FLAG -- frame 0 lands in SPEECH (RMS above %.0f dBFS), so this "
+                    "opens mid-phrase, whatever the transcript says: it claims %.2fs of "
+                    "lead-in here. whisper truncates word ENDS, so a transcript gap can "
+                    "be speech. Place the cut on the waveform's local minimum and check "
+                    "the frame." % (thr, lead)
+                )
         # end_before_text cuts flush against the next phrase on purpose, so a
         # zero tail there is the feature, not a thin edge.
         if "end_before_text" in clip:
@@ -318,8 +370,10 @@ def main():
                 for g, a, b, txt in near[:4]:
                     print("     %.2fs  silence %.2f..%.2f" % (g, a, b))
             else:
-                print("   no pause >= %.2fs anywhere near -- this speaker does "
-                      "not stop; choose the frame by picture" % GAP_MIN)
+                print(
+                    "   no pause >= %.2fs anywhere near -- this speaker does "
+                    "not stop; choose the frame by picture" % GAP_MIN
+                )
 
         if args.sheet:
             # every frame inside the two best nearby pauses, plus the current cut
@@ -334,9 +388,11 @@ def main():
             if got:
                 print("   sheet %s" % got)
                 print("     times: %s" % ", ".join("%.2f" % t for t in times))
-                print("     (the LAST tile is the current cut)"
-                      if abs(times[-1] - start) < 1e-6 else
-                      "     (current cut = %.2f)" % start)
+                print(
+                    "     (the LAST tile is the current cut)"
+                    if abs(times[-1] - start) < 1e-6
+                    else "     (current cut = %.2f)" % start
+                )
 
         # the render itself, when it exists: look at what shipped
         outdir = _env.resolve(m.get("outdir", ""))
@@ -350,10 +406,12 @@ def main():
 
     print("%d clip(s) flagged" % flagged)
     if flagged:
-        print("A flag is a prompt to LOOK, not a verdict: re-run with --sheet, "
-              "open the png, and pick a frame where the mouth is closed and the "
-              "face is settled. Then set the clip's pad.head so the cut lands "
-              "there, or move start_text to a different phrase.")
+        print(
+            "A flag is a prompt to LOOK, not a verdict: re-run with --sheet, "
+            "open the png, and pick a frame where the mouth is closed and the "
+            "face is settled. Then set the clip's pad.head so the cut lands "
+            "there, or move start_text to a different phrase."
+        )
     return 1 if flagged else 0
 
 

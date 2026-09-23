@@ -42,7 +42,13 @@ encode.
 
 Invoke as:  python scripts/angle-cut.py --manifest projects/<id>/anglecut.json
 """
-import sys, os, json, argparse, subprocess, shutil
+
+import sys
+import os
+import json
+import argparse
+import subprocess
+import shutil
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -52,7 +58,7 @@ from importlib import import_module  # noqa: E402
 import _progress  # noqa: E402
 import _project  # noqa: E402
 
-_shots = import_module("shot-detect")   # hyphen: not importable by name
+_shots = import_module("shot-detect")  # hyphen: not importable by name
 _notes = import_module("debug-notes")
 _namelabel = import_module("name-label")
 _imgoverlay = import_module("image-overlay")
@@ -62,8 +68,7 @@ ENV = _env.ENV
 
 # No "encoder": _encode picks one this machine can actually run, and a
 # manifest that names one overrides it. "speed" is family-neutral.
-DEFAULT_RENDER = {"speed": 5, "cq": 18,
-                  "maxrate": "40M", "bufsize": "80M", "audio_bitrate": "192k"}
+DEFAULT_RENDER = {"speed": 5, "cq": 18, "maxrate": "40M", "bufsize": "80M", "audio_bitrate": "192k"}
 DEFAULT_ANCHOR = {"still": 0.0015, "tolerance_frames": 1, "min_margin": 3.0}
 # Finding a HELD stretch is a stricter job than finding where the opening freeze
 # ends, and wants its own numbers. Calibrated against stage 1, where the plan is
@@ -75,8 +80,7 @@ DEFAULT_DEBUG = {"held": 0.0005, "held_min_run_s": 1.0, "warn_frac": 0.2}
 
 
 def run(cmd, **kw):
-    return subprocess.run(cmd, check=True, capture_output=True, text=True,
-                          env=ENV, **kw)
+    return subprocess.run(cmd, check=True, capture_output=True, text=True, env=ENV, **kw)
 
 
 def hhmmss(t):
@@ -88,25 +92,63 @@ def rel(p):
 
 
 def probe_video(path):
-    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-               "-show_entries", "stream=width,height,r_frame_rate",
-               "-of", "json", path]).stdout
+    out = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,r_frame_rate",
+            "-of",
+            "json",
+            path,
+        ]
+    ).stdout
     s = json.loads(out)["streams"][0]
     num, den = (int(x) for x in s["r_frame_rate"].split("/"))
     return int(s["width"]), int(s["height"]), num, den
 
 
 def count_frames(path):
-    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-               "-count_packets", "-show_entries", "stream=nb_read_packets",
-               "-of", "csv=p=0", path]).stdout
+    out = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-count_packets",
+            "-show_entries",
+            "stream=nb_read_packets",
+            "-of",
+            "csv=p=0",
+            path,
+        ]
+    ).stdout
     return int(out.strip().rstrip(","))
 
 
 def peak_db(path):
-    p = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", path,
-                        "-vn", "-af", "volumedetect", "-f", "null", "-"],
-                       capture_output=True, text=True, env=ENV)
+    p = subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-i",
+            path,
+            "-vn",
+            "-af",
+            "volumedetect",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture_output=True,
+        text=True,
+        env=ENV,
+    )
     for line in (p.stderr or "").splitlines():
         if "max_volume:" in line:
             try:
@@ -117,9 +159,20 @@ def peak_db(path):
 
 
 def rotation(path):
-    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-               "-show_entries", "stream_side_data=rotation",
-               "-of", "default=noprint_wrappers=1:nokey=1", path]).stdout
+    out = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream_side_data=rotation",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            path,
+        ]
+    ).stdout
     return out.strip()
 
 
@@ -144,10 +197,11 @@ def picture_start(path, w, h, still):
     half an hour of decoding to ask a question whose answer cannot change.
     """
     import hashlib
-    ck = "%s|%d|%d|%.6f|%d" % (os.path.abspath(path), w, h, still,
-                               int(os.path.getmtime(path)))
-    cp = os.path.join(ROOT, "temp", "anglecut-anchor-%s.json"
-                      % hashlib.md5(ck.encode("utf-8")).hexdigest()[:12])
+
+    ck = "%s|%d|%d|%.6f|%d" % (os.path.abspath(path), w, h, still, int(os.path.getmtime(path)))
+    cp = os.path.join(
+        ROOT, "temp", "anglecut-anchor-%s.json" % hashlib.md5(ck.encode("utf-8")).hexdigest()[:12]
+    )
     if os.path.exists(cp):
         try:
             with open(cp, encoding="utf-8") as f:
@@ -166,8 +220,9 @@ def picture_start(path, w, h, still):
     try:
         os.makedirs(os.path.dirname(cp), exist_ok=True)
         with open(cp, "w", encoding="utf-8") as f:
-            json.dump({"i": got[0], "floor": got[1], "jump": got[2],
-                       "tape": _project.norm(path)}, f)
+            json.dump(
+                {"i": got[0], "floor": got[1], "jump": got[2], "tape": _project.norm(path)}, f
+            )
     except Exception:
         pass
     return got
@@ -192,8 +247,9 @@ def overlap(a, b, spans):
     return sum(max(0, min(b, y) - max(a, x)) for x, y in spans)
 
 
-def debug_notes(plan, anchors, off, files, tapes, fps, spf, stage, plan_src,
-                why, extra, warn_frac=0.2):
+def debug_notes(
+    plan, anchors, off, files, tapes, fps, spf, stage, plan_src, why, extra, warn_frac=0.2
+):
     """One note per segment: what the cut did here, and why.
 
     The freeze warning is the one that earns its place. A synthetic tape only
@@ -205,17 +261,20 @@ def debug_notes(plan, anchors, off, files, tapes, fps, spf, stage, plan_src,
     notes = []
     for i, (c, a, b) in enumerate(plan):
         ta, tb = anchors[c] + a, anchors[c] + b
-        lines = ["ANGLE-CUT  %s  plan: %s" % (stage, plan_src),
-                 "seg %02d/%02d   %s   %s-%s   %d frames"
-                 % (i + 1, len(plan), c, hhmmss(a * spf), hhmmss(b * spf), b - a),
-                 "why: %s" % (why.get(i) or "replaying the given plan"),
-                 "tape %s  f%d-%d   anchor +%d   sync %+.2f fr"
-                 % (os.path.basename(files[c]), ta, tb, anchors[c],
-                    off.get(c, 0.0))]
+        lines = [
+            "ANGLE-CUT  %s  plan: %s" % (stage, plan_src),
+            "seg %02d/%02d   %s   %s-%s   %d frames"
+            % (i + 1, len(plan), c, hhmmss(a * spf), hhmmss(b * spf), b - a),
+            "why: %s" % (why.get(i) or "replaying the given plan"),
+            "tape %s  f%d-%d   anchor +%d   sync %+.2f fr"
+            % (os.path.basename(files[c]), ta, tb, anchors[c], off.get(c, 0.0)),
+        ]
         held = overlap(ta, tb, tapes.get(c, []))
         if held > warn_frac * (b - a):
-            lines.append("!! %s is HELD for %.1fs of this shot -- no footage "
-                         "exists for this angle here" % (c, held * spf))
+            lines.append(
+                "!! %s is HELD for %.1fs of this shot -- no footage "
+                "exists for this angle here" % (c, held * spf)
+            )
         for x in extra:
             lines.append(x)
         notes.append({"start": a, "end": b, "lines": lines})
@@ -240,8 +299,7 @@ def load_plan(m):
     return plan, why, label
 
 
-def build_graph(plan, cams, anchors, idx, audio_from, a_start, a_end,
-                vlabel="vout"):
+def build_graph(plan, cams, anchors, idx, audio_from, a_start, a_end, vlabel="vout"):
     """Per-segment trim from the tape that covers it, one concat, one atrim.
 
     Each camera's segments are monotonically increasing in its own time, so a
@@ -258,35 +316,43 @@ def build_graph(plan, cams, anchors, idx, audio_from, a_start, a_end,
         if n == 1:
             ch.append("[%d:v]null[x%s_0]" % (idx[c], c))
         elif n > 1:
-            ch.append("[%d:v]split=%d%s"
-                      % (idx[c], n, "".join("[x%s_%d]" % (c, i) for i in range(n))))
+            ch.append(
+                "[%d:v]split=%d%s" % (idx[c], n, "".join("[x%s_%d]" % (c, i) for i in range(n)))
+            )
         cursor[c] = 0
     segs = []
     for i, (c, a, b) in enumerate(plan):
         k = cursor[c]
         cursor[c] += 1
-        ch.append("[x%s_%d]trim=start_frame=%d:end_frame=%d,setpts=PTS-STARTPTS[v%d]"
-                  % (c, k, anchors[c] + a, anchors[c] + b, i))
+        ch.append(
+            "[x%s_%d]trim=start_frame=%d:end_frame=%d,setpts=PTS-STARTPTS[v%d]"
+            % (c, k, anchors[c] + a, anchors[c] + b, i)
+        )
         segs.append("[v%d]" % i)
     if len(segs) == 1:
         ch.append("[v0]null[%s]" % vlabel)
     else:
-        ch.append("%sconcat=n=%d:v=1:a=0[%s]"
-                  % ("".join(segs), len(segs), vlabel))
-    ch.append("[%d:a]atrim=start_sample=%d:end_sample=%d,asetpts=PTS-STARTPTS[aout]"
-              % (idx[audio_from], a_start, a_end))
+        ch.append("%sconcat=n=%d:v=1:a=0[%s]" % ("".join(segs), len(segs), vlabel))
+    ch.append(
+        "[%d:a]atrim=start_sample=%d:end_sample=%d,asetpts=PTS-STARTPTS[aout]"
+        % (idx[audio_from], a_start, a_end)
+    )
     return ";".join(ch)
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--manifest", required=True)
-    ap.add_argument("--list", action="store_true",
-                    help="print the plan and the anchors, encode nothing")
-    ap.add_argument("--debug", action="store_true",
-                    help="burn a running commentary into the corner: what each "
-                         "shot is, why, and whether its tape actually has "
-                         "footage there")
+    ap.add_argument(
+        "--list", action="store_true", help="print the plan and the anchors, encode nothing"
+    )
+    ap.add_argument(
+        "--debug",
+        action="store_true",
+        help="burn a running commentary into the corner: what each "
+        "shot is, why, and whether its tape actually has "
+        "footage there",
+    )
     ap.add_argument("--debug-style", help="default config/overlays/debug-notes.json")
     ap.add_argument("--out", help="default <outdir>/<id>.mp4")
     ap.add_argument("--force", action="store_true")
@@ -312,13 +378,13 @@ def main():
             sys.exit("every image_overlays entry needs at least at")
         given = [k for k in _imgoverlay.SOURCES if spec.get(k)]
         if len(given) != 1:
-            sys.exit("every image_overlays entry needs exactly one of %s -- "
-                     "got %s" % ("/".join(_imgoverlay.SOURCES),
-                                 ", ".join(given) or "none"))
+            sys.exit(
+                "every image_overlays entry needs exactly one of %s -- "
+                "got %s" % ("/".join(_imgoverlay.SOURCES), ", ".join(given) or "none")
+            )
         src = rel(spec[given[0]])
         if not os.path.exists(src):
-            sys.exit("image overlay source does not exist: %s"
-                     % _project.norm(src))
+            sys.exit("image overlay source does not exist: %s" % _project.norm(src))
 
     cams = [c["id"] for c in m["cameras"]]
     files = {c["id"]: rel(c["file"]) for c in m["cameras"]}
@@ -332,8 +398,10 @@ def main():
         sync = json.load(f)
     off = {t["id"]: t["offset_frames"] for t in sync["tracks"]}
     if sync.get("reference") != ref:
-        sys.exit("the sync was measured against %s but the manifest says %s"
-                 % (sync.get("reference"), ref))
+        sys.exit(
+            "the sync was measured against %s but the manifest says %s"
+            % (sync.get("reference"), ref)
+        )
 
     plan, why, plan_src = load_plan(m)
     used = sorted({c for c, _, _ in plan})
@@ -355,15 +423,17 @@ def main():
     for c in cams:
         cw, ch, cn, cd = probe_video(files[c])
         if (cw, ch) != (w, h):
-            odd.append("%s is %dx%d, reference %s is %dx%d"
-                       % (c, cw, ch, ref, w, h))
+            odd.append("%s is %dx%d, reference %s is %dx%d" % (c, cw, ch, ref, w, h))
         if cn * den != cd * num:
-            odd.append("%s is %g fps, reference %s is %g fps"
-                       % (c, cn / float(cd), ref, num / float(den)))
+            odd.append(
+                "%s is %g fps, reference %s is %g fps" % (c, cn / float(cd), ref, num / float(den))
+            )
     if odd:
-        sys.exit("the tapes are not on one grid, so a frame number does not "
-                 "mean the same thing on each:\n  %s\nrun scripts/conform-"
-                 "tapes.py over them first" % "\n  ".join(odd))
+        sys.exit(
+            "the tapes are not on one grid, so a frame number does not "
+            "mean the same thing on each:\n  %s\nrun scripts/conform-"
+            "tapes.py over them first" % "\n  ".join(odd)
+        )
 
     # Anchoring uses each instrument where it is strong. The picture gives ONE
     # absolute anchor, taken from the tape whose opening hold breaks most
@@ -388,18 +458,24 @@ def main():
                 continue
             i, floor, jump = picture_start(files[c], w, h, acfg["still"])
             if i is None or i == 1:
-                sys.exit("%s does not open on a held frame it ever leaves -- "
-                         "declare `anchor` per camera instead" % c)
-            cand[c] = (i - first[c] - 1,      # the held frame is the first live one
-                       floor, jump, jump / max(floor, 1e-6))
+                sys.exit(
+                    "%s does not open on a held frame it ever leaves -- "
+                    "declare `anchor` per camera instead" % c
+                )
+            cand[c] = (
+                i - first[c] - 1,  # the held frame is the first live one
+                floor,
+                jump,
+                jump / max(floor, 1e-6),
+            )
         base = max(cand, key=lambda c: cand[c][3])
         if cand[base][3] < acfg["min_margin"]:
-            sys.exit("no tape breaks its opening hold decisively (best margin "
-                     "%.1fx on %s) -- declare `anchor` per camera instead"
-                     % (cand[base][3], base))
+            sys.exit(
+                "no tape breaks its opening hold decisively (best margin "
+                "%.1fx on %s) -- declare `anchor` per camera instead" % (cand[base][3], base)
+            )
         if off.get(base) is None:
-            sys.exit("%s anchors the film but the sync has no offset for it"
-                     % base)
+            sys.exit("%s anchors the film but the sync has no offset for it" % base)
         anchors[base] = cand[base][0]
         for c in cand:
             if c != base:
@@ -408,23 +484,25 @@ def main():
         anchors = {c: int(how[c]) for c in cams if c in how}
         base = None
     else:
-        sys.exit("anchor must be \"picture_start\" or a map of camera to frame")
+        sys.exit('anchor must be "picture_start" or a map of camera to frame')
 
-    print("%d tapes, reference %s, %dx%d %d/%d, programme %d frames (%s)"
-          % (len(cams), ref, w, h, num, den, n_prog, hhmmss(n_prog * spf)))
+    print(
+        "%d tapes, reference %s, %dx%d %d/%d, programme %d frames (%s)"
+        % (len(cams), ref, w, h, num, den, n_prog, hhmmss(n_prog * spf))
+    )
     print("\n  cam   anchor   tape frames   margin   picture check")
     bad = []
     for c in cams:
         if anchors.get(c) is None:
-            print("  %-5s      -                             unused by the plan"
-                  % c)
+            print("  %-5s      -                             unused by the plan" % c)
             continue
         mine = []
         tot = count_frames(files[c])
         need = anchors[c] + n_prog
         if anchors[c] < 0 or need > tot:
-            mine.append("%s: the plan needs frames %d-%d but the tape has %d"
-                        % (c, anchors[c], need, tot))
+            mine.append(
+                "%s: the plan needs frames %d-%d but the tape has %d" % (c, anchors[c], need, tot)
+            )
         note, mg = "declared", None
         if c in cand:
             mg = cand[c][3]
@@ -434,15 +512,17 @@ def main():
                 d = cand[c][0] - anchors[c]
                 note = "agrees %+d fr" % d
                 if abs(d) > acfg["tolerance_frames"]:
-                    mine.append("%s: its own picture says anchor %d but the "
-                                "sound-derived anchor is %d -- they must agree"
-                                % (c, cand[c][0], anchors[c]))
+                    mine.append(
+                        "%s: its own picture says anchor %d but the "
+                        "sound-derived anchor is %d -- they must agree"
+                        % (c, cand[c][0], anchors[c])
+                    )
             else:
-                note = ("too still to self-anchor (%.1fx) -- placed by sound"
-                        % mg)
-        print("  %-5s %6d  %12d   %5s    %s"
-              % (c, anchors[c], tot,
-                 "-" if mg is None else "%.1fx" % mg, note))
+                note = "too still to self-anchor (%.1fx) -- placed by sound" % mg
+        print(
+            "  %-5s %6d  %12d   %5s    %s"
+            % (c, anchors[c], tot, "-" if mg is None else "%.1fx" % mg, note)
+        )
         bad += mine
     if bad:
         for b in bad:
@@ -451,16 +531,29 @@ def main():
 
     print("\n   #  cam      start       end     len   tape frames")
     for i, (c, a, b) in enumerate(plan):
-        print("  %2d  %-5s %8s %9s %7.2f   %6d-%-6d"
-              % (i, c, hhmmss(a * spf), hhmmss(b * spf), (b - a) * spf,
-                 anchors[c] + a, anchors[c] + b))
+        print(
+            "  %2d  %-5s %8s %9s %7.2f   %6d-%-6d"
+            % (
+                i,
+                c,
+                hhmmss(a * spf),
+                hhmmss(b * spf),
+                (b - a) * spf,
+                anchors[c] + a,
+                anchors[c] + b,
+            )
+        )
     total = sum(b - a for _, a, b in plan)
     switches = sum(1 for i in range(1, len(plan)) if plan[i][0] != plan[i - 1][0])
-    print("\n%d segments, %d switches, %d frames (%s) of film"
-          % (len(plan), switches, total, hhmmss(total * spf)))
+    print(
+        "\n%d segments, %d switches, %d frames (%s) of film"
+        % (len(plan), switches, total, hhmmss(total * spf))
+    )
     if total != n_prog:
-        print("  note: the plan tiles %d frames but ends at %d -- it has holes "
-              "or overlaps" % (total, n_prog))
+        print(
+            "  note: the plan tiles %d frames but ends at %d -- it has holes "
+            "or overlaps" % (total, n_prog)
+        )
 
     # A graphic past the end of the film fails SILENTLY -- `enable` simply
     # never turns true and the render is a frame-perfect copy of a film with
@@ -470,8 +563,10 @@ def main():
     runtime = n_prog * spf
     for spec in name_specs:
         if float(spec["at"]) >= runtime:
-            sys.exit("name label %r starts at %.1fs but the film runs %.1fs"
-                     % (spec["name"], float(spec["at"]), runtime))
+            sys.exit(
+                "name label %r starts at %.1fs but the film runs %.1fs"
+                % (spec["name"], float(spec["at"]), runtime)
+            )
     img_preset_doc = {}
     if img_specs:
         with open(rel(img_preset), encoding="utf-8") as f:
@@ -479,22 +574,27 @@ def main():
     for i, spec in enumerate(img_specs):
         at, _ = _imgoverlay.resolve_window(spec, img_preset_doc, runtime)
         if at >= runtime:
-            sys.exit("image overlay %d starts at %.1fs but the film runs %.1fs"
-                     % (i, at, runtime))
+            sys.exit("image overlay %d starts at %.1fs but the film runs %.1fs" % (i, at, runtime))
     if name_specs:
         print("\n  name labels (film time):")
         for spec in name_specs:
-            print("  %8.2f %8.2f   %s -- %s"
-                  % (float(spec["at"]),
-                     float(spec["at"]) + float(spec.get("dur", 5.5)),
-                     spec["name"], spec.get("title", "")))
+            print(
+                "  %8.2f %8.2f   %s -- %s"
+                % (
+                    float(spec["at"]),
+                    float(spec["at"]) + float(spec.get("dur", 5.5)),
+                    spec["name"],
+                    spec.get("title", ""),
+                )
+            )
     if img_specs:
         print("\n  image overlays (film time):")
         for spec in img_specs:
             at, dur = _imgoverlay.resolve_window(spec, img_preset_doc, runtime)
-            print("  %8.2f %8.2f   %s"
-                  % (at, at + dur,
-                     _imgoverlay.describe(spec, img_preset_doc, runtime)))
+            print(
+                "  %8.2f %8.2f   %s"
+                % (at, at + dur, _imgoverlay.describe(spec, img_preset_doc, runtime))
+            )
 
     if args.list:
         print("  encoder: %s" % _encode.describe(render))
@@ -516,22 +616,30 @@ def main():
     # input indices AFTER the tapes, which is why nothing here may renumber a
     # camera.
     graphics = bool(name_specs or img_specs or args.debug)
-    graph = build_graph(plan, cams, anchors, idx, audio_from, a0, a1,
-                        vlabel="vcut" if graphics else "vout")
+    graph = build_graph(
+        plan, cams, anchors, idx, audio_from, a0, a1, vlabel="vcut" if graphics else "vout"
+    )
     chains, pngs_in, cur, nxt = [], [], "vcut", len(cams)
     if name_specs:
         os.makedirs(tmpdir, exist_ok=True)
         pngs, fc, cur = _namelabel.prepare(
-            m.get("label_preset", _namelabel.DEFAULT_PRESET), name_specs,
-            w, h, tmpdir, tag=pid, base=cur, first_input=nxt)
+            m.get("label_preset", _namelabel.DEFAULT_PRESET),
+            name_specs,
+            w,
+            h,
+            tmpdir,
+            tag=pid,
+            base=cur,
+            first_input=nxt,
+        )
         chains.append(fc)
         pngs_in += pngs
         nxt += len(pngs)
     if img_specs:
         os.makedirs(tmpdir, exist_ok=True)
         pngs, fc, cur = _imgoverlay.prepare(
-            img_preset, img_specs, w, h, tmpdir, tag=pid, base=cur,
-            first_input=nxt, runtime=runtime)
+            img_preset, img_specs, w, h, tmpdir, tag=pid, base=cur, first_input=nxt, runtime=runtime
+        )
         chains.append(fc)
         pngs_in += pngs
         nxt += len(pngs)
@@ -547,19 +655,42 @@ def main():
             diff, _ = _shots.scan(files[c], w, h)
             tapes[c] = still_runs(diff, dcfg["held"], mn)
             held = sum(b - a for a, b in tapes[c])
-            print("  %s: %d held runs, %d frames (%.0f%% of the tape)"
-                  % (c, len(tapes[c]), held, 100.0 * held / max(1, len(diff))))
+            print(
+                "  %s: %d held runs, %d frames (%.0f%% of the tape)"
+                % (c, len(tapes[c]), held, 100.0 * held / max(1, len(diff)))
+            )
         stage = "stage 2 (chosen from sound)" if why else "stage 1 (given plan)"
         extra = list((m.get("debug") or {}).get("lines") or [])
-        notes = debug_notes(plan, anchors, off, files, tapes, num / float(den),
-                            spf, stage, plan_src, why, extra, dcfg["warn_frac"])
+        notes = debug_notes(
+            plan,
+            anchors,
+            off,
+            files,
+            tapes,
+            num / float(den),
+            spf,
+            stage,
+            plan_src,
+            why,
+            extra,
+            dcfg["warn_frac"],
+        )
         ass, fc, cur = _notes.prepare(
-            notes, w, h, num / float(den), tmpdir, tag=pid,
-            preset=args.debug_style, base=cur, label="vout")
+            notes,
+            w,
+            h,
+            num / float(den),
+            tmpdir,
+            tag=pid,
+            preset=args.debug_style,
+            base=cur,
+            label="vout",
+        )
         chains.append(fc)
         n_warn = sum(1 for n in notes if any(x.startswith("!!") for x in n["lines"]))
-        print("  debug notes: %d, of which %d warn that the tape is held there"
-              % (len(notes), n_warn))
+        print(
+            "  debug notes: %d, of which %d warn that the tape is held there" % (len(notes), n_warn)
+        )
 
     # The encoder is mapped to [vout], so whatever the last graphic left behind
     # is renamed rather than the chain being built backwards from it.
@@ -572,28 +703,43 @@ def main():
     # A debug render is a different artifact, never a replacement: burning text
     # changes pixels, so a debug copy of a stage-1 cut is no longer frame
     # identical to the programme and would fail its own comparison.
-    dst = rel(args.out) if args.out else os.path.join(
-        outdir, "%s-anglecut%s.mp4" % (pid, "-debug" if args.debug else ""))
+    dst = (
+        rel(args.out)
+        if args.out
+        else os.path.join(outdir, "%s-anglecut%s.mp4" % (pid, "-debug" if args.debug else ""))
+    )
     if os.path.exists(dst) and not args.force:
         sys.exit("%s exists -- pass --force to overwrite" % _project.norm(dst))
     tmp = dst + ".part.mp4"
 
     job = "anglecut-%s" % pid
     prog = _progress.begin(job, total * spf, os.path.relpath(dst, ROOT))
-    cmd = ["ffmpeg", "-hide_banner", "-nostats", "-loglevel", "warning",
-           "-progress", prog]
+    cmd = ["ffmpeg", "-hide_banner", "-nostats", "-loglevel", "warning", "-progress", prog]
     for c in cams:
         cmd += ["-i", files[c]]
     # -loop 1 makes each graphic an INFINITE stream; every overlay that uses
     # one carries shortest=1, which is what lets the render end at all.
     for png in pngs_in:
         cmd += ["-loop", "1", "-framerate", "%d/%d" % (num, den), "-i", png]
-    cmd += ["-filter_complex", graph, "-map", "[vout]", "-map", "[aout]",
-            "-r", "%d/%d" % (num, den), "-fps_mode", "cfr",
-            "-video_track_timescale", str(num),
-            ] + _encode.video_args(render) \
-          + _encode.audio_args(render, rate=a_rate) \
-          + ["-movflags", "+faststart", "-y", tmp]
+    cmd += (
+        [
+            "-filter_complex",
+            graph,
+            "-map",
+            "[vout]",
+            "-map",
+            "[aout]",
+            "-r",
+            "%d/%d" % (num, den),
+            "-fps_mode",
+            "cfr",
+            "-video_track_timescale",
+            str(num),
+        ]
+        + _encode.video_args(render)
+        + _encode.audio_args(render, rate=a_rate)
+        + ["-movflags", "+faststart", "-y", tmp]
+    )
     print("\nrendering %s" % _project.norm(dst))
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, env=ENV)
@@ -604,8 +750,10 @@ def main():
 
     got = count_frames(tmp)
     if got != total:
-        sys.exit("rendered %d frames, planned %d -- leaving %s in place"
-                 % (got, total, _project.norm(tmp)))
+        sys.exit(
+            "rendered %d frames, planned %d -- leaving %s in place"
+            % (got, total, _project.norm(tmp))
+        )
     gw, gh, gn, gd = probe_video(tmp)
     if (gw, gh) != (w, h):
         sys.exit("rendered %dx%d, want %dx%d" % (gw, gh, w, h))
@@ -617,27 +765,40 @@ def main():
     if pk is None or pk < -60:
         sys.exit("the output has no audio (peak %s dB)" % pk)
     shutil.move(tmp, dst)
-    print("done: %d frames, %s, audio peak %.1f dB"
-          % (got, hhmmss(total * spf), pk))
+    print("done: %d frames, %s, audio peak %.1f dB" % (got, hhmmss(total * spf), pk))
     print(os.path.abspath(dst))
 
-    _project.record(pid, "anglecut", out=dst, script=__file__, argv=sys.argv[1:],
-                    kind="anglecut", manifest=args.manifest,
-                    sidecars={"sync": rel(m["sync"])},
-                    burned=["%d segments switching between %d cameras full frame"
-                            % (len(plan), len(used)),
-                            "audio taken whole from %s -- no joins" % audio_from,
-                            "anchored by %s" % (how if isinstance(how, str)
-                                                else "declared frames")]
-                    + ["name label: %s -- %s at %.1fs"
-                       % (sp["name"], sp.get("title", ""), float(sp["at"]))
-                       for sp in name_specs]
-                    + ["image overlay: %s"
-                       % _imgoverlay.describe(sp, img_preset_doc, runtime)
-                       for sp in img_specs]
-                    + (["debug notes burned bottom-left: segment, reason, tape "
-                        "frames, and a warning where the tape is held"]
-                       if args.debug else []))
+    _project.record(
+        pid,
+        "anglecut",
+        out=dst,
+        script=__file__,
+        argv=sys.argv[1:],
+        kind="anglecut",
+        manifest=args.manifest,
+        sidecars={"sync": rel(m["sync"])},
+        burned=[
+            "%d segments switching between %d cameras full frame" % (len(plan), len(used)),
+            "audio taken whole from %s -- no joins" % audio_from,
+            "anchored by %s" % (how if isinstance(how, str) else "declared frames"),
+        ]
+        + [
+            "name label: %s -- %s at %.1fs" % (sp["name"], sp.get("title", ""), float(sp["at"]))
+            for sp in name_specs
+        ]
+        + [
+            "image overlay: %s" % _imgoverlay.describe(sp, img_preset_doc, runtime)
+            for sp in img_specs
+        ]
+        + (
+            [
+                "debug notes burned bottom-left: segment, reason, tape "
+                "frames, and a warning where the tape is held"
+            ]
+            if args.debug
+            else []
+        ),
+    )
 
 
 if __name__ == "__main__":

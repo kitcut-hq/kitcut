@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Generate TTS voiceover with background music ducking.
+"""Generate TTS voiceover with background music ducking.
 
 Uses ElevenLabs for text-to-speech and FFmpeg for music mixing with sidechain compression.
 Creates a professional voiceover track that ducks background music when speaking.
@@ -90,8 +89,7 @@ def load_script(script_file):
 
 
 def generate_speech(text, voice_id, api_key, model="eleven_turbo_v2_5"):
-    """
-    Generate speech using ElevenLabs TTS API.
+    """Generate speech using ElevenLabs TTS API.
 
     Returns: bytes of audio data (16kHz, mono, PCM)
     """
@@ -103,8 +101,8 @@ def generate_speech(text, voice_id, api_key, model="eleven_turbo_v2_5"):
         "model_id": model,
         "voice_settings": {
             "stability": 0.5,
-            "similarity_boost": 0.75
-        }
+            "similarity_boost": 0.75,
+        },
     }
 
     response = requests.post(url, json=payload, headers=headers)
@@ -123,8 +121,7 @@ def estimate_duration(text):
 
 
 def create_timed_voiceover(script_lines, voice_id, api_key, model):
-    """
-    Generate individual clips at scheduled times, create timing file for FFmpeg.
+    """Generate individual clips at scheduled times, create timing file for FFmpeg.
 
     Returns: (audio_file, timing_list)
     """
@@ -149,13 +146,15 @@ def create_timed_voiceover(script_lines, voice_id, api_key, model):
                 f.write(audio_data)
 
             estimated_duration = estimate_duration(text)
-            clips.append({
-                "idx": idx,
-                "file": str(clip_file),
-                "start": start_time,
-                "text": text,
-                "estimated_duration": estimated_duration
-            })
+            clips.append(
+                {
+                    "idx": idx,
+                    "file": str(clip_file),
+                    "start": start_time,
+                    "text": text,
+                    "estimated_duration": estimated_duration,
+                }
+            )
 
             print(f"  Estimated duration: {estimated_duration:.2f}s", file=sys.stderr)
             print()
@@ -163,16 +162,21 @@ def create_timed_voiceover(script_lines, voice_id, api_key, model):
         # Build FFmpeg concat file
         concat_file = Path(tmpdir) / "concat.txt"
         with open(concat_file, "w") as f:
-            for clip in clips:
-                f.write(f"file '{clip['file']}'\n")
+            f.writelines(f"file '{clip['file']}'\n" for clip in clips)
 
         # Concatenate all clips
         output_wav = Path(tmpdir) / "voiceover_raw.wav"
         cmd = [
-            "ffmpeg", "-f", "concat", "-safe", "0",
-            "-i", str(concat_file),
-            "-c", "pcm_s16le",
-            str(output_wav)
+            "ffmpeg",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_file),
+            "-c",
+            "pcm_s16le",
+            str(output_wav),
         ]
         subprocess.run(cmd, check=True, capture_output=True)
 
@@ -182,13 +186,13 @@ def create_timed_voiceover(script_lines, voice_id, api_key, model):
 
 
 def mix_with_music(voiceover_file, music_file, output_file):
-    """
-    Mix voiceover with background music using sidechain compression.
-    """
+    """Mix voiceover with background music using sidechain compression."""
     cmd = [
         "ffmpeg",
-        "-i", voiceover_file,
-        "-i", music_file,
+        "-i",
+        voiceover_file,
+        "-i",
+        music_file,
         "-filter_complex",
         (
             "[0]volume=+7.04dB,asplit=2[vo1][sc];"
@@ -199,20 +203,23 @@ def mix_with_music(voiceover_file, music_file, output_file):
             "[duck][vos]amix=inputs=2:normalize=0:dropout_transition=0[pre];"
             "[pre]alimiter=limit=0.95,loudnorm=I=-14:TP=-1.5:LRA=11[aout]"
         ),
-        "-map", "[aout]",
-        "-b:a", "128k",
-        "-ac", "2",
-        output_file
+        "-map",
+        "[aout]",
+        "-b:a",
+        "128k",
+        "-ac",
+        "2",
+        output_file,
     ]
 
-    print(f"Mixing with background music...", file=sys.stderr)
+    print("Mixing with background music...", file=sys.stderr)
     subprocess.run(cmd, check=True, capture_output=True)
     print(f"Output: {output_file}", file=sys.stderr)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate TTS voiceover with background music ducking"
+        description="Generate TTS voiceover with background music ducking",
     )
     parser.add_argument("--script", required=True, help="Script file (JSON or text)")
     parser.add_argument("--output", required=True, help="Output audio file")
@@ -237,13 +244,15 @@ def main():
     if args.background_music and not args.no_ducking:
         if not Path(args.background_music).exists():
             print(f"Warning: Background music not found: {args.background_music}", file=sys.stderr)
-            print(f"Skipping music mix. Saving voiceover only.", file=sys.stderr)
+            print("Skipping music mix. Saving voiceover only.", file=sys.stderr)
             import shutil
+
             shutil.copy(voiceover_file, args.output)
         else:
             mix_with_music(voiceover_file, args.background_music, args.output)
     else:
         import shutil
+
         shutil.copy(voiceover_file, args.output)
 
     print(f"\nDone! Output: {args.output}", file=sys.stderr)

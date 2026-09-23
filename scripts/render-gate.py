@@ -41,6 +41,7 @@ Why this exists as its own tool, and why it is shaped like this:
 
 Invoke as:  python scripts/render-gate.py --manifest projects/<id>/screen.json
 """
+
 import sys
 import os
 import json
@@ -68,7 +69,8 @@ for _s in (sys.stdout, sys.stderr):
 def load(name):
     """Import a hyphenated sibling script by path."""
     spec = importlib.util.spec_from_file_location(
-        name.replace("-", "_"), os.path.join(HERE, name + ".py"))
+        name.replace("-", "_"), os.path.join(HERE, name + ".py")
+    )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -108,14 +110,33 @@ def locate(plans, film_t):
 
 def is_cfr(path):
     """r_frame_rate == avg_frame_rate, which is what a `fps=`-closed graph
-    muxed by NVENC produces; a stream-copied concat of such pieces keeps it."""
-    out = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
-         "stream=r_frame_rate,avg_frame_rate", "-of", "csv=p=0", path],
-        capture_output=True, text=True).stdout.strip().split(",")
+    muxed by NVENC produces; a stream-copied concat of such pieces keeps it.
+    """
+    out = (
+        subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=r_frame_rate,avg_frame_rate",
+                "-of",
+                "csv=p=0",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        .stdout.strip()
+        .split(",")
+    )
+
     def f(x):
         n, _, d = x.partition("/")
         return float(n) / float(d) if d and float(d) else 0.0
+
     return len(out) == 2 and abs(f(out[0]) - f(out[1])) < 1e-3
 
 
@@ -138,13 +159,31 @@ def frames_around(render, fps, t0, t1, w, h):
     constant-rate.
     """
     r = subprocess.run(
-        ["ffmpeg", "-v", "error", "-nostdin", "-ss", f"{t0:.3f}", "-to", f"{t1:.3f}",
-         "-i", render, "-vf", f"scale={w}:{h}", "-pix_fmt", "gray",
-         "-f", "rawvideo", "-"], stdout=subprocess.PIPE, check=True)
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-nostdin",
+            "-ss",
+            f"{t0:.3f}",
+            "-to",
+            f"{t1:.3f}",
+            "-i",
+            render,
+            "-vf",
+            f"scale={w}:{h}",
+            "-pix_fmt",
+            "gray",
+            "-f",
+            "rawvideo",
+            "-",
+        ],
+        stdout=subprocess.PIPE,
+        check=True,
+    )
     n = w * h
     for i in range(len(r.stdout) // n):
-        yield t0 + i / fps, np.frombuffer(r.stdout[i * n:(i + 1) * n],
-                                          np.uint8).reshape(h, w)
+        yield t0 + i / fps, np.frombuffer(r.stdout[i * n : (i + 1) * n], np.uint8).reshape(h, w)
 
 
 def refine(hits, render, fps, tpl_by_key, cw, ch, half_window, tb):
@@ -164,9 +203,10 @@ def refine(hits, render, fps, tpl_by_key, cw, ch, half_window, tb):
         px, py, pw, ph = int(x * cw), int(y * ch), int(w * cw), int(hh * ch)
         tpls = tpl_by_key.get(h["key"], [])
         sharp = []
-        for t, fr in frames_around(render, fps, max(0.0, h["t"] - half_window),
-                                   h["t"] + half_window, cw, ch):
-            win = fr[max(0, py - pad):py + ph + pad, max(0, px - pad):px + pw + pad]
+        for t, fr in frames_around(
+            render, fps, max(0.0, h["t"] - half_window), h["t"] + half_window, cw, ch
+        ):
+            win = fr[max(0, py - pad) : py + ph + pad, max(0, px - pad) : px + pw + pad]
             for tp in tpls:
                 th, tw = tp["img"].shape[:2]
                 if win.shape[0] < th or win.shape[1] < tw:
@@ -232,12 +272,15 @@ def main():
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--render", help="default: the manifest's output")
     ap.add_argument("--fps", type=float, default=1.0, help="template pass rate")
-    ap.add_argument("--ocr-fps", type=float, default=0.25,
-                    help="OCR pass rate; 0 disables the OCR pass")
-    ap.add_argument("--target", default=None,
-                    help="the --target the film was rendered with, if any")
-    ap.add_argument("--patch", action="store_true",
-                    help="append a hand rect to the manifest for every hit")
+    ap.add_argument(
+        "--ocr-fps", type=float, default=0.25, help="OCR pass rate; 0 disables the OCR pass"
+    )
+    ap.add_argument(
+        "--target", default=None, help="the --target the film was rendered with, if any"
+    )
+    ap.add_argument(
+        "--patch", action="store_true", help="append a hand rect to the manifest for every hit"
+    )
     ap.add_argument("--out", help="default: <project>/temp/gate.json")
     args = ap.parse_args()
 
@@ -254,8 +297,7 @@ def main():
     plans = build_plans(sc, man, mpath, cfg)
     cw, ch = cfg["canvas"]
     rinfo = sc.probe(render)
-    print(f"gate: {os.path.basename(render)}  {fmt(rinfo['duration'])}  "
-          f"{len(plans)} source(s)")
+    print(f"gate: {os.path.basename(render)}  {fmt(rinfo['duration'])}  {len(plans)} source(s)")
 
     # ---- pass A: the secrets' own pixels against the render
     clock = time.time()
@@ -268,8 +310,10 @@ def main():
     tpl_by_geo = pools(tb, man, mpath, plans)
     lap("templates")
     all_tpls = [t for ts in tpl_by_geo.values() for t in ts]
-    print(f"  pass A: {len(all_tpls)} template(s) from {len(tpl_by_geo)} geometr(y/ies), "
-          f"NCC at {args.fps} fps")
+    print(
+        f"  pass A: {len(all_tpls)} template(s) from {len(tpl_by_geo)} geometr(y/ies), "
+        f"NCC at {args.fps} fps"
+    )
     tpl_by_key = {}
     for tp in all_tpls:
         tpl_by_key.setdefault(tp["key"], []).append(tp)
@@ -295,8 +339,16 @@ def main():
                 else:
                     found[tpl["key"]] = [x, y, w, h, tpl["kind"], tpl["text"]]
         for key, (x, y, w, h, kind, text) in found.items():
-            hits.append({"t": round(t, 3), "kind": kind, "key": key, "text": text,
-                         "via": "template", "rect": [x / cw, y / ch, w / cw, h / ch]})
+            hits.append(
+                {
+                    "t": round(t, 3),
+                    "kind": kind,
+                    "key": key,
+                    "text": text,
+                    "via": "template",
+                    "rect": [x / cw, y / ch, w / cw, h / ch],
+                }
+            )
         if int(t) % 60 == 0 and t > 0:
             print(f"    ...{fmt(t)}  {len(hits)} hit(s)", file=sys.stderr)
     lap("pass A")
@@ -315,10 +367,20 @@ def main():
                 continue
             if any(b in h["text"].replace(" ", "") for b in benign):
                 continue
-            hits.append({"t": h["t"], "kind": h["kind"], "key": tb.norm_key(h["kind"], h["text"]),
-                         "text": h["text"], "via": "ocr", "rect": h["rect"]})
-        print(f"  pass B: OCR at {args.ocr_fps} fps -> "
-              f"{sum(1 for h in hits if h['via'] == 'ocr')} hit(s)")
+            hits.append(
+                {
+                    "t": h["t"],
+                    "kind": h["kind"],
+                    "key": tb.norm_key(h["kind"], h["text"]),
+                    "text": h["text"],
+                    "via": "ocr",
+                    "rect": h["rect"],
+                }
+            )
+        print(
+            f"  pass B: OCR at {args.ocr_fps} fps -> "
+            f"{sum(1 for h in hits if h['via'] == 'ocr')} hit(s)"
+        )
         lap("pass B")
 
     # ---- map every hit back to its source
@@ -350,18 +412,25 @@ def main():
         by_src.setdefault(h["source"], []).append(h)
     for src, hs in sorted(by_src.items(), key=lambda kv: -len(kv[1])):
         ks = sorted({x["key"] for x in hs})
-        print(f"    {str(src):<34} {len(hs):>4} hit(s)  {', '.join(ks[:4])}"
-              f"{' …' if len(ks) > 4 else ''}")
+        print(
+            f"    {src!s:<34} {len(hs):>4} hit(s)  {', '.join(ks[:4])}{' …' if len(ks) > 4 else ''}"
+        )
     for h in sorted(hits, key=lambda x: x["t"])[:12]:
-        print(f"      {fmt(h['t']):>7}  {h['kind']:<7} {h['via']:<8} "
-              f"-> {h['source']} @ {fmt(h['source_t']) if h['source_t'] is not None else '?'}")
+        print(
+            f"      {fmt(h['t']):>7}  {h['kind']:<7} {h['via']:<8} "
+            f"-> {h['source']} @ {fmt(h['source_t']) if h['source_t'] is not None else '?'}"
+        )
 
-    out = _env.resolve(args.out) if args.out else os.path.join(
-        os.path.dirname(mpath), "temp", "gate.json")
+    out = (
+        _env.resolve(args.out)
+        if args.out
+        else os.path.join(os.path.dirname(mpath), "temp", "gate.json")
+    )
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
-        json.dump({"render": render, "hits": hits, "secrets": keys}, f,
-                  ensure_ascii=False, indent=1)
+        json.dump(
+            {"render": render, "hits": hits, "secrets": keys}, f, ensure_ascii=False, indent=1
+        )
 
     if args.patch and hits:
         # One rect per (source, secret, contiguous span). A rect that already
@@ -401,8 +470,11 @@ def main():
                     for b in extra:
                         if key not in b.get("_why", "") or not b.get("when"):
                             continue
-                        if overlap(b["rect"], rect) > 0.3 and \
-                                b["when"][0] <= when[1] + 0.5 and when[0] <= b["when"][1] + 0.5:
+                        if (
+                            overlap(b["rect"], rect) > 0.3
+                            and b["when"][0] <= when[1] + 0.5
+                            and when[0] <= b["when"][1] + 0.5
+                        ):
                             hit = b
                             break
                     if hit:
@@ -411,24 +483,33 @@ def main():
                         hit["_why"] += f"; extended: still sharp at {first}"
                         extended += 1
                     else:
-                        extra.append({
-                            "_why": f"render-gate: {key} sharp in the film at {first}; "
-                                    f"span mapped back through the cut and the pad",
-                            "rect": rect, "when": when})
+                        extra.append(
+                            {
+                                "_why": f"render-gate: {key} sharp in the film at {first}; "
+                                f"span mapped back through the cut and the pad",
+                                "rect": rect,
+                                "when": when,
+                            }
+                        )
                         added += 1
             s["blur_extra"] = extra
             s["blur"] = [b for b in (s.get("blur") or []) if b not in extra] + extra
         with open(mpath, "w", encoding="utf-8") as f:
             json.dump(man, f, ensure_ascii=False, indent=2)
-        print(f"\n  --patch: {added} hand rect(s) appended, {extended} extended, in "
-              f"{args.manifest}; re-render (cached pieces) and gate again")
+        print(
+            f"\n  --patch: {added} hand rect(s) appended, {extended} extended, in "
+            f"{args.manifest}; re-render (cached pieces) and gate again"
+        )
 
     pid = os.path.basename(_project.find_project_dir(mpath) or "")
     if pid:
-        _project.record(pid, "render-gate",
-                        note=f"{len(hits)} hit(s), {len(keys)} secret(s) on "
-                             f"{os.path.basename(render)}"
-                             + (f"; patched {added} rect(s)" if args.patch and hits else ""))
+        _project.record(
+            pid,
+            "render-gate",
+            note=f"{len(hits)} hit(s), {len(keys)} secret(s) on "
+            f"{os.path.basename(render)}"
+            + (f"; patched {added} rect(s)" if args.patch and hits else ""),
+        )
     raise SystemExit(1 if hits else 0)
 
 

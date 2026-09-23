@@ -1,5 +1,5 @@
 {
-  "_comment": "A white window on the recorder's lavender backdrop -- the same rounded, shadowed frame the demo was filmed in, so the end card reads as one more screen of the same film. Square ticks in the Instafill mint.",
+  "_comment": "A white window on the recorder's lavender backdrop -- the same rounded, shadowed frame the demo was filmed in, so the end card reads as one more screen of the same film. Square ticks in the brand mint.",
   "background": "#ECE6FD",
   "glow": "#F4F1FE",
   "panel": {
@@ -41,8 +41,7 @@
   "row": 82,
   "gap_cta": 48,
   "cta_logo": {
-    "file": "config/cards/brands/instafill-logo.png",
     "height": 54,
-    "_why": "the company's own mark on the last frame instead of the URL in our font (user's call, 2026-09-23)"
+    "_why": "when the card's spec names a `logo`, it replaces the typed call to action at this height"
   }
 }

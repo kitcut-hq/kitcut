@@ -36,6 +36,7 @@ grab) and the expensive filter runs at 1080p instead of 4K.
 
 Invoke as:  python scripts/screen-cut.py --manifest projects/<id>/screen.json --list
 """
+
 import sys
 import os
 import json
@@ -58,15 +59,15 @@ ROOT = _env.ROOT
 DEFAULTS = {
     "canvas": [1920, 1080],
     "fps": 30,
-    "drop_still": 0.002,      # below this, a region counts as not moving
-    "hold": 1.0,              # seconds a region stays "moving" after it moved
-    "panel_hold": 2.0,        # the panel streams in packets; hold it longer
-    "min_drop": 1.5,          # seconds; shorter dead runs are not worth cutting
-    "min_speed": 3.0,         # seconds; shorter waits are not worth a speed ramp
-    "min_keep": 1.2,          # seconds; shorter 1x islands stutter, so absorb
-    "speed": 6.0,             # how fast to run the "AI is thinking" stretches
-    "keep_speed": 1.0,        # how fast to run the working stretches
-    "air": 0.30,              # seconds of stillness kept at each join, for breath
+    "drop_still": 0.002,  # below this, a region counts as not moving
+    "hold": 1.0,  # seconds a region stays "moving" after it moved
+    "panel_hold": 2.0,  # the panel streams in packets; hold it longer
+    "min_drop": 1.5,  # seconds; shorter dead runs are not worth cutting
+    "min_speed": 3.0,  # seconds; shorter waits are not worth a speed ramp
+    "min_keep": 1.2,  # seconds; shorter 1x islands stutter, so absorb
+    "speed": 6.0,  # how fast to run the "AI is thinking" stretches
+    "keep_speed": 1.0,  # how fast to run the working stretches
+    "air": 0.30,  # seconds of stillness kept at each join, for breath
     "speed_badge": True,
     # A real blur, applied once to the whole frame and shown through a mask
     # (masked_blur / the tracked mask stream). The user's words: "blur, not
@@ -92,16 +93,33 @@ def fmt(t):
 
 def probe(path):
     out = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "v:0",
-         "-show_entries", "stream=width,height,avg_frame_rate",
-         "-show_entries", "format=duration", "-of", "json", path],
-        check=True, capture_output=True, text=True).stdout
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,avg_frame_rate",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            path,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
     d = json.loads(out)
     st = (d.get("streams") or [{}])[0]
     num, _, den = (st.get("avg_frame_rate") or "0/1").partition("/")
-    return {"width": int(st.get("width") or 0), "height": int(st.get("height") or 0),
-            "fps": float(num) / float(den) if float(den or 0) else 0.0,
-            "duration": float((d.get("format") or {}).get("duration") or 0.0)}
+    return {
+        "width": int(st.get("width") or 0),
+        "height": int(st.get("height") or 0),
+        "fps": float(num) / float(den) if float(den or 0) else 0.0,
+        "duration": float((d.get("format") or {}).get("duration") or 0.0),
+    }
 
 
 def load_activity(track_path):
@@ -142,8 +160,9 @@ def classify(track, cfg):
     hold = cfg["hold"]
     if "main" in ra:
         main = hold_on(np.array(ra["main"][:n], float) >= thr, fps, hold)
-        panel = hold_on(np.array(ra.get("panel", [0.0] * n)[:n], float) >= thr,
-                        fps, cfg.get("panel_hold", hold))
+        panel = hold_on(
+            np.array(ra.get("panel", [0.0] * n)[:n], float) >= thr, fps, cfg.get("panel_hold", hold)
+        )
         lab = np.zeros(n, np.int8)
         lab[panel] = 1
         lab[main] = 2
@@ -200,15 +219,15 @@ def smooth(lab, fps, cfg):
         right = rs[k + 1] if k + 1 < len(rs) else None
         cands = [c for c in (left, right) if c is not None]
         take = max(cands, key=lambda c: c[1] - c[0])
-        lab[r[0]:r[1]] = take[2]
+        lab[r[0] : r[1]] = take[2]
 
     air = int(round(cfg["air"] * fps))
     if air:
         for a, b, c in _runs_of(lab):
             if c != 0 or (b - a) <= 2 * air + 1:
                 continue
-            lab[a:a + air] = 2
-            lab[b - air:b] = 2
+            lab[a : a + air] = 2
+            lab[b - air : b] = 2
     return lab
 
 
@@ -235,7 +254,7 @@ def plan_source(src, cfg):
     segs = segments(lab, fps, dur)
 
     lo, hi = src.get("trim", [0.0, dur])
-    hi = min(hi if hi else dur, dur)
+    hi = min(hi or dur, dur)
     segs = [(max(a, lo), min(b, hi), c) for a, b, c in segs]
     segs = [(a, b, c) for a, b, c in segs if b - a > 1.0 / fps]
 
@@ -255,27 +274,37 @@ def plan_source(src, cfg):
             speed = 1.0
         else:
             speed = cfg["speed"] if c == 1 else cfg["keep_speed"]
-        kept.append({"start": round(a, 3), "end": round(b, 3), "speed": speed,
-                     "out": round((b - a) / speed, 3)})
+        kept.append(
+            {
+                "start": round(a, 3),
+                "end": round(b, 3),
+                "speed": speed,
+                "out": round((b - a) / speed, 3),
+            }
+        )
     # merge neighbours that survived at the same speed
     merged = []
     for s in kept:
-        if merged and abs(merged[-1]["end"] - s["start"]) < 1e-6 and \
-                merged[-1]["speed"] == s["speed"]:
+        if (
+            merged
+            and abs(merged[-1]["end"] - s["start"]) < 1e-6
+            and merged[-1]["speed"] == s["speed"]
+        ):
             merged[-1]["end"] = s["end"]
-            merged[-1]["out"] = round((merged[-1]["end"] - merged[-1]["start"])
-                                      / merged[-1]["speed"], 3)
+            merged[-1]["out"] = round(
+                (merged[-1]["end"] - merged[-1]["start"]) / merged[-1]["speed"], 3
+            )
         else:
             merged.append(dict(s))
     return {
-        "src": src, "duration": dur, "window": [lo, hi],
+        "src": src,
+        "duration": dur,
+        "window": [lo, hi],
         "segments": merged,
         "in_s": sum(s["end"] - s["start"] for s in merged),
         "out_s": sum(s["out"] for s in merged),
-        "keep_s": sum(s["end"] - s["start"] for s in merged
-                      if s["speed"] <= cfg["keep_speed"]),
-        "sped_in_s": sum(s["end"] - s["start"] for s in merged
-                         if s["speed"] > cfg["keep_speed"]),
+        "keep_s": sum(s["end"] - s["start"] for s in merged if s["speed"] <= cfg["keep_speed"]),
+        "sped_in_s": sum(s["end"] - s["start"] for s in merged if s["speed"] > cfg["keep_speed"]),
         "dropped_s": (hi - lo) - sum(s["end"] - s["start"] for s in merged),
         "sped": sum(1 for s in merged if s["speed"] != 1.0),
     }
@@ -314,9 +343,11 @@ def masked_blur(blurs, cw, ch, label_in, label_out, cfg):
     d = int(cfg.get("blur_downscale", 8))
     sigma = float(cfg.get("blur_sigma", 3.0))
     parts.append(f"[{label_in}]split=3[bl_clean][bl_src][bl_mk]")
-    parts.append(f"[bl_src]scale=iw/{d}:ih/{d}:flags=area,"
-                 f"gblur=sigma={sigma},"
-                 f"scale={cw}:{ch}:flags=bicubic[bl_blur]")
+    parts.append(
+        f"[bl_src]scale=iw/{d}:ih/{d}:flags=area,"
+        f"gblur=sigma={sigma},"
+        f"scale={cw}:{ch}:flags=bicubic[bl_blur]"
+    )
     cur = "bl_mk"
     parts.append(f"[{cur}]drawbox=x=0:y=0:w=iw:h=ih:color=black:t=fill[bl_m0]")
     cur = "bl_m0"
@@ -327,8 +358,9 @@ def masked_blur(blurs, cw, ch, label_in, label_out, cfg):
         pw = max(4, int(round(w * cw)))
         ph = max(4, int(round(h * ch)))
         nxt = f"bl_m{i + 1}"
-        parts.append(f"[{cur}]drawbox=x={px}:y={py}:w={pw}:h={ph}:"
-                     f"color=white:t=fill" + gate(b) + f"[{nxt}]")
+        parts.append(
+            f"[{cur}]drawbox=x={px}:y={py}:w={pw}:h={ph}:color=white:t=fill" + gate(b) + f"[{nxt}]"
+        )
         cur = nxt
     parts.append(f"[bl_blur][{cur}]alphamerge[bl_a]")
     parts.append(f"[bl_clean][bl_a]overlay=shortest=1[{label_out}]")
@@ -370,25 +402,29 @@ def blur_chain(blurs, cw, ch, label_in, label_out, cfg):
             lr = max(1, min(side // 3, (side - 1) // 2))
             cr = max(1, min(lr, (side // 2 - 1) // 2))
             parts.append(f"[{cur}]split[{nxt}a][{nxt}b]")
-            parts.append(f"[{nxt}b]crop={pw}:{ph}:{px}:{py},"
-                         f"boxblur=luma_radius={lr}:luma_power=3:"
-                         f"chroma_radius={cr}:chroma_power=3[{nxt}c]")
-            parts.append(f"[{nxt}a][{nxt}c]overlay=x={px}:y={py}"
-                         + gate(b) + f"[{nxt}]")
+            parts.append(
+                f"[{nxt}b]crop={pw}:{ph}:{px}:{py},"
+                f"boxblur=luma_radius={lr}:luma_power=3:"
+                f"chroma_radius={cr}:chroma_power=3[{nxt}c]"
+            )
+            parts.append(f"[{nxt}a][{nxt}c]overlay=x={px}:y={py}" + gate(b) + f"[{nxt}]")
         elif mode == "box":
-            parts.append(f"[{cur}]drawbox=x={px}:y={py}:w={pw}:h={ph}:"
-                         f"color={b.get('color', cfg.get('box_color', 'black'))}"
-                         f":t=fill" + gate(b) + f"[{nxt}]")
+            parts.append(
+                f"[{cur}]drawbox=x={px}:y={py}:w={pw}:h={ph}:"
+                f"color={b.get('color', cfg.get('box_color', 'black'))}"
+                f":t=fill" + gate(b) + f"[{nxt}]"
+            )
         else:
             # pixelate reads as "deliberately hidden"; a soft blur can read as
             # a focus artefact and invites someone to try to sharpen it back.
             parts.append(f"[{cur}]split[{nxt}a][{nxt}b]")
-            parts.append(f"[{nxt}b]crop={pw}:{ph}:{px}:{py},"
-                         f"scale={max(2, pw // strength) // 2 * 2}:"
-                         f"{max(2, ph // strength) // 2 * 2}:flags=area,"
-                         f"scale={pw}:{ph}:flags=neighbor[{nxt}c]")
-            parts.append(f"[{nxt}a][{nxt}c]overlay=x={px}:y={py}"
-                         + gate(b) + f"[{nxt}]")
+            parts.append(
+                f"[{nxt}b]crop={pw}:{ph}:{px}:{py},"
+                f"scale={max(2, pw // strength) // 2 * 2}:"
+                f"{max(2, ph // strength) // 2 * 2}:flags=area,"
+                f"scale={pw}:{ph}:flags=neighbor[{nxt}c]"
+            )
+            parts.append(f"[{nxt}a][{nxt}c]overlay=x={px}:y={py}" + gate(b) + f"[{nxt}]")
         cur = nxt
     return parts, cur
 
@@ -460,13 +496,15 @@ def build_filter(plan, cfg, idx):
     mcur = None
     if tracked or soft:
         if tracked:
-            parts.append(f"[1:v]fps={fps_in:.4f},scale={vw}:{vh}:flags=neighbor,"
-                         f"format=gray[m{idx}_0]")
+            parts.append(
+                f"[1:v]fps={fps_in:.4f},scale={vw}:{vh}:flags=neighbor,format=gray[m{idx}_0]"
+            )
         else:
             parts.append(f"[{cur}]split[{cur}v][m{idx}_src]")
             cur = f"{cur}v"
-            parts.append(f"[m{idx}_src]drawbox=x=0:y=0:w=iw:h=ih:color=black:t=fill,"
-                         f"format=gray[m{idx}_0]")
+            parts.append(
+                f"[m{idx}_src]drawbox=x=0:y=0:w=iw:h=ih:color=black:t=fill,format=gray[m{idx}_0]"
+            )
         mcur = f"m{idx}_0"
         for i, b in enumerate(soft):
             x, y, w, h = b["rect"]
@@ -475,22 +513,28 @@ def build_filter(plan, cfg, idx):
             pw = max(4, int(round(w * vw)))
             ph = max(4, int(round(h * vh)))
             nxt = f"m{idx}_{i + 1}"
-            parts.append(f"[{mcur}]drawbox=x={px}:y={py}:w={pw}:h={ph}:"
-                         f"color=white:t=fill" + gate(b) + f"[{nxt}]")
+            parts.append(
+                f"[{mcur}]drawbox=x={px}:y={py}:w={pw}:h={ph}:"
+                f"color=white:t=fill" + gate(b) + f"[{nxt}]"
+            )
             mcur = nxt
 
     segs = plan["segments"]
 
     def cut(label_in, tag, label_out):
         """trim/setpts/concat one stream on the plan's segments."""
-        parts.append(f"[{label_in}]split={len(segs)}" +
-                     "".join(f"[{tag}{idx}_{i}]" for i in range(len(segs))))
+        parts.append(
+            f"[{label_in}]split={len(segs)}"
+            + "".join(f"[{tag}{idx}_{i}]" for i in range(len(segs)))
+        )
         outs = []
         for i, s in enumerate(segs):
             sp = s["speed"]
             pts = "PTS-STARTPTS" if sp == 1.0 else f"(PTS-STARTPTS)/{sp}"
-            parts.append(f"[{tag}{idx}_{i}]trim=start={s['start']}:end={s['end']},"
-                         f"setpts={pts}[{tag}c{idx}_{i}]")
+            parts.append(
+                f"[{tag}{idx}_{i}]trim=start={s['start']}:end={s['end']},"
+                f"setpts={pts}[{tag}c{idx}_{i}]"
+            )
             outs.append(f"[{tag}c{idx}_{i}]")
         parts.append("".join(outs) + f"concat=n={len(segs)}:v=1:a=0[{label_out}]")
 
@@ -501,9 +545,11 @@ def build_filter(plan, cfg, idx):
         d = int(cfg.get("blur_downscale", 8))
         sigma = float(cfg.get("blur_sigma", 3.0))
         parts.append(f"[{pcur}]split[bl{idx}c][bl{idx}b]")
-        parts.append(f"[bl{idx}b]scale=iw/{d}:ih/{d}:flags=area,"
-                     f"gblur=sigma={sigma},"
-                     f"scale={vw}:{vh}:flags=bicubic[bl{idx}bl]")
+        parts.append(
+            f"[bl{idx}b]scale=iw/{d}:ih/{d}:flags=area,"
+            f"gblur=sigma={sigma},"
+            f"scale={vw}:{vh}:flags=bicubic[bl{idx}bl]"
+        )
         parts.append(f"[bl{idx}bl][pm{idx}]alphamerge[bl{idx}a]")
         parts.append(f"[bl{idx}c][bl{idx}a]overlay[pb{idx}]")
         pcur = f"pb{idx}"
@@ -520,14 +566,14 @@ def build_filter(plan, cfg, idx):
         # it: on a 1818x1080 desktop frame the bars are 51 px and a gblur pass
         # over the whole canvas would be spent on almost nothing.
         parts.append(f"[{pcur}]split[f{idx}][g{idx}]")
-        parts.append(f"[g{idx}]scale={cw}:{ch}:force_original_aspect_ratio=increase,"
-                     f"crop={cw}:{ch},gblur=sigma=32,eq=brightness=-0.18[gb{idx}]")
-        parts.append(f"[gb{idx}][f{idx}]overlay=(W-w)/2:(H-h)/2,"
-                     f"setsar=1[v{idx}]")
+        parts.append(
+            f"[g{idx}]scale={cw}:{ch}:force_original_aspect_ratio=increase,"
+            f"crop={cw}:{ch},gblur=sigma=32,eq=brightness=-0.18[gb{idx}]"
+        )
+        parts.append(f"[gb{idx}][f{idx}]overlay=(W-w)/2:(H-h)/2,setsar=1[v{idx}]")
     else:
         color = cfg["backdrop"] if cfg.get("backdrop") != "blur" else "0x101014"
-        parts.append(f"[{pcur}]pad={cw}:{ch}:(ow-iw)/2:(oh-ih)/2:"
-                     f"color={color},setsar=1[v{idx}]")
+        parts.append(f"[{pcur}]pad={cw}:{ch}:(ow-iw)/2:(oh-ih)/2:color={color},setsar=1[v{idx}]")
     return parts, vw, vh
 
 
@@ -572,10 +618,12 @@ def badge_filter(plans, cfg, label_in, label_out):
     # a viewer -- what they are seeing is this stretch running 6x the rest.
     rel = sorted({round(w[2] / base) for w in wins})
     text = f"{rel[0]}x faster" if len(rel) == 1 else "faster"
-    d = (f"[{label_in}]drawtext=text='>> {text}':"
-         f"x=w-tw-{pad}:y={pad}:fontsize={size}:fontcolor=white@0.92:"
-         f"box=1:boxcolor=0x000000@0.55:boxborderw={size // 3}:"
-         f"enable='{en}'")
+    d = (
+        f"[{label_in}]drawtext=text='>> {text}':"
+        f"x=w-tw-{pad}:y={pad}:fontsize={size}:fontcolor=white@0.92:"
+        f"box=1:boxcolor=0x000000@0.55:boxborderw={size // 3}:"
+        f"enable='{en}'"
+    )
     if font:
         d += f":fontfile='{esc(_env.resolve(font))}'"
     return [d + f"[{label_out}]"], label_out, sum(b - a for a, b, _ in wins)
@@ -623,13 +671,18 @@ def source_cmd(plan, cfg, out_path, prog=None):
     # `nvenc_preset` is the key the committed manifests use and still reads;
     # _encode translates it into whatever family the machine's encoder belongs
     # to, so this pipeline is no longer NVIDIA-only.
-    render = _encode.resolve({"encoder": cfg.get("encoder"),
-                              "preset": cfg.get("preset",
-                                                cfg.get("nvenc_preset", "p5")),
-                              "cq": cfg.get("cq", 21)})
-    cmd += (["-filter_complex_script", gpath, "-map", "[out]", "-an"]
-            + _encode.video_args(render)
-            + ["-movflags", "+faststart", out_path])
+    render = _encode.resolve(
+        {
+            "encoder": cfg.get("encoder"),
+            "preset": cfg.get("preset", cfg.get("nvenc_preset", "p5")),
+            "cq": cfg.get("cq", 21),
+        }
+    )
+    cmd += (
+        ["-filter_complex_script", gpath, "-map", "[out]", "-an"]
+        + _encode.video_args(render)
+        + ["-movflags", "+faststart", out_path]
+    )
     return cmd, len(parts)
 
 
@@ -646,8 +699,17 @@ def run_ffmpeg(cmd, what):
 # Bump when build_filter() changes what pixels it produces for the same plan,
 # or a cached piece from the old graph is silently reused next to a new one.
 GRAPH_VERSION = 2
-PIECE_CFG_KEYS = ("canvas", "fps", "cq", "backdrop", "blur_mode", "box_color",
-                  "speed_badge", "badge_font", "nvenc_preset")
+PIECE_CFG_KEYS = (
+    "canvas",
+    "fps",
+    "cq",
+    "backdrop",
+    "blur_mode",
+    "box_color",
+    "speed_badge",
+    "badge_font",
+    "nvenc_preset",
+)
 
 
 def piece_key(plan, cfg):
@@ -683,13 +745,11 @@ def piece_key(plan, cfg):
         "mask": mask_ident,
         "cfg": {k: cfg.get(k) for k in PIECE_CFG_KEYS},
     }
-    blob = json.dumps(payload, sort_keys=True, ensure_ascii=False,
-                      separators=(",", ":"))
+    blob = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:12]
 
 
-def render(plans, cfg, out_path, dry=False, prog=None, rebuild=False,
-           keep_stale=False):
+def render(plans, cfg, out_path, dry=False, prog=None, rebuild=False, keep_stale=False):
     """Render each source, then join them without re-encoding.
 
     Pieces are CONTENT-ADDRESSED: the filename carries the hash of everything
@@ -705,8 +765,7 @@ def render(plans, cfg, out_path, dry=False, prog=None, rebuild=False,
     # drafts and ranges get their own piece dir: the stale-piece cleanup
     # below deletes anything not in the current set, and a draft must not
     # throw away the final's pieces (or the reverse)
-    piece_dir = os.path.join(os.path.dirname(out_path), "..", "temp",
-                             cfg.get("piece_dir", "cut"))
+    piece_dir = os.path.join(os.path.dirname(out_path), "..", "temp", cfg.get("piece_dir", "cut"))
     piece_dir = os.path.normpath(piece_dir)
     os.makedirs(piece_dir, exist_ok=True)
     total_out = sum(p["out_s"] for p in plans)
@@ -717,8 +776,7 @@ def render(plans, cfg, out_path, dry=False, prog=None, rebuild=False,
         key = piece_key(p, cfg)
         dst = os.path.join(piece_dir, f"{base}.{key}.mp4")
         cmd, nodes = source_cmd(p, cfg, dst, prog)
-        pieces.append({"plan": p, "dst": dst, "cmd": cmd, "nodes": nodes,
-                       "key": key})
+        pieces.append({"plan": p, "dst": dst, "cmd": cmd, "nodes": nodes, "key": key})
 
     def usable(pc):
         if rebuild or not os.path.exists(pc["dst"]):
@@ -735,12 +793,16 @@ def render(plans, cfg, out_path, dry=False, prog=None, rebuild=False,
     if dry:
         for pc in pieces:
             p = pc["plan"]
-            print(f"  {os.path.basename(p['path'])[:36]:<36} "
-                  f"{len(p['segments']):>4} segs  {pc['nodes']:>4} nodes  "
-                  f"{'REUSE' if pc['cached'] else 'build'}  {pc['key']}")
+            print(
+                f"  {os.path.basename(p['path'])[:36]:<36} "
+                f"{len(p['segments']):>4} segs  {pc['nodes']:>4} nodes  "
+                f"{'REUSE' if pc['cached'] else 'build'}  {pc['key']}"
+            )
         n = sum(1 for pc in pieces if not pc["cached"])
-        print(f"\n  {n} of {len(pieces)} piece(s) to build, "
-              f"then concat demuxer -c copy -> {os.path.basename(out_path)}")
+        print(
+            f"\n  {n} of {len(pieces)} piece(s) to build, "
+            f"then concat demuxer -c copy -> {os.path.basename(out_path)}"
+        )
         return None
 
     todo = [pc for pc in pieces if not pc["cached"]]
@@ -749,8 +811,7 @@ def render(plans, cfg, out_path, dry=False, prog=None, rebuild=False,
         print(f"  reusing {reused} unchanged piece(s)")
     for i, pc in enumerate(todo, 1):
         p = pc["plan"]
-        print(f"  [{i}/{len(todo)}] {os.path.basename(p['path'])[:40]:<40} "
-              f"{fmt(p['out_s']):>7}")
+        print(f"  [{i}/{len(todo)}] {os.path.basename(p['path'])[:40]:<40} {fmt(p['out_s']):>7}")
         run_ffmpeg(pc["cmd"], os.path.basename(p["path"]))
 
     listing = os.path.join(piece_dir, "concat.txt")
@@ -758,14 +819,31 @@ def render(plans, cfg, out_path, dry=False, prog=None, rebuild=False,
         for pc in pieces:
             f.write(f"file '{pc['dst'].replace(chr(92), '/')}'\n")
     print(f"  joining {len(pieces)} pieces (stream copy)")
-    run_ffmpeg(["ffmpeg", "-v", "error", "-nostdin", "-y",
-                "-f", "concat", "-safe", "0", "-i", listing,
-                "-c", "copy", "-movflags", "+faststart", out_path], "concat")
+    run_ffmpeg(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-nostdin",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            listing,
+            "-c",
+            "copy",
+            "-movflags",
+            "+faststart",
+            out_path,
+        ],
+        "concat",
+    )
 
     if not keep_stale:
         live = {pc["dst"] for pc in pieces}
-        live |= {os.path.splitext(pc["dst"])[0] + ".filtergraph.txt"
-                 for pc in pieces}
+        live |= {os.path.splitext(pc["dst"])[0] + ".filtergraph.txt" for pc in pieces}
         live.add(listing)
         for f in glob.glob(os.path.join(piece_dir, "*")):
             if os.path.normpath(f) not in {os.path.normpath(x) for x in live}:
@@ -809,71 +887,105 @@ def solve_target(man, cfg, target_s):
         if abs(out - target_s) < 1.0:
             break
     mid, out, c = best
-    print(f"  --target {fmt(target_s)}: x{mid:.2f} on both speeds -> "
-          f"work {c['keep_speed']:.2f}x, waiting {c['speed']:.2f}x, "
-          f"giving {fmt(out)}")
+    print(
+        f"  --target {fmt(target_s)}: x{mid:.2f} on both speeds -> "
+        f"work {c['keep_speed']:.2f}x, waiting {c['speed']:.2f}x, "
+        f"giving {fmt(out)}"
+    )
     if out > target_s + 5:
-        print(f"  (floor: forced-1x `hold_1x` windows and the source count "
-              f"keep it above {fmt(out)})")
+        print(
+            f"  (floor: forced-1x `hold_1x` windows and the source count keep it above {fmt(out)})"
+        )
     return c
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifest", required=True)
-    ap.add_argument("--list", action="store_true",
-                    help="price the cut; measures and encodes nothing")
-    ap.add_argument("--sweep", action="store_true",
-                    help="price a grid of speed / drop settings")
-    ap.add_argument("--sheet", metavar="DIR",
-                    help="write a frame per blur rect and per kept segment "
-                         "start, so both can be checked before an encode")
+    ap.add_argument(
+        "--list", action="store_true", help="price the cut; measures and encodes nothing"
+    )
+    ap.add_argument("--sweep", action="store_true", help="price a grid of speed / drop settings")
+    ap.add_argument(
+        "--sheet",
+        metavar="DIR",
+        help="write a frame per blur rect and per kept segment "
+        "start, so both can be checked before an encode",
+    )
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--out")
     ap.add_argument("--speed", type=float)
     ap.add_argument("--keep-speed", type=float)
     ap.add_argument("--drop-still", type=float)
     ap.add_argument("--min-drop", type=float)
-    ap.add_argument("--where", action="append", default=[], metavar="M:SS",
-                    help="given a time in the FINISHED film, print which source "
-                         "and which source timecode it came from, and the rect "
-                         "transform between them; repeatable. This is how a "
-                         "leak found by scanning the render gets traced back "
-                         "to the manifest entry that should have covered it.")
-    ap.add_argument("--draft", action="store_true",
-                    help="half-resolution, fast-preset render for a human to "
-                         "review; ~4x faster than the final. Every rect is a "
-                         "fraction of the frame, so a draft is a valid review "
-                         "of the redaction; what it cannot judge is fine text "
-                         "legibility, which the final and the gate cover.")
-    ap.add_argument("--range", metavar="M:SS-M:SS",
-                    help="render only this stretch of FILM time (mapped back "
-                         "through the cut), for reviewing one issue")
-    ap.add_argument("--hot", action="store_true",
-                    help="render only the risky moments: the first appearance "
-                         "of every tracked secret and every hand rect, a few "
-                         "seconds each, joined -- a risk trailer of about a minute")
-    ap.add_argument("--no-proxy", action="store_true",
-                    help="read the original sources even where a proxy exists")
-    ap.add_argument("--no-redact", action="store_true",
-                    help="cut the film with NOTHING hidden -- no hand rects, "
-                         "no tracked mask -- into temp/film/base.mp4. This is "
-                         "the input to film-redact.py, which detects and blurs "
-                         "in FILM time; it is never the deliverable, so it is "
-                         "written under temp/ and its own piece cache.")
-    ap.add_argument("--smoke", action="store_true",
-                    help="render ~30 s of the busiest source through the FULL "
-                         "graph and check its duration; run before every full "
-                         "render. Seven ffmpeg failures in one session were "
-                         "each found by a full-film render after a 5-10 minute "
-                         "wait; every one of them shows up here in a minute.")
-    ap.add_argument("--rebuild", action="store_true",
-                    help="re-render every piece, ignoring the cache")
-    ap.add_argument("--keep-stale", action="store_true",
-                    help="keep pieces from previous renders in temp/cut")
-    ap.add_argument("--target", metavar="M:SS",
-                    help="solve for the speeds that land on this runtime, "
-                         "keeping the panel:work ratio the manifest asks for")
+    ap.add_argument(
+        "--where",
+        action="append",
+        default=[],
+        metavar="M:SS",
+        help="given a time in the FINISHED film, print which source "
+        "and which source timecode it came from, and the rect "
+        "transform between them; repeatable. This is how a "
+        "leak found by scanning the render gets traced back "
+        "to the manifest entry that should have covered it.",
+    )
+    ap.add_argument(
+        "--draft",
+        action="store_true",
+        help="half-resolution, fast-preset render for a human to "
+        "review; ~4x faster than the final. Every rect is a "
+        "fraction of the frame, so a draft is a valid review "
+        "of the redaction; what it cannot judge is fine text "
+        "legibility, which the final and the gate cover.",
+    )
+    ap.add_argument(
+        "--range",
+        metavar="M:SS-M:SS",
+        help="render only this stretch of FILM time (mapped back "
+        "through the cut), for reviewing one issue",
+    )
+    ap.add_argument(
+        "--hot",
+        action="store_true",
+        help="render only the risky moments: the first appearance "
+        "of every tracked secret and every hand rect, a few "
+        "seconds each, joined -- a risk trailer of about a minute",
+    )
+    ap.add_argument(
+        "--no-proxy",
+        action="store_true",
+        help="read the original sources even where a proxy exists",
+    )
+    ap.add_argument(
+        "--no-redact",
+        action="store_true",
+        help="cut the film with NOTHING hidden -- no hand rects, "
+        "no tracked mask -- into temp/film/base.mp4. This is "
+        "the input to film-redact.py, which detects and blurs "
+        "in FILM time; it is never the deliverable, so it is "
+        "written under temp/ and its own piece cache.",
+    )
+    ap.add_argument(
+        "--smoke",
+        action="store_true",
+        help="render ~30 s of the busiest source through the FULL "
+        "graph and check its duration; run before every full "
+        "render. Seven ffmpeg failures in one session were "
+        "each found by a full-film render after a 5-10 minute "
+        "wait; every one of them shows up here in a minute.",
+    )
+    ap.add_argument(
+        "--rebuild", action="store_true", help="re-render every piece, ignoring the cache"
+    )
+    ap.add_argument(
+        "--keep-stale", action="store_true", help="keep pieces from previous renders in temp/cut"
+    )
+    ap.add_argument(
+        "--target",
+        metavar="M:SS",
+        help="solve for the speeds that land on this runtime, "
+        "keeping the panel:work ratio the manifest asks for",
+    )
     args = ap.parse_args()
 
     mpath = _env.resolve(args.manifest)
@@ -894,8 +1006,9 @@ def main():
             # Left in the manifest, with its reason, rather than deleted: a
             # source dropped for a privacy reason must stay visible to the
             # next session, or someone re-adds it without knowing why it went.
-            print(f"  skipping {os.path.basename(s['path'])}"
-                  f"  -- {s.get('_skip_why', 'skip: true')}")
+            print(
+                f"  skipping {os.path.basename(s['path'])}  -- {s.get('_skip_why', 'skip: true')}"
+            )
             continue
         p = plan_source(s, cfg)
         # Read the proxy when make-proxies.py has built one. It is the SAME
@@ -932,30 +1045,34 @@ def main():
                 if os.path.exists(listing):
                     p["mask_listing"] = listing
                 else:
-                    print(f"  track masks missing for "
-                          f"{os.path.basename(s['path'])}: {listing}")
+                    print(f"  track masks missing for {os.path.basename(s['path'])}: {listing}")
         plans.append(p)
 
     tot_in = sum(p["window"][1] - p["window"][0] for p in plans)
     tot_out = sum(p["out_s"] for p in plans)
     nprox = sum(1 for p in plans if p["is_proxy"])
-    print(f"{os.path.basename(mpath)}   {len(plans)} source(s)   "
-          f"speed={cfg['speed']}x  drop_still={cfg['drop_still']}"
-          f"   proxies={nprox}/{len(plans)}")
-    hdr = (f"  {'source':<38} {'in':>7} {'drop':>7} {'1x':>7} "
-           f"{'sped in':>7} {'out':>7} {'segs':>5}")
+    print(
+        f"{os.path.basename(mpath)}   {len(plans)} source(s)   "
+        f"speed={cfg['speed']}x  drop_still={cfg['drop_still']}"
+        f"   proxies={nprox}/{len(plans)}"
+    )
+    hdr = f"  {'source':<38} {'in':>7} {'drop':>7} {'1x':>7} {'sped in':>7} {'out':>7} {'segs':>5}"
     print(hdr)
     for p in plans:
-        print(f"  {os.path.basename(p['path'])[:38]:<38} "
-              f"{fmt(p['window'][1] - p['window'][0]):>7} "
-              f"{fmt(p['dropped_s']):>7} {fmt(p['keep_s']):>7} "
-              f"{fmt(p['sped_in_s']):>7} {fmt(p['out_s']):>7} "
-              f"{len(p['segments']):>5}")
-    print(f"  {'TOTAL':<38} {fmt(tot_in):>7} "
-          f"{fmt(sum(p['dropped_s'] for p in plans)):>7} "
-          f"{fmt(sum(p['keep_s'] for p in plans)):>7} "
-          f"{fmt(sum(p['sped_in_s'] for p in plans)):>7} "
-          f"{fmt(tot_out):>7} {sum(len(p['segments']) for p in plans):>5}")
+        print(
+            f"  {os.path.basename(p['path'])[:38]:<38} "
+            f"{fmt(p['window'][1] - p['window'][0]):>7} "
+            f"{fmt(p['dropped_s']):>7} {fmt(p['keep_s']):>7} "
+            f"{fmt(p['sped_in_s']):>7} {fmt(p['out_s']):>7} "
+            f"{len(p['segments']):>5}"
+        )
+    print(
+        f"  {'TOTAL':<38} {fmt(tot_in):>7} "
+        f"{fmt(sum(p['dropped_s'] for p in plans)):>7} "
+        f"{fmt(sum(p['keep_s'] for p in plans)):>7} "
+        f"{fmt(sum(p['sped_in_s'] for p in plans)):>7} "
+        f"{fmt(tot_out):>7} {sum(len(p['segments']) for p in plans):>5}"
+    )
 
     if args.sweep:
         print(f"\n  {'speed':>6} {'drop':>7} {'min_drop':>9} {'out':>9} {'segs':>6}")
@@ -963,9 +1080,11 @@ def main():
             for ds in (0.001, 0.002, 0.004):
                 c = dict(cfg, speed=sp, drop_still=ds)
                 ps = [plan_source(s, c) for s in man["sources"]]
-                print(f"  {sp:>6.0f} {ds:>7.3f} {c['min_drop']:>9.1f} "
-                      f"{fmt(sum(x['out_s'] for x in ps)):>9} "
-                      f"{sum(len(x['segments']) for x in ps):>6}")
+                print(
+                    f"  {sp:>6.0f} {ds:>7.3f} {c['min_drop']:>9.1f} "
+                    f"{fmt(sum(x['out_s'] for x in ps)):>9} "
+                    f"{sum(len(x['segments']) for x in ps):>6}"
+                )
 
     if args.where:
         where(plans, cfg, [parse_hms(w) for w in args.where])
@@ -993,15 +1112,20 @@ def main():
         variant += f"-{fmt(a).replace(':', 'm')}-{fmt(b).replace(':', 'm')}"
     if args.draft:
         cw, ch = cfg["canvas"]
-        cfg = dict(cfg, canvas=[cw // 2 // 2 * 2, ch // 2 // 2 * 2],
-                   cq=max(cfg.get("cq", 21), 28), nvenc_preset="p1")
+        cfg = dict(
+            cfg,
+            canvas=[cw // 2 // 2 * 2, ch // 2 // 2 * 2],
+            cq=max(cfg.get("cq", 21), 28),
+            nvenc_preset="p1",
+        )
         variant += "-draft"
     if args.no_redact:
         variant += "-base"
         cfg["piece_dir"] = "cut-base"
         if not args.out:
-            man["output"] = os.path.join(os.path.dirname(mpath), "temp",
-                                         "film", "base.mp4").replace("\\", "/")
+            man["output"] = os.path.join(
+                os.path.dirname(mpath), "temp", "film", "base.mp4"
+            ).replace("\\", "/")
     elif variant and not args.out:
         base, ext = os.path.splitext(man["output"])
         man["output"] = f"{base}{variant}{ext}"
@@ -1010,13 +1134,12 @@ def main():
     out = _env.resolve(args.out or man["output"])
     os.makedirs(os.path.dirname(out), exist_ok=True)
     if args.dry_run:
-        render(plans, cfg, out, dry=True, rebuild=args.rebuild,
-               keep_stale=args.keep_stale)
+        render(plans, cfg, out, dry=True, rebuild=args.rebuild, keep_stale=args.keep_stale)
         return
 
     total_out = sum(p["out_s"] for p in plans)
     pid = os.path.basename(_project.find_project_dir(out) or "")
-    job = (pid or "screen-cut") + variant   # a draft must not clobber the film's progress
+    job = (pid or "screen-cut") + variant  # a draft must not clobber the film's progress
     # begin() RETURNS the path ffmpeg must write to; declaring the job without
     # wiring -progress leaves render-status.py reading an empty file, which it
     # correctly reports as "stalled" for the whole encode. Cleared in a finally,
@@ -1024,8 +1147,7 @@ def main():
     prog = _progress.begin(job, total_out, _project.norm(out), kind="screen-cut")
     try:
         print(f"\n  rendering {fmt(total_out)} -> {out}")
-        render(plans, cfg, out, prog=prog, rebuild=args.rebuild,
-               keep_stale=args.keep_stale)
+        render(plans, cfg, out, prog=prog, rebuild=args.rebuild, keep_stale=args.keep_stale)
     finally:
         _progress.end(job)
 
@@ -1037,12 +1159,22 @@ def main():
     if pid:
         blurs = sum(len(p["src"].get("blur") or []) for p in plans)
         _project.record(
-            pid, "screen-cut", out=out, script=__file__, argv=sys.argv[1:],
-            kind=("draft" if variant else "film"), manifest=mpath,
-            burned={"cut": "activity-driven", "blur_rects": blurs,
-                    "speed_badge": bool(cfg.get("speed_badge")),
-                    "speed": cfg["speed"], "audio": "none (silent sources)"},
-            note=f"{fmt(tot_in)} of sources -> {fmt(got)}")
+            pid,
+            "screen-cut",
+            out=out,
+            script=__file__,
+            argv=sys.argv[1:],
+            kind=("draft" if variant else "film"),
+            manifest=mpath,
+            burned={
+                "cut": "activity-driven",
+                "blur_rects": blurs,
+                "speed_badge": bool(cfg.get("speed_badge")),
+                "speed": cfg["speed"],
+                "audio": "none (silent sources)",
+            },
+            note=f"{fmt(tot_in)} of sources -> {fmt(got)}",
+        )
 
 
 def smoke(plans, cfg, man, mpath, seconds=30.0):
@@ -1054,11 +1186,13 @@ def smoke(plans, cfg, man, mpath, seconds=30.0):
     input, hand blurs, the badge and the encoder all run exactly as the full
     render would -- only shorter.
     """
+
     def busy(p):
         # a tracked mask stream is the expensive, failure-prone path; it must
         # win over any number of hand rects (15 rects picked the handheld clip
         # once, and the smoke never touched alphamerge)
         return (100 if p.get("mask_listing") else 0) + len(p["src"].get("blur") or [])
+
     p = max(plans, key=busy)
     segs, out = [], 0.0
     for s in p["segments"]:
@@ -1071,16 +1205,20 @@ def smoke(plans, cfg, man, mpath, seconds=30.0):
     os.makedirs(sdir, exist_ok=True)
     dst = os.path.join(sdir, os.path.splitext(os.path.basename(p["path"]))[0] + ".mp4")
     cmd, nodes = source_cmd(sp, cfg, dst)
-    print(f"\n  smoke: {os.path.basename(p['path'])}  {len(segs)} segment(s), "
-          f"{nodes} filter nodes, {'mask stream, ' if p.get('mask_listing') else ''}"
-          f"{len(p['src'].get('blur') or [])} hand rect(s) -> {fmt(out)}")
+    print(
+        f"\n  smoke: {os.path.basename(p['path'])}  {len(segs)} segment(s), "
+        f"{nodes} filter nodes, {'mask stream, ' if p.get('mask_listing') else ''}"
+        f"{len(p['src'].get('blur') or [])} hand rect(s) -> {fmt(out)}"
+    )
     t0 = time.time()
     run_ffmpeg(cmd, "smoke")
     got = probe(dst)["duration"]
     ok = abs(got - out) <= max(1.0, out * 0.02)
-    print(f"  smoke: rendered {fmt(got)} in {time.time() - t0:.0f}s "
-          f"({got / max(0.01, time.time() - t0):.2f}x realtime)  "
-          f"{'ok' if ok else 'FAIL: planned ' + fmt(out)}  -> {dst}")
+    print(
+        f"  smoke: rendered {fmt(got)} in {time.time() - t0:.0f}s "
+        f"({got / max(0.01, time.time() - t0):.2f}x realtime)  "
+        f"{'ok' if ok else 'FAIL: planned ' + fmt(out)}  -> {dst}"
+    )
     if not ok:
         raise SystemExit(1)
 
@@ -1106,8 +1244,11 @@ def hot_ranges(plans, lead=2.0, tail=3.0, cap=75.0):
     """
     wins = []
     for p in plans:
-        tj = os.path.join(os.path.dirname(p["mask_listing"]), "track.json") \
-            if p.get("mask_listing") else None
+        tj = (
+            os.path.join(os.path.dirname(p["mask_listing"]), "track.json")
+            if p.get("mask_listing")
+            else None
+        )
         if tj and os.path.exists(tj):
             d = json.load(open(tj, encoding="utf-8"))
             fps = float(d.get("fps") or p["info"]["fps"] or 30)
@@ -1144,7 +1285,8 @@ def hot_ranges(plans, lead=2.0, tail=3.0, cap=75.0):
 def clip_to_ranges(plans, ranges):
     """Keep only the parts of every plan that fall inside the FILM-time
     ranges, splitting segments at the boundaries. Pieces stay per source, so
-    the render path is unchanged; sources with nothing left drop out."""
+    the render path is unchanged; sources with nothing left drop out.
+    """
     out = []
     t = 0.0
     for p in plans:
@@ -1157,8 +1299,14 @@ def clip_to_ranges(plans, ranges):
                     continue
                 st = s["start"] + (lo - f0) * s["speed"]
                 en = s["start"] + (hi - f0) * s["speed"]
-                segs.append({"start": round(st, 3), "end": round(en, 3),
-                             "speed": s["speed"], "out": round((en - st) / s["speed"], 3)})
+                segs.append(
+                    {
+                        "start": round(st, 3),
+                        "end": round(en, 3),
+                        "speed": s["speed"],
+                        "out": round((en - st) / s["speed"], 3),
+                    }
+                )
             t = f1
         if segs:
             q = dict(p, segments=segs, out_s=sum(x["out"] for x in segs))
@@ -1200,17 +1348,22 @@ def where(plans, cfg, times):
         vh = max(2, int(round(info["height"] * f)) // 2 * 2)
         ox, oy = (cw - vw) / 2.0 / cw, (ch - vh) / 2.0 / ch
         sx, sy = vw / float(cw), vh / float(ch)
-        print(f"  {fmt(target):>8}  {os.path.basename(p['source_path'])}"
-              f"  @ {fmt(src_t)}   (segment {s['start']:.1f}-{s['end']:.1f} "
-              f"at {s['speed']:.2f}x)")
-        print(f"            canvas rect [X,Y] -> source rect "
-              f"[(X-{ox:.4f})/{sx:.4f}, (Y-{oy:.4f})/{sy:.4f}]")
+        print(
+            f"  {fmt(target):>8}  {os.path.basename(p['source_path'])}"
+            f"  @ {fmt(src_t)}   (segment {s['start']:.1f}-{s['end']:.1f} "
+            f"at {s['speed']:.2f}x)"
+        )
+        print(
+            f"            canvas rect [X,Y] -> source rect "
+            f"[(X-{ox:.4f})/{sx:.4f}, (Y-{oy:.4f})/{sy:.4f}]"
+        )
 
 
 def sheet(plans, cfg, outdir):
     """Frame grabs that prove the two things a render cannot take back:
     every blur rect actually covers the thing it names, and every kept
-    segment starts on something worth keeping."""
+    segment starts on something worth keeping.
+    """
     os.makedirs(outdir, exist_ok=True)
     cw, ch = cfg["canvas"]
     n = 0
@@ -1235,26 +1388,57 @@ def sheet(plans, cfg, outdir):
             # frame grabbed from 32 s in and the preview comes back CLEAN --
             # which reads exactly like a rect that works. The render reads from
             # the start and keeps source time, so its gates are correct.
-            active = [{k: v for k, v in o.items() if k != "when"}
-                      for o in blurs
-                      if not o.get("when")
-                      or (o["when"][0] <= t <= o["when"][1])]
+            active = [
+                {k: v for k, v in o.items() if k != "when"}
+                for o in blurs
+                if not o.get("when") or (o["when"][0] <= t <= o["when"][1])
+            ]
             parts, cur = blur_chain(active, vw, vh, "0:v", "bb_", cfg)
-            fc = f"[0:v]scale={vw}:{vh}[s];" + \
-                 ";".join(parts).replace("[0:v]", "[s]", 1)
+            fc = f"[0:v]scale={vw}:{vh}[s];" + ";".join(parts).replace("[0:v]", "[s]", 1)
             dst = os.path.join(outdir, f"{base}.blur{i}.jpg")
-            subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(t),
-                            "-i", p["path"], "-filter_complex", fc,
-                            "-map", f"[{cur}]", "-frames:v", "1", dst],
-                           check=True)
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-v",
+                    "error",
+                    "-y",
+                    "-ss",
+                    str(t),
+                    "-i",
+                    p["path"],
+                    "-filter_complex",
+                    fc,
+                    "-map",
+                    f"[{cur}]",
+                    "-frames:v",
+                    "1",
+                    dst,
+                ],
+                check=True,
+            )
             n += 1
         for i, s in enumerate(p["segments"]):
-            dst = os.path.join(outdir, f"{base}.seg{i:03d}."
-                                       f"{'x%g' % s['speed']}.{s['start']:.1f}.jpg")
-            subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss",
-                            str(s["start"] + 0.2), "-i", p["path"],
-                            "-vf", f"scale=640:-2", "-frames:v", "1", dst],
-                           check=True)
+            dst = os.path.join(
+                outdir, f"{base}.seg{i:03d}.{'x%g' % s['speed']}.{s['start']:.1f}.jpg"
+            )
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-v",
+                    "error",
+                    "-y",
+                    "-ss",
+                    str(s["start"] + 0.2),
+                    "-i",
+                    p["path"],
+                    "-vf",
+                    "scale=640:-2",
+                    "-frames:v",
+                    "1",
+                    dst,
+                ],
+                check=True,
+            )
             n += 1
     print(f"\n  wrote {n} frames -> {outdir}")
 

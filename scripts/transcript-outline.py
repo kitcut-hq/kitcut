@@ -14,42 +14,88 @@ span.
 
 Invoke as:  python scripts/transcript-outline.py ...
 """
-import sys, os, json, argparse, unicodedata
+
+import sys
+import os
+import json
+import argparse
+import unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
 
+# Whisper's tokeniser takes words apart, in two directions, and joining the
+# pieces with a space burns a typo into the picture: "60 ,000", "U .S.",
+# "Instafill .ai", "W -9", "flat- to- fillable". It reached a shipped caption
+# card as "15 ,000", and a dub sent "60 ,000" to its translator.
+#
+# The repair lives HERE, in the one loader every consumer shares, so captions,
+# phrase anchors, outlines and dub units all see the same text, and transcripts
+# already paid for are fixed on read instead of re-transcribed. The raw
+# words.json on disk stays verbatim ASR output; nothing is migrated.
+#
+# Joining cannot break phrase matching: fold() strips whitespace and index()
+# concatenates words with no separator, so "60"+",000" and "60,000" build the
+# identical haystack. check-shorts.py pins that invariance.
+#
+# The set is measured, not assumed -- 358 leading-punctuation tokens across
+# this repo's transcripts. Two families LOOK like punctuation and must keep
+# their space, which is why "join anything that starts with punctuation" is
+# the wrong rule: 57 standalone en/em dashes in the Ukrainian transcripts,
+# where the dash is a word, and 19 opening guillemets («Дельта»). A leading
+# "$" needs nothing -- "$14" already arrives whole. Accepted risk, zero cases
+# in the corpus: a genuinely negative number ("-20" meaning minus twenty)
+# would weld onto the word before it; every leading-hyphen token measured is
+# a suffix.
+GLUE_BACK = ",.!?;:%)]}»…&-'’”"
+# ...and of those, only "%" is still glue when it stands alone. A lone "&" is
+# "Point & Figure"; a lone "-" is a dash. A suffix is a suffix only if it has
+# something after the punctuation.
+GLUE_SOLO_OK = "%"
+
+
+def glues_back(tok, apo=""):
+    """True when tok is a suffix of the word before it, joined with no space."""
+    if not tok:
+        return False
+    c = tok[0]
+    if c not in GLUE_BACK and (not apo or c != apo):
+        return False
+    return len(tok) > 1 or c in GLUE_SOLO_OK
 
 
 def rejoin(words):
-    """Put back together the names Whisper's tokeniser took apart.
+    """Put the pieces back together, in the raw envelope.
 
-    A hyphenated or dotted name arrives as several "words": W / -9,
-    flat / -to / -fillable, Instafill / .ai, lead / -based. Nothing downstream
-    knows they belong together, so captions render "W -9" and "Instafill .ai"
-    with a space in front of the punctuation -- which looks like a typo to
-    every viewer, and is burned into the picture.
+    Two rules, and each catches what the other misses -- they were written by
+    two sessions against different footage and neither alone is enough:
 
-    The join happens HERE, in the envelope loader, rather than in
-    transcribe-words.py, so that transcripts already paid for are fixed on read
-    instead of re-transcribed. Merging is safe for timing: the pieces are
-    adjacent by construction, so the joined word simply spans both.
+      * a token that is a SUFFIX of the word before it (",000", ".S.", ".ai",
+        "-9", "-fillable", a solo "%") joins backwards, per glues_back()
+      * a word left hanging on a trailing hyphen ("flat-" waiting for "to")
+        takes the next word, whatever it starts with
+
+    The joined word spans both timing windows -- a caption spotlight on
+    "60,000" must stay lit while ",000" is being said -- and keeps the lower
+    probability. Idempotent: a joined list has no suffix tokens left.
     """
     out = []
     for w in words:
         t = w["text"]
-        glue = (out and t and (
-            # ".ai", "-9", "-fillable" -- punctuation LEADING a real fragment
-            (t[0] in "-." and len(t) > 1 and t[1].isalnum())
-            # "flat-" waiting for its other half
-            or out[-1]["text"].endswith("-")))
-        if glue:
-            out[-1]["text"] += t
-            out[-1]["end"] = w["end"]
+        if out and t and (glues_back(t) or out[-1]["text"].endswith("-")):
+            p = out[-1]
+            p["text"] += t
+            p["end"] = max(p["end"], w["end"])
+            if "probability" in w or "probability" in p:
+                p["probability"] = min(p.get("probability", 1.0), w.get("probability", 1.0))
             continue
         out.append(dict(w))
     return out
+
+
+# the name this repo's shorts tooling imports; one function, two doors
+glue_words = rejoin
 
 
 def load_words(path):
@@ -61,7 +107,10 @@ def load_words(path):
         t = w.get("text", w.get("word"))
         if t is None:
             continue
-        out.append({"text": t, "start": float(w["start"]), "end": float(w["end"])})
+        rec = {"text": t, "start": float(w["start"]), "end": float(w["end"])}
+        if "probability" in w:
+            rec["probability"] = w["probability"]
+        out.append(rec)
     if not out:
         sys.exit("no words in %s" % path)
     return rejoin(out)
@@ -69,14 +118,14 @@ def load_words(path):
 
 def fold(s, loose=True):
     """Normalise for matching. Whitespace always goes -- the words carry no
-    spaces of their own, so a spaced query would never match otherwise."""
+    spaces of their own, so a spaced query would never match otherwise.
+    """
     s = unicodedata.normalize("NFC", s)
     s = "".join(ch for ch in s if not ch.isspace())
     if loose:
         s = s.casefold()
         # apostrophes and dashes vary between the ASR output and what you type
-        for a, b in (("’", "'"), ("ʼ", "'"), ("`", "'"),
-                     ("–", "-"), ("—", "-")):
+        for a, b in (("’", "'"), ("ʼ", "'"), ("`", "'"), ("–", "-"), ("—", "-")):
             s = s.replace(a, b)
         s = "".join(ch for ch in s if ch.isalnum() or ch in "'-")
     return s
@@ -139,8 +188,7 @@ def _retime(old, new):
     if not new:
         return []
     if len(new) == len(old):
-        return [{"text": t, "start": w["start"], "end": w["end"]}
-                for t, w in zip(new, old)]
+        return [{"text": t, "start": w["start"], "end": w["end"]} for t, w in zip(new, old)]
 
     spans = [(w["start"], w["end"]) for w in old]
     spoken = sum(e - s for s, e in spans) or 1e-6
@@ -198,21 +246,22 @@ def apply_corrections(words, specs, verbose=False):
             # corrections only change case and punctuation, which fold() throws
             # away -- so the corrected text still matches its own `find`, and
             # restarting the search would loop forever.
-            span = find_span(words[at:], phrase,
-                             nth=(nth if nth is not None else 0))
+            span = find_span(words[at:], phrase, nth=(nth if nth is not None else 0))
             if span is None:
                 break
             i, j = span[0] + at, span[1] + at
             new = repl.split()
-            words[i:j + 1] = _retime(words[i:j + 1], new)
+            words[i : j + 1] = _retime(words[i : j + 1], new)
             hits += 1
             at = i + len(new)
             if nth is not None:
                 break
         if not hits:
-            sys.exit("corrections: %r matches nothing in the transcript -- it "
-                     "has already been fixed, or the transcript changed under "
-                     "it" % phrase)
+            sys.exit(
+                "corrections: %r matches nothing in the transcript -- it "
+                "has already been fixed, or the transcript changed under "
+                "it" % phrase
+            )
         if verbose:
             print("  corrected %dx %r -> %r" % (hits, phrase, repl))
     return words
@@ -242,11 +291,14 @@ def main():
     ap.add_argument("--outline", action="store_true", help="dump timestamped lines")
     ap.add_argument("--chunk", type=float, default=12.0, help="seconds per outline line")
     ap.add_argument("--find", action="append", default=[], metavar="PHRASE")
-    ap.add_argument("--nth", type=int, default=0,
-                    help="use the Nth occurrence (0-based); applies to every "
-                         "--find phrase in the call, not per phrase")
-    ap.add_argument("--exact", action="store_true",
-                    help="match case and punctuation too")
+    ap.add_argument(
+        "--nth",
+        type=int,
+        default=0,
+        help="use the Nth occurrence (0-based); applies to every "
+        "--find phrase in the call, not per phrase",
+    )
+    ap.add_argument("--exact", action="store_true", help="match case and punctuation too")
     ap.add_argument("-o", "--out", help="write the outline here instead of stdout")
     args = ap.parse_args()
 

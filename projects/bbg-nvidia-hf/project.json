@@ -1,0 +1,55 @@
+{
+  "v": 1,
+  "id": "bbg-nvidia-hf",
+  "intent": "End-to-end check that the shorts pipeline works on macOS (Apple silicon, no NVIDIA card), using a Bloomberg Tech episode as the test footage. The deliverables are a by-product of the check and are not published anywhere.",
+  "pipelines": [
+    "shorts"
+  ],
+  "inputs": {
+    "source": "projects/bbg-nvidia-hf/sources/bbg-nvidia-hf.mp4",
+    "source_origin": "youtube g-YDNJcyuck, 1920x1080 29.97fps 44:08, fetched with yt-dlp --js-runtimes bun (see KI-027)",
+    "words": "projects/bbg-nvidia-hf/transcripts/bbg-nvidia-hf.words.json",
+    "words_engine": "faster-whisper distil-large-v3, int8 on CPU -- no CUDA on this machine. Proper nouns are unreliable: 'Nvidia' often decodes as 'Invidia'/'in videos', 'Rachel Metz' as 'Retro Metz'. Clip anchors deliberately avoid those words. A hotword list was passed on this run and then deleted: it did not fix the brand it was written for, and it was never measured either way, so it was not worth committing as a channel config."
+  },
+  "controls": {
+    "selection": "projects/bbg-nvidia-hf/shortlist.json -- 5 candidates, 2 picks, 1 backup, 2 rejects",
+    "clips": "projects/bbg-nvidia-hf/clips-vertical.json",
+    "crop": "projects/bbg-nvidia-hf/clips-vertical.reframe.json (auto-reframe, face-tracked)",
+    "caption_style": "config/presets/bloomberg-tech-vertical.json, with bottom_margin_px overridden in the manifest -- see its _bottom_margin_why",
+    "encoder": "manifest/preset name h264_nvenc, substituted to h264_videotoolbox on this machine by _encode.py"
+  },
+  "deliverables": {
+    "projects/bbg-nvidia-hf/outputs/shorts-vertical/bbg-nvidia-hf-v-01-cognition-47b.mp4": {
+      "status": "current",
+      "built_utc": "2026-09-04T10:47:39Z",
+      "kind": "short",
+      "script": "scripts/cut-clips.py",
+      "manifest": "projects/bbg-nvidia-hf/clips-vertical.json",
+      "burned": [
+        "9:16 crop per reframe sidecar",
+        "word-synced captions, style config/presets/bloomberg-tech-vertical.json",
+        "handle badge @kitcut"
+      ],
+      "sidecars": {
+        "clip": "projects/bbg-nvidia-hf/outputs/shorts-vertical/bbg-nvidia-hf-v-01-cognition-47b.json"
+      }
+    },
+    "projects/bbg-nvidia-hf/outputs/shorts-vertical/bbg-nvidia-hf-v-02-uber-micro-teams.mp4": {
+      "status": "current",
+      "built_utc": "2026-09-04T10:47:48Z",
+      "kind": "short",
+      "script": "scripts/cut-clips.py",
+      "manifest": "projects/bbg-nvidia-hf/clips-vertical.json",
+      "burned": [
+        "9:16 crop per reframe sidecar",
+        "word-synced captions, style config/presets/bloomberg-tech-vertical.json",
+        "handle badge @kitcut"
+      ],
+      "sidecars": {
+        "clip": "projects/bbg-nvidia-hf/outputs/shorts-vertical/bbg-nvidia-hf-v-02-uber-micro-teams.json"
+      }
+    }
+  },
+  "notes": [],
+  "updated_utc": "2026-09-04T10:47:48Z"
+}

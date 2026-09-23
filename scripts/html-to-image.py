@@ -26,7 +26,13 @@ around it.
 
 Invoke as:  python scripts/html-to-image.py --html page.html --out card.png
 """
-import sys, os, argparse, subprocess, shutil, tempfile
+
+import sys
+import os
+import argparse
+import subprocess
+import shutil
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -51,8 +57,9 @@ BROWSERS = [
 def find_browsers():
     """Every Chromium we can see, in preference order, deduplicated."""
     got, seen = [], set()
-    for cand in ([os.environ["HTML2IMG_BROWSER"]]
-                 if os.environ.get("HTML2IMG_BROWSER") else []) + BROWSERS:
+    for cand in (
+        [os.environ["HTML2IMG_BROWSER"]] if os.environ.get("HTML2IMG_BROWSER") else []
+    ) + BROWSERS:
         if cand and os.path.exists(cand) and cand.lower() not in seen:
             seen.add(cand.lower())
             got.append(cand)
@@ -91,19 +98,18 @@ def file_url(path):
     return "file:///" + os.path.abspath(path).replace("\\", "/")
 
 
-def shoot(html, out, browser, viewport=(1600, 1000), scale=2, timeout=45,
-          settle_ms=2000):
+def shoot(html, out, browser, viewport=(1600, 1000), scale=2, timeout=45, settle_ms=2000):
     """Screenshot `html` into `out`. Returns the browser that did it."""
     os.makedirs(os.path.dirname(os.path.abspath(out)) or ".", exist_ok=True)
     if os.path.exists(out):
-        os.remove(out)                       # so a failed run cannot look fresh
+        os.remove(out)  # so a failed run cannot look fresh
 
     with tempfile.TemporaryDirectory(prefix="html2img-") as profile:
         base = [
             "--headless",
             "--screenshot=%s" % os.path.abspath(out),
-            "--default-background-color=00000000",   # the transparency itself
-            "--window-size=%d,%d" % viewport,        # a COMMA, not an x
+            "--default-background-color=00000000",  # the transparency itself
+            "--window-size=%d,%d" % viewport,  # a COMMA, not an x
             "--force-device-scale-factor=%g" % scale,
             "--hide-scrollbars",
             # Deterministic settling: renders virtual time forward until the
@@ -111,21 +117,26 @@ def shoot(html, out, browser, viewport=(1600, 1000), scale=2, timeout=45,
             # before the shutter. Without it the shot races the page and a
             # font-swap lands in some runs and not others.
             "--virtual-time-budget=%d" % settle_ms,
-            "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-            "--disable-extensions", "--user-data-dir=%s" % profile,
+            "--disable-gpu",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-extensions",
+            "--user-data-dir=%s" % profile,
             file_url(html),
         ]
         # Chromium 132 removed old headless, so on anything current `--headless`
         # IS the new one. Older builds need it spelled out; try that once rather
         # than making the caller know which vintage they have.
         for flags in (base, ["--headless=new"] + base[1:]):
-            r = subprocess.run([browser] + flags, env=ENV,
-                               capture_output=True, text=True, timeout=timeout)
+            r = subprocess.run(
+                [browser] + flags, env=ENV, capture_output=True, text=True, timeout=timeout
+            )
             if os.path.exists(out) and os.path.getsize(out) > 0:
                 return browser
-        sys.exit("%s produced no screenshot for %s\n%s"
-                 % (os.path.basename(browser), html,
-                    (r.stderr or r.stdout or "").strip()[:800]))
+        sys.exit(
+            "%s produced no screenshot for %s\n%s"
+            % (os.path.basename(browser), html, (r.stderr or r.stdout or "").strip()[:800])
+        )
 
 
 def finish(out, crop=True, pad=0):
@@ -139,10 +150,11 @@ def finish(out, crop=True, pad=0):
     alpha = img.split()[3]
     lo, _ = alpha.getextrema()
     if lo == 255:
-        sys.exit("%s came back fully opaque -- the page painted a background.\n"
-                 "  Give html/body no background (or `background: transparent`)"
-                 " and let the card itself be the only thing with a fill."
-                 % out)
+        sys.exit(
+            "%s came back fully opaque -- the page painted a background.\n"
+            "  Give html/body no background (or `background: transparent`)"
+            " and let the card itself be the only thing with a fill." % out
+        )
 
     if crop:
         # The ALPHA channel's bbox, not the image's: Image.getbbox() counts any
@@ -151,14 +163,29 @@ def finish(out, crop=True, pad=0):
         box = alpha.getbbox()
         if box:
             l, t, r, b = box
-            img = img.crop((max(0, l - pad), max(0, t - pad),
-                            min(img.width, r + pad), min(img.height, b + pad)))
+            img = img.crop(
+                (
+                    max(0, l - pad),
+                    max(0, t - pad),
+                    min(img.width, r + pad),
+                    min(img.height, b + pad),
+                )
+            )
     img.save(out)
     return img.size
 
 
-def render(html, out, browser=None, viewport=(1600, 1000), scale=2,
-           crop=True, pad=0, timeout=45, settle_ms=2000):
+def render(
+    html,
+    out,
+    browser=None,
+    viewport=(1600, 1000),
+    scale=2,
+    crop=True,
+    pad=0,
+    timeout=45,
+    settle_ms=2000,
+):
     """Render + verify + crop in one call. This is the importable entry point."""
     html = _overlay.repo_path(html)
     if not os.path.exists(html):
@@ -166,45 +193,51 @@ def render(html, out, browser=None, viewport=(1600, 1000), scale=2,
     if browser is None:
         found = find_browsers()
         if not found:
-            sys.exit("no Chromium browser found -- looked for Edge and Chrome "
-                     "in Program Files and on PATH.\n  Set HTML2IMG_BROWSER to "
-                     "one, or pass --browser.")
+            sys.exit(
+                "no Chromium browser found -- looked for Edge and Chrome "
+                "in Program Files and on PATH.\n  Set HTML2IMG_BROWSER to "
+                "one, or pass --browser."
+            )
         browser = found[0]
     shoot(html, out, browser, viewport, scale, timeout, settle_ms)
     return finish(out, crop, pad)
 
 
 def main():
-    ap = argparse.ArgumentParser(
-        description="Render an HTML page to a transparent PNG.")
+    ap = argparse.ArgumentParser(description="Render an HTML page to a transparent PNG.")
     ap.add_argument("--html", help="the page to shoot")
     ap.add_argument("--out", help="output PNG; default <html>.png")
-    ap.add_argument("--viewport", default="1600,1000",
-                    help="browser window, W,H (default 1600,1000)")
-    ap.add_argument("--scale", type=float, default=2.0,
-                    help="device pixel ratio; 2 keeps type crisp when the card "
-                         "is scaled up onto a 1080p frame")
-    ap.add_argument("--pad", type=int, default=0,
-                    help="transparent pixels to keep around the ink")
-    ap.add_argument("--no-crop", action="store_true",
-                    help="keep the full viewport instead of cropping to alpha")
-    ap.add_argument("--settle-ms", type=int, default=2000,
-                    help="virtual time to run before the shutter")
+    ap.add_argument(
+        "--viewport", default="1600,1000", help="browser window, W,H (default 1600,1000)"
+    )
+    ap.add_argument(
+        "--scale",
+        type=float,
+        default=2.0,
+        help="device pixel ratio; 2 keeps type crisp when the card is scaled up onto a 1080p frame",
+    )
+    ap.add_argument("--pad", type=int, default=0, help="transparent pixels to keep around the ink")
+    ap.add_argument(
+        "--no-crop", action="store_true", help="keep the full viewport instead of cropping to alpha"
+    )
+    ap.add_argument(
+        "--settle-ms", type=int, default=2000, help="virtual time to run before the shutter"
+    )
     ap.add_argument("--timeout", type=int, default=45)
     ap.add_argument("--browser", help="path to Edge/Chrome; overrides discovery")
-    ap.add_argument("--check", action="store_true",
-                    help="name the browsers this machine can render with, and "
-                         "render nothing")
+    ap.add_argument(
+        "--check",
+        action="store_true",
+        help="name the browsers this machine can render with, and render nothing",
+    )
     args = ap.parse_args()
 
     if args.check:
         found = find_browsers()
         if not found:
-            sys.exit("no Chromium browser found -- install Edge or Chrome, or "
-                     "set HTML2IMG_BROWSER")
+            sys.exit("no Chromium browser found -- install Edge or Chrome, or set HTML2IMG_BROWSER")
         for i, p in enumerate(found):
-            print("%s %-24s %s" % ("*" if i == 0 else " ",
-                                   browser_version(p), p))
+            print("%s %-24s %s" % ("*" if i == 0 else " ", browser_version(p), p))
         print("\n* is the one that would be used.")
         return
 
@@ -216,8 +249,17 @@ def main():
     except ValueError:
         sys.exit("--viewport wants W,H -- e.g. 1600,1000")
 
-    w, h = render(args.html, out, args.browser, (vw, vh), args.scale,
-                  not args.no_crop, args.pad, args.timeout, args.settle_ms)
+    w, h = render(
+        args.html,
+        out,
+        args.browser,
+        (vw, vh),
+        args.scale,
+        not args.no_crop,
+        args.pad,
+        args.timeout,
+        args.settle_ms,
+    )
     print("%s  %dx%d  %.0f KB" % (out, w, h, os.path.getsize(out) / 1e3))
 
 

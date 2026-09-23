@@ -39,7 +39,7 @@ themselves; if you ran ffmpeg by hand or a script printed
 End an editing session by appending a short prose note to `journal.md`
 addressed to the next session: what was asked, which knob changed, why, and
 anything it should not have to rediscover. Details: `## Projects` in the
-README; the re-edit entry point is the `video-project` skill.
+`docs/reference.md`; the re-edit entry point is the `video-project` skill.
 
 ## Always do these two things first
 
@@ -56,6 +56,14 @@ README; the re-edit entry point is the `video-project` skill.
    a preset in `config/presets/`, or measure a reference frame and write a new one.
 
 ## Deriving a style from a reference video
+
+For a **channel** we are cutting for, this is not optional and the full
+procedure — what to measure, which measurement lies to you, the Shorts safe
+area, and the 1.7778 conversion — is `## Step 0` in the `video-shorts` skill.
+Worked examples: `config/presets/bloomberg-tech.json` (measured off a broadcast
+frame) and `config/presets/lennys-podcast-vertical.json` (measured off the
+channel's own published shorts).
+
 
 ```powershell
 .venv/Scripts/python.exe -m yt_dlp --download-sections "*MM:SS-MM:SS" -f "<vfmt>+<afmt>" -o "temp/ref.%(ext)s" "<URL>"
@@ -77,7 +85,7 @@ twin) was measured off a news channel: a saturated slab in uppercase, built to
 be read over a talking head on a phone. Put it on a **screen recording** and it
 fights the UI the video is pointing at — the frame is already busy, mostly
 white, and full of what the viewer is supposed to be looking at.
-`config/presets/instafill.json` is the screencast answer: near-black slab at 12%
+`config/presets/dark-card.json` is the screencast answer: near-black slab at 12%
 transparency, sentence case (word shape is what makes a line readable at a
 glance; uppercase throws it away), narrower lines, and the brand mint `#13BA82`
 as the spotlight, so captions, a name label and an end card read as one channel.
@@ -93,7 +101,8 @@ fitted around — read that before widening `layout.max_line_width_px`.
 | `text.uppercase`, `text.apostrophe`, `text.strip_trailing` | text transforms |
 | `text.outline_px` / `outline_colour`, `shadow_px` / `shadow_colour` | stroke + drop shadow |
 | `card.enabled` | `false` = no background card, text only |
-| `card.colour`, `card.alpha`, `card.corner_radius_px`, `card.pad_x_px`, `card.pad_y_px` | the card |
+| `card.colour`, `card.alpha`, `card.corner_radius_px`, `card.pad_x_px`, `card.pad_y_px` | the card (`alpha` is the ASS byte: 0 opaque, 255 invisible) |
+| `card.rule.colour` / `px` / `side` | a solid strip the full card width, `"bottom"` (default) or `"top"` — the accent bar that makes a broadcast lower third read as itself. `bottom_margin_px` measures to the bottom of the **whole** graphic, rule included |
 | `card.collision_gap_px` | clearance when dodging the source's own graphics |
 | `layout.anchor_x`, `bottom_margin_px`, `max_lines`, `max_line_width_px`, `line_height_px` | placement |
 | `states.base` / `states.active` / `states.spoken` | **`spoken == base` → moving spotlight; `spoken == active` → progressive karaoke fill** |
@@ -101,6 +110,31 @@ fitted around — read that before widening `layout.max_line_width_px`.
 | `grouping.*` | words per card, pause/sentence breaks, max duration |
 | `timing.*` | lead-in, hold-out, min highlight, fade |
 | `render.*` | encoder, preset/speed, cq, bitrate caps — translated per encoder family by `_encode.py`; a preset naming an encoder this machine cannot run is substituted, and `--encoder <name>` picks one explicitly for a run |
+
+## Highlighting the main points
+
+The per-word spotlight says *"this is being said now"*. It cannot say *"this is
+the sentence that matters"*. When the ask is to highlight key points, main
+points or takeaways, that is `states.emphasis` plus an emphasis file — not a
+hand-made overlay and not a second pass:
+
+```powershell
+python scripts/run-captions.py --input <film> --style <preset>     --emphasis-file projects/<id>/emphasis.txt
+```
+
+One phrase per line (a JSON list or `{"phrases": [...]}` also works). Every word
+a phrase covers keeps the emphasis colour for the **whole life of its card**,
+before and after the spotlight reaches it, so the point reads to someone
+skimming. About one phrase per 40 s of finished film.
+
+Two rules, both load-bearing:
+
+- **A phrase that matches nothing fails the build.** Quote what the transcript
+  says *after* any `corrections`. A highlight list that silently stops applying
+  after a re-transcription is worse than none, because nobody looks again.
+- **Emphasis must not reuse the spotlight colour.** Otherwise "this is the
+  point" and "this is the current word" become one signal and neither reads.
+  Pick it against the card, not against the base text.
 
 ## Dodging the source's own graphics
 
@@ -238,7 +272,7 @@ Break any of those and YouTube renders no chapters **without reporting an
 error**, which looks exactly like a failed update.
 
 Writing needs the channel owner's OAuth consent (an API key cannot edit a
-video); the one-time console setup is in the README, and the token caches to
+video); the one-time console setup is in `docs/reference.md`, and the token caches to
 `.yt-oauth/`. **You cannot complete that consent on the user's behalf** — if
 `.yt-oauth/client_secret.json` is missing, hand them the steps and the exact
 command rather than trying to work around it. The update preserves the rest of

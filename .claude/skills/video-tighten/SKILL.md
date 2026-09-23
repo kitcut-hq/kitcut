@@ -10,13 +10,18 @@ you have a screen capture and a *separate* camera/phone take that need syncing
 and compositing, use `video-multicam` (`screencast-cut.py`). If the ask is to
 pull short clips *out* of a long video, use `video-shorts` (`cut-clips.py`).
 
+If the file came out of **Zoom**, or the recording arrived as **two or more
+parts**, start at `video-zoom` — it wraps this pipeline with `zoom-import.py` in
+front, because a Zoom recording is a folder rather than a file and its parts
+must be joined onto one clock before any of this runs.
+
 ```powershell
 # from the repo root
 python scripts/tighten-cut.py --manifest projects/<id>/tighten.json --list
 python scripts/tighten-cut.py --manifest projects/<id>/tighten.json
 ```
 
-The worked example is `projects/flatten-pdf/tighten.json`. README has the
+The worked example is `projects/flatten-pdf/tighten.json`. `docs/reference.md` has the
 reference under "Tightening one recording that is already composited".
 
 ## The project folder comes first
@@ -39,7 +44,7 @@ session with a prose note in `journal.md`.
    python scripts/transcribe-words.py projects/<id>/audio/<id>.wav `
        --out projects/<id>/transcripts/<id>.words.json `
        --model large-v3 --device cpu --compute-type int8 --language en `
-       --hotwords-file config/vocab/instafill.txt
+       --hotwords-file config/vocab/product.local.txt
    ```
 
    **Do this before anything else that reads the transcript.** A product name
@@ -115,16 +120,16 @@ keep-list. The remap is exact — a cut only deletes — so put it where
 ```powershell
 copy projects/<id>/outputs/<id>-tight.words.json projects/<id>/transcripts/<id>-tight.words.json
 python scripts/run-captions.py --input projects/<id>/outputs/<id>-tight.mp4 `
-    --id <id>-tight --project <id> --style config/presets/instafill.json
+    --id <id>-tight --project <id> --style config/presets/dark-card.json
 ```
 
-**Use `config/presets/instafill.json`, not `red-card`, on a screen recording.**
+**Use `config/presets/dark-card.json`, not `red-card`, on a screen recording.**
 `red-card` was measured off a news channel — a saturated slab in uppercase,
 built to be read over a talking head. On a screencast it competes with the very
-UI the video is pointing at. The `instafill` preset recedes instead: near-black
+UI the video is pointing at. The `dark-card` preset recedes instead: near-black
 at 12% transparency, sentence case, mint spotlight, narrower lines, and its
 `_geometry` block records the webcam bubble and taskbar the placement was fitted
-around. See `## Styling` in the README before widening a line.
+around. See `## Styling` in `docs/reference.md` before widening a line.
 
 ## Checks it makes for you
 

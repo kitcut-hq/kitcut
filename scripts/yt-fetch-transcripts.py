@@ -15,7 +15,13 @@ Invoke as:
   python scripts/yt-fetch-transcripts.py --ids abc123 def456
   python scripts/yt-fetch-transcripts.py --from-audit temp/chapters-audit.json
 """
-import sys, os, json, time, argparse, subprocess
+
+import sys
+import os
+import json
+import time
+import argparse
+import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -36,13 +42,26 @@ def words_path(vid):
 def download(vid, pause):
     out = audio_path(vid)
     if os.path.exists(out) and os.path.getsize(out) > 0:
-        print(f"  audio cached")
+        print("  audio cached")
         return True
     r = subprocess.run(
-        _env.PY + ["-m", "yt_dlp", "-f", "bestaudio[ext=m4a]/bestaudio",
-                   "-o", os.path.join(AUDIO, "%(id)s.%(ext)s"), "--", vid],
-        env=_env.ENV, capture_output=True, text=True,
-        encoding="utf-8", errors="replace")
+        _env.PY
+        + [
+            "-m",
+            "yt_dlp",
+            "-f",
+            "bestaudio[ext=m4a]/bestaudio",
+            "-o",
+            os.path.join(AUDIO, "%(id)s.%(ext)s"),
+            "--",
+            vid,
+        ],
+        env=_env.ENV,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     time.sleep(pause)
     if r.returncode != 0 or not os.path.exists(out):
         tail = [l for l in (r.stderr or "").splitlines() if l.startswith("ERROR")]
@@ -58,8 +77,12 @@ def transcribe(vid, language):
         n = len(json.load(open(out, encoding="utf-8"))["words"])
         print(f"  transcript cached ({n} words)")
         return True
-    cmd = _env.PY + [os.path.join(ROOT, "scripts", "transcribe-words.py"),
-                     audio_path(vid), "--out", out]
+    cmd = _env.PY + [
+        os.path.join(ROOT, "scripts", "transcribe-words.py"),
+        audio_path(vid),
+        "--out",
+        out,
+    ]
     if language:
         cmd += ["--language", language]
     r = subprocess.run(cmd, env=_env.ENV)
@@ -72,21 +95,29 @@ def transcribe(vid, language):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--ids", nargs="*", default=[])
-    ap.add_argument("--from-audit", help="JSON from yt-audit-chapters.py; "
-                                         "takes every NONE/AUTO video")
-    ap.add_argument("--min-duration", type=int, default=120,
-                    help="skip videos shorter than this many seconds")
+    ap.add_argument(
+        "--from-audit", help="JSON from yt-audit-chapters.py; takes every NONE/AUTO video"
+    )
+    ap.add_argument(
+        "--min-duration", type=int, default=120, help="skip videos shorter than this many seconds"
+    )
     ap.add_argument("--language", default="en", help="'' to autodetect")
-    ap.add_argument("--pause", type=float, default=3.0,
-                    help="seconds between downloads; lower trips the bot check")
+    ap.add_argument(
+        "--pause",
+        type=float,
+        default=3.0,
+        help="seconds between downloads; lower trips the bot check",
+    )
     args = ap.parse_args()
 
     ids = list(args.ids)
     if args.from_audit:
         rows = json.load(open(args.from_audit, encoding="utf-8"))
-        ids += [r["id"] for r in rows
-                if r["verdict"] in ("NONE", "AUTO")
-                and r["duration_s"] >= args.min_duration]
+        ids += [
+            r["id"]
+            for r in rows
+            if r["verdict"] in ("NONE", "AUTO") and r["duration_s"] >= args.min_duration
+        ]
     if not ids:
         sys.exit("nothing to do: pass --ids or --from-audit")
 

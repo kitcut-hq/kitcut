@@ -14,6 +14,7 @@ with no NVIDIA driver and every render on it then fails.
 
 Invoke as:  python scripts/check-env.py
 """
+
 import os
 import subprocess
 import sys
@@ -53,13 +54,17 @@ else:
 
 print("== sys.path hygiene ==")
 if os.environ.get("PYTHONPATH"):
-    bad("PYTHONPATH is set (%s) -- it overrides the venv and breaks compiled "
-        "extensions" % os.environ["PYTHONPATH"])
+    bad(
+        "PYTHONPATH is set (%s) -- it overrides the venv and breaks compiled "
+        "extensions" % os.environ["PYTHONPATH"]
+    )
 else:
     ok("PYTHONPATH is unset")
-foreign = [p for p in sys.path
-           if "site-packages" in p.lower()
-           and os.path.normcase(ROOT) not in os.path.normcase(p)]
+foreign = [
+    p
+    for p in sys.path
+    if "site-packages" in p.lower() and os.path.normcase(ROOT) not in os.path.normcase(p)
+]
 if foreign:
     bad("foreign site-packages on sys.path: %s" % "; ".join(foreign))
 else:
@@ -82,14 +87,29 @@ for mod, why in [
     ("av", "audio decode for faster-whisper"),
     ("sherpa_onnx", "speaker embeddings for the multicam auto-switch"),
 ]:
-    try:
-        m = __import__(mod)
-        ok("%-15s %-9s (%s)" % (mod, getattr(m, "__version__", "") or "-", why))
-    except Exception as e:
-        bad("%-15s %s: %s -- %s" % (mod, type(e).__name__, str(e)[:60], why))
+    # One interpreter per import: cv2 and av (which faster_whisper pulls in)
+    # bundle different FFmpeg builds and register the same AVFoundation classes,
+    # so macOS warns about duplicate objc classes in a process holding both.
+    if (
+        r := subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import sys;print(getattr(__import__(sys.argv[1]),'__version__','') or '-')",
+                mod,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    ).returncode == 0:
+        ok("%-15s %-9s (%s)" % (mod, r.stdout.strip() or "-", why))
+    else:
+        bad("%-15s %s -- %s" % (mod, (r.stderr.strip().splitlines() or ["failed"])[-1][:70], why))
 
 try:
     import cv2
+
     n = len([f for f in os.listdir(cv2.data.haarcascades) if f.endswith(".xml")])
     # OpenCV 5.0 ships none of these, which silently disables face tracking.
     (ok if n else bad)("%d Haar cascade XMLs bundled with OpenCV" % n)
@@ -109,22 +129,38 @@ for _root in _env.site_roots():
                 n_dll += len([f for f in os.listdir(_bin) if f.lower().endswith(".dll")])
 (ok if n_dll else warn)("%d CUDA DLLs on the package path (GPU transcription)" % n_dll)
 
-# The two pins whose comments in requirements.txt say "load-bearing": drift
-# here is exactly what pip check cannot see.
+# opencv-python and nvidia-cublas-cu12, the pins requirements.txt calls
+# load-bearing: drift here is exactly what pip check cannot see. A pin carrying
+# an environment marker is only checked where it actually installs. The CUDA
+# wheels have no macOS build, so demanding them there is a failure the machine
+# cannot fix.
 print("== pins ==")
+
 try:
     import importlib.metadata as _md
+    from packaging.markers import Marker as _Marker
+
     _pins = {}
+
     with open(os.path.join(ROOT, "requirements.txt"), encoding="utf-8") as _f:
         for _line in _f:
             _line = _line.split("#")[0].strip()
+
             if "==" in _line:
                 _k, _, _v = _line.partition("==")
-                _pins[_k.strip().lower()] = _v.strip()
+                _v, _, _mk = _v.partition(";")
+                _pins[_k.strip().lower()] = (_v.strip(), _mk.strip())
+
     for _pkg in ("opencv-python", "nvidia-cublas-cu12"):
-        _want = _pins.get(_pkg)
+        _want, _mk = _pins.get(_pkg, (None, ""))
+
         if not _want:
             continue
+
+        if _mk and not _Marker(_mk).evaluate():
+            print("  - %s %s is not for this platform (%s)" % (_pkg, _want, _mk))
+            continue
+
         try:
             _have = _md.version(_pkg)
         except _md.PackageNotFoundError:
@@ -139,13 +175,15 @@ except Exception as _e:
 
 print("== external tools ==")
 import shutil as _sh  # noqa: E402
+
 if _sh.which("claude"):
     ok("claude CLI on PATH (default translation engine for dubbing)")
 else:
-    warn("claude CLI not on PATH -- dub-clips.py's default --engine claude "
-         "needs it; use --engine openai or manual otherwise")
-for _k, _why in (("ELEVENLABS_API_KEY", "--tts elevenlabs"),
-                 ("OPENAI_API_KEY", "--engine openai")):
+    warn(
+        "claude CLI not on PATH -- dub-clips.py's default --engine claude "
+        "needs it; use --engine openai or manual otherwise"
+    )
+for _k, _why in (("ELEVENLABS_API_KEY", "--tts elevenlabs"), ("OPENAI_API_KEY", "--engine openai")):
     if os.environ.get(_k):
         ok("%s is set (%s)" % (_k, _why))
     else:
@@ -156,8 +194,10 @@ _font = os.path.join(ROOT, "fonts", "Montserrat-Bold.ttf")
 if os.path.exists(_font):
     ok("fonts/Montserrat-Bold.ttf present")
 else:
-    bad("fonts/Montserrat-Bold.ttf missing -- every caption preset points at "
-        "it, and libass would silently substitute another face")
+    bad(
+        "fonts/Montserrat-Bold.ttf missing -- every caption preset points at "
+        "it, and libass would silently substitute another face"
+    )
 
 print("== ffmpeg ==")
 for tool in ("ffmpeg", "ffprobe"):
@@ -181,43 +221,61 @@ try:
         else:
             print("  - %-12s not usable here (%s)" % (cand, fam))
     if not good:
-        bad("no video encoder can encode a frame -- nothing here can render. "
-            "Check the ffmpeg build and the GPU driver")
+        bad(
+            "no video encoder can encode a frame -- nothing here can render. "
+            "Check the ffmpeg build and the GPU driver"
+        )
     elif _encode.family_of(good[0]) == "software":
         # true but slow, and worth saying out loud before someone starts a
         # feature-length render and assumes it has hung
-        warn("only CPU encoding is available (%s) -- renders run several times "
-             "slower than on a GPU, but they are correct" % good[0])
+        warn(
+            "only CPU encoding is available (%s) -- renders run several times "
+            "slower than on a GPU, but they are correct" % good[0]
+        )
     else:
-        ok("default encoder: %s -- manifests and presets naming an encoder "
-           "this machine cannot run are substituted with it, and _encode.py "
-           "translates their preset/rate keys into its family. Set "
-           "render.encoder (or $%s) to make a choice permanent"
-           % (good[0], _encode.ENCODER_VAR))
+        ok(
+            "default encoder: %s -- manifests and presets naming an encoder "
+            "this machine cannot run are substituted with it, and _encode.py "
+            "translates their preset/rate keys into its family. Set "
+            "render.encoder (or $%s) to make a choice permanent" % (good[0], _encode.ENCODER_VAR)
+        )
         if "h264_nvenc" not in good:
-            # Encoding is covered by the substitution above. Decoding is a
-            # separate question and nothing translates it: faster-whisper and
-            # the NVDEC paths still want the card.
-            print("  note: h264_nvenc is not available -- every render "
-                  "pipeline substitutes %s, but GPU *decode* (-hwaccel cuda) "
-                  "and CUDA transcription still need an NVIDIA card"
-                  % good[0])
-    stale = [e for e in ("h264_nvenc", "h264_amf", "libx264")
-             if e not in good and e in subprocess.run(
-                 ["ffmpeg", "-hide_banner", "-encoders"],
-                 capture_output=True, text=True).stdout]
+            # Encoding is covered by the substitution above, and GPU decode is
+            # now probed and dropped by _encode.decode_args() rather than
+            # reaching ffmpeg and failing the INPUT. Transcription is the one
+            # axis nothing here translates: faster-whisper falls back to CPU
+            # on its own, and is slower for it.
+            print(
+                "  note: h264_nvenc is not available -- every render "
+                "pipeline substitutes %s and GPU decode is dropped "
+                "automatically, so the pipelines are correct here; CUDA "
+                "transcription still wants an NVIDIA card and falls back "
+                "to the CPU without one" % good[0]
+            )
+    stale = [
+        e
+        for e in ("h264_nvenc", "h264_amf", "libx264")
+        if e not in good
+        and e
+        in subprocess.run(
+            ["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True
+        ).stdout
+    ]
     if stale:
-        print("  note: %s %s in the ffmpeg build but fail(s) to open -- "
-              "compiled in, no driver behind it"
-              % (", ".join(stale), "is" if len(stale) == 1 else "are"))
-    flt = subprocess.run(["ffmpeg", "-hide_banner", "-filters"],
-                         capture_output=True, text=True).stdout
+        print(
+            "  note: %s %s in the ffmpeg build but fail(s) to open -- "
+            "compiled in, no driver behind it"
+            % (", ".join(stale), "is" if len(stale) == 1 else "are")
+        )
+    flt = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-filters"], capture_output=True, text=True
+    ).stdout
     # rubberband time-stretches without shifting pitch; atempo is the fallback
     # and sounds worse past about +/-15%.
     (ok if "rubberband" in flt else warn)("rubberband (pitch-preserving stretch)")
     import re as _re  # noqa: E402
-    (ok if _re.search(r"^\s*\S+\s+ass\s", flt, _re.M) else bad)(
-        "ass (subtitle burn-in)")
+
+    (ok if _re.search(r"^\s*\S+\s+ass\s", flt, _re.MULTILINE) else bad)("ass (subtitle burn-in)")
 except Exception as e:
     bad("could not query ffmpeg: %s" % e)
 
@@ -227,14 +285,19 @@ print("== gpu ==")
 # AMD card cannot, whatever it does for video. Whether anything can ENCODE is
 # already answered above, by encoding.
 try:
-    out = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total",
-                          "--format=csv,noheader"],
-                         capture_output=True, text=True, check=True).stdout.strip()
+    out = subprocess.run(
+        ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
     ok("%s -- CUDA transcription available" % out)
 except Exception:
-    warn("no nvidia-smi: faster-whisper runs on CPU. Pass --device cpu "
-         "--compute-type int8 and a distil model; see README ## Setup. GPU "
-         "*encoding* is a separate question and is answered above")
+    warn(
+        "no nvidia-smi: faster-whisper runs on CPU. Pass --device cpu "
+        "--compute-type int8 and a distil model; see README ## Setup. GPU "
+        "*encoding* is a separate question and is answered above"
+    )
 
 print()
 if FAIL:

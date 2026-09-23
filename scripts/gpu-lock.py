@@ -22,6 +22,7 @@ venv is one of the things that can wedge it.
 
 Invoke as:  python scripts/gpu-lock.py [--list] [--clear [--force]] [--name gpu]
 """
+
 import os
 import sys
 import glob
@@ -45,8 +46,10 @@ def show(name):
     why = _gpulock.stale(rec)
     if why:
         print("  STALE: %s" % why)
-        print("  -- clear it with: python scripts/gpu-lock.py --clear"
-              + ("" if name == "gpu" else " --name %s" % name))
+        print(
+            "  -- clear it with: python scripts/gpu-lock.py --clear"
+            + ("" if name == "gpu" else " --name %s" % name)
+        )
     else:
         print("  holder is alive; a second run would queue behind it")
     return 0
@@ -55,12 +58,11 @@ def show(name):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--name", default="gpu", help="which lock (default: gpu)")
-    ap.add_argument("--list", action="store_true",
-                    help="show every lock file, not just --name")
-    ap.add_argument("--clear", action="store_true",
-                    help="remove the lock if its holder is dead")
-    ap.add_argument("--force", action="store_true",
-                    help="with --clear, remove it even if the holder is alive")
+    ap.add_argument("--list", action="store_true", help="show every lock file, not just --name")
+    ap.add_argument("--clear", action="store_true", help="remove the lock if its holder is dead")
+    ap.add_argument(
+        "--force", action="store_true", help="with --clear, remove it even if the holder is alive"
+    )
     args = ap.parse_args()
 
     if args.clear:
@@ -71,10 +73,11 @@ def main():
         why = _gpulock.stale(rec)
         if not why and not args.force:
             print(_gpulock.describe(rec, args.name))
-            print("REFUSED: that holder is alive. Clearing would put a second "
-                  "job on the card, which is what this lock prevents.")
-            print("If you have already killed pid %s, re-run with --force."
-                  % rec.get("pid"))
+            print(
+                "REFUSED: that holder is alive. Clearing would put a second "
+                "job on the card, which is what this lock prevents."
+            )
+            print("If you have already killed pid %s, re-run with --force." % rec.get("pid"))
             return 1
         print("clearing: %s" % _gpulock.describe(rec, args.name))
         print("  reason: %s" % (why or "forced by --force"))

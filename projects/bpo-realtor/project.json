@@ -216,8 +216,9 @@
         "audio: voice projects/bpo-realtor/outputs/dub/bpo-realtor-film.vo.wav + music projects/bpo-realtor/audio/When You're Alone - Dyalla.mp3 at -22 dB, ducked under the voice, loudnorm -14 LUFS",
         "elapsed counter 'AI filling the form' film 1:31.4-1:48.8, stops at 1:50 (source 58.0->168.88)"
       ],
-      "checked_utc": "2026-09-23T18:00:00Z",
-      "note": "picture-only render the voice-over is timed against; the edit.json changes after it (audio, captions) do not touch the picture"
+      "checked_utc": "2026-09-23T21:40:00Z",
+      "note": "picture-only render the voice-over is timed against; the edit.json changes after it (audio, captions) do not touch the picture",
+      "checked_note": "manifest edit was a rename only (instafill-* presets -> band-*, logo path) for the kitcut-hq de-branding; no pixel or sample changes"
     },
     "projects/bpo-realtor/outputs/dub/bpo-realtor-film.vo.wav": {
       "status": "current",
@@ -263,7 +264,9 @@
         "url": "https://youtu.be/9Ufk4p-4yMM",
         "privacy": "unlisted",
         "sidecar": "projects/bpo-realtor/outputs/bpo-realtor.youtube.json"
-      }
+      },
+      "checked_utc": "2026-09-23T21:40:00Z",
+      "checked_note": "manifest edit was a rename only (instafill-* presets -> band-*, logo path) for the kitcut-hq de-branding; no pixel or sample changes"
     },
     "projects/bpo-realtor/temp/s1-picture.mp4": {
       "status": "current",
@@ -315,7 +318,9 @@
         "url": "https://youtu.be/OLhroTUMoW0",
         "privacy": "unlisted",
         "sidecar": "projects/bpo-realtor/outputs/shorts/bpo-realtor-s1.youtube.json"
-      }
+      },
+      "checked_utc": "2026-09-23T21:40:00Z",
+      "checked_note": "manifest edit was a rename only (instafill-* presets -> band-*, logo path) for the kitcut-hq de-branding; no pixel or sample changes"
     }
   },
   "notes": [

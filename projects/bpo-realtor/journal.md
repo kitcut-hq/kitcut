@@ -168,8 +168,8 @@ hand-time claim, no market value).
 **Captions:** need the voice-over audio first (words come from it, not from
 ASR on a silent film). Previews used the draft script at 2.5 words/s, so the
 group splits in outputs/previews/captions-compare.png are not real. Three
-looks: instafill (existing, sits on the window edge), instafill-band-light,
-instafill-band-dark (both in the lavender band under the window).
+looks: instafill (existing, sits on the window edge), band-light,
+band-dark (both in the lavender band under the window).
 
 **Music:** proposed only -- nothing downloaded or generated.
 - 16:29 render scripts/edl-cut.py -> projects/bpo-realtor/temp/picture.mp4 (--manifest projects/bpo-realtor/edit.json --out projects/bpo-realtor/temp/picture.mp4)
@@ -180,7 +180,7 @@ instafill-band-dark (both in the lavender band under the window).
 ### Session note -- the film: end card, voice, captions (music pending)
 
 **Chosen by the user:** end card A (`window`) with the Instafill logo in place
-of the typed URL; captions C (`instafill-band-dark`); music 1 (YouTube Audio
+of the typed URL; captions C (`band-dark`); music 1 (YouTube Audio
 Library); voice-over text as drafted.
 
 **outputs/bpo-realtor.mp4** (2:35.2): the picture from review 2, the checklist

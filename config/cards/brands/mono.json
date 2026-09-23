@@ -1,5 +1,5 @@
 {
-  "_comment": "Brand-neutral black and white. The default when a card is for someone who has no palette here yet, and the sanity check that a template is not secretly tied to Instafill's colours.",
+  "_comment": "Brand-neutral black and white. The default when a card is for someone who has no palette here yet, and the sanity check that a template is not secretly tied to any one palette.",
   "ink": "#0A0A0A",
   "paper": "#FFFFFF",
   "accent": "#FFFFFF",

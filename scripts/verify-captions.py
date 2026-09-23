@@ -17,7 +17,13 @@ case that motivated it.
 
 Invoke as:  python scripts/verify-captions.py ...
 """
-import sys, os, json, argparse, subprocess, random
+
+import sys
+import os
+import json
+import argparse
+import subprocess
+import random
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -37,18 +43,36 @@ def hex_rgb(h):
 
 def probe(ass, fontsdir, t, png, fps=60.0, size=(1920, 1080)):
     """Frame n covers [n/fps,(n+1)/fps). Sample the MIDDLE of the frame that
-    contains t, so we read the frame libass actually rendered for that instant."""
+    contains t, so we read the frame libass actually rendered for that instant.
+    """
     n = int(t * fps)
     tm = (n + 0.5) / fps
     # Do NOT seek: a short synthetic source has no frame at tm, and seeking would
     # rebase PTS to 0 so libass would look up the wrong dialogue lines anyway.
     # Instead push the single frame's PTS onto the real timeline for the ass
     # filter, then pull it back. Same fix as the preview-clip render.
-    vf = ("setpts=PTS+%.5f/TB,ass=filename=%s:fontsdir=%s:shaping=simple,setpts=PTS-%.5f/TB"
-          % (tm, ass, fontsdir, tm))
-    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-           "-f", "lavfi", "-i", "color=c=black:s=%dx%d:r=%g:d=0.05" % (size[0], size[1], fps),
-           "-vf", vf, "-frames:v", "1", png]
+    vf = "setpts=PTS+%.5f/TB,ass=filename=%s:fontsdir=%s:shaping=simple,setpts=PTS-%.5f/TB" % (
+        tm,
+        ass,
+        fontsdir,
+        tm,
+    )
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=black:s=%dx%d:r=%g:d=0.05" % (size[0], size[1], fps),
+        "-vf",
+        vf,
+        "-frames:v",
+        "1",
+        png,
+    ]
     subprocess.run(cmd, env=ENV, check=True)
     return np.array(Image.open(png).convert("RGB"), dtype=float)
 
@@ -61,8 +85,12 @@ def main():
     ap.add_argument("--fontsdir", default="fonts")
     ap.add_argument("--samples", type=int, default=40)
     ap.add_argument("--seed", type=int, default=7)
-    ap.add_argument("--fps", type=float, default=60.0,
-                    help="video frame rate; probe times snap to frame midpoints")
+    ap.add_argument(
+        "--fps",
+        type=float,
+        default=60.0,
+        help="video frame rate; probe times snap to frame midpoints",
+    )
     ap.add_argument("--tmp", default="temp/_probe.png")
     args = ap.parse_args()
 
@@ -104,17 +132,75 @@ def main():
     # wide enough to be judged is still judged, and the skipped count is printed
     # so a preset that quietly shrinks every highlight cannot hide behind it.
     min_active_s = 2.0 / args.fps
-    wide = [(g, wi) for (g, wi) in cand
-            if (g["words"][wi]["b"] - g["words"][wi]["a"]) / 100.0 >= min_active_s]
+    wide = [
+        (g, wi)
+        for (g, wi) in cand
+        if (g["words"][wi]["b"] - g["words"][wi]["a"]) / 100.0 >= min_active_s
+    ]
     skipped = len(cand) - len(wide)
     if skipped:
-        print("skipping %d/%d candidate word(s) with an active window under "
-              "%.0f ms (2 frames at %g fps) -- too short for a 1-frame probe to judge"
-              % (skipped, len(cand), min_active_s * 1000.0, args.fps))
+        print(
+            "skipping %d/%d candidate word(s) with an active window under "
+            "%.0f ms (2 frames at %g fps) -- too short for a 1-frame probe to judge"
+            % (skipped, len(cand), min_active_s * 1000.0, args.fps)
+        )
     if not wide:
-        sys.exit("no word has an active window of at least %.0f ms -- nothing "
-                 "probeable; check the preset's timing block" % (min_active_s * 1000.0))
+        sys.exit(
+            "no word has an active window of at least %.0f ms -- nothing "
+            "probeable; check the preset's timing block" % (min_active_s * 1000.0)
+        )
     cand = wide
+
+    # Second scope limit, for the same reason as the first and measured the same
+    # way. Classification here is NEAREST-COLOUR, and that is only meaningful
+    # while the card is at full opacity. Inside a group's fade every word is a
+    # blend toward the card, and the blend is not linear in the metric this uses:
+    # a dimmed white word can sit closer to the mint reference than a dimmed
+    # mint one does to white, so argmin picks a base word and reports a
+    # mismatch on a file that is correct.
+    #
+    # Measured case, on a Ukrainian talking-head briefing: group 54, the word
+    # 'неї' active 117.19->117.27 -- 80 ms, exactly two frames, so the filter
+    # above keeps it -- and its whole window lies inside the 90 ms fade-in,
+    # because it is the first word of its card. The rendered frame at 117.23
+    # shows 'неї' correctly in mint; only the classifier could not read it.
+    # 249 of 250 probes passed and the one failure was this.
+    #
+    # So: a word whose active window is entirely inside a fade is not probed,
+    # and any word that merely OVERLAPS one is probed at an instant outside it.
+    # Nothing is softened -- every word that can be judged is still judged, and
+    # both skip counts are printed.
+    fade_s = float(cfg["timing"].get("fade_ms", 0)) / 1000.0
+    if fade_s > 0:
+
+        def probe_at(g, wi):
+            """When to sample this word, or None if the fades leave no instant."""
+            w = g["words"][wi]
+            a, b = w["a"] / 100.0, w["b"] / 100.0
+            lo = max(a, g["g0"] / 100.0 + fade_s)
+            hi = min(b, g["g1"] / 100.0 - fade_s)
+            if hi - lo < 1.0 / args.fps:
+                return None
+            return (lo + hi) / 2.0
+
+        timed = [(g, wi, probe_at(g, wi)) for (g, wi) in cand]
+        keep = [(g, wi, t) for (g, wi, t) in timed if t is not None]
+        lost = len(timed) - len(keep)
+        if lost:
+            print(
+                "skipping %d/%d candidate word(s) whose active window lies "
+                "inside the %.0f ms card fade -- nearest-colour classification "
+                "is not valid while the card is not at full opacity"
+                % (lost, len(timed), fade_s * 1000.0)
+            )
+        if not keep:
+            sys.exit(
+                "every word's highlight falls inside the card fade; nothing "
+                "probeable. Lower timing.fade_ms or lengthen the groups."
+            )
+        cand = keep
+    else:
+        cand = [(g, wi, (g["words"][wi]["a"] + g["words"][wi]["b"]) / 200.0) for (g, wi) in cand]
 
     random.seed(args.seed)
     picks = random.sample(cand, min(args.samples, len(cand)))
@@ -122,9 +208,8 @@ def main():
 
     ok = fail = 0
     failures = []
-    for g, wi in picks:
+    for g, wi, t in picks:
         w = g["words"][wi]
-        t = (w["a"] + w["b"]) / 2.0 / 100.0
         img = probe(args.ass, args.fontsdir, t, args.tmp, args.fps, tuple(size))
 
         # Half-height of a word's sampling box. fsize is the NOMINAL font size,
@@ -143,17 +228,19 @@ def main():
             x1 = int(ww["cx"] + ww["w"] / 2) + 2
             y0 = int(ww["cy"] - half)
             y1 = int(ww["cy"] + half)
-            box = img[max(0, y0):y1, max(0, x0):x1]
+            box = img[max(0, y0) : y1, max(0, x0) : x1]
             if box.size == 0:
-                scores.append(1e9); continue
+                scores.append(1e9)
+                continue
             lum = box.sum(axis=2)
             mask = lum > lum.max() * 0.55 if lum.max() > 60 else None
             if mask is None or mask.sum() < 5:
-                scores.append(1e9); continue
+                scores.append(1e9)
+                continue
             mean = box[mask].mean(axis=0)
             d_act = np.linalg.norm(mean - act)
             d_base = np.linalg.norm(mean - base)
-            scores.append(d_act - d_base)      # most negative = most active-like
+            scores.append(d_act - d_base)  # most negative = most active-like
 
         got = int(np.argmin(scores))
         if got == wi:
@@ -164,8 +251,10 @@ def main():
 
     print("sync probes: %d/%d correct" % (ok, ok + fail))
     for t, gi, expect, gotw in failures[:15]:
-        print("  MISMATCH t=%.2fs group %d: expected '%s' highlighted, got '%s'"
-              % (t, gi, expect, gotw))
+        print(
+            "  MISMATCH t=%.2fs group %d: expected '%s' highlighted, got '%s'"
+            % (t, gi, expect, gotw)
+        )
     if os.path.exists(args.tmp):
         os.remove(args.tmp)
     sys.exit(0 if fail == 0 else 1)

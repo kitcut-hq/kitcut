@@ -10,9 +10,11 @@ faster-whisper==1.2.1          # word-level timestamps; GPU via ctranslate2
 ctranslate2==4.8.1
 av==18.1.0
 # CUDA runtime that ctranslate2 dlopens. Without these faster-whisper falls
-# back to CPU and a 40-minute video takes the best part of an hour.
-nvidia-cublas-cu12==12.9.2.10
-nvidia-cuda-nvrtc-cu12==12.9.86
+# back to CPU and a 40-minute video takes the best part of an hour. There are
+# no macOS wheels, and without the marker the whole file fails to resolve there
+# instead of skipping these two.
+nvidia-cublas-cu12==12.9.2.10 ; sys_platform != "darwin"
+nvidia-cuda-nvrtc-cu12==12.9.86 ; sys_platform != "darwin"
 
 # --- vision --------------------------------------------------------------
 # HARD PIN: OpenCV 5.0 ships no Haar cascade XML at all (cv2.data.haarcascades
@@ -49,6 +51,12 @@ yt-dlp
 # huggingface_hub, so a faster-whisper bump could silently remove them.
 httpx
 requests
+
+# --- environment doctor --------------------------------------------------
+# check-env.py imports packaging directly, to evaluate the environment markers
+# written in this very file. Nothing else here declares it, so without this
+# line it is present only as a dependency of pip and setuptools.
+packaging
 
 # --- publishing ----------------------------------------------------------
 # Writing chapter markers back into a video description (yt-set-chapters.py).

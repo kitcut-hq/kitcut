@@ -1,0 +1,34 @@
+# Without `requires-python` every uv invocation warns "No requires-python value
+# found in the workspace" and defaults to >=3.13. PEP 621 then forces `name` and
+# `version` alongside it -- uv refuses the table without either -- so the version
+# is a placeholder; nothing here is packaged or published.
+#
+# `managed = false` stops uv adopting .venv as its own. Left unset it creates an
+# empty .venv and a dependency-free uv.lock, and a later `uv sync` enforces that
+# lock by removing every installed package. Dependencies stay in
+# requirements.txt, installed with pip.
+[project]
+name = "kitcut"
+version = "0"
+requires-python = ">=3.13,<3.14"
+
+[tool.uv]
+managed = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    # These three delete or reorder the `_env` bootstrap, which every script
+    # imports for its side effect and never names again.
+    "F401",
+    "I001",
+    "RUF100",
+    # Fights `ruff format`, on ruff's own advice.
+    "COM812",
+    # Nothing here is packaged or distributed, so no file carries a header.
+    "CPY001",
+]

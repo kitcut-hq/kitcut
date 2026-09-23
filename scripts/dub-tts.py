@@ -23,7 +23,16 @@ Standalone:
 
 Invoke as:  python scripts/dub-tts.py --help  (usually driven in-process by dub-clips.py)
 """
-import sys, os, json, argparse, asyncio, subprocess, time, wave, re
+
+import sys
+import os
+import json
+import argparse
+import asyncio
+import subprocess
+import time
+import wave
+import re
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -38,12 +47,12 @@ SR = 48000
 # *Multilingual* variants keep their accent on foreign proper nouns, which
 # matters when a dub is full of place names.
 VOICES = {
-    "ava":     "en-US-AvaMultilingualNeural",     # warm, young, conversational
-    "emma":    "en-US-EmmaMultilingualNeural",
-    "jenny":   "en-US-JennyNeural",
-    "aria":    "en-US-AriaNeural",
-    "andrew":  "en-US-AndrewMultilingualNeural",
-    "brian":   "en-US-BrianMultilingualNeural",
+    "ava": "en-US-AvaMultilingualNeural",  # warm, young, conversational
+    "emma": "en-US-EmmaMultilingualNeural",
+    "jenny": "en-US-JennyNeural",
+    "aria": "en-US-AriaNeural",
+    "andrew": "en-US-AndrewMultilingualNeural",
+    "brian": "en-US-BrianMultilingualNeural",
 }
 DEFAULT_VOICE = "ava"
 
@@ -59,9 +68,9 @@ def _el_config():
     global _EL_CFG
     if _EL_CFG is None:
         try:
-            with open(os.path.join(_env.ROOT, "config",
-                                   "elevenlabs-voices.json"),
-                      encoding="utf-8") as f:
+            with open(
+                os.path.join(_env.ROOT, "config", "elevenlabs-voices.json"), encoding="utf-8"
+            ) as f:
                 _EL_CFG = json.load(f)
         except (OSError, ValueError):
             _EL_CFG = {}
@@ -83,23 +92,28 @@ def resolve_voice(name, backend="edge"):
         if name in voices:
             v = voices[name]
             if not v.get("verified"):
-                sys.exit("elevenlabs voice %r is marked verified: false in "
-                         "config/elevenlabs-voices.json (%s) -- call the id "
-                         "once, then flip the flag"
-                         % (name, v.get("note", "never called")))
+                sys.exit(
+                    "elevenlabs voice %r is marked verified: false in "
+                    "config/elevenlabs-voices.json (%s) -- call the id "
+                    "once, then flip the flag" % (name, v.get("note", "never called"))
+                )
             return v["voice_id"]
         if name in EL_VOICES:
             return EL_VOICES[name]
         if re.fullmatch(r"[A-Za-z0-9]{16,32}", name):
-            return name                  # a raw voice id passes through
-        sys.exit("unknown elevenlabs voice %r -- known: %s"
-                 % (name, ", ".join(sorted(voices or EL_VOICES))))
+            return name  # a raw voice id passes through
+        sys.exit(
+            "unknown elevenlabs voice %r -- known: %s"
+            % (name, ", ".join(sorted(voices or EL_VOICES)))
+        )
     if name in VOICES:
         return VOICES[name]
     if re.match(r"^[a-z]{2,3}-[A-Z]{2}-", name):
-        return name                      # a full edge ShortName passes through
-    sys.exit("unknown edge voice %r -- shortcuts: %s, or a full ShortName "
-             "(--list-voices prints them)" % (name, ", ".join(sorted(VOICES))))
+        return name  # a full edge ShortName passes through
+    sys.exit(
+        "unknown edge voice %r -- shortcuts: %s, or a full ShortName "
+        "(--list-voices prints them)" % (name, ", ".join(sorted(VOICES)))
+    )
 
 
 def default_voice(backend="edge"):
@@ -107,12 +121,15 @@ def default_voice(backend="edge"):
 
 
 async def _stream(text, voice, rate_pct, pitch_hz):
-    c = edge_tts.Communicate(text, voice,
-                             rate="%+d%%" % int(round(rate_pct)),
-                             pitch="%+dHz" % int(round(pitch_hz)),
-                             # the default is SentenceBoundary, which for our
-                             # purposes reports nothing useful
-                             boundary="WordBoundary")
+    c = edge_tts.Communicate(
+        text,
+        voice,
+        rate="%+d%%" % int(round(rate_pct)),
+        pitch="%+dHz" % int(round(pitch_hz)),
+        # the default is SentenceBoundary, which for our
+        # purposes reports nothing useful
+        boundary="WordBoundary",
+    )
     audio, marks = bytearray(), []
     async for ch in c.stream():
         if ch["type"] == "audio":
@@ -123,12 +140,31 @@ async def _stream(text, voice, rate_pct, pitch_hz):
 
 
 def _decode(mp3, sr=SR):
-    p = subprocess.run(["ffmpeg", "-v", "error", "-f", "mp3", "-i", "pipe:0",
-                        "-ac", "1", "-ar", str(sr), "-f", "f32le", "pipe:1"],
-                       input=mp3, capture_output=True, env=ENV)
+    p = subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "mp3",
+            "-i",
+            "pipe:0",
+            "-ac",
+            "1",
+            "-ar",
+            str(sr),
+            "-f",
+            "f32le",
+            "pipe:1",
+        ],
+        input=mp3,
+        capture_output=True,
+        env=ENV,
+    )
     if p.returncode:
-        raise RuntimeError("ffmpeg could not decode the TTS audio: %s"
-                           % p.stderr.decode("utf-8", "replace")[:200])
+        raise RuntimeError(
+            "ffmpeg could not decode the TTS audio: %s" % p.stderr.decode("utf-8", "replace")[:200]
+        )
     return np.frombuffer(p.stdout, dtype=np.float32).copy()
 
 
@@ -155,7 +191,7 @@ def _trim(x, sr=SR, floor_db=-45.0, margin=0.02):
 # Lines that run long therefore fall back on the `tight` rewrite and rubberband
 # more often. Both numbers were measured, not taken from the docs.
 EL_URL = "https://api.elevenlabs.io/v1/text-to-speech/%s/with-timestamps"
-EL_MODEL = None      # resolved from config/elevenlabs-voices.json; --el-model wins
+EL_MODEL = None  # resolved from config/elevenlabs-voices.json; --el-model wins
 EL_SPEED_LO, EL_SPEED_HI = 0.7, 1.2
 
 
@@ -163,8 +199,11 @@ def el_model():
     global EL_MODEL
     if EL_MODEL is None:
         cfg = _el_config()
-        EL_MODEL = ((cfg.get("dubbing") or {}).get("model")
-                    or cfg.get("default_model") or "eleven_multilingual_v2")
+        EL_MODEL = (
+            (cfg.get("dubbing") or {}).get("model")
+            or cfg.get("default_model")
+            or "eleven_multilingual_v2"
+        )
     return EL_MODEL
 
 
@@ -174,14 +213,16 @@ class TTSPermanentError(RuntimeError):
 
 class TTSRateLimited(RuntimeError):
     """HTTP 429 -- retryable, but on a much longer backoff than a socket blip."""
+
+
 EL_VOICES = {
-    "sarah":   "EXAVITQu4vr4xnSDxMaL",
-    "laura":   "FGY2WhTYpPnrIDTdsKH5",
-    "alice":   "Xb7hH8MSUJpSbSDYk0k2",
+    "sarah": "EXAVITQu4vr4xnSDxMaL",
+    "laura": "FGY2WhTYpPnrIDTdsKH5",
+    "alice": "Xb7hH8MSUJpSbSDYk0k2",
     "matilda": "XrExE9yKIg1WjnnlVkGX",
     "jessica": "cgSgspJ2msm6clMCkdW9",
-    "lily":    "pFZP5JQG7iQjIQuC4Bku",
-    "brian":   "nPczCjzI2devNBz1zQrb",
+    "lily": "pFZP5JQG7iQjIQuC4Bku",
+    "brian": "nPczCjzI2devNBz1zQrb",
 }
 EL_DEFAULT_VOICE = "jessica"
 
@@ -189,24 +230,33 @@ EL_DEFAULT_VOICE = "jessica"
 def _el_render(text, voice, rate_pct):
     """Returns (mp3 bytes, [(word, t0, t1)]) with times in seconds."""
     import base64
+
     try:
         import httpx
     except ImportError:
-        raise TTSPermanentError("httpx is not installed -- run "
-                                "scripts/setup-python.ps1 (it is in "
-                                "requirements.txt)")
+        raise TTSPermanentError(
+            "httpx is not installed -- run scripts/setup-python.ps1 (it is in requirements.txt)"
+        )
 
     key = os.environ.get("ELEVENLABS_API_KEY")
     if not key:
         raise TTSPermanentError("ELEVENLABS_API_KEY is not set (put it in .env)")
     vid = resolve_voice(voice, "elevenlabs")
     speed = max(EL_SPEED_LO, min(EL_SPEED_HI, 1.0 + rate_pct / 100.0))
-    r = httpx.post(EL_URL % vid, timeout=180,
-                   headers={"xi-api-key": key, "Content-Type": "application/json"},
-                   json={"text": text, "model_id": el_model(),
-                         "voice_settings": {"stability": 0.5,
-                                            "similarity_boost": 0.75,
-                                            "speed": round(speed, 3)}})
+    r = httpx.post(
+        EL_URL % vid,
+        timeout=180,
+        headers={"xi-api-key": key, "Content-Type": "application/json"},
+        json={
+            "text": text,
+            "model_id": el_model(),
+            "voice_settings": {
+                "stability": 0.5,
+                "similarity_boost": 0.75,
+                "speed": round(speed, 3),
+            },
+        },
+    )
     if r.status_code == 429:
         raise TTSRateLimited("elevenlabs 429: %s" % r.text[:200])
     if 400 <= r.status_code < 500:
@@ -225,8 +275,10 @@ def _el_render(text, voice, rate_pct):
         raise RuntimeError("elevenlabs returned no alignment for %r" % text[:40])
     if not (len(chars) == len(t0s) == len(t1s)):
         # zip() would silently drop the tail of the marks
-        raise RuntimeError("elevenlabs alignment arrays disagree: %d chars, "
-                           "%d starts, %d ends" % (len(chars), len(t0s), len(t1s)))
+        raise RuntimeError(
+            "elevenlabs alignment arrays disagree: %d chars, "
+            "%d starts, %d ends" % (len(chars), len(t0s), len(t1s))
+        )
     # alignment is per CHARACTER; glue them back into words on whitespace
     marks, cur, t0, t1 = [], "", None, None
     for c, a, b in zip(chars, t0s, t1s):
@@ -281,8 +333,7 @@ def monotonic(marks, min_len=0.01, max_t=None):
     return out
 
 
-def speak(text, voice=None, rate_pct=0.0, pitch_hz=0.0, sr=SR, tries=4,
-          backend="edge"):
+def speak(text, voice=None, rate_pct=0.0, pitch_hz=0.0, sr=SR, tries=4, backend="edge"):
     """Render one line. Returns (samples float32 mono, [(word, t0, t1), ...]).
 
     Word times are seconds from the first sample of the returned audio.
@@ -296,8 +347,8 @@ def speak(text, voice=None, rate_pct=0.0, pitch_hz=0.0, sr=SR, tries=4,
     if not text or not text.strip():
         return np.zeros(0, dtype=np.float32), []
     if voice is None:
-        voice = default_voice(backend)   # each backend has its own default;
-                                         # edge's "ava" is a 404 on ElevenLabs
+        voice = default_voice(backend)  # each backend has its own default;
+        # edge's "ava" is a 404 on ElevenLabs
     last = None
     for attempt in range(tries):
         try:
@@ -305,12 +356,13 @@ def speak(text, voice=None, rate_pct=0.0, pitch_hz=0.0, sr=SR, tries=4,
                 mp3, marks = _el_render(text, voice, rate_pct)
             else:
                 mp3, raw = asyncio.run(
-                    _stream(text, resolve_voice(voice, backend), rate_pct,
-                            pitch_hz))
+                    _stream(text, resolve_voice(voice, backend), rate_pct, pitch_hz)
+                )
                 # edge reports 100-nanosecond ticks; normalise to seconds so the
                 # two backends hand back the same shape
-                marks = [(m["text"], m["offset"] / 1e7,
-                          (m["offset"] + m["duration"]) / 1e7) for m in raw]
+                marks = [
+                    (m["text"], m["offset"] / 1e7, (m["offset"] + m["duration"]) / 1e7) for m in raw
+                ]
             if not mp3:
                 raise RuntimeError("empty audio")
             # decode inside the retry: a truncated body behind an HTTP 200 is
@@ -319,21 +371,21 @@ def speak(text, voice=None, rate_pct=0.0, pitch_hz=0.0, sr=SR, tries=4,
             # monotonic() AFTER the trim shift, not before: clamping the shifted
             # times at zero collapses every word that began inside the trimmed
             # lead onto 0.0, re-creating exactly the overlaps it removes.
-            return audio, monotonic([(w, max(0.0, a - lead), max(0.0, b - lead))
-                                     for w, a, b in marks],
-                                    max_t=audio.size / float(sr))
+            return audio, monotonic(
+                [(w, max(0.0, a - lead), max(0.0, b - lead)) for w, a, b in marks],
+                max_t=audio.size / float(sr),
+            )
         except TTSPermanentError as e:
             sys.exit("text-to-speech: %s" % e)
         except TTSRateLimited as e:
             last = e
             if attempt < tries - 1:
                 time.sleep((5, 15, 30)[min(attempt, 2)])
-        except Exception as e:                       # transient socket or service
+        except Exception as e:  # transient socket or service
             last = e
             if attempt < tries - 1:
                 time.sleep(0.6 * (attempt + 1))
-    raise RuntimeError("text-to-speech failed after %d tries for %r: %s"
-                       % (tries, text[:60], last))
+    raise RuntimeError("text-to-speech failed after %d tries for %r: %s" % (tries, text[:60], last))
 
 
 def rate_limits(backend="edge"):
@@ -380,8 +432,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--say")
     ap.add_argument("--out")
-    ap.add_argument("--tts", default="edge", choices=["edge", "elevenlabs"],
-                    help="which voice service to speak with")
+    ap.add_argument(
+        "--tts",
+        default="edge",
+        choices=["edge", "elevenlabs"],
+        help="which voice service to speak with",
+    )
     ap.add_argument("--voice", help="voice name or id; default depends on --tts")
     ap.add_argument("--rate", type=float, default=0.0, help="speaking rate %%")
     ap.add_argument("--pitch", type=float, default=0.0, help="semitone-ish Hz shift")
@@ -402,18 +458,25 @@ def main():
             voices = _el_config().get("voices") or {}
             for name in sorted(voices):
                 v = voices[name]
-                print("%-10s %-22s %-8s %s%s"
-                      % (name, v.get("voice_id", "?"), v.get("gender", ""),
-                         "" if v.get("verified") else "UNVERIFIED  ",
-                         v.get("note", "")))
-            print("\nfrom config/elevenlabs-voices.json; a TTS-scoped key "
-                  "cannot list voices at runtime")
+                print(
+                    "%-10s %-22s %-8s %s%s"
+                    % (
+                        name,
+                        v.get("voice_id", "?"),
+                        v.get("gender", ""),
+                        "" if v.get("verified") else "UNVERIFIED  ",
+                        v.get("note", ""),
+                    )
+                )
+            print(
+                "\nfrom config/elevenlabs-voices.json; a TTS-scoped key "
+                "cannot list voices at runtime"
+            )
             return
         vs = asyncio.run(edge_tts.list_voices())
         for v in sorted(vs, key=lambda v: v["ShortName"]):
             if args.filter.lower() in v["ShortName"].lower():
-                print("%-38s %-8s %s" % (v["ShortName"], v["Gender"],
-                                         v.get("FriendlyName", "")))
+                print("%-38s %-8s %s" % (v["ShortName"], v["Gender"], v.get("FriendlyName", "")))
         print("\nshortcuts: %s" % ", ".join("%s=%s" % kv for kv in VOICES.items()))
         print("(--tts elevenlabs --list-voices shows the other backend)")
         return
@@ -427,8 +490,10 @@ def main():
     if args.fit:
         r = rate_for(dur, args.fit, backend=args.tts)
         audio, words = speak(args.say, voice, r, args.pitch, backend=args.tts)
-        print("fit: %.2fs -> rate %+.0f%% -> %.2fs (target %.2fs)"
-              % (dur, r, audio.size / float(SR), args.fit))
+        print(
+            "fit: %.2fs -> rate %+.0f%% -> %.2fs (target %.2fs)"
+            % (dur, r, audio.size / float(SR), args.fit)
+        )
         dur = audio.size / float(SR)
     print("%.3fs, %d words" % (dur, len(words)))
     for w, a, b in words:

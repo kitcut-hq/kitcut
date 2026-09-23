@@ -38,6 +38,7 @@ pad is visible while a crop is not.
 Invoke as:  python scripts/conform-tapes.py --manifest projects/<id>/anglecut.json
             python scripts/conform-tapes.py --tapes a.mkv b.mp4 --outdir projects/<id>/tapes --fps 30 --size 1920x1080
 """
+
 import sys
 import os
 import json
@@ -54,14 +55,19 @@ import _project  # noqa: E402
 ROOT = _env.ROOT
 ENV = _env.ENV
 
-SR = 48000                      # every tape resampled to this, as split-cameras
+SR = 48000  # every tape resampled to this, as split-cameras
 # A conform is an intermediate that a real render reads again, so it is kept
 # visually lossless-ish: cq 16 is what split-cameras.py conforms at.
-DEFAULT_CONFORM = {"speed": 5, "cq": 16, "maxrate": "40M", "bufsize": "80M",
-                   "audio_bitrate": "256k"}
-DEFAULT_RATE_TOL = 0.002        # 30.03 vs 30 is 0.1%; 30 vs 29.97 is 0.1% too,
-                                # so this is deliberately tight enough to keep
-                                # those two apart and force an explicit choice
+DEFAULT_CONFORM = {
+    "speed": 5,
+    "cq": 16,
+    "maxrate": "40M",
+    "bufsize": "80M",
+    "audio_bitrate": "256k",
+}
+DEFAULT_RATE_TOL = 0.002  # 30.03 vs 30 is 0.1%; 30 vs 29.97 is 0.1% too,
+# so this is deliberately tight enough to keep
+# those two apart and force an explicit choice
 
 
 def rel(p):
@@ -71,11 +77,23 @@ def rel(p):
 def probe(path):
     """(width, height, r_num, r_den, n_frames, duration)."""
     out = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets",
-         "-show_entries",
-         "stream=width,height,r_frame_rate,avg_frame_rate,nb_read_packets"
-         ":format=duration", "-of", "json", path],
-        env=ENV, capture_output=True, text=True)
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-count_packets",
+            "-show_entries",
+            "stream=width,height,r_frame_rate,avg_frame_rate,nb_read_packets:format=duration",
+            "-of",
+            "json",
+            path,
+        ],
+        env=ENV,
+        capture_output=True,
+        text=True,
+    )
     if out.returncode:
         sys.exit("ffprobe failed on %s\n%s" % (path, out.stderr.strip()))
     j = json.loads(out.stdout)
@@ -113,12 +131,11 @@ def pick_target(probes, rates, tol):
     Lowest, because a rate below a tape's own is reachable by dropping frames
     and a rate above it is not reachable at all without inventing them.
     """
-    cands = sorted({round(num / float(den or 1), 3)
-                    for _, _, num, den, _, _ in probes})
+    cands = sorted({round(num / float(den or 1), 3) for _, _, num, den, _, _ in probes})
     for t in cands:
         if all(route(f, t, tol)[0] != "refuse" for f in rates):
             return t
-    return round(min(rates), 3)          # nothing works; let --list say why
+    return round(min(rates), 3)  # nothing works; let --list say why
 
 
 def route(src_fps, tgt_fps, tol=DEFAULT_RATE_TOL):
@@ -141,9 +158,10 @@ def size_filter(sw, sh, tw, th):
     target and the pad fills what is left. A 16:9 source into a 16:9 grid pads
     by zero and costs nothing, so this is written once rather than branched.
     """
-    return ("scale=%d:%d:force_original_aspect_ratio=decrease:flags=lanczos,"
-            "pad=%d:%d:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
-            % (tw, th, tw, th))
+    return (
+        "scale=%d:%d:force_original_aspect_ratio=decrease:flags=lanczos,"
+        "pad=%d:%d:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1" % (tw, th, tw, th)
+    )
 
 
 def plan_one(path, tgt_fps, tw, th, tol):
@@ -152,11 +170,20 @@ def plan_one(path, tgt_fps, tw, th, tol):
     fps = real_fps(n, dur, num, den)
     how, k = route(fps, tgt_fps, tol)
     out_n = n if how == "regrid" else (math.ceil(n / float(k)) if k else 0)
-    return {"src": path, "w": sw, "h": sh, "n": n, "dur": dur,
-            "claimed_fps": num / float(den or 1), "real_fps": fps,
-            "how": how, "k": k, "out_n": out_n,
-            "out_dur": out_n / float(tgt_fps) if tgt_fps else 0.0,
-            "resize": (sw, sh) != (tw, th)}
+    return {
+        "src": path,
+        "w": sw,
+        "h": sh,
+        "n": n,
+        "dur": dur,
+        "claimed_fps": num / float(den or 1),
+        "real_fps": fps,
+        "how": how,
+        "k": k,
+        "out_n": out_n,
+        "out_dur": out_n / float(tgt_fps) if tgt_fps else 0.0,
+        "resize": (sw, sh) != (tw, th),
+    }
 
 
 def conform(p, dst, cfg, tgt_fps, tw, th):
@@ -174,53 +201,78 @@ def conform(p, dst, cfg, tgt_fps, tw, th):
     vf += "setpts=N/%g/TB," % tgt_fps
     vf += size_filter(p["w"], p["h"], tw, th)
 
-    cmd = (["ffmpeg", "-hide_banner", "-nostats", "-loglevel", "warning",
-            "-i", p["src"], "-vf", vf,
-            "-fps_mode", "passthrough",
-            "-video_track_timescale", str(int(round(tgt_fps * 1000)))]
-           + _encode.video_args(cfg) + _encode.audio_args(cfg, rate=SR)
-           + ["-movflags", "+faststart", "-y", tmp])
+    cmd = (
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-loglevel",
+            "warning",
+            "-i",
+            p["src"],
+            "-vf",
+            vf,
+            "-fps_mode",
+            "passthrough",
+            "-video_track_timescale",
+            str(int(round(tgt_fps * 1000))),
+        ]
+        + _encode.video_args(cfg)
+        + _encode.audio_args(cfg, rate=SR)
+        + ["-movflags", "+faststart", "-y", tmp]
+    )
     r = subprocess.run(cmd, capture_output=True, text=True, env=ENV)
     if r.returncode != 0:
-        sys.exit("conform failed for %s:\n%s"
-                 % (_project.norm(p["src"]), (r.stderr or "")[-3000:]))
+        sys.exit("conform failed for %s:\n%s" % (_project.norm(p["src"]), (r.stderr or "")[-3000:]))
 
     gw, gh, _, _, gn, _ = probe(tmp)
     if (gw, gh) != (tw, th):
         os.remove(tmp)
-        sys.exit("conform produced %dx%d, wanted %dx%d -- %s left alone"
-                 % (gw, gh, tw, th, _project.norm(p["src"])))
+        sys.exit(
+            "conform produced %dx%d, wanted %dx%d -- %s left alone"
+            % (gw, gh, tw, th, _project.norm(p["src"]))
+        )
     # The assertion is the point. A route that silently duplicated or dropped
     # is exactly what makes a frame-addressed cut wrong, and it is invisible
     # in the picture.
     if gn != p["out_n"]:
         os.remove(tmp)
-        sys.exit("conform produced %d frames, the %s route predicted %d. The "
-                 "grid is wrong and nothing downstream can be trusted."
-                 % (gn, p["how"], p["out_n"]))
+        sys.exit(
+            "conform produced %d frames, the %s route predicted %d. The "
+            "grid is wrong and nothing downstream can be trusted." % (gn, p["how"], p["out_n"])
+        )
     shutil.move(tmp, dst)
     return gn
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--manifest", help="an anglecut manifest; conforms its "
-                                       "`cameras` in place of --tapes")
+    ap.add_argument(
+        "--manifest", help="an anglecut manifest; conforms its `cameras` in place of --tapes"
+    )
     ap.add_argument("--tapes", nargs="+", help="recordings to conform")
     ap.add_argument("--outdir", help="default projects/<id>/tapes")
     ap.add_argument("--id", help="project id, for the record")
-    ap.add_argument("--fps", type=float, default=None,
-                    help="target rate; default: the lowest real rate among "
-                         "the tapes, because that is the only one every tape "
-                         "can reach without inventing frames")
-    ap.add_argument("--size", default=None, metavar="WxH",
-                    help="target frame size; default: the largest width and "
-                         "height present, so no tape is downscaled")
+    ap.add_argument(
+        "--fps",
+        type=float,
+        default=None,
+        help="target rate; default: the lowest real rate among "
+        "the tapes, because that is the only one every tape "
+        "can reach without inventing frames",
+    )
+    ap.add_argument(
+        "--size",
+        default=None,
+        metavar="WxH",
+        help="target frame size; default: the largest width and "
+        "height present, so no tape is downscaled",
+    )
     ap.add_argument("--rate-tol", type=float, default=DEFAULT_RATE_TOL)
-    ap.add_argument("--list", action="store_true",
-                    help="print what each tape becomes and stop")
-    ap.add_argument("--force", action="store_true",
-                    help="re-conform tapes whose output already exists")
+    ap.add_argument("--list", action="store_true", help="print what each tape becomes and stop")
+    ap.add_argument(
+        "--force", action="store_true", help="re-conform tapes whose output already exists"
+    )
     _env.add_workspace_arg(ap)
     args = ap.parse_args()
     _env.set_workspace(args.workspace)
@@ -248,46 +300,63 @@ def main():
     # The lowest rate is the only one every tape reaches by dropping frames
     # rather than by inventing them, and the largest size is the only one that
     # downscales nothing. Both are overridable; neither is a guess.
-    tgt_fps = args.fps if args.fps else pick_target(probes, rates, args.rate_tol)
+    tgt_fps = args.fps or pick_target(probes, rates, args.rate_tol)
     if args.size:
         tw, th = (int(x) for x in args.size.lower().split("x"))
     else:
         tw = max(p[0] for p in probes)
         th = max(p[1] for p in probes)
-    tw, th = tw // 2 * 2, th // 2 * 2          # yuv420p chroma wants even
+    tw, th = tw // 2 * 2, th // 2 * 2  # yuv420p chroma wants even
 
-    outdir = rel(args.outdir) if args.outdir else (
-        os.path.join(_project.projects_dir(), pid, "tapes") if pid else None)
+    outdir = (
+        rel(args.outdir)
+        if args.outdir
+        else (os.path.join(_project.projects_dir(), pid, "tapes") if pid else None)
+    )
     if not outdir:
         sys.exit("pass --outdir, or --id/--manifest so one can be derived")
 
     plans = [plan_one(t, tgt_fps, tw, th, args.rate_tol) for t in tapes]
 
-    print("target grid: %dx%d @ %g fps   ->  %s"
-          % (tw, th, tgt_fps, _project.norm(outdir)))
-    print("encoder: %s" % _encode.describe(_encode.resolve(dict(
-        DEFAULT_CONFORM, **((m or {}).get("conform") or {})))))
-    print("")
+    print("target grid: %dx%d @ %g fps   ->  %s" % (tw, th, tgt_fps, _project.norm(outdir)))
+    print(
+        "encoder: %s"
+        % _encode.describe(
+            _encode.resolve(dict(DEFAULT_CONFORM, **((m or {}).get("conform") or {})))
+        )
+    )
+    print()
     print("  tape           source           claimed  real     route       out")
     refused = []
     for cid, p in zip(ids, plans):
-        print("  %-14s %4dx%-4d %5df  %7.3f  %7.3f  %-11s %5df %6.2fs%s"
-              % (cid[:14], p["w"], p["h"], p["n"], p["claimed_fps"], p["real_fps"],
-                 p["how"] + ("/%d" % p["k"] if p["how"] == "decimate" else ""),
-                 p["out_n"], p["out_dur"],
-                 "  (letterboxed)" if p["resize"] else ""))
+        print(
+            "  %-14s %4dx%-4d %5df  %7.3f  %7.3f  %-11s %5df %6.2fs%s"
+            % (
+                cid[:14],
+                p["w"],
+                p["h"],
+                p["n"],
+                p["claimed_fps"],
+                p["real_fps"],
+                p["how"] + ("/%d" % p["k"] if p["how"] == "decimate" else ""),
+                p["out_n"],
+                p["out_dur"],
+                "  (letterboxed)" if p["resize"] else "",
+            )
+        )
         if p["how"] == "refuse":
             refused.append((cid, p))
 
     if refused:
-        print("")
+        print()
         for cid, p in refused:
-            print("  REFUSED %s: %.3f fps -> %g fps is neither the same rate "
-                  "nor an integer multiple of it. Reaching it means dropping "
-                  "or duplicating frames unevenly, which is what makes a "
-                  "frame-addressed cut wrong. Pick --fps %g, or re-shoot the "
-                  "tape on the grid." % (cid, p["real_fps"], tgt_fps,
-                                         round(min(rates), 3)))
+            print(
+                "  REFUSED %s: %.3f fps -> %g fps is neither the same rate "
+                "nor an integer multiple of it. Reaching it means dropping "
+                "or duplicating frames unevenly, which is what makes a "
+                "frame-addressed cut wrong. Pick --fps %g, or re-shoot the "
+                "tape on the grid." % (cid, p["real_fps"], tgt_fps, round(min(rates), 3))
+            )
         if not args.list:
             sys.exit(1)
 
@@ -296,7 +365,7 @@ def main():
         return
 
     cfg = _encode.resolve(dict(DEFAULT_CONFORM, **((m or {}).get("conform") or {})))
-    print("")
+    print()
     outs = {}
     for cid, p in zip(ids, plans):
         dst = os.path.join(outdir, "%s.mp4" % cid)
@@ -306,17 +375,18 @@ def main():
             continue
         print("  conforming %s (%s) ..." % (cid, p["how"]))
         n = conform(p, dst, cfg, tgt_fps, tw, th)
-        print("    %s  %d frames  %.2fs" % (_project.norm(dst), n,
-                                            n / float(tgt_fps)))
+        print("    %s  %d frames  %.2fs" % (_project.norm(dst), n, n / float(tgt_fps)))
 
     if pid:
-        _project.record(pid, "conform", script=__file__, argv=sys.argv[1:],
-                        note="conformed %d tapes to %dx%d @ %g fps"
-                             % (len(tapes), tw, th, tgt_fps))
-    print("\nconformed %d tapes to %dx%d @ %g fps"
-          % (len(tapes), tw, th, tgt_fps))
-    print("point the anglecut manifest's `cameras` at %s"
-          % _project.norm(outdir))
+        _project.record(
+            pid,
+            "conform",
+            script=__file__,
+            argv=sys.argv[1:],
+            note="conformed %d tapes to %dx%d @ %g fps" % (len(tapes), tw, th, tgt_fps),
+        )
+    print("\nconformed %d tapes to %dx%d @ %g fps" % (len(tapes), tw, th, tgt_fps))
+    print("point the anglecut manifest's `cameras` at %s" % _project.norm(outdir))
 
 
 if __name__ == "__main__":

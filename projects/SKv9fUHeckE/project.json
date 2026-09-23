@@ -16,7 +16,11 @@
     "source": "projects/SKv9fUHeckE/sources/SKv9fUHeckE-1080p.mp4",
     "words": "projects/SKv9fUHeckE/transcripts/SKv9fUHeckE.words.json"
   },
-  "controls": {},
+  "controls": {
+    "reframe": "projects/SKv9fUHeckE/clips-vertical.reframe.json",
+    "manifest": "projects/SKv9fUHeckE/clips-vertical.json",
+    "caption-style": "config/presets/red-card-vertical.json"
+  },
   "deliverables": {
     "projects/SKv9fUHeckE/outputs/shorts-vertical/SKv9fUHeckE-v-01-hunting-our-engineers.mp4": {
       "status": "current",
@@ -77,5 +81,5 @@
     }
   },
   "notes": [],
-  "updated_utc": "2026-09-02T05:36:08Z"
+  "updated_utc": "2026-09-03T17:56:52Z"
 }

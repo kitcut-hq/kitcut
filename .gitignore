@@ -16,14 +16,28 @@ temp/*
 !transcripts/.gitkeep
 !temp/.gitkeep
 
-# Per-video project folders: the metadata and manifests at the top of
-# projects/<id>/ are committed; the content dirs inside are not.
+# Per-video project folders. NEW ones stay local: a project folder is working
+# memory for whoever is cutting that video, and the repo is the tooling.
+# The 22 folders committed before this line was added remain tracked -- git
+# ignores .gitignore for files it already follows -- so their journals and
+# manifests still serve as the worked examples the skills and README cite.
+# To stop tracking those too: git rm -r --cached projects/
+projects/
+
+# Content dirs, listed for the already-tracked folders above (the blanket
+# ignore covers new ones): never committed, whatever the folder's status.
 projects/*/sources/
 projects/*/audio/
 projects/*/transcripts/
 projects/*/outputs/
 projects/*/temp/
 projects/*/raws/
+
+# Private hotword lists. The people and clients in a recording are the most
+# valuable ASR hotwords there are and the least shareable thing in the repo,
+# so they live beside the committed vocabularies and never travel with them.
+# transcribe-words.py --hotwords-file is repeatable so both can be passed.
+config/vocab/*.local.txt
 
 # Belt and braces: these must not slip in from anywhere
 *.mp4
@@ -73,6 +87,7 @@ node_modules/
 # IDE
 .vscode/
 .idea/
+.serena/
 
 # Speaker models for auto-switch.py -- 200 MB, downloaded not authored
 models/

@@ -286,7 +286,7 @@
   },
   "captions": {
     "words": "projects/bpo-realtor/outputs/dub/bpo-realtor-film.vo.words.json",
-    "style": "config/presets/instafill-band-dark.json",
+    "style": "config/presets/band-dark.json",
     "_why": "style C, the user's choice: one line in the lavender band under the window, in the counter card's colour",
     "display": {
       "_why": "the voice spells numbers out; the caption shows them the way the picture does",

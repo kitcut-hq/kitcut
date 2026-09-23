@@ -1,0 +1,37 @@
+# English software vocabulary spoken inside Ukrainian sentences, fed to
+# transcribe-words.py --hotwords-file.
+#
+# Ukrainian-speaking engineers code-switch constantly, and large-v3 hears the
+# English word as a Cyrillic near-homophone: "batch" comes back as "бач",
+# "PDF" as "під'євка", and a "табличка" next to a spoken "spreadsheet" as
+# "ставичка". Prompting for the English spelling fixes it at the source;
+# patching afterwards leaves the timings attached to words that were never
+# decoded.
+#
+# Keep this list short. A hotword nudges the decoder on EVERY window, so
+# padding it with ordinary Ukrainian makes the transcript worse, not better.
+# Everything here is a term measured wrong on real speech, not a guess.
+#
+# NAMES AND BRANDS DO NOT GO IN THIS FILE. People, clients and your own
+# products are the highest-value hotwords there are -- a name is what a viewer
+# checks, and Whisper reliably mangles one it has never seen -- but this file
+# is shared, and the names in your recordings are not everyone's to have. Put
+# them in a sibling `*.local.txt`, which .gitignore keeps out of the repo, and
+# pass BOTH; --hotwords-file is repeatable for exactly this reason:
+#
+#   python scripts/transcribe-words.py <film> --out <words.json> --language uk \
+#       --hotwords-file config/vocab/tech-uk.txt \
+#       --hotwords-file config/vocab/names.local.txt
+#
+# One measured example of what the private half buys: a surname came back split
+# across two words on every appearance, and fixing it afterwards cost a whole
+# re-transcription because nobody declared it up front.
+
+batch
+spreadsheet
+Excel
+PDF
+Knowledge Base
+workspace
+reasoning
+Sonnet

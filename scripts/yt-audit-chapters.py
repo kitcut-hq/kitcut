@@ -32,7 +32,15 @@ Invoke as:
   python scripts/yt-audit-chapters.py --channel @instafill_ai --none-only
   python scripts/yt-audit-chapters.py --channel @instafill_ai --json out.json
 """
-import sys, os, re, json, argparse, importlib.util, subprocess, ast
+
+import sys
+import os
+import re
+import json
+import argparse
+import importlib.util
+import subprocess
+import ast
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -45,8 +53,7 @@ SHORT_S = ch.MIN_GAP_S * (ch.MIN_CHAPTERS - 1)
 
 def _setter():
     """yt-set-chapters.py, imported despite the hyphen, for its auth."""
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        "yt-set-chapters.py")
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "yt-set-chapters.py")
     spec = importlib.util.spec_from_file_location("yt_set_chapters", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -77,8 +84,11 @@ def uploads_playlist(yt, channel):
 def all_video_ids(yt, playlist):
     ids, page = [], None
     while True:
-        r = yt.playlistItems().list(part="contentDetails", playlistId=playlist,
-                                    maxResults=50, pageToken=page).execute()
+        r = (
+            yt.playlistItems()
+            .list(part="contentDetails", playlistId=playlist, maxResults=50, pageToken=page)
+            .execute()
+        )
         ids += [i["contentDetails"]["videoId"] for i in r["items"]]
         page = r.get("nextPageToken")
         if not page:
@@ -91,8 +101,9 @@ def _reason(stderr):
     if "live event" in s or "premieres in" in s.lower():
         return "live", "scheduled live event; nothing published yet"
     if "not a bot" in s or "429" in s:
-        return "throttled", ("YouTube is rate-limiting this machine; rerun "
-                             "with --jobs 1, or pass cookies")
+        return "throttled", (
+            "YouTube is rate-limiting this machine; rerun with --jobs 1, or pass cookies"
+        )
     for line in reversed(s.splitlines()):
         if line.startswith("ERROR:"):
             return "error", line[6:].strip()[:140]
@@ -111,13 +122,16 @@ def rendered_chapters(vid, attempts=2):
     seen, last_err = [], ""
     for _ in range(attempts):
         p = subprocess.run(
-            [_env.PY[0], "-m", "yt_dlp", "--skip-download",
-             "--print", "%(chapters)s", "--", vid],
-            capture_output=True, text=True, encoding="utf-8",
-            errors="replace", env=_env.ENV)
+            [_env.PY[0], "-m", "yt_dlp", "--skip-download", "--print", "%(chapters)s", "--", vid],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=_env.ENV,
+        )
         out = (p.stdout or "").strip()
         if p.returncode != 0:
-            last_err = p.stderr           # network/extractor failure, not data
+            last_err = p.stderr  # network/extractor failure, not data
             continue
         # --print renders an absent field as the literal "NA". That is the
         # normal answer for a video with no chapters, NOT a parse failure --
@@ -130,9 +144,9 @@ def rendered_chapters(vid, attempts=2):
         except (ValueError, SyntaxError):
             continue
         if seen[-1]:
-            return seen[-1], ""           # a non-empty answer is trustworthy
+            return seen[-1], ""  # a non-empty answer is trustworthy
     if not seen:
-        return None, _reason(last_err)    # never got a usable answer
+        return None, _reason(last_err)  # never got a usable answer
     return max(seen, key=len), ""
 
 
@@ -145,8 +159,12 @@ def classify(chapters, description, duration_s, reason=("", "")):
     if not chapters:
         if duration_s < SHORT_S:
             return "SHORT", f"{ch.fmt_ts(duration_s)} long"
-        return "NONE", "no chapters in the description either" if not block \
-            else "description HAS timestamps but none render -- investigate"
+        return (
+            "NONE",
+            "no chapters in the description either"
+            if not block
+            else "description HAS timestamps but none render -- investigate",
+        )
     if block is None:
         return "AUTO", "YouTube's own; no timestamps in the description"
     return "OK", ""
@@ -155,26 +173,30 @@ def classify(chapters, description, duration_s, reason=("", "")):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--channel", required=True, help="@handle or UC... id")
-    ap.add_argument("--none-only", action="store_true",
-                    help="list only videos with no chapters")
+    ap.add_argument("--none-only", action="store_true", help="list only videos with no chapters")
     ap.add_argument("--json", help="also write the full result here")
-    ap.add_argument("--jobs", type=int, default=3,
-                    help="parallel watch-page reads; raising this is the "
-                         "fastest way to get rate-limited")
+    ap.add_argument(
+        "--jobs",
+        type=int,
+        default=3,
+        help="parallel watch-page reads; raising this is the fastest way to get rate-limited",
+    )
     args = ap.parse_args()
 
     from googleapiclient.discovery import build
+
     yt = build("youtube", "v3", credentials=_setter().credentials())
 
     ids = all_video_ids(yt, uploads_playlist(yt, args.channel))
     meta = {}
     for i in range(0, len(ids), 50):
-        r = yt.videos().list(part="snippet,contentDetails",
-                             id=",".join(ids[i:i + 50])).execute()
+        r = yt.videos().list(part="snippet,contentDetails", id=",".join(ids[i : i + 50])).execute()
         for it in r["items"]:
-            meta[it["id"]] = (it["snippet"]["title"],
-                              it["snippet"]["description"],
-                              iso8601_seconds(it["contentDetails"]["duration"]))
+            meta[it["id"]] = (
+                it["snippet"]["title"],
+                it["snippet"]["description"],
+                iso8601_seconds(it["contentDetails"]["duration"]),
+            )
 
     print(f"{len(ids)} videos on {args.channel}; reading each watch page ...\n")
     with ThreadPoolExecutor(max_workers=args.jobs) as ex:
@@ -185,13 +207,19 @@ def main():
         title, desc, dur = meta[vid]
         got, reason = chapters[vid]
         verdict, note = classify(got, desc, dur, reason)
-        rows.append({"id": vid, "title": title, "duration_s": dur,
-                     "verdict": verdict, "note": note,
-                     "rendered": len(got or []),
-                     "from_description": ch.block_text(desc) is not None})
+        rows.append(
+            {
+                "id": vid,
+                "title": title,
+                "duration_s": dur,
+                "verdict": verdict,
+                "note": note,
+                "rendered": len(got or []),
+                "from_description": ch.block_text(desc) is not None,
+            }
+        )
 
-    order = {"RETRY": 0, "ERROR": 1, "NONE": 2, "AUTO": 3, "OK": 4,
-             "SHORT": 5, "LIVE": 6}
+    order = {"RETRY": 0, "ERROR": 1, "NONE": 2, "AUTO": 3, "OK": 4, "SHORT": 5, "LIVE": 6}
     rows.sort(key=lambda r: (order[r["verdict"]], -r["duration_s"]))
 
     for r in rows:
@@ -199,8 +227,7 @@ def main():
             continue
         title = r["title"] if len(r["title"]) <= 60 else r["title"][:57] + "..."
         n = f"  ({r['rendered']} marks)" if r["rendered"] else ""
-        print(f"{r['verdict']:<6} {ch.fmt_ts(r['duration_s']):>6}  "
-              f"{r['id']:<12}  {title}{n}")
+        print(f"{r['verdict']:<6} {ch.fmt_ts(r['duration_s']):>6}  {r['id']:<12}  {title}{n}")
         if r["note"]:
             print(f"{'':>15}{r['note']}")
 
@@ -213,8 +240,7 @@ def main():
     worth = [r for r in rows if r["verdict"] == "NONE"]
     if worth:
         total = sum(r["duration_s"] for r in worth)
-        print(f"\n{len(worth)} videos need chapters "
-              f"({ch.fmt_ts(total)} of footage to outline).")
+        print(f"\n{len(worth)} videos need chapters ({ch.fmt_ts(total)} of footage to outline).")
 
     if args.json:
         json.dump(rows, open(args.json, "w", encoding="utf-8"), indent=2)

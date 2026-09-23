@@ -14,7 +14,7 @@
     "source": "projects/flatten-pdf/sources/flatten-pdf-raw.mp4",
     "source_note": "the raw recorder output the user dropped in outputs/ (1280x720, VFR averaging 30.02 fps, 4:54, webcam bubble and narration already burned in - so screencast-cut.py does not apply, there is only one clock). This is the master the film was cut from.",
     "words": "projects/flatten-pdf/transcripts/flatten-pdf.lv3.words.json",
-    "words_note": "large-v3 on CPU with --hotwords-file config/vocab/instafill.txt. The distil-large-v3 pass without hotwords is kept beside it as flatten-pdf.words.json and should NOT be used: it spells the product \"Instafili\"/\"Instafil\"/\"Instafield\" and the tool \"flat and PDF\".",
+    "words_note": "large-v3 on CPU with --hotwords-file config/vocab/product.local.txt. The distil-large-v3 pass without hotwords is kept beside it as flatten-pdf.words.json and should NOT be used: it spells the product \"Instafili\"/\"Instafil\"/\"Instafield\" and the tool \"flat and PDF\".",
     "shorts-source": "projects/flatten-pdf/sources/flatten-pdf.mp4",
     "shorts-audio": "projects/flatten-pdf/audio/flatten-pdf.16k.mono.wav",
     "shorts-words": "projects/flatten-pdf/transcripts/flatten-pdf.words.json",
@@ -24,7 +24,7 @@
     "cut": "projects/flatten-pdf/tighten.json -> cut.min_silence / cut.keep_pause",
     "removals": "projects/flatten-pdf/tighten.json -> remove[] (quoted, with why)",
     "caption text": "projects/flatten-pdf/tighten.json -> corrections[]",
-    "caption look": "config/presets/instafill.json",
+    "caption look": "config/presets/dark-card.json",
     "end card": "projects/flatten-pdf/cards/outro.json + image_overlays[0] in tighten.json",
     "title / description / chapters / tags": "projects/flatten-pdf/{title,description,chapters,tags}.txt",
     "manifest-clips-vertical": "projects/flatten-pdf/clips-vertical.json",
@@ -34,7 +34,11 @@
     "handle-style": "config/handles/vertical.json",
     "overlay-preset": "config/overlays/end-card.json",
     "vo-script-01": "projects/flatten-pdf/vo/01-free-tool.json",
-    "description-01": "projects/flatten-pdf/description-01.txt"
+    "description-01": "projects/flatten-pdf/description-01.txt",
+    "manifest": "projects/flatten-pdf/clips-vertical.json",
+    "overlay-style": "config/overlays/end-card.json",
+    "overlay-1": "projects/flatten-pdf/cards/01-free-tool.json",
+    "overlay-2": "projects/flatten-pdf/cards/02-whole-packet.json"
   },
   "deliverables": {
     "projects/flatten-pdf/outputs/shorts/flatten-pdf-01-free-tool.mp4": {
@@ -126,7 +130,7 @@
       "kind": "captioned",
       "script": "scripts/run-captions.py",
       "burned": [
-        "word-synced captions, style config/presets/instafill.json"
+        "word-synced captions, style config/presets/dark-card.json"
       ],
       "sidecars": {
         "render-manifest": "projects/flatten-pdf/outputs/flatten-pdf-tight.manifest.json",
@@ -164,5 +168,5 @@
     "Source has its own branded end card wiping in at ~192s; short 2 ends at 191 to stay clear of it.",
     "Short 2 (02-whole-packet.mp4) is still stage 1: picture only, source audio, no captions."
   ],
-  "updated_utc": "2026-09-02T00:00:00Z"
+  "updated_utc": "2026-09-03T17:56:52Z"
 }

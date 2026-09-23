@@ -26,7 +26,12 @@ is an instrument, and it should never be mistaken for part of the film.
 
 Invoke as:  python scripts/debug-notes.py --notes notes.json --out notes.ass
 """
-import sys, os, json, argparse, subprocess
+
+import sys
+import os
+import json
+import argparse
+import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -34,20 +39,33 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 ROOT = _env.ROOT
 ENV = _env.ENV
 
-BS = chr(92)             # dodge backslash-escaping pain, as the caption builder does
+BS = chr(92)  # dodge backslash-escaping pain, as the caption builder does
 
 DEFAULT_STYLE = {
-    "font": "Montserrat-Medium", "fontsdir": "fonts",
+    "font": "Montserrat-Medium",
+    "fontsdir": "fonts",
     "size_px": 17,
-    "ink": "#F2F2F2", "accent": "#7FD1C4",
-    "box": "#000000", "box_alpha": 0.62, "pad_px": 10,
-    "corner": "bottom-left", "margin_x_px": 24, "margin_y_px": 20,
+    "ink": "#F2F2F2",
+    "accent": "#7FD1C4",
+    "box": "#000000",
+    "box_alpha": 0.62,
+    "pad_px": 10,
+    "corner": "bottom-left",
+    "margin_x_px": 24,
+    "margin_y_px": 20,
 }
 
 # ASS numeric alignment: 1..3 bottom, 4..6 middle, 7..9 top; 1/4/7 left.
-CORNERS = {"bottom-left": 1, "bottom-centre": 2, "bottom-center": 2,
-           "bottom-right": 3, "top-left": 7, "top-centre": 8,
-           "top-center": 8, "top-right": 9}
+CORNERS = {
+    "bottom-left": 1,
+    "bottom-centre": 2,
+    "bottom-center": 2,
+    "bottom-right": 3,
+    "top-left": 7,
+    "top-centre": 8,
+    "top-center": 8,
+    "top-right": 9,
+}
 
 
 def rel(p):
@@ -66,7 +84,7 @@ def filter_path(p):
     p = os.path.abspath(p)
     root = os.path.normpath(ROOT)
     if os.path.normcase(p).startswith(os.path.normcase(root + os.sep)):
-        p = p[len(root) + 1:]
+        p = p[len(root) + 1 :]
     return p.replace("\\", "/")
 
 
@@ -100,8 +118,7 @@ def ass_1c(hexstr):
 
 def esc_text(s):
     """ASS eats braces as override blocks and collapses runs of spaces."""
-    return (str(s).replace("{", "(").replace("}", ")")
-            .replace(BS, "/").replace("\n", " ").strip())
+    return str(s).replace("{", "(").replace("}", ")").replace(BS, "/").replace("\n", " ").strip()
 
 
 def load_style(path=None):
@@ -109,8 +126,7 @@ def load_style(path=None):
     p = rel(path or "config/overlays/debug-notes.json")
     if os.path.exists(p):
         with open(p, encoding="utf-8") as f:
-            st.update({k: v for k, v in json.load(f).items()
-                       if not k.startswith("_")})
+            st.update({k: v for k, v in json.load(f).items() if not k.startswith("_")})
     return st
 
 
@@ -147,13 +163,22 @@ def build(notes, width, height, fps, style):
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, "
         "Effect, Text\n"
-        % (int(width), int(height),
-           st["font"], size,
-           ass_colour(st["ink"]), ass_colour(st["ink"]),
-           ass_colour(st["box"], st["box_alpha"]),
-           ass_colour(st["box"], st["box_alpha"]),
-           pad, align,
-           int(st["margin_x_px"]), int(st["margin_x_px"]), int(st["margin_y_px"])))
+        % (
+            int(width),
+            int(height),
+            st["font"],
+            size,
+            ass_colour(st["ink"]),
+            ass_colour(st["ink"]),
+            ass_colour(st["box"], st["box_alpha"]),
+            ass_colour(st["box"], st["box_alpha"]),
+            pad,
+            align,
+            int(st["margin_x_px"]),
+            int(st["margin_x_px"]),
+            int(st["margin_y_px"]),
+        )
+    )
 
     def cs(frame):
         return int(round(frame * 100.0 / fps))
@@ -168,8 +193,10 @@ def build(notes, width, height, fps, style):
         text = "{%s1c%s}%s{%s1c%s}" % (BS, accent, lines[0], BS, ink)
         if lines[1:]:
             text += sp + sp.join(lines[1:])
-        ev.append("Dialogue: 0,%s,%s,Dbg,,0,0,0,,%s"
-                  % (fmt_cs(cs(n["start"])), fmt_cs(cs(n["end"])), text))
+        ev.append(
+            "Dialogue: 0,%s,%s,Dbg,,0,0,0,,%s"
+            % (fmt_cs(cs(n["start"])), fmt_cs(cs(n["end"])), text)
+        )
     return head + "\n".join(ev) + "\n"
 
 
@@ -181,8 +208,7 @@ def write(notes, width, height, fps, style, out):
     return out
 
 
-def prepare(notes, width, height, fps, tmpdir, tag="", preset=None,
-            base="vcat", label="dbgout"):
+def prepare(notes, width, height, fps, tmpdir, tag="", preset=None, base="vcat", label="dbgout"):
     """(ass path, filter fragment, out label) for a caller's filter_complex.
 
     Forward slashes, always: a Windows backslash reaches libass through the
@@ -191,8 +217,12 @@ def prepare(notes, width, height, fps, tmpdir, tag="", preset=None,
     st = load_style(preset)
     ass = os.path.join(tmpdir, "debug-notes%s.ass" % (tag and "-" + tag))
     write(notes, width, height, fps, st, ass)
-    fc = ("[%s]ass=filename=%s:fontsdir=%s:shaping=simple[%s]"
-          % (base, filter_path(ass), st.get("fontsdir", "fonts"), label))
+    fc = "[%s]ass=filename=%s:fontsdir=%s:shaping=simple[%s]" % (
+        base,
+        filter_path(ass),
+        st.get("fontsdir", "fonts"),
+        label,
+    )
     return ass, fc, label
 
 
@@ -203,12 +233,35 @@ def preview(video, ass, t, out, fontsdir="fonts"):
     verify-captions.py uses: a seek resets timestamps to zero and every
     time-gated event would evaluate against the wrong clock.
     """
-    vf = ("setpts=PTS+%.4f/TB,ass=filename=%s:fontsdir=%s:shaping=simple,"
-          "setpts=PTS-%.4f/TB" % (t, filter_path(ass), fontsdir, t))
-    r = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error",
-                        "-nostdin", "-ss", "%.4f" % t, "-i", video,
-                        "-frames:v", "1", "-vf", vf, "-y", out],
-                       capture_output=True, text=True, env=ENV, cwd=ROOT)
+    vf = "setpts=PTS+%.4f/TB,ass=filename=%s:fontsdir=%s:shaping=simple,setpts=PTS-%.4f/TB" % (
+        t,
+        filter_path(ass),
+        fontsdir,
+        t,
+    )
+    r = subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-ss",
+            "%.4f" % t,
+            "-i",
+            video,
+            "-frames:v",
+            "1",
+            "-vf",
+            vf,
+            "-y",
+            out,
+        ],
+        capture_output=True,
+        text=True,
+        env=ENV,
+        cwd=ROOT,
+    )
     if r.returncode:
         sys.exit("preview failed:\n%s" % (r.stderr or "")[-2000:])
     return out
@@ -216,12 +269,14 @@ def preview(video, ass, t, out, fontsdir="fonts"):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--notes", required=True,
-                    help="JSON: {width,height,fps,notes:[{start,end,lines[]}]}")
+    ap.add_argument(
+        "--notes", required=True, help="JSON: {width,height,fps,notes:[{start,end,lines[]}]}"
+    )
     ap.add_argument("--style", help="default config/overlays/debug-notes.json")
     ap.add_argument("--out", help="default beside the notes, as .ass")
-    ap.add_argument("--frame", type=float,
-                    help="composite onto the real frame at this time and stop")
+    ap.add_argument(
+        "--frame", type=float, help="composite onto the real frame at this time and stop"
+    )
     ap.add_argument("--video", help="the film, for --frame")
     ap.add_argument("--png", help="where --frame writes, default temp/")
     args = ap.parse_args()
@@ -229,8 +284,7 @@ def main():
     with open(rel(args.notes), encoding="utf-8") as f:
         doc = json.load(f)
     st = load_style(args.style)
-    out = rel(args.out) if args.out else \
-        os.path.splitext(rel(args.notes))[0] + ".ass"
+    out = rel(args.out) if args.out else os.path.splitext(rel(args.notes))[0] + ".ass"
     write(doc["notes"], doc["width"], doc["height"], doc["fps"], st, out)
     print("wrote %s -- %d notes" % (out.replace("\\", "/"), len(doc["notes"])))
 
@@ -239,8 +293,7 @@ def main():
             sys.exit("--frame needs --video")
         png = rel(args.png or os.path.join("temp", "debug-notes-frame.png"))
         os.makedirs(os.path.dirname(png) or ".", exist_ok=True)
-        preview(rel(args.video), out, args.frame, png,
-                st.get("fontsdir", "fonts"))
+        preview(rel(args.video), out, args.frame, png, st.get("fontsdir", "fonts"))
         print("preview %s" % png.replace("\\", "/"))
 
 

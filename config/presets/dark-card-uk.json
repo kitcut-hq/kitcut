@@ -1,0 +1,106 @@
+{
+ "_comment": "Dark-slab captions for Cyrillic, sized for a screen recording or a talking head rather than a social short. Near-black card at 12% transparency instead of a saturated one, because a busy frame is already competing for attention and a dark slab recedes behind it; sentence case, not uppercase, because mixed case carries word shape and a tutorial that shouts is a tutorial nobody finishes. Two highlight colours: a moving spotlight on the word being said, and a separate emphasis colour that holds on the phrases an --emphasis-file names. Swap the four colours for your own and it is your channel's preset. The one number tuned specifically for Cyrillic is layout.max_line_width_px at 1296 -- see _measured.",
+ "canvas": {
+  "play_res_x": 1920,
+  "play_res_y": 1080
+ },
+ "font": {
+  "family": "Montserrat",
+  "file": "fonts/Montserrat-Bold.ttf",
+  "spacing": 0,
+  "fudge": 1.0,
+  "bold": 1,
+  "fontsdir": "fonts",
+  "cap_height_px": 34
+ },
+ "text": {
+  "uppercase": false,
+  "apostrophe": "’",
+  "strip_trailing": ",",
+  "word_gap_ratio": 1.0,
+  "outline_px": 0,
+  "outline_colour": "#000000",
+  "shadow_px": 0,
+  "shadow_colour": "#000000"
+ },
+ "card": {
+  "colour": "#0B0F14",
+  "alpha": 30,
+  "corner_radius_px": 10,
+  "pad_x_px": 26,
+  "pad_y_px": 14,
+  "collision_gap_px": 16,
+  "enabled": true
+ },
+ "layout": {
+  "anchor_x": 960,
+  "bottom_margin_px": 96,
+  "max_line_width_px": 1296,
+  "max_lines": 2,
+  "line_height_px": 50
+ },
+ "states": {
+  "base": {
+   "colour": "#FFFFFF"
+  },
+  "active": {
+   "colour": "#13BA82"
+  },
+  "spoken": {
+   "colour": "#FFFFFF"
+  },
+  "emphasis": {
+   "_comment": "The talk's main points, named per video in an --emphasis-file and marked for the whole life of their card. A DIFFERENT hue from states.active on purpose: the active colour is already the moving spotlight, so reusing it would make 'this is the point' and 'this is the word being said' the same signal and neither would read. Check the pair against the card, not against the base text.",
+   "colour": "#FFC53D"
+  }
+ },
+ "grouping": {
+  "max_words": 6,
+  "gap_break_s": 0.4,
+  "break_on_sentence_end": true,
+  "max_group_duration_s": 3.4
+ },
+ "timing": {
+  "lead_in_ms": 60,
+  "hold_out_ms": 200,
+  "min_active_ms": 80,
+  "min_gap_between_groups_ms": 40,
+  "active_extends_to_next_word": true,
+  "fade_ms": 90
+ },
+ "pop": {
+  "enabled": false,
+  "scale": 112,
+  "rise_ms": 70,
+  "settle_ms": 110
+ },
+ "render": {
+  "speed": 5,
+  "cq": 20,
+  "maxrate": "12M",
+  "bufsize": "24M",
+  "aq_strength": 8
+ },
+ "overlays": {
+  "auto": false,
+  "_note": "Colour of the SOURCE video's own lower-third graphics to dodge, not the colour of this card. A screencast has none, so there is nothing to dodge."
+ },
+ "_geometry": {
+  "target": "1280x720 screen recording with a round webcam bubble in the bottom-left corner",
+  "bubble_px": "x 15..190, y 490..660 at 1280x720",
+  "why_bottom_margin_96": "96 on the 1920 canvas scales to 64px at 720p, which puts the card's baseline clear of the Windows taskbar (top edge ~y 682) without pushing it up into the page content.",
+  "why_max_line_1080": "1080 on the 1920 canvas scales to 720px at 720p, centred on x=640, so the card spans x 280..1000 and never reaches the webcam bubble at x<190. Widening this past ~1150 makes them collide."
+ },
+ "_measured": {
+  "source": "1108 words of unrehearsed Ukrainian speech -- the cut-remapped transcript of a 7:40 talking-head recording, scaled to 1280x720",
+  "method": "python scripts/build-captions-ass.py --sweep, then the four candidate cells built and their wrap/orphan counters read",
+  "sweep": {
+   "max_words=6, width=1080 (dark-card.json, the English-tuned parent)": "219 cards, 37 wrapped, 33 orphans",
+   "max_words=5, width=1080": "257 cards, 10 wrapped, 10 orphans",
+   "max_words=4, width=1080": "304 cards, 1 wrapped, 1 orphan",
+   "max_words=5, width=1296": "257 cards, 0 wrapped, 0 orphans",
+   "max_words=6, width=1296 (CHOSEN)": "219 cards, 1 wrapped, 1 orphan"
+  },
+  "why": "Widening the line beats carrying fewer words. Both reach ~zero orphans, but 6 words gives 219 cards against 304 -- a card change every 2.1s instead of every 1.5s -- and on a static talking head the card is the only thing moving, so fewer changes read calmer. The widest resulting card is 864px of a 1280px frame including padding, leaving ~190px clear each side."
+ }
+}

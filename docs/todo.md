@@ -1,0 +1,211 @@
+# TODO
+
+Open work, newest first. An entry earns its place by being something a future
+session would otherwise have to rediscover or re-argue. Close one by deleting it
+and saying where the work landed (skill, script, README section).
+
+Traps that already bit us live in `docs/known-issues.md`; this file is for work
+that has not happened yet.
+
+---
+
+## 1. Take an edit BACK from DaVinci Resolve
+
+**Half of this landed 2026-09-08.** `resolve-export.py` writes the cut as
+`.otio` / `.edl` / FCP7 `.xml` / `.srt` with the decisions as markers,
+`check-resolve.py` pins it (56 checks, no Resolve, no media), and
+`config/resolve/export.json` carries the defaults. The research is
+`docs/davinci-resolve.md`; the reference section is "Handing an edit to DaVinci
+Resolve"; the skill is `video-resolve`.
+
+What is still open, and it is the more valuable direction:
+
+- **`resolve-import.py`** — a human fine-trims in Resolve (free), exports
+  `.otio`, and we render it here with NVENC, the captions, the labels, the
+  redaction and the project record. Resolve becomes the front end for what a
+  person is better at, and the finishing stays where it is gated and recorded.
+  Start with `.otio` only (plain JSON, exact) and refuse EDL by name: an EDL
+  carries no media paths, so a keep-list built from one is a guess.
+- **Verify the export against a real Resolve.** Nothing here has opened one.
+  Five questions in `docs/davinci-resolve.md` §7 need a machine with Resolve
+  on it — chiefly whether OTIO import honours markers, relinks by path, and
+  what it does with a `LinearTimeWarp` (which is what decides whether
+  `screen-cut.py`'s speed ramps can travel at all).
+- **Speed ramps.** `screen-cut.py` produces 6x segments and the exporter does
+  not write them yet; the shape is a `LinearTimeWarp` on the clip, and it is
+  worth writing only once the question above is answered.
+
+## 2. Make shorts predictable: the roadmap
+
+**The diagnosis, from the 2026-09-03 session** (four shorts, two channels,
+every defect the user or a late check caught): each failure was either a
+hand-chosen number validated *after* the encode (caption margin, crop zoom —
+three re-renders of one clip), or a judgement step living in skill prose
+(frame review missed a card across a mouth twice). The one pre-existing guard
+that lived in the render path as code — the hook gate — caught its error before
+anything was spent. The fix is therefore structural, and both halves of it are
+already proven elsewhere in this repo: `screencast-pipeline.py` (one command,
+cached stages, explicit review stops, gates that read the render) and the
+multicam round-trip corpus (the only thing that tells a result from a fit).
+Shorts has neither. In leverage order:
+
+**1a. `shorts-pipeline.py` — one command owns the sequence.** Stages: fetch →
+transcribe → derive channel style (1b, skipped when the preset exists) → pick
+episodes (propose boundaries + hooks + rejected-alternative notes, **stop for
+review**) → reframe → solve placement (1c) → render with gates inside →
+review sheet (1d, **stop**) → record + journal. Cached and checkpointed like
+the screencast pipeline, prints the known-issues entries for its stages.
+Removes: forgotten steps, order drift, and review-by-whenever-I-think-to-look.
+
+**1b. `channel-style.py` — style measuring in code** (absorbed from the old
+item 1). Takes a channel URL or reference short; finds the caption band by
+temporal median across frames (a single frame cannot tell a caption box from a
+black turtleneck — this is what cost time by hand); measures card colour,
+opacity, radius, cap height, pads, margin, case, words/card; samples the brand
+accent from the logo bug where it sits on a bright background; emits a preset
+stub with everything in `_measured` and a `--list` mode. ~20 min of hand
+pixel-poking per channel becomes a minute.
+
+**1c. Placement becomes a solver, not a setting.** The decision tree now in
+skill Step 0c is an algorithm written as prose; make it code. Run
+`check-caption-space`'s geometry on the PLAN: sample faces through the intended
+crop before encoding, intersect with the forbidden zones (the source-graphics
+map from the channel measurement, the Shorts UI band), and output per clip:
+a margin, or above-the-head, or letterbox. The preset keeps the style; the
+position is computed per framing. Kills the whole class "margin measured on
+another framing" — the three Bloomberg re-renders become zero. The post-render
+check stays as the backstop, because the solver and the render can still
+disagree (that is what backstops are for).
+
+**1d. A review sheet as the stop.** One HTML per run — first frame, worst-
+clearance frame, caption-band strip, hook timing per clip — on the
+`redaction-review.py` pattern: nothing publishes unapproved, and approval is
+recorded in the manifest. One look at one page instead of scrubbing N files,
+which is the sampling-luck failure that shipped the mouth card.
+
+**1e. `check-shorts.py` — DONE 2026-09-03.** Landed as
+`scripts/check-shorts.py` (33 checks: hook gate, `resolve()` padding, crop
+windows, grouping typography end to end through real font metrics on the real
+orphan-producing word span, caption-space geometry, `clip_style` overrides,
+`capitalize_i`), wired into CLAUDE.md pipeline 2, the README script table and
+the `video-shorts` skill. Proven in both directions: passes clean, and
+re-injecting the two historical guard bugs (0.7 floor, below-only gap metric)
+is detected. The one gap it does not close: nothing *forces* it to run after
+an edit — that is `check-script.py --changed`'s reminder at best. 1a's
+pipeline should run it as stage zero.
+
+**1f. The two finished projects become the golden corpus.** After any tooling
+change, re-run the *plan* stages (no encodes — seconds) on the committed
+manifests + transcripts of `g-YDNJcyuck` and `zMvBMfj4cSQ` and diff the
+decisions: boundaries, groups, placements, gate verdicts. The multicam
+round-trip, at the plan layer. New projects join the corpus by existing.
+
+**1g. Refuse unmeasured defaults on a new channel.** `cut-clips.py` warns (or
+refuses without an override flag) when the caption style carries no
+`_measured` block — Step 0 becomes enforced instead of advised, which is the
+difference between a standard and a hope.
+
+**1h. Hand-edits survive regeneration — DONE 2026-09-03.** `merge_sidecar()`
+in `auto-reframe.py`: entries carrying `_`-prefixed markers are kept (a
+file-level `_comment` protects every existing entry, new clips still land),
+`--force-regen` overrides, refusals name the marker they honoured. Proven live
+against `g-YDNJcyuck`'s hand-edited sidecar (semantically identical after a
+real regen) and covered by 8 checks in `check-shorts.py`. Unmarked edits still
+only WARN — marking them is the contract, taught in the `video-shorts` skill.
+
+Sequencing: 1e first (it protects everything else while it is built), then
+1c (biggest error-class kill), then 1a wrapping it all, 1b/1d inside 1a,
+1f/1g/1h as they land. Each obeys the house rules: free mode, README section,
+skill update, `check-script.py --changed` clean.
+
+## 3. Vertical presets sit inside the YouTube Shorts UI
+
+`config/presets/red-card-vertical.json` uses `bottom_margin_px: 170`, which
+scales to **302 px** from the bottom of a 1080x1920 frame. The Shorts UI (title,
+channel line, CTA) occupies roughly the bottom 380 px.
+
+Measured against a channel that does this correctly: Lenny's Podcast parks its
+caption box 602 px above the frame bottom. The three presets written in this
+session use 339 on the authoring canvas = 602 px for that reason.
+
+**Open:** whether `red-card-vertical` should move too. It cannot be changed
+silently — every already-rendered short that used it goes STALE — so this wants
+a deliberate pass with `project-scan.py --all --check` and a journal note per
+project, not a one-line edit.
+
+## 4. `_gpulock` reports the wrong hold time
+
+`acquire()` builds the lock record — including `started_epoch` — **before** the
+retry loop, so a run that queued for 20 minutes and then took the card reports
+itself as having held it for 20 minutes longer than it has. Seen live this
+session: the second transcribe printed `since 16:50:05Z, 24m58s` when it had
+actually held the lock for about 7.
+
+Harmless for the 6 h `MAX_AGE_S` staleness backstop, but `gpu-lock.py` is the
+thing you read when a run is wedged, and it is currently lying to you in exactly
+that situation. Fix: stamp `started_epoch` at the moment `_write_new` succeeds.
+
+## 5. Carry the channel's own logo bug into the cut
+
+Lenny's shorts carry their campfire logo top-left and the sponsor bug top-right,
+both burned into the 1920x1080 source at x 25..145 and x 1750..1900. No 9:16
+window contains either, so our cuts drop both. For a pitch that is a visible
+gap — the first thing the owner looks for is their own logo.
+
+`cut-clips.py` already reads `image_overlays`, so the burn is free; the missing
+piece is getting a clean transparent PNG of the bug out of footage that only
+ever shows it composited. Worth doing properly (key it where it sits on the flat
+grey column, verify the alpha the way `html-to-image.py` does) rather than
+shipping a grey box behind a logo.
+
+## 6. The Resolve live API: decided against, and what to keep if that changes
+
+Two sessions built toward the same thing at once. **Resolved in favour of
+interchange** -- `resolve-export.py` and `docs/davinci-resolve.md` above: OTIO
+leads, EDL is the universal fallback, FCP7 XML carries paths, SRT carries the
+words, and all of it works in the **free** edition.
+
+The other answer drove the running application through `fusionscript`. It is not
+merged and its branch is gone; the commit is kept as the tag
+**`archive/resolve-live-api`** (`git show archive/resolve-live-api`) so nothing
+was destroyed, but treat it as a reference, not a starting point -- Resolve's API
+moves, and the facts below are the expensive part, not the code.
+
+**Why it was rejected, measured rather than argued:** external scripting is
+**Studio-only**. Resolve 21.1's notes say "Advanced scripting now requires
+DaVinci Resolve Studio", and on the free 21.1 `scriptapp("Resolve")` returns
+`None` from both this repo's venv and Blackmagic's own bundled `ResolvePython`.
+A live mode nobody on the free edition can reach is a maintenance cost with no
+user, and the 21.1 MCP server sits behind the same licence. **Never tell a
+free-edition operator to switch external scripting on** -- their build has no
+such preference, and sending them to look for it costs their trust in whatever
+you say next. That mistake was made in the session that wrote this.
+
+**If a Studio machine ever justifies the live API, three things are worth
+rebuilding rather than rediscovering:**
+
+1. **Reach the API without setting `PYTHONPATH`.** Blackmagic's README tells you
+   to export `RESOLVE_SCRIPT_API`, `RESOLVE_SCRIPT_LIB` and `PYTHONPATH`. Do not
+   export the third -- CLAUDE.md documents the day that variable cost this repo,
+   and `_env.py` exists to undo it. The `Modules/DaVinciResolveScript.py` shim it
+   wants on the path does nothing but load the `fusionscript` extension from a
+   known file, so load it directly instead:
+   `importlib.machinery.ExtensionFileLoader("fusionscript", <path to
+   fusionscript.dll/.so>)`, then `spec_from_loader` / `module_from_spec` /
+   `exec_module`, then `mod.scriptapp("Resolve")`. Probe the per-OS install
+   paths with `os.path.exists()` and let `$RESOLVE_SCRIPT_LIB` override. The
+   extension loads fine into the project venv, so the bundled interpreter (which
+   has no pip, and so cannot see this repo's dependencies) is not needed.
+2. **Diagnose a failed connection three ways.** `scriptapp()` returns the same
+   `None` whether Resolve is absent, still starting, or refusing -- so check for
+   the library, then for the process, and only then report a refusal, naming the
+   edition. One `None` and three causes is otherwise an unanswerable support
+   question.
+3. **Resolve's `endFrame` is INCLUSIVE.** A half-open `[start, end)` range in
+   seconds becomes `endFrame = last frame`, not one past it. Getting it wrong
+   lengthens every segment by a frame, and on a 68-segment timeline that is
+   nearly three seconds of drift that surfaces only as late audio ten minutes
+   in. Convert in exactly one function and pin it with a fake media pool, the
+   way `check-resolve.py` pins the interchange arithmetic.
+
+Do not open a third implementation.

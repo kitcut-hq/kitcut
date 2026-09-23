@@ -22,6 +22,7 @@ shows is what the film will do, not an approximation of it.
 
 Invoke as:  python scripts/redaction-review.py --manifest projects/<id>/screen.json
 """
+
 import sys
 import os
 import json
@@ -44,15 +45,31 @@ for _s in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
-TILE_W, TILE_H = 440, 150      # one before/after crop
+TILE_W, TILE_H = 440, 150  # one before/after crop
 PAD = 10
 
 
 def frame_at(path, t):
     out = subprocess.run(
-        ["ffmpeg", "-v", "error", "-nostdin", "-ss", f"{t:.3f}", "-i", path,
-         "-frames:v", "1", "-pix_fmt", "bgr24", "-f", "rawvideo", "-"],
-        capture_output=True).stdout
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-nostdin",
+            "-ss",
+            f"{t:.3f}",
+            "-i",
+            path,
+            "-frames:v",
+            "1",
+            "-pix_fmt",
+            "bgr24",
+            "-f",
+            "rawvideo",
+            "-",
+        ],
+        capture_output=True,
+    ).stdout
     info = probe(path)
     n = info["w"] * info["h"] * 3
     if len(out) < n:
@@ -67,16 +84,33 @@ def probe(path):
     if path in _probe_cache:
         return _probe_cache[path]
     out = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "v:0",
-         "-show_entries", "stream=width,height,avg_frame_rate",
-         "-show_entries", "format=duration", "-of", "json", path],
-        check=True, capture_output=True, text=True).stdout
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,avg_frame_rate",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            path,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
     d = json.loads(out)
     st = (d.get("streams") or [{}])[0]
     num, _, den = (st.get("avg_frame_rate") or "0/1").partition("/")
-    r = {"w": int(st["width"]), "h": int(st["height"]),
-         "fps": float(num) / float(den) if float(den or 0) else 30.0,
-         "dur": float((d.get("format") or {}).get("duration") or 0.0)}
+    r = {
+        "w": int(st["width"]),
+        "h": int(st["height"]),
+        "fps": float(num) / float(den) if float(den or 0) else 30.0,
+        "dur": float((d.get("format") or {}).get("duration") or 0.0),
+    }
     _probe_cache[path] = r
     return r
 
@@ -111,7 +145,7 @@ def crop_around(img, box, out_w=TILE_W, out_h=TILE_H):
         cw = int(ch * out_w / out_h)
     cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
     sx, sy = max(0, min(W - cw, cx - cw // 2)), max(0, min(H - ch, cy - ch // 2))
-    tile = img[sy:sy + ch, sx:sx + cw]
+    tile = img[sy : sy + ch, sx : sx + cw]
     return cv2.resize(tile, (out_w, out_h), interpolation=cv2.INTER_AREA)
 
 
@@ -152,8 +186,14 @@ def redact_secret(key, kind):
 def collect(man, mpath, cfg):
     """Every tile the sheet needs: (title, source, t, before, after, area%)."""
     tiles = []
-    stats = {"secrets": set(), "templates": 0, "hand": 0, "coverage": [],
-             "sources_tracked": 0, "sources_hand": 0}
+    stats = {
+        "secrets": set(),
+        "templates": 0,
+        "hand": 0,
+        "coverage": [],
+        "sources_tracked": 0,
+        "sources_hand": 0,
+    }
     pdir = os.path.dirname(mpath)
     for s in man["sources"]:
         if s.get("skip"):
@@ -191,8 +231,15 @@ def collect(man, mpath, cfg):
                 m = mask_for_frame(tdir, runs, f0, size)
                 after = composite(fr, m, cfg)
                 kind = (keys.get(key) or {}).get("kind", key.split(":")[0])
-                tiles.append((redact_secret(key, kind), base, t,
-                              crop_around(fr, box), crop_around(after, box)))
+                tiles.append(
+                    (
+                        redact_secret(key, kind),
+                        base,
+                        t,
+                        crop_around(fr, box),
+                        crop_around(after, box),
+                    )
+                )
         for b in s.get("blur") or []:
             stats["hand"] += 1
             stats["sources_hand"] += 1
@@ -204,16 +251,28 @@ def collect(man, mpath, cfg):
             m = hand_mask(b["rect"], size)
             after = composite(fr, m, cfg)
             x, y, bw, bh = b["rect"]
-            box = (int(x * size[0]), int(y * size[1]),
-                   int((x + bw) * size[0]), int((y + bh) * size[1]))
-            tiles.append((("hand: " + (b.get("_why") or ""))[:44], base, t,
-                          crop_around(fr, box), crop_around(after, box)))
+            box = (
+                int(x * size[0]),
+                int(y * size[1]),
+                int((x + bw) * size[0]),
+                int((y + bh) * size[1]),
+            )
+            tiles.append(
+                (
+                    ("hand: " + (b.get("_why") or ""))[:44],
+                    base,
+                    t,
+                    crop_around(fr, box),
+                    crop_around(after, box),
+                )
+            )
     return tiles, stats
 
 
 def film_mask(boxes, size, dilate=6):
     """The mask `film-redact.py --blur` will paint for one state's boxes.
-    Same dilation and same 9x9 feather, so the tile is the render."""
+    Same dilation and same 9x9 feather, so the tile is the render.
+    """
     W, H = size
     m = np.zeros((H, W), np.uint8)
     dx, dy = dilate / float(W), dilate / float(H)
@@ -229,13 +288,19 @@ def film_mask(boxes, size, dilate=6):
 def hand_tiles(states, reps, cfg, hand, fps):
     """One tile per manifest `film_blur` rect, on the first state its window
     covers. A hand rect exists because a person saw what the detector could
-    not, so it belongs on the sheet beside the detections, not below them."""
+    not, so it belongs on the sheet beside the detections, not below them.
+    """
     tiles = []
     for b in hand or []:
         w = b.get("when") or [0.0, 1e9]
-        hit = next((n for n, s in enumerate(states)
-                    if s["i1"] / fps >= float(w[0]) and s["i0"] / fps < float(w[1])),
-                   None)
+        hit = next(
+            (
+                n
+                for n, s in enumerate(states)
+                if s["i1"] / fps >= float(w[0]) and s["i0"] / fps < float(w[1])
+            ),
+            None,
+        )
         if hit is None:
             continue
         img = cv2.imread(os.path.join(reps, f"rep_{hit:05d}.png"), cv2.IMREAD_COLOR)
@@ -246,9 +311,15 @@ def hand_tiles(states, reps, cfg, hand, fps):
         after = composite(img, film_mask(one, (W, H)), cfg)
         x, y, bw, bh = b["rect"]
         box = (int(x * W), int(y * H), int((x + bw) * W), int((y + bh) * H))
-        tiles.append((("hand: " + (b.get("why") or ""))[:44], f"state {hit}",
-                      float(states[hit].get("t") or 0),
-                      crop_around(img, box), crop_around(after, box)))
+        tiles.append(
+            (
+                ("hand: " + (b.get("why") or ""))[:44],
+                f"state {hit}",
+                float(states[hit].get("t") or 0),
+                crop_around(img, box),
+                crop_around(after, box),
+            )
+        )
     return tiles
 
 
@@ -270,9 +341,17 @@ def collect_states(pdir, cfg, per_kind=8, hand=None):
     states, reps = doc["states"], os.path.join(fd, "reps")
     per = json.load(open(dj, encoding="utf-8"))["per_state"]
     tiles = []
-    stats = {"secrets": set(), "templates": 0, "hand": 0, "coverage": [],
-             "sources_tracked": 1, "sources_hand": 0,
-             "states": len(states), "states_hit": len(per), "film_s": 0.0}
+    stats = {
+        "secrets": set(),
+        "templates": 0,
+        "hand": 0,
+        "coverage": [],
+        "sources_tracked": 1,
+        "sources_hand": 0,
+        "states": len(states),
+        "states_hit": len(per),
+        "film_s": 0.0,
+    }
     seen = {}
     for key in sorted(per, key=int):
         n = int(key)
@@ -287,8 +366,7 @@ def collect_states(pdir, cfg, per_kind=8, hand=None):
             if seen.get(kind, 0) >= per_kind:
                 continue
             if img is None:
-                img = cv2.imread(os.path.join(reps, f"rep_{n:05d}.png"),
-                                 cv2.IMREAD_COLOR)
+                img = cv2.imread(os.path.join(reps, f"rep_{n:05d}.png"), cv2.IMREAD_COLOR)
                 if img is None:
                     break
                 H, W = img.shape[:2]
@@ -299,9 +377,15 @@ def collect_states(pdir, cfg, per_kind=8, hand=None):
             seen[kind] = seen.get(kind, 0) + 1
             x, y, w, h = b["rect"]
             box = (int(x * W), int(y * H), int((x + w) * W), int((y + h) * H))
-            tiles.append((f"{kind} ({b.get('via', '?')})", f"state {n}",
-                          float(s.get("t") or 0),
-                          crop_around(img, box), crop_around(after, box)))
+            tiles.append(
+                (
+                    f"{kind} ({b.get('via', '?')})",
+                    f"state {n}",
+                    float(s.get("t") or 0),
+                    crop_around(img, box),
+                    crop_around(after, box),
+                )
+            )
         if img is None and boxes:
             # the rep is gone but the state still carries boxes: count its
             # coverage anyway, so the numbers on the sheet stay honest
@@ -314,19 +398,21 @@ def collect_states(pdir, cfg, per_kind=8, hand=None):
 
 def fingerprint_states(pdir, man):
     """What is being approved: the detections, and the hand rects beside them.
-    Adding a `film_blur` rect changes the look, so it must un-approve it."""
+    Adding a `film_blur` rect changes the look, so it must un-approve it.
+    """
     dj = os.path.join(pdir, "temp", "film", "detect.json")
     h = hashlib.sha1()
     with open(dj, "rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
-    h.update(json.dumps(man.get("film_blur") or [], sort_keys=True,
-                        ensure_ascii=False).encode("utf-8"))
+    h.update(
+        json.dumps(man.get("film_blur") or [], sort_keys=True, ensure_ascii=False).encode("utf-8")
+    )
     return "film-" + h.hexdigest()[:11]
 
 
 def render_sheet(tiles, stats, cfg, out):
-    cols = 2                              # two secrets per row, each before|after
+    cols = 2  # two secrets per row, each before|after
     cell_w = TILE_W * 2 + PAD * 3
     cell_h = TILE_H + 44
     rows = (len(tiles) + cols - 1) // cols
@@ -337,21 +423,39 @@ def render_sheet(tiles, stats, cfg, out):
     cov = stats["coverage"]
     cov_mean = (sum(a * n for a, n in cov) / max(1, sum(n for _, n in cov))) * 100
     cov_max = max((a for a, _ in cov), default=0.0) * 100
-    label(canvas, "REDACTION REVIEW -- nothing renders until this is approved",
-          PAD, 30, (120, 200, 255), 0.7)
-    label(canvas, f"{len(stats['secrets'])} secret(s), {stats['templates']} template(s), "
-                  f"{stats['hand']} hand rect(s)   mode: {cfg.get('blur_mode', 'blur')}   "
-                  f"blur covers {cov_mean:.1f}% of the frame on average, {cov_max:.1f}% at most",
-          PAD, 58, (200, 200, 200), 0.5)
-    label(canvas, "left: as recorded   right: as it will render   "
-                  "approve with:  redaction-review.py --manifest <screen.json> --approve",
-          PAD, 82, (160, 160, 160), 0.45)
+    label(
+        canvas,
+        "REDACTION REVIEW -- nothing renders until this is approved",
+        PAD,
+        30,
+        (120, 200, 255),
+        0.7,
+    )
+    label(
+        canvas,
+        f"{len(stats['secrets'])} secret(s), {stats['templates']} template(s), "
+        f"{stats['hand']} hand rect(s)   mode: {cfg.get('blur_mode', 'blur')}   "
+        f"blur covers {cov_mean:.1f}% of the frame on average, {cov_max:.1f}% at most",
+        PAD,
+        58,
+        (200, 200, 200),
+        0.5,
+    )
+    label(
+        canvas,
+        "left: as recorded   right: as it will render   "
+        "approve with:  redaction-review.py --manifest <screen.json> --approve",
+        PAD,
+        82,
+        (160, 160, 160),
+        0.45,
+    )
     for i, (title, base, t, before, after) in enumerate(tiles):
         r, c = divmod(i, cols)
         x = PAD + c * cell_w
         y = head + r * cell_h
-        canvas[y + 30:y + 30 + TILE_H, x:x + TILE_W] = before
-        canvas[y + 30:y + 30 + TILE_H, x + TILE_W + PAD:x + TILE_W * 2 + PAD] = after
+        canvas[y + 30 : y + 30 + TILE_H, x : x + TILE_W] = before
+        canvas[y + 30 : y + 30 + TILE_H, x + TILE_W + PAD : x + TILE_W * 2 + PAD] = after
         label(canvas, f"{title}   {base}  @ {int(t) // 60}:{t % 60:04.1f}", x, y + 20)
     cv2.imwrite(out, canvas, [cv2.IMWRITE_JPEG_QUALITY, 88])
     return cov_mean, cov_max
@@ -361,7 +465,8 @@ def group_for_page(tiles):
     """As few images as possible: one representative per KIND of secret,
     plus one per hand rect. The question is the same for all of them --
     "is the right side how it should look?" -- and a person answers it once
-    per kind, not thirty-four times per appearance."""
+    per kind, not thirty-four times per appearance.
+    """
     groups = {}
     for title, base, t, before, after in tiles:
         kind = title.split(" ", 1)[0].rstrip(":")
@@ -381,15 +486,25 @@ def write_html(groups, stats, cfg, out, fp):
     downloaded as decisions.json.
     """
     import base64
+
     cards = []
     for g in groups:
         base, t, before, after = g["examples"][0]
+
         def b64(img):
             ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
             return "data:image/jpeg;base64," + base64.b64encode(buf.tobytes()).decode()
-        cards.append({"id": g["label"], "kind": g["kind"], "n": len(g["examples"]),
-                      "where": f"{base} @ {int(t) // 60}:{t % 60:04.1f}",
-                      "before": b64(before), "after": b64(after)})
+
+        cards.append(
+            {
+                "id": g["label"],
+                "kind": g["kind"],
+                "n": len(g["examples"]),
+                "where": f"{base} @ {int(t) // 60}:{t % 60:04.1f}",
+                "before": b64(before),
+                "after": b64(after),
+            }
+        )
     payload = json.dumps(cards, ensure_ascii=False)
     html = """<!doctype html><html><head><meta charset="utf-8">
 <title>Redaction review</title>
@@ -461,11 +576,21 @@ render();
 
 def fingerprint(man, mpath):
     """What exactly is being approved: the manifest's redaction, and the
-    track files' identities."""
+    track files' identities.
+    """
     h = hashlib.sha1()
-    keep = {"cut": man.get("cut"), "sources": [
-        {"path": s["path"], "blur": s.get("blur"), "track": s.get("track"),
-         "skip": s.get("skip")} for s in man.get("sources", [])]}
+    keep = {
+        "cut": man.get("cut"),
+        "sources": [
+            {
+                "path": s["path"],
+                "blur": s.get("blur"),
+                "track": s.get("track"),
+                "skip": s.get("skip"),
+            }
+            for s in man.get("sources", [])
+        ],
+    }
     h.update(json.dumps(keep, sort_keys=True, ensure_ascii=False).encode("utf-8"))
     for s in man.get("sources", []):
         if s.get("track"):
@@ -482,18 +607,28 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--out", help="default: <project>/temp/review/redaction-sheet.jpg")
-    ap.add_argument("--approve", action="store_true",
-                    help="record approval of the CURRENT look in project.json")
-    ap.add_argument("--check", action="store_true",
-                    help="exit 0 if the current look is already approved, else 3")
-    ap.add_argument("--states", action="store_true",
-                    help="review the FILM-time redaction (temp/film/detect.json) "
-                         "instead of the source-time tracker; this is the "
-                         "acceptance test between film-redact --detect and --blur")
-    ap.add_argument("--html", action="store_true",
-                    help="also write temp/review/review.html: one image at a time, "
-                         "yes/no, as few images as possible, answers remembered "
-                         "locally and handed back as JSON")
+    ap.add_argument(
+        "--approve", action="store_true", help="record approval of the CURRENT look in project.json"
+    )
+    ap.add_argument(
+        "--check",
+        action="store_true",
+        help="exit 0 if the current look is already approved, else 3",
+    )
+    ap.add_argument(
+        "--states",
+        action="store_true",
+        help="review the FILM-time redaction (temp/film/detect.json) "
+        "instead of the source-time tracker; this is the "
+        "acceptance test between film-redact --detect and --blur",
+    )
+    ap.add_argument(
+        "--html",
+        action="store_true",
+        help="also write temp/review/review.html: one image at a time, "
+        "yes/no, as few images as possible, answers remembered "
+        "locally and handed back as JSON",
+    )
     args = ap.parse_args()
 
     mpath = _env.resolve(args.manifest)
@@ -514,51 +649,61 @@ def main():
 
     if args.approve:
         doc.setdefault("review", {})
-        doc["review"] = {"fingerprint": fp,
-                         "approved_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                         "sheet": _project.norm(args.out or os.path.join(
-                             pdir, "temp", "review", sheet_name))}
+        doc["review"] = {
+            "fingerprint": fp,
+            "approved_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "sheet": _project.norm(args.out or os.path.join(pdir, "temp", "review", sheet_name)),
+        }
         with open(_project.path_for(pid), "w", encoding="utf-8") as f:
             json.dump(doc, f, ensure_ascii=False, indent=2)
         _project.record(pid, "redaction-review", note=f"redaction look approved ({fp})")
         print(f"approved the current redaction look ({fp}); recorded in project.json")
         return
 
-    out = _env.resolve(args.out) if args.out else os.path.join(pdir, "temp", "review",
-                                                               sheet_name)
+    out = _env.resolve(args.out) if args.out else os.path.join(pdir, "temp", "review", sheet_name)
     os.makedirs(os.path.dirname(out), exist_ok=True)
     if args.states:
         tiles, stats = collect_states(pdir, cfg, hand=man.get("film_blur"))
         if not tiles:
-            raise SystemExit("nothing to review: detect.json found no secret on "
-                             "any state -- that is a result to check, not to approve")
+            raise SystemExit(
+                "nothing to review: detect.json found no secret on "
+                "any state -- that is a result to check, not to approve"
+            )
     else:
         tiles, stats = collect(man, mpath, cfg)
         if not tiles:
             raise SystemExit("nothing to review: no track dirs with track.json and no hand rects")
     cov_mean, cov_max = render_sheet(tiles, stats, cfg, out)
     if args.html:
-        page = os.path.join(os.path.dirname(out),
-                            "film-review.html" if args.states else "review.html")
+        page = os.path.join(
+            os.path.dirname(out), "film-review.html" if args.states else "review.html"
+        )
         n = write_html(group_for_page(tiles), stats, cfg, page, fp)
         print(f"page  -> {page}   ({n} question(s), one image each)")
     if args.states:
-        print(f"{len(stats['secrets'])} distinct secret(s) on "
-              f"{stats['states_hit']} of {stats['states']} state(s) "
-              f"({stats['film_s']:.0f}s of film), {stats['hand']} hand rect(s); "
-              f"blur covers {cov_mean:.1f}% of the frame on average, "
-              f"{cov_max:.1f}% at most")
+        print(
+            f"{len(stats['secrets'])} distinct secret(s) on "
+            f"{stats['states_hit']} of {stats['states']} state(s) "
+            f"({stats['film_s']:.0f}s of film), {stats['hand']} hand rect(s); "
+            f"blur covers {cov_mean:.1f}% of the frame on average, "
+            f"{cov_max:.1f}% at most"
+        )
     else:
-        print(f"{len(stats['secrets'])} secret(s), {stats['templates']} template(s), "
-              f"{stats['hand']} hand rect(s); blur covers {cov_mean:.1f}% of the frame "
-              f"on average, {cov_max:.1f}% at most")
+        print(
+            f"{len(stats['secrets'])} secret(s), {stats['templates']} template(s), "
+            f"{stats['hand']} hand rect(s); blur covers {cov_mean:.1f}% of the frame "
+            f"on average, {cov_max:.1f}% at most"
+        )
     print(f"sheet -> {out}")
     if approved == fp:
         print(f"this exact look is already approved ({fp})")
         return
-    print(f"\nSTOP: review the sheet, then approve with\n"
-          f"  python scripts/redaction-review.py --manifest {args.manifest}"
-          + (" --states" if args.states else "") + " --approve")
+    print(
+        f"\nSTOP: review the sheet, then approve with\n"
+        f"  python scripts/redaction-review.py --manifest {args.manifest}"
+        + (" --states" if args.states else "")
+        + " --approve"
+    )
     raise SystemExit(2)
 
 

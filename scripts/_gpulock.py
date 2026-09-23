@@ -35,6 +35,7 @@ Stdlib only, and no `_env` import, for the same reason as `_runlog.py`: this is
 what you read when a run is wedged, and a broken venv is one of the things that
 can wedge it. `gpu-lock.py` is the reader.
 """
+
 import os
 import io
 import json
@@ -69,6 +70,7 @@ def alive(pid):
         return False
     if os.name == "nt":
         import ctypes
+
         k = ctypes.windll.kernel32
         # QUERY_LIMITED_INFORMATION works without full rights to the process.
         h = k.OpenProcess(0x1000, False, pid)
@@ -77,23 +79,23 @@ def alive(pid):
         try:
             code = ctypes.c_ulong()
             if k.GetExitCodeProcess(h, ctypes.byref(code)):
-                return code.value == 259          # STILL_ACTIVE
+                return code.value == 259  # STILL_ACTIVE
             return True
         finally:
             k.CloseHandle(h)
     try:
         os.kill(pid, 0)
     except OSError as e:
-        return e.errno == errno.EPERM             # alive, just not ours
+        return e.errno == errno.EPERM  # alive, just not ours
     return True
 
 
 def read(name="gpu"):
     """The current holder as a dict, or None. Never raises."""
     try:
-        with io.open(lock_path(name), "r", encoding="utf-8") as f:
+        with open(lock_path(name), encoding="utf-8") as f:
             rec = json.load(f)
-    except (IOError, OSError, ValueError):
+    except (OSError, ValueError):
         return None
     return rec if isinstance(rec, dict) else None
 
@@ -106,8 +108,7 @@ def stale(rec):
         return "holder pid %s is gone" % rec.get("pid")
     age = time.time() - float(rec.get("started_epoch") or 0)
     if age > MAX_AGE_S:
-        return "held %.1f h, over the %.0f h cap" % (age / 3600.0,
-                                                     MAX_AGE_S / 3600.0)
+        return "held %.1f h, over the %.0f h cap" % (age / 3600.0, MAX_AGE_S / 3600.0)
     return None
 
 
@@ -119,7 +120,7 @@ def _write_new(path, rec):
         if e.errno == errno.EEXIST:
             return False
         raise
-    with io.open(fd, "w", encoding="utf-8", newline="\n") as f:
+    with open(fd, "w", encoding="utf-8", newline="\n") as f:
         json.dump(rec, f)
     return True
 
@@ -132,10 +133,15 @@ def acquire(name="gpu", tool="?", project=None, wait=0, poll=5.0, on_wait=None):
     """
     os.makedirs(locks_dir(), exist_ok=True)
     path = lock_path(name)
-    rec = {"schema": SCHEMA, "pid": os.getpid(), "tool": tool,
-           "project": project, "host": _host(),
-           "started_epoch": time.time(),
-           "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    rec = {
+        "schema": SCHEMA,
+        "pid": os.getpid(),
+        "tool": tool,
+        "project": project,
+        "host": _host(),
+        "started_epoch": time.time(),
+        "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
     t0 = time.time()
     told = False
     while True:
@@ -161,10 +167,10 @@ def _steal(path, name, held):
     try:
         cur = read(name)
         if cur and held and cur.get("pid") != held.get("pid"):
-            return                                # someone already replaced it
+            return  # someone already replaced it
         os.remove(path)
     except OSError:
-        pass                                      # lost the race; loop retries
+        pass  # lost the race; loop retries
 
 
 def release(token, name="gpu"):
@@ -172,8 +178,11 @@ def release(token, name="gpu"):
     if not token:
         return
     cur = read(name)
-    if cur and cur.get("pid") == token.get("pid") \
-            and cur.get("started_epoch") == token.get("started_epoch"):
+    if (
+        cur
+        and cur.get("pid") == token.get("pid")
+        and cur.get("started_epoch") == token.get("started_epoch")
+    ):
         try:
             os.remove(lock_path(name))
         except OSError:
@@ -183,16 +192,18 @@ def release(token, name="gpu"):
 def _host():
     try:
         import socket
+
         return socket.gethostname()
     except Exception:
         return "?"
 
 
-class hold(object):
+class hold:
     """Context manager. `blocked` is set when the wait timed out."""
 
-    def __init__(self, name="gpu", tool="?", project=None, wait=0, poll=5.0,
-                 on_wait=None, required=True):
+    def __init__(
+        self, name="gpu", tool="?", project=None, wait=0, poll=5.0, on_wait=None, required=True
+    ):
         self.name, self.tool, self.project = name, tool, project
         self.wait, self.poll, self.on_wait = wait, poll, on_wait
         self.required = required
@@ -200,8 +211,7 @@ class hold(object):
         self.blocked = None
 
     def __enter__(self):
-        self.token = acquire(self.name, self.tool, self.project,
-                             self.wait, self.poll, self.on_wait)
+        self.token = acquire(self.name, self.tool, self.project, self.wait, self.poll, self.on_wait)
         if self.token is None:
             self.blocked = read(self.name)
             if self.required:
@@ -224,13 +234,18 @@ def describe(rec, name="gpu"):
     if not rec:
         return "%s: free" % name
     age = time.time() - float(rec.get("started_epoch") or 0)
-    return ("%s: held by pid %s (%s%s) since %s, %s"
-            % (name, rec.get("pid"), rec.get("tool"),
-               "/" + rec["project"] if rec.get("project") else "",
-               rec.get("started_utc"), _dur(age)))
+    return "%s: held by pid %s (%s%s) since %s, %s" % (
+        name,
+        rec.get("pid"),
+        rec.get("tool"),
+        "/" + rec["project"] if rec.get("project") else "",
+        rec.get("started_utc"),
+        _dur(age),
+    )
 
 
 def _dur(s):
     s = int(max(0, s))
-    return "%dh%02dm" % (s // 3600, (s % 3600) // 60) if s >= 3600 \
-        else "%dm%02ds" % (s // 60, s % 60)
+    return (
+        "%dh%02dm" % (s // 3600, (s % 3600) // 60) if s >= 3600 else "%dm%02ds" % (s // 60, s % 60)
+    )

@@ -22,7 +22,13 @@ film is not a re-encode of an unlabelled one.
 
 Invoke as:  python scripts/name-label.py --video in.mp4 --name "..." --title "..."
 """
-import sys, os, json, argparse, subprocess, shutil
+
+import sys
+import os
+import json
+import argparse
+import subprocess
+import shutil
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -30,8 +36,15 @@ import _encode  # noqa: E402 -- the one place encoder keys are chosen
 
 from PIL import Image, ImageDraw
 import _overlay
-from _overlay import (hex_rgba, font_for_cap_height, draw_text_tracked,
-                      text_width_tracked, esc, probe, anchor_xy)
+from _overlay import (
+    hex_rgba,
+    font_for_cap_height,
+    draw_text_tracked,
+    text_width_tracked,
+    esc,
+    probe,
+    anchor_xy,
+)
 
 ENV = _env.ENV
 ROOT = _overlay.ROOT
@@ -74,15 +87,26 @@ def measure(preset, texts, scale):
         c = _line_cfg(preset, key)
         if c.get("uppercase"):
             text = text.upper()
-        f = font_for_cap_height(_overlay.repo_path(c["file"]),
-                                max(4, int(round(c["cap_height_px"] * scale))))
+        f = font_for_cap_height(
+            _overlay.repo_path(c["file"]), max(4, int(round(c["cap_height_px"] * scale)))
+        )
         tracking = c.get("tracking_px", 0) * scale
         w = text_width_tracked(pen, text, f, tracking)
         cap = f.getbbox("H")
         asc, desc = f.getmetrics()
-        rows.append({"key": key, "text": text, "font": f, "tracking": tracking,
-                     "w": w, "cap_top": cap[1], "cap_h": cap[3] - cap[1],
-                     "desc": desc, "colour": c["colour"]})
+        rows.append(
+            {
+                "key": key,
+                "text": text,
+                "font": f,
+                "tracking": tracking,
+                "w": w,
+                "cap_top": cap[1],
+                "cap_h": cap[3] - cap[1],
+                "desc": desc,
+                "colour": c["colour"],
+            }
+        )
 
     if not rows:
         raise SystemExit("name-label: nothing to draw -- give at least a name")
@@ -92,10 +116,14 @@ def measure(preset, texts, scale):
     # tallest accent and the deepest tail in the whole typeface, which would
     # pad this card differently for every string put in it.
     ink = sum(r["cap_h"] for r in rows) + gap * (len(rows) - 1) + rows[-1]["desc"]
-    return {"rows": rows,
-            "w": max(r["w"] for r in rows) + 2 * pad_x,
-            "h": ink + 2 * pad_y,
-            "pad_x": pad_x, "pad_y": pad_y, "gap": gap}
+    return {
+        "rows": rows,
+        "w": max(r["w"] for r in rows) + 2 * pad_x,
+        "h": ink + 2 * pad_y,
+        "pad_x": pad_x,
+        "pad_y": pad_y,
+        "gap": gap,
+    }
 
 
 def render_card(preset, texts, scale):
@@ -118,17 +146,19 @@ def render_card(preset, texts, scale):
     if acc.get("enabled", True) and (dx or dy):
         acc_layer = Image.new("RGBA", (cw * SS, chh * SS), (0, 0, 0, 0))
         ImageDraw.Draw(acc_layer).rounded_rectangle(
-            [0, 0, cw * SS - 1, chh * SS - 1], radius=radius * SS,
-            fill=hex_rgba(acc["colour"], int(round(255 * acc.get("alpha", 1.0)))))
-        img.alpha_composite(acc_layer.resize((cw, chh), Image.LANCZOS),
-                            (max(0, dx), max(0, dy)))
+            [0, 0, cw * SS - 1, chh * SS - 1],
+            radius=radius * SS,
+            fill=hex_rgba(acc["colour"], int(round(255 * acc.get("alpha", 1.0)))),
+        )
+        img.alpha_composite(acc_layer.resize((cw, chh), Image.LANCZOS), (max(0, dx), max(0, dy)))
 
     card_layer = Image.new("RGBA", (cw * SS, chh * SS), (0, 0, 0, 0))
     ImageDraw.Draw(card_layer).rounded_rectangle(
-        [0, 0, cw * SS - 1, chh * SS - 1], radius=radius * SS,
-        fill=hex_rgba(card["colour"], int(round(255 * card.get("alpha", 1.0)))))
-    img.alpha_composite(card_layer.resize((cw, chh), Image.LANCZOS),
-                        (max(0, -dx), max(0, -dy)))
+        [0, 0, cw * SS - 1, chh * SS - 1],
+        radius=radius * SS,
+        fill=hex_rgba(card["colour"], int(round(255 * card.get("alpha", 1.0)))),
+    )
+    img.alpha_composite(card_layer.resize((cw, chh), Image.LANCZOS), (max(0, -dx), max(0, -dy)))
 
     d = ImageDraw.Draw(img)
     x0, y0 = max(0, -dx), max(0, -dy)
@@ -137,8 +167,14 @@ def render_card(preset, texts, scale):
         # Draw from the cap top: PIL anchors text at the font box top, and the
         # gap between that and the cap differs per weight, so subtracting
         # cap_top is what makes the two lines sit on the spacing we measured.
-        draw_text_tracked(d, (x0 + (g["w"] - r["w"]) / 2.0, y - r["cap_top"]),
-                          r["text"], r["font"], hex_rgba(r["colour"]), r["tracking"])
+        draw_text_tracked(
+            d,
+            (x0 + (g["w"] - r["w"]) / 2.0, y - r["cap_top"]),
+            r["text"],
+            r["font"],
+            hex_rgba(r["colour"]),
+            r["tracking"],
+        )
         y += r["cap_h"] + (g["gap"] if i < len(g["rows"]) - 1 else 0)
     return img
 
@@ -158,8 +194,10 @@ def render_label(preset, spec, scale, max_w=None):
                 break
             s *= 0.97
         if s < scale:
-            sys.stderr.write("  note: %r shrunk to %.0f%% to fit %dpx\n"
-                             % (spec.get("name", ""), 100 * s / scale, max_w))
+            sys.stderr.write(
+                "  note: %r shrunk to %.0f%% to fit %dpx\n"
+                % (spec.get("name", ""), 100 * s / scale, max_w)
+            )
     return render_card(preset, texts, s)
 
 
@@ -170,8 +208,7 @@ def render_label(preset, spec, scale, max_w=None):
 # and corner placement was never specific to the name card.
 
 
-def prepare(preset_path, specs, vid_w, vid_h, tmpdir, tag="", base="0:v",
-            first_input=1):
+def prepare(preset_path, specs, vid_w, vid_h, tmpdir, tag="", base="0:v", first_input=1):
     """Render each label's PNG and build the filter graph that animates them.
 
     Returns (png_paths, filter_complex, out_label). The caller adds each png as
@@ -215,17 +252,19 @@ def prepare(preset_path, specs, vid_w, vid_h, tmpdir, tag="", base="0:v",
         # as well keeps the composite out of the graph entirely for the rest of
         # the film, which is nearly all of it.
         src = "%d:v" % (first_input + i)
-        parts.append("[%s]format=rgba,fade=t=in:st=%.3f:d=%.3f:alpha=1,"
-                     "fade=t=out:st=%.3f:d=%.3f:alpha=1[nl%s%d]"
-                     % (src, at, fin, max(at, end - fout), fout, tag, i))
+        parts.append(
+            "[%s]format=rgba,fade=t=in:st=%.3f:d=%.3f:alpha=1,"
+            "fade=t=out:st=%.3f:d=%.3f:alpha=1[nl%s%d]"
+            % (src, at, fin, max(at, end - fout), fout, tag, i)
+        )
         nxt = "nlv%s%d" % (tag, i)
         # shortest=1 is not optional: these are -loop 1 image inputs and so are
         # INFINITE. Without it the overlay never sees its second input end, the
         # render never finishes, and the file it leaves behind has no moov atom.
-        parts.append("[%s][nl%s%d]overlay=x=%d:y=%d:format=auto:shortest=1"
-                     ":enable=%s[%s]"
-                     % (cur, tag, i, x, y,
-                        esc("between(t,%.3f,%.3f)" % (at, end)), nxt))
+        parts.append(
+            "[%s][nl%s%d]overlay=x=%d:y=%d:format=auto:shortest=1"
+            ":enable=%s[%s]" % (cur, tag, i, x, y, esc("between(t,%.3f,%.3f)" % (at, end)), nxt)
+        )
         cur = nxt
     return pngs, ";".join(parts), cur
 
@@ -241,37 +280,43 @@ def load_specs(args):
         return specs
     if not args.name:
         sys.exit("give --name (and usually --title), or --labels <json>")
-    return [{"name": args.name, "title": args.title or "", "at": args.at,
-             "dur": args.dur}]
+    return [{"name": args.name, "title": args.title or "", "at": args.at, "dur": args.dur}]
 
 
 def main():
-    ap = argparse.ArgumentParser(
-        description="Burn a lower-third name label into a video.")
+    ap = argparse.ArgumentParser(description="Burn a lower-third name label into a video.")
     ap.add_argument("--video", help="input video (omit with --card-only)")
     ap.add_argument("--out", help="output video; default <input>-labelled.mp4")
     ap.add_argument("--name", help='e.g. "Oleksandr Gamaniuk"')
     ap.add_argument("--title", help='e.g. "CEO, Instafill.ai"')
-    ap.add_argument("--at", type=float, default=2.0,
-                    help="film time the label fades up (s)")
-    ap.add_argument("--dur", type=float, default=5.5,
-                    help="how long it stays, fades included (s)")
+    ap.add_argument("--at", type=float, default=2.0, help="film time the label fades up (s)")
+    ap.add_argument("--dur", type=float, default=5.5, help="how long it stays, fades included (s)")
     ap.add_argument("--labels", help="JSON list of label specs, for several")
     ap.add_argument("--preset", default=DEFAULT_PRESET)
     ap.add_argument("--tmp", default="temp")
-    ap.add_argument("--card-only", action="store_true",
-                    help="render the card PNG and stop, to eyeball the style")
-    ap.add_argument("--frame", type=float, metavar="T",
-                    help="composite onto the frame at T and write a PNG -- "
-                         "proves placement without spending an encode")
-    ap.add_argument("--clip", action="store_true",
-                    help="encode only the label windows, not the whole film")
+    ap.add_argument(
+        "--card-only",
+        action="store_true",
+        help="render the card PNG and stop, to eyeball the style",
+    )
+    ap.add_argument(
+        "--frame",
+        type=float,
+        metavar="T",
+        help="composite onto the frame at T and write a PNG -- "
+        "proves placement without spending an encode",
+    )
+    ap.add_argument(
+        "--clip", action="store_true", help="encode only the label windows, not the whole film"
+    )
     ap.add_argument("--width", type=int, default=1920, help="with --card-only")
     ap.add_argument("--height", type=int, default=1080, help="with --card-only")
     ap.add_argument("--cq", default="21")
-    ap.add_argument("--encoder", default=None,
-                    help="default: the best one this machine can run "
-                         "(see _encode.py)")
+    ap.add_argument(
+        "--encoder",
+        default=None,
+        help="default: the best one this machine can run (see _encode.py)",
+    )
     args = ap.parse_args()
 
     specs = load_specs(args)
@@ -291,8 +336,10 @@ def main():
     w, h, fps, dur = probe(args.video)
     for s in specs:
         if float(s["at"]) >= dur:
-            sys.exit("label %r starts at %.1fs but the film is %.1fs long"
-                     % (s.get("name"), float(s["at"]), dur))
+            sys.exit(
+                "label %r starts at %.1fs but the film is %.1fs long"
+                % (s.get("name"), float(s["at"]), dur)
+            )
     pngs, fc, out_label = prepare(args.preset, specs, w, h, args.tmp)
 
     # --frame: one composited still. The cheapest possible proof that the card
@@ -301,8 +348,17 @@ def main():
     if args.frame is not None:
         png = os.path.splitext(args.video)[0] + "-label-%.0fs.png" % args.frame
         png = os.path.join(args.tmp, os.path.basename(png))
-        cmd = ["ffmpeg", "-hide_banner", "-v", "error", "-nostdin",
-               "-ss", "%.3f" % args.frame, "-i", args.video]
+        cmd = [
+            "ffmpeg",
+            "-hide_banner",
+            "-v",
+            "error",
+            "-nostdin",
+            "-ss",
+            "%.3f" % args.frame,
+            "-i",
+            args.video,
+        ]
         for p in pngs:
             cmd += ["-i", p]
         # The still is grabbed at T, so the image inputs' clocks restart at zero
@@ -320,8 +376,16 @@ def main():
             parts.append("[%d:v]format=rgba[q%d]" % (i + 1, i))
             parts.append("[%s][q%d]overlay=x=%d:y=%d[o%d]" % (cur, i, x, y, i))
             cur = "o%d" % i
-        cmd += ["-filter_complex", ";".join(parts), "-map", "[%s]" % cur,
-                "-frames:v", "1", "-y", png]
+        cmd += [
+            "-filter_complex",
+            ";".join(parts),
+            "-map",
+            "[%s]" % cur,
+            "-frames:v",
+            "1",
+            "-y",
+            png,
+        ]
         if subprocess.run(cmd, env=ENV).returncode:
             sys.exit("ffmpeg failed building the preview frame")
         print(png)
@@ -331,8 +395,7 @@ def main():
     trim = []
     if args.clip:
         a = max(0.0, min(float(s["at"]) for s in specs) - 1.5)
-        b = min(dur, max(float(s["at"]) + float(s.get("dur", 5.5))
-                         for s in specs) + 1.5)
+        b = min(dur, max(float(s["at"]) + float(s.get("dur", 5.5)) for s in specs) + 1.5)
         # -ss AFTER -i so the input keeps its original timeline and the fade
         # start times still mean what they say; seeking first would rebase t.
         trim = ["-ss", "%.3f" % a, "-to", "%.3f" % b]
@@ -340,25 +403,27 @@ def main():
 
     # One place decides the encoder keys; these preview burns get the
     # same treatment as a pipeline render.
-    rcfg = _encode.resolve({"encoder": args.encoder, "cq": args.cq,
-                            "speed": 5, "maxrate": "16M",
-                            "bufsize": "32M"})
+    rcfg = _encode.resolve(
+        {"encoder": args.encoder, "cq": args.cq, "speed": 5, "maxrate": "16M", "bufsize": "32M"}
+    )
     cmd = ["ffmpeg", "-hide_banner", "-v", "error", "-nostdin", "-i", args.video]
     for p in pngs:
         cmd += ["-loop", "1", "-framerate", "%g" % fps, "-i", p]
     cmd += ["-filter_complex", fc, "-map", "[%s]" % out_label, "-map", "0:a:0?"]
     cmd += trim
-    cmd += (_encode.video_args(rcfg) + ["-r", "%g" % fps]
-            + _encode.audio_args(rcfg)
-            + ["-movflags", "+faststart", "-y", out])
+    cmd += (
+        _encode.video_args(rcfg)
+        + ["-r", "%g" % fps]
+        + _encode.audio_args(rcfg)
+        + ["-movflags", "+faststart", "-y", out]
+    )
     if subprocess.run(cmd, env=ENV).returncode:
         sys.exit("ffmpeg failed for %s" % out)
 
     got = probe(out)[3]
     want = (b - a) if args.clip else dur
     if abs(got - want) > 0.5:
-        sys.exit("output is %.2fs, expected %.2fs -- %s left in place"
-                 % (got, want, out))
+        sys.exit("output is %.2fs, expected %.2fs -- %s left in place" % (got, want, out))
     print("%s  %.1fs  %.1f MB" % (out, got, os.path.getsize(out) / 1e6))
 
 

@@ -41,9 +41,8 @@
   "row": 96,
   "gap_cta": 48,
   "cta_logo": {
-    "file": "config/cards/brands/instafill-logo.png",
     "height": 54,
-    "_why": "the company's own mark on the last frame instead of the URL in our font (user's call, 2026-09-23)"
+    "_why": "when the card's spec names a `logo`, it replaces the typed call to action at this height"
   },
   "timing": {
     "headline_at": 0.15,

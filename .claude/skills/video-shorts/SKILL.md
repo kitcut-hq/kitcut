@@ -41,7 +41,130 @@ themselves; if you ran ffmpeg by hand or a script printed
 End an editing session by appending a short prose note to `journal.md`
 addressed to the next session: what was asked, which knob changed, why, and
 anything it should not have to rediscover. Details: `## Projects` in the
-README; the re-edit entry point is the `video-project` skill.
+`docs/reference.md`; the re-edit entry point is the `video-project` skill.
+
+## Step 0 — derive the channel's own style
+
+**Never cut for a channel we have not cut for before without first measuring
+their look and committing a preset named for them.** Reaching for `red-card` on
+somebody else's footage is what makes a sample reel read as "here is some
+software" instead of "this is your show". It costs about twenty minutes and it
+is the highest-leverage thing in the whole job.
+
+Where the style is depends on what they publish:
+
+- **They already post shorts** → measure those. `.venv/Scripts/python.exe -m yt_dlp`
+  their channel's `/shorts` tab, pull three, and measure at **native 1080x1920**.
+- **They only post long-form, but it is broadcast** → measure their own on-air
+  lower third off a native 1920x1080 frame. In the 9:16 cut their banner is
+  outside the crop, so **our caption card becomes their banner** — which is only
+  true if it is actually theirs.
+
+What to measure, and the trap in each:
+
+| | how, and what bites |
+|---|---|
+| card colour + **opacity** | Compare brightness inside the box against just outside it, **over a bright part of the picture**. Lenny's read 65/140 and 62/138 → ~55% black → `card.alpha` 115. Sampling over dark hair or a black jumper tells you nothing, and a single frame cannot tell a caption box from clothing. |
+| box top/bottom | Step-detect down a column that crosses a bright region. Their box: y 1210→1318, 109 px. |
+| cap height | A line with **no descenders** — a `g` or `y` inflates it by ~10 px. |
+| pads | `pad_y = (box height − cap height) / 2`. |
+| case | Look. Sentence case vs uppercase is the single biggest tell, and uppercase runs ~15% wider, which changes `grouping.max_words`. |
+| bottom margin | Distance from the frame bottom to the bottom of the box. |
+| brand accent | Sample their logo bug **where it sits on a bright background** — over their own beige wall the wall wins the histogram. |
+
+Then divide every 1080x1920 measurement by **1.7778** before writing it into the
+preset, because presets are authored on a 1920x1080 canvas and scaled by the
+height ratio. Put the raw numbers in a `_measured` block: that block is the
+difference between a style and a guess, and it is what the next session reads
+instead of measuring again. `config/presets/lennys-podcast-vertical.json` and
+`bloomberg-tech.json` are the two worked examples.
+
+**Two rules that are not negotiable:**
+
+- **Shorts safe area.** Park the caption box ~600 px above the frame bottom
+  (339 on the authoring canvas). The Shorts UI draws its title and CTA over the
+  bottom ~380 px and the action rail over the right ~200 px. Lenny's sits at
+  602 px, which is how we know it is a real constraint and not a preference.
+  `red-card-vertical`'s 170 → 302 px is inside that zone.
+- **Copy the look, then change exactly one thing** — and be able to say what it
+  is. Here it was the per-word spotlight, in a colour sampled from their own
+  logo. If you cannot name the single difference, you have either cloned them
+  (why would they pay) or redesigned them (why would they agree).
+
+## Step 0b — when the job is a pitch, write their numbers down FIRST
+
+If the channel already publishes shorts, "better than theirs" is a claim, and a
+claim recorded after the fact is unfalsifiable. Before cutting, put into the
+manifest and the journal: their shorts' **length range, view range, caption
+treatment, framing method, and what they do NOT do**. See
+a `_their_shorts_from_this_episode` block in the clips manifest, holding one
+line per short they already published: id, title, duration, views. Project
+folders are local (see `.gitignore`), so copy the shape rather than expecting
+to find that file in a fresh clone:
+
+```json
+"_their_shorts_from_this_episode": {
+  "_note": "Recorded BEFORE cutting, so 'better' stays falsifiable.",
+  "range": "33-61s, 1080x1920, 194-3741 views, posted 1-4 days after",
+  "already_mined": ["<id> '<title>' <dur> <views>", "..."],
+  "what_they_do_not_do": "flat caption block, no per-word highlight, ..."
+}
+```
+
+Then cut **one of each kind**: one short from a passage they *already published*
+(so the comparison is direct and nothing hides behind a different pick) and one
+from a moment they missed. The first argues craft, the second argues judgement.
+
+## Step 0c — the caption placement is checked for you; read its verdict right
+
+**A caption position is only safe relative to a framing.** The preset's
+`bottom_margin_px` was measured against one framing; a crop change silently
+invalidates it. On `g-YDNJcyuck` clearing the broadcast lower third pushed
+`crop_zoom` up, magnified the face, and put the card across two speakers'
+mouths — through 24/24 caption-sync probes, a passing hook gate and two rounds
+of eyeballed frames.
+
+`cut-clips.py` runs `check-caption-space.py` **automatically** after rendering
+any vertical captioned manifest and fails the run if a card sits on a face, so
+you do not have to remember it — you have to know what to do when it fires.
+Run it standalone only to re-check without an encode, or on a machine that had
+no face model at render time (the render prints a loud skip in that case —
+never publish past one):
+
+```powershell
+python scripts/check-caption-space.py --manifest projects/<id>/clips-vertical.json
+python scripts/check-caption-space.py --manifest ... --list   # every frame, exit 0
+```
+
+Read the verdict as a decision tree, not a pass/fail:
+
+1. **Clean** → done.
+2. **Card on the face, room below the chin** → lower `bottom_margin_px`.
+3. **No room below** (the card cannot clear the face box *and* stay above the
+   Shorts UI at y≈1540 — a two-line card is ~174 px and often will not fit)
+   → put it **above the head** with a large `bottom_margin_px`.
+4. **No room anywhere** — the subject fills the frame top to bottom → the
+   *framing* is wrong, not the caption. Letterbox the clip (`pad` in the
+   `.reframe.json` sidecar, which **overrides** the manifest's `crop_pad`): the
+   whole source frame over a blurred fill keeps the channel's own graphics
+   intact and unsliced and opens clear space under the band for the card.
+
+Clips in one manifest can need different answers. A clip may carry its own
+`captions` block overriding `bottom_margin_px` / `max_lines` /
+`max_line_width_px`; only `layout` keys are overridable.
+
+And sweep the grouping — `grouping.max_words` against
+`layout.max_line_width_px` — using the wrap/orphan counters
+`build-captions-ass.py` prints. A group one word too wide wraps and orphans that
+word onto its own line ("the models are going / **to**"), which no structural
+check can see. Both channel presets shipped on the worst cell of their own
+sweep; uppercase runs ~15% wider, so caps take one word fewer per card.
+
+After changing any of the machinery itself — `cut-clips.py`,
+`build-captions-ass.py`, `check-caption-space.py` — run
+`python scripts/check-shorts.py` before trusting a render: it pins the hook
+gate, pad resolution, crop windows, grouping typography and caption-space
+geometry against real-footage fixtures, in seconds, with no encode.
 
 ## Step 1 — analyze: pick the episodes
 
@@ -59,7 +182,10 @@ What makes a good as-is short (no editing pass to save it later):
   a short has ~2 s to earn the watch, and "the start of the thought" is usually
   several sentences of it. Closes on a payoff or punchline. Never open
   mid-sentence.
-- **60–90 s** for talking-head content; under 60 s for a single gag/story.
+- **Length is the user's call, not a rule.** When they name a length or a
+  count, that wins — platforms take up to 3 minutes now. Absent an ask,
+  60–90 s suits talking-head content and under 60 s a single gag/story; say
+  which default you used so it can be overridden.
 - Prefer segments with emotion, concrete numbers, a strong visual, or a
   controversial thesis — those carry a clip with zero extra editing.
 - **Skip the video's intro** (it never stands alone) and **skip sponsor reads**;
@@ -70,6 +196,42 @@ Verify each candidate boundary before writing the manifest:
 ```powershell
 python scripts/transcript-outline.py projects/<id>/transcripts/<id>.words.json --find "exact phrase"
 ```
+
+### Step 1b — the selection is a STAGE, not a moment of taste
+
+Do not go from the outline straight to a manifest. Write
+`projects/<id>/shortlist.json` first — every candidate seriously considered,
+each with its quotes, its hook, answers to the four hook tests, a picture
+note, and a verdict (`pick`/`backup`/`reject`) with reasoning — then run:
+
+```powershell
+python scripts/shortlist-moments.py --shortlist projects/<id>/shortlist.json
+```
+
+It resolves every phrase, prices every hook against the gate, prints every
+duration, and refuses only skipped process — an unanswered test, a phrase
+that does not resolve, a span that runs backwards, a pick past the hook gate
+with no `hook_ok` reason. **It has no opinion on counts or length**: how
+many shorts a video owes and how long they run is the user's ask, recorded
+verbatim in the optional top-level `wanted` field — one named moment, ten
+shorts, a 3-minute short, or the honest "nothing here carries a short" are
+all valid shortlists. The bar it holds is comparison, not quantity: multiple
+picks with nothing documented as losing draws a warning, because when
+everything considered was chosen, the selection was a decision wearing a
+list. Only candidates marked `pick` go into the manifest; `backup`s are the
+bench for when a pick dies on review.
+
+Why mandatory: on one Bloomberg episode the pick-inside-the-flow approach
+shipped two rejected shorts in a row (an anchor posing a question; a Treasury
+Secretary saying nothing falsifiable), while the candidate that survived had
+been the top of the payoff table all along. Both bad picks fail the four
+tests ON PAPER — the stage makes writing that paper mandatory, and the
+comparison run that proved it also caught, in one afternoon: a hook quoted
+from a short's TITLE instead of the transcript, two "already mined" shorts
+that belonged to a different episode entirely, and two spans silently
+anchored to the cold-open trailer's copy of the quote (a first-match phrase
+resolver takes the trailer, and the same trap applies to `resolve()` in
+cut-clips — anchor on words unique to the body instance).
 
 ## Step 2 — the manifest
 
@@ -188,12 +350,17 @@ Only `crop_keys` (inline `[[t, x], ...]`) overrides the sidecar. `crop_x` and
 prints a note if a clip sets one anyway. Override by editing the sidecar
 itself, as above.
 
-**A re-run of `auto-reframe.py` wipes those sidecar edits** — it now WARNs
-about each pad it is overwriting, but it cannot merge them back: sidecar times
-are in CLIP time, so the moment a clip's boundary moves, every hand-tuned time
-in its entry means something else. One film had the same letterbox override
-silently destroyed three times in a session before the warning existed. After
-any regen, re-apply overrides by hand, recomputed against the clip's new start.
+**Mark every hand edit, and a re-run of `auto-reframe.py` will refuse to
+destroy it.** Put a `_`-prefixed prose key in the entry (`"_pad_why": "..."`)
+or at the top of the file (`"_comment": "HAND-EDITED ..."`) — the regen keeps
+marked entries (file-level marks protect every existing entry, new clips still
+land) and says what it kept and why. `--force-regen` overwrites, which is the
+right move after a clip's boundary changes: sidecar times are in CLIP time, so
+a moved start makes every hand-tuned time mean something else — regenerate,
+then re-apply the edit recomputed against the new start. An UNMARKED edit is
+still overwritten with only a WARNING, which is how one film lost the same
+letterbox override three times in a session — so mark them; the marker doubles
+as the note the next session needs anyway.
 
 The other reason to letterbox besides "no face": a **full-width graphic
 insert** — the host steps aside and a news card takes half the frame. The
@@ -450,6 +617,60 @@ clip nobody would watch:
 Both now FAIL the gate, and both trip the filler-opener warning by name. Naming
 the hook is most of the value: **a clip whose hook cannot be written down as a
 phrase does not have one**, and the boundaries are wrong.
+
+**A hook is a CLAIM somebody makes, not a question an anchor poses.** The gate
+measures *when* the hook lands; it cannot tell you the hook is worthless. A news
+panel is the trap, because its wind-up is grammatical, confident and completely
+empty. Bloomberg Tech's headline segment opened
+
+> "But really the question here is what happens to Hugging Face if Nvidia owns it"
+
+which passes every structural check and is not a hook: it is hedged (*really the
+question here is*), it is meta — a question ABOUT the story rather than a
+statement of it — and there is nothing in it for a scroller to agree or disagree
+with. Its one real claim, "arguably Hugging Face's greatest value is that
+everybody uses it", sat at 0:12. Three tests, all free:
+
+- **Could a viewer disagree with the first sentence?** If not, it is set-up.
+- **Is the speaker addressing an audience, or the person next to them?**
+  Studio cross-talk is not a short. "So Rachel, real quick, is this imminent"
+  ran through the middle of that same clip; a handoff mid-clip is a dead 3 s.
+- **Does it end on the claim or trail off?** That one closed on "it sounds
+  like, like, it is pretty imminent" — a hedge on a hedge.
+- **Does the first sentence contain something falsifiable — a number, a name,
+  an event?** This is the test that matters, and it was learned the expensive
+  way: the first replacement for that clip was a Treasury Secretary telling a
+  room the AI industry has "done a horrendous job, horrendous job of
+  explaining themselves" and needs "a big reset" — which passes all three
+  tests above and was rejected on review as "blabla nothing specific",
+  correctly. It contains no number, no name, no event; it is a complaint
+  about *messaging*, meta all the way down. A politician can deliver empty
+  content with perfect form. "Dell was considered dead, or almost a dinosaur"
+  passes: a named company, a dated reversal, and the numbers follow.
+
+The clip that finally shipped is the same episode's Dell answer — falsifiable
+from its first sentence, revenue up 110 % inside it, one held shot.
+
+**Rank the alternatives by where their payoff lands before you argue about
+them.** It costs nothing and it turns taste into a table: write the
+candidates into the manifest and run `cut-clips.py --list` — it prints
+`hook +X.Xs` for every passing clip, not just gate failures. For that
+episode: Dell "considered dead" +1.8 s, Uber micro-teams +5.0 s, Bessent
++7.5 s, Ian King "wants more customers" +12.7 s. Then apply the
+falsifiability test BEFORE re-anchoring anything — it would have eliminated
+Bessent at the table stage, before a render was spent. Typography prices the
+same way: `build-captions-ass.py --sweep` prints the max_words × width table
+for the words that will actually render.
+
+**Re-anchoring usually beats rejecting.** A soundbite whose payoff is buried
+behind parallel clauses can often be entered mid-sentence at a point that still
+reads as a whole sentence — "the labs themselves have done a horrendous job"
+moved +7.5 s to +2.9 s and changed not one word of his. What you may NOT do is
+redeclare the hook as a longer phrase that starts earlier: that scores +1.4 s by
+moving the goalposts rather than the cut, and the gate is then measuring
+nothing. **Then let the picture decide.** Of the four candidates above, the
+SpaceX/Cognition exchange died on a two-box and the Hugging Face segment had
+already died on one.
 
 **When a fast hook and a settled frame are incompatible, change the material,
 not the rule.** They are separate constraints and both are real — an opening

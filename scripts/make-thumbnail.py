@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """A YouTube thumbnail (1280x720) in the channel's house style, from a spec.
 
-The Instafill channel's thumbnails share one grammar, read off the last six
-public uploads: a dark navy/purple field, a heavy condensed headline in white
+A product channel's thumbnails tend to share one grammar; this one was read
+off the last six public uploads of the channel bpo-realtor was made for: a dark navy/purple field, a heavy condensed headline in white
 with ONE phrase on a yellow slab, the form itself on the right -- tilted, with
 a drop shadow -- a yellow time badge on the form, a yellow caption strip under
 it, and the logo top-left. This draws that grammar; the words, the picture and
@@ -29,6 +29,7 @@ Spec (projects/<id>/thumbnail.json):
 
 Invoke as:  python scripts/make-thumbnail.py --spec projects/<id>/thumbnail.json
 """
+
 import sys
 import os
 import json
@@ -40,8 +41,14 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont  # noqa: E402
 import _overlay  # noqa: E402
 
 W, H = 1280, 720
-DEFAULT_COLOURS = {"bg_top": "#2B1570", "bg_bottom": "#120A33", "accent": "#FFB81C",
-                   "ink": "#FFFFFF", "slab_ink": "#111111", "pill": "#5B3FD1"}
+DEFAULT_COLOURS = {
+    "bg_top": "#2B1570",
+    "bg_bottom": "#120A33",
+    "accent": "#FFB81C",
+    "ink": "#FFFFFF",
+    "slab_ink": "#111111",
+    "pill": "#5B3FD1",
+}
 HEAD_FONT = "fonts/Anton-Regular.ttf"
 BODY_FONT = "fonts/Montserrat-Bold.ttf"
 LIMIT = 2 * 1024 * 1024
@@ -62,7 +69,10 @@ def background(c):
     d = ImageDraw.Draw(bg)
     for y in range(H):
         u = y / (H - 1)
-        d.line([(0, y), (W, y)], fill=tuple(int(top[i] + (bot[i] - top[i]) * u) for i in range(3)) + (255,))
+        d.line(
+            [(0, y), (W, y)],
+            fill=tuple(int(top[i] + (bot[i] - top[i]) * u) for i in range(3)) + (255,),
+        )
     glow = Image.new("L", (W, H), 0)
     ImageDraw.Draw(glow).ellipse([-300, -300, 700, 500], fill=90)
     glow = glow.filter(ImageFilter.GaussianBlur(160))
@@ -82,7 +92,12 @@ def logo_white(path, height):
     for y in range(im.height):
         for x in range(im.width):
             r, g, b, a = px[x, y]
-            if a and max(r, g, b) < 110 and max(r, g, b) - min(r, g, b) < 40 and x > im.height * 0.85:
+            if (
+                a
+                and max(r, g, b) < 110
+                and max(r, g, b) - min(r, g, b) < 40
+                and x > im.height * 0.85
+            ):
                 px[x, y] = (255, 255, 255, a)
     return im.resize((int(im.width * height / im.height), height), Image.LANCZOS)
 
@@ -125,8 +140,12 @@ def draw(spec, base_dir, report=False):
     if spec.get("badge"):
         r = 74
         bx, by = cx + rot.width - r - 6, cy - r // 2 + 4
-        d.ellipse([bx - r, by - r, bx + r, by + r], fill=rgba(c["accent"]),
-                  outline=rgba(c["bg_bottom"]), width=6)
+        d.ellipse(
+            [bx - r, by - r, bx + r, by + r],
+            fill=rgba(c["accent"]),
+            outline=rgba(c["bg_bottom"]),
+            width=6,
+        )
         f = font(HEAD_FONT, 62)
         tw = d.textlength(spec["badge"], font=f)
         d.text((bx - tw / 2, by - 44), spec["badge"], font=f, fill=rgba(c["slab_ink"]))
@@ -150,7 +169,7 @@ def draw(spec, base_dir, report=False):
 
     # -- logo ------------------------------------------------------------------
     left = 56
-    y = int(spec.get("top", 44))   # lower it to centre a short left column
+    y = int(spec.get("top", 44))  # lower it to centre a short left column
     if spec.get("logo"):
         lg = logo_white(spec["logo"], int(spec.get("logo_height", 56)))
         im.alpha_composite(lg, (left, y))
@@ -171,7 +190,9 @@ def draw(spec, base_dir, report=False):
         if line.get("slab"):
             pad = 18
             slab = Image.new("RGBA", (int(tw + 2 * pad), cap + 2 * pad), rgba(c["accent"]))
-            ImageDraw.Draw(slab).text((pad, pad - top), line["text"], font=f, fill=rgba(c["slab_ink"]))
+            ImageDraw.Draw(slab).text(
+                (pad, pad - top), line["text"], font=f, fill=rgba(c["slab_ink"])
+            )
             slab = slab.rotate(float(line.get("tilt", -2)), resample=Image.BICUBIC, expand=True)
             im.alpha_composite(slab, (left - 8, int(y) - 4))
             y += slab.height + 14
@@ -189,8 +210,10 @@ def draw(spec, base_dir, report=False):
     if y > H - 30:
         notes.append("the left column runs to y=%d, past the frame" % y)
     if report:
-        print("  picture box x %d-%d, y %d-%d; headline column width %d; text ends y=%d"
-              % (cx, cx + rot.width, cy, cy + rot.height, max_w, y))
+        print(
+            "  picture box x %d-%d, y %d-%d; headline column width %d; text ends y=%d"
+            % (cx, cx + rot.width, cy, cy + rot.height, max_w, y)
+        )
         for n in notes:
             print("  note:", n)
     return im.convert("RGB"), notes
@@ -212,8 +235,9 @@ def main():
     size = os.path.getsize(out)
     if size > LIMIT:
         im.save(os.path.splitext(out)[0] + ".jpg", quality=90)
-        sys.exit("%s is %.1f MB, over YouTube's 2 MB limit; wrote a JPEG beside it"
-                 % (out, size / 1e6))
+        sys.exit(
+            "%s is %.1f MB, over YouTube's 2 MB limit; wrote a JPEG beside it" % (out, size / 1e6)
+        )
     print("  %s  %dx%d  %.0f KB" % (os.path.relpath(out, _env.ROOT), W, H, size / 1024))
 
 

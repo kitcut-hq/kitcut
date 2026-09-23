@@ -22,7 +22,7 @@ python scripts/name-label.py --video projects/<id>/outputs/film.mp4 `
 
 The worked example is the `name_labels` block in
 `projects/claude-demo/screencast.json`. Style lives in
-`config/labels/lower-third.json`; README has the reference under
+`config/labels/lower-third.json`; `docs/reference.md` has the reference under
 "A lower-third name label".
 
 ## The project folder comes first
@@ -38,7 +38,7 @@ themselves; if you ran ffmpeg by hand or a script printed
 End an editing session by appending a short prose note to `journal.md`
 addressed to the next session: what was asked, which knob changed, why, and
 anything it should not have to rediscover. Details: `## Projects` in the
-README; the re-edit entry point is the `video-project` skill.
+`docs/reference.md`; the re-edit entry point is the `video-project` skill.
 
 ## Do not re-encode a finished film to label it
 

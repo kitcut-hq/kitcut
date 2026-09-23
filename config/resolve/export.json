@@ -1,0 +1,18 @@
+{
+  "_comment": "Defaults for scripts/resolve-export.py. Nothing here is per-video: a project's own decisions stay in its manifest. `formats` is what --format all writes; otio leads because it is the only one of the three that carries speed changes and marker notes, edl is the universal fallback, srt is the caption text with our look deliberately left behind (Resolve does not import ASS).",
+  "formats": ["otio", "edl", "srt"],
+  "srt": {
+    "_why": "Grouping for handover, not for burning: Resolve draws its own subtitle, so this only decides where a cue breaks. Values are the readable defaults, not the caption preset's -- a 3-word karaoke card is right burned in and unreadable as a Resolve subtitle.",
+    "max_words": 8,
+    "max_chars": 42,
+    "max_dur": 3.5,
+    "gap_break": 0.6
+  },
+  "markers": {
+    "_why": "Every editorial decision this repo already records travels as a marker, so the reasoning arrives with the cut instead of staying in the manifest. Colours are OTIO's enum names.",
+    "removal": "red",
+    "label": "blue",
+    "overlay": "green",
+    "bookend": "yellow"
+  }
+}

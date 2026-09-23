@@ -21,7 +21,14 @@ all land in the same place.
 
 Invoke as:  python scripts/handle-overlay.py --video in.mp4 --handle @name
 """
-import sys, os, json, math, argparse, subprocess, shutil
+
+import sys
+import os
+import json
+import math
+import argparse
+import subprocess
+import shutil
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -32,8 +39,14 @@ from PIL import Image, ImageDraw
 import _overlay
 
 # Re-exported: cut-clips.py reaches for _handle.esc and _handle.probe_dims.
-from _overlay import (hex_rgba, font_for_cap_height, draw_text_tracked,
-                      text_width_tracked, esc, probe_dims)
+from _overlay import (
+    hex_rgba,
+    font_for_cap_height,
+    draw_text_tracked,
+    text_width_tracked,
+    esc,
+    probe_dims,
+)
 
 ENV = _env.ENV
 
@@ -63,9 +76,12 @@ def gradient_image(size, colours, angle_deg):
             i = min(int(f), n - 1)
             k = f - i
             c0, c1 = stops[i], stops[i + 1]
-            px[x, y] = (int(c0[0] + (c1[0] - c0[0]) * k),
-                        int(c0[1] + (c1[1] - c0[1]) * k),
-                        int(c0[2] + (c1[2] - c0[2]) * k), 255)
+            px[x, y] = (
+                int(c0[0] + (c1[0] - c0[0]) * k),
+                int(c0[1] + (c1[1] - c0[1]) * k),
+                int(c0[2] + (c1[2] - c0[2]) * k),
+                255,
+            )
     return img
 
 
@@ -76,15 +92,14 @@ def glyph_mask(size, stroke, radius):
     gradient -- Pillow can paste through a mask, and ASS could not do gradients
     at all, which is why the badge is a PNG and not a subtitle line.
     """
-    ss = 4                                   # supersample: crisp curves at any size
+    ss = 4  # supersample: crisp curves at any size
     S = size * ss
     w = max(1, int(round(stroke * ss)))
     r = radius * ss
     m = Image.new("L", (S, S), 0)
     d = ImageDraw.Draw(m)
     half = w / 2.0
-    d.rounded_rectangle([half, half, S - 1 - half, S - 1 - half],
-                        radius=r, outline=255, width=w)
+    d.rounded_rectangle([half, half, S - 1 - half, S - 1 - half], radius=r, outline=255, width=w)
     lens = S * 0.235
     cx = cy = S / 2.0
     d.ellipse([cx - lens, cy - lens, cx + lens, cy + lens], outline=255, width=w)
@@ -102,8 +117,7 @@ def render_icon(cfg, scale, variant):
 
     mask = glyph_mask(size, stroke, radius)
     if variant == "gradient":
-        fill = gradient_image((size, size), cfg["gradient"],
-                              cfg.get("gradient_angle_deg", 45))
+        fill = gradient_image((size, size), cfg["gradient"], cfg.get("gradient_angle_deg", 45))
     else:
         fill = Image.new("RGBA", (size, size), hex_rgba(cfg["colour"]))
 
@@ -120,8 +134,7 @@ def render_icon(cfg, scale, variant):
             ox = int(round(math.cos(th) * out_px))
             oy = int(round(math.sin(th) * out_px))
             halo.paste(mask, (pad + ox, pad + oy), mask)
-        img.paste(Image.new("RGBA", img.size, hex_rgba(cfg["outline_colour"])),
-                  (0, 0), halo)
+        img.paste(Image.new("RGBA", img.size, hex_rgba(cfg["outline_colour"])), (0, 0), halo)
     img.paste(fill, (pad, pad), mask)
     return img
 
@@ -148,9 +161,16 @@ def render_badge(preset, handle, scale, variant):
     img.paste(icon, ((w - icon.width) // 2, 0), icon)
 
     d = ImageDraw.Draw(img)
-    draw_text_tracked(d, ((w - tw) / 2.0, icon.height + gap + pad), text, font,
-                      hex_rgba(tcfg["colour"]), tracking,
-                      t_stroke, hex_rgba(tcfg["outline_colour"]))
+    draw_text_tracked(
+        d,
+        ((w - tw) / 2.0, icon.height + gap + pad),
+        text,
+        font,
+        hex_rgba(tcfg["colour"]),
+        tracking,
+        t_stroke,
+        hex_rgba(tcfg["outline_colour"]),
+    )
     return img
 
 
@@ -217,8 +237,10 @@ def prepare(preset_path, handle, vid_w, vid_h, tmpdir, tag="", base="0:v"):
     for i, _ in enumerate(variants):
         nxt = "hv%d" % i
         enable = "1" if len(variants) == 1 else "eq(%s,%d)" % (col_i, i)
-        parts.append("[%s][hb%d]overlay=x=%s:y=%s:format=auto:enable=%s[%s]"
-                     % (cur, i, esc(x_expr), esc(y_expr), esc(enable), nxt))
+        parts.append(
+            "[%s][hb%d]overlay=x=%s:y=%s:format=auto:enable=%s[%s]"
+            % (cur, i, esc(x_expr), esc(y_expr), esc(enable), nxt)
+        )
         cur = nxt
     return pngs, ";".join(parts), cur
 
@@ -230,14 +252,19 @@ def main():
     ap.add_argument("--handle", required=True, help="e.g. @kris_zahrebelna")
     ap.add_argument("--preset", default=DEFAULT_PRESET)
     ap.add_argument("--tmp", default="temp")
-    ap.add_argument("--badges-only", action="store_true",
-                    help="render the badge PNGs and stop, to eyeball the style")
+    ap.add_argument(
+        "--badges-only",
+        action="store_true",
+        help="render the badge PNGs and stop, to eyeball the style",
+    )
     ap.add_argument("--width", type=int, default=1920, help="with --badges-only")
     ap.add_argument("--height", type=int, default=1080, help="with --badges-only")
     ap.add_argument("--cq", default="21")
-    ap.add_argument("--encoder", default=None,
-                    help="default: the best one this machine can run "
-                         "(see _encode.py)")
+    ap.add_argument(
+        "--encoder",
+        default=None,
+        help="default: the best one this machine can run (see _encode.py)",
+    )
     args = ap.parse_args()
 
     if args.badges_only:
@@ -258,15 +285,25 @@ def main():
 
     # One place decides the encoder keys; these preview burns get the
     # same treatment as a pipeline render.
-    rcfg = _encode.resolve({"encoder": args.encoder, "cq": args.cq,
-                            "speed": 5, "maxrate": "16M",
-                            "bufsize": "32M"})
+    rcfg = _encode.resolve(
+        {"encoder": args.encoder, "cq": args.cq, "speed": 5, "maxrate": "16M", "bufsize": "32M"}
+    )
     cmd = ["ffmpeg", "-hide_banner", "-v", "error", "-nostdin", "-i", args.video]
     for p in pngs:
         cmd += ["-i", p]
-    cmd += ["-filter_complex", fc, "-map", "[%s]" % label, "-map", "0:a:0?",
-            ] + _encode.video_args(rcfg) + _encode.audio_args(rcfg) + [
-            "-movflags", "+faststart", "-y", out]
+    cmd += (
+        [
+            "-filter_complex",
+            fc,
+            "-map",
+            "[%s]" % label,
+            "-map",
+            "0:a:0?",
+        ]
+        + _encode.video_args(rcfg)
+        + _encode.audio_args(rcfg)
+        + ["-movflags", "+faststart", "-y", out]
+    )
     if subprocess.run(cmd, env=ENV).returncode:
         sys.exit("ffmpeg failed for %s" % out)
     print("%s  %.1f MB" % (out, os.path.getsize(out) / 1e6))

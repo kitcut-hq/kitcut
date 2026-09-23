@@ -6,10 +6,10 @@ which knob changed, why, and anything the next session should not rediscover.
 ## 2026-09-01
 - 14:34 project created
 - 15:08 render scripts/tighten-cut.py -> projects/flatten-pdf/outputs/flatten-pdf-tight.mp4 (--manifest projects/flatten-pdf/tighten.json)
-- 15:18 render scripts/run-captions.py -> projects/flatten-pdf/outputs/flatten-pdf-tight-captioned.mp4 (--input projects/flatten-pdf/outputs/flatten-pdf-tight.mp4 --id flatten-pdf-tight --project flatten-pdf --style config/presets/instafill.json --no-overlays --force render)
+- 15:18 render scripts/run-captions.py -> projects/flatten-pdf/outputs/flatten-pdf-tight-captioned.mp4 (--input projects/flatten-pdf/outputs/flatten-pdf-tight.mp4 --id flatten-pdf-tight --project flatten-pdf --style config/presets/dark-card.json --no-overlays --force render)
 - 15:23 render scripts/tighten-cut.py -> projects/flatten-pdf/outputs/flatten-pdf-tight.mp4 (--manifest projects/flatten-pdf/tighten.json --force)
 - 15:25 render scripts/tighten-cut.py -> projects/flatten-pdf/outputs/flatten-pdf-tight.mp4 (--manifest projects/flatten-pdf/tighten.json --force)
-- 15:27 render scripts/run-captions.py -> projects/flatten-pdf/outputs/flatten-pdf-tight-captioned.mp4 (--input projects/flatten-pdf/outputs/flatten-pdf-tight.mp4 --id flatten-pdf-tight --project flatten-pdf --style config/presets/instafill.json --no-overlays --force ass)
+- 15:27 render scripts/run-captions.py -> projects/flatten-pdf/outputs/flatten-pdf-tight-captioned.mp4 (--input projects/flatten-pdf/outputs/flatten-pdf-tight.mp4 --id flatten-pdf-tight --project flatten-pdf --style config/presets/dark-card.json --no-overlays --force ass)
 
 ### Session note — first edit, 2026-09-01
 
@@ -35,7 +35,7 @@ there, 0.22 on one word), and the 20s wait plus "we'll pause the video". Result
 
 **Do not re-transcribe with the default settings.** The first pass
 (distil-large-v3, no hotwords) spelled the product three different ways and
-called the tool "flat and PDF". `--hotwords-file config/vocab/instafill.txt`
+called the tool "flat and PDF". `--hotwords-file config/vocab/product.local.txt`
 with `large-v3` fixed it; that flag was added this session. It is ~45 minutes
 on this CPU, which is why the transcript is committed-adjacent and why
 `corrections[]` exists rather than a re-run.
@@ -51,7 +51,7 @@ on this CPU, which is why the transcript is committed-adjacent and why
   two-line card reaches into the line below and reads its colour. It failed a
   provably correct ASS. The box is clamped to its own line now.
 
-**Captions:** `config/presets/instafill.json`, written this session. Near-black
+**Captions:** `config/presets/dark-card.json`, written this session. Near-black
 slab at 12% transparency, sentence case, mint `#13BA82` spotlight. `red-card`
 was measured off a news channel and fights a screen recording for attention —
 that is what "the red ones looked unprofessional" was actually about. The

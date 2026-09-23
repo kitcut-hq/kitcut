@@ -50,11 +50,14 @@ WHAT YOU NEED BEFORE THE FIRST RUN (once per machine):
 
 Invoke as:
   python scripts/yt-connect.py --check
-  python scripts/yt-connect.py --channel @instafill_ai
-  python scripts/yt-connect.py --channel @instafill_ai --reauth
-  python scripts/yt-connect.py --channel @instafill_ai --reauth --no-browser
+  python scripts/yt-connect.py --channel @yourhandle
+  python scripts/yt-connect.py --channel @yourhandle --reauth
+  python scripts/yt-connect.py --channel @yourhandle --reauth --no-browser
 """
-import sys, os, argparse
+
+import sys
+import os
+import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -62,8 +65,7 @@ from importlib import import_module  # noqa: E402
 
 _yt = import_module("yt-set-chapters")
 
-ENV_KEYS = ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET",
-            "YOUTUBE_REFRESH_TOKEN")
+ENV_KEYS = ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN")
 
 
 def state():
@@ -71,8 +73,9 @@ def state():
     oauth = os.path.join(_env.ROOT, ".yt-oauth")
     tokens = []
     if os.path.isdir(oauth):
-        tokens = sorted(f for f in os.listdir(oauth)
-                        if f.startswith("token") and f.endswith(".json"))
+        tokens = sorted(
+            f for f in os.listdir(oauth) if f.startswith("token") and f.endswith(".json")
+        )
     return {
         "client_secret": os.path.exists(_yt.CLIENT_SECRET),
         "env_grant": all(os.environ.get(k) for k in ENV_KEYS),
@@ -82,13 +85,14 @@ def state():
 
 def describe(yt):
     """The channel a live credential actually points at."""
-    r = yt.channels().list(part="snippet,statistics,contentDetails",
-                           mine=True).execute()
+    r = yt.channels().list(part="snippet,statistics,contentDetails", mine=True).execute()
     items = r.get("items") or []
     if not items:
-        sys.exit("this grant owns no channel -- you consented as an account "
-                 "that has never created one. Re-run with --reauth and pick "
-                 "the brand account.")
+        sys.exit(
+            "this grant owns no channel -- you consented as an account "
+            "that has never created one. Re-run with --reauth and pick "
+            "the brand account."
+        )
     it = items[0]
     sn, st = it["snippet"], it.get("statistics", {})
     return {
@@ -96,21 +100,22 @@ def describe(yt):
         "title": sn.get("title", ""),
         "handle": (sn.get("customUrl") or "").lstrip("@").lower(),
         "videos": st.get("videoCount", "?"),
-        "subscribers": ("hidden" if st.get("hiddenSubscriberCount")
-                        else st.get("subscriberCount", "?")),
+        "subscribers": (
+            "hidden" if st.get("hiddenSubscriberCount") else st.get("subscriberCount", "?")
+        ),
     }
 
 
 def service(creds):
     from googleapiclient.discovery import build
+
     return build("youtube", "v3", credentials=creds, cache_discovery=False)
 
 
 def report(ch):
     print("  channel:     %s" % ch["title"])
     print("  handle:      @%s" % (ch["handle"] or "(none set)"))
-    print("  id:          %s   <- this is what a project file should carry"
-          % ch["id"])
+    print("  id:          %s   <- this is what a project file should carry" % ch["id"])
     print("  videos:      %s" % ch["videos"])
     print("  subscribers: %s" % ch["subscribers"])
 
@@ -119,15 +124,18 @@ def do_check(args):
     """Report without consenting: cheap, and safe to run any time."""
     s = state()
     print("== what this checkout holds ==")
-    print("  %s .yt-oauth/client_secret.json  %s"
-          % ("OK " if s["client_secret"] else "-- ",
-             "" if s["client_secret"]
-             else "(missing: see this script's docstring, steps 1-4)"))
-    print("  %s .env grant (%s)"
-          % ("OK " if s["env_grant"] else "-- ", ", ".join(ENV_KEYS)))
-    print("  %s per-channel tokens: %s"
-          % ("OK " if s["tokens"] else "-- ",
-             ", ".join(s["tokens"]) if s["tokens"] else "none"))
+    print(
+        "  %s .yt-oauth/client_secret.json  %s"
+        % (
+            "OK " if s["client_secret"] else "-- ",
+            "" if s["client_secret"] else "(missing: see this script's docstring, steps 1-4)",
+        )
+    )
+    print("  %s .env grant (%s)" % ("OK " if s["env_grant"] else "-- ", ", ".join(ENV_KEYS)))
+    print(
+        "  %s per-channel tokens: %s"
+        % ("OK " if s["tokens"] else "-- ", ", ".join(s["tokens"]) if s["tokens"] else "none")
+    )
 
     if not (s["env_grant"] or s["tokens"]):
         print("\nNot connected. Nothing here can upload or write chapters.")
@@ -139,25 +147,22 @@ def do_check(args):
     try:
         creds = _yt.credentials(handle=args.channel)
         ch = describe(service(creds))
-    except Exception as e:                      # noqa: BLE001 -- report, not raise
+    except Exception as e:  # noqa: BLE001 -- report, not raise
         print("  refresh FAILED: %s" % e)
         print("\nA grant that will not refresh is usually one of two things:")
         print("  * the consent screen is still in Testing -- refresh tokens")
         print("    expire after 7 days there (docstring step 2), or")
         print("  * the grant was revoked in the Google account.")
-        print("Fix either way: python scripts/yt-connect.py --channel "
-              "@your_handle --reauth")
+        print("Fix either way: python scripts/yt-connect.py --channel @your_handle --reauth")
         return 1
     report(ch)
     if args.channel:
         want = args.channel.lstrip("@").lower()
         ok = want in (ch["handle"], ch["title"].lower())
-        print("\n  %s grant points at %s"
-              % ("OK  " if ok else "WRONG:", args.channel))
+        print("\n  %s grant points at %s" % ("OK  " if ok else "WRONG:", args.channel))
         if not ok:
             return 1
-    print("\nConnected. Uploads and chapter writes will go to the channel "
-          "above.")
+    print("\nConnected. Uploads and chapter writes will go to the channel above.")
     return 0
 
 
@@ -166,15 +171,20 @@ def do_connect(args):
     want = args.channel.lstrip("@").lower()
     s = state()
     if not (s["client_secret"] or s["env_grant"] or s["tokens"]):
-        sys.exit("no .yt-oauth/client_secret.json and no existing grant -- "
-                 "there is nothing to connect with.\nSee this script's "
-                 "docstring, steps 1-4 (python scripts/yt-connect.py --help).")
+        sys.exit(
+            "no .yt-oauth/client_secret.json and no existing grant -- "
+            "there is nothing to connect with.\nSee this script's "
+            "docstring, steps 1-4 (python scripts/yt-connect.py --help)."
+        )
 
-    print("Opening Google's consent screen..." if args.reauth
-          else "Using the grant already on this machine (--reauth forces a "
-               "new consent)...")
-    creds = _yt.credentials(handle=args.channel, reauth=args.reauth,
-                            open_browser=not args.no_browser)
+    print(
+        "Opening Google's consent screen..."
+        if args.reauth
+        else "Using the grant already on this machine (--reauth forces a new consent)..."
+    )
+    creds = _yt.credentials(
+        handle=args.channel, reauth=args.reauth, open_browser=not args.no_browser
+    )
     ch = describe(service(creds))
     print()
     report(ch)
@@ -185,35 +195,43 @@ def do_connect(args):
             # The grant is for someone else; leaving it filed under this
             # handle would make every later run confidently wrong.
             os.remove(token)
-        sys.exit("\nREFUSED: you asked for %s and Google handed back '%s' "
-                 "(@%s).\nAt the chooser pick the BRAND account that owns the "
-                 "channel -- and note the chooser lists the brand account's "
-                 "own name, which a renamed channel no longer matches.\n"
-                 "Re-run: python scripts/yt-connect.py --channel %s --reauth"
-                 % (args.channel, ch["title"], ch["handle"], args.channel))
+        sys.exit(
+            "\nREFUSED: you asked for %s and Google handed back '%s' "
+            "(@%s).\nAt the chooser pick the BRAND account that owns the "
+            "channel -- and note the chooser lists the brand account's "
+            "own name, which a renamed channel no longer matches.\n"
+            "Re-run: python scripts/yt-connect.py --channel %s --reauth"
+            % (args.channel, ch["title"], ch["handle"], args.channel)
+        )
 
-    print("\nConnected: the grant is filed as %s"
-          % os.path.relpath(_yt.channel_token(args.channel), _env.ROOT))
-    print("Verify any time with:  python scripts/yt-connect.py --check "
-          "--channel %s" % args.channel)
+    print(
+        "\nConnected: the grant is filed as %s"
+        % os.path.relpath(_yt.channel_token(args.channel), _env.ROOT)
+    )
+    print("Verify any time with:  python scripts/yt-connect.py --check --channel %s" % args.channel)
     return 0
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--channel",
-                    help="handle or title the grant MUST point at, e.g. "
-                         "@instafill_ai")
-    ap.add_argument("--check", action="store_true",
-                    help="report what this machine holds and who the grant "
-                         "is, without consenting to anything")
-    ap.add_argument("--no-browser", action="store_true",
-                    help="print the consent URL instead of opening a browser, "
-                         "so it can be pasted into a PRIVATE window -- the "
-                         "only reliable way to reach a brand-account channel")
-    ap.add_argument("--reauth", action="store_true",
-                    help="force a fresh Google consent; use when adding a "
-                         "channel or after a revoked grant")
+    ap.add_argument("--channel", help="handle or title the grant MUST point at, e.g. @yourhandle")
+    ap.add_argument(
+        "--check",
+        action="store_true",
+        help="report what this machine holds and who the grant is, without consenting to anything",
+    )
+    ap.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="print the consent URL instead of opening a browser, "
+        "so it can be pasted into a PRIVATE window -- the "
+        "only reliable way to reach a brand-account channel",
+    )
+    ap.add_argument(
+        "--reauth",
+        action="store_true",
+        help="force a fresh Google consent; use when adding a channel or after a revoked grant",
+    )
     args = ap.parse_args()
 
     if args.check or not args.channel:

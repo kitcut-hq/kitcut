@@ -25,6 +25,7 @@ entry `{"card": <spec>, "style": <style>}`; its length comes from here.
 
 Invoke as:  python scripts/checklist-card.py --spec projects/<id>/cards/checklist.json --style config/cards/checklist/window.json --list
 """
+
 import sys
 import os
 import json
@@ -40,9 +41,16 @@ import _overlay  # noqa: E402
 ROOT = _env.ROOT
 ENV = _env.ENV
 
-DEFAULT_TIMING = {"headline_at": 0.25, "first_at": 1.0, "step": 0.75,
-                  "pop": 0.28, "tick_delay": 0.18, "tick": 0.32,
-                  "cta_after": 0.5, "hold": 2.2}
+DEFAULT_TIMING = {
+    "headline_at": 0.25,
+    "first_at": 1.0,
+    "step": 0.75,
+    "pop": 0.28,
+    "tick_delay": 0.18,
+    "tick": 0.32,
+    "cta_after": 0.5,
+    "hold": 2.2,
+}
 
 
 def rgba(h, a=255):
@@ -83,7 +91,8 @@ class Checklist:
         # 1080x1920 short would otherwise get a 1.78x card twice its own width
         self.k = min(self.H / 1080.0, self.W / 1200.0)
         f = lambda key: ImageFont.truetype(  # noqa: E731
-            _overlay.repo_path(style[key]["font"]), max(6, int(round(style[key]["size"] * self.k))))
+            _overlay.repo_path(style[key]["font"]), max(6, int(round(style[key]["size"] * self.k)))
+        )
         self.f_head, self.f_item, self.f_cta = f("headline"), f("item"), f("cta")
         self.t_head, self.t_items, self.t_cta, self.total = timeline(spec, style)
         self.tm = timing(style)
@@ -110,12 +119,14 @@ class Checklist:
                 sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
                 ImageDraw.Draw(sh).rounded_rectangle(
                     [x0, y0 + 18 * self.k, x0 + pw, y0 + ph + 18 * self.k],
-                    radius=int(p["radius"] * self.k), fill=rgba(p["shadow"], int(255 * p.get("shadow_alpha", 0.18))))
+                    radius=int(p["radius"] * self.k),
+                    fill=rgba(p["shadow"], int(255 * p.get("shadow_alpha", 0.18))),
+                )
                 sh = sh.filter(ImageFilter.GaussianBlur(28 * self.k))
                 bg.alpha_composite(sh)
-            ImageDraw.Draw(bg).rounded_rectangle([x0, y0, x0 + pw, y0 + ph],
-                                                 radius=int(p["radius"] * self.k),
-                                                 fill=rgba(p["fill"]))
+            ImageDraw.Draw(bg).rounded_rectangle(
+                [x0, y0, x0 + pw, y0 + ph], radius=int(p["radius"] * self.k), fill=rgba(p["fill"])
+            )
         else:
             self.panel_box = None
         return bg
@@ -123,14 +134,19 @@ class Checklist:
     def _panel_h(self):
         st, k = self.st, self.k
         n = len(self.spec["items"])
-        h = st["pad"] * 2 + st["headline"]["size"] * 1.25 + st["gap_head"] + \
-            n * st["row"] + (st["gap_cta"] + self._cta_h() if self.spec.get("cta") else 0)
+        h = (
+            st["pad"] * 2
+            + st["headline"]["size"] * 1.25
+            + st["gap_head"]
+            + n * st["row"]
+            + (st["gap_cta"] + self._cta_h() if self.spec.get("cta") else 0)
+        )
         return h * k
 
     def _cta_h(self):
         """Height of the call to action in 1080-line units: a logo, or a line of type."""
         lg = self.st.get("cta_logo")
-        return lg["height"] if lg else self.st["cta"]["size"] * 1.4
+        return lg["height"] if (lg and self.spec.get("logo")) else self.st["cta"]["size"] * 1.4
 
     def _logo(self):
         """The brand logo, scaled to its style height, or None.
@@ -140,10 +156,11 @@ class Checklist:
         more than its domain in our font.
         """
         lg = self.st.get("cta_logo")
-        if not lg:
+        if not (lg and self.spec.get("logo")):
             return None
         if not hasattr(self, "_logo_im"):
-            im = Image.open(_overlay.repo_path(lg["file"])).convert("RGBA")
+            # the mark is the project's (spec), the size is the look's (style)
+            im = Image.open(_env.resolve(self.spec["logo"], base=_env.workspace())).convert("RGBA")
             h = int(round(lg["height"] * self.k))
             self._logo_im = im.resize((max(1, int(im.width * h / im.height)), h), Image.LANCZOS)
         return self._logo_im
@@ -155,8 +172,10 @@ class Checklist:
         widest = max([d.textlength(t, font=self.f_item) for t in self.spec["items"]] + [1])
         box = st["box"]["size"] * k
         chip = 2 * st["item_chip"]["pad"] * k if st.get("item_chip") else 0
-        block_w = max(box + st["box"]["gap"] * k + widest + chip,
-                      d.textlength(self.spec["headline"], font=self.f_head))
+        block_w = max(
+            box + st["box"]["gap"] * k + widest + chip,
+            d.textlength(self.spec["headline"], font=self.f_head),
+        )
         block_h = self._panel_h() - 2 * st["pad"] * k
         if self.panel_box:
             x0, y0, x1, y1 = self.panel_box
@@ -166,10 +185,14 @@ class Checklist:
             self.left = (self.W - block_w) / 2
             self.top = (self.H - block_h) / 2
         self.block_w = block_w
-        self.row_y = [self.top + (st["headline"]["size"] * 1.25 + st["gap_head"] + i * st["row"]) * k
-                      for i in range(n)]
-        self.cta_y = self.top + (st["headline"]["size"] * 1.25 + st["gap_head"] + n * st["row"]
-                                 + st["gap_cta"]) * k
+        self.row_y = [
+            self.top + (st["headline"]["size"] * 1.25 + st["gap_head"] + i * st["row"]) * k
+            for i in range(n)
+        ]
+        self.cta_y = (
+            self.top
+            + (st["headline"]["size"] * 1.25 + st["gap_head"] + n * st["row"] + st["gap_cta"]) * k
+        )
 
     # -- one frame -------------------------------------------------------
     def frame(self, t):
@@ -183,8 +206,14 @@ class Checklist:
         # headline: rises 24 px and fades in
         u = ease_out((t - self.t_head) / 0.45)
         if u > 0:
-            self._text(im, (self.left, self.top + (1 - u) * 24 * k), self.spec["headline"],
-                       self.f_head, st["headline"]["colour"], u)
+            self._text(
+                im,
+                (self.left, self.top + (1 - u) * 24 * k),
+                self.spec["headline"],
+                self.f_head,
+                st["headline"]["colour"],
+                u,
+            )
         box = st["box"]["size"] * k
         for i, (txt, t0) in enumerate(zip(self.spec["items"], self.t_items)):
             y = self.row_y[i]
@@ -201,15 +230,24 @@ class Checklist:
             if st["box"].get("shape") == "circle":
                 r = half
             if filled:
-                d.rounded_rectangle([cx - half, cy - half, cx + half, cy + half], radius=min(r, half),
-                                    fill=rgba(st["box"]["fill"], int(255 * a)))
+                d.rounded_rectangle(
+                    [cx - half, cy - half, cx + half, cy + half],
+                    radius=min(r, half),
+                    fill=rgba(st["box"]["fill"], int(255 * a)),
+                )
             else:
                 ea = st["box"].get("empty_alpha", 0)
-                d.rounded_rectangle([cx - half, cy - half, cx + half, cy + half], radius=min(r, half),
-                                    fill=(rgba(st["box"].get("empty", st["box"]["fill"]), int(255 * a * ea))
-                                          if ea else None),
-                                    outline=rgba(st["box"]["outline"], int(255 * a)),
-                                    width=max(2, int(st["box"]["stroke"] * k)))
+                d.rounded_rectangle(
+                    [cx - half, cy - half, cx + half, cy + half],
+                    radius=min(r, half),
+                    fill=(
+                        rgba(st["box"].get("empty", st["box"]["fill"]), int(255 * a * ea))
+                        if ea
+                        else None
+                    ),
+                    outline=rgba(st["box"]["outline"], int(255 * a)),
+                    width=max(2, int(st["box"]["stroke"] * k)),
+                )
             if filled:
                 self._tick(d, cx, cy, box, min(1.0, tick_u), st["box"]["tick"])
             # the line slides in from the left and fades
@@ -219,8 +257,14 @@ class Checklist:
                 ty = cy - self.f_item.getbbox("Hg")[3] / 2 - self.f_item.getbbox("H")[1] / 2 + 2 * k
                 if st.get("item_chip"):
                     self._chip(im, tx, cy, txt, tu)
-                self._text(im, (tx + (st["item_chip"]["pad"] * k if st.get("item_chip") else 0), ty),
-                           txt, self.f_item, st["item"]["colour"], tu)
+                self._text(
+                    im,
+                    (tx + (st["item_chip"]["pad"] * k if st.get("item_chip") else 0), ty),
+                    txt,
+                    self.f_item,
+                    st["item"]["colour"],
+                    tu,
+                )
         im.alpha_composite(shapes)
         if self.t_cta is not None:
             u = ease_out((t - self.t_cta) / 0.5)
@@ -233,15 +277,23 @@ class Checklist:
                 lay.paste(lg, (int(self.left), int(self.cta_y + (1 - u) * 16 * k)))
                 im.alpha_composite(lay)
             elif u > 0:
-                self._text(im, (self.left, self.cta_y + (1 - u) * 16 * k), self.spec["cta"],
-                           self.f_cta, st["cta"]["colour"], u)
+                self._text(
+                    im,
+                    (self.left, self.cta_y + (1 - u) * 16 * k),
+                    self.spec["cta"],
+                    self.f_cta,
+                    st["cta"]["colour"],
+                    u,
+                )
                 dot = st.get("cta_dot")
                 if dot:
                     w = ImageDraw.Draw(im).textlength(self.spec["cta"], font=self.f_cta)
                     rr = 7 * k
                     cy = self.cta_y + (1 - u) * 16 * k + self.f_cta.getbbox("H")[3] * 0.62
-                    ImageDraw.Draw(im).ellipse([self.left + w + 12 * k, cy - rr, self.left + w + 12 * k + 2 * rr, cy + rr],
-                                               fill=rgba(dot, int(255 * u)))
+                    ImageDraw.Draw(im).ellipse(
+                        [self.left + w + 12 * k, cy - rr, self.left + w + 12 * k + 2 * rr, cy + rr],
+                        fill=rgba(dot, int(255 * u)),
+                    )
         return im
 
     def _text(self, im, xy, txt, font, colour, alpha):
@@ -254,8 +306,11 @@ class Checklist:
         w = ImageDraw.Draw(im).textlength(txt, font=self.f_item) + 2 * c["pad"] * k
         h = self.st["item"]["size"] * k * 1.9
         layer = Image.new("RGBA", im.size, (0, 0, 0, 0))
-        ImageDraw.Draw(layer).rounded_rectangle([x, cy - h / 2, x + w, cy + h / 2], radius=int(h / 2),
-                                                fill=rgba(c["fill"], int(255 * u)))
+        ImageDraw.Draw(layer).rounded_rectangle(
+            [x, cy - h / 2, x + w, cy + h / 2],
+            radius=int(h / 2),
+            fill=rgba(c["fill"], int(255 * u)),
+        )
         im.alpha_composite(layer)
 
     def _tick(self, d, cx, cy, box, u, colour):
@@ -270,12 +325,20 @@ class Checklist:
         w = max(3, int(self.st["box"].get("tick_width", 5) * k))
         if run <= l1:
             f = run / l1
-            d.line([p0, (p0[0] + (p1[0] - p0[0]) * f, p0[1] + (p1[1] - p0[1]) * f)],
-                   fill=rgba(colour), width=w, joint="curve")
+            d.line(
+                [p0, (p0[0] + (p1[0] - p0[0]) * f, p0[1] + (p1[1] - p0[1]) * f)],
+                fill=rgba(colour),
+                width=w,
+                joint="curve",
+            )
         else:
             f = (run - l1) / l2
-            d.line([p0, p1, (p1[0] + (p2[0] - p1[0]) * f, p1[1] + (p2[1] - p1[1]) * f)],
-                   fill=rgba(colour), width=w, joint="curve")
+            d.line(
+                [p0, p1, (p1[0] + (p2[0] - p1[0]) * f, p1[1] + (p2[1] - p1[1]) * f)],
+                fill=rgba(colour),
+                width=w,
+                joint="curve",
+            )
 
 
 def load(spec_path, style_path):
@@ -290,10 +353,32 @@ def render_clip(spec, style, size, fps, out):
     """Every frame of the card into a clip; returns its duration in seconds."""
     card = Checklist(spec, style, size)
     n = int(math.ceil(card.total * fps))
-    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-           "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "%dx%d" % size, "-r", "%g" % fps,
-           "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", "12",
-           "-pix_fmt", "yuv420p", out]
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-s",
+        "%dx%d" % size,
+        "-r",
+        "%g" % fps,
+        "-i",
+        "-",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "medium",
+        "-crf",
+        "12",
+        "-pix_fmt",
+        "yuv420p",
+        out,
+    ]
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE, env=ENV)
     for i in range(n):
         p.stdin.write(card.frame(i / fps).convert("RGB").tobytes())
@@ -309,8 +394,13 @@ def main():
     ap.add_argument("--style", required=True, help="the look: config/cards/checklist/*.json")
     ap.add_argument("--size", default="1920x1080")
     ap.add_argument("--list", action="store_true", help="print the timeline; draw nothing")
-    ap.add_argument("--png", nargs="?", const="end", metavar="T",
-                    help="write the frame at card time T (default: the final state)")
+    ap.add_argument(
+        "--png",
+        nargs="?",
+        const="end",
+        metavar="T",
+        help="write the frame at card time T (default: the final state)",
+    )
     ap.add_argument("--sheet", action="store_true", help="a strip of frames across the animation")
     ap.add_argument("--clip", metavar="OUT", help="render the whole card as a clip")
     ap.add_argument("--fps", type=float, default=30)
@@ -320,8 +410,10 @@ def main():
     spec, style = load(args.spec, args.style)
     size = tuple(int(v) for v in args.size.lower().split("x"))
     th, ti, tc, total = timeline(spec, style)
-    tag = "%s-%s" % (os.path.splitext(os.path.basename(args.spec))[0],
-                     os.path.splitext(os.path.basename(args.style))[0])
+    tag = "%s-%s" % (
+        os.path.splitext(os.path.basename(args.spec))[0],
+        os.path.splitext(os.path.basename(args.style))[0],
+    )
     outdir = os.path.join(ROOT, "temp", "cards")
     os.makedirs(outdir, exist_ok=True)
 

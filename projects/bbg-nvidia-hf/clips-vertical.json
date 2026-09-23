@@ -1,0 +1,42 @@
+{
+  "_comment": "Vertical 9:16 build of the two picks in shortlist.json. Cut from the clean source, never from a captioned master: captions are re-rendered at vertical size after the crop so the crop cannot slice them. The handle is a placeholder: these renders are a local macOS check of the pipeline and are not published anywhere. The caption preset is bloomberg-tech-vertical, whose bottom_margin_px 816 was measured on THIS episode: clearing Bloomberg's own lower third forces crop_zoom up, which magnifies the face until nothing fits between the chin and the Shorts UI, so the card goes above the head.",
+  "source": "projects/bbg-nvidia-hf/sources/bbg-nvidia-hf.mp4",
+  "words": "projects/bbg-nvidia-hf/transcripts/bbg-nvidia-hf.words.json",
+  "outdir": "projects/bbg-nvidia-hf/outputs/shorts-vertical",
+  "prefix": "bbg-nvidia-hf-v",
+  "pad": {
+    "head": 0.15,
+    "tail": 0.35
+  },
+  "vertical": {
+    "width": 1080,
+    "height": 1920
+  },
+  "captions": {
+    "style": "config/presets/bloomberg-tech-vertical.json",
+    "samples": 24,
+    "_bottom_margin_why": "Overrides the preset's 816, which was measured on a tighter framing of this same episode (crop_zoom ~1.556-1.714 to clear Bloomberg's lower third). These clips are reframed without that zoom, so the faces sit higher and 816 put the card on the chin: 10 FAIL, worst 18% cover, clearance -9..-101 px. Swept with check-caption-space.py, which needs no encode. Read the two numbers it gives you separately: the standalone sweep measures the PLAN and said 900 cleared both clips (+58 / +48 px), while the same check run against the RENDER put clip 02 at -55 px and 3 warns. The render is the one that counts. 950 is the value that clears both on the render.",
+    "bottom_margin_px": 950
+  },
+  "handle": {
+    "text": "@kitcut",
+    "preset": "config/handles/vertical.json"
+  },
+  "clips": [
+    {
+      "id": "01-cognition-47b",
+      "title": "Cognition doubles its valuation in four months",
+      "start_text": "Cognition just raised at a $26 billion valuation in May",
+      "hook": "Cognition just raised at a $26 billion valuation in May",
+      "end_text": "So that's one of the things that's really driving a lot of interest here"
+    },
+    {
+      "id": "02-uber-micro-teams",
+      "title": "Uber cuts 3,300 roles to kill its micro-teams",
+      "start_text": "is looking to cut about 3,300 roles in its latest restructuring",
+      "hook": "is looking to cut about 3,300 roles in its latest restructuring",
+      "end_text": "make the organization simpler and faster"
+    }
+  ],
+  "tmp": "projects/bbg-nvidia-hf/temp"
+}

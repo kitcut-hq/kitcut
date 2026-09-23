@@ -1,0 +1,9 @@
+# Toolchain, not imports. Nothing in scripts/ imports any of this, so it stays
+# out of requirements.txt, which is the list check-env.py verifies by importing.
+# setup-python.ps1 does not read this file -- install it into .venv yourself:
+#   uv pip install -r requirements-dev.txt
+-r requirements.txt
+
+# Lint and format. Pinned because a lint that moves under you is a diff nobody
+# asked for. Config lives in pyproject.toml.
+ruff==0.16.6

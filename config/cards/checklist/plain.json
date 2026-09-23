@@ -1,12 +1,36 @@
 {
   "_comment": "No panel: large dark type straight on the lavender backdrop, round mint ticks. The quietest of the three -- reads like the last slide of a keynote.",
-  "background": "#ECE6FD", "glow": "#F4F1FE",
+  "background": "#ECE6FD",
+  "glow": "#F4F1FE",
   "pad": 0,
-  "headline": {"font": "fonts/Montserrat-Bold.ttf", "size": 80, "colour": "#050608"},
-  "item": {"font": "fonts/Montserrat-Medium.ttf", "size": 46, "colour": "#1B1F24"},
-  "cta": {"font": "fonts/Montserrat-Bold.ttf", "size": 36, "colour": "#050608"},
+  "headline": {
+    "font": "fonts/Montserrat-Bold.ttf",
+    "size": 80,
+    "colour": "#050608"
+  },
+  "item": {
+    "font": "fonts/Montserrat-Medium.ttf",
+    "size": 46,
+    "colour": "#1B1F24"
+  },
+  "cta": {
+    "font": "fonts/Montserrat-Bold.ttf",
+    "size": 36,
+    "colour": "#050608"
+  },
   "cta_dot": "#13BA82",
-  "box": {"shape": "circle", "size": 54, "radius": 27, "stroke": 3, "outline": "#9C94C4", "fill": "#13BA82",
-          "tick": "#FFFFFF", "tick_width": 6, "gap": 30},
-  "gap_head": 60, "row": 98, "gap_cta": 44
+  "box": {
+    "shape": "circle",
+    "size": 54,
+    "radius": 27,
+    "stroke": 3,
+    "outline": "#9C94C4",
+    "fill": "#13BA82",
+    "tick": "#FFFFFF",
+    "tick_width": 6,
+    "gap": 30
+  },
+  "gap_head": 60,
+  "row": 98,
+  "gap_cta": 44
 }
