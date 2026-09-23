@@ -56,3 +56,10 @@ requests
 google-api-python-client
 google-auth-oauthlib
 rapidocr-onnxruntime==1.2.3   # OCR for scan-pii.py and render-gate.py; CPU, no torch
+
+# --- documents -----------------------------------------------------------
+# Reading the PDFs a product video is ABOUT -- the form's field count and the
+# data sheets' contents are what a script is written from, and guessing them
+# is how a video ends up claiming a number nobody measured. bpo-realtor's
+# "534 fields" came from here.
+pypdf
