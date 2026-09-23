@@ -1,0 +1,10 @@
+{
+  "_comment": "The voice-over for the whole BPO film, as ONE clip over the picture-only render. The film has no speech of its own, so every slot comes from vo/film.json (--script), timed against the picture.",
+  "source": "projects/bpo-realtor/temp/picture.mp4",
+  "outdir": "projects/bpo-realtor/outputs/dub",
+  "prefix": "bpo-realtor",
+  "tmp": "projects/bpo-realtor/temp",
+  "clips": [
+    {"id": "film", "title": "BPO film voice-over", "start": 0.0, "end": 155.2}
+  ]
+}

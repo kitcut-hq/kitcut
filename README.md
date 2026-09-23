@@ -1314,6 +1314,26 @@ matching and brightness correlation all failed to pin the phone to take 5
 (z ≤ 3.6 and mutually inconsistent). A 1.5 s cutaway of a click does not need
 sync, but it must not be presented as the same click.
 
+**Voice, captions and music in the same pass.** A silent film gets its voice
+from `dub-clips.py --script` run over the picture-only render. Use one clip
+spanning the film, with no `words` in its manifest: `--script` no longer needs
+a source transcript, and a dub still refuses without one. `edl-cut.py` then reads:
+
+```json
+"audio":    {"voice": "<vo.wav>", "music": "<track or null>", "music_db": -22, "lufs": -14},
+"captions": {"words": "<vo.words.json>", "style": "config/presets/instafill-band-dark.json",
+             "display": {"five hundred and thirty-four": "534"}}
+```
+
+The music loops, fades in and out, and ducks under the voice through a
+sidechain compressor keyed on the voice. The mix is loudness-normalised, and a
+silent result is refused. Captions come from the voice-over's own word timings,
+not from ASR over the film. `display` rewrites spoken phrases into how they
+should read ("one minute and fifty seconds" becomes 1:50) and keeps the timing.
+Transcribe the voice back and diff it against the script before trusting it.
+On bpo-realtor every difference was number formatting, apart from one
+"and"→"in" that ElevenLabs actually said.
+
 ## Tightening one recording that is already composited
 
 `screencast-cut.py` needs two tapes. Most screen recorders hand you one — screen,

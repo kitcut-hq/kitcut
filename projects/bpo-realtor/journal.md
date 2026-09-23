@@ -172,3 +172,28 @@ looks: instafill (existing, sits on the window edge), instafill-band-light,
 instafill-band-dark (both in the lavender band under the window).
 
 **Music:** proposed only -- nothing downloaded or generated.
+- 16:29 render scripts/edl-cut.py -> projects/bpo-realtor/temp/picture.mp4 (--manifest projects/bpo-realtor/edit.json --out projects/bpo-realtor/temp/picture.mp4)
+- 16:32 dub scripts/dub-clips.py -> projects/bpo-realtor/outputs/dub/bpo-realtor-film.vo.wav (--manifest projects/bpo-realtor/vo.json --only film --script projects/bpo-realtor/vo/film.json --tts elevenlabs --voice brian --tag vo --outdir projects/bpo-realtor/outputs/dub) -- sync 40.7%, elevenlabs/nPczCjzI2devNBz1zQrb
+- 16:43 render scripts/edl-cut.py -> projects/bpo-realtor/outputs/bpo-realtor.mp4 (--manifest projects/bpo-realtor/edit.json)
+- 16:47 render scripts/edl-cut.py -> projects/bpo-realtor/outputs/bpo-realtor.mp4 (--manifest projects/bpo-realtor/edit.json)
+
+### Session note -- the film: end card, voice, captions (music pending)
+
+**Chosen by the user:** end card A (`window`) with the Instafill logo in place
+of the typed URL; captions C (`instafill-band-dark`); music 1 (YouTube Audio
+Library); voice-over text as drafted.
+
+**outputs/bpo-realtor.mp4** (2:35.2): the picture from review 2, the checklist
+card at the end (logo: config/cards/brands/instafill-logo.png), the ElevenLabs
+voice-over (brian, vo/film.json, every line `natural`), captions built from the
+voice-over's own words with `display` putting numbers in written form
+(534, $392,000, 1:50, instafill.ai). Mix at -13.9 LUFS integrated.
+
+Verified by transcribing the voice back: every difference is number formatting,
+except ElevenLabs said "in section three" for "and section three" (harmless).
+
+**Music is the one open item.** The YouTube Audio Library needs the user's
+Studio login. When the track is in `projects/bpo-realtor/audio/`, set
+`audio.music` in edit.json and re-render: loop, fades and ducking are automatic.
+Tooling gaps closed this session: dub-clips --script without a transcript;
+edl-cut audio/captions/display; checklist-card logo.

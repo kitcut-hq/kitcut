@@ -122,8 +122,29 @@ class Checklist:
         st, k = self.st, self.k
         n = len(self.spec["items"])
         h = st["pad"] * 2 + st["headline"]["size"] * 1.25 + st["gap_head"] + \
-            n * st["row"] + (st["gap_cta"] + st["cta"]["size"] * 1.4 if self.spec.get("cta") else 0)
+            n * st["row"] + (st["gap_cta"] + self._cta_h() if self.spec.get("cta") else 0)
         return h * k
+
+    def _cta_h(self):
+        """Height of the call to action in 1080-line units: a logo, or a line of type."""
+        lg = self.st.get("cta_logo")
+        return lg["height"] if lg else self.st["cta"]["size"] * 1.4
+
+    def _logo(self):
+        """The brand logo, scaled to its style height, or None.
+
+        A logo replaces the typed URL when the style names one: the end card is
+        the last frame of the film, and a company's own mark there is worth
+        more than its domain in our font.
+        """
+        lg = self.st.get("cta_logo")
+        if not lg:
+            return None
+        if not hasattr(self, "_logo_im"):
+            im = Image.open(_overlay.repo_path(lg["file"])).convert("RGBA")
+            h = int(round(lg["height"] * self.k))
+            self._logo_im = im.resize((max(1, int(im.width * h / im.height)), h), Image.LANCZOS)
+        return self._logo_im
 
     def _layout(self):
         st, k = self.st, self.k
@@ -201,7 +222,15 @@ class Checklist:
         im.alpha_composite(shapes)
         if self.t_cta is not None:
             u = ease_out((t - self.t_cta) / 0.5)
-            if u > 0:
+            logo = self._logo()
+            if u > 0 and logo is not None:
+                lay = Image.new("RGBA", im.size, (0, 0, 0, 0))
+                a = logo.getchannel("A").point(lambda v: int(v * u))
+                lg = logo.copy()
+                lg.putalpha(a)
+                lay.paste(lg, (int(self.left), int(self.cta_y + (1 - u) * 16 * k)))
+                im.alpha_composite(lay)
+            elif u > 0:
                 self._text(im, (self.left, self.cta_y + (1 - u) * 16 * k), self.spec["cta"],
                            self.f_cta, st["cta"]["colour"], u)
                 dot = st.get("cta_dot")

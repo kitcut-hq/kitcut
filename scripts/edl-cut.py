@@ -704,7 +704,8 @@ def fit(cw, ch, bg):
             % (cw, ch, cw, ch, bg.lstrip("#")))
 
 
-def build(segs, canvas, fps, follows, zooms, card_clip=None, card_xy=None, card_g0=0):
+def build(segs, canvas, fps, follows, zooms, card_clip=None, card_xy=None, card_g0=0,
+          captions=None, audio=None):
     cw, ch = canvas
     inputs, parts = Inputs(), []
     for k, s in enumerate(segs):
@@ -742,7 +743,42 @@ def build(segs, canvas, fps, follows, zooms, card_clip=None, card_xy=None, card_
         parts.append("[film][card]overlay=%d:%d:eof_action=pass:format=auto,"
                      "format=yuv420p[vout]" % card_xy)
         out = "vout"
-    return inputs.args, ";".join(parts), out
+    if captions:
+        # after the counter card, so a caption is never drawn under it; the
+        # path is repo-relative because ffmpeg runs from ROOT and a Windows
+        # drive letter's colon breaks the filter's own option parser
+        parts.append("[%s]subtitles='%s':fontsdir='fonts'[vcap]" % (out, captions))
+        out = "vcap"
+    aout = None
+    if audio:
+        rt = (segs[-1]["f0"] + segs[-1]["n"]) / fps
+        fmt_a = "aformat=sample_rates=48000:channel_layouts=stereo"
+        vi = inputs.add("-i", audio["voice"])
+        parts.append("[%d:a]%s,volume=%.1fdB,apad,atrim=0:%.4f[vo]"
+                     % (vi, fmt_a, float(audio.get("voice_db", 0)), rt))
+        if audio.get("music"):
+            mi = inputs.add("-stream_loop", "-1", "-i", audio["music"])
+            fade_out = float(audio.get("music_fade_out", 3.0))
+            parts.append("[%d:a]%s,atrim=0:%.4f,volume=%.1fdB,afade=t=in:d=%.2f,"
+                         "afade=t=out:st=%.4f:d=%.2f[mu]"
+                         % (mi, fmt_a, rt, float(audio.get("music_db", -20)),
+                            float(audio.get("music_fade_in", 1.5)),
+                            max(0.0, rt - fade_out), fade_out))
+            # the voice keys a compressor on the music: the bed drops under
+            # every line and comes back up in the pauses, by itself
+            d = audio.get("duck") or {}
+            parts.append("[vo]asplit[vo1][vok]")
+            parts.append("[mu][vok]sidechaincompress=threshold=%g:ratio=%g:attack=%g:release=%g[duck]"
+                         % (d.get("threshold", 0.03), d.get("ratio", 8), d.get("attack", 15),
+                            d.get("release", 400)))
+            parts.append("[vo1][duck]amix=inputs=2:normalize=0:duration=first[mix]")
+            src = "mix"
+        else:
+            src = "vo"
+        parts.append("[%s]loudnorm=I=%g:TP=-1.5:LRA=11,aresample=48000,atrim=0:%.4f[aout]"
+                     % (src, float(audio.get("lufs", -14)), rt))
+        aout = "aout"
+    return inputs.args, ";".join(parts), out, aout
 
 
 # ---------------------------------------------------------------- modes
@@ -785,7 +821,7 @@ def one_frame(segs, canvas, fps, t, follows, zooms, cards, out_png):
     st = src_time(s, g, fps)
     mini = dict(s, **{"from": st, "to": min(s["src"]["dur"], st + 2.0 * s["speed"] / fps),
                       "f0": g, "n": 1})
-    inputs, graph, out = build([mini], canvas, fps, follows, zooms)
+    inputs, graph, out, _ = build([mini], canvas, fps, follows, zooms)
     tmp = out_png + ".base.png"
     r = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y"] + inputs
                        + ["-filter_complex", graph, "-map", "[%s]" % out,
@@ -801,6 +837,84 @@ def one_frame(segs, canvas, fps, t, follows, zooms, cards, out_png):
     im.convert("RGB").save(out_png)
     print("  film %s = %s %s (x%g)  ->  %s"
           % (fmt(t), s["src"]["key"], fmt(st), s["speed"], rel(out_png)))
+
+
+def caption_ass(spec, canvas, tmpdir):
+    """Build the ASS for the manifest's captions (words + style) with the
+    repo's own caption builder, scaled to the canvas; returns a repo-relative
+    path for ffmpeg.
+
+    The words are the VOICE-OVER's (dub-clips.py writes them in film time), not
+    an ASR pass over the film: a silent screencast has nothing to transcribe,
+    and the TTS's own timings are exact where a transcription is a guess.
+    """
+    out = os.path.join(tmpdir, "captions.ass")
+    words = _env.resolve(spec["words"], base=_env.workspace())
+    if spec.get("display"):
+        words = display_words(words, spec["display"], os.path.join(tmpdir, "captions.words.json"))
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "build-captions-ass.py"),
+                        "--words", words,
+                        "--style", _env.resolve(spec["style"]),
+                        "--out", out, "--scale-to", str(canvas[0]), str(canvas[1])],
+                       env=ENV, capture_output=True, text=True)
+    if r.returncode:
+        sys.exit("caption build failed:\n" + (r.stderr or r.stdout)[-2000:])
+    return rel(out)
+
+
+def _bare(w):
+    import re
+    return re.sub(r"[^\w'-]", "", w.lower())
+
+
+def display_words(path, table, out):
+    """Rewrite spoken phrases into how they should READ, keeping the timing.
+
+    A voice says "five hundred and thirty-four"; the picture and the viewer
+    both mean 534, and a caption that spells it out is five words to read
+    where one would do. Each `display` entry maps a spoken phrase to its
+    written form; the matched words collapse into one, from the first word's
+    start to the last word's end, and keep the last word's punctuation.
+    """
+    import re
+    doc = json.load(open(path, encoding="utf-8"))
+    words = doc["words"] if isinstance(doc, dict) else doc
+    keyed = sorted(((k.lower().split(), v) for k, v in table.items() if not k.startswith("_")),
+                   key=lambda kv: -len(kv[0]))
+    res, i, hits = [], 0, 0
+    while i < len(words):
+        for spoken, written in keyed:
+            n = len(spoken)
+            if [_bare(w["text"]) for w in words[i:i + n]] == [_bare(x) for x in spoken]:
+                tail = re.sub(r"^.*?([^\w'-]*)$", r"\1", words[i + n - 1]["text"].strip())
+                res.append(dict(words[i], text=written + tail, end=words[i + n - 1]["end"]))
+                i += n
+                hits += 1
+                break
+        else:
+            res.append(words[i])
+            i += 1
+    if isinstance(doc, dict):
+        doc = dict(doc, words=res)
+    else:
+        doc = res
+    json.dump(doc, open(out, "w", encoding="utf-8"), ensure_ascii=False)
+    print("  captions: %d spoken phrase(s) shown in written form" % hits)
+    return out
+
+
+def audio_peak(path):
+    """Peak level of a file's audio in dB, or None if it has none."""
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", path, "-vn",
+                        "-af", "volumedetect", "-f", "null", "-"],
+                       env=ENV, capture_output=True, text=True)
+    for line in (r.stderr or "").splitlines():
+        if "max_volume:" in line:
+            try:
+                return float(line.split("max_volume:")[1].split("dB")[0])
+            except ValueError:
+                return None
+    return None
 
 
 def main():
@@ -854,20 +968,33 @@ def main():
         clip = os.path.join(tmpdir, "counter.mov")
         write_card_video(frames, card, fps, clip)
         g0 = cps[0][1]["g0"]
-    inputs, graph, out = build(segs, canvas, fps, follows, zooms, clip, xy, g0)
+    capspec = m.get("captions")
+    ass = caption_ass(capspec, canvas, tmpdir) if capspec else None
+    audio = m.get("audio")
+    if audio:
+        audio = dict(audio, voice=_env.resolve(audio["voice"], base=_env.workspace()),
+                     music=(_env.resolve(audio["music"], base=_env.workspace())
+                            if audio.get("music") else None))
+        for k in ("voice", "music"):
+            if audio.get(k) and not os.path.exists(audio[k]):
+                sys.exit("audio.%s: %s does not exist" % (k, audio[k]))
+    inputs, graph, out, aout = build(segs, canvas, fps, follows, zooms, clip, xy, g0,
+                                     captions=ass, audio=audio)
     render = _encode.resolve(dict(DEFAULT_RENDER, **(m.get("render") or {})))
     runtime = total / fps
     tmp = dst + ".part.mp4"
     prog = _progress.begin(mid, runtime, rel(dst))
     cmd = (["ffmpeg", "-hide_banner", "-nostats", "-loglevel", "warning",
             "-progress", prog] + inputs
-           + ["-filter_complex", graph, "-map", "[%s]" % out, "-an", "-r", "%g" % fps]
+           + ["-filter_complex", graph, "-map", "[%s]" % out]
+           + (["-map", "[%s]" % aout] if aout else ["-an"]) + ["-r", "%g" % fps]
            + _encode.video_args(render)
+           + (_encode.audio_args(render) if aout else [])
            + ["-movflags", "+faststart", "-y", tmp])
     print("\n  rendering %s  (%s, %d segments, %s)"
           % (rel(dst), fmt(runtime), len(segs), _encode.describe(render)))
     try:
-        p = subprocess.run(cmd, env=ENV, capture_output=True, text=True)
+        p = subprocess.run(cmd, env=ENV, capture_output=True, text=True, cwd=ROOT)
     finally:
         _progress.end(mid)
     if p.returncode:
@@ -877,6 +1004,10 @@ def main():
     if abs(got - runtime) > 2.0 / fps + 0.05:
         sys.exit("output is %.3fs, the EDL predicted %.3fs; %s left in place"
                  % (got, runtime, tmp))
+    if aout:
+        peak = audio_peak(tmp)
+        if peak is None or peak < -60:
+            sys.exit("the rendered audio is silent (peak %s dB); %s left in place" % (peak, tmp))
     shutil.move(tmp, dst)
     print("  %s  %s  %.1f MB" % (rel(dst), fmt(got), os.path.getsize(dst) / 1e6))
 
@@ -896,6 +1027,15 @@ def main():
     for z in zooms:
         burned.append("zoom %.2fx film %s-%s: %s" % (1 / z["rw"], fmt(z["a"]), fmt(z["b"]),
                                                      z["why"]))
+    if capspec:
+        burned.append("captions %s from %s" % (capspec["style"], capspec["words"]))
+    if audio:
+        a_ = m["audio"]
+        burned.append("audio: voice %s%s, loudnorm %s LUFS"
+                      % (a_["voice"],
+                         (" + music %s at %s dB, ducked under the voice"
+                          % (a_["music"], a_.get("music_db", -20))) if a_.get("music")
+                         else ", no music", a_.get("lufs", -14)))
     for sp, cp in cps:
         burned.append("elapsed counter '%s' film %s-%s, stops at %s (source %s->%s)"
                       % (sp.get("label"), fmt(cp["g0"] / fps), fmt(cp["g1"] / fps),

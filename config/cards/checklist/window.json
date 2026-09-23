@@ -1,13 +1,48 @@
 {
   "_comment": "A white window on the recorder's lavender backdrop -- the same rounded, shadowed frame the demo was filmed in, so the end card reads as one more screen of the same film. Square ticks in the Instafill mint.",
-  "background": "#ECE6FD", "glow": "#F4F1FE",
-  "panel": {"w": 1080, "radius": 26, "fill": "#FFFFFF", "shadow": "#3A2F6B", "shadow_alpha": 0.16},
-  "align": "left", "pad": 72,
-  "headline": {"font": "fonts/Montserrat-Bold.ttf", "size": 60, "colour": "#050608"},
-  "item": {"font": "fonts/Montserrat-Medium.ttf", "size": 38, "colour": "#1B1F24"},
-  "cta": {"font": "fonts/Montserrat-Bold.ttf", "size": 32, "colour": "#050608"},
+  "background": "#ECE6FD",
+  "glow": "#F4F1FE",
+  "panel": {
+    "w": 1080,
+    "radius": 26,
+    "fill": "#FFFFFF",
+    "shadow": "#3A2F6B",
+    "shadow_alpha": 0.16
+  },
+  "align": "left",
+  "pad": 72,
+  "headline": {
+    "font": "fonts/Montserrat-Bold.ttf",
+    "size": 60,
+    "colour": "#050608"
+  },
+  "item": {
+    "font": "fonts/Montserrat-Medium.ttf",
+    "size": 38,
+    "colour": "#1B1F24"
+  },
+  "cta": {
+    "font": "fonts/Montserrat-Bold.ttf",
+    "size": 32,
+    "colour": "#050608"
+  },
   "cta_dot": "#13BA82",
-  "box": {"size": 46, "radius": 10, "stroke": 3, "outline": "#C9CDD6", "fill": "#13BA82",
-          "tick": "#FFFFFF", "tick_width": 5, "gap": 28},
-  "gap_head": 44, "row": 82, "gap_cta": 36
+  "box": {
+    "size": 46,
+    "radius": 10,
+    "stroke": 3,
+    "outline": "#C9CDD6",
+    "fill": "#13BA82",
+    "tick": "#FFFFFF",
+    "tick_width": 5,
+    "gap": 28
+  },
+  "gap_head": 44,
+  "row": 82,
+  "gap_cta": 48,
+  "cta_logo": {
+    "file": "config/cards/brands/instafill-logo.png",
+    "height": 54,
+    "_why": "the company's own mark on the last frame instead of the URL in our font (user's call, 2026-09-23)"
+  }
 }
