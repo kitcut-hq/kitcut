@@ -1,5 +1,5 @@
 {
-  "_comment": "Short S1 '534 fields in 1:50', 1080x1920, cut from the same takes as the film. Every crop is 5:4 so the picture box (1080x864, y 528-1392) never changes shape; the title card sits above it, the counter and captions below. Voice: vo/s1.json.",
+  "_comment": "Short S1 '534 fields in 1:50', 1080x1920, cut from the same takes as the film. Each crop holds a WHOLE element (the grid, the file list, the progress panel, the form, a whole column block) -- review 1 used one 5:4 crop everywhere and cut columns and words in half (user: 'some screens don't fit'). The picture box therefore changes height between shots; it stays centred between the title band and the captions. Voice: vo/s1.json.",
   "id": "bpo-realtor",
   "output": "projects/bpo-realtor/outputs/shorts/bpo-realtor-s1.mp4",
   "canvas": [
@@ -37,8 +37,8 @@
       "to": 20.3,
       "crop": [
         330,
-        300,
-        900,
+        340,
+        1240,
         720
       ],
       "_why": "the blank comparable-sales grid"
@@ -48,10 +48,10 @@
       "from": 40.8,
       "to": 44.0,
       "crop": [
-        985,
-        344,
-        780,
-        624
+        975,
+        290,
+        815,
+        560
       ],
       "_why": "the eight documents listed (framed below the yellow 8-files banner)"
     },
@@ -60,10 +60,10 @@
       "from": 55.6,
       "to": 57.9,
       "crop": [
-        985,
-        344,
-        780,
-        624
+        975,
+        290,
+        815,
+        560
       ],
       "_why": "to Submit"
     },
@@ -84,10 +84,10 @@
       "from": 57.9,
       "to": 61.3,
       "crop": [
-        985,
-        344,
-        780,
-        624
+        975,
+        290,
+        815,
+        560
       ],
       "_why": "Submit fires at 58.00: the counter starts; same framing as the Submit shot, which keeps the yellow 8-files banner (y 280-335) out"
     },
@@ -98,9 +98,9 @@
       "speed": 12,
       "crop": [
         960,
-        250,
+        380,
         830,
-        664
+        440
       ],
       "_why": "the fill at 12x under the counter"
     },
@@ -110,9 +110,9 @@
       "to": 170.2,
       "crop": [
         960,
-        250,
+        380,
         830,
-        664
+        440
       ],
       "_why": "done: the counter stops at 1:50"
     },
@@ -122,9 +122,9 @@
       "to": 183.6,
       "crop": [
         125,
-        250,
+        222,
         820,
-        656
+        746
       ],
       "_why": "the filled form appears"
     },
@@ -134,23 +134,23 @@
       "to": 27.5,
       "crop": [
         205,
-        320,
-        800,
+        235,
+        1140,
         640
       ],
-      "_why": "the filled grid: subject and comparable 1, $392,000"
+      "_why": "the filled grid: subject, comparable 1 ($392,000) and comparable 2, ending exactly on the column border"
     },
     {
       "src": "take5",
-      "from": 29.2,
-      "to": 32.6,
+      "from": 30.6,
+      "to": 32.4,
       "crop": [
+        960,
+        290,
         830,
-        160,
-        900,
-        720
+        560
       ],
-      "_why": "the same $392,000 on the listing"
+      "_why": "the same $392,000 on the listing -- Cursorful's steady zoom, framed on 'Residential $392,000' and the details column so no word is cut (the unzoomed listing is on screen for only ~1 s)"
     },
     {
       "card": "projects/bpo-realtor/cards/checklist.json",
@@ -192,7 +192,7 @@
     {
       "card": "projects/bpo-realtor/cards/short-title.json",
       "at": 26.0,
-      "dur": 8.6,
+      "dur": 7.1,
       "layout": {
         "corner": "top",
         "margin_y_px": 40,
@@ -225,8 +225,7 @@
       "five hundred and thirty-four": "534",
       "one minute fifty": "1:50",
       "three ninety-two": "$392,000",
-      "instafill dot ai": "instafill.ai",
-      "twelve times": "12x"
+      "instafill dot ai": "instafill.ai"
     }
   }
 }

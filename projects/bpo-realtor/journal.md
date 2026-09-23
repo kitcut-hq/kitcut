@@ -254,3 +254,18 @@ band; 5:4 picture box y 528-1392 (every crop 5:4); captions below. During the
 fill the counter takes the title band (the title steps aside 11.0-26.0) --
 under the picture it collided with the captions. The 57.9 segment reuses the
 Submit crop to keep the yellow 8-files banner out. End card: window-vertical.
+- 18:51 render scripts/edl-cut.py -> projects/bpo-realtor/temp/s1-picture.mp4 (--manifest projects/bpo-realtor/shorts/s1.json --out projects/bpo-realtor/temp/s1-picture.mp4)
+- 18:51 dub scripts/dub-clips.py -> projects/bpo-realtor/outputs/dub/bpo-realtor-s1.vo.wav (--manifest projects/bpo-realtor/vo-s1.json --only s1 --script projects/bpo-realtor/vo/s1.json --tts elevenlabs --voice brian --tag vo --outdir projects/bpo-realtor/outputs/dub --force) -- sync 60.3%, elevenlabs/nPczCjzI2devNBz1zQrb
+- 18:53 render scripts/edl-cut.py -> projects/bpo-realtor/outputs/shorts/bpo-realtor-s1.mp4 (--manifest projects/bpo-realtor/shorts/s1.json)
+
+### Session note -- short S1, review 2
+
+User: no "12x faster" talk in a short -- it is not what a viewer needs in the
+seconds they give it; and some screens did not fit. Changes: the line is now
+"Prices, dates, square footage, the repair budget. Each goes into its own
+cell."; the counter's speed chip is off for the vertical style
+(`speed_chip: false`); every crop now holds a whole element (whole grid, whole
+file list with act1, the whole form heading, grid ending on the comp-2 border,
+the listing's details column with no cut word) instead of one 5:4 crop cutting
+columns. Cost: the picture box changes height between shots and the widest
+shots (blank grid, filled grid) are smaller. Runtime 0:37.8.

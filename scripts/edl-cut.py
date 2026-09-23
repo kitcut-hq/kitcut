@@ -306,7 +306,7 @@ class Card:
                        font=self.f_dig, fill=dcol)
                 x += self.cell
         # the speed chip: why the digits are racing
-        if not done and speed > 1.01:
+        if not done and speed > 1.01 and st.get("speed_chip", True):
             label = "%g×" % round(speed, 1)
             tw = d.textlength(label, font=self.f_chip)
             th = self.f_chip.getbbox("0")[3] - self.f_chip.getbbox("0")[1]

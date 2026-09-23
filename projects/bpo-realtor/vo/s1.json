@@ -1,12 +1,42 @@
 [
-  {"t": 0.3, "text": "A Broker Price Opinion. Five hundred and thirty-four fields."},
-  {"t": 4.5, "text": "The agent already has the documents. All eight go in."},
-  {"t": 9.9, "text": "Submit."},
-  {"t": 11.6, "text": "The AI reads every document and fills every field."},
-  {"t": 15.4, "text": "The clock is real time. The video runs twelve times faster."},
-  {"t": 23.6, "text": "One minute fifty."},
-  {"t": 25.1, "text": "Every field, filled."},
-  {"t": 27.6, "text": "Comparable one sold for three ninety-two."},
-  {"t": 31.5, "text": "Same number as the listing."},
-  {"t": 35.6, "text": "Instafill dot ai."}
+  {
+    "t": 0.3,
+    "text": "A Broker Price Opinion. Five hundred and thirty-four fields."
+  },
+  {
+    "t": 4.5,
+    "text": "The agent already has the documents. All eight go in."
+  },
+  {
+    "t": 9.9,
+    "text": "Submit."
+  },
+  {
+    "t": 11.6,
+    "text": "The AI reads every document and fills every field."
+  },
+  {
+    "t": 15.4,
+    "text": "Prices, dates, square footage, the repair budget. Each goes into its own cell."
+  },
+  {
+    "t": 23.6,
+    "text": "One minute fifty."
+  },
+  {
+    "t": 25.1,
+    "text": "Every field, filled."
+  },
+  {
+    "t": 27.6,
+    "text": "Comparable one sold for three ninety-two."
+  },
+  {
+    "t": 31.5,
+    "text": "Same number as the listing."
+  },
+  {
+    "t": 35.6,
+    "text": "Instafill dot ai."
+  }
 ]

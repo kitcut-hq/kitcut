@@ -36,5 +36,7 @@
   "done": "#22c55e",
   "pulse_hz": 1.0,
   "fade": 0.3,
-  "hold_after": 2.0
+  "hold_after": 2.0,
+  "speed_chip": false,
+  "_speed_chip_why": "no '12x' chip on a short: how fast the footage runs is not what a viewer needs in the seconds they give it (user, 2026-09-23)"
 }
