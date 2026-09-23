@@ -1219,6 +1219,64 @@ track. A stutter or a missed PAN otherwise costs an encode to discover.
 `-an`, deliberately. The sources are silent, and the voice-over is recorded
 against the finished cut; muxing a silent AAC track just invites a later pass to
 mix onto it and produce nothing.
+
+## A film cut by hand from a few takes, with an honest clock over the wait
+
+`screen-cut.py` chooses what to keep from motion. That is right for an hour of
+capture and wrong for five takes somebody has already watched: the decisions
+are editorial ("the second download is the better one", "two seconds of that
+hover, not fifteen"), and a motion metric cannot make them. On `bpo-realtor` it
+called the whole two-minute fill "still", because a progress bar moves below any
+threshold that also ignores cursor jitter. `edl-cut.py` takes the decisions as
+data: an edit decision list in film order, one `_why` per line.
+
+```powershell
+python scripts/edl-cut.py --manifest projects/<id>/edit.json --list          # EDL, runtime, counter span
+python scripts/edl-cut.py --manifest projects/<id>/edit.json --frame 1:33    # one finished frame, card included
+python scripts/edl-cut.py --manifest projects/<id>/edit.json
+```
+
+```json
+"sources": {"take3": {"path": "...", "bg": "#ece6fd",
+                      "paint": [{"rect": [x, y, w, h], "color": "#d3e1f8"}],
+                      "blur":  [{"rect": [x, y, w, h], "when": [168.8, 190.0]}]}},
+"edl": [{"src": "take3", "from": 61.3, "to": 168.8, "speed": 10, "_why": "the fill"}],
+"counters": [{"src": "take3", "start": 58.0, "end": 168.88,
+              "label": "AI filling the form", "done_label": "Form filled"}]
+```
+
+**The counter runs on source time, not film time.** Every film frame is mapped
+back through the EDL to the source instant it shows, and the card reads
+(that instant − `start`). So it races under a 10x segment, crawls at 1x, jumps
+honestly across anything cut from inside its span (`--list` says how much), and
+lands on the true interval at the frame the footage reaches `end`, whatever
+speeds you choose. Measure `start`/`end` to the frame off the source (a crop's
+mean brightness across a 1/60 s scan finds a click or a message appearing).
+A counter whose start or end is not in the film is refused: it would either
+never appear or freeze mid-count.
+
+**If the app prints its own duration, decide which clock you are showing.**
+Instafill writes "processed in 1 minute and 28 seconds", its server's interval;
+Submit to that message on screen is 1:50. Two different numbers side by side
+read as a mistake, so the manifest blurs the app's line (`blur`, source time)
+and the card shows click-to-result, which is what a user waits.
+
+The card is drawn by Pillow, one PNG per distinct state, and piped into a short
+PNG-in-MOV clip with alpha that is overlaid inside the film's one encode.
+Montserrat's figures are proportional, so each digit gets a fixed cell sized to
+the widest figure. Without that, the clock shifts sideways every second. A
+`▶▶ 10×` chip shows while the footage is sped up, so the viewer knows why the
+digits are racing. Style is `config/overlays/elapsed-counter.json`.
+
+`paint` fills a source rect with a flat colour. Use it for browser chrome: tab
+titles and a `C:/Users/<name>/...` path, painted over in the chrome's own
+sampled colours so the Cursorful window keeps its shape. A crop would lose that
+framing and not match the takes that have no chrome. Sources of different
+heights are padded to the canvas with `bg`, sampled off the frame edge, so no
+seam shows. Segment lengths are whole frames, and every film offset is a sum of
+them, so the card and the picture cannot drift apart across segments. The
+render asserts its duration against that sum.
+
 ## Tightening one recording that is already composited
 
 `screencast-cut.py` needs two tapes. Most screen recorders hand you one — screen,

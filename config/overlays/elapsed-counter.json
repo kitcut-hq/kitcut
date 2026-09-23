@@ -1,0 +1,18 @@
+{
+  "_comment": "The elapsed-time card edl-cut.py draws over a sped-up wait. Sizes are for a 1080-line canvas and scale with it. The value is computed from SOURCE time, frame by frame, so it stays true however fast the footage under it runs.",
+  "corner": "bottom-right",
+  "margin": [40, 20],
+  "card": {"w": 340, "h": 112, "radius": 20, "fill": "#111318", "alpha": 0.93,
+           "border": "#2b3140"},
+  "pad": 24,
+  "label": {"font": "fonts/Montserrat-Medium.ttf", "size": 15, "tracking": 1.8,
+            "color": "#9aa3b5"},
+  "digits": {"font": "fonts/Montserrat-Bold.ttf", "size": 54, "color": "#ffffff"},
+  "chip": {"font": "fonts/Montserrat-Bold.ttf", "size": 17, "fill": "#2563eb",
+           "color": "#ffffff"},
+  "accent": "#3b82f6",
+  "done": "#22c55e",
+  "pulse_hz": 1.0,
+  "fade": 0.3,
+  "hold_after": 3.0
+}

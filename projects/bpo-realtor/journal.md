@@ -42,3 +42,78 @@ on the table is to record SILENT -- clicks only, no talking -- and write the
 narration afterwards as an ElevenLabs voice-over. That removes the accented,
 halting live take that made `flatten-pdf` need a voice-over anyway, and it
 makes the recording itself far easier: no retakes for stumbles.
+
+### Session note -- sources arrived, inventoried
+
+Five files, not six: takes 3 and 4 were recorded as one Cursorful file,
+`take3-upload-take4-fill.mp4` (200 s). Not a problem -- the takes are split by
+content, not by file; the boundary is the Submit click. Take 5 is named
+`take5-results.mp4` (plan said `result`); names are not load-bearing.
+
+**Screen size changed mid-session:** take1/take2 are 1920x1064, take3-4/take5
+are 1920x968 (all 60 fps, no audio track). The cut has to pad or scale onto one
+canvas -- do not assume one size.
+
+**The phone did not run continuously.** `phone.mp4` is 5:49, 1920x1080 30 fps,
+creation_time 13:55:59Z; the screen takes are stamped 13:18Z..14:01Z. By the
+stamps (not yet proven by sync) it covers only the ~4 minutes before take 5 and
+take 5 itself -- i.e. cutaway #2 (result) exists, cutaway #1 (Submit, take 3)
+does not. Framing is good: hands + mouse, laptop screen at the bottom edge and
+unreadable. The last frames of take3-4 are black (recorder tail) -- trim.
+
+### Session note -- every take read frame by frame (sheets in temp/inspect/)
+
+**The one real duplicate: Download -> open PDF is recorded twice.** End of
+take3-4 (3:06-3:20, with a black frame at 3:15) and start of take 5
+(0:04-0:12). Keep take 5's -- it runs straight on into the walkthrough.
+take3-4 2:49-3:01 is 12 s of "File is loading" after the fill: cut.
+
+**Fill timing, measured (take3-4 source time):** Submit clicked 0:58.1;
+"Filling out form" screen 1:01.3; progress bar sits near 0 % to ~1:25, stalls
+~24 % 1:48-2:20; "processed in 1 minute and 28 seconds" text appears 2:48.5;
+filled form visible 3:01.8. Click-to-result on screen = **110 s**, the app
+says **88 s** -- no visible event at 2:48.5-88 s, so the app's number is a
+server-side interval. A counter must not sit next to that text disagreeing
+without a decision about which clock it shows.
+
+**Content problems no cut fixes:**
+- take 3 0:41-0:59: yellow banner "You've attached 8 source files ... a large
+  number of documents increases the chance of errors" -- on screen through Submit.
+- take 5 0:46-0:52: section VII MARKET VALUE, AS IS / REPAIRED estimated value
+  are EMPTY. The bottom line of the BPO is blank; do not end the film on it.
+- takes 1-2 show the browser chrome: address bar C:/Users/<user>/Downloads/...,
+  and eight tabs titled "untitled" in take 2. Crop the chrome.
+
+**Waste to cut:** take1 0:00-0:08 hold (keep ~2 s), 0:21-0:27 zoomed-out page 2,
+0:31-0:41 page-3 hold; take2 0:00-0:11 on cantrell_tax; take3 0:16-0:24
+upload spinner, 0:44-0:58 cursor hovering over Submit. Screen-activity's
+"still" runs mislabel the fill as still (141.8 s): the progress bar moves
+below the threshold -- do not let the cut drop it.
+- 14:53 render scripts/edl-cut.py -> projects/bpo-realtor/outputs/bpo-realtor-review1.mp4 (--manifest projects/bpo-realtor/edit.json)
+
+### Session note -- review cut 1, and the counter
+
+**Ask:** cut the waste, keep the best of each repeated action, speed up the fill
+and put a professional elapsed counter in a corner that stays correct at speed.
+User said "добре" to the 1:50 (click-to-result) clock, the recommendation.
+
+**New tool, `scripts/edl-cut.py` + `edit.json`.** screen-cut.py's motion
+classifier cannot make editorial choices and called the fill "still". The EDL
+is data with a `_why` per range. The counter maps every film frame back to
+source time, so it reads 0:52 at film 1:33 (3.3 s + 4.9 s x 10) and stops on
+1:50 at the frame the result message appears (source 168.88; Submit 58.00).
+Card style: config/overlays/elapsed-counter.json, bottom-right in the lavender
+margin under the window (it covers nothing of the app there).
+
+**What review1 shows (2:24):** blank form -> 8 documents -> upload -> Submit ->
+fill at 10x under the counter -> "Form filled 1:50" -> form appears ->
+download (take 5's copy; take3's is the duplicate) -> comps grid -> $392,000
+check -> section VI. Ends before section VII (empty estimated values).
+Chrome in takes 1-2 painted in its own colours (tab strip, path, 'untitled').
+The app's "processed in 1 minute and 28 seconds" is blurred.
+
+**Open, for the next session:** phone cutaways not in yet (phone covers only
+take 5 -- sync it with sync-tracks.py before using it); the yellow 8-files
+warning is still visible 1:02-1:28 film; take 5 enters on Cursorful's zoom,
+off-centre (as recorded); no voice-over. Pacing is 1x everywhere except the
+spinner and the fill -- the voice-over will decide the rest.

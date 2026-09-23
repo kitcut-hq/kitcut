@@ -1,0 +1,184 @@
+{
+  "_comment": "Review cut 1 of the BPO film: picture only, no voice-over yet. Every range below was chosen by reading the takes frame by frame (journal 2026-09-23); the fill is sped up under an elapsed-time counter driven by SOURCE time, so it lands on the true Submit-to-result interval.",
+  "id": "bpo-realtor",
+  "output": "projects/bpo-realtor/outputs/bpo-realtor-review1.mp4",
+  "canvas": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "render": {
+    "cq": 20
+  },
+  "sources": {
+    "take1": {
+      "path": "projects/bpo-realtor/sources/take1-form.mp4",
+      "bg": "#ece6fd",
+      "_bg_why": "Cursorful's backdrop, sampled at the frame edge; the 1064-line frame is padded to 1080 with it so no seam shows",
+      "paint": [
+        {
+          "rect": [
+            0.06094,
+            0.08083,
+            0.875,
+            0.03853
+          ],
+          "color": "#d3e1f8",
+          "_why": "tab strip: tab titles and window controls, erased to the strip's own colour"
+        },
+        {
+          "rect": [
+            0.13021,
+            0.12688,
+            0.70313,
+            0.03102
+          ],
+          "color": "#ecf1f9",
+          "_why": "address bar: C:/Users/<user>/Downloads/... is a local path with the user name in it"
+        }
+      ]
+    },
+    "take2": {
+      "path": "projects/bpo-realtor/sources/take2-documents.mp4",
+      "bg": "#ece6fd",
+      "paint": [
+        {
+          "rect": [
+            0.06094,
+            0.08083,
+            0.875,
+            0.03853
+          ],
+          "color": "#d3e1f8",
+          "_why": "eight tabs all titled 'untitled' -- reads as a debugging session"
+        },
+        {
+          "rect": [
+            0.13021,
+            0.12688,
+            0.70313,
+            0.03102
+          ],
+          "color": "#ecf1f9",
+          "_why": "local file path with the user name"
+        },
+        {
+          "rect": [
+            0.09375,
+            0.18797,
+            0.03646,
+            0.03383
+          ],
+          "color": "#3c3c3c",
+          "_why": "PDF viewer title 'untitled' -- the synthetic listings have no document title"
+        }
+      ]
+    },
+    "take3": {
+      "path": "projects/bpo-realtor/sources/take3-upload-take4-fill.mp4",
+      "bg": "#ece6fd",
+      "_note": "takes 3 and 4 were recorded as one file; Submit is at 58.00, the result message at 168.88 (measured to the frame)",
+      "blur": [
+        {
+          "rect": [
+            0.50104,
+            0.20455,
+            0.33229,
+            0.03926
+          ],
+          "when": [
+            168.8,
+            190.0
+          ],
+          "sigma": 7,
+          "_why": "'processed in 1 minute and 28 seconds' is the server's interval; the counter shows click-to-result (1:50) and the two must not sit side by side disagreeing"
+        }
+      ]
+    },
+    "take5": {
+      "path": "projects/bpo-realtor/sources/take5-results.mp4",
+      "bg": "#ece6fd"
+    }
+  },
+  "edl": [
+    {
+      "src": "take1",
+      "from": 5.5,
+      "to": 20.8,
+      "_why": "the blank form: 2.5 s on page 1, the scroll, then section III held -- the grid the film is about"
+    },
+    {
+      "src": "take1",
+      "from": 27.2,
+      "to": 33.5,
+      "_why": "on to page 3; skips 0:21-0:27 where the zoom-out made page 2 unreadable"
+    },
+    {
+      "src": "take2",
+      "from": 8.5,
+      "to": 32.3,
+      "_why": "the eight documents; the first 8.5 s sat on one tab"
+    },
+    {
+      "src": "take3",
+      "from": 1.0,
+      "to": 16.0,
+      "_why": "Instafill: landing, dashboard, choosing the blank BPO"
+    },
+    {
+      "src": "take3",
+      "from": 16.0,
+      "to": 24.8,
+      "speed": 4,
+      "_why": "upload spinner"
+    },
+    {
+      "src": "take3",
+      "from": 24.8,
+      "to": 44.0,
+      "_why": "form loaded, the eight documents chosen and listed"
+    },
+    {
+      "src": "take3",
+      "from": 55.0,
+      "to": 61.3,
+      "_why": "to Submit (58.00); drops 11 s of the cursor hovering over it"
+    },
+    {
+      "src": "take3",
+      "from": 61.3,
+      "to": 168.8,
+      "speed": 10,
+      "_why": "the fill, 107.5 s at 10x under the counter"
+    },
+    {
+      "src": "take3",
+      "from": 168.8,
+      "to": 170.4,
+      "_why": "done -- the counter stops on the result message"
+    },
+    {
+      "src": "take3",
+      "from": 181.0,
+      "to": 183.6,
+      "_why": "the filled form appears; drops 11 s of 'File is loading'"
+    },
+    {
+      "src": "take5",
+      "from": 3.8,
+      "to": 45.0,
+      "_why": "download, open, the comps grid, the $392,000 check against the listing, section VI. Enters on Cursorful's zoom (the first download, end of take3, is the duplicate). Ends before section VII, whose estimated values are empty"
+    }
+  ],
+  "counters": [
+    {
+      "src": "take3",
+      "start": 58.0,
+      "end": 168.88,
+      "label": "AI filling the form",
+      "done_label": "Form filled",
+      "hold_after": 3.0,
+      "_why": "Submit click to the result message, measured to the frame: 110.9 s"
+    }
+  ]
+}

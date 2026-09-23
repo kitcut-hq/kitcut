@@ -610,6 +610,7 @@ which cannot encode the glyphs at all.
 | `scripts/_encode.py` | the one place encoder keys are chosen; `check-encode.py` is its test |
 | `scripts/conform-tapes.py` | put N real recordings onto one frame rate and size before a frame-addressed cut |
 | `scripts/tighten-cut.py` | one already-composited recording: shorten its pauses, drop its stumbles, remove the parts you name |
+| `scripts/edl-cut.py` | a film from hand-chosen ranges of a few silent takes, with an elapsed counter driven by SOURCE time so it stays true over a sped-up wait |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
 | `scripts/screencast-pipeline.py` | the silent-screencast job as one cached, checkpointed command; the stage scripts it drives are listed under pipeline 7 |
