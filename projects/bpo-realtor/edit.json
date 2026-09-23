@@ -1,7 +1,7 @@
 {
-  "_comment": "Review cut 1 of the BPO film: picture only, no voice-over yet. Every range below was chosen by reading the takes frame by frame (journal 2026-09-23); the fill is sped up under an elapsed-time counter driven by SOURCE time, so it lands on the true Submit-to-result interval.",
+  "_comment": "Review cut 2 of the BPO film: picture only, no voice-over yet. Ranges chosen by reading the takes frame by frame (journal 2026-09-23). The fill runs 10x under an elapsed counter driven by SOURCE time. Phone shots are B-roll cutaways, NOT synced: the phone covers only take 5 and no method pinned its offset (journal).",
   "id": "bpo-realtor",
-  "output": "projects/bpo-realtor/outputs/bpo-realtor-review1.mp4",
+  "output": "projects/bpo-realtor/outputs/bpo-realtor-review2.mp4",
   "canvas": [
     1920,
     1080
@@ -98,6 +98,12 @@
     "take5": {
       "path": "projects/bpo-realtor/sources/take5-results.mp4",
       "bg": "#ece6fd"
+    },
+    "phone": {
+      "path": "projects/bpo-realtor/sources/phone.mp4",
+      "rotate": 180,
+      "bg": "#000000",
+      "_rotate_why": "no rotation tag, and the picture is upside down: keyboard legends and the mousepad print read inverted"
     }
   },
   "edl": [
@@ -118,6 +124,12 @@
       "from": 8.5,
       "to": 32.3,
       "_why": "the eight documents; the first 8.5 s sat on one tab"
+    },
+    {
+      "src": "phone",
+      "from": 119.0,
+      "to": 121.5,
+      "_why": "scene break: a hand at the keyboard, before the tool appears (B-roll)"
     },
     {
       "src": "take3",
@@ -141,8 +153,20 @@
     {
       "src": "take3",
       "from": 55.0,
+      "to": 57.9,
+      "_why": "the cursor to Submit; drops 11 s of hovering"
+    },
+    {
+      "src": "phone",
+      "from": 272.0,
+      "to": 273.6,
+      "_why": "cutaway #1: the click (B-roll from the take-5 session -- the phone was not rolling during take 3)"
+    },
+    {
+      "src": "take3",
+      "from": 57.9,
       "to": 61.3,
-      "_why": "to Submit (58.00); drops 11 s of the cursor hovering over it"
+      "_why": "Submit fires at 58.00 -- the counter starts"
     },
     {
       "src": "take3",
@@ -166,8 +190,20 @@
     {
       "src": "take5",
       "from": 3.8,
+      "to": 8.6,
+      "_why": "download: enters on Cursorful's zoom (the first download, end of take3, is the duplicate)"
+    },
+    {
+      "src": "phone",
+      "from": 269.1,
+      "to": 270.6,
+      "_why": "cutaway #2: a click, covering the dark flash while the PDF opens (take5 8.7-10.0)"
+    },
+    {
+      "src": "take5",
+      "from": 10.1,
       "to": 45.0,
-      "_why": "download, open, the comps grid, the $392,000 check against the listing, section VI. Enters on Cursorful's zoom (the first download, end of take3, is the duplicate). Ends before section VII, whose estimated values are empty"
+      "_why": "the downloaded PDF, the comps grid, the $392,000 check against the listing, section VI; ends before section VII (empty estimated values)"
     }
   ],
   "counters": [
@@ -179,6 +215,60 @@
       "done_label": "Form filled",
       "hold_after": 3.0,
       "_why": "Submit click to the result message, measured to the frame: 110.9 s"
+    }
+  ],
+  "zooms": [
+    {
+      "src": "take3",
+      "from": 1.3,
+      "to": 5.9,
+      "rect": [
+        0.09375,
+        0.213,
+        0.5
+      ],
+      "in": 0.9,
+      "out": 0.5,
+      "_why": "the promise, 'The AI does the paperwork. Not you.' -- the line the voice-over opens the tool on"
+    },
+    {
+      "src": "take3",
+      "from": 39.7,
+      "to": 57.9,
+      "rect": [
+        0.4167,
+        0.3194,
+        0.514
+      ],
+      "in": 0.6,
+      "out": 0,
+      "_why": "the eight documents and Submit, framed below the yellow '8 files increases the chance of errors' banner. Starts at 39.7 so it is fully in before the list (and the banner) appear at 40.6. Holds across the hover cut, ends on the cut to the phone"
+    },
+    {
+      "src": "take3",
+      "from": 57.9,
+      "to": 61.25,
+      "rect": [
+        0.36,
+        0.3194,
+        0.625
+      ],
+      "in": 0,
+      "out": 0,
+      "_why": "back from the phone on Submit, at 1.6x not 1.95x so Submit sits above the counter card; ends on a hard cut to the progress screen (61.3) -- an ease-out showed the banner again"
+    },
+    {
+      "src": "take3",
+      "from": 181.2,
+      "to": 183.6,
+      "rect": [
+        0.0677,
+        0.2315,
+        0.4167
+      ],
+      "in": 1.4,
+      "out": 0,
+      "_why": "the reveal: a slow push onto the fields that just filled (address, parcel, market conditions)"
     }
   ]
 }

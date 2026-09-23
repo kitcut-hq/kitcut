@@ -1277,6 +1277,43 @@ seam shows. Segment lengths are whole frames, and every film offset is a sum of
 them, so the card and the picture cannot drift apart across segments. The
 render asserts its duration against that sum.
 
+**A fixed paint rect breaks the moment the recorder zooms.** Cursorful zooms
+toward the cursor. On review 1 the chrome slid out from under the rects, so
+blue stripes landed on the page while the real address bar, file path and all,
+came into view beside them. Now every frame the EDL uses is tested. At rest, a
+paint rect is mostly its own colour. Where it is not, the chrome has moved, and
+for that run the rects are carried by a tracked similarity transform (ORB on
+the chrome band, RANSAC):
+
+- The tracker works frame to frame, fitting only the residual after warping by
+  the last transform. At 1.5× a single-scale match against the unzoomed frame
+  found 3 inliers of 400.
+- It refuses to guess. If it loses the chrome or the residual grows, it stops
+  and prints the time.
+- `--list` prints the followed runs, and the transforms are cached under
+  `temp/edl/`.
+- The rects go into a half-resolution alpha clip upscaled with **nearest**.
+  Bilinear blends the clear pixels' black into each edge and draws a dark
+  outline round every rect.
+
+**Zooms** are accents. They are authored in source time on a canvas rect
+(`zooms: [{src, from, to, rect: [x, y, w], in, out}]`) and rendered by
+`zoompan` on a 2× upscale inside the same pass. A zoom's window ends at the
+first frame that leaves its source. An earlier rule ("last frame at or before
+`to`") let a zoom that ended on a cut to the phone reach across the cutaway and
+magnify it. Check where the counter card lands inside a zoom: at 1.95× Submit
+went under it, so that stretch uses 1.6×. A zoom is also a way to keep
+something out of shot. The Submit framing starts below a warning banner, fully
+in before the banner appears, and leaves on a hard cut, because an ease-out
+showed the banner again.
+
+**Phone takes:** `rotate: 180` handles a missing or wrong rotation tag. This
+one had none and played upside down. A phone that did not roll through the
+take it cuts into is B-roll, and the manifest says so. `sync-tracks.py`, click
+matching and brightness correlation all failed to pin the phone to take 5
+(z ≤ 3.6 and mutually inconsistent). A 1.5 s cutaway of a click does not need
+sync, but it must not be presented as the same click.
+
 ## Tightening one recording that is already composited
 
 `screencast-cut.py` needs two tapes. Most screen recorders hand you one — screen,

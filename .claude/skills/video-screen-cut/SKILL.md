@@ -33,8 +33,14 @@ line rather than let two numbers disagree on screen. Look for the
 **duplicate action** in takes (a download recorded at the end of one take and
 the start of the next) and keep the one that flows into what follows. Paint
 browser chrome (tab titles, a local path with the user name) in its own
-sampled colours rather than cropping it. README: "A film cut by hand from a
-few takes". Worked example: `projects/bpo-realtor/edit.json`.
+sampled colours rather than cropping it. **Render `--frame` at the recorder's
+own zooms**, not just the resting frames. Paint is followed through a moving
+chrome automatically (`--list` names the runs), but only a frame shows whether
+it held. Zoom accents (`zooms`) can also frame something out of shot, such as a
+warning banner. Check that the counter card does not cover the thing being
+zoomed on. Phone footage not rolled with the take is B-roll: say so in its
+`_why`. README: "A film cut by hand from a few takes". Worked example:
+`projects/bpo-realtor/edit.json`.
 
 ```powershell
 # from the repo root -- this is the whole job

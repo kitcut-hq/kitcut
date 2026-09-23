@@ -1,0 +1,8 @@
+{
+  "_comment": "The phone (hands on the mouse) against take 5 of the screen. The phone was started ~4 min before take 5 and covers only it. The phone mic hears the mouse clicks; the screen changes on them.",
+  "id": "bpo-phone-take5",
+  "screen": "projects/bpo-realtor/sources/take5-results.mp4",
+  "camera": "projects/bpo-realtor/sources/phone.mp4",
+  "camera_rotate": "none",
+  "sync": {"hz": 20, "search": 20.0}
+}

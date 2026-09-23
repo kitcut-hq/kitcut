@@ -117,3 +117,35 @@ take 5 -- sync it with sync-tracks.py before using it); the yellow 8-files
 warning is still visible 1:02-1:28 film; take 5 enters on Cursorful's zoom,
 off-centre (as recorded); no voice-over. Pacing is 1x everywhere except the
 spinner and the fill -- the voice-over will decide the rest.
+- 15:41 render scripts/edl-cut.py -> projects/bpo-realtor/outputs/bpo-realtor-review2.mp4 (--manifest projects/bpo-realtor/edit.json)
+- 15:45 render scripts/edl-cut.py -> projects/bpo-realtor/outputs/bpo-realtor-review2.mp4 (--manifest projects/bpo-realtor/edit.json)
+
+### Session note -- review 2: zoom-proof paint, zooms, phone
+
+**Ask:** remove the stripes where the video zooms; add zooms where an accent
+helps; add the phone; propose texts; explain how shorts come out of this.
+
+**The stripes were the fixed paint rects inside Cursorful's own zoom** (take2
+23.1-26.2, the $392,000 zoom): the chrome slid away, the rects stayed on the
+page, the path showed beside them. edl-cut.py now tests every used frame (a
+paint rect at rest is mostly its own colour) and tracks the chrome through the
+moved runs with ORB + RANSAC, frame to frame. Verified on the render at
+36.2-39.0: clean. Nearest-neighbour upscale of the follow clip, or the rects
+get a dark outline.
+
+**Phone:** upside down with no rotation tag -> `rotate: 180`. NOT synced:
+creation_time seed +264 s; sync-tracks correlation z=3.2 (+275.65); click
+matching gives three equal offsets; screen brightness via the phone z=13 at
++276.77 but the event spacing disagrees ~1.5x. Used as B-roll only: a hand at
+the keyboard before Instafill (phone 119-121.5), a click on Submit (272.0-
+273.6), a click covering take5's dark PDF-loading flash (269.1-270.6).
+
+**Zooms:** the headline (2x), the documents + Submit (1.95x, framed below the
+yellow 8-files banner, fully in before it appears), Submit after the cutaway at
+1.6x (at 1.95x the counter card covered Submit), a slow push onto the filled
+fields at the reveal (2.4x). Bug found and fixed: a zoom ending on a cut
+reached across the phone cutaway and magnified it.
+
+**Texts:** voiceover.md -- timed script, titles, description, chapters,
+thumbnail, three short concepts. Not yet approved. The full-film voice-over is
+still the missing capability (dub-clips --script is per clip).

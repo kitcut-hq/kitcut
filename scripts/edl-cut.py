@@ -27,10 +27,18 @@ PAINT AND BLUR run in SOURCE time, before the speed change, so a window you
 measured on a source frame stays true. `paint` fills a rect with a flat
 colour (browser chrome: tab titles and a local file path, erased to the
 chrome's own colour); `blur` defocuses one (an on-screen number that
-contradicts the counter).
+contradicts the counter). A fixed rect is only right while the picture holds
+still, and a screen recorder that zooms toward the cursor moves the chrome
+out from under it -- so every frame the EDL uses is tested, and where the
+chrome has moved the rects are carried by a tracked transform instead.
+
+ZOOMS are accents authored in source time on a canvas rect, rendered by
+zoompan on a 2x upscale inside the same pass. `rotate: 180` turns a phone
+take whose rotation tag is missing or wrong.
 
   --list      the EDL with film in/out, the runtime, the counter's film span
-              and its final value; encodes nothing
+              and final value, the zooms and where chrome is followed;
+              encodes nothing
   --frame T   the finished frame at film time T as a PNG, card included --
               the placement check that costs one frame, not one encode
   (none)      render
@@ -97,6 +105,9 @@ def load(mpath):
         if not os.path.exists(path):
             sys.exit("source %s: %s does not exist" % (key, s["path"]))
         w, h, sfps, dur = _overlay.probe(path)
+        if int(s.get("rotate", 0)) not in (0, 180):
+            sys.exit("source %s: rotate %s -- only 0 and 180 are supported (a "
+                     "90-degree turn changes the frame's shape)" % (key, s["rotate"]))
         srcs[key] = dict(s, key=key, abspath=path, w=w, h=h, fps=sfps, dur=dur)
     segs = []
     frame = 0
@@ -166,11 +177,15 @@ def counter_plan(spec, segs, fps, total):
     fade = float(spec.get("fade", 0.3))
     g1 = min(total, gend + int(round((hold + fade) * fps)))
     frames = []
+    v = 0.0
     for g in range(g0, g1):
         s = seg_at(segs, g)
         if g < gend:
-            v = src_time(s, g, fps) - c0
-            frames.append((g, max(0.0, v), False, s["speed"]))
+            # A cutaway to another source inside the span shows no source
+            # time of ours, so the clock holds rather than inventing seconds.
+            if s["src"]["key"] == key:
+                v = max(0.0, src_time(s, g, fps) - c0)
+            frames.append((g, v, False, s["speed"] if s["src"]["key"] == key else 1.0))
         else:
             frames.append((g, c1 - c0, True, 1.0))
     # Source seconds of the counted span that the EDL does not show: the
@@ -317,6 +332,259 @@ def write_card_video(frames, card, fps, path):
         sys.exit("could not write the counter clip %s" % path)
 
 
+# ---------------------------------------------------------------- follow
+
+REST_TOL = 20        # colour distance that still counts as the painted colour
+REST_MIN = 0.45      # fraction of a paint rect that must be its colour at rest
+FOLLOW_PAD = 0.3     # seconds of rest kept either side of a moved run
+
+
+def _decode(src, a, b, fps=None, scale=1.0, fmt_="rgb24"):
+    """Frames of a source stretch as a numpy array, rotation applied."""
+    import numpy as np
+    w, h = int(src["w"] * scale) // 2 * 2, int(src["h"] * scale) // 2 * 2
+    vf = ["hflip,vflip"] if int(src.get("rotate", 0)) == 180 else []
+    if fps:
+        vf.append("fps=%g" % fps)
+    vf.append("scale=%d:%d" % (w, h))
+    p = subprocess.run(["ffmpeg", "-v", "error", "-ss", "%.3f" % a, "-t", "%.3f" % (b - a),
+                        "-i", src["abspath"], "-vf", ",".join(vf),
+                        "-f", "rawvideo", "-pix_fmt", fmt_, "-"],
+                       env=ENV, capture_output=True)
+    if fmt_ == "rgb24":
+        return np.frombuffer(p.stdout, np.uint8).reshape(-1, h, w, 3)
+    return np.frombuffer(p.stdout, np.uint8).reshape(-1, h, w)
+
+
+def moved_runs(src, segs):
+    """Source windows where a painted source's chrome is NOT where it was
+    measured -- a recorder's zoom, a scroll of the whole window.
+
+    A fixed rect is only right while the thing under it holds still. Cursorful
+    zooms toward the cursor, and a drawbox that stays put then lands on the
+    page while the real address bar, file path and all, slides into view
+    beside it (bpo-realtor review 1). So every frame the EDL uses is tested:
+    at rest, each paint rect is mostly its own colour; when it is not, the
+    frame has moved and needs following.
+    """
+    import numpy as np
+    paint = src.get("paint") or []
+    if not paint:
+        return []
+    k = 0.25
+    runs = []
+    for s in segs:
+        if s["src"]["key"] != src["key"]:
+            continue
+        fr = _decode(src, s["from"], s["to"], fps=10, scale=k).astype(int)
+        H, W = fr.shape[1:3]
+        moved = []
+        for i, f in enumerate(fr):
+            worst = 1.0
+            for p in paint:
+                x, y, rw, rh = rect_px(p["rect"], W, H)
+                c = np.array(_overlay.hex_rgba(p["color"])[:3])
+                reg = f[y:y + rh, x:x + rw]
+                if reg.size:
+                    worst = min(worst, (np.abs(reg - c).sum(-1) < REST_TOL).mean())
+            if worst < REST_MIN:
+                moved.append(s["from"] + i / 10.0)
+        for t in moved:
+            if runs and t - runs[-1][1] <= 0.25:
+                runs[-1][1] = t
+            else:
+                runs.append([t, t])
+    out = []
+    for a, b in runs:
+        a, b = max(0.0, a - FOLLOW_PAD), min(src["dur"], b + 0.1 + FOLLOW_PAD)
+        if out and a <= out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], b))
+        else:
+            out.append((a, b))
+    return out
+
+
+def track(src, a, b, cache_dir):
+    """Per-frame similarity transforms (2x3) from the frame at `a` to each
+    frame of [a, b], at the source's own frame rate.
+
+    Tracked, not matched: the reference is warped by the previous frame's
+    transform and only the residual is fitted, because at a 1.5x zoom a
+    single-scale ORB match against the unzoomed frame finds nothing (measured:
+    3 inliers of 400). The mask is the band around the paint rects -- browser
+    chrome moves rigidly with the zoom and does not change with the page. A
+    frame whose fit fails, or whose warped reference no longer matches it,
+    stops the render with its time: a guessed rect over a file path is a leak.
+    """
+    import numpy as np
+    import cv2
+    import hashlib
+    key = hashlib.sha1(json.dumps([src["abspath"], os.path.getsize(src["abspath"]),
+                                   round(a, 3), round(b, 3), src.get("paint"),
+                                   src.get("rotate", 0)]).encode()).hexdigest()[:12]
+    cache = os.path.join(cache_dir, "follow-%s-%s.npy" % (src["key"], key))
+    if os.path.exists(cache):
+        return np.load(cache)
+    fr = _decode(src, a, b, fmt_="gray")
+    H, W = fr.shape[1:3]
+    xs, ys = [], []
+    for p in src["paint"]:
+        x, y, rw, rh = rect_px(p["rect"], W, H)
+        xs += [x, x + rw]
+        ys += [y, y + rh]
+    pad = int(0.06 * H)
+    mask = np.zeros((H, W), np.uint8)
+    mask[max(0, min(ys) - pad):min(H, max(ys) + pad),
+         max(0, min(xs) - pad):min(W, max(xs) + pad)] = 255
+    orb = cv2.ORB_create(3000)
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    ref = fr[0]
+    M = np.array([[1, 0, 0], [0, 1, 0]], np.float32)
+
+    def h3(A):
+        return np.vstack([A, [0, 0, 1]])
+
+    out = []
+    print("  following %s %s-%s (%d frames) ..." % (src["key"], fmt(a), fmt(b), len(fr)))
+    for i, f in enumerate(fr):
+        wr = cv2.warpAffine(ref, M, (W, H))
+        wm = cv2.warpAffine(mask, M, (W, H), flags=cv2.INTER_NEAREST)
+        kr, dr = orb.detectAndCompute(wr, wm)
+        kf, df = orb.detectAndCompute(f, wm)
+        ok = False
+        if dr is not None and df is not None:
+            m = bf.match(dr, df)
+            if len(m) >= 8:
+                pa = np.float32([kr[x.queryIdx].pt for x in m])
+                pb = np.float32([kf[x.trainIdx].pt for x in m])
+                R, inl = cv2.estimateAffinePartial2D(pa, pb, method=cv2.RANSAC,
+                                                     ransacReprojThreshold=2.0)
+                if R is not None and inl is not None and int(inl.sum()) >= 12:
+                    M = (h3(R) @ h3(M))[:2].astype(np.float32)
+                    ok = True
+        vis = cv2.warpAffine(mask, M, (W, H), flags=cv2.INTER_NEAREST) > 0
+        err = (np.abs(cv2.warpAffine(ref, M, (W, H)).astype(int) - f.astype(int))[vis].mean()
+               if vis.any() else 0.0)
+        if not ok and vis.any():
+            sys.exit("follow: lost the chrome of %s at %s -- refusing to guess where "
+                     "a painted rect goes" % (src["key"], fmt(a + i / src["fps"])))
+        if err > 8.0:
+            sys.exit("follow: %s at %s matches its reference badly (mean error %.1f) "
+                     "-- refusing" % (src["key"], fmt(a + i / src["fps"]), err))
+        out.append(M.copy())
+    out = np.array(out)
+    np.save(cache, out)
+    return out
+
+
+def follow_clip(src, mats, path):
+    """The paint rects, carried by each frame's transform, as an alpha clip."""
+    k = 0.5
+    W, H = int(src["w"] * k) // 2 * 2, int(src["h"] * k) // 2 * 2
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+           "-f", "rawvideo", "-pix_fmt", "rgba", "-s", "%dx%d" % (W, H),
+           "-r", "%.6f" % src["fps"], "-i", "-", "-c:v", "png", path]
+    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, env=ENV)
+    for M in mats:
+        im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        for pt in src["paint"]:
+            x, y, rw, rh = rect_px(pt["rect"], src["w"], src["h"])
+            x0 = M[0][0] * x + M[0][1] * y + M[0][2]
+            y0 = M[1][0] * x + M[1][1] * y + M[1][2]
+            x1 = M[0][0] * (x + rw) + M[0][1] * (y + rh) + M[0][2]
+            y1 = M[1][0] * (x + rw) + M[1][1] * (y + rh) + M[1][2]
+            d.rectangle([x0 * k, y0 * k, x1 * k, y1 * k],
+                        fill=_overlay.hex_rgba(pt["color"]))
+        p.stdin.write(im.tobytes())
+    p.stdin.close()
+    if p.wait():
+        sys.exit("could not write the follow clip %s" % path)
+
+
+def prepare_follows(srcs, segs, tmpdir):
+    """{source key: [(a, b, clip path)]} for every moved run the EDL uses."""
+    out = {}
+    for src in srcs.values():
+        for a, b in moved_runs(src, segs):
+            mats = track(src, a, b, tmpdir)
+            clip = os.path.join(tmpdir, "follow-%s-%.2f-%d.mov" % (src["key"], a, len(mats)))
+            if not os.path.exists(clip):
+                follow_clip(src, mats, clip)
+            out.setdefault(src["key"], []).append((a, b, clip))
+    return out
+
+
+# ---------------------------------------------------------------- zoom
+
+def zoom_plan(specs, segs, fps):
+    """Film-time windows for the accent zooms, resolved from SOURCE times.
+
+    A zoom is authored against a source frame -- that is where you can see
+    what deserves it -- so `from`/`to` are source seconds of `src`, and `rect`
+    is x, y, width of the canvas to end up filling it, all fractions (the
+    height follows from the canvas aspect). Resolved here, so a zoom survives
+    an EDL change that moves it in the film.
+    """
+    out = []
+    for i, z in enumerate(specs):
+        a, b = parse_t(z["from"]), parse_t(z["to"])
+        fa = fb = None
+        total = segs[-1]["f0"] + segs[-1]["n"]
+        for g in range(total):
+            s = seg_at(segs, g)
+            if fa is None:
+                if s["src"]["key"] == z["src"] and src_time(s, g, fps) >= a:
+                    fa = fb = g
+                continue
+            # The window ends at the first frame that leaves this source or
+            # passes `to`. Taking "the last frame at or before `to`" instead
+            # let a zoom that ended on a cut to the phone reach across the
+            # cutaway to the frame after it, and magnified the phone.
+            if s["src"]["key"] != z["src"] or src_time(s, g, fps) > b:
+                break
+            fb = g
+        if fa is None or fb is None or fb <= fa:
+            sys.exit("zooms[%d]: %s %s-%s is not in the film" % (i, z["src"], fmt(a), fmt(b)))
+        rx, ry, rw = [float(v) for v in z["rect"]]
+        if not (0 <= rx and 0 <= ry and 0 < rw <= 1 and rx + rw <= 1.0001
+                and ry + rw <= 1.0001):
+            sys.exit("zooms[%d]: rect %s leaves the canvas" % (i, z["rect"]))
+        out.append({"a": fa / fps, "b": (fb + 1) / fps, "rx": rx, "ry": ry, "rw": rw,
+                    "in": float(z.get("in", 0.6)), "out": float(z.get("out", 0.6)),
+                    "why": z.get("_why", "")})
+    return out
+
+
+def _ease(T, a, d, rising):
+    """smoothstep from 0 to 1 over [a, a+d] (rising) or 1 to 0 over [a-d, a]."""
+    u = ("((%s-%.4f)/%.4f)" % (T, a, d)) if rising else ("((%.4f-%s)/%.4f)" % (a, T, d))
+    return "(%s*%s*(3-2*%s))" % (u, u, u)
+
+
+def zoom_expr(zooms, f0, fps, canvas):
+    """zoompan for one segment whose first film frame is f0. Film time is
+    rebuilt from zoompan's own input frame counter, so it is exact."""
+    cw, ch = canvas
+    U = 2
+    T = "((%d+in)/%g)" % (f0, fps)
+    terms = []
+    for z in zooms:
+        a, b, i, o = z["a"], z["b"], z["in"], z["out"]
+        e = "1"
+        if o > 0:
+            e = "if(gt(%s,%.4f),%s,%s)" % (T, b - o, _ease(T, b, o, False), e)
+        if i > 0:
+            e = "if(lt(%s,%.4f),%s,%s)" % (T, a + i, _ease(T, a, i, True), e)
+        terms.append(("if(between(%s,%.4f,%.4f),%s,0)" % (T, a, b, e), z))
+    ow = "(1-(%s))" % "+".join("%s*%.5f" % (e, 1 - z["rw"]) for e, z in terms)
+    ox = "(%s)" % "+".join("%s*%.5f" % (e, z["rx"]) for e, z in terms)
+    oy = "(%s)" % "+".join("%s*%.5f" % (e, z["ry"]) for e, z in terms)
+    zp = ("zoompan=z='1/%s':x='%s*%d':y='%s*%d':d=1:s=%dx%d:fps=%g"
+          % (ow, ox, cw * U, oy, ch * U, cw, ch, fps))
+    return zp.replace(",", "\\,"), U
+
+
 # ---------------------------------------------------------------- filters
 
 def rect_px(r, w, h):
@@ -325,23 +593,47 @@ def rect_px(r, w, h):
             max(2, int(round(rw * w))), max(2, int(round(rh * h))))
 
 
-def window(item, t0, length):
-    """`enable` for a source-time window, in the chain's local time (0 = t0)."""
-    w = item.get("when")
-    if not w:
-        return ""
-    a, b = parse_t(w[0]) - t0, parse_t(w[1]) - t0
-    if b <= 0 or a >= length:
-        return None
-    return ":enable='between(t\\,%.3f\\,%.3f)'" % (a, b)
+def enable(when, t0, length, holes=()):
+    """`:enable=...` for a source-time window minus `holes`, in the chain's
+    local time (0 = t0). None when the item is never on in this stretch."""
+    terms = []
+    if when:
+        a, b = parse_t(when[0]) - t0, parse_t(when[1]) - t0
+        if b <= 0 or a >= length:
+            return None
+        terms.append("between(t\\,%.3f\\,%.3f)" % (a, b))
+    for a, b in holes:
+        a, b = a - t0, b - t0
+        if a <= 0 and b >= length:
+            return None
+        if b > 0 and a < length:
+            terms.append("not(between(t\\,%.3f\\,%.3f))" % (a, b))
+    return (":enable='%s'" % "*".join(terms)) if terms else ""
 
 
-def treat(src, t0, length, lab_in, tag):
-    """Paint and blur for one source stretch starting at source time t0."""
+class Inputs:
+    """ffmpeg -i arguments, handing out each input's index as it is added."""
+
+    def __init__(self):
+        self.args = []
+        self.n = 0
+
+    def add(self, *args):
+        self.args += list(args)
+        self.n += 1
+        return self.n - 1
+
+
+def treat(src, t0, length, lab_in, tag, follows, inputs):
+    """Paint (fixed, or followed through a zoom) and blur for one source
+    stretch starting at source time t0."""
     parts, cur = [], lab_in
     w, h = src["w"], src["h"]
+    mine = [(a, b, c) for a, b, c in follows.get(src["key"], [])
+            if b > t0 and a < t0 + length]
+    holes = [(a, b) for a, b, _ in mine]
     for j, p in enumerate(src.get("paint") or []):
-        en = window(p, t0, length)
+        en = enable(p.get("when"), t0, length, holes)
         if en is None:
             continue
         x, y, rw, rh = rect_px(p["rect"], w, h)
@@ -349,12 +641,26 @@ def treat(src, t0, length, lab_in, tag):
         parts.append("[%s]drawbox=x=%d:y=%d:w=%d:h=%d:color=0x%s:t=fill%s[%s]"
                      % (cur, x, y, rw, rh, p["color"].lstrip("#"), en, nxt))
         cur = nxt
-    for j, b in enumerate(src.get("blur") or []):
-        en = window(b, t0, length)
+    for j, (a, b, clip) in enumerate(mine):
+        ix = inputs.add("-i", clip)
+        off = a - t0
+        lead = ("trim=start=%.4f," % -off) if off < 0 else ""
+        shift = ("+%.4f/TB" % off) if off > 0 else ""
+        nxt = "%sf%d" % (tag, j)
+        # nearest, not bilinear: a smooth upscale blends the clear pixels' black
+        # into each rect's edge and draws a dark outline round it
+        parts.append("[%d:v]scale=%d:%d:flags=neighbor,format=rgba,%ssetpts=PTS-STARTPTS%s[%sk]"
+                     % (ix, w, h, lead, shift, nxt))
+        parts.append("[%s][%sk]overlay=0:0:eof_action=pass:"
+                     "enable='between(t\\,%.3f\\,%.3f)'[%s]"
+                     % (cur, nxt, max(0.0, off), b - t0, nxt))
+        cur = nxt
+    for j, bl in enumerate(src.get("blur") or []):
+        en = enable(bl.get("when"), t0, length)
         if en is None:
             continue
-        x, y, rw, rh = rect_px(b["rect"], w, h)
-        sig = float(b.get("sigma", 6))
+        x, y, rw, rh = rect_px(bl["rect"], w, h)
+        sig = float(bl.get("sigma", 6))
         nxt = "%sb%d" % (tag, j)
         parts.append("[%s]split[%sa][%sc]" % (cur, nxt, nxt))
         parts.append("[%sc]crop=%d:%d:%d:%d,gblur=sigma=%.1f[%sk]"
@@ -370,39 +676,50 @@ def fit(cw, ch, bg):
             % (cw, ch, cw, ch, bg.lstrip("#")))
 
 
-def build(segs, canvas, fps, card_clip=None, card_xy=None, card_g0=0):
+def build(segs, canvas, fps, follows, zooms, card_clip=None, card_xy=None, card_g0=0):
     cw, ch = canvas
-    inputs, parts = [], []
+    inputs, parts = Inputs(), []
     for k, s in enumerate(segs):
         src = s["src"]
         length = s["to"] - s["from"]
-        inputs += ["-ss", "%.3f" % s["from"], "-t", "%.3f" % length,
-                   "-i", src["abspath"]]
-        tp, cur = treat(src, s["from"], length, "%d:v" % k, "s%d" % k)
+        ix = inputs.add("-ss", "%.3f" % s["from"], "-t", "%.3f" % length,
+                        "-i", src["abspath"])
+        lab = "%d:v" % ix
+        if int(src.get("rotate", 0)) == 180:
+            # a phone's rotation tag can be wrong or missing; this one had none
+            # and the picture was upside down (the keyboard legends read inverted)
+            parts.append("[%s]hflip,vflip[r%d]" % (lab, k))
+            lab = "r%d" % k
+        tp, cur = treat(src, s["from"], length, lab, "s%d" % k, follows, inputs)
         parts += tp
         sp = s["speed"]
         pts = "PTS-STARTPTS" if sp == 1.0 else "(PTS-STARTPTS)/%g" % sp
-        parts.append("[%s]setpts=%s,fps=%g,%s,trim=end_frame=%d,setpts=PTS-STARTPTS,"
-                     "format=yuv420p[v%d]"
-                     % (cur, pts, fps, fit(cw, ch, src.get("bg", "#000000")),
-                        s["n"], k))
+        chain = ("setpts=%s,fps=%g,%s,trim=end_frame=%d,setpts=PTS-STARTPTS"
+                 % (pts, fps, fit(cw, ch, src.get("bg", "#000000")), s["n"]))
+        a, b = s["f0"] / fps, (s["f0"] + s["n"]) / fps
+        mine = [z for z in zooms if z["b"] > a and z["a"] < b]
+        if mine:
+            zp, U = zoom_expr(mine, s["f0"], fps, canvas)
+            # zoompan crops on whole input pixels; at 2x the step is half a
+            # film pixel, which is what keeps a slow push from shimmering
+            chain += ",scale=%d:%d:flags=lanczos,%s" % (cw * U, ch * U, zp)
+        parts.append("[%s]%s,format=yuv420p[v%d]" % (cur, chain, k))
     parts.append("".join("[v%d]" % k for k in range(len(segs)))
                  + "concat=n=%d:v=1:a=0[film]" % len(segs))
     out = "film"
     if card_clip:
-        ci = len(segs)
-        inputs += ["-i", card_clip]
+        ci = inputs.add("-i", card_clip)
         parts.append("[%d:v]format=rgba,setpts=PTS-STARTPTS+%.6f/TB[card]"
                      % (ci, card_g0 / fps))
         parts.append("[film][card]overlay=%d:%d:eof_action=pass:format=auto,"
                      "format=yuv420p[vout]" % card_xy)
         out = "vout"
-    return inputs, ";".join(parts), out
+    return inputs.args, ";".join(parts), out
 
 
 # ---------------------------------------------------------------- modes
 
-def show_list(segs, fps, total, cps):
+def show_list(segs, fps, total, cps, zooms, runs):
     print("\n  %-3s %-8s %-19s %6s  %-17s %s" % ("#", "source", "source in->out",
                                                 "speed", "film in->out", "why"))
     for s in segs:
@@ -422,22 +739,29 @@ def show_list(segs, fps, total, cps):
         if cp["cut_s"] > 0.05:
             print("    note: %.1f s of the counted interval is cut; the clock "
                   "jumps across it" % cp["cut_s"])
+    for z in zooms:
+        print("  zoom %.2fx film %s -> %s (in %.1fs, out %.1fs)  %s"
+              % (1 / z["rw"], fmt(z["a"]), fmt(z["b"]), z["in"], z["out"], z["why"][:60]))
+    for key, rs in runs.items():
+        for a, b in rs:
+            print("  follow %s %s -> %s: the chrome moves here, so its paint is tracked"
+                  % (key, fmt(a), fmt(b)))
 
 
-def one_frame(segs, canvas, fps, t, cards, out_png):
+def one_frame(segs, canvas, fps, t, follows, zooms, cards, out_png):
+    """The real graph, one frame long -- so the check cannot disagree with the render."""
     g = int(round(t * fps))
     s = seg_at(segs, g)
     if s is None:
         sys.exit("film time %s is past the end" % fmt(t))
     st = src_time(s, g, fps)
-    tp, cur = treat(s["src"], st, 0.05, "0:v", "f")
-    graph = ";".join(tp + ["[%s]%s[o]" % (cur, fit(canvas[0], canvas[1],
-                                                   s["src"].get("bg", "#000000")))])
+    mini = dict(s, **{"from": st, "to": min(s["src"]["dur"], st + 2.0 * s["speed"] / fps),
+                      "f0": g, "n": 1})
+    inputs, graph, out = build([mini], canvas, fps, follows, zooms)
     tmp = out_png + ".base.png"
-    r = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                        "-ss", "%.3f" % st, "-i", s["src"]["abspath"],
-                        "-filter_complex", graph, "-map", "[o]", "-frames:v", "1", tmp],
-                       env=ENV, capture_output=True, text=True)
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y"] + inputs
+                       + ["-filter_complex", graph, "-map", "[%s]" % out,
+                          "-frames:v", "1", tmp], env=ENV, capture_output=True, text=True)
     if r.returncode:
         sys.exit(r.stderr[-2000:])
     im = Image.open(tmp).convert("RGBA")
@@ -455,7 +779,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--list", action="store_true",
-                    help="print the EDL, runtime and counter span; encode nothing")
+                    help="print the EDL, runtime, counter, zooms and followed chrome; "
+                         "encode nothing")
     ap.add_argument("--frame", action="append", default=[], metavar="M:SS",
                     help="write the finished frame at this FILM time as a PNG; repeatable")
     ap.add_argument("--out", help="override the manifest's output path")
@@ -469,13 +794,16 @@ def main():
     if len(specs) > 1:
         sys.exit("one counter per film for now; the overlay chain takes one clip")
     cps = [(sp, counter_plan(sp, segs, fps, total)) for sp in specs]
+    zooms = zoom_plan(m.get("zooms") or [], segs, fps)
     tmpdir = os.path.join(_project.projects_dir(), mid, "temp", "edl")
     os.makedirs(tmpdir, exist_ok=True)
 
     if args.list:
-        show_list(segs, fps, total, cps)
+        runs = {k: moved_runs(s, segs) for k, s in srcs.items() if s.get("paint")}
+        show_list(segs, fps, total, cps, zooms, {k: v for k, v in runs.items() if v})
         return
 
+    follows = prepare_follows(srcs, segs, tmpdir)
     cards = []
     for sp, cp in cps:
         st = dict(style, **{k: sp[k] for k in ("hold_after", "fade") if k in sp})
@@ -485,7 +813,7 @@ def main():
     if args.frame:
         for t in args.frame:
             tt = parse_t(t)
-            one_frame(segs, canvas, fps, tt, cards,
+            one_frame(segs, canvas, fps, tt, follows, zooms, cards,
                       os.path.join(tmpdir, "frame-%s.png" % fmt(tt).replace(":", "m")))
         return
 
@@ -498,7 +826,7 @@ def main():
         clip = os.path.join(tmpdir, "counter.mov")
         write_card_video(frames, card, fps, clip)
         g0 = cps[0][1]["g0"]
-    inputs, graph, out = build(segs, canvas, fps, clip, xy, g0)
+    inputs, graph, out = build(segs, canvas, fps, follows, zooms, clip, xy, g0)
     render = _encode.resolve(dict(DEFAULT_RENDER, **(m.get("render") or {})))
     runtime = total / fps
     tmp = dst + ".part.mp4"
@@ -527,11 +855,19 @@ def main():
     burned = ["EDL cut: %d segments from %d sources, %s"
               % (len(segs), len({s["src"]["key"] for s in segs}), fmt(runtime))]
     for s in srcs.values():
+        if int(s.get("rotate", 0)):
+            burned.append("rotate %s by %s" % (s["key"], s["rotate"]))
         for p_ in s.get("paint") or []:
             burned.append("paint %s %s: %s" % (s["key"], p_["rect"], p_.get("_why", "")))
+        for a, b, _ in follows.get(s["key"], []):
+            burned.append("paint on %s tracked through %s-%s (the recorder zooms there)"
+                          % (s["key"], fmt(a), fmt(b)))
         for b in s.get("blur") or []:
             burned.append("blur %s %s %s: %s" % (s["key"], b["rect"], b.get("when"),
                                                  b.get("_why", "")))
+    for z in zooms:
+        burned.append("zoom %.2fx film %s-%s: %s" % (1 / z["rw"], fmt(z["a"]), fmt(z["b"]),
+                                                     z["why"]))
     for sp, cp in cps:
         burned.append("elapsed counter '%s' film %s-%s, stops at %s (source %s->%s)"
                       % (sp.get("label"), fmt(cp["g0"] / fps), fmt(cp["g1"] / fps),
