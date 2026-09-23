@@ -1,69 +1,85 @@
 [
   {
-    "t": 0.3,
+    "t": 2.8,
     "text": "This is a Broker Price Opinion. Three pages, five hundred and thirty-four fields, and an agent fills one in for every listing, by hand.",
     "tight": "A Broker Price Opinion: three pages, five hundred and thirty-four fields, filled in by hand."
   },
   {
-    "t": 15.5,
+    "t": 10.9,
+    "text": "Section three alone compares the house with three recent sales, line by line."
+  },
+  {
+    "t": 18.0,
     "text": "And almost every value in it already exists somewhere else."
   },
   {
-    "t": 22.2,
+    "t": 24.7,
     "text": "In the tax record. In the contractor's scope of work. In three active listings and three recent sales."
   },
   {
-    "t": 34.3,
+    "t": 36.8,
     "text": "This one sold for three hundred ninety-two thousand. Remember that number."
   },
   {
-    "t": 40.5,
+    "t": 44.3,
     "text": "Eight documents the agent already has."
   },
   {
-    "t": 48.4,
+    "t": 50.9,
     "text": "So let's give them to Instafill."
   },
   {
-    "t": 53.3,
+    "t": 55.8,
     "text": "Upload the blank form, all five hundred and thirty-four fields."
   },
   {
-    "t": 65.3,
+    "t": 61.7,
+    "text": "Instafill maps every text box and every checkbox on it."
+  },
+  {
+    "t": 67.8,
     "text": "Then the eight documents, all at once, exactly as they are. No typing, no copy and paste."
   },
   {
-    "t": 85.0,
+    "t": 77.3,
+    "text": "A tax record, a scope of work, six listings. Nothing renamed, nothing reformatted."
+  },
+  {
+    "t": 89.8,
     "text": "Submit."
   },
   {
-    "t": 92.4,
+    "t": 93.1,
     "text": "The AI reads every listing, the tax record and the renovation budget, and puts each value in its field.",
     "tight": "The AI reads every document and puts each value in its field."
   },
   {
-    "t": 103.2,
+    "t": 100.1,
+    "text": "The clock in the corner is real time. The video runs ten times faster."
+  },
+  {
+    "t": 105.7,
     "text": "One minute and fifty seconds."
   },
   {
-    "t": 107.3,
+    "t": 109.8,
     "text": "A normal PDF you can open, edit and send."
   },
   {
-    "t": 113.6,
+    "t": 116.1,
     "text": "The property, the parcel number, the market conditions. And section three: the subject and three comparable sales, side by side. Prices, dates, adjustments.",
     "tight": "The property, the parcel number, the market conditions. And section three: the subject and three comparable sales."
   },
   {
-    "t": 130.4,
+    "t": 132.1,
     "text": "And that sale at three ninety-two? Here it is in the grid, and here in the listing. Same number."
   },
   {
-    "t": 137.4,
+    "t": 139.9,
     "text": "You still review it and sign it. You just don't type it."
   },
   {
-    "t": 152.4,
+    "t": 148.7,
     "text": "Try it on your own form at instafill dot ai."
   }
 ]

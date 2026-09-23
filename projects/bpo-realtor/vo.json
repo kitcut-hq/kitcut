@@ -5,6 +5,11 @@
   "prefix": "bpo-realtor",
   "tmp": "projects/bpo-realtor/temp",
   "clips": [
-    {"id": "film", "title": "BPO film voice-over", "start": 0.0, "end": 155.2}
+    {
+      "id": "film",
+      "title": "BPO film voice-over",
+      "start": 0.0,
+      "end": 154.7
+    }
   ]
 }

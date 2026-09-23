@@ -109,9 +109,9 @@
   "edl": [
     {
       "src": "take1",
-      "from": 5.5,
+      "from": 3.0,
       "to": 20.8,
-      "_why": "the blank form: 2.5 s on page 1, the scroll, then section III held -- the grid the film is about"
+      "_why": "the blank form: opens on 2.5 s of page 1 with music alone before the voice comes in (user: 'music first, then the voice'), the scroll, then section III held"
     },
     {
       "src": "take1",
@@ -202,8 +202,8 @@
     {
       "src": "take5",
       "from": 10.1,
-      "to": 45.0,
-      "_why": "the downloaded PDF, the comps grid, the $392,000 check against the listing, section VI; ends before section VII (empty estimated values)"
+      "to": 42.0,
+      "_why": "the downloaded PDF, the comps grid, the $392,000 check against the listing, section VI; ends before section VII (empty estimated values); ends 3 s earlier (42.0) so the end card is not preceded by a silent stretch"
     },
     {
       "card": "projects/bpo-realtor/cards/checklist.json",
@@ -278,10 +278,11 @@
   ],
   "audio": {
     "voice": "projects/bpo-realtor/outputs/dub/bpo-realtor-film.vo.wav",
-    "music": null,
-    "music_db": -22,
+    "music": "projects/bpo-realtor/audio/When You're Alone - Dyalla.mp3",
+    "music_db": -18,
     "lufs": -14,
-    "_why": "voice: ElevenLabs brian (the channel voice since flatten-pdf) from vo/film.json. Music: the user chose the YouTube Audio Library; set music to the downloaded file and re-render -- it loops, fades and ducks under the voice."
+    "_why": "voice: ElevenLabs brian (the channel voice since flatten-pdf) from vo/film.json. Music: the user chose the YouTube Audio Library; set music to the downloaded file and re-render -- it loops, fades and ducks under the voice.",
+    "music_fade_in": 0.8
   },
   "captions": {
     "words": "projects/bpo-realtor/outputs/dub/bpo-realtor-film.vo.words.json",

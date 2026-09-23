@@ -197,3 +197,22 @@ Studio login. When the track is in `projects/bpo-realtor/audio/`, set
 `audio.music` in edit.json and re-render: loop, fades and ducking are automatic.
 Tooling gaps closed this session: dub-clips --script without a transcript;
 edl-cut audio/captions/display; checklist-card logo.
+- 17:05 render scripts/edl-cut.py -> projects/bpo-realtor/temp/picture.mp4 (--manifest projects/bpo-realtor/edit.json --out projects/bpo-realtor/temp/picture.mp4)
+- 17:06 dub scripts/dub-clips.py -> projects/bpo-realtor/outputs/dub/bpo-realtor-film.vo.wav (--manifest projects/bpo-realtor/vo.json --only film --script projects/bpo-realtor/vo/film.json --tts elevenlabs --voice brian --tag vo --outdir projects/bpo-realtor/outputs/dub --force) -- sync 52.5%, elevenlabs/nPczCjzI2devNBz1zQrb
+- 17:09 render scripts/edl-cut.py -> projects/bpo-realtor/outputs/bpo-realtor.mp4 (--manifest projects/bpo-realtor/edit.json)
+- 17:12 render scripts/edl-cut.py -> projects/bpo-realtor/outputs/bpo-realtor.mp4 (--manifest projects/bpo-realtor/edit.json)
+
+### Session note -- music in, voice retimed
+
+User: the voice starts at the first second and then goes quiet for long
+stretches; let the music play 2-3 s first. Music: "When You're Alone - Dyalla"
+(YouTube Audio Library, audio/), bed at -18 dB, ducked under the voice.
+
+Changes: take1 now opens at 3.0 (2.5 s of page 1 with music alone; voice at
+2.80 s); take5 ends at 42.0 (3 s less dead tail before the end card). Silences
+measured on the voice words: were 8.2/8.9/14.4/7.0/11.9 s, now max 7.9 s (the
+zoom on the documents before Submit -- a picture beat). Four lines ADDED to the
+approved script to fill them (section three; "maps every text box and
+checkbox"; "tax record, scope of work, six listings"; "the clock in the corner
+is real time, the video runs ten times faster"); others moved onto their
+picture. Line 1 now uses its `tight` form. Tell the user about the additions.
