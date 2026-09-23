@@ -1,0 +1,43 @@
+{
+  "v": 1,
+  "id": "bpo-realtor",
+  "intent": "A 2-3 minute product video for @instafill_ai aimed at REAL ESTATE AGENTS rather than at appraisers: the same Residential BPO form and the same synthetic Cantrell dataset the 9:14 walkthrough (neaCnEawvbk) used, re-recorded and re-cut under the angle 'how real estate agents automate paperwork with AI'. Plus one vertical short cut from it. Recorded SILENT -- the narration is a written ElevenLabs voice-over, not a live take.",
+  "pipelines": [],
+  "inputs": {
+    "form": {
+      "path": "projects/bpo-realtor/assets/forms/BPO_TEMPLATE_Standard.pdf",
+      "pages": 3,
+      "acroform_fields": 534,
+      "breakdown": "455 text, 78 button, 1 choice -- measured with pypdf, which is where the '500+ fields' claim in the old video comes from",
+      "sections": "I General Market Conditions, II Subject Marketability, III Competitive Closed Sales, IV Competitive Listings, and the adjustment grids"
+    },
+    "subject": {
+      "path": "projects/bpo-realtor/assets/forms/cantrell_tax.pdf",
+      "address": "946 Alderwick St, Philadelphia, PA 19145",
+      "what": "the subject property: Pending at $151,800, 3 bed / 1 bath, 1,158 sqft, built 1928, condition 'Major Rehab Needed', tax assessed $241,200",
+      "why_it_matters": "the story of the video is the gap between $151,800 as-is and ~$400k renovated -- that gap is what the BPO has to document"
+    },
+    "scope": {
+      "path": "projects/bpo-realtor/assets/forms/cantrell_scope.pdf",
+      "what": "Northline Restoration Co. rehabilitation budget for 946 Alderwick St -- demolition $10,500, roofing $9,500, HVAC $8,500, flooring $5,500, plus drywall, kitchen, plumbing, paint, cleanup"
+    },
+    "closed_sales": [
+      {"path": "projects/bpo-realtor/assets/forms/cantrell_sold1.pdf", "address": "614 Wrenford St", "closed": "2026-06-12", "price": 392000, "beds_baths": "3 / 1 Full, 1 Half", "sqft": 1118},
+      {"path": "projects/bpo-realtor/assets/forms/cantrell_sold2.pdf", "address": "2251 S Kingsleigh St", "closed": "2026-07-17", "price": 404500, "beds_baths": "2 / 2 Full, 1 Half", "sqft": 1040},
+      {"path": "projects/bpo-realtor/assets/forms/cantrell_sold3.pdf", "address": "1844 S Bramwell St", "closed": "2026-08-07", "price": 418000, "beds_baths": "4 / 1 Full", "sqft": 1170}
+    ],
+    "active_listings": [
+      {"path": "projects/bpo-realtor/assets/forms/cantrell_act1.pdf", "address": "1046 Branton St", "status": "Active", "price": 389500, "beds_baths": "3 / 1 Full, 1 Half", "sqft": 1286},
+      {"path": "projects/bpo-realtor/assets/forms/cantrell_act2.pdf", "address": "1124 S Marlowe St", "status": "Active Under Contract", "price": 424500, "beds_baths": "3 / 1 Full, 1 Half", "sqft": 1146},
+      {"path": "projects/bpo-realtor/assets/forms/cantrell_act3.pdf", "address": "821 Bellington Ave", "status": "Active", "price": 442000, "beds_baths": "3 / 1 Full, 1 Half", "sqft": 1092}
+    ],
+    "_assets_are_committed": "These nine PDFs live under assets/ and are IN GIT on purpose, against the convention that project content is gitignored. The precedent is the failure this project exists to avoid: projects/neaCnEawvbk kept only its manifests, its sources are gone, and the video it made cannot be rebuilt or re-cut today. 490 KB of synthetic data is a cheap price for a reproducible demo, and nothing here is real -- the addresses, MLS numbers, licences and phone numbers are invented."
+  },
+  "controls": {},
+  "deliverables": {},
+  "notes": [
+    "Predecessor: neaCnEawvbk, 'How to fill out BPO forms with AI | Residential Broker Price Opinion', 9:14, with three vertical shorts. This project is NOT a re-cut of it -- the requirement is a new recording of the same form on the same data.",
+    "Channel: Instafill, @instafill_ai, UCa57I5DFqulQaoMR_0H--kA."
+  ],
+  "updated_utc": "2026-09-23T11:33:22Z"
+}
