@@ -18,6 +18,19 @@ A channel is asserted by handle AND reported by id, because a handle can be
 changed by its owner and an id cannot. The id is what belongs in a project
 file.
 
+THE BRAND-ACCOUNT TRAP, which cost an hour here. A YouTube channel is often a
+*brand account* the login merely manages, and OAuth authenticates the LOGIN --
+so `channels.list(mine=True)` returns the login's own channel unless the brand
+account is picked at the chooser. Two things suppress that chooser:
+
+  * an `Internal` consent screen -- a brand account is not an org account, so
+    Google refuses it outright with `Error 403: org_internal`. The audience
+    must be External.
+  * a browser already signed in -- Google silently reuses the session and the
+    chooser never renders, even with prompt=consent. Revoke the app at
+    myaccount.google.com/connections and use --no-browser to paste the URL
+    into a private window.
+
 WHAT YOU NEED BEFORE THE FIRST RUN (once per machine):
 
   1. Google Cloud Console -> a project (any) -> "Enable APIs and services" ->
@@ -39,6 +52,7 @@ Invoke as:
   python scripts/yt-connect.py --check
   python scripts/yt-connect.py --channel @instafill_ai
   python scripts/yt-connect.py --channel @instafill_ai --reauth
+  python scripts/yt-connect.py --channel @instafill_ai --reauth --no-browser
 """
 import sys, os, argparse
 
@@ -159,7 +173,8 @@ def do_connect(args):
     print("Opening Google's consent screen..." if args.reauth
           else "Using the grant already on this machine (--reauth forces a "
                "new consent)...")
-    creds = _yt.credentials(handle=args.channel, reauth=args.reauth)
+    creds = _yt.credentials(handle=args.channel, reauth=args.reauth,
+                            open_browser=not args.no_browser)
     ch = describe(service(creds))
     print()
     report(ch)
@@ -192,6 +207,10 @@ def main():
     ap.add_argument("--check", action="store_true",
                     help="report what this machine holds and who the grant "
                          "is, without consenting to anything")
+    ap.add_argument("--no-browser", action="store_true",
+                    help="print the consent URL instead of opening a browser, "
+                         "so it can be pasted into a PRIVATE window -- the "
+                         "only reliable way to reach a brand-account channel")
     ap.add_argument("--reauth", action="store_true",
                     help="force a fresh Google consent; use when adding a "
                          "channel or after a revoked grant")

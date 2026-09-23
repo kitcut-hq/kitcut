@@ -147,7 +147,7 @@ def channel_token(handle):
     return os.path.join(OAUTH_DIR, "token-%s.json" % safe)
 
 
-def credentials(handle=None, reauth=False):
+def credentials(handle=None, reauth=False, open_browser=True):
     """A usable credential, preferring .env over the cached token file.
 
     .env is where this repo already keeps secrets, and a refresh token there
@@ -190,8 +190,14 @@ def credentials(handle=None, reauth=False):
         flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET, SCOPES)
         # offline + consent so Google actually returns a refresh token; it
         # withholds one on a repeat grant otherwise, leaving .env unfillable.
+        # open_browser=False prints the URL and waits instead of launching the
+        # default browser. That matters for a BRAND-ACCOUNT channel: the
+        # default browser carries a signed-in session Google reuses silently,
+        # picking the login's own channel and never showing the channel
+        # chooser. Pasting the URL into a private window forces the choice.
         creds = flow.run_local_server(port=0, access_type="offline",
-                                      prompt="consent")
+                                      prompt="consent",
+                                      open_browser=open_browser)
     os.makedirs(OAUTH_DIR, exist_ok=True)
     with open(token_path, "w", encoding="utf-8") as f:
         f.write(creds.to_json())

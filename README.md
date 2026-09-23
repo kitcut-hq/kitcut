@@ -2191,7 +2191,7 @@ mid-publish. `yt-connect.py` is that step on its own.
 ```powershell
 python scripts/yt-connect.py --check                        # free: am I connected, and as whom?
 python scripts/yt-connect.py --channel @instafill_ai        # connect, asserting the channel
-python scripts/yt-connect.py --channel @instafill_ai --reauth   # force a fresh consent
+python scripts/yt-connect.py --channel @instafill_ai --reauth --no-browser   # the brand-account route
 ```
 
 Once per machine, before the first run:
@@ -2207,6 +2207,34 @@ Once per machine, before the first run:
 4. Save it as `.yt-oauth/client_secret.json` (gitignored).
 5. Run `--channel`. A browser opens: pick the **brand account** that owns the
    channel, not the personal login it sits under.
+
+### The brand-account trap
+
+Measured on @instafill_ai, 2026-09-23, at a cost of about an hour. A channel is
+usually a **brand account** that a login merely manages, and OAuth authenticates
+the **login** -- so `channels.list(mine=True)` returns the login's own channel
+(here `Eugene Smirnov`, @eugenesmirnov9343, 5 videos) rather than the one you
+meant (`Instafill`, @instafill_ai, `UCa57I5DFqulQaoMR_0H--kA`, 46 videos). The
+brand account has to be picked at Google's chooser, and **two settings suppress
+that chooser entirely**:
+
+- **An `Internal` consent screen.** A brand account is not an organisation
+  account, so Google does not merely hide it -- picking it fails outright with
+  `Error 403: org_internal`. The audience must be **External**. For a Workspace
+  login `Internal` is the tempting choice, because it needs no test users and
+  has no token expiry; it cannot work here.
+- **A browser that is already signed in.** Google reuses the session, picks the
+  login's channel silently and completes the whole flow without rendering a
+  chooser -- `prompt=consent` does not help, because it re-asks for *scopes*,
+  not for *identity*. Revoke the app at `myaccount.google.com/connections`, then
+  use **`--no-browser`** and paste the URL into a **private window**, where
+  there is no session to reuse. That is what finally worked.
+
+`External` + `Testing` costs a re-consent every seven days. Moving to
+`In production` needs an app home page and a privacy policy URL on the Branding
+page (`https://instafill.ai` and `https://instafill.ai/home/privacy` for this
+channel), plus domain verification -- worth doing once, but not a blocker: the
+weekly symptom is a refresh that fails, and `--check` names it.
 
 The grant is filed per channel (`.yt-oauth/token-<handle>.json`), so a second
 channel does not burn the first one's consent. A grant that comes back for the
