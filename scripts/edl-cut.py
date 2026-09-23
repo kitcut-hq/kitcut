@@ -131,8 +131,13 @@ def load(mpath):
         n = int(math.floor((b - a) / sp * fps + 1e-6))
         if n < 1:
             sys.exit("edl[%d] is shorter than one frame at x%s" % (i, sp))
+        crop = e.get("crop")
+        if crop:
+            cx_, cy_, cw_, ch_ = [int(v) for v in crop]
+            if cx_ < 0 or cy_ < 0 or cx_ + cw_ > s["w"] or cy_ + ch_ > s["h"]:
+                sys.exit("edl[%d] crop %s leaves the %dx%d source" % (i, crop, s["w"], s["h"]))
         segs.append({"i": i, "src": s, "from": a, "to": b, "speed": sp,
-                     "f0": frame, "n": n, "why": e.get("_why", "")})
+                     "f0": frame, "n": n, "why": e.get("_why", ""), "crop": crop})
         frame += n
     if not segs:
         sys.exit("the manifest has no edl entries")
@@ -233,7 +238,9 @@ class Card:
     def __init__(self, style, spec, canvas_h):
         self.st = style
         self.spec = spec
-        k = canvas_h / 1080.0
+        # sizes are authored for a 1080-line landscape frame; `scale` lets a
+        # vertical style pick its own size instead of inheriting 1920/1080
+        k = float(style.get("scale", canvas_h / 1080.0))
         self.k = k
         c = style["card"]
         self.w, self.h = int(round(c["w"] * k)), int(round(c["h"] * k))
@@ -330,7 +337,8 @@ class Card:
     def xy(self, cw, ch):
         mx, my = [v * self.k for v in self.st.get("margin", [40, 20])]
         corner = self.st.get("corner", "bottom-right")
-        x = cw - self.w - mx if "right" in corner else mx
+        x = (cw - self.w - mx if "right" in corner else
+             mx if "left" in corner else (cw - self.w) // 2)
         y = ch - self.h - my if "bottom" in corner else my
         return int(round(x)), int(round(y))
 
@@ -705,7 +713,7 @@ def fit(cw, ch, bg):
 
 
 def build(segs, canvas, fps, follows, zooms, card_clip=None, card_xy=None, card_g0=0,
-          captions=None, audio=None):
+          captions=None, audio=None, overlays=None):
     cw, ch = canvas
     inputs, parts = Inputs(), []
     for k, s in enumerate(segs):
@@ -723,8 +731,13 @@ def build(segs, canvas, fps, follows, zooms, card_clip=None, card_xy=None, card_
         parts += tp
         sp = s["speed"]
         pts = "PTS-STARTPTS" if sp == 1.0 else "(PTS-STARTPTS)/%g" % sp
-        chain = ("setpts=%s,fps=%g,%s,trim=end_frame=%d,setpts=PTS-STARTPTS"
-                 % (pts, fps, fit(cw, ch, src.get("bg", "#000000")), s["n"]))
+        # A crop is how a landscape screen becomes a vertical short: it runs
+        # AFTER paint and blur, so their rects stay in full-source pixels --
+        # the one frame a human measured them on.
+        crop = ("crop=%d:%d:%d:%d," % (s["crop"][2], s["crop"][3], s["crop"][0], s["crop"][1])
+                if s.get("crop") else "")
+        chain = ("%ssetpts=%s,fps=%g,%s,trim=end_frame=%d,setpts=PTS-STARTPTS"
+                 % (crop, pts, fps, fit(cw, ch, src.get("bg", "#000000")), s["n"]))
         a, b = s["f0"] / fps, (s["f0"] + s["n"]) / fps
         mine = [z for z in zooms if z["b"] > a and z["a"] < b]
         if mine:
@@ -743,6 +756,18 @@ def build(segs, canvas, fps, follows, zooms, card_clip=None, card_xy=None, card_
         parts.append("[film][card]overlay=%d:%d:eof_action=pass:format=auto,"
                      "format=yuv420p[vout]" % card_xy)
         out = "vout"
+    if overlays:
+        # image-overlay.py owns the look and the motion; it hands back PNGs to
+        # add as looped inputs and a graph to splice onto the tail of ours
+        io = _imgoverlay()
+        pngs, ofc, oout = io.prepare(overlays["preset"], overlays["specs"], cw, ch,
+                                     overlays["tmpdir"], tag="edl", base=out,
+                                     first_input=inputs.n, runtime=overlays["runtime"])
+        for png in pngs:
+            inputs.add("-loop", "1", "-framerate", "%g" % fps, "-i", png)
+        if ofc:
+            parts.append(ofc)
+            out = oout
     if captions:
         # after the counter card, so a caption is never drawn under it; the
         # path is repo-relative because ffmpeg runs from ROOT and a Windows
@@ -837,6 +862,11 @@ def one_frame(segs, canvas, fps, t, follows, zooms, cards, out_png):
     im.convert("RGB").save(out_png)
     print("  film %s = %s %s (x%g)  ->  %s"
           % (fmt(t), s["src"]["key"], fmt(st), s["speed"], rel(out_png)))
+
+
+def _imgoverlay():
+    from importlib import import_module
+    return import_module("image-overlay")
 
 
 def caption_ass(spec, canvas, tmpdir):
@@ -978,8 +1008,20 @@ def main():
         for k in ("voice", "music"):
             if audio.get(k) and not os.path.exists(audio[k]):
                 sys.exit("audio.%s: %s does not exist" % (k, audio[k]))
+    img_specs = m.get("image_overlays") or []
+    ov = None
+    if img_specs:
+        preset = m.get("overlay_preset", "config/overlays/end-card.json")
+        pdoc = json.load(open(_env.resolve(preset), encoding="utf-8"))
+        for i, sp in enumerate(img_specs):
+            at, _ = _imgoverlay().resolve_window(sp, pdoc, total / fps)
+            if at >= total / fps:
+                sys.exit("image overlay %d starts at %.1fs but the film runs %.1fs"
+                         % (i, at, total / fps))
+        ov = {"preset": preset, "specs": img_specs, "tmpdir": tmpdir, "runtime": total / fps,
+              "doc": pdoc}
     inputs, graph, out, aout = build(segs, canvas, fps, follows, zooms, clip, xy, g0,
-                                     captions=ass, audio=audio)
+                                     captions=ass, audio=audio, overlays=ov)
     render = _encode.resolve(dict(DEFAULT_RENDER, **(m.get("render") or {})))
     runtime = total / fps
     tmp = dst + ".part.mp4"
@@ -1027,6 +1069,8 @@ def main():
     for z in zooms:
         burned.append("zoom %.2fx film %s-%s: %s" % (1 / z["rw"], fmt(z["a"]), fmt(z["b"]),
                                                      z["why"]))
+    for sp in img_specs:
+        burned.append(_imgoverlay().describe(sp, ov["doc"], total / fps))
     if capspec:
         burned.append("captions %s from %s" % (capspec["style"], capspec["words"]))
     if audio:

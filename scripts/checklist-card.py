@@ -79,7 +79,9 @@ class Checklist:
     def __init__(self, spec, style, size):
         self.spec, self.st = spec, style
         self.W, self.H = size
-        self.k = self.H / 1080.0
+        # scale by the height on landscape, but never wider than the frame: a
+        # 1080x1920 short would otherwise get a 1.78x card twice its own width
+        self.k = min(self.H / 1080.0, self.W / 1200.0)
         f = lambda key: ImageFont.truetype(  # noqa: E731
             _overlay.repo_path(style[key]["font"]), max(6, int(round(style[key]["size"] * self.k))))
         self.f_head, self.f_item, self.f_cta = f("headline"), f("item"), f("cta")

@@ -1334,6 +1334,22 @@ Transcribe the voice back and diff it against the script before trusting it.
 On bpo-realtor every difference was number formatting, apart from one
 "and"→"in" that ElevenLabs actually said.
 
+**A vertical short from the same takes** is one more manifest (`canvas: [1080, 1920]`,
+`projects/bpo-realtor/shorts/s1.json`):
+
+- An EDL entry may carry `crop: [x, y, w, h]` in source pixels. It runs after
+  paint and blur, so their rects stay in full-source pixels. Keep every crop at
+  one aspect (5:4 here) so the picture box never changes shape between shots.
+- `image_overlays` work as in `tighten-cut.py`, after the counter card and
+  before the captions. The title card uses them.
+- `counter_style` picks a vertical counter (`elapsed-counter-vertical.json`:
+  `scale`, `top-centre`). On a short the counter takes the title band's place
+  while the fill runs: under the picture it collided with the captions, so the
+  title steps aside in two windows instead.
+- `checklist-card.py` scales by `min(H/1080, W/1200)` so a vertical card is not
+  wider than its frame. `window-vertical.json` is the faster variant for shorts.
+- The caption preset for this layout is `instafill-vertical-dark.json`.
+
 ## Tightening one recording that is already composited
 
 `screencast-cut.py` needs two tapes. Most screen recorders hand you one — screen,

@@ -235,3 +235,22 @@ fields; the form has 534 (pypdf) -- this one says 534.
 
 Open from Oleksandr's list: the Short from this video (S1 "534 fields in 1:50"
 is the proposal), then HIPAA / Boyd Group cases when their inputs arrive.
+- 18:35 render scripts/edl-cut.py -> projects/bpo-realtor/temp/s1-picture.mp4 (--manifest projects/bpo-realtor/shorts/s1.json --out projects/bpo-realtor/temp/s1-picture.mp4)
+- 18:37 render scripts/edl-cut.py -> projects/bpo-realtor/temp/s1-picture.mp4 (--manifest projects/bpo-realtor/shorts/s1.json --out projects/bpo-realtor/temp/s1-picture.mp4)
+- 18:37 dub scripts/dub-clips.py -> projects/bpo-realtor/outputs/dub/bpo-realtor-s1.vo.wav (--manifest projects/bpo-realtor/vo-s1.json --only s1 --script projects/bpo-realtor/vo/s1.json --tts elevenlabs --voice brian --tag vo --outdir projects/bpo-realtor/outputs/dub --force) -- sync 48.8%, elevenlabs/nPczCjzI2devNBz1zQrb
+- 18:38 render scripts/edl-cut.py -> projects/bpo-realtor/outputs/shorts/bpo-realtor-s1.mp4 (--manifest projects/bpo-realtor/shorts/s1.json)
+- 18:40 render scripts/edl-cut.py -> projects/bpo-realtor/outputs/shorts/bpo-realtor-s1.mp4 (--manifest projects/bpo-realtor/shorts/s1.json)
+- 18:42 render scripts/edl-cut.py -> projects/bpo-realtor/outputs/shorts/bpo-realtor-s1.mp4 (--manifest projects/bpo-realtor/shorts/s1.json)
+
+### Session note -- short S1
+
+User will publish the long video himself. Asked for the short.
+outputs/shorts/bpo-realtor-s1.mp4 (0:39.4, 1080x1920, -15 LUFS), manifest
+shorts/s1.json, voice vo/s1.json (brian, all lines natural), title/description
+in shorts/s1-*.txt. NOT uploaded -- ask first.
+
+Layout: title card (make-card stacked-blocks, cards/short-title.json) in the top
+band; 5:4 picture box y 528-1392 (every crop 5:4); captions below. During the
+fill the counter takes the title band (the title steps aside 11.0-26.0) --
+under the picture it collided with the captions. The 57.9 segment reuses the
+Submit crop to keep the yellow 8-files banner out. End card: window-vertical.

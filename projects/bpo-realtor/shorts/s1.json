@@ -1,0 +1,232 @@
+{
+  "_comment": "Short S1 '534 fields in 1:50', 1080x1920, cut from the same takes as the film. Every crop is 5:4 so the picture box (1080x864, y 528-1392) never changes shape; the title card sits above it, the counter and captions below. Voice: vo/s1.json.",
+  "id": "bpo-realtor",
+  "output": "projects/bpo-realtor/outputs/shorts/bpo-realtor-s1.mp4",
+  "canvas": [
+    1080,
+    1920
+  ],
+  "fps": 30,
+  "render": {
+    "cq": 21
+  },
+  "counter_style": "config/overlays/elapsed-counter-vertical.json",
+  "sources": {
+    "take1": {
+      "path": "projects/bpo-realtor/sources/take1-form.mp4",
+      "bg": "#ece6fd"
+    },
+    "take3": {
+      "path": "projects/bpo-realtor/sources/take3-upload-take4-fill.mp4",
+      "bg": "#ece6fd"
+    },
+    "take5": {
+      "path": "projects/bpo-realtor/sources/take5-results.mp4",
+      "bg": "#ece6fd"
+    },
+    "phone": {
+      "path": "projects/bpo-realtor/sources/phone.mp4",
+      "rotate": 180,
+      "bg": "#ece6fd"
+    }
+  },
+  "edl": [
+    {
+      "src": "take1",
+      "from": 16.0,
+      "to": 20.3,
+      "crop": [
+        330,
+        300,
+        900,
+        720
+      ],
+      "_why": "the blank comparable-sales grid"
+    },
+    {
+      "src": "take3",
+      "from": 40.8,
+      "to": 44.0,
+      "crop": [
+        985,
+        344,
+        780,
+        624
+      ],
+      "_why": "the eight documents listed (framed below the yellow 8-files banner)"
+    },
+    {
+      "src": "take3",
+      "from": 55.6,
+      "to": 57.9,
+      "crop": [
+        985,
+        344,
+        780,
+        624
+      ],
+      "_why": "to Submit"
+    },
+    {
+      "src": "phone",
+      "from": 272.0,
+      "to": 273.3,
+      "crop": [
+        570,
+        0,
+        1350,
+        1080
+      ],
+      "_why": "the click (B-roll)"
+    },
+    {
+      "src": "take3",
+      "from": 57.9,
+      "to": 61.3,
+      "crop": [
+        985,
+        344,
+        780,
+        624
+      ],
+      "_why": "Submit fires at 58.00: the counter starts; same framing as the Submit shot, which keeps the yellow 8-files banner (y 280-335) out"
+    },
+    {
+      "src": "take3",
+      "from": 61.3,
+      "to": 168.9,
+      "speed": 12,
+      "crop": [
+        960,
+        250,
+        830,
+        664
+      ],
+      "_why": "the fill at 12x under the counter"
+    },
+    {
+      "src": "take3",
+      "from": 168.9,
+      "to": 170.2,
+      "crop": [
+        960,
+        250,
+        830,
+        664
+      ],
+      "_why": "done: the counter stops at 1:50"
+    },
+    {
+      "src": "take3",
+      "from": 181.0,
+      "to": 183.6,
+      "crop": [
+        125,
+        250,
+        820,
+        656
+      ],
+      "_why": "the filled form appears"
+    },
+    {
+      "src": "take5",
+      "from": 23.5,
+      "to": 27.5,
+      "crop": [
+        205,
+        320,
+        800,
+        640
+      ],
+      "_why": "the filled grid: subject and comparable 1, $392,000"
+    },
+    {
+      "src": "take5",
+      "from": 29.2,
+      "to": 32.6,
+      "crop": [
+        830,
+        160,
+        900,
+        720
+      ],
+      "_why": "the same $392,000 on the listing"
+    },
+    {
+      "card": "projects/bpo-realtor/cards/checklist.json",
+      "style": "config/cards/checklist/window-vertical.json",
+      "_why": "end card with the logo"
+    }
+  ],
+  "counters": [
+    {
+      "src": "take3",
+      "start": 58.0,
+      "end": 168.88,
+      "label": "AI filling the form",
+      "done_label": "Form filled",
+      "hold_after": 2.0
+    }
+  ],
+  "image_overlays": [
+    {
+      "card": "projects/bpo-realtor/cards/short-title.json",
+      "at": 0.0,
+      "dur": 11.0,
+      "layout": {
+        "corner": "top",
+        "margin_y_px": 40,
+        "width_frac": 0.86
+      },
+      "in": {
+        "type": "wipe",
+        "dur": 0.5
+      },
+      "out": {
+        "type": "fade",
+        "dur": 0.3
+      },
+      "background": null,
+      "_why": "the claim, above the picture; steps aside at 11.0 for the counter, which takes this band during the fill"
+    },
+    {
+      "card": "projects/bpo-realtor/cards/short-title.json",
+      "at": 26.0,
+      "dur": 8.6,
+      "layout": {
+        "corner": "top",
+        "margin_y_px": 40,
+        "width_frac": 0.86
+      },
+      "in": {
+        "type": "fade",
+        "dur": 0.3
+      },
+      "out": {
+        "type": "fade",
+        "dur": 0.3
+      },
+      "background": null,
+      "_why": "back after the counter has faded, until the end card"
+    }
+  ],
+  "audio": {
+    "voice": "projects/bpo-realtor/outputs/dub/bpo-realtor-s1.vo.wav",
+    "music": "projects/bpo-realtor/audio/When You're Alone - Dyalla.mp3",
+    "music_db": -18,
+    "music_fade_in": 0.4,
+    "music_fade_out": 2.0,
+    "lufs": -14
+  },
+  "captions": {
+    "words": "projects/bpo-realtor/outputs/dub/bpo-realtor-s1.vo.words.json",
+    "style": "config/presets/instafill-vertical-dark.json",
+    "display": {
+      "five hundred and thirty-four": "534",
+      "one minute fifty": "1:50",
+      "three ninety-two": "$392,000",
+      "instafill dot ai": "instafill.ai",
+      "twelve times": "12x"
+    }
+  }
+}
