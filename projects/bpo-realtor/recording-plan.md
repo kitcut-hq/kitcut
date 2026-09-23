@@ -1,188 +1,185 @@
 # bpo-realtor — recording plan
 
-For the person holding the mouse. **You do not speak.** Every word of this
-video is written afterwards and spoken by ElevenLabs, so the recording carries
-picture only. That is deliberate: it removes retakes for stumbles, and it
-removes the lip-sync problem a written voice-over over a face would create.
+For the person holding the mouse.
 
-Five short takes, not one long one. A fumble then costs one take, not the day.
+Three things decide everything below, so they come first:
+
+1. **You do not speak.** Every word is written afterwards and spoken by
+   ElevenLabs. Silence on the recording is correct, not a mistake.
+2. **Two cameras.** The screen (Cursorful) and a phone on a stand filming the
+   desk and your hands. The phone runs continuously and is never touched.
+3. **No face.** A written voice-over over a filmed face is a lip-sync problem
+   by construction, and the phone is pointed at paper, not at you.
 
 ---
 
-## Part 0 — what the previous video got wrong
+## Part 0 — why there is a second camera at all
 
-Read this first; it is the whole reason for the checklist below. Frames pulled
-from the published `neaCnEawvbk` (1920x1080, 9:14):
+A second angle used for decoration is worse than no second angle. This one has
+a job:
 
-| at | what is on screen | why it hurts |
+> On the screen: 534 fields. On the desk: the same three sheets of paper
+> somebody fills in by hand.
+
+So **print `assets/forms/BPO_TEMPLATE_Standard.pdf` on three sheets** and put
+them on the desk before you start. The phone films your hand turning those
+pages. That is the shot — the physical weight of the thing the software
+removes.
+
+The cutaways are **punctuation, 2–3 seconds each**, in three places: when the
+paper form is the subject, at the moment of Submit, and at the end. A product
+demo that spends half its runtime on a hand is a lifestyle advert.
+
+---
+
+## Part 1 — what the previous BPO video got wrong
+
+Not editing mistakes — **recording** mistakes, which no cut repairs. From the
+published `neaCnEawvbk`:
+
+| at | on screen | why it hurts |
 |---|---|---|
-| 0:52 | bookmarks bar reading `hipa.ai`, `crowd links`, `Re: Do you assembl…` (two Gmail threads) | private working context on a public product video |
-| 2:56 | five browser tabs titled `(anonymous)` | looks like a debugging session, not a product |
-| 6:20 | the webcam bubble sits **on top of the adjustment grid** | it covers the exact thing the video exists to show |
-| throughout | taskbar, system clock, notification area | nothing to do with the product |
+| 0:52 | bookmarks bar reading `hipa.ai`, `crowd links`, two Gmail threads | private working context on a public product video |
+| 2:56 | five tabs titled `(anonymous)` | looks like a debugging session |
+| 6:20 | the webcam bubble sits **on top of the adjustment grid** | it covers the one thing the video exists to show |
 
-None of these are editing mistakes. They are **recording** mistakes, and no
-amount of cutting afterwards fixes the first two.
-
----
-
-## Part 1 — prepare the machine (15 minutes, once)
-
-**Screen**
-- Display resolution **1920x1080**. If the laptop panel is larger, set it to
-  1920x1080 for the recording — a downscaled 4K screencast reads soft, and the
-  vertical short cut out of it reads worse.
-- Nothing on the desktop wallpaper worth reading.
-
-**Browser — use a clean profile**
-- Chrome → profile icon → **Add** → a new profile with no name, no sync, no
-  extensions. This is faster and safer than tidying the working profile, and
-  the working profile stays untouched.
-- Hide the bookmarks bar: **Ctrl+Shift+B**.
-- Exactly **one tab** open. Close everything else.
-- **Zoom to 125 %** (Ctrl and `+` twice). This is not cosmetic: the vertical
-  short only keeps a middle band of the screen, and at 100 % the form's
-  labels are unreadable there.
-
-**Windows**
-- Notifications off: **Win+N** → Do not disturb ON. One Slack toast mid-take
-  and the take is gone.
-- Quit Telegram, Slack, mail, anything that can pop.
-- Clock and taskbar can stay; the edit crops them.
-
-**Webcam: OFF.** Not minimised — off. There is no face in this video.
+Cursorful removes the first two by framing the browser window. The third is
+solved by not filming a face.
 
 ---
 
-## Part 2 — the recorder
+## Part 2 — set up (20 minutes, once)
 
-Use the **Windows 11 Snipping Tool**, which records video and needs no install:
+### The screen
 
-1. **Win+Shift+S**
-2. In the little toolbar at the top, switch from the camera icon to the
-   **video camera icon**.
-3. Drag a rectangle over the **whole screen** (or click the full-screen
-   option).
-4. **Start** → a 3-second countdown → record.
-5. **Stop** → Save → into `projects/bpo-realtor/sources/`.
+- **Cursorful export at 1080p.** The reference recording `sARFB1XnQKk` is
+  1280x720, and that is not enough here: the vertical short keeps only a
+  middle band of the frame, and 720p falls apart inside it.
+- Browser **zoom 125 %** (`Ctrl` `+` twice). The form's labels must stay
+  readable after the vertical crop.
+- A **clean Chrome profile**: no extensions bar, no bookmarks
+  (`Ctrl+Shift+B`), signed into Instafill and nothing else.
+- Tabs: open the ones take 2 needs **before** recording starts, so no tab is
+  ever created on camera.
 
-> **Do not use the Xbox Game Bar here.** It refuses to record File Explorer and
-> the desktop — and take 2 is File Explorer. It was fine for `books-giveaway`
-> because that was browser-only.
+### Windows
 
-Name the files exactly:
+- `Win+N` → **Do not disturb ON**.
+- Quit Telegram, Slack, mail.
 
-```
-take1-form.mp4
-take2-documents.mp4
-take3-upload.mp4
-take4-fill.mp4
-take5-result.mp4
-```
+### The phone
 
-Audio does not matter — record it or don't, it is discarded.
+- On a small stand or propped against something solid, to the side, framing
+  **the desk, the printed form and your hands**. Your face out of frame.
+- **1080p, 30 fps.**
+- **Press record once, before take 1, and stop it only after take 5.** Do not
+  start and stop it per take. One continuous file is what lets `sync-tracks.py`
+  line the two cameras up by itself.
+- Do not move the phone once it is rolling.
+
+### The paper
+
+- The three printed pages of the BPO form, squared up on the desk.
 
 ---
 
 ## Part 3 — how to move
 
-Four rules, and they matter more than anything else here:
+More important than anything else in this file:
 
 1. **Move the mouse slowly.** A cursor that snaps across the screen cannot be
-   followed at 1080p, and cannot be followed at all in a vertical crop.
-2. **Pause two full seconds** before and after every click that matters. Those
-   pauses are where the cuts land and where the voice-over breathes. Count them
-   out; two seconds feels much longer than it is.
-3. **Never talk. Never apologise to the screen.**
-4. **If you fumble:** stop, hold still for three seconds, then redo the action
-   from its start. The still moment is what lets the edit remove the fumble
-   cleanly. Do not restart the take.
+   followed — and Cursorful's zoom follows the cursor, so a fast cursor makes
+   the whole frame lurch.
+2. **Pause two full seconds** before and after every click that matters. The
+   cuts land in those pauses and the voice-over breathes there. Count them.
+3. **Never talk.**
+4. **If you fumble:** stop, hold still for three seconds, redo the action from
+   its start. Do not restart the take. The still moment is what lets the fumble
+   be removed cleanly.
 
 ---
 
 ## Part 4 — the five takes
 
-Everything lives in `projects/bpo-realtor/assets/forms/`. Copy that folder's
-nine PDFs somewhere ordinary first — `Downloads` is fine and is what the old
-video used.
+Everything is in `projects/bpo-realtor/assets/forms/`. Save the recordings into
+`projects/bpo-realtor/sources/` with exactly these names:
 
-### Take 1 — the form itself (~45 s)
+```
+take1-form.mp4       take2-documents.mp4   take3-upload.mp4
+take4-fill.mp4       take5-result.mp4
+```
 
-The beat: *534 fields, and none of them get typed.*
+### Take 1 — the form (~45 s)
 
-1. Open `BPO_TEMPLATE_Standard.pdf` in the browser. Hold **3 s**.
-2. Scroll page 1 slowly, top to bottom, about **8 s**.
-3. Same for page 2. When the **COMPETITIVE CLOSED SALES** grid is fully in
-   frame, **stop and hold 3 s**. That grid is the image the whole video is
-   built around.
-4. Same for page 3. Hold **2 s** at the end.
-5. Stop recording.
+*534 fields, and nobody types them.*
 
-### Take 2 — the documents (~25 s)
+1. `BPO_TEMPLATE_Standard.pdf` open in a browser tab. Hold **3 s**.
+2. Scroll page 1 slowly, top to bottom — about **8 s**.
+3. Page 2. When **III. COMPETITIVE CLOSED SALES** is fully in frame, **stop and
+   hold 3 s**. That grid is the image the whole video is built around.
+4. Page 3. Hold **2 s**.
+5. Now look at the phone: turn the three printed pages, one at a time, about
+   **6 s**. (The screen keeps recording; it does not matter what it shows.)
 
-The beat: *these are papers the agent already has.*
+### Take 2 — the documents (~30 s)
 
-1. File Explorer, open on the folder with the nine PDFs. **Details** view,
-   sorted by name, so the file names are readable. Hold **3 s**.
-2. Double-click `cantrell_sold1.pdf`. Let it open. Hold **5 s** — long enough
-   for a viewer to see it is a real listing sheet with a price on it.
-3. Close it. Back to the folder. Hold **2 s**.
-4. Stop recording.
+*Papers the agent already has.*
+
+All eight `cantrell_*.pdf` are already open in tabs — you opened them before
+recording.
+
+1. Click through the tabs slowly: `cantrell_tax`, `cantrell_scope`, then one
+   sold and one active. **Hold 4 s on each.**
+2. On `cantrell_sold1.pdf`, put the cursor on the **sale price** and hold
+   **3 s**. Remember this number; take 5 comes back to it.
 
 ### Take 3 — handing them over (~50 s)
 
-The beat: *upload, don't type.*
+*Upload, don't type.*
 
-1. Instafill, signed in, on **Forms**. Hold **2 s**.
-2. Upload `BPO_TEMPLATE_Standard.pdf`. Wait for it to finish processing.
-   **Hold 4 s** on whatever it says about the form — if a field count appears
-   anywhere on screen, hold on it.
-3. Start filling the form out.
-4. Add the **eight** `cantrell_*.pdf` documents. Select all eight at once
-   rather than one at a time. Hold **4 s** once they are all listed.
-5. Submit. Hold **3 s**.
-6. Stop recording.
+1. Instafill, on **Forms**. Hold **2 s**.
+2. Upload `BPO_TEMPLATE_Standard.pdf`. Wait for processing. If a field count
+   appears anywhere, **hold 4 s** on it.
+3. Start filling the form out, and add the **eight** documents — all eight at
+   once, not one by one. Hold **4 s** when they are listed.
+4. **Submit.** Hold **3 s**. (This is cutaway #2 — keep your hands visible to
+   the phone for a moment.)
 
-### Take 4 — the fill (~however long it takes)
+### Take 4 — the fill
 
-1. Start recording **before** you submit if that is easier; overlap is fine.
-2. **Hands off the mouse entirely.** Do not scroll, do not move the cursor.
-3. Let it run to completion. Hold **3 s** after it finishes.
-4. Stop recording.
+1. **Hands off the mouse completely.** No scrolling, no cursor movement.
+2. Let it run to the end. Hold **3 s** after it finishes.
 
-The edit speeds this up. A still cursor is what makes that look deliberate
-instead of broken.
+The edit speeds this up; a motionless cursor is what makes that read as
+deliberate rather than broken.
 
 ### Take 5 — the result (~70 s)
 
-The beat, and the most important one in the video: *the numbers are in the
-right cells, and you can check.*
+*The numbers are in the right cells — and you can check.*
 
-1. The filled form, open. Hold **3 s**.
-2. Scroll to **III. COMPETITIVE CLOSED SALES**. Frame the grid so the SUBJECT
-   column and all three COMPARABLE columns are visible. Hold **5 s**.
-3. Now the verification shot. Open `cantrell_sold1.pdf` in a second window,
-   side by side with the filled form. Move the cursor to the **sale price** on
-   the listing sheet, hold **3 s**, then move it to **the same number** in the
-   grid and hold **3 s**. Slowly. This single move is the most persuasive
-   thing in the video — it is the difference between "it filled something in"
-   and "it filled in the right thing".
-4. Close the second window. Scroll to **IV. COMPETITIVE LISTINGS** (the active
-   ones). Hold **4 s**.
-5. Click **Download PDF**. Hold **3 s** on the downloaded file.
-6. Stop recording.
+1. The filled form. Hold **3 s**.
+2. Scroll to **III. COMPETITIVE CLOSED SALES**, framed so the SUBJECT column
+   and all three COMPARABLE columns are visible. Hold **5 s**.
+3. **The verification shot — the most persuasive ten seconds in the video.**
+   Put `cantrell_sold1.pdf` beside the filled form. Move the cursor to the sale
+   price on the listing sheet, hold **3 s**, then move it slowly to **the same
+   number** in the grid and hold **3 s**. This is the difference between "it
+   filled something in" and "it filled in the right thing".
+4. Scroll to **IV. COMPETITIVE LISTINGS**. Hold **4 s**.
+5. **Download PDF.** Hold **3 s** on the downloaded file.
+6. Stop the screen recording, then stop the phone.
 
 ---
 
 ## Part 5 — what you do NOT have to care about
 
-- **Length.** Take as long as you like; dead air is removed automatically.
-- **Mistakes.** Hold still for three seconds and redo. That is all.
-- **Order between takes.** They are assembled from this list, not from
-  timestamps.
-- **The wording.** There is none — the script is written to the picture
-  afterwards, so nothing in the recording can contradict it.
-- **Sound.** Discarded.
+- **Length** — dead air is removed automatically.
+- **Mistakes** — hold still three seconds, redo.
+- **Order** — takes are assembled from this list, not from timestamps.
+- **Sound** — discarded from both cameras.
+- **Wording** — there is none; the script is written to the finished picture,
+  so nothing you record can contradict it.
 
-When the five files are in `projects/bpo-realtor/sources/`, say so. Nothing
-else is needed from you until there is a cut to watch.
+When the five screen files and the one phone file are in
+`projects/bpo-realtor/sources/`, say so. Nothing else is needed from you until
+there is a cut to watch.
