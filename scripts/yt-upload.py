@@ -81,6 +81,7 @@ def main():
     ap.add_argument("--reauth", action="store_true",
                     help="force a new Google consent and file the grant under --channel; use when adding a channel this machine has never uploaded to")
     ap.add_argument("--made-for-kids", action="store_true")
+    ap.add_argument("--thumbnail", help="a JPEG/PNG (1280x720, under 2 MB) set as the custom thumbnail")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -112,6 +113,14 @@ def main():
     print("%s  (%.1f MB)" % (os.path.relpath(path, _env.ROOT), size / 1e6))
     print("  title:   %s" % args.title)
     print("  privacy: %s" % args.privacy)
+    thumb = None
+    if args.thumbnail:
+        thumb = _env.resolve(args.thumbnail)
+        if not os.path.exists(thumb):
+            sys.exit("no such thumbnail: %s" % thumb)
+        if os.path.getsize(thumb) > 2 * 1024 * 1024:
+            sys.exit("thumbnail is over YouTube's 2 MB limit")
+        print("  thumb:   %s" % os.path.relpath(thumb, _env.ROOT))
 
     # pass the channel so the grant filed under that handle is used --
     # one login can own several channels and each grant points at one.
@@ -169,10 +178,24 @@ def main():
     if not ok:
         sys.exit("the video is up but not as asked -- fix it in Studio")
 
+    if thumb:
+        # A custom thumbnail is a separate call, and it can fail on its own --
+        # an unverified channel is refused -- so the upload is not undone by it;
+        # the failure is printed and the sidecar says the thumbnail is missing.
+        from googleapiclient.http import MediaFileUpload as _M
+        try:
+            yt.thumbnails().set(videoId=vid, media_body=_M(
+                thumb, mimetype="image/png" if thumb.lower().endswith(".png") else "image/jpeg")).execute()
+            print("  thumbnail set")
+        except Exception as e:                      # noqa: BLE001
+            print("  !! thumbnail NOT set (%s) -- upload it in Studio" % e)
+            thumb = None
+
     side = os.path.splitext(path)[0] + ".youtube.json"
     with open(side, "w", encoding="utf-8") as f:
         json.dump({"id": vid, "url": url, "title": args.title,
                    "privacy": args.privacy, "bytes": size,
+                   "thumbnail": thumb and _project.norm(thumb),
                    "uploaded_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ",
                                                  time.gmtime())},
                   f, ensure_ascii=False, indent=1)

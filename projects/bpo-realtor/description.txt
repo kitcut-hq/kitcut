@@ -1,0 +1,32 @@
+How real estate agents can use AI to automate paperwork: a Residential Broker Price Opinion (BPO) with 534 fields over 3 pages, filled by Instafill.ai from eight documents an agent already has, in 1 minute 50 seconds from the click.
+
+=========================
+
+A BPO is the document that has to justify a price. Almost every value in it already exists somewhere else: in the tax record, the contractor's scope of work, three active listings and three recent sales. Typing it all in by hand is slow and one wrong number gets the report sent back.
+
+In this video:
+- The blank BPO form: 3 pages, 534 fields, the comparable sales grid
+- The eight source documents: tax record, scope of work, 3 active listings, 3 sold listings
+- Uploading the form and the documents to Instafill.ai, as they are, with no renaming
+- The fill itself, with a real-time clock: 1:50 from Submit to the finished form
+- The filled BPO, downloaded as a normal PDF you can edit and send
+- Checking one value against its source: the $392,000 sale, in the grid and on the listing
+
+You still review and sign the report. You just don't type it.
+
+All property data in this video is synthetic and was created for the demonstration.
+
+🔗 Try Instafill.ai: https://instafill.ai
+🔗 BPO automation: https://instafill.ai/solutions/bpo
+🔗 More tutorials: https://www.youtube.com/@instafill_ai
+
+CHAPTERS
+0:00 A 534-field BPO form
+0:24 The documents an agent already has
+0:50 Uploading the form to Instafill
+1:29 Submit: the AI fills it in 1:50
+1:49 The finished BPO
+2:12 Checking a number against its source
+2:27 Recap
+
+#realestate #ai #bpo #Instafill #realestateagent

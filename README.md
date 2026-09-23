@@ -2385,6 +2385,25 @@ later run confidently wrong. The channel is asserted by handle and reported by
 **id**, because an owner can rename a handle and cannot change an id; the id is
 what belongs in a project file.
 
+## A thumbnail in the channel's style: `make-thumbnail.py`
+
+```powershell
+python scripts/make-thumbnail.py --spec projects/<id>/thumbnail.json --list   # layout, shrink warnings
+python scripts/make-thumbnail.py --spec projects/<id>/thumbnail.json          # 1280x720 PNG, 2 MB checked
+python scripts/yt-upload.py <mp4> ... --thumbnail projects/<id>/thumbnail.png
+```
+
+The grammar was read off the channel's six latest public uploads: a dark purple
+field, an Anton headline with one phrase on a yellow slab, the form tilted on
+the right with a shadow, a round yellow time badge, a yellow caption strip, and
+the logo top-left, its lettering re-inked white. The spec holds the words, the
+frame grab plus crop, and the colours. Lines are spaced by ink, not by font
+metrics: Anton's ascent is much taller than its capitals, and metric spacing
+ran the headline off the frame. `html-to-image.py` is not used because it
+refuses opaque pages. `yt-upload.py --thumbnail` sets the image after the
+upload. A failure there (an unverified channel) is printed and does not undo
+the upload.
+
 ## Chapter markers on a published video
 
 Turn a transcript into YouTube chapters, then write them into the video's own

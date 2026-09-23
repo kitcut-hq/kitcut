@@ -1,0 +1,7 @@
+0:00 A 534-field BPO form
+0:24 The documents an agent already has
+0:50 Uploading the form to Instafill
+1:29 Submit: the AI fills it in 1:50
+1:49 The finished BPO
+2:12 Checking a number against its source
+2:27 Recap

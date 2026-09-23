@@ -216,3 +216,22 @@ approved script to fill them (section three; "maps every text box and
 checkbox"; "tax record, scope of work, six listings"; "the clock in the corner
 is real time, the video runs ten times faster"); others moved onto their
 picture. Line 1 now uses its `tight` form. Tell the user about the additions.
+- 18:23 publish scripts/yt-upload.py -> projects/bpo-realtor/outputs/bpo-realtor.mp4 (projects/bpo-realtor/outputs/bpo-realtor.mp4 --title How Real Estate Agents Can Use AI to Automate Paperwork | BPO in 1:50 --description-file projects/bpo-realtor/description.txt --tags real estate ai) https://youtu.be/9Ufk4p-4yMM -- uploaded How Real Estate Agents Can Use AI to Automate Paperwork | BPO in 1:50
+
+### Session note -- uploaded UNLISTED for the user's review
+
+https://youtu.be/9Ufk4p-4yMM -- unlisted on purpose: the user wants to review
+everything before it goes public. Do NOT make it public without their word.
+
+Title follows Oleksandr's angle ("how real estate agents can use AI to automate
+paperwork"). Description/tags/chapters in title.txt, description.txt, tags.txt,
+chapters.txt, modelled on the two best public videos (BPO 158 views, 1004 109):
+long how-to description, bullets, links incl. /solutions/bpo (200), chapters,
+hashtags. Chapters read back from YouTube: 7, valid. Tags: 19.
+
+Thumbnail: new scripts/make-thumbnail.py + thumbnail.json; fonts/Anton (OFL).
+Style read off the last six public thumbnails. The old BPO video says 537
+fields; the form has 534 (pypdf) -- this one says 534.
+
+Open from Oleksandr's list: the Short from this video (S1 "534 fields in 1:50"
+is the proposal), then HIPAA / Boyd Group cases when their inputs arrive.
