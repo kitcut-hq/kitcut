@@ -96,7 +96,8 @@
     "Predecessor: neaCnEawvbk, 'How to fill out BPO forms with AI | Residential Broker Price Opinion', 9:14, with three vertical shorts. This project is NOT a re-cut of it -- the requirement is a new recording of the same form on the same data.",
     "Channel: Instafill, @instafill_ai, UCa57I5DFqulQaoMR_0H--kA.",
     "Angle settled 2026-09-23: NOT the valuation story. The data is synthetic, so leaning on $151,800-vs-$400k invites scrutiny of numbers we invented and points the viewer away from the product. The axis is input vs output -- eight documents the agent already has, 534 fields nobody types. 'The AI does the paperwork. Not you.'",
-    "No face and no phone take. A written ElevenLabs voice-over over a filmed face is a lip-sync problem by construction, and a 3-page 534-field PDF is unreadable in a mobile browser -- a phone take would make the short worse, not better.",
+    "No face, in any take. A written ElevenLabs voice-over over a filmed face is a lip-sync problem by construction. The phone IS used, but it points at the desk, the printed form and the hands -- see inputs.recorder.",
+    "The phone is NOT used to re-shoot the demo in a mobile browser. That was considered and dropped: a 3-page 534-field PDF is unreadable on a phone, so a mobile take would make the vertical short worse, not better. Keep that idea for a video about a short, simple form.",
     "Cursorful replaces the planned cursor-follow auto-zoom tool. Do not build it for this project; revisit only if a future recording cannot use the extension (e.g. File Explorer, which a Chrome extension cannot capture -- which is why take 2 shows the documents as browser tabs instead of as files in a folder)."
   ],
   "updated_utc": "2026-09-23T11:33:22Z"
