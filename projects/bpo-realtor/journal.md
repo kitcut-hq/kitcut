@@ -269,3 +269,6 @@ file list with act1, the whole form heading, grid ending on the comp-2 border,
 the listing's details column with no cut word) instead of one 5:4 crop cutting
 columns. Cost: the picture box changes height between shots and the widest
 shots (blank grid, filled grid) are smaller. Runtime 0:37.8.
+- 19:03 publish scripts/yt-upload.py -> projects/bpo-realtor/outputs/shorts/bpo-realtor-s1.mp4 (projects/bpo-realtor/outputs/shorts/bpo-realtor-s1.mp4 --title AI fills a 534-field real estate form in 1:50 #Shorts --description-file projects/bpo-realtor/shorts/s1-description.txt --tags real estat) https://youtu.be/OLhroTUMoW0 -- uploaded AI fills a 534-field real estate form in 1:50 #Shorts
+
+- short S1 uploaded UNLISTED: https://youtu.be/OLhroTUMoW0 -- the user publishes it himself.

@@ -298,9 +298,9 @@
     },
     "projects/bpo-realtor/outputs/shorts/bpo-realtor-s1.mp4": {
       "status": "current",
-      "built_utc": "2026-09-23T18:53:01Z",
+      "built_utc": "2026-09-23T19:03:49Z",
       "kind": "edl",
-      "script": "scripts/edl-cut.py",
+      "script": "scripts/yt-upload.py",
       "manifest": "projects/bpo-realtor/shorts/s1.json",
       "burned": [
         "EDL cut: 11 segments from 5 sources, 0:37.8",
@@ -310,7 +310,12 @@
         "captions config/presets/instafill-vertical-dark.json from projects/bpo-realtor/outputs/dub/bpo-realtor-s1.vo.words.json",
         "audio: voice projects/bpo-realtor/outputs/dub/bpo-realtor-s1.vo.wav + music projects/bpo-realtor/audio/When You're Alone - Dyalla.mp3 at -18 dB, ducked under the voice, loudnorm -14 LUFS",
         "elapsed counter 'AI filling the form' film 0:11.2-0:25.8, stops at 1:50 (source 58.0->168.88)"
-      ]
+      ],
+      "published": {
+        "url": "https://youtu.be/OLhroTUMoW0",
+        "privacy": "unlisted",
+        "sidecar": "projects/bpo-realtor/outputs/shorts/bpo-realtor-s1.youtube.json"
+      }
     }
   },
   "notes": [
@@ -322,5 +327,5 @@
     "Cursorful replaces the planned cursor-follow auto-zoom tool. Do not build it for this project; revisit only if a future recording cannot use the extension (e.g. File Explorer, which a Chrome extension cannot capture -- which is why take 2 shows the documents as browser tabs instead of as files in a folder).",
     "Second-angle idea worth keeping: a PRINTED copy of the three-page form on the desk, a hand turning its pages -- '534 fields on screen, three sheets in a hand' is the argument in one image. Dropped for this shoot only because there is no printer. Blank A4 as a stand-in was refused: blank paper is not this form, and the difference reads as staging."
   ],
-  "updated_utc": "2026-09-23T18:53:01Z"
+  "updated_utc": "2026-09-23T19:03:49Z"
 }
