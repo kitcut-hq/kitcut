@@ -16,6 +16,10 @@ redirects others: local-first does **not** sell to shorts buyers as a privacy
 pitch, only as an economic one, and the on-prem privacy money is in redaction —
 pipeline 7's territory, not pipeline 2's.
 
+**Also read `docs/openseo-learnings.md`** — OpenSEO is the product this plan's
+SEO-operator observation (§2) predicted, already shipped; it tests §2's buyer,
+§7's packaging and §9's contribution model against something real.
+
 ---
 
 ## The one-page version

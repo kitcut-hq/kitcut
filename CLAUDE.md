@@ -725,6 +725,7 @@ which cannot encode the glyphs at all.
 | `docs/product-strategy.md` | how this repo becomes a product: the audience, the licensed-plugin model, install/update/routing mechanics, the learning flywheel. Read it before designing anything customer-facing |
 | `docs/market-shorts-2026.md` | what the AI shorts/clipping market actually looks like, researched 2026-09-01 with sources: who died, who is healthy, the GTM playbooks and what each produces, who pays, and where local-first does and does not matter. Findings only, no recommendation — read it before re-arguing the shorts question from priors |
 | `docs/davinci-resolve.md` | whether we can interoperate with DaVinci Resolve, researched 2026-09-08: its project files (`.drp`, the disk database) are closed and not ours to write; OTIO/EDL/FCP7 XML + SRT are the door, and work in the free edition; external scripting and the new 21.1 MCP server are Studio-only. Includes a measured export of a real keep-list and what each format drops |
+| `docs/openseo-learnings.md` | OpenSEO (open-source SEO tool sold to the user's own agent) read against our strategy, researched 2026-09-24: plugin-per-host packaging, skill evals, metered-path wrapper, free tools as funnel, the buyer who never used the incumbent. Read it before building the free plugin or revisiting §2's buyer |
 
 ## House rules
 
