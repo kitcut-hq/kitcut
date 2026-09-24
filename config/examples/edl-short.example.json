@@ -1,0 +1,232 @@
+{
+  "_comment": "Short S1 '534 fields in 1:50', 1080x1920, cut from the same takes as the film. Each crop holds a WHOLE element (the grid, the file list, the progress panel, the form, a whole column block) -- review 1 used one 5:4 crop everywhere and cut columns and words in half (user: 'some screens don't fit'). The picture box therefore changes height between shots; it stays centred between the title band and the captions. Voice: vo/s1.json.",
+  "id": "<id>",
+  "output": "projects/<id>/outputs/shorts/<id>-s1.mp4",
+  "canvas": [
+    1080,
+    1920
+  ],
+  "fps": 30,
+  "render": {
+    "cq": 21
+  },
+  "counter_style": "config/overlays/elapsed-counter-vertical.json",
+  "sources": {
+    "take1": {
+      "path": "projects/<id>/sources/take1-form.mp4",
+      "bg": "#ece6fd"
+    },
+    "take3": {
+      "path": "projects/<id>/sources/take3-upload-take4-fill.mp4",
+      "bg": "#ece6fd"
+    },
+    "take5": {
+      "path": "projects/<id>/sources/take5-results.mp4",
+      "bg": "#ece6fd"
+    },
+    "phone": {
+      "path": "projects/<id>/sources/phone.mp4",
+      "rotate": 180,
+      "bg": "#ece6fd"
+    }
+  },
+  "edl": [
+    {
+      "src": "take1",
+      "from": 16.0,
+      "to": 20.3,
+      "crop": [
+        330,
+        340,
+        1240,
+        720
+      ],
+      "_why": "the blank comparable-sales grid"
+    },
+    {
+      "src": "take3",
+      "from": 40.8,
+      "to": 44.0,
+      "crop": [
+        975,
+        290,
+        815,
+        560
+      ],
+      "_why": "the eight documents listed (framed below the yellow 8-files banner)"
+    },
+    {
+      "src": "take3",
+      "from": 55.6,
+      "to": 57.9,
+      "crop": [
+        975,
+        290,
+        815,
+        560
+      ],
+      "_why": "to Submit"
+    },
+    {
+      "src": "phone",
+      "from": 272.0,
+      "to": 273.3,
+      "crop": [
+        570,
+        0,
+        1350,
+        1080
+      ],
+      "_why": "the click (B-roll)"
+    },
+    {
+      "src": "take3",
+      "from": 57.9,
+      "to": 61.3,
+      "crop": [
+        975,
+        290,
+        815,
+        560
+      ],
+      "_why": "Submit fires at 58.00: the counter starts; same framing as the Submit shot, which keeps the yellow 8-files banner (y 280-335) out"
+    },
+    {
+      "src": "take3",
+      "from": 61.3,
+      "to": 168.9,
+      "speed": 12,
+      "crop": [
+        960,
+        380,
+        830,
+        440
+      ],
+      "_why": "the fill at 12x under the counter"
+    },
+    {
+      "src": "take3",
+      "from": 168.9,
+      "to": 170.2,
+      "crop": [
+        960,
+        380,
+        830,
+        440
+      ],
+      "_why": "done: the counter stops at 1:50"
+    },
+    {
+      "src": "take3",
+      "from": 181.0,
+      "to": 183.6,
+      "crop": [
+        125,
+        222,
+        820,
+        746
+      ],
+      "_why": "the filled form appears"
+    },
+    {
+      "src": "take5",
+      "from": 23.5,
+      "to": 27.5,
+      "crop": [
+        205,
+        235,
+        1140,
+        640
+      ],
+      "_why": "the filled grid: subject, comparable 1 ($392,000) and comparable 2, ending exactly on the column border"
+    },
+    {
+      "src": "take5",
+      "from": 30.6,
+      "to": 32.4,
+      "crop": [
+        960,
+        290,
+        830,
+        560
+      ],
+      "_why": "the same $392,000 on the listing -- Cursorful's steady zoom, framed on 'Residential $392,000' and the details column so no word is cut (the unzoomed listing is on screen for only ~1 s)"
+    },
+    {
+      "card": "projects/<id>/cards/checklist.json",
+      "style": "config/cards/checklist/window-vertical.json",
+      "_why": "end card with the logo"
+    }
+  ],
+  "counters": [
+    {
+      "src": "take3",
+      "start": 58.0,
+      "end": 168.88,
+      "label": "AI filling the form",
+      "done_label": "Form filled",
+      "hold_after": 2.0
+    }
+  ],
+  "image_overlays": [
+    {
+      "card": "projects/<id>/cards/short-title.json",
+      "at": 0.0,
+      "dur": 11.0,
+      "layout": {
+        "corner": "top",
+        "margin_y_px": 40,
+        "width_frac": 0.86
+      },
+      "in": {
+        "type": "wipe",
+        "dur": 0.5
+      },
+      "out": {
+        "type": "fade",
+        "dur": 0.3
+      },
+      "background": null,
+      "_why": "the claim, above the picture; steps aside at 11.0 for the counter, which takes this band during the fill"
+    },
+    {
+      "card": "projects/<id>/cards/short-title.json",
+      "at": 26.0,
+      "dur": 7.1,
+      "layout": {
+        "corner": "top",
+        "margin_y_px": 40,
+        "width_frac": 0.86
+      },
+      "in": {
+        "type": "fade",
+        "dur": 0.3
+      },
+      "out": {
+        "type": "fade",
+        "dur": 0.3
+      },
+      "background": null,
+      "_why": "back after the counter has faded, until the end card"
+    }
+  ],
+  "audio": {
+    "voice": "projects/<id>/outputs/dub/<id>-s1.vo.wav",
+    "music": "projects/<id>/audio/music.mp3",
+    "music_db": -18,
+    "music_fade_in": 0.4,
+    "music_fade_out": 2.0,
+    "lufs": -14
+  },
+  "captions": {
+    "words": "projects/<id>/outputs/dub/<id>-s1.vo.words.json",
+    "style": "config/presets/vertical-band-dark.json",
+    "display": {
+      "five hundred and thirty-four": "534",
+      "one minute fifty": "1:50",
+      "three ninety-two": "$392,000",
+      "example dot com": "example.com"
+    }
+  },
+  "_example": "A worked vertical short from the same takes: 1080x1920, a crop per shot holding a whole screen element, a title card via image_overlays, the counter taking the title band during the wait, captions below."
+}

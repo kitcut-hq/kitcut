@@ -1387,6 +1387,136 @@ track. A stutter or a missed PAN otherwise costs an encode to discover.
 `-an`, deliberately. The sources are silent, and the voice-over is recorded
 against the finished cut; muxing a silent AAC track just invites a later pass to
 mix onto it and produce nothing.
+## A film cut by hand from a few takes, with an honest clock over the wait
+
+`screen-cut.py` chooses what to keep from motion. That is right for an hour of
+capture and wrong for five takes somebody has already watched: the decisions
+are editorial ("the second download is the better one", "two seconds of that
+hover, not fifteen"), and a motion metric cannot make them. On `bpo-realtor` it
+called the whole two-minute fill "still", because a progress bar moves below any
+threshold that also ignores cursor jitter. `edl-cut.py` takes the decisions as
+data: an edit decision list in film order, one `_why` per line.
+
+```powershell
+python scripts/edl-cut.py --manifest projects/<id>/edit.json --list          # EDL, runtime, counter span
+python scripts/edl-cut.py --manifest projects/<id>/edit.json --frame 1:33    # one finished frame, card included
+python scripts/edl-cut.py --manifest projects/<id>/edit.json
+```
+
+```json
+"sources": {"take3": {"path": "...", "bg": "#ece6fd",
+                      "paint": [{"rect": [x, y, w, h], "color": "#d3e1f8"}],
+                      "blur":  [{"rect": [x, y, w, h], "when": [168.8, 190.0]}]}},
+"edl": [{"src": "take3", "from": 61.3, "to": 168.8, "speed": 10, "_why": "the fill"}],
+"counters": [{"src": "take3", "start": 58.0, "end": 168.88,
+              "label": "AI filling the form", "done_label": "Form filled"}]
+```
+
+**The counter runs on source time, not film time.** Every film frame is mapped
+back through the EDL to the source instant it shows, and the card reads
+(that instant − `start`). So it races under a 10x segment, crawls at 1x, jumps
+honestly across anything cut from inside its span (`--list` says how much), and
+lands on the true interval at the frame the footage reaches `end`, whatever
+speeds you choose. Measure `start`/`end` to the frame off the source (a crop's
+mean brightness across a 1/60 s scan finds a click or a message appearing).
+A counter whose start or end is not in the film is refused: it would either
+never appear or freeze mid-count.
+
+**If the app prints its own duration, decide which clock you are showing.**
+The app wrote "processed in 1 minute and 28 seconds", its server's interval;
+Submit to that message on screen is 1:50. Two different numbers side by side
+read as a mistake, so the manifest blurs the app's line (`blur`, source time)
+and the card shows click-to-result, which is what a user waits.
+
+The card is drawn by Pillow, one PNG per distinct state, and piped into a short
+PNG-in-MOV clip with alpha that is overlaid inside the film's one encode.
+Montserrat's figures are proportional, so each digit gets a fixed cell sized to
+the widest figure. Without that, the clock shifts sideways every second. A
+`▶▶ 10×` chip shows while the footage is sped up, so the viewer knows why the
+digits are racing. Style is `config/overlays/elapsed-counter.json`.
+
+`paint` fills a source rect with a flat colour. Use it for browser chrome: tab
+titles and a `C:/Users/<name>/...` path, painted over in the chrome's own
+sampled colours so the Cursorful window keeps its shape. A crop would lose that
+framing and not match the takes that have no chrome. Sources of different
+heights are padded to the canvas with `bg`, sampled off the frame edge, so no
+seam shows. Segment lengths are whole frames, and every film offset is a sum of
+them, so the card and the picture cannot drift apart across segments. The
+render asserts its duration against that sum.
+
+**A fixed paint rect breaks the moment the recorder zooms.** Cursorful zooms
+toward the cursor. On review 1 the chrome slid out from under the rects, so
+blue stripes landed on the page while the real address bar, file path and all,
+came into view beside them. Now every frame the EDL uses is tested. At rest, a
+paint rect is mostly its own colour. Where it is not, the chrome has moved, and
+for that run the rects are carried by a tracked similarity transform (ORB on
+the chrome band, RANSAC):
+
+- The tracker works frame to frame, fitting only the residual after warping by
+  the last transform. At 1.5× a single-scale match against the unzoomed frame
+  found 3 inliers of 400.
+- It refuses to guess. If it loses the chrome or the residual grows, it stops
+  and prints the time.
+- `--list` prints the followed runs, and the transforms are cached under
+  `temp/edl/`.
+- The rects go into a half-resolution alpha clip upscaled with **nearest**.
+  Bilinear blends the clear pixels' black into each edge and draws a dark
+  outline round every rect.
+
+**Zooms** are accents. They are authored in source time on a canvas rect
+(`zooms: [{src, from, to, rect: [x, y, w], in, out}]`) and rendered by
+`zoompan` on a 2× upscale inside the same pass. A zoom's window ends at the
+first frame that leaves its source. An earlier rule ("last frame at or before
+`to`") let a zoom that ended on a cut to the phone reach across the cutaway and
+magnify it. Check where the counter card lands inside a zoom: at 1.95× Submit
+went under it, so that stretch uses 1.6×. A zoom is also a way to keep
+something out of shot. The Submit framing starts below a warning banner, fully
+in before the banner appears, and leaves on a hard cut, because an ease-out
+showed the banner again.
+
+**Phone takes:** `rotate: 180` handles a missing or wrong rotation tag. This
+one had none and played upside down. A phone that did not roll through the
+take it cuts into is B-roll, and the manifest says so. `sync-tracks.py`, click
+matching and brightness correlation all failed to pin the phone to take 5
+(z ≤ 3.6 and mutually inconsistent). A 1.5 s cutaway of a click does not need
+sync, but it must not be presented as the same click.
+
+**Voice, captions and music in the same pass.** A silent film gets its voice
+from `dub-clips.py --script` run over the picture-only render. Use one clip
+spanning the film, with no `words` in its manifest: `--script` no longer needs
+a source transcript, and a dub still refuses without one. `edl-cut.py` then reads:
+
+```json
+"audio":    {"voice": "<vo.wav>", "music": "<track or null>", "music_db": -22, "lufs": -14},
+"captions": {"words": "<vo.words.json>", "style": "config/presets/band-dark.json",
+             "display": {"five hundred and thirty-four": "534"}}
+```
+
+The music loops, fades in and out, and ducks under the voice through a
+sidechain compressor keyed on the voice. The mix is loudness-normalised, and a
+silent result is refused. Captions come from the voice-over's own word timings,
+not from ASR over the film. `display` rewrites spoken phrases into how they
+should read ("one minute and fifty seconds" becomes 1:50) and keeps the timing.
+Transcribe the voice back and diff it against the script before trusting it.
+On bpo-realtor every difference was number formatting, apart from one
+"and"→"in" that ElevenLabs actually said.
+
+**A vertical short from the same takes** is one more manifest (`canvas: [1080, 1920]`,
+`config/examples/edl-short.example.json`):
+
+- An EDL entry may carry `crop: [x, y, w, h]` in source pixels. It runs after
+  paint and blur, so their rects stay in full-source pixels. Keep every crop at
+  one aspect (5:4 here) so the picture box never changes shape between shots.
+- `image_overlays` work as in `tighten-cut.py`, after the counter card and
+  before the captions. The title card uses them.
+- `counter_style` picks a vertical counter (`elapsed-counter-vertical.json`:
+  `scale`, `top-centre`). On a short the counter takes the title band's place
+  while the fill runs: under the picture it collided with the captions, so the
+  title steps aside in two windows instead.
+- `checklist-card.py` scales by `min(H/1080, W/1200)` so a vertical card is not
+  wider than its frame. `window-vertical.json` is the faster variant for shorts.
+- The caption preset for this layout is `vertical-band-dark.json`.
+
 ## Tightening one recording that is already composited
 
 `screencast-cut.py` needs two tapes. Most screen recorders hand you one — screen,
@@ -2378,6 +2508,33 @@ Templates use a very small mustache (`{{x}}`, `{{{x}}}` raw, `{{#x}}…{{/x}}`
 for a list or flag, `{{^x}}…{{/x}}` for its absence). That is deliberately not
 a real template language: a card that needs logic wants a new template.
 
+### An animated checklist end screen: `checklist-card.py`
+
+A full-frame card for the end of a demo. The headline rises in, then each line's box
+pops, the text slides in beside it, and a tick draws itself into the box, one
+line after another. The call to action comes last. It is drawn by Pillow from
+`t`, so a `--png T` still is exactly the frame the render will contain.
+
+```powershell
+python scripts/checklist-card.py --spec projects/<id>/cards/checklist.json --style config/cards/checklist/window.json --list
+python scripts/checklist-card.py --spec ... --style ... --png          # final state
+python scripts/checklist-card.py --spec ... --style ... --sheet        # a strip across the animation
+```
+
+The words are the spec (`headline`, `items`, `cta`). The look and the timing
+are the style: `window` is a white window on the recorder's lavender, `plain`
+is type straight on the backdrop, and `chips` has dark lines in the counter
+card's colour. Put it in a film as an `edl-cut.py` entry,
+`{"card": <spec>, "style": <style>}`. It is rendered once and cached, then
+plays as a source. Draw shapes on their own layer: `ImageDraw` on an RGBA
+image **replaces** pixels rather than blending, and a "clear" fill wrote an
+opaque green box before its tick was due.
+
+For captions on a Cursorful-framed film, `band-light` and
+`band-dark` set one line low, in the lavender band under the window
+(bottom margin 44 of the 140 px band), so a caption never covers the app. The
+dark one uses the counter card's colour and radius.
+
 ### Writing the page by hand
 
 Two rules, both enforced rather than assumed:
@@ -2493,6 +2650,89 @@ with no published schema — editable enough to *rescue* a crashing project, not
 enough to author one. The evidence, the field-by-field breakdown and the
 Studio-only scripting/MCP situation are in
 [`docs/davinci-resolve.md`](davinci-resolve.md).
+
+## Connecting a YouTube channel
+
+Everything that publishes -- `yt-upload.py`, `yt-set-chapters.py`,
+`yt-audit-chapters.py` -- rides one `youtube.force-ssl` grant. Creating that
+grant used to be a side effect of the first real command, which is a bad place
+to discover that Google's chooser handed you a personal account instead of the
+brand account that owns the videos: the fix is a re-consent, and you find out
+mid-publish. `yt-connect.py` is that step on its own.
+
+```powershell
+python scripts/yt-connect.py --check                        # free: am I connected, and as whom?
+python scripts/yt-connect.py --channel @yourhandle        # connect, asserting the channel
+python scripts/yt-connect.py --channel @yourhandle --reauth --no-browser   # the brand-account route
+```
+
+Once per machine, before the first run:
+
+1. Google Cloud Console -> any project -> **enable "YouTube Data API v3"**.
+2. **OAuth consent screen**: User type External; add the channel's Google
+   account as a Test user. Then **press "Publish app"** -- while the screen is
+   in *Testing*, Google expires every refresh token after **seven days**, and
+   publishing then fails weekly with `invalid_grant`. The unverified-app
+   warning that replaces it is about other people's data; this grant only ever
+   touches your own channel.
+3. **Credentials -> OAuth client ID -> Desktop app**, download the JSON.
+4. Save it as `.yt-oauth/client_secret.json` (gitignored).
+5. Run `--channel`. A browser opens: pick the **brand account** that owns the
+   channel, not the personal login it sits under.
+
+### The brand-account trap
+
+Measured on a brand-account channel, 2026-09-23, at a cost of about an hour. A channel is
+usually a **brand account** that a login merely manages, and OAuth authenticates
+the **login** -- so `channels.list(mine=True)` returns the login's own channel
+(on that run: the operator's personal channel, 5 videos) rather than the one you
+meant (the brand account's channel, 46 videos). The
+brand account has to be picked at Google's chooser, and **two settings suppress
+that chooser entirely**:
+
+- **An `Internal` consent screen.** A brand account is not an organisation
+  account, so Google does not merely hide it -- picking it fails outright with
+  `Error 403: org_internal`. The audience must be **External**. For a Workspace
+  login `Internal` is the tempting choice, because it needs no test users and
+  has no token expiry; it cannot work here.
+- **A browser that is already signed in.** Google reuses the session, picks the
+  login's channel silently and completes the whole flow without rendering a
+  chooser -- `prompt=consent` does not help, because it re-asks for *scopes*,
+  not for *identity*. Revoke the app at `myaccount.google.com/connections`, then
+  use **`--no-browser`** and paste the URL into a **private window**, where
+  there is no session to reuse. That is what finally worked.
+
+`External` + `Testing` costs a re-consent every seven days. Moving to
+`In production` needs an app home page and a privacy policy URL on the Branding
+page (the company's site and its privacy page for this
+channel), plus domain verification -- worth doing once, but not a blocker: the
+weekly symptom is a refresh that fails, and `--check` names it.
+
+The grant is filed per channel (`.yt-oauth/token-<handle>.json`), so a second
+channel does not burn the first one's consent. A grant that comes back for the
+wrong channel is **deleted rather than filed** -- keeping it would make every
+later run confidently wrong. The channel is asserted by handle and reported by
+**id**, because an owner can rename a handle and cannot change an id; the id is
+what belongs in a project file.
+
+## A thumbnail in the channel's style: `make-thumbnail.py`
+
+```powershell
+python scripts/make-thumbnail.py --spec projects/<id>/thumbnail.json --list   # layout, shrink warnings
+python scripts/make-thumbnail.py --spec projects/<id>/thumbnail.json          # 1280x720 PNG, 2 MB checked
+python scripts/yt-upload.py <mp4> ... --thumbnail projects/<id>/thumbnail.png
+```
+
+The grammar was read off the channel's six latest public uploads: a dark purple
+field, an Anton headline with one phrase on a yellow slab, the form tilted on
+the right with a shadow, a round yellow time badge, a yellow caption strip, and
+the logo top-left, its lettering re-inked white. The spec holds the words, the
+frame grab plus crop, and the colours. Lines are spaced by ink, not by font
+metrics: Anton's ascent is much taller than its capitals, and metric spacing
+ran the headline off the frame. `html-to-image.py` is not used because it
+refuses opaque pages. `yt-upload.py --thumbnail` sets the image after the
+upload. A failure there (an unverified channel) is printed and does not undo
+the upload.
 
 ## Chapter markers on a published video
 

@@ -1,0 +1,303 @@
+{
+  "_comment": "The BPO film. Ranges chosen by reading the takes frame by frame (journal 2026-09-23). The fill runs 10x under an elapsed counter driven by SOURCE time. Phone shots are B-roll cutaways, NOT synced (journal). Ends on the animated checklist card.",
+  "id": "<id>",
+  "output": "projects/<id>/outputs/<id>.mp4",
+  "canvas": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "render": {
+    "cq": 20
+  },
+  "sources": {
+    "take1": {
+      "path": "projects/<id>/sources/take1-form.mp4",
+      "bg": "#ece6fd",
+      "_bg_why": "Cursorful's backdrop, sampled at the frame edge; the 1064-line frame is padded to 1080 with it so no seam shows",
+      "paint": [
+        {
+          "rect": [
+            0.06094,
+            0.08083,
+            0.875,
+            0.03853
+          ],
+          "color": "#d3e1f8",
+          "_why": "tab strip: tab titles and window controls, erased to the strip's own colour"
+        },
+        {
+          "rect": [
+            0.13021,
+            0.12688,
+            0.70313,
+            0.03102
+          ],
+          "color": "#ecf1f9",
+          "_why": "address bar: C:/Users/<user>/Downloads/... is a local path with the user name in it"
+        }
+      ]
+    },
+    "take2": {
+      "path": "projects/<id>/sources/take2-documents.mp4",
+      "bg": "#ece6fd",
+      "paint": [
+        {
+          "rect": [
+            0.06094,
+            0.08083,
+            0.875,
+            0.03853
+          ],
+          "color": "#d3e1f8",
+          "_why": "eight tabs all titled 'untitled' -- reads as a debugging session"
+        },
+        {
+          "rect": [
+            0.13021,
+            0.12688,
+            0.70313,
+            0.03102
+          ],
+          "color": "#ecf1f9",
+          "_why": "local file path with the user name"
+        },
+        {
+          "rect": [
+            0.09375,
+            0.18797,
+            0.03646,
+            0.03383
+          ],
+          "color": "#3c3c3c",
+          "_why": "PDF viewer title 'untitled' -- the synthetic listings have no document title"
+        }
+      ]
+    },
+    "take3": {
+      "path": "projects/<id>/sources/take3-upload-take4-fill.mp4",
+      "bg": "#ece6fd",
+      "_note": "takes 3 and 4 were recorded as one file; Submit is at 58.00, the result message at 168.88 (measured to the frame)",
+      "blur": [
+        {
+          "rect": [
+            0.50104,
+            0.20455,
+            0.33229,
+            0.03926
+          ],
+          "when": [
+            168.8,
+            190.0
+          ],
+          "sigma": 7,
+          "_why": "'processed in 1 minute and 28 seconds' is the server's interval; the counter shows click-to-result (1:50) and the two must not sit side by side disagreeing"
+        }
+      ]
+    },
+    "take5": {
+      "path": "projects/<id>/sources/take5-results.mp4",
+      "bg": "#ece6fd"
+    },
+    "phone": {
+      "path": "projects/<id>/sources/phone.mp4",
+      "rotate": 180,
+      "bg": "#000000",
+      "_rotate_why": "no rotation tag, and the picture is upside down: keyboard legends and the mousepad print read inverted"
+    }
+  },
+  "edl": [
+    {
+      "src": "take1",
+      "from": 3.0,
+      "to": 20.8,
+      "_why": "the blank form: opens on 2.5 s of page 1 with music alone before the voice comes in (user: 'music first, then the voice'), the scroll, then section III held"
+    },
+    {
+      "src": "take1",
+      "from": 27.2,
+      "to": 33.5,
+      "_why": "on to page 3; skips 0:21-0:27 where the zoom-out made page 2 unreadable"
+    },
+    {
+      "src": "take2",
+      "from": 8.5,
+      "to": 32.3,
+      "_why": "the eight documents; the first 8.5 s sat on one tab"
+    },
+    {
+      "src": "phone",
+      "from": 119.0,
+      "to": 121.5,
+      "_why": "scene break: a hand at the keyboard, before the tool appears (B-roll)"
+    },
+    {
+      "src": "take3",
+      "from": 1.0,
+      "to": 16.0,
+      "_why": "the app: landing, dashboard, choosing the blank BPO"
+    },
+    {
+      "src": "take3",
+      "from": 16.0,
+      "to": 24.8,
+      "speed": 4,
+      "_why": "upload spinner"
+    },
+    {
+      "src": "take3",
+      "from": 24.8,
+      "to": 44.0,
+      "_why": "form loaded, the eight documents chosen and listed"
+    },
+    {
+      "src": "take3",
+      "from": 55.0,
+      "to": 57.9,
+      "_why": "the cursor to Submit; drops 11 s of hovering"
+    },
+    {
+      "src": "phone",
+      "from": 272.0,
+      "to": 273.6,
+      "_why": "cutaway #1: the click (B-roll from the take-5 session -- the phone was not rolling during take 3)"
+    },
+    {
+      "src": "take3",
+      "from": 57.9,
+      "to": 61.3,
+      "_why": "Submit fires at 58.00 -- the counter starts"
+    },
+    {
+      "src": "take3",
+      "from": 61.3,
+      "to": 168.8,
+      "speed": 10,
+      "_why": "the fill, 107.5 s at 10x under the counter"
+    },
+    {
+      "src": "take3",
+      "from": 168.8,
+      "to": 170.4,
+      "_why": "done -- the counter stops on the result message"
+    },
+    {
+      "src": "take3",
+      "from": 181.0,
+      "to": 183.6,
+      "_why": "the filled form appears; drops 11 s of 'File is loading'"
+    },
+    {
+      "src": "take5",
+      "from": 3.8,
+      "to": 8.6,
+      "_why": "download: enters on Cursorful's zoom (the first download, end of take3, is the duplicate)"
+    },
+    {
+      "src": "phone",
+      "from": 269.1,
+      "to": 270.6,
+      "_why": "cutaway #2: a click, covering the dark flash while the PDF opens (take5 8.7-10.0)"
+    },
+    {
+      "src": "take5",
+      "from": 10.1,
+      "to": 42.0,
+      "_why": "the downloaded PDF, the comps grid, the $392,000 check against the listing, section VI; ends before section VII (empty estimated values); ends 3 s earlier (42.0) so the end card is not preceded by a silent stretch"
+    },
+    {
+      "card": "projects/<id>/cards/checklist.json",
+      "style": "config/cards/checklist/window.json",
+      "_why": "end card: what the film showed, ticking in line by line, then the logo (user chose the 'window' look with the logo)"
+    }
+  ],
+  "counters": [
+    {
+      "src": "take3",
+      "start": 58.0,
+      "end": 168.88,
+      "label": "AI filling the form",
+      "done_label": "Form filled",
+      "hold_after": 3.0,
+      "_why": "Submit click to the result message, measured to the frame: 110.9 s"
+    }
+  ],
+  "zooms": [
+    {
+      "src": "take3",
+      "from": 1.3,
+      "to": 5.9,
+      "rect": [
+        0.09375,
+        0.213,
+        0.5
+      ],
+      "in": 0.9,
+      "out": 0.5,
+      "_why": "the promise, 'The AI does the paperwork. Not you.' -- the line the voice-over opens the tool on"
+    },
+    {
+      "src": "take3",
+      "from": 39.7,
+      "to": 57.9,
+      "rect": [
+        0.4167,
+        0.3194,
+        0.514
+      ],
+      "in": 0.6,
+      "out": 0,
+      "_why": "the eight documents and Submit, framed below the yellow '8 files increases the chance of errors' banner. Starts at 39.7 so it is fully in before the list (and the banner) appear at 40.6. Holds across the hover cut, ends on the cut to the phone"
+    },
+    {
+      "src": "take3",
+      "from": 57.9,
+      "to": 61.25,
+      "rect": [
+        0.36,
+        0.3194,
+        0.625
+      ],
+      "in": 0,
+      "out": 0,
+      "_why": "back from the phone on Submit, at 1.6x not 1.95x so Submit sits above the counter card; ends on a hard cut to the progress screen (61.3) -- an ease-out showed the banner again"
+    },
+    {
+      "src": "take3",
+      "from": 181.2,
+      "to": 183.6,
+      "rect": [
+        0.0677,
+        0.2315,
+        0.4167
+      ],
+      "in": 1.4,
+      "out": 0,
+      "_why": "the reveal: a slow push onto the fields that just filled (address, parcel, market conditions)"
+    }
+  ],
+  "audio": {
+    "voice": "projects/<id>/outputs/dub/<id>-film.vo.wav",
+    "music": "projects/<id>/audio/music.mp3",
+    "music_db": -18,
+    "lufs": -14,
+    "_why": "voice: ElevenLabs brian (the channel voice since flatten-pdf) from vo/film.json. Music: the user chose the YouTube Audio Library; set music to the downloaded file and re-render -- it loops, fades and ducks under the voice.",
+    "music_fade_in": 0.8
+  },
+  "captions": {
+    "words": "projects/<id>/outputs/dub/<id>-film.vo.words.json",
+    "style": "config/presets/band-dark.json",
+    "_why": "style C, the user's choice: one line in the lavender band under the window, in the counter card's colour",
+    "display": {
+      "_why": "the voice spells numbers out; the caption shows them the way the picture does",
+      "five hundred and thirty-four": "534",
+      "three hundred ninety-two thousand": "$392,000",
+      "three ninety-two": "$392,000",
+      "one minute and fifty seconds": "1:50",
+      "eight documents": "8 documents",
+      "three pages": "3 pages",
+      "example dot com": "example.com"
+    }
+  },
+  "_example": "A worked edl-cut.py manifest: a 2:35 product demo assembled from five silent screen takes and a phone B-roll, with a source-time elapsed counter over a 10x wait, paint that follows the recorder's zoom, accent zooms, a voice-over + ducked music bed, captions and a checklist end card. Copy it to projects/<id>/edit.json and replace the sources and times."
+}

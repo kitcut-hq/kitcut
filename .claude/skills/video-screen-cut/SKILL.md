@@ -11,6 +11,37 @@ carries the sound**, use `video-multicam` (`sync-tracks.py` +
 for recordings with **no usable audio at all**, where the picture is the only
 signal and the voice-over is added afterwards.
 
+**A few takes a person has already watched?** Use `edl-cut.py` instead of the
+pipeline. When the recording is a handful of planned takes (a product demo, a
+retake or two, one long wait), what to keep is an editorial decision, not a
+motion threshold. `screen-activity.py` labelled a two-minute progress bar
+"still". Read the takes frame by frame (contact sheets at 1 s, then 0.25 s
+around each decision), write the EDL with a `_why` per range, and put an
+elapsed counter over any sped-up wait:
+
+```powershell
+python scripts/edl-cut.py --manifest projects/<id>/edit.json --list
+python scripts/edl-cut.py --manifest projects/<id>/edit.json --frame 1:33   # check before encoding
+python scripts/edl-cut.py --manifest projects/<id>/edit.json
+```
+
+The counter is computed from **source** time per film frame, so it is right
+at any speed. Measure its `start`/`end` to the frame: scan a crop's mean
+brightness at 1/60 s for the click, and for the result appearing. If the app
+prints its own duration, it is probably a different interval, so blur that
+line rather than let two numbers disagree on screen. Look for the
+**duplicate action** in takes (a download recorded at the end of one take and
+the start of the next) and keep the one that flows into what follows. Paint
+browser chrome (tab titles, a local path with the user name) in its own
+sampled colours rather than cropping it. **Render `--frame` at the recorder's
+own zooms**, not just the resting frames. Paint is followed through a moving
+chrome automatically (`--list` names the runs), but only a frame shows whether
+it held. Zoom accents (`zooms`) can also frame something out of shot, such as a
+warning banner. Check that the counter card does not cover the thing being
+zoomed on. Phone footage not rolled with the take is B-roll: say so in its
+`_why`. README: "A film cut by hand from a few takes". Worked example:
+`config/examples/edl-film.example.json`.
+
 ```powershell
 # from the repo root -- this is the whole job
 python scripts/screencast-pipeline.py --project <id> --target 8:00            # stops at the review sheet

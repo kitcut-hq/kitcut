@@ -1,0 +1,34 @@
+{
+  "_comment": "Thumbnail spec for make-thumbnail.py: a dark field, a condensed headline with one phrase on a yellow slab, the form tilted on the right, a round time badge and a caption strip. Words, frame grab and colours are data.",
+  "logo": "projects/<id>/assets/logo.png",
+  "headline": [
+    {
+      "text": "REAL ESTATE",
+      "size": 100
+    },
+    {
+      "text": "PAPERWORK",
+      "size": 116,
+      "slab": true
+    },
+    {
+      "text": "ON AUTOPILOT",
+      "size": 100,
+      "colour": "#FFB81C"
+    }
+  ],
+  "sub": "with AI  ·  a 534-field BPO",
+  "image": "projects/<id>/assets/thumb-grid.png",
+  "crop": [
+    205,
+    228,
+    1490,
+    520
+  ],
+  "image_width": 600,
+  "tilt": -4,
+  "badge": "1:50",
+  "badge_sub": "min",
+  "strip": "8 documents. One finished BPO.",
+  "top": 100
+}

@@ -1,0 +1,30 @@
+# Git guesses text-vs-binary by looking for a NUL byte in the first 8 KB, and
+# a small PDF whose streams are not compressed contains none -- so git called
+# projects/bpo-realtor/assets/forms/*.pdf TEXT and announced it would rewrite
+# their line endings on the next checkout. That is silent corruption: the byte
+# count changes, the xref offsets stop pointing at the right objects, and the
+# file opens as a damaged PDF on somebody else's clone while looking perfect on
+# the machine that committed it.
+#
+# Everything a project can legitimately commit and that is not source code is
+# named here. Renders and footage stay gitignored; these are the small assets
+# that ARE kept, because a video's claims should be measured off the document it shows.
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.webp  binary
+*.ico    binary
+*.mp4   binary
+*.mov   binary
+*.wav   binary
+*.m4a   binary
+*.mp3   binary
+*.ttf   binary
+*.otf   binary
+*.onnx  binary
+
+# Text that must keep LF regardless of platform: the ASS subtitle format and
+# the shell scripts are read by tools that do not want CRLF.
+*.ass   text eol=lf
+*.sh    text eol=lf

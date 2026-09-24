@@ -823,3 +823,14 @@ boundaries, then renders a `…-en.mp4` alongside the original:
 python scripts/dub-clips.py --manifest projects/<id>/clips-vertical.json --only <clip-id> --outdir projects/<id>/outputs/dub
 python scripts/cut-clips.py --manifest projects/<id>/clips-vertical.json --only <clip-id> --dub projects/<id>/outputs/dub
 ```
+
+## A short cut from silent screen takes (no speaker, a voice-over)
+
+When the long video was assembled by `edl-cut.py` from silent takes, cut the
+short the same way: a second manifest with `canvas: [1080, 1920]`, a `crop`
+per EDL entry (one aspect for all, so the picture box holds still), a title card
+via `image_overlays`, and `counter_style: config/overlays/elapsed-counter-vertical.json`.
+Voice it with `dub-clips.py --script` over its own picture-only render, exactly
+like the film. Worked example: `config/examples/edl-short.example.json`. Check a
+contact sheet for the counter colliding with captions and for a crop that
+reveals something the long cut framed out.

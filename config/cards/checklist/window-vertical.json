@@ -1,0 +1,56 @@
+{
+  "_comment": "The window checklist for a 1080x1920 short: faster (a short cannot hold 7 s on a card), and bigger rows so it reads on a phone.",
+  "background": "#ECE6FD",
+  "glow": "#F4F1FE",
+  "panel": {
+    "w": 1000,
+    "radius": 26,
+    "fill": "#FFFFFF",
+    "shadow": "#3A2F6B",
+    "shadow_alpha": 0.16
+  },
+  "align": "left",
+  "pad": 64,
+  "headline": {
+    "font": "fonts/Montserrat-Bold.ttf",
+    "size": 72,
+    "colour": "#050608"
+  },
+  "item": {
+    "font": "fonts/Montserrat-Medium.ttf",
+    "size": 44,
+    "colour": "#1B1F24"
+  },
+  "cta": {
+    "font": "fonts/Montserrat-Bold.ttf",
+    "size": 32,
+    "colour": "#050608"
+  },
+  "cta_dot": "#13BA82",
+  "box": {
+    "size": 54,
+    "radius": 10,
+    "stroke": 3,
+    "outline": "#C9CDD6",
+    "fill": "#13BA82",
+    "tick": "#FFFFFF",
+    "tick_width": 5,
+    "gap": 28
+  },
+  "gap_head": 44,
+  "row": 96,
+  "gap_cta": 48,
+  "cta_logo": {
+    "height": 54,
+    "_why": "when the card's spec names a `logo`, it replaces the typed call to action at this height"
+  },
+  "timing": {
+    "headline_at": 0.15,
+    "first_at": 0.6,
+    "step": 0.45,
+    "tick_delay": 0.12,
+    "tick": 0.25,
+    "cta_after": 0.3,
+    "hold": 1.6
+  }
+}

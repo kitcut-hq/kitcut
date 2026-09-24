@@ -708,6 +708,9 @@ which cannot encode the glyphs at all.
 | `scripts/tighten-cut.py` | one already-composited recording: shorten its pauses, drop its stumbles, remove the parts you name |
 | `scripts/zoom-import.py` | Zoom local recordings -> a project; `--join` puts a talk recorded in parts on one clock |
 | `scripts/check-zoom.py` | the Zoom/emphasis self-test: folder rules, part ordering, phrase matching |
+| `scripts/checklist-card.py` | an animated checklist end screen (ticks drawn one by one), words in the project, look in `config/cards/checklist/`; `edl-cut.py` plays it as an EDL entry |
+| `scripts/make-thumbnail.py` | a 1280x720 YouTube thumbnail in the channel's house style from a spec; `yt-upload.py --thumbnail` sets it |
+| `scripts/edl-cut.py` | a film from hand-chosen ranges of a few silent takes, with an elapsed counter driven by SOURCE time so it stays true over a sped-up wait |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
 | `scripts/resolve-export.py` | the cut as an OTIO/EDL/FCP7 XML timeline plus an SRT, for DaVinci Resolve (free edition); `check-resolve.py` is its test, `docs/davinci-resolve.md` the research behind it |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |

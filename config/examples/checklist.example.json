@@ -1,0 +1,12 @@
+{
+  "_comment": "End screen of the BPO film: what the film showed, as a checklist. Every line is something the film demonstrated -- no claim about time saved by hand (not measured) and none about the market value (section VII came back empty).",
+  "headline": "Your BPO, done.",
+  "items": [
+    "534 fields filled",
+    "8 documents read — nothing typed",
+    "1:50 from click to finished PDF",
+    "Every value traceable to its source"
+  ],
+  "cta": "the app.ai",
+  "logo": "projects/<id>/assets/logo.png"
+}

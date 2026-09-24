@@ -1,0 +1,42 @@
+{
+  "_comment": "The elapsed counter for a 1080x1920 short: it takes the TITLE BAND's place at the top while the fill runs (the title card steps aside for it), because under the picture it collided with the captions. Larger than the landscape card -- on a phone it is the hero of the fill.",
+  "corner": "top-centre",
+  "scale": 1.7,
+  "margin": [
+    0,
+    110
+  ],
+  "card": {
+    "w": 340,
+    "h": 112,
+    "radius": 20,
+    "fill": "#111318",
+    "alpha": 0.93,
+    "border": "#2b3140"
+  },
+  "pad": 24,
+  "label": {
+    "font": "fonts/Montserrat-Medium.ttf",
+    "size": 15,
+    "tracking": 1.8,
+    "color": "#9aa3b5"
+  },
+  "digits": {
+    "font": "fonts/Montserrat-Bold.ttf",
+    "size": 54,
+    "color": "#ffffff"
+  },
+  "chip": {
+    "font": "fonts/Montserrat-Bold.ttf",
+    "size": 17,
+    "fill": "#2563eb",
+    "color": "#ffffff"
+  },
+  "accent": "#3b82f6",
+  "done": "#22c55e",
+  "pulse_hz": 1.0,
+  "fade": 0.3,
+  "hold_after": 2.0,
+  "speed_chip": false,
+  "_speed_chip_why": "no '12x' chip on a short: how fast the footage runs is not what a viewer needs in the seconds they give it (user, 2026-09-23)"
+}

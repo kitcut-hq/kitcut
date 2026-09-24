@@ -593,7 +593,19 @@ def main():
 
     with open(args.manifest, encoding="utf-8") as f:
         m = json.load(f)
-    words = _outline.load_words(m["words"])
+    # A dub needs the speaker's words -- its slots come from their pauses. A
+    # written voice-over over a film with no speech of its own (a silent
+    # screencast) has none to give, and --script does not use them: numeric
+    # clip bounds resolve without a transcript. So only the dub requires it.
+    if m.get("words"):
+        words = _outline.load_words(m["words"])
+    elif args.script:
+        words = []
+    else:
+        sys.exit(
+            'the manifest has no "words" transcript; a dub segments on '
+            "the speaker's pauses, so it needs one (--script does not)"
+        )
     pad = m.get("pad", {})
     pad_head, pad_tail = float(pad.get("head", 0.12)), float(pad.get("tail", 0.30))
     prefix = m.get("prefix", "")
