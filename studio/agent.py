@@ -24,7 +24,6 @@ import os
 import re
 import json
 import time
-import shlex
 import shutil
 import asyncio
 import argparse
@@ -59,128 +58,23 @@ ROOT = _env.ROOT
 HERE = os.path.dirname(os.path.abspath(__file__))
 # Opus only: the drawing is the product, and a smaller model's films are not worth the saving
 MODEL = "claude-opus-5-5"
-EDITABLE = ("film.js", "score.json", "sfx.json", "vo.json")
-MADE = ("film.js", "score.json", "sfx.json")  # what a finished film must have
-LENGTHS = (5, 10, 15)  # seconds a visitor may ask for
-# drawn: everything drawn in code; painted: an image model paints the scenes, the code animates
-LOOKS = ("drawn", "painted")
-# what Claude may not change in paint.json: the painter, and how many paintings a film may cost
-PAINT_PINNED = {"backend": "muse", "model": "meta/muse-image", "max_images": 8}
-
-
-def look_of(job):
-    return "painted" if os.path.exists(os.path.join(job, "paint.json")) else "drawn"
-
-
 AGENT_TIMEOUT = 15 * 60
-# the voice: Google's Gemini text-to-speech. 3.8 needs the Gemini API enabled in the service
-# account's project; STUDIO_TTS_MODEL in .env overrides it (e.g. gemini-3.1-flash-tts-preview)
-TTS_MODEL = "gemini-3.8-flash-tts"
-# what Claude may not change in vo.json: the studio decides the backend, model and take count
-VO_PINNED = {"tts": "gemini", "takes": 1, "lead": 0.5, "gap": 0.35}
-
-
-def tts_model():
-    return os.environ.get("STUDIO_TTS_MODEL", "").strip() or TTS_MODEL
-
-
-# ------------------------------------------------------------------ the permission model
-def _path(p):
-    """A tool's path argument, absolute: relative to the repo root, posix or git-bash (/c/...)."""
-    p = str(p or "").strip().strip("\"'")
-    m = re.match(r"^/([a-zA-Z])/(.*)$", p) if os.name == "nt" else None
-    if m:
-        p = m.group(1) + ":/" + m.group(2)
-    return os.path.normcase(os.path.abspath(os.path.join(ROOT, p)))
-
-
-def _inside(p, base):
-    base = os.path.normcase(os.path.abspath(base))
-    return p == base or p.startswith(base + os.sep)
-
-
-SECRET = re.compile(r"(^|[\\/])\.env[^\\/]*$|[\\/]\.(git|venv)([\\/]|$)", re.IGNORECASE)
-SHELL_META = re.compile(r"[;&|<>`$\n]")
-TIMES = re.compile(r"^\d+(\.\d+)?(,\d+(\.\d+)?)*$")
-
-
-def guard(tool, inp, job):
-    """(allowed, reason) for one tool call by Claude working in the job folder `job`."""
-    job = os.path.normcase(os.path.abspath(job))
-    if tool == "Read":
-        p = _path(inp.get("file_path"))
-        if _inside(p, ROOT) and not SECRET.search(p):
-            return True, ""
-        return False, "Read is limited to the kitcut repo, and never .env, .git or .venv."
-    if tool in ("Write", "Edit"):
-        p = _path(inp.get("file_path"))
-        mine = EDITABLE + (("paint.json",) if look_of(job) == "painted" else ())
-        if os.path.dirname(p) == job and os.path.basename(p) in mine:
-            return True, ""
-        return False, "You can only write %s in your job folder." % ", ".join(mine)
-    if tool == "Bash":
-        return _bash_ok(inp.get("command", ""), job)
-    return False, "%s is not available here: use Read, Write, Edit and the listed commands." % tool
-
-
-def _bash_ok(cmd, job):
-    usage = (
-        "Only these commands run, one per call, from the working directory: "
-        "`node --check <job>/film.js`, "
-        "`python scripts/sketch-vo.py --manifest <job>/sketch.json [--only <n> --retake]`, "
-        "`python scripts/sketch-paint.py --manifest <job>/sketch.json [--only <names> --retake]` "
-        "(painted films), "
-        "`python scripts/sketch-render.py --manifest <job>/sketch.json --stills <t,t,...> [--sheet]`, "
-        "`python scripts/sketch-render.py --manifest <job>/sketch.json --automation`, "
-        "`python scripts/sketch-audio.py --manifest <job>/sketch.json [--levels]`."
-    )
-    if SHELL_META.search(cmd):
-        return False, "No ;, &&, |, redirection or $(...). " + usage
-    try:
-        argv = shlex.split(cmd.strip())
-    except ValueError:
-        return False, usage
-    if len(argv) == 3 and argv[:2] == ["node", "--check"]:
-        ok = _path(argv[2]) == os.path.join(job, "film.js")
-        return (True, "") if ok else (False, usage)
-    if len(argv) < 4 or argv[0] not in ("python", "python3", "py") or argv[2] != "--manifest":
-        return False, usage
-    script = argv[1].replace("\\", "/").removeprefix("./")
-    if _path(argv[3]) != os.path.join(job, "sketch.json"):
-        return False, "Use your own manifest, %s. " % os.path.relpath(job, ROOT) + usage
-    rest = argv[4:]
-    if script == "scripts/sketch-audio.py":
-        return (True, "") if set(rest) <= {"--levels", "--plan"} else (False, usage)
-    if script == "scripts/sketch-paint.py" and look_of(job) == "painted":
-        if rest in ([], ["--plan"]):
-            return True, ""
-        # repaint some: --only <name,name> --retake, in either order
-        if len(rest) == 3 and "--only" in rest and "--retake" in rest:
-            i = rest.index("--only")
-            if i + 1 < len(rest) and re.fullmatch(r"[\w,-]+", rest[i + 1]):
-                return True, ""
-        return False, usage
-    if script == "scripts/sketch-vo.py":
-        if rest in ([], ["--plan"]):
-            return True, ""
-        # one line again: --only <n> --retake, in either order
-        if sorted(a for a in rest if not a.isdigit()) == ["--only", "--retake"] and len(rest) == 3:
-            i = rest.index("--only")
-            if i + 1 < len(rest) and rest[i + 1].isdigit():
-                return True, ""
-        return False, usage
-    if script == "scripts/sketch-render.py":
-        if rest == ["--automation"]:
-            return True, ""
-        flags = [a for a in rest if a != "--sheet"]
-        if (
-            len(flags) == 2
-            and flags[0] == "--stills"
-            and TIMES.match(flags[1])
-            and rest.count("--sheet") <= 1
-        ):
-            return True, ""
-    return False, usage
+# the permission model, and what the studio pins in Claude's files (shared with the CLI hook)
+from guard import (  # noqa: E402
+    EDITABLE,
+    LENGTHS,
+    LOOKS,
+    MADE,
+    PAINT_PINNED,
+    VO_PINNED,
+    _path,
+    guard,
+    look_of,
+    pin_after,
+    pin_paint,
+    pin_vo,
+    tts_model,
+)
 
 
 # ------------------------------------------------------------------ the environment Claude runs in
@@ -296,39 +190,6 @@ def new_job(prompt, seconds=5, look="drawn"):
             indent=2,
         )
     return job
-
-
-def _pin(job, name, want):
-    """Put back what Claude may not change in one of its files. Returns what it had to restore,
-    or "" -- the PostToolUse hook tells Claude so."""
-    p = os.path.join(job, name)
-    if not os.path.exists(p):
-        return ""
-    try:
-        with open(p, encoding="utf-8") as f:
-            d = json.load(f)
-    except (OSError, ValueError) as e:
-        return "%s is not valid JSON (%s); fix it" % (name, e)
-    wrong = {k for k, v in want.items() if d.get(k) != v}
-    if wrong:
-        with open(p, "w", encoding="utf-8") as f:
-            json.dump(d | want, f, indent=2, ensure_ascii=False)
-        return "the studio sets %s in %s; restored %s" % (
-            ", ".join(sorted(want)),
-            name,
-            ", ".join("%s=%r" % (k, want[k]) for k in sorted(wrong)),
-        )
-    return ""
-
-
-def pin_vo(job):
-    """vo.json: the voice backend, model and takes are the studio's."""
-    return _pin(job, "vo.json", {**VO_PINNED, "model": tts_model()})
-
-
-def pin_paint(job):
-    """paint.json: the painter, its model and the cap on paintings are the studio's."""
-    return _pin(job, "paint.json", PAINT_PINNED)
 
 
 def _describe(name, inp, job):
@@ -488,13 +349,7 @@ async def run_claude(prompt, job, emit, meter):
 
     async def post_tool(inp, tool_use_id, ctx):
         # after a write to vo.json or paint.json: put back what the studio decides there
-        p = str((inp.get("tool_input") or {}).get("file_path", "")).replace("\\", "/")
-        if p.endswith("vo.json"):
-            note = pin_vo(job)
-        elif p.endswith("paint.json"):
-            note = pin_paint(job)
-        else:
-            return {}
+        note = pin_after((inp.get("tool_input") or {}).get("file_path"), job)
         if note:
             emit({"type": "blocked", "text": note})
             return {
@@ -561,6 +416,163 @@ async def run_claude(prompt, job, emit, meter):
     return result
 
 
+def claude_cli():
+    """The newest installed Claude Code CLI binary. A machine can have several (npm, WinGet, the
+    desktop app), and an old one refuses new models ("version 2.1.280 or newer is required")."""
+    import subprocess
+
+    found = [shutil.which("claude.exe"), shutil.which("claude")]
+    root = subprocess.run(["npm", "root", "-g"], capture_output=True, text=True, shell=True).stdout
+    found.append(os.path.join(root.strip(), "@anthropic-ai", "claude-code", "bin", "claude.exe"))
+    best = None
+    for exe in {f for f in found if f and os.path.exists(f)}:
+        try:
+            out = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=30)
+            ver = tuple(int(x) for x in re.findall(r"\d+", out.stdout)[:3])
+        except (OSError, subprocess.TimeoutExpired, ValueError):
+            continue
+        if ver and (best is None or ver > best[0]):
+            best = (ver, exe)
+    if not best:
+        sys.exit("the Claude Code CLI is not installed (npm i -g @anthropic-ai/claude-code)")
+    return best[1]
+
+
+async def run_claude_cli(prompt, job, emit, meter):
+    """Claude's part through the Claude Code CLI (`claude -p`) on this machine's login instead of
+    the API key: the same system prompt, tools and guard (studio/guard.py as the hook command).
+    Returns a ResultMessage-like object."""
+    from types import SimpleNamespace
+
+    sp = os.path.join(job, "temp", "system-prompt.md")
+    os.makedirs(os.path.dirname(sp), exist_ok=True)
+    with open(sp, "w", encoding="utf-8") as f:
+        f.write(system_prompt(job))
+    hook = '"%s" "%s" %%s "%s"' % (sys.executable, os.path.join(HERE, "guard.py"), job)
+    settings = {
+        "hooks": {
+            "PreToolUse": [
+                {"matcher": "*", "hooks": [{"type": "command", "command": hook % "pre"}]}
+            ],
+            "PostToolUse": [
+                {"matcher": "Write|Edit", "hooks": [{"type": "command", "command": hook % "post"}]}
+            ],
+        }
+    }
+    sfile = os.path.join(job, "temp", "cli-settings.json")
+    with open(sfile, "w", encoding="utf-8") as f:
+        json.dump(settings, f, indent=1)
+    with open(os.path.join(job, "sketch.json"), encoding="utf-8") as f:
+        seconds = round(float(json.load(f)["duration"]))
+    ask = "Make the film (%d seconds): %s" % (seconds, prompt.strip())
+    # the login, not the key: no ANTHROPIC_API_KEY, the user's own Claude config folder, and none
+    # of the variables a surrounding Claude Code session would pass down
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k != "ANTHROPIC_API_KEY"
+        and not k.startswith(("CLAUDECODE", "CLAUDE_CODE_", "CLAUDE_PID"))
+        and k != "CLAUDE_CONFIG_DIR"
+    }
+    env["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] = "1"
+    proc = await asyncio.create_subprocess_exec(
+        claude_cli(),
+        "-p",
+        ask,
+        "--model",
+        MODEL,
+        "--system-prompt-file",
+        sp,
+        "--settings",
+        sfile,
+        "--setting-sources",
+        "",
+        "--tools",
+        "Read,Write,Edit,Bash",
+        "--max-turns",
+        "50",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        cwd=ROOT,
+        env=env,
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        limit=16 * 1024 * 1024,  # one stream-json line can carry a whole file Claude wrote
+    )
+    pending, result, sheet_v = {}, None, [0]
+    try:
+        async for raw in proc.stdout:
+            try:
+                d = json.loads(raw)
+            except ValueError:
+                continue
+            kind = d.get("type")
+            if kind == "system" and d.get("subtype") == "init":
+                emit(
+                    {
+                        "type": "init",
+                        "model": d.get("model"),
+                        "key": d.get("apiKeySource") or "login",
+                    }
+                )
+            elif kind == "assistant":
+                m = d.get("message") or {}
+                before = meter.usd()
+                meter.add(m.get("id"), m.get("usage"), m.get("model"))
+                if meter.usd() != before:
+                    emit({"type": "cost", "usd": round(meter.usd(), 4)})
+                for b in m.get("content") or []:
+                    if b.get("type") == "text" and b.get("text", "").strip():
+                        emit({"type": "say", "text": b["text"].strip()})
+                    elif b.get("type") == "tool_use":
+                        pending[b["id"]] = (b["name"], b.get("input") or {})
+                        emit(
+                            {
+                                "type": "tool",
+                                "text": _describe(b["name"], b.get("input") or {}, job),
+                            }
+                        )
+            elif kind == "user":
+                for b in (d.get("message") or {}).get("content") or []:
+                    if not isinstance(b, dict) or b.get("type") != "tool_result":
+                        continue
+                    name, inp = pending.pop(b.get("tool_use_id"), ("", {}))
+                    c = b.get("content")
+                    text = (
+                        c
+                        if isinstance(c, str)
+                        else "\n".join(x.get("text", "") for x in (c or []) if isinstance(x, dict))
+                    )
+                    if b.get("is_error"):
+                        if name == "" or "hook" not in text.lower():
+                            emit({"type": "fail", "text": text.strip()[-400:]})
+                        else:
+                            emit({"type": "blocked", "text": text.strip()[-300:]})
+                    elif name == "Bash" and "--stills" in inp.get("command", ""):
+                        if os.path.exists(os.path.join(job, "outputs", "review", "sheet.png")):
+                            sheet_v[0] += 1
+                            emit({"type": "image", "path": "review/sheet.png", "v": sheet_v[0]})
+            elif kind == "result":
+                result = SimpleNamespace(
+                    total_cost_usd=d.get("total_cost_usd"),
+                    num_turns=d.get("num_turns"),
+                    result=d.get("result"),
+                    session_id=d.get("session_id"),
+                    is_error=bool(d.get("is_error")),
+                    subtype=d.get("subtype"),
+                )
+        await proc.wait()
+    finally:
+        if proc.returncode is None:
+            proc.kill()
+    if result is None:
+        err = (await proc.stderr.read()).decode("utf-8", "replace")[-500:]
+        raise RuntimeError("the Claude Code CLI gave no result: %s" % err)
+    return result
+
+
 async def _step(argv, emit, label):
     """One pipeline script, its output streamed as log lines. Raises on failure."""
     proc = await asyncio.create_subprocess_exec(
@@ -590,9 +602,11 @@ def _newer(a, *bs):
     return all(not os.path.exists(b) or os.path.getmtime(b) <= t for b in bs)
 
 
-async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
+async def make_film(prompt, emit=None, job=None, source="cli", client="local", via="sdk"):
     """The whole film. Every step is reported through emit(dict); returns the final summary.
-    Whatever happens, the run's cost goes to kitcut.studio_runs (STORE) and studio.json."""
+    Whatever happens, the run's cost goes to kitcut.studio_runs (STORE) and studio.json.
+    via: "sdk" (the Agent SDK on the API key, billed per token) or "cli" (the Claude Code CLI on
+    this machine's login: Claude's figure is then what the tokens WOULD cost, not a charge)."""
     emit = emit or (lambda ev: None)
     job = job or new_job(prompt)
     rel = os.path.relpath(job, ROOT).replace("\\", "/")
@@ -635,10 +649,13 @@ async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
         claude = round(sdk, 4) if sdk is not None else metered
         tts, tts_tok, tts_model_used = tts_spend()
         img, n_img = image_spend()
+        billed = via == "sdk"  # on the CLI login, Claude's tokens are covered by the plan
         summary.update(
             # everything this film cost: Claude + the voice + the paintings
-            cost_usd=round(claude + tts + img, 4),
+            cost_usd=round((claude if billed else 0) + tts + img, 4),
             claude_cost_usd=claude,
+            claude_billed=billed,
+            via=via,
             image_cost_usd=img,
             images=n_img,
             tts_cost_usd=tts,
@@ -683,7 +700,8 @@ async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
             {"type": "stage", "name": "claude", "text": "Claude is writing and reviewing the film"}
         )
         s = time.time()
-        res = await asyncio.wait_for(run_claude(prompt, job, emit, meter), AGENT_TIMEOUT)
+        run = run_claude_cli if via == "cli" else run_claude
+        res = await asyncio.wait_for(run(prompt, job, emit, meter), AGENT_TIMEOUT)
         stages["claude"] = time.time() - s
         price()
         if res is not None:
@@ -751,6 +769,8 @@ async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
                 "error": summary.get("error"),
                 "cost_usd": summary["cost_usd"],
                 "claude_cost_usd": summary["claude_cost_usd"],
+                "claude_billed": summary["claude_billed"],
+                "via": via,
                 "image_cost_usd": summary["image_cost_usd"],
                 "images": summary["images"],
                 "tts_cost_usd": summary["tts_cost_usd"],
@@ -893,6 +913,13 @@ def main():
     ap.add_argument("prompt", nargs="?", help="what the film is about")
     ap.add_argument("--seconds", type=int, default=LENGTHS[0], choices=LENGTHS)
     ap.add_argument("--look", default=LOOKS[0], choices=LOOKS)
+    ap.add_argument(
+        "--via",
+        default="sdk",
+        choices=("sdk", "cli"),
+        help="sdk: the Agent SDK on ANTHROPIC_API_KEY; cli: the Claude Code CLI on this "
+        "machine's login",
+    )
     ap.add_argument("--smoke", action="store_true", help="a one-turn API check, no film")
     ap.add_argument("--costs", action="store_true", help="print what the runs cost, and totals")
     ap.add_argument("--sync", action="store_true", help="send runs the database missed")
@@ -919,7 +946,8 @@ def main():
         return
     if not args.prompt:
         ap.error("give a prompt, or --smoke")
-    r = asyncio.run(make_film(args.prompt, _print, new_job(args.prompt, args.seconds, args.look)))
+    job = new_job(args.prompt, args.seconds, args.look)
+    r = asyncio.run(make_film(args.prompt, _print, job, via=args.via))
     sys.exit(0 if r.get("ok") else 1)
 
 
