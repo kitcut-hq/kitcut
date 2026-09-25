@@ -51,6 +51,10 @@ BROWSERS = [
     r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    # macOS keeps its browsers in app bundles, off PATH; Linux ones are found on PATH below
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
 ]
 
 
@@ -63,7 +67,15 @@ def find_browsers():
         if cand and os.path.exists(cand) and cand.lower() not in seen:
             seen.add(cand.lower())
             got.append(cand)
-    for name in ("msedge", "chrome", "chromium", "google-chrome"):
+    for name in (
+        "msedge",
+        "chrome",
+        "chromium",
+        "google-chrome",
+        "google-chrome-stable",
+        "chromium-browser",
+        "microsoft-edge",
+    ):
         p = shutil.which(name)
         if p and p.lower() not in seen:
             seen.add(p.lower())

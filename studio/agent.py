@@ -2,6 +2,9 @@
 """Sketch Studio: one line of text in, a 5-second sketch film out, written by Claude.
 
     python studio/agent.py --smoke                  one-turn API check: key source, model, cost
+    python studio/agent.py --costs                  what the runs have cost (MongoDB kitcut.studio_runs)
+    python studio/agent.py --sync                   send runs the database missed (the outbox)
+    python studio/agent.py --announce <url>|off     tell the public site where the tunnel is
     python studio/agent.py "a paper plane ..."      a whole film from the command line
     python studio/server.py                         the web page (http://127.0.0.1:8765)
 
@@ -22,6 +25,7 @@ import re
 import json
 import time
 import shlex
+import shutil
 import asyncio
 import argparse
 from datetime import datetime
@@ -30,6 +34,9 @@ sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 )
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import store  # noqa: E402
 
 from claude_agent_sdk import (  # noqa: E402
     AssistantMessage,
@@ -59,7 +66,7 @@ AGENT_TIMEOUT = 12 * 60
 def _path(p):
     """A tool's path argument, absolute: relative to the repo root, posix or git-bash (/c/...)."""
     p = str(p or "").strip().strip("\"'")
-    m = re.match(r"^/([a-zA-Z])/(.*)$", p)
+    m = re.match(r"^/([a-zA-Z])/(.*)$", p) if os.name == "nt" else None
     if m:
         p = m.group(1) + ":/" + m.group(2)
     return os.path.normcase(os.path.abspath(os.path.join(ROOT, p)))
@@ -179,6 +186,8 @@ def system_prompt(job):
     inst = sorted(os.listdir(os.path.join(ROOT, "models", "soundfonts", "FluidR3_GM")))
     fill = {
         "JOB": os.path.relpath(job, ROOT).replace("\\", "/"),
+        # what Claude's shell calls Python: macOS and many Linux systems only have python3
+        "PY": "python" if shutil.which("python") else "python3",
         "ENGINE": _read("sketch", "engine.js"),
         "PROPS": _read("sketch", "props.js"),
         "EXAMPLE_FILM": _read("config", "sketch", "example", "film.js"),
@@ -243,7 +252,106 @@ def _result_text(block):
     return str(c or "")
 
 
-async def run_claude(prompt, job, emit):
+# ------------------------------------------------------------------ what it costs
+# USD per million tokens, from the price table inside Claude Code 2.1.281 (the CLI this SDK
+# bundles). Sonnet is here only to price a run already on record; the studio runs MODEL.
+PRICES = {
+    "claude-opus-5-5": {"in": 4, "out": 20, "w5m": 5, "w1h": 8, "read": 0.2},
+    "claude-sonnet-5": {"in": 2, "out": 10, "w5m": 2.5, "w1h": 4, "read": 0.2},
+}
+# every run's record lives in kitcut's MongoDB (store.py); the outbox holds what could not be sent
+STORE = store.MongoStore(outbox=os.path.join(ROOT, "projects", "studio-runs-outbox.jsonl"))
+
+
+def _price(model, t):
+    p = PRICES.get(model, PRICES[MODEL])
+    return (
+        t["input"] * p["in"]
+        + t["output"] * p["out"]
+        + t["cache_read"] * p["read"]
+        + t["cache_write_5m"] * p["w5m"]
+        + t["cache_write_1h"] * p["w1h"]
+    ) / 1e6
+
+
+def _tokens(u):
+    w1h = (u.get("cache_creation") or {}).get("ephemeral_1h_input_tokens") or 0
+    return {
+        "input": u.get("input_tokens") or 0,
+        "output": u.get("output_tokens") or 0,
+        "cache_read": u.get("cache_read_input_tokens") or 0,
+        "cache_write_5m": (u.get("cache_creation_input_tokens") or 0) - w1h,
+        "cache_write_1h": w1h,
+    }
+
+
+class Meter:
+    """Token counts per API response, priced as they arrive, so a run cut short (a timeout,
+    a crash, a stop) is still costed. The SDK reports its own total only at the very end."""
+
+    def __init__(self, model=MODEL):
+        self.model, self.msgs = model, {}
+
+    def add(self, msg_id, usage, model=None, at=None):
+        if msg_id and usage:
+            # one response arrives in parts; the last part carries the final counts
+            first = self.msgs.get(msg_id, {}).get("at")
+            self.msgs[msg_id] = {
+                "usage": usage,
+                "model": model or self.model,
+                "at": first or at or store.now(),
+            }
+
+    def tokens(self):
+        t = dict.fromkeys(("input", "output", "cache_read", "cache_write_5m", "cache_write_1h"), 0)
+        for m in self.msgs.values():
+            for k, v in _tokens(m["usage"]).items():
+                t[k] += v
+        return t
+
+    def usd(self):
+        return sum(_price(m["model"], _tokens(m["usage"])) for m in self.msgs.values())
+
+    def calls(self):
+        """One entry per Claude API response, for the run's record."""
+        return [
+            {"message_id": k, "at": m["at"], "model": m["model"], **_tokens(m["usage"])}
+            | {"cost_usd": round(_price(m["model"], _tokens(m["usage"])), 6)}
+            for k, m in self.msgs.items()
+        ]
+
+
+def runs():
+    """Every run on record, oldest first."""
+    return STORE.runs()
+
+
+def spend_summary(rows=None):
+    """Totals over the runs on record: all time, today, this month (local time), per source."""
+    rows = runs() if rows is None else rows
+    today, month = datetime.now().strftime("%Y-%m-%d"), datetime.now().strftime("%Y-%m")
+    local = lambda r: (
+        r["created_at"].astimezone().strftime("%Y-%m-%d") if r.get("created_at") else ""
+    )  # noqa: E731
+    films = [r for r in rows if r.get("kind") != "smoke"]
+    ok = [r for r in films if r.get("ok")]
+    total = lambda rs: round(sum(r.get("cost_usd") or 0 for r in rs), 4)  # noqa: E731
+    return {
+        "total_usd": total(rows),
+        "today_usd": total([r for r in rows if local(r) == today]),
+        "month_usd": total([r for r in rows if local(r).startswith(month)]),
+        "runs": len(rows),
+        "films_ok": len(ok),
+        "films_failed": len(films) - len(ok),
+        "avg_usd_per_film": round(total(ok) / len(ok), 4) if ok else None,
+        "by_source": {
+            s: total([r for r in rows if r.get("source") == s])
+            for s in sorted({r.get("source", "?") for r in rows})
+        },
+    }
+
+
+async def run_claude(prompt, job, emit, meter):
     """Claude's part: write, review and fix. Returns the SDK's ResultMessage (or None)."""
     pending, result, sheet_v = {}, None, [0]
 
@@ -286,6 +394,10 @@ async def run_claude(prompt, job, emit):
                 d = msg.data
                 emit({"type": "init", "model": d.get("model"), "key": d.get("apiKeySource")})
             elif isinstance(msg, AssistantMessage):
+                before = meter.usd()
+                meter.add(msg.message_id or msg.uuid, msg.usage, msg.model)
+                if meter.usd() != before:
+                    emit({"type": "cost", "usd": round(meter.usd(), 4)})
                 for b in msg.content:
                     if isinstance(b, TextBlock) and b.text.strip():
                         emit({"type": "say", "text": b.text.strip()})
@@ -339,29 +451,61 @@ def _newer(a, *bs):
     return all(not os.path.exists(b) or os.path.getmtime(b) <= t for b in bs)
 
 
-async def make_film(prompt, emit=None, job=None):
-    """The whole film. Every step is reported through emit(dict); returns the final summary."""
+async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
+    """The whole film. Every step is reported through emit(dict); returns the final summary.
+    Whatever happens, the run's cost goes to kitcut.studio_runs (STORE) and studio.json."""
     emit = emit or (lambda ev: None)
     job = job or new_job(prompt)
     rel = os.path.relpath(job, ROOT).replace("\\", "/")
     manifest = rel + "/sketch.json"
-    t0, stages = time.time(), {}
+    t0, stages, meter, res = time.time(), {}, Meter(), None
     emit({"type": "job", "id": os.path.basename(job), "dir": rel, "model": MODEL})
     summary = {"prompt": prompt, "model": MODEL, "dir": rel}
+
+    def price():
+        # the SDK's own figure when the run reached its end; the meter's when it did not
+        metered = round(meter.usd(), 4)
+        sdk = res.total_cost_usd if res is not None else None
+        summary.update(
+            cost_usd=round(sdk, 4) if sdk is not None else metered,
+            cost_metered_usd=metered,
+            tokens=meter.tokens(),
+        )
+
+    run_id, loop = os.path.basename(job), asyncio.get_running_loop()
+    record = {
+        "kind": "film",
+        "source": source,
+        "client": client,
+        "host": store.HOST,
+        "prompt": prompt,
+        "model": MODEL,
+        "job": rel,
+        "state": "running",
+        "cost_usd": 0.0,
+    }
+    # on record before the first token is spent, and kept current while it runs
+    await asyncio.to_thread(STORE.save, run_id, record)
+    saved_at = [time.time()]
+    outer = emit
+
+    def emit(ev):
+        outer(ev)
+        if ev["type"] == "cost" and time.time() - saved_at[0] > 5:
+            saved_at[0] = time.time()
+            now = {"cost_usd": ev["usd"], "tokens": meter.tokens(), "calls": meter.calls()}
+            loop.run_in_executor(None, STORE.save, run_id, now)
+
     try:
         emit(
             {"type": "stage", "name": "claude", "text": "Claude is writing and reviewing the film"}
         )
         s = time.time()
-        res = await asyncio.wait_for(run_claude(prompt, job, emit), AGENT_TIMEOUT)
+        res = await asyncio.wait_for(run_claude(prompt, job, emit, meter), AGENT_TIMEOUT)
         stages["claude"] = time.time() - s
+        price()
         if res is not None:
-            summary.update(
-                cost_usd=res.total_cost_usd,
-                turns=res.num_turns,
-                claude_said=res.result,
-                usage=res.usage,
-            )
+            summary.update(turns=res.num_turns, claude_said=res.result, session=res.session_id)
             if res.is_error:
                 raise RuntimeError("Claude stopped early: %s" % (res.result or res.subtype))
         missing = [f for f in EDITABLE if not os.path.exists(os.path.join(job, f))]
@@ -397,14 +541,41 @@ async def make_film(prompt, emit=None, job=None):
         )
         emit({"type": "done", **summary})
     except Exception as e:  # noqa: BLE001 -- every failure goes to the page, not just the console
-        stages.setdefault("failed_after", time.time() - t0)
-        summary.update(ok=False, error=str(e), seconds=round(time.time() - t0, 1))
-        emit({"type": "error", "text": str(e)})
-    with open(os.path.join(job, "studio.json"), encoding="utf-8") as f:
-        rec = json.load(f)
-    rec.update(summary, finished=datetime.now().isoformat(timespec="seconds"))
-    with open(os.path.join(job, "studio.json"), "w", encoding="utf-8") as f:
-        json.dump(rec, f, indent=2)
+        text = str(e) or type(e).__name__
+        if isinstance(e, TimeoutError):
+            text = "Claude ran past the %d-minute limit" % (AGENT_TIMEOUT // 60)
+        summary.update(ok=False, error=text, seconds=round(time.time() - t0, 1))
+        emit({"type": "error", "text": text})
+    finally:  # also on a cancelled run (the server stopping): the tokens were still spent
+        summary.setdefault("ok", False)
+        if not summary["ok"]:
+            summary.setdefault("error", "stopped before it finished")
+            summary.setdefault("seconds", round(time.time() - t0, 1))
+        price()
+        with open(os.path.join(job, "studio.json"), encoding="utf-8") as f:
+            rec = json.load(f)
+        rec.update(summary, finished=datetime.now().isoformat(timespec="seconds"))
+        with open(os.path.join(job, "studio.json"), "w", encoding="utf-8") as f:
+            json.dump(rec, f, indent=2)
+        STORE.save(
+            run_id,
+            record
+            | {
+                "state": "done" if summary["ok"] else "failed",
+                "ok": summary["ok"],
+                "error": summary.get("error"),
+                "cost_usd": summary["cost_usd"],
+                "cost_metered_usd": summary["cost_metered_usd"],
+                "tokens": summary["tokens"],
+                "calls": meter.calls(),
+                "turns": summary.get("turns"),
+                "seconds": summary.get("seconds"),
+                "stages": {k: round(v, 1) for k, v in stages.items()} or None,
+                "session_id": summary.get("session"),
+                "finished_at": store.now(),
+            },
+            final=True,
+        )
     return summary
 
 
@@ -420,14 +591,84 @@ async def smoke():
         max_turns=1,
         env=child_env(),
     )
-    t = time.time()
+    t, meter = time.time(), Meter()
     async for m in query(prompt="ping", options=opts):
         if isinstance(m, SystemMessage) and m.subtype == "init":
             print("  key source: %s" % m.data.get("apiKeySource"))
             print("  model:      %s" % m.data.get("model"))
+        elif isinstance(m, AssistantMessage):
+            meter.add(m.message_id or m.uuid, m.usage, m.model)
         elif isinstance(m, ResultMessage):
             print("  reply:      %r%s" % (m.result, "  (ERROR)" if m.is_error else ""))
             print("  cost:       $%.4f in %.1fs" % (m.total_cost_usd or 0, time.time() - t))
+            saved = STORE.save(
+                "smoke:%s" % m.session_id,
+                {
+                    "kind": "smoke",
+                    "source": "smoke",
+                    "client": "local",
+                    "host": store.HOST,
+                    "prompt": "ping",
+                    "model": MODEL,
+                    "state": "failed" if m.is_error else "done",
+                    "ok": not m.is_error,
+                    "error": m.result if m.is_error else None,
+                    "cost_usd": round(m.total_cost_usd or 0, 6),
+                    "cost_metered_usd": round(meter.usd(), 6),
+                    "tokens": meter.tokens(),
+                    "calls": meter.calls(),
+                    "turns": m.num_turns,
+                    "seconds": round(time.time() - t, 1),
+                    "session_id": m.session_id,
+                    "finished_at": store.now(),
+                },
+                final=True,
+            )
+            print(
+                "  logged:     %s"
+                % ("kitcut.studio_runs" if saved else "outbox (MongoDB unreachable)")
+            )
+
+
+def print_costs(last=20):
+    """The runs on record (kitcut.studio_runs): the latest, and the totals."""
+    rows = runs()
+    if not rows:
+        print("no runs in kitcut.%s yet" % store.COLLECTION)
+        return
+    print(
+        "  %-16s  %-8s  %-5s  %8s  %7s  %s" % ("time", "source", "ok", "cost", "seconds", "prompt")
+    )
+    for r in rows[-last:]:
+        print(
+            "  %-16s  %-8s  %-5s  %8s  %7s  %s"
+            % (
+                r["created_at"].astimezone().strftime("%Y-%m-%d %H:%M"),
+                r.get("source", ""),
+                "yes" if r.get("ok") else "NO",
+                "$%.4f" % (r.get("cost_usd") or 0),
+                r.get("seconds") if r.get("seconds") is not None else "",
+                (r.get("prompt") or "")[:60],
+            )
+        )
+    s = spend_summary(rows)
+    print(
+        "\n  total $%.2f over %d runs (%d films made, %d failed)   today $%.2f   this month $%.2f"
+        % (
+            s["total_usd"],
+            s["runs"],
+            s["films_ok"],
+            s["films_failed"],
+            s["today_usd"],
+            s["month_usd"],
+        )
+    )
+    if s["avg_usd_per_film"] is not None:
+        print("  average per finished film: $%.2f" % s["avg_usd_per_film"])
+    print("  by source: %s" % ", ".join("%s $%.2f" % kv for kv in s["by_source"].items()))
+    print("  from MongoDB kitcut.%s" % store.COLLECTION)
+    if STORE.outbox and os.path.exists(STORE.outbox):
+        print("  NOT YET SENT: runs waiting in %s (python studio/agent.py --sync)" % STORE.outbox)
 
 
 def _print(ev):
@@ -438,6 +679,8 @@ def _print(ev):
         print("  claude: " + ev["text"].replace("\n", "\n          "))
     elif k in ("tool", "stage", "blocked", "fail", "error"):
         print("  %-7s %s" % (k, ev.get("text")))
+    elif k == "cost":
+        print("  cost    $%.4f so far" % ev["usd"])
     elif k == "init":
         print("  init    model %s, key from %s" % (ev["model"], ev["key"]))
     elif k in ("job", "image"):
@@ -458,7 +701,26 @@ def main():
     )
     ap.add_argument("prompt", nargs="?", help="what the film is about")
     ap.add_argument("--smoke", action="store_true", help="a one-turn API check, no film")
+    ap.add_argument("--costs", action="store_true", help="print what the runs cost, and totals")
+    ap.add_argument("--sync", action="store_true", help="send runs the database missed")
+    ap.add_argument(
+        "--announce",
+        metavar="URL",
+        help="record the tunnel URL the public site should use ('off' when stopping)",
+    )
     args = ap.parse_args()
+    if args.announce:
+        url = None if args.announce == "off" else args.announce.rstrip("/")
+        STORE.announce(url)
+        print("kitcut.studio_hosts: studio -> %s" % (url or "offline"))
+        return
+    if args.sync:
+        sent, left = STORE.sync()
+        print("sent %d run(s) to kitcut.%s; %d still waiting" % (sent, store.COLLECTION, left))
+        return
+    if args.costs:
+        print_costs()
+        return
     if args.smoke:
         asyncio.run(smoke())
         return

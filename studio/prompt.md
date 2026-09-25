@@ -18,10 +18,10 @@ Run each exactly like this, from the working directory, one command per call (no
 no pipes, no redirection):
 
 - `node --check {JOB}/film.js`
-- `python scripts/sketch-render.py --manifest {JOB}/sketch.json --stills 0,1,2,3,4,4.9 --sheet`
+- `{PY} scripts/sketch-render.py --manifest {JOB}/sketch.json --stills 0,1,2,3,4,4.9 --sheet`
   (any comma list of times; writes `{JOB}/outputs/review/<t>.png` and `{JOB}/outputs/review/sheet.png`)
-- `python scripts/sketch-render.py --manifest {JOB}/sketch.json --automation` (only if a cue uses `"air"`)
-- `python scripts/sketch-audio.py --manifest {JOB}/sketch.json` (add `--levels` to see the balance)
+- `{PY} scripts/sketch-render.py --manifest {JOB}/sketch.json --automation` (only if a cue uses `"air"`)
+- `{PY} scripts/sketch-audio.py --manifest {JOB}/sketch.json` (add `--levels` to see the balance)
 
 Change files with Edit (or Write), never with shell tools such as `sed`.
 You cannot render the final video; Sketch Studio does that after you finish. You can Read files

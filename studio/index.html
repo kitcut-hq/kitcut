@@ -18,17 +18,21 @@
           --accent: #e58a58; --accent-ink: #1d1a17; --accent-soft: #3b2a20; --bad: #e07a66; --good: #7cc08c; color-scheme: dark; }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }  /* .row and .stats set display, which would beat it */
 html, body { margin: 0; }
 body { background: var(--paper); color: var(--ink); font: 15px/1.5 Inter, system-ui, sans-serif; }
 .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 60px; display: grid; gap: 22px; }
 header h1 { font: 700 64px/1 Caveat, cursive; margin: 0; letter-spacing: .5px; }
 header h1 span { color: var(--accent); }
 header p { margin: 6px 0 0; color: var(--ink-soft); font-size: 16px; }
+header .spend { font-size: 13.5px; font-variant-numeric: tabular-nums; }
+header .spend b { color: var(--ink); font-weight: 600; }
 form { display: grid; gap: 10px; }
 textarea { width: 100%; min-height: 84px; resize: vertical; padding: 14px 16px; border-radius: 12px;
   border: 1.5px solid var(--rule); background: var(--sheet); color: var(--ink); font: 22px/1.35 'Patrick Hand', cursive; }
 textarea:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+#token { flex: 1 1 280px; min-width: 0; padding: 10px 12px; border-radius: 10px; border: 1.5px solid var(--rule); background: var(--sheet); color: var(--ink); font: inherit; }
 select { padding: 9px 12px; border-radius: 10px; border: 1.5px solid var(--rule); background: var(--sheet); color: var(--ink); font: inherit; }
 button { padding: 10px 22px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink);
   font: 700 24px/1 Caveat, cursive; cursor: pointer; letter-spacing: .5px; }
@@ -73,13 +77,19 @@ button:disabled { opacity: .5; cursor: progress; }
   <header>
     <h1>Sketch <span>Studio</span></h1>
     <p>Type an idea. Claude writes, draws, reviews and scores a 5-second hand-drawn film.</p>
+    <p class="spend" id="spend" hidden></p>
   </header>
+
+  <form id="tokenForm" class="row" hidden>
+    <input id="token" type="password" autocomplete="off" placeholder="Studio token" aria-label="Studio token">
+    <button type="submit">Use token</button>
+  </form>
 
   <form id="form">
     <textarea id="prompt" aria-label="What should the film show?">A paper plane delivers a cup of coffee to a sleepy developer, who wakes up delighted</textarea>
     <div class="row">
       <button id="go" type="submit">Make the film</button>
-      <span class="note">Claude Opus 5.5 · about 2-4 minutes · runs on the Claude API key in kitcut's .env</span>
+      <span class="note">Claude Opus 5.5 · about 2-3 minutes · one film at a time</span>
     </div>
   </form>
 
@@ -104,9 +114,36 @@ button:disabled { opacity: .5; cursor: progress; }
 
 <script>
 const $ = (id) => document.getElementById(id);
-let t0 = 0, timer = null, es = null;
+let t0 = 0, timer = null, poll = null;
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// Three homes for this one page:
+// - on the studio's own machine, the server fills the token in;
+// - through the bare tunnel, it asks for the token once and this browser keeps it;
+// - on the public site (Vercel), the site's own API adds the token server-side, and the
+//   placeholder below stays unfilled.
+// File URLs (video, poster, review sheet) always come from the API already signed.
+const store = { get() { try { return localStorage.getItem('studioToken') || ''; } catch (e) { return ''; } },
+                set(v) { try { localStorage.setItem('studioToken', v); } catch (e) { /* private window */ } } };
+const INJECTED = '__TOKEN__';
+let TOKEN = (INJECTED.startsWith('__') ? '' : INJECTED) || store.get();
+const api = (path, opt = {}) => fetch(path, { ...opt, headers: { ...(opt.headers || {}), ...(TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {}) } });
+function needToken() { $('tokenForm').hidden = false; $('go').disabled = true; }
+$('tokenForm').addEventListener('submit', (e) => {
+  e.preventDefault(); TOKEN = $('token').value.trim(); store.set(TOKEN);
+  $('tokenForm').hidden = true; $('go').disabled = false; recent();
+});
+async function online() {
+  try {
+    const r = await api('/api/health');
+    const h = await r.json();
+    if (r.ok && h.ok) return true;
+    $('status').textContent = h.error || 'The studio is offline right now.';
+  } catch (e) { $('status').textContent = 'The studio is offline right now.'; }
+  $('go').disabled = true;
+  return false;
+}
 
 function line(kind, text) {
   const li = document.createElement('li');
@@ -116,8 +153,8 @@ function line(kind, text) {
   return li;
 }
 function screen(html) { $('screen').innerHTML = html; }
-function play(id, poster) {
-  screen(`<video src="/files/${id}/film.mp4" poster="/files/${id}/film_poster.png" controls autoplay playsinline></video>`);
+function play(video, poster) {
+  screen(`<video src="${esc(video)}" poster="${esc(poster || '')}" controls autoplay playsinline></video>`);
 }
 function stats(ev) {
   const st = ev.stages || {};
@@ -130,42 +167,78 @@ function stats(ev) {
   $('stats').hidden = false;
 }
 
-async function recent() {
+const usd = (v) => v == null ? 'n/a' : '$' + v.toFixed(v < 1 ? 3 : 2);
+async function spend() {
   try {
-    const list = await (await fetch('/api/films')).json();
+    const r = await api('/api/costs?last=1');
+    if (!r.ok) return;
+    const s = await r.json();
+    $('spend').innerHTML = `API spend: <b>${usd(s.total_usd)}</b> over ${s.runs} runs · today <b>${usd(s.today_usd)}</b> · ` +
+      `${s.films_ok} films made${s.films_failed ? `, ${s.films_failed} failed` : ''}` +
+      (s.avg_usd_per_film != null ? ` · about <b>${usd(s.avg_usd_per_film)}</b> a film` : '');
+    $('spend').hidden = false;
+  } catch (e) { /* a convenience */ }
+}
+
+async function recent() {
+  spend();
+  try {
+    const r = await api('/api/films');
+    if (r.status === 401) return needToken();
+    const list = await r.json();
     if (!list.length) return;
-    $('films').innerHTML = list.map((f) => `
-      <button class="film" type="button" data-id="${esc(f.id)}">
-        <img src="/files/${esc(f.id)}/film_poster.png" alt="">
+    $('films').innerHTML = list.map((f, i) => `
+      <button class="film" type="button" data-i="${i}">
+        <img src="${esc(f.poster_url)}" alt="" loading="lazy">
         <div><p>${esc(f.prompt)}</p><small>${mmss(f.seconds || 0)} · ${f.cost_usd != null ? '$' + f.cost_usd.toFixed(2) : ''}</small></div>
       </button>`).join('');
-    for (const b of $('films').querySelectorAll('.film')) b.onclick = () => { play(b.dataset.id); $('status').textContent = b.querySelector('p').textContent; };
+    for (const b of $('films').querySelectorAll('.film')) {
+      const f = list[+b.dataset.i];
+      b.onclick = () => { play(f.video_url, f.poster_url); $('status').textContent = f.prompt; };
+    }
   } catch (e) { /* the list is a convenience */ }
 }
 
 let lastLog = null;
 function onEvent(ev) {
   switch (ev.type) {
-    case 'job': $('status').innerHTML = `<span class="pen"></span>Working in ${esc(ev.dir)}`; break;
+    case 'job': $('status').innerHTML = '<span class="pen"></span>Starting'; break;
     case 'init': line('sub', `${ev.model} · billed via ${ev.key}`); break;
     case 'stage': line('stage', ev.text); $('status').innerHTML = `<span class="pen"></span>${esc(ev.text)}`; lastLog = null; break;
     case 'say': line('say', ev.text); break;
     case 'tool': line('', ev.text); break;
     case 'blocked': line('blocked', 'Blocked: ' + ev.text); break;
     case 'fail': line('fail', ev.text); break;
-    case 'image': screen(`<img src="/files/${esc(currentId)}/${ev.path}?v=${ev.v}" alt="Review stills">`); line('sub', 'review sheet updated'); break;
+    case 'image': if (ev.url) screen(`<img src="${esc(ev.url)}" alt="Review stills">`); line('sub', 'review sheet updated'); break;
     case 'log':
       if (!lastLog) lastLog = line('sub', ev.text); else lastLog.querySelector('span').textContent = ev.text;
       break;
-    case 'done':
-      play(currentId); stats(ev); line('done', `Done in ${mmss(ev.seconds)}`);
+    case 'done':  // the video itself comes with the status (follow), signed
+      stats(ev); line('done', `Done in ${mmss(ev.seconds)}`);
       $('status').textContent = 'Done. ' + (ev.claude_said || ''); recent(); break;
-    case 'error': line('error', ev.text); $('status').textContent = 'Failed.'; break;
-    case 'end': finish(); break;
+    case 'error': line('error', ev.text); $('status').textContent = 'Failed.'; spend(); break;
+    case 'cost': $('clock').textContent = `${usd(ev.usd)} so far · ` + mmss((Date.now() - t0) / 1000); lastCost = ev.usd; break;
   }
 }
-let currentId = null;
-function finish() { clearInterval(timer); timer = null; if (es) es.close(); es = null; $('go').disabled = false; }
+let currentId = null, lastCost = null;
+function finish() { clearInterval(timer); timer = null; clearTimeout(poll); poll = null; $('go').disabled = false; }
+
+// polling, not server-sent events: Cloudflare quick tunnels do not carry an event stream
+async function follow(since = 0, misses = 0) {
+  try {
+    const r = await api(`/api/films/${encodeURIComponent(currentId)}?since=${since}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const s = await r.json();
+    for (const ev of s.events) onEvent(ev);
+    if (s.status === 'queued') $('status').innerHTML = `<span class="pen"></span>Waiting: number ${s.position} in the queue`;
+    if (s.status === 'done' && s.video_url) play(s.video_url, s.poster_url);
+    if (s.status === 'done' || s.status === 'error' || s.status === 'lost') return finish();
+    poll = setTimeout(() => follow(s.next, 0), 1500);
+  } catch (err) {
+    if (misses >= 5) { line('error', 'Lost the connection to the server: ' + err.message); return finish(); }
+    poll = setTimeout(() => follow(since, misses + 1), 3000);
+  }
+}
 
 $('form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -174,17 +247,18 @@ $('form').addEventListener('submit', async (e) => {
   $('go').disabled = true; $('stats').hidden = true; $('log').innerHTML = ''; lastLog = null;
   screen('<div class="idle">Claude is thinking up the film...</div>');
   t0 = Date.now();
-  timer = setInterval(() => { $('clock').textContent = mmss((Date.now() - t0) / 1000); }, 500);
+  lastCost = null;
+  timer = setInterval(() => { $('clock').textContent = (lastCost != null ? `${usd(lastCost)} so far · ` : '') + mmss((Date.now() - t0) / 1000); }, 500);
   try {
-    const r = await fetch('/api/films', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
-    if (!r.ok) throw new Error(await r.text());
-    currentId = (await r.json()).id;
-    es = new EventSource(`/api/films/${currentId}/events`);
-    es.onmessage = (m) => onEvent(JSON.parse(m.data));
-    es.onerror = () => { if (timer) line('error', 'Lost the connection to the server.'); finish(); };
+    const r = await api('/api/films', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
+    if (r.status === 401) { finish(); line('error', 'The studio token is missing or wrong.'); return needToken(); }
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    currentId = body.id;
+    follow(0);
   } catch (err) { line('error', String(err.message || err)); finish(); }
 });
-recent();
+online().then((up) => { if (up) recent(); });  // a 401 from recent() asks for the token
 </script>
 </body>
 </html>
