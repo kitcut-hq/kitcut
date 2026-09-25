@@ -199,7 +199,15 @@ async def create(req):
     refused = await over_limit(client)
     if refused:
         return web.json_response({"error": refused}, status=429)
-    d = agent.new_job(prompt)
+    try:
+        seconds = int(body.get("seconds") or agent.LENGTHS[0])
+    except (TypeError, ValueError):
+        seconds = 0
+    if seconds not in agent.LENGTHS:
+        return web.json_response(
+            {"error": "seconds must be one of %s" % ", ".join(map(str, agent.LENGTHS))}, status=400
+        )
+    d = agent.new_job(prompt, seconds)
     jid = os.path.basename(d)
     J = JOBS[jid] = {
         "events": [],
@@ -297,7 +305,20 @@ async def status(req):
         out.update(
             video_url=signed(req, jid, "film.mp4"), poster_url=signed(req, jid, "film_poster.png")
         )
-    for k in ("prompt", "seconds", "cost_usd", "tokens", "turns", "stages", "error", "claude_said"):
+    keys = (
+        "prompt",
+        "length",
+        "seconds",
+        "cost_usd",
+        "claude_cost_usd",
+        "tts_cost_usd",
+        "tokens",
+        "turns",
+        "stages",
+        "error",
+        "claude_said",
+    )
+    for k in keys:
         if r.get(k) is not None:
             out[k] = r[k]
     return web.json_response(out)
@@ -333,7 +354,10 @@ async def films(req):
             r = json.load(f)
         if r.get("ok"):
             out.append(
-                {k: r.get(k) for k in ("prompt", "seconds", "cost_usd", "turns", "stages")}
+                {
+                    k: r.get(k)
+                    for k in ("prompt", "length", "seconds", "cost_usd", "turns", "stages")
+                }
                 | {
                     "id": jid,
                     "video_url": signed(req, jid, "film.mp4"),

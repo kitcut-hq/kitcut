@@ -38,6 +38,11 @@ def load(path):
         os.makedirs(m["_" + sub], exist_ok=True)
     m.setdefault("duration", 30.0)
     m.setdefault("fps", 60)
+    # "vo": "vo.json" keeps the voice-over in its own file, so a writer can be allowed to edit
+    # the narration without being able to touch the rest of the manifest (Sketch Studio does this)
+    if isinstance(m.get("vo"), str):
+        with open(rel(m, m["vo"]), encoding="utf-8") as f:
+            m["_vo_file"], m["vo"] = rel(m, m["vo"]), json.load(f)
     return m
 
 

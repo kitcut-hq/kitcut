@@ -29,6 +29,7 @@ import shutil
 import asyncio
 import argparse
 from datetime import datetime
+from importlib import import_module
 
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
@@ -58,8 +59,19 @@ ROOT = _env.ROOT
 HERE = os.path.dirname(os.path.abspath(__file__))
 # Opus only: the drawing is the product, and a smaller model's films are not worth the saving
 MODEL = "claude-opus-5-5"
-EDITABLE = ("film.js", "score.json", "sfx.json")
-AGENT_TIMEOUT = 12 * 60
+EDITABLE = ("film.js", "score.json", "sfx.json", "vo.json")
+MADE = ("film.js", "score.json", "sfx.json")  # what a finished film must have
+LENGTHS = (5, 10, 15)  # seconds a visitor may ask for
+AGENT_TIMEOUT = 15 * 60
+# the voice: Google's Gemini text-to-speech. 3.8 needs the Gemini API enabled in the service
+# account's project; STUDIO_TTS_MODEL in .env overrides it (e.g. gemini-3.1-flash-tts-preview)
+TTS_MODEL = "gemini-3.8-flash-tts"
+# what Claude may not change in vo.json: the studio decides the backend, model and take count
+VO_PINNED = {"tts": "gemini", "takes": 1, "lead": 0.5, "gap": 0.35}
+
+
+def tts_model():
+    return os.environ.get("STUDIO_TTS_MODEL", "").strip() or TTS_MODEL
 
 
 # ------------------------------------------------------------------ the permission model
@@ -104,6 +116,7 @@ def _bash_ok(cmd, job):
     usage = (
         "Only these commands run, one per call, from the working directory: "
         "`node --check <job>/film.js`, "
+        "`python scripts/sketch-vo.py --manifest <job>/sketch.json [--only <n> --retake]`, "
         "`python scripts/sketch-render.py --manifest <job>/sketch.json --stills <t,t,...> [--sheet]`, "
         "`python scripts/sketch-render.py --manifest <job>/sketch.json --automation`, "
         "`python scripts/sketch-audio.py --manifest <job>/sketch.json [--levels]`."
@@ -125,6 +138,15 @@ def _bash_ok(cmd, job):
     rest = argv[4:]
     if script == "scripts/sketch-audio.py":
         return (True, "") if set(rest) <= {"--levels", "--plan"} else (False, usage)
+    if script == "scripts/sketch-vo.py":
+        if rest in ([], ["--plan"]):
+            return True, ""
+        # one line again: --only <n> --retake, in either order
+        if sorted(a for a in rest if not a.isdigit()) == ["--only", "--retake"] and len(rest) == 3:
+            i = rest.index("--only")
+            if i + 1 < len(rest) and rest[i + 1].isdigit():
+                return True, ""
+        return False, usage
     if script == "scripts/sketch-render.py":
         if rest == ["--automation"]:
             return True, ""
@@ -184,7 +206,13 @@ def system_prompt(job):
     notation = doc[doc.index("Score notation") :].split("Not an entry script")[0].strip()
     fx = "\n".join(re.findall(r"^def fx_(\w+\(.*\)):", audio, re.MULTILINE))
     inst = sorted(os.listdir(os.path.join(ROOT, "models", "soundfonts", "FluidR3_GM")))
+    with open(os.path.join(job, "sketch.json"), encoding="utf-8") as f:
+        seconds = round(float(json.load(f)["duration"]))
+    vo_mod = import_module("sketch-vo")  # the voice list lives with the Gemini backend
     fill = {
+        "SECONDS": str(seconds),
+        "WORDS": str(round(seconds * 2.2 - 3)),  # unhurried narration, with room to breathe
+        "VOICES": ", ".join(vo_mod.GEMINI_VOICES),
         "JOB": os.path.relpath(job, ROOT).replace("\\", "/"),
         # what Claude's shell calls Python: macOS and many Linux systems only have python3
         "PY": "python" if shutil.which("python") else "python3",
@@ -202,21 +230,53 @@ def system_prompt(job):
 
 
 # ------------------------------------------------------------------ one film
-def new_job(prompt):
-    """projects/studio-<stamp>/ with the 5-second manifest in it."""
+def new_job(prompt, seconds=5):
+    """projects/studio-<stamp>/ with the manifest (its length set) and an empty narration."""
+    seconds = seconds if seconds in LENGTHS else LENGTHS[0]
     job = os.path.join(ROOT, "projects", "studio-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
     os.makedirs(job)
     with open(os.path.join(HERE, "template", "sketch.json"), encoding="utf-8") as f:
         m = json.load(f)
     words = re.sub(r"\s+", " ", prompt).strip()
     m["title"] = (words[:60] + "...") if len(words) > 60 else words
+    m["duration"], m["poster_t"] = float(seconds), round(seconds - 0.4, 2)
     with open(os.path.join(job, "sketch.json"), "w", encoding="utf-8") as f:
         json.dump(m, f, indent=2)
+    vo = {**VO_PINNED, "model": tts_model(), "voice": "Kore", "style": "", "language": "en"}
+    with open(os.path.join(job, "vo.json"), "w", encoding="utf-8") as f:
+        json.dump(vo | {"lines": []}, f, indent=2, ensure_ascii=False)
     with open(os.path.join(job, "studio.json"), "w", encoding="utf-8") as f:
         json.dump(
-            {"prompt": prompt, "started": datetime.now().isoformat(timespec="seconds")}, f, indent=2
+            {
+                "prompt": prompt,
+                "length": seconds,  # the film's; "seconds" is later how long making it took
+                "started": datetime.now().isoformat(timespec="seconds"),
+            },
+            f,
+            indent=2,
         )
     return job
+
+
+def pin_vo(job):
+    """Put back what Claude may not change in vo.json (backend, model, takes). Returns what it
+    had to restore, or "" -- the PostToolUse hook tells Claude so."""
+    p = os.path.join(job, "vo.json")
+    try:
+        with open(p, encoding="utf-8") as f:
+            vo = json.load(f)
+    except (OSError, ValueError) as e:
+        return "vo.json is not valid JSON (%s); fix it" % e
+    want = {**VO_PINNED, "model": tts_model()}
+    wrong = {k: vo.get(k) for k, v in want.items() if vo.get(k) != v}
+    if wrong:
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(vo | want, f, indent=2, ensure_ascii=False)
+        return "the studio sets %s in vo.json; restored %s" % (
+            ", ".join(sorted(want)),
+            ", ".join("%s=%r" % (k, want[k]) for k in sorted(wrong)),
+        )
+    return ""
 
 
 def _describe(name, inp, job):
@@ -241,6 +301,8 @@ def _describe(name, inp, job):
             return "tracing motion for the sound of air"
         if "sketch-audio" in c:
             return "rendering the soundtrack"
+        if "sketch-vo" in c:
+            return "recording the narration (Gemini TTS)"
         return c
     return name
 
@@ -368,6 +430,19 @@ async def run_claude(prompt, job, emit, meter):
         ok, why = guard(name, inp, job)
         return PermissionResultAllow() if ok else PermissionResultDeny(message=why)
 
+    async def post_tool(inp, tool_use_id, ctx):
+        # after any write to vo.json: put back the voice backend, model and take count
+        p = str((inp.get("tool_input") or {}).get("file_path", ""))
+        if not p.replace("\\", "/").endswith("vo.json"):
+            return {}
+        note = pin_vo(job)
+        if note:
+            emit({"type": "blocked", "text": note})
+            return {
+                "hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": note}
+            }
+        return {}
+
     # by file: with the engine and the cast inlined it is ~80 KB, more than twice the length
     # Windows allows a command line (the spawn then fails as "Claude Code not found")
     sp = os.path.join(job, "temp", "system-prompt.md")
@@ -380,13 +455,18 @@ async def run_claude(prompt, job, emit, meter):
         system_prompt={"type": "file", "path": sp},
         tools=["Read", "Write", "Edit", "Bash"],
         setting_sources=[],
-        hooks={"PreToolUse": [HookMatcher(matcher=None, hooks=[pre_tool])]},
+        hooks={
+            "PreToolUse": [HookMatcher(matcher=None, hooks=[pre_tool])],
+            "PostToolUse": [HookMatcher(matcher="Write|Edit", hooks=[post_tool])],
+        },
         can_use_tool=can_use,
-        max_turns=40,
+        max_turns=50,
         max_budget_usd=float(os.environ.get("STUDIO_MAX_USD") or 5),
         env=child_env(),
     )
-    ask = "Make the film: %s" % prompt.strip()
+    with open(os.path.join(job, "sketch.json"), encoding="utf-8") as f:
+        seconds = round(float(json.load(f)["duration"]))
+    ask = "Make the film (%d seconds): %s" % (seconds, prompt.strip())
     async with ClaudeSDKClient(options=opts) as client:
         await client.query(ask)
         async for msg in client.receive_response():
@@ -459,15 +539,38 @@ async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
     rel = os.path.relpath(job, ROOT).replace("\\", "/")
     manifest = rel + "/sketch.json"
     t0, stages, meter, res = time.time(), {}, Meter(), None
-    emit({"type": "job", "id": os.path.basename(job), "dir": rel, "model": MODEL})
-    summary = {"prompt": prompt, "model": MODEL, "dir": rel}
+    with open(os.path.join(job, "sketch.json"), encoding="utf-8") as f:
+        m = json.load(f)
+    length, frames = round(float(m["duration"])), round(float(m["duration"]) * m.get("fps", 60))
+    emit({"type": "job", "id": os.path.basename(job), "dir": rel, "model": MODEL, "length": length})
+    summary = {"prompt": prompt, "model": MODEL, "dir": rel, "length": length}
+
+    def tts_spend():
+        # every sketch-vo run Claude made for this film appends what it spent (Gemini TTS)
+        p = os.path.join(job, "audio", "vo", "spend.jsonl")
+        rows = []
+        if os.path.exists(p):
+            with open(p, encoding="utf-8") as f:
+                rows = [json.loads(x) for x in f if x.strip()]
+        tok = {"input": sum(r["input"] for r in rows), "output": sum(r["output"] for r in rows)}
+        return (
+            round(sum(r["cost_usd"] for r in rows), 6),
+            tok,
+            (rows[-1]["model"] if rows else None),
+        )
 
     def price():
         # the SDK's own figure when the run reached its end; the meter's when it did not
         metered = round(meter.usd(), 4)
         sdk = res.total_cost_usd if res is not None else None
+        claude = round(sdk, 4) if sdk is not None else metered
+        tts, tts_tok, tts_model_used = tts_spend()
         summary.update(
-            cost_usd=round(sdk, 4) if sdk is not None else metered,
+            cost_usd=round(claude + tts, 4),  # everything this film cost: Claude + the voice
+            claude_cost_usd=claude,
+            tts_cost_usd=tts,
+            tts_tokens=tts_tok,
+            tts_model=tts_model_used,
             cost_metered_usd=metered,
             tokens=meter.tokens(),
         )
@@ -481,6 +584,7 @@ async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
         "prompt": prompt,
         "model": MODEL,
         "job": rel,
+        "length": length,
         "state": "running",
         "cost_usd": 0.0,
     }
@@ -493,7 +597,11 @@ async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
         outer(ev)
         if ev["type"] == "cost" and time.time() - saved_at[0] > 5:
             saved_at[0] = time.time()
-            now = {"cost_usd": ev["usd"], "tokens": meter.tokens(), "calls": meter.calls()}
+            now = {
+                "cost_usd": round(ev["usd"] + tts_spend()[0], 4),
+                "tokens": meter.tokens(),
+                "calls": meter.calls(),
+            }
             loop.run_in_executor(None, STORE.save, run_id, now)
 
     try:
@@ -508,9 +616,10 @@ async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
             summary.update(turns=res.num_turns, claude_said=res.result, session=res.session_id)
             if res.is_error:
                 raise RuntimeError("Claude stopped early: %s" % (res.result or res.subtype))
-        missing = [f for f in EDITABLE if not os.path.exists(os.path.join(job, f))]
+        missing = [f for f in MADE if not os.path.exists(os.path.join(job, f))]
         if missing:
             raise RuntimeError("Claude finished without writing %s" % ", ".join(missing))
+        pin_vo(job)  # whatever Claude left there, the backend and model stay the studio's
 
         s = time.time()
         emit({"type": "stage", "name": "sound", "text": "Mixing the soundtrack"})
@@ -523,12 +632,13 @@ async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
                 "automation",
             )
         wav = os.path.join(job, "audio", "final.wav")
-        if not _newer(wav, *(os.path.join(job, f) for f in EDITABLE)):
+        timeline = os.path.join(job, "audio", "vo", "timeline.json")
+        if not _newer(wav, timeline, *(os.path.join(job, f) for f in EDITABLE)):
             await _step(["scripts/sketch-audio.py", "--manifest", manifest], emit, "the soundtrack")
         stages["sound"] = time.time() - s
 
         s = time.time()
-        emit({"type": "stage", "name": "render", "text": "Rendering 300 frames"})
+        emit({"type": "stage", "name": "render", "text": "Rendering %d frames" % frames})
         await _step(["scripts/sketch-render.py", "--manifest", manifest], emit, "the render")
         stages["render"] = time.time() - s
 
@@ -565,6 +675,10 @@ async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
                 "ok": summary["ok"],
                 "error": summary.get("error"),
                 "cost_usd": summary["cost_usd"],
+                "claude_cost_usd": summary["claude_cost_usd"],
+                "tts_cost_usd": summary["tts_cost_usd"],
+                "tts_tokens": summary["tts_tokens"],
+                "tts_model": summary["tts_model"],
                 "cost_metered_usd": summary["cost_metered_usd"],
                 "tokens": summary["tokens"],
                 "calls": meter.calls(),
@@ -700,6 +814,7 @@ def main():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("prompt", nargs="?", help="what the film is about")
+    ap.add_argument("--seconds", type=int, default=LENGTHS[0], choices=LENGTHS)
     ap.add_argument("--smoke", action="store_true", help="a one-turn API check, no film")
     ap.add_argument("--costs", action="store_true", help="print what the runs cost, and totals")
     ap.add_argument("--sync", action="store_true", help="send runs the database missed")
@@ -726,7 +841,7 @@ def main():
         return
     if not args.prompt:
         ap.error("give a prompt, or --smoke")
-    r = asyncio.run(make_film(args.prompt, _print))
+    r = asyncio.run(make_film(args.prompt, _print, new_job(args.prompt, args.seconds)))
     sys.exit(0 if r.get("ok") else 1)
 
 

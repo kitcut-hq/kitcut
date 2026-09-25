@@ -27,6 +27,16 @@ Creator tier (192k is a 403).
 Voice names resolve through config/elevenlabs-voices.json (dub-tts.py's registry, which refuses
 unverified ids before anything is spent). "tts": "edge" is the free draft backend.
 
+"tts": "gemini" is Google's Gemini text-to-speech. "model" (default gemini-3.8-flash-tts),
+"voice" (a Gemini voice: Kore, Leda, Puck, Aoede, ...), and "style" (how to say it, e.g. "warm
+and gentle, like a kind teacher talking to young children"). It needs no tail word and gives no
+timings, so the word times come from Whisper's word timestamps on the take, matched back to the
+script. Auth is the service account in GOOGLE_SERVICE_ACCOUNT_KEY (base64 JSON), or
+GEMINI_API_KEY for the Gemini API. The 2.5 and 3.1 models go through Vertex AI (GOOGLE_CLOUD_LOCATION,
+default global); the 3.8 models through the Gemini API (generativelanguage.googleapis.com), which
+must be enabled in the service account's project. The timeline records each line's tokens and
+what they cost.
+
 Invoke as:
     python scripts/sketch-vo.py --manifest projects/<id>/sketch.json --plan
     python scripts/sketch-vo.py --manifest projects/<id>/sketch.json
@@ -77,7 +87,8 @@ def fingerprint(line, vo):
             vo.get("tail"),
             vo.get("settings"),
             vo.get("tts"),
-        ],
+        ]
+        + ([vo.get("style")] if vo.get("style") else []),  # gemini's voice direction
         sort_keys=True,
     )
     return hashlib.sha1(key.encode(), usedforsecurity=False).hexdigest()[:10]
@@ -110,6 +121,172 @@ def el_take(text, voice_id, vo):
 def edge_take(text, voice, dub):
     audio, marks = dub.speak(spoken(text), voice, backend="edge")
     return audio, marks
+
+
+# Gemini TTS: USD per 1M tokens (text in, audio out; 25 audio tokens a second), the Gemini API's
+# list prices as published 2026-09 (ai.google.dev/gemini-api/docs/pricing); 3.8 is at its 2026
+# introductory price, which doubles on 2027-01-01.
+GEMINI_PRICES = {
+    "gemini-3.8-flash-tts": (0.50, 9.00),
+    "gemini-3.8-flash-lite-tts": (0.50, 6.00),
+    "gemini-3.1-flash-tts-preview": (1.00, 20.00),
+    "gemini-2.5-flash-tts": (0.50, 10.00),
+    "gemini-2.5-flash-preview-tts": (0.50, 10.00),
+    "gemini-2.5-pro-tts": (1.00, 20.00),
+    "gemini-2.5-pro-preview-tts": (1.00, 20.00),
+}
+GEMINI_VERTEX = {  # what Vertex AI serves (measured 2026-09-25); anything else: the Gemini API
+    "gemini-2.5-flash-tts",
+    "gemini-2.5-pro-tts",
+    "gemini-2.5-flash-preview-tts",
+    "gemini-3.1-flash-tts-preview",
+}
+GEMINI_VOICES = (
+    "Zephyr Puck Charon Kore Fenrir Leda Orus Aoede Callirrhoe Autonoe Enceladus Iapetus Umbriel "
+    "Algieba Despina Erinome Algenib Rasalgethi Laomedeia Achernar Alnilam Schedar Gacrux "
+    "Pulcherrima Achird Zubenelgenubi Vindemiatrix Sadachbia Sadaltager Sulafat"
+).split()
+GEMINI_SR = 24000
+
+
+def _google_creds(scopes):
+    from google.oauth2 import service_account
+
+    raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_KEY", "").strip()
+    if not raw:
+        return None, None
+    info = json.loads(base64.b64decode(raw) if not raw.startswith("{") else raw)
+    return service_account.Credentials.from_service_account_info(info, scopes=scopes), info
+
+
+def gemini_take(text, vo):
+    """One line from Gemini TTS. Returns (samples float at SR, {model, voice, usage, cost_usd})."""
+    from scipy.signal import resample_poly
+
+    model = vo.get("model") or "gemini-3.8-flash-tts"
+    voice = vo.get("voice") or "Kore"
+    if voice not in GEMINI_VOICES:
+        sys.exit("gemini voice %r is not one of: %s" % (voice, ", ".join(GEMINI_VOICES)))
+    words = spoken(text)
+    style = (vo.get("style") or "").strip()
+    speech = {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}
+    if model in GEMINI_VERTEX:
+        # the older models take direction in the prompt itself, and do not read it aloud
+        from google import genai
+        from google.genai import types
+
+        creds, info = _google_creds(["https://www.googleapis.com/auth/cloud-platform"])
+        if not creds:
+            sys.exit("GOOGLE_SERVICE_ACCOUNT_KEY is not set (Vertex AI needs the service account)")
+        client = genai.Client(
+            vertexai=True,
+            project=os.environ.get("GOOGLE_CLOUD_PROJECT") or info["project_id"],
+            location=os.environ.get("GOOGLE_CLOUD_LOCATION") or "global",
+            credentials=creds,
+        )
+        r = client.models.generate_content(
+            model=model,
+            contents=("%s: %s" % (style, words)) if style else words,
+            config=types.GenerateContentConfig(
+                response_modalities=["AUDIO"],
+                speech_config=types.SpeechConfig(
+                    voice_config=types.VoiceConfig(
+                        prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice)
+                    )
+                ),
+            ),
+        )
+        pcm = r.candidates[0].content.parts[0].inline_data.data
+        u = r.usage_metadata
+        usage = {"input": u.prompt_token_count or 0, "output": u.candidates_token_count or 0}
+    else:
+        # the Gemini API: 3.8 reads its input as a verbatim transcript, so the direction goes
+        # in as a system instruction instead of being prefixed to the words
+        import httpx
+
+        body = {
+            "contents": [{"parts": [{"text": words}]}],
+            "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": speech},
+        }
+        if style:
+            body["systemInstruction"] = {"parts": [{"text": "Voice direction: " + style}]}
+        key = os.environ.get("GEMINI_API_KEY", "").strip()
+        if key:
+            headers = {"x-goog-api-key": key}
+        else:
+            from google.auth.transport.requests import Request
+
+            creds, info = _google_creds(
+                [
+                    "https://www.googleapis.com/auth/generative-language",
+                    "https://www.googleapis.com/auth/cloud-platform",
+                ]
+            )
+            if not creds:
+                sys.exit("set GEMINI_API_KEY or GOOGLE_SERVICE_ACCOUNT_KEY for Gemini TTS")
+            creds.refresh(Request())
+            headers = {
+                "Authorization": "Bearer " + creds.token,
+                "x-goog-user-project": os.environ.get("GOOGLE_CLOUD_PROJECT") or info["project_id"],
+            }
+        r = httpx.post(
+            "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent" % model,
+            headers=headers,
+            json=body,
+            timeout=180,
+        )
+        if r.status_code != 200:
+            sys.exit("gemini %s %s: %s" % (model, r.status_code, r.text[:400]))
+        j = r.json()
+        pcm = base64.b64decode(j["candidates"][0]["content"]["parts"][0]["inlineData"]["data"])
+        u = j.get("usageMetadata") or {}
+        usage = {
+            "input": u.get("promptTokenCount") or 0,
+            "output": u.get("candidatesTokenCount") or 0,
+        }
+    x = np.frombuffer(pcm, dtype="<i2").astype(np.float64) / 32768.0
+    y = resample_poly(x, SR // 1000, GEMINI_SR // 1000)  # 24 kHz -> the pipeline's 48 kHz
+    pin, pout = GEMINI_PRICES.get(model, (0.0, 0.0))
+    cost = (usage["input"] * pin + usage["output"] * pout) / 1e6
+    return y, {"model": model, "voice": voice, "usage": usage, "cost_usd": round(cost, 6)}
+
+
+def trim_silence(x, db=-50.0, pad=0.05):
+    """The take without its leading and trailing silence (Gemini leaves some at both ends)."""
+    loud = np.flatnonzero(np.abs(x) > 10 ** (db / 20))
+    if not len(loud):
+        return x, 0.0
+    a, b = max(0, loud[0] - int(pad * SR)), min(len(x), loud[-1] + int(pad * SR))
+    y = x[a:b].copy()
+    f = min(len(y), int(0.02 * SR))
+    y[-f:] *= np.linspace(1, 0, f)
+    return y, a / SR
+
+
+def align_words(script, heard):
+    """Word times for the SCRIPT's words from Whisper's words on the take: matched in order,
+    and the rare word Whisper spelled differently timed between its matched neighbours.
+    heard: [(text, start, end)]. Returns [{text, s, e}] in the script's own spelling."""
+    toks = [t for t in spoken(script).split() if any(c.isalnum() for c in t)]
+    ref = ["".join(words_of(t)) for t in toks]
+    hyp = ["".join(words_of(w)) for w, _, _ in heard]
+    at = [None] * len(toks)
+    for blk in difflib.SequenceMatcher(None, ref, hyp, autojunk=False).get_matching_blocks():
+        for k in range(blk.size):
+            _, s, e = heard[blk.b + k]
+            at[blk.a + k] = (s, e)
+    end = heard[-1][2] if heard else 0.0
+    for i in range(len(toks)):  # fill the gaps between known neighbours
+        if at[i] is None:
+            j = next((k for k in range(i + 1, len(toks)) if at[k] is not None), None)
+            lo = at[i - 1][1] if i and at[i - 1] else 0.0
+            hi = at[j][0] if j is not None else end
+            n = (j if j is not None else len(toks)) - i
+            step = max(hi - lo, 0.0) / max(n, 1)
+            at[i] = (lo, lo + step)
+    return [
+        {"text": t, "s": round(s, 3), "e": round(e, 3)} for t, (s, e) in zip(toks, at, strict=True)
+    ]
 
 
 # ------------------------------------------------------------------ cutting the tail off
@@ -212,13 +389,23 @@ def _whisper(lang, name):
     return _WHISPER
 
 
-def whisper_score(path, text, hotwords, lang="en", model=None):
+def whisper_score(path, text, hotwords, lang="en", model=None, words=False):
+    """(accuracy against the script, what was heard) -- plus, with words=True, Whisper's word
+    timestamps [(text, start, end)] for a backend that gives none (Gemini)."""
     segs, _ = _whisper(lang, model).transcribe(
-        path, language=lang, initial_prompt=", ".join(hotwords) if hotwords else None
+        path,
+        language=lang,
+        initial_prompt=", ".join(hotwords) if hotwords else None,
+        word_timestamps=words,
     )
+    segs = list(segs)
     heard = " ".join(s.text for s in segs)
     ref, hyp = words_of(text), words_of(heard)
-    return difflib.SequenceMatcher(None, ref, hyp).ratio(), heard.strip()
+    acc = difflib.SequenceMatcher(None, ref, hyp).ratio()
+    if not words:
+        return acc, heard.strip()
+    ws = [(w.word.strip(), w.start, w.end) for s in segs for w in (s.words or [])]
+    return acc, heard.strip(), ws
 
 
 def main():
@@ -230,7 +417,9 @@ def main():
     ap.add_argument("--only", help="comma list of line numbers (0-based) to (re)process")
     ap.add_argument("--retake", action="store_true", help="discard cached takes for --only lines")
     ap.add_argument("--takes", type=int, help="override vo.takes")
-    ap.add_argument("--tts", choices=["elevenlabs", "edge"], help="override vo.tts (edge is free)")
+    ap.add_argument(
+        "--tts", choices=["elevenlabs", "edge", "gemini"], help="override vo.tts (edge is free)"
+    )
     args = ap.parse_args()
 
     m = _sketch.load(args.manifest)
@@ -247,9 +436,15 @@ def main():
     vdir = os.path.join(m["_audio"], "vo")
     os.makedirs(vdir, exist_ok=True)
 
-    dub = import_module("dub-tts")
-    voice = vo.get("voice") or dub.default_voice(tts)
-    voice_id = dub.resolve_voice(voice, tts)  # refuses unknown / unverified voices before any spend
+    if tts == "gemini":
+        dub, voice, voice_id = None, vo.get("voice") or "Kore", None
+        if voice not in GEMINI_VOICES:  # before anything is spent
+            sys.exit("gemini voice %r is not one of: %s" % (voice, ", ".join(GEMINI_VOICES)))
+    else:
+        dub = import_module("dub-tts")
+        voice = vo.get("voice") or dub.default_voice(tts)
+        # refuses unknown / unverified voices before any spend
+        voice_id = dub.resolve_voice(voice, tts)
 
     # plan
     chars = sum(len(ln["text"]) + len(tail) + 2 for i, ln in enumerate(lines) if i in only)
@@ -261,8 +456,9 @@ def main():
             .get(vo.get("model", "eleven_v3"), {})
             .get("cost_credits_per_character", 1.0)
         )
-    except Exception:  # noqa: BLE001 -- the registry is optional for planning
+    except Exception:  # noqa: BLE001 -- the registry is optional for planning (and absent for gemini)
         pass
+    model_name = {"elevenlabs": vo.get("model", "eleven_v3"), "gemini": vo.get("model")}.get(tts)
     t = vo.get("lead", 0.6)
     print(
         "%s  voice=%s (%s)  model=%s  takes=%d"
@@ -270,7 +466,7 @@ def main():
             m["_id"],
             voice,
             tts,
-            vo.get("model", "eleven_v3") if tts == "elevenlabs" else "edge",
+            (model_name or "gemini-3.8-flash-tts") if tts != "edge" else "edge",
             takes,
         )
     )
@@ -295,7 +491,7 @@ def main():
     with _sketch.Stages(
         m, "sketch-vo", ["synth", "trim", "score", "place"], argv=sys.argv[1:]
     ) as st:
-        results = {}
+        results, fresh = {}, set()  # fresh: takes rendered (and paid for) in this run
         with st("synth"):
             for i, ln in enumerate(lines):
                 if i not in only:
@@ -310,12 +506,26 @@ def main():
                     if os.path.exists(base + ".json"):
                         continue
                     print("  line %d take %d" % (i, k), flush=True)
+                    fresh.add(base)
                     if tts == "elevenlabs":
                         mp3, align = el_take(
                             ln["text"] + ("\n\n" + tail if tail else ""), voice_id, vo
                         )
                         with open(base + ".mp3", "wb") as f:
                             f.write(mp3)
+                    elif tts == "gemini":
+                        audio, meta = gemini_take(ln["text"], vo)
+                        _sketch.write_wav(base + ".wav", audio)
+                        align = {"gemini": meta}  # no timings: Whisper supplies the words
+                        print(
+                            "    %.1fs, %d+%d tokens, $%.5f"
+                            % (
+                                len(audio) / SR,
+                                meta["usage"]["input"],
+                                meta["usage"]["output"],
+                                meta["cost_usd"],
+                            )
+                        )
                     else:
                         audio, marks = edge_take(ln["text"], voice, dub)
                         _sketch.write_wav(base + ".wav", audio)
@@ -334,24 +544,38 @@ def main():
                     x = _sketch.decode(src)
                     if "words" in align:  # edge: already a clean line, times in seconds
                         y, lead, ok, words = x, 0.0, True, align["words"]
+                    elif "gemini" in align:  # a clean line; the words come from Whisper below
+                        y, lead = trim_silence(x)
+                        ok, words = True, None
                     else:
                         y, lead, ok = cut_at_tail(x, align, tail)
                         words = word_times(align, lead, tail)
                     out = base + "_line.wav"
                     _sketch.write_wav(out, y)
                     cand.setdefault(i, []).append(
-                        {"take": k, "file": out, "dur": len(y) / SR, "clean": ok, "words": words}
+                        {
+                            "take": k,
+                            "file": out,
+                            "dur": len(y) / SR,
+                            "clean": ok,
+                            "words": words,
+                            "tts": align.get("gemini") if base in fresh else None,
+                        }
                     )
         with st("score"):
             for i, cs in cand.items():
                 for c in cs:
-                    c["acc"], c["heard"] = whisper_score(
+                    got = whisper_score(
                         c["file"],
                         lines[i]["text"],
                         vo.get("hotwords", []),
                         _sketch.language(m),
                         vo.get("whisper"),
+                        words=c["words"] is None,
                     )
+                    c["acc"], c["heard"] = got[0], got[1]
+                    if c["words"] is None:  # gemini: the script's words, timed by Whisper
+                        c["words"] = align_words(lines[i]["text"], got[2])
                 med = float(np.median([c["dur"] for c in cs]))
                 for c in cs:
                     # accuracy first, then a clean cut, then the take nearest the median length
@@ -390,6 +614,13 @@ def main():
                         "file": os.path.relpath(b["file"], _env.ROOT).replace("\\", "/"),
                         "dur": round(b["dur"], 3),
                     }
+                    spent = [c["tts"] for c in cand.get(i, []) if c.get("tts")]
+                    if spent:
+                        # what this line cost in this run: every take rendered, not only the pick
+                        L["tts_cost_usd"] = round(sum(t["cost_usd"] for t in spent), 6)
+                        L["tts_tokens"] = {
+                            k: sum(t["usage"][k] for t in spent) for k in ("input", "output")
+                        }
                     words = b["words"]
                 elif i in old:
                     L = {k: v for k, v in old[i].items() if k not in ("start", "end", "words")}
@@ -427,6 +658,25 @@ def main():
                     % (t - vo.get("gap", 0.35), m["duration"])
                 )
             timeline = {"duration": m["duration"], "voice": voice, "tts": tts, "lines": placed}
+            if tts == "gemini":
+                timeline["model"] = vo.get("model") or "gemini-3.8-flash-tts"
+                # spent in THIS run: cached takes cost nothing again
+                timeline["tts_cost_usd"] = round(sum(L.get("tts_cost_usd") or 0 for L in placed), 6)
+                print("  gemini tts this run: $%.5f" % timeline["tts_cost_usd"])
+                if timeline["tts_cost_usd"]:  # a film may run this more than once: keep them all
+                    with open(os.path.join(vdir, "spend.jsonl"), "a", encoding="utf-8") as f:
+                        tok = [L["tts_tokens"] for L in placed if L.get("tts_tokens")]
+                        f.write(
+                            json.dumps(
+                                {
+                                    "model": timeline["model"],
+                                    "cost_usd": timeline["tts_cost_usd"],
+                                    "input": sum(t["input"] for t in tok),
+                                    "output": sum(t["output"] for t in tok),
+                                }
+                            )
+                            + "\n"
+                        )
             with open(tl_path, "w", encoding="utf-8") as f:
                 json.dump(timeline, f, indent=1)
             srt, vtt = _sketch.write_captions(

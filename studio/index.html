@@ -76,7 +76,7 @@ button:disabled { opacity: .5; cursor: progress; }
 <div class="wrap">
   <header>
     <h1>Sketch <span>Studio</span></h1>
-    <p>Type an idea. Claude writes, draws, reviews and scores a 5-second hand-drawn film.</p>
+    <p>Type an idea, in any language. Claude writes, draws, reviews and scores a short narrated hand-drawn film.</p>
     <p class="spend" id="spend" hidden></p>
   </header>
 
@@ -88,8 +88,13 @@ button:disabled { opacity: .5; cursor: progress; }
   <form id="form">
     <textarea id="prompt" aria-label="What should the film show?">A paper plane delivers a cup of coffee to a sleepy developer, who wakes up delighted</textarea>
     <div class="row">
+      <select id="length" aria-label="Length">
+        <option value="5">5 seconds</option>
+        <option value="10" selected>10 seconds</option>
+        <option value="15">15 seconds</option>
+      </select>
       <button id="go" type="submit">Make the film</button>
-      <span class="note">Claude Opus 5.5 · about 2-3 minutes · one film at a time</span>
+      <span class="note">Claude Opus 5.5 draws it · Google Gemini narrates it · about 3-5 minutes · one film at a time</span>
     </div>
   </form>
 
@@ -163,8 +168,9 @@ function play(video, poster) {
 function stats(ev) {
   const st = ev.stages || {};
   const cells = [
-    ['Total', mmss(ev.seconds)], ['Claude', mmss(st.claude || 0)], ['Sound', `${Math.round(st.sound || 0)} s`],
-    ['Render', `${Math.round(st.render || 0)} s`], ['API cost', ev.cost_usd != null ? `$${ev.cost_usd.toFixed(2)}` : 'n/a'],
+    ['Made in', mmss(ev.seconds)], ['Claude', mmss(st.claude || 0)], ['Render', `${Math.round(st.render || 0)} s`],
+    ['API cost', ev.cost_usd != null ? `$${ev.cost_usd.toFixed(2)}` : 'n/a'],
+    ['Voice cost', ev.tts_cost_usd != null ? `$${ev.tts_cost_usd.toFixed(4)}` : 'none'],
     ['Turns', ev.turns ?? 'n/a'],
   ];
   $('stats').innerHTML = cells.map(([k, v]) => `<div class="stat"><small>${k}</small><b>${v}</b></div>`).join('');
@@ -194,7 +200,7 @@ async function recent() {
     $('films').innerHTML = list.map((f, i) => `
       <button class="film" type="button" data-i="${i}">
         <img src="${esc(f.poster_url)}" alt="" loading="lazy">
-        <div><p>${esc(f.prompt)}</p><small>${mmss(f.seconds || 0)} · ${f.cost_usd != null ? '$' + f.cost_usd.toFixed(2) : ''}</small></div>
+        <div><p>${esc(f.prompt)}</p><small>${f.length || 5} s film · made in ${mmss(f.seconds || 0)} · ${f.cost_usd != null ? '$' + f.cost_usd.toFixed(2) : ''}</small></div>
       </button>`).join('');
     for (const b of $('films').querySelectorAll('.film')) {
       const f = list[+b.dataset.i];
@@ -266,6 +272,7 @@ async function follow(since = 0, misses = 0) {
     const s = await r.json();
     if (since === 0) {  // first look: the prompt, and a clock that carries on from the run's start
       if (s.prompt) $('prompt').value = s.prompt;
+      if (s.length) $('length').value = String(s.length);
       if (s.status === 'queued' || s.status === 'running') { startClock(s.elapsed_s); screen('<div class="idle">Claude is thinking up the film...</div>'); }
     }
     for (const ev of s.events) onEvent(ev);
@@ -296,7 +303,7 @@ $('form').addEventListener('submit', async (e) => {
   screen('<div class="idle">Claude is thinking up the film...</div>');
   startClock(0);
   try {
-    const r = await api('/api/films', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
+    const r = await api('/api/films', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, seconds: +$('length').value }) });
     if (r.status === 401) { finish(); line('error', 'The studio token is missing or wrong.'); return needToken(); }
     const body = await r.json();
     if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);

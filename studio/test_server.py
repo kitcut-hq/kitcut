@@ -11,6 +11,7 @@ MongoDB). About a minute, most of it the render. The job folder is removed at th
 
 import os
 import sys
+import json
 import time
 import shutil
 import asyncio
@@ -24,13 +25,22 @@ from aiohttp.test_utils import TestClient, TestServer  # noqa: E402
 
 TOKEN = "test-token"
 USAGE = {"input_tokens": 1000, "output_tokens": 2000, "cache_read_input_tokens": 100000}
-EXPECT_USD = (1000 * 4 + 2000 * 20 + 100000 * 0.2) / 1e6  # Opus 5.5 prices: $0.064
+CLAUDE_USD = (1000 * 4 + 2000 * 20 + 100000 * 0.2) / 1e6  # Opus 5.5 prices: $0.064
+TTS_USD = 0.002  # what the stub's narration "spent"
+EXPECT_USD = CLAUDE_USD + TTS_USD
 
 
 async def fake_claude(prompt, job, emit, meter):
     ex = os.path.join(agent.ROOT, "config", "sketch", "example")
-    for f in agent.EDITABLE:
+    for f in agent.MADE:
         shutil.copy(os.path.join(ex, f), job)
+    # a vo.json with what Claude may not change changed (the studio must put it back), and the
+    # spend a sketch-vo run would have logged
+    with open(os.path.join(job, "vo.json"), "w", encoding="utf-8") as f:
+        json.dump({"tts": "elevenlabs", "model": "wrong", "takes": 9, "lines": []}, f)
+    os.makedirs(os.path.join(job, "audio", "vo"), exist_ok=True)
+    with open(os.path.join(job, "audio", "vo", "spend.jsonl"), "w", encoding="utf-8") as f:
+        f.write(json.dumps({"model": "m", "cost_usd": TTS_USD, "input": 20, "output": 100}) + "\n")
     meter.add("msg_1", USAGE)
     emit({"type": "cost", "usd": round(meter.usd(), 4)})
     emit({"type": "tool", "text": "wrote film.js (stub)"})
@@ -65,7 +75,13 @@ async def main():
         ).text()
         check(TOKEN not in page, "the page relayed by the tunnel does not")
 
-        r = await c.post("/api/films", json={"prompt": "the example film, stubbed"}, headers=auth)
+        r = await c.post("/api/films", json={"prompt": "x" * 10, "seconds": 7}, headers=auth)
+        check(
+            r.status == 400 and "seconds" in (await r.json())["error"], "a length off the list: 400"
+        )
+        r = await c.post(
+            "/api/films", json={"prompt": "the example film, stubbed", "seconds": 5}, headers=auth
+        )
         body = await r.json()
         job = body.get("id")
         check(
@@ -84,8 +100,17 @@ async def main():
             "the film finishes (%s)" % (st.get("error") or st.get("status")),
         )
         check(
-            abs((st.get("cost_usd") or 0) - EXPECT_USD) < 1e-6,
-            "status reports the cost $%s" % st.get("cost_usd"),
+            abs((st.get("cost_usd") or 0) - EXPECT_USD) < 1e-4
+            and st.get("tts_cost_usd") == TTS_USD
+            and abs(st.get("claude_cost_usd", 0) - CLAUDE_USD) < 1e-4,
+            "status reports the cost, Claude + voice ($%s)" % st.get("cost_usd"),
+        )
+        check(st.get("length") == 5, "and the film's length")
+        with open(os.path.join(agent.ROOT, "projects", job, "vo.json"), encoding="utf-8") as f:
+            vo = json.load(f)
+        check(
+            vo["tts"] == "gemini" and vo["model"] == agent.tts_model() and vo["takes"] == 1,
+            "the studio put back the voice backend, model and takes Claude changed",
         )
         check(st.get("tokens", {}).get("cache_read") == 100000, "status reports the tokens")
         video = st.get("video_url", "")
@@ -117,16 +142,17 @@ async def main():
         )
 
         costs = await (await c.get("/api/costs", headers=auth)).json()
-        check(abs(costs["total_usd"] - EXPECT_USD) < 1e-6, "/api/costs totals the runs")
+        check(abs(costs["total_usd"] - EXPECT_USD) < 1e-4, "/api/costs totals the runs")
         d = mem.docs.get(job, {})
         check(
             d.get("source") == "web" and d.get("client") == "local" and d.get("state") == "done",
             "one run record: source web, client local, state done",
         )
         check(
-            len(d.get("calls", [])) == 1 and d["calls"][0]["cost_usd"] == round(EXPECT_USD, 6),
+            len(d.get("calls", [])) == 1 and d["calls"][0]["cost_usd"] == round(CLAUDE_USD, 6),
             "the record lists each Claude API call with its cost",
         )
+        check(d.get("tts_cost_usd") == TTS_USD and d.get("length") == 5, "and the voice's cost")
         check(
             bool(d.get("created_at") and d.get("finished_at")),
             "with UTC created_at and finished_at",
