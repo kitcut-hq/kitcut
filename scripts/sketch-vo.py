@@ -369,6 +369,12 @@ def main():
                 else:
                     sys.exit("line %d has no take yet -- run without --only first" % i)
                 start = float(ln.get("start", t))
+                if i and start < t - vo.get("gap", 0.35) + 0.15:
+                    print(
+                        "  line %d: start %.2fs overlaps line %d; moved to %.2fs"
+                        % (i, start, i - 1, t)
+                    )
+                    start = t
                 L["start"], L["end"] = round(start, 3), round(start + L["dur"], 3)
                 L["words"] = [
                     {
