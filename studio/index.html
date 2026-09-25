@@ -134,20 +134,24 @@ $('tokenForm').addEventListener('submit', (e) => {
   e.preventDefault(); TOKEN = $('token').value.trim(); store.set(TOKEN);
   $('tokenForm').hidden = true; $('go').disabled = false; recent();
 });
+let studioUp = false;
 async function online() {
   try {
     const r = await api('/api/health');
     const h = await r.json();
-    if (r.ok && h.ok) return true;
+    if (r.ok && h.ok) return (studioUp = true);
     $('status').textContent = h.error || 'The studio is offline right now.';
   } catch (e) { $('status').textContent = 'The studio is offline right now.'; }
   $('go').disabled = true;
-  return false;
+  return (studioUp = false);
 }
 
-function line(kind, text) {
+// `at`: seconds into the film's run, as the server stamped the event (so a reloaded page shows
+// the same times); lines of the page's own fall back to the clock
+function line(kind, text, at) {
+  const s = at != null ? at : (t0 ? (Date.now() - t0) / 1000 : null);
   const li = document.createElement('li');
-  li.innerHTML = `<time>${t0 ? mmss((Date.now() - t0) / 1000) : ''}</time><span class="${kind}">${esc(text)}</span>`;
+  li.innerHTML = `<time>${s != null ? mmss(s) : ''}</time><span class="${kind}">${esc(text)}</span>`;
   $('log').appendChild(li);
   li.scrollIntoView({ block: 'nearest' });
   return li;
@@ -194,48 +198,89 @@ async function recent() {
       </button>`).join('');
     for (const b of $('films').querySelectorAll('.film')) {
       const f = list[+b.dataset.i];
-      b.onclick = () => { play(f.video_url, f.poster_url); $('status').textContent = f.prompt; };
+      b.onclick = () => { openFilm(f.id, true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
     }
   } catch (e) { /* the list is a convenience */ }
 }
 
-let lastLog = null;
+let lastLog = null, showedDone = false;
 function onEvent(ev) {
+  const at = ev.t;
   switch (ev.type) {
     case 'job': $('status').innerHTML = '<span class="pen"></span>Starting'; break;
-    case 'init': line('sub', `${ev.model} · billed via ${ev.key}`); break;
-    case 'stage': line('stage', ev.text); $('status').innerHTML = `<span class="pen"></span>${esc(ev.text)}`; lastLog = null; break;
-    case 'say': line('say', ev.text); break;
-    case 'tool': line('', ev.text); break;
-    case 'blocked': line('blocked', 'Blocked: ' + ev.text); break;
-    case 'fail': line('fail', ev.text); break;
-    case 'image': if (ev.url) screen(`<img src="${esc(ev.url)}" alt="Review stills">`); line('sub', 'review sheet updated'); break;
+    case 'init': line('sub', `${ev.model} · billed via ${ev.key}`, at); break;
+    case 'stage': line('stage', ev.text, at); $('status').innerHTML = `<span class="pen"></span>${esc(ev.text)}`; lastLog = null; break;
+    case 'say': line('say', ev.text, at); break;
+    case 'tool': line('', ev.text, at); break;
+    case 'blocked': line('blocked', 'Blocked: ' + ev.text, at); break;
+    case 'fail': line('fail', ev.text, at); break;
+    case 'image': if (ev.url) screen(`<img src="${esc(ev.url)}" alt="Review stills">`); line('sub', 'review sheet updated', at); break;
     case 'log':
-      if (!lastLog) lastLog = line('sub', ev.text); else lastLog.querySelector('span').textContent = ev.text;
+      if (!lastLog) lastLog = line('sub', ev.text, at); else lastLog.querySelector('span').textContent = ev.text;
       break;
     case 'done':  // the video itself comes with the status (follow), signed
-      stats(ev); line('done', `Done in ${mmss(ev.seconds)}`);
+      showedDone = true; stats(ev); line('done', `Done in ${mmss(ev.seconds)}`, at);
       $('status').textContent = 'Done. ' + (ev.claude_said || ''); recent(); break;
-    case 'error': line('error', ev.text); $('status').textContent = 'Failed.'; spend(); break;
-    case 'cost': $('clock').textContent = `${usd(ev.usd)} so far · ` + mmss((Date.now() - t0) / 1000); lastCost = ev.usd; break;
+    case 'error': line('error', ev.text, at); $('status').textContent = 'Failed.'; spend(); break;
+    case 'cost': lastCost = ev.usd; if (timer) tick(); break;
   }
 }
+
+// ---- one film per address: /film/<id>. Starting a film goes there, so a reload (or a shared
+// link) asks the studio for that film again and rebuilds the log, or plays the finished video.
+const FILM_PATH = /^\/film\/(studio-\d{8}-\d{6})\/?$/;
 let currentId = null, lastCost = null;
-function finish() { clearInterval(timer); timer = null; clearTimeout(poll); poll = null; $('go').disabled = false; }
+function tick() { $('clock').textContent = (lastCost != null ? `${usd(lastCost)} so far · ` : '') + mmss((Date.now() - t0) / 1000); }
+function startClock(elapsed) { t0 = Date.now() - (elapsed || 0) * 1000; clearInterval(timer); tick(); timer = setInterval(tick, 500); }
+function finish() { clearInterval(timer); timer = null; clearTimeout(poll); poll = null; $('go').disabled = !studioUp; }
+function reset() {
+  finish(); t0 = 0; lastCost = null; lastLog = null; showedDone = false;
+  $('stats').hidden = true; $('log').innerHTML = ''; $('clock').textContent = '';
+}
+function home() {
+  reset(); currentId = null;
+  screen('<div class="idle">Your film appears here.</div>');
+  $('status').textContent = studioUp ? 'Ready.' : 'The studio is offline right now.';
+}
+function openFilm(id, push) {
+  if (push && location.pathname !== '/film/' + id) history.pushState({ id }, '', '/film/' + id);
+  reset(); currentId = id; $('go').disabled = true;
+  screen('<div class="idle">Loading the film...</div>');
+  $('status').innerHTML = '<span class="pen"></span>Loading';
+  follow(0);
+}
+window.addEventListener('popstate', () => {
+  const m = location.pathname.match(FILM_PATH);
+  if (m) openFilm(m[1], false); else home();
+});
 
 // polling, not server-sent events: Cloudflare quick tunnels do not carry an event stream
 async function follow(since = 0, misses = 0) {
+  const id = currentId;
   try {
-    const r = await api(`/api/films/${encodeURIComponent(currentId)}?since=${since}`);
+    const r = await api(`/api/films/${encodeURIComponent(id)}?since=${since}`);
+    if (id !== currentId) return;  // the viewer has moved on to another film
+    if (r.status === 404) { screen('<div class="idle">There is no film at this address.</div>'); $('status').textContent = 'Not found.'; return finish(); }
+    if (r.status === 401) { finish(); return needToken(); }
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const s = await r.json();
+    if (since === 0) {  // first look: the prompt, and a clock that carries on from the run's start
+      if (s.prompt) $('prompt').value = s.prompt;
+      if (s.status === 'queued' || s.status === 'running') { startClock(s.elapsed_s); screen('<div class="idle">Claude is thinking up the film...</div>'); }
+    }
     for (const ev of s.events) onEvent(ev);
     if (s.status === 'queued') $('status').innerHTML = `<span class="pen"></span>Waiting: number ${s.position} in the queue`;
-    if (s.status === 'done' && s.video_url) play(s.video_url, s.poster_url);
+    if (s.status === 'done') {
+      if (s.video_url) play(s.video_url, s.poster_url);
+      if (!showedDone && s.seconds != null) { stats(s); $('status').textContent = 'Done. ' + (s.claude_said || ''); }
+    }
+    if (s.status === 'error' && !s.events.length && since === 0) { line('error', s.error || 'This film failed.'); $('status').textContent = 'Failed.'; }
+    if (s.status === 'lost') { screen('<div class="idle">This film was interrupted.</div>'); $('status').textContent = 'The studio restarted before this film finished.'; }
     if (s.status === 'done' || s.status === 'error' || s.status === 'lost') return finish();
     poll = setTimeout(() => follow(s.next, 0), 1500);
   } catch (err) {
-    if (misses >= 5) { line('error', 'Lost the connection to the server: ' + err.message); return finish(); }
+    if (id !== currentId) return;
+    if (misses >= 5) { line('error', 'Lost the connection to the studio: ' + err.message); return finish(); }
     poll = setTimeout(() => follow(since, misses + 1), 3000);
   }
 }
@@ -244,21 +289,24 @@ $('form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const prompt = $('prompt').value.trim();
   if (!prompt) return;
-  $('go').disabled = true; $('stats').hidden = true; $('log').innerHTML = ''; lastLog = null;
+  reset(); $('go').disabled = true;
   screen('<div class="idle">Claude is thinking up the film...</div>');
-  t0 = Date.now();
-  lastCost = null;
-  timer = setInterval(() => { $('clock').textContent = (lastCost != null ? `${usd(lastCost)} so far · ` : '') + mmss((Date.now() - t0) / 1000); }, 500);
+  startClock(0);
   try {
     const r = await api('/api/films', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
     if (r.status === 401) { finish(); line('error', 'The studio token is missing or wrong.'); return needToken(); }
     const body = await r.json();
     if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
-    currentId = body.id;
-    follow(0);
+    openFilm(body.id, true);
   } catch (err) { line('error', String(err.message || err)); finish(); }
 });
-online().then((up) => { if (up) recent(); });  // a 401 from recent() asks for the token
+
+online().then((up) => {
+  const m = location.pathname.match(FILM_PATH);
+  if (m && up) openFilm(m[1], false);
+  else if (m) screen('<div class="idle">The studio is offline, so this film cannot be shown right now.</div>');
+  if (up) recent();  // a 401 from recent() asks for the token
+});
 </script>
 </body>
 </html>

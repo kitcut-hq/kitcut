@@ -211,7 +211,8 @@ async def create(req):
     WAITING.append(jid)
 
     def emit(ev):
-        J["events"].append(ev)
+        # t: seconds into the run, so a page reloaded half-way shows the same times
+        J["events"].append({**ev, "t": round(time.time() - J["t0"], 1)})
         if ev["type"] == "stage":
             J["stage"] = ev["name"]
         elif ev["type"] == "cost":
@@ -330,6 +331,7 @@ def make_app(token):
     app.add_routes(
         [
             web.get("/", index),
+            web.get("/film/{id}", index),  # one film's page: the page reads the id from the path
             web.get("/fonts/{name}", font),
             web.get("/api/health", health),
             web.get("/api/films", films),
