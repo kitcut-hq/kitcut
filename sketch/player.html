@@ -51,6 +51,16 @@ body.render canvas { border-radius: 0; box-shadow: none; }
 </div>
 <audio id="audio" preload="auto" src="__AUDIO__"></audio>
 <script>
+// A syntax or top-level error in the film throws before the player below is listening; report the
+// first one now, or a render sits out its 90 s stall timeout and then says nothing useful.
+window.__early = function (e) {
+  if (window.__earlyErr || !/[?&](render|export|stills|automation)=/.test(location.search)) return;
+  window.__earlyErr = String(e.message) + ' @' + e.lineno;
+  fetch('/error', { method: 'POST', body: window.__earlyErr });
+};
+window.addEventListener('error', window.__early);
+</script>
+<script>
 __ENGINE__
 </script>
 <script>
@@ -86,6 +96,7 @@ __FILM__
       catch (e) { if (k >= 6) throw e; await new Promise(res => setTimeout(res, 150 * 2 ** k)); }
     }
   };
+  window.removeEventListener('error', window.__early);
   window.addEventListener('error', (e) => { if (RENDER) report('/error', String(e.message) + ' @' + e.lineno); });
 
   SK.init(cv);

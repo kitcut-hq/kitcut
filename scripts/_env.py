@@ -179,11 +179,14 @@ def prune_foreign_site_packages():
     install before any third-party import happens.
     """
     own = site_roots()
-    sys.path[:] = [
-        x
-        for x in sys.path
-        if "site-packages" not in x.lower() or os.path.normcase(os.path.abspath(x)) in own
-    ]
+
+    def mine(x):
+        # a folder *inside* our own site-packages is ours too: pywin32's .pth adds
+        # site-packages/win32 and win32/lib, and dropping them breaks `import pywintypes`
+        n = os.path.normcase(os.path.abspath(x))
+        return any(n == r or n.startswith(r + os.sep) for r in own)
+
+    sys.path[:] = [x for x in sys.path if "site-packages" not in x.lower() or mine(x)]
 
 
 def bootstrap():

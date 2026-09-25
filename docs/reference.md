@@ -2999,6 +2999,36 @@ a brand explainer), wall clock:
 The first film, which produced these tools, took most of a day; the saving is the engine,
 the cast, the voice/audio/render pipeline and the traps already paid for.
 
+### Sketch Studio: a prompt box that makes a 5-second film (`studio/`)
+
+A proof of concept, set up with `pip install -r requirements-studio.txt`:
+
+- `python studio/server.py` serves a page on 127.0.0.1:8765 with one prompt box.
+- Claude, through the Claude Agent SDK on `ANTHROPIC_API_KEY`, writes `film.js`, `score.json`
+  and `sfx.json` in `projects/studio-<stamp>/`.
+- It reviews its own stills, and the studio renders the MP4.
+- `python studio/agent.py "<idea>"` does the same from the command line, and `--smoke` checks
+  the key.
+
+`studio/README.md` has the permission model (`guard()`, tested by `studio/test_guard.py`) and
+the limits.
+
+It always runs Claude Opus 5.5 (`MODEL` in `agent.py`).
+
+Measured on the first two films, wall clock from prompt to MP4:
+
+| film | Claude | render | total | turns | API cost |
+|---|---|---|---|---|---|
+| paper plane brings coffee (command line) | 113 s | 23 s | 136 s | 20 | $0.56 |
+| sticky-note rocket, SHIP IT (web page) | 110 s | 32 s | 141 s | 19 | $0.54 |
+
+The soundtrack takes no time here, because Claude has already rendered it by the end of its
+turn. Most of the cost is cache reads of the ~80 KB system prompt that carries the engine and
+the cast.
+
+At 192k, the AAC encode pushed the rocket's confetti transients to -0.1 dBFS, against -1.5 dBTP
+in the master WAV, so the template now encodes at 320k.
+
 ## Projects: one folder and two files per video
 
 Everything about one video lives in `projects/<id>/`: the manifests that drive

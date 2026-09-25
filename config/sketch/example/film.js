@@ -8,7 +8,8 @@
 (function () {
   'use strict';
   const { S, E, clamp, tw, pop, P } = SK;
-  const w = (li, word, n = 0) => SK.w(li, word, 0, 's', n);
+  // w(line, word, fallback seconds, n-th match): the fallback is where the cue sits with no voice-over
+  const w = (li, word, fb, n = 0) => SK.w(li, word, fb, 's', n);
   SK.setStyle('crayon');
   const C = SK.C;
 

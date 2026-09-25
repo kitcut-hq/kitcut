@@ -1,0 +1,4 @@
+# Sketch Studio (studio/): the prompt-to-film web page. Optional; the core tools do not need it.
+# pip install -r requirements-studio.txt   (aiohttp comes in with the core requirements' deps)
+claude-agent-sdk>=0.2.159
+aiohttp>=3.9

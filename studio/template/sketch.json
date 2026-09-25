@@ -1,0 +1,26 @@
+{
+  "title": "Sketch Studio film",
+  "description": "A 5-second sketch film written by Claude from a one-line prompt.",
+  "slug": "film",
+  "duration": 5.0,
+  "fps": 60,
+  "film": "film.js",
+  "poster_t": 4.6,
+  "fonts": [
+    {"file": "fonts/Caveat.woff2", "family": "Caveat", "weight": "400 700", "load": "700"},
+    {"file": "fonts/PatrickHand-400.woff2", "family": "Patrick Hand", "weight": "400"}
+  ],
+  "player": {
+    "accent": "#d9733f",
+    "paper": "#f7f2e7",
+    "ink": "#2a2521",
+    "hint": "5s · sound on",
+    "hint_font": "'Caveat', cursive"
+  },
+  "audio": {
+    "score": "score.json",
+    "sfx": "sfx.json",
+    "mix": {"music_db": 6.0, "sfx_db": 3.0, "fade_out": 0.5}
+  },
+  "render": {"cq": 18, "preset": "p5", "audio_bitrate": "320k"}
+}
