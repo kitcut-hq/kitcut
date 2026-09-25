@@ -207,7 +207,12 @@ async def create(req):
         return web.json_response(
             {"error": "seconds must be one of %s" % ", ".join(map(str, agent.LENGTHS))}, status=400
         )
-    d = agent.new_job(prompt, seconds)
+    look = body.get("look") or agent.LOOKS[0]
+    if look not in agent.LOOKS:
+        return web.json_response(
+            {"error": "look must be one of %s" % ", ".join(agent.LOOKS)}, status=400
+        )
+    d = agent.new_job(prompt, seconds, look)
     jid = os.path.basename(d)
     J = JOBS[jid] = {
         "events": [],
@@ -307,7 +312,10 @@ async def status(req):
         )
     keys = (
         "prompt",
+        "look",
         "length",
+        "image_cost_usd",
+        "images",
         "seconds",
         "cost_usd",
         "claude_cost_usd",
@@ -356,7 +364,7 @@ async def films(req):
             out.append(
                 {
                     k: r.get(k)
-                    for k in ("prompt", "length", "seconds", "cost_usd", "turns", "stages")
+                    for k in ("prompt", "look", "length", "seconds", "cost_usd", "turns", "stages")
                 }
                 | {
                     "id": jid,

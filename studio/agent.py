@@ -62,6 +62,16 @@ MODEL = "claude-opus-5-5"
 EDITABLE = ("film.js", "score.json", "sfx.json", "vo.json")
 MADE = ("film.js", "score.json", "sfx.json")  # what a finished film must have
 LENGTHS = (5, 10, 15)  # seconds a visitor may ask for
+# drawn: everything drawn in code; painted: an image model paints the scenes, the code animates
+LOOKS = ("drawn", "painted")
+# what Claude may not change in paint.json: the painter, and how many paintings a film may cost
+PAINT_PINNED = {"backend": "muse", "model": "meta/muse-image", "max_images": 8}
+
+
+def look_of(job):
+    return "painted" if os.path.exists(os.path.join(job, "paint.json")) else "drawn"
+
+
 AGENT_TIMEOUT = 15 * 60
 # the voice: Google's Gemini text-to-speech. 3.8 needs the Gemini API enabled in the service
 # account's project; STUDIO_TTS_MODEL in .env overrides it (e.g. gemini-3.1-flash-tts-preview)
@@ -104,9 +114,10 @@ def guard(tool, inp, job):
         return False, "Read is limited to the kitcut repo, and never .env, .git or .venv."
     if tool in ("Write", "Edit"):
         p = _path(inp.get("file_path"))
-        if os.path.dirname(p) == job and os.path.basename(p) in EDITABLE:
+        mine = EDITABLE + (("paint.json",) if look_of(job) == "painted" else ())
+        if os.path.dirname(p) == job and os.path.basename(p) in mine:
             return True, ""
-        return False, "You can only write %s in your job folder." % ", ".join(EDITABLE)
+        return False, "You can only write %s in your job folder." % ", ".join(mine)
     if tool == "Bash":
         return _bash_ok(inp.get("command", ""), job)
     return False, "%s is not available here: use Read, Write, Edit and the listed commands." % tool
@@ -117,6 +128,8 @@ def _bash_ok(cmd, job):
         "Only these commands run, one per call, from the working directory: "
         "`node --check <job>/film.js`, "
         "`python scripts/sketch-vo.py --manifest <job>/sketch.json [--only <n> --retake]`, "
+        "`python scripts/sketch-paint.py --manifest <job>/sketch.json [--only <names> --retake]` "
+        "(painted films), "
         "`python scripts/sketch-render.py --manifest <job>/sketch.json --stills <t,t,...> [--sheet]`, "
         "`python scripts/sketch-render.py --manifest <job>/sketch.json --automation`, "
         "`python scripts/sketch-audio.py --manifest <job>/sketch.json [--levels]`."
@@ -138,6 +151,15 @@ def _bash_ok(cmd, job):
     rest = argv[4:]
     if script == "scripts/sketch-audio.py":
         return (True, "") if set(rest) <= {"--levels", "--plan"} else (False, usage)
+    if script == "scripts/sketch-paint.py" and look_of(job) == "painted":
+        if rest in ([], ["--plan"]):
+            return True, ""
+        # repaint some: --only <name,name> --retake, in either order
+        if len(rest) == 3 and "--only" in rest and "--retake" in rest:
+            i = rest.index("--only")
+            if i + 1 < len(rest) and re.fullmatch(r"[\w,-]+", rest[i + 1]):
+                return True, ""
+        return False, usage
     if script == "scripts/sketch-vo.py":
         if rest in ([], ["--plan"]):
             return True, ""
@@ -225,14 +247,27 @@ def system_prompt(job):
         "FX": fx,
         "INSTRUMENTS": ", ".join(inst),
     }
-    text = _read("studio", "prompt.md")
+    fill["MAX_IMAGES"] = str(PAINT_PINNED["max_images"])
+    # the look's own sections (studio/looks/<look>.md, "## NAME" headed) go in first, since
+    # they carry placeholders of their own
+    look = {}
+    for part in _read("studio", "looks", look_of(job) + ".md").split("\n## ")[0:]:
+        name, _, body = part.lstrip("#").strip().partition("\n")
+        look["LOOK_" + name.strip()] = body.strip() + (
+            "\n" if name.strip() in ("FILES", "COMMANDS") and body.strip() else ""
+        )
+    text = re.sub(
+        r"\{(LOOK_[A-Z]+)\}", lambda m: look.get(m.group(1), ""), _read("studio", "prompt.md")
+    )
     return re.sub(r"\{([A-Z_]+)\}", lambda m: fill.get(m.group(1), m.group(0)), text)
 
 
 # ------------------------------------------------------------------ one film
-def new_job(prompt, seconds=5):
-    """projects/studio-<stamp>/ with the manifest (its length set) and an empty narration."""
+def new_job(prompt, seconds=5, look="drawn"):
+    """projects/studio-<stamp>/ with the manifest (its length set), an empty narration, and for
+    a painted film an empty list of paintings."""
     seconds = seconds if seconds in LENGTHS else LENGTHS[0]
+    look = look if look in LOOKS else LOOKS[0]
     job = os.path.join(ROOT, "projects", "studio-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
     os.makedirs(job)
     with open(os.path.join(HERE, "template", "sketch.json"), encoding="utf-8") as f:
@@ -240,6 +275,10 @@ def new_job(prompt, seconds=5):
     words = re.sub(r"\s+", " ", prompt).strip()
     m["title"] = (words[:60] + "...") if len(words) > 60 else words
     m["duration"], m["poster_t"] = float(seconds), round(seconds - 0.4, 2)
+    if look == "painted":
+        m["paint"] = "paint.json"
+        with open(os.path.join(job, "paint.json"), "w", encoding="utf-8") as f:
+            json.dump(PAINT_PINNED | {"style": "", "images": []}, f, indent=2)
     with open(os.path.join(job, "sketch.json"), "w", encoding="utf-8") as f:
         json.dump(m, f, indent=2)
     vo = {**VO_PINNED, "model": tts_model(), "voice": "Kore", "style": "", "language": "en"}
@@ -249,6 +288,7 @@ def new_job(prompt, seconds=5):
         json.dump(
             {
                 "prompt": prompt,
+                "look": look,
                 "length": seconds,  # the film's; "seconds" is later how long making it took
                 "started": datetime.now().isoformat(timespec="seconds"),
             },
@@ -258,25 +298,37 @@ def new_job(prompt, seconds=5):
     return job
 
 
-def pin_vo(job):
-    """Put back what Claude may not change in vo.json (backend, model, takes). Returns what it
-    had to restore, or "" -- the PostToolUse hook tells Claude so."""
-    p = os.path.join(job, "vo.json")
+def _pin(job, name, want):
+    """Put back what Claude may not change in one of its files. Returns what it had to restore,
+    or "" -- the PostToolUse hook tells Claude so."""
+    p = os.path.join(job, name)
+    if not os.path.exists(p):
+        return ""
     try:
         with open(p, encoding="utf-8") as f:
-            vo = json.load(f)
+            d = json.load(f)
     except (OSError, ValueError) as e:
-        return "vo.json is not valid JSON (%s); fix it" % e
-    want = {**VO_PINNED, "model": tts_model()}
-    wrong = {k: vo.get(k) for k, v in want.items() if vo.get(k) != v}
+        return "%s is not valid JSON (%s); fix it" % (name, e)
+    wrong = {k for k, v in want.items() if d.get(k) != v}
     if wrong:
         with open(p, "w", encoding="utf-8") as f:
-            json.dump(vo | want, f, indent=2, ensure_ascii=False)
-        return "the studio sets %s in vo.json; restored %s" % (
+            json.dump(d | want, f, indent=2, ensure_ascii=False)
+        return "the studio sets %s in %s; restored %s" % (
             ", ".join(sorted(want)),
+            name,
             ", ".join("%s=%r" % (k, want[k]) for k in sorted(wrong)),
         )
     return ""
+
+
+def pin_vo(job):
+    """vo.json: the voice backend, model and takes are the studio's."""
+    return _pin(job, "vo.json", {**VO_PINNED, "model": tts_model()})
+
+
+def pin_paint(job):
+    """paint.json: the painter, its model and the cap on paintings are the studio's."""
+    return _pin(job, "paint.json", PAINT_PINNED)
 
 
 def _describe(name, inp, job):
@@ -289,6 +341,8 @@ def _describe(name, inp, job):
         return "edited %s" % rel(inp.get("file_path"))
     if name == "Read":
         p = rel(inp.get("file_path"))
+        if p.endswith("images/sheet.jpg"):
+            return "looking at the paintings"
         return "looking at the review sheet" if p.endswith("sheet.png") else "read %s" % p
     if name == "Bash":
         c = inp.get("command", "")
@@ -303,6 +357,8 @@ def _describe(name, inp, job):
             return "rendering the soundtrack"
         if "sketch-vo" in c:
             return "recording the narration (Gemini TTS)"
+        if "sketch-paint" in c:
+            return "painting the scenes (Muse)" if "--retake" not in c else "repainting a scene"
         return c
     return name
 
@@ -431,11 +487,14 @@ async def run_claude(prompt, job, emit, meter):
         return PermissionResultAllow() if ok else PermissionResultDeny(message=why)
 
     async def post_tool(inp, tool_use_id, ctx):
-        # after any write to vo.json: put back the voice backend, model and take count
-        p = str((inp.get("tool_input") or {}).get("file_path", ""))
-        if not p.replace("\\", "/").endswith("vo.json"):
+        # after a write to vo.json or paint.json: put back what the studio decides there
+        p = str((inp.get("tool_input") or {}).get("file_path", "")).replace("\\", "/")
+        if p.endswith("vo.json"):
+            note = pin_vo(job)
+        elif p.endswith("paint.json"):
+            note = pin_paint(job)
+        else:
             return {}
-        note = pin_vo(job)
         if note:
             emit({"type": "blocked", "text": note})
             return {
@@ -543,7 +602,8 @@ async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
         m = json.load(f)
     length, frames = round(float(m["duration"])), round(float(m["duration"]) * m.get("fps", 60))
     emit({"type": "job", "id": os.path.basename(job), "dir": rel, "model": MODEL, "length": length})
-    summary = {"prompt": prompt, "model": MODEL, "dir": rel, "length": length}
+    look = look_of(job)
+    summary = {"prompt": prompt, "model": MODEL, "dir": rel, "length": length, "look": look}
 
     def tts_spend():
         # every sketch-vo run Claude made for this film appends what it spent (Gemini TTS)
@@ -559,15 +619,28 @@ async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
             (rows[-1]["model"] if rows else None),
         )
 
+    def image_spend():
+        # every painting sketch-paint made for this film (repaints included), with its price
+        p = os.path.join(job, "images", "spend.jsonl")
+        rows = []
+        if os.path.exists(p):
+            with open(p, encoding="utf-8") as f:
+                rows = [json.loads(x) for x in f if x.strip()]
+        return round(sum(r.get("cost_usd") or 0 for r in rows), 6), len(rows)
+
     def price():
         # the SDK's own figure when the run reached its end; the meter's when it did not
         metered = round(meter.usd(), 4)
         sdk = res.total_cost_usd if res is not None else None
         claude = round(sdk, 4) if sdk is not None else metered
         tts, tts_tok, tts_model_used = tts_spend()
+        img, n_img = image_spend()
         summary.update(
-            cost_usd=round(claude + tts, 4),  # everything this film cost: Claude + the voice
+            # everything this film cost: Claude + the voice + the paintings
+            cost_usd=round(claude + tts + img, 4),
             claude_cost_usd=claude,
+            image_cost_usd=img,
+            images=n_img,
             tts_cost_usd=tts,
             tts_tokens=tts_tok,
             tts_model=tts_model_used,
@@ -585,6 +658,7 @@ async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
         "model": MODEL,
         "job": rel,
         "length": length,
+        "look": look,
         "state": "running",
         "cost_usd": 0.0,
     }
@@ -598,7 +672,7 @@ async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
         if ev["type"] == "cost" and time.time() - saved_at[0] > 5:
             saved_at[0] = time.time()
             now = {
-                "cost_usd": round(ev["usd"] + tts_spend()[0], 4),
+                "cost_usd": round(ev["usd"] + tts_spend()[0] + image_spend()[0], 4),
                 "tokens": meter.tokens(),
                 "calls": meter.calls(),
             }
@@ -619,7 +693,8 @@ async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
         missing = [f for f in MADE if not os.path.exists(os.path.join(job, f))]
         if missing:
             raise RuntimeError("Claude finished without writing %s" % ", ".join(missing))
-        pin_vo(job)  # whatever Claude left there, the backend and model stay the studio's
+        pin_vo(job)  # whatever Claude left there, the backends and models stay the studio's
+        pin_paint(job)
 
         s = time.time()
         emit({"type": "stage", "name": "sound", "text": "Mixing the soundtrack"})
@@ -676,6 +751,8 @@ async def make_film(prompt, emit=None, job=None, source="cli", client="local"):
                 "error": summary.get("error"),
                 "cost_usd": summary["cost_usd"],
                 "claude_cost_usd": summary["claude_cost_usd"],
+                "image_cost_usd": summary["image_cost_usd"],
+                "images": summary["images"],
                 "tts_cost_usd": summary["tts_cost_usd"],
                 "tts_tokens": summary["tts_tokens"],
                 "tts_model": summary["tts_model"],
@@ -815,6 +892,7 @@ def main():
     )
     ap.add_argument("prompt", nargs="?", help="what the film is about")
     ap.add_argument("--seconds", type=int, default=LENGTHS[0], choices=LENGTHS)
+    ap.add_argument("--look", default=LOOKS[0], choices=LOOKS)
     ap.add_argument("--smoke", action="store_true", help="a one-turn API check, no film")
     ap.add_argument("--costs", action="store_true", help="print what the runs cost, and totals")
     ap.add_argument("--sync", action="store_true", help="send runs the database missed")
@@ -841,7 +919,7 @@ def main():
         return
     if not args.prompt:
         ap.error("give a prompt, or --smoke")
-    r = asyncio.run(make_film(args.prompt, _print, new_job(args.prompt, args.seconds)))
+    r = asyncio.run(make_film(args.prompt, _print, new_job(args.prompt, args.seconds, args.look)))
     sys.exit(0 if r.get("ok") else 1)
 
 

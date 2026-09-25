@@ -43,6 +43,17 @@ def load(path):
     if isinstance(m.get("vo"), str):
         with open(rel(m, m["vo"]), encoding="utf-8") as f:
             m["_vo_file"], m["vo"] = rel(m, m["vo"]), json.load(f)
+    # "paint": "paint.json" -- scenes painted by an image model (sketch-paint.py). Each one that
+    # has been painted joins "images", so the film draws it with SK.image(name, ...)
+    if m.get("paint"):
+        if isinstance(m["paint"], str):
+            with open(rel(m, m["paint"]), encoding="utf-8") as f:
+                m["_paint_file"], m["paint"] = rel(m, m["paint"]), json.load(f)
+        m["images"] = dict(m.get("images") or {})
+        for im in m["paint"].get("images", []):
+            p = os.path.join("images", im["name"] + ".jpg")
+            if os.path.exists(rel(m, p)):
+                m["images"].setdefault(im["name"], p)
     return m
 
 

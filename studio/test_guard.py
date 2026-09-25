@@ -2,7 +2,9 @@
 """The Sketch Studio permission model, checked without calling Claude: python studio/test_guard.py"""
 
 import os
+import re
 import sys
+import shutil
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import agent  # noqa: E402
@@ -123,7 +125,59 @@ def main():
         if got != want:
             bad += 1
             print("FAIL  %-6s %s -> %s (%s)" % (tool, inp, got, why))
-    print("%d cases, %d failed" % (len(CASES), bad))
+
+    # a painted film: paint.json and the painter are allowed, and only there
+    PJ = "projects/studio-testpaint"
+    pjob = os.path.join(agent.ROOT, *PJ.split("/"))
+    os.makedirs(pjob, exist_ok=True)
+    with open(os.path.join(pjob, "paint.json"), "w", encoding="utf-8") as f:
+        f.write("{}")
+    paint = "python scripts/sketch-paint.py --manifest %s/sketch.json" % PJ
+    painted = [
+        ("Write", {"file_path": PJ + "/paint.json"}, True),
+        ("Bash", {"command": paint}, True),
+        ("Bash", {"command": paint + " --plan"}, True),
+        ("Bash", {"command": paint + " --only kitchen,sink --retake"}, True),
+        ("Bash", {"command": paint + " --retake --only kitchen"}, True),
+        ("Bash", {"command": paint + " --only ../x --retake"}, False),
+        ("Bash", {"command": paint + " --only kitchen"}, False),
+    ]
+    drawn = [  # the same, in a drawn film's folder: refused
+        ("Write", {"file_path": J + "/paint.json"}, False),
+        (
+            "Bash",
+            {"command": "python scripts/sketch-paint.py --manifest %s/sketch.json" % J},
+            False,
+        ),
+    ]
+    try:
+        for job, cases in ((pjob, painted), (JOB, drawn)):
+            for tool, inp, want in cases:
+                got, why = agent.guard(tool, inp, job)
+                if got != want:
+                    bad += 1
+                    print("FAIL  %-6s %s -> %s (%s)" % (tool, inp, got, why))
+        # both looks' instructions build, every placeholder filled
+        for look in agent.LOOKS:
+            job = agent.new_job("a test", 10, look)
+            try:
+                ours = set(re.findall(r"\{([A-Z_]+)\}", agent._read("studio", "prompt.md")))
+                for f in agent.LOOKS:
+                    ours |= set(
+                        re.findall(r"\{([A-Z_]+)\}", agent._read("studio", "looks", f + ".md"))
+                    )
+                # (the inlined engine has regexes such as \p{L}: not ours, so not checked)
+                text = agent.system_prompt(job)
+                left = sorted(n for n in ours if "{%s}" % n in text)
+                if left:
+                    bad += 1
+                    print("FAIL  %s prompt leaves %s" % (look, left))
+            finally:
+                shutil.rmtree(job, ignore_errors=True)
+    finally:
+        shutil.rmtree(pjob, ignore_errors=True)
+    n = len(CASES) + len(painted) + len(drawn) + len(agent.LOOKS)
+    print("%d cases, %d failed" % (n, bad))
     sys.exit(1 if bad else 0)
 
 
