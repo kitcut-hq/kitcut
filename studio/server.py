@@ -210,9 +210,15 @@ async def create(req):
     }
     WAITING.append(jid)
 
+    log = os.path.join(d, "events.jsonl")
+
     def emit(ev):
         # t: seconds into the run, so a page reloaded half-way shows the same times
-        J["events"].append({**ev, "t": round(time.time() - J["t0"], 1)})
+        ev = {**ev, "t": round(time.time() - J["t0"], 1)}
+        J["events"].append(ev)
+        # and on disk, so the film's page still has its log after this server restarts
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(json.dumps(ev, ensure_ascii=False) + "\n")
         if ev["type"] == "stage":
             J["stage"] = ev["name"]
         elif ev["type"] == "cost":
@@ -247,25 +253,40 @@ async def status(req):
     jid = req.match_info["id"]
     job_dir(jid)  # 404 unless it exists
     J = JOBS.get(jid)
-    if J is None:  # made before this server started: the record on disk is all there is
+    since = max(0, int(req.query.get("since") or 0))
+
+    def with_urls(events):
+        # a review sheet gets a signed URL, so a browser can show it without the token
+        return [
+            ev | {"url": signed(req, jid, ev["path"]) + "&v=%d" % ev["v"]}
+            if ev["type"] == "image"
+            else ev
+            for ev in events
+        ]
+
+    if J is None:  # made before this server started: what is on disk is all there is
         r = record(jid)
         st = "done" if r.get("ok") else ("error" if "finished" in r else "lost")
-        out = {"id": jid, "status": st, "prompt": r.get("prompt"), "events": [], "next": 0}
+        log = os.path.join(job_dir(jid), "events.jsonl")
+        events = []
+        if os.path.exists(log):
+            with open(log, encoding="utf-8") as f:
+                events = [json.loads(x) for x in f if x.strip()]
+        out = {
+            "id": jid,
+            "status": st,
+            "prompt": r.get("prompt"),
+            "events": with_urls(events[since:]),
+            "next": len(events),
+        }
     else:
-        since = max(0, int(req.query.get("since") or 0))
         r = record(jid) if J["status"] in ("done", "error") else {}
         out = {
             "id": jid,
             "status": J["status"],
             "stage": J["stage"],
             "elapsed_s": round(time.time() - J["t0"], 1),
-            # a review sheet gets a signed URL, so a browser can show it without the token
-            "events": [
-                ev | {"url": signed(req, jid, ev["path"]) + "&v=%d" % ev["v"]}
-                if ev["type"] == "image"
-                else ev
-                for ev in J["events"][since:]
-            ],
+            "events": with_urls(J["events"][since:]),
             "next": len(J["events"]),
         }
         if J["status"] == "queued":

@@ -135,6 +135,18 @@ async def main():
             not sheets or all("sig=" in e.get("url", "") for e in sheets),
             "review sheets come signed",
         )
+        check(
+            all("t" in e for e in st.get("events", [])), "every event carries its time into the run"
+        )
+
+        # after a restart the server has forgotten the film; its page still gets the whole log
+        live = len((await (await c.get("/api/films/%s" % job, headers=auth)).json())["events"])
+        server.JOBS.pop(job)
+        again = await (await c.get("/api/films/%s" % job, headers=auth)).json()
+        check(
+            again["status"] == "done" and len(again["events"]) == live and again["next"] == live,
+            "after a restart the film's log comes from disk (%d events)" % live,
+        )
 
         # the public limits: a visitor's films per day, and the day's budget
         server.PER_CLIENT_DAILY = 0

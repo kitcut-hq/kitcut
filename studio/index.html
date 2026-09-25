@@ -220,7 +220,7 @@ function onEvent(ev) {
       break;
     case 'done':  // the video itself comes with the status (follow), signed
       showedDone = true; stats(ev); line('done', `Done in ${mmss(ev.seconds)}`, at);
-      $('status').textContent = 'Done. ' + (ev.claude_said || ''); recent(); break;
+      $('status').textContent = `Done in ${mmss(ev.seconds)}.`; recent(); break;
     case 'error': line('error', ev.text, at); $('status').textContent = 'Failed.'; spend(); break;
     case 'cost': lastCost = ev.usd; if (timer) tick(); break;
   }
@@ -272,7 +272,10 @@ async function follow(since = 0, misses = 0) {
     if (s.status === 'queued') $('status').innerHTML = `<span class="pen"></span>Waiting: number ${s.position} in the queue`;
     if (s.status === 'done') {
       if (s.video_url) play(s.video_url, s.poster_url);
-      if (!showedDone && s.seconds != null) { stats(s); $('status').textContent = 'Done. ' + (s.claude_said || ''); }
+      if (!showedDone && s.seconds != null) {  // a film from before the log was kept: its summary stands in
+        stats(s); $('status').textContent = `Done in ${mmss(s.seconds)}.`;
+        if (s.claude_said) line('say', s.claude_said, null);
+      }
     }
     if (s.status === 'error' && !s.events.length && since === 0) { line('error', s.error || 'This film failed.'); $('status').textContent = 'Failed.'; }
     if (s.status === 'lost') { screen('<div class="idle">This film was interrupted.</div>'); $('status').textContent = 'The studio restarted before this film finished.'; }
