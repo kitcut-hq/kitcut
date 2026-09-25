@@ -22,8 +22,8 @@ python studio/test_server.py                    # the API end to end with Claude
 A quick tunnel gets a **new random URL each time the tunnel starts**, and it has no uptime
 guarantee. The machine must stay on and awake.
 
-**The public site** is [kitcut-hq/sketch-studio](https://github.com/kitcut-hq/sketch-studio) on
-Vercel:
+**The public site** is https://create.kitcut.ai, from
+[kitcut-hq/sketch-studio](https://github.com/kitcut-hq/sketch-studio) on Vercel:
 - It serves a copy of `index.html`; keep the two the same.
 - It looks the tunnel URL up in `kitcut.studio_hosts`, so a restart needs no redeploy.
 - It forwards the page's calls with the token added server-side, plus the visitor's IP as
