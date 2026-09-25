@@ -57,6 +57,10 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
 
 ## Traps already paid for
 
+- **Never open on a blank page.** A fade in from paper, or a draw-on that starts at zero,
+  reads as empty frames at the head of the film. The engine no longer fades in by default;
+  start the first draw-ons around 20% (`clamp(.2 + .8 * E.out(...))`) so frame 0 already
+  shows the pen at work. Check frame 0 in the stills every time.
 - `-shortest` with a subtitle track shortens the film to the last caption. `sketch-render.py`
   muxes with `-t`; do the same in any hand-run mux.
 - `eleven_v3` clips final syllables: always go through `sketch-vo.py` (tail word + cut).

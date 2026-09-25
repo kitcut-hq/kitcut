@@ -524,7 +524,7 @@
 
   /* ------------------------------------------------------------ the film */
   /**
-   * SK.film({ duration, camera, draw(t, vis), fadeIn = .35, fadeOut = .45, speedLines = true,
+   * SK.film({ duration, camera, draw(t, vis), fadeIn = 0, fadeOut = .45, speedLines = true,
    *           handheld = true, automation: { name: { t0, t1, pos(t) } } })
    * draw() runs in world space; vis(x0, y0, x1, y1) says whether a box is on screen.
    */
@@ -564,7 +564,8 @@
     const vg = ctx.createRadialGradient(W / 2, H / 2, H * .45, W / 2, H / 2, H * 1.05);
     vg.addColorStop(0, 'rgba(60,40,20,0)'); vg.addColorStop(1, `rgba(${SK.style.vignetteRGB ?? '60,40,20'},${SK.style.vignette})`);
     ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
-    const fin = 1 - tw(t, 0, F.fadeIn ?? .35), fout = tw(t, F.duration - (F.fadeOut ?? .45), F.duration);
+    // no fade-in by default: a fade from blank paper reads as empty frames at the head of the film
+    const fin = F.fadeIn ? 1 - tw(t, 0, F.fadeIn) : 0, fout = tw(t, F.duration - (F.fadeOut ?? .45), F.duration);
     if (fin > 0 || fout > 0) { ctx.fillStyle = SK.C.paper; ctx.globalAlpha = Math.max(fin, fout); ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
   };
 

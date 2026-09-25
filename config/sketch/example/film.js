@@ -25,9 +25,11 @@
   ], [{ t: tLand + .05, w: .12, amp: 4 }]);
 
   function desk(t) {
-    P.table(-420, 420, 160, 400, tw(t, 0, .8), 300);
-    P.floor(-700, 700, 400, tw(t, 0, .8), 360);
-    const k = tw(t, .3, 1.3);
+    // open mid-stroke: a draw-on that starts from nothing reads as blank frames
+    const head = (a, d) => clamp(.2 + .8 * E.out(SK.inv(a, a + d, t)));
+    P.table(-420, 420, 160, 400, head(0, .8), 300);
+    P.floor(-700, 700, 400, head(0, .8), 360);
+    const k = head(.1, 1.1);
     if (t < tFly) P.ticket({ x: 0, y: -40, s: .9, p: k, title: 'INVITE', subtitle: 'one free week', mood: t > w(0, 'waiting', 1.5) ? 'sad' : 'open', mouth: 'smile', arms: [.3, .3] });
     SK.txt('An invite, unused.', 0, -330, { size: 84, p: tw(t, w(0, 'an', .5), w(0, 'waiting', 2) + .4, E.lin) });
   }

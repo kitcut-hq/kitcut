@@ -209,7 +209,13 @@ class Session:
                 self.send_header("Content-Length", "0")
                 self.end_headers()
 
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        class Server(ThreadingHTTPServer):
+            def handle_error(self, request, client_address):
+                # Chromium closing its keep-alive connection when the run ends is not an error
+                if not isinstance(sys.exc_info()[1], (ConnectionError, OSError)):
+                    super().handle_error(request, client_address)
+
+        self.server = Server(("127.0.0.1", 0), H)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
     def run(self, query, stall=90):
@@ -257,7 +263,9 @@ def kill_tree(proc):
     """Chromium is a process tree; on Windows killing the parent leaves the renderer and GPU
     children running (measured: a 1.3 GB renderer outlived its run). Take the whole tree."""
     if os.name == "nt":
-        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, check=False)
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, check=False
+        )
     else:
         proc.kill()
     proc.wait(timeout=10)
@@ -444,7 +452,10 @@ def main():
                 if i != expect[0]:
                     raise RuntimeError("frame %d arrived, expected %d" % (i, expect[0]))
                 if len(body) != FRAME_BYTES:
-                    raise RuntimeError("frame %d is %d bytes, expected %d (1920x1080 RGBA)" % (i, len(body), FRAME_BYTES))
+                    raise RuntimeError(
+                        "frame %d is %d bytes, expected %d (1920x1080 RGBA)"
+                        % (i, len(body), FRAME_BYTES)
+                    )
                 ff.stdin.write(body)
                 expect[0] += 1
                 if i % (fps * 5) == 0:

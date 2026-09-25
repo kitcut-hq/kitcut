@@ -2743,9 +2743,21 @@ Machine time for the 60 s film, from its run logs (`--timings` prints them):
 | review stills (per round of 18) | ~9 |
 | final render, 60 fps | ~420 |
 
-The rest is authoring: the script, `film.js` (the largest part), the score and the cue list,
-and the review rounds. On the second film built with these tools that took about two hours;
-the first film, which produced the tools, took most of a day.
+The rest is authoring. Measured on the second film built with these tools (60 s, clean look,
+a brand explainer), wall clock:
+
+| phase | minutes |
+|---|---|
+| research: the product's claims and their sources, the brand's rules and assets | 9 |
+| script + manifest | 2 |
+| voice (`sketch-vo.py`, 27 takes) | 5 |
+| `film.js`, first pass | 5 |
+| review rounds (stills), fixes, score and cue list | 8 |
+| final render | 8 |
+| **total** | **~37** |
+
+The first film, which produced these tools, took most of a day; the saving is the engine,
+the cast, the voice/audio/render pipeline and the traps already paid for.
 
 ## Projects: one folder and two files per video
 
@@ -3261,6 +3273,11 @@ everything in `temp/` regenerates in seconds.
   outlived its run; `sketch-render.py` takes the whole tree with `taskkill /T`.
 - **Python's `hash()` of a string is salted per process.** A drum seeded from `hash(piece)`
   sounded different every run; seed from the characters instead.
+- **A film that opens on blank paper looks broken.** A 0.35 s fade in from the paper colour
+  plus a draw-on that started at zero gave six identical blank frames and a slow fade: the
+  first thing a viewer saw was nothing. `SK.film` no longer fades in unless asked, and the
+  opening draw-ons start part-way. `ffmpeg ... -vf signalstats` on the first 40 frames
+  (YAVG) shows where the picture actually starts.
 - **A world-space paper texture balloons in a wide shot.** At zoom 0.4 its grain turned into
   blotches; the engine draws paper in screen space and slides it with the camera.
 
