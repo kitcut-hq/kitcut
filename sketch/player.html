@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<meta name="description" content="__DESCRIPTION__">
+<style>
+__FONTFACES__
+:root {
+  --bg: #1c1a18; --fg: #f7f2e7; --accent: __ACCENT__; --paper: __PAPER__; --ink: __INK__;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) { --bg: #e9e6df; --fg: #2a2521; color-scheme: light; }
+}
+:root[data-theme="dark"] { --bg: #1c1a18; --fg: #f7f2e7; color-scheme: dark; }
+:root[data-theme="light"] { --bg: #e9e6df; --fg: #2a2521; color-scheme: light; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; }
+body { display: flex; align-items: center; justify-content: center; overflow: hidden; padding-inline: 16px; padding-block: 16px; }
+body.render { padding: 0; }
+#stage { position: relative; width: min(100%, calc((100vh - 32px) * 16 / 9)); max-width: 100%; aspect-ratio: 16 / 9; }
+body.render #stage { width: 100vw; }
+canvas { width: 100%; height: 100%; display: block; background: var(--paper); border-radius: 10px; box-shadow: 0 18px 60px rgba(0,0,0,.35); cursor: pointer; }
+body.render canvas { border-radius: 0; box-shadow: none; }
+#overlay { position: absolute; inset: 0; display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-end; justify-content: center; gap: 2.2%; padding-bottom: 3%;
+  background: rgba(255,255,255,.18); border-radius: 10px; transition: opacity .35s; cursor: pointer; }
+#overlay.hidden { opacity: 0; pointer-events: none; }
+#overlay:focus-visible { outline: 4px solid var(--accent); outline-offset: 4px; }
+#playbtn { width: clamp(44px, 8.5%, 104px); aspect-ratio: 1; height: auto; border-radius: 50%; border: 4px solid var(--ink);
+  background: var(--accent); display: grid; place-items: center; box-shadow: 4px 5px 0 var(--ink); transition: transform .15s; }
+#overlay:hover #playbtn { transform: scale(1.06); }
+#playbtn svg { width: 42%; height: 42%; margin-left: 8%; }
+#hint { align-self: flex-end; margin-bottom: 2.4%; font-family: __HINT_FONT__; font-weight: 700; font-size: clamp(14px, 2.2vw, 30px); color: var(--ink);
+  background: var(--paper); border: 3px solid var(--ink); border-radius: 999px; padding: .1em .9em .15em; box-shadow: 3px 4px 0 var(--ink); }
+#bar { position: absolute; left: 14px; right: 14px; bottom: 12px; height: 6px; border-radius: 3px; background: rgba(42,37,33,.18); opacity: 0; transition: opacity .25s; cursor: pointer; }
+#stage:hover #bar { opacity: 1; }
+#fill { height: 100%; width: 0; border-radius: 3px; background: var(--accent); }
+@media (max-width: 600px) { canvas, #overlay { border-radius: 0; } #bar { left: 8px; right: 8px; bottom: 8px; } }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c" width="1920" height="1080" aria-label="__TITLE__"></canvas>
+  <div id="overlay" role="button" tabindex="0" aria-label="Play">
+    <div id="playbtn"><svg viewBox="0 0 24 24"><path d="M5 3.5 L20 12 L5 20.5 Z" fill="#fff" stroke="__INK__" stroke-width="2" stroke-linejoin="round"/></svg></div>
+    <div id="hint">__HINT__</div>
+  </div>
+  <div id="bar"><div id="fill"></div></div>
+</div>
+<audio id="audio" preload="auto" src="__AUDIO__"></audio>
+<script>
+__ENGINE__
+</script>
+<script>
+__PROPS__
+</script>
+<script>
+SK.VO = __VO__;
+</script>
+<script>
+__FILM__
+</script>
+<script>
+(function () {
+  // Modes (query string):
+  //   (none)                interactive player
+  //   ?render=1             no UI; window.__frame(t) draws one frame (manual capture)
+  //   ?export=1&fps&from&to  draw every frame and POST each PNG to /frame, then /done  (sketch-render.py)
+  //   ?stills=1.5,9,23.8    POST a PNG per time to /still, then /done
+  //   ?automation=1         POST SK.automation() JSON to /automation, then /done
+  const Q = new URLSearchParams(location.search);
+  const RENDER = Q.has('render') || Q.has('export') || Q.has('stills') || Q.has('automation');
+  const audio = document.getElementById('audio');
+  const overlay = document.getElementById('overlay');
+  const fill = document.getElementById('fill');
+  const bar = document.getElementById('bar');
+  const cv = document.getElementById('c');
+  const DUR = SK._film.duration, POSTER_T = __POSTER_T__;
+  let ready = false, playing = false, clockBase = 0, clockAt = 0;
+  // retried: one reset connection must not end a ten-minute render (the server ignores a repeat)
+  const report = async (path, body) => {
+    for (let k = 0; ; k++) {
+      try { const r = await fetch(path, { method: 'POST', body }); if (r.ok) return r; throw new Error('HTTP ' + r.status); }
+      catch (e) { if (k >= 6) throw e; await new Promise(res => setTimeout(res, 150 * 2 ** k)); }
+    }
+  };
+  window.addEventListener('error', (e) => { if (RENDER) report('/error', String(e.message) + ' @' + e.lineno); });
+
+  SK.init(cv);
+  const faces = __FONT_LOADS__, IMAGES = __IMAGES__;
+  const imgs = Object.entries(IMAGES).map(([k, src]) => new Promise(r => { const im = new Image(); im.onload = () => { SK.IMG[k] = im; r(); }; im.onerror = () => r(); im.src = src; }));
+  Promise.all([...faces.map(f => document.fonts.load(f)), ...imgs]).then(() => document.fonts.ready).then(async () => {
+    SK.makeTextures();
+    ready = true;
+    window.__frame = (t) => { SK.render(t); return true; };
+    if (RENDER) {
+      document.body.classList.add('render'); overlay.remove(); bar.remove(); window.__ready = true;
+      const png = () => new Promise(r => cv.toBlob(r, 'image/png'));
+      try {
+        if (Q.has('export')) {
+          const fps = +Q.get('fps') || 60, from = +(Q.get('from') || 0), to = +(Q.get('to') || DUR);
+          const n = Math.round((to - from) * fps);
+          // raw RGBA, not PNG: toBlob() fills Chromium's blob store faster than GC frees it
+          // ("Failed to fetch" after ~100 frames), and skipping the PNG round trip is faster too
+          const cx2 = cv.getContext('2d');
+          for (let i = 0; i < n; i++) { SK.render(from + i / fps); await report('/frame?i=' + i, cx2.getImageData(0, 0, cv.width, cv.height).data); }
+        }
+        if (Q.has('stills')) for (const s of Q.get('stills').split(',')) { SK.render(+s); await report('/still?t=' + s, await png()); }
+        if (Q.has('automation')) await report('/automation', JSON.stringify(SK.automation()));
+      } catch (e) { await report('/error', String(e && e.stack || e)); }
+      if (!Q.has('render')) await report('/done', '');
+      return;
+    }
+    SK.render(POSTER_T);
+    requestAnimationFrame(loop);
+  });
+
+  function now() {
+    const a = audio.currentTime;
+    if (a !== clockBase) { clockBase = a; clockAt = performance.now(); }
+    return playing && !audio.paused ? clockBase + (performance.now() - clockAt) / 1000 : a;
+  }
+  function loop() {
+    if (ready && playing) { const t = Math.min(DUR, now()); SK.render(t); fill.style.width = (t / DUR * 100) + '%'; }
+    requestAnimationFrame(loop);
+  }
+  function start() {
+    if (!ready) return;
+    if (audio.ended || audio.currentTime >= DUR - .05) audio.currentTime = 0;
+    audio.play().then(() => { playing = true; clockBase = audio.currentTime; clockAt = performance.now(); overlay.classList.add('hidden'); }).catch(() => {});
+  }
+  function pause() { audio.pause(); playing = false; overlay.classList.remove('hidden'); document.getElementById('hint').textContent = 'paused · click to continue'; }
+  overlay.addEventListener('click', start);
+  overlay.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); start(); } });
+  cv.addEventListener('click', () => playing ? pause() : start());
+  document.addEventListener('keydown', (e) => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); playing ? pause() : start(); } });
+  audio.addEventListener('ended', () => { playing = false; SK.render(POSTER_T); fill.style.width = '100%'; overlay.classList.remove('hidden'); document.getElementById('hint').textContent = 'watch again'; });
+  bar.addEventListener('click', (e) => {
+    const r = bar.getBoundingClientRect(); const t = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * DUR;
+    audio.currentTime = t; clockBase = t; clockAt = performance.now(); SK.render(t); fill.style.width = (t / DUR * 100) + '%';
+  });
+})();
+</script>
+</body>
+</html>

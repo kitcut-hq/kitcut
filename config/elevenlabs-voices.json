@@ -22,6 +22,13 @@
       "latency": "slow",
       "recommended": false,
       "note": "Only use if you need multilingual support or premium quality. 2x the cost."
+    },
+    "eleven_v3": {
+      "cost_credits_per_character": 1.0,
+      "quality": "most expressive",
+      "latency": "slow",
+      "recommended": false,
+      "note": "supports [audio tags]; clips the final syllable of most takes -- sketch-vo.py renders a throwaway tail word and cuts it off. Only mp3_44100_128 below the Creator tier."
     }
   },
   "voices": {
@@ -79,6 +86,12 @@
       "gender": "Male",
       "verified": false,
       "note": "carried over from the old file; never called"
+    },
+    "george": {
+      "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+      "gender": "Male",
+      "verified": true,
+      "note": "warm British storyteller; used for the whimsical sketch films (eleven_v3), called 2026-09-25"
     }
   },
   "stability_similarity_presets": {

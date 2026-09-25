@@ -25,6 +25,7 @@ scenedetect==0.7.1
 
 # --- rendering -----------------------------------------------------------
 numpy==2.5.2
+scipy==1.18.1                  # sketch films: filters, convolution reverb, resampling (_sketchaudio.py)
 pillow==12.3.0                 # draws the handle badge PNGs
 fonttools==4.63.0              # cap-height metrics for badge sizing
 onnxruntime==1.29.0

@@ -1,0 +1,10 @@
+[
+ {"t": 0.05, "fx": "scribble", "db": -28, "args": {"sec": 1.0, "seed": 1}},
+ {"t": 0.3, "fx": "scribble", "db": -30, "args": {"sec": 1.0, "seed": 2}},
+ {"t": 3.2, "fx": "crinkle", "db": -26, "args": {"sec": 0.25}},
+ {"t": 3.25, "fx": "whoosh", "db": -20, "pan": -0.4, "args": {"sec": 0.6, "f0": 300, "f1": 2600}},
+ {"t": 3.3, "fx": "air", "track": "plane", "db": -26},
+ {"t": 5.2, "fx": "pop", "db": -22, "pan": 0.3, "args": {"f0": 500, "f1": 180, "sec": 0.12}},
+ {"t": 5.5, "fx": "sample", "inst": "glockenspiel", "note": "C7", "db": -22, "send": 0.35},
+ {"t": 9.0, "fx": "scribble", "db": -28, "args": {"sec": 1.1, "seed": 3}}
+]

@@ -2859,6 +2859,146 @@ from a render's `.youtube.json` sidecar can be pasted straight in. After
 deleting, drop the deliverable's entry from `projects/<id>/project.json` and
 its `.youtube.json` sidecar yourself — no script records a deletion.
 
+## Sketch films: an explainer written as code
+
+A sketch film is an animated explainer with no footage at all: the picture is JavaScript,
+the voice is text-to-speech, the music is a score played on sampled instruments, and every
+sound effect is synthesised. Three scripts take one manifest from script to finished MP4, and
+the same code plays live in a browser as a self-contained HTML player.
+
+```powershell
+python scripts/sketch-vo.py     --manifest projects/<id>/sketch.json --plan   # price the voice
+python scripts/sketch-vo.py     --manifest projects/<id>/sketch.json          # takes, pick, word times, captions
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 2,9.5,31 --sheet
+python scripts/sketch-audio.py  --manifest projects/<id>/sketch.json --levels # score + sfx + mix + master
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json          # the video
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --timings
+python scripts/check-sketch.py                                                # free self-test
+```
+
+Start a film by copying `config/sketch/example/` to `projects/<id>/` (the scripts write
+`audio/ outputs/ temp/` next to the manifest). The example runs end to end for free: its
+voice is edge-tts.
+
+### The pieces
+
+| file | what it is |
+|---|---|
+| `sketch/engine.js` | the renderer: strokes that boil, cel fills, write-on text, camera, flight paths, paper, grain; `SK.setStyle('crayon' \| 'clean')` |
+| `sketch/props.js` | the cast: ticket character, seated person with poses, paper plane, laptop, table, lightbulb, rocket, padlock, coin, stamp, browser window, thought bubble, confetti, architectural houses |
+| `sketch/player.html` | the page: player UI, and the export modes the renderer drives |
+| `projects/<id>/film.js` | the film: `SK.film({duration, camera, draw(t, vis)})` |
+| `projects/<id>/score.json` | the music, as data (notation below) |
+| `projects/<id>/sfx.json` | timed sound cues |
+
+**Every frame is a pure function of time.** Nothing in a film may keep state between frames
+(no physics integration, no `Math.random`); randomness is `SK.rnd(seed)`, motion is `t`. That
+single rule is what lets the browser play the film against its audio *and* the renderer export
+frame 2,317 on its own.
+
+**Cue visuals to words, not to seconds.** The bundler injects the voice timeline, and
+`SK.w(line, "word")` returns when a word starts. A film written that way survives a
+re-recorded line: the visuals move with the voice. Hand-copied timestamps silently drift the
+first time a take changes.
+
+**Two looks, one engine.** `crayon` re-jitters every line 8 times a second (the traced-cel
+boil), adds a faint second pencil pass, and prints fills a few pixels off their outlines;
+`clean` turns all of that off for crisp editorial line art with flat fills, soft card shadows
+(`SK.card`), a drafting grid and letters that rise instead of pop. Both have shipped: a
+whimsical 40 s crayon film, and a 60 s clean real-estate film for a brand.
+
+### The voice: `sketch-vo.py`
+
+Per line: N takes (cached by a fingerprint of text + voice + model + settings, so an edit
+re-renders only that line), each cut at the silence before a throwaway tail word, scored by
+Whisper against the script, the best one picked (accuracy, then a clean cut, then the take
+nearest the median length) unless the line names `"pick"`. Lines are placed at their `start`
+or after the previous line plus `gap`; word times come from the ElevenLabs character
+alignment, minus `[audio tags]` and the tail. Writes `audio/vo/timeline.json` and
+`outputs/<slug>.srt/.vtt`.
+
+`"hotwords"` go to Whisper as its initial prompt, so a brand name is heard as one word
+instead of costing its take a lower rank.
+
+Measured, 9 lines x 3 takes of `eleven_v3` (839 characters, ~2,500 credits): synth 91 s,
+trim 2.5 s, Whisper scoring (small.en, CPU) 81-99 s.
+
+### The soundtrack: `sketch-audio.py`
+
+Stages: fetch any missing instrument notes (FluidR3 GM, MIT, into
+`models/soundfonts/FluidR3_GM/`, shared by every project), render the score, render the cues,
+place the voice, duck the music under it (fast attack, slow release), mix, and master with a
+two-pass `loudnorm` to -14 LUFS / -1.5 dBTP. `--levels` prints music / ducked / sfx / voice RMS
+per 2 s, which is how the balance is judged without listening; `--stems` writes them out.
+
+Measured on the 60 s film: samples 45 s the first time (69 notes), 0.5 s after; music 16.7 s;
+sfx 4.1 s; voice 3.5 s; mix 1.5 s; master 8.1 s.
+
+**Score notation** (`_sketchaudio.py` carries the full reference):
+
+```json
+{"bpm": 96, "drum_gain": 0.45, "events": [
+  {"inst": "acoustic_grand_piano", "vel": 0.3, "notes": "0 D4+F#4+A4 .5; .5 D4+F#4+A4 .5"},
+  {"type": "strum", "at": 22, "chord": "F3+A3+C4+F4+A4", "vel": 0.55, "pattern": "bar"},
+  {"type": "gliss", "from": 31.2, "to": 32, "lo": "D4", "hi": "D6", "v0": 0.12, "v1": 0.3, "root": "D"},
+  {"type": "roll", "inst": "timpani", "note": "C2", "from": 44, "to": 47.4, "v0": 0.12, "v1": 0.67},
+  {"type": "drums", "from": 32, "bars": 5, "kit": {"kick": "x.....x...x.....", "clap": "....x.......x..."}}
+]}
+```
+
+Times are in beats. **Choose the tempo so bar lines land on the story**: at 96 bpm a bar is
+2.5 s, which put the drop exactly on "Now, drop the files" (20.0 s) and the stabs on
+"Confirm" (40.0 s). A long score is easier to generate from chord charts with a small script
+beside it than to type by hand.
+
+**Cue notation** (`sfx.json`): `{"t", "fx", "db", "pan", "send", "args"}`, plus
+`"times": [...]` for a repeat. `fx` is any generator in `_sketchaudio.FX` (whoosh, pop, boing,
+thunk, clink, crash, rumble, boom, zip, blip, click, scribble, crinkle, keys, shimmer,
+swoosh_soft, tick, chime), `"sample"` (an instrument note or a run of notes), or `"air"`:
+airflow that follows a moving object's speed and screen position, from the film's
+`automation` tracks (`sketch-render.py --automation` writes them).
+
+### The picture: `sketch-render.py`
+
+Bundles engine + props + film + fonts + images + voice timeline + mastered MP3 into
+`outputs/<slug>.html` (one file, plays offline) and `outputs/artifact/<slug>.html` (the same
+without html/head/body, for claude.ai Artifacts). `--stills` and `--sheet` are the review
+loop: 18 stills in 8.6 s. The video is rendered by opening the page in headless Edge/Chrome
+(`html-to-image.py`'s browser finder, so no Node and no Playwright): the page draws each frame
+and POSTs its raw pixels to a local server here, which pipes them into ffmpeg with
+`_encode.video_args`. The mux uses `-t`, never `-shortest` (see the gotchas), asserts the
+duration, and adds a soft subtitle track and the poster.
+
+Measured: a 60 s film at 60 fps renders at about 9 frames a second of wall clock (simple
+scenes 13, busy UI scenes 8), so roughly 7 minutes; `--draft` renders 30 fps.
+
+### How long a film takes
+
+Machine time for the 60 s film, from its run logs (`--timings` prints them):
+
+| stage | seconds |
+|---|---|
+| voice (27 takes, scoring, placing) | ~185 |
+| soundtrack (first run, incl. sample fetch) | ~80 |
+| review stills (per round of 18) | ~9 |
+| final render, 60 fps | ~420 |
+
+The rest is authoring. Measured on the second film built with these tools (60 s, clean look,
+a brand explainer), wall clock:
+
+| phase | minutes |
+|---|---|
+| research: the product's claims and their sources, the brand's rules and assets | 9 |
+| script + manifest | 2 |
+| voice (`sketch-vo.py`, 27 takes) | 5 |
+| `film.js`, first pass | 5 |
+| review rounds (stills), fixes, score and cue list | 8 |
+| final render | 8 |
+| **total** | **~37** |
+
+The first film, which produced these tools, took most of a day; the saving is the engine,
+the cast, the voice/audio/render pipeline and the traps already paid for.
+
 ## Projects: one folder and two files per video
 
 Everything about one video lives in `projects/<id>/`: the manifests that drive
@@ -3354,6 +3494,32 @@ Of those, `transcripts/` is the only expensive artifact (minutes of GPU time);
 everything in `temp/` regenerates in seconds.
 
 ## Gotchas worth knowing
+
+- **`-shortest` with a subtitle track cuts the film where the subtitles end.** A film's last
+  caption ends before its last frame, and `-shortest` counts the subtitle stream: a 40 s film
+  came out 38.57 s with its end card gone. Mux with `-t <duration>` and assert the duration
+  afterwards (`sketch-render.py` does).
+- **`eleven_v3` clips the last syllable of most takes.** Measured: 16 of 18 takes ended above
+  -30 dBFS, mid-word. Render "line + tail word" and cut in the silence before the tail
+  (`sketch-vo.py`); the line also gets a sentence-final ending that way. `mp3_44100_192` is a
+  403 below the Creator tier, so ask for `mp3_44100_128`; a TTS-scoped key gets 401 from the
+  music and sound-effects endpoints, which is why sketch films synthesise both.
+- **Chromium's blob store does not keep up with a frame export.** `canvas.toBlob()` per frame
+  failed with "Failed to fetch" after ~100 frames; the export posts raw RGBA from
+  `getImageData` instead (also twice as fast: no PNG encode or decode). An HTTP/1.0 server
+  opened a new connection per 8 MB frame and a render died on the one that got reset, so the
+  frame server speaks HTTP/1.1 keep-alive and the page retries a failed POST.
+- **Killing Chromium's parent on Windows leaves its children running.** A 1.3 GB renderer
+  outlived its run; `sketch-render.py` takes the whole tree with `taskkill /T`.
+- **Python's `hash()` of a string is salted per process.** A drum seeded from `hash(piece)`
+  sounded different every run; seed from the characters instead.
+- **A film that opens on blank paper looks broken.** A 0.35 s fade in from the paper colour
+  plus a draw-on that started at zero gave six identical blank frames and a slow fade: the
+  first thing a viewer saw was nothing. `SK.film` no longer fades in unless asked, and the
+  opening draw-ons start part-way. `ffmpeg ... -vf signalstats` on the first 40 frames
+  (YAVG) shows where the picture actually starts.
+- **A world-space paper texture balloons in a wide shot.** At zoom 0.4 its grain turned into
+  blotches; the engine draws paper in screen space and slides it with the camera.
 
 - **`-hwaccel cuda` fails the INPUT, so a missing card reads as a broken
   source file.** It is NVDEC on the input and a different axis from the NVENC

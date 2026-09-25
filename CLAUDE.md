@@ -169,7 +169,7 @@ Don't reintroduce it, and don't use `os.execve` to re-exec on Windows — it
 spawns rather than replaces, so the parent dies abnormally and the exit code is
 lost. `_env.bootstrap()` uses `subprocess.run` and propagates the status.
 
-## The nine pipelines
+## The ten pipelines
 
 Everything is manifest-driven. Nothing hardcodes a timecode, a colour or a font
 size; per-video decisions live in the project's manifests under
@@ -643,6 +643,28 @@ spotlight and the emphasis colour stay with the burn-in pass.
 `docs/davinci-resolve.md` is the research; `docs/todo.md` #6 records the
 live-API branch and what is worth salvaging from it.
 
+**10. Sketch films** — an animated explainer with no footage: the picture is JavaScript
+(`sketch/engine.js` + `sketch/props.js` + the project's `film.js`), the voice is
+text-to-speech, the music a score on sampled instruments, the sound effects synthesised.
+`sketch-vo.py` (takes → pick → word times → captions) → `sketch-audio.py` (score + cues +
+duck + master) → `sketch-render.py` (HTML player, stills, 60 fps MP4 via headless Edge).
+
+```powershell
+python scripts/sketch-vo.py     --manifest projects/<id>/sketch.json --plan
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 2,9,31 --sheet
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --timings
+```
+
+Start from `config/sketch/example/` (copied into the project; it runs free on edge-tts).
+Two rules carry the design: **every frame is a pure function of t** (the browser plays it
+live and the renderer exports any frame on its own), and **cues hang off words**
+(`SK.w(line, "word")` reads the voice timeline the bundler injects), so a re-recorded line
+moves its visuals with it. Two looks share one engine: `SK.setStyle('crayon')` (boiling
+hand-drawn lines) and `'clean'` (editorial line art, cards, flat fills). Each script times
+its stages into the run log; `--timings` answers "how long does a film take". After touching
+any of it, run `python scripts/check-sketch.py` — the notation, every sound generator, the
+ducker, the tail-word cut and the bundler; no API, no browser, seconds.
+
 ## Projects: the memory that outlives the session
 
 Each video is a folder, `projects/<id>/`: its manifests and two committed
@@ -712,6 +734,8 @@ which cannot encode the glyphs at all.
 | `scripts/make-thumbnail.py` | a 1280x720 YouTube thumbnail in the channel's house style from a spec; `yt-upload.py --thumbnail` sets it |
 | `scripts/edl-cut.py` | a film from hand-chosen ranges of a few silent takes, with an elapsed counter driven by SOURCE time so it stays true over a sped-up wait |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
+| `sketch/` | the sketch-film engine (`engine.js`), cast (`props.js`) and player page (`player.html`); `scripts/_sketch.py` and `_sketchaudio.py` are the Python half, `check-sketch.py` their test |
+| `config/sketch/example/` | a 12 s sketch film to copy into a new project: manifest, `film.js`, score, cues |
 | `scripts/resolve-export.py` | the cut as an OTIO/EDL/FCP7 XML timeline plus an SRT, for DaVinci Resolve (free edition); `check-resolve.py` is its test, `docs/davinci-resolve.md` the research behind it |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
 | `scripts/screencast-pipeline.py` | the silent-screencast job as one cached, checkpointed command; the stage scripts it drives are listed under pipeline 7 |
