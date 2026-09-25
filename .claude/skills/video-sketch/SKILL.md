@@ -52,6 +52,9 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    `bar = 240 / bpm` and line the scene changes up) and `sfx.json` (a cue on every visual hit).
    `sketch-audio.py --levels`: the voice should sit 6-12 dB over the ducked music.
 8. **Render**, then check the MP4 itself: duration, loudness (-14 LUFS), a few decoded frames.
+   The render draws `--jobs` chunks at once (default: a quarter of the logical cores), 3x the
+   old serial speed on a 60 s film. On a machine other sessions are loading, lower `--jobs`
+   rather than let every browser crawl; `--jobs 1` is the old serial path.
 9. **Publish** with `yt-upload.py --channel <handle>` — unlisted unless told otherwise.
 10. **Report the timings** (`--timings`) with the deliverables.
 

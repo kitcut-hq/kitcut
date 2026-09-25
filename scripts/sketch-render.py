@@ -274,6 +274,147 @@ def kill_tree(proc):
     proc.wait(timeout=10)
 
 
+def auto_jobs():
+    """Browsers to run at once. Each is a renderer process plus an encoder, about 2-3 cores
+    busy; past a quarter of the logical cores the page's GPU readback is the wall."""
+    return max(1, min(6, (os.cpu_count() or 4) // 4))
+
+
+def packets(path):
+    """Video frames in a file, counted from its packets (no decode); 0 when it will not open."""
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets"]
+        + ["-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", path],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return int(r.stdout.strip() or 0) if r.returncode == 0 else 0
+
+
+def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent):
+    """Draw frames [0, n_frames) into `silent`. The film is cut into chunks of `chunk` seconds;
+    `jobs` browsers draw chunks at once, each into its own encoder and segment file, and the
+    segments are joined by stream copy. One browser is serial -- draw, read back, POST 8 MB,
+    wait for the encoder -- so the machine sat mostly idle while it rendered.
+
+    A fresh browser per chunk: measured on a 63.5 s film, one session fell from 13.8 to 1.5 fps
+    and then stopped answering at frame ~2700. A chunk that fails is redrawn from its start
+    (frames are a pure function of t, so the redraw is identical), up to three times."""
+    per = max(1, int(round(chunk * fps)))
+    # a film shorter than jobs x chunk (a 5 s Sketch Studio film is one chunk) is split evenly
+    # across the browsers instead, down to 1 s each -- below that a browser's start-up dominates
+    per = min(per, max(fps, -(-n_frames // max(1, jobs))))
+    chunks = [(a, min(n_frames, a + per)) for a in range(0, n_frames, per)]
+    seg_dir = os.path.join(temp, os.path.splitext(os.path.basename(silent))[0] + "_segments")
+    shutil.rmtree(seg_dir, ignore_errors=True)
+    os.makedirs(seg_dir)
+    lock, t_start = threading.Lock(), time.time()
+    done, failed, next_report = [0], [], [fps * 5]
+    jobs = max(1, min(jobs, len(chunks)))
+    print("  %d chunks of %d frames, %d at a time" % (len(chunks), per, jobs), flush=True)
+
+    def encode(a, b, seg):
+        ff = subprocess.Popen(
+            ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgba"]
+            + ["-s", "1920x1080", "-framerate", str(fps), "-i", "-"]
+            + _encode.video_args(cfg)
+            + [seg],
+            stdin=subprocess.PIPE,
+        )
+        got = [0]
+
+        def frame(i, body):
+            if i < got[0]:
+                return  # a retried POST whose first attempt already landed
+            if i != got[0]:
+                raise RuntimeError("frame %d arrived, expected %d" % (a + i, a + got[0]))
+            if len(body) != FRAME_BYTES:
+                raise RuntimeError(
+                    "frame %d is %d bytes, expected %d (1920x1080 RGBA)"
+                    % (a + i, len(body), FRAME_BYTES)
+                )
+            ff.stdin.write(body)
+            got[0] += 1
+            with lock:
+                done[0] += 1
+                if done[0] >= next_report[0]:
+                    next_report[0] += fps * 5
+                    rate = done[0] / max(time.time() - t_start, 1e-3)
+                    print(
+                        "  frame %d/%d  %.1f fps  eta %.0fs"
+                        % (done[0], n_frames, rate, (n_frames - done[0]) / max(rate, 1e-3)),
+                        flush=True,
+                    )
+
+        err = Session(page, on_frame=frame).run(
+            "export=1&fps=%d&from=%r&to=%r" % (fps, t0 + a / fps, t0 + b / fps), fatal=False
+        )
+        try:
+            ff.stdin.close()
+        except OSError:
+            pass
+        code = ff.wait()
+        if not err and code != 0:
+            err = "ffmpeg exited %d encoding the chunk" % code
+        if not err and got[0] != b - a:
+            err = "chunk came back short (%d)" % got[0]
+        # read the segment back: a parallel run once produced a segment with no moov atom whose
+        # chunk had reported clean, and the join is where that would otherwise surface
+        if not err and packets(seg) != b - a:
+            err = "segment holds %d frames" % packets(seg)
+        if err:
+            with lock:
+                done[0] -= got[0]
+        return err
+
+    def work(k):
+        a, b = chunks[k]
+        seg = os.path.join(seg_dir, "%05d.mp4" % k)
+        for attempt in range(4):
+            if failed:
+                return
+            err = encode(a, b, seg)
+            if not err:
+                return
+            print("  chunk %d-%d failed (%s); retry %d" % (a, b, err, attempt + 1), flush=True)
+        failed.append("chunk %d-%d: %s" % (a, b, err))
+
+    pending = list(range(len(chunks)))
+
+    def runner():
+        while not failed:
+            with lock:
+                if not pending:
+                    return
+                k = pending.pop(0)
+            work(k)
+
+    threads = [threading.Thread(target=runner, daemon=True) for _ in range(jobs)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    if failed:
+        sys.exit("page error: %s" % failed[0])
+
+    listing = os.path.join(seg_dir, "list.txt")
+    with open(listing, "w", encoding="utf-8") as f:
+        for k in range(len(chunks)):
+            f.write("file '%05d.mp4'\n" % k)
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", listing]
+        + ["-c", "copy", "-movflags", "+faststart", silent],
+        check=True,
+    )
+    count = packets(silent)
+    if count != n_frames:
+        sys.exit("joined %d frames, expected %d" % (count, n_frames))
+    shutil.rmtree(seg_dir, ignore_errors=True)
+    el = time.time() - t_start
+    print("  %d frames in %.0fs  (%.1f fps, %d jobs)" % (n_frames, el, n_frames / el, jobs))
+
+
 def contact_sheet(paths, out, cols=4):
     from PIL import Image, ImageDraw
 
@@ -318,6 +459,13 @@ def main():
         help="seconds of film per browser session (default 8): one long session slows down "
         "as it runs, and a chunk that fails is retried from its first unwritten frame",
     )
+    ap.add_argument(
+        "--jobs",
+        type=int,
+        default=0,
+        help="chunks drawn at once, each in its own browser and encoder "
+        "(default: a quarter of the logical cores, at most 6; 1 = the old serial render)",
+    )
     ap.add_argument("--from", dest="t0", type=float, default=0.0)
     ap.add_argument("--to", dest="t1", type=float)
     ap.add_argument(
@@ -354,7 +502,9 @@ def main():
     final = os.path.join(m["_audio"], "final.wav")
     srt = os.path.join(m["_outputs"], slug + ".srt")
     n_frames = int(round((t1 - args.t0) * fps))
+    jobs = args.jobs or auto_jobs()
     print("%s  %.1fs  %d fps  %d frames" % (m["_id"], t1 - args.t0, fps, n_frames))
+    print("  jobs:    %d browsers at once, %.0f s of film each" % (jobs, args.chunk))
     print(
         "  film:    %s%s"
         % (os.path.relpath(film, _env.ROOT), "" if os.path.exists(film) else "  (MISSING)")
@@ -433,83 +583,7 @@ def main():
 
         silent = os.path.join(m["_temp"], slug + "_silent.mp4")
         with st("frames"):
-            ff = subprocess.Popen(
-                [
-                    "ffmpeg",
-                    "-v",
-                    "error",
-                    "-y",
-                    "-f",
-                    "rawvideo",
-                    "-pix_fmt",
-                    "rgba",
-                    "-s",
-                    "1920x1080",
-                    "-framerate",
-                    str(fps),
-                    "-i",
-                    "-",
-                ]
-                + _encode.video_args(cfg)
-                + ["-movflags", "+faststart", silent],
-                stdin=subprocess.PIPE,
-            )
-            t_start, expect, base = time.time(), [0], [0]
-
-            def frame(i, body):
-                i += base[0]  # the page numbers frames from its own chunk's start
-                if i < expect[0]:
-                    return  # a retried POST whose first attempt already landed
-                if i != expect[0]:
-                    raise RuntimeError("frame %d arrived, expected %d" % (i, expect[0]))
-                if len(body) != FRAME_BYTES:
-                    raise RuntimeError(
-                        "frame %d is %d bytes, expected %d (1920x1080 RGBA)"
-                        % (i, len(body), FRAME_BYTES)
-                    )
-                ff.stdin.write(body)
-                expect[0] += 1
-                if i % (fps * 5) == 0:
-                    el = time.time() - t_start
-                    print(
-                        "  frame %d/%d  %.1f fps  eta %.0fs"
-                        % (
-                            i,
-                            n_frames,
-                            (i + 1) / max(el, 1e-3),
-                            (n_frames - i - 1) / max((i + 1) / max(el, 1e-3), 1e-3),
-                        ),
-                        flush=True,
-                    )
-
-            # a fresh browser per chunk: measured on a 63.5 s film, one session fell from 13.8 to
-            # 1.5 fps and then stopped answering at frame ~2700; frames are a pure function of t,
-            # so a failed chunk resumes at its first unwritten frame and the file is unchanged
-            per, fails = max(1, int(round(args.chunk * fps))), 0
-            while expect[0] < n_frames:
-                a = expect[0]
-                b = min(n_frames, a + per)
-                base[0] = a
-                err = Session(light, on_frame=frame).run(
-                    "export=1&fps=%d&from=%r&to=%r" % (fps, args.t0 + a / fps, args.t0 + b / fps),
-                    fatal=False,
-                )
-                if err or expect[0] != b:
-                    fails += 1
-                    print(
-                        "  chunk %d-%d stopped at frame %d (%s); retry %d"
-                        % (a, b, expect[0], err or "short", fails),
-                        flush=True,
-                    )
-                    if fails > 3:
-                        ff.stdin.close()
-                        ff.wait()
-                        sys.exit("page error: %s" % (err or "chunk came back short"))
-            ff.stdin.close()
-            if ff.wait() != 0:
-                sys.exit("ffmpeg failed encoding the frames")
-            if expect[0] != n_frames:
-                sys.exit("got %d frames, expected %d" % (expect[0], n_frames))
+            render_frames(light, cfg, fps, args.t0, n_frames, args.chunk, jobs, m["_temp"], silent)
 
         out = os.path.join(m["_outputs"], slug + ("_draft" if args.draft else "") + ".mp4")
         with st("mux"):

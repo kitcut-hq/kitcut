@@ -2983,15 +2983,35 @@ and POSTs its raw pixels to a local server here, which pipes them into ffmpeg wi
 `_encode.video_args`. The mux uses `-t`, never `-shortest` (see the gotchas), asserts the
 duration, and adds a soft subtitle track and the poster.
 
-The frames are drawn in chunks (`--chunk`, 8 s of film each), each in a fresh browser feeding
-the one ffmpeg process: measured on the 63.5 s air-raid film, a single session fell from 13.8
-to 1.5 frames a second and then stopped answering at frame ~2,700 of 3,810. A chunk that fails
-is retried from its first unwritten frame, which is safe because every frame is a pure
-function of t. Render speed also moves with the machine: the same 6 s ran at 13.8 fps and,
-an hour later with other sessions busy, at 2.3.
+The frames are drawn in chunks (`--chunk`, 8 s of film each), each in a fresh browser: measured
+on the 63.5 s air-raid film, a single session fell from 13.8 to 1.5 frames a second and then
+stopped answering at frame ~2,700 of 3,810. `--jobs` browsers draw chunks at once (default a
+quarter of the logical cores, at most 6), each into its own encoder and segment file under
+`temp/`, and the segments are joined by stream copy. One browser is serial -- draw, read the
+canvas back, POST 8 MB, wait for the encoder -- so it left most of the machine idle. A film
+shorter than jobs x chunk is split evenly across the browsers instead, down to 1 s each.
 
-Measured: a 60 s film at 60 fps renders at about 9 frames a second of wall clock (simple
-scenes 13, busy UI scenes 8), so roughly 7 minutes; `--draft` renders 30 fps.
+Every segment's frames are counted (`ffprobe -count_packets`) before it is accepted, and a
+chunk that fails or comes back short is redrawn from its start, up to three times -- safe
+because every frame is a pure function of t. The count is not paranoia: the first parallel
+run produced a segment with no moov atom whose chunk had reported clean, and the join is
+where that surfaced. The joined file is counted again against the frame total.
+
+Measured on an i9-11900H (8 cores/16 threads) + RTX 3050 Ti laptop, shared with other sessions:
+
+| render | jobs | wall clock | frames/s |
+|---|---|---|---|
+| air-raid, 63.5 s at 60 fps | 1 (the old serial path) | 809 s | 4.7 |
+| air-raid, 63.5 s at 60 fps | 4 | 269 s | 14.1 |
+| 32 s of it, chunk 4 | 2 / 4 / 6 / 8 | 219 / 108 / 102 / 95 s | 8.8 / 17.8 / 18.9 / 20.3 |
+| a 5 s studio-length film | 1 / 4 | 28 / 15 s | 10.8 / 20.1 |
+
+Past four browsers the gain flattens, which is why the default is a quarter of the cores.
+Speed also moves with the machine: the same 6 s ran at 13.8 fps and, an hour later with other
+sessions busy, at 2.3. A parallel render is not bit-identical to a serial one after the first
+chunk (SSIM 0.98 between them): each segment is its own encode, so a frame's compression no
+longer leans on the chunk before it. The drawn picture is the same -- against a lossless still
+of t = 30 s both renders score 0.972. `--draft` renders 30 fps.
 
 ### How long a film takes
 
