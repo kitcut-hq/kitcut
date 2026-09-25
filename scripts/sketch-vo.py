@@ -6,6 +6,7 @@ Reads the `vo` block of `projects/<id>/sketch.json`:
     "vo": {"tts": "elevenlabs", "voice": "sarah", "model": "eleven_v3", "takes": 3,
            "tail": "Alright.", "settings": {"stability": 0.5, "similarity_boost": 0.8},
            "hotwords": ["Acme", "BPO"], "lead": 0.6, "gap": 0.35,
+           "language": "en", "whisper": "small.en",
            "lines": [{"text": "[warmly] Every BPO starts the same way.", "start": 0.6, "pick": 1}]}
 
 Per line it: renders N takes (cached by text fingerprint, so an edit re-renders only that line),
@@ -13,6 +14,10 @@ cuts each take at the silence before a throwaway TAIL word, scores every take wi
 against the script, picks the best (or the manifest's "pick"), and places the line on the
 film clock (its "start", else lead + gaps). It writes audio/vo/timeline.json (lines, files,
 word times from the ElevenLabs character alignment) and the captions next to it.
+
+A film in another language sets "language" (ISO 639-1, e.g. "uk") and a TAIL in that language
+("Добре."): an English tail on a Ukrainian line switches the voice's accent for the last words.
+Scoring then runs a multilingual Whisper ("whisper", default large-v3 on the GPU).
 
 Why the tail word: eleven_v3 clips the last syllable of most takes (measured: 16 of 18 takes
 ended above -30 dBFS). Rendering "line + tail" and cutting in the silence between them gives the
@@ -58,7 +63,9 @@ def spoken(text):
 
 
 def words_of(text):
-    return re.sub(r"[^a-z0-9$ ]", "", spoken(text).lower().replace("-", " ")).split()
+    """Comparable words of any script (an a-z class leaves nothing of a Cyrillic line)."""
+    t = spoken(text).lower().replace("-", " ").replace("’", "").replace("'", "")
+    return re.sub(r"[^\w$ ]", " ", t).split()
 
 
 def fingerprint(line, vo):
@@ -176,17 +183,41 @@ def word_times(align, lead, tail):
 _WHISPER = None
 
 
-def whisper_score(path, text, hotwords):
+def _whisper(lang, name):
+    """English scores on small.en (CPU, measured fast enough); any other language needs a
+    multilingual model -- large-v3 on the GPU by default, CPU if CUDA will not load."""
     global _WHISPER
     if _WHISPER is None:
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        # ctranslate2 loads cuBLAS lazily through PATH (see transcribe-words.py)
+        nv = [
+            os.path.join(r, "nvidia", p, "bin")
+            for r in _env.site_roots()
+            if os.path.isdir(os.path.join(r, "nvidia"))
+            for p in os.listdir(os.path.join(r, "nvidia"))
+        ]
+        os.environ["PATH"] = os.pathsep.join(nv + [os.environ.get("PATH", "")])
         from faster_whisper import WhisperModel
 
-        _WHISPER = WhisperModel("small.en", device="cpu", compute_type="int8")
-    segs, _ = _WHISPER.transcribe(
-        path, language="en", initial_prompt=", ".join(hotwords) if hotwords else None
+        name = name or ("small.en" if lang == "en" else "large-v3")
+        if name.endswith(".en"):
+            _WHISPER = WhisperModel(name, device="cpu", compute_type="int8")
+        else:
+            try:
+                _WHISPER = WhisperModel(name, device="cuda", compute_type="int8_float16")
+                _WHISPER.transcribe(np.zeros(SR // 10, dtype=np.float32), language=lang)
+            except Exception as e:  # noqa: BLE001 -- no usable GPU: slower, same answer
+                print("  whisper %s on CPU (%s)" % (name, str(e)[:80]))
+                _WHISPER = WhisperModel(name, device="cpu", compute_type="int8")
+    return _WHISPER
+
+
+def whisper_score(path, text, hotwords, lang="en", model=None):
+    segs, _ = _whisper(lang, model).transcribe(
+        path, language=lang, initial_prompt=", ".join(hotwords) if hotwords else None
     )
     heard = " ".join(s.text for s in segs)
-    ref, hyp = words_of(text), re.sub(r"[^a-z0-9$ ]", "", heard.lower().replace("-", " ")).split()
+    ref, hyp = words_of(text), words_of(heard)
     return difflib.SequenceMatcher(None, ref, hyp).ratio(), heard.strip()
 
 
@@ -315,7 +346,11 @@ def main():
             for i, cs in cand.items():
                 for c in cs:
                     c["acc"], c["heard"] = whisper_score(
-                        c["file"], lines[i]["text"], vo.get("hotwords", [])
+                        c["file"],
+                        lines[i]["text"],
+                        vo.get("hotwords", []),
+                        _sketch.language(m),
+                        vo.get("whisper"),
                     )
                 med = float(np.median([c["dur"] for c in cs]))
                 for c in cs:

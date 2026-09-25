@@ -218,7 +218,9 @@ class Session:
         self.server = Server(("127.0.0.1", 0), H)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
-    def run(self, query, stall=90):
+    def run(self, query, stall=90, fatal=True):
+        """Drive the page until it reports /done. A failure exits, or with fatal=False is
+        returned as a string so the caller can retry."""
         h2i = import_module("html-to-image")
         browsers = h2i.find_browsers()
         if not browsers:
@@ -255,8 +257,9 @@ class Session:
             kill_tree(proc)
             self.server.shutdown()
             shutil.rmtree(prof, ignore_errors=True)
-        if self.error:
+        if self.error and fatal:
             sys.exit("page error: %s" % self.error)
+        return self.error
 
 
 def kill_tree(proc):
@@ -308,6 +311,13 @@ def main():
         "--draft", action="store_true", help="30 fps, lower quality: a fast preview render"
     )
     ap.add_argument("--fps", type=int)
+    ap.add_argument(
+        "--chunk",
+        type=float,
+        default=8.0,
+        help="seconds of film per browser session (default 8): one long session slows down "
+        "as it runs, and a chunk that fails is retried from its first unwritten frame",
+    )
     ap.add_argument("--from", dest="t0", type=float, default=0.0)
     ap.add_argument("--to", dest="t1", type=float)
     ap.add_argument(
@@ -444,9 +454,10 @@ def main():
                 + ["-movflags", "+faststart", silent],
                 stdin=subprocess.PIPE,
             )
-            t_start, expect = time.time(), [0]
+            t_start, expect, base = time.time(), [0], [0]
 
             def frame(i, body):
+                i += base[0]  # the page numbers frames from its own chunk's start
                 if i < expect[0]:
                     return  # a retried POST whose first attempt already landed
                 if i != expect[0]:
@@ -471,7 +482,29 @@ def main():
                         flush=True,
                     )
 
-            Session(light, on_frame=frame).run("export=1&fps=%d&from=%s&to=%s" % (fps, args.t0, t1))
+            # a fresh browser per chunk: measured on a 63.5 s film, one session fell from 13.8 to
+            # 1.5 fps and then stopped answering at frame ~2700; frames are a pure function of t,
+            # so a failed chunk resumes at its first unwritten frame and the file is unchanged
+            per, fails = max(1, int(round(args.chunk * fps))), 0
+            while expect[0] < n_frames:
+                a = expect[0]
+                b = min(n_frames, a + per)
+                base[0] = a
+                err = Session(light, on_frame=frame).run(
+                    "export=1&fps=%d&from=%r&to=%r" % (fps, args.t0 + a / fps, args.t0 + b / fps),
+                    fatal=False,
+                )
+                if err or expect[0] != b:
+                    fails += 1
+                    print(
+                        "  chunk %d-%d stopped at frame %d (%s); retry %d"
+                        % (a, b, expect[0], err or "short", fails),
+                        flush=True,
+                    )
+                    if fails > 3:
+                        ff.stdin.close()
+                        ff.wait()
+                        sys.exit("page error: %s" % (err or "chunk came back short"))
             ff.stdin.close()
             if ff.wait() != 0:
                 sys.exit("ffmpeg failed encoding the frames")
@@ -493,7 +526,7 @@ def main():
                     "-c:s",
                     "mov_text",
                     "-metadata:s:s:0",
-                    "language=eng",
+                    "language=%s" % _sketch.iso639_2(m),
                     "-disposition:s:0",
                     "0",
                 ]

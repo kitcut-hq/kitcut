@@ -2885,7 +2885,7 @@ voice is edge-tts.
 | file | what it is |
 |---|---|
 | `sketch/engine.js` | the renderer: strokes that boil, cel fills, write-on text, camera, flight paths, paper, grain; `SK.setStyle('crayon' \| 'clean')` |
-| `sketch/props.js` | the cast: ticket character, seated person with poses, paper plane, laptop, table, lightbulb, rocket, padlock, coin, stamp, browser window, thought bubble, confetti, architectural houses |
+| `sketch/props.js` | the cast: ticket character, seated person with poses, a standing/walking/sitting kid (`P.kid`, also the grown-up at s ~1.4), paper plane, laptop, table, lightbulb, rocket, padlock, coin, stamp, browser window, thought bubble, confetti, architectural houses, phone, window (cracks), street siren, delta-wing drone, missile, stopwatch, debris |
 | `sketch/player.html` | the page: player UI, and the export modes the renderer drives |
 | `projects/<id>/film.js` | the film: `SK.film({duration, camera, draw(t, vis)})` |
 | `projects/<id>/score.json` | the music, as data (notation below) |
@@ -2923,6 +2923,20 @@ instead of costing its take a lower rank.
 Measured, 9 lines x 3 takes of `eleven_v3` (839 characters, ~2,500 credits): synth 91 s,
 trim 2.5 s, Whisper scoring (small.en, CPU) 81-99 s.
 
+**A film in another language** sets `vo.language` (ISO 639-1) and a `tail` in that language
+(`"Добре."` for Ukrainian -- an English tail flips the voice's accent on the line's last
+words). Scoring then runs a multilingual Whisper (`vo.whisper`, default `large-v3` on the
+GPU, CPU if CUDA will not load), the words are compared letter-class-agnostic, `SK.w()`
+matches Cyrillic cue words, and the MP4's subtitle track is tagged with the language.
+Fonts must carry the script: the committed woff2 files are Latin subsets, so a Ukrainian film
+uses the complete `.ttf` fonts in `fonts/` (`Caveat-Cyrillic-VF.ttf`, `BalsamiqSans-*.ttf`).
+Voice choice is measured, not guessed: synthesize one line with each candidate and let
+Whisper large-v3 detect the language unprompted -- its confidence is an accent score. For
+Ukrainian on `eleven_v3`, `lily` came first (p = 0.997, 100% of words; 8 voices tried).
+Measured on the first Ukrainian film (10 lines x 3 takes, 738 characters): synth 142 s,
+scoring on large-v3/GPU 48 s. Lily speaks Ukrainian at ~1.8 words a second, not the 2.6 the
+`--plan` estimate assumes: budget ~100 words for a minute.
+
 ### The soundtrack: `sketch-audio.py`
 
 Stages: fetch any missing instrument notes (FluidR3 GM, MIT, into
@@ -2954,7 +2968,7 @@ beside it than to type by hand.
 **Cue notation** (`sfx.json`): `{"t", "fx", "db", "pan", "send", "args"}`, plus
 `"times": [...]` for a repeat. `fx` is any generator in `_sketchaudio.FX` (whoosh, pop, boing,
 thunk, clink, crash, rumble, boom, zip, blip, click, scribble, crinkle, keys, shimmer,
-swoosh_soft, tick, chime), `"sample"` (an instrument note or a run of notes), or `"air"`:
+swoosh_soft, tick, chime, siren -- a softened civil-defence wail), `"sample"` (an instrument note or a run of notes), or `"air"`:
 airflow that follows a moving object's speed and screen position, from the film's
 `automation` tracks (`sketch-render.py --automation` writes them).
 
@@ -2968,6 +2982,13 @@ loop: 18 stills in 8.6 s. The video is rendered by opening the page in headless 
 and POSTs its raw pixels to a local server here, which pipes them into ffmpeg with
 `_encode.video_args`. The mux uses `-t`, never `-shortest` (see the gotchas), asserts the
 duration, and adds a soft subtitle track and the poster.
+
+The frames are drawn in chunks (`--chunk`, 8 s of film each), each in a fresh browser feeding
+the one ffmpeg process: measured on the 63.5 s air-raid film, a single session fell from 13.8
+to 1.5 frames a second and then stopped answering at frame ~2,700 of 3,810. A chunk that fails
+is retried from its first unwritten frame, which is safe because every frame is a pure
+function of t. Render speed also moves with the machine: the same 6 s ran at 13.8 fps and,
+an hour later with other sessions busy, at 2.3.
 
 Measured: a 60 s film at 60 fps renders at about 9 frames a second of wall clock (simple
 scenes 13, busy UI scenes 8), so roughly 7 minutes; `--draft` renders 30 fps.

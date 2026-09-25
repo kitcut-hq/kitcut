@@ -511,6 +511,19 @@ def fx_chime(freqs=(1568, 2349, 3136), sec=1.4, tau=0.45):
     )
 
 
+def fx_siren(sec=3.0, lo=420, hi=760, period=1.5, vib=5.5):
+    """A civil-defence siren, softened for a film: a sine wail rising and falling between LO
+    and HI every PERIOD seconds, a little vibrato, two soft upper partials, fade in and out.
+    Recognisable without the full-scale horn's harshness -- for children, keep it quiet."""
+    t = np.arange(int(sec * SR)) / SR
+    u = 0.5 - 0.5 * np.cos(2 * np.pi * t / period)  # 0 -> 1 -> 0 each period
+    f = lo + (hi - lo) * u**0.8 + 6 * np.sin(2 * np.pi * vib * t)
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    x = np.sin(ph) + 0.28 * np.sin(2 * ph) + 0.12 * np.sin(3 * ph)
+    env = np.minimum(1, t / 0.35) * np.minimum(1, (sec - t) / 0.6)
+    return lp(x * env, 3500) * 0.6
+
+
 FX = {n[3:]: f for n, f in globals().items() if n.startswith("fx_")}
 
 

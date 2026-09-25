@@ -202,6 +202,19 @@ def captions(timeline, max_words=9):
     return cues
 
 
+LANG3 = {"en": "eng", "uk": "ukr", "pl": "pol", "de": "deu", "fr": "fra", "es": "spa"}
+
+
+def language(m):
+    """The film's spoken language, ISO 639-1 (vo.language; English when unset)."""
+    return ((m.get("vo") or {}).get("language") or "en").lower()
+
+
+def iso639_2(m):
+    """The same, as the three-letter tag an MP4 subtitle track carries."""
+    return LANG3.get(language(m), "und")
+
+
 def write_captions(timeline, base, max_words=9):
     """Write <base>.srt and <base>.vtt; returns the two paths."""
 

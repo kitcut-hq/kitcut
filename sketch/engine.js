@@ -399,7 +399,8 @@
   /* ------------------------------------------------------------ the voice-over clock (sketch-vo's timeline, injected by the bundler)
      Cue visuals to words, not to hand-copied seconds, so a re-recorded line moves its visuals with it. */
   SK.VO = SK.VO || { lines: [] };
-  const norm = s => String(s).toLowerCase().replace(/[^a-z0-9$]/g, '');
+  // letters of any script: an a-z class strips a Cyrillic word to '' and every cue matches word 0
+  const norm = s => String(s).toLowerCase().replace(/[’']/g, '').replace(/[^\p{L}\p{N}$]/gu, '');
   /** start (or end, with edge 'e') of word `w` (index or text; n-th match) in VO line `li` */
   SK.w = function (li, w, fallback = 0, edge = 's', n = 0) {
     const L = SK.VO.lines[li]; if (!L) return fallback;

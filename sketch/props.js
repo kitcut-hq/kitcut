@@ -477,5 +477,230 @@
     });
   };
 
+  /* ------------------------------------------------------------ a standing / walking / sitting kid
+     Front-facing doodle child, origin = between the feet on the ground, ~340 units tall at s = 1.
+     The same drawing at s ~1.4 with hair 'long' or 'short' is a grown-up.
+     o: x, y, s, p (draw-on), hair ('pigtails'|'short'|'long'|'bun'), hairCol, shirt, pants,
+        skin, mood, mouth, blink, walk (phase in cycles; 0 = standing), sit (0..1),
+        arms {F:[x,y], B:[x,y]} hand targets (F = viewer's right), backpack (colour),
+        lookX (-1..1 eye direction), flip (mirror) */
+  P.KIDPOSE = {
+    rest: { F: [62, -128], B: [-62, -128] }, stop: { F: [96, -318], B: [-60, -130] },
+    hold: { F: [98, -150], B: [-62, -128] }, holdB: { F: [62, -128], B: [-98, -150] },
+    cheer: { F: [104, -350], B: [-104, -350] }, point: { F: [130, -250], B: [-62, -128] },
+    book: { F: [28, -190], B: [-28, -190] }, wave: { F: [100, -330], B: [-62, -128] },
+    phone: { F: [36, -214], B: [-58, -130] }, knees: { F: [40, -150], B: [-40, -150] },
+    ears: { F: [70, -300], B: [-70, -300] },
+  };
+  P.kidPoseAt = function (t, keys) {
+    let k = 0;
+    for (let i = 0; i < keys.length; i++) if (keys[i][0] <= t) k = i;
+    const to = P.KIDPOSE[keys[k][1]] || keys[k][1];
+    if (t < keys[0][0] || k === 0) return to;
+    const from = P.KIDPOSE[keys[k - 1][1]] || keys[k - 1][1];
+    const u = E.back(clamp((t - keys[k][0]) / .32));
+    return { F: [lerp(from.F[0], to.F[0], u), lerp(from.F[1], to.F[1], u)], B: [lerp(from.B[0], to.B[0], u), lerp(from.B[1], to.B[1], u)] };
+  };
+  P.kid = function (o) {
+    const p = o.p ?? 1; if (p <= 0) return;
+    const ctx = SK.ctx(), s = o.s ?? 1, sd = o.seed ?? 0;
+    const pp = (a, b) => clamp((p - a) / (b - a));
+    const skin = o.skin ?? C().skin, shirt = o.shirt ?? C().yellow, pants = o.pants ?? '#5b7fb8';
+    const ph = (o.walk ?? 0) * TAU, walking = o.walk !== undefined && o.walk !== 0;
+    const sit = o.sit ?? 0;
+    const bob = walking ? -Math.abs(Math.sin(ph)) * 8 : 0;
+    ctx.save(); ctx.translate(o.x, o.y); ctx.scale(s * (o.flip ? -1 : 1), s);
+    const hipY = lerp(-118, -44, sit) + bob, top = lerp(-236, -160, sit) + bob;
+    // legs: walking swings the feet; sitting folds the knees up and out
+    for (const [side, i] of [[-1, 0], [1, 1]]) {
+      const hx = side * 22;
+      if (sit > .01) {
+        const kx = side * lerp(26, 70, sit), ky = lerp(-60, -86, sit), fx = side * lerp(26, 52, sit), fy = 0;
+        ink(S.path([['M', hx, hipY], ['Q', kx, ky - 10, kx, ky], ['L', fx, fy]]), { w: 13, col: pants, seed: sd + 700 + i, p: pp(0, .3), taper: false, dbl: false });
+        wash(S.ellC(fx + side * 10, -6, 22, 11), C().ink, { dx: 0, dy: 0, tex: false, alpha: pp(.2, .35) });
+      } else {
+        const sw = walking ? Math.sin(ph + i * Math.PI) : 0;
+        const fx = side * 24 + sw * 16, fy = walking ? -Math.max(0, Math.sin(ph + i * Math.PI)) * 16 : 0;
+        ink(S.line(hx, hipY, fx, fy - 8), { w: 13, col: pants, seed: sd + 700 + i, p: pp(0, .3), taper: false, dbl: false });
+        ink(S.line(hx, hipY, fx, fy - 8), { w: 3, seed: sd + 702 + i, p: pp(0, .3), dbl: false, alpha: .5 });
+        wash(S.ellC(fx + side * 8, fy - 6, 22, 11), C().ink, { dx: 0, dy: 0, tex: false, alpha: pp(.2, .35) });
+      }
+    }
+    const arms = o.arms ?? P.KIDPOSE.rest;
+    const sh = (side) => [side * 40, top + 22];
+    const hand = (hx, hy) => [hx, hy + (sit > 0 ? lerp(0, 76, sit) : 0) + bob];
+    const drawArm = (side, tgt, seed) => {
+      const [sx, sy] = sh(side), [hx, hy] = hand(tgt[0], tgt[1]);
+      const mx = (sx + hx) / 2 + side * 16, my = (sy + hy) / 2 + 6;
+      ink(S.path([['M', sx, sy], ['Q', mx, my, hx, hy]]), { w: 10, col: shirt, seed, p: pp(.4, .7), taper: false, dbl: false });
+      ink(S.path([['M', sx, sy], ['Q', mx, my, hx, hy]]), { w: 3, seed: seed + 1, p: pp(.4, .7), dbl: false, alpha: .45 });
+      wash(S.ellC(hx, hy, 12, 12), skin, { dx: 0, dy: 0, tex: false, alpha: pp(.6, .75) });
+      ink(S.ell(hx, hy, 12, 12), { w: 3.6, seed: seed + 2, p: pp(.6, .8), dbl: false });
+    };
+    // backpack peeks out behind the shoulders
+    if (o.backpack) {
+      const bp = S.rrect(-58, top + 6, 116, 118, 26);
+      wash(bp, o.backpack, { seed: sd + 720, alpha: pp(.2, .4) }); ink(bp, { w: 5, seed: sd + 721, p: pp(.1, .4) });
+    }
+    drawArm(-1, arms.B, sd + 730);
+    // body: a little tunic
+    const body = S.path([['M', -40, top + 6], ['Q', -58, hipY - 40, -60, hipY + 12], ['L', 60, hipY + 12], ['Q', 58, hipY - 40, 40, top + 6], ['Q', 0, top - 12, -40, top + 6]]);
+    wash(body, shirt, { seed: sd + 740, alpha: pp(.2, .45) });
+    ink(body, { w: 5.5, seed: sd + 741, p: pp(.1, .45) });
+    if (o.backpack) {
+      ink(S.path([['M', -30, top + 2], ['Q', -36, top + 50, -30, top + 96]]), { w: 6, col: mix(o.backpack, '#000000', .25), seed: sd + 722, p: pp(.4, .6), dbl: false });
+      ink(S.path([['M', 30, top + 2], ['Q', 36, top + 50, 30, top + 96]]), { w: 6, col: mix(o.backpack, '#000000', .25), seed: sd + 723, p: pp(.4, .6), dbl: false });
+    }
+    // head
+    const hy = top - 64;
+    ctx.save(); ctx.translate(0, hy); ctx.rotate(o.headTilt ?? 0);
+    const hc = o.hairCol ?? C().hairA, ha = pp(.45, .65), hair = o.hair ?? 'pigtails';
+    if (hair === 'long' && ha > 0) { const bk = S.path([['M', -70, -10], ['Q', -86, 70, -64, 96], ['L', 64, 96], ['Q', 86, 70, 70, -10], ['Z']]); wash(bk, hc, { seed: sd + 750, alpha: ha }); ink(bk, { w: 4.5, seed: sd + 751, p: ha }); }
+    if (hair === 'pigtails' && ha > 0) for (const side of [-1, 1]) {
+      const tail = S.ellC(side * 86, 18, 22, 34, side * .5);
+      wash(tail, hc, { seed: sd + 752 + side, alpha: ha }); ink(S.ell(side * 86, 18, 22, 34, -2, .2, side * .5), { w: 4.5, seed: sd + 754 + side, p: ha });
+      wash(S.ellC(side * 70, -6, 9, 9), C().heart, { dx: 0, dy: 0, tex: false, alpha: ha });
+    }
+    wash(S.ellC(0, 0, 70, 66), skin, { seed: sd + 760, alpha: pp(.3, .5), texCol: 'rgba(255,255,255,.25)' });
+    ink(S.ell(0, 0, 70, 66, -2.2, .28), { w: 5.5, seed: sd + 761, p: pp(.25, .5) });
+    if (ha > 0 && hair !== 'none') {
+      let cap;
+      if (hair === 'short') cap = S.path([['M', -70, -4], ['Q', -74, -74, -8, -72], ['Q', 60, -76, 70, -8], ['Q', 40, -40, 12, -34], ['Q', -30, -44, -70, -4]]);
+      else if (hair === 'bun') cap = S.path([['M', -70, 0], ['Q', -80, -66, -8, -70], ['Q', 58, -74, 70, -10], ['Q', 24, -44, -12, -36], ['Q', -44, -26, -70, 0]]);
+      else cap = S.path([['M', -70, 6], ['Q', -82, -70, 0, -70], ['Q', 82, -70, 70, 6], ['Q', 56, -34, 0, -38], ['Q', -56, -34, -70, 6]]);
+      wash(cap, hc, { seed: sd + 762, alpha: ha, texCol: 'rgba(255,255,255,.14)' }); ink(cap, { w: 4.5, seed: sd + 763, p: ha });
+      if (hair === 'bun') { wash(S.ellC(0, -84, 28, 24), hc, { seed: sd + 764, alpha: ha }); ink(S.ell(0, -84, 28, 24), { w: 4.5, seed: sd + 765, p: ha }); }
+    }
+    const fa = pp(.55, .8);
+    if (fa > 0) {
+      const b0 = ctx.globalAlpha; ctx.globalAlpha = b0 * fa;
+      const lx = (o.lookX ?? 0) * 8;
+      SK.alpha(.5, () => { wash(S.ellC(-38, 22, 12, 7), C().blush, { dx: 0, dy: 0, tex: false }); wash(S.ellC(38, 22, 12, 7), C().blush, { dx: 0, dy: 0, tex: false }); });
+      P.face.eyes(-24 + lx, -4, 24 + lx, -4, o.mood ?? 'open', o.blink ?? 0, .85);
+      P.face.mouth(lx * .6, 34, o.mouth ?? 'smile', .8);
+      ctx.globalAlpha = b0;
+    }
+    ctx.restore();
+    drawArm(1, arms.F, sd + 734);
+    ctx.restore();
+    return { handF: [o.x + (arms.F[0]) * s * (o.flip ? -1 : 1), o.y + (arms.F[1] + bob) * s], handB: [o.x + arms.B[0] * s * (o.flip ? -1 : 1), o.y + (arms.B[1] + bob) * s] };
+  };
+
+  /* ------------------------------------------------------------ a phone, centred; o.screen(w, h) draws on its screen */
+  P.phone = function (x, y, s, o = {}) {
+    SK.at(x, y, o.rot ?? 0, s, () => {
+      const p = o.p ?? 1, w = 150, h = 290;
+      const body = S.rrect(-w / 2, -h / 2, w, h, 26);
+      wash(body, o.body ?? '#3a3f4a', { seed: 800, alpha: clamp(p * 2 - .4), tex: false });
+      ink(body, { w: 5, seed: 801, p });
+      SK.card(-w / 2 + 12, -h / 2 + 30, w - 24, h - 60, { r: 10, fill: o.screenCol ?? '#f4f7fb', shadow: false, alpha: clamp(p * 2 - .8), clip: o.screen ? () => SK.at(-w / 2 + 12, -h / 2 + 30, 0, 1, () => o.screen(w - 24, h - 60)) : null });
+      SK.alpha(clamp(p * 2 - 1), () => { SK.ctx().fillStyle = '#20242c'; SK.ctx().beginPath(); SK.ctx().arc(0, -h / 2 + 16, 5, 0, TAU); SK.ctx().fill(); });
+    });
+  };
+
+  /* ------------------------------------------------------------ a window, top-left at x, y
+     o: p, sky (glass colour), crack (0..1 spreads from crackAt), crackAt [u, v], curtains, frame */
+  P.window = function (x, y, w, h, o = {}) {
+    const p = o.p ?? 1, fr = o.frame ?? C().wood;
+    const out = S.poly([[x - 14, y - 14], [x + w + 14, y - 14], [x + w + 14, y + h + 14], [x - 14, y + h + 14]], true);
+    wash(out, fr, { seed: 820, alpha: clamp(p * 2 - .5) });
+    wash(S.poly([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], true), o.sky ?? '#cfe6f7', { seed: 821, dx: 0, dy: 0, alpha: clamp(p * 2 - .6), texCol: 'rgba(255,255,255,.35)' });
+    if (o.inside) SK.at(x, y, 0, 1, () => o.inside(w, h));
+    ink(out, { w: 5, seed: 822, p });
+    SK.sketchRect(x, y, w, h, { w: 4.5, seed: 823, over: 2, p: clamp(p * 1.4 - .2) });
+    ink(S.line(x + w / 2, y, x + w / 2, y + h), { w: 7, col: fr, seed: 824, p: clamp(p * 1.5 - .5), dbl: false, taper: false });
+    ink(S.line(x + w / 2, y, x + w / 2, y + h), { w: 3, seed: 825, p: clamp(p * 1.5 - .5), dbl: false, alpha: .6 });
+    ink(S.line(x, y + h * .42, x + w, y + h * .42), { w: 7, col: fr, seed: 826, p: clamp(p * 1.5 - .5), dbl: false, taper: false });
+    // glints
+    ink(S.line(x + w * .1, y + h * .3, x + w * .22, y + h * .12), { w: 5, col: 'rgba(255,255,255,.85)', seed: 827, p: clamp(p * 2 - 1), dbl: false });
+    ink(S.line(x + w * .6, y + h * .8, x + w * .7, y + h * .62), { w: 5, col: 'rgba(255,255,255,.85)', seed: 828, p: clamp(p * 2 - 1), dbl: false });
+    const cr = o.crack ?? 0;
+    if (cr > 0) {
+      const [cu, cv] = o.crackAt ?? [.3, .3], cx = x + w * cu, cy = y + h * cv;
+      for (let i = 0; i < 9; i++) {
+        const a = i / 9 * TAU + rnd(i + 3) * .5, L = (80 + rnd(i * 7) * 160) * Math.min(w, h) / 300;
+        const pts = [[cx, cy]];
+        for (let k = 1; k <= 4; k++) pts.push([cx + Math.cos(a + (rnd(i * 11 + k) - .5) * .5) * L * k / 4, cy + Math.sin(a + (rnd(i * 13 + k) - .5) * .5) * L * k / 4]);
+        ink(S.poly(pts), { w: 3, seed: 830 + i, p: clamp(cr * 1.3 - i * .03), dbl: false, col: '#52616e' });
+      }
+      for (let r = 1; r <= 2; r++) ink(S.ell(cx, cy, 26 * r * Math.min(w, h) / 300, 22 * r * Math.min(w, h) / 300, 0, .1), { w: 2.5, seed: 850 + r, p: clamp(cr * 2 - r * .5), dbl: false, col: '#52616e' });
+    }
+    if (o.curtains) for (const side of [0, 1]) {
+      const cx0 = side ? x + w + 30 : x - 30, dir = side ? -1 : 1;
+      const cur = S.path([['M', cx0, y - 40], ['L', cx0 + dir * 90, y - 40], ['Q', cx0 + dir * 50, y + h * .5, cx0 + dir * 70, y + h + 30], ['L', cx0, y + h + 30], ['Z']]);
+      wash(cur, o.curtains, { seed: 860 + side, alpha: clamp(p * 2 - .6) }); ink(cur, { w: 4.5, seed: 862 + side, p });
+    }
+  };
+
+  /* ------------------------------------------------------------ a street siren: pole + horn + sound arcs (waves 0..1 loudness) */
+  P.siren = function (x, y, s, o = {}) {
+    SK.at(x, y, 0, s, () => {
+      const p = o.p ?? 1, wv = o.waves ?? 0;
+      ink(S.line(0, 0, 0, -300), { w: 9, seed: 870, p, col: C().inkSoft });
+      const horn = S.path([['M', 0, -310], ['L', 70, -350], ['L', 70, -250], ['L', 0, -290], ['Z']]);
+      wash(horn, '#c9ced6', { seed: 871, alpha: clamp(p * 2 - .6) }); ink(horn, { w: 5, seed: 872, p: clamp(p * 1.5 - .3) });
+      wash(S.ellC(76, -300, 14, 52), '#9aa3ae', { seed: 873, dx: 0, dy: 0, tex: false, alpha: clamp(p * 2 - .8) });
+      ink(S.ell(76, -300, 14, 52), { w: 4.5, seed: 874, p: clamp(p * 1.5 - .4) });
+      if (wv > 0) for (let i = 0; i < 3; i++) {
+        const ph = (SK.T * 1.4 + i / 3) % 1, r = 60 + ph * 170;
+        ink(S.arc(80, -300, r, -.6, .6), { w: 6, col: o.col ?? C().orangeDk, seed: 875 + i, alpha: wv * (1 - ph), dbl: false });
+      }
+    });
+  };
+
+  /* ------------------------------------------------------------ a delta-wing strike drone seen from below, nose along +x */
+  P.drone = function (x, y, s, o = {}) {
+    SK.at(x, y, o.rot ?? 0, s, () => {
+      const p = o.p ?? 1, col = o.col ?? '#8c939c';
+      const wing = S.path([['M', 120, 0], ['L', -70, -110], ['L', -92, -110], ['L', -60, -14], ['L', -96, -10], ['L', -96, 10], ['L', -60, 14], ['L', -92, 110], ['L', -70, 110], ['Z']]);
+      wash(wing, col, { seed: 880, alpha: clamp(p * 2 - .5) }); ink(wing, { w: 5, seed: 881, p });
+      ink(S.line(-80, -110, -80, -128), { w: 5, seed: 882, p: clamp(p * 2 - 1), dbl: false });
+      ink(S.line(-80, 110, -80, 128), { w: 5, seed: 883, p: clamp(p * 2 - 1), dbl: false });
+      const blur = .5 + .5 * Math.sin(SK.T * 50);
+      SK.alpha(.5 * clamp(p * 2 - 1), () => ink(S.line(-104, -26 * blur - 8, -104, 26 * blur + 8), { w: 6, seed: 884, dbl: false, col: C().inkSoft }));
+    });
+  };
+  /** a missile, nose along +x */
+  P.missile = function (x, y, s, o = {}) {
+    SK.at(x, y, o.rot ?? 0, s, () => {
+      const p = o.p ?? 1, col = o.col ?? '#9aa1aa';
+      const body = S.path([['M', 150, 0], ['Q', 120, -22, 70, -22], ['L', -110, -22], ['L', -110, 22], ['L', 70, 22], ['Q', 120, 22, 150, 0]]);
+      const fin = (sg) => S.poly([[-70, sg * 22], [-120, sg * 60], [-130, sg * 60], [-112, sg * 22]]);
+      for (const sg of [-1, 1]) { wash(fin(sg), mix(col, '#000000', .15), { seed: 890 + sg, alpha: clamp(p * 2 - .5) }); ink(fin(sg), { w: 4.5, seed: 892 + sg, p }); }
+      wash(body, col, { seed: 894, alpha: clamp(p * 2 - .5) }); ink(body, { w: 5, seed: 895, p });
+      ink(S.line(60, -22, 60, 22), { w: 3.5, seed: 896, p: clamp(p * 2 - 1), dbl: false, alpha: .6 });
+    });
+  };
+  /** a stopwatch: face radius r, hand at angle a (0 = 12 o'clock, radians), sweep (0..1 filled sector) */
+  P.stopwatch = function (x, y, r, o = {}) {
+    const p = o.p ?? 1, a = o.a ?? 0;
+    ink(S.line(x, y - r, x, y - r - 34), { w: 10, seed: 900, p, taper: false });
+    wash(S.rrect(x - 26, y - r - 58, 52, 26, 8), o.col ?? C().orangeDk, { seed: 901, alpha: clamp(p * 2 - .5) });
+    ink(S.rrect(x - 26, y - r - 58, 52, 26, 8), { w: 5, seed: 902, p });
+    wash(S.ellC(x, y, r + 16, r + 16), o.col ?? C().orangeDk, { seed: 903, alpha: clamp(p * 2 - .4) });
+    wash(S.ellC(x, y, r, r), '#fffdf7', { seed: 904, dx: 0, dy: 0, alpha: clamp(p * 2 - .6), tex: false });
+    if (o.sweep > 0) {
+      const ctx = SK.ctx(); ctx.save(); ctx.globalAlpha *= .35; ctx.fillStyle = o.sweepCol ?? C().heart;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, r * .92, -Math.PI / 2, -Math.PI / 2 + o.sweep * TAU); ctx.closePath(); ctx.fill(); ctx.restore();
+    }
+    ink(S.ell(x, y, r + 16, r + 16), { w: 6, seed: 905, p });
+    ink(S.ell(x, y, r, r), { w: 4, seed: 906, p: clamp(p * 1.4 - .3), dbl: false });
+    for (let i = 0; i < 12; i++) { const q = i / 12 * TAU, L = i % 3 ? .1 : .18; ink(S.line(x + Math.sin(q) * r * .92, y - Math.cos(q) * r * .92, x + Math.sin(q) * r * (.92 - L), y - Math.cos(q) * r * (.92 - L)), { w: i % 3 ? 3 : 5, seed: 910 + i, p: clamp(p * 2 - 1), dbl: false }); }
+    ink(S.line(x, y, x + Math.sin(a) * r * .78, y - Math.cos(a) * r * .78), { w: 7, seed: 925, col: o.handCol ?? C().ink, dbl: false, p: clamp(p * 2 - 1) });
+    wash(S.ellC(x, y, 10, 10), C().ink, { dx: 0, dy: 0, tex: false, alpha: clamp(p * 2 - 1) });
+  };
+  /** a twisted fragment of metal lying on the ground (origin = where it touches the ground) */
+  P.debris = function (x, y, s, o = {}) {
+    SK.at(x, y, o.rot ?? 0, s, () => {
+      const p = o.p ?? 1;
+      const a = S.poly([[-120, 0], [-96, -46], [-40, -60], [-22, -96], [30, -70], [70, -86], [120, -30], [96, 0]], true);
+      wash(a, o.col ?? '#8d949c', { seed: 930, alpha: clamp(p * 2 - .5) }); ink(a, { w: 5, seed: 931, p });
+      ink(S.poly([[-40, -60], [-10, -24], [30, -70]]), { w: 3.5, seed: 932, p: clamp(p * 2 - 1), dbl: false, alpha: .7 });
+      ink(S.poly([[70, -86], [60, -40], [120, -30]]), { w: 3.5, seed: 933, p: clamp(p * 2 - 1), dbl: false, alpha: .7 });
+      ink(S.path([['M', 96, -6], ['C', 140, -30, 150, 20, 190, -10]]), { w: 4, col: C().heart, seed: 934, p: clamp(p * 2 - 1), dbl: false });
+      for (const [rx, ry] of [[-70, -30], [-30, -30], [40, -40]]) { SK.ctx().fillStyle = C().ink; SK.alpha(clamp(p * 2 - 1), () => { SK.ctx().beginPath(); SK.ctx().arc(rx, ry, 4, 0, TAU); SK.ctx().fill(); }); }
+    });
+  };
+
   P.inv = inv; // re-export for film scripts that destructure from SK.P
 })();

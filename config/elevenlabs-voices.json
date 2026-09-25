@@ -61,7 +61,8 @@
     "lily": {
       "voice_id": "pFZP5JQG7iQjIQuC4Bku",
       "gender": "Female",
-      "verified": true
+      "verified": true,
+      "note": "best of 8 voices for UKRAINIAN on eleven_v3 (2026-09-25): Whisper large-v3 heard uk at p=0.997, 100% words; matilda 0.989, alice 0.991 next. Used for air-raid-kids."
     },
     "brian": {
       "voice_id": "nPczCjzI2devNBz1zQrb",

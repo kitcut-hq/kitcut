@@ -69,3 +69,16 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
   scale treatment before using it small.
 - Every frame must be a pure function of `t`; any state kept between frames breaks the
   exported video while looking fine in the browser.
+- **A film in another language** needs four things, or it fails silently: `vo.language`
+  (e.g. `"uk"`), a `tail` in that language (`"Добре."`), fonts that carry the script (the
+  committed woff2 files are Latin subsets -- use the full `.ttf` in `fonts/`), and cue words
+  written exactly as spoken (`SK.w(3, "збиті")`). Pick the voice by measurement: one test line
+  per candidate, Whisper large-v3 with no language forced, highest language confidence wins
+  (Ukrainian: `lily`). Budget ~1.8 words/s, not 2.6 -- `--plan` overestimates a Ukrainian
+  line's speed.
+- **Films for children** (the air-raid-kids film): no explosions, fire or injury on screen --
+  a shoot-down is a puff, danger is a grey silhouette -- and every scene ends on the child
+  doing the safe thing. Use the official wording of the safety authority verbatim where it
+  exists (ДСНС: «Стій! Не чіпай! Телефонуй 101!») and list what was left out in `_sources`.
+- Cue sound effects from the voice timeline with a small `sfx_gen.py` beside the manifest
+  (see `projects/air-raid-kids/`), not with hand-copied seconds: a retake moves them too.
