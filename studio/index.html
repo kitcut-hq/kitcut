@@ -67,6 +67,23 @@ button:disabled { opacity: .5; cursor: progress; }
 .film { background: var(--sheet); border: 1.5px solid var(--rule); border-radius: 12px; overflow: hidden; cursor: pointer; text-align: left; padding: 0; color: inherit; font: inherit; }
 .film:hover { border-color: var(--accent); }
 .film img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #f7f2e7; }
+.top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 10px 20px; }
+.account { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-soft); padding-top: 8px; }
+.account img { width: 30px; height: 30px; border-radius: 50%; display: block; }
+.account form { display: inline; }
+button.small { font: 600 14px/1 Inter, system-ui, sans-serif; letter-spacing: 0; padding: 9px 14px; }
+button.ghost, a.ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--rule); }
+#signin { border: 1.5px solid var(--rule); border-radius: 16px; background: var(--sheet); color: var(--ink); padding: 22px 24px 24px; width: min(420px, calc(100% - 32px)); }
+#signin::backdrop { background: rgba(20, 16, 12, .45); }
+#signin h2 { font: 700 34px/1.05 Caveat, cursive; margin: 0 28px 4px 0; }
+#signin p { margin: 6px 0; }
+#signin .close { position: absolute; top: 10px; right: 12px; background: none; color: var(--ink-soft); font: 400 26px/1 Inter, system-ui, sans-serif; padding: 4px 8px; }
+#signin .err { color: var(--bad); font-weight: 600; }
+#signin .or { text-align: center; color: var(--ink-soft); font-size: 13px; }
+#signin input[type=email] { padding: 11px 12px; border-radius: 10px; border: 1.5px solid var(--rule); background: var(--paper); color: var(--ink); font: inherit; }
+a.google { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 14px; padding: 11px 14px; border-radius: 10px; text-decoration: none; font-weight: 600; }
+a.google:hover { border-color: var(--accent); }
+.hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .film div { padding: 8px 10px 10px; font-size: 13px; }
 .film p { margin: 0 0 4px; font: 18px/1.2 'Patrick Hand', cursive; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .film small { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
@@ -75,7 +92,10 @@ button:disabled { opacity: .5; cursor: progress; }
 <body>
 <div class="wrap">
   <header>
-    <h1>Sketch <span>Studio</span></h1>
+    <div class="top">
+      <h1>Sketch <span>Studio</span></h1>
+      <nav class="account" id="account" aria-label="Account" hidden></nav>
+    </div>
     <p>Type an idea, in any language. Claude writes, draws, reviews and scores a short narrated hand-drawn film.</p>
     <p class="spend" id="spend" hidden></p>
   </header>
@@ -120,6 +140,24 @@ button:disabled { opacity: .5; cursor: progress; }
     <div class="films" id="films"><span class="note">None yet.</span></div>
   </section>
 </div>
+
+<dialog id="signin" aria-labelledby="signinTitle">
+  <form method="dialog"><button class="close" aria-label="Close">&times;</button></form>
+  <h2 id="signinTitle">Sign in to make your film</h2>
+  <p class="note">It's free. No password: continue with Google, or get a one-time link by email.</p>
+  <p class="err" id="signinErr" hidden></p>
+  <a class="google ghost" id="googleBtn" href="/api/auth/signin" hidden>
+    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+    Continue with Google
+  </a>
+  <p class="or" id="signinOr" hidden>or</p>
+  <form id="emailForm">
+    <input id="email" type="email" required autocomplete="email" placeholder="you@example.com" aria-label="Email address">
+    <input class="hp" id="website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+    <button type="submit">Email me a sign-in link</button>
+  </form>
+  <p id="sent" hidden>Check your inbox: a sign-in link is on its way to <b id="sentTo"></b>. It works once, for 30 minutes. Your idea is kept here until you are back.</p>
+</dialog>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -301,22 +339,104 @@ async function follow(since = 0, misses = 0) {
   }
 }
 
+// ---- the sign-up wall, on the public site only. /api/me exists where the site has accounts
+// (Vercel, api/auth.js); on the laptop and through the bare tunnel it is not found, AUTH stays
+// false, and the page works as it always has. Watching films needs no account; making one does.
+let AUTH = false, USER = null, GOOGLE = false;
+const SIGNIN_ERRORS = {
+  link: 'That sign-in link is invalid or has expired. Request a fresh one.',
+  google: "Google sign-in didn't complete. Try again, or use the email link.",
+  noemail: "Google didn't hand back a verified email address. Try the email link instead.",
+};
+// the idea typed before signing in, kept in this browser until the visitor is back
+const draft = {
+  save() { try { localStorage.setItem('studioDraft', JSON.stringify({ prompt: $('prompt').value, look: $('look').value, length: $('length').value })); } catch (e) { /* private window */ } },
+  take() {
+    try {
+      const d = JSON.parse(localStorage.getItem('studioDraft') || 'null');
+      localStorage.removeItem('studioDraft');
+      return d;
+    } catch (e) { return null; }
+  },
+};
+function renderAccount() {
+  const a = $('account');
+  a.hidden = false;
+  if (USER) {
+    a.innerHTML = (USER.picture ? `<img src="${esc(USER.picture)}" alt="" referrerpolicy="no-referrer">` : '') +
+      `<span>${esc(USER.email)}</span><form method="post" action="/api/auth/signout"><button class="small ghost" type="submit">Sign out</button></form>`;
+  } else {
+    a.innerHTML = '<button class="small ghost" type="button" id="signinBtn">Sign in</button>';
+    $('signinBtn').onclick = () => askSignIn();
+  }
+}
+function askSignIn(err) {
+  const back = location.pathname;  // come back to the page you were on
+  $('googleBtn').href = '/api/auth/signin?return_to=' + encodeURIComponent(back);
+  $('googleBtn').hidden = $('signinOr').hidden = !GOOGLE;
+  $('signinErr').textContent = err || ''; $('signinErr').hidden = !err;
+  $('emailForm').hidden = false; $('sent').hidden = true;
+  if (!$('signin').open) $('signin').showModal();
+}
+$('emailForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = $('email').value.trim(), btn = $('emailForm').querySelector('button');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/auth/magic', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, website: $('website').value, return_to: location.pathname }) });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    $('sentTo').textContent = email; $('emailForm').hidden = true; $('sent').hidden = false; $('signinErr').hidden = true;
+  } catch (err) { $('signinErr').textContent = String(err.message || err); $('signinErr').hidden = false; }
+  btn.disabled = false;
+});
+async function whoami() {
+  try {
+    const r = await fetch('/api/me', { headers: { Accept: 'application/json' } });
+    const me = r.ok ? await r.json() : null;
+    if (!me || !me.auth) return;
+    AUTH = true; USER = me.user; GOOGLE = !!me.google;
+  } catch (e) { return; }
+  renderAccount();
+  const q = new URLSearchParams(location.search), failed = q.get('signin');
+  if (failed != null) { history.replaceState(null, '', location.pathname); if (!USER) askSignIn(SIGNIN_ERRORS[failed] || SIGNIN_ERRORS.link); }
+  const d = USER && draft.take();
+  if (d) {
+    if (d.prompt) $('prompt').value = d.prompt;
+    if (d.look) $('look').value = d.look;
+    if (d.length) $('length').value = d.length;
+    if (!currentId) $('status').textContent = 'Signed in. Your idea is back in the box: press "Make the film".';
+  }
+}
+
 $('form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const prompt = $('prompt').value.trim();
   if (!prompt) return;
+  if (AUTH && !USER) { draft.save(); return askSignIn(); }
   reset(); $('go').disabled = true;
   screen('<div class="idle">Claude is thinking up the film...</div>');
   startClock(0);
   try {
     const r = await api('/api/films', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, seconds: +$('length').value, look: $('look').value }) });
-    if (r.status === 401) { finish(); line('error', 'The studio token is missing or wrong.'); return needToken(); }
+    if (r.status === 401) {
+      const why = await r.json().catch(() => ({}));
+      finish();
+      if (why.reason === 'signin') {  // the session ran out, or /api/me never answered
+        AUTH = true; USER = null; renderAccount(); draft.save();
+        screen('<div class="idle">Your film appears here.</div>'); $('status').textContent = 'Sign in to make a film.';
+        return askSignIn();
+      }
+      line('error', 'The studio token is missing or wrong.'); return needToken();
+    }
     const body = await r.json();
     if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
     openFilm(body.id, true);
   } catch (err) { line('error', String(err.message || err)); finish(); }
 });
 
+whoami();
 online().then((up) => {
   const m = location.pathname.match(FILM_PATH);
   if (m && up) openFilm(m[1], false);

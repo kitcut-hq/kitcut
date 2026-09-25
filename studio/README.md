@@ -25,14 +25,26 @@ guarantee. The machine must stay on and awake.
 **The public site** is https://create.kitcut.ai, from
 [kitcut-hq/sketch-studio](https://github.com/kitcut-hq/sketch-studio) on Vercel:
 - It serves a copy of `index.html`; keep the two the same.
+  - The page carries the site's sign-in UI.
+  - That UI appears only where `/api/me` answers, which is on the site and not here. On this
+    server (token filled in) and through the bare tunnel (token form), the page works as it
+    always has.
 - It looks the tunnel URL up in `kitcut.studio_hosts`, so a restart needs no redeploy.
-- It forwards the page's calls with the token added server-side, plus the visitor's IP as
-  `X-Client-Ip`.
+- **Anyone may watch there, but making a film needs an account** (Google, or a one-time
+  link by email, sent through SendGrid from `hello@kitcut.ai`).
+  - The site owns the accounts (MongoDB `kitcut.users`); this server knows nothing of them.
+  - It forwards the page's calls with the token added server-side, plus `X-Client-Ip`.
+  - For a film request, `X-Client-Ip` is `u:<userId>`, the signed-in account, so the
+    per-visitor cap below is per account and `studio_runs.client` records whose film it was.
+  - For other calls it is the visitor's IP.
+  - The sign-up wall and the plan limits to come live in the site's `api/studio.js`, not here.
+    See that repo's README.
 - `serve.ps1 -Stop` marks the studio offline there.
 
-Anyone can reach the studio through that site, so two limits apply:
+Two limits apply to everything that reaches the studio:
 - **A day's spend:** `STUDIO_DAILY_USD`, default $25.
-- **A visitor's films per day:** `STUDIO_PER_CLIENT_DAILY`, default 5.
+- **A visitor's films per day:** `STUDIO_PER_CLIENT_DAILY`, default 5. Through the site, a
+  visitor is an account.
 
 Past either limit, the request gets a 429 with a plain-English reason.
 
