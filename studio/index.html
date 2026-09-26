@@ -452,7 +452,9 @@ $('emailForm').addEventListener('submit', async (e) => {
 // ---- length and credits. One credit is one second of film; /api/me says what is left this cycle.
 // Where there is no /api/me (the laptop), CREDITS stays null and the slider is just a length.
 const renews = () => new Date(CREDITS.renews_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-const shortOf = (v) => !!(CREDITS && v > CREDITS.balance);
+// a film uses a credit a second, and at least min_credits (the site's lib/plans.js)
+const costOf = (v) => Math.max(v, (CREDITS && CREDITS.min_credits) || 0);
+const shortOf = (v) => !!(CREDITS && costOf(v) > CREDITS.balance);
 // The usable range is the plan's longest film (the laptop: 1:00); the track carries on, locked,
 // to 5:00. The usable part takes 70% of the width up to 1:00 and 80% beyond.
 const TRACK_END = 300;
@@ -488,7 +490,7 @@ function paintLength() {
   c.hidden = !CREDITS;
   if (CREDITS) {
     c.classList.toggle('short', short);
-    c.innerHTML = `${v} credits · you have ${mmss(CREDITS.balance)} left · renews ${renews()}` +
+    c.innerHTML = `${costOf(v)} credits${costOf(v) > v ? ' (the least a film uses)' : ''} · you have ${mmss(CREDITS.balance)} left · renews ${renews()}` +
       ' · <a href="/pricing">Get more film</a>';
   }
 }
@@ -535,7 +537,7 @@ $('form').addEventListener('submit', async (e) => {
   if (!prompt) return;
   if (AUTH && !USER) { draft.save(); return askSignIn(); }
   if (shortOf(+$('length').value)) {
-    $('status').innerHTML = `This film needs ${mmss(+$('length').value)} of credit and you have ${mmss(CREDITS.balance)}. ` +
+    $('status').innerHTML = `This film needs ${mmss(costOf(+$('length').value))} of credit and you have ${mmss(CREDITS.balance)}. ` +
       `Credits renew on ${renews()}, or <a href="/pricing">get more film</a>.`;
     return;
   }
