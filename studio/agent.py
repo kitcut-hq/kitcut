@@ -384,6 +384,9 @@ async def run_claude(film, emit, meter, tools, auth="api"):
         can_use_tool=can_use,
         max_turns=50,
         max_budget_usd=limits(film.length)["budget_usd"],
+        # a review sheet of painted frames is a PNG of several MB, and it comes back to the SDK
+        # as one message (the default limit, 1 MB, failed a painted film)
+        max_buffer_size=64 * 1024 * 1024,
         env=claude_env(film, auth),
         cli_path=claude_cli() if auth == "login" else None,
     )
