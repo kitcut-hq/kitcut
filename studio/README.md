@@ -94,8 +94,9 @@ The public site is https://create.kitcut.ai, from
     second) and what is left this cycle, under the length slider.
   - Both appear only where `/api/me` answers, which is on the site and not here. On this
     server (token filled in) and through the bare tunnel (token form), the page works as it
-    always has, and the slider is just a length from 5 to 60 s. The 1-5 min part of the track
-    is drawn but locked; lifting it takes `LENGTHS` in `film.py` and the site's plan together.
+    always has, and the slider is just a length from 5 to 60 s. On the site it runs to the
+    plan's longest film (Pro: 2:00; `max_length` in the site's `lib/plans.js`, within `LENGTHS`
+    here), and the rest of the track up to 5:00 is drawn but locked.
 - It looks the tunnel URL up in `kitcut.studio_hosts`, so a restart needs no redeploy.
 - **Anyone may watch there, but making (or stopping) a film needs an account** (Google, or a
   one-time link by email, sent through SendGrid from `hello@kitcut.ai`).

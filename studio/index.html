@@ -110,6 +110,7 @@ a.google:hover { border-color: var(--accent); }
 .ticks { position: relative; height: 16px; font-size: 11.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .ticks span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
 .ticks .dim { opacity: .5; }
+#lenHint a, .credit a, #status a { color: var(--accent); }
 .credit { margin: 4px 0 0; }
 .credit.short { color: var(--bad); }
 button.short { background: var(--rule); color: var(--ink-soft); }
@@ -146,13 +147,7 @@ button.short { background: var(--rule); color: var(--ink-soft); }
           <input type="range" id="length" min="5" max="60" step="5" value="10" aria-valuetext="10 seconds">
           <button type="button" class="locked" id="lenLocked" title="Films up to 5 minutes are coming soon" aria-label="Films up to 5 minutes are coming soon"></button>
         </div>
-        <div class="ticks" aria-hidden="true">
-          <span style="left: 0; transform: none">0:05</span>
-          <span style="left: calc(11px + (70% - 22px) * .4545)">0:30</span>
-          <span style="left: calc(70% - 11px)">1:00</span>
-          <span class="dim" style="left: 85%">3:00</span>
-          <span class="dim" style="left: 100%; transform: translateX(-100%)">5:00</span>
-        </div>
+        <div class="ticks" id="ticks" aria-hidden="true"></div>
         <p class="note credit" id="credit" hidden></p>
       </div>
       <button id="go" type="submit">Make the film</button>
@@ -458,8 +453,29 @@ $('emailForm').addEventListener('submit', async (e) => {
 // Where there is no /api/me (the laptop), CREDITS stays null and the slider is just a length.
 const renews = () => new Date(CREDITS.renews_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 const shortOf = (v) => !!(CREDITS && v > CREDITS.balance);
+// The usable range is the plan's longest film (the laptop: 1:00); the track carries on, locked,
+// to 5:00. The usable part takes 70% of the width up to 1:00 and 80% beyond.
+const TRACK_END = 300;
+let drawnMax = 0;
+function drawTrack(max) {
+  const el = $('length'), f = max > 60 ? 0.8 : 0.7;
+  el.max = String(max);
+  if (+el.value > max) el.value = String(max);
+  el.style.flexBasis = el.style.width = `${f * 100}%`;
+  const at = (s) => `calc(11px + (${f * 100}% - 22px) * ${(s - 5) / (max - 5)})`;
+  const locked = (s) => `${(f + ((1 - f) * (s - max)) / (TRACK_END - max)) * 100}%`;
+  const mid = Math.round(max / 2 / 5) * 5;
+  $('ticks').innerHTML = '<span style="left: 0; transform: none">0:05</span>' +
+    `<span style="left: ${at(mid)}">${mmss(mid)}</span><span style="left: ${at(max)}">${mmss(max)}</span>` +
+    [180, 300].filter((s) => s > max + 30).map((s) =>
+      `<span class="dim" style="left: ${locked(s)}${s === TRACK_END ? '; transform: translateX(-100%)' : ''}">${mmss(s)}</span>`).join('');
+  drawnMax = max;
+}
 function paintLength() {
-  const el = $('length'), v = +el.value;
+  const el = $('length');
+  const max = (CREDITS && CREDITS.max_length) || 60;
+  if (max !== drawnMax) drawTrack(max);
+  const v = +el.value;
   el.style.setProperty('--p', (v - +el.min) / (+el.max - +el.min));
   el.setAttribute('aria-valuetext', `${v} seconds`);
   $('lenOut').textContent = mmss(v);
@@ -472,14 +488,18 @@ function paintLength() {
   c.hidden = !CREDITS;
   if (CREDITS) {
     c.classList.toggle('short', short);
-    c.textContent = `${v} credits · you have ${mmss(CREDITS.balance)} left · renews ${renews()}`;
+    c.innerHTML = `${v} credits · you have ${mmss(CREDITS.balance)} left · renews ${renews()}` +
+      ' · <a href="/pricing">Get more film</a>';
   }
 }
 $('length').addEventListener('input', paintLength);
 let hintTimer = null;
 $('lenLocked').addEventListener('click', () => {
+  $('lenHint').innerHTML = !AUTH ? 'Longer films are coming soon.'
+    : CREDITS && CREDITS.max_length >= 120 ? 'Films up to 5 minutes are coming soon.'
+      : 'Pro makes films up to 2 minutes. <a href="/pricing">See plans</a>';
   $('lenHint').hidden = false; clearTimeout(hintTimer);
-  hintTimer = setTimeout(() => { $('lenHint').hidden = true; }, 4000);
+  hintTimer = setTimeout(() => { $('lenHint').hidden = true; }, 6000);
 });
 async function refreshCredits() {
   if (!AUTH || !USER) return;
@@ -515,7 +535,8 @@ $('form').addEventListener('submit', async (e) => {
   if (!prompt) return;
   if (AUTH && !USER) { draft.save(); return askSignIn(); }
   if (shortOf(+$('length').value)) {
-    $('status').textContent = `This film needs ${mmss(+$('length').value)} of credit and you have ${mmss(CREDITS.balance)}. Credits renew on ${renews()}.`;
+    $('status').innerHTML = `This film needs ${mmss(+$('length').value)} of credit and you have ${mmss(CREDITS.balance)}. ` +
+      `Credits renew on ${renews()}, or <a href="/pricing">get more film</a>.`;
     return;
   }
   reset(); $('go').disabled = true;
