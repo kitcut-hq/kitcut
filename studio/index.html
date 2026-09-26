@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KitCut: type an idea, get a film</title>
+<title>Claude Animation &amp; Video Maker (Opus 5.5) | KitCut</title>
 <link rel="icon" href="/logo-64.png" type="image/png">
 <link rel="apple-touch-icon" href="/logo-180.png">
 <!-- The home page's link preview (X, Facebook, Slack...). A film's page, /film/<id>, gets its
      own in place of everything between the two markers (the site's api/film.js). -->
 <!-- meta -->
-<meta name="description" content="Type an idea, in any language. Claude writes, draws, narrates and scores a short film of it, hand-drawn or painted.">
+<meta name="description" content="Make a Claude animation from one prompt. Claude Opus 5.5 writes, draws, narrates and scores an animated video of your idea in minutes. First 30 seconds free.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="KitCut">
-<meta property="og:title" content="KitCut: type an idea, get a film">
-<meta property="og:description" content="Type an idea, in any language. Claude writes, draws, narrates and scores a short film of it, hand-drawn or painted.">
+<meta property="og:title" content="Claude animation &amp; video from one prompt | KitCut">
+<meta property="og:description" content="Make a Claude animation from one prompt. Claude Opus 5.5 writes, draws, narrates and scores an animated video of your idea in minutes. First 30 seconds free.">
 <meta property="og:url" content="https://kitcut.ai/">
 <meta property="og:image" content="https://kitcut.ai/og.jpg">
 <meta property="og:image:type" content="image/jpeg">
@@ -21,10 +21,12 @@
 <meta property="og:image:height" content="628">
 <meta property="og:image:alt" content="Frames from four films made in KitCut: a honey jar, a young dragon, a lighthouse cat and a raindrop">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="KitCut: type an idea, get a film">
-<meta name="twitter:description" content="Type an idea, in any language. Claude writes, draws, narrates and scores a short film of it, hand-drawn or painted.">
+<meta name="twitter:title" content="Claude animation &amp; video from one prompt | KitCut">
+<meta name="twitter:description" content="Make a Claude animation from one prompt. Claude Opus 5.5 writes, draws, narrates and scores an animated video of your idea in minutes. First 30 seconds free.">
 <meta name="twitter:image" content="https://kitcut.ai/og.jpg">
 <meta name="twitter:image:alt" content="Frames from four films made in KitCut: a honey jar, a young dragon, a lighthouse cat and a raindrop">
+<link rel="canonical" href="https://kitcut.ai/">
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kitcut.ai/#website", "url": "https://kitcut.ai/", "name": "KitCut", "description": "Claude animation and video maker"}, {"@type": "Organization", "@id": "https://kitcut.ai/#org", "name": "KitCut", "url": "https://kitcut.ai/", "logo": "https://kitcut.ai/logo-256.png", "sameAs": ["https://github.com/kitcut-hq/kitcut"]}, {"@type": "WebApplication", "name": "KitCut: Claude animation & video maker", "url": "https://kitcut.ai/", "applicationCategory": "MultimediaApplication", "operatingSystem": "Any (web browser)", "description": "Make a Claude animation from one prompt. Claude Opus 5.5 writes, draws, narrates and scores an animated video of your idea in minutes. First 30 seconds free.", "publisher": {"@id": "https://kitcut.ai/#org"}, "offers": {"@type": "AggregateOffer", "priceCurrency": "USD", "lowPrice": "0", "highPrice": "849", "offerCount": "13"}}, {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Can Claude make videos and animations?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Claude has no video model: it writes code that draws every frame, the way the Opus 5.5 animations people share on X are made. KitCut has Claude Opus 5.5 write the script, draw every scene, write a narration and compose the music, then renders it all into a finished video."}}, {"@type": "Question", "name": "How do I make a Claude animation?", "acceptedAnswer": {"@type": "Answer", "text": "Type one sentence about your idea, pick a length and a look (hand-drawn or painted), and press Make the film. Claude plans it, draws it, looks at stills of its own work and fixes what it doesn't like. The finished video is ready in a few minutes."}}, {"@type": "Question", "name": "Which Claude model makes the films?", "acceptedAnswer": {"@type": "Answer", "text": "Claude Opus 5.5 directs every film. It writes the script and the code that draws each frame, and reviews the result before it is rendered. For the painted look an image model paints the scenes and Claude animates them; a voice model reads Claude's narration."}}, {"@type": "Question", "name": "Is it free?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, to start: every account gets 30 seconds of film a month, with no card needed. Paid plans give you more minutes, and Pro makes films up to 2 minutes long."}}, {"@type": "Question", "name": "How long can a Claude video be?", "acceptedAnswer": {"@type": "Answer", "text": "Up to 1 minute on the Free and Standard plans, and up to 2 minutes on Pro."}}, {"@type": "Question", "name": "What can I make with it?", "acceptedAnswer": {"@type": "Answer", "text": "Motion graphics, explainer videos, launch videos, tiny stories, music videos, showreels and lessons, in any language you type in. Every film gets its own page to share."}}]}]}</script>
 <!-- /meta -->
 <style>
 @font-face { font-family: 'Caveat'; src: url(/fonts/Caveat.woff2) format('woff2'); font-weight: 400 700; font-display: swap; }
@@ -97,8 +99,18 @@ button:disabled { opacity: .5; cursor: progress; }
 .stat small { display: block; color: var(--ink-soft); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 .stat b { font-size: 20px; font-variant-numeric: tabular-nums; }
 .recent h2 { font: 700 30px/1 Caveat, cursive; margin: 0 0 10px; }
+.about { display: grid; gap: 14px; }
+.about h2 { font: 700 34px/1.05 Caveat, cursive; margin: 0; }
+.about > p { margin: 0; color: var(--ink-soft); font-size: 16px; max-width: 75ch; }
+.about .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.about .cards div { background: var(--sheet); border: 1.5px solid var(--rule); border-radius: 12px; padding: 14px 16px; }
+.about h3 { margin: 0 0 4px; font-size: 16px; }
+.about .cards p { margin: 0; color: var(--ink-soft); font-size: 14px; }
+.faq details { border-bottom: 1.5px solid var(--rule); padding: 10px 0; }
+.faq summary { cursor: pointer; font-weight: 600; font-size: 15.5px; }
+.faq details p { margin: 8px 0 2px; color: var(--ink-soft); font-size: 14.5px; max-width: 80ch; }
 .films { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
-.film { background: var(--sheet); border: 1.5px solid var(--rule); border-radius: 12px; overflow: hidden; cursor: pointer; text-align: left; padding: 0; color: inherit; font: inherit; }
+.film { display: block; text-decoration: none; background: var(--sheet); border: 1.5px solid var(--rule); border-radius: 12px; overflow: hidden; cursor: pointer; text-align: left; padding: 0; color: inherit; font: inherit; }
 .film:hover { border-color: var(--accent); }
 .film img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #f7f2e7; }
 .top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 10px 20px; }
@@ -156,11 +168,13 @@ button.short { background: var(--rule); color: var(--ink-soft); }
     <a class="brand" href="/" aria-label="KitCut home"><img src="/logo-64.png" alt="" width="42" height="42" onerror="this.remove()"><span>KitCut<span class="tld">.ai</span></span></a>
     <nav class="account" id="account" aria-label="Account" hidden></nav>
   </header>
+  <!-- hero -->
   <section class="hero">
-    <h1>Type an idea. Get a film.</h1>
-    <p>In any language. Claude writes, draws, narrates and scores a short animated film of it, hand-drawn or painted.</p>
+    <h1>Type an idea. Get a Claude animation.</h1>
+    <p>Claude Opus 5.5 writes, draws, narrates and scores an animated video of any idea in minutes: motion graphics, explainers, short films and music videos, hand-drawn or painted, in any language.</p>
     <p class="spend" id="spend" hidden></p>
   </section>
+  <!-- /hero -->
 
   <form id="tokenForm" class="row" hidden>
     <input id="token" type="password" autocomplete="off" placeholder="Studio token" aria-label="Studio token">
@@ -202,8 +216,30 @@ button.short { background: var(--rule); color: var(--ink-soft); }
   <section class="stats" id="stats" hidden></section>
 
   <section class="recent">
-    <h2>Recent films</h2>
+    <h2>Latest Claude animations</h2>
     <div class="films" id="films"><span class="note">None yet.</span></div>
+  </section>
+
+  <section class="about" id="about">
+    <h2>Claude animation, from one prompt</h2>
+    <p>KitCut is a Claude animation and video maker. You write one sentence and Claude Opus 5.5 turns it into a short animated video with a narrator and music: the same kind of Claude animation people post from Opus 5.5, without writing code or setting anything up.</p>
+    <div class="cards">
+      <div><h3>Claude draws every frame</h3><p>No video model. Claude writes the code that draws each frame, hand-drawn or painted, and checks stills of its own work before the video is rendered.</p></div>
+      <div><h3>Written, voiced and scored</h3><p>Claude writes the script and the narration, a voice reads it, and Claude composes the music. You get a finished video, not a silent clip.</p></div>
+      <div><h3>Any idea, any language</h3><p>Motion graphics, explainer videos, launch videos, stories and lessons, in the language you type in. Every film has its own page to share.</p></div>
+    </div>
+  </section>
+
+  <section class="about faq">
+    <h2>Questions about Claude video</h2>
+    <div>
+      <details><summary>Can Claude make videos and animations?</summary><p>Yes. Claude has no video model: it writes code that draws every frame, the way the Opus 5.5 animations people share on X are made. KitCut has Claude Opus 5.5 write the script, draw every scene, write a narration and compose the music, then renders it all into a finished video.</p></details>
+      <details><summary>How do I make a Claude animation?</summary><p>Type one sentence about your idea, pick a length and a look (hand-drawn or painted), and press Make the film. Claude plans it, draws it, looks at stills of its own work and fixes what it doesn't like. The finished video is ready in a few minutes.</p></details>
+      <details><summary>Which Claude model makes the films?</summary><p>Claude Opus 5.5 directs every film. It writes the script and the code that draws each frame, and reviews the result before it is rendered. For the painted look an image model paints the scenes and Claude animates them; a voice model reads Claude's narration.</p></details>
+      <details><summary>Is it free?</summary><p>Yes, to start: every account gets 30 seconds of film a month, with no card needed. Paid plans give you more minutes, and Pro makes films up to 2 minutes long.</p></details>
+      <details><summary>How long can a Claude video be?</summary><p>Up to 1 minute on the Free and Standard plans, and up to 2 minutes on Pro.</p></details>
+      <details><summary>What can I make with it?</summary><p>Motion graphics, explainer videos, launch videos, tiny stories, music videos, showreels and lessons, in any language you type in. Every film gets its own page to share.</p></details>
+    </div>
   </section>
 
   <footer class="site-foot">
@@ -334,13 +370,16 @@ async function recent() {
     const list = await r.json();
     if (!list.length) return;
     $('films').innerHTML = list.map((f, i) => `
-      <button class="film" type="button" data-i="${i}">
+      <a class="film" href="/film/${esc(f.id)}" data-i="${i}">
         <img src="${esc(f.poster_url)}" alt="" loading="lazy">
         <div><p>${esc(f.prompt)}</p><small>${f.length || 5} s ${f.look === 'painted' ? 'painted' : 'drawn'} film · made in ${mmss(f.seconds || 0)}${f.cost_usd != null ? ' · $' + f.cost_usd.toFixed(2) : ''}</small></div>
-      </button>`).join('');
+      </a>`).join('');
     for (const b of $('films').querySelectorAll('.film')) {
       const f = list[+b.dataset.i];
-      b.onclick = () => { openFilm(f.id, true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+      b.onclick = (e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;  // a new tab: let the link work
+        e.preventDefault(); openFilm(f.id, true); window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
     }
   } catch (e) { /* the list is a convenience */ }
 }
