@@ -1,22 +1,24 @@
 #!/usr/bin/env python
-"""Sketch Studio: one line of text in, a 5-second sketch film out, written by Claude.
+"""Sketch Studio: one line of text in, a short sketch film out, written by Claude.
 
-    python studio/agent.py --smoke                  one-turn API check: key source, model, cost
-    python studio/agent.py --costs                  what the runs have cost (MongoDB kitcut.studio_runs)
-    python studio/agent.py --sync                   send runs the database missed (the outbox)
-    python studio/agent.py --announce <url>|off     tell the public site where the tunnel is
-    python studio/agent.py "a paper plane ..."      a whole film from the command line
-    python studio/server.py                         the web page (http://127.0.0.1:8765)
+    python studio/agent.py --smoke [--auth login]      one-turn check: key source, model, cost
+    python studio/agent.py --costs                     what the runs have cost (kitcut.studio_runs)
+    python studio/agent.py --sync                      send runs the database missed (the outbox)
+    python studio/agent.py --announce <url>|off        tell the public site where the tunnel is
+    python studio/agent.py "a paper plane ..."         a whole film from the command line
+    python studio/server.py                            the web page (http://127.0.0.1:8765)
 
-Claude (Opus 5.5) runs through the Claude Agent SDK, Claude Code's agent loop as a library. It
-writes film.js, score.json and sfx.json into projects/studio-<stamp>/, renders review stills and
-looks at them, and fixes what it sees. This script then renders the soundtrack and the video with the
-ordinary sketch scripts.
+Claude (Opus 5.5) runs through the Claude Agent SDK, Claude Code's agent loop as a library, inside
+one film's sandbox (film.py): its working directory is the film's folder, it reads and writes only
+there (guard.py), and it drives the pipeline through the studio's tools (tools.py) -- there is no
+shell. It writes film.js, score.json and sfx.json (and the narration, and for a painted film the
+paintings), renders review stills and looks at them, and fixes what it sees. The studio then mixes
+the soundtrack and renders the video with the ordinary sketch scripts.
 
-It runs on ANTHROPIC_API_KEY from .env and a private Claude config folder (temp/studio-claude/),
-so it never uses a local Claude Code login or its settings. guard() is the whole permission
-model: Claude can read the repo (never .env), write three files in its own job folder, and run
-four exact commands.
+Several films are made at once: each waits for a free Claude slot, then shares the machine through
+the scheduler (sched.py). Two ways to pay for Claude:
+    --auth api     ANTHROPIC_API_KEY, a private config folder per film (the public site)
+    --auth login   this machine's Claude Code login (local and internal runs only)
 """
 
 import sys
@@ -24,19 +26,38 @@ import os
 import re
 import json
 import time
-import shutil
 import asyncio
 import argparse
+import contextlib
 from datetime import datetime
 from importlib import import_module
 
-sys.path.insert(
-    0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
-)
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(HERE), "scripts"))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, HERE)
+import procs  # noqa: E402
+import film as films  # noqa: E402
+
+# the studio's keys, out of the environment before anything is started (procs.py)
+procs.load_secrets(os.environ.get("STUDIO_ENV_FILE") or os.path.join(films.REPO, ".env"))
+
 import store  # noqa: E402
+from film import (  # noqa: E402
+    HOME,
+    KIT,
+    LENGTHS,
+    LOOKS,
+    MADE,
+    PAINT_PINNED,
+    RELEASE,
+    Film,
+    limits,
+)
+from guard import _path, guard, pin_after, pin_paint, pin_vo  # noqa: E402
+from sched import Clock, Sched, waiting_text  # noqa: E402
+from tools import Tools  # noqa: E402
 
 from claude_agent_sdk import (  # noqa: E402
     AssistantMessage,
@@ -54,66 +75,51 @@ from claude_agent_sdk import (  # noqa: E402
     query,
 )
 
-ROOT = _env.ROOT
-HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = KIT
 # Opus only: the drawing is the product, and a smaller model's films are not worth the saving
 MODEL = "claude-opus-5-5"
-AGENT_TIMEOUT = 15 * 60
-# the permission model, and what the studio pins in Claude's files (shared with the CLI hook)
-from guard import (  # noqa: E402
-    EDITABLE,
-    LENGTHS,
-    LOOKS,
-    MADE,
-    PAINT_PINNED,
-    VO_PINNED,
-    _path,
-    guard,
-    look_of,
-    pin_after,
-    pin_paint,
-    pin_vo,
-    tts_model,
-)
+# how long Claude may work on a film, and what it may spend, grow with the film's length:
+# film.limits() (15 min of working time for up to 15 s; waiting for the machine does not count)
 
 
 # ------------------------------------------------------------------ the environment Claude runs in
-def child_env():
-    """ANTHROPIC_API_KEY from .env and a private config folder: an API-billed run that cannot pick
-    up a local Claude Code login, its settings or its memory.
-    """
-    _env.load_dotenv()
-    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    if not key:
-        sys.exit("ANTHROPIC_API_KEY is not set (put it in .env)")
-    # a Claude Code session that launches this passes its own CLAUDE_* variables down: drop them
-    for k in list(os.environ):
-        if k.startswith(("CLAUDE", "ANTHROPIC_")) and k not in (
-            "ANTHROPIC_API_KEY",
-            "CLAUDE_CODE_GIT_BASH_PATH",
-        ):
-            os.environ.pop(k)
-    cfg = os.path.join(ROOT, "temp", "studio-claude")
-    os.makedirs(cfg, exist_ok=True)
-    return {
-        "ANTHROPIC_API_KEY": key,
-        "CLAUDE_CONFIG_DIR": cfg,
+def claude_env(film=None, auth="api"):
+    """What Claude Code is started with, on top of the (already secret-free) environment.
+    api: the key and a private config folder per film, so a run can pick up no local login,
+    settings or memory; login: this machine's Claude Code login and its config folder."""
+    env = {
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
         # an organisation without zero data retention (e.g. a HIPAA one) gets a 400 for the
-        # context-management beta Claude Code sends by default; a 5-second film never needs it
+        # context-management beta Claude Code sends by default; a short film never needs it
         "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
+        # every tool is listed up front (there are only a few), and none is deferred
+        "ENABLE_TOOL_SEARCH": "false",
+        # none of the account's claude.ai connectors: the studio's tools are the only ones
+        "ENABLE_CLAUDEAI_MCP_SERVERS": "false",
+        # a studio tool may wait for the machine; the tools time out on their own
+        "MCP_TOOL_TIMEOUT": str(30 * 60 * 1000),
     }
+    if auth == "api":
+        key = procs.secret("ANTHROPIC_API_KEY")
+        if not key:
+            sys.exit("ANTHROPIC_API_KEY is not set (put it in the studio's .env)")
+        cfg = film.claude_dir if film else os.path.join(HOME, "claude", "_smoke")
+        os.makedirs(cfg, exist_ok=True)
+        env.update(ANTHROPIC_API_KEY=key, CLAUDE_CONFIG_DIR=cfg)
+    return env
 
 
 def _read(*parts):
-    with open(os.path.join(ROOT, *parts), encoding="utf-8") as f:
+    with open(os.path.join(KIT, *parts), encoding="utf-8") as f:
         return f.read()
 
 
-def system_prompt(job):
+def system_prompt(look):
     """prompt.md with the engine, the cast, the example and the sound notation filled in, read
-    fresh each run so the prompt always matches the code.
-    """
+    fresh so it always matches the code. It depends only on the look -- the film's own facts
+    (its length, the prompt) come in the first message -- so films made close together share
+    Claude's prompt cache."""
+    A = import_module("_sketchaudio")
     ref = _read("docs", "reference.md")
     a = ref.index("**Score notation**")
     b = ref.index("### The picture: `sketch-render.py`")
@@ -121,17 +127,12 @@ def system_prompt(job):
     doc = audio.split('"""')[1]
     notation = doc[doc.index("Score notation") :].split("Not an entry script")[0].strip()
     fx = "\n".join(re.findall(r"^def fx_(\w+\(.*\)):", audio, re.MULTILINE))
-    inst = sorted(os.listdir(os.path.join(ROOT, "models", "soundfonts", "FluidR3_GM")))
-    with open(os.path.join(job, "sketch.json"), encoding="utf-8") as f:
-        seconds = round(float(json.load(f)["duration"]))
+    # the cache is shared by every film on the machine: only real instrument names are listed
+    sf = os.path.join(KIT, "models", "soundfonts", "FluidR3_GM")
+    inst = sorted(n for n in (os.listdir(sf) if os.path.isdir(sf) else []) if n in A.GM)
     vo_mod = import_module("sketch-vo")  # the voice list lives with the Gemini backend
     fill = {
-        "SECONDS": str(seconds),
-        "WORDS": str(round(seconds * 2.2 - 3)),  # unhurried narration, with room to breathe
         "VOICES": ", ".join(vo_mod.GEMINI_VOICES),
-        "JOB": os.path.relpath(job, ROOT).replace("\\", "/"),
-        # what Claude's shell calls Python: macOS and many Linux systems only have python3
-        "PY": "python" if shutil.which("python") else "python3",
         "ENGINE": _read("sketch", "engine.js"),
         "PROPS": _read("sketch", "props.js"),
         "EXAMPLE_FILM": _read("config", "sketch", "example", "film.js"),
@@ -139,62 +140,36 @@ def system_prompt(job):
         "EXAMPLE_SFX": _read("config", "sketch", "example", "sfx.json"),
         "NOTATION": ref[a:b].strip() + "\n\n```\n" + notation + "\n```",
         "FX": fx,
-        "INSTRUMENTS": ", ".join(inst),
+        "INSTRUMENTS": ", ".join(inst) or "(none yet)",
+        "MAX_IMAGES": str(PAINT_PINNED["max_images"]),
     }
-    fill["MAX_IMAGES"] = str(PAINT_PINNED["max_images"])
     # the look's own sections (studio/looks/<look>.md, "## NAME" headed) go in first, since
     # they carry placeholders of their own
-    look = {}
-    for part in _read("studio", "looks", look_of(job) + ".md").split("\n## ")[0:]:
+    sections = {}
+    for part in _read("studio", "looks", look + ".md").split("\n## "):
         name, _, body = part.lstrip("#").strip().partition("\n")
-        look["LOOK_" + name.strip()] = body.strip() + (
+        sections["LOOK_" + name.strip()] = body.strip() + (
             "\n" if name.strip() in ("FILES", "COMMANDS") and body.strip() else ""
         )
     text = re.sub(
-        r"\{(LOOK_[A-Z]+)\}", lambda m: look.get(m.group(1), ""), _read("studio", "prompt.md")
+        r"\{(LOOK_[A-Z]+)\}", lambda m: sections.get(m.group(1), ""), _read("studio", "prompt.md")
     )
     return re.sub(r"\{([A-Z_]+)\}", lambda m: fill.get(m.group(1), m.group(0)), text)
 
 
-# ------------------------------------------------------------------ one film
-def new_job(prompt, seconds=5, look="drawn"):
-    """projects/studio-<stamp>/ with the manifest (its length set), an empty narration, and for
-    a painted film an empty list of paintings."""
-    seconds = seconds if seconds in LENGTHS else LENGTHS[0]
-    look = look if look in LOOKS else LOOKS[0]
-    job = os.path.join(ROOT, "projects", "studio-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
-    os.makedirs(job)
-    with open(os.path.join(HERE, "template", "sketch.json"), encoding="utf-8") as f:
-        m = json.load(f)
-    words = re.sub(r"\s+", " ", prompt).strip()
-    m["title"] = (words[:60] + "...") if len(words) > 60 else words
-    m["duration"], m["poster_t"] = float(seconds), round(seconds - 0.4, 2)
-    if look == "painted":
-        m["paint"] = "paint.json"
-        with open(os.path.join(job, "paint.json"), "w", encoding="utf-8") as f:
-            json.dump(PAINT_PINNED | {"style": "", "images": []}, f, indent=2)
-    with open(os.path.join(job, "sketch.json"), "w", encoding="utf-8") as f:
-        json.dump(m, f, indent=2)
-    vo = {**VO_PINNED, "model": tts_model(), "voice": "Kore", "style": "", "language": "en"}
-    with open(os.path.join(job, "vo.json"), "w", encoding="utf-8") as f:
-        json.dump(vo | {"lines": []}, f, indent=2, ensure_ascii=False)
-    with open(os.path.join(job, "studio.json"), "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "prompt": prompt,
-                "look": look,
-                "length": seconds,  # the film's; "seconds" is later how long making it took
-                "started": datetime.now().isoformat(timespec="seconds"),
-            },
-            f,
-            indent=2,
-        )
-    return job
+def ask(film):
+    """The first message: the film's own facts, then the visitor's prompt."""
+    n = film.length
+    return (
+        "Make the film.\n\nLength: %d seconds (fixed). Narration: about %d words, ending by "
+        "about %d s.\n\nPrompt: %s"
+        % (n, round(n * 2.2 - 3), n - 1, film.record().get("prompt", "").strip())
+    )
 
 
-def _describe(name, inp, job):
+def _describe(name, inp, film):
     """A one-line account of a tool call for the page."""
-    rel = lambda p: os.path.relpath(_path(p), job).replace("\\", "/")  # noqa: E731
+    rel = lambda p: os.path.relpath(_path(p, film), film.dir).replace("\\", "/")  # noqa: E731
     if name == "Write":
         n = str(inp.get("content", "")).count("\n") + 1
         return "wrote %s (%d lines)" % (rel(inp.get("file_path")), n)
@@ -205,22 +180,23 @@ def _describe(name, inp, job):
         if p.endswith("images/sheet.jpg"):
             return "looking at the paintings"
         return "looking at the review sheet" if p.endswith("sheet.png") else "read %s" % p
-    if name == "Bash":
-        c = inp.get("command", "")
-        if c.startswith("node --check"):
-            return "checking film.js for syntax errors"
-        m = re.search(r"--stills\s+(\S+)", c)
-        if m:
-            return "rendering %d review stills" % len(m.group(1).split(","))
-        if "--automation" in c:
-            return "tracing motion for the sound of air"
-        if "sketch-audio" in c:
-            return "rendering the soundtrack"
-        if "sketch-vo" in c:
-            return "recording the narration (Gemini TTS)"
-        if "sketch-paint" in c:
-            return "painting the scenes (Muse)" if "--retake" not in c else "repainting a scene"
-        return c
+    tool = name.removeprefix("mcp__studio__")
+    if tool == "check":
+        return "checking film.js for syntax errors"
+    if tool == "stills":
+        return "rendering %d review stills" % len(inp.get("times") or [])
+    if tool == "sound":
+        return "rendering the soundtrack"
+    if tool == "voice":
+        if inp.get("retake_line") is not None:
+            return "recording line %s again" % inp["retake_line"]
+        return "recording the narration (Gemini TTS)"
+    if tool == "paint":
+        return (
+            "repainting %s" % ", ".join(inp["retake"])
+            if inp.get("retake")
+            else ("painting the scenes (Muse)")
+        )
     return name
 
 
@@ -239,7 +215,7 @@ PRICES = {
     "claude-sonnet-5": {"in": 2, "out": 10, "w5m": 2.5, "w1h": 4, "read": 0.2},
 }
 # every run's record lives in kitcut's MongoDB (store.py); the outbox holds what could not be sent
-STORE = store.MongoStore(outbox=os.path.join(ROOT, "projects", "studio-runs-outbox.jsonl"))
+STORE = store.MongoStore(uri=procs.secret("MONGODB_URI"), outbox=os.path.join(HOME, "outbox.jsonl"))
 
 
 def _price(model, t):
@@ -312,8 +288,8 @@ def spend_summary(rows=None):
     local = lambda r: (
         r["created_at"].astimezone().strftime("%Y-%m-%d") if r.get("created_at") else ""
     )  # noqa: E731
-    films = [r for r in rows if r.get("kind") != "smoke"]
-    ok = [r for r in films if r.get("ok")]
+    films_ = [r for r in rows if r.get("kind") != "smoke"]
+    ok = [r for r in films_ if r.get("ok")]
     total = lambda rs: round(sum(r.get("cost_usd") or 0 for r in rs), 4)  # noqa: E731
     return {
         "total_usd": total(rows),
@@ -321,7 +297,7 @@ def spend_summary(rows=None):
         "month_usd": total([r for r in rows if local(r).startswith(month)]),
         "runs": len(rows),
         "films_ok": len(ok),
-        "films_failed": len(films) - len(ok),
+        "films_failed": len(films_) - len(ok),
         "avg_usd_per_film": round(total(ok) / len(ok), 4) if ok else None,
         "by_source": {
             s: total([r for r in rows if r.get("source") == s])
@@ -330,102 +306,24 @@ def spend_summary(rows=None):
     }
 
 
-async def run_claude(prompt, job, emit, meter):
-    """Claude's part: write, review and fix. Returns the SDK's ResultMessage (or None)."""
-    pending, result, sheet_v = {}, None, [0]
-
-    async def pre_tool(inp, tool_use_id, ctx):
-        ok, why = guard(inp["tool_name"], inp["tool_input"], job)
-        if not ok:
-            emit({"type": "blocked", "text": why})
-        out = {"hookEventName": "PreToolUse", "permissionDecision": "allow" if ok else "deny"}
-        if not ok:
-            out["permissionDecisionReason"] = why
-        return {"hookSpecificOutput": out}
-
-    async def can_use(name, inp, ctx):  # backstop: the hook above decides first
-        ok, why = guard(name, inp, job)
-        return PermissionResultAllow() if ok else PermissionResultDeny(message=why)
-
-    async def post_tool(inp, tool_use_id, ctx):
-        # after a write to vo.json or paint.json: put back what the studio decides there
-        note = pin_after((inp.get("tool_input") or {}).get("file_path"), job)
-        if note:
-            emit({"type": "blocked", "text": note})
-            return {
-                "hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": note}
-            }
-        return {}
-
-    # by file: with the engine and the cast inlined it is ~80 KB, more than twice the length
-    # Windows allows a command line (the spawn then fails as "Claude Code not found")
-    sp = os.path.join(job, "temp", "system-prompt.md")
-    os.makedirs(os.path.dirname(sp), exist_ok=True)
-    with open(sp, "w", encoding="utf-8") as f:
-        f.write(system_prompt(job))
-    opts = ClaudeAgentOptions(
-        model=MODEL,
-        cwd=ROOT,
-        system_prompt={"type": "file", "path": sp},
-        tools=["Read", "Write", "Edit", "Bash"],
-        setting_sources=[],
-        hooks={
-            "PreToolUse": [HookMatcher(matcher=None, hooks=[pre_tool])],
-            "PostToolUse": [HookMatcher(matcher="Write|Edit", hooks=[post_tool])],
-        },
-        can_use_tool=can_use,
-        max_turns=50,
-        max_budget_usd=float(os.environ.get("STUDIO_MAX_USD") or 5),
-        env=child_env(),
-    )
-    with open(os.path.join(job, "sketch.json"), encoding="utf-8") as f:
-        seconds = round(float(json.load(f)["duration"]))
-    ask = "Make the film (%d seconds): %s" % (seconds, prompt.strip())
-    async with ClaudeSDKClient(options=opts) as client:
-        await client.query(ask)
-        async for msg in client.receive_response():
-            if isinstance(msg, SystemMessage) and msg.subtype == "init":
-                d = msg.data
-                emit({"type": "init", "model": d.get("model"), "key": d.get("apiKeySource")})
-            elif isinstance(msg, AssistantMessage):
-                before = meter.usd()
-                meter.add(msg.message_id or msg.uuid, msg.usage, msg.model)
-                if meter.usd() != before:
-                    emit({"type": "cost", "usd": round(meter.usd(), 4)})
-                for b in msg.content:
-                    if isinstance(b, TextBlock) and b.text.strip():
-                        emit({"type": "say", "text": b.text.strip()})
-                    elif isinstance(b, ToolUseBlock):
-                        pending[b.id] = (b.name, b.input)
-                        emit({"type": "tool", "text": _describe(b.name, b.input, job)})
-            elif isinstance(msg, UserMessage) and isinstance(msg.content, list):
-                for b in msg.content:
-                    if not isinstance(b, ToolResultBlock):
-                        continue
-                    name, inp = pending.pop(b.tool_use_id, ("", {}))
-                    text = _result_text(b)
-                    if b.is_error:
-                        if "hook error" not in text:  # a guard denial was already reported
-                            emit({"type": "fail", "text": text.strip()[-400:]})
-                    elif name == "Bash" and "--stills" in inp.get("command", ""):
-                        if os.path.exists(os.path.join(job, "outputs", "review", "sheet.png")):
-                            sheet_v[0] += 1
-                            emit({"type": "image", "path": "review/sheet.png", "v": sheet_v[0]})
-            elif isinstance(msg, ResultMessage):
-                result = msg
-    return result
-
-
 def claude_cli():
-    """The newest installed Claude Code CLI binary. A machine can have several (npm, WinGet, the
-    desktop app), and an old one refuses new models ("version 2.1.280 or newer is required")."""
+    """The newest installed Claude Code (auth=login). A machine can have several (npm, WinGet,
+    the desktop app), and an old one refuses new models ("version 2.1.280 or newer is
+    required"). Only real executables: the SDK will not start a .cmd shim."""
+    import shutil
     import subprocess
 
     found = [shutil.which("claude.exe"), shutil.which("claude")]
-    root = subprocess.run(["npm", "root", "-g"], capture_output=True, text=True, shell=True).stdout
-    found.append(os.path.join(root.strip(), "@anthropic-ai", "claude-code", "bin", "claude.exe"))
+    npm = shutil.which("npm") or shutil.which("npm.cmd")
+    if npm:
+        root = subprocess.run([npm, "root", "-g"], capture_output=True, text=True).stdout
+        found.append(
+            os.path.join(root.strip(), "@anthropic-ai", "claude-code", "bin", "claude.exe")
+        )
     best = None
     for exe in {f for f in found if f and os.path.exists(f)}:
+        if os.name == "nt" and not exe.lower().endswith(".exe"):
+            continue
         try:
             out = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=30)
             ver = tuple(int(x) for x in re.findall(r"\d+", out.stdout)[:3])
@@ -438,160 +336,325 @@ def claude_cli():
     return best[1]
 
 
-async def run_claude_cli(prompt, job, emit, meter):
-    """Claude's part through the Claude Code CLI (`claude -p`) on this machine's login instead of
-    the API key: the same system prompt, tools and guard (studio/guard.py as the hook command).
-    Returns a ResultMessage-like object."""
-    from types import SimpleNamespace
+async def run_claude(film, emit, meter, tools, auth="api"):
+    """Claude's part: write, review and fix. Returns the SDK's ResultMessage (or None)."""
+    pending, result = {}, None
 
-    sp = os.path.join(job, "temp", "system-prompt.md")
+    async def pre_tool(inp, tool_use_id, ctx):
+        ok, why = guard(inp["tool_name"], inp["tool_input"], film)
+        if not ok:
+            emit({"type": "blocked", "text": why})
+        out = {"hookEventName": "PreToolUse", "permissionDecision": "allow" if ok else "deny"}
+        if not ok:
+            out["permissionDecisionReason"] = why
+        return {"hookSpecificOutput": out}
+
+    async def can_use(name, inp, ctx):  # backstop: the hook above decides first
+        ok, why = guard(name, inp, film)
+        return PermissionResultAllow() if ok else PermissionResultDeny(message=why)
+
+    async def post_tool(inp, tool_use_id, ctx):
+        # after a write: put back what the studio decides, and say what else is wrong
+        note = pin_after((inp.get("tool_input") or {}).get("file_path"), film)
+        if note:
+            emit({"type": "blocked", "text": note})
+            return {
+                "hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": note}
+            }
+        return {}
+
+    # by file: with the engine and the cast inlined it is ~80 KB, more than twice the length
+    # Windows allows a command line (the spawn then fails as "Claude Code not found")
+    sp = film.path("temp", "system-prompt.md")
     os.makedirs(os.path.dirname(sp), exist_ok=True)
     with open(sp, "w", encoding="utf-8") as f:
-        f.write(system_prompt(job))
-    hook = '"%s" "%s" %%s "%s"' % (sys.executable, os.path.join(HERE, "guard.py"), job)
-    settings = {
-        "hooks": {
-            "PreToolUse": [
-                {"matcher": "*", "hooks": [{"type": "command", "command": hook % "pre"}]}
-            ],
-            "PostToolUse": [
-                {"matcher": "Write|Edit", "hooks": [{"type": "command", "command": hook % "post"}]}
-            ],
-        }
-    }
-    sfile = os.path.join(job, "temp", "cli-settings.json")
-    with open(sfile, "w", encoding="utf-8") as f:
-        json.dump(settings, f, indent=1)
-    with open(os.path.join(job, "sketch.json"), encoding="utf-8") as f:
-        seconds = round(float(json.load(f)["duration"]))
-    ask = "Make the film (%d seconds): %s" % (seconds, prompt.strip())
-    # the login, not the key: no ANTHROPIC_API_KEY, the user's own Claude config folder, and none
-    # of the variables a surrounding Claude Code session would pass down
-    env = {
-        k: v
-        for k, v in os.environ.items()
-        if k != "ANTHROPIC_API_KEY"
-        and not k.startswith(("CLAUDECODE", "CLAUDE_CODE_", "CLAUDE_PID"))
-        and k != "CLAUDE_CONFIG_DIR"
-    }
-    env["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] = "1"
-    proc = await asyncio.create_subprocess_exec(
-        claude_cli(),
-        "-p",
-        ask,
-        "--model",
-        MODEL,
-        "--system-prompt-file",
-        sp,
-        "--settings",
-        sfile,
-        "--setting-sources",
-        "",
-        "--tools",
-        "Read,Write,Edit,Bash",
-        "--max-turns",
-        "50",
-        "--output-format",
-        "stream-json",
-        "--verbose",
-        cwd=ROOT,
-        env=env,
-        stdin=asyncio.subprocess.DEVNULL,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        limit=16 * 1024 * 1024,  # one stream-json line can carry a whole file Claude wrote
+        f.write(system_prompt(film.look))
+    opts = ClaudeAgentOptions(
+        model=MODEL,
+        cwd=film.dir,
+        system_prompt={"type": "file", "path": sp},
+        tools=["Read", "Write", "Edit"],
+        mcp_servers={"studio": tools.server()},
+        strict_mcp_config=True,
+        setting_sources=[],
+        hooks={
+            "PreToolUse": [HookMatcher(matcher=None, hooks=[pre_tool])],
+            "PostToolUse": [HookMatcher(matcher="Write|Edit", hooks=[post_tool])],
+        },
+        can_use_tool=can_use,
+        max_turns=50,
+        max_budget_usd=limits(film.length)["budget_usd"],
+        env=claude_env(film, auth),
+        cli_path=claude_cli() if auth == "login" else None,
     )
-    pending, result, sheet_v = {}, None, [0]
-    try:
-        async for raw in proc.stdout:
-            try:
-                d = json.loads(raw)
-            except ValueError:
-                continue
-            kind = d.get("type")
-            if kind == "system" and d.get("subtype") == "init":
+    async with ClaudeSDKClient(options=opts) as client:
+        await client.query(ask(film))
+        async for msg in client.receive_response():
+            if isinstance(msg, SystemMessage) and msg.subtype == "init":
+                d = msg.data
                 emit(
                     {
                         "type": "init",
                         "model": d.get("model"),
-                        "key": d.get("apiKeySource") or "login",
+                        "key": d.get("apiKeySource") or auth,
+                        "tools": [t for t in d.get("tools", []) if t.startswith("mcp__")],
                     }
                 )
-            elif kind == "assistant":
-                m = d.get("message") or {}
+            elif isinstance(msg, AssistantMessage):
                 before = meter.usd()
-                meter.add(m.get("id"), m.get("usage"), m.get("model"))
+                meter.add(msg.message_id or msg.uuid, msg.usage, msg.model)
                 if meter.usd() != before:
                     emit({"type": "cost", "usd": round(meter.usd(), 4)})
-                for b in m.get("content") or []:
-                    if b.get("type") == "text" and b.get("text", "").strip():
-                        emit({"type": "say", "text": b["text"].strip()})
-                    elif b.get("type") == "tool_use":
-                        pending[b["id"]] = (b["name"], b.get("input") or {})
-                        emit(
-                            {
-                                "type": "tool",
-                                "text": _describe(b["name"], b.get("input") or {}, job),
-                            }
-                        )
-            elif kind == "user":
-                for b in (d.get("message") or {}).get("content") or []:
-                    if not isinstance(b, dict) or b.get("type") != "tool_result":
+                for b in msg.content:
+                    if isinstance(b, TextBlock) and b.text.strip():
+                        emit({"type": "say", "text": b.text.strip()})
+                    elif isinstance(b, ToolUseBlock):
+                        pending[b.id] = (b.name, b.input)
+                        emit({"type": "tool", "text": _describe(b.name, b.input, film)})
+            elif isinstance(msg, UserMessage) and isinstance(msg.content, list):
+                for b in msg.content:
+                    if not isinstance(b, ToolResultBlock):
                         continue
-                    name, inp = pending.pop(b.get("tool_use_id"), ("", {}))
-                    c = b.get("content")
-                    text = (
-                        c
-                        if isinstance(c, str)
-                        else "\n".join(x.get("text", "") for x in (c or []) if isinstance(x, dict))
-                    )
-                    if b.get("is_error"):
-                        if name == "" or "hook" not in text.lower():
-                            emit({"type": "fail", "text": text.strip()[-400:]})
-                        else:
-                            emit({"type": "blocked", "text": text.strip()[-300:]})
-                    elif name == "Bash" and "--stills" in inp.get("command", ""):
-                        if os.path.exists(os.path.join(job, "outputs", "review", "sheet.png")):
-                            sheet_v[0] += 1
-                            emit({"type": "image", "path": "review/sheet.png", "v": sheet_v[0]})
-            elif kind == "result":
-                result = SimpleNamespace(
-                    total_cost_usd=d.get("total_cost_usd"),
-                    num_turns=d.get("num_turns"),
-                    result=d.get("result"),
-                    session_id=d.get("session_id"),
-                    is_error=bool(d.get("is_error")),
-                    subtype=d.get("subtype"),
-                )
-        await proc.wait()
-    finally:
-        if proc.returncode is None:
-            proc.kill()
-    if result is None:
-        err = (await proc.stderr.read()).decode("utf-8", "replace")[-500:]
-        raise RuntimeError("the Claude Code CLI gave no result: %s" % err)
+                    pending.pop(b.tool_use_id, None)
+                    text = _result_text(b)
+                    if b.is_error and "hook error" not in text:  # denials were reported
+                        emit({"type": "fail", "text": text.strip()[-400:]})
+            elif isinstance(msg, ResultMessage):
+                result = msg
     return result
 
 
-async def _step(argv, emit, label):
-    """One pipeline script, its output streamed as log lines. Raises on failure."""
-    proc = await asyncio.create_subprocess_exec(
-        sys.executable,
-        "-X",
-        "utf8",
-        *argv,
-        cwd=ROOT,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-    )
-    tail = []
-    async for raw in proc.stdout:
-        line = raw.decode("utf-8", "replace").rstrip()
-        if line.strip():
-            tail = (tail + [line])[-12:]
-            emit({"type": "log", "text": line})
-    if await proc.wait() != 0:
-        raise RuntimeError("%s failed:\n%s" % (label, "\n".join(tail)))
+async def _within(coro, clock, lim):
+    """Run Claude's part, stopping it past its working time (the clock does not count waits for
+    the machine) or its wall time (lim: film.limits)."""
+    task = asyncio.ensure_future(coro)
+    try:
+        while True:
+            done, _ = await asyncio.wait({task}, timeout=2)
+            if done:
+                return task.result()
+            if clock.active() > lim["claude_s"] or clock.wall() > lim["wall_s"]:
+                raise TimeoutError()
+    finally:
+        if not task.done():
+            task.cancel()
+            with contextlib.suppress(BaseException):
+                await task
+
+
+# ------------------------------------------------------------------ one film
+def _spend(film, *parts):
+    p = film.path(*parts)
+    if not os.path.exists(p):
+        return []
+    with open(p, encoding="utf-8") as f:
+        return [json.loads(x) for x in f if x.strip()]
+
+
+async def save(run_id, fields, final=False):
+    """A record write off the event loop: MongoDB may take seconds to answer, and every film
+    shares this loop."""
+    return await asyncio.to_thread(STORE.save, run_id, fields, final)
+
+
+async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, control=None):
+    """The whole film, from its Claude slot to the video. Every step is reported through
+    emit(dict); returns the final summary. Whatever happens, the run's cost goes to
+    kitcut.studio_runs (STORE) and studio.json.
+
+    finish_only: Claude's part is already done (a film a restart interrupted while mixing or
+    rendering); only the soundtrack and the video are made. control: a dict the server may set
+    {"requeue": True} in before it cancels a film still waiting for its slot -- the film then
+    stays queued for the next server instead of being marked cancelled."""
+    emit = emit or (lambda ev: None)
+    sched = sched or Sched()
+    control = control if control is not None else {}
+    rec = film.record()
+    prompt, length, look = rec.get("prompt", ""), film.length, film.look
+    fps = 60
+    with contextlib.suppress(OSError, ValueError):
+        with open(film.manifest, encoding="utf-8") as f:
+            fps = json.load(f).get("fps", 60)
+    t0, stages, meter, res = time.time(), {}, Meter(), None
+    clock = Clock()
+    tools = Tools(film, sched, emit, clock)
+    billed = auth == "api"  # on the login, Claude's tokens are covered by the plan
+    summary = {
+        "prompt": prompt,
+        "model": MODEL,
+        "length": length,
+        "look": look,
+        "release": RELEASE,
+        "auth": auth,
+    }
+    emit({"type": "job", "id": film.id, "model": MODEL, "length": length, "look": look})
+
+    def price():
+        # the SDK's own figure when the run reached its end; the meter's when it did not
+        metered = round(meter.usd(), 4)
+        sdk = res.total_cost_usd if res is not None else None
+        claude = round(sdk, 4) if sdk is not None else metered
+        tts_rows = _spend(film, "audio", "vo", "spend.jsonl")
+        img_rows = _spend(film, "images", "spend.jsonl")
+        tts = round(sum(r["cost_usd"] for r in tts_rows), 6)
+        img = round(sum(r.get("cost_usd") or 0 for r in img_rows), 6)
+        if finish_only and not meter.msgs:  # Claude's part was costed by the earlier server
+            claude = rec.get("claude_cost_usd") or 0
+        summary.update(
+            # everything this film cost: Claude + the voice + the paintings
+            cost_usd=round((claude if billed else 0) + tts + img, 4),
+            claude_cost_usd=claude,
+            claude_billed=billed,
+            via="sdk" if billed else "login",
+            image_cost_usd=img,
+            images=len(img_rows),
+            tts_cost_usd=tts,
+            tts_tokens={
+                "input": sum(r["input"] for r in tts_rows),
+                "output": sum(r["output"] for r in tts_rows),
+            },
+            tts_model=tts_rows[-1]["model"] if tts_rows else None,
+            cost_metered_usd=metered,
+            tokens=meter.tokens(),
+        )
+
+    loop = asyncio.get_running_loop()
+    saved_at = [time.time()]
+    outer = emit
+
+    def emit(ev):  # noqa: F811 -- the same emit, keeping the record's cost current as it grows
+        outer(ev)
+        if ev["type"] == "cost" and time.time() - saved_at[0] > 5:
+            saved_at[0] = time.time()
+            price()
+            now = {
+                "cost_usd": summary["cost_usd"],
+                "tokens": meter.tokens(),
+                "calls": meter.calls(),
+            }
+            loop.run_in_executor(None, STORE.save, film.id, now)
+
+    tools.emit = emit
+
+    def on_wait(pool, ahead):
+        emit({"type": "wait", "pool": pool, "ahead": ahead, "text": waiting_text(pool, ahead)})
+
+    state = "error"
+    try:
+        if not finish_only:
+            async with sched["claude"].hold(1, film.id, on_wait):
+                clock.t0, clock.paused = time.time(), 0.0  # the queue was not Claude's time
+                film.update(state="claude", started=datetime.now().isoformat(timespec="seconds"))
+                await save(film.id, {"state": "running", "started_at": store.now()})
+                emit(
+                    {
+                        "type": "stage",
+                        "name": "claude",
+                        "text": "Claude is writing and reviewing the film",
+                    }
+                )
+                s = time.time()
+                res = await _within(
+                    run_claude(film, emit, meter, tools, auth), clock, limits(length)
+                )
+                stages["claude"] = time.time() - s
+                stages["waited"] = clock.paused
+            price()
+            if res is not None:
+                summary.update(turns=res.num_turns, claude_said=res.result, session=res.session_id)
+                if res.is_error:
+                    raise RuntimeError("Claude stopped early: %s" % (res.result or res.subtype))
+            missing = [f for f in MADE if not os.path.exists(film.path(f))]
+            if missing:
+                raise RuntimeError("Claude finished without writing %s" % ", ".join(missing))
+            film.update(state="finishing", **summary)
+            await save(film.id, {"state": "finishing"})
+        pin_vo(film)  # whatever Claude left there, the backends and models stay the studio's
+        pin_paint(film)
+
+        s = time.time()
+        emit({"type": "stage", "name": "sound", "text": "Mixing the soundtrack"})
+        wav = film.path("audio", "final.wav")
+        deps = [film.path("audio", "vo", "timeline.json")] + [film.path(f) for f in film.editable()]
+        if not _newer(wav, *deps):
+            await tools.sound(log=True)
+        stages["sound"] = time.time() - s
+
+        s = time.time()
+        emit(
+            {"type": "stage", "name": "render", "text": "Rendering %d frames" % round(length * fps)}
+        )
+        await tools.render()
+        stages["render"] = time.time() - s
+        changed = film.engine_diff()
+        summary.update(
+            ok=True,
+            video="film.mp4",
+            poster="film_poster.png",
+            engine_changed=changed,
+            seconds=round(time.time() - t0, 1),
+            stages={k: round(v, 1) for k, v in stages.items()},
+        )
+        state = "done"
+        emit({"type": "done", **summary})
+    except asyncio.CancelledError:
+        tools.kill()
+        if control.get("requeue") and film.state == "queued":
+            state = "queued"  # the next server makes it; nothing was spent
+            raise
+        state = "cancelled"
+        summary.update(ok=False, error="cancelled", seconds=round(time.time() - t0, 1))
+        emit({"type": "error", "text": "The film was cancelled."})
+        raise
+    except Exception as e:  # noqa: BLE001 -- every failure goes to the page, not just the console
+        text = str(e) or type(e).__name__
+        if isinstance(e, TimeoutError):
+            text = "Claude ran past the %d-minute limit" % (limits(length)["claude_s"] // 60)
+        summary.update(ok=False, error=text, seconds=round(time.time() - t0, 1))
+        emit({"type": "error", "text": text})
+    finally:
+        tools.kill()  # nothing of this film's keeps running
+        if state != "queued":
+            summary.setdefault("ok", False)
+            if not summary["ok"]:
+                summary.setdefault("error", "stopped before it finished")
+                summary.setdefault("seconds", round(time.time() - t0, 1))
+            price()
+            film.update(
+                state=state, **summary, finished=datetime.now().isoformat(timespec="seconds")
+            )
+            final = {
+                "state": {"done": "done", "cancelled": "cancelled"}.get(state, "failed"),
+                "ok": summary["ok"],
+                "error": summary.get("error"),
+                "calls": meter.calls(),
+                "turns": summary.get("turns"),
+                "seconds": summary.get("seconds"),
+                "stages": {k: round(v, 1) for k, v in stages.items()} or None,
+                "session_id": summary.get("session"),
+                "engine_changed": summary.get("engine_changed"),
+                "finished_at": store.now(),
+            } | {
+                k: summary[k]
+                for k in (
+                    "cost_usd",
+                    "claude_cost_usd",
+                    "claude_billed",
+                    "via",
+                    "image_cost_usd",
+                    "images",
+                    "tts_cost_usd",
+                    "tts_tokens",
+                    "tts_model",
+                    "cost_metered_usd",
+                    "tokens",
+                    "release",
+                    "auth",
+                )
+            }
+            # shielded: a cancelled film's record must still be written
+            await asyncio.shield(save(film.id, final, final=True))
+    return summary
 
 
 def _newer(a, *bs):
@@ -602,211 +665,46 @@ def _newer(a, *bs):
     return all(not os.path.exists(b) or os.path.getmtime(b) <= t for b in bs)
 
 
-async def make_film(prompt, emit=None, job=None, source="cli", client="local", via="sdk"):
-    """The whole film. Every step is reported through emit(dict); returns the final summary.
-    Whatever happens, the run's cost goes to kitcut.studio_runs (STORE) and studio.json.
-    via: "sdk" (the Agent SDK on the API key, billed per token) or "cli" (the Claude Code CLI on
-    this machine's login: Claude's figure is then what the tokens WOULD cost, not a charge)."""
-    emit = emit or (lambda ev: None)
-    job = job or new_job(prompt)
-    rel = os.path.relpath(job, ROOT).replace("\\", "/")
-    manifest = rel + "/sketch.json"
-    t0, stages, meter, res = time.time(), {}, Meter(), None
-    with open(os.path.join(job, "sketch.json"), encoding="utf-8") as f:
-        m = json.load(f)
-    length, frames = round(float(m["duration"])), round(float(m["duration"]) * m.get("fps", 60))
-    emit({"type": "job", "id": os.path.basename(job), "dir": rel, "model": MODEL, "length": length})
-    look = look_of(job)
-    summary = {"prompt": prompt, "model": MODEL, "dir": rel, "length": length, "look": look}
-
-    def tts_spend():
-        # every sketch-vo run Claude made for this film appends what it spent (Gemini TTS)
-        p = os.path.join(job, "audio", "vo", "spend.jsonl")
-        rows = []
-        if os.path.exists(p):
-            with open(p, encoding="utf-8") as f:
-                rows = [json.loads(x) for x in f if x.strip()]
-        tok = {"input": sum(r["input"] for r in rows), "output": sum(r["output"] for r in rows)}
-        return (
-            round(sum(r["cost_usd"] for r in rows), 6),
-            tok,
-            (rows[-1]["model"] if rows else None),
-        )
-
-    def image_spend():
-        # every painting sketch-paint made for this film (repaints included), with its price
-        p = os.path.join(job, "images", "spend.jsonl")
-        rows = []
-        if os.path.exists(p):
-            with open(p, encoding="utf-8") as f:
-                rows = [json.loads(x) for x in f if x.strip()]
-        return round(sum(r.get("cost_usd") or 0 for r in rows), 6), len(rows)
-
-    def price():
-        # the SDK's own figure when the run reached its end; the meter's when it did not
-        metered = round(meter.usd(), 4)
-        sdk = res.total_cost_usd if res is not None else None
-        claude = round(sdk, 4) if sdk is not None else metered
-        tts, tts_tok, tts_model_used = tts_spend()
-        img, n_img = image_spend()
-        billed = via == "sdk"  # on the CLI login, Claude's tokens are covered by the plan
-        summary.update(
-            # everything this film cost: Claude + the voice + the paintings
-            cost_usd=round((claude if billed else 0) + tts + img, 4),
-            claude_cost_usd=claude,
-            claude_billed=billed,
-            via=via,
-            image_cost_usd=img,
-            images=n_img,
-            tts_cost_usd=tts,
-            tts_tokens=tts_tok,
-            tts_model=tts_model_used,
-            cost_metered_usd=metered,
-            tokens=meter.tokens(),
-        )
-
-    run_id, loop = os.path.basename(job), asyncio.get_running_loop()
-    record = {
+def first_record(film, source, client):
+    """The run's record as it is when the film is asked for (state queued), so it counts toward
+    the day's limits from the first moment."""
+    rec = film.record()
+    return {
         "kind": "film",
         "source": source,
         "client": client,
         "host": store.HOST,
-        "prompt": prompt,
+        "prompt": rec.get("prompt"),
         "model": MODEL,
-        "job": rel,
-        "length": length,
-        "look": look,
-        "state": "running",
+        "job": film.id,
+        "length": rec.get("length"),
+        "look": rec.get("look"),
+        "release": RELEASE,
+        "state": "queued",
         "cost_usd": 0.0,
     }
-    # on record before the first token is spent, and kept current while it runs
-    await asyncio.to_thread(STORE.save, run_id, record)
-    saved_at = [time.time()]
-    outer = emit
-
-    def emit(ev):
-        outer(ev)
-        if ev["type"] == "cost" and time.time() - saved_at[0] > 5:
-            saved_at[0] = time.time()
-            now = {
-                "cost_usd": round(ev["usd"] + tts_spend()[0] + image_spend()[0], 4),
-                "tokens": meter.tokens(),
-                "calls": meter.calls(),
-            }
-            loop.run_in_executor(None, STORE.save, run_id, now)
-
-    try:
-        emit(
-            {"type": "stage", "name": "claude", "text": "Claude is writing and reviewing the film"}
-        )
-        s = time.time()
-        run = run_claude_cli if via == "cli" else run_claude
-        res = await asyncio.wait_for(run(prompt, job, emit, meter), AGENT_TIMEOUT)
-        stages["claude"] = time.time() - s
-        price()
-        if res is not None:
-            summary.update(turns=res.num_turns, claude_said=res.result, session=res.session_id)
-            if res.is_error:
-                raise RuntimeError("Claude stopped early: %s" % (res.result or res.subtype))
-        missing = [f for f in MADE if not os.path.exists(os.path.join(job, f))]
-        if missing:
-            raise RuntimeError("Claude finished without writing %s" % ", ".join(missing))
-        pin_vo(job)  # whatever Claude left there, the backends and models stay the studio's
-        pin_paint(job)
-
-        s = time.time()
-        emit({"type": "stage", "name": "sound", "text": "Mixing the soundtrack"})
-        with open(os.path.join(job, "sfx.json"), encoding="utf-8") as f:
-            air = any(c.get("fx") == "air" for c in json.load(f))
-        if air and not os.path.exists(os.path.join(job, "temp", "automation.json")):
-            await _step(
-                ["scripts/sketch-render.py", "--manifest", manifest, "--automation"],
-                emit,
-                "automation",
-            )
-        wav = os.path.join(job, "audio", "final.wav")
-        timeline = os.path.join(job, "audio", "vo", "timeline.json")
-        if not _newer(wav, timeline, *(os.path.join(job, f) for f in EDITABLE)):
-            await _step(["scripts/sketch-audio.py", "--manifest", manifest], emit, "the soundtrack")
-        stages["sound"] = time.time() - s
-
-        s = time.time()
-        emit({"type": "stage", "name": "render", "text": "Rendering %d frames" % frames})
-        await _step(["scripts/sketch-render.py", "--manifest", manifest], emit, "the render")
-        stages["render"] = time.time() - s
-
-        summary.update(
-            ok=True,
-            video="film.mp4",
-            poster="film_poster.png",
-            seconds=round(time.time() - t0, 1),
-            stages={k: round(v, 1) for k, v in stages.items()},
-        )
-        emit({"type": "done", **summary})
-    except Exception as e:  # noqa: BLE001 -- every failure goes to the page, not just the console
-        text = str(e) or type(e).__name__
-        if isinstance(e, TimeoutError):
-            text = "Claude ran past the %d-minute limit" % (AGENT_TIMEOUT // 60)
-        summary.update(ok=False, error=text, seconds=round(time.time() - t0, 1))
-        emit({"type": "error", "text": text})
-    finally:  # also on a cancelled run (the server stopping): the tokens were still spent
-        summary.setdefault("ok", False)
-        if not summary["ok"]:
-            summary.setdefault("error", "stopped before it finished")
-            summary.setdefault("seconds", round(time.time() - t0, 1))
-        price()
-        with open(os.path.join(job, "studio.json"), encoding="utf-8") as f:
-            rec = json.load(f)
-        rec.update(summary, finished=datetime.now().isoformat(timespec="seconds"))
-        with open(os.path.join(job, "studio.json"), "w", encoding="utf-8") as f:
-            json.dump(rec, f, indent=2)
-        STORE.save(
-            run_id,
-            record
-            | {
-                "state": "done" if summary["ok"] else "failed",
-                "ok": summary["ok"],
-                "error": summary.get("error"),
-                "cost_usd": summary["cost_usd"],
-                "claude_cost_usd": summary["claude_cost_usd"],
-                "claude_billed": summary["claude_billed"],
-                "via": via,
-                "image_cost_usd": summary["image_cost_usd"],
-                "images": summary["images"],
-                "tts_cost_usd": summary["tts_cost_usd"],
-                "tts_tokens": summary["tts_tokens"],
-                "tts_model": summary["tts_model"],
-                "cost_metered_usd": summary["cost_metered_usd"],
-                "tokens": summary["tokens"],
-                "calls": meter.calls(),
-                "turns": summary.get("turns"),
-                "seconds": summary.get("seconds"),
-                "stages": {k: round(v, 1) for k, v in stages.items()} or None,
-                "session_id": summary.get("session"),
-                "finished_at": store.now(),
-            },
-            final=True,
-        )
-    return summary
 
 
 # ------------------------------------------------------------------ command line
-async def smoke():
-    """One turn, no tools: proves the key, the model and where the bill goes."""
+async def smoke(auth="api"):
+    """One turn, no tools: proves the key (or the login), the model and where the bill goes."""
     opts = ClaudeAgentOptions(
         model=MODEL,
-        cwd=ROOT,
+        cwd=HOME if os.path.isdir(HOME) else KIT,
         system_prompt="Reply with exactly: OK",
         tools=[],
+        strict_mcp_config=True,
         setting_sources=[],
         max_turns=1,
-        env=child_env(),
+        env=claude_env(None, auth),
+        cli_path=claude_cli() if auth == "login" else None,
     )
     t, meter = time.time(), Meter()
     async for m in query(prompt="ping", options=opts):
         if isinstance(m, SystemMessage) and m.subtype == "init":
             print("  key source: %s" % m.data.get("apiKeySource"))
             print("  model:      %s" % m.data.get("model"))
+            print("  mcp:        %s" % ([s.get("name") for s in m.data.get("mcp_servers", [])]))
         elif isinstance(m, AssistantMessage):
             meter.add(m.message_id or m.uuid, m.usage, m.model)
         elif isinstance(m, ResultMessage):
@@ -821,10 +719,11 @@ async def smoke():
                     "host": store.HOST,
                     "prompt": "ping",
                     "model": MODEL,
+                    "auth": auth,
                     "state": "failed" if m.is_error else "done",
                     "ok": not m.is_error,
                     "error": m.result if m.is_error else None,
-                    "cost_usd": round(m.total_cost_usd or 0, 6),
+                    "cost_usd": round(m.total_cost_usd or 0, 6) if auth == "api" else 0.0,
                     "cost_metered_usd": round(meter.usd(), 6),
                     "tokens": meter.tokens(),
                     "calls": meter.calls(),
@@ -888,20 +787,19 @@ def _print(ev):
         print("      " + ev["text"])
     elif k == "say":
         print("  claude: " + ev["text"].replace("\n", "\n          "))
-    elif k in ("tool", "stage", "blocked", "fail", "error"):
+    elif k in ("tool", "stage", "blocked", "fail", "error", "wait"):
         print("  %-7s %s" % (k, ev.get("text")))
     elif k == "cost":
         print("  cost    $%.4f so far" % ev["usd"])
     elif k == "init":
-        print("  init    model %s, key from %s" % (ev["model"], ev["key"]))
+        print("  init    model %s, key from %s, tools %s" % (ev["model"], ev["key"], ev["tools"]))
     elif k in ("job", "image"):
-        print("  %-7s %s" % (k, ev.get("dir") or ev.get("path")))
+        print("  %-7s %s" % (k, ev.get("id") or ev.get("path")))
     elif k == "done":
         print(
             "\n  done in %.0fs  %s  $%.2f  %s turns"
             % (ev["seconds"], ev["stages"], ev.get("cost_usd") or 0, ev.get("turns"))
         )
-        print("  %s/outputs/%s" % (ev["dir"], ev["video"]))
     sys.stdout.flush()
 
 
@@ -914,13 +812,12 @@ def main():
     ap.add_argument("--seconds", type=int, default=LENGTHS[0], choices=LENGTHS)
     ap.add_argument("--look", default=LOOKS[0], choices=LOOKS)
     ap.add_argument(
-        "--via",
-        default="sdk",
-        choices=("sdk", "cli"),
-        help="sdk: the Agent SDK on ANTHROPIC_API_KEY; cli: the Claude Code CLI on this "
-        "machine's login",
+        "--auth",
+        default="api",
+        choices=("api", "login"),
+        help="api: ANTHROPIC_API_KEY (billed per token); login: this machine's Claude Code login",
     )
-    ap.add_argument("--smoke", action="store_true", help="a one-turn API check, no film")
+    ap.add_argument("--smoke", action="store_true", help="a one-turn check, no film")
     ap.add_argument("--costs", action="store_true", help="print what the runs cost, and totals")
     ap.add_argument("--sync", action="store_true", help="send runs the database missed")
     ap.add_argument(
@@ -942,12 +839,20 @@ def main():
         print_costs()
         return
     if args.smoke:
-        asyncio.run(smoke())
+        asyncio.run(smoke(args.auth))
         return
     if not args.prompt:
         ap.error("give a prompt, or --smoke")
-    job = new_job(args.prompt, args.seconds, args.look)
-    r = asyncio.run(make_film(args.prompt, _print, job, via=args.via))
+    film = Film.create(args.prompt, args.seconds, args.look, client="local", source="cli")
+    print("  film    %s" % film.dir)
+
+    async def go():
+        await save(film.id, first_record(film, "cli", "local"))
+        return await make_film(film, _print, Sched(), auth=args.auth)
+
+    r = asyncio.run(go())
+    if r.get("ok"):
+        print("  %s" % film.path("outputs", "film.mp4"))
     sys.exit(0 if r.get("ok") else 1)
 
 

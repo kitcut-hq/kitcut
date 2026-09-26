@@ -7,16 +7,20 @@ that project's data.
 
 One document per run, snake_case, real UTC datetimes (the kitcut-web conventions):
 
-    _id                 the job id (studio-20260925-131102), or "smoke:<session>" for --smoke
+    _id                 the film id (studio-20260925-131102-k3f9qa), or "smoke:<session>"
     kind                "film" | "smoke"
     source              "web" | "cli" | "smoke" | "backfill"
-    state               "running" | "done" | "failed"
-    prompt, model, ok, error, turns, seconds, stages{claude, sound, render}, session_id, host
+    state               "queued" | "running" | "finishing" | "done" | "failed" | "cancelled" |
+                        "interrupted" (the server stopped while Claude was working)
+    prompt, model, ok, error, turns, seconds, session_id, host, release (the code it ran on)
+    stages              {claude, waited (for the machine, inside Claude's part), sound, render}
+    auth, via           "api"/"sdk" (billed per token) or "login" (the machine's Claude Code plan)
+    engine_changed      lines Claude changed in its copy of the engine (outputs/engine.diff)
     cost_usd            the Claude API cost: the SDK's own total, or the meter's if the run
                         never reached its end
     cost_metered_usd    the same, priced here from the token counts (a cross-check)
-    client              who asked: the visitor's IP (forwarded by the public site as X-Client-Ip,
-                        or as Cloudflare saw it), or "local"
+    client              who asked: "u:<account>" through the public site (X-Client-Ip), else
+                        the visitor's IP as Cloudflare saw it, or "local"
     tokens              {input, output, cache_read, cache_write_5m, cache_write_1h}
     calls               one entry per Claude API response: {message_id, at, model, tokens...,
                         cost_usd}
@@ -25,10 +29,10 @@ One document per run, snake_case, real UTC datetimes (the kitcut-web conventions
 A second collection, studio_hosts, holds one document ("studio"): the tunnel URL the studio can be
 reached at now, which the public site (kitcut-hq/sketch-studio on Vercel) looks up per request.
 
-The document is written when a run starts and again as its cost grows, so a run that dies
-half-way (a crash, a power cut) still shows what it spent. If the database cannot be reached
-the final record goes to projects/studio-runs-outbox.jsonl, and `python studio/agent.py --sync`
-sends it later.
+The document is written when a film is asked for (state queued, so it counts toward the day's
+limits at once), when it starts, as its cost grows and at the end, so a run that dies half-way (a
+crash, a power cut) still shows what it spent. If the database cannot be reached the final record
+goes to the outbox (STUDIO_HOME/outbox.jsonl), and `python studio/agent.py --sync` sends it later.
 """
 
 import os

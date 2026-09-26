@@ -1,146 +1,64 @@
-#!/usr/bin/env python
-"""Sketch Studio's permission model: what Claude may read, write and run in a film's folder.
+"""Sketch Studio's permission model: what Claude may do in its film's sandbox.
 
-Imported by agent.py (the Agent SDK's PreToolUse / PostToolUse hooks call guard() and the pins),
-and run as a hook command by the Claude Code CLI (agent.py --via cli):
+Claude has three built-in tools (Read, Write, Edit) and the studio's own (mcp__studio__*: check,
+voice, paint, stills, sound), which run the pipeline for it. There is no shell. guard() is the
+PreToolUse hook's answer for every call:
 
-    python studio/guard.py pre  <job>     reads the hook's JSON on stdin, prints its decision
-    python studio/guard.py post <job>     after a write: puts back what the studio pins
+    Read          a file inside the film's folder (film.readable: never temp/, studio.json)
+    Write, Edit   film.js, score.json, sfx.json, vo.json, paint.json (painted films) and the
+                  film's engine copy, engine/engine.js and engine/props.js (film.writable)
+    mcp__studio__ the studio's tools; they check their own arguments
+    anything else refused, with a reason Claude can act on
 
-Nothing here imports anything heavy: the CLI runs it once per tool call.
+Paths are resolved against the film's folder (Claude's working directory) and then to their real
+path, so neither ../ nor a link reaches another film. After a write, pin_after() puts back what
+the studio decides in vo.json and paint.json and says what else is wrong (validate.problems).
 """
 
 import os
 import re
-import sys
 import json
-import shlex
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EDITABLE = ("film.js", "score.json", "sfx.json", "vo.json")
-MADE = ("film.js", "score.json", "sfx.json")  # what a finished film must have
-LENGTHS = (5, 10, 15)  # seconds a visitor may ask for
-# drawn: everything drawn in code; painted: an image model paints the scenes, the code animates
-LOOKS = ("drawn", "painted")
-# what Claude may not change in paint.json: the painter, and how many paintings a film may cost
-PAINT_PINNED = {"backend": "muse", "model": "meta/muse-image", "max_images": 8}
-# the voice: Google's Gemini text-to-speech. 3.8 needs the Gemini API enabled in the service
-# account's project; STUDIO_TTS_MODEL in .env overrides it (e.g. gemini-3.1-flash-tts-preview)
-TTS_MODEL = "gemini-3.8-flash-tts"
-# what Claude may not change in vo.json: the studio decides the backend, model and take count
-VO_PINNED = {"tts": "gemini", "takes": 1, "lead": 0.5, "gap": 0.35}
+import validate
+from film import PAINT_PINNED, VO_PINNED, tts_model
+
+STUDIO_TOOLS = "mcp__studio__"
 
 
-def tts_model():
-    return os.environ.get("STUDIO_TTS_MODEL", "").strip() or TTS_MODEL
-
-
-def look_of(job):
-    return "painted" if os.path.exists(os.path.join(job, "paint.json")) else "drawn"
-
-
-def _path(p):
-    """A tool's path argument, absolute: relative to the repo root, posix or git-bash (/c/...)."""
+def _path(p, film):
+    """A tool's path argument, absolute: relative to the film's folder, posix or git-bash
+    (/c/...) spellings too."""
     p = str(p or "").strip().strip("\"'")
     m = re.match(r"^/([a-zA-Z])/(.*)$", p) if os.name == "nt" else None
     if m:
         p = m.group(1) + ":/" + m.group(2)
-    return os.path.normcase(os.path.abspath(os.path.join(ROOT, p)))
+    return os.path.abspath(os.path.join(film.dir, p))
 
 
-def _inside(p, base):
-    base = os.path.normcase(os.path.abspath(base))
-    return p == base or p.startswith(base + os.sep)
-
-
-SECRET = re.compile(r"(^|[\\/])\.env[^\\/]*$|[\\/]\.(git|venv)([\\/]|$)", re.IGNORECASE)
-SHELL_META = re.compile(r"[;&|<>`$\n]")
-TIMES = re.compile(r"^\d+(\.\d+)?(,\d+(\.\d+)?)*$")
-
-
-def guard(tool, inp, job):
-    """(allowed, reason) for one tool call by Claude working in the job folder `job`."""
-    job = os.path.normcase(os.path.abspath(job))
+def guard(tool, inp, film):
+    """(allowed, reason) for one tool call by Claude working on `film`."""
     if tool == "Read":
-        p = _path(inp.get("file_path"))
-        if _inside(p, ROOT) and not SECRET.search(p):
+        if film.readable(_path(inp.get("file_path"), film)):
             return True, ""
-        return False, "Read is limited to the kitcut repo, and never .env, .git or .venv."
+        return False, "Read is limited to your film's folder (your working directory)."
     if tool in ("Write", "Edit"):
-        p = _path(inp.get("file_path"))
-        mine = EDITABLE + (("paint.json",) if look_of(job) == "painted" else ())
-        if os.path.dirname(p) == job and os.path.basename(p) in mine:
+        if film.writable(_path(inp.get("file_path"), film)):
             return True, ""
-        return False, "You can only write %s in your job folder." % ", ".join(mine)
-    if tool == "Bash":
-        return _bash_ok(inp.get("command", ""), job)
-    return False, "%s is not available here: use Read, Write, Edit and the listed commands." % tool
-
-
-def _bash_ok(cmd, job):
-    usage = (
-        "Only these commands run, one per call, from the working directory: "
-        "`node --check <job>/film.js`, "
-        "`python scripts/sketch-vo.py --manifest <job>/sketch.json [--only <n> --retake]`, "
-        "`python scripts/sketch-paint.py --manifest <job>/sketch.json [--only <names> --retake]` "
-        "(painted films), "
-        "`python scripts/sketch-render.py --manifest <job>/sketch.json --stills <t,t,...> [--sheet]`, "
-        "`python scripts/sketch-render.py --manifest <job>/sketch.json --automation`, "
-        "`python scripts/sketch-audio.py --manifest <job>/sketch.json [--levels]`."
+        mine = ", ".join(film.editable() + ("engine/engine.js", "engine/props.js"))
+        return False, "You can only write %s, in your working directory." % mine
+    if tool.startswith(STUDIO_TOOLS):
+        return True, ""
+    return False, (
+        "%s is not available here: use Read, Write, Edit and the studio tools "
+        "(check, voice, paint, stills, sound)." % tool
     )
-    if SHELL_META.search(cmd):
-        return False, "No ;, &&, |, redirection or $(...). " + usage
-    try:
-        argv = shlex.split(cmd.strip())
-    except ValueError:
-        return False, usage
-    if len(argv) == 3 and argv[:2] == ["node", "--check"]:
-        ok = _path(argv[2]) == os.path.join(job, "film.js")
-        return (True, "") if ok else (False, usage)
-    if len(argv) < 4 or argv[0] not in ("python", "python3", "py") or argv[2] != "--manifest":
-        return False, usage
-    script = argv[1].replace("\\", "/").removeprefix("./")
-    if _path(argv[3]) != os.path.join(job, "sketch.json"):
-        return False, "Use your own manifest, %s. " % os.path.relpath(job, ROOT) + usage
-    rest = argv[4:]
-    if script == "scripts/sketch-audio.py":
-        return (True, "") if set(rest) <= {"--levels", "--plan"} else (False, usage)
-    if script == "scripts/sketch-paint.py" and look_of(job) == "painted":
-        if rest in ([], ["--plan"]):
-            return True, ""
-        # repaint some: --only <name,name> --retake, in either order
-        if len(rest) == 3 and "--only" in rest and "--retake" in rest:
-            i = rest.index("--only")
-            if i + 1 < len(rest) and re.fullmatch(r"[\w,-]+", rest[i + 1]):
-                return True, ""
-        return False, usage
-    if script == "scripts/sketch-vo.py":
-        if rest in ([], ["--plan"]):
-            return True, ""
-        # one line again: --only <n> --retake, in either order
-        if sorted(a for a in rest if not a.isdigit()) == ["--only", "--retake"] and len(rest) == 3:
-            i = rest.index("--only")
-            if i + 1 < len(rest) and rest[i + 1].isdigit():
-                return True, ""
-        return False, usage
-    if script == "scripts/sketch-render.py":
-        if rest == ["--automation"]:
-            return True, ""
-        flags = [a for a in rest if a != "--sheet"]
-        if (
-            len(flags) == 2
-            and flags[0] == "--stills"
-            and TIMES.match(flags[1])
-            and rest.count("--sheet") <= 1
-        ):
-            return True, ""
-    return False, usage
 
 
-def _pin(job, name, want):
-    """Put back what Claude may not change in one of its files. Returns what it had to restore,
-    or "" -- the PostToolUse hook tells Claude so."""
-    p = os.path.join(job, name)
+def _pin(film, name, want, keep=None):
+    """Put back what Claude may not change in one of its files, and (keep) drop keys that are
+    not Claude's to set. Returns what it had to restore, or "" -- the PostToolUse hook tells
+    Claude so."""
+    p = film.path(name)
     if not os.path.exists(p):
         return ""
     try:
@@ -148,63 +66,49 @@ def _pin(job, name, want):
             d = json.load(f)
     except (OSError, ValueError) as e:
         return "%s is not valid JSON (%s); fix it" % (name, e)
+    if not isinstance(d, dict):
+        return ""
     wrong = {k for k, v in want.items() if d.get(k) != v}
+    extra = set(d) - set(keep) if keep else set()
+    if not wrong and not extra:
+        return ""
+    d = {k: v for k, v in d.items() if k not in extra} | want
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(d, f, indent=2, ensure_ascii=False)
+    said = []
     if wrong:
-        with open(p, "w", encoding="utf-8") as f:
-            json.dump(d | want, f, indent=2, ensure_ascii=False)
-        return "the studio sets %s in %s; restored %s" % (
-            ", ".join(sorted(want)),
-            name,
-            ", ".join("%s=%r" % (k, want[k]) for k in sorted(wrong)),
-        )
-    return ""
-
-
-def pin_vo(job):
-    """vo.json: the voice backend, model and takes are the studio's."""
-    return _pin(job, "vo.json", {**VO_PINNED, "model": tts_model()})
-
-
-def pin_paint(job):
-    """paint.json: the painter, its model and the cap on paintings are the studio's."""
-    return _pin(job, "paint.json", PAINT_PINNED)
-
-
-def pin_after(file_path, job):
-    """After a write: pin the file if it is one the studio has a say in. Returns a note or ""."""
-    p = str(file_path or "").replace("\\", "/")
-    if p.endswith("vo.json"):
-        return pin_vo(job)
-    if p.endswith("paint.json"):
-        return pin_paint(job)
-    return ""
-
-
-def hook(kind, job):
-    """The Claude Code CLI's hook protocol: the event on stdin, the answer on stdout."""
-    ev = json.load(sys.stdin)
-    if kind == "pre":
-        ok, why = guard(ev.get("tool_name", ""), ev.get("tool_input") or {}, job)
-        out = {"hookEventName": "PreToolUse", "permissionDecision": "allow" if ok else "deny"}
-        if not ok:
-            out["permissionDecisionReason"] = why
-        print(json.dumps({"hookSpecificOutput": out}))
-    else:
-        note = pin_after((ev.get("tool_input") or {}).get("file_path"), job)
-        if note:
-            print(
-                json.dumps(
-                    {
-                        "hookSpecificOutput": {
-                            "hookEventName": "PostToolUse",
-                            "additionalContext": note,
-                        }
-                    }
-                )
+        said.append(
+            "the studio sets %s in %s; restored %s"
+            % (
+                ", ".join(sorted(want)),
+                name,
+                ", ".join("%s=%r" % (k, want[k]) for k in sorted(wrong)),
             )
+        )
+    if extra:
+        said.append("removed %s from %s (not yours to set)" % (", ".join(sorted(extra)), name))
+    return "; ".join(said)
 
 
-if __name__ == "__main__":
-    if len(sys.argv) != 3 or sys.argv[1] not in ("pre", "post"):
-        sys.exit("usage: guard.py pre|post <job folder>")
-    hook(sys.argv[1], sys.argv[2])
+def pin_vo(film):
+    """vo.json: the voice backend, model and takes are the studio's, and so is everything that
+    is not the narration (a Whisper model, hotwords...)."""
+    return _pin(film, "vo.json", {**VO_PINNED, "model": tts_model()}, keep=validate.VO_KEYS)
+
+
+def pin_paint(film):
+    """paint.json: the painter, its model and the cap on paintings are the studio's."""
+    return _pin(film, "paint.json", PAINT_PINNED, keep=validate.PAINT_KEYS)
+
+
+def pin_after(file_path, film):
+    """After a write: pin the file if the studio has a say in it, then check it. Returns a note
+    for Claude, or ""."""
+    name = os.path.relpath(_path(file_path, film), film.dir).replace("\\", "/")
+    notes = []
+    if name == "vo.json":
+        notes.append(pin_vo(film))
+    elif name == "paint.json":
+        notes.append(pin_paint(film))
+    notes += validate.problems(film, name)
+    return "; ".join(n for n in notes if n)

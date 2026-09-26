@@ -3040,32 +3040,39 @@ a brand explainer), wall clock:
 The first film, which produced these tools, took most of a day; the saving is the engine,
 the cast, the voice/audio/render pipeline and the traps already paid for.
 
-### Sketch Studio: a prompt box that makes a 5-second film (`studio/`)
+### Sketch Studio: a prompt box that makes a short film (`studio/`)
 
-A proof of concept, set up with `pip install -r requirements-studio.txt`:
+A prompt-to-film web app on this engine, set up with `pip install -r requirements-studio.txt`:
 
-- `python studio/server.py` serves a page on 127.0.0.1:8765 with one prompt box.
-- Claude, through the Claude Agent SDK on `ANTHROPIC_API_KEY`, writes `film.js`, `score.json`
-  and `sfx.json` in `projects/studio-<stamp>/`.
-- It reviews its own stills, and the studio renders the MP4.
-- `python studio/agent.py "<idea>"` does the same from the command line, and `--smoke` checks
-  the key.
+- `python studio/server.py` (or `studio\serve.ps1`, with a public tunnel) serves a page on
+  127.0.0.1:8765 with one prompt box and a JSON API; the public site is create.kitcut.ai.
+- Claude (always Opus 5.5, `MODEL` in `agent.py`), through the Claude Agent SDK, writes the
+  narration, `film.js`, `score.json` and `sfx.json` (and for the painted look, the paintings),
+  reviews its own stills, and the studio renders the MP4.
+- **Several films are made at once, each in a sandbox of its own**: a folder per film under
+  `STUDIO_HOME` (its own engine copy, its own Claude session, no shell -- the pipeline is the
+  studio's typed tools), a scheduler for the machine (Claude sessions, browsers, CPU), secrets kept
+  out of every process that does not need them, an offline renderer the film's code cannot reach
+  out of, and every step in a Windows Job Object. The server runs from a release snapshot
+  (`studio/release.py`), so edits in the working tree never reach a film being made.
+- `python studio/agent.py "<idea>"` does the same from the command line, `--smoke` checks the
+  key, and `--auth login` runs on this machine's Claude Code login instead.
 
-`studio/README.md` has the permission model (`guard()`, tested by `studio/test_guard.py`) and
-the limits.
+`studio/README.md` has the sandbox, the scheduler, the permission model (tested by
+`studio/test_guard.py`, `test_isolation.py`, `test_sched.py`, `test_server.py`), the API and the
+limits. The pipeline scripts support it generically: a manifest `engine` folder,
+`SKETCH_RENDER_OFFLINE`, `SKETCH_WHISPER_DEVICE`, `KITCUT_DOTENV=0`, `KITCUT_LOCKS_DIR`, and
+names of paintings and instruments that can never be paths.
 
-It always runs Claude Opus 5.5 (`MODEL` in `agent.py`).
-
-Measured on the first two films, wall clock from prompt to MP4:
+Measured on the first two films (one at a time, before narration), wall clock from prompt to MP4:
 
 | film | Claude | render | total | turns | API cost |
 |---|---|---|---|---|---|
 | paper plane brings coffee (command line) | 113 s | 23 s | 136 s | 20 | $0.56 |
 | sticky-note rocket, SHIP IT (web page) | 110 s | 32 s | 141 s | 19 | $0.54 |
 
-The soundtrack takes no time here, because Claude has already rendered it by the end of its
-turn. Most of the cost is cache reads of the ~80 KB system prompt that carries the engine and
-the cast.
+Most of the cost is cache reads of the ~100 KB system prompt that carries the engine and the
+cast; it depends only on the look, so films made close together share the cache.
 
 At 192k, the AAC encode pushed the rocket's confetti transients to -0.1 dBFS, against -1.5 dBTP
 in the master WAV, so the template now encodes at 320k.

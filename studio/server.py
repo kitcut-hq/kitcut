@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-"""Sketch Studio's server: a JSON API and a page that turn one prompt into a 5-second film.
+"""Sketch Studio's server: a JSON API and a page that turn a prompt into a short film -- many
+films at once, each in a sandbox of its own.
 
     python studio/server.py [--port 8765]          then open http://127.0.0.1:8765
     powershell studio/serve.ps1                    the same, plus a public Cloudflare quick tunnel
@@ -7,26 +8,35 @@
 It listens on 127.0.0.1 only; the outside world reaches it through the tunnel, normally via the
 public site (kitcut-hq/sketch-studio on Vercel), which finds the tunnel's current URL in MongoDB
 and adds the token server-side. Every /api and /files route (except /api/health) needs the token
-from .env (STUDIO_TOKEN, created on first start) as `Authorization: Bearer <token>`,
+(STUDIO_TOKEN in the studio's .env, created on first start) as `Authorization: Bearer <token>`,
 `X-Studio-Token: <token>` or `?token=<token>`; the file URLs the API hands out are signed for 12
 hours instead, so a browser can load them without it. The page gets the token filled in only when
 opened on this machine; through the tunnel it asks.
 
-Anyone can reach it through the public site, so each day's spend is capped (STUDIO_DAILY_USD,
-default 25) and so is each visitor's number of films (STUDIO_PER_CLIENT_DAILY, default 5); the
-visitor is the X-Client-Ip the site forwards.
+Films run side by side (STUDIO_PARALLEL Claude sessions, default 3), each in its own folder under
+STUDIO_HOME with its own Claude session, and share the machine through the scheduler (sched.py);
+the rest wait their turn, up to STUDIO_MAX_QUEUE (default 5) of them. Anyone can reach this
+through the public site, so the day's spend is capped (STUDIO_DAILY_USD, default 25, counting
+a reserve for every film still being made, by its length), and each client -- the account the site
+forwards as X-Client-Ip "u:<id>", else the IP -- may have one film in the making and
+STUDIO_PER_CLIENT_DAILY (default 5) a day.
 
-    POST /api/films            {"prompt": "..."}  ->  202 {"id", "status", "position", "status_url"}
-    GET  /api/films/{id}       ?since=N  ->  {"status": queued|running|done|error, "stage",
-                               "events": [...from N], "next", "video_url", "cost_usd", ...}
-    GET  /api/films            the finished films, newest first
-    GET  /api/costs            the spend: total, today, this month, per film, latest runs
-    GET  /files/{id}/film.mp4  the film (also film_poster.png, review/sheet.png)
-    GET  /api/health           {"ok", "busy", "queued"}   (no token)
+    POST /api/films              {"prompt", "seconds", "look"}  ->  202 {"id", "status", "position"}
+    GET  /api/films/{id}         ?since=N  ->  {"status": queued|running|done|error|cancelled,
+                                 "stage", "wait", "events": [...from N], "next", "video_url", ...}
+    POST /api/films/{id}/cancel  the film's own client (or this machine) stops it
+    GET  /api/films              the finished films, newest first
+    GET  /api/costs              the spend: total, today, this month, per film, latest runs
+    GET  /files/{id}/film.mp4    the film (also film_poster.png, review/sheet.png)
+    GET  /api/health             {"ok", "running", "queued", "slots", "draining"}   (no token)
+    POST /api/admin/drain        (this machine) take no new films, let the running ones finish:
+                                 serve.ps1 restarts the server once "active" reaches 0. Films
+                                 still queued stay queued, and the next server makes them.
 
 Poll the status; there is no push, because Cloudflare quick tunnels do not carry server-sent
-events. One film is made at a time (the render needs the GPU and a headless browser); up to
-STUDIO_MAX_QUEUE (default 5) more wait, and the next one gets a 429.
+events. A server that starts finds the films the last one left: queued ones are made, ones that
+were being mixed or rendered are finished, and ones Claude was still writing are marked
+interrupted.
 """
 
 import os
@@ -40,31 +50,40 @@ import argparse
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import agent  # noqa: E402 -- imports _env first, which re-execs into .venv
+import agent  # noqa: E402 -- imports _env first, which re-execs into .venv; then the secrets
+import film as films  # noqa: E402
+import procs  # noqa: E402
+import store  # noqa: E402
+from film import Film  # noqa: E402
+from sched import Sched  # noqa: E402
 
 from aiohttp import web  # noqa: E402
 
-ROOT, HERE = agent.ROOT, agent.HERE
-PROJECTS = os.path.join(ROOT, "projects")
-JOBS = {}  # id -> {"events": [...], "status", "stage", "t0", "prompt"}
-WAITING = []  # ids queued behind the running film, in order
-LOCK = asyncio.Lock()
+HERE = agent.HERE
+SCHED = Sched()
+JOBS = {}  # id -> {"events", "status", "stage", "wait", "t0", "client", "task", "control"}
+ADMIT = asyncio.Lock()  # one admission at a time: the limits are checked and taken together
+DRAINING = False
 TOKEN = ""
 MAX_QUEUE = int(os.environ.get("STUDIO_MAX_QUEUE") or 5)
-# the public site makes this reachable by anyone: a day's spend, and each visitor's films, are capped
+# the public site makes this reachable by anyone: a day's spend, and each client's films, are capped
 DAILY_USD = float(os.environ.get("STUDIO_DAILY_USD") or 25)
 PER_CLIENT_DAILY = int(os.environ.get("STUDIO_PER_CLIENT_DAILY") or 5)
+KEEP_S = 3600  # a finished film's events stay in memory this long; then they come from disk
 
 
 # ------------------------------------------------------------------ the token
 def ensure_token():
-    """STUDIO_TOKEN from .env, created and saved there on first start (never printed)."""
-    tok = os.environ.get("STUDIO_TOKEN", "").strip()
+    """STUDIO_TOKEN from the studio's .env, created and saved there on first start (never
+    printed). The file is the working tree's, never a release's."""
+    tok = procs.secret("STUDIO_TOKEN")
     if not tok:
         tok = secrets.token_urlsafe(32)
-        with open(os.path.join(ROOT, ".env"), "a", encoding="utf-8") as f:
+        path = os.environ.get("STUDIO_ENV_FILE") or os.path.join(films.REPO, ".env")
+        with open(path, "a", encoding="utf-8") as f:
             f.write("\n# Sketch Studio API token (studio/server.py)\nSTUDIO_TOKEN=%s\n" % tok)
-        print("created STUDIO_TOKEN in .env", flush=True)
+        procs.SECRETS["STUDIO_TOKEN"] = tok
+        print("created STUDIO_TOKEN in %s" % path, flush=True)
     return tok
 
 
@@ -83,6 +102,16 @@ def token_of(req):
     if auth.lower().startswith("bearer "):
         return auth[7:].strip()
     return req.headers.get("X-Studio-Token") or req.query.get("token") or ""
+
+
+def client_of(req):
+    """Who asks: the account (or IP) the public site forwards (trusted: the request carries the
+    token), else the IP Cloudflare saw, else this machine."""
+    return (
+        req.headers.get("X-Client-Ip", "")[:64]
+        or req.headers.get("Cf-Connecting-Ip")
+        or ("local" if from_this_machine(req) else req.remote)
+    )
 
 
 # A file URL the API hands out carries its own short-lived signature instead of the token, so a
@@ -119,13 +148,11 @@ async def need_token(req, handler):
 
 
 # ------------------------------------------------------------------ helpers
-def job_dir(jid):
-    if not jid.startswith("studio-") or os.sep in jid or "/" in jid or ".." in jid:
+def film_of(jid):
+    f = Film.open(jid)
+    if f is None:
         raise web.HTTPNotFound()
-    d = os.path.join(PROJECTS, jid)
-    if not os.path.isdir(d):
-        raise web.HTTPNotFound()
-    return d
+    return f
 
 
 def base_url(req):
@@ -134,9 +161,97 @@ def base_url(req):
     return "%s://%s" % (proto, req.host)
 
 
-def record(jid):
-    with open(os.path.join(job_dir(jid), "studio.json"), encoding="utf-8") as f:
-        return json.load(f)
+def live(status=("queued", "running")):
+    return [j for j in JOBS.values() if j["status"] in status]
+
+
+def prune():
+    """Forget finished films' events after a while (the page then reads them from disk)."""
+    now = time.time()
+    for jid in [k for k, j in JOBS.items() if j.get("ended") and now - j["ended"] > KEEP_S]:
+        JOBS.pop(jid, None)
+
+
+# ------------------------------------------------------------------ running a film
+def start(film, finish_only=False):
+    """Make the film in the background; its events go to memory and its events.jsonl."""
+    log = film.path("events.jsonl")
+    before = []
+    if os.path.exists(log):  # a film picked up again after a restart keeps its log
+        with open(log, encoding="utf-8") as f:
+            before = [json.loads(x) for x in f if x.strip()]
+    J = JOBS[film.id] = {
+        "events": before,
+        "status": "running" if finish_only else "queued",
+        "stage": "queue",
+        "wait": None,
+        "t0": time.time() - (before[-1]["t"] if before else 0),
+        "client": film.record().get("client", "local"),
+        "reserve": films.limits(film.length)["reserve_usd"],
+        "control": {},
+        "ended": None,
+    }
+
+    def emit(ev):
+        # t: seconds into the run, so a page reloaded half-way shows the same times
+        ev = {**ev, "t": round(time.time() - J["t0"], 1)}
+        J["events"].append(ev)
+        # and on disk, so the film's page still has its log after this server restarts
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(json.dumps(ev, ensure_ascii=False) + "\n")
+        if ev["type"] == "stage":
+            J["stage"], J["wait"], J["status"] = ev["name"], None, "running"
+        elif ev["type"] == "wait":
+            J["wait"] = ev["text"]
+        elif ev["type"] in ("tool", "say"):
+            J["wait"] = None
+        elif ev["type"] == "cost":
+            J["cost_usd"] = ev["usd"]
+
+    async def run():
+        ok = False
+        try:
+            # done/error only once make_film returns: by then studio.json and
+            # kitcut.studio_runs hold the final cost
+            r = await agent.make_film(
+                film, emit, SCHED, auth="api", finish_only=finish_only, control=J["control"]
+            )
+            ok = r.get("ok")
+            J["status"] = "done" if ok else "error"
+        except asyncio.CancelledError:
+            J["status"] = "queued" if J["control"].get("requeue") else "cancelled"
+        except Exception as e:  # noqa: BLE001 -- make_film reports its own; this is the backstop
+            emit({"type": "error", "text": str(e)})
+            J["status"] = "error"
+        J["ended"] = time.time()
+
+    J["task"] = asyncio.create_task(run())
+    return J
+
+
+async def recover(app):
+    """The films the last server left behind (in this home only)."""
+    for f in reversed(Film.all()):  # oldest first, so the queue keeps its order
+        if f.legacy or f.id in JOBS:
+            continue
+        st = f.state
+        if st == "queued":
+            start(f)
+        elif st == "finishing":
+            start(f, finish_only=True)
+        elif st == "claude":
+            why = "the studio restarted while Claude was working on it"
+            f.update(
+                state="interrupted",
+                ok=False,
+                error=why,
+                finished=datetime.now().isoformat(timespec="seconds"),
+            )
+            await agent.save(
+                f.id,
+                {"state": "interrupted", "ok": False, "error": why, "finished_at": store.now()},
+                final=True,
+            )
 
 
 # ------------------------------------------------------------------ routes
@@ -151,16 +266,28 @@ async def font(req):
     name = req.match_info["name"]
     if name not in ("Caveat.woff2", "PatrickHand-400.woff2", "Inter.woff2"):
         raise web.HTTPNotFound()
-    return web.FileResponse(os.path.join(ROOT, "fonts", name))
+    return web.FileResponse(os.path.join(films.KIT, "fonts", name))
 
 
 async def health(req):
-    return web.json_response({"ok": True, "busy": LOCK.locked(), "queued": len(WAITING)})
+    running, queued = len(live(("running",))), len(live(("queued",)))
+    return web.json_response(
+        {
+            "ok": True,
+            "busy": running >= SCHED["claude"].capacity,
+            "running": running,
+            "queued": queued,
+            "active": running + (0 if DRAINING else queued),
+            "slots": SCHED.snapshot(),
+            "draining": DRAINING,
+            "release": films.RELEASE,
+        }
+    )
 
 
-async def over_limit(client):
-    """Why this request must wait until tomorrow, or None. Today is local time. Nothing is
-    refused to this machine itself except by the budget."""
+async def over_limit(client, seconds):
+    """Why this request must wait (for now, or until tomorrow), or None. Today is local time.
+    Nothing is refused to this machine itself except by the budget."""
     midnight = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
     try:
         rows = await asyncio.to_thread(agent.STORE.runs, None, midnight)
@@ -168,18 +295,27 @@ async def over_limit(client):
         if client == "local":
             return None
         return "The studio cannot check today's budget right now; please try again later."
-    if sum(r.get("cost_usd") or 0 for r in rows) >= DAILY_USD:
+    # a film still being made may spend its reserve (by its length: film.limits) beyond what its
+    # record shows so far; the new one is held at its own
+    reserved = sum(max(0.0, j["reserve"] - (j.get("cost_usd") or 0)) for j in live())
+    spent = sum(r.get("cost_usd") or 0 for r in rows)
+    if spent + reserved + films.limits(seconds)["reserve_usd"] > DAILY_USD:
         return "Today's budget ($%.0f) is used up. Please try again tomorrow." % DAILY_USD
     if client == "local":
         return None
+    if any(j["client"] == client for j in live()):
+        return "You already have a film in the making; wait for it to finish (or cancel it)."
     mine = sum(1 for r in rows if r.get("client") == client and r.get("kind") == "film")
-    mine += sum(1 for j in JOBS.values() if j.get("client") == client and j["status"] == "queued")
     if mine >= PER_CLIENT_DAILY:
         return "That is %d films today, the limit for now. Please try again tomorrow." % mine
     return None
 
 
 async def create(req):
+    if DRAINING:
+        return web.json_response(
+            {"error": "The studio is restarting; try again in a minute."}, status=503
+        )
     try:
         body = await req.json()
     except ValueError:
@@ -187,85 +323,74 @@ async def create(req):
     prompt = str(body.get("prompt", "")).strip()[:600]
     if len(prompt) < 3:
         return web.json_response({"error": "write a prompt"}, status=400)
-    if len(WAITING) >= MAX_QUEUE:
-        return web.json_response({"error": "the queue is full; try again later"}, status=429)
-    # who asked: the visitor's IP as the public site forwards it (trusted: this request carries
-    # the token), else as Cloudflare saw it, else this machine
-    client = (
-        req.headers.get("X-Client-Ip", "")[:64]
-        or req.headers.get("Cf-Connecting-Ip")
-        or ("local" if from_this_machine(req) else req.remote)
-    )
-    refused = await over_limit(client)
-    if refused:
-        return web.json_response({"error": refused}, status=429)
     try:
-        seconds = int(body.get("seconds") or agent.LENGTHS[0])
+        seconds = int(body.get("seconds") or films.LENGTHS[0])
     except (TypeError, ValueError):
         seconds = 0
-    if seconds not in agent.LENGTHS:
+    if seconds not in films.LENGTHS:
         return web.json_response(
-            {"error": "seconds must be one of %s" % ", ".join(map(str, agent.LENGTHS))}, status=400
+            {"error": "seconds must be one of %s" % ", ".join(map(str, films.LENGTHS))},
+            status=400,
         )
-    look = body.get("look") or agent.LOOKS[0]
-    if look not in agent.LOOKS:
+    look = body.get("look") or films.LOOKS[0]
+    if look not in films.LOOKS:
         return web.json_response(
-            {"error": "look must be one of %s" % ", ".join(agent.LOOKS)}, status=400
+            {"error": "look must be one of %s" % ", ".join(films.LOOKS)}, status=400
         )
-    d = agent.new_job(prompt, seconds, look)
-    jid = os.path.basename(d)
-    J = JOBS[jid] = {
-        "events": [],
-        "status": "queued",
-        "stage": "queue",
-        "t0": time.time(),
-        "client": client,
-    }
-    WAITING.append(jid)
-
-    log = os.path.join(d, "events.jsonl")
-
-    def emit(ev):
-        # t: seconds into the run, so a page reloaded half-way shows the same times
-        ev = {**ev, "t": round(time.time() - J["t0"], 1)}
-        J["events"].append(ev)
-        # and on disk, so the film's page still has its log after this server restarts
-        with open(log, "a", encoding="utf-8") as f:
-            f.write(json.dumps(ev, ensure_ascii=False) + "\n")
-        if ev["type"] == "stage":
-            J["stage"] = ev["name"]
-        elif ev["type"] == "cost":
-            J["cost_usd"] = ev["usd"]
-
-    async def run():
-        async with LOCK:
-            WAITING.remove(jid)
-            J["status"] = "running"
-            ok = False
-            try:
-                # done/error only once make_film returns: by then studio.json and
-                # kitcut.studio_runs hold the final cost
-                ok = (await agent.make_film(prompt, emit, d, source="web", client=client)).get("ok")
-            except Exception as e:  # noqa: BLE001 -- make_film reports its own; this is the backstop
-                emit({"type": "error", "text": str(e)})
-            J["status"] = "done" if ok else "error"
-
-    asyncio.create_task(run())
+    client = client_of(req)
+    prune()
+    # the check and the taking happen under one lock: two requests at the same moment cannot
+    # both slip under a limit that has room for one
+    async with ADMIT:
+        if len(live(("queued",))) >= MAX_QUEUE:
+            return web.json_response({"error": "the queue is full; try again later"}, status=429)
+        refused = await over_limit(client, seconds)
+        if refused:
+            return web.json_response({"error": refused}, status=429)
+        f = Film.create(prompt, seconds, look, client=client, source="web")
+        await agent.save(f.id, agent.first_record(f, "web", client))
+        start(f)
+    await asyncio.sleep(0)  # let it take a free slot now, so the answer says whether it waits
+    ahead = SCHED["claude"].ahead(f.id)
     return web.json_response(
         {
-            "id": jid,
-            "status": "queued",
-            "position": len(WAITING) - (0 if LOCK.locked() else 1),
-            "status_url": "%s/api/films/%s" % (base_url(req), jid),
+            "id": f.id,
+            "status": "queued" if ahead is not None else "running",
+            "position": (ahead + 1) if ahead is not None else 0,
+            "status_url": "%s/api/films/%s" % (base_url(req), f.id),
         },
         status=202,
     )
 
 
+async def cancel(req):
+    f = film_of(req.match_info["id"])
+    J = JOBS.get(f.id)
+    if J is None or J["status"] not in ("queued", "running"):
+        return web.json_response({"error": "that film is not being made"}, status=409)
+    if not (from_this_machine(req) or J["client"] == client_of(req)):
+        return web.json_response({"error": "only whoever asked for a film can stop it"}, status=403)
+    J["task"].cancel()
+    return web.json_response({"id": f.id, "status": "cancelling"}, status=202)
+
+
+async def drain(req):
+    """Take no more films; let the running ones finish; leave the queued ones for the next
+    server (serve.ps1 then restarts). Only from this machine."""
+    global DRAINING
+    if not from_this_machine(req):
+        raise web.HTTPForbidden()
+    DRAINING = True
+    for J in live(("queued",)):
+        J["control"]["requeue"] = True
+        J["task"].cancel()
+    return web.json_response({"draining": True, "running": len(live(("running",)))})
+
+
 async def status(req):
     jid = req.match_info["id"]
-    job_dir(jid)  # 404 unless it exists
-    J = JOBS.get(jid)
+    f = film_of(jid)  # 404 unless it exists
+    J = JOBS.get(f.id)
     since = max(0, int(req.query.get("since") or 0))
 
     def with_urls(events):
@@ -277,23 +402,27 @@ async def status(req):
             for ev in events
         ]
 
+    r = f.record()
     if J is None:  # made before this server started: what is on disk is all there is
-        r = record(jid)
-        st = "done" if r.get("ok") else ("error" if "finished" in r else "lost")
-        log = os.path.join(job_dir(jid), "events.jsonl")
+        st = f.state
+        st = {
+            "done": "done",
+            "cancelled": "cancelled",
+            "error": "error",
+            "interrupted": "error",
+        }.get(st, "lost")
+        log = f.path("events.jsonl")
         events = []
         if os.path.exists(log):
-            with open(log, encoding="utf-8") as f:
-                events = [json.loads(x) for x in f if x.strip()]
+            with open(log, encoding="utf-8") as fh:
+                events = [json.loads(x) for x in fh if x.strip()]
         out = {
             "id": jid,
             "status": st,
-            "prompt": r.get("prompt"),
             "events": with_urls(events[since:]),
             "next": len(events),
         }
     else:
-        r = record(jid) if J["status"] in ("done", "error") else {}
         out = {
             "id": jid,
             "status": J["status"],
@@ -302,10 +431,15 @@ async def status(req):
             "events": with_urls(J["events"][since:]),
             "next": len(J["events"]),
         }
-        if J["status"] == "queued":
-            out["position"] = WAITING.index(jid) + 1
+        if J["wait"]:
+            out["wait"] = J["wait"]
+        ahead = SCHED["claude"].ahead(f.id)
+        if J["status"] == "queued" and ahead is not None:
+            out["position"] = ahead + 1
         if J.get("cost_usd") is not None:
             out["cost_usd"] = J["cost_usd"]  # so far; the final figure replaces it below
+        if J["status"] not in ("done", "error", "cancelled"):
+            r = {k: r.get(k) for k in ("prompt", "look", "length")}
     if out["status"] == "done":
         out.update(
             video_url=signed(req, jid, "film.mp4"), poster_url=signed(req, jid, "film_poster.png")
@@ -333,9 +467,9 @@ async def status(req):
 
 
 async def files(req):
-    d = os.path.join(job_dir(req.match_info["id"]), "outputs")
-    p = os.path.normcase(os.path.abspath(os.path.join(d, req.match_info["path"])))
-    if not p.startswith(os.path.normcase(os.path.abspath(d)) + os.sep) or not os.path.isfile(p):
+    d = os.path.join(film_of(req.match_info["id"]).dir, "outputs")
+    p = os.path.normcase(os.path.realpath(os.path.join(d, req.match_info["path"])))
+    if not p.startswith(os.path.normcase(os.path.realpath(d)) + os.sep) or not os.path.isfile(p):
         raise web.HTTPNotFound()
     return web.FileResponse(p, headers={"Cache-Control": "no-cache"})
 
@@ -351,15 +485,11 @@ async def costs(req):
     return web.json_response(body, dumps=lambda o: json.dumps(o, default=str))
 
 
-async def films(req):
+async def list_films(req):
     """The finished films, newest first."""
     out = []
-    for jid in sorted(os.listdir(PROJECTS), reverse=True):
-        rec = os.path.join(PROJECTS, jid, "studio.json")
-        if not jid.startswith("studio-") or not os.path.exists(rec):
-            continue
-        with open(rec, encoding="utf-8") as f:
-            r = json.load(f)
+    for f in Film.all():
+        r = f.record()
         if r.get("ok"):
             out.append(
                 {
@@ -367,9 +497,9 @@ async def films(req):
                     for k in ("prompt", "look", "length", "seconds", "cost_usd", "turns", "stages")
                 }
                 | {
-                    "id": jid,
-                    "video_url": signed(req, jid, "film.mp4"),
-                    "poster_url": signed(req, jid, "film_poster.png"),
+                    "id": f.id,
+                    "video_url": signed(req, f.id, "film.mp4"),
+                    "poster_url": signed(req, f.id, "film_poster.png"),
                 }
             )
         if len(out) >= 12:
@@ -387,13 +517,16 @@ def make_app(token):
             web.get("/film/{id}", index),  # one film's page: the page reads the id from the path
             web.get("/fonts/{name}", font),
             web.get("/api/health", health),
-            web.get("/api/films", films),
+            web.get("/api/films", list_films),
             web.get("/api/costs", costs),
             web.post("/api/films", create),
             web.get("/api/films/{id}", status),
+            web.post("/api/films/{id}/cancel", cancel),
+            web.post("/api/admin/drain", drain),
             web.get("/files/{id}/{path:.+}", files),
         ]
     )
+    app.on_startup.append(recover)
     return app
 
 
@@ -403,9 +536,14 @@ def main():
     )
     ap.add_argument("--port", type=int, default=8765)
     args = ap.parse_args()
-    agent.child_env()  # fail now, not on the first request, if the key is missing
+    if not procs.secret("ANTHROPIC_API_KEY"):  # fail now, not on the first request
+        sys.exit("ANTHROPIC_API_KEY is not set (put it in the studio's .env)")
     app = make_app(ensure_token())
-    print("Sketch Studio on http://127.0.0.1:%d" % args.port, flush=True)
+    print(
+        "Sketch Studio on http://127.0.0.1:%d  (code %s, home %s)"
+        % (args.port, films.RELEASE, films.HOME),
+        flush=True,
+    )
     web.run_app(app, host="127.0.0.1", port=args.port, print=None)
 
 

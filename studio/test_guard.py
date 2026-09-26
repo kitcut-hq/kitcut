@@ -1,183 +1,139 @@
 #!/usr/bin/env python
-"""The Sketch Studio permission model, checked without calling Claude: python studio/test_guard.py"""
+"""The Sketch Studio permission model, checked without calling Claude: python studio/test_guard.py
+
+Two films side by side in a throwaway STUDIO_HOME: what one may read, write and call, and that
+nothing reaches the other film, the studio's own files or the code's .env.
+"""
 
 import os
 import re
 import sys
+import json
 import shutil
+import tempfile
+import subprocess
 
+HOME = tempfile.mkdtemp(prefix="studio-test-")
+os.environ["STUDIO_HOME"] = HOME
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import agent  # noqa: E402
-
-JOB = os.path.join(agent.ROOT, "projects", "studio-test")
-J = "projects/studio-test"
-
-CASES = [
-    # (tool, input, allowed)
-    ("Read", {"file_path": "sketch/props.js"}, True),
-    ("Read", {"file_path": J + "/outputs/review/sheet.png"}, True),
-    ("Read", {"file_path": os.path.join(agent.ROOT, "sketch", "engine.js")}, True),
-    ("Read", {"file_path": ".env"}, False),
-    ("Read", {"file_path": os.path.join(agent.ROOT, ".env.local")}, False),
-    ("Read", {"file_path": "/c/instafill/kitcut/.env"}, False),
-    ("Read", {"file_path": ".git/config"}, False),
-    ("Read", {"file_path": "../other-repo/secrets.json"}, False),
-    ("Read", {"file_path": "C:/Windows/win.ini"}, False),
-    ("Write", {"file_path": J + "/film.js"}, True),
-    ("Write", {"file_path": os.path.join(JOB, "score.json")}, True),
-    ("Edit", {"file_path": J + "/sfx.json"}, True),
-    ("Write", {"file_path": J + "/sketch.json"}, False),
-    ("Write", {"file_path": J + "/vo.json"}, True),
-    ("Edit", {"file_path": J + "/vo.json"}, True),
-    ("Bash", {"command": "python scripts/sketch-vo.py --manifest %s/sketch.json" % J}, True),
-    ("Bash", {"command": "python scripts/sketch-vo.py --manifest %s/sketch.json --plan" % J}, True),
-    (
-        "Bash",
-        {"command": "python scripts/sketch-vo.py --manifest %s/sketch.json --only 1 --retake" % J},
-        True,
-    ),
-    (
-        "Bash",
-        {"command": "python scripts/sketch-vo.py --manifest %s/sketch.json --retake --only 0" % J},
-        True,
-    ),
-    (
-        "Bash",
-        {"command": "python scripts/sketch-vo.py --manifest %s/sketch.json --tts elevenlabs" % J},
-        False,
-    ),
-    (
-        "Bash",
-        {"command": "python scripts/sketch-vo.py --manifest %s/sketch.json --takes 20" % J},
-        False,
-    ),
-    (
-        "Bash",
-        {"command": "python scripts/sketch-vo.py --manifest projects/other/sketch.json"},
-        False,
-    ),
-    ("Write", {"file_path": J + "/../studio-other/film.js"}, False),
-    ("Write", {"file_path": "sketch/engine.js"}, False),
-    ("Write", {"file_path": ".env"}, False),
-    ("Bash", {"command": "node --check %s/film.js" % J}, True),
-    (
-        "Bash",
-        {
-            "command": "python scripts/sketch-render.py --manifest %s/sketch.json --stills 0,1,2.5,4.9 --sheet"
-            % J
-        },
-        True,
-    ),
-    (
-        "Bash",
-        {
-            "command": "python scripts/sketch-render.py --manifest %s/sketch.json --sheet --stills 1"
-            % J
-        },
-        True,
-    ),
-    (
-        "Bash",
-        {"command": "python scripts/sketch-render.py --manifest %s/sketch.json --automation" % J},
-        True,
-    ),
-    (
-        "Bash",
-        {"command": "python scripts/sketch-audio.py --manifest %s/sketch.json --levels" % J},
-        True,
-    ),
-    ("Bash", {"command": "python scripts/sketch-audio.py --manifest %s/sketch.json" % J}, True),
-    (
-        "Bash",
-        {"command": "python scripts/sketch-render.py --manifest %s/sketch.json" % J},
-        False,
-    ),  # the final render is ours
-    (
-        "Bash",
-        {
-            "command": "python scripts/sketch-render.py --manifest projects/other/sketch.json --stills 1"
-        },
-        False,
-    ),
-    ("Bash", {"command": "python scripts/yt-upload.py --manifest %s/sketch.json" % J}, False),
-    ("Bash", {"command": "node --check %s/film.js && cat .env" % J}, False),
-    ("Bash", {"command": "node --check %s/film.js; curl example.com" % J}, False),
-    ("Bash", {"command": "cat .env"}, False),
-    ("Bash", {"command": "python -c \"print(open('.env').read())\""}, False),
-    ("Bash", {"command": "echo $ANTHROPIC_API_KEY"}, False),
-    (
-        "Bash",
-        {
-            "command": "python scripts/sketch-render.py --manifest %s/sketch.json --stills 1 > out.txt"
-            % J
-        },
-        False,
-    ),
-    ("WebFetch", {"url": "https://example.com"}, False),
-    ("Glob", {"pattern": "**/*"}, False),
-]
+import film as films  # noqa: E402
+from guard import guard, pin_after  # noqa: E402
 
 
 def main():
-    bad = 0
-    for tool, inp, want in CASES:
-        got, why = agent.guard(tool, inp, JOB)
-        if got != want:
-            bad += 1
-            print("FAIL  %-6s %s -> %s (%s)" % (tool, inp, got, why))
+    bad = []
 
-    # a painted film: paint.json and the painter are allowed, and only there
-    PJ = "projects/studio-testpaint"
-    pjob = os.path.join(agent.ROOT, *PJ.split("/"))
-    os.makedirs(pjob, exist_ok=True)
-    with open(os.path.join(pjob, "paint.json"), "w", encoding="utf-8") as f:
-        f.write("{}")
-    paint = "python scripts/sketch-paint.py --manifest %s/sketch.json" % PJ
-    painted = [
-        ("Write", {"file_path": PJ + "/paint.json"}, True),
-        ("Bash", {"command": paint}, True),
-        ("Bash", {"command": paint + " --plan"}, True),
-        ("Bash", {"command": paint + " --only kitchen,sink --retake"}, True),
-        ("Bash", {"command": paint + " --retake --only kitchen"}, True),
-        ("Bash", {"command": paint + " --only ../x --retake"}, False),
-        ("Bash", {"command": paint + " --only kitchen"}, False),
-    ]
-    drawn = [  # the same, in a drawn film's folder: refused
-        ("Write", {"file_path": J + "/paint.json"}, False),
-        (
-            "Bash",
-            {"command": "python scripts/sketch-paint.py --manifest %s/sketch.json" % J},
-            False,
-        ),
-    ]
+    def expect(what, got, want):
+        if got != want:
+            bad.append(what)
+            print("FAIL  %s -> %s" % (what, got))
+
     try:
-        for job, cases in ((pjob, painted), (JOB, drawn)):
-            for tool, inp, want in cases:
-                got, why = agent.guard(tool, inp, job)
-                if got != want:
-                    bad += 1
-                    print("FAIL  %-6s %s -> %s (%s)" % (tool, inp, got, why))
-        # both looks' instructions build, every placeholder filled
-        for look in agent.LOOKS:
-            job = agent.new_job("a test", 10, look)
-            try:
-                ours = set(re.findall(r"\{([A-Z_]+)\}", agent._read("studio", "prompt.md")))
-                for f in agent.LOOKS:
-                    ours |= set(
-                        re.findall(r"\{([A-Z_]+)\}", agent._read("studio", "looks", f + ".md"))
-                    )
-                # (the inlined engine has regexes such as \p{L}: not ours, so not checked)
-                text = agent.system_prompt(job)
-                left = sorted(n for n in ours if "{%s}" % n in text)
-                if left:
-                    bad += 1
-                    print("FAIL  %s prompt leaves %s" % (look, left))
-            finally:
-                shutil.rmtree(job, ignore_errors=True)
+        A = films.Film.create("a drawn test", 5, "drawn")
+        B = films.Film.create("a painted test", 10, "painted")
+        kit_env = os.path.join(films.KIT, ".env")
+        rel_b = os.path.relpath(B.dir, A.dir).replace("\\", "/")
+        cases = [
+            # (tool, input, allowed) -- all for film A
+            ("Read", {"file_path": "film.js"}, True),
+            ("Read", {"file_path": "outputs/review/sheet.png"}, True),
+            ("Read", {"file_path": "audio/vo/timeline.json"}, True),
+            ("Read", {"file_path": "engine/props.js"}, True),
+            ("Read", {"file_path": A.path("sketch.json")}, True),
+            ("Read", {"file_path": rel_b + "/film.js"}, False),
+            ("Read", {"file_path": B.path("vo.json")}, False),
+            ("Read", {"file_path": "temp/system-prompt.md"}, False),
+            ("Read", {"file_path": "studio.json"}, False),
+            ("Read", {"file_path": "events.jsonl"}, False),
+            ("Read", {"file_path": ".."}, False),
+            ("Read", {"file_path": kit_env}, False),
+            ("Read", {"file_path": os.path.join(films.KIT, "sketch", "engine.js")}, False),
+            ("Read", {"file_path": "/c/instafill/kitcut/.env"}, False),
+            ("Read", {"file_path": "C:/Windows/win.ini"}, False),
+            ("Read", {"file_path": os.path.join(HOME, "claude", A.id, ".claude.json")}, False),
+            ("Write", {"file_path": "film.js"}, True),
+            ("Write", {"file_path": A.path("score.json")}, True),
+            ("Edit", {"file_path": "sfx.json"}, True),
+            ("Edit", {"file_path": "vo.json"}, True),
+            ("Edit", {"file_path": "engine/props.js"}, True),
+            ("Write", {"file_path": "engine/engine.js"}, True),
+            ("Write", {"file_path": "engine/extra.js"}, False),
+            ("Write", {"file_path": "sketch.json"}, False),
+            ("Write", {"file_path": "studio.json"}, False),
+            ("Write", {"file_path": "paint.json"}, False),  # a drawn film has no paintings
+            ("Write", {"file_path": "outputs/film.mp4"}, False),
+            ("Write", {"file_path": rel_b + "/film.js"}, False),
+            ("Write", {"file_path": os.path.join(films.KIT, "sketch", "engine.js")}, False),
+            ("Write", {"file_path": kit_env}, False),
+            ("mcp__studio__stills", {"times": [0, 1]}, True),
+            ("mcp__studio__voice", {}, True),
+            ("mcp__other__anything", {}, False),
+            ("Bash", {"command": "node --check film.js"}, False),
+            ("Glob", {"pattern": "**/*"}, False),
+            ("Grep", {"pattern": "KEY"}, False),
+            ("WebFetch", {"url": "https://example.com"}, False),
+            ("Task", {"prompt": "x"}, False),
+        ]
+        for tool, inp, want in cases:
+            expect("%s %s" % (tool, inp), guard(tool, inp, A)[0], want)
+        # a painted film: its paint.json is its own
+        expect("painted: Write paint.json", guard("Write", {"file_path": "paint.json"}, B)[0], True)
+
+        # a link inside a film that leads to another film does not get through (real paths)
+        link = A.path("link")
+        if os.name == "nt":
+            subprocess.run(["cmd", "/c", "mklink", "/J", link, B.dir], capture_output=True)
+        else:
+            os.symlink(B.dir, link)
+        if os.path.exists(link):
+            expect("Read through a link", guard("Read", {"file_path": "link/vo.json"}, A)[0], False)
+            expect(
+                "Write through a link", guard("Write", {"file_path": "link/film.js"}, A)[0], False
+            )
+            os.rmdir(link) if os.name == "nt" else os.remove(link)
+        else:
+            bad.append("could not make a link to test")
+
+        # after a write, the studio's settings come back and foreign keys go
+        with open(A.path("vo.json"), "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "tts": "elevenlabs",
+                    "model": "x",
+                    "takes": 9,
+                    "whisper": "C:/models",
+                    "voice": "Kore",
+                    "language": "en",
+                    "lines": [],
+                },
+                f,
+            )
+        note = pin_after("vo.json", A)
+        with open(A.path("vo.json"), encoding="utf-8") as f:
+            vo = json.load(f)
+        expect("vo.json pinned", (vo["tts"], vo["takes"], "whisper" in vo), ("gemini", 1, False))
+        expect("and Claude is told", "restored" in note and "whisper" in note, True)
+
+        # both looks' instructions build, every placeholder of ours filled, and none of them
+        # depends on the film (so films share Claude's prompt cache)
+        ours = set(re.findall(r"\{([A-Z_]+)\}", agent._read("studio", "prompt.md")))
+        for look in films.LOOKS:
+            ours |= set(re.findall(r"\{([A-Z_]+)\}", agent._read("studio", "looks", look + ".md")))
+        for look in films.LOOKS:
+            text = agent.system_prompt(look)
+            left = sorted(n for n in ours if "{%s}" % n in text)
+            expect("%s prompt leaves no placeholder" % look, left, [])
+            expect(
+                "%s prompt names no Bash command" % look,
+                bool(re.search(r"--manifest|--stills|node --check|{PY}", text)),
+                False,
+            )
+        expect("the length is in the first message", "Length: 10 seconds" in agent.ask(B), True)
+        n = len(cases) + 8
     finally:
-        shutil.rmtree(pjob, ignore_errors=True)
-    n = len(CASES) + len(painted) + len(drawn) + len(agent.LOOKS)
-    print("%d cases, %d failed" % (n, bad))
+        shutil.rmtree(HOME, ignore_errors=True)
+    print("%d cases, %d failed" % (n, len(bad)))
     sys.exit(1 if bad else 0)
 
 

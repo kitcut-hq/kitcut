@@ -46,6 +46,8 @@ button:disabled { opacity: .5; cursor: progress; }
 .screen .idle { font: 700 34px/1.2 Caveat, cursive; color: var(--ink-soft); text-align: center; padding: 20px; }
 .caption { display: flex; justify-content: space-between; gap: 10px; padding: 10px 14px; border-top: 1.5px solid var(--rule); font-size: 13px; color: var(--ink-soft); }
 .caption b { color: var(--ink); font-weight: 600; }
+.caption .right { display: flex; align-items: center; gap: 10px; }
+.caption button.small { padding: 5px 10px; font-size: 12px; }
 .pen { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); margin-right: 8px; animation: pulse 1s ease-in-out infinite; vertical-align: 1px; }
 @keyframes pulse { 50% { opacity: .25; } }
 .log { background: var(--sheet); border: 1.5px solid var(--rule); border-radius: 14px; padding: 12px 14px; max-height: 560px; overflow: auto; }
@@ -118,14 +120,14 @@ a.google:hover { border-color: var(--accent); }
         <option value="15">15 seconds</option>
       </select>
       <button id="go" type="submit">Make the film</button>
-      <span class="note">Claude Opus 5.5 directs · Muse paints (painted look) · Gemini narrates · about 3-6 minutes · one film at a time</span>
+      <span class="note">Claude Opus 5.5 directs · Muse paints (painted look) · Gemini narrates · about 3-6 minutes<span id="busy"></span></span>
     </div>
   </form>
 
   <section class="work">
     <div class="stage">
       <div class="screen" id="screen"><div class="idle">Your film appears here.</div></div>
-      <div class="caption"><span id="status">Ready.</span><span id="clock"></span></div>
+      <div class="caption"><span id="status">Ready.</span><span class="right"><button class="small ghost" type="button" id="stop" hidden>Stop</button><span id="clock"></span></span></div>
     </div>
     <aside class="log">
       <h2>What Claude is doing</h2>
@@ -186,7 +188,12 @@ async function online() {
   try {
     const r = await api('/api/health');
     const h = await r.json();
-    if (r.ok && h.ok) return (studioUp = true);
+    if (r.ok && h.ok) {
+      const n = (h.running || 0) + (h.queued || 0);
+      $('busy').textContent = n ? ` · ${n} film${n === 1 ? '' : 's'} being made right now` : '';
+      if (h.draining) $('status').textContent = 'The studio is restarting; new films in a minute.';
+      return (studioUp = true);
+    }
     $('status').textContent = h.error || 'The studio is offline right now.';
   } catch (e) { $('status').textContent = 'The studio is offline right now.'; }
   $('go').disabled = true;
@@ -272,16 +279,32 @@ function onEvent(ev) {
       $('status').textContent = `Done in ${mmss(ev.seconds)}.`; recent(); break;
     case 'error': line('error', ev.text, at); $('status').textContent = 'Failed.'; spend(); break;
     case 'cost': lastCost = ev.usd; if (timer) tick(); break;
+    case 'wait': $('status').innerHTML = `<span class="pen"></span>${esc(ev.text)}`; break;
   }
 }
 
 // ---- one film per address: /film/<id>. Starting a film goes there, so a reload (or a shared
 // link) asks the studio for that film again and rebuilds the log, or plays the finished video.
-const FILM_PATH = /^\/film\/(studio-\d{8}-\d{6})\/?$/;
+const FILM_PATH = /^\/film\/(studio-\d{8}-\d{6}(?:-[a-z0-9]{6})?)\/?$/;
+const mine = {
+  all() { try { return JSON.parse(localStorage.getItem('studioMine') || '[]'); } catch (e) { return []; } },
+  add(id) { try { localStorage.setItem('studioMine', JSON.stringify([id, ...this.all()].slice(0, 20))); } catch (e) { /* private window */ } },
+  has(id) { return this.all().includes(id); },
+};
+$('stop').addEventListener('click', async () => {
+  const id = currentId;
+  $('stop').disabled = true;
+  try {
+    const r = await api(`/api/films/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    $('status').innerHTML = '<span class="pen"></span>Stopping...';
+  } catch (err) { line('error', 'Could not stop it: ' + (err.message || err)); $('stop').disabled = false; }
+});
 let currentId = null, lastCost = null;
 function tick() { $('clock').textContent = (lastCost != null ? `${usd(lastCost)} so far · ` : '') + mmss((Date.now() - t0) / 1000); }
 function startClock(elapsed) { t0 = Date.now() - (elapsed || 0) * 1000; clearInterval(timer); tick(); timer = setInterval(tick, 500); }
-function finish() { clearInterval(timer); timer = null; clearTimeout(poll); poll = null; $('go').disabled = !studioUp; }
+function finish() { clearInterval(timer); timer = null; clearTimeout(poll); poll = null; $('go').disabled = !studioUp; $('stop').hidden = true; }
 function reset() {
   finish(); t0 = 0; lastCost = null; lastLog = null; showedDone = false;
   $('stats').hidden = true; $('log').innerHTML = ''; $('clock').textContent = '';
@@ -320,7 +343,10 @@ async function follow(since = 0, misses = 0) {
       if (s.status === 'queued' || s.status === 'running') { startClock(s.elapsed_s); screen('<div class="idle">Claude is thinking up the film...</div>'); }
     }
     for (const ev of s.events) onEvent(ev);
-    if (s.status === 'queued') $('status').innerHTML = `<span class="pen"></span>Waiting: number ${s.position} in the queue`;
+    const live = s.status === 'queued' || s.status === 'running';
+    $('stop').hidden = !(live && mine.has(id)); $('stop').disabled = false;
+    if (s.status === 'queued') $('status').innerHTML = `<span class="pen"></span>` + esc(s.position > 1 ? `Waiting for a free studio: ${s.position - 1} film${s.position === 2 ? '' : 's'} ahead` : (s.wait || 'Waiting for a free studio'));
+    else if (s.status === 'running' && s.wait) $('status').innerHTML = `<span class="pen"></span>${esc(s.wait)}`;
     if (s.status === 'done') {
       if (s.video_url) play(s.video_url, s.poster_url);
       if (!showedDone && s.seconds != null) {  // a film from before the log was kept: its summary stands in
@@ -330,7 +356,8 @@ async function follow(since = 0, misses = 0) {
     }
     if (s.status === 'error' && !s.events.length && since === 0) { line('error', s.error || 'This film failed.'); $('status').textContent = 'Failed.'; }
     if (s.status === 'lost') { screen('<div class="idle">This film was interrupted.</div>'); $('status').textContent = 'The studio restarted before this film finished.'; }
-    if (s.status === 'done' || s.status === 'error' || s.status === 'lost') return finish();
+    if (s.status === 'cancelled') { if (since === 0 && !s.events.length) line('error', 'This film was stopped.'); $('status').textContent = 'Stopped.'; }
+    if (['done', 'error', 'lost', 'cancelled'].includes(s.status)) return finish();
     poll = setTimeout(() => follow(s.next, 0), 1500);
   } catch (err) {
     if (id !== currentId) return;
@@ -432,6 +459,7 @@ $('form').addEventListener('submit', async (e) => {
     }
     const body = await r.json();
     if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    mine.add(body.id);
     openFilm(body.id, true);
   } catch (err) { line('error', String(err.message || err)); finish(); }
 });

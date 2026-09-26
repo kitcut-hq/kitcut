@@ -3,3 +3,4 @@
 claude-agent-sdk>=0.2.159
 aiohttp>=3.9
 pymongo[srv]>=4.10
+pywin32>=306; sys_platform == "win32"  # each film's processes live in a Job Object

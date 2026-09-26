@@ -4,30 +4,29 @@ those paintings in code -- the camera moving across them, crossfades on spoken w
 and hand-drawn marks on top.
 
 ## FILES
-- `{JOB}/paint.json` -- the paintings (already there, with no images yet; see "The paintings").
+- `paint.json` -- the paintings (already there, with no images yet; see "The paintings").
 
 ## COMMANDS
-- `{PY} scripts/sketch-paint.py --manifest {JOB}/sketch.json` -- paints every image in
-  `paint.json` at once (about 30 s; unchanged ones come from cache) and tiles them into
-  `{JOB}/images/sheet.jpg`. `--only <name> --retake` repaints one. At most {MAX_IMAGES} paintings
-  for the whole film, repaints included -- `--plan` shows what a run would paint.
+- `paint` -- paints every image in `paint.json` at once (about 30 s; unchanged ones come from
+  cache) and tiles them into `images/sheet.jpg`. `retake: ["<name>"]` repaints some. At most
+  {MAX_IMAGES} paintings for the whole film, repaints included.
 
 ## STEPS
-1. Decide the idea and the shots: one clear point, told in {SECONDS} seconds, in one to three
-   paintings.
-2. Write the narration in `vo.json` and run `sketch-vo.py`. Read `{JOB}/audio/vo/timeline.json`:
-   each line's start and end, and every word's time on the film clock. If a line runs past
-   {SECONDS} s or `acc` is below 0.9, shorten or rephrase it and run again.
-3. Write `paint.json` (see "The paintings") and run `sketch-paint.py`. Read
-   `{JOB}/images/sheet.jpg`. Repaint an image that is wrong -- lettering in it, the wrong subject, a
-   character who does not match -- at most twice in all.
-4. Write `film.js`: the paintings moving and changing on the spoken words, then `node --check` it.
-5. Render about six stills spread over the film (always 0, and one just before the end) with
-   `--sheet`, and Read the sheet. Look hard: a painting's edge showing inside the frame, words
-   that are hard to read over the picture, a crossfade landing on the wrong word, text that does
-   not match the narration. Fix and re-check. Two review rounds at most.
-6. Write `score.json` and `sfx.json`, then run `sketch-audio.py` once to prove they render. The
-   music ducks under the voice by itself.
+1. Decide the idea and the shots: one clear point, told in the film's length, in one to three
+   paintings (a few more for a long film, within the limit).
+2. Write the narration in `vo.json` and call `voice`. It returns each line's start and end, and
+   every word's time on the film clock. If a line runs past the end of the film or `acc` is
+   below 0.9, shorten or rephrase it and record again.
+3. Write `paint.json` (see "The paintings") and call `paint`. Read `images/sheet.jpg`. Repaint
+   an image that is wrong -- lettering in it, the wrong subject, a character who does not match
+   -- at most twice in all.
+4. Write `film.js`: the paintings moving and changing on the spoken words, then call `check`.
+5. Call `stills` with about six times spread over the film (always 0, and one just before the
+   end), and Read `outputs/review/sheet.png`. Look hard: a painting's edge showing inside the
+   frame, words that are hard to read over the picture, a crossfade landing on the wrong word,
+   text that does not match the narration. Fix and re-check. Two review rounds at most.
+6. Write `score.json` and `sfx.json`, then call `sound` once to prove they render. The music
+   ducks under the voice by itself.
 7. Finish with one or two sentences: what the film shows and says, and anything from the prompt
    you could not do.
 
@@ -39,14 +38,16 @@ The studio has set `backend`, `model` and `max_images`; leave them. You set:
 - `style`: one line for the look of every painting, taken from the prompt when it asks for one
   (watercolour, anime, claymation, paper collage, 1950s poster, flat vector, photoreal...), else
   whatever suits the subject and the audience.
-- `images`: `[{"name": "kitchen", "prompt": "..."}, ...]` -- names of letters, digits and `-`.
-  Describe each picture fully: who, doing what, where, the framing (wide, close-up), the light.
-  Never ask for words, letters or signs in a picture.
+- `images`: `[{"name": "kitchen", "prompt": "..."}, ...]` -- names of lowercase letters, digits,
+  `-` and `_`. Describe each picture fully: who, doing what, where, the framing (wide,
+  close-up), the light. Never ask for words, letters or signs in a picture. `"ref": "<name>"`
+  paints an image from another one, the way to keep a character the same.
 
 Each painting comes back 1920x1280 (a little taller than the 1920x1080 frame: room to move).
 
 - Fewer, richer paintings: one wide painting gives several shots -- push in on one part, then
-  pan to another. One or two paintings for 5 s, two or three for 10-15 s.
+  pan to another. One or two paintings for 5 s, two or three for 10-15 s, four to six for a
+  minute.
 - The same character in two paintings will not look quite the same. Describe them identically
   every time (age, hair, clothes and their colours), or keep them in one painting and frame
   different parts of it.
