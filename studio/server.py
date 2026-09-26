@@ -70,6 +70,7 @@ ADMIT = asyncio.Lock()  # one admission at a time: the limits are checked and ta
 DRAINING = False
 TOKEN = ""
 MAX_QUEUE = int(os.environ.get("STUDIO_MAX_QUEUE") or 5)
+PROMPT_MAX = 4000  # characters of a prompt: a pasted brief fits (the page caps it too)
 # the public site makes this reachable by anyone: a day's spend, and each client's films, are capped
 DAILY_USD = float(os.environ.get("STUDIO_DAILY_USD") or 25)
 PER_CLIENT_DAILY = int(os.environ.get("STUDIO_PER_CLIENT_DAILY") or 5)
@@ -331,7 +332,7 @@ async def create(req):
         body = await req.json()
     except ValueError:
         return web.json_response({"error": 'send JSON: {"prompt": "..."}'}, status=400)
-    prompt = str(body.get("prompt", "")).strip()[:600]
+    prompt = str(body.get("prompt", "")).strip()[:PROMPT_MAX]
     if len(prompt) < 3:
         return web.json_response({"error": "write a prompt"}, status=400)
     try:
@@ -354,6 +355,11 @@ async def create(req):
     # this machine may have a film made on its own Claude Code login (internal runs); never
     # anyone through the tunnel
     auth = "login" if body.get("auth") == "login" and from_this_machine(req) else "api"
+    # a Free-plan film gets KitCut's watermark and closing (the site sends it, trusted like
+    # X-Priority; this machine may ask for it to try it)
+    branding = req.headers.get("X-Branding", "").strip() == "1" or (
+        body.get("branding") is True and from_this_machine(req)
+    )
     prune()
     # the check and the taking happen under one lock: two requests at the same moment cannot
     # both slip under a limit that has room for one
@@ -364,7 +370,14 @@ async def create(req):
         if refused:
             return web.json_response({"error": refused}, status=429)
         f = Film.create(
-            prompt, seconds, look, client=client, source="web", priority=priority, auth=auth
+            prompt,
+            seconds,
+            look,
+            client=client,
+            source="web",
+            priority=priority,
+            auth=auth,
+            branding=branding,
         )
         await agent.save(f.id, agent.first_record(f, "web", client))
         start(f)

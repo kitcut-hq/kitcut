@@ -19,6 +19,7 @@ import json
 import time
 import shutil
 import asyncio
+import subprocess
 import tempfile
 
 HOME = tempfile.mkdtemp(prefix="studio-test-")
@@ -40,9 +41,26 @@ EXPECT_USD = CLAUDE_USD + TTS_USD
 CALLED = []  # the films the stub was asked to write
 
 
-async def fake_claude(film, emit, meter, tools, auth="api"):
+async def fake_claude(film, emit, meter, tools, auth="api", prompt=None, resume=None):
     CALLED.append(film.id)
     ex = os.path.join(films.KIT, "config", "sketch", "example")
+    if resume:  # the last turn after the time ran out: what was missing
+        for f in films.MADE:
+            if not os.path.exists(film.path(f)):
+                shutil.copy(os.path.join(ex, f), film.dir)
+        return
+    prompt = film.record().get("prompt", "")
+    if "nothing written" in prompt:
+        await asyncio.sleep(60)  # Claude past its time with no film: a failure
+        return
+    if "only the picture" in prompt:  # past its time with the music and the cues unwritten
+        film.update(claude_session="fake-session")
+        shutil.copy(os.path.join(ex, "film.js"), film.dir)
+        os.makedirs(film.path("audio", "vo"), exist_ok=True)
+        with open(film.path("audio", "vo", "timeline.json"), "w", encoding="utf-8") as f:
+            json.dump({"lines": []}, f)
+        await asyncio.sleep(60)
+        return
     for f in films.MADE:
         shutil.copy(os.path.join(ex, f), film.dir)
     # a vo.json with what Claude may not change changed (the studio must put it back), and the
@@ -64,8 +82,12 @@ async def fake_claude(film, emit, meter, tools, auth="api"):
         f.write(json.dumps({"model": "m", "cost_usd": TTS_USD, "input": 20, "output": 100}) + "\n")
     meter.add("msg_" + film.id, USAGE)
     emit({"type": "cost", "usd": round(meter.usd(), 4)})
-    if "slow" in film.record().get("prompt", ""):
+    if "slow" in prompt:
         await asyncio.sleep(120)  # a film someone cancels, or that keeps a slot busy
+    if "overtime" in prompt:  # the film written and its narration recorded, then a long last look
+        with open(film.path("audio", "vo", "timeline.json"), "w", encoding="utf-8") as f:
+            json.dump({"lines": []}, f)
+        await asyncio.sleep(60)
     await tools.check()
     await tools.stills([0, 2.5], True)
     emit({"type": "tool", "text": "wrote film.js (stub)"})
@@ -114,9 +136,11 @@ async def main():
 
         # ------------------------------------------------ three films at once, three clients
         ids = []
-        extra = [  # film 0 is a priority plan's; film 1 asks for the login through the tunnel
-            ({"X-Priority": "1"}, {}),  # (refused: api); film 2 asks for it from this machine
-            ({"Cf-Ray": "test"}, {"auth": "login"}),
+        # film 0 is a priority plan's; film 1 is a Free plan's (branded), and asks for the login
+        # through the tunnel (refused: api); film 2 asks for the login from this machine
+        extra = [
+            ({"X-Priority": "1"}, {}),
+            ({"Cf-Ray": "test", "X-Branding": "1"}, {"auth": "login"}),
             ({}, {"auth": "login"}),
         ]
         for i in range(3):
@@ -161,6 +185,34 @@ async def main():
                 (rec.get("priority"), rec.get("auth")) == [(1, "api"), (0, "api"), (0, "login")][i]
                 and mem.docs[j].get("priority") == rec.get("priority"),
                 "its priority and way to pay (%s, %s)" % (rec.get("priority"), rec.get("auth")),
+            )
+            with open(f.manifest, encoding="utf-8") as fh:
+                tail = json.load(fh).get("tail")
+            secs = float(
+                subprocess.run(
+                    [
+                        "ffprobe",
+                        "-v",
+                        "error",
+                        "-show_entries",
+                        "format=duration",
+                        "-of",
+                        "csv=p=0",
+                        f.path("outputs", "film.mp4"),
+                    ],
+                    capture_output=True,
+                    text=True,
+                ).stdout
+                or 0
+            )
+            branded = i == 1
+            check(
+                bool(rec.get("branding")) == branded
+                and bool(tail) == branded
+                and abs(secs - (5 + (3 if branded else 0))) < 0.1
+                and mem.docs[j].get("branding") == branded,
+                "%s: its video is %.2f s"
+                % ("a Free-plan film: the closing, 3 s more" if branded else "no closing", secs),
             )
             with open(f.path("vo.json"), encoding="utf-8") as fh:
                 vo = json.load(fh)
@@ -225,6 +277,48 @@ async def main():
         r = await c.post("/api/films", json={"prompt": "over budget"}, headers=auth)
         check(r.status == 429 and "budget" in (await r.json())["error"], "past the day's budget")
         server.DAILY_USD = 1000
+
+        # ------------------------------------------------ Claude past its time
+        real_limits = agent.limits
+        agent.limits = lambda n: real_limits(n) | ({"claude_s": 3} if n in (20, 25, 30) else {})
+        r1 = await c.post(
+            "/api/films",
+            json={"prompt": "overtime, the film written", "seconds": 20},
+            headers=auth | {"X-Client-Ip": "u:ot1"},
+        )
+        r2 = await c.post(
+            "/api/films",
+            json={"prompt": "overtime, nothing written", "seconds": 25},
+            headers=auth | {"X-Client-Ip": "u:ot2"},
+        )
+        r3 = await c.post(
+            "/api/films",
+            json={"prompt": "overtime, only the picture", "seconds": 30},
+            headers=auth | {"X-Client-Ip": "u:ot3"},
+        )
+        a, b = (await r1.json()).get("id"), (await r2.json()).get("id")
+        w = (await r3.json()).get("id")
+        sa, sb, sw = await asyncio.gather(
+            wait_for(c, auth, a), wait_for(c, auth, b, limit=180), wait_for(c, auth, w)
+        )
+        agent.limits = real_limits
+        check(
+            sa.get("status") == "done"
+            and films.Film.open(a).record().get("overtime") is True
+            and mem.docs[a].get("overtime") is True,
+            "past its time, a film Claude had written is finished (%s)"
+            % (sa.get("error") or sa.get("status")),
+        )
+        check(
+            sb.get("status") == "error" and "limit" in (sb.get("error") or ""),
+            "past its time with nothing written, a film fails (%s)" % sb.get("error"),
+        )
+        check(
+            sw.get("status") == "done"
+            and any("finishing up" in (e.get("text") or "") for e in sw["all_events"]),
+            "past its time with only the picture, one last turn writes the rest (%s)"
+            % (sw.get("error") or sw.get("status")),
+        )
 
         # ------------------------------------------------ a restart finds what was left
         q = films.Film.create("left queued", 5, "drawn", client="u:r1")

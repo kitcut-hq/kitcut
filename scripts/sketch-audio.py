@@ -14,6 +14,9 @@ Outputs, in projects/<id>/audio/:
     mix_pre.wav     the un-mastered mix          stem_music/sfx/vo.wav   (--stems)
     final.wav       mastered, 24-bit             final.mp3               for the HTML player
 
+A manifest `tail` ({secs, audio}: a closing after the film) adds its recording after the film's
+sound, which still ends at the film's end.
+
 Manifest keys (audio block), all optional except score:
     score, sfx, automation ("temp/automation.json"), vo_timeline ("audio/vo/timeline.json")
     mix: {music_db: 6, sfx_db: 3, vo_db: -17, duck: .62, reverb_sec: 2.3, music_reverb: .9,
@@ -162,6 +165,7 @@ def main():
             k = int(mix["fade_out"] * SR)
             if k:
                 out[:, -k:] *= np.linspace(1, 0, k) ** 1.5
+            out = with_tail(m, out, dur, mix["vo_db"])
             out = out / (np.abs(out).max() + 1e-9) * 0.89
             pre = os.path.join(m["_audio"], "mix_pre.wav")
             _sketch.write_wav(pre, out)
@@ -215,6 +219,24 @@ def main():
         manifest=m["_path"],
         sidecars={"mp3": mp3, "mix_pre": pre},
     )
+
+
+def with_tail(m, out, dur, vo_db):
+    """The film's sound, then the closing's (the manifest's tail): its own recording, as loud as
+    the narration, after the film has ended as it always does."""
+    tail = m.get("tail") or {}
+    n = int(round(_sketch.total(m) * SR)) - out.shape[1]
+    if n <= 0:
+        return out
+    out = np.concatenate([out, np.zeros((2, n))], axis=1)
+    if tail.get("audio"):
+        x = A.hp(_sketch.decode(_sketch.rel(m, tail["audio"]), SR, mono=True), 70)
+        a = np.abs(x)
+        x = x / (np.sqrt(np.mean(x[a > a.max() * 0.05] ** 2)) + 1e-9) * 10 ** (vo_db / 20)
+        i0 = int(dur * SR)
+        x = x[: out.shape[1] - i0]
+        out[:, i0 : i0 + len(x)] += x
+    return out
 
 
 if __name__ == "__main__":

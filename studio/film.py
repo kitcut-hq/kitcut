@@ -81,8 +81,10 @@ def limits(length):
     extra = max(0, length - 15)
     cap = os.environ.get("STUDIO_MAX_USD")
     return {
-        "claude_s": 15 * 60 + extra * 10,  # Claude's working time (waits for the machine excluded)
-        "wall_s": 40 * 60 + extra * 20,  # its phase, waits included
+        # Claude's working time (waits for the machine excluded): at effort xhigh a 10 s film
+        # took 4.6-12 min and a 30 s one 14.5 (2026-09-26); a 60 s one ran past 22.5
+        "claude_s": 20 * 60 + extra * 15,
+        "wall_s": 60 * 60 + extra * 25,  # its phase, waits included
         "budget_usd": float(cap) if cap else max(5.0, 0.12 * length),
         # what a film being made may still spend, held against the day's budget: from the films
         # so far, about $0.33 + $0.05 a second, with room
@@ -285,7 +287,15 @@ class Film:
     # ---------------------------------------------------------------- making and finding films
     @classmethod
     def create(
-        cls, prompt, seconds=5, look="drawn", client="local", source="web", priority=0, auth="api"
+        cls,
+        prompt,
+        seconds=5,
+        look="drawn",
+        client="local",
+        source="web",
+        priority=0,
+        auth="api",
+        branding=False,
     ):
         """A new film's folder: the manifest (its length set), the engine copy, an empty
         narration, an empty list of paintings for a painted film, and its record."""
@@ -333,6 +343,8 @@ class Film:
                 "priority": 1 if priority else 0,
                 # api: the public key (billed); login: this machine's Claude Code (local only)
                 "auth": auth,
+                # a Free-plan film: KitCut's watermark and closing (agent.brand, studio/outro.js)
+                "branding": bool(branding),
                 "release": RELEASE,
                 "state": "queued",
                 "created": datetime.now().isoformat(timespec="seconds"),

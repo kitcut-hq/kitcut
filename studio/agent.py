@@ -26,6 +26,7 @@ import os
 import re
 import json
 import time
+import shutil
 import asyncio
 import argparse
 import contextlib
@@ -57,7 +58,7 @@ from film import (  # noqa: E402
 )
 from guard import _path, guard, pin_after, pin_paint, pin_vo  # noqa: E402
 from sched import Clock, Sched, waiting_text  # noqa: E402
-from tools import Tools  # noqa: E402
+from tools import ToolError, Tools  # noqa: E402
 
 from claude_agent_sdk import (  # noqa: E402
     AssistantMessage,
@@ -169,8 +170,15 @@ def ask(film, recent=()):
     n = film.length
     text = (
         "Make the film.\n\nLength: %d seconds (fixed). Narration: about %d words, ending by "
-        "about %d s.\n\nPrompt: %s"
-        % (n, round(n * 2.2 - 3), n - 1, film.record().get("prompt", "").strip())
+        "about %d s. Your working time: about %d minutes (waiting for the machine is not "
+        "counted); keep the last few for the music, the cues and the sound check.\n\nPrompt: %s"
+        % (
+            n,
+            round(n * 2.2 - 3),
+            n - 1,
+            limits(n)["claude_s"] // 60,
+            film.record().get("prompt", "").strip(),
+        )
     )
     note = recent_note(film.look, recent)
     return text + ("\n\n" + note if note else "")
@@ -418,8 +426,9 @@ def claude_cli():
     return best[1]
 
 
-async def run_claude(film, emit, meter, tools, auth="api"):
-    """Claude's part: write, review and fix. Returns the SDK's ResultMessage (or None)."""
+async def run_claude(film, emit, meter, tools, auth="api", prompt=None, resume=None):
+    """Claude's part: write, review and fix. Returns the SDK's ResultMessage (or None). With
+    `resume` (a session id) and a `prompt`, one more turn of a session that was stopped."""
     pending, result = {}, None
 
     async def pre_tool(inp, tool_use_id, ctx):
@@ -474,10 +483,11 @@ async def run_claude(film, emit, meter, tools, auth="api"):
         cli_path=claude_cli() if auth == "login" else None,
         # the raw stream too: only its message_delta events carry a response's final token count
         include_partial_messages=True,
+        resume=resume,
     )
     streamed = {}
     async with ClaudeSDKClient(options=opts) as client:
-        await client.query(ask(film, recent_films(film)))
+        await client.query(prompt or ask(film, recent_films(film)))
         async for msg in client.receive_response():
             if isinstance(msg, StreamEvent):
                 before = meter.usd()
@@ -485,6 +495,8 @@ async def run_claude(film, emit, meter, tools, auth="api"):
                     emit({"type": "cost", "usd": round(meter.usd(), 4)})
             elif isinstance(msg, SystemMessage) and msg.subtype == "init":
                 d = msg.data
+                if not resume and d.get("session_id"):  # to wrap up in, if time runs out
+                    film.update(claude_session=d["session_id"])
                 emit(
                     {
                         "type": "init",
@@ -648,9 +660,27 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
                     }
                 )
                 s = time.time()
-                res = await _within(
-                    run_claude(film, emit, meter, tools, auth), clock, limits(length)
-                )
+                try:
+                    res = await _within(
+                        run_claude(film, emit, meter, tools, auth), clock, limits(length)
+                    )
+                except TimeoutError:
+                    # past its time, Claude may only have been taking a last look at a film it
+                    # had written: one that is whole and passes the checks is finished, not lost;
+                    # one with its picture written gets one short last turn for what is missing
+                    if not await written(film, tools) and not await wrap_up(
+                        film, emit, meter, tools, auth
+                    ):
+                        raise
+                    res = None
+                    summary["overtime"] = True
+                    emit(
+                        {
+                            "type": "stage",
+                            "name": "claude",
+                            "text": "Claude's time is up; finishing the film it wrote",
+                        }
+                    )
                 stages["claude"] = time.time() - s
                 stages["waited"] = clock.paused
             price()
@@ -665,11 +695,15 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
             await save(film.id, {"state": "finishing"})
         pin_vo(film)  # whatever Claude left there, the backends and models stay the studio's
         pin_paint(film)
+        if rec.get("branding"):
+            brand(film)
 
         s = time.time()
         emit({"type": "stage", "name": "sound", "text": "Mixing the soundtrack"})
         wav = film.path("audio", "final.wav")
-        deps = [film.path("audio", "vo", "timeline.json")] + [film.path(f) for f in film.editable()]
+        deps = [film.path("audio", "vo", "timeline.json"), film.manifest] + [
+            film.path(f) for f in film.editable()
+        ]
         if not _newer(wav, *deps):
             await tools.sound(log=True)
         stages["sound"] = time.time() - s
@@ -729,6 +763,7 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
                 "session_id": summary.get("session"),
                 "engine_changed": summary.get("engine_changed"),
                 "direction": summary.get("direction"),
+                "overtime": summary.get("overtime", False),
                 "finished_at": store.now(),
             } | {
                 k: summary[k]
@@ -761,6 +796,70 @@ def _newer(a, *bs):
     return all(not os.path.exists(b) or os.path.getmtime(b) <= t for b in bs)
 
 
+async def written(film, tools):
+    """Whether the film Claude wrote is whole: every file it must make, a recorded narration,
+    and files that pass the gate and the syntax check."""
+    if any(not os.path.exists(film.path(f)) for f in MADE):
+        return False
+    if not os.path.exists(film.path("audio", "vo", "timeline.json")):
+        return False
+    try:
+        tools.gate()
+        await tools.check()
+    except ToolError:
+        return False
+    return True
+
+
+WRAP_UP_S = 240  # the last turn's working time
+WRAP_UP = (
+    "Time is up. Do not review or render stills again. Write whatever is still missing of "
+    "film.js, score.json and sfx.json now -- keep them simple -- call check if you changed "
+    "film.js, and stop with one sentence."
+)
+
+
+async def wrap_up(film, emit, meter, tools, auth):
+    """One short last turn in the session that ran out of time, for a film whose picture is
+    written: Claude writes what is missing (the music, the cues). Whether the film is whole."""
+    sid = film.record().get("claude_session")
+    if not sid or not os.path.exists(film.path("film.js")):
+        return False
+    emit({"type": "stage", "name": "claude", "text": "Claude's time is up; it is finishing up"})
+    with contextlib.suppress(TimeoutError):
+        await _within(
+            run_claude(film, emit, meter, tools, auth, prompt=WRAP_UP, resume=sid),
+            Clock(),
+            {"claude_s": WRAP_UP_S, "wall_s": WRAP_UP_S + 120},
+        )
+    return await written(film, tools)
+
+
+CLOSING_S = 3.0  # the Free plan's closing, after the film
+
+
+def brand(film):
+    """A Free-plan film's watermark and closing (studio/outro.js, studio/brand/), added to its
+    manifest as a `tail` for the final sound and render only -- so Claude's review stills never
+    show them. Copied into the film, which then renders the same way later. Idempotent."""
+    d = film.path("temp", "brand")
+    os.makedirs(d, exist_ok=True)
+    for src in (
+        os.path.join(HERE, "outro.js"),
+        *(os.path.join(HERE, "brand", n) for n in ("kitcut.png", "closing.wav")),
+    ):
+        shutil.copyfile(src, os.path.join(d, os.path.basename(src)))
+    with open(film.manifest, encoding="utf-8") as f:
+        m = json.load(f)
+    m["tail"] = {
+        "secs": CLOSING_S,
+        "scripts": ["temp/brand/outro.js"],
+        "images": {"kitcut": "temp/brand/kitcut.png"},
+        "audio": "temp/brand/closing.wav",
+    }
+    films._write_json(film.manifest, m)
+
+
 def first_record(film, source, client):
     """The run's record as it is when the film is asked for (state queued), so it counts toward
     the day's limits from the first moment."""
@@ -779,6 +878,7 @@ def first_record(film, source, client):
         "release": RELEASE,
         "priority": rec.get("priority", 0),
         "auth": rec.get("auth", "api"),
+        "branding": bool(rec.get("branding")),
         "state": "queued",
         "cost_usd": 0.0,
     }

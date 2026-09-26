@@ -21,7 +21,9 @@ Outputs (projects/<id>/outputs/):
 Manifest keys: title, description, slug, duration, fps, film ("film.js"), fonts
 ([{"file", "family", "weight", "load"}]), images ({"logo": "assets/logo.png"} -> SK.IMG.logo),
 player ({accent, paper, ink, hint, hint_font}), poster_t,
-render ({cq, preset, audio_bitrate, encoder}).
+render ({cq, preset, audio_bitrate, encoder}),
+tail ({secs, scripts, images, audio}: a closing after the film -- `secs` more of picture, drawn by
+`scripts` run after film.js, which lengthen SK._film; its sound is sketch-audio's).
 
 Invoke as:
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --plan
@@ -118,6 +120,9 @@ def bundle(m, audio=True):
         **m.get("player", {}),
     }
     film = read_text(_sketch.rel(m, m.get("film", "film.js")))
+    tail = m.get("tail") or {}
+    for p in tail.get("scripts", []):  # a closing drawn after the film (it lengthens SK._film)
+        film += "\n;\n" + read_text(_sketch.rel(m, p))
     mp3 = os.path.join(m["_audio"], "final.mp3")
     src = "data:audio/mpeg;base64," + b64(mp3) if audio and os.path.exists(mp3) else ""
     rep = {
@@ -140,7 +145,7 @@ def bundle(m, audio=True):
         "__IMAGES__": json.dumps(
             {
                 k: "data:%s;base64,%s" % (mime(v), b64(_sketch.rel(m, v)))
-                for k, v in m.get("images", {}).items()
+                for k, v in {**m.get("images", {}), **tail.get("images", {})}.items()
             }
         ),
     }
@@ -525,7 +530,7 @@ def main():
         return
 
     fps = args.fps or (30 if args.draft else int(m.get("fps", 60)))
-    t1 = args.t1 if args.t1 is not None else float(m["duration"])
+    t1 = args.t1 if args.t1 is not None else _sketch.total(m)
     cfg = _encode.resolve(
         {
             "cq": 16,

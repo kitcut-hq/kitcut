@@ -2892,6 +2892,12 @@ voice is edge-tts.
 | `projects/<id>/score.json` | the music, as data (notation below) |
 | `projects/<id>/sfx.json` | timed sound cues |
 
+**A closing after the film** is the manifest's `tail`: `{"secs": 3, "scripts": [...], "images":
+{...}, "audio": "closing.wav"}`. The scripts run after film.js and lengthen `SK._film` (Sketch
+Studio's `studio/outro.js` holds the last frame and draws over it); sketch-render renders `secs`
+more, and sketch-audio ends the film's sound at the film's end as always, then plays `audio`
+after it, as loud as the narration. `poster_t` stays in the film.
+
 **Every frame is a pure function of time.** Nothing in a film may keep state between frames
 (no physics integration, no `Math.random`); randomness is `SK.rnd(seed)`, motion is `t`. That
 single rule is what lets the browser play the film against its audio *and* the renderer export

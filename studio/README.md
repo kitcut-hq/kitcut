@@ -198,9 +198,19 @@ Anthropic Console.
    What each film chose is kept as `direction` in its record and in Mongo.
 3. Claude writes the narration and records it (`voice`), writes `film.js` (and for a painted
    film, the paintings), renders review stills and looks at the sheet, fixes what it sees, writes
-   the score and the cues, and checks the soundtrack (`sound`).
+   the score and the cues, and checks the soundtrack (`sound`). It is told its working time
+   (`film.limits`). **When the time runs out,** a film that is whole and passes the checks is
+   finished anyway (`overtime` on its record); one whose picture is written gets one short last
+   turn in the same session to write what is missing (`wrap_up`, 4 minutes); only then does it
+   fail.
 4. The studio then mixes the soundtrack and renders the video (three browsers at once), and the
    MP4 lands in the film's `outputs\film.mp4`.
+
+**Free-plan films** (the site sends `X-Branding: 1`; `branding` on the record) carry a small
+"made with kitcut.ai" in the corner and end with a 3-second closing: the last frame as a tilted
+snapshot beside the logo and kitcut.ai, with a chime and "Make yours at KitCut AI" (one recording,
+`brand/closing.wav`). `studio/outro.js` draws both; `agent.brand` adds them to the manifest as a
+`tail` at the final render only, so Claude's review stills never show them.
 
 ## Paying for Claude
 

@@ -180,6 +180,11 @@ def decode(path, sr=SR, mono=True):
     return x if mono else x.reshape(-1, 2).T.copy()
 
 
+def total(m):
+    """The video's length: the film, and the closing after it when the manifest has a tail."""
+    return float(m["duration"]) + float((m.get("tail") or {}).get("secs", 0))
+
+
 def write_wav(path, x, sr=SR):
     """float32 WAV (IEEE float, format tag 3). x: (n,) or (channels, n)."""
     x = np.atleast_2d(np.asarray(x, dtype=np.float32))
