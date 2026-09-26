@@ -29,6 +29,7 @@ import time
 import asyncio
 import argparse
 import contextlib
+from collections import Counter
 from datetime import datetime
 from importlib import import_module
 
@@ -138,9 +139,11 @@ def system_prompt(look):
         "VOICES": ", ".join(vo_mod.GEMINI_VOICES),
         "ENGINE": _read("sketch", "engine.js"),
         "PROPS": _read("sketch", "props.js"),
-        "EXAMPLE_FILM": _read("config", "sketch", "example", "film.js"),
-        "EXAMPLE_SCORE": _read("config", "sketch", "example", "score.json"),
-        "EXAMPLE_SFX": _read("config", "sketch", "example", "sfx.json"),
+        "EXAMPLE_NIGHT": _read("studio", "examples", "night", "film.js"),
+        "EXAMPLE_NIGHT_SCORE": _read("studio", "examples", "night", "score.json"),
+        "EXAMPLE_NIGHT_SFX": _read("studio", "examples", "night", "sfx.json"),
+        "EXAMPLE_BLUEPRINT": _read("studio", "examples", "blueprint", "film.js"),
+        "EXAMPLE_BLUEPRINT_SCORE": _read("studio", "examples", "blueprint", "score.json"),
         "NOTATION": ref[a:b].strip() + "\n\n```\n" + notation + "\n```",
         "FX": fx,
         "INSTRUMENTS": ", ".join(inst) or "(none yet)",
@@ -159,13 +162,61 @@ def system_prompt(look):
     return re.sub(r"\{([A-Z_]+)\}", lambda m: fill.get(m.group(1), m.group(0)), text)
 
 
-def ask(film):
-    """The first message: the film's own facts, then the visitor's prompt."""
+def ask(film, recent=()):
+    """The first message: the film's own facts, then the visitor's prompt, then what recent
+    films chose -- here and not in the system prompt, which stays the same for every film of a
+    look (and so stays cached)."""
     n = film.length
-    return (
+    text = (
         "Make the film.\n\nLength: %d seconds (fixed). Narration: about %d words, ending by "
         "about %d s.\n\nPrompt: %s"
         % (n, round(n * 2.2 - 3), n - 1, film.record().get("prompt", "").strip())
+    )
+    note = recent_note(film.look, recent)
+    return text + ("\n\n" + note if note else "")
+
+
+def recent_films(film, n=8):
+    """The directions of the last n finished films made here, other than this one, newest
+    first: what they chose, never what they were asked."""
+    out = []
+    for f in Film.all():
+        if len(out) >= n:
+            break
+        if f.id != film.id and f.state == "done":
+            out.append(f.record().get("direction") or f.direction())
+    return out
+
+
+def recent_note(look, dirs):
+    """What recent films chose, counted: 'grounds: paper x5, night'."""
+    if not dirs:
+        return ""
+
+    def tally(values, k=4):
+        c = Counter(v for v in values if v)
+        return ", ".join("%s x%d" % (v, m) if m > 1 else str(v) for v, m in c.most_common(k))
+
+    def firsts(values, words, k=4):  # the opening words of each, without repeats
+        seen = dict.fromkeys(" ".join(str(v).split()[:words]) for v in values if v)
+        return "; ".join(list(seen)[:k])
+
+    same = [d for d in dirs if d.get("look") == look]
+    rows = [
+        ("grounds", tally(d.get("ground") for d in same) if look == "drawn" else ""),
+        (
+            "painting styles",
+            firsts((d.get("paint_style") for d in same), 6) if look == "painted" else "",
+        ),
+        ("voices", tally(d.get("voice") for d in dirs)),
+        ("voice directions", firsts((d.get("voice_style") for d in dirs), 8)),
+        ("instruments", tally((i for d in dirs for i in d.get("instruments") or []), 6)),
+        ("tempos", tally(d.get("bpm") for d in dirs)),
+    ]
+    rows = ["- %s: %s" % (k, v) for k, v in rows if v]
+    return (
+        "Recent films made here chose (choose freshly for this prompt; repeat one only when it "
+        "clearly calls for it):\n" + "\n".join(rows)
     )
 
 
@@ -426,7 +477,7 @@ async def run_claude(film, emit, meter, tools, auth="api"):
     )
     streamed = {}
     async with ClaudeSDKClient(options=opts) as client:
-        await client.query(ask(film))
+        await client.query(ask(film, recent_films(film)))
         async for msg in client.receive_response():
             if isinstance(msg, StreamEvent):
                 before = meter.usd()
@@ -635,6 +686,7 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
             video="film.mp4",
             poster="film_poster.png",
             engine_changed=changed,
+            direction=film.direction(),
             seconds=round(time.time() - t0, 1),
             stages={k: round(v, 1) for k, v in stages.items()},
         )
@@ -676,6 +728,7 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
                 "stages": {k: round(v, 1) for k, v in stages.items()} or None,
                 "session_id": summary.get("session"),
                 "engine_changed": summary.get("engine_changed"),
+                "direction": summary.get("direction"),
                 "finished_at": store.now(),
             } | {
                 k: summary[k]

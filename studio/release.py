@@ -35,7 +35,7 @@ import film as films  # noqa: E402
 
 RELEASES = os.path.join(films.HOME, "releases")
 CURRENT = os.path.join(RELEASES, "current")
-TESTS = ("test_guard.py", "test_sched.py", "test_isolation.py")
+TESTS = ("test_guard.py", "test_sched.py", "test_isolation.py", "test_direction.py")
 
 
 def git(*args):

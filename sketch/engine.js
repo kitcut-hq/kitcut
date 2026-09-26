@@ -42,6 +42,38 @@
     shirtA: '#8db5de', shirtB: '#a9cb92', hairA: '#4a3528', hairB: '#a4532b',
     yellow: '#f6cd4b', coin: '#f3c24a', screenOff: '#e9e3d6', screen: '#2e2a26',
     heart: '#e8665a', pink: '#f4b3b0', teal: '#7cc4b8', lilac: '#b9a6dd', green: '#6fae6b',
+    accent: '#d9733f', accentText: '#c2592a',
+  };
+
+  /* ------------------------------------------------------------ grounds: the page a film is drawn on
+     SK.setGround(name, overrides), once at the top of film.js, picks the paper and the colours that
+     read on it, tested together:
+       C.paper       the ground (and what the film fades to)
+       C.text        captions and marks drawn straight on the ground (SK.txt and SK.dashes default)
+       C.textSoft    quieter text and lines on the ground (speed lines too)
+       C.accent      highlights: sparks, arrows, a key shape
+       C.accentText  emphasised words
+     plus the tint of the paper's grain and of the vignette. Outlines (C.ink) stay dark on every
+     ground: a filled shape with a dark outline reads on a dark ground as well. On a dark ground,
+     give a bare line (an arrow, a path) col: C.text. Without a call a film keeps the cream paper. */
+  const TINT = { mottle: '160,130,90', speck: '90,70,40', fibre: '120,95,60', light: '255,255,255', dk: 1, lk: 1, fk: 1 };
+  SK.GROUNDS = {
+    paper: { paper: '#f7f2e7', text: '#2a2521', textSoft: '#6b635a', accent: '#d9733f', accentText: '#c2592a', tint: TINT, vignette: '60,40,20' }, // cream sketchbook
+    white: { paper: '#fbfaf7', text: '#1d2330', textSoft: '#5d6677', accent: '#2f6fdb', accentText: '#1f55b8', tint: { ...TINT, mottle: '120,125,140', speck: '60,65,80', fibre: '110,115,130', dk: .7, fk: .6 }, vignette: '30,35,50' }, // crisp editorial page
+    kraft: { paper: '#d7b48a', text: '#2b1d12', textSoft: '#5c4330', accent: '#b8432e', accentText: '#8f2c1c', tint: { ...TINT, mottle: '110,75,40', speck: '70,45,20', fibre: '95,65,35', lk: .55, dk: 1.4, fk: 1.5 }, vignette: '60,35,15' }, // brown wrapping paper
+    sky: { paper: '#dcebf5', text: '#1d3246', textSoft: '#51677d', accent: '#e0703a', accentText: '#c1531f', tint: { ...TINT, mottle: '90,120,160', speck: '40,60,90', fibre: '70,95,125' }, vignette: '20,40,70' }, // pale blue
+    mint: { paper: '#e2efe3', text: '#1e392b', textSoft: '#557062', accent: '#e0664f', accentText: '#bb4431', tint: { ...TINT, mottle: '100,140,110', speck: '40,70,50', fibre: '70,100,80' }, vignette: '20,50,35' }, // pale green
+    butter: { paper: '#fbeec6', text: '#3a2912', textSoft: '#7a6443', accent: '#d2502e', accentText: '#a8381c', tint: { ...TINT, mottle: '180,140,60', speck: '110,85,30', fibre: '140,110,50' }, vignette: '90,60,10' }, // warm pale yellow
+    blush: { paper: '#f8e4dd', text: '#3a2226', textSoft: '#7a5a5e', accent: '#2f8f83', accentText: '#1f6f65', tint: { ...TINT, mottle: '170,110,110', speck: '100,60,60', fibre: '130,85,85' }, vignette: '70,30,35' }, // soft pink
+    night: { paper: '#1d2541', text: '#f4ecd8', textSoft: '#a9b0c8', accent: '#f6cd4b', accentText: '#ffd76a', tint: { mottle: '120,135,190', speck: '0,0,10', fibre: '150,160,210', light: '190,200,255', dk: 1.4, lk: .45, fk: .8 }, vignette: '4,6,18' }, // deep navy
+    chalkboard: { paper: '#2b3a32', text: '#f2f0e6', textSoft: '#b8c2ba', accent: '#f6cd4b', accentText: '#f7a8a0', tint: { mottle: '255,255,255', speck: '0,0,0', fibre: '230,235,225', light: '255,255,255', dk: 1.2, lk: .7, fk: 1.3 }, vignette: '0,12,6' }, // green-black board, chalk
+    blueprint: { paper: '#1f4f8c', text: '#eef4ff', textSoft: '#a9c3e8', accent: '#ffd166', accentText: '#ffe08a', tint: { mottle: '200,220,255', speck: '0,10,40', fibre: '190,210,255', light: '220,235,255', dk: 1.2, lk: .5, fk: .7 }, vignette: '4,18,48', grid: { step: 80, col: 'rgba(235,244,255,.13)', w: 1.4 } }, // drafting blue, white grid
+  };
+  SK.ground = { name: 'paper', ...SK.GROUNDS.paper };
+  SK.setGround = function (name, over = {}) {
+    const g = (SK.ground = { name, ...(SK.GROUNDS[name] || SK.GROUNDS.paper), ...over });
+    g.tint = { ...TINT, ...g.tint };
+    Object.assign(SK.C, { paper: g.paper, text: g.text, textSoft: g.textSoft, accent: g.accent, accentText: g.accentText });
   };
   SK.FONT_HAND = 'Caveat';
   SK.FONT_PRINT = 'Patrick Hand';
@@ -274,7 +306,7 @@
     let cx = o.align === 'left' ? x : o.align === 'right' ? x - total : x - total / 2;
     const n = chars.length, k = p * (n + 1.5), seed = o.seed ?? 3, wob = (o.wob ?? 1) * SK.style.textWob;
     const base = ctx.globalAlpha;
-    ctx.fillStyle = o.col ?? SK.C.ink;
+    ctx.fillStyle = o.col ?? SK.C.text ?? SK.C.ink;
     const mode = o.mode ?? SK.style.textMode;
     let caretX = null;
     for (let i = 0; i < n; i++) {
@@ -294,7 +326,7 @@
       cx += ws[i];
     }
     if (mode === 'type' && o.caret && p < 1.02 && Math.floor(SK.T * 2.4) % 2 === 0) {
-      ctx.fillStyle = o.caretCol ?? o.col ?? SK.C.ink;
+      ctx.fillStyle = o.caretCol ?? o.col ?? SK.C.text ?? SK.C.ink;
       const x0 = caretX ?? (o.align === 'left' ? x : o.align === 'right' ? x - total : x - total / 2);
       ctx.fillRect(x0 + 2, y - size * .42, Math.max(2, size * .06), size * .84);
     }
@@ -385,7 +417,83 @@
   /** dashed line along a point list; o: on, off (in points), w, col, alpha */
   SK.dashes = function (pts, o = {}) {
     const on = o.on ?? 4, off = o.off ?? 4;
-    for (let i = 0; i + on < pts.length; i += on + off) SK.ink(pts.slice(i, i + on + 1), { w: o.w ?? 4, col: o.col ?? SK.C.ink, seed: i + (o.seed ?? 0), dbl: false, alpha: o.alpha ?? 1, taper: false });
+    for (let i = 0; i + on < pts.length; i += on + off) SK.ink(pts.slice(i, i + on + 1), { w: o.w ?? 4, col: o.col ?? SK.C.text ?? SK.C.ink, seed: i + (o.seed ?? 0), dbl: false, alpha: o.alpha ?? 1, taper: false });
+  };
+  /* ------------------------------------------------------------ backdrops: a place, not a bare page
+     Called first in draw(), before anything stands in front of them. Each one covers whatever
+     the camera shows, so its edge never comes into frame. Ground, sea and hills (SK.band) belong
+     to the world and move with the camera; the sky and the stars are far away and stay put on
+     screen. They draw in the film's style: crayon (with the paper's grain) or clean. */
+  /**
+   * A sky over the whole frame: a gradient from `top` to `bottom`. o: mid (a third colour halfway:
+   * a sunset's glow), y0, y1 (pin its ends to world heights instead of the screen's, so a camera
+   * rising through it sees it change)
+   */
+  SK.sky = function (top, bottom, o = {}) {
+    const v = SK.view; if (!v) return;
+    const g = ctx.createLinearGradient(0, o.y0 ?? v.y0 + 100, 0, o.y1 ?? v.y1 - 100);
+    g.addColorStop(0, top); if (o.mid) g.addColorStop(.5, o.mid); g.addColorStop(1, bottom ?? top);
+    ctx.save();
+    ctx.fillStyle = g; ctx.fillRect(v.x0 - 200, v.y0 - 200, v.x1 - v.x0 + 400, v.y1 - v.y0 + 400);
+    if (SK.style.paper !== 'flat') { // the paper's tooth over it, fixed to the paper like the paper's own
+      const T = tooth(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+      T.setTransform(new DOMMatrix([1, 0, 0, 1, v.ox, v.oy])); ctx.fillStyle = T; ctx.fillRect(0, 0, W, H);
+    }
+    ctx.restore();
+  };
+  /**
+   * Ground, sea, grass or a far range of hills: filled from world height y down to o.to (default:
+   * out of frame) across the whole view. o: edge ('flat'|'hills'|'waves'|'grass'), amp and len
+   * (the edge's height and wavelength; grass: the blades' height and the spacing of tufts), seed,
+   * speed (waves roll, 40 units/s; 0 holds them), line (the edge's outline colour, or false),
+   * blade (grass blades' colour), w, alpha, tex (crayon grain in the fill).
+   * Returns edge(x), the edge's height at x: stand things on the hills with it.
+   */
+  SK.band = function (y, col, o = {}) {
+    const v = SK.view, kind = o.edge ?? 'flat', seed = o.seed ?? 7;
+    const amp = o.amp ?? { hills: 60, waves: 12, grass: 26 }[kind] ?? 0;
+    const len = o.len ?? { hills: 900, waves: 170, grass: 64 }[kind] ?? 900;
+    const r = mulberry(seed * 977 + 3), p1 = r() * TAU, p2 = r() * TAU;
+    const roll = kind === 'waves' ? SK.T * (o.speed ?? 40) : 0;
+    const edge = (x) => kind === 'hills' ? y - amp * (.62 * Math.sin(x / len * TAU + p1) + .38 * Math.sin(x / (len * .43) * TAU + p2))
+      : kind === 'waves' ? y + amp * Math.sin((x - roll) / len * TAU + p1)
+        : kind === 'grass' ? y - 6 * Math.sin(x / 700 * TAU + p1)
+          : y;
+    if (!v) return edge;
+    const step = 14, k0 = Math.floor((v.x0 - 80) / step), k1 = Math.ceil((v.x1 + 80) / step);
+    const bottom = o.to ?? Math.max(v.y1 + 80, y + amp + 80);
+    if (y - amp > v.y1 || bottom < v.y0) return edge;
+    const top = [];
+    for (let k = k0; k <= k1; k++) top.push([k * step, edge(k * step)]);
+    const a = o.alpha ?? 1;
+    SK.wash([...top, [k1 * step, bottom], [k0 * step, bottom]], col, { seed, alpha: a, tex: o.tex });
+    if (o.line !== false) SK.ink(top, { w: o.w ?? 4.5, col: o.line ?? SK.C.ink, seed: seed + 1, alpha: a });
+    if (kind === 'grass') { // tufts along the edge, where a hash of the spot says one grows, in a deeper green
+      const blade = o.blade ?? (/^#[0-9a-f]{6}$/i.test(col) ? mix(col, '#1f3a1f', .45) : SK.C.ink);
+      for (let k = Math.floor((v.x0 - 80) / len); k <= Math.ceil((v.x1 + 80) / len); k++) {
+        if (rnd(k * 7 + seed) > .6) continue;
+        const bx = k * len + rnd(k * 13 + seed) * len * .5, by = edge(bx) + 3;
+        for (let j = -1; j <= 1; j++) {
+          const h = amp * (.7 + .6 * rnd(k * 29 + j + seed)), lean = j * 7 + (rnd(k * 31 + j) - .5) * 6;
+          SK.ink(S.line(bx + j * 7, by, bx + j * 7 + lean, by - h, j * 2), { w: 3.4, col: blade, seed: seed + 40 + (k & 15) * 3 + j, alpha: a, dbl: false, jit: .8 });
+        }
+      }
+    }
+    return edge;
+  };
+  /** Stars fixed on screen, twinkling. o: n (60), seed, col, top (how far down the frame they
+   *  reach, 0..1, default .7), size, alpha */
+  SK.stars = function (o = {}) {
+    const n = o.n ?? 60, r = mulberry((o.seed ?? 11) * 131), col = o.col ?? '#fff6d8', reach = o.top ?? .7, sz = o.size ?? 1;
+    const base = ctx.globalAlpha;
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    for (let i = 0; i < n; i++) {
+      const x = r() * W, y = r() * H * reach, s = (2 + r() * 3.2) * sz, ph = r() * TAU, sp = .8 + r() * 2.2, big = r() < .14;
+      const a = (o.alpha ?? 1) * (.6 + .4 * Math.sin(SK.T * sp + ph));
+      if (big) { ctx.globalAlpha = base; SK.sparkle(x, y, s * 2.4, a, 700 + i, col); }
+      else { ctx.globalAlpha = base * a; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, s * .6, 0, TAU); ctx.fill(); }
+    }
+    ctx.restore();
   };
   /** run fn with the context faded by a */
   SK.alpha = function (a, fn) { if (a <= 0) return; const b = ctx.globalAlpha; ctx.globalAlpha = b * a; try { fn(); } finally { ctx.globalAlpha = b; } };
@@ -478,27 +586,41 @@
   };
 
   /* ------------------------------------------------------------ paper, grain, speed lines */
-  let PAPER = null; const GRAIN = [];
-  SK.makeTextures = function () {
+  let PAPER = null, TOOTH = null, TEX_PAPER = null, TEX_GROUND = null; const GRAIN = [];
+  /** the paper's grain in the ground's tints, on `fill` (or on nothing: the tooth laid over a sky) */
+  function paperCanvas(fill, T) {
     const pc = document.createElement('canvas'); pc.width = pc.height = 1024;
     const g = pc.getContext('2d');
-    g.fillStyle = SK.C.paper; g.fillRect(0, 0, 1024, 1024);
+    if (fill) { g.fillStyle = fill; g.fillRect(0, 0, 1024, 1024); }
     const r = mulberry(42);
     for (let i = 0; i < 70; i++) { // soft mottling, kept faint: it reads as dirt when strong
       const x = r() * 1024, y = r() * 1024, rad = 80 + r() * 160;
       const gr = g.createRadialGradient(x, y, 0, x, y, rad);
       const dark = r() < .5;
-      gr.addColorStop(0, dark ? 'rgba(160,130,90,0.016)' : 'rgba(255,255,255,0.05)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      gr.addColorStop(0, dark ? `rgba(${T.mottle},${0.016 * T.dk})` : `rgba(${T.light},${0.05 * T.lk})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
       g.fillStyle = gr;
       for (const dx of [-1024, 0, 1024]) for (const dy of [-1024, 0, 1024]) { g.save(); g.translate(dx, dy); g.fillRect(x - rad, y - rad, rad * 2, rad * 2); g.restore(); }
     }
-    for (let i = 0; i < 26000; i++) { const x = r() * 1024, y = r() * 1024; g.fillStyle = r() < .5 ? `rgba(90,70,40,${.03 + r() * .05})` : `rgba(255,255,255,${.05 + r() * .08})`; g.fillRect(x, y, 1 + r() * 1.5, 1 + r() * 1.5); }
+    for (let i = 0; i < 26000; i++) { const x = r() * 1024, y = r() * 1024; g.fillStyle = r() < .5 ? `rgba(${T.speck},${(.03 + r() * .05) * T.dk})` : `rgba(${T.light},${(.05 + r() * .08) * T.lk})`; g.fillRect(x, y, 1 + r() * 1.5, 1 + r() * 1.5); }
     g.lineCap = 'round';
     for (let i = 0; i < 260; i++) {
       const x = r() * 1024, y = r() * 1024, a = r() * TAU, l = 6 + r() * 22;
-      g.strokeStyle = `rgba(120,95,60,${.05 + r() * .06})`; g.lineWidth = .8; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a + .5) * l * .5, y + Math.sin(a + .5) * l * .5, x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
+      g.strokeStyle = `rgba(${T.fibre},${(.05 + r() * .06) * T.fk})`; g.lineWidth = .8; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a + .5) * l * .5, y + Math.sin(a + .5) * l * .5, x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
     }
-    PAPER = ctx.createPattern(pc, 'repeat');
+    return pc;
+  }
+  // the paper follows the ground: made again when a film changes either, and kept, so a film that
+  // goes from day to night and back makes each paper once
+  const PAPERS = new Map();
+  function makePaper() {
+    TEX_PAPER = SK.C.paper; TEX_GROUND = SK.ground;
+    const T = SK.ground.tint || TINT, key = SK.C.paper + JSON.stringify(T);
+    if (!PAPERS.has(key)) PAPERS.set(key, { paper: ctx.createPattern(paperCanvas(SK.C.paper, T), 'repeat'), tooth: null, T });
+    PAPER = PAPERS.get(key).paper; TOOTH = PAPERS.get(key);
+  }
+  function tooth() { return (TOOTH.tooth ??= ctx.createPattern(paperCanvas(null, TOOTH.T), 'repeat')); }
+  SK.makeTextures = function () {
+    PAPERS.clear(); makePaper();
     GRAIN.length = 0;
     for (let k = 0; k < 4; k++) {
       const gc = document.createElement('canvas'); gc.width = gc.height = 256; const gg = gc.getContext('2d');
@@ -518,7 +640,7 @@
     const r = mulberry(SK.BOIL * 3 + 5);
     for (let i = 0; i < 14; i++) {
       const cx = r() * W, cy = r() * H, L = 180 + r() * 380;
-      SK.ink(S.line(cx - Math.cos(ang) * L / 2, cy - Math.sin(ang) * L / 2, cx + Math.cos(ang) * L / 2, cy + Math.sin(ang) * L / 2), { w: 3 + r() * 3, col: SK.C.inkSoft, seed: 2000 + i, dbl: false });
+      SK.ink(S.line(cx - Math.cos(ang) * L / 2, cy - Math.sin(ang) * L / 2, cx + Math.cos(ang) * L / 2, cy + Math.sin(ang) * L / 2), { w: 3 + r() * 3, col: SK.C.textSoft ?? SK.C.inkSoft, seed: 2000 + i, dbl: false });
     }
     ctx.restore();
   }
@@ -526,8 +648,10 @@
   /* ------------------------------------------------------------ the film */
   /**
    * SK.film({ duration, camera, draw(t, vis), fadeIn = 0, fadeOut = .45, speedLines = true,
-   *           handheld = true, automation: { name: { t0, t1, pos(t) } } })
-   * draw() runs in world space; vis(x0, y0, x1, y1) says whether a box is on screen.
+   *           handheld = true, automation: { name: { t0, t1, pos(t) } }, ground(t) })
+   * draw() runs in world space; vis(x0, y0, x1, y1) says whether a box is on screen, and SK.view
+   * is the world box on screen this frame. ground(t), if given, names the ground at time t (a
+   * film that goes from day to night); otherwise the one SK.setGround chose holds throughout.
    */
   SK.film = function (def) { SK._film = def; };
   SK.init = function (canvas) { canvas.width = W; canvas.height = H; ctx = canvas.getContext('2d'); };
@@ -536,6 +660,7 @@
     const F = SK._film;
     SK.T = t; SK.BOIL = Math.floor(t * SK.BOIL_FPS);
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+    if (F.ground) { const g = F.ground(t); if (g && g !== SK.ground.name) SK.setGround(g); }
     const [cx, cy, z] = F.camera.at(t);
     const sh = F.camera.shake(t), hh = F.handheld === false ? 0 : SK.style.handheld;
     const hx = hh * (Math.sin(t * .7) * 4 + Math.sin(t * 1.9) * 2) + (rnd(SK.BOIL * 5 + 1) - .5) * sh * 2;
@@ -544,12 +669,15 @@
     // paper: screen space so a wide shot never balloons its grain, but it slides with the camera
     const ox = ((-(cx * z) + hx) % 1024 + 1024) % 1024, oy = ((-(cy * z) + hy) % 1024 + 1024) % 1024;
     if (SK.style.paper === 'flat') { ctx.fillStyle = SK.C.paper; ctx.fillRect(0, 0, W, H); }
-    else { PAPER.setTransform(new DOMMatrix([1, 0, 0, 1, ox, oy])); ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H); }
+    else {
+      if (SK.C.paper !== TEX_PAPER || SK.ground !== TEX_GROUND) makePaper();
+      PAPER.setTransform(new DOMMatrix([1, 0, 0, 1, ox, oy])); ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H);
+    }
     ctx.translate(W / 2 + hx, H / 2 + hy); ctx.rotate(rot); ctx.scale(z, z); ctx.translate(-cx, -cy);
     const vw = W / z + 200, vh = H / z + 200;
-    const view = { x0: cx - vw / 2, x1: cx + vw / 2, y0: cy - vh / 2, y1: cy + vh / 2 };
+    const view = (SK.view = { x0: cx - vw / 2, x1: cx + vw / 2, y0: cy - vh / 2, y1: cy + vh / 2, ox, oy });
     const vis = (x0, y0, x1, y1) => x1 > view.x0 && x0 < view.x1 && y1 > view.y0 && y0 < view.y1;
-    const G = SK.style.grid;
+    const G = SK.style.grid ?? SK.ground.grid;
     if (G) { // a faint drafting grid in world space
       const st = G.step ?? 80; ctx.save(); ctx.strokeStyle = G.col ?? 'rgba(26,86,219,.07)'; ctx.lineWidth = (G.w ?? 1.2) / z; ctx.beginPath();
       for (let gx = Math.floor(view.x0 / st) * st; gx < view.x1; gx += st) { ctx.moveTo(gx, view.y0); ctx.lineTo(gx, view.y1); }
@@ -562,8 +690,8 @@
     if (F.overlay) F.overlay(t);
     const gb = Math.floor(t * 8);
     if (SK.style.grain > 0) { ctx.globalAlpha = SK.style.grain; ctx.fillStyle = GRAIN[gb % 4]; ctx.save(); ctx.translate((gb * 37) % 256, (gb * 71) % 256); ctx.fillRect(-256, -256, W + 512, H + 512); ctx.restore(); ctx.globalAlpha = 1; }
-    const vg = ctx.createRadialGradient(W / 2, H / 2, H * .45, W / 2, H / 2, H * 1.05);
-    vg.addColorStop(0, 'rgba(60,40,20,0)'); vg.addColorStop(1, `rgba(${SK.style.vignetteRGB ?? '60,40,20'},${SK.style.vignette})`);
+    const vg = ctx.createRadialGradient(W / 2, H / 2, H * .45, W / 2, H / 2, H * 1.05), vrgb = SK.ground.vignette ?? '60,40,20';
+    vg.addColorStop(0, `rgba(${vrgb},0)`); vg.addColorStop(1, `rgba(${SK.style.vignetteRGB ?? vrgb},${SK.style.vignette})`);
     ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
     // no fade-in by default: a fade from blank paper reads as empty frames at the head of the film
     const fin = F.fadeIn ? 1 - tw(t, 0, F.fadeIn) : 0, fout = tw(t, F.duration - (F.fadeOut ?? .45), F.duration);

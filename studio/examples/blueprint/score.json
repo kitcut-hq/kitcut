@@ -1,0 +1,11 @@
+{
+  "bpm": 88,
+  "drum_gain": 0.32,
+  "events": [
+    {"inst": "electric_piano_1", "vel": 0.3, "notes": "0 C4+E4+G4+B4 2; 2 C4+E4+G4+B4 2; 4 A3+C4+E4+G4 2; 6 A3+C4+E4+G4 2; 8 F3+A3+C4+E4 2; 10 F3+A3+C4+E4 2; 12 G3+B3+D4+E4 3"},
+    {"inst": "electric_bass_finger", "vel": 0.5, "notes": "0 C2 1.5; 1.5 C2 .5; 2 G2 1; 4 A1 1.5; 5.5 A1 .5; 6 E2 1; 8 F1 1.5; 9.5 F1 .5; 10 C2 1; 12 G1 3"},
+    {"inst": "pad_2_warm", "vel": 0.16, "notes": "0 E4+B4 4; 4 E4+C5 4; 8 C4+A4 4; 12 D4+B4 3"},
+    {"type": "drums", "from": 0, "bars": 3, "kit": {"kick": "x......x..x.....", "snare": "....x.......x...", "hat": "x.x.x.x.x.x.x.x."}, "vel": 0.5},
+    {"inst": "xylophone", "vel": 0.4, "notes": "9.5 G5 .5; 10 C6 .5; 10.5 E6 1"}
+  ]
+}

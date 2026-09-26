@@ -11,9 +11,14 @@ and hand-drawn marks on top.
   cache) and tiles them into `images/sheet.jpg`. `retake: ["<name>"]` repaints some. At most
   8 paintings for a film of up to a minute (12 for a longer one), repaints included.
 
+## DIRECTION
+- the painting style (see "The paintings"), the light and the palette;
+- the places and the shots: which paintings, and how the camera moves across them;
+- the colour of the words on screen, and of the marks drawn over the paintings;
+
 ## STEPS
-1. Decide the idea and the shots: one clear point, told in the film's length, in one to three
-   paintings (a few more for a long film, within the limit).
+1. Decide the idea and the direction (above): one clear point, told in the film's length, in one
+   to three paintings (a few more for a long film, within the limit).
 2. Write the narration in `vo.json` and call `voice`. It returns each line's start and end, and
    every word's time on the film clock. If a line runs past the end of the film or `acc` is
    below 0.9, shorten or rephrase it and record again.
@@ -35,9 +40,12 @@ and hand-drawn marks on top.
 
 The studio has set `backend`, `model` and `max_images`; leave them. You set:
 
-- `style`: one line for the look of every painting, taken from the prompt when it asks for one
-  (watercolour, anime, claymation, paper collage, 1950s poster, flat vector, photoreal...), else
-  whatever suits the subject and the audience.
+- `style`: one line for the look of every painting. Take it from the prompt when it asks for
+  one; else choose what suits this subject and its audience -- not by habit. Styles that paint
+  well: paper cut-out collage, flat vector poster, 1950s travel poster, claymation diorama,
+  ukiyo-e woodblock print, ink and wash, charcoal sketch, gouache concept art, risograph print,
+  pixel art, soft 3D render (like an animated feature), cinematic photoreal. A soft storybook
+  watercolour is for young children's stories only. Name the palette and the light in it too.
 - `images`: `[{"name": "kitchen", "prompt": "..."}, ...]` -- names of lowercase letters, digits,
   `-` and `_`. Describe each picture fully: who, doing what, where, the framing (wide,
   close-up), the light. Never ask for words, letters or signs in a picture. `"ref": "<name>"`
@@ -61,4 +69,7 @@ Each painting comes back 1920x1280 (a little taller than the 1920x1080 frame: ro
   read over a busy picture. Hand-drawn marks on top are welcome -- an arrow, a circle, sparkles,
   hearts (`SK.ink`, `S.*`, `SK.sparkle`, `SK.heart`): a painting with pen notes is a good look.
 - `SK.setStyle('clean', { grain: .25, vignette: .15, handheld: .3 })`: the crayon paper and the
-  boiling line are for drawings, not paintings.
+  boiling line are for drawings, not paintings. Suit it to the style: `grain: 0, vignette: 0` for
+  flat vector, a poster or pixel art; `vignette: .3` for cinematic or moody light.
+- Words and marks over a painting take colours from the painting's own palette (`col`), with a
+  banner or a stroke behind them -- not the same orange every time.

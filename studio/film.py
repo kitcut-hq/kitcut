@@ -244,6 +244,44 @@ class Film:
                 f.writelines(out)
         return n
 
+    # ---------------------------------------------------------------- what the film chose
+    def direction(self):
+        """The choices the film made -- its ground and style, voice, music, painting style --
+        read from its own files: the next films are told what recent ones chose (agent.recent),
+        and the curator can see what films choose."""
+
+        def load(name):
+            try:
+                with open(self.path(name), encoding="utf-8") as f:
+                    return f.read() if name.endswith(".js") else json.load(f)
+            except (OSError, ValueError):
+                return None
+
+        d = {"look": self.look}
+        js = load("film.js") or ""
+        if d["look"] == "drawn":
+            g = re.search(r"setGround\(\s*['\"](\w+)", js)
+            changes = re.search(r"\bground\s*:\s*\(?\s*\w+\s*\)?\s*=>", js)
+            d["ground"] = "changing" if changes else (g.group(1) if g else "paper")
+        st = re.search(r"setStyle\(\s*['\"](\w+)", js)
+        d["style"] = st.group(1) if st else "crayon"
+        vo = load("vo.json") or {}
+        if isinstance(vo, dict):
+            d["voice"], d["voice_style"] = vo.get("voice"), (vo.get("style") or "")[:120]
+        score = load("score.json") or {}
+        if isinstance(score, dict):
+            ev = score.get("events") if isinstance(score.get("events"), list) else []
+            inst = {
+                e.get("inst") for e in ev if isinstance(e, dict) and isinstance(e.get("inst"), str)
+            }
+            drums = any(isinstance(e, dict) and e.get("type") == "drums" for e in ev)
+            d["instruments"] = sorted(inst) + (["drums"] if drums else [])
+            d["bpm"] = score.get("bpm")
+        if d["look"] == "painted":
+            paint = load("paint.json") or {}
+            d["paint_style"] = (paint.get("style") or "")[:120] if isinstance(paint, dict) else ""
+        return d
+
     # ---------------------------------------------------------------- making and finding films
     @classmethod
     def create(

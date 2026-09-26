@@ -233,6 +233,22 @@ button.short { background: var(--rule); color: var(--ink-soft); }
 
 <script>
 const $ = (id) => document.getElementById(id);
+// a different idea in the box on each visit, of every kind, so the films people start from are
+// not all the same one (a film being watched, or an idea kept through sign-in, replaces it)
+const IDEAS = [
+  'A paper plane delivers a cup of coffee to a sleepy developer, who wakes up delighted',
+  'How a volcano erupts, told like a nature documentary',
+  'A pigeon detective solves the case of the missing sandwich, as a film noir',
+  "The last penalty of a cup final, from the goalkeeper's point of view",
+  'How to make fluffy pancakes on a busy morning, step by step',
+  'The first keeper of a lighthouse on a stormy island, 1850',
+  'A robot on Mars finds a flower and has no idea what it is',
+  'Why cats purr: an explainer for curious grown-ups',
+  'A shy moon who is afraid of the dark: a bedtime story',
+  'How a lever lets one person lift a car, drawn as a blueprint',
+  'A tiny startup launches its app at 3 a.m., and the first user signs up',
+];
+if ($('prompt').value === $('prompt').defaultValue) $('prompt').value = IDEAS[Math.floor(Math.random() * IDEAS.length)];
 let t0 = 0, timer = null, poll = null;
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

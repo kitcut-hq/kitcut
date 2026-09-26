@@ -8,6 +8,8 @@
    SK.P.person({...}) + SK.P.POSE      seated doodle person (stick limbs, big head); poseAt() blends poses
    SK.P.plane, laptop, table, floor, lightbulb, rocket, padlock, coin, stamp, pokeHand,
    browser, thoughtBubble, confetti
+   SK.P.kid (+ KIDPOSE, kidPoseAt), phone, window, house, siren, drone, missile, stopwatch, debris
+   scenery: SK.P.tree, bush, cloud, sun, moon, mountain, building (with SK.band, SK.sky, SK.stars)
 */
 (function () {
   'use strict';
@@ -699,6 +701,139 @@
       ink(S.poly([[70, -86], [60, -40], [120, -30]]), { w: 3.5, seed: 933, p: clamp(p * 2 - 1), dbl: false, alpha: .7 });
       ink(S.path([['M', 96, -6], ['C', 140, -30, 150, 20, 190, -10]]), { w: 4, col: C().heart, seed: 934, p: clamp(p * 2 - 1), dbl: false });
       for (const [rx, ry] of [[-70, -30], [-30, -30], [40, -40]]) { SK.ctx().fillStyle = C().ink; SK.alpha(clamp(p * 2 - 1), () => { SK.ctx().beginPath(); SK.ctx().arc(rx, ry, 4, 0, TAU); SK.ctx().fill(); }); }
+    });
+  };
+
+  /* ------------------------------------------------------------ scenery: the places films happen in
+     Each stands on (x, y) -- the middle of where it meets the ground -- except the sky's own
+     (sun, moon, cloud: centred on x, y). o.s scales it, o.p draws it on (0..1), o.seed varies it.
+     For the ground itself, the sky and the stars, see SK.band, SK.sky and SK.stars. */
+  // a lumpy outline: the upper edge of a row of overlapping circles [cx, r], on a flat base at 0
+  function lumps(bumps, base = 0) {
+    const x0 = Math.min(...bumps.map(([cx, r]) => cx - r)), x1 = Math.max(...bumps.map(([cx, r]) => cx + r));
+    const top = [];
+    for (let x = x0; x <= x1 + .01; x += 6) {
+      let y = base;
+      for (const [cx, r, cy = -r * .35] of bumps) if (Math.abs(x - cx) < r) y = Math.min(y, cy - Math.sqrt(r * r - (x - cx) * (x - cx)));
+      top.push([x, y]);
+    }
+    return [...top, ...S.line(x1, base, x0, base, -6).slice(1)];
+  }
+  // a round blob with n soft bumps (a tree's crown, a bush)
+  function blob(cx, cy, rx, ry, n, seed) {
+    const ph = rnd(seed) * TAU, out = [];
+    for (let i = 0; i < 64; i++) { const a = i / 64 * TAU, k = 1 + .075 * Math.sin(a * n + ph); out.push([cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k]); }
+    return out;
+  }
+  /** a cloud; o: s, col, p, seed, alpha, line (outline colour) */
+  P.cloud = function (x, y, o = {}) {
+    const seed = o.seed ?? 1500, p = o.p ?? 1, r = mulberry(seed);
+    const bumps = [[-95, 58 + r() * 10], [-30, 76 + r() * 12], [45, 66 + r() * 10], [104, 44 + r() * 10]];
+    SK.at(x, y, 0, o.s ?? 1, () => SK.alpha(o.alpha ?? 1, () => {
+      const pts = lumps(bumps);
+      wash(pts, o.col ?? '#ffffff', { seed, dx: 0, dy: 0, tex: false, alpha: clamp(p * 2 - .4) });
+      ink(pts, { w: 4.5, seed: seed + 1, p, col: o.line ?? C().ink });
+    }));
+  };
+  /** a bush on the ground; o: s, col, p, seed, flowers (a colour: dots of it) */
+  P.bush = function (x, y, o = {}) {
+    const seed = o.seed ?? 1520, p = o.p ?? 1, col = o.col ?? C().green;
+    SK.at(x, y, 0, o.s ?? 1, () => {
+      const pts = lumps([[-60, 46, -30], [0, 62, -40], [58, 44, -28]]);
+      wash(pts, col, { seed, alpha: clamp(p * 2 - .4) });
+      ink(pts, { w: 4.5, seed: seed + 1, p });
+      if (o.flowers) for (let i = 0; i < 6; i++) { const fx = -70 + i * 28 + rnd(seed + i) * 10, fy = -30 - rnd(seed + 9 + i) * 50; wash(S.ellC(fx, fy, 7, 7), o.flowers, { dx: 0, dy: 0, tex: false, alpha: clamp(p * 2 - 1) }); }
+    });
+  };
+  /** a tree; o: kind ('round'|'pine'|'bare'), s, leaf, trunk, p, seed, sway (radians, e.g. .03 * Math.sin(t)) */
+  P.tree = function (x, y, o = {}) {
+    const kind = o.kind ?? 'round', seed = o.seed ?? 1540, p = o.p ?? 1;
+    const leaf = o.leaf ?? (kind === 'pine' ? mix(C().green, '#2a4a35', .35) : C().green), trunk = o.trunk ?? C().woodIn;
+    const fa = clamp(p * 2 - .4);
+    SK.at(x, y, 0, o.s ?? 1, () => {
+      const tr = S.poly([[-16, 0], [-11, -150], [11, -150], [16, 0]], true);
+      wash(tr, trunk, { seed, alpha: fa }); ink(tr, { w: 4.5, seed: seed + 1, p });
+      SK.at(0, -130, o.sway ?? 0, 1, () => {
+        if (kind === 'pine') {
+          for (let i = 0; i < 3; i++) {
+            const w = 130 - i * 30, yb = -i * 70, tri = S.poly([[-w, yb], [0, yb - 150], [w, yb]], true);
+            wash(tri, leaf, { seed: seed + 2 + i, alpha: fa }); ink(tri, { w: 4.5, seed: seed + 5 + i, p: clamp(p * 1.4 - i * .15) });
+          }
+        } else if (kind === 'bare') {
+          for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + (i - 2) * .42, L = 90 + rnd(seed + i) * 60; ink(S.line(0, 0, Math.cos(a) * L, Math.sin(a) * L - 20, 8), { w: 6 - Math.abs(i - 2), seed: seed + 10 + i, p }); }
+        } else {
+          const crown = blob(0, -90, 120, 105, 7, seed);
+          wash(crown, leaf, { seed: seed + 2, alpha: fa }); ink(crown, { w: 5, seed: seed + 3, p });
+          ink(S.arc(-30, -110, 50, Math.PI * 1.1, Math.PI * 1.45), { w: 4, seed: seed + 4, dbl: false, alpha: .45, p: clamp(p * 2 - 1), col: '#ffffff' });
+        }
+      });
+    });
+  };
+  /** the sun; o: r (70), p, face (a mood: P.face), rot (the rays' turn, e.g. t * .2), col, rays */
+  P.sun = function (x, y, o = {}) {
+    const R = o.r ?? 70, p = o.p ?? 1, n = o.rays ?? 12, col = o.col ?? C().yellow;
+    SK.at(x, y, 0, R / 70, () => {
+      for (let i = 0; i < n; i++) { const a = (o.rot ?? 0) + i / n * TAU; ink(S.line(Math.cos(a) * 88, Math.sin(a) * 88, Math.cos(a) * (i % 2 ? 112 : 124), Math.sin(a) * (i % 2 ? 112 : 124)), { w: 6, col: o.rayCol ?? C().orange, seed: 1560 + i, p: clamp(p * 2 - 1 - i * .02), dbl: false }); }
+      wash(S.ellC(0, 0, 70, 70), col, { seed: 1580, alpha: clamp(p * 2 - .4) });
+      ink(S.ell(0, 0, 70, 70), { w: 5, seed: 1581, p });
+      if (o.face) { P.face.eyes(-22, -6, 22, -6, o.face, 0, .9); P.face.mouth(0, 26, o.mouth ?? 'smile', .8); }
+    });
+  };
+  /** the moon; o: r (60), phase ('full'|'crescent'), p, col, glow (0..1: a soft halo), face (a mood) */
+  P.moon = function (x, y, o = {}) {
+    const R = o.r ?? 60, p = o.p ?? 1, col = o.col ?? '#f5ecc9', ctx = SK.ctx();
+    if (o.glow) {
+      const g = ctx.createRadialGradient(x, y, R * .8, x, y, R * 3);
+      g.addColorStop(0, `rgba(255,244,210,${.28 * o.glow})`); g.addColorStop(1, 'rgba(255,244,210,0)');
+      ctx.fillStyle = g; ctx.fillRect(x - R * 3, y - R * 3, R * 6, R * 6);
+    }
+    SK.at(x, y, 0, R / 60, () => {
+      let pts;
+      if (o.phase === 'crescent') { // the full disc less a disc a little to the right
+        const d = 34, r1 = 54, a = (60 * 60 - r1 * r1 + d * d) / (2 * d), h = Math.sqrt(60 * 60 - a * a);
+        const t0 = Math.atan2(-h, a), t1 = Math.atan2(h, a), f0 = Math.atan2(h, a - d), f1 = Math.atan2(-h, a - d);
+        pts = [...S.arc(0, 0, 60, t1, t0 + TAU), ...S.arc(d, 0, r1, f1 + TAU, f0).slice(1)];
+      } else pts = S.ellC(0, 0, 60, 60);
+      wash(pts, col, { seed: 1600, dx: 0, dy: 0, alpha: clamp(p * 2 - .4), tex: false });
+      if (o.phase !== 'crescent') for (const [cx, cy, cr] of [[-18, -14, 11], [16, 12, 8], [-6, 26, 6]]) wash(S.ellC(cx, cy, cr, cr), mix(col, '#9a8f70', .35), { seed: 1601 + cx, dx: 0, dy: 0, tex: false, alpha: clamp(p * 2 - 1) });
+      ink(pts, { w: 4.5, seed: 1605, p, dbl: false });
+      if (o.face) { P.face.eyes(-16, -6, 16, -6, o.face, 0, .75); P.face.mouth(0, 20, o.mouth ?? 'smile', .65); }
+    });
+  };
+  /** a mountain; o: w (700), h (520), col, snow (true), p, seed */
+  P.mountain = function (x, y, o = {}) {
+    const w = o.w ?? 700, h = o.h ?? 520, seed = o.seed ?? 1620, p = o.p ?? 1, r = mulberry(seed);
+    const pk = (r() - .5) * w * .12, L = [], R = [];
+    for (let i = 1; i < 4; i++) { const u = i / 4; L.push([lerp(-w / 2, pk, u) + (r() - .5) * 24, lerp(0, -h, u) + (r() - .5) * 30]); R.push([lerp(w / 2, pk, u) + (r() - .5) * 24, lerp(0, -h, u) + (r() - .5) * 30]); }
+    const Rd = [...R].reverse(), ridge = [[-w / 2, 0], ...L, [pk, -h], ...Rd, [w / 2, 0]];
+    SK.at(x, y, 0, o.s ?? 1, () => {
+      const body = S.poly(ridge, true);
+      wash(body, o.col ?? '#a3adbd', { seed, alpha: clamp(p * 2 - .4) });
+      SK.hatch(S.poly([[pk, -h], ...Rd, [w / 2, 0], [pk + w * .05, 0]], true), { seed: seed + 1, alpha: .22 * clamp(p * 2 - 1) });
+      if (o.snow !== false) {
+        const cap = S.poly([[lerp(pk, -w / 2, .26), -h * .74], [pk, -h], [lerp(pk, w / 2, .26), -h * .74], [lerp(pk, w / 2, .12), -h * .8], [pk + 10, -h * .72], [lerp(pk, -w / 2, .12), -h * .81]], true);
+        wash(cap, '#ffffff', { seed: seed + 2, dx: 0, dy: 0, tex: false, alpha: clamp(p * 2 - .8) });
+      }
+      ink(S.poly(ridge), { w: 5, seed: seed + 3, p });
+    });
+  };
+  /** a building of a street or a skyline; o: w (220), h (420), col, roof ('flat'|'peak'|'dome'),
+   *  lit (0..1: how many windows glow), litCol, p, seed */
+  P.building = function (x, y, o = {}) {
+    const w = o.w ?? 220, h = o.h ?? 420, seed = o.seed ?? 1640, p = o.p ?? 1, fa = clamp(p * 2 - .4);
+    const col = o.col ?? '#c9b9a6', roof = o.roof ?? 'flat', lit = o.lit ?? 0, litCol = o.litCol ?? '#f6d36b';
+    SK.at(x, y, 0, o.s ?? 1, () => {
+      const body = S.poly([[-w / 2, 0], [-w / 2, -h], [w / 2, -h], [w / 2, 0]], true);
+      wash(body, col, { seed, alpha: fa });
+      if (roof === 'peak') { const t = S.poly([[-w / 2 - 14, -h], [0, -h - w * .45], [w / 2 + 14, -h]], true); wash(t, mix(col, '#5a3a2a', .35), { seed: seed + 1, alpha: fa }); ink(t, { w: 4.5, seed: seed + 2, p }); }
+      if (roof === 'dome') { const d = S.arc(0, -h, w * .36, Math.PI, TAU); wash([...d, [w * .36, -h]], mix(col, '#ffffff', .25), { seed: seed + 1, alpha: fa }); ink(d, { w: 4.5, seed: seed + 2, p }); }
+      ink(body, { w: 5, seed: seed + 3, p });
+      const cols = Math.max(1, Math.round(w / 70)), rows = Math.max(1, Math.round((h - 60) / 80)), ww = w / cols * .45, wh = 38;
+      for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+        const wx = -w / 2 + (i + .5) * w / cols, wy = -h + 50 + j * ((h - 90) / rows), on = rnd(seed * 13 + i * 31 + j * 7) < lit;
+        const win = S.poly([[wx - ww / 2, wy], [wx + ww / 2, wy], [wx + ww / 2, wy + wh], [wx - ww / 2, wy + wh]], true);
+        wash(win, on ? litCol : mix(col, '#2a2521', .45), { seed: seed + 10 + i * rows + j, dx: 0, dy: 0, tex: false, alpha: clamp(p * 2 - 1) });
+      }
     });
   };
 

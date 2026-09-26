@@ -20,6 +20,7 @@ python studio/agent.py "a paper plane delivers a coffee" [--auth login]   # one 
 python studio/test_guard.py                     # the permission model, no API calls
 python studio/test_sched.py                     # the scheduler's pools
 python studio/test_isolation.py                 # names, the gate, secrets, the offline renderer, process kill
+python studio/test_direction.py                 # one cached prompt per look, a film's choices, the recent note
 python studio/test_server.py                    # the API end to end, 3 films at once, Claude stubbed out, no cost
 ```
 
@@ -180,11 +181,21 @@ Anthropic Console.
 1. `server.py` (aiohttp, 127.0.0.1 only) admits the request, makes the film's folder
    (`film.py`: the manifest from `template/sketch.json`, the engine copy, an empty narration)
    and starts it; it waits for a Claude slot.
-2. `agent.py` runs Claude (**Opus 5.5 only**, `MODEL`) through the **Claude Agent SDK**, which
-   is Claude Code's agent loop as a library. The system prompt is `prompt.md` and the look's
-   `looks/<look>.md`, with the engine, the cast, the example film and the sound notation read
-   fresh from the code (written to a file: at ~100 KB it is too long for a Windows command
-   line). The film's length and the prompt come in the first message.
+2. `agent.py` runs Claude (**Opus 5.5 only**, `MODEL`, at effort `EFFORT` = xhigh) through the
+   **Claude Agent SDK**, which is Claude Code's agent loop as a library. The system prompt is
+   `prompt.md` and the look's `looks/<look>.md`, with the engine, the cast, the two example films
+   (`examples/`) and the sound notation read fresh from the code (written to a file: at ~130 KB
+   it is too long for a Windows command line). It is the same for every film of a look, so it
+   stays cached. The film's length, the prompt and what recent films chose come in the first
+   message.
+
+   **Films that don't all look alike.** Every film starts from the same instructions, so the
+   prompt makes Claude choose a direction first -- the place, the ground (`SK.setGround`), the
+   voice and its direction, an ensemble and a tempo, for a painted film the painting style --
+   from menus of choices tested together (`config/sketch/grounds/` renders every ground). The
+   first message then lists what the last eight finished films chose (`recent_films`, counts
+   only, never their prompts), and Claude chooses freshly unless the prompt calls for a repeat.
+   What each film chose is kept as `direction` in its record and in Mongo.
 3. Claude writes the narration and records it (`voice`), writes `film.js` (and for a painted
    film, the paintings), renders review stills and looks at the sheet, fixes what it sees, writes
    the score and the cues, and checks the soundtrack (`sound`).

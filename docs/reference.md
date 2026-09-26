@@ -2884,8 +2884,9 @@ voice is edge-tts.
 
 | file | what it is |
 |---|---|
-| `sketch/engine.js` | the renderer: strokes that boil, cel fills, write-on text, camera, flight paths, paper, grain; `SK.setStyle('crayon' \| 'clean')` |
-| `sketch/props.js` | the cast: ticket character, seated person with poses, a standing/walking/sitting kid (`P.kid`, also the grown-up at s ~1.4), paper plane, laptop, table, lightbulb, rocket, padlock, coin, stamp, browser window, thought bubble, confetti, architectural houses, phone, window (cracks), street siren, delta-wing drone, missile, stopwatch, debris |
+| `sketch/engine.js` | the renderer: strokes that boil, cel fills, write-on text, camera, flight paths, paper, grain; `SK.setStyle('crayon' \| 'clean')`; the ground, `SK.setGround(name)` (paper, white, kraft, sky, mint, butter, blush, night, chalkboard, blueprint: the paper, its grain and the text colours that read on it, `C.text` `C.textSoft` `C.accent` `C.accentText`), or `ground: (t) => name` in `SK.film`; backdrops that cover whatever the camera shows: `SK.sky`, `SK.band` (ground, hills, waves, grass; returns `edge(x)`), `SK.stars` |
+| `sketch/props.js` | the cast: ticket character, seated person with poses, a standing/walking/sitting kid (`P.kid`, also the grown-up at s ~1.4), paper plane, laptop, table, lightbulb, rocket, padlock, coin, stamp, browser window, thought bubble, confetti, architectural houses, phone, window (cracks), street siren, delta-wing drone, missile, stopwatch, debris; scenery: tree (round, pine, bare), bush, cloud, sun, moon (full, crescent), mountain, building |
+| `config/sketch/grounds/` | every ground and three places built from the backdrops, one a second: render its stills after changing any of them |
 | `sketch/player.html` | the page: player UI, and the export modes the renderer drives |
 | `projects/<id>/film.js` | the film: `SK.film({duration, camera, draw(t, vis)})` |
 | `projects/<id>/score.json` | the music, as data (notation below) |
