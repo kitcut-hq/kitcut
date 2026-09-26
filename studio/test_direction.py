@@ -81,6 +81,14 @@ def main():
         named = set(re.findall(r"`([a-z0-9_]+)`", sound))
         expect("every ensemble instrument is cached", named <= cached, sorted(named - cached))
 
+    # ---- the Free plan's closing ships with the code (a release is committed files only)
+    for name in (
+        "outro.js",
+        os.path.join("brand", "kitcut.png"),
+        os.path.join("brand", "closing.wav"),
+    ):
+        expect("the closing's %s is in this code" % name, os.path.isfile(os.path.join(HERE, name)))
+
     # ---- direction, read back from a film's files
     f = films.Film.create("A lighthouse at night", 10, "drawn", client="t")
     write(f, "film.js", "SK.setStyle('clean');\nSK.setGround('night');\nSK.film({duration: 10});")

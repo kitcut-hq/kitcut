@@ -696,7 +696,10 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
         pin_vo(film)  # whatever Claude left there, the backends and models stay the studio's
         pin_paint(film)
         if rec.get("branding"):
-            brand(film)
+            missing = brand(film)
+            if missing:
+                print("film %s: no closing: %s" % (film.id, missing), file=sys.stderr, flush=True)
+                summary["branding_error"] = missing
 
         s = time.time()
         emit({"type": "stage", "name": "sound", "text": "Mixing the soundtrack"})
@@ -841,14 +844,19 @@ CLOSING_S = 3.0  # the Free plan's closing, after the film
 def brand(film):
     """A Free-plan film's watermark and closing (studio/outro.js, studio/brand/), added to its
     manifest as a `tail` for the final sound and render only -- so Claude's review stills never
-    show them. Copied into the film, which then renders the same way later. Idempotent."""
+    show them. Copied into the film, which then renders the same way later. Idempotent.
+    Returns why it could not (a file of the studio's missing), and then the film goes out
+    without them rather than not at all."""
     d = film.path("temp", "brand")
     os.makedirs(d, exist_ok=True)
-    for src in (
-        os.path.join(HERE, "outro.js"),
-        *(os.path.join(HERE, "brand", n) for n in ("kitcut.png", "closing.wav")),
-    ):
-        shutil.copyfile(src, os.path.join(d, os.path.basename(src)))
+    try:
+        for src in (
+            os.path.join(HERE, "outro.js"),
+            *(os.path.join(HERE, "brand", n) for n in ("kitcut.png", "closing.wav")),
+        ):
+            shutil.copyfile(src, os.path.join(d, os.path.basename(src)))
+    except OSError as e:
+        return str(e)
     with open(film.manifest, encoding="utf-8") as f:
         m = json.load(f)
     m["tail"] = {
@@ -858,6 +866,7 @@ def brand(film):
         "audio": "temp/brand/closing.wav",
     }
     films._write_json(film.manifest, m)
+    return None
 
 
 def first_record(film, source, client):

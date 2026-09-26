@@ -50,6 +50,8 @@ config/vocab/*.local.txt
 *.m4a
 *.flac
 *.aac
+# the Free plan closing's one recorded line ships with the studio (studio/brand/)
+!studio/brand/*.wav
 *.srt
 *.vtt
 *.ass
