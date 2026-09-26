@@ -66,6 +66,7 @@ from claude_agent_sdk import (  # noqa: E402
     PermissionResultAllow,
     PermissionResultDeny,
     ResultMessage,
+    StreamEvent,
     SystemMessage,
     TextBlock,
     ToolResultBlock,
@@ -238,6 +239,21 @@ def _tokens(u):
     }
 
 
+def _merge(a, b):
+    """Two readings of one response's usage: every count at its highest. The assistant message
+    Claude Code passes on carries the counts as the response began (a few output tokens); the
+    stream's message_delta carries the final ones."""
+    out = dict(a or {})
+    for k, v in (b or {}).items():
+        if isinstance(v, dict):
+            out[k] = _merge(out.get(k), v)
+        elif isinstance(v, (int, float)) and not isinstance(v, bool):
+            out[k] = max(out.get(k) or 0, v)
+        elif k not in out:
+            out[k] = v
+    return out
+
+
 class Meter:
     """Token counts per API response, priced as they arrive, so a run cut short (a timeout,
     a crash, a stop) is still costed. The SDK reports its own total only at the very end."""
@@ -247,13 +263,27 @@ class Meter:
 
     def add(self, msg_id, usage, model=None, at=None):
         if msg_id and usage:
-            # one response arrives in parts; the last part carries the final counts
-            first = self.msgs.get(msg_id, {}).get("at")
+            # one response is read several times as it streams: keep the highest counts
+            old = self.msgs.get(msg_id, {})
             self.msgs[msg_id] = {
-                "usage": usage,
-                "model": model or self.model,
-                "at": first or at or store.now(),
+                "usage": _merge(old.get("usage"), usage),
+                "model": model or old.get("model") or self.model,
+                "at": old.get("at") or at or store.now(),
             }
+
+    def stream(self, ev, state):
+        """A raw API stream event (the SDK's StreamEvent): message_start names the response and
+        its opening counts, message_delta its final output. Returns True when the cost moved."""
+        kind = ev.get("type")
+        if kind == "message_start":
+            m = ev.get("message") or {}
+            state["id"] = m.get("id")
+            self.add(state["id"], m.get("usage"), m.get("model"))
+            return True
+        if kind == "message_delta" and state.get("id") and ev.get("usage"):
+            self.add(state["id"], ev["usage"])
+            return True
+        return False
 
     def tokens(self):
         t = dict.fromkeys(("input", "output", "cache_read", "cache_write_5m", "cache_write_1h"), 0)
@@ -387,11 +417,18 @@ async def run_claude(film, emit, meter, tools, auth="api"):
         max_buffer_size=64 * 1024 * 1024,
         env=claude_env(film, auth),
         cli_path=claude_cli() if auth == "login" else None,
+        # the raw stream too: only its message_delta events carry a response's final token count
+        include_partial_messages=True,
     )
+    streamed = {}
     async with ClaudeSDKClient(options=opts) as client:
         await client.query(ask(film))
         async for msg in client.receive_response():
-            if isinstance(msg, SystemMessage) and msg.subtype == "init":
+            if isinstance(msg, StreamEvent):
+                before = meter.usd()
+                if meter.stream(msg.event, streamed) and round(meter.usd(), 3) != round(before, 3):
+                    emit({"type": "cost", "usd": round(meter.usd(), 4)})
+            elif isinstance(msg, SystemMessage) and msg.subtype == "init":
                 d = msg.data
                 emit(
                     {
@@ -701,10 +738,13 @@ async def smoke(auth="api"):
         max_turns=1,
         env=claude_env(None, auth),
         cli_path=claude_cli() if auth == "login" else None,
+        include_partial_messages=True,
     )
-    t, meter = time.time(), Meter()
+    t, meter, streamed = time.time(), Meter(), {}
     async for m in query(prompt="ping", options=opts):
-        if isinstance(m, SystemMessage) and m.subtype == "init":
+        if isinstance(m, StreamEvent):
+            meter.stream(m.event, streamed)
+        elif isinstance(m, SystemMessage) and m.subtype == "init":
             print("  key source: %s" % m.data.get("apiKeySource"))
             print("  model:      %s" % m.data.get("model"))
             print("  mcp:        %s" % ([s.get("name") for s in m.data.get("mcp_servers", [])]))
@@ -713,6 +753,7 @@ async def smoke(auth="api"):
         elif isinstance(m, ResultMessage):
             print("  reply:      %r%s" % (m.result, "  (ERROR)" if m.is_error else ""))
             print("  cost:       $%.4f in %.1fs" % (m.total_cost_usd or 0, time.time() - t))
+            print("  metered:    $%.4f  %s" % (meter.usd(), meter.tokens()))
             saved = STORE.save(
                 "smoke:%s" % m.session_id,
                 {
