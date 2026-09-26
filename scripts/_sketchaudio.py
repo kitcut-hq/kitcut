@@ -10,7 +10,8 @@ into `models/soundfonts/FluidR3_GM/<instrument>/<note>.mp3` (gitignored, shared 
 Score notation -- an event list, each one of:
   {"inst": "celesta", "vel": .4, "notes": "1 E6 .5; 1.5 F6 .5; 2 C4+E4+G4 1 .3"}
       beat, note(s) joined by '+', duration in beats, optional per-note velocity
-      optional: "transpose": 12, "swell": [from, to], "humanize": false
+      optional: "transpose": 12, "humanize": false, and "swell": [g0, g1] -- each note's own
+      volume ramps from gain g0 to g1 ([.3, 1] fades every note in); gains, never beats
   {"type": "strum", "at": 22, "chord": "F3+A3+C4+F4+A4", "vel": .55,
    "pattern": "bar"|"half"|"once"|"up", "inst": "acoustic_guitar_nylon"}
   {"type": "gliss", "from": 23.45, "to": 24.2, "lo": "C4", "hi": "C7", "v0": .18, "v1": .42,
@@ -20,6 +21,10 @@ Score notation -- an event list, each one of:
   {"type": "drums", "from": 0, "bars": 8, "beats_per_bar": 4, "steps": 16, "vel": .8,
    "kit": {"kick": "x...x...x...x...", "snare": "....x.......x...", "hat": "x.x.x.x.x.x.x.x."}}
       step chars: x = hit, X = accent, o = soft, . = rest
+
+Every volume -- vel, a note's velocity, v0/v1, swell, drum_gain -- is a gain from 0 to 1.5 (real
+scores stay under 1); sketch-audio.py refuses a score with one outside that. The mix then holds
+the music at least 8 dB under the narration wherever it speaks (voice_gate), whatever the score.
 
 Not an entry script: imported by sketch-audio.py and check-sketch.py.
 """
@@ -128,6 +133,46 @@ def parse_notes(spec):
         vel = float(f[3]) if len(f) > 3 else None
         out.append((float(f[0]), [M(x) for x in f[1].split("+")], float(f[2]), vel))
     return out
+
+
+# the loudest any volume in a score may be: across 33 scores the largest was 0.95
+GAIN_MAX = 1.5
+
+
+def check_score(score):
+    """What is wrong with a score's volumes, one sentence each ([] when nothing). Every volume --
+    vel, a note's own velocity, v0/v1, drum_gain and swell -- is a gain from 0 to GAIN_MAX.
+    swell is the one that reads like a time, since from/to are beats in gliss and roll: a film
+    wrote "swell": [24, 30] meaning "beats 24 to 30", and every string chord played 24-30x too
+    loud (+28 dB) over the narration."""
+    bad = []
+
+    def gain(where, key, v):
+        if not isinstance(v, (int, float)) or isinstance(v, bool) or not 0 <= v <= GAIN_MAX:
+            bad.append("%s: %s %r is a volume, 0 to %g" % (where, key, v, GAIN_MAX))
+
+    if "drum_gain" in score:
+        gain("the score", "drum_gain", score["drum_gain"])
+    for i, e in enumerate(score.get("events", [])):
+        where = "events[%d] (%s)" % (i, e.get("inst") or e.get("type", "notes"))
+        for k in ("vel", "v0", "v1"):
+            if k in e:
+                gain(where, k, e[k])
+        if "swell" in e:
+            s = e["swell"]
+            ok = isinstance(s, list) and len(s) == 2
+            ok = ok and all(isinstance(v, (int, float)) and 0 <= v <= GAIN_MAX for v in s)
+            if not ok:
+                bad.append(
+                    '%s: "swell": %s -- swell is each note\'s volume ramp, two gains from 0 to '
+                    "%g ([0.3, 1] fades each note in), not a time: beats go in the notes"
+                    % (where, json.dumps(s), GAIN_MAX)
+                )
+        if isinstance(e.get("notes"), str):
+            for _, _, _, v in parse_notes(e["notes"]):
+                if v is not None and not 0 <= v <= GAIN_MAX:
+                    gain(where, "a note's velocity", v)
+    return bad
 
 
 # ------------------------------------------------------------------ samples
@@ -747,6 +792,75 @@ def duck_gain(vo, amount=0.62, attack=0.03, release=0.35, decimate=48):
         cur += (tgt - cur) * (a if tgt < cur else r)
         gs[i] = cur
     return np.interp(np.arange(len(vo)), np.arange(len(gs)) * decimate, gs)
+
+
+def _power(x, n):
+    """Per-sample power of x (channels averaged), its first n samples."""
+    return np.mean(np.asarray(x, dtype=float).reshape(-1, np.shape(x)[-1])[:, :n] ** 2, axis=0)
+
+
+def voice_gate(music, voice, margin_db=8.0, win=1.0, hop=0.25, release=0.6, rate=100):
+    """Hold the music at least margin_db under the voice wherever the voice speaks. Returns the
+    gain the mix multiplies the (already ducked) music by -- 1 where nothing is wrong -- and what
+    it did. The ducking follows the voice but trusts the score's own level; this does not, so a
+    score written too loud can never bury the narration.
+
+    Measured in `win`-second windows every `hop` s: the music over the whole window (a swell
+    between words covers them too), the voice only while it sounds (its envelope within 20 dB of
+    its typical level), and a window counts only when the voice sounds for 40% of it. Measured
+    over whole windows, the pauses between lines diluted the voice by 8-11 dB and the gate cut the
+    music of films that were fine; after the last word the music is free again. The cut comes
+    down at once and comes back up over `release` s.
+
+    8 dB, measured on the 13 finished films of 2026-09-25/26: at 6 dB it touches none of them, at
+    8 dB one by 1.4 dB for 1.2 s, at 9 dB two by ~2 dB. The one bad film (swell [24, 30]) is cut
+    by up to 18 dB from 16 s to the end."""
+    n = min(np.shape(music)[-1], np.shape(voice)[-1])
+    W, H = int(win * SR), max(1, int(hop * SR))
+    off = {"margin_db": margin_db, "max_cut_db": 0.0, "seconds": 0.0, "spans": []}
+    pm, pv = _power(music, n), _power(voice, n)
+    env = np.sqrt(np.maximum(lp(pv, 12), 0))
+    if n < W or not env.any():
+        return np.ones(n), off
+    active = env > np.percentile(env[env > env.max() * 1e-3], 95) * 0.1
+    cs = lambda x: np.concatenate([[0.0], np.cumsum(x)])  # noqa: E731
+    ca, cm, cv = cs(active), cs(pm), cs(pv * active)
+    starts = np.arange(0, n - W + 1, H)
+    na = ca[starts + W] - ca[starts]
+    m_db = 10 * np.log10((cm[starts + W] - cm[starts]) / W + 1e-12)
+    v_db = 10 * np.log10((cv[starts + W] - cv[starts]) / np.maximum(na, 1) + 1e-12)
+    need = np.where(na >= 0.4 * W, np.minimum(0.0, v_db - margin_db - m_db), 0.0)
+    # onto a coarse clock: each window's need covers the window, the deepest one wins
+    k = int(np.ceil(n / SR * rate))
+    tgt = np.zeros(k)
+    for s, d in zip(starts, need, strict=True):
+        if d < 0:
+            a, b = int(s / SR * rate), int(np.ceil((s + W) / SR * rate))
+            tgt[a:b] = np.minimum(tgt[a:b], d)
+    cur, out = 0.0, np.empty(k)
+    r = 1 - math.exp(-1 / (release * rate))
+    for i, t in enumerate(tgt):  # down at once, up slowly
+        cur = t if t < cur else cur + (t - cur) * r
+        out[i] = cur
+    cut = out < -1.0
+    spans, i = [], 0
+    while i < k:
+        if cut[i]:
+            j = i
+            while j < k and cut[j]:
+                j += 1
+            spans.append([round(i / rate, 2), round(min(j / rate, n / SR), 2)])
+            i = j
+        else:
+            i += 1
+    report = {
+        "margin_db": margin_db,
+        "max_cut_db": round(float(-out.min()), 1),
+        "seconds": round(float(cut.sum()) / rate, 1),
+        "spans": spans,
+    }
+    g = 10 ** (np.interp(np.arange(n) / SR, np.arange(k) / rate, out) / 20)
+    return g, report
 
 
 # ------------------------------------------------------------------ master

@@ -50,7 +50,11 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    wrong way reads as angry).
 7. **Sound.** Write `score.json` (tempo chosen so bar lines land on the story beats — compute
    `bar = 240 / bpm` and line the scene changes up) and `sfx.json` (a cue on every visual hit).
-   `sketch-audio.py --levels`: the voice should sit 6-12 dB over the ducked music.
+   `sketch-audio.py --levels`: the voice should sit 8-12 dB over the heard music. Every volume
+   in a score (`vel`, `v0`/`v1`, `drum_gain`, `"swell": [g0, g1]`) is a gain from 0 to 1.5,
+   never a time -- a swell written as beats, `[24, 30]`, played the strings 28 dB too loud and
+   is now refused. The voice gate holds the music 8 dB under the voice anyway; if the run says
+   it pulled the music down, lower the score there instead of relying on it.
 8. **Render**, then check the MP4 itself: duration, loudness (-14 LUFS), a few decoded frames.
    The render draws `--jobs` chunks at once (default: a quarter of the logical cores), 3x the
    old serial speed on a 60 s film. On a machine other sessions are loading, lower `--jobs`

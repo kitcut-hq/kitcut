@@ -126,6 +126,53 @@ def main():
     check("duck: reduced under speech", g[int(1.6 * SR)] < 0.6, "%.2f" % g[int(1.6 * SR)])
     check("duck: recovers after", g[int(2.9 * SR)] > 0.8, "%.2f" % g[int(2.9 * SR)])
 
+    # ---- the score's volumes: swell is a gain ramp, and [24, 30] (read as beats) was refused
+    strings = {"inst": "string_ensemble_1", "vel": 0.17, "notes": "24 D4+F#4+B4 4"}
+    bad = A.check_score({"events": [{**strings, "swell": [24, 30]}]})
+    check("score volumes: swell [24, 30] refused", len(bad) == 1 and "swell" in bad[0], str(bad))
+    check(
+        "score volumes: swell [.3, 1] fine",
+        not A.check_score({"events": [{**strings, "swell": [0.3, 1]}]}),
+    )
+    loud = {"drum_gain": 2, "events": [{"inst": "celesta", "vel": 3, "notes": "0 C5 1 1.8"}]}
+    check(
+        "score volumes: vel, note velocity, drum_gain",
+        len(A.check_score(loud)) == 3,
+        str(A.check_score(loud)),
+    )
+
+    # ---- the voice gate: music held under speech, left alone where it already is, free after
+    t = np.arange(8 * SR) / SR
+    vo = np.zeros_like(t)
+    for a, b in ((1.0, 3.0), (3.3, 5.5)):  # two lines with a breath between
+        k = (t >= a) & (t < b)
+        vo[k] = (
+            0.1 * np.sin(2 * np.pi * 180 * t[k]) * (0.6 + 0.4 * np.sin(2 * np.pi * 4 * t[k]) ** 2)
+        )
+    voice = np.stack([vo, vo])
+    tone = np.stack([np.sin(2 * np.pi * 330 * t)] * 2)
+
+    def db(x, a, b):  # RMS in dBFS between a and b seconds
+        return 20 * np.log10(np.sqrt(np.mean(x[:, int(a * SR) : int(b * SR)] ** 2)) + 1e-12)
+
+    quiet = tone * 10 ** ((db(voice, 1, 5.5) - 16 - db(tone, 0, 8)) / 20)
+    g, rep = A.voice_gate(quiet, voice, 8.0)
+    check(
+        "gate: music 16 dB under is left alone",
+        rep["max_cut_db"] <= 1.0 and g.min() > 0.89,
+        str(rep),
+    )
+    blare = tone * 10 ** ((db(voice, 1, 5.5) + 3 - db(tone, 0, 8)) / 20)
+    g, rep = A.voice_gate(blare, voice, 8.0)
+    heard = blare * g
+    under = min(db(voice, a, a + 1) - db(heard, a, a + 1) for a in (1.0, 2.0, 3.5, 4.5))
+    check("gate: music 3 dB over the voice held 8 dB under it", under >= 7.0, "%.1f dB" % under)
+    check(
+        "gate: untouched before the first word", g[int(0.3 * SR)] > 0.98, "%.2f" % g[int(0.3 * SR)]
+    )
+    check("gate: free again after the last word", g[int(7.5 * SR)] > 0.9, "%.2f" % g[int(7.5 * SR)])
+    check("gate: says where", rep["spans"] and 0.5 <= rep["spans"][0][0] <= 1.5, str(rep["spans"]))
+
     # ---- the tail-word cut and word timing
     vo_mod = import_module("sketch-vo")
     tone = lambda s: np.sin(np.arange(int(s * SR)) * 2 * np.pi * 220 / SR) * 0.3  # noqa: E731

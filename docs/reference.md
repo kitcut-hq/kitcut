@@ -2948,9 +2948,23 @@ scoring on large-v3/GPU 48 s. Lily speaks Ukrainian at ~1.8 words a second, not 
 
 Stages: fetch any missing instrument notes (FluidR3 GM, MIT, into
 `models/soundfonts/FluidR3_GM/`, shared by every project), render the score, render the cues,
-place the voice, duck the music under it (fast attack, slow release), mix, and master with a
-two-pass `loudnorm` to -14 LUFS / -1.5 dBTP. `--levels` prints music / ducked / sfx / voice RMS
-per 2 s, which is how the balance is judged without listening; `--stems` writes them out.
+place the voice, duck the music under it (fast attack, slow release), hold it at least
+`mix.voice_margin_db` (8) under the voice wherever the voice speaks, mix, and master with a
+two-pass `loudnorm` to -14 LUFS / -1.5 dBTP. `--levels` prints music / ducked / heard / sfx /
+voice RMS per 2 s, which is how the balance is judged without listening; `--stems` writes them
+out. Every run also writes `audio/balance.json` (the same table, and what the voice gate did),
+which is what Sketch Studio's `sound` tool shows Claude.
+
+**The voice gate** is the backstop the ducker is not: the ducker follows the voice but trusts
+the score's own level, so a score written too loud buries the narration however well it
+ducks. The gate measures, in 1 s windows, the music over the whole window against the voice
+only while it sounds (a window counts when the voice sounds for 40% of it), and pulls the
+music down to the margin where it is closer -- at once, releasing over 0.6 s, and free again
+after the last word. Measured on the 13 finished studio films: at 8 dB it touches one of them
+by 1.4 dB for 1.2 s (6 dB: none; 9 dB: two by ~2 dB); on the one bad film it cuts up to 18 dB
+from 16 s to the end. The first version measured the voice over whole windows, where the pauses
+between lines diluted it by 8-11 dB, and it cut 2-4 s off the music of films that were fine.
+A score with any volume outside 0..1.5 is refused before anything renders (`check_score`).
 
 Measured on the 60 s film: samples 45 s the first time (69 notes), 0.5 s after; music 16.7 s;
 sfx 4.1 s; voice 3.5 s; mix 1.5 s; master 8.1 s.
@@ -2967,7 +2981,9 @@ sfx 4.1 s; voice 3.5 s; mix 1.5 s; master 8.1 s.
 ]}
 ```
 
-Times are in beats. **Choose the tempo so bar lines land on the story**: at 96 bpm a bar is
+Times are in beats; every volume (`vel`, a note's own velocity, `v0`/`v1`, `drum_gain`, and
+`"swell": [g0, g1]`, each note's own volume ramp such as `[0.3, 1]`) is a gain from 0 to 1.5,
+never a time. **Choose the tempo so bar lines land on the story**: at 96 bpm a bar is
 2.5 s, which put the drop exactly on "Now, drop the files" (20.0 s) and the stabs on
 "Confirm" (40.0 s). A long score is easier to generate from chord charts with a small script
 beside it than to type by hand.
@@ -3598,6 +3614,14 @@ everything in `temp/` regenerates in seconds.
   outlived its run; `sketch-render.py` takes the whole tree with `taskkill /T`.
 - **Python's `hash()` of a string is salted per process.** A drum seeded from `hash(piece)`
   sounded different every run; seed from the characters instead.
+- **`"swell": [from, to]` read as beats.** In `gliss` and `roll`, `from`/`to` are beats, so a
+  studio film wrote `"swell": [24, 30]` meaning "swell over beats 24-30". It is a gain ramp:
+  every string chord played 24-30x (+28 dB), from 16.5 s to the end, over the narration. Two
+  things let it through: nothing checked a score's volumes, and the studio's `sound` tool
+  returned the script's last 15 lines -- the stage timings -- so even `levels: true` never
+  showed Claude the balance. Now: `check_score` refuses volumes outside 0..1.5 (33 real scores
+  peak at 0.95), the voice gate holds the music 8 dB under the voice, and the tool reads
+  `audio/balance.json` (studio film ssemfm, 2026-09-26).
 - **A film that opens on blank paper looks broken.** A 0.35 s fade in from the paper colour
   plus a draw-on that started at zero gave six identical blank frames and a slow fade: the
   first thing a viewer saw was nothing. `SK.film` no longer fades in unless asked, and the

@@ -4,8 +4,10 @@
 Reads `projects/<id>/sketch.json`: its `audio.score` (sampled-instrument score, see
 _sketchaudio.py for the notation), `audio.sfx` (timed sound cues), the VO timeline written by
 sketch-vo.py, and optional plane/object automation written by sketch-render.py --automation.
-Renders music, SFX and voice, ducks the music under speech, mixes, and masters to EBU R128
-(-14 LUFS, -1.5 dBTP by default) with a two-pass loudnorm.
+Renders music, SFX and voice, ducks the music under speech, holds it at least
+`voice_margin_db` under the voice wherever the voice speaks (the voice gate: a score written too
+loud cannot bury the narration), mixes, and masters to EBU R128 (-14 LUFS, -1.5 dBTP by default)
+with a two-pass loudnorm. A score with a volume outside 0..1.5 is refused before anything renders.
 
 Every stage is timed into the project's run log (run-log.py reads it), and the stage table is
 printed at the end -- the answer to "how long does the audio for a film take".
@@ -13,6 +15,7 @@ printed at the end -- the answer to "how long does the audio for a film take".
 Outputs, in projects/<id>/audio/:
     mix_pre.wav     the un-mastered mix          stem_music/sfx/vo.wav   (--stems)
     final.wav       mastered, 24-bit             final.mp3               for the HTML player
+    balance.json    music / ducked / heard / sfx / voice per 2 s, and what the voice gate did
 
 A manifest `tail` ({secs, audio}: a closing after the film) adds its recording after the film's
 sound, which still ends at the film's end.
@@ -20,7 +23,7 @@ sound, which still ends at the film's end.
 Manifest keys (audio block), all optional except score:
     score, sfx, automation ("temp/automation.json"), vo_timeline ("audio/vo/timeline.json")
     mix: {music_db: 6, sfx_db: 3, vo_db: -17, duck: .62, reverb_sec: 2.3, music_reverb: .9,
-          sfx_reverb: .8, fade_out: .6}
+          sfx_reverb: .8, fade_out: .6, voice_margin_db: 8 (null: no voice gate)}
     master: {lufs: -14, tp: -1.5}
 
 Invoke as:
@@ -88,6 +91,7 @@ def main():
         "music_reverb": 0.9,
         "sfx_reverb": 0.8,
         "fade_out": 0.6,
+        "voice_margin_db": 8.0,
         **au.get("mix", {}),
     }
     master = {"lufs": -14.0, "tp": -1.5, **au.get("master", {})}
@@ -95,6 +99,9 @@ def main():
     score, score_p = load_json(m, "score")
     if score is None:
         sys.exit("no score: set audio.score in %s (missing: %s)" % (m["_path"], score_p))
+    bad = A.check_score(score)
+    if bad:
+        sys.exit("%s: volumes that cannot be right\n  %s" % (score_p, "\n  ".join(bad)))
     cues, _ = load_json(m, "sfx")
     cues = cues or []
     autom, _ = load_json(m, "automation", "temp/automation.json")
@@ -161,7 +168,15 @@ def main():
                 vo_st, gain = np.zeros((2, int(dur * SR))), np.ones(int(dur * SR))
         with st("mix"):
             Mg, Sg = 10 ** (mix["music_db"] / 20), 10 ** (mix["sfx_db"] / 20)
-            out = music * gain * Mg + sfx * Sg + vo_st
+            ducked = music * gain * Mg
+            gate = None
+            if timeline and mix["voice_margin_db"] is not None:
+                vgate, gate = A.voice_gate(ducked, vo_st, float(mix["voice_margin_db"]))
+                heard = ducked * vgate
+            else:
+                heard = ducked
+            print("  " + gate_line(gate))
+            out = heard + sfx * Sg + vo_st
             k = int(mix["fade_out"] * SR)
             if k:
                 out[:, -k:] *= np.linspace(1, 0, k) ** 1.5
@@ -172,15 +187,29 @@ def main():
             if args.stems:
                 for name, x in (("music", music * Mg), ("sfx", sfx * Sg), ("vo", vo_st)):
                     _sketch.write_wav(os.path.join(m["_audio"], "stem_%s.wav" % name), x * 0.5)
-            if args.levels:
-                names, rows = A.levels_table(
+            # the film's balance (the closing after it is the studio's, not the film's), kept
+            # beside the mix: the studio's sound tool shows it to Claude, who cannot listen
+            names, rows = A.levels_table(
+                {
+                    "music": music * Mg,
+                    "ducked": ducked,
+                    "heard": heard,
+                    "sfx": sfx * Sg,
+                    "voice": vo_st,
+                }
+            )
+            bal = os.path.join(m["_audio"], "balance.json")
+            with open(bal, "w", encoding="utf-8") as f:
+                json.dump(
                     {
-                        "music": music * Mg,
-                        "ducked": music * gain * Mg,
-                        "sfx": sfx * Sg,
-                        "voice": vo_st,
-                    }
+                        "step": 2.0,
+                        "columns": ["sec"] + names,
+                        "rows": [[round(float(v), 1) for v in r] for r in rows],
+                        "voice_gate": gate,
+                    },
+                    f,
                 )
+            if args.levels:
                 print("\n  %5s " % "sec" + " ".join("%8s" % n for n in names))
                 for r in rows:
                     print("  %5.0f " % r[0] + " ".join("%8.1f" % v for v in r[1:]))
@@ -217,7 +246,22 @@ def main():
         argv=sys.argv[1:],
         kind="audio",
         manifest=m["_path"],
-        sidecars={"mp3": mp3, "mix_pre": pre},
+        sidecars={"mp3": mp3, "mix_pre": pre, "balance": bal},
+    )
+
+
+def gate_line(gate):
+    """What the voice gate did, in one line."""
+    if gate is None:
+        return "voice gate: off (no narration, or voice_margin_db is null)"
+    if gate["max_cut_db"] <= 1.0:
+        return "voice gate: the music stays %g dB or more under the voice" % gate["margin_db"]
+    spans = gate["spans"]
+    where = ", ".join("%.1f-%.1f s" % tuple(s) for s in spans[:6])
+    more = " and %d more" % (len(spans) - 6) if len(spans) > 6 else ""
+    return (
+        "voice gate: the music came within %g dB of the voice; pulled down up to %.1f dB "
+        "over %.1f s (%s%s)" % (gate["margin_db"], gate["max_cut_db"], gate["seconds"], where, more)
     )
 
 

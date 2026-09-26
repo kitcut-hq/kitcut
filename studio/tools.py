@@ -211,17 +211,15 @@ class Tools:
             )
 
     async def sound(self, levels=False, log=False):
+        """The soundtrack, and what Claude needs to judge it without listening: whether the music
+        stays under the narration, always, and with levels the balance per 2 s. Both come from
+        audio/balance.json: only a script's last lines come back, and they were the stage timings,
+        so a score whose strings played 28 dB too loud over the voice was reported as fine."""
         async with self.lock:
             self.gate()
             await self._automation_if_needed()
-            tail = await self._script(
-                "sound",
-                "sketch-audio.py",
-                ["--levels"] if levels else [],
-                pools=[("cpu", 1)],
-                log=log,
-            )
-        return "\n".join(tail[-15:])
+            tail = await self._script("sound", "sketch-audio.py", [], pools=[("cpu", 1)], log=log)
+        return balance_text(self.film, levels) or "\n".join(tail[-15:])
 
     async def render(self):
         """The final video (the studio's step, not Claude's): three browsers at once."""
@@ -283,13 +281,45 @@ class Tools:
             tool(
                 "sound",
                 "Render the soundtrack from score.json and sfx.json (and the narration) to prove "
-                "they work; levels: also print the balance.",
+                "they work, and say whether the music stays under the narration; levels: also "
+                "print the music / sfx / voice balance per 2 s.",
                 {"type": "object", "properties": {"levels": {"type": "boolean"}}},
             )(wrap(lambda a: self.sound(bool(a.get("levels"))))),
         ]
         if self.film.look != "painted":
             tools = [t for t in tools if t.name != "paint"]
         return create_sdk_mcp_server("studio", tools=tools)
+
+
+def balance_text(film, table=False):
+    """What sketch-audio.py measured (audio/balance.json), in words for Claude: whether the voice
+    gate had to pull the music down, and with table the balance per 2 s. None when there is none."""
+    try:
+        with open(film.path("audio", "balance.json"), encoding="utf-8") as f:
+            b = json.load(f)
+    except (OSError, ValueError):
+        return None
+    g = b.get("voice_gate")
+    if not g:
+        lines = ["No narration, so nothing to balance the music against."]
+    elif g["max_cut_db"] > 1.0:
+        where = ", ".join("%.1f-%.1f s" % tuple(s) for s in g["spans"][:6])
+        lines = [
+            "Too loud: the music came within %g dB of the narration, so the studio pulled it down "
+            "by up to %.1f dB over %.1f s (%s). Lower the score there (vel, or a swell's gains) "
+            "rather than leave it to the studio."
+            % (g["margin_db"], g["max_cut_db"], g["seconds"], where)
+        ]
+    else:
+        lines = ["Balance OK: the music stays %g dB or more under the narration." % g["margin_db"]]
+    if table:
+        i = {c: k for k, c in enumerate(b["columns"])}
+        lines.append("  sec   music   sfx  voice   (dBFS per 2 s; music as heard, after ducking)")
+        lines += [
+            "%5.0f %7.1f %5.0f %6.1f" % (r[i["sec"]], r[i["heard"]], r[i["sfx"]], r[i["voice"]])
+            for r in b["rows"]
+        ]
+    return "\n".join(lines)
 
 
 def _newer(a, *bs):
