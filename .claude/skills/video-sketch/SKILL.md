@@ -43,6 +43,12 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
 5. **Picture.** Write `film.js` scene by scene, every cue on a word: `SK.w(line, "word")`.
    Lay scenes out in world space and move the camera between them (`SK.camera` keys with
    easing); keep each scene's content inside ±900 x ±500 of its centre at zoom 1.
+   For a painted film, `sketch-paint.py` makes the pictures from the manifest's `paint` block
+   (one style line, one prompt per scene, `ref` to keep a character across scenes on a model
+   that takes references). Look at `images/sheet.jpg` before animating. To choose or change
+   the image model, run `paint-compare.py` on a few real scenes and judge the sheets. Its
+   `--plan` prices the run, but it cannot see an OpenRouter account's allowed-providers
+   setting, so paint one scene per model first.
 6. **Review with stills, not guesses.** `--stills` at the moments that matter (each cue, each
    transition midpoint) with `--sheet`, then look at the sheet. Fix, re-still, repeat. A round
    of 18 stills costs ~9 s. Check text overlaps, off-frame content, elements hidden behind

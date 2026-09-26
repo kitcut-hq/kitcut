@@ -2995,6 +2995,58 @@ swoosh_soft, tick, chime, siren -- a softened civil-defence wail), `"sample"` (a
 airflow that follows a moving object's speed and screen position, from the film's
 `automation` tracks (`sketch-render.py --automation` writes them).
 
+### The paintings: `sketch-paint.py`, and choosing a painter with `paint-compare.py`
+
+A painted film animates pictures made by an image model. The manifest's `paint` block (inline,
+or `"paint": "paint.json"`) lists them as `{"name", "prompt", "ref"?}`, with one `style` line
+in front of every prompt and a no-lettering, no-border suffix behind it. Each becomes
+`images/<name>.jpg` and joins the manifest's `images`, so `film.js` draws it with
+`SK.image(name, x, y, w)`. Paintings are cached by a fingerprint of backend, model, style,
+prompt and reference; `max_images` caps a film's total (Sketch Studio sets 8).
+
+Backends:
+- **`openrouter`**: any model OpenRouter's Image API serves (`"model": "<vendor>/<model>"`).
+  Each model is sent only what its entry in the public catalogue
+  (`/api/v1/images/models/<id>/endpoints`) lists. That means 16:9 or the landscape ratio
+  nearest it, 2K or the nearest size below, and JPEG where offered. `quality` is sent only to
+  models that have the setting (OpenAI's). The price comes back with each picture.
+- **`muse`**: the same backend pinned to `meta/muse-image`, the studio's painter. It is served
+  but missing from the catalogue, so it gets the settings it always got (2K, 16:9, PNG) and
+  answers 1920x1280 whatever ratio was asked. It costs about $0.01 a picture and takes 15-30 s.
+- **`gemini`**: Vertex AI.
+
+`ref` names a painting already made. It goes in as a reference picture (`input_references`,
+a data URL) wherever the model takes one, and is how a character stays the same from scene to
+scene. Muse takes no reference, so it paints the second scene from the words alone.
+
+**Choosing a painter.** `paint-compare.py` paints one paint block with several models side by
+side.
+- An image may carry its own `style`, so one test set can hold scenes from several films.
+- A `ref` is painted from the same model's own painting of the scene it names.
+- It writes into `temp/paint-compare/`: a contact sheet per model, a sheet per prompt with every
+  model's picture labelled (price, seconds, size), and `results.csv`/`results.json`.
+- `--plan` prices the run from the catalogue, and `--cap` stops it at a spend.
+- A rerun reuses every picture already painted.
+- The test set used on 2026-09-26 is `projects/paint-bakeoff/`: six scenes from studio films,
+  plus one character painted and then re-used as the reference for two more scenes. That run
+  painted 72 pictures on 8 models for $1.78, with no lettering or borders from any model.
+- **Muse is the best picture per dollar we can reach.** It gives $0.01 at 1920x1280 with the
+  most detail. The alternatives:
+  - GPT Image 2.5 Flare is $0.009, or $0.02 with a reference. It takes 14 s and composes well,
+    but its textures look blocky at full size.
+  - MAI Image 2.6 Flash is $0.02 and takes 14 s. It holds a character best and looks clean, but
+    comes out at only 1365x768.
+  - GPT Image 2 and MAI 2.6 look good, but cost 3-4 times as much.
+  - GPT Image 1 Mini is flat and sepia.
+  - The weighted scores are in the journal.
+
+**OpenRouter's allowed-providers setting overrides the model name.** A model whose only
+providers are outside the account's allow-list fails with `404 No allowed providers are
+available for the selected model`. On 2026-09-26 the kitcut key permitted only
+meta, azure, openai and typesafe. So Seedream, Qwen, FLUX.2, Recraft, Riverflow and Gemini all
+refused, even though they are in the catalogue at a price. `--plan` cannot see that setting;
+paint one scene per model before trusting a price.
+
 ### The picture: `sketch-render.py`
 
 Bundles engine + props + film + fonts + images + voice timeline + mastered MP3 into

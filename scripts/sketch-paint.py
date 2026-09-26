@@ -15,11 +15,22 @@ behind (an image model letters signs and frames pictures unless told not to). A 
 all of them, images/sheet.jpg, is what to look at before animating.
 
 Backends:
-    muse    meta/muse-image through OpenRouter (OPENROUTER_API_KEY). 1920x1280 whatever the
-            aspect asked for; ~25 s and $0.01 an image (the price comes back with each image).
+    openrouter  any image model OpenRouter serves ("model": "bytedance-seed/seedream-5-0-lite"),
+            through its Image API (OPENROUTER_API_KEY). What each model takes -- resolution,
+            aspect ratio, output format, quality, reference pictures -- is read from OpenRouter's
+            catalogue, so a model is only sent what it accepts: 16:9 or the nearest landscape
+            ratio it has, 2K or the nearest below. The price comes back with each image.
+    muse    the same backend with meta/muse-image as its model (the studio's default): 1920x1280
+            whatever the aspect asked for, ~25 s and $0.01 an image. Muse is served but not in
+            the catalogue, so it is sent what it always was, and it takes no reference.
     gemini  a Gemini image model on Vertex AI (GOOGLE_SERVICE_ACCOUNT_KEY), default
-            gemini-3.1-flash-image: 1376x768, ~10 s. "ref" names an image already painted, which
-            goes in as a reference: the way to keep a character the same from scene to scene.
+            gemini-3.1-flash-image: 1376x768, ~10 s.
+
+"ref" names an image already painted, which goes in as a reference picture wherever the model
+takes one (gemini, and the OpenRouter models whose catalogue entry lists input_references): the
+way to keep a character the same from scene to scene. "quality" (low/medium/high) is sent to the
+models that have the setting (OpenAI's). scripts/paint-compare.py paints one paint block with
+several models side by side, to choose between them.
 
 Images are cached by a fingerprint of backend, model, style, prompt and reference, so a rerun
 paints only what changed. Each image painted appends its cost to images/spend.jsonl, and a run
@@ -47,7 +58,15 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 import _project  # noqa: E402
 import _sketch  # noqa: E402
 
-MODELS = {"muse": "meta/muse-image", "gemini": "gemini-3.1-flash-image"}
+MODELS = {
+    "openrouter": "meta/muse-image",
+    "muse": "meta/muse-image",
+    "gemini": "gemini-3.1-flash-image",
+}
+OPENROUTER = "https://openrouter.ai/api/v1"
+# what the muse backend always sent, for a model OpenRouter's catalogue does not describe
+UNLISTED = {"resolution": "2K", "aspect_ratio": "16:9", "output_format": "png"}
+KEEP_REF = "Keep the characters, their clothes and the drawing style exactly as in this picture. "
 # the suffix sprinkles learned to send: any lettering, border or torn edge is a defect
 NO_TEXT = (
     "Do not render any text in the image at all: no captions, signs, labels, packaging, "
@@ -61,10 +80,10 @@ GEMINI_OUT_PRICE = {"gemini-2.5-flash-image": 30.0}
 
 
 def fingerprint(spec, im, ref_fp=None):
-    key = json.dumps(
-        [spec.get("backend"), spec.get("model"), spec.get("style"), im["prompt"], ref_fp],
-        sort_keys=True,
-    )
+    parts = [spec.get("backend"), spec.get("model"), spec.get("style"), im["prompt"], ref_fp]
+    if spec.get("quality"):  # only when set, so every painting made before it keeps its key
+        parts.append(spec["quality"])
+    key = json.dumps(parts, sort_keys=True)
     return hashlib.sha1(key.encode(), usedforsecurity=False).hexdigest()[:10]
 
 
@@ -75,25 +94,88 @@ def full_prompt(spec, im):
     )
 
 
-def paint_muse(prompt, model):
+_CAPS = {}
+
+
+def model_caps(model):
+    """What OpenRouter serves `model` with: its first endpoint from the image catalogue
+    ({"supported_parameters", "pricing", ...}), or None when the catalogue has none for it or
+    cannot be reached. Public, no key; asked once per model per run."""
+    if model not in _CAPS:
+        import httpx
+
+        try:
+            r = httpx.get("%s/images/models/%s/endpoints" % (OPENROUTER, model), timeout=20)
+            eps = r.json().get("endpoints") or []
+        except Exception:  # noqa: BLE001 -- no catalogue: send what the muse backend always did
+            eps = []
+        _CAPS[model] = eps[0] if eps else None
+    return _CAPS[model]
+
+
+def _ratio(a):
+    w, h = (float(x) for x in a.split(":"))
+    return w / h
+
+
+def pick_params(caps, quality=None):
+    """The request's settings for a model: 16:9 (or the landscape ratio nearest it), 2K (or the
+    nearest below), jpeg where the model offers it, and `quality` if the model has the setting.
+    Anything the catalogue does not list is not sent."""
+    if caps is None:
+        return dict(UNLISTED)
+    sp = caps.get("supported_parameters") or {}
+    out = {}
+    ars = [a for a in (sp.get("aspect_ratio") or {}).get("values") or [] if ":" in a]
+    if "16:9" in ars:
+        out["aspect_ratio"] = "16:9"
+    elif ars:
+        wide = [a for a in ars if _ratio(a) >= 1] or ars
+        out["aspect_ratio"] = min(wide, key=lambda a: abs(_ratio(a) - 16 / 9))
+    res = (sp.get("resolution") or {}).get("values") or []
+    if res:
+        order = ["512", "1K", "2K", "4K"]
+        below = [r for r in res if r in order and order.index(r) <= order.index("2K")]
+        out["resolution"] = max(below, key=order.index) if below else res[0]
+    fmts = (sp.get("output_format") or {}).get("values") or []
+    if fmts:
+        out["output_format"] = "jpeg" if "jpeg" in fmts else fmts[0]
+    if quality and quality in ((sp.get("quality") or {}).get("values") or []):
+        out["quality"] = quality
+    return out
+
+
+def takes_refs(caps):
+    """Whether the catalogue says the model takes a reference picture."""
+    refs = ((caps or {}).get("supported_parameters") or {}).get("input_references") or {}
+    return refs.get("max", 0) >= 1
+
+
+def paint_openrouter(prompt, model, ref=None, quality=None):
+    """One picture from an OpenRouter image model; `ref` (a JPEG path) goes in as a reference
+    picture when the model takes one, and is dropped (as Muse always dropped it) when not."""
     import httpx
 
     key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY is not set (put it in .env)")
+    caps = model_caps(model)
+    body = {"model": model, "prompt": prompt, **pick_params(caps, quality)}
+    if ref and takes_refs(caps):
+        with open(ref, "rb") as f:
+            url = "data:image/jpeg;base64," + base64.b64encode(f.read()).decode()
+        body["input_references"] = [{"type": "image_url", "image_url": {"url": url}}]
+        body["prompt"] = KEEP_REF + prompt
     r = httpx.post(
-        "https://openrouter.ai/api/v1/images",
+        OPENROUTER + "/images",
         headers={"Authorization": "Bearer " + key, "X-Title": "kitcut"},
-        json={
-            "model": model,
-            "prompt": prompt,
-            "resolution": "2K",
-            "aspect_ratio": "16:9",
-            "output_format": "png",
-        },
+        json=body,
         timeout=240,
     )
-    j = r.json()
+    try:
+        j = r.json()
+    except ValueError:
+        raise RuntimeError("openrouter %s: %s" % (r.status_code, r.text[:300])) from None
     if r.status_code != 200:
         raise RuntimeError("openrouter %s: %s" % (r.status_code, str(j.get("error", j))[:300]))
     d = j["data"][0]
@@ -246,10 +328,10 @@ def main():
                 t, err = time.time(), None
                 for attempt in range(3):
                     try:
-                        if backend == "muse":
-                            data, meta = paint_muse(prompt, model)
-                        else:
+                        if backend == "gemini":
                             data, meta = paint_gemini(prompt, model, ref)
+                        else:
+                            data, meta = paint_openrouter(prompt, model, ref, spec.get("quality"))
                         break
                     except Exception as e:  # noqa: BLE001 -- image services drop requests; retry
                         err = e
