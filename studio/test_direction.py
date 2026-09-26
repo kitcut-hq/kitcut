@@ -136,7 +136,10 @@ def main():
     )
     expect(
         "the note counts choices",
-        "- voices: Kore, Charon" in msg and "- grounds: paper" in msg and "- tempos: 76" in msg,
+        # the two films are made in the same second, so either may count as the newer
+        ("- voices: Kore, Charon" in msg or "- voices: Charon, Kore" in msg)
+        and "- grounds: paper" in msg
+        and "- tempos: 76" in msg,
         msg,
     )
     expect("the note gives no other film's prompt", "lighthouse" not in msg and "dragon" not in msg)
