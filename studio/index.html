@@ -28,7 +28,7 @@ header p { margin: 6px 0 0; color: var(--ink-soft); font-size: 16px; }
 header .spend { font-size: 13.5px; font-variant-numeric: tabular-nums; }
 header .spend b { color: var(--ink); font-weight: 600; }
 form { display: grid; gap: 10px; }
-textarea { width: 100%; min-height: 84px; resize: vertical; padding: 14px 16px; border-radius: 12px;
+textarea { width: 100%; min-height: calc(5 * 1.35em + 28px); resize: vertical; padding: 14px 16px; border-radius: 12px;
   border: 1.5px solid var(--rule); background: var(--sheet); color: var(--ink); font: 22px/1.35 'Patrick Hand', cursive; }
 textarea:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
@@ -87,6 +87,30 @@ a.google { display: flex; justify-content: center; align-items: center; gap: 10p
 a.google:hover { border-color: var(--accent); }
 .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .film div { padding: 8px 10px 10px; font-size: 13px; }
+/* the length slider: 5-60 s usable, and the track carries on, locked, to 5 min */
+.len { flex: 1 1 300px; min-width: 240px; display: grid; gap: 2px; }
+.lenhead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--ink-soft); }
+.lenhead b { font: 700 26px/1 Caveat, cursive; color: var(--ink); min-width: 2.2em; }
+.lentrack { display: flex; align-items: center; height: 28px; }
+#length { --p: .09; --fill-color: var(--accent); flex: 0 0 70%; width: 70%; margin: 0; height: 28px; background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer; }
+#length::-webkit-slider-runnable-track { height: 8px; border-radius: 4px 0 0 4px;
+  background: linear-gradient(to right, var(--fill-color) 0 calc(11px + (100% - 22px) * var(--p)), var(--rule) 0); }
+#length::-moz-range-track { height: 8px; border-radius: 4px 0 0 4px;
+  background: linear-gradient(to right, var(--fill-color) 0 calc(11px + (100% - 22px) * var(--p)), var(--rule) 0); }
+#length::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -7px; border-radius: 50%;
+  background: var(--fill-color); border: 3px solid var(--sheet); box-shadow: 0 0 0 1.5px var(--fill-color); }
+#length::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--fill-color);
+  border: 3px solid var(--sheet); box-shadow: 0 0 0 1.5px var(--fill-color); }
+#length:focus-visible { outline: none; }
+#length:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 4.5px var(--fill-color); }
+.locked { flex: 1 1 auto; height: 8px; padding: 0; border: 0; border-radius: 0 4px 4px 0; cursor: not-allowed;
+  background: repeating-linear-gradient(135deg, var(--rule) 0 3px, transparent 3px 7px); box-shadow: inset 0 0 0 1px var(--rule); }
+.ticks { position: relative; height: 16px; font-size: 11.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.ticks span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.ticks .dim { opacity: .5; }
+.credit { margin: 4px 0 0; }
+.credit.short { color: var(--bad); }
+button.short { background: var(--rule); color: var(--ink-soft); }
 .film p { margin: 0 0 4px; font: 18px/1.2 'Patrick Hand', cursive; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .film small { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 </style>
@@ -108,17 +132,27 @@ a.google:hover { border-color: var(--accent); }
   </form>
 
   <form id="form">
-    <textarea id="prompt" aria-label="What should the film show?">A paper plane delivers a cup of coffee to a sleepy developer, who wakes up delighted</textarea>
+    <textarea id="prompt" rows="5" aria-label="What should the film show?">A paper plane delivers a cup of coffee to a sleepy developer, who wakes up delighted</textarea>
     <div class="row">
       <select id="look" aria-label="Look">
         <option value="drawn" selected>Hand-drawn</option>
         <option value="painted">Painted (AI scenes)</option>
       </select>
-      <select id="length" aria-label="Length">
-        <option value="5">5 seconds</option>
-        <option value="10" selected>10 seconds</option>
-        <option value="15">15 seconds</option>
-      </select>
+      <div class="len">
+        <div class="lenhead"><label for="length">Length</label><b id="lenOut">0:10</b><span id="lenHint" hidden>Films longer than a minute are coming soon.</span></div>
+        <div class="lentrack">
+          <input type="range" id="length" min="5" max="60" step="5" value="10" aria-valuetext="10 seconds">
+          <button type="button" class="locked" id="lenLocked" title="Films up to 5 minutes are coming soon" aria-label="Films up to 5 minutes are coming soon"></button>
+        </div>
+        <div class="ticks" aria-hidden="true">
+          <span style="left: 0; transform: none">0:05</span>
+          <span style="left: calc(11px + (70% - 22px) * .4545)">0:30</span>
+          <span style="left: calc(70% - 11px)">1:00</span>
+          <span class="dim" style="left: 85%">3:00</span>
+          <span class="dim" style="left: 100%; transform: translateX(-100%)">5:00</span>
+        </div>
+        <p class="note credit" id="credit" hidden></p>
+      </div>
       <button id="go" type="submit">Make the film</button>
       <span class="note">Claude Opus 5.5 directs · Muse paints (painted look) · Gemini narrates · about 3-6 minutes<span id="busy"></span></span>
     </div>
@@ -338,7 +372,7 @@ async function follow(since = 0, misses = 0) {
     const s = await r.json();
     if (since === 0) {  // first look: the prompt, and a clock that carries on from the run's start
       if (s.prompt) $('prompt').value = s.prompt;
-      if (s.length) $('length').value = String(s.length);
+      if (s.length) { $('length').value = String(s.length); paintLength(); }
       if (s.look) $('look').value = s.look;
       if (s.status === 'queued' || s.status === 'running') { startClock(s.elapsed_s); screen('<div class="idle">Claude is thinking up the film...</div>'); }
     }
@@ -357,7 +391,7 @@ async function follow(since = 0, misses = 0) {
     if (s.status === 'error' && !s.events.length && since === 0) { line('error', s.error || 'This film failed.'); $('status').textContent = 'Failed.'; }
     if (s.status === 'lost') { screen('<div class="idle">This film was interrupted.</div>'); $('status').textContent = 'The studio restarted before this film finished.'; }
     if (s.status === 'cancelled') { if (since === 0 && !s.events.length) line('error', 'This film was stopped.'); $('status').textContent = 'Stopped.'; }
-    if (['done', 'error', 'lost', 'cancelled'].includes(s.status)) return finish();
+    if (['done', 'error', 'lost', 'cancelled'].includes(s.status)) { if (mine.has(id)) refreshCredits(); return finish(); }
     poll = setTimeout(() => follow(s.next, 0), 1500);
   } catch (err) {
     if (id !== currentId) return;
@@ -369,7 +403,7 @@ async function follow(since = 0, misses = 0) {
 // ---- the sign-up wall, on the public site only. /api/me exists where the site has accounts
 // (Vercel, api/auth.js); on the laptop and through the bare tunnel it is not found, AUTH stays
 // false, and the page works as it always has. Watching films needs no account; making one does.
-let AUTH = false, USER = null, GOOGLE = false;
+let AUTH = false, USER = null, GOOGLE = false, CREDITS = null;
 const SIGNIN_ERRORS = {
   link: 'That sign-in link is invalid or has expired. Request a fresh one.',
   google: "Google sign-in didn't complete. Try again, or use the email link.",
@@ -418,21 +452,57 @@ $('emailForm').addEventListener('submit', async (e) => {
   } catch (err) { $('signinErr').textContent = String(err.message || err); $('signinErr').hidden = false; }
   btn.disabled = false;
 });
+// ---- length and credits. One credit is one second of film; /api/me says what is left this cycle.
+// Where there is no /api/me (the laptop), CREDITS stays null and the slider is just a length.
+const renews = () => new Date(CREDITS.renews_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+const shortOf = (v) => !!(CREDITS && v > CREDITS.balance);
+function paintLength() {
+  const el = $('length'), v = +el.value;
+  el.style.setProperty('--p', (v - +el.min) / (+el.max - +el.min));
+  el.setAttribute('aria-valuetext', `${v} seconds`);
+  $('lenOut').textContent = mmss(v);
+  const short = shortOf(v);
+  el.style.setProperty('--fill-color', short ? 'var(--bad)' : 'var(--accent)');
+  $('go').textContent = short ? 'Not enough credits' : 'Make the film';
+  $('go').classList.toggle('short', short);
+  $('go').setAttribute('aria-disabled', String(short));
+  const c = $('credit');
+  c.hidden = !CREDITS;
+  if (CREDITS) {
+    c.classList.toggle('short', short);
+    c.textContent = `${v} credits · you have ${mmss(CREDITS.balance)} left · renews ${renews()}`;
+  }
+}
+$('length').addEventListener('input', paintLength);
+let hintTimer = null;
+$('lenLocked').addEventListener('click', () => {
+  $('lenHint').hidden = false; clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => { $('lenHint').hidden = true; }, 4000);
+});
+async function refreshCredits() {
+  if (!AUTH || !USER) return;
+  try {
+    const r = await fetch('/api/me', { headers: { Accept: 'application/json' } });
+    const me = r.ok ? await r.json() : null;
+    if (me && me.credits) { CREDITS = me.credits; paintLength(); }
+  } catch (e) { /* the balance on screen stays as it was */ }
+}
+
 async function whoami() {
   try {
     const r = await fetch('/api/me', { headers: { Accept: 'application/json' } });
     const me = r.ok ? await r.json() : null;
     if (!me || !me.auth) return;
-    AUTH = true; USER = me.user; GOOGLE = !!me.google;
+    AUTH = true; USER = me.user; GOOGLE = !!me.google; CREDITS = me.credits || null;
   } catch (e) { return; }
-  renderAccount();
+  renderAccount(); paintLength();
   const q = new URLSearchParams(location.search), failed = q.get('signin');
   if (failed != null) { history.replaceState(null, '', location.pathname); if (!USER) askSignIn(SIGNIN_ERRORS[failed] || SIGNIN_ERRORS.link); }
   const d = USER && draft.take();
   if (d) {
     if (d.prompt) $('prompt').value = d.prompt;
     if (d.look) $('look').value = d.look;
-    if (d.length) $('length').value = d.length;
+    if (d.length) { $('length').value = d.length; paintLength(); }
     if (!currentId) $('status').textContent = 'Signed in. Your idea is back in the box: press "Make the film".';
   }
 }
@@ -442,6 +512,10 @@ $('form').addEventListener('submit', async (e) => {
   const prompt = $('prompt').value.trim();
   if (!prompt) return;
   if (AUTH && !USER) { draft.save(); return askSignIn(); }
+  if (shortOf(+$('length').value)) {
+    $('status').textContent = `This film needs ${mmss(+$('length').value)} of credit and you have ${mmss(CREDITS.balance)}. Credits renew on ${renews()}.`;
+    return;
+  }
   reset(); $('go').disabled = true;
   screen('<div class="idle">Claude is thinking up the film...</div>');
   startClock(0);
@@ -458,12 +532,21 @@ $('form').addEventListener('submit', async (e) => {
       line('error', 'The studio token is missing or wrong.'); return needToken();
     }
     const body = await r.json();
+    if (r.status === 402 && body.reason === 'credits') {  // spent elsewhere since this page loaded
+      finish(); screen('<div class="idle">Your film appears here.</div>');
+      if (CREDITS) { CREDITS.balance = body.have; paintLength(); }
+      $('status').textContent = `This film needs ${mmss(body.need)} of credit and you have ${mmss(body.have)}.` +
+        (body.renews_at ? ` Credits renew on ${new Date(body.renews_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.` : '');
+      return;
+    }
     if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    if (CREDITS && body.credits) { CREDITS.balance = body.credits.balance; paintLength(); }
     mine.add(body.id);
     openFilm(body.id, true);
   } catch (err) { line('error', String(err.message || err)); finish(); }
 });
 
+paintLength();
 whoami();
 online().then((up) => {
   const m = location.pathname.match(FILM_PATH);

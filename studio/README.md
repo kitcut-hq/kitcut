@@ -87,10 +87,12 @@ The page says what a film is waiting for ("Waiting for the renderer: 1 film ahea
 The public site is https://create.kitcut.ai, from
 [kitcut-hq/sketch-studio](https://github.com/kitcut-hq/sketch-studio) on Vercel:
 - It serves a copy of `index.html`; keep the two the same.
-  - The page carries the site's sign-in UI.
-  - That UI appears only where `/api/me` answers, which is on the site and not here. On this
+  - The page carries the site's sign-in UI and its credit line: what a film costs (one credit a
+    second) and what is left this cycle, under the length slider.
+  - Both appear only where `/api/me` answers, which is on the site and not here. On this
     server (token filled in) and through the bare tunnel (token form), the page works as it
-    always has.
+    always has, and the slider is just a length from 5 to 60 s. The 1-5 min part of the track
+    is drawn but locked; lifting it takes `LENGTHS` in `film.py` and the site's plan together.
 - It looks the tunnel URL up in `kitcut.studio_hosts`, so a restart needs no redeploy.
 - **Anyone may watch there, but making (or stopping) a film needs an account** (Google, or a
   one-time link by email, sent through SendGrid from `hello@kitcut.ai`).
@@ -99,8 +101,10 @@ The public site is https://create.kitcut.ai, from
   - For a film request, `X-Client-Ip` is `u:<userId>`, the signed-in account, so the
     per-client limits below are per account and `studio_runs.client` records whose film it was.
   - For other calls it is the visitor's IP.
-  - The sign-up wall and the plan limits to come live in the site's `api/studio.js`, not here.
-    See that repo's README.
+  - The sign-up wall and the credits live in the site's `api/studio.js` and `lib/credits.js`,
+    not here. The site holds a film's seconds before forwarding it, and settles them from this
+    server's `studio_runs` record of the run: `done` is charged; `failed`, `interrupted` and
+    `cancelled` are given back. **Keep those `state` names stable.** See that repo's README.
 - `serve.ps1 -Stop` marks the studio offline there.
 
 Limits on everything that reaches the studio, checked and taken together under one lock:
