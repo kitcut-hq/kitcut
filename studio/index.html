@@ -3,26 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sketch Studio</title>
+<title>KitCut: type an idea, get a film</title>
+<link rel="icon" href="/logo-64.png" type="image/png">
+<link rel="apple-touch-icon" href="/logo-180.png">
 <!-- The home page's link preview (X, Facebook, Slack...). A film's page, /film/<id>, gets its
      own in place of everything between the two markers (the site's api/film.js). -->
 <!-- meta -->
 <meta name="description" content="Type an idea, in any language. Claude writes, draws, narrates and scores a short film of it, hand-drawn or painted.">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Sketch Studio">
-<meta property="og:title" content="Sketch Studio: type an idea, get a film">
+<meta property="og:site_name" content="KitCut">
+<meta property="og:title" content="KitCut: type an idea, get a film">
 <meta property="og:description" content="Type an idea, in any language. Claude writes, draws, narrates and scores a short film of it, hand-drawn or painted.">
-<meta property="og:url" content="https://create.kitcut.ai/">
-<meta property="og:image" content="https://create.kitcut.ai/og.jpg">
+<meta property="og:url" content="https://kitcut.ai/">
+<meta property="og:image" content="https://kitcut.ai/og.jpg">
 <meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="628">
-<meta property="og:image:alt" content="Frames from four films made in Sketch Studio: a honey jar, a young dragon, a lighthouse cat and a raindrop">
+<meta property="og:image:alt" content="Frames from four films made in KitCut: a honey jar, a young dragon, a lighthouse cat and a raindrop">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Sketch Studio: type an idea, get a film">
+<meta name="twitter:title" content="KitCut: type an idea, get a film">
 <meta name="twitter:description" content="Type an idea, in any language. Claude writes, draws, narrates and scores a short film of it, hand-drawn or painted.">
-<meta name="twitter:image" content="https://create.kitcut.ai/og.jpg">
-<meta name="twitter:image:alt" content="Frames from four films made in Sketch Studio: a honey jar, a young dragon, a lighthouse cat and a raindrop">
+<meta name="twitter:image" content="https://kitcut.ai/og.jpg">
+<meta name="twitter:image:alt" content="Frames from four films made in KitCut: a honey jar, a young dragon, a lighthouse cat and a raindrop">
 <!-- /meta -->
 <style>
 @font-face { font-family: 'Caveat'; src: url(/fonts/Caveat.woff2) format('woff2'); font-weight: 400 700; font-display: swap; }
@@ -42,11 +44,21 @@
 html, body { margin: 0; }
 body { background: var(--paper); color: var(--ink); font: 15px/1.5 Inter, system-ui, sans-serif; }
 .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 60px; display: grid; gap: 22px; }
-header h1 { font: 700 64px/1 Caveat, cursive; margin: 0; letter-spacing: .5px; }
-header h1 span { color: var(--accent); }
-header p { margin: 6px 0 0; color: var(--ink-soft); font-size: 16px; }
-header .spend { font-size: 13.5px; font-variant-numeric: tabular-nums; }
-header .spend b { color: var(--ink); font-weight: 600; }
+.site-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 20px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font: 700 40px/1 Caveat, cursive; letter-spacing: .3px; }
+.brand img { width: 42px; height: 42px; border-radius: 10px; display: block; }
+.brand .tld { color: var(--accent); }
+.hero h1 { font: 700 54px/1.05 Caveat, cursive; margin: 0; letter-spacing: .3px; }
+.hero p { margin: 6px 0 0; color: var(--ink-soft); font-size: 16px; max-width: 70ch; }
+.hero .spend { font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.hero .spend b { color: var(--ink); font-weight: 600; }
+.site-foot { border-top: 1.5px solid var(--rule); padding-top: 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; color: var(--ink-soft); font-size: 14px; }
+.site-foot .brand { font-size: 28px; gap: 8px; }
+.site-foot .brand img { width: 28px; height: 28px; border-radius: 7px; }
+.site-foot p { margin: 0; }
+.site-foot nav { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.site-foot a { color: var(--ink-soft); }
+.site-foot a:hover { color: var(--accent); }
 form { display: grid; gap: 10px; }
 textarea { width: 100%; min-height: calc(5 * 1.35em + 28px); resize: vertical; padding: 14px 16px; border-radius: 12px;
   border: 1.5px solid var(--rule); background: var(--sheet); color: var(--ink); font: 22px/1.35 'Patrick Hand', cursive; }
@@ -140,14 +152,15 @@ button.short { background: var(--rule); color: var(--ink-soft); }
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <div class="top">
-      <h1>Sketch <span>Studio</span></h1>
-      <nav class="account" id="account" aria-label="Account" hidden></nav>
-    </div>
-    <p>Type an idea, in any language. Claude writes, draws, reviews and scores a short narrated hand-drawn film.</p>
-    <p class="spend" id="spend" hidden></p>
+  <header class="site-head">
+    <a class="brand" href="/" aria-label="KitCut home"><img src="/logo-64.png" alt="" width="42" height="42" onerror="this.remove()"><span>KitCut<span class="tld">.ai</span></span></a>
+    <nav class="account" id="account" aria-label="Account" hidden></nav>
   </header>
+  <section class="hero">
+    <h1>Type an idea. Get a film.</h1>
+    <p>In any language. Claude writes, draws, narrates and scores a short animated film of it, hand-drawn or painted.</p>
+    <p class="spend" id="spend" hidden></p>
+  </section>
 
   <form id="tokenForm" class="row" hidden>
     <input id="token" type="password" autocomplete="off" placeholder="Studio token" aria-label="Studio token">
@@ -192,6 +205,12 @@ button.short { background: var(--rule); color: var(--ink-soft); }
     <h2>Recent films</h2>
     <div class="films" id="films"><span class="note">None yet.</span></div>
   </section>
+
+  <footer class="site-foot">
+    <a class="brand" href="/" aria-label="KitCut home"><img src="/logo-64.png" alt="" width="28" height="28" onerror="this.remove()"><span>KitCut</span></a>
+    <nav id="footNav" aria-label="Site" hidden><a href="/">Make a film</a><a href="/pricing">Pricing</a><a href="/account">Your account</a><a href="mailto:hello@kitcut.ai">hello@kitcut.ai</a></nav>
+    <p>&copy; 2026 KitCut. Films written, drawn, narrated and scored by Claude.</p>
+  </footer>
 </div>
 
 <dialog id="signin" aria-labelledby="signinTitle">
@@ -269,9 +288,9 @@ function stats(ev) {
   const st = ev.stages || {};
   const cells = [
     ['Made in', mmss(ev.seconds)], ['Claude', mmss(st.claude || 0)], ['Render', `${Math.round(st.render || 0)} s`],
-    ['API cost', ev.cost_usd != null ? `$${ev.cost_usd.toFixed(2)}` : 'n/a'],
-    ['Voice cost', ev.tts_cost_usd != null ? `$${ev.tts_cost_usd.toFixed(4)}` : 'none'],
-    ...(ev.images ? [['Paintings', `${ev.images} · $${(ev.image_cost_usd || 0).toFixed(2)}`]] : []),
+    ...(ev.cost_usd != null ? [['API cost', `$${ev.cost_usd.toFixed(2)}`]] : []),
+    ...(ev.tts_cost_usd != null ? [['Voice cost', `$${ev.tts_cost_usd.toFixed(4)}`]] : []),
+    ...(ev.images ? [['Paintings', ev.image_cost_usd != null ? `${ev.images} · $${ev.image_cost_usd.toFixed(2)}` : String(ev.images)]] : []),
     ['Turns', ev.turns ?? 'n/a'],
   ];
   $('stats').innerHTML = cells.map(([k, v]) => `<div class="stat"><small>${k}</small><b>${v}</b></div>`).join('');
@@ -301,7 +320,7 @@ async function recent() {
     $('films').innerHTML = list.map((f, i) => `
       <button class="film" type="button" data-i="${i}">
         <img src="${esc(f.poster_url)}" alt="" loading="lazy">
-        <div><p>${esc(f.prompt)}</p><small>${f.length || 5} s ${f.look === 'painted' ? 'painted' : 'drawn'} film · made in ${mmss(f.seconds || 0)} · ${f.cost_usd != null ? '$' + f.cost_usd.toFixed(2) : ''}</small></div>
+        <div><p>${esc(f.prompt)}</p><small>${f.length || 5} s ${f.look === 'painted' ? 'painted' : 'drawn'} film · made in ${mmss(f.seconds || 0)}${f.cost_usd != null ? ' · $' + f.cost_usd.toFixed(2) : ''}</small></div>
       </button>`).join('');
     for (const b of $('films').querySelectorAll('.film')) {
       const f = list[+b.dataset.i];
@@ -440,11 +459,12 @@ const draft = {
 function renderAccount() {
   const a = $('account');
   a.hidden = false;
+  const pricing = '<a class="me" href="/pricing">Pricing</a>';
   if (USER) {
-    a.innerHTML = (USER.picture ? `<img src="${esc(USER.picture)}" alt="" referrerpolicy="no-referrer">` : '') +
+    a.innerHTML = pricing + (USER.picture ? `<img src="${esc(USER.picture)}" alt="" referrerpolicy="no-referrer">` : '') +
       `<a class="me" href="/account" title="Your credits, billing cycle and films">${esc(USER.email)}</a><form method="post" action="/api/auth/signout"><button class="small ghost" type="submit">Sign out</button></form>`;
   } else {
-    a.innerHTML = '<button class="small ghost" type="button" id="signinBtn">Sign in</button>';
+    a.innerHTML = pricing + '<button class="small ghost" type="button" id="signinBtn">Sign in</button>';
     $('signinBtn').onclick = () => askSignIn();
   }
 }
@@ -540,6 +560,7 @@ async function whoami() {
     AUTH = true; USER = me.user; GOOGLE = !!me.google; CREDITS = me.credits || null;
   } catch (e) { return; }
   renderAccount(); paintLength();
+  $('footNav').hidden = false;
   const q = new URLSearchParams(location.search), failed = q.get('signin');
   if (failed != null) { history.replaceState(null, '', location.pathname); if (!USER) askSignIn(SIGNIN_ERRORS[failed] || SIGNIN_ERRORS.link); }
   const d = USER && draft.take();
