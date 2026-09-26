@@ -90,6 +90,9 @@ async def fake_claude(film, emit, meter, tools, auth="api", prompt=None, resume=
         await asyncio.sleep(60)
     await tools.check()
     await tools.stills([0, 2.5], True)
+    said = await tools.motion()  # the film a few times a second: its cuts and still stretches
+    if not said.startswith("Motion, from frames every"):
+        raise RuntimeError("motion said: %s" % said)
     emit({"type": "tool", "text": "wrote film.js (stub)"})
 
 

@@ -25,6 +25,7 @@ import contextlib
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
+import motion
 import procs
 import validate
 from film import HOME, KIT, REPO, limits
@@ -197,6 +198,31 @@ class Tools:
             what = "outputs/review/sheet.png"
         return "Rendered %d stills. Read %s to look at them." % (len(ts), what)
 
+    async def motion(self):
+        """The film a few times a second, for what a sheet of stills cannot show: its cuts, and
+        any stretch where nothing moves (studio/motion.py)."""
+        ts = motion.times(self.film.length)
+        shutil.rmtree(self.film.path("temp", "motion"), ignore_errors=True)
+        args = ["--stills", ",".join("%g" % t for t in ts), "--into", "temp/motion"]
+        async with self.lock:
+            self.gate()
+            await self._script(
+                "stills",
+                "sketch-render.py",
+                args,
+                pools=[("browser", 1)],
+                timeout=120 + 2 * len(ts),
+            )
+        text, sheet = await asyncio.to_thread(
+            motion.analyse,
+            self.film.path("temp", "motion"),
+            self.film.path("outputs", "review", "motion.png"),
+        )
+        if sheet:
+            self.sheet_v += 1
+            self.emit({"type": "image", "path": "review/motion.png", "v": self.sheet_v})
+        return text
+
     async def _automation_if_needed(self):
         """The air cues follow the picture's motion, traced by a render pass."""
         try:
@@ -278,6 +304,13 @@ class Tools:
                     "required": ["times"],
                 },
             )(wrap(lambda a: self.stills(a.get("times"), a.get("sheet", True)))),
+            tool(
+                "motion",
+                "Render the film a few times a second and report its cuts and any stretch where "
+                "nothing moves for 4 s or more, with a sheet of the frames around each "
+                "(outputs/review/motion.png).",
+                {"type": "object", "properties": {}},
+            )(wrap(lambda a: self.motion())),
             tool(
                 "sound",
                 "Render the soundtrack from score.json and sfx.json (and the narration) to prove "

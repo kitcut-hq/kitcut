@@ -24,6 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import agent  # noqa: E402
 import film as films  # noqa: E402
+import motion  # noqa: E402
 
 films.LEGACY = os.path.join(HOME, "legacy")  # only this test's films, not the working tree's
 
@@ -72,6 +73,13 @@ def main():
         "SK.setGround('night')" in drawn and "SK.setGround('blueprint')" in drawn,
     )
     expect("painted: the style menu", "paper cut-out collage" in agent.system_prompt("painted"))
+    for look in films.LOOKS:
+        p = agent.system_prompt(look)
+        expect(
+            "%s: the review calls motion" % look,
+            "`motion`" in p and "One film, not a slideshow" in p,
+        )
+    expect("drawn: the film is built scene by scene", "scene by scene" in drawn)
 
     # ---- the ensembles use only cached instruments
     sf = os.path.join(films.KIT, "models", "soundfonts", "FluidR3_GM")
@@ -88,6 +96,34 @@ def main():
         os.path.join("brand", "closing.wav"),
     ):
         expect("the closing's %s is in this code" % name, os.path.isfile(os.path.join(HERE, name)))
+
+    # ---- motion: cuts and still stretches, from frames 0.25 s apart
+    d = os.path.join(HOME, "motion")
+    os.makedirs(d)
+    from PIL import Image, ImageDraw
+
+    for i in range(
+        48
+    ):  # 12 s: a square moving (0-5 s), then nothing moving (5-10 s), a cut at 10 s
+        t = i / 4
+        im = Image.new("RGB", (480, 270), "#f7f2e7" if t < 10 else "#1d2541")
+        x = 40 + 30 * min(t, 5) if t < 10 else 40 + 30 * (t - 10)
+        ImageDraw.Draw(im).rectangle((x, 100, x + 60, 160), fill="#c2592a")
+        im.save(os.path.join(d, "%06.2f.png" % t))
+    text, sheet = motion.analyse(d, os.path.join(HOME, "motion.png"))
+    expect(
+        "motion: the still stretch is found", "Still for 4.8 s, from 5.0 to 9.8 s" in text, text
+    )
+    expect("motion: the cut is found", "Cuts or transitions at 9.9 s" in text, text)
+    expect("motion: the moving part is not still", "from 0." not in text, text)
+    expect(
+        "motion: a sheet of the frames around them",
+        sheet and os.path.exists(os.path.join(HOME, "motion.png")),
+    )
+    expect(
+        "motion: the frames it looks at",
+        motion.times(10)[:3] == [0, 0.25, 0.5] and len(motion.times(120)) == 240,
+    )
 
     # ---- direction, read back from a film's files
     f = films.Film.create("A lighthouse at night", 10, "drawn", client="t")

@@ -27,9 +27,12 @@ and hand-drawn marks on top.
    -- at most twice in all.
 4. Write `film.js`: the paintings moving and changing on the spoken words, then call `check`.
 5. Call `stills` with about six times spread over the film -- ten or twelve for a film over
-   a minute -- (always 0, and one just before the end), and Read `outputs/review/sheet.png`. Look hard: a painting's edge showing inside the
-   frame, words that are hard to read over the picture, a crossfade landing on the wrong word,
-   text that does not match the narration. Fix and re-check. Two review rounds at most.
+   a minute -- (always 0, and one just before the end), and Read `outputs/review/sheet.png`;
+   then call `motion` once and Read `outputs/review/motion.png`. Look hard: a painting's edge
+   showing inside the frame, words that are hard to read over the picture, a crossfade landing
+   on the wrong word, text that does not match the narration; and from `motion`, any stretch
+   where nothing moves and any change of painting where nothing carries over. Fix and re-check.
+   Two review rounds at most.
 6. Write `score.json` and `sfx.json`, then call `sound` once to prove they render. The music
    ducks under the voice by itself.
 7. Finish with one or two sentences: what the film shows and says, and anything from the prompt
@@ -63,6 +66,9 @@ Each painting comes back 1920x1280 (a little taller than the 1920x1080 frame: ro
   camera: `SK.camera([[0, [x, y, zoom]], [t, [x, y, zoom], E.sine], ...])`. It must cover the
   frame at every moment -- a paper-coloured strip at an edge of a still means it does not. At zoom
   1 the frame is 1920x1080 around the camera centre; drawn 2000 wide, a painting is 1333 tall.
+- One film, not a slideshow: every painting moves while it is on screen, and each change of
+  painting carries something over -- the same character, a push-in that continues, a match on
+  a shape or a colour.
 - Move slowly: a push-in of about 10% over a shot, or a pan of a few hundred units. Crossfade to
   the next painting over 0.4-0.8 s (`alpha` on `SK.image`), starting on a spoken word.
 - Words on screen: `SK.txt` on a banner (`SK.card` behind it) or with a thick `stroke`, so they

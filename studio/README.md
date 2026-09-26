@@ -196,9 +196,12 @@ Anthropic Console.
    first message then lists what the last eight finished films chose (`recent_films`, counts
    only, never their prompts), and Claude chooses freshly unless the prompt calls for a repeat.
    What each film chose is kept as `direction` in its record and in Mongo.
-3. Claude writes the narration and records it (`voice`), writes `film.js` (and for a painted
-   film, the paintings), renders review stills and looks at the sheet, fixes what it sees, writes
-   the score and the cues, and checks the soundtrack (`sound`). It is told its working time
+3. Claude writes the narration and records it (`voice`), writes `film.js` scene by scene (each
+   scene checked and looked at before the next; for a painted film, the paintings first),
+   renders review stills of the whole and looks at the sheet, runs `motion` -- the film a few
+   times a second, reporting its cuts and any stretch where nothing moves for 4 s
+   (`motion.py`) -- fixes what it sees, writes the score and the cues, and checks the
+   soundtrack (`sound`). It is told its working time
    (`film.limits`). **When the time runs out,** a film that is whole and passes the checks is
    finished anyway (`overtime` on its record); one whose picture is written gets one short last
    turn in the same session to write what is missing (`wrap_up`, 4 minutes); only then does it

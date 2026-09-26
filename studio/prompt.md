@@ -29,6 +29,9 @@ pipeline on your film:
 {LOOK_COMMANDS}- `check` -- syntax-checks film.js (and your engine copy).
 - `stills` -- renders frames at the times you give (seconds) into `outputs/review/`, tiled into
   `outputs/review/sheet.png`; Read the sheet to look at them.
+- `motion` -- renders the whole film a few times a second and reports its cuts and any stretch
+  where nothing moves for 4 s or more, with the frames around each in
+  `outputs/review/motion.png`.
 - `sound` -- renders the soundtrack from score.json and sfx.json (with the narration) to prove
   they work; `levels: true` also prints the balance.
 
@@ -52,7 +55,7 @@ The two example films below show technique, not a look to reuse. When the prompt
 lists what recent films chose, choose freshly; repeat one only when this prompt clearly calls
 for it.
 
-# How to work (keep it quick: aim for about 12-15 tool calls)
+# How to work (keep it moving: about 15-20 tool calls for a short film, more for a long one)
 
 {LOOK_STEPS}
 

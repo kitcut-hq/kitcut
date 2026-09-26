@@ -240,6 +240,8 @@ def _describe(name, inp, film):
         p = rel(inp.get("file_path"))
         if p.endswith("images/sheet.jpg"):
             return "looking at the paintings"
+        if p.endswith("motion.png"):
+            return "looking at the cuts"
         return "looking at the review sheet" if p.endswith("sheet.png") else "read %s" % p
     tool = name.removeprefix("mcp__studio__")
     if tool == "check":
@@ -248,6 +250,8 @@ def _describe(name, inp, film):
         return "rendering %d review stills" % len(inp.get("times") or [])
     if tool == "sound":
         return "rendering the soundtrack"
+    if tool == "motion":
+        return "checking the cuts and the motion"
     if tool == "voice":
         if inp.get("retake_line") is not None:
             return "recording line %s again" % inp["retake_line"]
@@ -474,7 +478,7 @@ async def run_claude(film, emit, meter, tools, auth="api", prompt=None, resume=N
             "PostToolUse": [HookMatcher(matcher="Write|Edit", hooks=[post_tool])],
         },
         can_use_tool=can_use,
-        max_turns=50,
+        max_turns=90,  # a film built scene by scene takes more turns than one written at once
         max_budget_usd=limits(film.length)["budget_usd"],
         # a review sheet of painted frames is a PNG of several MB, and it comes back to the SDK
         # as one message (the default limit, 1 MB, failed a painted film)

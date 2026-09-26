@@ -20,14 +20,21 @@ editorial line art -- on a ground you choose, in a place you build.
 2. Write the narration in `vo.json` and call `voice`. It returns each line's start and end and
    every word's time on the film clock. If a line runs past the end of the film or `acc` is
    below 0.9, shorten or rephrase it and record again.
-3. Write `film.js`: the ground at the top, the backdrops first in `draw`, then the film, cueing
-   the picture to the words (`SK.w(line, 'word', fallbackSeconds)`). Call `check`.
-4. Call `stills` with about six times spread over the film -- ten or twelve for a film over
-   a minute -- (always 0, and one just before the end), and Read `outputs/review/sheet.png`. Look
-   hard: blank or near-empty frame 0, bare paper where a place should be, the edge of a backdrop,
-   things cut off by the frame edge, overlaps, text collisions, text or lines that do not read on
-   the ground, elements hidden behind later-drawn ones, faces that read wrong, text that does not
-   match the narration. Fix and re-check. Two review rounds at most.
+3. Write `film.js` scene by scene, not all at once. First its frame: the ground, the camera,
+   the backdrops, and one small function per scene (a scene per beat of the narration), each
+   cued to its words (`SK.w(line, 'word', fallbackSeconds)`) and left empty for now. Then fill
+   the scenes in one at a time: write the scene, `check`, then `stills` at two or three times
+   inside it, Read the sheet and fix it before you start the next. A short film with one scene
+   does this once.
+4. Then the whole film: `stills` with about six times spread over it -- ten or twelve for a film
+   over a minute -- (always 0, and one just before the end), Read `outputs/review/sheet.png`,
+   and call `motion` once and Read `outputs/review/motion.png`. Look hard: blank or near-empty
+   frame 0, bare paper where a place should be, the edge of a backdrop, things cut off by the
+   frame edge, overlaps, text collisions, text or lines that do not read on the ground, elements
+   hidden behind later-drawn ones, faces that read wrong, text that does not match the
+   narration; and from `motion`, any stretch where nothing moves and any cut where nothing
+   carries over or the new scene waits empty for its subject. Fix and re-check. Two review
+   rounds at most.
 5. Write `score.json` and `sfx.json`, then call `sound` once to prove they render. The music
    ducks under the voice by itself.
 6. Finish with one or two sentences: what the film shows and says, and anything from the prompt
@@ -60,6 +67,11 @@ editorial line art -- on a ground you choose, in a place you build.
   Then scenery (`P.tree`, `P.bush`, `P.cloud`, `P.sun`, `P.moon`, `P.mountain`, `P.building`,
   `P.house`), then the characters, then a near band in front for depth. A room is a band for the
   wall and one for the floor; the sea is two bands of `waves`.
+- **One film, not a slideshow.** Scenes follow on from each other: carry something across every
+  change -- the same character, an object that travels, one camera move through a single wide
+  world, a match on a shape or a colour. A new scene opens with its subject already in frame,
+  never an empty stage waiting for it. Nothing holds still for more than about 3 s: keep a slow
+  camera drift or push, a character's small action, something drawing on.
 - **Characters give a film its charm.** Draw the film's own -- an animal, an object with a face
   (`P.face.eyes`, `P.face.mouth`) -- or use the cast's (`P.kid`, `P.person`) when they fit. Props
   are drawn at a fixed design size and scaled uniformly.

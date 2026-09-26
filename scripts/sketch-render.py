@@ -28,6 +28,7 @@ tail ({secs, scripts, images, audio}: a closing after the film -- `secs` more of
 Invoke as:
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --plan
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 1.5,9,23.8 --sheet
+    python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 0,0.25,0.5 --into temp/motion
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --automation
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --bundle
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json            (full render)
@@ -481,6 +482,9 @@ def main():
     ap.add_argument("--bundle", action="store_true", help="only write the HTML player(s)")
     ap.add_argument("--stills", help="comma list of times -> outputs/review/<t>.png")
     ap.add_argument(
+        "--into", help="with --stills: the folder for them (relative to the manifest's)"
+    )
+    ap.add_argument(
         "--sheet",
         action="store_true",
         help="with --stills: also tile them into outputs/review/sheet.png",
@@ -591,7 +595,11 @@ def main():
 
         if args.stills:
             with st("stills"):
-                rdir = os.path.join(m["_outputs"], "review")
+                rdir = (
+                    _sketch.rel(m, args.into)
+                    if args.into
+                    else os.path.join(m["_outputs"], "review")
+                )
                 os.makedirs(rdir, exist_ok=True)
                 got = []
 
