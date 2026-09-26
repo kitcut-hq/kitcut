@@ -78,6 +78,9 @@ from claude_agent_sdk import (  # noqa: E402
 ROOT = KIT
 # Opus only: the drawing is the product, and a smaller model's films are not worth the saving
 MODEL = "claude-opus-5-5"
+# how hard it thinks: adaptive thinking at this effort (the CLI's --effort). Pinned here, so a CLI
+# update that moves the default cannot change the films unnoticed
+EFFORT = "xhigh"
 # how long Claude may work on a film, and what it may spend, grow with the film's length:
 # film.limits() (15 min of working time for up to 15 s; waiting for the machine does not count)
 
@@ -399,6 +402,7 @@ async def run_claude(film, emit, meter, tools, auth="api"):
         f.write(system_prompt(film.look))
     opts = ClaudeAgentOptions(
         model=MODEL,
+        effort=EFFORT,
         cwd=film.dir,
         system_prompt={"type": "file", "path": sp},
         tools=["Read", "Write", "Edit"],
@@ -520,6 +524,7 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
     summary = {
         "prompt": prompt,
         "model": MODEL,
+        "effort": EFFORT,
         "length": length,
         "look": look,
         "release": RELEASE,
@@ -714,6 +719,7 @@ def first_record(film, source, client):
         "host": store.HOST,
         "prompt": rec.get("prompt"),
         "model": MODEL,
+        "effort": EFFORT,
         "job": film.id,
         "length": rec.get("length"),
         "look": rec.get("look"),
@@ -730,6 +736,7 @@ async def smoke(auth="api"):
     """One turn, no tools: proves the key (or the login), the model and where the bill goes."""
     opts = ClaudeAgentOptions(
         model=MODEL,
+        effort=EFFORT,
         cwd=HOME if os.path.isdir(HOME) else KIT,
         system_prompt="Reply with exactly: OK",
         tools=[],
