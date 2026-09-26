@@ -73,6 +73,8 @@ button:disabled { opacity: .5; cursor: progress; }
 .account { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-soft); padding-top: 8px; }
 .account img { width: 30px; height: 30px; border-radius: 50%; display: block; }
 .account form { display: inline; }
+.account a.me { color: var(--ink); text-underline-offset: 3px; text-decoration-color: var(--rule); }
+.account a.me:hover { text-decoration-color: var(--accent); }
 button.small { font: 600 14px/1 Inter, system-ui, sans-serif; letter-spacing: 0; padding: 9px 14px; }
 button.ghost, a.ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--rule); }
 #signin { border: 1.5px solid var(--rule); border-radius: 16px; background: var(--sheet); color: var(--ink); padding: 22px 24px 24px; width: min(420px, calc(100% - 32px)); }
@@ -425,7 +427,7 @@ function renderAccount() {
   a.hidden = false;
   if (USER) {
     a.innerHTML = (USER.picture ? `<img src="${esc(USER.picture)}" alt="" referrerpolicy="no-referrer">` : '') +
-      `<span>${esc(USER.email)}</span><form method="post" action="/api/auth/signout"><button class="small ghost" type="submit">Sign out</button></form>`;
+      `<a class="me" href="/account" title="Your credits, billing cycle and films">${esc(USER.email)}</a><form method="post" action="/api/auth/signout"><button class="small ghost" type="submit">Sign out</button></form>`;
   } else {
     a.innerHTML = '<button class="small ghost" type="button" id="signinBtn">Sign in</button>';
     $('signinBtn').onclick = () => askSignIn();
