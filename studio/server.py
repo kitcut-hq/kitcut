@@ -30,7 +30,8 @@ STUDIO_PER_CLIENT_DAILY (default 5) a day.
     POST /api/films/{id}/cancel  the film's own client (or this machine) stops it
     GET  /api/films              the finished films, newest first
     GET  /api/costs              the spend: total, today, this month, per film, latest runs
-    GET  /files/{id}/film.mp4    the film (also film_poster.png, review/sheet.png)
+    GET  /files/{id}/film.mp4    the film (also film_poster.png, review/sheet.png, and card.jpg:
+                                 its 1200x628 link preview, made on first request)
     GET  /api/health             {"ok", "running", "queued", "slots", "draining"}   (no token)
     POST /api/admin/drain        (this machine) take no new films, let the running ones finish:
                                  serve.ps1 restarts the server once "active" reaches 0. Films
@@ -483,10 +484,67 @@ async def status(req):
     return web.json_response(out)
 
 
+CARD = (1200, 628)  # the 1.91:1 image X, Facebook and most link previews show
+
+
+def _frame(mp4, t):
+    """One frame of the film at t seconds, as a PIL image (None if ffmpeg cannot)."""
+    import io
+    import subprocess
+
+    from PIL import Image
+
+    r = subprocess.run(
+        ["ffmpeg", "-v", "error", "-ss", "%.2f" % t, "-i", mp4, "-frames:v", "1"]
+        + ["-f", "image2pipe", "-vcodec", "png", "-"],
+        capture_output=True,
+    )
+    return (
+        Image.open(io.BytesIO(r.stdout)).convert("RGB") if r.returncode == 0 and r.stdout else None
+    )
+
+
+def make_card(outputs, length=None):
+    """card.jpg: the film as a link preview, 1200x628 (1.91:1).
+
+    The frame is the poster (the film's end, its payoff) unless that is mid fade-out -- films
+    often end on paper -- when a clearly livelier frame from later in the film stands in (the
+    most contrast among a few). The whole 16:9 frame is kept, so a title drawn at its top edge is
+    not cut: scaled to the card's height, with the thin strips either side filled by a blurred
+    stretch of the same frame (on paper it disappears; on a painting it reads as the picture
+    going on)."""
+    from PIL import Image, ImageFilter, ImageStat
+
+    def contrast(im):
+        return ImageStat.Stat(im.convert("L")).stddev[0]
+
+    with Image.open(os.path.join(outputs, "film_poster.png")) as p:
+        best = p.convert("RGB")
+    mp4 = os.path.join(outputs, "film.mp4")
+    if length and os.path.isfile(mp4):
+        frames = [f for f in (_frame(mp4, length * k) for k in (0.5, 0.65, 0.8, 0.92)) if f]
+        alt = max(frames, key=contrast, default=None)
+        if alt is not None and contrast(alt) > 1.4 * contrast(best):
+            best = alt
+    card = best.resize(CARD, Image.LANCZOS).filter(ImageFilter.GaussianBlur(24))
+    w = round(best.width * CARD[1] / best.height)
+    card.paste(best.resize((w, CARD[1]), Image.LANCZOS), ((CARD[0] - w) // 2, 0))
+    tmp = os.path.join(outputs, "card.%d.tmp" % os.getpid())
+    card.save(tmp, "JPEG", quality=85, optimize=True, progressive=True)
+    os.replace(tmp, os.path.join(outputs, "card.jpg"))
+
+
 async def files(req):
     d = os.path.join(film_of(req.match_info["id"]).dir, "outputs")
     p = os.path.normcase(os.path.realpath(os.path.join(d, req.match_info["path"])))
-    if not p.startswith(os.path.normcase(os.path.realpath(d)) + os.sep) or not os.path.isfile(p):
+    if not p.startswith(os.path.normcase(os.path.realpath(d)) + os.sep):
+        raise web.HTTPNotFound()
+    # a finished film's link preview is made the first time someone (the site) asks for it
+    if req.match_info["path"] == "card.jpg" and not os.path.isfile(p):
+        if os.path.isfile(os.path.join(d, "film_poster.png")):
+            f = film_of(req.match_info["id"])
+            await asyncio.to_thread(make_card, d, f.record().get("length") or f.length)
+    if not os.path.isfile(p):
         raise web.HTTPNotFound()
     return web.FileResponse(p, headers={"Cache-Control": "no-cache"})
 
