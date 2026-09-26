@@ -91,7 +91,7 @@ def _vo(d, max_lines):
     return out
 
 
-def _paint(d):
+def _paint(d, length):
     out = []
     if not isinstance(d, dict):
         return ["paint.json must be an object"]
@@ -101,7 +101,7 @@ def _paint(d):
     if not isinstance(d.get("style", ""), str) or len(d.get("style", "")) > 400:
         out.append("paint.json: style is one line of text (at most 400 characters)")
     ims = d.get("images", [])
-    cap = PAINT_PINNED["max_images"]
+    cap = limits(length)["images"]
     if not isinstance(ims, list) or len(ims) > cap:
         return out + ["paint.json: images is a list of at most %d" % cap]
     names = [im.get("name") for im in ims if isinstance(im, dict)]
@@ -198,7 +198,7 @@ def problems(film, name):
     if name == "vo.json":
         return _vo(d, limits(film.length)["lines"])
     if name == "paint.json":
-        return _paint(d)
+        return _paint(d, film.length)
     if name == "score.json":
         return _score(d)
     if name == "sfx.json":

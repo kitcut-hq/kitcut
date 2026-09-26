@@ -1,7 +1,7 @@
 # Sketch Studio
 
 One prompt in, and Claude writes, reviews and scores a **short hand-drawn (or painted) film** on
-the kitcut sketch engine, narrated, 5-15 s. It's a JSON API for an app backend, plus a page with
+the kitcut sketch engine, narrated, 5 s to 2 minutes. It's a JSON API for an app backend, plus a page with
 one prompt box. It runs on this machine, is reachable from outside through a Cloudflare quick
 tunnel, and **makes several films at once**, each in a sandbox of its own.
 
@@ -79,8 +79,11 @@ They share the machine through the scheduler (`sched.py`), first come, first ser
 | `browser` | 4 | review stills take 1, the final render 3 |
 | `cpu` | 2 | the voice (Whisper, on the CPU: the GPU stays the renderer's) and the mix |
 
-Time a film spends waiting for the machine does not count against its 15 minutes of Claude time.
-The page says what a film is waiting for ("Waiting for the renderer: 1 film ahead").
+Time a film spends waiting for the machine does not count against its Claude time (15 minutes up
+to 15 s of film, more for a longer one: `film.limits()`). The page says what a film is waiting
+for ("Waiting for the renderer: 1 film ahead"). A film sent with `X-Priority: 1` (the site's
+plans with priority) joins every queue ahead of the films without it, first come first served
+among its own.
 
 ## The public site
 
@@ -108,8 +111,11 @@ The public site is https://create.kitcut.ai, from
 - `serve.ps1 -Stop` marks the studio offline there.
 
 Limits on everything that reaches the studio, checked and taken together under one lock:
-- **A day's spend:** `STUDIO_DAILY_USD`, default $25, counting `STUDIO_RESERVE_USD` ($1.50) for
-  every film still being made.
+- **A day's spend:** `STUDIO_DAILY_USD`, default $25, counting a reserve for every film still
+  being made: at least `STUDIO_RESERVE_USD` ($1.50), more for a longer film ($0.35 + $0.06 a
+  second).
+- **Lengths:** 5-120 s in 5 s steps. Who may ask for what (over a minute is Pro) is the site's
+  business; so are its plans and credits.
 - **One film in the making per client**, and `STUDIO_PER_CLIENT_DAILY` (default 5) a day.
 
 Past a limit, the request gets a 429 with a plain-English reason.
@@ -188,9 +194,10 @@ Anthropic Console.
 
 `--auth api` (the server always uses it) runs on `ANTHROPIC_API_KEY` from `.env` and a config
 folder per film, with `setting_sources=[]`: it never uses a local Claude Code login, its
-settings, its memory or its skills. `--auth login` (command line only) runs the newest installed
-Claude Code on this machine's login instead; Claude's tokens are then covered by the plan and
-recorded as not billed. Never serve the public from a login.
+settings, its memory or its skills. `--auth login` (the command line, or `{"auth": "login"}` in a
+POST from this machine itself) runs the newest installed Claude Code on this machine's login
+instead; Claude's tokens are then covered by the plan and recorded as not billed. Never serve the
+public from a login: through the tunnel, the server ignores the switch.
 
 `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` is set because some organisations reject Claude
 Code's default context-management beta with a 400 ("not available for HIPAA-regulated

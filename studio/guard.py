@@ -20,7 +20,7 @@ import re
 import json
 
 import validate
-from film import PAINT_PINNED, VO_PINNED, tts_model
+from film import VO_PINNED, paint_pins, tts_model
 
 STUDIO_TOOLS = "mcp__studio__"
 
@@ -98,7 +98,7 @@ def pin_vo(film):
 
 def pin_paint(film):
     """paint.json: the painter, its model and the cap on paintings are the studio's."""
-    return _pin(film, "paint.json", PAINT_PINNED, keep=validate.PAINT_KEYS)
+    return _pin(film, "paint.json", paint_pins(film.length), keep=validate.PAINT_KEYS)
 
 
 def pin_after(file_path, film):

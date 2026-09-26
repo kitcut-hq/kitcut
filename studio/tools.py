@@ -38,7 +38,6 @@ LOCKS = os.path.join(REPO, "temp", "locks")
 # seconds a step may run; the voice, the mix and the render get longer for a longer film
 TIMEOUT = {"check": 30, "stills": 120, "paint": 300, "automation": 180}
 MAX_VOICE_RUNS = 6  # recordings per film, retakes included
-MAX_TTS_USD = 0.30  # what one film's narration may cost
 MAX_STILLS = 12
 
 
@@ -77,6 +76,7 @@ class Tools:
         self.lock = asyncio.Lock()  # one step of this film at a time
         self.jobs = set()  # the steps running now (procs.Job), killed on cancel
         self.voice_runs, self.sheet_v = 0, 0
+        self.priority = film.record().get("priority", 0)
 
     # ---------------------------------------------------------------- plumbing
     def _on_wait(self, pool, ahead):
@@ -101,7 +101,7 @@ class Tools:
         async with contextlib.AsyncExitStack() as stack:
             for name, weight in pools:  # always browser before cpu (sched.py)
                 await stack.enter_async_context(
-                    self.sched[name].hold(weight, f.id, self._on_wait, self.clock)
+                    self.sched[name].hold(weight, f.id, self._on_wait, self.clock, self.priority)
                 )
             try:
                 code, tail = await procs.run(
@@ -152,7 +152,7 @@ class Tools:
                 "That is %d recordings, the limit for one film: keep the narration you have."
                 % MAX_VOICE_RUNS
             )
-        if _tts_spent(self.film) >= MAX_TTS_USD:
+        if _tts_spent(self.film) >= limits(self.film.length)["tts_usd"]:
             raise ToolError("The narration's budget is spent: keep the recording you have.")
         args = [] if retake_line is None else ["--only", str(int(retake_line)), "--retake"]
         async with self.lock:

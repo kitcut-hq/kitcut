@@ -22,6 +22,9 @@ forwards as X-Client-Ip "u:<id>", else the IP -- may have one film in the making
 STUDIO_PER_CLIENT_DAILY (default 5) a day.
 
     POST /api/films              {"prompt", "seconds", "look"}  ->  202 {"id", "status", "position"}
+                                 X-Priority: 1 (from the site, for a plan with priority): the
+                                 film goes ahead of the others in every queue. {"auth": "login"}
+                                 (this machine only): Claude runs on its Claude Code login.
     GET  /api/films/{id}         ?since=N  ->  {"status": queued|running|done|error|cancelled,
                                  "stage", "wait", "events": [...from N], "next", "video_url", ...}
     POST /api/films/{id}/cancel  the film's own client (or this machine) stops it
@@ -161,6 +164,12 @@ def base_url(req):
     return "%s://%s" % (proto, req.host)
 
 
+def reserve(seconds, auth="api"):
+    """What a film being made may still spend, held against the day's budget: all of it on the
+    key; on this machine's login only the voice and the paintings are paid for."""
+    return films.limits(seconds)["reserve_usd"] if auth == "api" else 0.01 * seconds
+
+
 def live(status=("queued", "running")):
     return [j for j in JOBS.values() if j["status"] in status]
 
@@ -187,7 +196,8 @@ def start(film, finish_only=False):
         "wait": None,
         "t0": time.time() - (before[-1]["t"] if before else 0),
         "client": film.record().get("client", "local"),
-        "reserve": films.limits(film.length)["reserve_usd"],
+        "auth": film.record().get("auth", "api"),
+        "reserve": reserve(film.length, film.record().get("auth", "api")),
         "control": {},
         "ended": None,
     }
@@ -214,7 +224,7 @@ def start(film, finish_only=False):
             # done/error only once make_film returns: by then studio.json and
             # kitcut.studio_runs hold the final cost
             r = await agent.make_film(
-                film, emit, SCHED, auth="api", finish_only=finish_only, control=J["control"]
+                film, emit, SCHED, auth=J["auth"], finish_only=finish_only, control=J["control"]
             )
             ok = r.get("ok")
             J["status"] = "done" if ok else "error"
@@ -285,7 +295,7 @@ async def health(req):
     )
 
 
-async def over_limit(client, seconds):
+async def over_limit(client, seconds, auth="api"):
     """Why this request must wait (for now, or until tomorrow), or None. Today is local time.
     Nothing is refused to this machine itself except by the budget."""
     midnight = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -299,7 +309,7 @@ async def over_limit(client, seconds):
     # record shows so far; the new one is held at its own
     reserved = sum(max(0.0, j["reserve"] - (j.get("cost_usd") or 0)) for j in live())
     spent = sum(r.get("cost_usd") or 0 for r in rows)
-    if spent + reserved + films.limits(seconds)["reserve_usd"] > DAILY_USD:
+    if spent + reserved + reserve(seconds, auth) > DAILY_USD:
         return "Today's budget ($%.0f) is used up. Please try again tomorrow." % DAILY_USD
     if client == "local":
         return None
@@ -338,16 +348,23 @@ async def create(req):
             {"error": "look must be one of %s" % ", ".join(films.LOOKS)}, status=400
         )
     client = client_of(req)
+    # a plan whose films go first (the site sends it, trusted like X-Client-Ip)
+    priority = 1 if req.headers.get("X-Priority", "").strip() == "1" else 0
+    # this machine may have a film made on its own Claude Code login (internal runs); never
+    # anyone through the tunnel
+    auth = "login" if body.get("auth") == "login" and from_this_machine(req) else "api"
     prune()
     # the check and the taking happen under one lock: two requests at the same moment cannot
     # both slip under a limit that has room for one
     async with ADMIT:
         if len(live(("queued",))) >= MAX_QUEUE:
             return web.json_response({"error": "the queue is full; try again later"}, status=429)
-        refused = await over_limit(client, seconds)
+        refused = await over_limit(client, seconds, auth)
         if refused:
             return web.json_response({"error": refused}, status=429)
-        f = Film.create(prompt, seconds, look, client=client, source="web")
+        f = Film.create(
+            prompt, seconds, look, client=client, source="web", priority=priority, auth=auth
+        )
         await agent.save(f.id, agent.first_record(f, "web", client))
         start(f)
     await asyncio.sleep(0)  # let it take a free slot now, so the answer says whether it waits

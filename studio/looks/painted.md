@@ -9,7 +9,7 @@ and hand-drawn marks on top.
 ## COMMANDS
 - `paint` -- paints every image in `paint.json` at once (about 30 s; unchanged ones come from
   cache) and tiles them into `images/sheet.jpg`. `retake: ["<name>"]` repaints some. At most
-  {MAX_IMAGES} paintings for the whole film, repaints included.
+  8 paintings for a film of up to a minute (12 for a longer one), repaints included.
 
 ## STEPS
 1. Decide the idea and the shots: one clear point, told in the film's length, in one to three
@@ -21,8 +21,8 @@ and hand-drawn marks on top.
    an image that is wrong -- lettering in it, the wrong subject, a character who does not match
    -- at most twice in all.
 4. Write `film.js`: the paintings moving and changing on the spoken words, then call `check`.
-5. Call `stills` with about six times spread over the film (always 0, and one just before the
-   end), and Read `outputs/review/sheet.png`. Look hard: a painting's edge showing inside the
+5. Call `stills` with about six times spread over the film -- ten or twelve for a film over
+   a minute -- (always 0, and one just before the end), and Read `outputs/review/sheet.png`. Look hard: a painting's edge showing inside the
    frame, words that are hard to read over the picture, a crossfade landing on the wrong word,
    text that does not match the narration. Fix and re-check. Two review rounds at most.
 6. Write `score.json` and `sfx.json`, then call `sound` once to prove they render. The music
@@ -47,7 +47,7 @@ Each painting comes back 1920x1280 (a little taller than the 1920x1080 frame: ro
 
 - Fewer, richer paintings: one wide painting gives several shots -- push in on one part, then
   pan to another. One or two paintings for 5 s, two or three for 10-15 s, four to six for a
-  minute.
+  minute, six to ten for two.
 - The same character in two paintings will not look quite the same. Describe them identically
   every time (age, hair, clothes and their colours), or keep them in one painting and frame
   different parts of it.

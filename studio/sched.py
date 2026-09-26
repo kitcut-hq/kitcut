@@ -9,7 +9,9 @@ the Whisper model on the CPU, ffmpeg. So each of those holds a slot in a pool wh
     cpu       2   the voice (Whisper) and the soundtrack mix
 
 A pool is strictly first come, first served: a request that does not fit yet (the render's 3)
-blocks the ones behind it, so small requests can never starve a big one. Whoever waits is told
+blocks the ones behind it, so small requests can never starve a big one. The one exception is
+priority: a film of a plan with priority (the site's X-Priority: 1) joins the line ahead of every
+film without it -- behind other priority films, first come first served among them. Whoever waits is told
 where it stands (on_wait), and the page shows "waiting for the renderer -- 1 film ahead".
 Pools are only ever taken in the order browser -> cpu, and nothing waits for a claude slot while
 holding another, so no two films can deadlock.
@@ -44,13 +46,17 @@ class Pool:
                 return i
         return None
 
-    async def acquire(self, weight=1, who="", on_wait=None):
+    async def acquire(self, weight=1, who="", on_wait=None, priority=0):
         """Wait for `weight` slots. Returns the seconds spent waiting."""
         weight = min(max(1, weight), self.capacity)
-        ticket = (weight, who, object())
+        ticket = (weight, who, object(), priority)
         t0, told = time.time(), None
         async with self.cond:
-            self.waiting.append(ticket)
+            # behind everyone of the same or a higher priority, ahead of everyone lower
+            i = len(self.waiting)
+            while i and self.waiting[i - 1][3] < priority:
+                i -= 1
+            self.waiting.insert(i, ticket)
             try:
                 while not (self.waiting[0] is ticket and self.used + weight <= self.capacity):
                     n = self.waiting.index(ticket)
@@ -75,8 +81,8 @@ class Pool:
             self.cond.notify_all()
 
     @contextlib.asynccontextmanager
-    async def hold(self, weight=1, who="", on_wait=None, clock=None):
-        waited = await self.acquire(weight, who, on_wait)
+    async def hold(self, weight=1, who="", on_wait=None, clock=None, priority=0):
+        waited = await self.acquire(weight, who, on_wait, priority)
         if clock is not None:
             clock.paused += waited
         try:

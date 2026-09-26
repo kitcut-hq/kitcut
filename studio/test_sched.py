@@ -92,6 +92,28 @@ async def main():
         clock.paused > 0.3 and clock.active() < clock.wall() - 0.3,
     )
 
+    # priority: ahead of everyone without it, first come first served among its own
+    order.clear()
+    one = Pool("claude", 1)
+
+    async def film(name, prio, hold_for=0.02):
+        async with one.hold(1, name, priority=prio):
+            order.append(name)
+            await asyncio.sleep(hold_for)
+
+    busy = asyncio.create_task(film("running", 0, 0.3))  # holds the slot while the others line up
+    await asyncio.sleep(0.01)
+    tasks = []
+    for name, prio in (("free-1", 0), ("free-2", 0), ("pro-1", 1), ("pro-2", 1), ("free-3", 0)):
+        tasks.append(asyncio.create_task(film(name, prio)))
+        await asyncio.sleep(0.005)
+    expect("a pro film is told it is 1 ahead of the others' line", one.ahead("pro-2") == 1)
+    await asyncio.gather(busy, *tasks)
+    expect(
+        "priority first, then first come first served: %s" % order,
+        order == ["running", "pro-1", "pro-2", "free-1", "free-2", "free-3"],
+    )
+
     s = Sched(claude=2, browser=4, cpu=2)
     expect(
         "the default pools",

@@ -114,11 +114,16 @@ async def main():
 
         # ------------------------------------------------ three films at once, three clients
         ids = []
+        extra = [  # film 0 is a priority plan's; film 1 asks for the login through the tunnel
+            ({"X-Priority": "1"}, {}),  # (refused: api); film 2 asks for it from this machine
+            ({"Cf-Ray": "test"}, {"auth": "login"}),
+            ({}, {"auth": "login"}),
+        ]
         for i in range(3):
             r = await c.post(
                 "/api/films",
-                json={"prompt": "film number %d, stubbed" % i, "seconds": 5},
-                headers=auth | {"X-Client-Ip": "u:test-%d" % i},
+                json={"prompt": "film number %d, stubbed" % i, "seconds": 5} | extra[i][1],
+                headers=auth | {"X-Client-Ip": "u:test-%d" % i} | extra[i][0],
             )
             ids.append((await r.json()).get("id"))
             check(r.status == 202, "film %d accepted" % i)
@@ -130,7 +135,7 @@ async def main():
         h = await (await c.get("/api/health")).json()
         check(h["running"] + h["queued"] == 3, "health counts them (%s)" % h)
         results = await asyncio.gather(*(wait_for(c, auth, j) for j in ids))
-        for j, st in zip(ids, results, strict=True):
+        for i, (j, st) in enumerate(zip(ids, results, strict=True)):
             f = films.Film.open(j)
             check(
                 st.get("status") == "done",
@@ -146,9 +151,16 @@ async def main():
                 sheets and all("/files/%s/" % j in e["url"] and "sig=" in e["url"] for e in sheets),
                 "its review sheet is its own, signed",
             )
+            want = TTS_USD if i == 2 else EXPECT_USD  # on the login, Claude is not billed
             check(
-                abs((st.get("cost_usd") or 0) - EXPECT_USD) < 1e-4,
+                abs((st.get("cost_usd") or 0) - want) < 1e-4,
                 "its cost, Claude + voice ($%s)" % st.get("cost_usd"),
+            )
+            rec = f.record()
+            check(
+                (rec.get("priority"), rec.get("auth")) == [(1, "api"), (0, "api"), (0, "login")][i]
+                and mem.docs[j].get("priority") == rec.get("priority"),
+                "its priority and way to pay (%s, %s)" % (rec.get("priority"), rec.get("auth")),
             )
             with open(f.path("vo.json"), encoding="utf-8") as fh:
                 vo = json.load(fh)

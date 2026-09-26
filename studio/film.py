@@ -48,15 +48,16 @@ HOME = _home()
 REPO = os.path.abspath(os.environ.get("STUDIO_REPO") or KIT)
 LEGACY = os.path.join(REPO, "projects")
 
-LENGTHS = tuple(
-    range(5, 65, 5)
-)  # seconds a visitor may ask for (the site sells them by the second)
+# seconds a visitor may ask for: the site sells them by the second, and decides who may have
+# what (films over a minute are for its Pro plan)
+LENGTHS = tuple(range(5, 125, 5))
 # drawn: everything drawn in code; painted: an image model paints the scenes, the code animates
 LOOKS = ("drawn", "painted")
 EDITABLE = ("film.js", "score.json", "sfx.json", "vo.json")
 MADE = ("film.js", "score.json", "sfx.json")  # what a finished film must have
 ENGINE = ("engine.js", "props.js")  # the film's own copy, in engine\; Claude may extend it
 # what Claude may not change in paint.json: the painter, and how many paintings a film may cost
+# (8 up to a minute, more for a longer film: paint_pins)
 PAINT_PINNED = {"backend": "muse", "model": "meta/muse-image", "max_images": 8}
 # the voice: Google's Gemini text-to-speech. 3.8 needs the Gemini API enabled in the service
 # account's project; STUDIO_TTS_MODEL overrides it (e.g. gemini-3.1-flash-tts-preview)
@@ -91,8 +92,15 @@ def limits(length):
         "render_s": 300 + 15 * length,
         "sound_s": max(300, 120 + 5 * length),
         "voice_s": max(300, 180 + 5 * length),
-        "lines": 6 if length <= 15 else 12,  # narration sentences
+        "lines": 6 if length <= 15 else max(12, -(-length // 5)),  # narration sentences
+        "tts_usd": max(0.30, 0.005 * length),  # what the narration may cost, retakes included
+        "images": 8 if length <= 60 else 12,  # paintings, repaints included
     }
+
+
+def paint_pins(length):
+    """What the studio sets in a painted film's paint.json."""
+    return PAINT_PINNED | {"max_images": limits(length)["images"]}
 
 
 def _release():
@@ -238,7 +246,9 @@ class Film:
 
     # ---------------------------------------------------------------- making and finding films
     @classmethod
-    def create(cls, prompt, seconds=5, look="drawn", client="local", source="web"):
+    def create(
+        cls, prompt, seconds=5, look="drawn", client="local", source="web", priority=0, auth="api"
+    ):
         """A new film's folder: the manifest (its length set), the engine copy, an empty
         narration, an empty list of paintings for a painted film, and its record."""
         seconds = seconds if seconds in LENGTHS else LENGTHS[0]
@@ -268,7 +278,7 @@ class Film:
         m["engine"] = "engine"
         if look == "painted":
             m["paint"] = "paint.json"
-            _write_json(film.path("paint.json"), PAINT_PINNED | {"style": "", "images": []})
+            _write_json(film.path("paint.json"), paint_pins(seconds) | {"style": "", "images": []})
         _write_json(film.manifest, m)
         vo = {**VO_PINNED, "model": tts_model(), "voice": "Kore", "style": "", "language": "en"}
         _write_json(film.path("vo.json"), vo | {"lines": []})
@@ -281,6 +291,10 @@ class Film:
                 "length": seconds,  # the film's; "seconds" is later how long making it took
                 "client": client,
                 "source": source,
+                # 1: a plan whose films go ahead of the others in every queue (sched.py)
+                "priority": 1 if priority else 0,
+                # api: the public key (billed); login: this machine's Claude Code (local only)
+                "auth": auth,
                 "release": RELEASE,
                 "state": "queued",
                 "created": datetime.now().isoformat(timespec="seconds"),

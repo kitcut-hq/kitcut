@@ -50,7 +50,6 @@ from film import (  # noqa: E402
     LENGTHS,
     LOOKS,
     MADE,
-    PAINT_PINNED,
     RELEASE,
     Film,
     limits,
@@ -141,7 +140,6 @@ def system_prompt(look):
         "NOTATION": ref[a:b].strip() + "\n\n```\n" + notation + "\n```",
         "FX": fx,
         "INSTRUMENTS": ", ".join(inst) or "(none yet)",
-        "MAX_IMAGES": str(PAINT_PINNED["max_images"]),
     }
     # the look's own sections (studio/looks/<look>.md, "## NAME" headed) go in first, since
     # they carry placeholders of their own
@@ -545,7 +543,7 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
     state = "error"
     try:
         if not finish_only:
-            async with sched["claude"].hold(1, film.id, on_wait):
+            async with sched["claude"].hold(1, film.id, on_wait, priority=rec.get("priority", 0)):
                 clock.t0, clock.paused = time.time(), 0.0  # the queue was not Claude's time
                 film.update(state="claude", started=datetime.now().isoformat(timespec="seconds"))
                 await save(film.id, {"state": "running", "started_at": store.now()})
@@ -683,6 +681,8 @@ def first_record(film, source, client):
         "length": rec.get("length"),
         "look": rec.get("look"),
         "release": RELEASE,
+        "priority": rec.get("priority", 0),
+        "auth": rec.get("auth", "api"),
         "state": "queued",
         "cost_usd": 0.0,
     }
