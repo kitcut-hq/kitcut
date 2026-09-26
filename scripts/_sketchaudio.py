@@ -42,6 +42,29 @@ SOUNDFONT = "models/soundfonts/FluidR3_GM"
 SOUNDFONT_URL = (
     "https://cdn.jsdelivr.net/gh/gleitz/midi-js-soundfonts@gh-pages/FluidR3_GM/%s-mp3/%s.mp3"
 )
+# The 128 General MIDI instruments as the soundfont names them: the only names a score may use,
+# since each becomes a folder in the shared cache and part of a download URL
+GM = (
+    "acoustic_grand_piano bright_acoustic_piano electric_grand_piano honkytonk_piano "
+    "electric_piano_1 electric_piano_2 harpsichord clavinet celesta glockenspiel music_box "
+    "vibraphone marimba xylophone tubular_bells dulcimer drawbar_organ percussive_organ "
+    "rock_organ church_organ reed_organ accordion harmonica tango_accordion "
+    "acoustic_guitar_nylon acoustic_guitar_steel electric_guitar_jazz electric_guitar_clean "
+    "electric_guitar_muted overdriven_guitar distortion_guitar guitar_harmonics acoustic_bass "
+    "electric_bass_finger electric_bass_pick fretless_bass slap_bass_1 slap_bass_2 synth_bass_1 "
+    "synth_bass_2 violin viola cello contrabass tremolo_strings pizzicato_strings "
+    "orchestral_harp timpani string_ensemble_1 string_ensemble_2 synth_strings_1 "
+    "synth_strings_2 choir_aahs voice_oohs synth_choir orchestra_hit trumpet trombone tuba "
+    "muted_trumpet french_horn brass_section synth_brass_1 synth_brass_2 soprano_sax alto_sax "
+    "tenor_sax baritone_sax oboe english_horn bassoon clarinet piccolo flute recorder pan_flute "
+    "blown_bottle shakuhachi whistle ocarina lead_1_square lead_2_sawtooth lead_3_calliope "
+    "lead_4_chiff lead_5_charang lead_6_voice lead_7_fifths lead_8_bass__lead pad_1_new_age "
+    "pad_2_warm pad_3_polysynth pad_4_choir pad_5_bowed pad_6_metallic pad_7_halo pad_8_sweep "
+    "fx_1_rain fx_2_soundtrack fx_3_crystal fx_4_atmosphere fx_5_brightness fx_6_goblins "
+    "fx_7_echoes fx_8_scifi sitar banjo shamisen koto kalimba bagpipe fiddle shanai tinkle_bell "
+    "agogo steel_drums woodblock taiko_drum melodic_tom synth_drum reverse_cymbal "
+    "guitar_fret_noise breath_noise seashore bird_tweet telephone_ring helicopter applause gunshot"
+).split()
 NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 SHARP = {"C#": "Db", "D#": "Eb", "F#": "Gb", "G#": "Ab", "A#": "Bb"}
 SCALES = {
@@ -109,6 +132,8 @@ def parse_notes(spec):
 
 # ------------------------------------------------------------------ samples
 def sample_path(inst, m):
+    if inst not in GM:
+        raise ValueError("unknown instrument %r: use a General MIDI name such as celesta" % inst)
     return _env.resolve(os.path.join(SOUNDFONT, inst, mname(m) + ".mp3"))
 
 
@@ -123,13 +148,17 @@ def fetch_samples(pairs, log=print):
     got = 0
     for inst, m in missing:
         p = sample_path(inst, m)
-        os.makedirs(os.path.dirname(p), exist_ok=True)
         for attempt in range(3):
             try:
                 with urllib.request.urlopen(SOUNDFONT_URL % (inst, mname(m)), timeout=30) as r:
                     data = r.read()
-                with open(p, "wb") as f:
+                # the cache is shared by every run on the machine: a file of our own, then a
+                # rename, so a run reading at the same moment never sees half a note
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                tmp = "%s.%d.tmp" % (p, os.getpid())
+                with open(tmp, "wb") as f:
                     f.write(data)
+                os.replace(tmp, p)
                 got += 1
                 break
             except Exception as e:  # noqa: BLE001 -- the CDN 404s the odd note; neighbours cover it
@@ -686,10 +715,15 @@ def render_sfx(cues, duration, automation=None):
 
 
 # ------------------------------------------------------------------ voice + ducking
-def build_vo(timeline, duration, target_db=-17.0):
+def build_vo(timeline, duration, target_db=-17.0, base=None):
+    """base: the manifest's folder, which the line files are relative to (older timelines were
+    written relative to the repo root, and still resolve there)."""
     vo = np.zeros(int(duration * SR))
     for L in timeline["lines"]:
-        x = hp(decode(_env.resolve(L["file"])), 70)
+        p = L["file"]
+        if base and not os.path.isabs(p) and os.path.exists(os.path.join(base, p)):
+            p = os.path.join(base, p)
+        x = hp(decode(_env.resolve(p)), 70)
         a = np.abs(x)
         act = x[a > a.max() * 0.05]
         x = x / (np.sqrt(np.mean(act**2)) + 1e-9) * 10 ** (target_db / 20)

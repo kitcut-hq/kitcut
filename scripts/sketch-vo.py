@@ -51,6 +51,7 @@ import json
 import base64
 import hashlib
 import difflib
+import atexit
 import argparse
 from importlib import import_module
 
@@ -59,6 +60,7 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
 import numpy as np  # noqa: E402
 
+import _gpulock  # noqa: E402
 import _project  # noqa: E402
 import _sketch  # noqa: E402
 
@@ -358,6 +360,7 @@ def word_times(align, lead, tail):
 
 # ------------------------------------------------------------------ scoring
 _WHISPER = None
+_GPU = [None]  # the machine-wide GPU lock, held while large-v3 is loaded on the card
 
 
 def _whisper(lang, name):
@@ -377,15 +380,25 @@ def _whisper(lang, name):
         from faster_whisper import WhisperModel
 
         name = name or ("small.en" if lang == "en" else "large-v3")
-        if name.endswith(".en"):
+        # SKETCH_WHISPER_DEVICE=cpu keeps the card free (Sketch Studio: several films at once)
+        if name.endswith(".en") or os.environ.get("SKETCH_WHISPER_DEVICE") == "cpu":
             _WHISPER = WhisperModel(name, device="cpu", compute_type="int8")
-        else:
-            try:
-                _WHISPER = WhisperModel(name, device="cuda", compute_type="int8_float16")
-                _WHISPER.transcribe(np.zeros(SR // 10, dtype=np.float32), language=lang)
-            except Exception as e:  # noqa: BLE001 -- no usable GPU: slower, same answer
-                print("  whisper %s on CPU (%s)" % (name, str(e)[:80]))
-                _WHISPER = WhisperModel(name, device="cpu", compute_type="int8")
+            return _WHISPER
+        # the card is one 4 GB resource shared by every run on the machine (_gpulock.py): queue
+        # for it a while, then score on the CPU rather than wait behind a long job
+        _GPU[0] = _gpulock.hold("gpu", tool="sketch-vo", wait=90, required=False)
+        _GPU[0].__enter__()
+        if _GPU[0].token is None:
+            print("  whisper %s on CPU (%s)" % (name, _gpulock.describe(_GPU[0].blocked)))
+            _WHISPER = WhisperModel(name, device="cpu", compute_type="int8")
+            return _WHISPER
+        atexit.register(_GPU[0].__exit__, None, None, None)
+        try:
+            _WHISPER = WhisperModel(name, device="cuda", compute_type="int8_float16")
+            _WHISPER.transcribe(np.zeros(SR // 10, dtype=np.float32), language=lang)
+        except Exception as e:  # noqa: BLE001 -- no usable GPU: slower, same answer
+            print("  whisper %s on CPU (%s)" % (name, str(e)[:80]))
+            _WHISPER = WhisperModel(name, device="cpu", compute_type="int8")
     return _WHISPER
 
 
@@ -611,7 +624,8 @@ def main():
                         "text": spoken(ln["text"]),
                         "take": b["take"],
                         "acc": round(b["acc"], 3),
-                        "file": os.path.relpath(b["file"], _env.ROOT).replace("\\", "/"),
+                        # relative to the manifest: the film's folder can live anywhere
+                        "file": os.path.relpath(b["file"], m["_dir"]).replace("\\", "/"),
                         "dur": round(b["dur"], 3),
                     }
                     spent = [c["tts"] for c in cand.get(i, []) if c.get("tts")]

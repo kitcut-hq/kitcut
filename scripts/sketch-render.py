@@ -39,6 +39,7 @@ import re
 import json
 import html
 import time
+import secrets
 import base64
 import shutil
 import argparse
@@ -130,8 +131,9 @@ def bundle(m, audio=True):
         "__HINT__": html.escape(pl["hint"]),
         "__HINT_FONT__": pl["hint_font"],
         "__POSTER_T__": str(m.get("poster_t", m["duration"] - 1)),
-        "__ENGINE__": read_text(os.path.join(SKETCH, "engine.js")),
-        "__PROPS__": read_text(os.path.join(SKETCH, "props.js")),
+        # the film's own engine folder when its manifest names one (Sketch Studio's per-film copy)
+        "__ENGINE__": read_text(os.path.join(m["_engine"], "engine.js")),
+        "__PROPS__": read_text(os.path.join(m["_engine"], "props.js")),
         "__FILM__": film,
         "__AUDIO__": src,
         "__VO__": json.dumps(vo_timeline(m)),
@@ -158,14 +160,27 @@ def artifact_flavour(page):
 
 
 # ------------------------------------------------------------------ the page drives, we listen
+# What the page may reach: only its own server. Everything it needs is inlined as data: URIs, so
+# the film's code can neither call out to the network nor into another render (or anything else)
+# listening on this machine's loopback ports.
+CSP = (
+    "default-src 'self' data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src 'self'; "
+    "form-action 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'"
+)
+
+
 class Session:
-    """Serve one page to headless Chromium and collect what it POSTs back."""
+    """Serve one page to headless Chromium and collect what it POSTs back.
+
+    The page lives under a random prefix (/<key>/film.html) and posts to paths relative to it; a
+    request without the key is refused, so nothing else on the machine can feed this render."""
 
     def __init__(self, page, on_frame=None, on_still=None):
         self.page = page.encode("utf-8")
         self.on_frame, self.on_still = on_frame, on_still
         self.done = threading.Event()
         self.error, self.automation, self.frames, self.last = None, None, 0, time.time()
+        self.key = "/" + secrets.token_hex(12) + "/"
         sess = self
 
         class H(BaseHTTPRequestHandler):
@@ -176,9 +191,17 @@ class Session:
             def log_message(self, *a):
                 pass
 
+            def refuse(self):
+                self.send_response(404)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
             def do_GET(self):
+                if not self.path.startswith(sess.key):
+                    return self.refuse()
                 self.send_response(200)
                 self.send_header("Connection", "keep-alive")
+                self.send_header("Content-Security-Policy", CSP)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(sess.page)))
                 self.end_headers()
@@ -187,7 +210,9 @@ class Session:
             def do_POST(self):
                 n = int(self.headers.get("Content-Length") or 0)
                 body = self.rfile.read(n) if n else b""
-                path, _, q = self.path.partition("?")
+                if not self.path.startswith(sess.key):
+                    return self.refuse()
+                path, _, q = self.path[len(sess.key) - 1 :].partition("?")
                 sess.last = time.time()
                 try:
                     if path == "/frame" and sess.on_frame:
@@ -226,7 +251,7 @@ class Session:
         if not browsers:
             sys.exit("no Edge/Chrome found (set HTML2IMG_BROWSER to a Chromium executable)")
         prof = tempfile.mkdtemp(prefix="sketch-render-")
-        url = "http://127.0.0.1:%d/film.html?%s" % (self.server.server_address[1], query)
+        url = "http://127.0.0.1:%d%sfilm.html?%s" % (self.server.server_address[1], self.key, query)
         # the four --disable-* flags keep Chromium from throttling a page it thinks nobody sees:
         # a headless window on Windows counts as occluded, and a throttled page stalls a render
         cmd = [
@@ -242,8 +267,20 @@ class Session:
             "--hide-scrollbars",
             "--user-data-dir=" + prof,
             "--window-size=1920,1080",
-            url,
         ]
+        if os.environ.get("SKETCH_RENDER_OFFLINE") == "1":
+            # no network at all: every request that is not to this page's own loopback server
+            # goes to a proxy that is not there, names never resolve, and WebRTC stays off
+            cmd += [
+                "--proxy-server=http://127.0.0.1:9",
+                "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1",
+                "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+                "--disable-extensions",
+                "--disable-sync",
+                "--disable-component-update",
+                "--no-pings",
+            ]
+        cmd.append(url)
         proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             while not self.done.wait(1.0):

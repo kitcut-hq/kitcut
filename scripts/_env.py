@@ -38,7 +38,9 @@ def load_dotenv(path=None, override=False):
     gitignored. Values already in the environment win unless override is set.
     """
     p = path or os.path.join(ROOT, ".env")
-    if not os.path.exists(p):
+    # KITCUT_DOTENV=0: a host that hands each run exactly the keys it needs (Sketch Studio) says
+    # so, and the repo's .env is then not read at all
+    if not os.path.exists(p) or (path is None and os.environ.get("KITCUT_DOTENV") == "0"):
         return {}
     got = {}
     with open(p, encoding="utf-8") as f:

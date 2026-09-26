@@ -183,9 +183,11 @@ def main():
     if not images:
         sys.exit("no paint.images in %s" % m["_path"])
     names = [im.get("name", "") for im in images]
-    bad = [n for n in names if not n or not n.replace("_", "").replace("-", "").isalnum()]
+    bad = [n for n in names if not isinstance(n, str) or not _sketch.SAFE_NAME.match(n)]
     if bad or len(set(names)) != len(names):
-        sys.exit("paint.images need unique names of letters, digits, - and _ (got %s)" % names)
+        sys.exit(
+            "paint.images need unique names of lowercase letters, digits, - and _ (got %s)" % names
+        )
     backend = spec.get("backend", "muse")
     if backend not in MODELS:
         sys.exit("paint.backend must be one of %s" % ", ".join(MODELS))

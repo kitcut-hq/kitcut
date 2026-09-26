@@ -151,7 +151,7 @@ def main():
             sfx = sfx + A.reverb(swet, ir) * mix["sfx_reverb"]
         with st("voice"):
             if timeline:
-                vo = A.build_vo(timeline, dur, mix["vo_db"])
+                vo = A.build_vo(timeline, dur, mix["vo_db"], base=m["_dir"])
                 vo_st = np.stack([vo, vo]) * 0.98 + A.reverb(np.stack([vo, vo]) * 0.05, ir) * 0.6
                 gain = A.duck_gain(vo, mix["duck"])
             else:

@@ -53,7 +53,9 @@ MAX_AGE_S = 6 * 3600
 
 
 def locks_dir():
-    return os.path.join(ROOT, "temp", "locks")
+    # KITCUT_LOCKS_DIR: a copy of these scripts running from elsewhere (Sketch Studio's release
+    # snapshots) still queues behind the same card as the working tree
+    return os.environ.get("KITCUT_LOCKS_DIR") or os.path.join(ROOT, "temp", "locks")
 
 
 def lock_path(name="gpu"):

@@ -56,7 +56,7 @@ body.render canvas { border-radius: 0; box-shadow: none; }
 window.__early = function (e) {
   if (window.__earlyErr || !/[?&](render|export|stills|automation)=/.test(location.search)) return;
   window.__earlyErr = String(e.message) + ' @' + e.lineno;
-  fetch('/error', { method: 'POST', body: window.__earlyErr });
+  fetch('error', { method: 'POST', body: window.__earlyErr });
 };
 window.addEventListener('error', window.__early);
 </script>
@@ -97,7 +97,7 @@ __FILM__
     }
   };
   window.removeEventListener('error', window.__early);
-  window.addEventListener('error', (e) => { if (RENDER) report('/error', String(e.message) + ' @' + e.lineno); });
+  window.addEventListener('error', (e) => { if (RENDER) report('error', String(e.message) + ' @' + e.lineno); });
 
   SK.init(cv);
   const faces = __FONT_LOADS__, IMAGES = __IMAGES__;
@@ -116,12 +116,12 @@ __FILM__
           // raw RGBA, not PNG: toBlob() fills Chromium's blob store faster than GC frees it
           // ("Failed to fetch" after ~100 frames), and skipping the PNG round trip is faster too
           const cx2 = cv.getContext('2d');
-          for (let i = 0; i < n; i++) { SK.render(from + i / fps); await report('/frame?i=' + i, cx2.getImageData(0, 0, cv.width, cv.height).data); }
+          for (let i = 0; i < n; i++) { SK.render(from + i / fps); await report('frame?i=' + i, cx2.getImageData(0, 0, cv.width, cv.height).data); }
         }
-        if (Q.has('stills')) for (const s of Q.get('stills').split(',')) { SK.render(+s); await report('/still?t=' + s, await png()); }
-        if (Q.has('automation')) await report('/automation', JSON.stringify(SK.automation()));
-      } catch (e) { await report('/error', String(e && e.stack || e)); }
-      if (!Q.has('render')) await report('/done', '');
+        if (Q.has('stills')) for (const s of Q.get('stills').split(',')) { SK.render(+s); await report('still?t=' + s, await png()); }
+        if (Q.has('automation')) await report('automation', JSON.stringify(SK.automation()));
+      } catch (e) { await report('error', String(e && e.stack || e)); }
+      if (!Q.has('render')) await report('done', '');
       return;
     }
     SK.render(POSTER_T);

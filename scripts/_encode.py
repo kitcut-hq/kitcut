@@ -395,8 +395,11 @@ def _load_cache():
 def _save_cache():
     try:
         os.makedirs(os.path.dirname(_cache_path()), exist_ok=True)
-        with open(_cache_path(), "w", encoding="utf-8") as f:
+        # a temp file of our own, then a rename: renders running at once never read half a file
+        tmp = "%s.%d.tmp" % (_cache_path(), os.getpid())
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(_probe_cache, f, indent=2)
+        os.replace(tmp, _cache_path())
     except OSError:
         pass  # a cache that will not persist is not fatal
 

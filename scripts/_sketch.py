@@ -22,6 +22,19 @@ import _project
 import _runlog
 
 SR = 48000
+# A name that becomes part of a file path (a painting, an instrument): a plain word, so nothing
+# a film's author writes can point outside the film's own folders
+SAFE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
+
+
+def safe_name(name, what="name"):
+    """The name, if it is one a path may be built from; else a ValueError saying why."""
+    if not isinstance(name, str) or not SAFE_NAME.match(name):
+        raise ValueError(
+            "%s %r: use lowercase letters, digits, - and _ (at most 41, starting with a letter "
+            "or digit)" % (what, name)
+        )
+    return name
 
 
 # ------------------------------------------------------------------ manifest
@@ -51,9 +64,12 @@ def load(path):
                 m["_paint_file"], m["paint"] = rel(m, m["paint"]), json.load(f)
         m["images"] = dict(m.get("images") or {})
         for im in m["paint"].get("images", []):
-            p = os.path.join("images", im["name"] + ".jpg")
+            p = os.path.join("images", safe_name(im.get("name"), "paint image name") + ".jpg")
             if os.path.exists(rel(m, p)):
                 m["images"].setdefault(im["name"], p)
+    # "engine": "engine" -- a folder holding the film's own engine.js and props.js (Sketch Studio
+    # gives every film a copy it may extend); the repo's sketch/ otherwise
+    m["_engine"] = rel(m, m["engine"]) if m.get("engine") else os.path.join(_env.ROOT, "sketch")
     return m
 
 
