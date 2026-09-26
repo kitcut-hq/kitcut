@@ -892,6 +892,7 @@ def first_record(film, source, client):
         "priority": rec.get("priority", 0),
         "auth": rec.get("auth", "api"),
         "branding": bool(rec.get("branding")),
+        "build": rec.get("build", "once"),
         "state": "queued",
         "cost_usd": 0.0,
     }

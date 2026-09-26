@@ -42,8 +42,9 @@ def guard(tool, inp, film):
             return True, ""
         return False, "Read is limited to your film's folder (your working directory)."
     if tool in ("Write", "Edit"):
-        if film.writable(_path(inp.get("file_path"), film)):
-            return True, ""
+        p = _path(inp.get("file_path"), film)
+        if film.writable(p):
+            return _scene_at_a_time(tool, inp, film, p)
         mine = ", ".join(film.editable() + ("engine/engine.js", "engine/props.js"))
         return False, "You can only write %s, in your working directory." % mine
     if tool.startswith(STUDIO_TOOLS):
@@ -51,6 +52,34 @@ def guard(tool, inp, film):
     return False, (
         "%s is not available here: use Read, Write, Edit and the studio tools "
         "(check, voice, paint, stills, sound)." % tool
+    )
+
+
+SCENE_LINES = 120  # the most film.js may grow by in one write, for a film built scene by scene
+
+
+def _scene_at_a_time(tool, inp, film, p):
+    """A film whose record says build: "scenes" (an experiment) grows film.js a scene at a time:
+    a write or an edit that adds more than SCENE_LINES lines is refused."""
+    if os.path.basename(p) != "film.js" or film.record().get("build") != "scenes":
+        return True, ""
+    lines = lambda s: str(s).count("\n") + 1 if s else 0  # noqa: E731
+    if tool == "Write":
+        try:
+            with open(p, encoding="utf-8") as f:
+                had = lines(f.read())
+        except OSError:
+            had = 0
+        grow = lines(inp.get("content")) - had
+    else:
+        grow = lines(inp.get("new_string")) - lines(inp.get("old_string"))
+    if grow <= SCENE_LINES:
+        return True, ""
+    return False, (
+        "Build film.js a scene at a time: this adds %d lines, and the most one write may add is "
+        "%d. Write its frame first -- the ground, the camera, the backdrops and an empty function "
+        "per scene -- then fill in one scene per Edit, and check it and look at it (stills) "
+        "before the next." % (grow, SCENE_LINES)
     )
 
 

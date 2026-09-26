@@ -296,6 +296,7 @@ class Film:
         priority=0,
         auth="api",
         branding=False,
+        build="once",
     ):
         """A new film's folder: the manifest (its length set), the engine copy, an empty
         narration, an empty list of paintings for a painted film, and its record."""
@@ -345,6 +346,8 @@ class Film:
                 "auth": auth,
                 # a Free-plan film: KitCut's watermark and closing (agent.brand, studio/outro.js)
                 "branding": bool(branding),
+                # "scenes": film.js may grow only a scene at a time (guard.py; an experiment)
+                "build": "scenes" if build == "scenes" else "once",
                 "release": RELEASE,
                 "state": "queued",
                 "created": datetime.now().isoformat(timespec="seconds"),

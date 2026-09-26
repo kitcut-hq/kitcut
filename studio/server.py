@@ -360,6 +360,8 @@ async def create(req):
     branding = req.headers.get("X-Branding", "").strip() == "1" or (
         body.get("branding") is True and from_this_machine(req)
     )
+    # how Claude may write film.js: "scenes" caps each write (an experiment; this machine only)
+    build = "scenes" if body.get("build") == "scenes" and from_this_machine(req) else "once"
     prune()
     # the check and the taking happen under one lock: two requests at the same moment cannot
     # both slip under a limit that has room for one
@@ -378,6 +380,7 @@ async def create(req):
             priority=priority,
             auth=auth,
             branding=branding,
+            build=build,
         )
         await agent.save(f.id, agent.first_record(f, "web", client))
         start(f)

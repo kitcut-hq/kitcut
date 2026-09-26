@@ -80,6 +80,34 @@ def main():
         # a painted film: its paint.json is its own
         expect("painted: Write paint.json", guard("Write", {"file_path": "paint.json"}, B)[0], True)
 
+        # a film built scene by scene: film.js grows 120 lines at most per write
+        big, small = "x\n" * 300, "x\n" * 80
+        expect(
+            "once: a whole film.js at once",
+            guard("Write", {"file_path": "film.js", "content": big}, A)[0],
+            True,
+        )
+        S = films.Film.create("scenes", 30, "drawn", build="scenes")
+        expect(
+            "scenes: not a whole film.js at once",
+            guard("Write", {"file_path": "film.js", "content": big}, S)[0],
+            False,
+        )
+        expect(
+            "scenes: its frame",
+            guard("Write", {"file_path": "film.js", "content": small}, S)[0],
+            True,
+        )
+        grow = {"file_path": "film.js", "old_string": "a", "new_string": small}
+        expect("scenes: a scene per Edit", guard("Edit", grow, S)[0], True)
+        grow = {"file_path": "film.js", "old_string": "a", "new_string": big}
+        expect("scenes: not three scenes in one Edit", guard("Edit", grow, S)[0], False)
+        expect(
+            "scenes: other files as ever",
+            guard("Write", {"file_path": "score.json", "content": big}, S)[0],
+            True,
+        )
+
         # a link inside a film that leads to another film does not get through (real paths)
         link = A.path("link")
         if os.name == "nt":
