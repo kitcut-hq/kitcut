@@ -157,8 +157,10 @@ class Tools:
         args = [] if retake_line is None else ["--only", str(int(retake_line)), "--retake"]
         async with self.lock:
             self.gate()
-            self.voice_runs += 1
             await self._script("voice", "sketch-vo.py", args, pools=[("cpu", 1)])
+            # only recordings that worked count: a TTS that gave no audio cost nothing (and the
+            # narration's budget above caps what a film may spend on its voice either way)
+            self.voice_runs += 1
         return (
             "Recorded. The timeline (also in audio/vo/timeline.json), times on the film clock:\n"
             + timeline_text(self.film)

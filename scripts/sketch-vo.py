@@ -48,6 +48,7 @@ import sys
 import os
 import re
 import json
+import time
 import base64
 import hashlib
 import difflib
@@ -186,19 +187,35 @@ def gemini_take(text, vo):
             location=os.environ.get("GOOGLE_CLOUD_LOCATION") or "global",
             credentials=creds,
         )
-        r = client.models.generate_content(
-            model=model,
-            contents=("%s: %s" % (style, words)) if style else words,
-            config=types.GenerateContentConfig(
-                response_modalities=["AUDIO"],
-                speech_config=types.SpeechConfig(
-                    voice_config=types.VoiceConfig(
-                        prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice)
-                    )
+        # the preview models now and then answer with no audio at all (no candidate, or one with
+        # no parts) for a line they read fine a moment later: ask again before giving up
+        pcm, why = None, "no answer"
+        for attempt in range(3):
+            r = client.models.generate_content(
+                model=model,
+                contents=("%s: %s" % (style, words)) if style else words,
+                config=types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice)
+                        )
+                    ),
                 ),
-            ),
-        )
-        pcm = r.candidates[0].content.parts[0].inline_data.data
+            )
+            cand = (r.candidates or [None])[0]
+            parts = (cand.content.parts if cand and cand.content else None) or []
+            if parts and parts[0].inline_data and parts[0].inline_data.data:
+                pcm = parts[0].inline_data.data
+                break
+            why = "finish reason %s" % (cand.finish_reason if cand else r.prompt_feedback)
+            print("  gemini gave no audio for %r (%s); asking again" % (words[:40], why))
+            time.sleep(2 * (attempt + 1))
+        if pcm is None:
+            sys.exit(
+                "Gemini TTS gave no audio for the line %r three times (%s): rephrase it"
+                % (words, why)
+            )
         u = r.usage_metadata
         usage = {"input": u.prompt_token_count or 0, "output": u.candidates_token_count or 0}
     else:
@@ -240,7 +257,12 @@ def gemini_take(text, vo):
         if r.status_code != 200:
             sys.exit("gemini %s %s: %s" % (model, r.status_code, r.text[:400]))
         j = r.json()
-        pcm = base64.b64decode(j["candidates"][0]["content"]["parts"][0]["inlineData"]["data"])
+        try:
+            pcm = base64.b64decode(j["candidates"][0]["content"]["parts"][0]["inlineData"]["data"])
+        except (KeyError, IndexError, TypeError):
+            sys.exit(
+                "Gemini TTS gave no audio for the line %r (%s): rephrase it" % (words, str(j)[:300])
+            )
         u = j.get("usageMetadata") or {}
         usage = {
             "input": u.get("promptTokenCount") or 0,

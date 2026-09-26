@@ -17,6 +17,7 @@ Two things stay shared with the working tree: models\\ (a junction to the soundf
 film adds to) and the .venv the server and its steps run under.
 """
 
+import io
 import os
 import sys
 import json
@@ -66,13 +67,15 @@ def build(ref):
     part = dest + ".partial"
     shutil.rmtree(part, ignore_errors=True)
     os.makedirs(part)
-    arc = subprocess.Popen(
-        ["git", "-C", REPO, "archive", "--format=tar", sha], stdout=subprocess.PIPE
-    )
-    with tarfile.open(fileobj=arc.stdout, mode="r|") as tar:
-        tar.extractall(part, filter="data")
-    if arc.wait() != 0:
-        sys.exit("git archive failed")
+    # read whole (a few MB): a tar read as a stream cannot go back for a linked member
+    arc = subprocess.run(["git", "-C", REPO, "archive", "--format=tar", sha], capture_output=True)
+    if arc.returncode != 0:
+        sys.exit("git archive failed: %s" % arc.stderr.decode("utf-8", "replace")[-500:])
+    with tarfile.open(fileobj=io.BytesIO(arc.stdout)) as tar:
+        # no links: a release is plain files (the repo's one symlink is a dev-tool skill)
+        tar.extractall(
+            part, filter=lambda m, p: None if m.issym() or m.islnk() else tarfile.data_filter(m, p)
+        )
     with open(os.path.join(part, "RELEASE.json"), "w", encoding="utf-8") as f:
         json.dump(
             {
