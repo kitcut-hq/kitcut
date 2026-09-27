@@ -241,6 +241,23 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
 @keyframes slide { from { margin-left: 0; } to { margin-left: 70%; } }
 .okmark { color: var(--good); font-weight: 700; }
 </style>
+<script>
+// Where this visitor came from, for the sign-up to record (lib/attribution.js): the link's utm_*
+// tags (or ?ref=), the site that sent them, and the first page seen, in the kc_src cookie for 90
+// days. A later tagged link replaces it; an untagged visit never does.
+(() => { try {
+  const q = new URLSearchParams(location.search), tag = (k) => (q.get(k) || '').slice(0, 80);
+  const tagged = ['utm_source', 'utm_medium', 'utm_campaign', 'ref'].some((k) => q.get(k));
+  if (!tagged && document.cookie.split('; ').some((c) => c.startsWith('kc_src='))) return;
+  let r = '';
+  try { r = new URL(document.referrer).hostname.replace(/^www\./, ''); } catch (e) { /* no referrer */ }
+  if (r === location.hostname || /(^|\.)kitcut\.ai$|^(accounts\.google\.com|checkout\.stripe\.com|billing\.stripe\.com)$/.test(r)) r = '';
+  const v = { s: tag('utm_source') || tag('ref'), m: tag('utm_medium'), c: tag('utm_campaign'), t: tag('utm_term'),
+              n: tag('utm_content'), r, l: location.pathname.slice(0, 120), at: Date.now() };
+  document.cookie = `kc_src=${encodeURIComponent(JSON.stringify(v))}; Path=/; Max-Age=7776000; SameSite=Lax` +
+    (location.protocol === 'https:' ? '; Secure' : '');
+} catch (e) { /* never worth breaking the page for */ } })();
+</script>
 </head>
 <body>
 <div class="wrap">
