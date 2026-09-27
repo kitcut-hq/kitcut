@@ -212,6 +212,27 @@ async def main():
     async with TestClient(TestServer(server.make_app(TOKEN))) as c:
         auth = {"Authorization": "Bearer " + TOKEN}
         check((await c.get("/api/health")).status == 200, "health needs no token")
+        r = await c.get("/api/limits")
+        lim = await r.json()
+        check(r.status == 200, "the limits need no token (the site's docs are built from them)")
+        check(
+            lim["lengths"] == {"min": films.LENGTHS[0], "max": films.LENGTHS[-1], "step": 5}
+            and lim["prompt"]["max_chars"] == server.PROMPT_MAX
+            and lim["attachments"]["pictures_per_film"] == server.uploads.MAX_IMAGES
+            and lim["films"]["per_account_per_day"] == server.PER_CLIENT_DAILY,
+            "the limits are the constants the studio enforces (%s)" % lim["lengths"],
+        )
+        check(
+            not any(k in json.dumps(lim) for k in ("usd", "budget", "reserve", "cost")),
+            "the limits say nothing about money",
+        )
+        n = [films.limits(s)["images"] for s in films.LENGTHS]
+        check(n == sorted(n), "a longer film never gets fewer paintings (8 ... %d)" % n[-1])
+        vo = {"voice": validate.VOICES[0], "lines": [{"text": "Hi.", "start": 200}]}
+        check(
+            not validate._vo(vo, 12, 480) and validate._vo(vo, 12, 60),
+            "a narration line may start anywhere in the film, and not past its end",
+        )
         check(
             (await c.get("/api/films")).status == 401, "the API refuses a request without a token"
         )

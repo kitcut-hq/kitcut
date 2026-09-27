@@ -86,10 +86,17 @@ MODEL = "claude-opus-5-5"
 # update that moves the default cannot change the films unnoticed
 EFFORT = "xhigh"
 # how long Claude may work on a film, and what it may spend, grow with the film's length:
-# film.limits() (15 min of working time for up to 15 s; waiting for the machine does not count)
+# film.limits() (20 min of working time for up to 15 s; waiting for the machine does not count)
 
 
 # ------------------------------------------------------------------ the environment Claude runs in
+def tool_timeout_s(length):
+    """How long Claude Code waits for one studio tool: 30 min for the machine to be free, plus
+    the longest step Claude can call for a film of this length (film.limits())."""
+    lim = limits(max(length, 5))
+    return 30 * 60 + max(lim["voice_s"], lim["sound_s"])
+
+
 def claude_env(film=None, auth="api"):
     """What Claude Code is started with, on top of the (already secret-free) environment.
     api: the key and a private config folder per film, so a run can pick up no local login,
@@ -103,8 +110,9 @@ def claude_env(film=None, auth="api"):
         "ENABLE_TOOL_SEARCH": "false",
         # none of the account's claude.ai connectors: the studio's tools are the only ones
         "ENABLE_CLAUDEAI_MCP_SERVERS": "false",
-        # a studio tool may wait for the machine; the tools time out on their own
-        "MCP_TOOL_TIMEOUT": str(30 * 60 * 1000),
+        # a studio tool may wait for the machine, then run its step; the steps time out on their
+        # own, and the voice and the mix grow with the film (an 8-minute one: about 43 min)
+        "MCP_TOOL_TIMEOUT": str(tool_timeout_s(film.length if film else 0) * 1000),
     }
     if auth == "api":
         key = procs.secret("ANTHROPIC_API_KEY")

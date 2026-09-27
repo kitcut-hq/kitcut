@@ -110,8 +110,8 @@ def limits(length):
         "voice_s": max(300, 180 + 5 * length),
         "lines": 6 if length <= 15 else max(12, -(-length // 5)),  # narration sentences
         "tts_usd": max(0.30, 0.005 * length),  # what the narration may cost, retakes included
-        # paintings, repaints included: past 2 minutes one about every 20 s
-        "images": 8 if length <= 60 else 12 if length <= 120 else min(24, length // 20),
+        # paintings, repaints included: 12 up to 4 minutes, then one about every 20 s
+        "images": 8 if length <= 60 else min(24, max(12, length // 20)),
         # the agent's turns: 60 was enough up to 2 minutes; a longer film writes and checks
         # more scenes (a turn is one of Claude's replies, its tool calls included)
         "turns": 60 + max(0, length - 120) // 6,

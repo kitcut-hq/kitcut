@@ -58,7 +58,7 @@ def _num(x, lo, hi):
     return isinstance(x, (int, float)) and not isinstance(x, bool) and lo <= x <= hi
 
 
-def _vo(d, max_lines):
+def _vo(d, max_lines, length=60):
     out = []
     if not isinstance(d, dict):
         return ["vo.json must be an object"]
@@ -87,8 +87,8 @@ def _vo(d, max_lines):
             out.append("vo.json: line %d is over %d characters" % (i, MAX_LINE_CHARS))
         if set(ln) - VO_LINE_KEYS:
             out.append("vo.json: line %d may only have text (and start)" % i)
-        if "start" in ln and not _num(ln["start"], 0, 60):
-            out.append("vo.json: line %d start is seconds, 0-60" % i)
+        if "start" in ln and not _num(ln["start"], 0, length):
+            out.append("vo.json: line %d start is seconds, 0-%d" % (i, length))
     return out
 
 
@@ -202,7 +202,7 @@ def problems(film, name):
     if d is None:
         return out
     if name == "vo.json":
-        return _vo(d, limits(film.length)["lines"])
+        return _vo(d, limits(film.length)["lines"], film.length)
     if name == "paint.json":
         return _paint(d, film.length)
     if name == "score.json":

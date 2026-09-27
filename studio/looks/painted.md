@@ -9,7 +9,8 @@ and hand-drawn marks on top.
 ## COMMANDS
 - `paint` -- paints every image in `paint.json` at once (about 30 s; unchanged ones come from
   cache) and tiles them into `images/sheet.jpg`. `retake: ["<name>"]` repaints some. At most
-  8 paintings for a film of up to a minute (12 for a longer one), repaints included.
+  8 paintings for a film of up to a minute, 12 up to four minutes, then one for about every
+  20 s (24 at most), repaints included.
 
 ## DIRECTION
 - the painting style (see "The paintings"), the light and the palette;
@@ -51,8 +52,8 @@ The studio has set `backend`, `model` and `max_images`; leave them. You set:
   watercolour is for young children's stories only. Name the palette and the light in it too.
 - `images`: `[{"name": "kitchen", "prompt": "..."}, ...]` -- names of lowercase letters, digits,
   `-` and `_`. Describe each picture fully: who, doing what, where, the framing (wide,
-  close-up), the light. Never ask for words, letters or signs in a picture. `"ref": "<name>"`
-  paints an image from another one, the way to keep a character the same.
+  close-up), the light. Never ask for words, letters or signs in a picture. The painter works
+  from the words alone: it takes no reference picture, so `ref` changes nothing.
 
 Each painting comes back 1920x1280 (a little taller than the 1920x1080 frame: room to move).
 

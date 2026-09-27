@@ -172,7 +172,7 @@ def signature_ok(req):
 @web.middleware
 async def need_token(req, handler):
     p = req.path
-    guarded = p.startswith(("/api/", "/files/")) and p != "/api/health"
+    guarded = p.startswith(("/api/", "/files/")) and p not in ("/api/health", "/api/limits")
     ok = hmac.compare_digest(token_of(req).encode(), TOKEN.encode())
     if guarded and not ok and not (p.startswith("/files/") and signature_ok(req)):
         return web.json_response({"error": "missing or wrong token"}, status=401)
@@ -324,6 +324,63 @@ async def health(req):
             "release": films.RELEASE,
         }
     )
+
+
+def limits_doc():
+    """What a person can meet, in numbers: the site's docs are built from it (sketch-studio
+    scripts/docs.mjs). Nothing about money: no budgets, reserves or costs."""
+    sample = (10, 30, 60, 120, 240, 480)
+    return {
+        "release": films.RELEASE,
+        "lengths": {"min": films.LENGTHS[0], "max": films.LENGTHS[-1], "step": 5},
+        "looks": list(films.LOOKS),
+        "prompt": {"max_chars": PROMPT_MAX, "min_chars": 3},
+        "films": {
+            "at_once_per_account": 1,
+            "per_account_per_day": PER_CLIENT_DAILY,
+            "waiting_max": MAX_QUEUE,
+            "made_at_once": SCHED["claude"].capacity,
+        },
+        "attachments": {
+            "pictures_per_film": uploads.MAX_IMAGES,
+            "voice_notes_per_film": uploads.MAX_NOTES,
+            "picture_types": ["jpeg", "png", "webp"],
+            "voice_note_types": ["webm", "ogg", "mp4", "m4a", "wav", "mp3"],
+            "picture_max_bytes": uploads.MAX_BYTES["image"],
+            "picture_max_pixels": uploads.MAX_PIXELS,
+            "voice_note_max_bytes": uploads.MAX_BYTES["audio"],
+            "voice_note_max_seconds": uploads.MAX_AUDIO_S,
+            "unused_kept_hours": uploads.KEEP_S // 3600,
+            "per_account_per_day": {"files": uploads.DAY_FILES, "bytes": uploads.DAY_BYTES},
+        },
+        "library": {
+            "characters_per_new_film": library.SEEDED,
+            "earlier_films_remembered": library.MEMORY,
+            "versions_kept": library.KEEP,
+            "project_pictures": library.PICTURES,
+        },
+        "by_length": {
+            str(n): {
+                "claude_minutes": films.limits(n)["claude_s"] // 60,
+                "paintings": films.limits(n)["images"],
+                "narration_lines": films.limits(n)["lines"],
+            }
+            for n in sample
+        },
+        "output": {
+            "width": 1920,
+            "height": 1080,
+            "fps": 60,
+            "video": "H.264 (MP4)",
+            "audio": "AAC, stereo, -14 LUFS",
+            "subtitles": "a soft track, off by default; also film.srt and film.vtt",
+            "free_closing_seconds": 3,
+        },
+    }
+
+
+async def limits_route(req):
+    return web.json_response(limits_doc())
 
 
 async def over_limit(client, seconds, auth="api"):
@@ -828,6 +885,7 @@ def make_app(token):
             web.get("/film/{id}", index),  # one film's page: the page reads the id from the path
             web.get("/fonts/{name}", font),
             web.get("/api/health", health),
+            web.get("/api/limits", limits_route),
             web.get("/api/films", list_films),
             web.get("/api/costs", costs),
             web.post("/api/films", create),
