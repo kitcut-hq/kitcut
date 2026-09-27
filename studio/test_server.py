@@ -356,11 +356,54 @@ async def main():
         st = await (await c.get("/api/films/%s" % ids[0], headers=auth)).json()
         check(st.get("status") == "done", "and its own page still works")
 
-        # ------------------------------------------------ one film in the making per client
+        # ------------------------------------------------ link-only: its maker's switch
+        tunnel_as = auth | {"Cf-Ray": "t"}
         r = await c.post(
-            "/api/films", json={"prompt": "a slow one"}, headers=auth | {"X-Client-Ip": "u:busy"}
+            "/api/films/%s/listed" % ids[1],
+            json={"listed": False},
+            headers=tunnel_as | {"X-Client-Ip": "u:test-2"},
         )
-        slow = (await r.json()).get("id")
+        check(r.status == 403, "someone else cannot make a film link-only")
+        own = tunnel_as | {"X-Client-Ip": "u:test-1"}
+        r = await c.post("/api/films/%s/listed" % ids[1], json={"listed": "no"}, headers=own)
+        check(r.status == 400, "listed must be true or false")
+        r = await c.post("/api/films/%s/listed" % ids[1], json={"listed": False}, headers=own)
+        listed = await (await c.get("/api/films", headers=auth)).json()
+        st = await (await c.get("/api/films/%s" % ids[1], headers=auth)).json()
+        check(
+            r.status == 200
+            and ids[1] not in {x["id"] for x in listed}
+            and st.get("listed") is False
+            and st.get("status") == "done"
+            and mem.docs[ids[1]].get("listed") is False,
+            "its maker makes it link-only: out of the gallery, its page still works, on record",
+        )
+        await c.post("/api/films/%s/listed" % ids[1], json={"listed": True}, headers=own)
+        listed = await (await c.get("/api/films", headers=auth)).json()
+        check(ids[1] in {x["id"] for x in listed}, "and back in")
+        check(
+            (await (await c.get("/api/films/%s" % ids[2], headers=auth)).json()).get("listed")
+            is True,
+            "a film is listed unless it asks not to be",
+        )
+
+        # ------------------------------------------------ one film in the making per client
+        # (asked for through an assistant: link-only, and the record says where it came from)
+        r = await c.post(
+            "/api/films",
+            json={"prompt": "a slow one", "listed": False},
+            headers=auth | {"X-Client-Ip": "u:busy", "X-Source": "mcp", "X-App": "Claude"},
+        )
+        body = await r.json()
+        slow = body.get("id")
+        rec = films.Film.open(slow).record()
+        check(
+            body.get("listed") is False
+            and (rec.get("listed"), rec.get("source"), rec.get("app")) == (False, "mcp", "Claude")
+            and (mem.docs[slow].get("listed"), mem.docs[slow].get("source")) == (False, "mcp")
+            and mem.docs[slow].get("app") == "Claude",
+            "a film from an assistant: link-only, its source and app on record",
+        )
         r = await c.post(
             "/api/films", json={"prompt": "and another"}, headers=auth | {"X-Client-Ip": "u:busy"}
         )

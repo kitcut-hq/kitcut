@@ -42,6 +42,7 @@ sys.path.insert(0, HERE)
 import procs  # noqa: E402
 import film as films  # noqa: E402
 import library  # noqa: E402
+import media  # noqa: E402
 
 # the studio's keys, out of the environment before anything is started (procs.py)
 procs.load_secrets(os.environ.get("STUDIO_ENV_FILE") or os.path.join(films.REPO, ".env"))
@@ -819,6 +820,11 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
             summary["cast"] = kept
             stages["cast"] = time.time() - s
         changed = film.engine_diff()
+        if media.enabled():  # online for good: plays when this machine is off (media.py)
+            s = time.time()
+            emit({"type": "stage", "name": "online", "text": "Putting the film online"})
+            summary["media"] = await media.publish(film) or None
+            stages["online"] = time.time() - s
         summary.update(
             ok=True,
             video="film.mp4",
@@ -871,6 +877,7 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
                 # again here: the first record is not retried if the database was away
                 "project_id": (film.record().get("project") or {}).get("id"),
                 "title": film.record().get("title"),  # name_film's, when nothing was typed
+                "media": summary.get("media"),  # its lasting copy online (media.py)
                 "overtime": summary.get("overtime", False),
                 "finished_at": store.now(),
             } | {
@@ -1017,6 +1024,8 @@ def first_record(film, source, client):
         "priority": rec.get("priority", 0),
         "auth": rec.get("auth", "api"),
         "branding": bool(rec.get("branding")),
+        "listed": rec.get("listed") is not False,  # false: link-only (no gallery, no sitemap)
+        **({"app": rec["app"]} if rec.get("app") else {}),
         # what came with the idea: kinds and sizes only (the words and pictures stay here)
         "attachments": [
             {k: a.get(k) for k in ("kind", "secs", "w", "h") if a.get(k) is not None}

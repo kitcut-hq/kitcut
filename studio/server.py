@@ -21,10 +21,13 @@ a reserve for every film still being made, by its length), and each client -- th
 forwards as X-Client-Ip "u:<id>", else the IP -- may have one film in the making and
 STUDIO_PER_CLIENT_DAILY (default 5) a day.
 
-    POST /api/films              {"prompt", "seconds", "look"}  ->  202 {"id", "status", "position"}
-                                 X-Priority: 1 (from the site, for a plan with priority): the
-                                 film goes ahead of the others in every queue. {"auth": "login"}
-                                 (this machine only): Claude runs on its Claude Code login.
+    POST /api/films              {"prompt", "seconds", "look", "attachments", "listed"}  ->  202
+                                 {"id", "status", "position"}. X-Priority: 1 (from the site, for
+                                 a plan with priority): the film goes ahead of the others in every
+                                 queue. "listed": false keeps it out of the gallery (link-only).
+                                 X-Source: mcp and X-App: <name> (from the site): it was asked for
+                                 through an assistant. {"auth": "login"} (this machine only):
+                                 Claude runs on its Claude Code login.
                                  "project": {id, name, brief, from_account_cast}: an episode of
                                  the site's project, with the project's library (library.py)
     GET  /api/library            the asker's cast and films; ?project=<id>: that project's, and
@@ -34,8 +37,13 @@ STUDIO_PER_CLIENT_DAILY (default 5) a day.
                                  episode of the project gets; GET .../pictures/{name}/thumb.png
                                  and DELETE .../pictures/{name}, with ?project=
     GET  /api/films/{id}         ?since=N  ->  {"status": queued|running|done|error|cancelled,
-                                 "stage", "wait", "events": [...from N], "next", "video_url", ...}
+                                 "stage", "wait", "events": [...from N], "next", "video_url",
+                                 "listed", ...}; a film copied online (media.py) has its lasting
+                                 URLs there instead of signed ones
     POST /api/films/{id}/cancel  the film's own client (or this machine) stops it
+    POST /api/films/{id}/listed  {"listed": true|false}: the film's own client shows it in the
+                                 gallery or keeps it link-only
+    GET  /api/uploads            the asker's pictures and voice notes no film has taken yet
     POST /api/films/{id}/youtube {"to": <YouTube upload session>, "key"}: the film's own client
                                  sends the finished film into a session the site opened (youtube.py)
     GET  /api/films/{id}/youtube/{key}  how that send is going, and YouTube's answer
@@ -70,6 +78,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import agent  # noqa: E402 -- imports _env first, which re-execs into .venv; then the secrets
 import film as films  # noqa: E402
 import library  # noqa: E402
+import media  # noqa: E402
 import procs  # noqa: E402
 import store  # noqa: E402
 import uploads  # noqa: E402
@@ -391,6 +400,12 @@ async def create(req):
     branding = req.headers.get("X-Branding", "").strip() == "1" or (
         body.get("branding") is True and from_this_machine(req)
     )
+    # link-only: kept out of the gallery (and the site's sitemap), still watchable by its link
+    listed = body.get("listed") is not False
+    # where the request came from: the site's own page, or an assistant through its MCP server
+    # (the site sends both, trusted like X-Priority)
+    source = "mcp" if req.headers.get("X-Source", "").strip() == "mcp" else "web"
+    app = req.headers.get("X-App", "").strip()[:40] or None
     prune()
     # pictures and voice notes uploaded first (uploads.py): this client's own, and every voice
     # note written out -- which may take a moment, so before the lock
@@ -413,19 +428,21 @@ async def create(req):
             seconds,
             look,
             client=client,
-            source="web",
+            source=source,
             priority=priority,
             auth=auth,
             branding=branding,
             attachments=attached,
             project=project,
+            listed=listed,
+            app=app,
         )
         uploads.release(client, attached)  # the film has its own copies now
         try:  # the person's cast and earlier films (library.py); a film goes ahead without
             await asyncio.to_thread(library.seed, f)
         except Exception as e:  # noqa: BLE001
             print("film %s: no library: %s" % (f.id, e), file=sys.stderr, flush=True)
-        await agent.save(f.id, agent.first_record(f, "web", client))
+        await agent.save(f.id, agent.first_record(f, source, client))
         start(f)
     await asyncio.sleep(0)  # let it take a free slot now, so the answer says whether it waits
     ahead = SCHED["claude"].ahead(f.id)
@@ -436,6 +453,7 @@ async def create(req):
             "position": (ahead + 1) if ahead is not None else 0,
             "status_url": "%s/api/films/%s" % (base_url(req), f.id),
             "attachments": [a["kind"] for a in attached],
+            "listed": listed,
         },
         status=202,
     )
@@ -460,6 +478,12 @@ async def upload_status(req):
     if meta is None:
         return web.json_response({"error": "not found"}, status=404)
     return web.json_response(uploads.public(meta))
+
+
+async def upload_list(req):
+    """The asker's uploads no film has taken yet, newest first (each gone after a day)."""
+    prune()
+    return web.json_response({"uploads": uploads.listing(client_of(req))})
 
 
 async def youtube_send(req):
@@ -622,6 +646,44 @@ async def hide(req):
     return web.json_response({"id": f.id, "hidden": hidden})
 
 
+async def set_listed(req):
+    """Show a film in the gallery, or keep it link-only: {"listed": true|false}. The film's own
+    client (or this machine) only. Separate from hidden, which is the operator's: a film the
+    operator hid stays out of the gallery whatever its maker asks."""
+    f = film_of(req.match_info["id"])
+    rec = f.record()
+    if not (from_this_machine(req) or rec.get("client") == client_of(req)):
+        return web.json_response({"error": "only whoever made a film can change that"}, status=403)
+    try:
+        listed = (await req.json()).get("listed")
+    except ValueError:
+        listed = None
+    if not isinstance(listed, bool):
+        return web.json_response({"error": 'send JSON: {"listed": true|false}'}, status=400)
+    f.update(listed=listed)
+    await agent.save(f.id, {"listed": listed})
+    return web.json_response({"id": f.id, "listed": listed})
+
+
+def film_urls(req, jid, rec):
+    """A finished film's video and poster: its copy online (media.py) when there is one --
+    lasting, and playing when this machine is off -- else signed URLs through the tunnel."""
+    m = rec.get("media") or {}
+    if m.get("video"):
+        out = {"video_url": m["video"], "poster_url": m.get("poster")}
+        if m.get("card"):
+            out["card_url"] = m["card"]
+        if m.get("subtitles"):
+            out["subtitles_url"] = m["subtitles"]
+        if not out["poster_url"]:
+            out["poster_url"] = signed(req, jid, "film_poster.png")
+        return out
+    return {
+        "video_url": signed(req, jid, "film.mp4"),
+        "poster_url": signed(req, jid, "film_poster.png"),
+    }
+
+
 async def status(req):
     jid = req.match_info["id"]
     f = film_of(jid)  # 404 unless it exists
@@ -674,11 +736,10 @@ async def status(req):
         if J.get("cost_usd") is not None:
             out["cost_usd"] = J["cost_usd"]  # so far; the final figure replaces it below
         if J["status"] not in ("done", "error", "cancelled"):
-            r = {k: r.get(k) for k in ("prompt", "title", "look", "length")}
+            r = {k: r.get(k) for k in ("prompt", "title", "look", "length", "listed")}
     if out["status"] == "done":
-        out.update(
-            video_url=signed(req, jid, "film.mp4"), poster_url=signed(req, jid, "film_poster.png")
-        )
+        out.update(film_urls(req, jid, r))
+    out["listed"] = r.get("listed") is not False  # a film from before the switch was listed
     keys = (
         "prompt",
         "title",
@@ -702,56 +763,6 @@ async def status(req):
     return web.json_response(out)
 
 
-CARD = (1200, 628)  # the 1.91:1 image X, Facebook and most link previews show
-
-
-def _frame(mp4, t):
-    """One frame of the film at t seconds, as a PIL image (None if ffmpeg cannot)."""
-    import io
-    import subprocess
-
-    from PIL import Image
-
-    r = subprocess.run(
-        ["ffmpeg", "-v", "error", "-ss", "%.2f" % t, "-i", mp4, "-frames:v", "1"]
-        + ["-f", "image2pipe", "-vcodec", "png", "-"],
-        capture_output=True,
-    )
-    return (
-        Image.open(io.BytesIO(r.stdout)).convert("RGB") if r.returncode == 0 and r.stdout else None
-    )
-
-
-def make_card(outputs, length=None):
-    """card.jpg: the film as a link preview, 1200x628 (1.91:1).
-
-    The frame is the poster (the film's end, its payoff) unless that is mid fade-out -- films
-    often end on paper -- when a clearly livelier frame from later in the film stands in (the
-    most contrast among a few). The whole 16:9 frame is kept, so a title drawn at its top edge is
-    not cut: scaled to the card's height, with the thin strips either side filled by a blurred
-    stretch of the same frame (on paper it disappears; on a painting it reads as the picture
-    going on)."""
-    from PIL import Image, ImageFilter, ImageStat
-
-    def contrast(im):
-        return ImageStat.Stat(im.convert("L")).stddev[0]
-
-    with Image.open(os.path.join(outputs, "film_poster.png")) as p:
-        best = p.convert("RGB")
-    mp4 = os.path.join(outputs, "film.mp4")
-    if length and os.path.isfile(mp4):
-        frames = [f for f in (_frame(mp4, length * k) for k in (0.5, 0.65, 0.8, 0.92)) if f]
-        alt = max(frames, key=contrast, default=None)
-        if alt is not None and contrast(alt) > 1.4 * contrast(best):
-            best = alt
-    card = best.resize(CARD, Image.LANCZOS).filter(ImageFilter.GaussianBlur(24))
-    w = round(best.width * CARD[1] / best.height)
-    card.paste(best.resize((w, CARD[1]), Image.LANCZOS), ((CARD[0] - w) // 2, 0))
-    tmp = os.path.join(outputs, "card.%d.tmp" % os.getpid())
-    card.save(tmp, "JPEG", quality=85, optimize=True, progressive=True)
-    os.replace(tmp, os.path.join(outputs, "card.jpg"))
-
-
 async def files(req):
     d = os.path.join(film_of(req.match_info["id"]).dir, "outputs")
     p = os.path.normcase(os.path.realpath(os.path.join(d, req.match_info["path"])))
@@ -761,7 +772,7 @@ async def files(req):
     if req.match_info["path"] == "card.jpg" and not os.path.isfile(p):
         if os.path.isfile(os.path.join(d, "film_poster.png")):
             f = film_of(req.match_info["id"])
-            await asyncio.to_thread(make_card, d, f.record().get("length") or f.length)
+            await asyncio.to_thread(media.make_card, d, f.record().get("length") or f.length)
     if not os.path.isfile(p):
         raise web.HTTPNotFound()
     return web.FileResponse(p, headers={"Cache-Control": "no-cache"})
@@ -783,7 +794,8 @@ async def list_films(req):
     out = []
     for f in Film.all():
         r = f.record()
-        if r.get("ok") and not r.get("hidden"):
+        # a link-only film (its maker's choice) and a hidden one (the operator's) stay out
+        if r.get("ok") and not r.get("hidden") and r.get("listed") is not False:
             out.append(
                 {
                     k: r.get(k)
@@ -798,11 +810,8 @@ async def list_films(req):
                         "stages",
                     )
                 }
-                | {
-                    "id": f.id,
-                    "video_url": signed(req, f.id, "film.mp4"),
-                    "poster_url": signed(req, f.id, "film_poster.png"),
-                }
+                | {"id": f.id}
+                | film_urls(req, f.id, r)
             )
         if len(out) >= 12:
             break
@@ -823,6 +832,7 @@ def make_app(token):
             web.get("/api/costs", costs),
             web.post("/api/films", create),
             web.post("/api/uploads", upload),
+            web.get("/api/uploads", upload_list),
             web.get("/api/uploads/{id}", upload_status),
             web.get("/api/library", library_list),
             web.post("/api/library/pictures", picture_add),
@@ -832,6 +842,7 @@ def make_app(token):
             web.delete("/api/library/{name}", library_delete),
             web.get("/api/films/{id}", status),
             web.post("/api/films/{id}/cancel", cancel),
+            web.post("/api/films/{id}/listed", set_listed),
             web.post("/api/films/{id}/youtube", youtube_send),
             web.get("/api/films/{id}/youtube/{key}", youtube_sent),
             web.post("/api/admin/drain", drain),

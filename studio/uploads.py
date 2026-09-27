@@ -128,6 +128,30 @@ def public(meta):
     return {k: meta[k] for k in keys if meta.get(k) is not None}
 
 
+def listing(client, now=None):
+    """The client's uploads still waiting for a film, newest first: each as public() says, with
+    how many seconds it has left before prune() deletes it. A film that took one released it, so
+    only unused ones are here."""
+    now = now or time.time()
+    d = client_dir(client)
+    out = []
+    try:
+        names = os.listdir(d)
+    except OSError:
+        return out
+    for fn in names:
+        if not fn.endswith(".json") or not ID.match(fn[:-5]):
+            continue
+        meta = get(client, fn[:-5])
+        if meta is None:
+            continue
+        left = KEEP_S - (now - (meta.get("created") or 0))
+        if left > 0:
+            out.append(public(meta) | {"expires_in": round(left), "created": meta.get("created")})
+    out.sort(key=lambda m: m.get("created") or 0, reverse=True)
+    return [{k: v for k, v in m.items() if k != "created"} for m in out]
+
+
 def _spent_today(d):
     n, total, keep = 0, 0, []
     now = time.time()

@@ -121,6 +121,16 @@ async def main():
         check(r.status == 404, "another account cannot see it")
         r = await c.get("/api/uploads/../../studio.json", headers=me)
         check(r.status == 404, "an id cannot name a path")
+        mine = (await (await c.get("/api/uploads", headers=me)).json())["uploads"]
+        check(
+            [m["id"] for m in mine] == [note["id"], logo["id"], pic["id"]]
+            and all(0 < m["expires_in"] <= 86400 for m in mine)
+            and mine[0].get("transcript"),
+            "the list: newest first, with the time left and a note's words",
+            mine,
+        )
+        theirs = (await (await c.get("/api/uploads", headers=other)).json())["uploads"]
+        check(theirs == [], "another account's list is its own (empty)", theirs)
 
         # a film from a picture and a voice note, nothing typed
         body = {"prompt": "", "seconds": 10, "attachments": [pic["id"], note["id"], logo["id"]]}
@@ -178,6 +188,8 @@ async def main():
         )
         r = await c.get("/api/uploads/" + pic["id"], headers=me)
         check(r.status == 404, "a film's upload leaves the upload shelf")
+        mine = (await (await c.get("/api/uploads", headers=me)).json())["uploads"]
+        check(mine == [], "and the list", mine)
 
         # a typed film is not asked for a title
         st, p2 = await up(png(300, 300))

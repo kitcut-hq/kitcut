@@ -319,6 +319,8 @@ class Film:
         branding=False,
         attachments=(),
         project=None,
+        listed=True,
+        app=None,
     ):
         """A new film's folder: the manifest (its length set), the engine copy, an empty
         narration, an empty list of paintings for a painted film, and its record.
@@ -399,6 +401,10 @@ class Film:
                 "attachments": attached,
                 # the project it is an episode of (never shown publicly: the brief is theirs)
                 **({"project": project} if project else {}),
+                # false: link-only -- out of the gallery and the sitemap, watchable by its link
+                "listed": bool(listed),
+                # the assistant it was asked for through (source "mcp"), e.g. "Claude"
+                **({"app": str(app)[:40]} if app else {}),
                 "release": RELEASE,
                 "state": "queued",
                 "created": datetime.now().isoformat(timespec="seconds"),

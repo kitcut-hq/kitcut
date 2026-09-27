@@ -5,7 +5,8 @@ Secrets. The studio's keys (Claude, MongoDB, Google, OpenRouter...) are read fro
 started from here inherits them by accident: not Claude Code, not a browser, not ffmpeg. A step
 is handed only what it needs (step_env): the voice gets the Google keys, the painter OpenRouter's,
 the render and the mix none at all. KITCUT_DOTENV=0 stops the scripts reading a .env of their own.
-Settings that are not secrets (STUDIO_* but the token) stay ordinary environment variables.
+Settings that are not secrets (STUDIO_* but the token and the media SAS) stay ordinary
+environment variables.
 
 Lifetime. On Windows every step runs in a Job Object of its own: killing it (a timeout, a
 cancelled film) takes down the step and everything it started -- browsers, ffmpeg -- in one call,
@@ -29,6 +30,7 @@ KNOWN_SECRETS = (
     "CLAUDE_CODE_OAUTH_TOKEN",
     "MONGODB_URI",
     "STUDIO_TOKEN",
+    "STUDIO_MEDIA_SAS",
     "GOOGLE_SERVICE_ACCOUNT_KEY",
     "GEMINI_API_KEY",
     "OPENROUTER_API_KEY",
@@ -99,7 +101,7 @@ def read_env_file(path):
 
 
 def is_config(k):
-    return k.startswith(CONFIG) and k != "STUDIO_TOKEN"
+    return k.startswith(CONFIG) and k not in KNOWN_SECRETS
 
 
 def load_secrets(path):
