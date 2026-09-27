@@ -15,8 +15,8 @@ powershell -ExecutionPolicy Bypass -File studio\serve.ps1 -Restart       # resta
 powershell -ExecutionPolicy Bypass -File studio\serve.ps1 -Dev           # run this working tree instead of the release
 powershell -ExecutionPolicy Bypass -File studio\serve.ps1 -Stop
 python studio/agent.py --costs                  # what the runs have cost (from MongoDB)
-python studio/agent.py --smoke [--auth login]   # one-turn check: key source, model, cost
-python studio/agent.py "a paper plane delivers a coffee" [--auth login]   # one film from the command line
+python studio/agent.py --smoke [--auth api]   # one-turn check: key source, model, cost
+python studio/agent.py "a paper plane delivers a coffee" [--auth api]   # one film from the command line
 python studio/test_guard.py                     # the permission model, no API calls
 python studio/test_sched.py                     # the scheduler's pools
 python studio/test_isolation.py                 # names, the gate, secrets, the offline renderer, process kill
@@ -274,12 +274,16 @@ snapshot beside the logo and kitcut.ai, with a chime and "Make yours at KitCut A
 
 ## Paying for Claude
 
-`--auth api` (the server always uses it) runs on `ANTHROPIC_API_KEY` from `.env` and a config
-folder per film, with `setting_sources=[]`: it never uses a local Claude Code login, its
-settings, its memory or its skills. `--auth login` (the command line, or `{"auth": "login"}` in a
-POST from this machine itself) runs the newest installed Claude Code on this machine's login
-instead; Claude's tokens are then covered by the plan and recorded as not billed. Never serve the
-public from a login: through the tunnel, the server ignores the switch.
+There are two ways to pay:
+- **`--auth api`** runs on `ANTHROPIC_API_KEY` from `.env` and a config folder per film, with
+  `setting_sources=[]`: it never uses a local Claude Code login, its settings, its memory or its
+  skills. Every film through the tunnel, which means the public site, runs this way.
+- **`--auth login`** runs the newest installed Claude Code on this machine's login instead.
+  Claude's tokens are then covered by the plan and recorded as not billed, so they don't count
+  against the day's budget. Films made on this machine run this way by default: the command
+  line, and a POST from this machine itself. `{"auth": "api"}` in the POST puts one on the key.
+
+Never serve the public from a login. Through the tunnel, the server ignores the switch.
 
 `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` is set because some organisations reject Claude
 Code's default context-management beta with a 400 ("not available for HIPAA-regulated

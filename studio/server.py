@@ -363,9 +363,9 @@ async def create(req):
     client = client_of(req)
     # a plan whose films go first (the site sends it, trusted like X-Client-Ip)
     priority = 1 if req.headers.get("X-Priority", "").strip() == "1" else 0
-    # this machine may have a film made on its own Claude Code login (internal runs); never
-    # anyone through the tunnel
-    auth = "login" if body.get("auth") == "login" and from_this_machine(req) else "api"
+    # this machine's own films (tests, internal runs) are made on its Claude Code login unless
+    # they ask for the key ("auth": "api"); anyone through the tunnel always on the key
+    auth = ("api" if body.get("auth") == "api" else "login") if from_this_machine(req) else "api"
     # a Free-plan film gets KitCut's watermark and closing (the site sends it, trusted like
     # X-Priority; this machine may ask for it to try it)
     branding = req.headers.get("X-Branding", "").strip() == "1" or (

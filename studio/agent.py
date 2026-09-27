@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Sketch Studio: one line of text in, a short sketch film out, written by Claude.
 
-    python studio/agent.py --smoke [--auth login]      one-turn check: key source, model, cost
+    python studio/agent.py --smoke [--auth api]        one-turn check: key source, model, cost
     python studio/agent.py --costs                     what the runs have cost (kitcut.studio_runs)
     python studio/agent.py --sync                      send runs the database missed (the outbox)
     python studio/agent.py --announce <url>|off        tell the public site where the tunnel is
@@ -18,7 +18,7 @@ the soundtrack and renders the video with the ordinary sketch scripts.
 Several films are made at once: each waits for a free Claude slot, then shares the machine through
 the scheduler (sched.py). Two ways to pay for Claude:
     --auth api     ANTHROPIC_API_KEY, a private config folder per film (the public site)
-    --auth login   this machine's Claude Code login (local and internal runs only)
+    --auth login   this machine's Claude Code login (the default: local and internal runs)
 """
 
 import sys
@@ -1144,7 +1144,7 @@ def main():
     ap.add_argument("--look", default=LOOKS[0], choices=LOOKS)
     ap.add_argument(
         "--auth",
-        default="api",
+        default="login",  # this machine's own runs; the public site's films are on the key
         choices=("api", "login"),
         help="api: ANTHROPIC_API_KEY (billed per token); login: this machine's Claude Code login",
     )

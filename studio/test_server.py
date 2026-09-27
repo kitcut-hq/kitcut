@@ -149,10 +149,11 @@ async def main():
 
         # ------------------------------------------------ three films at once, three clients
         ids = []
-        # film 0 is a priority plan's; film 1 is a Free plan's (branded), and asks for the login
-        # through the tunnel (refused: api); film 2 asks for the login from this machine
+        # film 0 is a priority plan's, and asks for the key from this machine (which otherwise
+        # uses its login); film 1 is a Free plan's (branded), and asks for the login through the
+        # tunnel (refused: api); film 2 asks for the login from this machine
         extra = [
-            ({"X-Priority": "1"}, {}),
+            ({"X-Priority": "1"}, {"auth": "api"}),
             ({"Cf-Ray": "test", "X-Branding": "1"}, {"auth": "login"}),
             ({}, {"auth": "login"}),
         ]
