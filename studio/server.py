@@ -58,6 +58,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import agent  # noqa: E402 -- imports _env first, which re-execs into .venv; then the secrets
 import film as films  # noqa: E402
+import library  # noqa: E402
 import procs  # noqa: E402
 import store  # noqa: E402
 import uploads  # noqa: E402
@@ -395,6 +396,10 @@ async def create(req):
             attachments=attached,
         )
         uploads.release(client, attached)  # the film has its own copies now
+        try:  # the person's cast and earlier films (library.py); a film goes ahead without
+            await asyncio.to_thread(library.seed, f)
+        except Exception as e:  # noqa: BLE001
+            print("film %s: no library: %s" % (f.id, e), file=sys.stderr, flush=True)
         await agent.save(f.id, agent.first_record(f, "web", client))
         start(f)
     await asyncio.sleep(0)  # let it take a free slot now, so the answer says whether it waits
@@ -454,6 +459,26 @@ async def drain(req):
         J["control"]["requeue"] = True
         J["task"].cancel()
     return web.json_response({"draining": True, "running": len(live(("running",)))})
+
+
+async def library_list(req):
+    """The asker's own library (library.py): their cast and the films it remembers."""
+    return web.json_response(library.listing(client_of(req)))
+
+
+async def library_thumb(req):
+    """A cast member's picture, the asker's own."""
+    p = library.thumb_of(client_of(req), req.match_info["name"])
+    if p is None:
+        raise web.HTTPNotFound()
+    return web.FileResponse(p, headers={"Cache-Control": "private, no-cache"})
+
+
+async def library_delete(req):
+    """Leave a cast member out of the asker's next films."""
+    if not library.delete(client_of(req), req.match_info["name"]):
+        return web.json_response({"error": "no such cast member"}, status=404)
+    return web.json_response({"name": req.match_info["name"], "deleted": True})
 
 
 async def hide(req):
@@ -673,6 +698,9 @@ def make_app(token):
             web.post("/api/films", create),
             web.post("/api/uploads", upload),
             web.get("/api/uploads/{id}", upload_status),
+            web.get("/api/library", library_list),
+            web.get("/api/library/{name}/thumb.png", library_thumb),
+            web.delete("/api/library/{name}", library_delete),
             web.get("/api/films/{id}", status),
             web.post("/api/films/{id}/cancel", cancel),
             web.post("/api/admin/drain", drain),

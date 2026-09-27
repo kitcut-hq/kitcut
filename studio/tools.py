@@ -2,14 +2,14 @@
 
 Each one runs a kitcut script on the film's own manifest, and nothing else:
 
-    check()                  node --check on film.js and the engine copy
+    check()                  node --check on film.js, the engine copy and the cast
     voice(retake_line?)      sketch-vo.py: records the narration and times every word
     paint(retake?)           sketch-paint.py (painted films): paints the scenes, tiles a sheet
     stills(times, sheet?)    sketch-render.py --stills: review frames, tiled into a sheet
     sound(levels?)           sketch-audio.py (after --automation when a cue needs it)
     name_film(title)         the title, for a film whose visitor typed nothing (voice or pictures)
 
-and the studio's own final step, render(), which Claude cannot call.
+and the studio's own steps, render() and cast_sheet(), which Claude cannot call.
 
 They run inside the server, not in Claude Code, so every one goes through the scheduler (sched.py)
 before it touches the machine, with the film's scrubbed environment (procs.step_env), a timeout
@@ -92,12 +92,12 @@ class Tools:
         if bad:
             raise ToolError("Fix these first:\n- " + "\n- ".join(bad))
 
-    async def _script(self, kind, script, args, pools=(), log=False, timeout=None):
-        """One kitcut script on this film's manifest, once the pools let it. Returns the lines it
-        printed last; raises ToolError when it fails."""
+    async def _script(self, kind, script, args, pools=(), log=False, timeout=None, manifest=None):
+        """One kitcut script on this film's manifest (or another inside the film's folder), once
+        the pools let it. Returns the lines it printed last; raises ToolError when it fails."""
         f = self.film
         argv = [procs.python(), "-X", "utf8", os.path.join(SCRIPTS, script)]
-        argv += ["--manifest", f.manifest] + list(args)
+        argv += ["--manifest", manifest or f.manifest] + list(args)
         env = procs.step_env(f, kind, locks=LOCKS, home=HOME)
         on_line = (lambda s: self.emit({"type": "log", "text": s})) if log else None
         async with contextlib.AsyncExitStack() as stack:
@@ -128,8 +128,14 @@ class Tools:
         if not node:
             raise ToolError("node is not installed on this machine; skip the syntax check")
         out = []
+        d = self.film.path("cast")
+        cast = (
+            sorted("cast/" + n for n in os.listdir(d) if n.endswith(".js"))
+            if os.path.isdir(d)
+            else []
+        )
         async with self.lock:
-            for rel in ("film.js", "engine/engine.js", "engine/props.js"):
+            for rel in ["film.js", "engine/engine.js", "engine/props.js"] + cast:
                 p = self.film.path(*rel.split("/"))
                 if not os.path.exists(p):
                     if rel == "film.js":
@@ -146,7 +152,9 @@ class Tools:
                     out.append("%s:\n%s" % (rel, "\n".join(tail[-12:])))
         if out:
             raise ToolError("\n\n".join(out))
-        return "film.js and the engine parse."
+        return (
+            "film.js, the engine and the cast parse." if cast else "film.js and the engine parse."
+        )
 
     async def voice(self, retake_line=None):
         if self.voice_runs >= MAX_VOICE_RUNS:
@@ -269,6 +277,15 @@ class Tools:
                 "render", "sketch-render.py", ["--jobs", "3"], pools=[("browser", 3)], log=True
             )
 
+    async def cast_sheet(self, manifest, times):
+        """Stills of library.sheet()'s small film (each new cast member drawn alone), for their
+        thumbnails (the studio's step, after the film)."""
+        args = ["--stills", ",".join("%g" % t for t in times), "--into", "stills"]
+        async with self.lock:
+            await self._script(
+                "stills", "sketch-render.py", args, pools=[("browser", 1)], manifest=manifest
+            )
+
     # ---------------------------------------------------------------- as Claude sees them
     def server(self):
         """An in-process MCP server with these tools, for this film only."""
@@ -287,7 +304,7 @@ class Tools:
         tools = [
             tool(
                 "check",
-                "Syntax-check film.js (and engine/*.js) with node --check.",
+                "Syntax-check film.js (and engine/*.js and cast/*.js) with node --check.",
                 {"type": "object", "properties": {}},
             )(wrap(lambda a: self.check())),
             tool(

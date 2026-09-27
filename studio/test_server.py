@@ -63,6 +63,16 @@ async def fake_claude(film, emit, meter, tools, auth="api", prompt=None, resume=
         return
     for f in films.MADE:
         shutil.copy(os.path.join(ex, f), film.dir)
+    if "with a cast" in prompt:  # a member for the person's next films, and film.js using it
+        with open(film.path("cast", "pip.js"), "w", encoding="utf-8") as f:
+            f.write(
+                "SK.cast.pip = { about: 'Pip, a fox', draw(x, y, o = {}) {\n"
+                "  SK.wash(SK.S.ellC(x, y, 60, 80), '#e0782f'); } };\n"
+            )
+        with open(film.path("film.js"), "a", encoding="utf-8") as f:
+            f.write("\n// draws SK.cast.pip\n")
+        if "then fails" in prompt:
+            raise RuntimeError("Claude stopped early: a stub failure")
     # a vo.json with what Claude may not change changed (the studio must put it back), and the
     # spend a voice run would have logged
     with open(film.path("vo.json"), "w", encoding="utf-8") as f:
@@ -338,6 +348,57 @@ async def main():
             "past its time with only the picture, one last turn writes the rest (%s)"
             % (sw.get("error") or sw.get("status")),
         )
+
+        # ------------------------------------------------ a series: the person's cast comes back
+        r1 = await c.post(
+            "/api/films",
+            json={"prompt": "episode one, with a cast"},
+            headers=auth | {"X-Client-Ip": "u:series"},
+        )
+        r2 = await c.post(
+            "/api/films",
+            json={"prompt": "with a cast, then fails"},
+            headers=auth | {"X-Client-Ip": "u:series-fail"},
+        )
+        e1, e2 = (await r1.json())["id"], (await r2.json())["id"]
+        s1, s2 = await asyncio.gather(wait_for(c, auth, e1), wait_for(c, auth, e2))
+        mine = await (
+            await c.get("/api/library", headers=auth | {"X-Client-Ip": "u:series"})
+        ).json()
+        check(
+            s1.get("status") == "done"
+            and [m["name"] for m in mine["cast"]] == ["pip"]
+            and mine["cast"][0]["thumb"]
+            and mem.docs[e1].get("cast") == {"saved": ["pip"], "used": ["pip"]},
+            "a finished film's cast is kept, drawn (%s)" % (s1.get("error") or mine),
+        )
+        r = await c.get("/api/library/pip/thumb.png", headers=auth | {"X-Client-Ip": "u:series"})
+        check(r.status == 200 and (await r.read())[:4] == b"\x89PNG", "its picture, its person's")
+        r = await c.get("/api/library/pip/thumb.png", headers=auth | {"X-Client-Ip": "u:other"})
+        check(r.status == 404, "nobody else's")
+        failed = await (
+            await c.get("/api/library", headers=auth | {"X-Client-Ip": "u:series-fail"})
+        ).json()
+        check(s2.get("status") == "error" and failed["cast"] == [], "a failed film keeps nothing")
+        r = await c.post(
+            "/api/films", json={"prompt": "episode two"}, headers=auth | {"X-Client-Ip": "u:series"}
+        )
+        e3 = (await r.json())["id"]
+        f3 = films.Film.open(e3)
+        check(
+            os.path.exists(f3.path("cast", "pip.js"))
+            and "- pip: Pip, a fox (in 1 film)" in agent.ask(f3)
+            and mem.docs[e3].get("library") == {"cast": 1, "films": 1},
+            "the person's next film starts with it",
+        )
+        await wait_for(c, auth, e3)
+        r = await c.delete("/api/library/pip", headers=auth | {"X-Client-Ip": "u:other"})
+        check(r.status == 404, "only its person deletes a member")
+        r = await c.delete("/api/library/pip", headers=auth | {"X-Client-Ip": "u:series"})
+        mine = await (
+            await c.get("/api/library", headers=auth | {"X-Client-Ip": "u:series"})
+        ).json()
+        check(r.status == 200 and mine["cast"] == [], "and then it is gone")
 
         # ------------------------------------------------ a restart finds what was left
         q = films.Film.create("left queued", 5, "drawn", client="u:r1")

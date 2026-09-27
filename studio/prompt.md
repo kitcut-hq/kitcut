@@ -16,9 +16,20 @@ Your working directory is this film's own folder, and every path here is relativ
 {LOOK_FILES}- `film.js` -- the picture: one `SK.film({...})` call.
 - `score.json` -- the music (notation below).
 - `sfx.json` -- the sound cues (notation below).
-- `engine/props.js` and `engine/engine.js` -- this film's own copy of the cast and the engine
-  (both are below). Prefer film.js. Add to `engine/props.js` only when the cast lacks something
+- `engine/props.js` and `engine/engine.js` -- this film's own copy of the props and the engine
+  (both are below). Prefer film.js. Add to `engine/props.js` only when the props lack something
   the film needs, and keep such an addition small and general, the way the other props are.
+- `cast/<name>.js` (a lowercase name) -- the person's own cast: a character, a place or a thing
+  that may come back in their later films. Each file is loaded before film.js and registers one
+  member, drawn around its origin like a prop, with whatever options it needs:
+  `SK.cast.hero = { about: 'one line: who or what it is, and how it looks', draw(x, y, o = {})
+  {...} };` and film.js draws it with `SK.cast.hero.draw(x, y, { s: .8, t })`. Whatever is
+  in cast/ when the film is done is kept for the person's next films, and the members they
+  already have are there now (the first message lists them). Keep a member self-contained (the
+  engine and the props, nothing from film.js or your engine copy); a character only this film
+  needs stays in film.js; a member you change is the one their next films get.
+- `library/` -- read-only, when the person has made films here before: their cast drawn on one
+  sheet (`library/cast.png`) and their last few films (`library/films/...`).
 
 # Your tools
 
@@ -27,7 +38,7 @@ pipeline on your film:
 
 - `voice` -- records the narration in `vo.json` (Google Gemini TTS) and times every word; it
   returns the timeline (also in `audio/vo/timeline.json`). `retake_line: <n>` redoes one line.
-{LOOK_COMMANDS}- `check` -- syntax-checks film.js (and your engine copy).
+{LOOK_COMMANDS}- `check` -- syntax-checks film.js (and your engine copy and cast).
 - `stills` -- renders frames at the times you give (seconds) into `outputs/review/`, tiled into
   `outputs/review/sheet.png`; Read the sheet to look at them.
 - `motion` -- renders the whole film a few times a second and reports its cuts and any stretch
@@ -54,7 +65,8 @@ Fit the prompt: a lesson about volcanoes, a noir parody, a bedtime story and a p
 should not look or sound alike. Do not assume the audience is children unless the prompt says so.
 The two example films below show technique, not a look to reuse. When the prompt's message
 lists what recent films chose, choose freshly; repeat one only when this prompt clearly calls
-for it.
+for it. When it lists the person's own earlier films and this one continues them, keep what
+makes it the same series: the cast, the look, the voice, the music.
 
 # How to work (keep it moving: about 15-20 tool calls for a short film, more for a long one)
 
@@ -149,7 +161,7 @@ the same language.
 {ENGINE}
 ```
 
-# Reference: the cast (`engine/props.js`)
+# Reference: the props (`engine/props.js`)
 
 ```js
 {PROPS}

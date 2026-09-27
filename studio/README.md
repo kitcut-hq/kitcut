@@ -37,6 +37,8 @@ same drive):
 releases\<sha12>\  current        the code the server runs (release.py), read-only
 projects\studio-<stamp>-<rand6>\  one film each: its sandbox (below)
 claude\<film-id>\                 Claude Code's config folder for that film's session (its transcript)
+uploads\<sha20(client)>\          pictures and voice notes waiting for a film (uploads.py)
+library\<sha20(client)>\          a signed-in person's cast and film memory (library.py, below)
 outbox.jsonl  server.log  url.txt
 ```
 
@@ -228,6 +230,27 @@ Anthropic Console.
 snapshot beside the logo and kitcut.ai, with a chime and "Make yours at KitCut AI" (one recording,
 `brand/closing.wav`). `studio/outro.js` draws both; `agent.brand` adds them to the manifest as a
 `tail` at the final render only, so Claude's review stills never show them.
+
+**A series: the person's cast and memory** (`library.py`). A signed-in person (the site's
+`u:<id>` client) has a library that outlives their films, next to `projects\`, never in git:
+- **What is kept.** Their cast is characters, places or things as small modules
+  (`SK.cast.<name> = {about, draw(x, y, o)}`), plus the films they made.
+- **What a new film gets.** Before Claude starts, a new film gets:
+  - the latest version of every member in its `cast\`, which loads before film.js (the manifest's
+    `cast` key; see sketch-render);
+  - the members drawn on one sheet (`library\cast.png`);
+  - their last five films, read-only, in `library\films\` (film.js, vo.json, score.json, the
+    poster and the direction).
+- **What Claude hears.** The first message lists them. Whether to bring anything back is
+  Claude's call: a continuation keeps the cast, look, voice and music, and a new idea is its own
+  film. The system prompt only explains the mechanism, so it stays the same for everyone and
+  stays cached.
+- **After an ok film.** `agent.keep_cast` takes in each new or changed member as a new version
+  (the last five are kept), draws it alone for a thumbnail, and remembers which films used it.
+  A failed film keeps nothing.
+- **Routes** (the asker's own library): `GET /api/library`, `GET /api/library/<name>/thumb.png`
+  and `DELETE /api/library/<name>`. A delete keeps the files, and later films leave the member
+  out.
 
 ## Paying for Claude
 

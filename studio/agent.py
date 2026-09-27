@@ -41,6 +41,7 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 sys.path.insert(0, HERE)
 import procs  # noqa: E402
 import film as films  # noqa: E402
+import library  # noqa: E402
 
 # the studio's keys, out of the environment before anything is started (procs.py)
 procs.load_secrets(os.environ.get("STUDIO_ENV_FILE") or os.path.join(films.REPO, ".env"))
@@ -182,8 +183,9 @@ def ask(film, recent=()):
         )
     )
     text += attached_note(film)
-    note = recent_note(film.look, recent)
-    return text + ("\n\n" + note if note else "")
+    mine = library.note(film)  # the person's own cast and earlier films
+    note = recent_note(film.look, recent, series=bool(mine))
+    return text + "".join("\n\n" + x for x in (mine, note) if x)
 
 
 def attached_note(film):
@@ -263,8 +265,10 @@ def recent_films(film, n=8):
     return out
 
 
-def recent_note(look, dirs):
-    """What recent films chose, counted: 'grounds: paper x5, night'."""
+def recent_note(look, dirs, series=False):
+    """What recent films chose, counted: 'grounds: paper x5, night'. Only the choices from the
+    menus: never what a film was asked, nor its cast (a person's own). series: the person has
+    films of their own (library.note), which a continuation keeps to."""
     if not dirs:
         return ""
 
@@ -290,8 +294,10 @@ def recent_note(look, dirs):
     ]
     rows = ["- %s: %s" % (k, v) for k, v in rows if v]
     return (
-        "Recent films made here chose (choose freshly for this prompt; repeat one only when it "
-        "clearly calls for it):\n" + "\n".join(rows)
+        "Recent films made here, by everyone, chose (choose freshly for this prompt; repeat one "
+        "only when it clearly calls for it%s):\n"
+        % (", or when it continues one of this person's films above" if series else "")
+        + "\n".join(rows)
     )
 
 
@@ -767,6 +773,7 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
         pin_vo(film)  # whatever Claude left there, the backends and models stay the studio's
         pin_paint(film)
         drop_unused_uploads(film)
+        library.drop_unused(film)  # the person's other characters stay out of this film's files
         if rec.get("branding"):
             missing = brand(film)
             if missing:
@@ -789,6 +796,11 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
         )
         await tools.render()
         stages["render"] = time.time() - s
+        s = time.time()
+        kept = await keep_cast(film, tools, emit)
+        if kept is not None:
+            summary["cast"] = kept
+            stages["cast"] = time.time() - s
         changed = film.engine_diff()
         summary.update(
             ok=True,
@@ -838,6 +850,7 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
                 "session_id": summary.get("session"),
                 "engine_changed": summary.get("engine_changed"),
                 "direction": summary.get("direction"),
+                "cast": summary.get("cast"),  # what the person's library took in (library.py)
                 "overtime": summary.get("overtime", False),
                 "finished_at": store.now(),
             } | {
@@ -941,6 +954,30 @@ def brand(film):
     return None
 
 
+async def keep_cast(film, tools, emit):
+    """After a finished film, the person's library takes in what it made (library.keep): its new
+    and changed cast members, each drawn alone for a thumbnail. None when the film's client has
+    no library. Never fails the film: what went wrong goes to stderr and the record."""
+    if not library.owner(film.record().get("client")):
+        return None
+    try:
+        items = library.changes(film)
+        pictures = {}
+        if items:
+            names = [it["name"] for it in items]
+            emit({"type": "stage", "name": "cast", "text": "Keeping the cast for the next films"})
+            man, times = library.sheet(film, names)
+            try:
+                await tools.cast_sheet(man, times)
+                pictures = await asyncio.to_thread(library.thumbs, film, names)
+            except ToolError as e:  # kept all the same, without a picture
+                print("film %s: no cast pictures: %s" % (film.id, e), file=sys.stderr, flush=True)
+        return await asyncio.to_thread(library.keep, film, items, pictures)
+    except Exception as e:  # noqa: BLE001 -- the film is made; its cast is a bonus
+        print("film %s: cast not kept: %s" % (film.id, e), file=sys.stderr, flush=True)
+        return {"error": (str(e) or type(e).__name__)[:200]}
+
+
 def first_record(film, source, client):
     """The run's record as it is when the film is asked for (state queued), so it counts toward
     the day's limits from the first moment."""
@@ -965,6 +1002,10 @@ def first_record(film, source, client):
             {k: a.get(k) for k in ("kind", "secs", "w", "h") if a.get(k) is not None}
             for a in rec.get("attachments") or []
         ],
+        # what the film got from the person's library (library.seed): counts only
+        "library": {k: len(v or []) for k, v in rec["library"].items()}
+        if rec.get("library")
+        else None,
         "state": "queued",
         "cost_usd": 0.0,
     }

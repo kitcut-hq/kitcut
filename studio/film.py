@@ -5,6 +5,9 @@
         inputs\\upload1.jpg inputs\\voice1.webm         what the visitor attached (uploads.py)
         film.js score.json sfx.json vo.json [paint.json] Claude's
         engine\\engine.js engine\\props.js                 the film's own copy of the engine
+        cast\\<name>.js                                   the person's cast (library.py): loaded
+                                                         before film.js, kept for their next films
+        library\\                                        their earlier films, the cast drawn (read)
         audio\\ images\\ outputs\\ temp\\                    what the pipeline makes
 
 Several films are made at once, each by its own Claude session, so nothing a film does may reach
@@ -57,6 +60,10 @@ LOOKS = ("drawn", "painted")
 EDITABLE = ("film.js", "score.json", "sfx.json", "vo.json")
 MADE = ("film.js", "score.json", "sfx.json")  # what a finished film must have
 ENGINE = ("engine.js", "props.js")  # the film's own copy, in engine\; Claude may extend it
+# a member of the person's cast, cast\<name>.js (library.py), and one named in film code:
+# SK.cast.pip, cast.pip, cast['pip']
+CAST_FILE = re.compile(r"^[a-z][a-z0-9_]{0,30}\.js$")
+CAST_USE = re.compile(r"\bcast\s*(?:\.\s*([a-z][a-z0-9_]*)|\[\s*['\"]([a-z][a-z0-9_]*)['\"]\s*\])")
 # what Claude may not change in paint.json: the painter, and how many paintings a film may cost
 # (8 up to a minute, more for a longer film: paint_pins)
 PAINT_PINNED = {"backend": "muse", "model": "meta/muse-image", "max_images": 8}
@@ -218,10 +225,14 @@ class Film:
         return top not in ("temp", "studio.json", "events.jsonl")
 
     def writable(self, p):
-        p = _norm(p)
+        raw, p = p, _norm(p)
         parent, name = os.path.dirname(p), os.path.basename(p)
         if parent == _norm(self.dir):
             return name in self.editable()
+        if parent == _norm(self.path("cast")):  # a film made before casts has no such folder
+            # the name as asked for: Windows would fold Pip.js into pip.js
+            asked = os.path.basename(os.path.realpath(raw))
+            return bool(CAST_FILE.match(asked)) and os.path.isdir(self.path("cast"))
         return parent == _norm(self.path("engine")) and name in ENGINE
 
     # ---------------------------------------------------------------- the engine copy
@@ -283,6 +294,9 @@ class Film:
         if d["look"] == "painted":
             paint = load("paint.json") or {}
             d["paint_style"] = (paint.get("style") or "")[:120] if isinstance(paint, dict) else ""
+        cast = sorted({a or b for a, b in CAST_USE.findall(js)})
+        if cast:
+            d["cast"] = cast
         return d
 
     # ---------------------------------------------------------------- making and finding films
@@ -322,6 +336,7 @@ class Film:
             raise RuntimeError("could not make a unique film folder")
         film = cls(os.path.join(projects, fid))
         os.makedirs(film.path("engine"))
+        os.makedirs(film.path("cast"))  # the person's cast: library.seed fills it
         os.makedirs(film.path("temp", "tmp"))
         for name in ENGINE:  # copyfile, not copy2: a release's files are read-only
             shutil.copyfile(os.path.join(KIT, "sketch", name), film.path("engine", name))
@@ -348,6 +363,7 @@ class Film:
                 attached.append(item)
         m["duration"], m["poster_t"] = float(seconds), round(seconds - 0.4, 2)
         m["engine"] = "engine"
+        m["cast"] = "cast"  # every cast/*.js loads before film.js (sketch-render)
         if look == "painted":
             m["paint"] = "paint.json"
             _write_json(film.path("paint.json"), paint_pins(seconds) | {"style": "", "images": []})

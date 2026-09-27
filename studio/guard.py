@@ -5,8 +5,9 @@ voice, paint, stills, sound), which run the pipeline for it. There is no shell. 
 PreToolUse hook's answer for every call:
 
     Read          a file inside the film's folder (film.readable: never temp/, studio.json)
-    Write, Edit   film.js, score.json, sfx.json, vo.json, paint.json (painted films) and the
-                  film's engine copy, engine/engine.js and engine/props.js (film.writable)
+    Write, Edit   film.js, score.json, sfx.json, vo.json, paint.json (painted films), the
+                  film's engine copy, engine/engine.js and engine/props.js, and its cast,
+                  cast/<name>.js (film.writable)
     mcp__studio__ the studio's tools; they check their own arguments
     anything else refused, with a reason Claude can act on
 
@@ -45,6 +46,8 @@ def guard(tool, inp, film):
         if film.writable(_path(inp.get("file_path"), film)):
             return True, ""
         mine = ", ".join(film.editable() + ("engine/engine.js", "engine/props.js"))
+        if os.path.isdir(film.path("cast")):
+            mine += ", cast/<name>.js (a lowercase name)"
         return False, "You can only write %s, in your working directory." % mine
     if tool.startswith(STUDIO_TOOLS):
         return True, ""

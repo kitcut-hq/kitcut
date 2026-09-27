@@ -173,7 +173,7 @@ def main():
     msg = agent.ask(n, recent)
     expect(
         "the note is after the prompt",
-        msg.index("Prompt:") < msg.index("Recent films made here chose"),
+        msg.index("Prompt:") < msg.index("Recent films made here, by everyone, chose"),
     )
     expect(
         "the note counts choices",

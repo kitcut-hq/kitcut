@@ -2898,6 +2898,11 @@ Studio's `studio/outro.js` holds the last frame and draws over it); sketch-rende
 more, and sketch-audio ends the film's sound at the film's end as always, then plays `audio`
 after it, as loud as the narration. `poster_t` stays in the film.
 
+**A cast of recurring characters** is the manifest's `cast`: a folder (`"cast": "cast"`) whose
+`<name>.js` files each run in their own scope after props.js and before film.js, and register one
+member as `SK.cast.<name> = {about, draw(x, y, o)}`. An error in one names its file. Sketch
+Studio keeps each signed-in person's cast between their films (`studio/library.py`).
+
 **Every frame is a pure function of time.** Nothing in a film may keep state between frames
 (no physics integration, no `Math.random`); randomness is `SK.rnd(seed)`, motion is `t`. That
 single rule is what lets the browser play the film against its audio *and* the renderer export

@@ -23,7 +23,8 @@ Manifest keys: title, description, slug, duration, fps, film ("film.js"), fonts
 player ({accent, paper, ink, hint, hint_font}), poster_t,
 render ({cq, preset, audio_bitrate, encoder}),
 tail ({secs, scripts, images, audio}: a closing after the film -- `secs` more of picture, drawn by
-`scripts` run after film.js, which lengthen SK._film; its sound is sketch-audio's).
+`scripts` run after film.js, which lengthen SK._film; its sound is sketch-audio's),
+cast ("cast": a folder whose <name>.js files each run before film.js, as SK.cast.<name>).
 
 Invoke as:
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --plan
@@ -97,6 +98,23 @@ def vo_timeline(m):
     }
 
 
+def cast_scripts(m):
+    """"cast": "cast" -- a folder of cast members, each its own script between the props and
+    film.js (Sketch Studio: a person's recurring characters, studio/library.py). Each runs in its
+    own function scope and names itself in an error. "" for a manifest without one."""
+    if not m.get("cast"):
+        return ""
+    d = _sketch.rel(m, m["cast"])
+    out = ["<script>\nSK.cast = SK.cast || {};\n</script>"]
+    for n in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if re.fullmatch(r"[a-z][a-z0-9_]{0,30}\.js", n):
+            out.append(
+                "<script>\n(function () {\n%s\n})();\n//# sourceURL=cast/%s\n</script>"
+                % (read_text(os.path.join(d, n)), n)
+            )
+    return "\n".join(out)
+
+
 def bundle(m, audio=True):
     """The player page with everything inlined. Returns the HTML text."""
     with open(os.path.join(SKETCH, "player.html"), encoding="utf-8") as f:
@@ -140,6 +158,7 @@ def bundle(m, audio=True):
         # the film's own engine folder when its manifest names one (Sketch Studio's per-film copy)
         "__ENGINE__": read_text(os.path.join(m["_engine"], "engine.js")),
         "__PROPS__": read_text(os.path.join(m["_engine"], "props.js")),
+        "__CAST__": cast_scripts(m),
         "__FILM__": film,
         "__AUDIO__": src,
         "__VO__": json.dumps(vo_timeline(m)),

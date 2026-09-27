@@ -29,6 +29,7 @@ from film import ENGINE, PAINT_PINNED, VO_PINNED, limits  # noqa: E402
 VOICES = tuple(import_module("sketch-vo").GEMINI_VOICES)
 MAX_JS = 256 * 1024  # film.js: the prompt asks for ~200 lines
 MAX_ENGINE_JS = 400 * 1024  # engine.js + props.js are ~85 KB together
+MAX_CAST_JS = 64 * 1024  # one cast member (library.MAX_BYTES)
 MAX_JSON = 64 * 1024
 VO_KEYS = set(VO_PINNED) | {"model", "voice", "style", "language", "lines"}
 VO_LINE_KEYS = {"text", "start"}
@@ -191,6 +192,11 @@ def problems(film, name):
         p = film.path("film.js")
         if os.path.exists(p) and os.path.getsize(p) > MAX_JS:
             return ["film.js is over %d KB; keep it short" % (MAX_JS // 1024)]
+        return []
+    if name.startswith("cast/"):  # a cast member (library.py): kept only while it is small
+        p = film.path(*name.split("/"))
+        if os.path.exists(p) and os.path.getsize(p) > MAX_CAST_JS:
+            return ["%s is over %d KB, too big to keep" % (name, MAX_CAST_JS // 1024)]
         return []
     d, out = _load(film, name)
     if d is None:

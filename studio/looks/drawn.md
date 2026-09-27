@@ -1,6 +1,6 @@
 ## INTRO
-The look is **hand-drawn**: everything is drawn in code with the engine's pen and the cast of
-props below -- the crayon look (`SK.setStyle('crayon')`), or `SK.setStyle('clean')` for crisp
+The look is **hand-drawn**: everything is drawn in code with the engine's pen and the props
+below -- the crayon look (`SK.setStyle('crayon')`), or `SK.setStyle('clean')` for crisp
 editorial line art -- on a ground you choose, in a place you build.
 
 ## FILES
@@ -10,7 +10,8 @@ editorial line art -- on a ground you choose, in a place you build.
 ## DIRECTION
 - the place and the time of day: where this happens, and what fills the frame there;
 - the ground (below) and the style, crayon or clean;
-- who is in it: the film's own characters, drawn for it, or the cast's when they fit;
+- who is in it: the person's own cast (cast/) when this continues their films, characters drawn
+  for this film, or the props' (`P.kid`, `P.person`) when they fit;
 
 ## STEPS
 1. Decide the idea and the direction (above): one clear point, told in the film's length -- a
@@ -70,7 +71,7 @@ editorial line art -- on a ground you choose, in a place you build.
   never an empty stage waiting for it. Nothing holds still for more than about 3 s: keep a slow
   camera drift or push, a character's small action, something drawing on.
 - **Characters give a film its charm.** Draw the film's own -- an animal, an object with a face
-  (`P.face.eyes`, `P.face.mouth`) -- or use the cast's (`P.kid`, `P.person`) when they fit. Props
+  (`P.face.eyes`, `P.face.mouth`) -- or use the props' (`P.kid`, `P.person`) when they fit. Props
   are drawn at a fixed design size and scaled uniformly.
 - Never open on a blank page: start first draw-ons at about 20% (`clamp(.2 + .8 * E.out(...))`)
   so frame 0 already shows the pen at work -- and the place is there from the first frame.
