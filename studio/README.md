@@ -22,11 +22,16 @@ python studio/test_sched.py                     # the scheduler's pools
 python studio/test_isolation.py                 # names, the gate, secrets, the offline renderer, process kill
 python studio/test_direction.py                 # one cached prompt per look, a film's choices, the recent note
 python studio/test_server.py                    # the API end to end, 3 films at once, Claude stubbed out, no cost
+python studio/test_media.py                     # the copy online, against a stand-in for Azure
 ```
 
 `serve.ps1` writes the tunnel URL to `STUDIO_HOME\url.txt` and to MongoDB `kitcut.studio_hosts`.
 A quick tunnel gets a **new random URL each time the tunnel starts**, and it has no uptime
-guarantee. The machine must stay on and awake.
+guarantee (on 2026-09-27 one kept running while its host name stopped resolving, and the site
+said "offline" until the tunnel was restarted). A **named tunnel** keeps one address: set
+`STUDIO_TUNNEL` (the tunnel's UUID; its credentials in `~\.cloudflared\<uuid>.json`) and
+`STUDIO_TUNNEL_HOST` (e.g. `studio.kitcut.ai`) in `.env`, and `serve.ps1` runs it instead. The
+machine must stay on and awake.
 
 ## Where things live
 
@@ -166,6 +171,26 @@ writes), pictures join the manifest's `images` as `upload1...`, and the first me
 with the instruction to look at each and say what it took it to be; a film nobody typed a word for
 gets its title from Claude (`name_film`). Pictures film.js never draws leave the manifest before
 the final render, so they never reach the film's files.
+
+`GET /api/uploads` lists the asker's uploads no film has taken yet, newest first, each with
+`expires_in` seconds (the assistants' `list_uploads`).
+
+**Link-only films.** `"listed": false` in the film request keeps the film out of the gallery
+(`GET /api/films`); the site also keeps it out of its sitemap and marks its page noindex. Its page
+and link still work. `POST /api/films/<id>/listed {"listed": true|false}` lets the film's own
+client switch it. `hidden` stays the operator's switch, separate from this. Films the site makes
+for an assistant (its MCP server) come with `X-Source: mcp` and `X-App: <Claude|ChatGPT|...>`,
+trusted like `X-Priority`, and are link-only unless the person asked for public; the record
+keeps `source`, `app` and `listed`.
+
+**Copies online** (`media.py`). A finished film's `film.mp4`, poster, link-preview card and
+subtitles are copied to Azure blob storage (account `kitcutst`, container `films`, anonymous read,
+`<id>/<file>`) as its last stage, "online", with a container SAS on the stored access policy
+`studio-upload` (`STUDIO_MEDIA_BASE`, `STUDIO_MEDIA_SAS` in `.env`). The record keeps the URLs as
+`media`; status and the gallery then hand those out instead of signed tunnel URLs, so a film plays
+while this machine is off. A copy that fails leaves the film as it was. `python studio/media.py
+--backfill` copies earlier films; `--film <id>` one; `--delete <id>` removes one. Never use the
+container `media`: the catalog site's `upload-media.py` prunes it of anything not its own.
 
 **Publishing to YouTube** (`youtube.py`). The public site holds each person's channel grants and
 opens a resumable upload session with YouTube for the film. The studio gets only that session's

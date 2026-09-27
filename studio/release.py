@@ -42,6 +42,7 @@ TESTS = (
     "test_direction.py",
     "test_library.py",
     "test_youtube.py",
+    "test_media.py",
 )
 
 
