@@ -29,6 +29,7 @@ import server  # noqa: E402 -- imports agent, which imports _env first
 import agent  # noqa: E402
 import film as films  # noqa: E402
 import store  # noqa: E402
+import validate  # noqa: E402
 from sched import Sched  # noqa: E402
 
 from aiohttp.test_utils import TestClient, TestServer  # noqa: E402

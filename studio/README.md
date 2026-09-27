@@ -1,7 +1,7 @@
 # Sketch Studio
 
 One prompt in, and Claude writes, reviews and scores a **short hand-drawn (or painted) film** on
-the kitcut sketch engine, narrated, 5 s to 2 minutes. It's a JSON API for an app backend, plus a page with
+the kitcut sketch engine, narrated, 5 s to 8 minutes. It's a JSON API for an app backend, plus a page with
 one prompt box. It runs on this machine, is reachable from outside through a Cloudflare quick
 tunnel, and **makes several films at once**, each in a sandbox of its own.
 
@@ -87,15 +87,15 @@ They share the machine through the scheduler (`sched.py`), first come, first ser
 | `browser` | 4 | review stills take 1, the final render 3 |
 | `cpu` | 2 | the voice (Whisper, on the CPU: the GPU stays the renderer's) and the mix |
 
-Time a film spends waiting for the machine does not count against its Claude time (15 minutes up
-to 15 s of film, more for a longer one: `film.limits()`). The page says what a film is waiting
+Time a film spends waiting for the machine does not count against its Claude time (20 minutes up
+to 15 s of film, more for a longer one -- 136 minutes at 8 minutes: `film.limits()`). The page says what a film is waiting
 for ("Waiting for the renderer: 1 film ahead"). A film sent with `X-Priority: 1` (the site's
 plans with priority) joins every queue ahead of the films without it, first come first served
 among its own.
 
 ## The public site
 
-The public site is https://create.kitcut.ai, from
+The public site is https://kitcut.ai (create.kitcut.ai redirects there), from
 [kitcut-hq/sketch-studio](https://github.com/kitcut-hq/sketch-studio) on Vercel:
 - It serves a copy of `index.html`; keep the two the same.
   - The page carries the site's sign-in UI and its credit line: what a film costs (one credit a
@@ -103,8 +103,8 @@ The public site is https://create.kitcut.ai, from
   - Both appear only where `/api/me` answers, which is on the site and not here. On this
     server (token filled in) and through the bare tunnel (token form), the page works as it
     always has, and the slider is just a length from 5 to 60 s. On the site it runs to the
-    plan's longest film (Pro: 2:00; `max_length` in the site's `lib/plans.js`, within `LENGTHS`
-    here), and the rest of the track up to 5:00 is drawn but locked.
+    plan's longest film (Pro: 8:00; `max_length` in the site's `lib/plans.js`, within `LENGTHS`
+    here), and the rest of the track up to 8:00 is drawn but locked.
 - It looks the tunnel URL up in `kitcut.studio_hosts`, so a restart needs no redeploy.
 - **Anyone may watch there, but making (or stopping) a film needs an account** (Google, or a
   one-time link by email, sent through SendGrid from `hello@kitcut.ai`).
@@ -120,10 +120,10 @@ The public site is https://create.kitcut.ai, from
 - `serve.ps1 -Stop` marks the studio offline there.
 
 Limits on everything that reaches the studio, checked and taken together under one lock:
-- **A day's spend:** `STUDIO_DAILY_USD`, default $25, counting a reserve for every film still
+- **A day's spend:** `STUDIO_DAILY_USD`, default $100, counting a reserve for every film still
   being made: at least `STUDIO_RESERVE_USD` ($1.50), more for a longer film ($0.35 + $0.06 a
   second).
-- **Lengths:** 5-120 s in 5 s steps. Who may ask for what (over a minute is Pro) is the site's
+- **Lengths:** 5-480 s in 5 s steps. Who may ask for what (over a minute is Pro) is the site's
   business; so are its plans and credits.
 - **One film in the making per client**, and `STUDIO_PER_CLIENT_DAILY` (default 5) a day.
 
@@ -141,7 +141,7 @@ curl -s -X POST $BASE/api/films -H "Authorization: Bearer $TOKEN" \
 # 202 {"id": "studio-20260925-131102-k3f9qa", "status": "queued|running", "position": 0, "status_url": "..."}
 
 curl -s "$BASE/api/films/studio-20260925-131102-k3f9qa?since=0" -H "Authorization: Bearer $TOKEN"
-# {"status": "queued|running|done|error|cancelled", "stage": "claude|sound|render",
+# {"status": "queued|running|done|error|cancelled|lost", "stage": "queue|claude|sound|render|cast|online",
 #  "wait": "Waiting for the renderer -- 1 film ahead", "position" (queued), "elapsed_s", "cost_usd",
 #  "events": [...new since `since`], "next": <pass as since next time>,
 #  when done: "video_url", "poster_url", "seconds", "stages", "tokens", "turns"; on error: "error"}
@@ -154,8 +154,11 @@ curl -s $BASE/api/health                                      # running, queued,
 ```
 
 **Poll the status, every 2-5 s.** There is no push, because quick tunnels do not carry
-server-sent events. A film takes about 3-6 minutes, most of it Claude. The prompt is capped at
-12000 characters.
+server-sent events. A 10 s film takes about 8-12 minutes, a minute-long one about half an hour,
+most of it Claude (the site's `estimateMinutes`). The prompt is capped at 12000 characters.
+`GET /api/limits` (no token) lists the limits a person can meet, with no money in it: the
+site's docs (kitcut.ai/docs) are built from it, so a change to a limit here means rebuilding
+them (`npm run docs` in sketch-studio).
 
 **Pictures and voice notes** (`uploads.py`). The page uploads each one as it is attached
 (`POST /api/uploads`, the raw bytes), and a film request names them (`"attachments": [ids]`); a

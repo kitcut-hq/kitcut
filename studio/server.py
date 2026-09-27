@@ -16,7 +16,7 @@ opened on this machine; through the tunnel it asks.
 Films run side by side (STUDIO_PARALLEL Claude sessions, default 3), each in its own folder under
 STUDIO_HOME with its own Claude session, and share the machine through the scheduler (sched.py);
 the rest wait their turn, up to STUDIO_MAX_QUEUE (default 5) of them. Anyone can reach this
-through the public site, so the day's spend is capped (STUDIO_DAILY_USD, default 25, counting
+through the public site, so the day's spend is capped (STUDIO_DAILY_USD, default 100, counting
 a reserve for every film still being made, by its length), and each client -- the account the site
 forwards as X-Client-Ip "u:<id>", else the IP -- may have one film in the making and
 STUDIO_PER_CLIENT_DAILY (default 5) a day.
