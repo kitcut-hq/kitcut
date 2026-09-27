@@ -23,6 +23,18 @@ changed since the film got it, becomes a new version; a failed or cancelled film
 
 Only signed-in people have a library (the site's `u:<id>` clients): a visitor known only by an
 address could share one with a stranger.
+
+A project on the site (a series, a channel) has a library of its own, inside its person's:
+
+    STUDIO_HOME\\library\\<sha256(client)[:20]>\\<project id>\\
+        index.json cast\\ cast.png films\\      as above, for the project's episodes only
+        pictures\\<name>.png|jpg|webp           what the person put in the project: a logo,
+        pictures\\<name>.thumb.png              character art... every episode gets them as
+                                               inputs/pic_<name>.*, SK.image('pic_<name>')
+
+An episode seeds from and keeps into its project's library, never the person's own; a film outside
+projects, the other way round. A library is named (client, project), project None for the
+person's own; a bare client names that one too.
 """
 
 import os
@@ -30,9 +42,10 @@ import re
 import json
 import shutil
 import hashlib
+import threading
 from datetime import datetime
 
-from film import CAST_USE, HOME, Film, _write_json
+from film import CAST_USE, HOME, PROJECT_ID, Film, _write_json
 
 ROOT = os.path.join(HOME, "library")
 NAME = re.compile(r"^[a-z][a-z0-9_]{0,30}$")
@@ -42,15 +55,42 @@ MEMORY = 5  # earlier films a film may look at
 LISTED = 20  # film ids the index remembers
 MAX_BYTES = 64 * 1024  # one member's code
 FILES = ("film.js", "vo.json", "score.json", "sfx.json", "paint.json")
+PICTURES = 6  # a project's pictures: every review render carries them all
+PICTURE_EXT = ("png", "jpg", "webp")
+_LOCKS = {}  # a library's folder -> the lock its index is changed under
+_LOCKS_LOCK = threading.Lock()
 
 
-def owner(client):
-    """Whose library a film of this client's uses: a signed-in person's, else none."""
-    return client if isinstance(client, str) and client.startswith("u:") else None
+def owner(client, project=None):
+    """Which library a film or a request uses: (client, project) for a signed-in person, project
+    None for their own; None for anyone else, or a project id that is not one."""
+    if not (isinstance(client, str) and client.startswith("u:")):
+        return None
+    if project is not None and not (isinstance(project, str) and PROJECT_ID.match(project)):
+        return None
+    return (client, project)
 
 
-def dir_of(client):
-    return os.path.join(ROOT, hashlib.sha256(client.encode()).hexdigest()[:20])
+def lib_of(rec):
+    """The library of the film with this record: its project's, or its person's."""
+    return owner(rec.get("client"), (rec.get("project") or {}).get("id"))
+
+
+def _lib(lib):
+    return (lib, None) if isinstance(lib, str) else lib
+
+
+def dir_of(lib):
+    client, project = _lib(lib)
+    d = os.path.join(ROOT, hashlib.sha256(client.encode()).hexdigest()[:20])
+    return os.path.join(d, project) if project else d
+
+
+def _lock(lib):
+    """The library's own lock: a film keeping its cast and the person removing a member (or a
+    picture) at the same moment must not each write an index the other has not seen."""
+    with _LOCKS_LOCK:
+        return _LOCKS.setdefault(dir_of(lib), threading.Lock())
 
 
 def _hash(code):
@@ -70,24 +110,30 @@ def _about(code):
     return " ".join(m.group(2).split())[:200] if m else ""
 
 
-def load(client):
-    """The person's index; one that has never been written starts from their finished films."""
+def load(lib):
+    """The library's index. A person's that has never been written starts from their finished
+    films outside projects (made before there were libraries); a project's starts empty."""
+    client, project = _lib(lib)
     try:
-        with open(os.path.join(dir_of(client), "index.json"), encoding="utf-8") as f:
+        with open(os.path.join(dir_of(lib), "index.json"), encoding="utf-8") as f:
             idx = json.load(f)
     except (OSError, ValueError):
         idx = {}
     idx.setdefault("cast", {})
-    if "films" not in idx:  # made before there were libraries: their films still count
-        idx["films"] = [
-            f.id for f in Film.all() if f.record().get("client") == client and f.state == "done"
-        ][:LISTED]
+    idx.setdefault("pictures", {})
+    if "films" not in idx:
+        idx["films"] = []
+        for f in [] if project else Film.all():
+            rec = f.record()
+            if rec.get("client") == client and not rec.get("project") and f.state == "done":
+                idx["films"].append(f.id)
+        idx["films"] = idx["films"][:LISTED]
     return idx
 
 
-def _save(client, idx):
-    os.makedirs(dir_of(client), exist_ok=True)
-    _write_json(os.path.join(dir_of(client), "index.json"), idx)
+def _save(lib, idx):
+    os.makedirs(dir_of(lib), exist_ok=True)
+    _write_json(os.path.join(dir_of(lib), "index.json"), idx)
 
 
 def used(film):
@@ -106,9 +152,9 @@ def _slug(text):
     return re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")[:32] or "film"
 
 
-def _poster(client, f):
+def _poster(lib, f):
     """A small poster of an earlier film (cached in the library), or None."""
-    out = os.path.join(dir_of(client), "films", f.id + ".jpg")
+    out = os.path.join(dir_of(lib), "films", f.id + ".jpg")
     if os.path.exists(out):
         return out
     src = f.path("outputs", "film_poster.png")
@@ -127,15 +173,55 @@ def _poster(client, f):
         return None
 
 
+def _bring_account_cast(lib):
+    """A project that asked for it starts with its person's own cast (from their films outside
+    projects): each live member's latest version joins the project's, once. Under the lock."""
+    idx = load(lib)
+    if idx.get("imported"):
+        return
+    mine = (lib[0], None)
+    theirs, src = load(mine), dir_of(mine)
+    now = datetime.now().isoformat(timespec="seconds")
+    for n, e in theirs["cast"].items():
+        code = os.path.join(src, "cast", n, "v%d.js" % e.get("version", 0))
+        if e.get("deleted") or n in idx["cast"] or not os.path.exists(code):
+            continue
+        md = os.path.join(dir_of(lib), "cast", n)
+        os.makedirs(md, exist_ok=True)
+        shutil.copyfile(code, os.path.join(md, "v1.js"))
+        thumb = os.path.join(src, "cast", n, "thumb.png")
+        if os.path.exists(thumb):
+            shutil.copyfile(thumb, os.path.join(md, "thumb.png"))
+        idx["cast"][n] = {
+            "version": 1,
+            "hash": e["hash"],
+            "about": e.get("about", ""),
+            "films": [],
+            "created": now,
+            "updated": now,
+            "from_film": e.get("from_film"),
+            "thumb": os.path.exists(thumb),
+            "brought": True,  # from the person's own cast
+        }
+    idx["imported"] = now
+    _save(lib, idx)
+    _contact(lib, idx)
+
+
 def seed(film):
-    """Give a new film the person's library: their cast in cast/, their sheet and earlier films
-    in library/. What it got goes into the film's record (library), for note() and keep().
-    Returns that, or None when the film's client has no library."""
-    client = owner(film.record().get("client"))
-    if not client or not os.path.isdir(film.path("cast")):
+    """Give a new film its library (its project's, or its person's): the cast in cast/, the
+    sheet and earlier films in library/, a project's pictures in inputs/. What it got goes into
+    the film's record (library), for note() and keep(). Returns that, or None when the film's
+    client has no library."""
+    rec = film.record()
+    lib = lib_of(rec)
+    if not lib or not os.path.isdir(film.path("cast")):
         return None
-    idx = load(client)
-    d = dir_of(client)
+    if lib[1] and (rec.get("project") or {}).get("from_account_cast"):
+        with _lock(lib):
+            _bring_account_cast(lib)
+    idx = load(lib)
+    d = dir_of(lib)
     members = sorted(
         ((n, e) for n, e in idx["cast"].items() if not e.get("deleted")),
         key=lambda x: x[1].get("last_used") or x[1].get("updated") or "",
@@ -156,10 +242,10 @@ def seed(film):
                 "last_used": e.get("last_used") or e.get("updated"),
             }
         )
-    lib = film.path("library")
+    into = film.path("library")
     if cast and os.path.exists(os.path.join(d, "cast.png")):
-        os.makedirs(lib, exist_ok=True)
-        shutil.copyfile(os.path.join(d, "cast.png"), os.path.join(lib, "cast.png"))
+        os.makedirs(into, exist_ok=True)
+        shutil.copyfile(os.path.join(d, "cast.png"), os.path.join(into, "cast.png"))
     memory = []
     for fid in idx["films"]:
         if len(memory) >= MEMORY:
@@ -170,12 +256,12 @@ def seed(film):
         rec = f.record()
         title = rec.get("title") or rec.get("prompt") or ""
         sub = "%d-%s" % (len(memory) + 1, _slug(title))
-        out = os.path.join(lib, "films", sub)
+        out = os.path.join(into, "films", sub)
         os.makedirs(out, exist_ok=True)
         for name in FILES:
             if os.path.exists(f.path(name)):
                 shutil.copyfile(f.path(name), os.path.join(out, name))
-        poster = _poster(client, f)
+        poster = _poster(lib, f)
         if poster:
             shutil.copyfile(poster, os.path.join(out, "poster.jpg"))
         about = {
@@ -189,31 +275,74 @@ def seed(film):
         _write_json(os.path.join(out, "about.json"), about)
         memory.append({"dir": "library/films/" + sub, "poster": bool(poster)} | about)
     got = {"cast": cast, "films": memory}
+    if lib[1]:
+        got["pictures"] = _seed_pictures(film, lib, idx)
     film.update(library=got)
     return got
 
 
+def _seed_pictures(film, lib, idx):
+    """A project's pictures into the film's inputs/, each in the manifest's images as
+    pic_<name> (never a painted scene's name, nor an upload's). [{name, file, w, h}]"""
+    out = []
+    for n, e in sorted(idx["pictures"].items()):
+        src = os.path.join(dir_of(lib), "pictures", "%s.%s" % (n, e["ext"]))
+        if not os.path.exists(src):
+            continue
+        os.makedirs(film.path("inputs"), exist_ok=True)
+        rel = "inputs/pic_%s.%s" % (n, e["ext"])
+        shutil.copyfile(src, film.path(*rel.split("/")))
+        out.append({"name": "pic_" + n, "file": rel, "w": e.get("w"), "h": e.get("h")})
+    if out:
+        with open(film.manifest, encoding="utf-8") as f:
+            m = json.load(f)
+        m.setdefault("images", {}).update({p["name"]: p["file"] for p in out})
+        _write_json(film.manifest, m)
+    return out
+
+
 def note(film):
-    """What the film has from the person's library, for the first message ("" when nothing)."""
-    got = film.record().get("library") or {}
+    """What the film has from its library, for the first message ("" when nothing). An
+    episode also hears its project's name and brief, in its person's words."""
+    rec = film.record()
+    got = rec.get("library") or {}
+    project = rec.get("project") or {}
     cast, memory = got.get("cast") or [], got.get("films") or []
-    if not cast and not memory:
+    pics = got.get("pictures") or []
+    if not cast and not memory and not project:
         return ""
     out = []
+    if project:
+        out.append('This film is an episode of the project "%s".' % project.get("name"))
+        if (project.get("brief") or "").strip():
+            out.append("Its brief, from the person who runs it:\n" + project["brief"].strip())
+    if pics:
+        out += [
+            "" if out else None,
+            "The project's pictures (Read one to see it; on screen: SK.image('<name>', x, y, w)):",
+        ]
+        out += ["- %s (%sx%s): %s" % (p["name"], p.get("w"), p.get("h"), p["file"]) for p in pics]
     if cast:
-        out.append(
-            "This person's cast, from their earlier films (already loaded from cast/: use any as "
-            "SK.cast.<name>, change it, or leave it out; Read library/cast.png to see them):"
-        )
+        out += [
+            "" if out else None,
+            "This %s (already loaded from cast/: use any as SK.cast.<name>, change it, or leave "
+            "it out; Read library/cast.png to see them):"
+            % (
+                "project's cast, from its earlier episodes"
+                if project
+                else "person's cast, from their earlier films"
+            ),
+        ]
         for c in cast:
             n = c.get("films") or 0
             seen = "in %d film%s" % (n, "" if n == 1 else "s") if n else "not used yet"
             out.append("- %s: %s (%s)" % (c["name"], c.get("about") or "no description", seen))
     if memory:
         out += [
-            "" if cast else None,
-            "Their earlier films, newest first (Read <folder>/about.json, film.js, vo.json, "
-            "score.json or poster.jpg for more):",
+            "" if out else None,
+            "%s, newest first (Read <folder>/about.json, film.js, vo.json, score.json or "
+            "poster.jpg for more):"
+            % ("Its earlier episodes" if project else "Their earlier films"),
         ]
         for m in memory:
             dr = m.get("direction") or {}
@@ -233,11 +362,24 @@ def note(film):
             out.append(
                 '- %s: "%s" (%s)' % (m["dir"], m.get("title"), "; ".join(b for b in bits if b))
             )
-    out += [
-        "",
-        "If this film continues one of theirs, keep what makes it the same series (the cast, the "
-        "look, the voice, the music); if it is a new idea, make it its own film.",
-    ]
+    if project and memory:
+        out += [
+            "",
+            "An episode belongs with the others: keep what makes them one series (the cast, the "
+            "look, the voice, the music), unless the prompt asks for something new.",
+        ]
+    elif project:
+        out += [
+            "",
+            "It is the project's first episode: what you choose now is what its next episodes "
+            "will have to keep.",
+        ]
+    else:
+        out += [
+            "",
+            "If this film continues one of theirs, keep what makes it the same series (the cast, "
+            "the look, the voice, the music); if it is a new idea, make it its own film.",
+        ]
     return "\n".join(x for x in out if x is not None)
 
 
@@ -267,7 +409,7 @@ def changes(film):
     """The members the film has that its person's library does not: new ones, and ones changed
     since the film got them. [{name, code, hash, about}]; [] when the film has no library."""
     rec = film.record()
-    if not owner(rec.get("client")) or not os.path.isdir(film.path("cast")):
+    if not lib_of(rec) or not os.path.isdir(film.path("cast")):
         return []
     had = {c["name"]: c["hash"] for c in (rec.get("library") or {}).get("cast") or []}
     out = []
@@ -347,11 +489,11 @@ def thumbs(film, names):
     return out
 
 
-def _contact(client, idx):
+def _contact(lib, idx):
     """Every member on one sheet, named: cast.png."""
     from PIL import Image, ImageDraw, ImageFont
 
-    d = dir_of(client)
+    d = dir_of(lib)
     names = [n for n, e in sorted(idx["cast"].items()) if not e.get("deleted")]
     p = os.path.join(d, "cast.png")
     if not names:
@@ -384,13 +526,17 @@ def _contact(client, idx):
 def keep(film, items, pictures=None):
     """Take in what a finished film made: its new and changed members (changes()) as new
     versions, with their thumbnails (thumbs()); the film joins the members it used and the
-    person's films. Returns {"saved": [...], "used": [...]}, or None without a library."""
-    client = owner(film.record().get("client"))
-    if not client:
+    library's films. Returns {"saved": [...], "used": [...]}, or None without a library."""
+    lib = lib_of(film.record())
+    if not lib:
         return None
-    pictures = pictures or {}
-    idx = load(client)
-    d = dir_of(client)
+    with _lock(lib):
+        return _keep(film, lib, items, pictures or {})
+
+
+def _keep(film, lib, items, pictures):
+    idx = load(lib)
+    d = dir_of(lib)
     now = datetime.now().isoformat(timespec="seconds")
     saved = []
     for it in items:
@@ -430,19 +576,20 @@ def keep(film, items, pictures=None):
             e["films"] = ([film.id] + [x for x in e.get("films") or [] if x != film.id])[:LISTED]
             e["last_used"] = now
     idx["films"] = ([film.id] + [x for x in idx["films"] if x != film.id])[:LISTED]
-    _save(client, idx)
+    _save(lib, idx)
     if saved:
-        _contact(client, idx)
-    _poster(client, film)
+        _contact(lib, idx)
+    _poster(lib, film)
     return {"saved": saved, "used": [n for n in names if n in idx["cast"]]}
 
 
 # ---------------------------------------------------------------- what the person sees
-def listing(client):
-    """The person's cast and films, as the site may show them."""
-    if not owner(client):
+def listing(client, project=None):
+    """The library's cast and films (and a project's pictures), as the site may show them."""
+    lib = owner(client, project)
+    if not lib:
         return {"cast": [], "films": []}
-    idx = load(client)
+    idx = load(lib)
     cast = [
         {
             "name": n,
@@ -455,28 +602,118 @@ def listing(client):
         for n, e in sorted(idx["cast"].items())
         if not e.get("deleted")
     ]
-    return {"cast": cast, "films": idx["films"]}
+    out = {"cast": cast, "films": idx["films"]}
+    if project:
+        out["pictures"] = [
+            {"name": n} | {k: e.get(k) for k in ("w", "h", "added")}
+            for n, e in sorted(idx["pictures"].items())
+        ]
+    return out
 
 
-def thumb_of(client, name):
+def thumb_of(client, name, project=None):
     """The path of a member's thumbnail, or None."""
-    if not owner(client) or not NAME.match(name or ""):
+    lib = owner(client, project)
+    if not lib or not NAME.match(name or ""):
         return None
-    e = load(client)["cast"].get(name)
-    p = os.path.join(dir_of(client), "cast", name, "thumb.png")
+    e = load(lib)["cast"].get(name)
+    p = os.path.join(dir_of(lib), "cast", name, "thumb.png")
     return p if e and not e.get("deleted") and os.path.exists(p) else None
 
 
-def delete(client, name):
-    """Take a member out of the person's next films (its files stay, for an undo). False when
+def delete(client, name, project=None):
+    """Take a member out of the library's next films (its files stay, for an undo). False when
     there is no such member."""
-    if not owner(client) or not NAME.match(name or ""):
+    lib = owner(client, project)
+    if not lib or not NAME.match(name or ""):
         return False
-    idx = load(client)
-    e = idx["cast"].get(name)
-    if not e or e.get("deleted"):
-        return False
-    e["deleted"] = datetime.now().isoformat(timespec="seconds")
-    _save(client, idx)
-    _contact(client, idx)
+    with _lock(lib):
+        idx = load(lib)
+        e = idx["cast"].get(name)
+        if not e or e.get("deleted"):
+            return False
+        e["deleted"] = datetime.now().isoformat(timespec="seconds")
+        _save(lib, idx)
+        _contact(lib, idx)
     return True
+
+
+# ---------------------------------------------------------------- a project's pictures
+class PictureError(Exception):
+    """Why a picture was not taken: a status for the answer, and words for a person."""
+
+    def __init__(self, status, text):
+        super().__init__(text)
+        self.status, self.text = status, text
+
+
+def add_picture(client, project, name, src, ext):
+    """Put a picture (an upload's file, checked by uploads.receive) into a project, under a name
+    (the film's SK.image('pic_<name>')); the same name again replaces it. Returns its entry."""
+    lib = owner(client, project)
+    if not lib or not project:
+        raise PictureError(404, "No such project.")
+    if not NAME.match(name or ""):
+        raise PictureError(
+            400, "A picture's name is lowercase letters, digits and _, starting with a letter."
+        )
+    if ext not in PICTURE_EXT:
+        raise PictureError(400, "A picture is a PNG, JPEG or WebP.")
+    from PIL import Image
+
+    with _lock(lib):
+        idx = load(lib)
+        if name not in idx["pictures"] and len(idx["pictures"]) >= PICTURES:
+            raise PictureError(409, "A project holds up to %d pictures." % PICTURES)
+        d = os.path.join(dir_of(lib), "pictures")
+        os.makedirs(d, exist_ok=True)
+        _remove_picture(d, name)
+        shutil.copyfile(src, os.path.join(d, "%s.%s" % (name, ext)))
+        try:
+            with Image.open(src) as im:
+                w, h = im.size
+                im.thumbnail((480, 480))
+                im.save(os.path.join(d, name + ".thumb.png"))
+        except (OSError, ValueError) as e:
+            _remove_picture(d, name)
+            raise PictureError(400, "That picture could not be read.") from e
+        idx["pictures"][name] = {
+            "ext": ext,
+            "w": w,
+            "h": h,
+            "added": datetime.now().isoformat(timespec="seconds"),
+        }
+        _save(lib, idx)
+        return {"name": name} | idx["pictures"][name]
+
+
+def _remove_picture(d, name):
+    for ext in (*PICTURE_EXT, "thumb.png"):
+        try:
+            os.remove(os.path.join(d, "%s.%s" % (name, ext)))
+        except OSError:
+            pass
+
+
+def delete_picture(client, project, name):
+    """Take a picture out of a project, files and all. False when there is no such picture."""
+    lib = owner(client, project)
+    if not lib or not project or not NAME.match(name or ""):
+        return False
+    with _lock(lib):
+        idx = load(lib)
+        if name not in idx["pictures"]:
+            return False
+        del idx["pictures"][name]
+        _remove_picture(os.path.join(dir_of(lib), "pictures"), name)
+        _save(lib, idx)
+    return True
+
+
+def picture_thumb(client, project, name):
+    """The path of a project picture's thumbnail, or None."""
+    lib = owner(client, project)
+    if not lib or not project or not NAME.match(name or ""):
+        return None
+    p = os.path.join(dir_of(lib), "pictures", name + ".thumb.png")
+    return p if name in load(lib)["pictures"] and os.path.exists(p) else None

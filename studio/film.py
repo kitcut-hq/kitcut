@@ -10,6 +10,9 @@
         library\\                                        their earlier films, the cast drawn (read)
         audio\\ images\\ outputs\\ temp\\                    what the pipeline makes
 
+projects\\ is where films live (a name from before the site had projects). A film's "project" in
+its record is the site's: a series or a channel the person makes it for, with its own library.
+
 Several films are made at once, each by its own Claude session, so nothing a film does may reach
 outside its folder: Claude's cwd is the folder, it may read only inside it (readable) and write
 only its own files there (writable), and every pipeline step runs on its manifest with TEMP
@@ -75,6 +78,9 @@ VO_PINNED = {"tts": "gemini", "takes": 1, "lead": 0.5, "gap": 0.35}
 STATES = ("queued", "claude", "finishing", "done", "error", "cancelled", "interrupted")
 ACTIVE = ("queued", "claude", "finishing")
 ID = re.compile(r"^studio-\d{8}-\d{6}(-[a-z2-7]{6})?$")
+# a project on the site (a series, a channel): its id, and how long its brief may be
+PROJECT_ID = re.compile(r"^p-[a-z2-7]{10}$")
+BRIEF_MAX = 2000
 _B32 = "abcdefghijklmnopqrstuvwxyz234567"
 
 
@@ -312,6 +318,7 @@ class Film:
         auth="api",
         branding=False,
         attachments=(),
+        project=None,
     ):
         """A new film's folder: the manifest (its length set), the engine copy, an empty
         narration, an empty list of paintings for a painted film, and its record.
@@ -319,7 +326,10 @@ class Film:
         attachments: what the visitor attached (uploads.take), each meta with its file as "src",
         copied into inputs/. A picture becomes upload1.jpg... and joins the manifest's images
         under that name, so film.js can draw it with SK.image('upload1', ...); a voice note
-        becomes voice1..., with its words in the record."""
+        becomes voice1..., with its words in the record.
+
+        project: the site's project the film is an episode of, {id, name, brief,
+        from_account_cast}, checked by the caller; its library is the project's (library.py)."""
         seconds = seconds if seconds in LENGTHS else LENGTHS[0]
         look = look if look in LOOKS else LOOKS[0]
         projects = os.path.join(HOME, "projects")
@@ -387,6 +397,8 @@ class Film:
                 "branding": bool(branding),
                 # pictures and voice notes the visitor attached (inputs/): never shown publicly
                 "attachments": attached,
+                # the project it is an episode of (never shown publicly: the brief is theirs)
+                **({"project": project} if project else {}),
                 "release": RELEASE,
                 "state": "queued",
                 "created": datetime.now().isoformat(timespec="seconds"),

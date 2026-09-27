@@ -264,10 +264,170 @@ def main():
         G = Film.create("carol's next", 5, "drawn", client="u:carol")
         got = library.seed(G)
         check(len(got["films"]) == 1 and got["cast"] == [], "and are remembered")
+
+        projects(check)
     finally:
         shutil.rmtree(HOME, ignore_errors=True)
     print("%d failed" % len(bad))
     sys.exit(1 if bad else 0)
+
+
+P1, P2 = "p-aaaaaaaaaa", "p-bbbbbbbbbb"
+OWL = (
+    "SK.cast.owl = { about: 'Olga, a wise grey owl', draw(x, y, o = {}) {\n"
+    "  SK.wash(SK.S.ellC(x, y - 60, 50, 60), '#888');\n} };\n"
+)
+
+
+def episode(prompt, project=P1, client="u:alice", bring=False):
+    return Film.create(
+        prompt,
+        5,
+        "drawn",
+        client=client,
+        project={
+            "id": project,
+            "name": "Olga's Forest",
+            "brief": "A bedtime series for 4-year-olds. Calm narrator, soft piano.",
+            "from_account_cast": bring,
+        },
+    )
+
+
+def projects(check):
+    """A project's library: its own cast, episodes and pictures, apart from the person's."""
+    from PIL import Image
+
+    check(library.owner("u:alice", "p-nope") is None, "a project id that is not one: no library")
+    check(library.owner("1.2.3.4", P1) is None, "nor for a visitor without an account")
+    before = library.load("u:alice")
+    # ------------------------------------------------ pictures
+    logo = os.path.join(HOME, "logo.png")
+    Image.new("RGBA", (800, 400), (200, 40, 40, 255)).save(logo)
+    e = library.add_picture("u:alice", P1, "logo", logo, "png")
+    check(e["w"] == 800 and e["h"] == 400, "a picture joins the project")
+    check(library.picture_thumb("u:alice", P1, "logo"), "with a thumbnail")
+    check(library.picture_thumb("u:bob", P1, "logo") is None, "which only its person sees")
+    for bad, status in (("Logo", 400), ("1x", 400)):
+        try:
+            library.add_picture("u:alice", P1, bad, logo, "png")
+            check(False, "a bad name refused: %s" % bad)
+        except library.PictureError as err:
+            check(err.status == status, "a bad name refused: %s" % bad)
+    for i in range(library.PICTURES - 1):
+        library.add_picture("u:alice", P2, "p%d" % i, logo, "png")
+    library.add_picture("u:alice", P2, "p0", logo, "png")  # the same name replaces it
+    library.add_picture("u:alice", P2, "last", logo, "png")
+    try:
+        library.add_picture("u:alice", P2, "one_more", logo, "png")
+        check(False, "at most %d pictures" % library.PICTURES)
+    except library.PictureError as err:
+        check(err.status == 409, "at most %d pictures" % library.PICTURES)
+    check(library.delete_picture("u:alice", P2, "last"), "a picture taken out")
+    check(
+        not library.delete_picture("u:alice", P2, "last")
+        and library.picture_thumb("u:alice", P2, "last") is None,
+        "and gone",
+    )
+    check(
+        [p["name"] for p in library.listing("u:alice", P1)["pictures"]] == ["logo"]
+        and "pictures" not in library.listing("u:alice"),
+        "a project's listing has its pictures; the person's own has none",
+    )
+
+    # ------------------------------------------------ the first episode, bringing the person's cast
+    E1 = episode("Olga meets the moon", bring=True)
+    got = library.seed(E1)
+    check(
+        sorted(c["name"] for c in got["cast"]) == ["kite", "pip"],
+        "a project that asked for it starts with the person's cast",
+    )
+    check(
+        os.path.exists(E1.path("inputs", "pic_logo.png"))
+        and got["pictures"]
+        == [{"name": "pic_logo", "file": "inputs/pic_logo.png", "w": 800, "h": 400}],
+        "and its pictures, in inputs/",
+    )
+    with open(E1.manifest, encoding="utf-8") as f:
+        check(json.load(f)["images"].get("pic_logo") == "inputs/pic_logo.png", "in the manifest")
+    note = library.note(E1)
+    check(
+        'episode of the project "Olga\'s Forest"' in note
+        and "Calm narrator, soft piano." in note
+        and "- pic_logo (800x400): inputs/pic_logo.png" in note
+        and "project's cast" in note
+        and "first episode" in note,
+        "the note names the project, its brief, pictures and cast",
+    )
+    text = agent.ask(E1, [{"look": "drawn", "ground": "paper", "voice": "Kore"}])
+    check(note in text and "the project's brief" in text, "and is in ask()")
+    write(E1, "cast/owl.js", OWL)
+    write(E1, "film.js", scene("SK.cast.owl.draw(0, 0); SK.image('pic_logo', 0, 0, 200);"))
+    check(agent.drop_unused_uploads(E1) == [], "a picture film.js draws stays")
+    kept = finish(E1)
+    check(kept["saved"] == ["owl"], "the episode's new member is kept (%s)" % kept)
+    pidx = library.load(("u:alice", P1))
+    check(pidx["films"] == [E1.id] and "owl" in pidx["cast"], "in the project's library")
+    after = library.load("u:alice")
+    check(
+        "owl" not in after["cast"] and after["films"] == before["films"],
+        "and not in the person's own",
+    )
+
+    # ------------------------------------------------ the next episode
+    E2 = episode("Olga and the first snow")
+    got = library.seed(E2)
+    check(
+        "owl.js" in os.listdir(E2.path("cast")) and len(got["films"]) == 1,
+        "the next episode gets the owl and the first episode",
+    )
+    note = library.note(E2)
+    check(
+        "Its earlier episodes" in note and "belongs with the others" in note,
+        "and hears it is one of a series",
+    )
+    write(
+        E2, "cast/badge.js", "SK.cast.badge = { draw(x, y) { SK.image('pic_logo', x, y, 90); } };\n"
+    )
+    write(E2, "film.js", scene("SK.cast.badge.draw(0, 0);"))
+    check(agent.drop_unused_uploads(E2) == [], "a picture a cast member draws stays")
+    os.remove(E2.path("cast", "badge.js"))
+    write(E2, "film.js", scene(""))
+    library.drop_unused(E2)
+    check(agent.drop_unused_uploads(E2) == ["pic_logo"], "one nothing draws leaves the manifest")
+
+    # ------------------------------------------------ kept apart
+    H = Film.create("alice, outside any project", 5, "drawn", client="u:alice")
+    library.seed(H)
+    check(
+        "owl.js" not in os.listdir(H.path("cast")) and not os.path.exists(H.path("inputs")),
+        "a film outside the project gets none of it",
+    )
+    other = episode("another project", project=P2)
+    got = library.seed(other)
+    check(
+        got["cast"] == [] and got["films"] == [] and len(got["pictures"]) == library.PICTURES - 1,
+        "another project of hers has only its own (%s)" % [p["name"] for p in got["pictures"]],
+    )
+    B = episode("bob names alice's project", client="u:bob")
+    got = library.seed(B)
+    check(
+        got["cast"] == [] and got["pictures"] == [] and got["films"] == [],
+        "the same id from someone else is their own, empty",
+    )
+    check(
+        library.delete("u:alice", "owl", P1) and not library.delete("u:alice", "owl"),
+        "a member leaves the project it is in, not the person's own",
+    )
+    # someone whose films came before libraries: their episodes are not their own films
+    dave = Film.create("dave's film", 5, "drawn", client="u:dave")
+    dave.update(state="done")
+    ep = episode("dave's episode", client="u:dave")
+    ep.update(state="done")
+    check(
+        library.load("u:dave")["films"] == [dave.id], "a person's earlier films leave out episodes"
+    )
+    check(library.load(("u:dave", P1))["films"] == [], "and a project starts from nothing")
 
 
 if __name__ == "__main__":

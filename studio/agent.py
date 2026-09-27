@@ -183,8 +183,9 @@ def ask(film, recent=()):
         )
     )
     text += attached_note(film)
-    mine = library.note(film)  # the person's own cast and earlier films
-    note = recent_note(film.look, recent, series=bool(mine))
+    mine = library.note(film)  # the project, or the person's own cast and earlier films
+    project = bool(film.record().get("project"))
+    note = recent_note(film.look, recent, series=bool(mine), project=project)
     return text + "".join("\n\n" + x for x in (mine, note) if x)
 
 
@@ -234,18 +235,27 @@ def _mmss(s):
     return "%d:%02d" % (int(s) // 60, int(s) % 60)
 
 
+PICTURE = r"upload\d+|pic_[a-z0-9_]+"  # the visitor's pictures, and their project's
+
+
 def drop_unused_uploads(film):
-    """The visitor's pictures that film.js does not draw leave the manifest before the final
-    render, so they are never bundled into the film's files. Returns the names dropped."""
+    """The person's pictures (attached, or their project's) that neither film.js nor the cast
+    draws leave the manifest before the final render, so they are never bundled into the film's
+    files. Returns the names dropped."""
     with open(film.manifest, encoding="utf-8") as f:
         m = json.load(f)
     images = m.get("images") or {}
-    try:
-        with open(film.path("film.js"), encoding="utf-8") as f:
-            used = set(re.findall(r"\bupload\d+\b", f.read()))
-    except OSError:
-        used = set()
-    gone = [k for k in images if re.fullmatch(r"upload\d+", k) and k not in used]
+    code = [film.path("film.js")]
+    if os.path.isdir(film.path("cast")):
+        code += [film.path("cast", n) for n in os.listdir(film.path("cast")) if n.endswith(".js")]
+    used = set()
+    for p in code:
+        try:
+            with open(p, encoding="utf-8") as f:
+                used |= set(re.findall(r"\b(?:%s)\b" % PICTURE, f.read()))
+        except OSError:
+            pass
+    gone = [k for k in images if re.fullmatch(PICTURE, k) and k not in used]
     if gone:
         for k in gone:
             del images[k]
@@ -265,10 +275,11 @@ def recent_films(film, n=8):
     return out
 
 
-def recent_note(look, dirs, series=False):
+def recent_note(look, dirs, series=False, project=False):
     """What recent films chose, counted: 'grounds: paper x5, night'. Only the choices from the
     menus: never what a film was asked, nor its cast (a person's own). series: the person has
-    films of their own (library.note), which a continuation keeps to."""
+    films of their own (library.note), which a continuation keeps to; project: the film is an
+    episode, and its project's brief and episodes come first."""
     if not dirs:
         return ""
 
@@ -296,7 +307,13 @@ def recent_note(look, dirs, series=False):
     return (
         "Recent films made here, by everyone, chose (choose freshly for this prompt; repeat one "
         "only when it clearly calls for it%s):\n"
-        % (", or when it continues one of this person's films above" if series else "")
+        % (
+            ", or when the project's brief or its earlier episodes above do"
+            if project
+            else ", or when it continues one of this person's films above"
+            if series
+            else ""
+        )
         + "\n".join(rows)
     )
 
@@ -772,8 +789,8 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
             await save(film.id, {"state": "finishing"})
         pin_vo(film)  # whatever Claude left there, the backends and models stay the studio's
         pin_paint(film)
-        drop_unused_uploads(film)
         library.drop_unused(film)  # the person's other characters stay out of this film's files
+        drop_unused_uploads(film)  # then the pictures no code left in it draws
         if rec.get("branding"):
             missing = brand(film)
             if missing:
@@ -851,6 +868,9 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
                 "engine_changed": summary.get("engine_changed"),
                 "direction": summary.get("direction"),
                 "cast": summary.get("cast"),  # what the person's library took in (library.py)
+                # again here: the first record is not retried if the database was away
+                "project_id": (film.record().get("project") or {}).get("id"),
+                "title": film.record().get("title"),  # name_film's, when nothing was typed
                 "overtime": summary.get("overtime", False),
                 "finished_at": store.now(),
             } | {
@@ -958,7 +978,7 @@ async def keep_cast(film, tools, emit):
     """After a finished film, the person's library takes in what it made (library.keep): its new
     and changed cast members, each drawn alone for a thumbnail. None when the film's client has
     no library. Never fails the film: what went wrong goes to stderr and the record."""
-    if not library.owner(film.record().get("client")):
+    if not library.lib_of(film.record()):
         return None
     try:
         items = library.changes(film)
@@ -1002,10 +1022,12 @@ def first_record(film, source, client):
             {k: a.get(k) for k in ("kind", "secs", "w", "h") if a.get(k) is not None}
             for a in rec.get("attachments") or []
         ],
-        # what the film got from the person's library (library.seed): counts only
+        # what the film got from its library (library.seed): counts only
         "library": {k: len(v or []) for k, v in rec["library"].items()}
         if rec.get("library")
         else None,
+        # the site's project it is an episode of: the id only (the name and brief are the site's)
+        "project_id": (rec.get("project") or {}).get("id"),
         "state": "queued",
         "cost_usd": 0.0,
     }

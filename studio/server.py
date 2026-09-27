@@ -25,6 +25,14 @@ STUDIO_PER_CLIENT_DAILY (default 5) a day.
                                  X-Priority: 1 (from the site, for a plan with priority): the
                                  film goes ahead of the others in every queue. {"auth": "login"}
                                  (this machine only): Claude runs on its Claude Code login.
+                                 "project": {id, name, brief, from_account_cast}: an episode of
+                                 the site's project, with the project's library (library.py)
+    GET  /api/library            the asker's cast and films; ?project=<id>: that project's, and
+                                 its pictures. Also GET /api/library/{name}/thumb.png, DELETE
+                                 /api/library/{name} (a cast member), each with ?project=
+    POST /api/library/pictures   {"project", "upload", "name"}: an upload becomes a picture every
+                                 episode of the project gets; GET .../pictures/{name}/thumb.png
+                                 and DELETE .../pictures/{name}, with ?project=
     GET  /api/films/{id}         ?since=N  ->  {"status": queued|running|done|error|cancelled,
                                  "stage", "wait", "events": [...from N], "next", "video_url", ...}
     POST /api/films/{id}/cancel  the film's own client (or this machine) stops it
@@ -360,6 +368,18 @@ async def create(req):
         return web.json_response(
             {"error": "look must be one of %s" % ", ".join(films.LOOKS)}, status=400
         )
+    # the site's project the film is an episode of: {id, name, brief, from_account_cast}. The
+    # site checks it is the person's (trusted like X-Client-Ip); its library is theirs anyway
+    project = body.get("project")
+    if project is not None:
+        if not isinstance(project, dict) or not films.PROJECT_ID.match(str(project.get("id"))):
+            return web.json_response({"error": "project must be {id, name, brief}"}, status=400)
+        project = {
+            "id": project["id"],
+            "name": " ".join(str(project.get("name") or "").split())[:80] or "Untitled",
+            "brief": str(project.get("brief") or "").strip()[: films.BRIEF_MAX],
+            "from_account_cast": project.get("from_account_cast") is True,
+        }
     client = client_of(req)
     # a plan whose films go first (the site sends it, trusted like X-Client-Ip)
     priority = 1 if req.headers.get("X-Priority", "").strip() == "1" else 0
@@ -398,6 +418,7 @@ async def create(req):
             auth=auth,
             branding=branding,
             attachments=attached,
+            project=project,
         )
         uploads.release(client, attached)  # the film has its own copies now
         try:  # the person's cast and earlier films (library.py); a film goes ahead without
@@ -499,24 +520,91 @@ async def drain(req):
     return web.json_response({"draining": True, "running": len(live(("running",)))})
 
 
+def project_of(req):
+    """?project=<id>: which of the asker's libraries a library route means (None: their own).
+    Raises 404 for one that is not a project id."""
+    p = req.query.get("project")
+    if p is None:
+        return None
+    if not films.PROJECT_ID.match(p):
+        raise web.HTTPNotFound()
+    return p
+
+
 async def library_list(req):
-    """The asker's own library (library.py): their cast and the films it remembers."""
-    return web.json_response(library.listing(client_of(req)))
+    """The asker's own library (library.py): their cast and the films it remembers; with
+    ?project=, that project's, with its pictures."""
+    return web.json_response(library.listing(client_of(req), project_of(req)))
 
 
 async def library_thumb(req):
     """A cast member's picture, the asker's own."""
-    p = library.thumb_of(client_of(req), req.match_info["name"])
+    p = library.thumb_of(client_of(req), req.match_info["name"], project_of(req))
     if p is None:
         raise web.HTTPNotFound()
     return web.FileResponse(p, headers={"Cache-Control": "private, no-cache"})
 
 
 async def library_delete(req):
-    """Leave a cast member out of the asker's next films."""
-    if not library.delete(client_of(req), req.match_info["name"]):
+    """Leave a cast member out of the asker's next films (or their project's)."""
+    name, project = req.match_info["name"], project_of(req)
+    if not await asyncio.to_thread(library.delete, client_of(req), name, project):
         return web.json_response({"error": "no such cast member"}, status=404)
-    return web.json_response({"name": req.match_info["name"], "deleted": True})
+    return web.json_response({"name": name, "deleted": True})
+
+
+async def picture_add(req):
+    """Put one of the asker's uploads into their project as a picture its episodes get:
+    {"project": id, "upload": "up-...", "name": "logo"}. The upload goes; the picture stays."""
+    try:
+        body = await req.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return web.json_response({"error": 'send {"project", "upload", "name"}'}, status=400)
+    client, project = client_of(req), str(body.get("project") or "")
+    if not films.PROJECT_ID.match(project) or not library.owner(client, project):
+        return web.json_response({"error": "No such project."}, status=404)
+    meta = uploads.get(client, body.get("upload"))
+    if meta is None:
+        return web.json_response(
+            {"error": "That upload is no longer here; add it again.", "reason": "attachment"},
+            status=409,
+        )
+    if meta["kind"] != "image":
+        return web.json_response({"error": "A project's pictures are pictures."}, status=400)
+    try:
+        entry = await asyncio.to_thread(
+            library.add_picture,
+            client,
+            project,
+            str(body.get("name") or ""),
+            uploads.file_of(client, meta),
+            meta["ext"],
+        )
+    except library.PictureError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    uploads.release(client, [meta])
+    return web.json_response(entry, status=201)
+
+
+async def picture_delete(req):
+    """Take a picture out of the asker's project: ?project=<id>."""
+    name, project = req.match_info["name"], project_of(req)
+    if not project or not await asyncio.to_thread(
+        library.delete_picture, client_of(req), project, name
+    ):
+        return web.json_response({"error": "no such picture"}, status=404)
+    return web.json_response({"name": name, "deleted": True})
+
+
+async def picture_thumb(req):
+    """A project picture, small: ?project=<id>. The asker's own."""
+    project = project_of(req)
+    p = project and library.picture_thumb(client_of(req), project, req.match_info["name"])
+    if not p:
+        raise web.HTTPNotFound()
+    return web.FileResponse(p, headers={"Cache-Control": "private, no-cache"})
 
 
 async def hide(req):
@@ -737,6 +825,9 @@ def make_app(token):
             web.post("/api/uploads", upload),
             web.get("/api/uploads/{id}", upload_status),
             web.get("/api/library", library_list),
+            web.post("/api/library/pictures", picture_add),
+            web.get("/api/library/pictures/{name}/thumb.png", picture_thumb),
+            web.delete("/api/library/pictures/{name}", picture_delete),
             web.get("/api/library/{name}/thumb.png", library_thumb),
             web.delete("/api/library/{name}", library_delete),
             web.get("/api/films/{id}", status),

@@ -120,6 +120,85 @@ async def wait_for(c, auth, jid, states=("done", "error", "cancelled"), limit=60
     return st
 
 
+async def projects(c, auth, mem, check):
+    """A project's episodes: its pictures and cast, apart from the person's own; one film in the
+    making per person across projects; nothing of the project in what anyone may see."""
+    import io
+
+    from PIL import Image
+
+    P = "p-cccccccccc"
+    me, other = auth | {"X-Client-Ip": "u:proj"}, auth | {"X-Client-Ip": "u:proj-other"}
+    buf = io.BytesIO()
+    Image.new("RGB", (640, 360), (30, 90, 200)).save(buf, "PNG")
+    r = await c.post(
+        "/api/uploads", data=buf.getvalue(), headers=me | {"Content-Type": "image/png"}
+    )
+    up = (await r.json()).get("id")
+    check(r.status == 201 and up, "a picture uploaded for the project")
+    r = await c.post(
+        "/api/library/pictures", json={"project": P, "upload": up, "name": "logo"}, headers=other
+    )
+    check(r.status == 409, "nobody else can take it into their project")
+    r = await c.post(
+        "/api/library/pictures", json={"project": "p-x", "upload": up, "name": "logo"}, headers=me
+    )
+    check(r.status == 404, "nor into something that is not a project")
+    r = await c.post(
+        "/api/library/pictures", json={"project": P, "upload": up, "name": "logo"}, headers=me
+    )
+    check(r.status == 201 and (await r.json())["w"] == 640, "it joins the project")
+    r = await c.get("/api/library/pictures/logo/thumb.png?project=" + P, headers=me)
+    check(r.status == 200 and (await r.read())[:4] == b"\x89PNG", "with its thumbnail")
+    r = await c.get("/api/library/pictures/logo/thumb.png?project=" + P, headers=other)
+    check(r.status == 404, "its person's only")
+
+    project = {"id": P, "name": "Pip's Channel", "brief": "Short, funny, for kids."}
+    r = await c.post("/api/films", json={"prompt": "x", "project": {"id": "nope"}}, headers=me)
+    check(r.status == 400, "a film's project must be one")
+    r = await c.post(
+        "/api/films",
+        json={"prompt": "episode one, with a cast", "project": project},
+        headers=me,
+    )
+    ep = (await r.json())["id"]
+    f = films.Film.open(ep)
+    check(
+        f.record()["project"]["brief"] == "Short, funny, for kids."
+        and mem.docs[ep].get("project_id") == P
+        and os.path.exists(f.path("inputs", "pic_logo.png")),
+        "an episode knows its project, and has its pictures",
+    )
+    r = await c.post(
+        "/api/films",
+        json={"prompt": "at the same time, elsewhere", "project": project | {"id": "p-dddddddddd"}},
+        headers=me,
+    )
+    check(r.status == 429, "one film in the making per person, across projects")
+    st = await wait_for(c, auth, ep)
+    check(
+        st.get("status") == "done" and "brief" not in json.dumps(st) and "project" not in st,
+        "the film's status says nothing of the project",
+    )
+    check("title" in mem.docs[ep] and mem.docs[ep]["project_id"] == P, "the final record has both")
+    lib = await (await c.get("/api/library?project=" + P, headers=me)).json()
+    own = await (await c.get("/api/library", headers=me)).json()
+    check(
+        [m["name"] for m in lib["cast"]] == ["pip"]
+        and lib["films"] == [ep]
+        and [p["name"] for p in lib["pictures"]] == ["logo"],
+        "the project's library has the episode's cast (%s)" % lib,
+    )
+    check(own["cast"] == [] and own["films"] == [], "and the person's own does not")
+    r = await c.get("/api/library?project=p-bad", headers=me)
+    check(r.status == 404, "a library route with a bad project")
+    r = await c.delete("/api/library/pictures/logo?project=" + P, headers=other)
+    check(r.status == 404, "only its person takes a picture out")
+    r = await c.delete("/api/library/pictures/logo?project=" + P, headers=me)
+    lib = await (await c.get("/api/library?project=" + P, headers=me)).json()
+    check(r.status == 200 and lib["pictures"] == [], "and then it is gone")
+
+
 async def main():
     agent.run_claude = fake_claude
     agent.STORE = mem = store.MemoryStore()
@@ -400,6 +479,8 @@ async def main():
             await c.get("/api/library", headers=auth | {"X-Client-Ip": "u:series"})
         ).json()
         check(r.status == 200 and mine["cast"] == [], "and then it is gone")
+
+        await projects(c, auth, mem, check)
 
         # ------------------------------------------------ a restart finds what was left
         q = films.Film.create("left queued", 5, "drawn", client="u:r1")

@@ -272,6 +272,24 @@ snapshot beside the logo and kitcut.ai, with a chime and "Make yours at KitCut A
   and `DELETE /api/library/<name>`. A delete keeps the files, and later films leave the member
   out.
 
+**Projects: a series or a channel with a library of its own.** The site keeps projects (a name,
+a brief, defaults) in Mongo and sends `"project": {id, name, brief, from_account_cast}` with a
+film it vouches is the person's. That film is an episode:
+- **Its library is the project's**, `library\<sha20(client)>\<project id>\`, the same layout as
+  the person's. It seeds from there and keeps into there, never into the person's own, and a film
+  outside projects never sees a project's. A project made with "bring in my characters" starts
+  with a copy of the person's own cast, once.
+- **Pictures.** A project holds up to six (`pictures\<name>.*`), made from uploads with `POST
+  /api/library/pictures`. Every episode gets them as `inputs\pic_<name>.*`, in the manifest as
+  `pic_<name>`; the ones neither film.js nor the cast draws leave before the final render, like
+  unused attachments.
+- **What Claude hears.** The first message names the project and gives its brief (the person's
+  words), then the pictures, the cast and the earlier episodes. The first episode hears that its
+  choices are what the next ones keep.
+- **Records.** `studio.json` keeps the project as it was asked for. `studio_runs` gets only
+  `project_id` (and every run now has `title`, `name_film`'s when nothing was typed): the site
+  lists a project's episodes from there. Limits stay per person, across projects.
+
 ## Paying for Claude
 
 There are two ways to pay:
