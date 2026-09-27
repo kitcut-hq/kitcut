@@ -33,6 +33,8 @@ STUDIO_PER_CLIENT_DAILY (default 5) a day.
     GET  /files/{id}/film.mp4    the film (also film_poster.png, review/sheet.png, and card.jpg:
                                  its 1200x628 link preview, made on first request)
     GET  /api/health             {"ok", "running", "queued", "slots", "draining"}   (no token)
+    POST /api/admin/films/<id>/hidden  (this machine) {"hidden": true|false}: out of the gallery
+                                 (its page and link still work), or back in
     POST /api/admin/drain        (this machine) take no new films, let the running ones finish:
                                  serve.ps1 restarts the server once "active" reaches 0. Films
                                  still queued stay queued, and the next server makes them.
@@ -360,8 +362,6 @@ async def create(req):
     branding = req.headers.get("X-Branding", "").strip() == "1" or (
         body.get("branding") is True and from_this_machine(req)
     )
-    # how Claude may write film.js: "scenes" caps each write (an experiment; this machine only)
-    build = "scenes" if body.get("build") == "scenes" and from_this_machine(req) else "once"
     prune()
     # the check and the taking happen under one lock: two requests at the same moment cannot
     # both slip under a limit that has room for one
@@ -380,7 +380,6 @@ async def create(req):
             priority=priority,
             auth=auth,
             branding=branding,
-            build=build,
         )
         await agent.save(f.id, agent.first_record(f, "web", client))
         start(f)
@@ -419,6 +418,21 @@ async def drain(req):
         J["control"]["requeue"] = True
         J["task"].cancel()
     return web.json_response({"draining": True, "running": len(live(("running",)))})
+
+
+async def hide(req):
+    """Take a film out of the gallery, or put it back: {"hidden": true|false}. Its page and its
+    link keep working. Only from this machine (the operator's call, not a visitor's)."""
+    if not from_this_machine(req):
+        raise web.HTTPForbidden()
+    f = film_of(req.match_info["id"])
+    try:
+        hidden = bool((await req.json()).get("hidden", True))
+    except ValueError:
+        hidden = True
+    f.update(hidden=hidden)
+    await agent.save(f.id, {"hidden": hidden})
+    return web.json_response({"id": f.id, "hidden": hidden})
 
 
 async def status(req):
@@ -581,7 +595,7 @@ async def list_films(req):
     out = []
     for f in Film.all():
         r = f.record()
-        if r.get("ok"):
+        if r.get("ok") and not r.get("hidden"):
             out.append(
                 {
                     k: r.get(k)
@@ -614,6 +628,7 @@ def make_app(token):
             web.get("/api/films/{id}", status),
             web.post("/api/films/{id}/cancel", cancel),
             web.post("/api/admin/drain", drain),
+            web.post("/api/admin/films/{id}/hidden", hide),
             web.get("/files/{id}/{path:.+}", files),
         ]
     )

@@ -478,7 +478,7 @@ async def run_claude(film, emit, meter, tools, auth="api", prompt=None, resume=N
             "PostToolUse": [HookMatcher(matcher="Write|Edit", hooks=[post_tool])],
         },
         can_use_tool=can_use,
-        max_turns=90,  # a film built scene by scene takes more turns than one written at once
+        max_turns=60,
         max_budget_usd=limits(film.length)["budget_usd"],
         # a review sheet of painted frames is a PNG of several MB, and it comes back to the SDK
         # as one message (the default limit, 1 MB, failed a painted film)
@@ -892,7 +892,6 @@ def first_record(film, source, client):
         "priority": rec.get("priority", 0),
         "auth": rec.get("auth", "api"),
         "branding": bool(rec.get("branding")),
-        "build": rec.get("build", "once"),
         "state": "queued",
         "cost_usd": 0.0,
     }

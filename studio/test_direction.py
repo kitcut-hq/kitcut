@@ -79,7 +79,6 @@ def main():
             "%s: the review calls motion" % look,
             "`motion`" in p and "One film, not a slideshow" in p,
         )
-    expect("drawn: the film is built scene by scene", "scene by scene" in drawn)
 
     # ---- the ensembles use only cached instruments
     sf = os.path.join(films.KIT, "models", "soundfonts", "FluidR3_GM")
@@ -111,9 +110,7 @@ def main():
         ImageDraw.Draw(im).rectangle((x, 100, x + 60, 160), fill="#c2592a")
         im.save(os.path.join(d, "%06.2f.png" % t))
     text, sheet = motion.analyse(d, os.path.join(HOME, "motion.png"))
-    expect(
-        "motion: the still stretch is found", "Still for 4.8 s, from 5.0 to 9.8 s" in text, text
-    )
+    expect("motion: the still stretch is found", "Still for 4.8 s, from 5.0 to 9.8 s" in text, text)
     expect("motion: the cut is found", "Cuts or transitions at 9.9 s" in text, text)
     expect("motion: the moving part is not still", "from 0." not in text, text)
     expect(

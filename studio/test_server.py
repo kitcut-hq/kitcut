@@ -249,6 +249,22 @@ async def main():
         check((await c.get("/api/films/../etc", headers=auth)).status == 404, "no id escape")
         listed = await (await c.get("/api/films", headers=auth)).json()
         check({x["id"] for x in listed} >= set(ids), "the gallery lists them")
+        r = await c.post(
+            "/api/admin/films/%s/hidden" % ids[0],
+            json={"hidden": True},
+            headers=auth | {"Cf-Ray": "t"},
+        )
+        check(r.status == 403, "a visitor cannot hide a film")
+        r = await c.post("/api/admin/films/%s/hidden" % ids[0], json={"hidden": True}, headers=auth)
+        listed = await (await c.get("/api/films", headers=auth)).json()
+        check(
+            r.status == 200
+            and ids[0] not in {x["id"] for x in listed}
+            and mem.docs[ids[0]].get("hidden") is True,
+            "a hidden film leaves the gallery, on record too",
+        )
+        st = await (await c.get("/api/films/%s" % ids[0], headers=auth)).json()
+        check(st.get("status") == "done", "and its own page still works")
 
         # ------------------------------------------------ one film in the making per client
         r = await c.post(
