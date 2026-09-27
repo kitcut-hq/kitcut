@@ -3195,6 +3195,41 @@ Lite first and Whisper turbo if that fails. Three things the table does not show
   and `gpt-audio-mini` skipped its first sentence. The Gemini models wrote every note down.
 - **Whisper medium turned Ukrainian into Russian** (61% WER on the mixed clip).
 
+#### Publishing a studio film to YouTube: `studio/youtube.py`
+
+A person connects one or more YouTube channels on kitcut.ai and publishes a finished film of their
+own to any of them. The design and the page are in the site's README ("YouTube"). This is the
+studio's half, which is only the bytes:
+
+- **The site owns everything Google-facing.** It holds the channel grants, sealed in
+  `kitcut.youtube_channels`, and opens a resumable upload session with the title, description and
+  privacy. It then posts that session's address to `POST /api/films/<id>/youtube`
+  `{"to", "key"}`. The studio never holds a Google token. A leaked session address can only
+  finish that one upload, into that one channel, within a week.
+- **What the studio refuses:**
+  - any address that is not `https://www.googleapis.com/upload/youtube/v3/videos?...upload_id=`;
+  - a film that is not finished;
+  - a client (`X-Client-Ip`) other than the film's own.
+- **How it sends.** It streams `outputs/film.mp4` in 8 MiB pieces; the protocol wants multiples
+  of 256 KiB. A 308 names the last byte kept. After a 5xx or a dropped connection, the studio asks
+  with `Content-Range: bytes */<size>` and carries on from there. A 404 or 410 means the session
+  expired.
+- **Sends are keyed by the site's post id.** Asking twice sends once, and asking after a restart
+  resumes. Sends live in memory only, and the site asks again whenever `GET .../youtube/<key>`
+  answers 404.
+- **Two things Google decides, not the code:**
+  - **The YouTube API audit.** Every video uploaded through an unaudited project created after
+    2020-07-28 is locked private. The final answer's `status.privacyStatus` shows it, and the
+    page reports it rather than claiming the video is public.
+  - **OAuth verification.** Both scopes are sensitive. Until the app is verified, people see an
+    "unverified app" screen and at most 100 of them can connect.
+- **The test.** `python studio/test_youtube.py` runs a stand-in for YouTube's endpoint that
+  half-keeps one piece and answers 503. It checks:
+  - every byte arrives in order;
+  - a pre-filled session gets only the rest;
+  - a repeated key sends nothing new;
+  - someone else's send is invisible.
+
 ## Projects: one folder and two files per video
 
 Everything about one video lives in `projects/<id>/`: the manifests that drive

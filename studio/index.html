@@ -199,6 +199,47 @@ a.google:hover { border-color: var(--accent); }
 button.short { background: var(--rule); color: var(--ink-soft); }
 .film p { margin: 0 0 4px; font: 18px/1.2 'Patrick Hand', cursive; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .film small { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+/* publishing to YouTube: a button under a finished film of your own, and the dialog it opens */
+.ytmark { width: 20px; height: 14px; flex: none; display: block; }
+button.yt { display: inline-flex; align-items: center; gap: 7px; }
+.posts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 0 14px 10px; font-size: 13px; color: var(--ink-soft); }
+.posts a { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); text-decoration: none; border: 1.5px solid var(--rule); border-radius: 999px; padding: 3px 10px 3px 4px; }
+.posts a:hover { border-color: var(--accent); }
+.posts img, .chan img { width: 22px; height: 22px; border-radius: 50%; display: block; }
+#yt { border: 1.5px solid var(--rule); border-radius: 16px; background: var(--sheet); color: var(--ink); padding: 22px 24px 24px; width: min(480px, calc(100% - 32px)); }
+#yt::backdrop { background: rgba(20, 16, 12, .45); }
+#yt h2 { font: 700 34px/1.05 Caveat, cursive; margin: 0 28px 10px 0; }
+#yt p { margin: 6px 0; }
+#yt .close { position: absolute; top: 10px; right: 12px; background: none; color: var(--ink-soft); font: 400 26px/1 Inter, system-ui, sans-serif; padding: 4px 8px; }
+#yt .err { color: var(--bad); font-weight: 600; }
+#yt label.field { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+#yt input[type=text], #yt textarea { width: 100%; padding: 9px 11px; border-radius: 10px; border: 1.5px solid var(--rule); background: var(--paper); color: var(--ink); font: 15px/1.4 Inter, system-ui, sans-serif; resize: vertical; min-height: 0; }
+#yt fieldset { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
+#yt legend { font-size: 13px; font-weight: 600; color: var(--ink-soft); padding: 0; margin-bottom: 4px; }
+.chan { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 8px 10px; border: 1.5px solid var(--rule); border-radius: 12px; cursor: pointer; font-size: 15px; }
+.chan:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.chan input { accent-color: var(--accent); margin: 0; }
+.chan span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chan small { color: var(--ink-soft); }
+.chan.broken { cursor: default; opacity: .8; }
+.chan a { color: var(--accent); font-size: 13px; font-weight: 600; }
+.seg { display: flex !important; flex-wrap: wrap; gap: 6px; }
+.seg label { flex: 1 1 0; min-width: 90px; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg span { display: block; text-align: center; padding: 8px 6px; border: 1.5px solid var(--rule); border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.seg input:checked + span { border-color: var(--accent); background: var(--accent-soft); }
+.seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+#yt .check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+#yt .check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+#yt a.more { font-size: 13px; color: var(--accent); justify-self: start; }
+#yt .go { justify-self: end; }
+#yt .button { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 10px 18px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font: 700 22px/1 Caveat, cursive; letter-spacing: .5px; }
+#yt .button.ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--rule); }
+.progress { height: 10px; border-radius: 5px; background: var(--rule); overflow: hidden; margin: 10px 0 4px; }
+.progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .6s ease; }
+.progress.wait i { width: 30% !important; animation: slide 1.2s ease-in-out infinite alternate; }
+@keyframes slide { from { margin-left: 0; } to { margin-left: 70%; } }
+.okmark { color: var(--good); font-weight: 700; }
 </style>
 </head>
 <body>
@@ -260,7 +301,8 @@ button.short { background: var(--rule); color: var(--ink-soft); }
   <section class="work">
     <div class="stage">
       <div class="screen" id="screen"><div class="idle">Your film appears here.</div></div>
-      <div class="caption"><span id="status">Ready.</span><span class="right"><button class="small ghost" type="button" id="stop" hidden>Stop</button><span id="clock"></span></span></div>
+      <div class="caption"><span id="status">Ready.</span><span class="right"><button class="small ghost yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><button class="small ghost" type="button" id="stop" hidden>Stop</button><span id="clock"></span></span></div>
+      <div class="posts" id="ytPosts" hidden></div>
     </div>
     <aside class="log">
       <h2>What Claude is doing</h2>
@@ -305,6 +347,41 @@ button.short { background: var(--rule); color: var(--ink-soft); }
 </div>
 
 <dialog id="peek" aria-label="Picture"><img alt=""></dialog>
+<dialog id="yt" aria-labelledby="ytTitle">
+  <form method="dialog"><button class="close" aria-label="Close">&times;</button></form>
+  <h2 id="ytTitle">Publish to YouTube</h2>
+  <p class="err" id="ytErr" hidden></p>
+  <div id="ytConnect" hidden>
+    <p>Connect your YouTube channel once, then publish any of your films to it from here.</p>
+    <p class="note">KitCut only uploads the films you choose, and you can disconnect it any time from your account page.</p>
+    <p><a class="button" id="ytConnectBtn" href="/api/youtube/connect"><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Connect YouTube</a></p>
+    <p class="note">Google will ask which account to use. If your channel belongs to a business or brand, choose the channel's name there.</p>
+  </div>
+  <form id="ytForm" hidden>
+    <fieldset id="ytChans"><legend>Channel</legend></fieldset>
+    <a class="more" id="ytAdd" href="/api/youtube/connect">+ Add another channel</a>
+    <p class="note" id="ytAgain" hidden></p>
+    <label class="field">Title<input type="text" id="ytName" maxlength="100" required></label>
+    <label class="field">Description<textarea id="ytDesc" rows="4" maxlength="5000"></textarea></label>
+    <fieldset class="seg" id="ytWho"><legend>Who can watch it</legend>
+      <label><input type="radio" name="ytWho" value="public"><span>Public</span></label>
+      <label><input type="radio" name="ytWho" value="unlisted"><span>Unlisted</span></label>
+      <label><input type="radio" name="ytWho" value="private"><span>Private</span></label>
+    </fieldset>
+    <p class="note" id="ytWhoNote"></p>
+    <label class="check"><input type="checkbox" id="ytKids"> Made for kids</label>
+    <button class="go" type="submit" id="ytGo">Publish</button>
+  </form>
+  <div id="ytSend" hidden>
+    <p id="ytSendText" aria-live="polite">Sending your film to YouTube...</p>
+    <div class="progress" id="ytBar"><i></i></div>
+    <div id="ytDone" hidden>
+      <p id="ytDoneText"></p>
+      <p class="note" id="ytDoneNote"></p>
+      <p class="row"><a class="button" id="ytWatch" target="_blank" rel="noopener">Watch on YouTube</a><button class="small ghost" type="button" id="ytMore">Publish to another channel</button></p>
+    </div>
+  </div>
+</dialog>
 <dialog id="signin" aria-labelledby="signinTitle">
   <form method="dialog"><button class="close" aria-label="Close">&times;</button></form>
   <h2 id="signinTitle">Sign in to make your film</h2>
@@ -506,7 +583,7 @@ function tick() { $('clock').textContent = (lastCost != null ? `${usd(lastCost)}
 function startClock(elapsed) { t0 = Date.now() - (elapsed || 0) * 1000; clearInterval(timer); tick(); timer = setInterval(tick, 500); }
 function finish() { clearInterval(timer); timer = null; clearTimeout(poll); poll = null; $('go').disabled = !studioUp; $('stop').hidden = true; }
 function reset() {
-  finish(); t0 = 0; lastCost = null; lastLog = null; showedDone = false;
+  finish(); ytReset(); t0 = 0; lastCost = null; lastLog = null; showedDone = false;
   $('stats').hidden = true; $('log').innerHTML = ''; $('clock').textContent = '';
 }
 function home() {
@@ -549,6 +626,7 @@ async function follow(since = 0, misses = 0) {
     else if (s.status === 'running' && s.wait) $('status').innerHTML = `<span class="pen"></span>${esc(s.wait)}`;
     if (s.status === 'done') {
       if (s.video_url) play(s.video_url, s.poster_url);
+      ytDoneId = id; ytLoad();
       if (!showedDone && s.seconds != null) {  // a film from before the log was kept: its summary stands in
         stats(s); $('status').textContent = `Done in ${mmss(s.seconds)}.`;
         if (s.claude_said) line('say', s.claude_said, null);
@@ -687,7 +765,7 @@ async function whoami() {
     const r = await fetch('/api/me', { headers: { Accept: 'application/json' } });
     const me = r.ok ? await r.json() : null;
     if (!me || !me.auth) return;
-    AUTH = true; USER = me.user; GOOGLE = !!me.google; CREDITS = me.credits || null;
+    AUTH = true; USER = me.user; GOOGLE = !!me.google; CREDITS = me.credits || null; YT = !!me.youtube;
   } catch (e) { return; }
   renderAccount(); paintLength();
   $('footNav').hidden = false;
@@ -700,6 +778,178 @@ async function whoami() {
     if (d.length) { $('length').value = d.length; paintLength(); }
     if (!currentId) $('status').textContent = 'Signed in. Your idea is back in the box: press "Make the film".';
   }
+  ytLoad();
+}
+
+
+// ---------------------------------------------------------------- publishing to YouTube
+// Under a finished film of your own: "Publish to YouTube" opens a dialog to pick one of your
+// channels, a title, a description and who can watch. The site opens the upload with YouTube and
+// the studio sends the file (api/youtube.js); the dialog follows it through to the link. With no
+// channel yet, the same dialog connects one first (Google's chooser), and comes back here.
+let YT = false;        // /api/me: this account may publish to YouTube
+let ytDoneId = null;   // the finished film on screen
+let ytFilm = null;     // that film, when it is yours: {id, channels, posts, defaults}
+let ytFormFor = null, ytPoll = null, ytPost = null;
+const ls = { get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
+             set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private window */ } } };
+const WHO = {
+  public: { label: 'Public', note: 'Anyone can find it and watch it.' },
+  unlisted: { label: 'Unlisted', note: 'Only people you send the link to can watch it.' },
+  private: { label: 'Private', note: 'Only you can watch it.' },
+};
+// back from Google's chooser: /film/<id>?youtube=<how it went>&channel=<the one connected>
+const YT_SAID = {
+  again: "That channel was already connected. To add a different one, pick it on Google's screen: a business or brand channel is listed under its own name.",
+  cancelled: 'Connecting was cancelled, so nothing changed.',
+  noscope: 'KitCut needs both permissions Google asks for, to publish for you. Try again and leave both boxes ticked.',
+  nochannel: 'That Google account has no YouTube channel yet. Create one on youtube.com, then connect it here.',
+  failed: "Connecting didn't work. Please try again.",
+};
+const YT_BACK = (() => {
+  const q = new URLSearchParams(location.search), back = { said: q.get('youtube'), channel: q.get('channel') };
+  if (back.said) {
+    q.delete('youtube'); q.delete('channel');
+    history.replaceState(null, '', location.pathname + (q.toString() ? `?${q}` : ''));
+  }
+  return back;
+})();
+function ytReset() {
+  clearTimeout(ytPoll); ytPoll = null; ytPost = null; ytDoneId = null; ytFilm = null;
+  $('ytOpen').hidden = true; $('ytPosts').hidden = true;
+  if ($('yt').open) $('yt').close();
+}
+async function ytLoad() {
+  const id = currentId;
+  if (!YT || !USER || !id || ytDoneId !== id || (ytFilm && ytFilm.id === id)) return;
+  try {
+    const r = await fetch(`/api/youtube/film?id=${encodeURIComponent(id)}`, { headers: { Accept: 'application/json' } });
+    if (!r.ok || id !== currentId) return;  // not yours, or you have moved on
+    ytFilm = { ...(await r.json()), id };
+  } catch (e) { return; }
+  $('ytOpen').hidden = false;
+  ytList();
+  const sending = ytFilm.posts.find((p) => p.state === 'sending');
+  if (sending) ytTrack(sending);
+  if (YT_BACK.said) {
+    const said = YT_BACK.said; YT_BACK.said = null;
+    ytShow(YT_SAID[said] || null, YT_BACK.channel);
+  }
+}
+function ytErr(text) { $('ytErr').textContent = text || ''; $('ytErr').hidden = !text; }
+// where the film already is on YouTube, under the film
+function ytList() {
+  const list = ((ytFilm && ytFilm.posts) || []).filter((p) => p.state !== 'failed');
+  $('ytPosts').hidden = !list.length;
+  $('ytPosts').innerHTML = !list.length ? '' : '<span>On YouTube:</span>' + list.map((p) => {
+    const face = (p.channel.thumb ? `<img src="${esc(p.channel.thumb)}" alt="" referrerpolicy="no-referrer">` : '') + esc(p.channel.title);
+    return p.url
+      ? `<a href="${esc(p.url)}" target="_blank" rel="noopener" title="${esc(p.title)}">${face} · ${WHO[p.held ? 'private' : p.privacy].label}</a>`
+      : `<a href="#" data-sending="1">${face} · sending ${p.pct}%</a>`;
+  }).join('');
+  for (const a of $('ytPosts').querySelectorAll('[data-sending]')) a.onclick = (e) => { e.preventDefault(); $('yt').showModal(); };
+}
+function ytShow(err, pick) {
+  const f = ytFilm;
+  if (!f) return;
+  $('ytConnectBtn').href = $('ytAdd').href = '/api/youtube/connect?back=' + encodeURIComponent('/film/' + f.id);
+  ytErr(err);
+  $('ytSend').hidden = true;
+  $('ytConnect').hidden = f.channels.length > 0;
+  $('ytForm').hidden = !f.channels.length;
+  if (f.channels.length) ytForm(pick);
+  if (!$('yt').open) $('yt').showModal();
+}
+function ytForm(pick) {
+  const f = ytFilm, ok = f.channels.filter((c) => !c.broken);
+  const want = pick || ls.get('ytChannel');
+  const chosen = (ok.find((c) => c.id === want) || ok[0] || {}).id;
+  $('ytChans').innerHTML = '<legend>Channel</legend>' + f.channels.map((c) => `
+    <label class="chan${c.broken ? ' broken' : ''}">
+      <input type="radio" name="ytChan" value="${esc(c.id)}"${c.id === chosen ? ' checked' : ''}${c.broken ? ' disabled' : ''}>
+      ${c.thumb ? `<img src="${esc(c.thumb)}" alt="" referrerpolicy="no-referrer">` : ''}
+      <span>${esc(c.title)}${c.handle ? ` <small>${esc(c.handle)}</small>` : ''}</span>
+      ${c.broken ? `<a href="${esc($('ytAdd').href)}">Reconnect</a>` : ''}
+    </label>`).join('');
+  for (const r of $('ytChans').querySelectorAll('input')) r.onchange = ytAgain;
+  if (ytFormFor !== f.id) {  // a new film starts from its own title; a reopened dialog keeps your edits
+    ytFormFor = f.id;
+    $('ytName').value = f.defaults.title; $('ytDesc').value = f.defaults.description; $('ytKids').checked = false;
+    const who = WHO[ls.get('ytWho')] ? ls.get('ytWho') : 'public';
+    document.querySelector(`input[name=ytWho][value=${who}]`).checked = true;
+  }
+  ytWhoNote(); ytAgain();
+}
+function ytWhoNote() {
+  const w = document.querySelector('input[name=ytWho]:checked');
+  $('ytWhoNote').textContent = w ? WHO[w.value].note : '';
+}
+for (const r of document.querySelectorAll('input[name=ytWho]')) r.onchange = ytWhoNote;
+// publishing to a channel that has it already makes a second copy: say so before, not after
+function ytAgain() {
+  const c = document.querySelector('input[name=ytChan]:checked');
+  const had = c && ytFilm.posts.find((p) => p.channel.id === c.value && p.state !== 'failed');
+  $('ytAgain').hidden = !had;
+  $('ytAgain').textContent = had ? 'This film is already on that channel. Publishing again adds a second copy.' : '';
+}
+$('ytOpen').addEventListener('click', () => {
+  if (ytPost && ytPost.state === 'sending') $('yt').showModal(); else ytShow();
+});
+$('ytMore').addEventListener('click', () => ytShow());
+$('ytForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const chan = document.querySelector('input[name=ytChan]:checked'), who = document.querySelector('input[name=ytWho]:checked');
+  if (!chan) return ytErr('Pick a channel to publish to.');
+  if (!$('ytName').value.trim()) return ytErr('Give the video a title.');
+  ytErr(''); $('ytGo').disabled = true;
+  try {
+    const r = await fetch('/api/youtube/publish', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ film: ytFilm.id, channel: chan.value, title: $('ytName').value, description: $('ytDesc').value, privacy: who.value, kids: $('ytKids').checked }),
+    });
+    const b = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      if (b.reason === 'reconnect' && b.channel) { ytFilm.channels = ytFilm.channels.map((c) => (c.id === b.channel.id ? { ...c, broken: true } : c)); ytForm(); }
+      throw new Error(b.error || `HTTP ${r.status}`);
+    }
+    ls.set('ytChannel', chan.value); ls.set('ytWho', who.value);
+    ytTrack(b.post);
+  } catch (err) { ytErr(String(err.message || err)); }
+  $('ytGo').disabled = false;
+});
+// follow one publish: the bar while the studio sends the file, then the link
+function ytTrack(p) {
+  if (!ytFilm || ytFilm.id !== p.film) return;
+  ytPost = p;
+  ytFilm.posts = [...ytFilm.posts.filter((x) => x.id !== p.id), p];
+  ytList();
+  clearTimeout(ytPoll);
+  if (p.state === 'failed') {
+    $('ytSend').hidden = true; $('ytForm').hidden = false; ytForm(p.channel.id);
+    return ytErr(p.error || 'The upload did not go through. Please try again.');
+  }
+  $('ytForm').hidden = true; $('ytConnect').hidden = true; $('ytSend').hidden = false; ytErr('');
+  const bar = $('ytBar'), sending = p.state === 'sending';
+  bar.hidden = !sending; $('ytDone').hidden = sending;
+  if (sending) {
+    bar.classList.toggle('wait', !p.pct);
+    bar.querySelector('i').style.width = `${p.pct}%`;
+    $('ytSendText').textContent = `Sending your film to ${p.channel.title}...` + (p.pct ? ` ${p.pct}%` : '');
+    ytPoll = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/youtube/post?id=${encodeURIComponent(p.id)}`, { headers: { Accept: 'application/json' } });
+        if (r.ok) return ytTrack((await r.json()).post);
+      } catch (e) { /* ask again */ }
+      ytTrack(p);
+    }, 1500);
+    return;
+  }
+  $('ytSendText').innerHTML = `<span class="okmark">&#10003;</span> Published to <b>${esc(p.channel.title)}</b>`;
+  $('ytWatch').href = p.url;
+  $('ytDoneNote').textContent = p.held
+    ? "YouTube is keeping it private for now, while Google reviews KitCut's access to YouTube."
+    : p.state === 'live' ? `It is on YouTube now, as ${WHO[p.privacy].label.toLowerCase()}.`
+      : 'YouTube takes a few minutes to get a new video ready. Until then it may say "processing".';
 }
 
 

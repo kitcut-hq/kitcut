@@ -28,6 +28,9 @@ STUDIO_PER_CLIENT_DAILY (default 5) a day.
     GET  /api/films/{id}         ?since=N  ->  {"status": queued|running|done|error|cancelled,
                                  "stage", "wait", "events": [...from N], "next", "video_url", ...}
     POST /api/films/{id}/cancel  the film's own client (or this machine) stops it
+    POST /api/films/{id}/youtube {"to": <YouTube upload session>, "key"}: the film's own client
+                                 sends the finished film into a session the site opened (youtube.py)
+    GET  /api/films/{id}/youtube/{key}  how that send is going, and YouTube's answer
     GET  /api/films              the finished films, newest first
     GET  /api/costs              the spend: total, today, this month, per film, latest runs
     GET  /files/{id}/film.mp4    the film (also film_poster.png, review/sheet.png, and card.jpg:
@@ -62,6 +65,7 @@ import library  # noqa: E402
 import procs  # noqa: E402
 import store  # noqa: E402
 import uploads  # noqa: E402
+import youtube  # noqa: E402
 from film import Film  # noqa: E402
 from sched import Sched  # noqa: E402
 
@@ -437,6 +441,40 @@ async def upload_status(req):
     return web.json_response(uploads.public(meta))
 
 
+async def youtube_send(req):
+    """Send a finished film into a YouTube upload session the site opened (youtube.py). The
+    film's owner only; asking again with the same key answers the first send."""
+    if DRAINING:
+        return web.json_response(
+            {"error": "The studio is restarting; try again in a minute."}, status=503
+        )
+    f = film_of(req.match_info["id"])
+    rec = f.record()
+    client = client_of(req)
+    if not (from_this_machine(req) or rec.get("client") == client):
+        return web.json_response({"error": "only whoever made a film can publish it"}, status=403)
+    if not rec.get("ok"):
+        return web.json_response({"error": "This film is not finished."}, status=409)
+    try:
+        body = await req.json()
+        job = youtube.start(f, client, body.get("to"), body.get("key"))
+    except ValueError:
+        return web.json_response({"error": "expected JSON"}, status=400)
+    except youtube.SendError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    return web.json_response(youtube.public(job), status=202)
+
+
+async def youtube_sent(req):
+    """How a send is going: bytes sent, and YouTube's answer once it has the whole film."""
+    job = youtube.get(req.match_info["key"])
+    if job is None or job["film"] != req.match_info["id"]:
+        return web.json_response({"error": "no such send"}, status=404)
+    if not (from_this_machine(req) or job["client"] == client_of(req)):
+        return web.json_response({"error": "no such send"}, status=404)
+    return web.json_response(youtube.public(job))
+
+
 async def cancel(req):
     f = film_of(req.match_info["id"])
     J = JOBS.get(f.id)
@@ -703,6 +741,8 @@ def make_app(token):
             web.delete("/api/library/{name}", library_delete),
             web.get("/api/films/{id}", status),
             web.post("/api/films/{id}/cancel", cancel),
+            web.post("/api/films/{id}/youtube", youtube_send),
+            web.get("/api/films/{id}/youtube/{key}", youtube_sent),
             web.post("/api/admin/drain", drain),
             web.post("/api/admin/films/{id}/hidden", hide),
             web.get("/files/{id}/{path:.+}", files),

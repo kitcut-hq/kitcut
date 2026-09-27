@@ -167,6 +167,26 @@ with the instruction to look at each and say what it took it to be; a film nobod
 gets its title from Claude (`name_film`). Pictures film.js never draws leave the manifest before
 the final render, so they never reach the film's files.
 
+**Publishing to YouTube** (`youtube.py`). The public site holds each person's channel grants and
+opens a resumable upload session with YouTube for the film. The studio gets only that session's
+address:
+
+```bash
+curl -s -X POST $BASE/api/films/<id>/youtube -H "Authorization: Bearer $TOKEN" -H "X-Client-Ip: u:<account>" \
+     -H "Content-Type: application/json" -d '{"to": "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&upload_id=...", "key": "<post id>"}'
+# 202 {"key", "film", "state": "sending", "sent": 0, "size"}
+curl -s $BASE/api/films/<id>/youtube/<post id> -H "Authorization: Bearer $TOKEN" -H "X-Client-Ip: u:<account>"
+# {"state": "sending|done|failed", "sent", "size", "video": {"id", "privacy", "upload"}, "error"}
+```
+
+- **Who may send.** Only the film's own client, and only a finished film. The address must be
+  YouTube's upload endpoint.
+- **How it sends.** `outputs/film.mp4` goes up in 8 MiB pieces. After a dropped connection or a
+  5xx, the studio asks the session how far it got and carries on from there.
+- **Asking twice** with one key sends once.
+- **Sends are kept in memory.** After a restart the site asks again, and the send picks up from
+  what YouTube already has. The studio never holds a Google token.
+
 ## What it costs, and where that is recorded
 
 Every run is a document in **MongoDB `kitcut.studio_runs`**. That's the database kitcut-web uses:
