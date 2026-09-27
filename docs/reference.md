@@ -3152,6 +3152,44 @@ cast; it depends only on the look, so films made close together share the cache.
 At 192k, the AAC encode pushed the rocket's confetti transients to -0.1 dBFS, against -1.5 dBTP
 in the master WAV, so the template now encodes at 320k.
 
+#### Pictures and voice notes: `studio/uploads.py`, and choosing a transcriber with `stt-compare.py`
+
+A film request can carry pictures and voice notes as well as words, or instead of them
+(`studio/README.md` has the API). A picture reaches Claude as a file it Reads; Claude decides
+whether it is material to show (`SK.image('upload1', ...)`), a reference to match, or the brief
+itself, and says which. A voice note reaches it written out, by `scripts/_stt.py`: one call over
+several engines (`openrouter:`, `gemini:`, `vertex:`, `openai:`, `whisper:`), every note normalised
+to 16 kHz mono FLAC first.
+
+`scripts/stt-compare.py` picks the engine instead of guessing. `--make-clips` writes a test set of
+film briefs read by edge-tts voices (English, Ukrainian, Spanish, brand names, one over noise, one
+silent) encoded as Chrome and Safari record them; every engine hears the same clips, and the table
+weighs accuracy 40, names spelt right 15, speed 20, cost 10, robustness 15. Measured 2026-09-26,
+eight clips:
+
+| engine | score | WER | names | median s | $/min |
+|---|---|---|---|---|---|
+| whisper:large-v3-turbo (CPU) | 97.1 | 2.0% | 18/21 | 15.2 | 0 |
+| vertex:gemini-3.1-flash-lite | 96.3 | 1.8% | 19/21 | 2.5 | 0.0012 |
+| openrouter:openai/gpt-audio-mini | 94.2 | 7.3% | 18/21 | 2.6 | 0.0010 |
+| vertex:gemini-3.5-flash-lite | 92.3 | 2.1% | 18/21 | 3.2 | 0.0011 |
+| vertex:gemini-3.8-flash | 80.2 | 1.4% | 20/21 | 5.4 | 0.0046 |
+| whisper:large-v3 (CPU) | 79.1 | 1.8% | 18/21 | 25.5 | 0 |
+| whisper:medium (CPU) | 77.4 | 9.8% | 19/21 | 18.4 | 0 |
+| openrouter:openai/gpt-audio | 75.3 | 15.4% | 16/21 | 3.5 | 0.021 |
+
+(Turbo ran on its own; its speed score is against itself, so its total is not comparable -- at
+15 s against 2.5 s it is the fallback, not the first choice.) The studio uses Gemini 3.1 Flash
+Lite first and Whisper turbo if that fails. Three things the table does not show:
+
+- **Every language model invents words for silence** -- a French sentence, "He is making a lot of
+  noise", the list of names it was given as hints. `_stt.transcribe()` therefore asks the Silero
+  VAD first and returns nothing for a note with under 0.4 s of speech, without calling any engine.
+- **A chat audio model can answer the note instead of writing it down.** A voice note is a film
+  brief, i.e. an instruction; `gpt-audio` replied "I'm sorry, but I can't assist with that" to one
+  and `gpt-audio-mini` skipped its first sentence. The Gemini models wrote every note down.
+- **Whisper medium turned Ukrainian into Russian** (61% WER on the mixed clip).
+
 ## Projects: one folder and two files per video
 
 Everything about one video lives in `projects/<id>/`: the manifests that drive

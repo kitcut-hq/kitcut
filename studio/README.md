@@ -148,7 +148,22 @@ curl -s $BASE/api/health                                      # running, queued,
 
 **Poll the status, every 2-5 s.** There is no push, because quick tunnels do not carry
 server-sent events. A film takes about 3-6 minutes, most of it Claude. The prompt is capped at
-600 characters.
+4000 characters.
+
+**Pictures and voice notes** (`uploads.py`). The page uploads each one as it is attached
+(`POST /api/uploads`, the raw bytes), and a film request names them (`"attachments": [ids]`); a
+film may then have no typed words at all. The kind is read off the file's first bytes (JPEG, PNG,
+WebP pictures; WebM, Ogg, MP4, WAV, MP3 recordings), a picture must open in Pillow, a recording
+may last 3 minutes. A voice note is written out in the background -- Gemini 3.1 Flash Lite on
+Vertex, then Whisper large-v3-turbo on the CPU if that fails (`STUDIO_STT` overrides; measured by
+`scripts/stt-compare.py`) -- and `GET /api/uploads/<id>` returns its words; a note with no speech
+comes back empty without asking any engine, because every model tried invented words for
+silence. Only the uploader's client (`X-Client-Ip`) can see or use an upload; what no film takes is
+deleted after a day. A film copies its attachments into `inputs/` (Claude reads them, never
+writes), pictures join the manifest's `images` as `upload1...`, and the first message lists them
+with the instruction to look at each and say what it took it to be; a film nobody typed a word for
+gets its title from Claude (`name_film`). Pictures film.js never draws leave the manifest before
+the final render, so they never reach the film's files.
 
 ## What it costs, and where that is recorded
 

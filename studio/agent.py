@@ -177,11 +177,78 @@ def ask(film, recent=()):
             round(n * 2.2 - 3),
             n - 1,
             limits(n)["claude_s"] // 60,
-            film.record().get("prompt", "").strip(),
+            film.record().get("prompt", "").strip()
+            or "(nothing typed: the idea is in what is attached)",
         )
     )
+    text += attached_note(film)
     note = recent_note(film.look, recent)
     return text + ("\n\n" + note if note else "")
+
+
+def attached_note(film):
+    """What the visitor attached (studio.json attachments, files in inputs/), and how to take it:
+    a picture may be something to show, a reference, or the brief itself, and nobody says which,
+    so Claude looks, decides, and says what it decided (the first thing the page shows)."""
+    rec = film.record()
+    items = rec.get("attachments") or []
+    if not items:
+        return ""
+    lines = ["", "", "Attached by the person:"]
+    notes = [a for a in items if a["kind"] == "audio"]
+    pics = [a for a in items if a["kind"] == "image"]
+    for i, a in enumerate(notes, 1):
+        lines.append(
+            '- Voice note %d (%s, written out by speech recognition; a name may be misheard): "%s"'
+            % (i, _mmss(a.get("secs") or 0), (a.get("transcript") or "").strip())
+        )
+    for a in pics:
+        lines.append(
+            "- Picture %s (%sx%s): Read %s to see it. On screen: SK.image('%s', x, y, w)."
+            % (a["name"], a.get("w"), a.get("h"), a["file"], a["name"])
+        )
+    if pics:
+        lines += [
+            "",
+            "Read every picture before you plan. Each is one of three things: material to show "
+            "(a logo, a product, a person, a place: put it on screen with SK.image), a reference "
+            "to match (a look, a character, a layout: draw in its spirit, don't paste it), or the "
+            "brief itself (a screenshot, a note, a sketch of the story: read it as the prompt). "
+            "Where the person said how to use one, do that; otherwise decide. Before you write "
+            "anything, say in one short sentence per picture what you took it to be. A photo in "
+            "a drawn film sits best framed, as a pinned print or a card, so it belongs to the "
+            "drawn world. A picture you don't draw never leaves the studio.",
+        ]
+    if not rec.get("prompt", "").strip():
+        lines += [
+            "",
+            "Nothing was typed, so the film has no title yet: once you know what it is, call "
+            "name_film with a short title (a few words, in the brief's language).",
+        ]
+    return "\n".join(lines)
+
+
+def _mmss(s):
+    return "%d:%02d" % (int(s) // 60, int(s) % 60)
+
+
+def drop_unused_uploads(film):
+    """The visitor's pictures that film.js does not draw leave the manifest before the final
+    render, so they are never bundled into the film's files. Returns the names dropped."""
+    with open(film.manifest, encoding="utf-8") as f:
+        m = json.load(f)
+    images = m.get("images") or {}
+    try:
+        with open(film.path("film.js"), encoding="utf-8") as f:
+            used = set(re.findall(r"\bupload\d+\b", f.read()))
+    except OSError:
+        used = set()
+    gone = [k for k in images if re.fullmatch(r"upload\d+", k) and k not in used]
+    if gone:
+        for k in gone:
+            del images[k]
+        films._write_json(film.manifest, m)
+    return gone
 
 
 def recent_films(film, n=8):
@@ -699,6 +766,7 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
             await save(film.id, {"state": "finishing"})
         pin_vo(film)  # whatever Claude left there, the backends and models stay the studio's
         pin_paint(film)
+        drop_unused_uploads(film)
         if rec.get("branding"):
             missing = brand(film)
             if missing:
@@ -892,6 +960,11 @@ def first_record(film, source, client):
         "priority": rec.get("priority", 0),
         "auth": rec.get("auth", "api"),
         "branding": bool(rec.get("branding")),
+        # what came with the idea: kinds and sizes only (the words and pictures stay here)
+        "attachments": [
+            {k: a.get(k) for k in ("kind", "secs", "w", "h") if a.get(k) is not None}
+            for a in rec.get("attachments") or []
+        ],
         "state": "queued",
         "cost_usd": 0.0,
     }

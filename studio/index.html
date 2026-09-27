@@ -65,6 +65,43 @@ form { display: grid; gap: 10px; }
 textarea { width: 100%; min-height: calc(5 * 1.35em + 28px); resize: vertical; padding: 14px 16px; border-radius: 12px;
   border: 1.5px solid var(--rule); background: var(--sheet); color: var(--ink); font: 22px/1.35 'Patrick Hand', cursive; }
 .count { margin: -4px 2px 0; text-align: right; }
+/* the prompt card: the words, then what is attached, then + and the microphone */
+.composer { display: grid; border: 1.5px solid var(--rule); border-radius: 12px; background: var(--sheet); }
+.composer:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.composer.drop { border-color: var(--accent); background: var(--accent-soft); }
+.composer textarea { border: 0; border-radius: 12px 12px 0 0; background: transparent; }
+.composer textarea:focus { outline: none; }
+.tray { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 14px 6px; }
+.att { position: relative; margin: 0; }
+.att .x { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; padding: 0; border-radius: 50%;
+  background: rgba(20, 16, 12, .72); color: #fff; font: 600 15px/24px Inter, system-ui, sans-serif; letter-spacing: 0; }
+.att.pic { width: 72px; height: 72px; border-radius: 10px; overflow: hidden; border: 1.5px solid var(--rule); background: var(--paper); }
+.att.pic img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
+.att.busy::after { content: ''; position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px;
+  border: 3px solid rgba(255, 255, 255, .9); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+.att.bad { border-color: var(--bad); }
+.att.voice { width: 72px; height: 72px; border-radius: 10px; border: 1.5px solid var(--rule); background: var(--paper); }
+.att.voice .play { width: 100%; height: 100%; padding: 14px 0 0; border-radius: 10px; background: none; color: var(--ink);
+  display: grid; place-items: center; gap: 2px; font: 600 12px/1 Inter, system-ui, sans-serif; letter-spacing: 0; }
+.att.voice .play svg { width: 20px; height: 20px; color: var(--accent); }
+.tools, .recbar { display: flex; align-items: center; gap: 10px; padding: 4px 10px 10px; }
+.tools .grow { flex: 1; min-width: 0; }
+.tools .grow button { margin-left: 6px; }
+button.icon { flex: none; width: 42px; height: 42px; padding: 0; border-radius: 50%; display: inline-grid; place-items: center;
+  background: transparent; color: var(--ink); border: 1.5px solid var(--rule); font: 400 26px/1 Inter, system-ui, sans-serif; letter-spacing: 0; }
+button.icon:hover:not(:disabled) { background: var(--accent-soft); }
+button.icon svg { width: 20px; height: 20px; }
+button.icon.send { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.recbar canvas { flex: 1; min-width: 0; height: 36px; color: var(--accent); }
+.rectime { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; color: var(--ink-soft);
+  font: 600 14px/1 Inter, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.rectime i { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); animation: blink 1s steps(2) infinite; }
+.rectime.late { color: var(--bad); }
+@keyframes blink { 50% { opacity: .2; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+#peek { border: 0; padding: 0; background: none; max-width: min(96vw, 1200px); }
+#peek::backdrop { background: rgba(20, 16, 12, .7); }
+#peek img { display: block; max-width: 100%; max-height: 88vh; border-radius: 10px; cursor: zoom-out; }
 .count.over { color: var(--bad); font-weight: 600; }
 textarea:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
@@ -184,7 +221,22 @@ button.short { background: var(--rule); color: var(--ink-soft); }
   </form>
 
   <form id="form">
-    <textarea id="prompt" rows="5" aria-label="What should the film show?" aria-describedby="promptCount">A paper plane delivers a cup of coffee to a sleepy developer, who wakes up delighted</textarea>
+    <div class="composer" id="composer">
+      <textarea id="prompt" rows="5" aria-label="What should the film show?" aria-describedby="promptCount" placeholder="Type your idea, or say it with the microphone. Add pictures with +.">A paper plane delivers a cup of coffee to a sleepy developer, who wakes up delighted</textarea>
+      <div class="tray" id="tray" hidden></div>
+      <div class="tools" id="tools">
+        <button type="button" class="icon" id="attach" aria-label="Add pictures" title="Add pictures: a logo, a photo, a sketch, a screenshot of your brief">+</button>
+        <input type="file" id="files" accept="image/*" multiple hidden>
+        <span class="note grow" id="attachNote" aria-live="polite"></span>
+        <button type="button" class="icon" id="mic" aria-label="Record a voice note" title="Say your idea instead of typing it" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+      </div>
+      <div class="recbar" id="recbar" hidden>
+        <button type="button" class="icon" id="recCancel" aria-label="Cancel the recording" title="Cancel (Esc)">&times;</button>
+        <canvas id="recLevel" aria-hidden="true"></canvas>
+        <span class="rectime" id="recTime"><i></i><span id="recClock">0:00</span>&nbsp;/ 3:00</span>
+        <button type="button" class="icon send" id="recDone" aria-label="Done: attach the recording" title="Done: attach it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+      </div>
+    </div>
     <p class="note count" id="promptCount" aria-live="polite" hidden></p>
     <div class="row">
       <select id="look" aria-label="Look">
@@ -252,6 +304,7 @@ button.short { background: var(--rule); color: var(--ink-soft); }
   </footer>
 </div>
 
+<dialog id="peek" aria-label="Picture"><img alt=""></dialog>
 <dialog id="signin" aria-labelledby="signinTitle">
   <form method="dialog"><button class="close" aria-label="Close">&times;</button></form>
   <h2 id="signinTitle">Sign in to make your film</h2>
@@ -288,6 +341,14 @@ const IDEAS = [
   'A tiny startup launches its app at 3 a.m., and the first user signs up',
 ];
 if ($('prompt').value === $('prompt').defaultValue) $('prompt').value = IDEAS[Math.floor(Math.random() * IDEAS.length)];
+// the example idea in the box, until someone types: attaching a picture or a voice note clears it,
+// so a film about a bakery does not also get a paper plane nobody asked for
+let example = $('prompt').value;
+$('prompt').addEventListener('input', () => { example = null; });
+function dropExample() {
+  if (example !== null && $('prompt').value === example && IDEAS.includes(example)) { $('prompt').value = ''; countPrompt(); }
+  example = null;
+}
 // how much of a prompt the studio reads (studio/server.py): a longer one is refused here, never cut
 const PROMPT_MAX = 4000;
 function countPrompt() {
@@ -386,7 +447,7 @@ async function recent() {
     $('films').innerHTML = list.map((f, i) => `
       <a class="film" href="/film/${esc(f.id)}" data-i="${i}">
         <img src="${esc(f.poster_url)}" alt="" loading="lazy">
-        <div><p>${esc(f.prompt)}</p><small>${f.length || 5} s ${f.look === 'painted' ? 'painted' : 'drawn'} film · made in ${mmss(f.seconds || 0)}${f.cost_usd != null ? ' · $' + f.cost_usd.toFixed(2) : ''}</small></div>
+        <div><p>${esc(f.prompt || f.title || 'A film from pictures and a voice note')}</p><small>${f.length || 5} s ${f.look === 'painted' ? 'painted' : 'drawn'} film · made in ${mmss(f.seconds || 0)}${f.cost_usd != null ? ' · $' + f.cost_usd.toFixed(2) : ''}</small></div>
       </a>`).join('');
     for (const b of $('films').querySelectorAll('.film')) {
       const f = list[+b.dataset.i];
@@ -641,16 +702,336 @@ async function whoami() {
   }
 }
 
+
+// ---------------------------------------------------------------- pictures and voice notes
+// Attached to the idea, alongside the words or instead of them. A picture is shrunk here (2048 px;
+// redrawing it drops the camera's location data) and a voice note recorded here; each goes up to
+// the studio as soon as the visitor is signed in (api/uploads.js), and a voice note comes back
+// written out (its words are the tile's tooltip). Everything waits in this browser
+// (IndexedDB) until a film takes it, so it survives the sign-in link and a reload.
+const MAX_PICS = 6, MAX_NOTES = 3, REC_MAX = 180, REC_WARN = 165;
+const ATT = [];  // {kind: 'image'|'audio', blob, url, w, h, secs, id, state, transcript, error}
+let known = false;  // whoami() has answered: uploads wait for it
+const canUpload = () => known && (!AUTH || !!USER);
+function note(html) { $('attachNote').innerHTML = html || ''; }
+const pics = () => ATT.filter((a) => a.kind === 'image').length;
+const notes = () => ATT.filter((a) => a.kind === 'audio').length;
+
+const shelf = {
+  db: null,
+  open() {
+    return this.db || (this.db = new Promise((ok, no) => {
+      const r = indexedDB.open('kitcut', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('draft');
+      r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error);
+    }));
+  },
+  async save() {
+    const items = ATT.map(({ kind, blob, w, h, secs, id, transcript, state }) =>
+      ({ kind, blob, w, h, secs, id, transcript, state: state === 'ready' || state === 'transcribing' ? state : 'local' }));
+    try {
+      const db = await this.open();
+      db.transaction('draft', 'readwrite').objectStore('draft').put(items, 'attachments');
+    } catch (e) { /* a private window: kept for this visit only */ }
+  },
+  async load() {
+    try {
+      const db = await this.open();
+      return await new Promise((ok) => {
+        const r = db.transaction('draft').objectStore('draft').get('attachments');
+        r.onsuccess = () => ok(r.result || []); r.onerror = () => ok([]);
+      });
+    } catch (e) { return []; }
+  },
+};
+
+function renderTray() {
+  const tray = $('tray');
+  tray.hidden = !ATT.length;
+  $('attach').disabled = pics() >= MAX_PICS;
+  let n = { image: 0, audio: 0 };
+  tray.replaceChildren(...ATT.map((a) => attEl(a, ++n[a.kind])));
+}
+function attEl(a, n) {
+  const busy = a.state === 'uploading';
+  if (a.kind === 'image') {
+    const f = document.createElement('figure');
+    f.className = `att pic${busy ? ' busy' : ''}${a.state === 'error' ? ' bad' : ''}`;
+    f.title = a.error || '';
+    f.innerHTML = `<img alt="Picture ${n}" src="${a.url}"><button type="button" class="x" aria-label="Remove picture ${n}">&times;</button>`;
+    f.querySelector('img').onclick = () => { $('peek').querySelector('img').src = a.url; $('peek').showModal(); };
+    f.querySelector('.x').onclick = () => removeAtt(a);
+    return f;
+  }
+  const d = document.createElement('figure');
+  const failed = a.state === 'error' || a.state === 'failed' || (a.state === 'ready' && !a.transcript);
+  d.className = `att voice${busy || a.state === 'transcribing' ? ' busy' : ''}${failed ? ' bad' : ''}`;
+  // what was heard stays out of the way: a tooltip, not a line of its own
+  d.title = failed ? (a.error || 'No words were heard in this one. Delete it and record it again.')
+    : a.transcript ? `We heard: “${a.transcript}”` : '';
+  const icon = (playing) => (playing
+    ? '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>') + mmss(a.secs || 0);
+  d.innerHTML = `<button type="button" class="play" aria-label="Play voice note ${n}">${icon(false)}</button>` +
+    `<button type="button" class="x" aria-label="Delete voice note ${n}">&times;</button>`;
+  const play = d.querySelector('.play');
+  play.onclick = () => {
+    a.audio = a.audio || new Audio(a.url);
+    a.audio.onended = () => { play.innerHTML = icon(false); };
+    if (a.audio.paused) { a.audio.play(); play.innerHTML = icon(true); } else { a.audio.pause(); play.innerHTML = icon(false); }
+  };
+  d.querySelector('.x').onclick = () => removeAtt(a);
+  return d;
+}
+function removeAtt(a) {
+  const i = ATT.indexOf(a);
+  if (i < 0) return;
+  ATT.splice(i, 1);
+  if (a.audio) a.audio.pause();
+  URL.revokeObjectURL(a.url);
+  renderTray(); shelf.save();
+}
+function clearAttachments() {
+  for (const a of ATT.splice(0)) { if (a.audio) a.audio.pause(); URL.revokeObjectURL(a.url); }
+  renderTray(); shelf.save();
+}
+function addAtt(a) {
+  a.url = URL.createObjectURL(a.blob);
+  ATT.push(a);
+  renderTray(); shelf.save(); sync();
+}
+
+// a picture as the studio should get it: at most 2048 px, PNG where it is see-through (a logo),
+// JPEG otherwise, and under the site's 4.5 MB request limit
+async function decode(file) {
+  try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) { /* try the <img> way */ }
+  const url = URL.createObjectURL(file);
+  try { const im = new Image(); im.src = url; await im.decode(); return im; } finally { URL.revokeObjectURL(url); }
+}
+async function shrink(file, side = 2048) {
+  const src = await decode(file);
+  const W = src.width || src.naturalWidth, H = src.height || src.naturalHeight;
+  const k = Math.min(1, side / Math.max(W, H)), w = Math.max(1, Math.round(W * k)), h = Math.max(1, Math.round(H * k));
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d'); g.drawImage(src, 0, 0, w, h);
+  if (src.close) src.close();
+  let alpha = false;
+  if (file.type !== 'image/jpeg') {
+    const px = g.getImageData(0, 0, w, h).data;
+    for (let i = 3; i < px.length; i += 64) if (px[i] < 250) { alpha = true; break; }
+  }
+  const blob = await new Promise((ok) => c.toBlob(ok, alpha ? 'image/png' : 'image/jpeg', 0.88));
+  if (!blob) throw new Error('could not encode');
+  if (blob.size > 4.2e6 && side > 1000) return shrink(file, Math.round(side * 0.75));
+  return { blob, w, h };
+}
+async function addFiles(list) {
+  const files = [...list].filter((f) => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
+  if (!files.length) { note('Only pictures can be added here (JPG, PNG, WebP).'); return; }
+  dropExample(); note('');
+  for (const f of files) {
+    if (pics() >= MAX_PICS) { note(`Up to ${MAX_PICS} pictures a film.`); break; }
+    try {
+      addAtt({ kind: 'image', state: 'local', ...(await shrink(f)) });
+    } catch (e) {
+      note(`“${esc(f.name)}” could not be opened here. Try a JPG or PNG (on an iPhone, a screenshot of the photo works).`);
+    }
+  }
+}
+$('attach').addEventListener('click', () => $('files').click());
+$('files').addEventListener('change', (e) => { addFiles(e.target.files); e.target.value = ''; });
+const composer = $('composer');
+for (const t of ['dragenter', 'dragover']) composer.addEventListener(t, (e) => {
+  if (![...(e.dataTransfer?.types || [])].includes('Files')) return;
+  e.preventDefault(); composer.classList.add('drop');
+});
+composer.addEventListener('dragleave', (e) => { if (!composer.contains(e.relatedTarget)) composer.classList.remove('drop'); });
+composer.addEventListener('drop', (e) => {
+  composer.classList.remove('drop');
+  if (!e.dataTransfer?.files?.length) return;
+  e.preventDefault(); addFiles(e.dataTransfer.files);
+});
+$('prompt').addEventListener('paste', (e) => {  // a screenshot pasted into the box
+  const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'));
+  if (files.length) { e.preventDefault(); addFiles(files); }
+});
+$('peek').addEventListener('click', () => $('peek').close());
+
+// uploads, in order, as soon as the visitor may; a voice note is then watched until written out
+let syncing = null;
+function sync() {
+  if (!canUpload()) { renderTray(); return Promise.resolve(); }
+  if (syncing) return syncing;
+  syncing = (async () => {
+    await null;  // so the finally below runs after syncing is set, not before
+    let retry = false;
+    try {
+      for (const a of [...ATT]) {
+        if (a.id || a.state === 'error' || !ATT.includes(a)) continue;
+        a.state = 'uploading'; renderTray();
+        try {
+          const r = await api('/api/uploads', { method: 'POST', headers: { 'Content-Type': a.blob.type || 'application/octet-stream' }, body: a.blob });
+          const b = await r.json().catch(() => ({}));
+          if (r.status === 401) { a.state = 'local'; if (b.reason === 'signin') { AUTH = true; USER = null; renderAccount(); } break; }
+          if (!r.ok) { a.state = 'error'; a.error = b.error || 'This one could not be uploaded.'; continue; }
+          a.id = b.id; a.state = b.state === 'transcribing' ? 'transcribing' : 'ready';
+          if (b.transcript != null) a.transcript = b.transcript;
+        } catch (e) { a.state = 'local'; retry = true; note('An upload did not go through; it will try again.'); }
+      }
+    } finally { syncing = null; renderTray(); shelf.save(); }
+    ATT.filter((a) => a.state === 'transcribing').forEach(watch);
+    // added while this ran, or failed on the way: another pass (a pause first after a failure)
+    if (ATT.some((a) => a.state === 'local')) setTimeout(sync, retry ? 3000 : 0);
+  })();
+  return syncing;
+}
+const watched = new Set();
+async function watch(a) {
+  if (watched.has(a)) return;
+  watched.add(a);
+  try {
+    for (let i = 0; i < 150 && ATT.includes(a) && a.state === 'transcribing'; i++) {
+      await new Promise((ok) => setTimeout(ok, i < 10 ? 1000 : 2000));
+      const r = await api(`/api/uploads/${a.id}`);
+      if (r.status === 404) { a.id = null; a.state = 'local'; watched.delete(a); sync(); return; }  // gone: send it again
+      const b = await r.json().catch(() => ({}));
+      if (b.state === 'ready') { a.state = 'ready'; a.transcript = b.transcript || ''; }
+      else if (b.state === 'failed') { a.state = 'failed'; a.error = b.error; }
+    }
+  } catch (e) { /* offline for a moment: making the film waits for it */ }
+  watched.delete(a); renderTray(); shelf.save();
+}
+// every attachment uploaded and every voice note written out, or why not
+async function attachmentIds(show) {
+  if (!ATT.length) return [];
+  for (let i = 0; i < 120; i++) {
+    const bad = ATT.find((a) => a.state === 'error' || a.state === 'failed');
+    if (bad) throw new Error(bad.kind === 'audio' ? 'A voice note could not be written out: delete it or record it again.' : 'A picture could not be uploaded: remove it and add it again.');
+    if (ATT.every((a) => a.id && a.state === 'ready')) break;
+    show(ATT.some((a) => a.state === 'transcribing') ? 'Writing out your voice note...' : 'Sending your pictures and voice notes...');
+    if (ATT.some((a) => a.state === 'local')) await sync();
+    ATT.filter((a) => a.state === 'transcribing').forEach(watch);
+    await new Promise((ok) => setTimeout(ok, 1000));
+  }
+  if (!ATT.every((a) => a.id && a.state === 'ready')) throw new Error('Your attachments are taking too long to send. Try again in a minute.');
+  if (ATT.some((a) => a.kind === 'audio' && !a.transcript)) throw new Error('A voice note has no words in it: delete it or record it again.');
+  return ATT.map((a) => a.id);
+}
+
+// the microphone: record, then attach (the check) or throw away (the cross, or Esc)
+let rec = null;
+if (navigator.mediaDevices?.getUserMedia && window.MediaRecorder) $('mic').hidden = false;
+async function startRec() {
+  if (rec) return;
+  if (notes() >= MAX_NOTES) { note(`Up to ${MAX_NOTES} voice notes a film.`); return; }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  } catch (e) {
+    note(e.name === 'NotAllowedError' || e.name === 'SecurityError'
+      ? 'The microphone is blocked. Allow it for this site (the icon at the left of the address bar), then press the microphone again.'
+      : 'No microphone was found on this device.');
+    return;
+  }
+  dropExample(); note('');
+  const type = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm'].find((t) => MediaRecorder.isTypeSupported(t));
+  const mr = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 48000 } : undefined);
+  const chunks = [];
+  mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  let ctx = null, an = null;
+  try {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    an = ctx.createAnalyser(); an.fftSize = 1024;
+    ctx.createMediaStreamSource(stream).connect(an);
+  } catch (e) { /* no level bars, the recording still works */ }
+  rec = { mr, chunks, stream, ctx, an, t0: performance.now(), bars: [], last: 0 };
+  mr.start(250);
+  $('tools').hidden = true; $('recbar').hidden = false; $('recDone').focus();
+  draw();
+}
+function draw() {
+  if (!rec) return;
+  const s = (performance.now() - rec.t0) / 1000;
+  $('recClock').textContent = mmss(s);
+  $('recTime').classList.toggle('late', s >= REC_WARN);
+  if (s >= REC_WARN && s < REC_WARN + 0.1) note('15 seconds left in this voice note.');
+  if (s >= REC_MAX) { stopRec(true).then((a) => { if (a) note('That is the 3-minute limit: the voice note is attached.'); }); return; }
+  const cv = $('recLevel'), dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  if (rec.an && performance.now() - rec.last > 70) {
+    rec.last = performance.now();
+    const buf = new Uint8Array(rec.an.fftSize);
+    rec.an.getByteTimeDomainData(buf);
+    let sum = 0;
+    for (const v of buf) sum += (v - 128) * (v - 128);
+    rec.bars.push(Math.min(1, Math.sqrt(sum / buf.length) / 32));
+    if (rec.bars.length > 400) rec.bars.splice(0, 200);
+  }
+  if (W && H) {
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    const g = cv.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+    g.fillStyle = getComputedStyle(cv).color;
+    const bars = rec.bars.slice(-Math.floor(W / 5));
+    bars.forEach((v, i) => { const bh = Math.max(3, v * H); g.fillRect(W - (bars.length - i) * 5, (H - bh) / 2, 3, bh); });
+  }
+  rec.raf = requestAnimationFrame(draw);
+}
+function stopRec(keep) {
+  if (!rec) return Promise.resolve(null);
+  const r = rec; rec = null;
+  cancelAnimationFrame(r.raf);
+  const secs = (performance.now() - r.t0) / 1000;
+  return new Promise((ok) => {
+    r.mr.onstop = () => {
+      r.stream.getTracks().forEach((t) => t.stop());
+      if (r.ctx) r.ctx.close().catch(() => {});
+      $('recbar').hidden = true; $('tools').hidden = false; $('recTime').classList.remove('late');
+      const blob = new Blob(r.chunks, { type: (r.mr.mimeType || type0()).split(';')[0] });
+      const a = { kind: 'audio', state: 'local', blob, secs };
+      if (!keep) {
+        if (secs > 10 && blob.size) {  // a long one thrown away by mistake can come back
+          note('Recording deleted. <button type="button" class="small ghost" id="undoRec">Undo</button>');
+          const t = setTimeout(() => { if ($('undoRec')) note(''); }, 5000);
+          $('undoRec').onclick = () => { clearTimeout(t); note(''); addAtt(a); };
+        }
+        ok(null); return;
+      }
+      if (secs < 1 || !blob.size) { note('That was too short to keep.'); ok(null); return; }
+      addAtt(a); ok(a);
+    };
+    try { r.mr.stop(); } catch (e) { r.mr.onstop(); }
+  });
+}
+const type0 = () => (window.MediaRecorder?.isTypeSupported?.('audio/webm') ? 'audio/webm' : 'audio/mp4');
+$('mic').addEventListener('click', startRec);
+$('recDone').addEventListener('click', () => stopRec(true));
+$('recCancel').addEventListener('click', () => stopRec(false));
+document.addEventListener('keydown', (e) => { if (rec && e.key === 'Escape') { e.preventDefault(); stopRec(false); } });
+
+// what was attached last time, back in the tray
+shelf.load().then((saved) => {
+  for (const s of saved) {
+    if (!s.blob) continue;
+    const state = s.id ? (s.kind === 'audio' && s.state !== 'ready' ? 'transcribing' : 'ready') : 'local';
+    ATT.push({ ...s, state, url: URL.createObjectURL(s.blob) });
+  }
+  if (ATT.length) { dropExample(); renderTray(); sync(); }
+});
+
 $('form').addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (rec) await stopRec(true);  // pressed while recording: what was said is attached, not lost
   const prompt = $('prompt').value.trim();
-  if (!prompt) return;
+  if (!prompt && !ATT.length) {
+    $('status').textContent = 'Type your idea, say it with the microphone, or add a picture.';
+    $('prompt').focus(); return;
+  }
   if (prompt.length > PROMPT_MAX) {
     countPrompt(); $('prompt').focus();
     $('status').textContent = `The idea is ${prompt.length.toLocaleString()} characters; the studio reads up to ${PROMPT_MAX.toLocaleString()}. Shorten it, then make the film.`;
     return;
   }
-  if (AUTH && !USER) { draft.save(); return askSignIn(); }
+  if (AUTH && !USER) { draft.save(); shelf.save(); return askSignIn(); }
   if (shortOf(+$('length').value)) {
     $('status').innerHTML = `This film needs ${mmss(costOf(+$('length').value))} of credit and you have ${mmss(CREDITS.balance)}. ` +
       `Credits renew on ${renews()}, or <a href="/pricing">get more film</a>.`;
@@ -660,7 +1041,15 @@ $('form').addEventListener('submit', async (e) => {
   screen('<div class="idle">Claude is thinking up the film...</div>');
   startClock(0);
   try {
-    const r = await api('/api/films', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, seconds: +$('length').value, look: $('look').value }) });
+    const ids = await attachmentIds((t) => screen(`<div class="idle">${t}</div>`));
+    const send = (attachments) => api('/api/films', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, seconds: +$('length').value, look: $('look').value, ...(attachments.length ? { attachments } : {}) }) });
+    let r = await send(ids);
+    if (r.status === 409) {  // an attachment the studio no longer has (a day old): send it again, once
+      const why = await r.clone().json().catch(() => ({}));
+      const lost = ATT.find((a) => a.id === why.id);
+      if (lost) { lost.id = null; lost.state = 'local'; r = await send(await attachmentIds((t) => screen(`<div class="idle">${t}</div>`))); }
+    }
     if (r.status === 401) {
       const why = await r.json().catch(() => ({}));
       finish();
@@ -680,6 +1069,7 @@ $('form').addEventListener('submit', async (e) => {
       return;
     }
     if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    clearAttachments();  // the film has them now
     if (CREDITS && body.credits) { CREDITS.balance = body.credits.balance; paintLength(); }
     mine.add(body.id);
     openFilm(body.id, true);
@@ -687,7 +1077,7 @@ $('form').addEventListener('submit', async (e) => {
 });
 
 paintLength();
-whoami();
+whoami().finally(() => { known = true; sync(); });
 online().then((up) => {
   const m = location.pathname.match(FILM_PATH);
   if (m && up) openFilm(m[1], false);

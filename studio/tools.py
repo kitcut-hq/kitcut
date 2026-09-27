@@ -7,6 +7,7 @@ Each one runs a kitcut script on the film's own manifest, and nothing else:
     paint(retake?)           sketch-paint.py (painted films): paints the scenes, tiles a sheet
     stills(times, sheet?)    sketch-render.py --stills: review frames, tiled into a sheet
     sound(levels?)           sketch-audio.py (after --automation when a cue needs it)
+    name_film(title)         the title, for a film whose visitor typed nothing (voice or pictures)
 
 and the studio's own final step, render(), which Claude cannot call.
 
@@ -28,7 +29,7 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 import motion
 import procs
 import validate
-from film import HOME, KIT, REPO, limits
+from film import HOME, KIT, REPO, _write_json, limits
 from guard import pin_paint, pin_vo
 from sched import waiting_text
 
@@ -198,6 +199,19 @@ class Tools:
             what = "outputs/review/sheet.png"
         return "Rendered %d stills. Read %s to look at them." % (len(ts), what)
 
+    async def name_film(self, title):
+        """The film's title, when the visitor typed nothing (voice notes or pictures only): the
+        record's title (the page and the film's own page show it) and the manifest's."""
+        title = " ".join(str(title or "").split())[:80]
+        if len(title) < 2:
+            raise ToolError("Give the film a short title, a few words.")
+        self.film.update(title=title)
+        with open(self.film.manifest, encoding="utf-8") as f:
+            m = json.load(f)
+        m["title"] = title
+        _write_json(self.film.manifest, m)
+        return "The film is called %r." % title
+
     async def motion(self):
         """The film a few times a second, for what a sheet of stills cannot show: its cuts, and
         any stretch where nothing moves (studio/motion.py)."""
@@ -312,6 +326,15 @@ class Tools:
                 {"type": "object", "properties": {}},
             )(wrap(lambda a: self.motion())),
             tool(
+                "name_film",
+                "Name the film (only when the person typed nothing): a short title, a few words.",
+                {
+                    "type": "object",
+                    "properties": {"title": {"type": "string"}},
+                    "required": ["title"],
+                },
+            )(wrap(lambda a: self.name_film(a.get("title")))),
+            tool(
                 "sound",
                 "Render the soundtrack from score.json and sfx.json (and the narration) to prove "
                 "they work, and say whether the music stays under the narration; levels: also "
@@ -319,6 +342,8 @@ class Tools:
                 {"type": "object", "properties": {"levels": {"type": "boolean"}}},
             )(wrap(lambda a: self.sound(bool(a.get("levels"))))),
         ]
+        if self.film.record().get("prompt", "").strip():  # a typed idea is the title already
+            tools = [t for t in tools if t.name != "name_film"]
         if self.film.look != "painted":
             tools = [t for t in tools if t.name != "paint"]
         return create_sdk_mcp_server("studio", tools=tools)

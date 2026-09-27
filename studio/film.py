@@ -2,6 +2,7 @@
 
     STUDIO_HOME\\projects\\studio-20260925-181500-k3f9qa\\
         sketch.json  studio.json  events.jsonl           the studio's (Claude reads, never writes)
+        inputs\\upload1.jpg inputs\\voice1.webm         what the visitor attached (uploads.py)
         film.js score.json sfx.json vo.json [paint.json] Claude's
         engine\\engine.js engine\\props.js                 the film's own copy of the engine
         audio\\ images\\ outputs\\ temp\\                    what the pipeline makes
@@ -296,9 +297,15 @@ class Film:
         priority=0,
         auth="api",
         branding=False,
+        attachments=(),
     ):
         """A new film's folder: the manifest (its length set), the engine copy, an empty
-        narration, an empty list of paintings for a painted film, and its record."""
+        narration, an empty list of paintings for a painted film, and its record.
+
+        attachments: what the visitor attached (uploads.take), each meta with its file as "src",
+        copied into inputs/. A picture becomes upload1.jpg... and joins the manifest's images
+        under that name, so film.js can draw it with SK.image('upload1', ...); a voice note
+        becomes voice1..., with its words in the record."""
         seconds = seconds if seconds in LENGTHS else LENGTHS[0]
         look = look if look in LOOKS else LOOKS[0]
         projects = os.path.join(HOME, "projects")
@@ -322,6 +329,23 @@ class Film:
             m = json.load(f)
         words = re.sub(r"\s+", " ", prompt).strip()
         m["title"] = (words[:60] + "...") if len(words) > 60 else words
+        attached = []
+        if attachments:
+            os.makedirs(film.path("inputs"))
+            n = {"image": 0, "audio": 0}
+            for a in attachments:
+                n[a["kind"]] += 1
+                stem = ("upload%d" if a["kind"] == "image" else "voice%d") % n[a["kind"]]
+                rel = "inputs/%s.%s" % (stem, a["ext"])
+                shutil.copyfile(a["src"], film.path("inputs", "%s.%s" % (stem, a["ext"])))
+                item = {"kind": a["kind"], "file": rel}
+                if a["kind"] == "image":
+                    m.setdefault("images", {})[stem] = rel
+                    item.update(name=stem, w=a.get("w"), h=a.get("h"))
+                else:
+                    item.update(secs=a.get("secs"), transcript=a.get("transcript") or "")
+                    item.update(lang=a.get("lang"))
+                attached.append(item)
         m["duration"], m["poster_t"] = float(seconds), round(seconds - 0.4, 2)
         m["engine"] = "engine"
         if look == "painted":
@@ -345,6 +369,8 @@ class Film:
                 "auth": auth,
                 # a Free-plan film: KitCut's watermark and closing (agent.brand, studio/outro.js)
                 "branding": bool(branding),
+                # pictures and voice notes the visitor attached (inputs/): never shown publicly
+                "attachments": attached,
                 "release": RELEASE,
                 "state": "queued",
                 "created": datetime.now().isoformat(timespec="seconds"),

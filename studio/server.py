@@ -60,6 +60,7 @@ import agent  # noqa: E402 -- imports _env first, which re-execs into .venv; the
 import film as films  # noqa: E402
 import procs  # noqa: E402
 import store  # noqa: E402
+import uploads  # noqa: E402
 from film import Film  # noqa: E402
 from sched import Sched  # noqa: E402
 
@@ -179,10 +180,12 @@ def live(status=("queued", "running")):
 
 
 def prune():
-    """Forget finished films' events after a while (the page then reads them from disk)."""
+    """Forget finished films' events after a while (the page then reads them from disk), and
+    the uploads no film took within a day."""
     now = time.time()
     for jid in [k for k, j in JOBS.items() if j.get("ended") and now - j["ended"] > KEEP_S]:
         JOBS.pop(jid, None)
+    uploads.prune(now)
 
 
 # ------------------------------------------------------------------ running a film
@@ -335,7 +338,8 @@ async def create(req):
     except ValueError:
         return web.json_response({"error": 'send JSON: {"prompt": "..."}'}, status=400)
     prompt = str(body.get("prompt", "")).strip()[:PROMPT_MAX]
-    if len(prompt) < 3:
+    ids = body.get("attachments") or []
+    if len(prompt) < 3 and not ids:
         return web.json_response({"error": "write a prompt"}, status=400)
     try:
         seconds = int(body.get("seconds") or films.LENGTHS[0])
@@ -363,6 +367,14 @@ async def create(req):
         body.get("branding") is True and from_this_machine(req)
     )
     prune()
+    # pictures and voice notes uploaded first (uploads.py): this client's own, and every voice
+    # note written out -- which may take a moment, so before the lock
+    try:
+        attached = await uploads.take(client, ids) if ids else []
+    except uploads.UploadError as e:
+        return web.json_response(e.body(), status=e.status)
+    for a in attached:
+        a["src"] = uploads.file_of(client, a)
     # the check and the taking happen under one lock: two requests at the same moment cannot
     # both slip under a limit that has room for one
     async with ADMIT:
@@ -380,7 +392,9 @@ async def create(req):
             priority=priority,
             auth=auth,
             branding=branding,
+            attachments=attached,
         )
+        uploads.release(client, attached)  # the film has its own copies now
         await agent.save(f.id, agent.first_record(f, "web", client))
         start(f)
     await asyncio.sleep(0)  # let it take a free slot now, so the answer says whether it waits
@@ -391,9 +405,31 @@ async def create(req):
             "status": "queued" if ahead is not None else "running",
             "position": (ahead + 1) if ahead is not None else 0,
             "status_url": "%s/api/films/%s" % (base_url(req), f.id),
+            "attachments": [a["kind"] for a in attached],
         },
         status=202,
     )
+
+
+async def upload(req):
+    """One picture or voice note, as raw bytes (uploads.py): its id, kind and state."""
+    if DRAINING:
+        return web.json_response(
+            {"error": "The studio is restarting; try again in a minute."}, status=503
+        )
+    try:
+        meta = await uploads.receive(req, client_of(req))
+    except uploads.UploadError as e:
+        return web.json_response(e.body(), status=e.status)
+    return web.json_response(uploads.public(meta), status=201)
+
+
+async def upload_status(req):
+    """An upload as it is now -- a voice note's words, once written out. Its uploader's only."""
+    meta = uploads.get(client_of(req), req.match_info["id"])
+    if meta is None:
+        return web.json_response({"error": "not found"}, status=404)
+    return web.json_response(uploads.public(meta))
 
 
 async def cancel(req):
@@ -487,13 +523,14 @@ async def status(req):
         if J.get("cost_usd") is not None:
             out["cost_usd"] = J["cost_usd"]  # so far; the final figure replaces it below
         if J["status"] not in ("done", "error", "cancelled"):
-            r = {k: r.get(k) for k in ("prompt", "look", "length")}
+            r = {k: r.get(k) for k in ("prompt", "title", "look", "length")}
     if out["status"] == "done":
         out.update(
             video_url=signed(req, jid, "film.mp4"), poster_url=signed(req, jid, "film_poster.png")
         )
     keys = (
         "prompt",
+        "title",
         "look",
         "length",
         "image_cost_usd",
@@ -599,7 +636,16 @@ async def list_films(req):
             out.append(
                 {
                     k: r.get(k)
-                    for k in ("prompt", "look", "length", "seconds", "cost_usd", "turns", "stages")
+                    for k in (
+                        "prompt",
+                        "title",
+                        "look",
+                        "length",
+                        "seconds",
+                        "cost_usd",
+                        "turns",
+                        "stages",
+                    )
                 }
                 | {
                     "id": f.id,
@@ -625,6 +671,8 @@ def make_app(token):
             web.get("/api/films", list_films),
             web.get("/api/costs", costs),
             web.post("/api/films", create),
+            web.post("/api/uploads", upload),
+            web.get("/api/uploads/{id}", upload_status),
             web.get("/api/films/{id}", status),
             web.post("/api/films/{id}/cancel", cancel),
             web.post("/api/admin/drain", drain),
