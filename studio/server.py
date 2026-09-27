@@ -96,8 +96,10 @@ DRAINING = False
 TOKEN = ""
 MAX_QUEUE = int(os.environ.get("STUDIO_MAX_QUEUE") or 5)
 PROMPT_MAX = 4000  # characters of a prompt: a pasted brief fits (the page caps it too)
-# the public site makes this reachable by anyone: a day's spend, and each client's films, are capped
-DAILY_USD = float(os.environ.get("STUDIO_DAILY_USD") or 25)
+# the public site makes this reachable by anyone: a day's spend, and each client's films, are
+# capped. It must hold at least one film of the longest length's reserve (8 minutes: ~$29,
+# film.limits)
+DAILY_USD = float(os.environ.get("STUDIO_DAILY_USD") or 100)
 PER_CLIENT_DAILY = int(os.environ.get("STUDIO_PER_CLIENT_DAILY") or 5)
 KEEP_S = 3600  # a finished film's events stay in memory this long; then they come from disk
 

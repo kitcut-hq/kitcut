@@ -56,8 +56,8 @@ REPO = os.path.abspath(os.environ.get("STUDIO_REPO") or KIT)
 LEGACY = os.path.join(REPO, "projects")
 
 # seconds a visitor may ask for: the site sells them by the second, and decides who may have
-# what (films over a minute are for its Pro plan)
-LENGTHS = tuple(range(5, 125, 5))
+# what (films over a minute are for its Pro plan, up to 8 minutes)
+LENGTHS = tuple(range(5, 485, 5))
 # drawn: everything drawn in code; painted: an image model paints the scenes, the code animates
 LOOKS = ("drawn", "painted")
 EDITABLE = ("film.js", "score.json", "sfx.json", "vo.json")
@@ -68,7 +68,7 @@ ENGINE = ("engine.js", "props.js")  # the film's own copy, in engine\; Claude ma
 CAST_FILE = re.compile(r"^[a-z][a-z0-9_]{0,30}\.js$")
 CAST_USE = re.compile(r"\bcast\s*(?:\.\s*([a-z][a-z0-9_]*)|\[\s*['\"]([a-z][a-z0-9_]*)['\"]\s*\])")
 # what Claude may not change in paint.json: the painter, and how many paintings a film may cost
-# (8 up to a minute, more for a longer film: paint_pins)
+# (8 up to a minute, more for a longer film: limits()["images"], paint_pins)
 PAINT_PINNED = {"backend": "muse", "model": "meta/muse-image", "max_images": 8}
 # the voice: Google's Gemini text-to-speech. 3.8 needs the Gemini API enabled in the service
 # account's project; STUDIO_TTS_MODEL overrides it (e.g. gemini-3.1-flash-tts-preview)
@@ -110,7 +110,11 @@ def limits(length):
         "voice_s": max(300, 180 + 5 * length),
         "lines": 6 if length <= 15 else max(12, -(-length // 5)),  # narration sentences
         "tts_usd": max(0.30, 0.005 * length),  # what the narration may cost, retakes included
-        "images": 8 if length <= 60 else 12,  # paintings, repaints included
+        # paintings, repaints included: past 2 minutes one about every 20 s
+        "images": 8 if length <= 60 else 12 if length <= 120 else min(24, length // 20),
+        # the agent's turns: 60 was enough up to 2 minutes; a longer film writes and checks
+        # more scenes (a turn is one of Claude's replies, its tool calls included)
+        "turns": 60 + max(0, length - 120) // 6,
     }
 
 

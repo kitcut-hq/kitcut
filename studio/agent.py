@@ -569,7 +569,7 @@ async def run_claude(film, emit, meter, tools, auth="api", prompt=None, resume=N
             "PostToolUse": [HookMatcher(matcher="Write|Edit", hooks=[post_tool])],
         },
         can_use_tool=can_use,
-        max_turns=60,
+        max_turns=limits(film.length)["turns"],
         max_budget_usd=limits(film.length)["budget_usd"],
         # a review sheet of painted frames is a PNG of several MB, and it comes back to the SDK
         # as one message (the default limit, 1 MB, failed a painted film)
