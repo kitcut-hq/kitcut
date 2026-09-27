@@ -155,7 +155,7 @@ curl -s $BASE/api/health                                      # running, queued,
 
 **Poll the status, every 2-5 s.** There is no push, because quick tunnels do not carry
 server-sent events. A film takes about 3-6 minutes, most of it Claude. The prompt is capped at
-4000 characters.
+12000 characters.
 
 **Pictures and voice notes** (`uploads.py`). The page uploads each one as it is attached
 (`POST /api/uploads`, the raw bytes), and a film request names them (`"attachments": [ids]`); a

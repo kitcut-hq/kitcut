@@ -95,7 +95,7 @@ ADMIT = asyncio.Lock()  # one admission at a time: the limits are checked and ta
 DRAINING = False
 TOKEN = ""
 MAX_QUEUE = int(os.environ.get("STUDIO_MAX_QUEUE") or 5)
-PROMPT_MAX = 4000  # characters of a prompt: a pasted brief fits (the page caps it too)
+PROMPT_MAX = 12000  # characters of a prompt: a long pasted brief with its narration fits (the page caps it too)
 # the public site makes this reachable by anyone: a day's spend, and each client's films, are
 # capped. It must hold at least one film of the longest length's reserve (8 minutes: ~$29,
 # film.limits)

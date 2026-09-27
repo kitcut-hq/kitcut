@@ -444,7 +444,7 @@ function dropExample() {
   example = null;
 }
 // how much of a prompt the studio reads (studio/server.py): a longer one is refused here, never cut
-const PROMPT_MAX = 4000;
+const PROMPT_MAX = 12000;
 function countPrompt() {
   const n = $('prompt').value.trim().length, c = $('promptCount'), max = PROMPT_MAX.toLocaleString();
   c.hidden = n < PROMPT_MAX * 0.75;
