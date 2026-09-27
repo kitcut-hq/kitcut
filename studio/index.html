@@ -358,7 +358,7 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
 
   <footer class="site-foot">
     <a class="brand" href="/" aria-label="KitCut home"><img src="/logo-64.png" alt="" width="28" height="28" onerror="this.remove()"><span>KitCut</span></a>
-    <nav id="footNav" aria-label="Site" hidden><a href="/">Make a film</a><a href="/pricing">Pricing</a><a href="/account">Your account</a><a href="mailto:hello@kitcut.ai">hello@kitcut.ai</a></nav>
+    <nav id="footNav" aria-label="Site" hidden><a href="/">Make a film</a><a href="/studio">Studio</a><a href="/pricing">Pricing</a><a href="/account">Your account</a><a href="/connect">Use it in Claude or ChatGPT</a><a href="mailto:hello@kitcut.ai">hello@kitcut.ai</a></nav>
     <p>&copy; 2026 KitCut. Films written, drawn, narrated and scored by Claude. <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
   </footer>
 </div>
@@ -686,7 +686,7 @@ function renderAccount() {
   a.hidden = false;
   const pricing = '<a class="me" href="/pricing">Pricing</a>';
   if (USER) {
-    a.innerHTML = pricing + (USER.picture ? `<img src="${esc(USER.picture)}" alt="" referrerpolicy="no-referrer">` : '') +
+    a.innerHTML = pricing + '<a class="me" href="/studio" title="Your projects: a series or a channel, with its cast and pictures">Studio</a>' + (USER.picture ? `<img src="${esc(USER.picture)}" alt="" referrerpolicy="no-referrer">` : '') +
       `<a class="me" href="/account" title="Your credits, billing cycle and films">${esc(USER.email)}</a><form method="post" action="/api/auth/signout"><button class="small ghost" type="submit">Sign out</button></form>`;
   } else {
     a.innerHTML = pricing + '<button class="small ghost" type="button" id="signinBtn">Sign in</button>';
