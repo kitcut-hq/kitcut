@@ -73,10 +73,14 @@ network() {
       --source-address-prefixes VirtualNetwork --destination-port-ranges '*' --output none
   fi
   if ! subnet_id >/dev/null 2>&1; then
-    run az network vnet subnet create -g "$VPN_RG" --vnet-name "$VPN_VNET" -n "$SUBNET" \
-      --address-prefixes "$SUBNET_PREFIX" --default-outbound-access true \
-      --network-security-group "$(az network nsg show -g "$RG" -n "$NSG" --query id -o tsv)" \
-      --output none
+    # through the REST API: `subnet create --default-outbound-access` needs a newer az than 2.49,
+    # and a subnet made today is private (no way out) unless it says otherwise
+    local vnet nsg
+    vnet="$(az network vnet show -g "$VPN_RG" -n "$VPN_VNET" --query id -o tsv)"
+    nsg="$(az network nsg show -g "$RG" -n "$NSG" --query id -o tsv)"
+    run az rest --method put --output none \
+      --url "https://management.azure.com$vnet/subnets/$SUBNET?api-version=2023-09-01" \
+      --body "{\"properties\": {\"addressPrefix\": \"$SUBNET_PREFIX\", \"defaultOutboundAccess\": true, \"networkSecurityGroup\": {\"id\": \"$nsg\"}}}"
   fi
   echo "network: $VPN_VNET/$SUBNET ($SUBNET_PREFIX), NSG $NSG: SSH from $VPN_CLIENTS only"
 }
