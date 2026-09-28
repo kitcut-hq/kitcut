@@ -39,7 +39,6 @@ SCRIPTS = os.path.join(KIT, "scripts")
 LOCKS = os.path.join(REPO, "temp", "locks")
 # seconds a step may run; the voice, the mix and the render get longer for a longer film
 TIMEOUT = {"check": 30, "stills": 120, "paint": 300, "automation": 180}
-MAX_VOICE_RUNS = 6  # recordings per film, retakes included
 MAX_STILLS = 12
 
 
@@ -157,10 +156,10 @@ class Tools:
         )
 
     async def voice(self, retake_line=None):
-        if self.voice_runs >= MAX_VOICE_RUNS:
+        runs = limits(self.film.length)["voice_runs"]  # recordings per film, retakes included
+        if self.voice_runs >= runs:
             raise ToolError(
-                "That is %d recordings, the limit for one film: keep the narration you have."
-                % MAX_VOICE_RUNS
+                "That is %d recordings, the limit for one film: keep the narration you have." % runs
             )
         if _tts_spent(self.film) >= limits(self.film.length)["tts_usd"]:
             raise ToolError("The narration's budget is spent: keep the recording you have.")

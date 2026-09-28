@@ -234,6 +234,15 @@ async def main():
             not validate._vo(vo, 12, 480) and validate._vo(vo, 12, 60),
             "a narration line may start anywhere in the film, and not past its end",
         )
+        drums = {"bpm": 120, "events": [{"type": "drums", "bars": 240}]}
+        check(
+            not validate._score(drums, 480) and validate._score(drums, 60),
+            "an 8-minute film's drums may run 240 bars; a minute's may not",
+        )
+        check(
+            films.limits(480)["voice_runs"] > films.limits(60)["voice_runs"] == 6,
+            "a long film gets more recordings than a short one (retakes and refusals)",
+        )
         check(
             (await c.get("/api/films")).status == 401, "the API refuses a request without a token"
         )

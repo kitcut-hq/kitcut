@@ -133,7 +133,7 @@ def _inst(where, inst, out):
         )
 
 
-def _score(d):
+def _score(d, length=60):
     out = []
     if not isinstance(d, dict) or not isinstance(d.get("events", []), list):
         return ['score.json must be {"bpm": ..., "events": [...]}']
@@ -149,8 +149,9 @@ def _score(d):
             _inst("score.json event %d" % i, e["inst"], out)
         if e.get("type") == "roll" and not _num(e.get("step", 0.125), 1 / 32, 4):
             out.append("score.json event %d: roll step must be 1/32-4 beats" % i)
-        if e.get("type") == "drums" and not _num(e.get("bars", 1), 0, 64):
-            out.append("score.json event %d: drums bars at most 64" % i)
+        bars = limits(length)["drum_bars"]
+        if e.get("type") == "drums" and not _num(e.get("bars", 1), 0, bars):
+            out.append("score.json event %d: drums bars at most %d" % (i, bars))
     return out
 
 
@@ -206,7 +207,7 @@ def problems(film, name):
     if name == "paint.json":
         return _paint(d, film.length)
     if name == "score.json":
-        return _score(d)
+        return _score(d, film.length)
     if name == "sfx.json":
         return _sfx(d, film.length)
     return []

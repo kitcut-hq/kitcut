@@ -110,6 +110,12 @@ def limits(length):
         "voice_s": max(300, 180 + 5 * length),
         "lines": 6 if length <= 15 else max(12, -(-length // 5)),  # narration sentences
         "tts_usd": max(0.30, 0.005 * length),  # what the narration may cost, retakes included
+        # recordings (voice runs), retakes included: 6 was plenty up to a minute; an 8-minute film
+        # has ~96 lines, and a line the voice model refuses costs a run too
+        "voice_runs": max(6, length // 30),
+        # a drums event's bars: 64 covered a short film; 8 minutes at 120 bpm is 240 bars (a bar
+        # is at least a second at the 240 bpm the score allows)
+        "drum_bars": max(64, length),
         # paintings, repaints included: 12 up to 4 minutes, then one about every 20 s
         "images": 8 if length <= 60 else min(24, max(12, length // 20)),
         # the agent's turns: 60 was enough up to 2 minutes; a longer film writes and checks
