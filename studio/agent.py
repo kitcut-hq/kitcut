@@ -830,7 +830,7 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
         changed = film.engine_diff()
         if media.enabled():  # online for good: plays when this machine is off (media.py)
             s = time.time()
-            emit({"type": "stage", "name": "online", "text": "Putting the film online"})
+            emit({"type": "stage", "name": "online", "text": "Making the web copy, then online"})
             summary["media"] = await media.publish(film) or None
             stages["online"] = time.time() - s
         summary.update(

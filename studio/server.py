@@ -729,7 +729,9 @@ def film_urls(req, jid, rec):
     lasting, and playing when this machine is off -- else signed URLs through the tunnel."""
     m = rec.get("media") or {}
     if m.get("video"):
-        out = {"video_url": m["video"], "poster_url": m.get("poster")}
+        # the web copy plays (media.make_web); the master is the download
+        out = {"video_url": m.get("web") or m["video"], "download_url": m["video"]}
+        out["poster_url"] = m.get("poster")
         if m.get("card"):
             out["card_url"] = m["card"]
         if m.get("subtitles"):
@@ -737,8 +739,11 @@ def film_urls(req, jid, rec):
         if not out["poster_url"]:
             out["poster_url"] = signed(req, jid, "film_poster.png")
         return out
+    f = Film.open(jid)
+    web = f is not None and os.path.isfile(f.path("outputs", "film_web.mp4"))
     return {
-        "video_url": signed(req, jid, "film.mp4"),
+        "video_url": signed(req, jid, "film_web.mp4" if web else "film.mp4"),
+        "download_url": signed(req, jid, "film.mp4"),
         "poster_url": signed(req, jid, "film_poster.png"),
     }
 

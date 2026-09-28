@@ -6,6 +6,11 @@ the assistants' film player) names one media host instead of a tunnel whose name
     python studio/media.py --film <id>      copy one film (again)
     python studio/media.py --backfill       every finished film that has no copy yet
     python studio/media.py --delete <id>    remove a film's copy
+    python studio/media.py --web-backfill [--first <id>]   make and copy the web copy of every
+                                            film online without one
+
+Every film gets a web copy (make_web, WEB below): the master re-encoded at 5 Mbps, which is what
+every page plays; the master stays for downloads and YouTube.
 
 Where: STUDIO_MEDIA_BASE, the container's URL (https://kitcutst.blob.core.windows.net/films,
 anonymous read of blobs), and STUDIO_MEDIA_SAS, a container SAS allowing create, write and delete
@@ -29,8 +34,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import procs  # noqa: E402
 
 VERSION = "2023-11-03"  # x-ms-version: single Put Blob up to 5000 MiB
-# what is copied, as (key in the record, file in outputs/, type); the video must be there
+# what is copied, as (key in the record, file in outputs/, type); the video must be there. "web"
+# is the copy every page plays (make_web); "video" the master, for downloads (YouTube sends the
+# master from this machine).
 FILES = (
+    ("web", "film_web.mp4", "video/mp4"),
     ("video", "film.mp4", "video/mp4"),
     ("poster", "film_poster.png", "image/png"),
     ("card", "card.jpg", "image/jpeg"),
@@ -38,6 +46,17 @@ FILES = (
 )
 CACHE = "public, max-age=31536000, immutable"  # a film's files never change under one id
 CARD = (1200, 628)  # the 1.91:1 image X, Facebook and most link previews show
+
+# The web copy: the master (sketch-render's cq 18, uncapped) is ~36 Mbps -- 2.2 GB for 8 minutes,
+# too heavy to stream. Measured 2026-09-27 on the 8-minute Dell/HP film (60 s of the dark data
+# hall, 60 s of paper) and a 10 s film, 1080p60 NVENC: every cq from 24 to 30 fills a 5 Mbps cap
+# (~300 MB for 8 minutes, 7.7 MB for 13 s); uncapped cq 26 wants ~11 Mbps. SSIM reads only
+# 0.93-0.95 at any of them, because the paper grain the engine animates is noise to SSIM; side by
+# side at 1:1, the characters, lettering and racks at 5M are indistinguishable from the master,
+# only the grain softens. 30 fps saves ~10 % and loses the smoothness, so 60 stays. A manifest's
+# "web" block overrides this.
+WEB = {"cq": 26, "preset": "p5", "maxrate": "5M", "bufsize": "10M", "audio_bitrate": "160k"}
+WEB_MBPS = 5.5  # a master already this light is copied as it is
 
 
 class MediaError(Exception):
@@ -117,6 +136,76 @@ def ensure_card(outputs, length=None):
         make_card(outputs, length)
 
 
+# ------------------------------------------------------------------ the web copy
+def _duration(path):
+    import subprocess
+
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
+        capture_output=True,
+        text=True,
+    )
+    try:
+        return float(r.stdout.strip())
+    except ValueError:
+        return 0.0
+
+
+def web_settings(film):
+    """WEB, with the film's own manifest "web" block over it."""
+    import json
+
+    try:
+        with open(film.manifest, encoding="utf-8") as f:
+            own = json.load(f).get("web") or {}
+    except (OSError, ValueError):
+        own = {}
+    return WEB | {k: v for k, v in own.items() if not k.startswith("_")}
+
+
+def make_web(film):
+    """outputs/film_web.mp4: the master re-encoded to stream (WEB), its soft subtitles kept; a
+    master already light enough is copied as it is. Made once (a newer copy is kept). Returns
+    its path, or None when there is no master. Raises on a failed encode."""
+    import shutil
+    import subprocess
+
+    out = film.path("outputs")
+    src, dst = os.path.join(out, "film.mp4"), os.path.join(out, "film_web.mp4")
+    if not os.path.isfile(src):
+        return None
+    if os.path.isfile(dst) and os.path.getmtime(dst) >= os.path.getmtime(src):
+        return dst
+    secs = _duration(src)
+    tmp = dst + ".%d.tmp.mp4" % os.getpid()
+    if secs and os.path.getsize(src) * 8 / secs / 1e6 <= WEB_MBPS:
+        shutil.copyfile(src, tmp)
+    else:
+        scripts = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+        )
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+        import _encode
+
+        cfg = _encode.resolve(web_settings(film))
+        cmd = (
+            ["ffmpeg", "-y", "-v", "error"]
+            + _encode.decode_args()
+            + ["-i", src, "-map", "0:v:0", "-map", "0:a?", "-map", "0:s?"]
+            + _encode.video_args(cfg)
+            + _encode.audio_args(cfg)
+            + ["-c:s", "copy", "-movflags", "+faststart", tmp]
+        )
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode or not os.path.isfile(tmp):
+            if os.path.exists(tmp):
+                os.remove(tmp)
+            raise MediaError("web copy: %s" % (r.stderr.strip()[-300:] or "ffmpeg failed"))
+    os.replace(tmp, dst)
+    return dst
+
+
 # ------------------------------------------------------------------ copying
 async def _put(session, blob, path, ctype):
     url = "%s/%s?%s" % (base(), quote(blob), sas())
@@ -134,9 +223,10 @@ async def _put(session, blob, path, ctype):
                 raise MediaError("%s: %d %s" % (blob, r.status, (await r.text())[:200]))
 
 
-async def publish(film, timeout=900):
-    """Copy the finished film's files; answers {"video", "poster", "card", "subtitles"} (the
-    ones there are), or {} when copying is off or the video could not be copied."""
+async def publish(film, timeout=3600):
+    """Make the web copy, then copy the finished film's files; answers {"web", "video", "poster",
+    "card", "subtitles"} (the ones there are), or {} when copying is off or the master could not
+    be copied. A web copy that failed leaves the master to play."""
     if not enabled():
         return {}
     import aiohttp
@@ -146,6 +236,10 @@ async def publish(film, timeout=900):
         await asyncio.to_thread(ensure_card, out, film.record().get("length") or film.length)
     except Exception as e:  # noqa: BLE001 -- no card is no reason to keep the film offline
         print("film %s: no card: %s" % (film.id, e), file=sys.stderr, flush=True)
+    try:
+        await asyncio.to_thread(make_web, film)
+    except Exception as e:  # noqa: BLE001 -- the master plays instead
+        print("film %s: no web copy: %s" % (film.id, e), file=sys.stderr, flush=True)
     urls = {}
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
@@ -158,6 +252,18 @@ async def publish(film, timeout=900):
         print("film %s: not copied online: %s" % (film.id, e), file=sys.stderr, flush=True)
         return urls if "video" in urls else {}
     return urls if "video" in urls else {}
+
+
+async def publish_web(film, timeout=3600):
+    """Make and copy only the web copy (a film already online): {"web": url}. Raises."""
+    import aiohttp
+
+    p = await asyncio.to_thread(make_web, film)
+    if not p:
+        raise MediaError("no film.mp4")
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
+        await _put(s, "%s/film_web.mp4" % film.id, p, "video/mp4")
+    return {"web": url_of(film.id, "film_web.mp4")}
 
 
 async def delete(fid, timeout=60):
@@ -209,6 +315,28 @@ async def _main(args):
             sys.exit("%s: no such finished film" % args.film)
         print(args.film, await _publish_and_record(f) or "NOT copied")
         return
+    if args.web_backfill:
+        todo = [
+            f
+            for f in Film.all()
+            if (f.record().get("media") or {}).get("video")
+            and not (f.record().get("media") or {}).get("web")
+        ]
+        if args.first:
+            todo.sort(key=lambda f: f.id != args.first)
+        print("%d films online have no web copy" % len(todo), flush=True)
+        for f in todo:
+            try:
+                urls = await publish_web(f)
+            except Exception as e:  # noqa: BLE001 -- say which, and carry on
+                print("  %s: NOT made: %s" % (f.id, e), flush=True)
+                continue
+            m = (f.record().get("media") or {}) | urls
+            f.update(media=m)
+            await agent.save(f.id, {"media": m})
+            size = os.path.getsize(f.path("outputs", "film_web.mp4")) / 1e6
+            print("  %s: ok, %.1f MB" % (f.id, size), flush=True)
+        return
     todo = [f for f in Film.all() if f.record().get("ok") and not f.record().get("media")]
     print("%d finished films have no copy online" % len(todo))
     for f in reversed(todo):  # oldest first
@@ -227,6 +355,12 @@ def main():
     g.add_argument("--film", help="copy this film (again)")
     g.add_argument("--backfill", action="store_true", help="every finished film with no copy yet")
     g.add_argument("--delete", help="remove this film's copy")
+    g.add_argument(
+        "--web-backfill",
+        action="store_true",
+        help="make and copy the web copy of every film online without one",
+    )
+    ap.add_argument("--first", help="with --web-backfill: this film before the others")
     asyncio.run(_main(ap.parse_args()))
 
 

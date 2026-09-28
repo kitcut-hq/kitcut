@@ -47,6 +47,33 @@ async def delete(req):
     return web.Response(status=202 if BLOBS.pop(name, None) else 404)
 
 
+def master(path, srt=None, heavy=True):
+    """A 2 s film.mp4: heavy (1080p60 noise, near-lossless mpeg4 -- far over the web cap) with
+    sound and a soft subtitle track, as sketch-render makes them; or light (a small still)."""
+    import subprocess
+
+    size, rate = ("1920x1080", 60) if heavy else ("320x180", 30)
+    src = "testsrc2=size=%s:rate=%d" % (size, rate) + (",noise=alls=12:allf=t" if heavy else "")
+    cmd = ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", src, "-f", "lavfi"]
+    cmd += ["-i", "sine=frequency=440:sample_rate=48000"]
+    cmd += ["-i", srt] if srt else []
+    cmd += ["-map", "0:v", "-map", "1:a"] + (["-map", "2:s", "-c:s", "mov_text"] if srt else [])
+    cmd += ["-t", "2", "-c:v", "mpeg4", "-q:v", "5" if heavy else "20", "-pix_fmt", "yuv420p"]
+    cmd += ["-c:a", "aac", path]
+    subprocess.run(cmd, check=True)
+
+
+def probe_streams(path):
+    import subprocess
+
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", path],
+        capture_output=True,
+        text=True,
+    )
+    return r.stdout.split()
+
+
 def poster(path):
     from PIL import Image
 
@@ -71,11 +98,12 @@ async def main():
         f = films.Film.create("a film for the copy", 5, "drawn", client="u:m")
         out = f.path("outputs")
         os.makedirs(out)
-        with open(os.path.join(out, "film.mp4"), "wb") as fh:
-            fh.write(b"\x00\x00\x00\x18ftypmp42" + os.urandom(300_000))
         poster(os.path.join(out, "film_poster.png"))
         with open(os.path.join(out, "film.vtt"), "w", encoding="utf-8") as fh:
             fh.write("WEBVTT\n\n00:00.000 --> 00:02.000\nHello\n")
+        with open(os.path.join(out, "film.srt"), "w", encoding="utf-8") as fh:
+            fh.write("1\n00:00:00,000 --> 00:00:02,000\nHello\n")
+        master(os.path.join(out, "film.mp4"), os.path.join(out, "film.srt"), heavy=True)
 
         check(not media.enabled() and await media.publish(f) == {}, "no settings, nothing tried")
 
@@ -87,6 +115,7 @@ async def main():
         check(
             urls
             == {
+                "web": base + "film_web.mp4",
                 "video": base + "film.mp4",
                 "poster": base + "film_poster.png",
                 "card": base + "card.jpg",
@@ -116,6 +145,27 @@ async def main():
             == "text/vtt",
             "the subtitles too",
         )
+        web_path = os.path.join(out, "film_web.mp4")
+        m_size, w_size = os.path.getsize(os.path.join(out, "film.mp4")), os.path.getsize(web_path)
+        check(
+            BLOBS.get("%s/film_web.mp4" % f.id, ({}, b""))[1] == open(web_path, "rb").read()
+            and w_size < m_size / 2,
+            "the web copy is made, much lighter, and sent (%d KB from %d KB)"
+            % (w_size // 1024, m_size // 1024),
+        )
+        kinds = probe_streams(web_path)
+        check(
+            kinds == ["video", "audio", "subtitle"] and abs(media._duration(web_path) - 2) < 0.2,
+            "it keeps the sound and the soft subtitles, and the length",
+            kinds,
+        )
+        light = films.Film.create("a light one", 5, "drawn", client="u:m")
+        os.makedirs(light.path("outputs"))
+        lp = light.path("outputs", "film.mp4")
+        master(lp, None, heavy=False)
+        media.make_web(light)
+        with open(lp, "rb") as a, open(light.path("outputs", "film_web.mp4"), "rb") as b:
+            check(a.read() == b.read(), "a master already light enough is copied as it is")
 
         REFUSE.add("film.mp4")
         BLOBS.clear()
@@ -127,7 +177,7 @@ async def main():
 
         await media.publish(f)
         n = await media.delete(f.id)
-        check(n == 4 and not BLOBS, "delete removes them all", (n, list(BLOBS)))
+        check(n == 5 and not BLOBS, "delete removes them all", (n, list(BLOBS)))
         check(await media.delete(f.id) == 0, "deleting again finds nothing, and says so")
     finally:
         await srv.close()
