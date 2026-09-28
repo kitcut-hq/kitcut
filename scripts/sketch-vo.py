@@ -50,11 +50,14 @@ import re
 import json
 import time
 import base64
+import random
+import secrets
 import glob
 import hashlib
 import difflib
 import atexit
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from importlib import import_module
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -105,17 +108,22 @@ def el_take(text, voice_id, vo):
     key = os.environ.get("ELEVENLABS_API_KEY")
     if not key:
         sys.exit("ELEVENLABS_API_KEY is not set (put it in .env)")
-    r = httpx.post(
-        EL_URL % voice_id,
-        params={"output_format": vo.get("format", "mp3_44100_128")},
-        headers={"xi-api-key": key},
-        json={
-            "text": text,
-            "model_id": vo.get("model", "eleven_v3"),
-            "voice_settings": vo.get("settings", {"stability": 0.5, "similarity_boost": 0.8}),
-        },
-        timeout=300,
-    )
+    for attempt in range(BUSY_TRIES):
+        r = httpx.post(
+            EL_URL % voice_id,
+            params={"output_format": vo.get("format", "mp3_44100_128")},
+            headers={"xi-api-key": key},
+            json={
+                "text": text,
+                "model_id": vo.get("model", "eleven_v3"),
+                "voice_settings": vo.get("settings", {"stability": 0.5, "similarity_boost": 0.8}),
+            },
+            timeout=300,
+        )
+        # 429 is also ElevenLabs' answer to more requests at once than the plan allows
+        if r.status_code not in BUSY or attempt == BUSY_TRIES - 1:
+            break
+        time.sleep(busy_wait(attempt))
     if r.status_code != 200:
         sys.exit("elevenlabs %s: %s" % (r.status_code, r.text[:300]))
     j = r.json()
@@ -172,6 +180,16 @@ EL_USD_PER_CHAR = {
 # what Gemini says when it will not read a line: a content block, not a glitch -- asking
 # again does not help, and rephrasing loses the words (a name, a wine)
 BLOCKED = ("PROHIBITED", "SAFETY", "BLOCKLIST", "SPII", "BLOCKREASON", "BLOCK_REASON")
+# a rate limit or a server hiccup: worth asking again after a pause, unlike a refusal. Lines
+# recorded several at a time (--jobs) meet the rate limit that one at a time never did
+BUSY = frozenset({429, 500, 502, 503, 504})
+BUSY_TRIES = 7  # ~1.5 minutes of backing off before a busy service is an error
+
+
+def busy_wait(attempt):
+    """Seconds to wait before asking again: doubling, capped, jittered so parallel takes that
+    were refused together do not all come back together."""
+    return min(30.0, 2.0**attempt) + random.random()  # noqa: S311 -- jitter, not a secret
 
 
 class Refused(Exception):
@@ -190,6 +208,22 @@ def _google_creds(scopes):
         return None, None
     info = json.loads(base64.b64decode(raw) if not raw.startswith("{") else raw)
     return service_account.Credentials.from_service_account_info(info, scopes=scopes), info
+
+
+def vertex_call(client, words, **kw):
+    """client.models.generate_content, asked again while Vertex is busy (429/5xx)."""
+    from google.genai import errors
+
+    for attempt in range(BUSY_TRIES - 1):
+        try:
+            return client.models.generate_content(**kw)
+        except errors.APIError as e:
+            if e.code not in BUSY:
+                raise
+            wait = busy_wait(attempt)
+            print("  gemini busy (%s) on %r; asking again in %.0fs" % (e.code, words[:40], wait))
+            time.sleep(wait)
+    return client.models.generate_content(**kw)  # the last try: busy now is an error
 
 
 def gemini_take(text, vo):
@@ -221,7 +255,9 @@ def gemini_take(text, vo):
         # no parts) for a line they read fine a moment later: ask again before giving up
         pcm, why = None, "no answer"
         for attempt in range(3):
-            r = client.models.generate_content(
+            r = vertex_call(
+                client,
+                words,
                 model=model,
                 contents=("%s: %s" % (style, words)) if style else words,
                 config=types.GenerateContentConfig(
@@ -280,12 +316,22 @@ def gemini_take(text, vo):
                 "Authorization": "Bearer " + creds.token,
                 "x-goog-user-project": os.environ.get("GOOGLE_CLOUD_PROJECT") or info["project_id"],
             }
-        r = httpx.post(
-            "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent" % model,
-            headers=headers,
-            json=body,
-            timeout=180,
-        )
+        for attempt in range(BUSY_TRIES):
+            r = httpx.post(
+                "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent"
+                % model,
+                headers=headers,
+                json=body,
+                timeout=180,
+            )
+            if r.status_code not in BUSY or attempt == BUSY_TRIES - 1:
+                break
+            wait = busy_wait(attempt)
+            print(
+                "  gemini busy (%s) on %r; asking again in %.0fs"
+                % (r.status_code, words[:40], wait)
+            )
+            time.sleep(wait)
         if r.status_code != 200:
             sys.exit("gemini %s %s: %s" % (model, r.status_code, r.text[:400]))
         j = r.json()
@@ -373,7 +419,7 @@ def backup_take(text, vo, vdir):
         vid,
         {"model": model, "settings": b.get("settings")} if b.get("settings") else {"model": model},
     )
-    tmp = os.path.join(vdir, "_backup.mp3")
+    tmp = os.path.join(vdir, "_backup_%s.mp3" % secrets.token_hex(4))
     with open(tmp, "wb") as f:
         f.write(mp3)
     y = level_to(_sketch.decode(tmp), BACKUP_LEVEL_DB)
@@ -567,6 +613,12 @@ def main():
     ap.add_argument("--retake", action="store_true", help="discard cached takes for --only lines")
     ap.add_argument("--takes", type=int, help="override vo.takes")
     ap.add_argument(
+        "--jobs",
+        type=int,
+        help="takes recorded at once (default vo.jobs, else 1): the TTS services answer one line "
+        "in seconds, so an 85-line film spends minutes waiting one line at a time",
+    )
+    ap.add_argument(
         "--tts", choices=["elevenlabs", "edge", "gemini"], help="override vo.tts (edge is free)"
     )
     args = ap.parse_args()
@@ -580,6 +632,7 @@ def main():
     tts = vo.get("tts", "elevenlabs")
     takes = args.takes or vo.get("takes", 3 if tts == "elevenlabs" else 1)
     tail = vo.get("tail", "Alright.") if tts == "elevenlabs" else ""
+    jobs = args.jobs or int(vo.get("jobs", 1))
     lines = vo["lines"]
     only = {int(x) for x in args.only.split(",")} if args.only else set(range(len(lines)))
     vdir = os.path.join(m["_audio"], "vo")
@@ -610,13 +663,14 @@ def main():
     model_name = {"elevenlabs": vo.get("model", "eleven_v3"), "gemini": vo.get("model")}.get(tts)
     t = vo.get("lead", 0.6)
     print(
-        "%s  voice=%s (%s)  model=%s  takes=%d"
+        "%s  voice=%s (%s)  model=%s  takes=%d  jobs=%d"
         % (
             m["_id"],
             voice,
             tts,
             (model_name or "gemini-3.8-flash-tts") if tts != "edge" else "edge",
             takes,
+            jobs,
         )
     )
     for i, ln in enumerate(lines):
@@ -642,6 +696,7 @@ def main():
     ) as st:
         results, fresh = {}, set()  # fresh: takes rendered (and paid for) in this run
         with st("synth"):
+            todo = []  # (line, take, base): the takes not in the cache
             for i, ln in enumerate(lines):
                 if i not in only:
                     continue
@@ -652,51 +707,74 @@ def main():
                         for ext in (".mp3", ".wav", ".json"):
                             if os.path.exists(base + ext):
                                 os.remove(base + ext)
-                    if os.path.exists(base + ".json"):
-                        continue
-                    print("  line %d take %d" % (i, k), flush=True)
-                    fresh.add(base)
-                    if tts == "elevenlabs":
-                        mp3, align = el_take(
-                            ln["text"] + ("\n\n" + tail if tail else ""), voice_id, vo
-                        )
-                        with open(base + ".mp3", "wb") as f:
-                            f.write(mp3)
-                    elif tts == "gemini":
-                        try:
-                            audio, meta = gemini_take(ln["text"], vo)
-                        except Refused as e:
-                            if not vo.get("backup"):
-                                sys.exit(
-                                    "Gemini TTS refused the line %r (%s): rephrase it"
-                                    % (spoken(ln["text"]), e)
-                                )
-                            audio, meta = backup_take(ln["text"], vo, vdir)
-                            meta["refused"] = str(e)[:200]
-                        _sketch.write_wav(base + ".wav", audio)
-                        align = {"gemini": meta}  # no timings: Whisper supplies the words
-                        if meta.get("backup"):
-                            print(
-                                "    Gemini refused it: read by the backup voice (%s, %s), %.1fs, $%.5f"
-                                % (meta["voice"], meta["model"], len(audio) / SR, meta["cost_usd"])
-                            )
-                        else:
-                            print(
-                                "    %.1fs, %d+%d tokens, $%.5f"
-                                % (
-                                    len(audio) / SR,
-                                    meta["usage"]["input"],
-                                    meta["usage"]["output"],
-                                    meta["cost_usd"],
-                                )
-                            )
-                    else:
-                        audio, marks = edge_take(ln["text"], voice, dub)
-                        _sketch.write_wav(base + ".wav", audio)
-                        align = {"words": [{"text": w, "s": a, "e": b} for w, a, b in marks]}
-                    with open(base + ".json", "w", encoding="utf-8") as f:
-                        json.dump(align, f)
+                    if not os.path.exists(base + ".json"):
+                        todo.append((i, k, base))
                 results[i] = fp
+
+            def synth(job):
+                """One take, written to base.{mp3|wav,json}; returns what to print about it.
+                The .json goes last, so a take is only ever cached whole."""
+                i, k, base = job
+                ln = lines[i]
+                note = "  line %d take %d" % (i, k)
+                if tts == "elevenlabs":
+                    mp3, align = el_take(ln["text"] + ("\n\n" + tail if tail else ""), voice_id, vo)
+                    with open(base + ".mp3", "wb") as f:
+                        f.write(mp3)
+                elif tts == "gemini":
+                    try:
+                        audio, meta = gemini_take(ln["text"], vo)
+                    except Refused as e:
+                        if not vo.get("backup"):
+                            sys.exit(
+                                "Gemini TTS refused the line %r (%s): rephrase it"
+                                % (spoken(ln["text"]), e)
+                            )
+                        audio, meta = backup_take(ln["text"], vo, vdir)
+                        meta["refused"] = str(e)[:200]
+                    _sketch.write_wav(base + ".wav", audio)
+                    align = {"gemini": meta}  # no timings: Whisper supplies the words
+                    if meta.get("backup"):
+                        note += (
+                            "\n    Gemini refused it: read by the backup voice (%s, %s), "
+                            "%.1fs, $%.5f"
+                        ) % (
+                            meta["voice"],
+                            meta["model"],
+                            len(audio) / SR,
+                            meta["cost_usd"],
+                        )
+                    else:
+                        note += "\n    %.1fs, %d+%d tokens, $%.5f" % (
+                            len(audio) / SR,
+                            meta["usage"]["input"],
+                            meta["usage"]["output"],
+                            meta["cost_usd"],
+                        )
+                else:
+                    audio, marks = edge_take(ln["text"], voice, dub)
+                    _sketch.write_wav(base + ".wav", audio)
+                    align = {"words": [{"text": w, "s": a, "e": b} for w, a, b in marks]}
+                with open(base + ".json", "w", encoding="utf-8") as f:
+                    json.dump(align, f)
+                return note
+
+            fresh.update(base for _, _, base in todo)
+            n_jobs = max(1, min(jobs, len(todo) or 1))
+            if todo:
+                print("  %d takes to record, %d at a time" % (len(todo), n_jobs), flush=True)
+            # a refused line with no backup, or a line that never comes back, exits: sys.exit in
+            # a worker is re-raised here, the takes not started are dropped, and the takes
+            # already written stay cached for the next run
+            with ThreadPoolExecutor(max_workers=n_jobs) as pool:
+                futs = [pool.submit(synth, job) for job in todo]
+                try:
+                    for f in as_completed(futs):
+                        print(f.result(), flush=True)
+                except BaseException:
+                    for g in futs:
+                        g.cancel()
+                    raise
         cand = {}
         with st("trim"):
             for i, fp in results.items():

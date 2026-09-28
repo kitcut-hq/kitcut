@@ -40,6 +40,7 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
 4. **Voice.** `sketch-vo.py`. Read the take table it prints: accuracy under ~0.8 is usually
    numbers ("45" vs "forty-five"), not a bad take; `HARD-CUT` means no silence was found before
    the tail word — pick another take with `"pick"` on the line. Put brand names in `hotwords`.
+   A long script: `--jobs 8` records eight takes at once (70 Gemini lines: 341 s -> 52 s).
 5. **Picture.** Write `film.js` scene by scene, every cue on a word: `SK.w(line, "word")`.
    Lay scenes out in world space and move the camera between them (`SK.camera` keys with
    easing); keep each scene's content inside ±900 x ±500 of its centre at zoom 1.

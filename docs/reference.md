@@ -2932,6 +2932,16 @@ alignment, minus `[audio tags]` and the tail. Writes `audio/vo/timeline.json` an
 `"hotwords"` go to Whisper as its initial prompt, so a brand name is heard as one word
 instead of costing its take a lower rank.
 
+`--jobs N` (or `vo.jobs`) records N takes at once; the default is 1, one after another, and the
+studio passes 8 (`studio/tools.py` `VOICE_JOBS`). The services answer a line in seconds, so a
+long film waited minutes on them: measured on the 8-minute studio film (70 lines of Gemini 3.1
+Flash TTS, 2026-09-28), synth took **341 s one at a time and 52 s eight at a time** (6.6x), with
+the same word accuracy (mean 0.932, the same 21 lines under 0.9) and the same cost ($0.25). A
+429 or 5xx from Gemini (Vertex or the Gemini API) or ElevenLabs is asked again with jittered,
+doubling waits (`BUSY`, `busy_wait`) -- N at once meets the rate limit that one at a time never
+did. The takes are cached exactly as before, the `.json` written last, so an interrupted run
+keeps what it finished. Word timing (`score`, Whisper) is unchanged and was the other 239 s.
+
 Measured, 9 lines x 3 takes of `eleven_v3` (839 characters, ~2,500 credits): synth 91 s,
 trim 2.5 s, Whisper scoring (small.en, CPU) 81-99 s.
 

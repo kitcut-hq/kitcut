@@ -40,6 +40,9 @@ LOCKS = os.path.join(REPO, "temp", "locks")
 # seconds a step may run; the voice, the mix and the render get longer for a longer film
 TIMEOUT = {"check": 30, "stills": 120, "paint": 300, "automation": 180}
 MAX_STILLS = 12
+# narration takes recorded at once (sketch-vo.py --jobs): an 8-minute film's 70 Gemini lines took
+# 341 s one at a time and 52 s eight at a time, same accuracy and cost (docs/studio-speed.md)
+VOICE_JOBS = 8
 
 
 class ToolError(Exception):
@@ -168,7 +171,9 @@ class Tools:
             )
         if _tts_spent(self.film) >= limits(self.film.length)["tts_usd"]:
             raise ToolError("The narration's budget is spent: keep the recording you have.")
-        args = [] if retake_line is None else ["--only", str(int(retake_line)), "--retake"]
+        args = ["--jobs", str(VOICE_JOBS)]
+        if retake_line is not None:
+            args += ["--only", str(int(retake_line)), "--retake"]
         async with self.lock:
             self.gate()
             await self._script("voice", "sketch-vo.py", args, pools=[("cpu", 1)])
