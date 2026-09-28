@@ -83,6 +83,13 @@ if [ "$DRY" = 1 ]; then echo "  would run: push.sh $VM $BRANCH"; else bash "$HER
 
 step "5. the toolchain"
 on 'cd /srv/kitcut/repo && HF_HOME=/srv/kitcut/hf bash scripts/setup-linux.sh --studio 2>&1 | tail -4'
+# the instrument samples every ensemble uses, from this laptop's cache (14 MB): a release's
+# test_direction refuses to go current without them ("every ensemble instrument is cached")
+SOUNDFONTS="$(git -C "$REPO_LOCAL" worktree list | head -1 | cut -d' ' -f1)/models/soundfonts"
+if [ "$DRY" = 1 ]; then echo "  would copy $SOUNDFONTS"; elif [ -d "$SOUNDFONTS" ]; then
+  tar -C "$(dirname "$(dirname "$SOUNDFONTS")")" -cf - models/soundfonts |
+    vm ssh "$VM" 'tar -xf - -C /srv/kitcut/repo && echo "  soundfonts: $(ls /srv/kitcut/repo/models/soundfonts/*/ | wc -l) instruments"'
+fi
 
 step "6. the studio's .env"
 if [ "$DRY" = 1 ]; then echo "  would write $VM:/srv/kitcut/repo/.env from $ENV_SRC ($KEYS) + $MACHINE_ENV"; else
