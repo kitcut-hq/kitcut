@@ -261,7 +261,9 @@ class Tools:
             args += ["--size", "%dx%d" % (int(width or 1920), int(height or 1080))]
         async with self.lock:
             tail = await self._script("web", "web-grab.py", args, pools=[("browser", 1)])
-        return tail[-1] if tail else "saved"
+        # the photograph's line and what the page is made of, below it
+        first = max((i for i, ln in enumerate(tail) if ln.startswith("web/")), default=0)
+        return "\n".join(tail[first:]) or "saved"
 
     async def font(self, family, weights=None):
         """A Google Fonts family into web/fonts/ and the manifest's fonts."""
@@ -416,9 +418,13 @@ class Tools:
             )(wrap(lambda a: self.picture(a.get("url"), a.get("name"), a.get("width")))),
             tool(
                 "page",
-                "Photograph a web page as a browser sees it (width x height px, 1920x1080 unless "
-                "given; a taller one takes more of the page) into web/<name>.jpg, shown with "
-                "SK.image('web_<name>', x, y, w). Read the file to see it.",
+                "Open a web page in a real browser (it also reads pages WebFetch is refused) and "
+                "photograph it (width x height px, 1920x1080 unless given; a taller one takes "
+                "more of the page) into web/<name>.jpg, shown with SK.image('web_<name>', x, y, "
+                "w). Reports what the page is made of, measured in it: the fonts that set its "
+                "headings, text and buttons, the web fonts it loaded, its text and painted "
+                "colours, its logo and icon files; a logo it draws inline is saved as "
+                "web/<name>_logo1.png. Its words go to web/<name>.txt.",
                 {
                     "type": "object",
                     "properties": {
@@ -431,7 +437,9 @@ class Tools:
                 },
             )(
                 wrap(
-                    lambda a: self.page(a.get("url"), a.get("name"), a.get("width"), a.get("height"))
+                    lambda a: self.page(
+                        a.get("url"), a.get("name"), a.get("width"), a.get("height")
+                    )
                 )
             ),
             tool(

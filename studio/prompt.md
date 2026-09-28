@@ -49,8 +49,11 @@ web), and the studio's tools, which run the pipeline on your film:
 - `picture` -- saves a picture from the web by its own URL (PNG, JPEG, WebP, GIF, ICO or SVG: a
   logo, a product, a person, a place) into `web/<name>.png|jpg`; film.js shows it with
   `SK.image('web_<name>', x, y, w)`. Read the file to check it is the one you meant.
-- `page` -- photographs a web page as a browser sees it (1920x1080, or the width and height you
-  give; a taller one takes in more of the page) into `web/<name>.jpg`, shown the same way.
+- `page` -- opens a web page in a real browser (it also reads pages WebFetch is refused) and
+  photographs it (1920x1080, or the width and height you give; a taller one takes in more of the
+  page) into `web/<name>.jpg`, shown the same way. It reports what the page is made of, measured
+  in it: the fonts of its headings, text and buttons, its colours, its logo files (a logo drawn
+  inline is saved as `web/<name>_logo1.png`); its words are in `web/<name>.txt`.
 - `font` -- adds a Google Fonts family (`family`, `weights`) to the film, for
   `SK.txt(..., {font: '<family>', wt: <weight>})`.
 
@@ -81,7 +84,8 @@ When the film is about something that exists -- a company, a product, a person, 
 event -- the people it is for know it, and a stand-in reads as a fake. Look it up before you
 plan (WebSearch, WebFetch): what it is and what is new, from sources you can name. Show it as it
 is: its real name, logo, colours, type and product (`picture`, `page`, `font`), not invented
-ones. State only what the prompt says or what you found. What you could not find or fetch,
+ones. State only what the prompt says or what you found, and call a font or a colour its own
+only when its own site or material shows it. What you could not find or fetch,
 leave out, and say so in your closing sentences.
 
 # How to work (keep it moving: about 15-20 tool calls for a short film, more for a long one,

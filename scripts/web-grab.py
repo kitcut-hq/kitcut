@@ -36,8 +36,10 @@ import json
 import time
 import base64
 import shutil
+import asyncio
 import argparse
 import tempfile
+import contextlib
 import importlib
 import subprocess
 import urllib.parse
@@ -270,35 +272,387 @@ def picture(root, url, name, width=1600, dry=False):
     return {"image": "web_" + name, "file": rel, "w": w, "h": h, "alpha": alpha, "kind": kind}
 
 
+# what the page is made of, measured in the page itself: the fonts its text is set in, the colours
+# of its text and of what it paints, its logo files, its words. Runs as one expression.
+BRAND_JS = r"""
+(() => {
+  const hex = c => {
+    const m = /rgba?\(([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)(?:[,/ ]+([\d.]+))?/.exec(c || '');
+    if (!m || (m[4] !== undefined && +m[4] < 0.5)) return null;
+    return '#' + [m[1], m[2], m[3]].map(v => (+v | 0).toString(16).padStart(2, '0')).join('');
+  };
+  const seen = el => {
+    const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+    return r.width > 1 && r.height > 1 && cs.visibility !== 'hidden' && +cs.opacity > 0.05;
+  };
+  const isButton = e => e.tagName === 'BUTTON' || e.getAttribute('role') === 'button' ||
+    /btn|button|cta/i.test(typeof e.className === 'string' ? e.className : '');
+  const role = el => {
+    const e = el.closest('h1,h2,h3,button,[role=button],a,nav,header,footer');
+    if (!e) return 'text';
+    const t = e.tagName.toLowerCase();
+    if (/^h[1-3]$/.test(t)) return 'headings';
+    if (isButton(e)) return 'buttons';
+    if (t === 'nav' || t === 'header') return 'navigation';
+    return t === 'a' ? 'links' : 'text';
+  };
+  const tally = (m, k, n, r) => {
+    if (!k) return;
+    const e = m[k] || (m[k] = {n: 0, roles: {}});
+    e.n += n;
+    e.roles[r] = (e.roles[r] || 0) + n;
+  };
+  const fonts = {}, ink = {}, fills = {};
+  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  let node, k = 0;
+  while ((node = walk.nextNode()) && k < 6000) {
+    const txt = node.textContent.trim(), el = node.parentElement;
+    if (!txt || !el || !seen(el)) continue;
+    k++;
+    const cs = getComputedStyle(el), r = role(el), n = txt.length * parseFloat(cs.fontSize);
+    tally(fonts, cs.fontFamily.split(',')[0].trim().replace(/^["']|["']$/g, ''), n, r);
+    tally(ink, hex(cs.color), n, r);
+  }
+  const vw = innerWidth, vh = innerHeight;
+  for (const el of document.querySelectorAll('body, body *')) {
+    const c = hex(getComputedStyle(el).backgroundColor);
+    if (!c) continue;
+    const r = el.getBoundingClientRect();
+    const area = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0)) *
+      Math.max(0, Math.min(r.bottom, vh * 3) - Math.max(r.top, 0));
+    if (area < 400) continue;
+    const t = el.tagName.toLowerCase();
+    const what = isButton(el) ? 'buttons' : t === 'body' ? 'page'
+      : el.closest('header,nav') ? 'navigation' : 'panels';
+    tally(fills, c, what === 'buttons' ? area * 20 : area, what);
+  }
+  const abs = u => { try { return new URL(u, location.href).href; } catch (e) { return null; } };
+  const logos = [];
+  const add = (url, how, w, h, alt) => {
+    url = abs(url);
+    if (url && /^https?:/.test(url) && !logos.some(l => l.url === url))
+      logos.push({url, how, w, h, alt: (alt || '').slice(0, 80)});
+  };
+  const sel = 'header img, nav img, a[href="/"] img, img[src*=logo i], img[alt*=logo i], ' +
+    'img[class*=logo i], img[id*=logo i]';
+  for (const img of document.querySelectorAll(sel))
+    add(img.currentSrc || img.src, 'img', img.naturalWidth, img.naturalHeight, img.alt);
+  // a logo drawn inline has no file: its markup, with the page's computed fills baked in (the
+  // page's CSS does not travel with it). Wide enough not to be an icon, near the top, first two.
+  const box = e => e.getBoundingClientRect();
+  const inline = [...document.querySelectorAll(
+    'header svg, nav svg, a[href="/"] svg, svg[class*=logo i], [class*=logo i] svg')]
+    .filter(e => seen(e) && box(e).width >= 40 && box(e).top < 300)
+    .sort((a, b) => box(a).top - box(b).top || box(a).left - box(b).left)
+    .slice(0, 2).map(e => {
+      const c = e.cloneNode(true), r = box(e);
+      c.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      if (!c.getAttribute('viewBox')) c.setAttribute('viewBox', `0 0 ${r.width} ${r.height}`);
+      c.setAttribute('width', r.width);
+      c.setAttribute('height', r.height);
+      c.style.color = getComputedStyle(e).color;
+      const dst = c.querySelectorAll('*');
+      e.querySelectorAll('*').forEach((el, i) => {
+        const k = getComputedStyle(el), d = dst[i];
+        if (!d) return;
+        if (k.fill && k.fill !== 'none') d.setAttribute('fill', k.fill);
+        if (k.stroke && k.stroke !== 'none') d.setAttribute('stroke', k.stroke);
+        if (k.opacity !== '1') d.setAttribute('opacity', k.opacity);
+      });
+      const label = e.getAttribute('aria-label') || (e.closest('a') || e).getAttribute('aria-label');
+      return {w: Math.round(r.width), h: Math.round(r.height), label: (label || '').slice(0, 60),
+        svg: new XMLSerializer().serializeToString(c).slice(0, 300000)};
+    });
+  for (const l of document.querySelectorAll('link[rel~=icon], link[rel=apple-touch-icon]'))
+    add(l.href, l.rel, 0, 0, l.sizes && l.sizes.value);
+  const og = document.querySelector('meta[property="og:image"]');
+  if (og) add(og.content, 'og:image', 0, 0, '');
+  const top = (m, n) => Object.entries(m).sort((a, b) => b[1].n - a[1].n).slice(0, n)
+    .map(([k, v]) => ({value: k, share: v.n,
+      roles: Object.entries(v.roles).sort((a, b) => b[1] - a[1]).map(x => x[0])}));
+  const share = list => {
+    const t = list.reduce((a, b) => a + b.share, 0) || 1;
+    list.forEach(x => { x.share = Math.round(100 * x.share / t); });
+    return list;
+  };
+  return {
+    url: location.href,
+    title: document.title,
+    description: (document.querySelector('meta[name=description]') || {}).content || '',
+    fonts: share(top(fonts, 6)),
+    // per role, so a headline face is not lost under the body text's volume
+    fonts_by_role: Object.fromEntries(['headings', 'text', 'buttons', 'navigation', 'links'].map(r => {
+      const rows = Object.entries(fonts).filter(([, v]) => v.roles[r]).sort((a, b) => b[1].roles[r] - a[1].roles[r]);
+      const t = rows.reduce((a, [, v]) => a + v.roles[r], 0) || 1;
+      return [r, rows.slice(0, 2).map(([k, v]) => [k, Math.round(100 * v.roles[r] / t)])];
+    }).filter(([, rows]) => rows.length)),
+    webfonts: (() => { const o = {}; document.fonts.forEach(f => { if (f.status === 'loaded') (o[f.family.replace(/^["']|["']$/g, '')] ||= new Set()).add(f.weight); });
+      return Object.entries(o).map(([k, w]) => k + ' ' + [...w].join('/')); })(),
+    text_colours: share(top(ink, 6)),
+    fills: share(top(fills, 8)),
+    logos: logos.slice(0, 8),
+    inline_svgs: inline,
+    text: (document.body.innerText || '').slice(0, 30000),
+  };
+})()
+"""
+
+
+class _CDP:
+    """Just enough of the DevTools protocol over one WebSocket: calls, and a handler per event."""
+
+    def __init__(self, ws):
+        self.ws, self.n, self.waiting, self.on, self.tasks = ws, 0, {}, {}, set()
+
+    async def pump(self):
+        import aiohttp
+
+        async for msg in self.ws:
+            if msg.type != aiohttp.WSMsgType.TEXT:
+                continue
+            d = json.loads(msg.data)
+            if "id" in d:
+                fut = self.waiting.pop(d["id"], None)
+                if fut and not fut.done():
+                    fut.set_result(d)
+            elif d.get("method") in self.on:
+                task = asyncio.ensure_future(self.on[d["method"]](d.get("params") or {}))
+                self.tasks.add(task)
+                task.add_done_callback(self.tasks.discard)
+
+    async def call(self, method, params=None, timeout=30):
+        self.n += 1
+        fut = asyncio.get_running_loop().create_future()
+        self.waiting[self.n] = fut
+        await self.ws.send_str(json.dumps({"id": self.n, "method": method, "params": params or {}}))
+        d = await asyncio.wait_for(fut, timeout)
+        if "error" in d:
+            raise GrabError("the browser refused %s: %s" % (method, d["error"].get("message")))
+        return d.get("result") or {}
+
+
+async def _browse(url, size, settle_s=2.5, load_s=30):
+    """Load `url` in headless Chromium at `size`, every request on the way checked against
+    _web.public_url -- the page, its redirects and everything it loads: a request for an address
+    that is not public fails. Returns (png bytes, BRAND_JS's facts, the requests refused)."""
+    import aiohttp
+
+    exe, prof = browser(), _profile_dir()
+    env = dict(_env.ENV)
+    if os.name != "nt":
+        env["TMPDIR"] = prof
+    flags = [
+        "--headless",
+        "--remote-debugging-port=0",
+        "--user-data-dir=%s" % prof,
+        "--window-size=%d,%d" % size,
+        "--hide-scrollbars",
+        "--disable-gpu",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-extensions",
+        "--mute-audio",
+        "--lang=en-US",
+        "--user-agent=%s" % _web.UA,
+        "about:blank",
+    ]
+    proc = subprocess.Popen(
+        [exe, *flags], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+    refused, verdicts = [], {}
+
+    async def allowed(u):
+        host = urllib.parse.urlsplit(u).hostname or ""
+        if host not in verdicts:
+            verdicts[host] = (await asyncio.to_thread(_web.public_url, u))[0]
+        return verdicts[host]
+
+    try:
+        port_file, t0 = os.path.join(prof, "DevToolsActivePort"), time.time()
+        while not (os.path.exists(port_file) and os.path.getsize(port_file) > 0):
+            if proc.poll() is not None or time.time() - t0 > 20:
+                raise GrabError("the browser did not start")
+            await asyncio.sleep(0.1)
+        with open(port_file, encoding="utf-8") as f:
+            port = int(f.readline().strip())
+        async with aiohttp.ClientSession() as http:
+            async with http.get("http://127.0.0.1:%d/json/list" % port) as r:
+                tabs = await r.json()
+            ws_url = next(t["webSocketDebuggerUrl"] for t in tabs if t.get("type") == "page")
+            async with http.ws_connect(ws_url, max_msg_size=0) as ws:
+                cdp = _CDP(ws)
+                pump = asyncio.ensure_future(cdp.pump())
+                loaded = asyncio.Event()
+
+                async def paused(p):
+                    u, rid = p["request"]["url"], p["requestId"]
+                    ok = not u.startswith(("http:", "https:")) or await allowed(u)
+                    if not ok:
+                        refused.append(u)
+                    with contextlib.suppress(GrabError, asyncio.TimeoutError):
+                        if ok:
+                            await cdp.call("Fetch.continueRequest", {"requestId": rid})
+                        else:
+                            await cdp.call(
+                                "Fetch.failRequest",
+                                {"requestId": rid, "errorReason": "AddressUnreachable"},
+                            )
+
+                async def on_load(_):
+                    loaded.set()
+
+                cdp.on = {"Fetch.requestPaused": paused, "Page.loadEventFired": on_load}
+                await cdp.call("Fetch.enable", {"patterns": [{"urlPattern": "*"}]})
+                await cdp.call("Page.enable")
+                await cdp.call(
+                    "Emulation.setDeviceMetricsOverride",
+                    {"width": size[0], "height": size[1], "deviceScaleFactor": 1, "mobile": False},
+                )
+                nav = await cdp.call("Page.navigate", {"url": url})
+                if nav.get("errorText"):
+                    raise GrabError("the browser could not open %s (%s)" % (url, nav["errorText"]))
+                with contextlib.suppress(asyncio.TimeoutError):
+                    # a page that never finishes loading is photographed as it stands
+                    await asyncio.wait_for(loaded.wait(), load_s)
+                await asyncio.sleep(settle_s)
+                got = await cdp.call(
+                    "Runtime.evaluate", {"expression": BRAND_JS, "returnByValue": True}
+                )
+                facts = got.get("result", {}).get("value") or {}
+                shot = await cdp.call(
+                    "Page.captureScreenshot",
+                    {
+                        "format": "png",
+                        "clip": {"x": 0, "y": 0, "width": size[0], "height": size[1], "scale": 1},
+                        "captureBeyondViewport": True,
+                    },
+                    timeout=60,
+                )
+                pump.cancel()
+        return base64.b64decode(shot["data"]), facts, refused
+    finally:
+        proc.kill()
+        with contextlib.suppress(Exception):
+            proc.wait(timeout=10)
+        shutil.rmtree(prof, ignore_errors=True)
+
+
+def brand_lines(facts):
+    """BRAND_JS's facts as a few lines for Claude."""
+
+    def row(items):
+        return (
+            ", ".join(
+                "%s %d%%%s"
+                % (
+                    x["value"],
+                    x["share"],
+                    " (%s)" % ", ".join(x["roles"][:3]) if x["roles"] else "",
+                )
+                for x in items
+                if x.get("share", 0) >= 2
+            )
+            or "-"
+        )
+
+    lines = [
+        "title: %s" % (facts.get("title") or "-")[:140],
+        "fonts, by what they set: %s"
+        % (
+            "; ".join(
+                "%s %s" % (r, ", ".join("%s %d%%" % (f, n) for f, n in rows))
+                for r, rows in (facts.get("fonts_by_role") or {}).items()
+            )
+            or "-"
+        ),
+        "web fonts it loaded: %s (system-ui and -apple-system mean the reader's own system font)"
+        % (", ".join(facts.get("webfonts") or []) or "none"),
+        "text colours: %s" % row(facts.get("text_colours", [])),
+        "painted colours (by area, buttons weighted up): %s" % row(facts.get("fills", [])),
+    ]
+    logos = [
+        "%s (%s%s%s)"
+        % (
+            x["url"],
+            x["how"],
+            ", %dx%d" % (x["w"], x["h"]) if x.get("w") else "",
+            ', "%s"' % x["alt"] if x.get("alt") else "",
+        )
+        for x in facts.get("logos") or []
+    ]
+    lines.append("logo and icon files: %s" % ("; ".join(logos) or "none found"))
+    return lines
+
+
 def page(root, url, name, size=(1920, 1080), dry=False):
-    """The page as a browser sees it, into web/<name>.jpg and the manifest as web_<name>."""
+    """The page as a browser sees it, into web/<name>.jpg (the manifest's web_<name>); what it is
+    made of into web/<name>.json and its words into web/<name>.txt."""
     ok, why = _web.public_url(url)
     if not ok:
         raise GrabError(why)
     if dry:
         return {"would": "photograph %s at %dx%d into web/%s.jpg" % (url, size[0], size[1], name)}
+    try:
+        png, facts, refused = asyncio.run(_browse(url, size))
+    except (OSError, asyncio.TimeoutError, StopIteration) as e:
+        raise GrabError("the browser could not photograph %s: %s" % (url, e)) from None
+    final = facts.get("url") or url
+    if not _web.public_url(final)[0]:
+        raise GrabError("%s led to %s, which is not on the public internet" % (url, final))
+    im = Image.open(io.BytesIO(png)).convert("RGB")
+    lo, hi = zip(*im.getextrema(), strict=True)
+    if max(hi) - min(lo) < 8:
+        raise GrabError("the page came out blank (%s): it may need a login or refuse robots" % url)
+    d = os.path.join(root, "web")
+    os.makedirs(d, exist_ok=True)
+    for ext in ("png", "jpg"):
+        if os.path.exists(os.path.join(d, "%s.%s" % (name, ext))):
+            os.remove(os.path.join(d, "%s.%s" % (name, ext)))
+    im.save(os.path.join(d, name + ".jpg"), quality=90, optimize=True)
+    text = facts.pop("text", "")
+    # the logos the page draws inline, as pictures of their own: web/<name>_logo1.png ...
+    extra, notes = {}, []
     work = tempfile.mkdtemp(prefix="wg-")
     try:
-        shot = os.path.join(work, "page.png")
-        run_browser(url, shot, size, settle_ms=8000, timeout=90)
-        im = Image.open(shot).convert("RGB")
-        lo, hi = zip(*im.getextrema(), strict=True)
-        if max(hi) - min(lo) < 8:
-            raise GrabError(
-                "the page came out blank (%s): it may need a login or refuse robots" % url
+        for i, sv in enumerate(facts.pop("inline_svgs", None) or [], 1):
+            key = "%s_logo%d" % (name, i)
+            try:
+                im = svg_raster(sv["svg"].encode("utf-8"), 1200, work)
+            except GrabError:
+                continue  # a sprite reference, or a mark that draws nothing out of its page
+            path, w, h, _ = store(im, os.path.join(d, key))
+            extra["web_" + key] = "web/" + os.path.basename(path)
+            notes.append(
+                "%s (SK.image('web_%s'), %dx%d%s)"
+                % (extra["web_" + key], key, w, h, ', "%s"' % sv["label"] if sv["label"] else "")
             )
-        d = os.path.join(root, "web")
-        os.makedirs(d, exist_ok=True)
-        for ext in ("png", "jpg"):
-            if os.path.exists(os.path.join(d, "%s.%s" % (name, ext))):
-                os.remove(os.path.join(d, "%s.%s" % (name, ext)))
-        path = os.path.join(d, name + ".jpg")
-        im.save(path, quality=90, optimize=True)
     finally:
         shutil.rmtree(work, ignore_errors=True)
+    with open(os.path.join(d, name + ".txt"), "w", encoding="utf-8") as f:
+        f.write(text)
+    with open(os.path.join(d, name + ".json"), "w", encoding="utf-8") as f:
+        json.dump(facts | {"refused": refused}, f, indent=2, ensure_ascii=False)
     rel = "web/" + name + ".jpg"
-    note_source(root, "web_" + name, url=url, kind="page", file=rel, w=size[0], h=size[1])
-    return {"image": "web_" + name, "file": rel, "w": size[0], "h": size[1], "kind": "page"}
+    note_source(
+        root, "web_" + name, url=url, final=final, kind="page", file=rel, w=size[0], h=size[1]
+    )
+    return {
+        "image": "web_" + name,
+        "file": rel,
+        "w": size[0],
+        "h": size[1],
+        "kind": "page",
+        "final": final,
+        "facts": brand_lines(facts)
+        + (
+            ["drawn inline in its header, saved as pictures: %s" % "; ".join(notes)]
+            if notes
+            else []
+        ),
+        "extra": extra,
+        "words": len(text.split()),
+        "refused": len(refused),
+    }
 
 
 # ------------------------------------------------------------------ fonts
@@ -416,6 +770,7 @@ def main():
                 out = page(root, a.page.strip(), a.name, a.size, a.dry_run)
             if "image" in out:
                 m.setdefault("images", {})[out["image"]] = out["file"]
+                m["images"].update(out.get("extra") or {})
     except GrabError as e:
         print("web-grab: %s" % e, file=sys.stderr)
         return 2
@@ -429,6 +784,25 @@ def main():
             "font %r at weights %s%s: write with {font: %r, wt: %d}"
             % (out["font"], out["weights"], miss, out["font"], out["weights"][-1])
         )
+    elif out["kind"] == "page":
+        print(
+            "%s %dx%d (the page %s): SK.image('%s', x, y, w). Read %s to see it; its words (%d) "
+            "are in %s.txt. What it is made of, measured in the page:"
+            % (
+                out["file"],
+                out["w"],
+                out["h"],
+                out["final"],
+                out["image"],
+                out["file"],
+                out["words"],
+                out["file"].rsplit(".", 1)[0],
+            )
+        )
+        for line in out["facts"]:
+            print("  " + line)
+        if out["refused"]:
+            print("  (%d requests to addresses off the public internet refused)" % out["refused"])
     else:
         print(
             "%s %dx%d (%s%s): SK.image('%s', x, y, w). Read %s to see it."

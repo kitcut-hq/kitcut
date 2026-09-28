@@ -166,6 +166,48 @@ def main():
     finally:
         _web.fetch = fetch
 
+    # ------------------------------------------------------------ a page in the browser
+    # a local page (no network): its headline face, its button colour, a logo drawn inline, and
+    # a picture it asks of a private address, which the browser must not be allowed to fetch
+    try:
+        exe = grab.browser()
+    except grab.GrabError:
+        exe = None
+    if exe:
+        with tempfile.TemporaryDirectory() as d:
+            html = os.path.join(d, "page.html")
+            with open(html, "w", encoding="utf-8") as f:
+                f.write(
+                    "<html><body style='font-family: Arial; color: #222222'>"
+                    "<header><a href='/' aria-label='Acme'><svg viewBox='0 0 200 40' "
+                    "style='width:200px;height:40px'><rect width='200' height='40' "
+                    "style='fill:#ff5e1f'/></svg></a></header>"
+                    "<h1 style='font-family: Georgia, serif; font-size: 64px'>Acme headline</h1>"
+                    "<p>" + "Body text. " * 80 + "</p>"
+                    "<button style='background:#123456;color:#fff;padding:20px 60px'>Go</button>"
+                    "<img alt='logo' src='http://10.0.0.1/logo.png'></body></html>"
+                )
+            import asyncio
+
+            url = "file:///" + html.replace("\\", "/").lstrip("/")
+            png, facts, refused = asyncio.run(grab._browse(url, (1280, 800), settle_s=0.5))
+            roles = facts.get("fonts_by_role") or {}
+            expect("page: the headline face", (roles.get("headings") or [[None]])[0][0], "Georgia")
+            expect("page: the body face", (roles.get("text") or [[None]])[0][0], "Arial")
+            fills = [x["value"] for x in facts.get("fills") or []]
+            expect("page: the button colour is among its fills", "#123456" in fills, True)
+            svgs = facts.get("inline_svgs") or []
+            fill = (svgs[0]["svg"] if svgs else "").replace(" ", "").lower()
+            expect("page: the inline logo, with its fill", "rgb(255,94,31)" in fill, True)
+            expect(
+                "page: a request to 10.0.0.1 is refused",
+                any("10.0.0.1" in u for u in refused),
+                True,
+            )
+            expect("page: a picture came back", png[1:4] == b"PNG", True)
+    else:
+        print("skip  no browser: the page checks did not run")
+
     print("%d cases, %d failed" % (n[0], len(bad)))
     return 1 if bad else 0
 
