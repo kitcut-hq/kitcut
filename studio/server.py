@@ -792,7 +792,7 @@ async def costs(req):
 
 
 async def list_films(req):
-    """The finished films, newest first."""
+    """Every finished film, newest first (no cap: the gallery lists them all)."""
     out = []
     for f in Film.all():
         r = f.record()
@@ -815,8 +815,6 @@ async def list_films(req):
                 | {"id": f.id}
                 | film_urls(req, f.id, r)
             )
-        if len(out) >= 12:
-            break
     return web.json_response(out)
 
 
