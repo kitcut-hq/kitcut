@@ -6,42 +6,36 @@
       "id": "dell",
       "look": "drawn",
       "audience": "adults: investors and business readers",
-      "for_children": false,
       "prompt": "A documentary explainer: Dell went private in 2013, HP split in two in 2015, and a decade later the AI data-center boom decided which bet was right."
     },
     {
       "id": "stroke",
       "look": "drawn",
       "audience": "adults: a patient's family, worried",
-      "for_children": false,
       "prompt": "What happens in the first hour after someone arrives at hospital with a stroke, explained for the family waiting outside."
     },
     {
       "id": "pripyat",
       "look": "drawn",
       "audience": "adults: a sombre piece of history",
-      "for_children": false,
       "prompt": "The evacuation of Pripyat on 27 April 1986, the day after the accident at the Chernobyl nuclear plant."
     },
     {
       "id": "expenses",
       "look": "drawn",
       "audience": "adults: a company's employees",
-      "for_children": false,
       "prompt": "An internal announcement for our staff: from 1 November, expense approvals move from email to our new system, Ledgerly. What changes, and what everyone needs to do."
     },
     {
       "id": "stroke-painted",
       "look": "painted",
       "audience": "adults: a patient's family, worried",
-      "for_children": false,
       "prompt": "What happens in the first hour after someone arrives at hospital with a stroke, explained for the family waiting outside."
     },
     {
       "id": "moon",
       "look": "drawn",
       "audience": "young children, at bedtime",
-      "for_children": true,
       "control": true,
       "prompt": "A bedtime story for a four-year-old: the moon can't fall asleep, so the stars help."
     },
@@ -49,7 +43,6 @@
       "id": "catcafe",
       "look": "drawn",
       "audience": "adults: a comic advert",
-      "for_children": false,
       "control": true,
       "prompt": "A funny ad for a cat cafe where the cats are the managers."
     }

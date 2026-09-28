@@ -361,9 +361,12 @@ python studio/bakeoff.py --set audience --compare before after     # compare.htm
   recent-films note, so the films of a set cannot steer each other. Each result records whether
   the film really ran on its tree's brief.
 - **The grade** shows Claude eight frames of the finished film and nothing else -- no prompt, no
-  arm -- and asks who it was made for, how far it looks made for children (0-1) and how
-  professionally made it looks for that audience (1-5). The page also counts what each film used
-  (faces, the doodle people, pops and boings): counts to read, never a rule.
+  arm -- and asks about the look, not the audience (a film about revenue reads "for adults"
+  however cartoonish it is drawn): how much it belongs in children's animation (0-1), how well it
+  fits its subject and how professionally made it looks (1-5 each). It is a mild grader -- the
+  Dell film's googly-eyed first minutes scored childish 0.40, fits 3 -- so compare the arms, and
+  look at the frames. The page also counts what each film used (faces, the doodle people, pops
+  and boings): counts to read, never a rule.
 - `--auth login` (the default) runs on this machine's Claude Code login. A 30 s film costs about
   $2.5 of Claude and 15-20 minutes; `--jobs 3` makes three at once.
 

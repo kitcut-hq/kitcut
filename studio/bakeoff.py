@@ -21,9 +21,12 @@ films chose" note, so the films of a set cannot steer each other. Films already 
 run an arm again to finish it (--redo makes them afresh).
 
 --grade renders eight frames spread over each finished film and has Claude read them blind -- no
-prompt, no arm -- for who it thinks the film was made for, how far it looks made for children, and
-how professionally made it looks for that audience. --compare writes compare.html: per prompt,
-each arm's frames, choices, grade, cost and time; and prints the tallies.
+prompt, no arm -- for what it is about, how much its look belongs in children's animation (0-1,
+whatever the subject), how well the look fits the subject, and how professionally made it looks
+(1-5 each). --compare writes compare.html: per prompt, each arm's frames, choices, grade, cost and
+time; and prints the tallies: per arm, the means, and how many films' look fits their subject (4
+or 5 of 5). Calibrated on the Dell documentary this was built for: its googly-eyed first minutes
+read childish 0.40, fits 3 -- a mild grader, so compare the arms, never one number to a bar.
 
 Results: <results>\\<set>\\<arm>\\<prompt id>\\ -- the film's home, result.json, grade\\
     <results> is STUDIO_BAKEOFF, else kitcut-studio-bakeoff beside the main checkout.
@@ -57,13 +60,16 @@ GRADER = (
     "You judge short animated films from their frames alone: no brief, no title, no sound. "
     "Answer only with the JSON object asked for."
 )
+# the look, not the subject: a film about revenue reads "for adults" however it is drawn (the
+# Dell film's own frames scored 0.1 on "made for children"), so the question is about the drawing
 GRADE_ASK = (
     "These are %d frames from one short narrated animated film, in order (left to right, then "
-    "the second row). Who do you think it was made for, and how well does it look made for "
-    "them? Answer with one JSON object and nothing else:\n"
-    '{"audience": "who you think it was made for, in a few words", '
-    '"for_children": <0 = clearly made for adults, 1 = clearly made for young children>, '
-    '"professional": <1-5: how professionally made it looks for that audience>, '
+    "the second row). Judge how it looks. Answer with one JSON object and nothing else:\n"
+    '{"subject": "what it is about, in a few words", '
+    '"childish": <0-1: how much its look belongs in animation for young children, whatever '
+    "its subject -- 0 = not at all, 1 = entirely>, "
+    '"fits_subject": <1-5: how well the look suits the subject and its seriousness>, '
+    '"professional": <1-5: how professionally made it looks>, '
     '"why": "one sentence"}' % FRAMES
 )
 
@@ -471,15 +477,23 @@ def grade(args, s, root):
         g = asyncio.run(ask_blind(sheet))
         write_json(os.path.join(d, "grade.json"), g)
         print(
-            "%-8s %-16s for children %.2f  professional %s  reads as: %s"
+            "%-8s %-16s childish %.2f  fits %s  professional %s  (%s)"
             % (
                 a,
                 p["id"],
-                float(g.get("for_children") or 0),
+                num(g, "childish"),
+                g.get("fits_subject"),
                 g.get("professional"),
-                g.get("audience"),
+                g.get("subject"),
             )
         )
+
+
+def num(g, key):
+    try:
+        return float(g.get(key))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 # ------------------------------------------------------------------ side by side
@@ -516,21 +530,13 @@ def tallies(root, name, arm, prompts):
         ("serious", [x for x in rows if not x[0].get("control")]),
         ("controls", [x for x in rows if x[0].get("control")]),
     ):
-        graded = [x for x in group if x[2]]
+        graded = [x[2] for x in group if x[2]]
         if graded:
-            fc = [float(x[2].get("for_children") or 0) for x in graded]
-            out[label] = {
-                "graded": len(graded),
-                "for_children": round(sum(fc) / len(fc), 2),
-                "professional": round(
-                    sum(float(x[2].get("professional") or 0) for x in graded) / len(graded), 2
-                ),
-                "read_right": sum(
-                    1
-                    for x, f in zip(graded, fc, strict=True)
-                    if (f >= 0.5) == bool(x[0].get("for_children"))
-                ),
+            out[label] = {"graded": len(graded)} | {
+                k: round(sum(num(g, k) for g in graded) / len(graded), 2)
+                for k in ("childish", "fits_subject", "professional")
             }
+            out[label]["fit"] = sum(1 for g in graded if num(g, "fits_subject") >= 4)
     if rows:
         out["claude_usd"] = round(
             sum(x[1].get("claude_cost_usd") or 0 for x in rows) / len(rows), 2
@@ -558,12 +564,13 @@ def compare(args, s, root):
         c = counts(r["film"])
         img = "%s/%s/grade/sheet.png" % (arm, p["id"])
         grade_line = (
-            "<b>reads as</b> %s &middot; for children <b>%.2f</b> &middot; professional <b>%s</b>"
-            "<div class=why>%s</div>"
+            "childish <b>%.2f</b> &middot; fits the subject <b>%s</b>/5 &middot; professional "
+            "<b>%s</b>/5 <span class=subj>(%s)</span><div class=why>%s</div>"
             % (
-                html.escape(str(g.get("audience"))),
-                float(g.get("for_children") or 0),
+                num(g, "childish"),
+                g.get("fits_subject"),
                 g.get("professional"),
+                html.escape(str(g.get("subject"))),
                 html.escape(str(g.get("why"))),
             )
             if g
@@ -600,12 +607,13 @@ def compare(args, s, root):
         for k in ("serious", "controls"):
             if k in v:
                 parts.append(
-                    "%s: read right %d/%d, for children %.2f, professional %.2f"
+                    "%s: %d/%d fit their subject, childish %.2f, fits %.2f, professional %.2f"
                     % (
                         k,
-                        v[k]["read_right"],
+                        v[k]["fit"],
                         v[k]["graded"],
-                        v[k]["for_children"],
+                        v[k]["childish"],
+                        v[k]["fits_subject"],
                         v[k]["professional"],
                     )
                 )
@@ -634,7 +642,7 @@ table{border-collapse:collapse;width:100%%;table-layout:fixed}
 th{text-align:left;padding:18px 8px 6px;font-size:15px;border-top:1px solid #d8d1c5}
 th span{font-weight:400;color:#5d6677} .prompt{font-weight:400;color:#5d6677;font-size:13px}
 td{vertical-align:top;padding:6px 8px;width:50%%} td img{width:100%%;border:1px solid #d8d1c5}
-.facts{color:#5d6677;font-size:12.5px;margin-top:4px} .why{color:#5d6677;font-style:italic}
+.facts{color:#5d6677;font-size:12.5px;margin-top:4px} .why,.subj{color:#5d6677;font-style:italic}
 td.none{color:#b8432e} .arms th{border:0;padding-top:4px;font-size:16px}
 </style>
 <h1>Bake-off: %(set)s</h1><p class=about>%(about)s</p>
