@@ -39,6 +39,10 @@ KEYS="ANTHROPIC_API_KEY MONGODB_URI GOOGLE_SERVICE_ACCOUNT_KEY GOOGLE_CLOUD_PROJ
 # this machine's own settings (measured on the VMs, 2026-09-28; deploy/README.md)
 MACHINE_ENV="${KITCUT_MACHINE_ENV:-$HERE/machine.env}"
 
+# a python that runs (on Windows `python3` is often only the Microsoft Store stub)
+PY="$(for p in python3 python; do "$p" -c '' >/dev/null 2>&1 && { echo "$p"; break; }; done)"
+[ -n "$PY" ] || { echo "no python on PATH" >&2; exit 1; }
+
 step() { printf '\n== %s ==\n' "$*"; }
 run() { if [ "$DRY" = 1 ]; then echo "  would run: $*"; else "$@"; fi; }
 vm() { bash "$HERE/vm.sh" "$@"; }
@@ -76,7 +80,7 @@ on 'cd /srv/kitcut/repo && bash scripts/setup-linux.sh --studio 2>&1 | tail -4'
 step "6. the studio's .env"
 if [ "$DRY" = 1 ]; then echo "  would write $VM:/srv/kitcut/repo/.env from $ENV_SRC ($KEYS) + $MACHINE_ENV"; else
   {
-    python3 - "$ENV_SRC" $KEYS <<'PY'
+    "$PY" - "$ENV_SRC" $KEYS <<'PY'
 import sys
 path, keys = sys.argv[1], set(sys.argv[2:])
 for line in open(path, encoding="utf-8-sig"):
