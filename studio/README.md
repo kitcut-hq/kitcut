@@ -2,8 +2,10 @@
 
 One prompt in, and Claude writes, reviews and scores a **short hand-drawn (or painted) film** on
 the kitcut sketch engine, narrated, 5 s to 8 minutes. It's a JSON API for an app backend, plus a page with
-one prompt box. It runs on this machine, is reachable from outside through a Cloudflare quick
-tunnel, and **makes several films at once**, each in a sandbox of its own.
+one prompt box. The public one runs on an Azure VM (`kitcut-studio-1`, since 2026-09-28;
+`studio/deploy/README.md`), is reachable from outside through a Cloudflare named tunnel
+(studio.kitcut.ai), and **makes several films at once**, each in a sandbox of its own. The
+Windows commands below still run a studio on a laptop, for development -- never with the tunnel.
 
 ```powershell
 pip install -r requirements-studio.txt       # once: the Claude Agent SDK (bundles Claude Code), pymongo, pywin32

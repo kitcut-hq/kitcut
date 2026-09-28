@@ -114,6 +114,11 @@ one machine only, and a studio that came up at boot would announce itself.
 
 ## The move (cutover), and back
 
+Done 2026-09-28 at 13:37 PDT, with about 7 minutes offline (13:30-13:37). All 68 laptop
+films came across, and the laptop's tunnel settings were taken out of its `.env`. Its
+credentials were moved to `~/.cloudflared/backup-20260928-moved-to-vm`, so a laptop
+`serve.ps1` can no longer start a second connector. The steps, kept for a rebuild or a move back:
+
 1. Copy the laptop's studio home (films, library, uploads, Claude sessions): `azcopy` through a
    temporary container in `kitcutst`, or `tar | ssh`.
 2. Test privately: `ssh -L 8765:127.0.0.1:8765`, run the server by hand (`serve.sh` is not
