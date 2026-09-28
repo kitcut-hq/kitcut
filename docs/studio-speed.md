@@ -75,6 +75,30 @@ Full numbers in `docs/reference.md` ("Encoding in the browser"). In short:
   for untagged HD, so they probably play slightly dark in green (5.6 levels of 255). The
   browser path tags its output; the pipe path is unchanged.
 
+### The blind test, 2026-09-28
+
+Three customer films (Clamly 30 s, the hand-painted science film 30 s, the owl bedtime film
+20 s), each rendered both ways twice, alternating which went first, then web copies made with
+the studio's own settings, then 10 true frames a film scored as Edge shows them. The laptop had
+other sessions running, so single timings swing ~2x; the ranges are what was seen.
+
+| | render time | master size | web copy SSIM (what viewers stream) | master SSIM | colour error (green, of 255) |
+|---|---|---|---|---|---|
+| Clamly, today / browser | 64-113 s / 32-47 s | 108 / 110 MB | 0.957 / 0.958 | 0.967 / 0.960 | -5.7 / -1.5 |
+| science, today / browser | 117-162 s / 34-66 s | 98 / 123 MB | 0.967 / 0.968 | 0.983 / 0.980 | -2.5 / -1.5 |
+| owl, today / browser | 118-153 s / 52-58 s | 101 / 168 MB | 0.854 / 0.855 | 0.949 / 0.961 | -1.5 / -1.4 |
+
+- The web copy, which is what every page plays, comes out the same sharpness either way.
+- The master scores a hair lower on two films and higher on one. The differences (<0.01 SSIM)
+  were not visible in 2x crops.
+- **Colour is the visible difference.** Edge was screenshotted playing each file: its pixels
+  match the file decoded as BT.709 for both (mean error 1.2 vs 2.1 decoded as BT.601), so
+  today's untagged BT.601 renders really do play shifted. On Clamly the clam turns orange and
+  the water bluer. The browser path matches the drawn frame. The pipe path could be fixed on
+  its own (convert and tag BT.709) without switching encoders.
+- The web copy of a pipe render stays untagged too; the browser path's web copy keeps its
+  BT.709 tags.
+
 ## Stills
 
 Per still, 120 of them, one browser: PNG 123 ms, JPEG 54 ms (the file 12x smaller, SSIM 0.975
