@@ -6,7 +6,8 @@ every frame is a pure function of time. This script bundles those with the fonts
 mastered soundtrack into one HTML file (plays anywhere, offline), and renders the video by
 opening that page in headless Edge/Chrome (the browser html-to-image.py already finds -- no
 Node, no Playwright). The page draws each frame and POSTs its PNG to a tiny local server here,
-which pipes it straight into ffmpeg; `_encode` chooses the encoder.
+which pipes it straight into ffmpeg; `_encode` chooses the encoder. With `--encode browser` the
+page encodes the frames itself (WebCodecs, the GPU's H.264 encoder) and POSTs only the stream.
 
 Every stage is timed into the project's run log; `--timings` prints the latest time of every
 stage of every sketch tool for the project -- the "how long does a film take" answer.
@@ -21,7 +22,8 @@ Outputs (projects/<id>/outputs/):
 Manifest keys: title, description, slug, duration, fps, film ("film.js"), fonts
 ([{"file", "family", "weight", "load"}]), images ({"logo": "assets/logo.png"} -> SK.IMG.logo),
 player ({accent, paper, ink, hint, hint_font}), poster_t,
-render ({cq, preset, audio_bitrate, encoder}),
+render ({cq, preset, audio_bitrate, encoder, encode}: encode "browser" has the page encode its own
+frames, see --encode),
 tail ({secs, scripts, images, audio}: a closing after the film -- `secs` more of picture, drawn by
 `scripts` run after film.js, which lengthen SK._film; its sound is sketch-audio's),
 cast ("cast": a folder whose <name>.js files each run before film.js, as SK.cast.<name>).
@@ -34,6 +36,7 @@ Invoke as:
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --bundle
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json            (full render)
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --draft    (30 fps, faster)
+    python scripts/sketch-render.py --manifest projects/<id>/sketch.json --encode browser --jobs 6
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --timings
 """
 
@@ -50,6 +53,7 @@ import argparse
 import tempfile
 import threading
 import subprocess
+import urllib.parse
 from importlib import import_module
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
@@ -99,7 +103,7 @@ def vo_timeline(m):
 
 
 def cast_scripts(m):
-    """"cast": "cast" -- a folder of cast members, each its own script between the props and
+    """ "cast": "cast" -- a folder of cast members, each its own script between the props and
     film.js (Sketch Studio: a person's recurring characters, studio/library.py). Each runs in its
     own function scope and names itself in an error. "" for a manifest without one."""
     if not m.get("cast"):
@@ -200,9 +204,9 @@ class Session:
     The page lives under a random prefix (/<key>/film.html) and posts to paths relative to it; a
     request without the key is refused, so nothing else on the machine can feed this render."""
 
-    def __init__(self, page, on_frame=None, on_still=None):
+    def __init__(self, page, on_frame=None, on_still=None, on_h264=None):
         self.page = page.encode("utf-8")
-        self.on_frame, self.on_still = on_frame, on_still
+        self.on_frame, self.on_still, self.on_h264 = on_frame, on_still, on_h264
         self.done = threading.Event()
         self.error, self.automation, self.frames, self.last = None, None, 0, time.time()
         self.key = "/" + secrets.token_hex(12) + "/"
@@ -243,6 +247,8 @@ class Session:
                     if path == "/frame" and sess.on_frame:
                         sess.on_frame(int(q.split("=")[1]), body)
                         sess.frames += 1
+                    elif path == "/h264" and sess.on_h264:
+                        sess.on_h264(int(q.split("=")[1]), body)
                     elif path == "/still" and sess.on_still:
                         sess.on_still(q.split("=")[1], body)
                     elif path == "/automation":
@@ -354,11 +360,18 @@ def packets(path):
     return int(r.stdout.strip() or 0) if r.returncode == 0 else 0
 
 
-def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent):
+def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="pipe"):
     """Draw frames [0, n_frames) into `silent`. The film is cut into chunks of `chunk` seconds;
     `jobs` browsers draw chunks at once, each into its own encoder and segment file, and the
     segments are joined by stream copy. One browser is serial -- draw, read back, POST 8 MB,
     wait for the encoder -- so the machine sat mostly idle while it rendered.
+
+    `how` is where a chunk is encoded. "pipe": the page POSTs raw RGBA and ffmpeg encodes it with
+    `_encode.video_args`. "browser": the page encodes with its own hardware H.264 encoder
+    (`_encode.webcodecs`) and POSTs the stream, which ffmpeg only wraps. Measured on a 33 s film
+    (2026-09-28): pipe ran 87 s at 3 browsers and 91 s at 6 -- the 8 MB per frame, not the
+    drawing, was the wall -- and browser 28 s at 6. A browser that cannot encode falls back to
+    pipe, loudly, for the rest of the render.
 
     A fresh browser per chunk: measured on a 63.5 s film, one session fell from 13.8 to 1.5 fps
     and then stopped answering at frame ~2700. A chunk that fails is redrawn from its start
@@ -374,9 +387,77 @@ def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent):
     lock, t_start = threading.Lock(), time.time()
     done, failed, next_report = [0], [], [fps * 5]
     jobs = max(1, min(jobs, len(chunks)))
-    print("  %d chunks of %d frames, %d at a time" % (len(chunks), per, jobs), flush=True)
+    mode = [how]  # a browser with no encoder turns this to "pipe" for every chunk after it
+    print(
+        "  %d chunks of %d frames, %d at a time, encoded %s"
+        % (len(chunks), per, jobs, "in the browser" if how == "browser" else "by ffmpeg"),
+        flush=True,
+    )
+
+    def progress(k):
+        with lock:
+            done[0] += k
+            if done[0] >= next_report[0]:
+                next_report[0] += fps * 5
+                rate = done[0] / max(time.time() - t_start, 1e-3)
+                print(
+                    "  frame %d/%d  %.1f fps  eta %.0fs"
+                    % (done[0], n_frames, rate, (n_frames - done[0]) / max(rate, 1e-3)),
+                    flush=True,
+                )
+
+    def encode_in_browser(a, b, seg):
+        """One chunk through the page's own encoder: the stream arrives in batches, is written
+        as raw H.264, and ffmpeg wraps it without re-encoding."""
+        h264 = seg + ".h264"
+        got = [0]
+        with open(h264, "wb") as out:
+
+            def stream(n, body):
+                if n <= got[0]:
+                    return  # a retried POST whose first attempt already landed
+                out.write(body)
+                k, got[0] = n - got[0], n
+                progress(k)
+
+            err = Session(page, on_h264=stream).run(
+                "encode=%s&fps=%d&from=%r&to=%r"
+                % (
+                    urllib.parse.quote(json.dumps(_encode.webcodecs(cfg, fps))),
+                    fps,
+                    t0 + a / fps,
+                    t0 + b / fps,
+                ),
+                fatal=False,
+            )
+        if not err and got[0] != b - a:
+            err = "chunk came back short (%d)" % got[0]
+        if not err:
+            r = subprocess.run(
+                ["ffmpeg", "-v", "error", "-y", "-r", str(fps), "-f", "h264", "-i", h264]
+                + ["-c", "copy", "-bsf:v", _encode.webcodecs(cfg, fps)["bsf"], seg],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if r.returncode != 0:
+                err = "wrapping the chunk's H.264 failed: %s" % r.stderr.strip()[-300:]
+        os.remove(h264)
+        return err, got[0]
 
     def encode(a, b, seg):
+        if mode[0] == "browser":
+            err, got = encode_in_browser(a, b, seg)
+            if not err and packets(seg) != b - a:
+                err = "segment holds %d frames" % packets(seg)
+            if err:
+                progress(-got)
+            if not (err and "no-encoder" in err):
+                return err
+            with lock:
+                if mode[0] == "browser":
+                    print("  %s -- encoding with ffmpeg instead" % err[:200], flush=True)
+                    mode[0] = "pipe"
         ff = subprocess.Popen(
             ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgba"]
             + ["-s", "1920x1080", "-framerate", str(fps), "-i", "-"]
@@ -398,16 +479,7 @@ def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent):
                 )
             ff.stdin.write(body)
             got[0] += 1
-            with lock:
-                done[0] += 1
-                if done[0] >= next_report[0]:
-                    next_report[0] += fps * 5
-                    rate = done[0] / max(time.time() - t_start, 1e-3)
-                    print(
-                        "  frame %d/%d  %.1f fps  eta %.0fs"
-                        % (done[0], n_frames, rate, (n_frames - done[0]) / max(rate, 1e-3)),
-                        flush=True,
-                    )
+            progress(1)
 
         err = Session(page, on_frame=frame).run(
             "export=1&fps=%d&from=%r&to=%r" % (fps, t0 + a / fps, t0 + b / fps), fatal=False
@@ -426,8 +498,7 @@ def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent):
         if not err and packets(seg) != b - a:
             err = "segment holds %d frames" % packets(seg)
         if err:
-            with lock:
-                done[0] -= got[0]
+            progress(-got[0])
         return err
 
     def work(k):
@@ -474,7 +545,17 @@ def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent):
         sys.exit("joined %d frames, expected %d" % (count, n_frames))
     shutil.rmtree(seg_dir, ignore_errors=True)
     el = time.time() - t_start
-    print("  %d frames in %.0fs  (%.1f fps, %d jobs)" % (n_frames, el, n_frames / el, jobs))
+    print(
+        "  %d frames in %.0fs  (%.1f fps, %d jobs, encoded %s)"
+        % (
+            n_frames,
+            el,
+            n_frames / el,
+            jobs,
+            "in the browser" if mode[0] == "browser" else "by ffmpeg",
+        )
+    )
+    return mode[0]
 
 
 def contact_sheet(paths, out, cols=4):
@@ -531,6 +612,12 @@ def main():
         help="chunks drawn at once, each in its own browser and encoder "
         "(default: a quarter of the logical cores, at most 6; 1 = the old serial render)",
     )
+    ap.add_argument(
+        "--encode",
+        choices=["pipe", "browser"],
+        help="where frames are encoded (default render.encode, else pipe): pipe sends raw pixels "
+        "to ffmpeg; browser encodes in the page with its hardware H.264 encoder, ~3x faster",
+    )
     ap.add_argument("--from", dest="t0", type=float, default=0.0)
     ap.add_argument("--to", dest="t1", type=float)
     ap.add_argument(
@@ -568,6 +655,9 @@ def main():
     srt = os.path.join(m["_outputs"], slug + ".srt")
     n_frames = int(round((t1 - args.t0) * fps))
     jobs = args.jobs or auto_jobs()
+    how = args.encode or m.get("render", {}).get("encode", "pipe")
+    if how not in ("pipe", "browser"):
+        sys.exit("render.encode is %r: pipe or browser" % how)
     print("%s  %.1fs  %d fps  %d frames" % (m["_id"], t1 - args.t0, fps, n_frames))
     print("  jobs:    %d browsers at once, %.0f s of film each" % (jobs, args.chunk))
     print(
@@ -582,7 +672,20 @@ def main():
             else "none yet -- run sketch-audio.py (the video will be silent)"
         )
     )
-    print("  encoder: %s" % _encode.describe(cfg))
+    if how == "browser":
+        w = _encode.webcodecs(cfg, fps)
+        print(
+            "  encoder: the browser's %s, %s, QP %d (from cq %s), keyframe every %d"
+            % (
+                w["config"]["codec"],
+                w["config"]["hardwareAcceleration"],
+                w["quantizer"],
+                cfg.get("cq", cfg.get("quality")),
+                w["gop"],
+            )
+        )
+    else:
+        print("  encoder: %s" % _encode.describe(cfg))
     for fnt in m.get("fonts", []):
         if not os.path.exists(_env.resolve(fnt["file"])):
             sys.exit("font missing: %s" % fnt["file"])
@@ -652,7 +755,9 @@ def main():
 
         silent = os.path.join(m["_temp"], slug + "_silent.mp4")
         with st("frames"):
-            render_frames(light, cfg, fps, args.t0, n_frames, args.chunk, jobs, m["_temp"], silent)
+            how = render_frames(
+                light, cfg, fps, args.t0, n_frames, args.chunk, jobs, m["_temp"], silent, how
+            )
 
         out = os.path.join(m["_outputs"], slug + ("_draft" if args.draft else "") + ".mp4")
         with st("mux"):
@@ -726,7 +831,12 @@ def main():
 
     _project.record(
         m["_id"],
-        "sketch film rendered (%d fps%s)" % (fps, ", draft" if args.draft else ""),
+        "sketch film rendered (%d fps%s%s)"
+        % (
+            fps,
+            ", draft" if args.draft else "",
+            ", encoded in the browser" if how == "browser" else "",
+        ),
         out=out,
         script=__file__,
         argv=sys.argv[1:],

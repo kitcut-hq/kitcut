@@ -3131,6 +3131,51 @@ chunk (SSIM 0.98 between them): each segment is its own encode, so a frame's com
 longer leans on the chunk before it. The drawn picture is the same -- against a lossless still
 of t = 30 s both renders score 0.972. `--draft` renders 30 fps.
 
+#### Encoding in the browser: `--encode browser`
+
+`--encode browser` (or `render.encode: "browser"`) has the page encode its own frames with the
+browser's hardware H.264 encoder (WebCodecs `VideoEncoder`, `_encode.webcodecs()`) and POST
+only the stream, one second of film per POST; ffmpeg wraps it without re-encoding
+(`-c copy`), tagging it BT.709. The default is still `pipe` until the switch is decided. A
+browser that cannot encode says `no-encoder` and the render falls back to `pipe`, loudly, for
+every remaining chunk.
+
+Why: profiled per frame on one browser (2026-09-28), a frame costs ~3 ms of draw calls, ~50 ms
+of actual drawing (deferred until the pixels are read), ~3 ms to copy them out, and ~28 ms to
+POST 8 MB to Python and ffmpeg; ffmpeg alone encodes ~170 frames/s. The POST is why `pipe`
+stopped scaling: the 33 s Clamly film took 87 s at 3 browsers and 91 s at 6. In the browser
+the frame never leaves the GPU:
+
+| film | pipe (today) | browser, 6 jobs |
+|---|---|---|
+| Clamly, 33 s at 60 fps | 87 s at 3 jobs (145 s with the machine busy) | 26-28 s |
+| the 8-minute studio film, 28,800 frames | 2,218 s at 3 jobs (13 fps) | **536 s (54 fps)** |
+
+Quality, scored against the true frames (PNG stills of the same t -- frames are a pure
+function of t -- decoded with each file's own colour matrix):
+
+| render | PSNR | SSIM (worst) | size |
+|---|---|---|---|
+| Clamly, pipe cq 18 | 38.8 dB | 0.967 (0.963) | 108 MB |
+| Clamly, browser QP 18 / 17 / 16 | 39.0 / 39.2 / 39.6 | 0.959 / 0.963 / 0.967 | 110 / 141 / 177 MB |
+| Clamly, browser at pipe's bitrate (VBR 26 Mbps) | 39.0 | 0.957 | 111 MB |
+| 8-min film, one minute: pipe cq 18 | 37.8 | 0.951 (0.907) | 273 MB |
+| same minute, browser QP 18 / 20 / 22 | 38.8 / 37.6 / 35.9 | 0.959 / 0.935 / 0.878 | 485 / 373 / 182 MB |
+| 8-min film, whole | pipe 38.1 dB, 0.955 (0.938), 2.2 GB | browser QP 18: 38.6 dB, 0.959 (0.956), 3.8 GB | |
+
+QP = cq (`WEBCODECS_QP_OFFSET` 0) is the one setting at least as good as pipe on both films;
+its price is file size on a grainy film (+75% here), because a fixed QP spends bits where
+NVENC's VBR and adaptive quantisation would not. Viewers get the 5 Mbps web copy either way;
+the master's size costs upload time and storage.
+
+The colour matrix: the browser encodes BT.709 and writes no tags; `pipe`'s rgba -> yuv420p is
+BT.601, also untagged. Decoded as BT.709 -- what a browser assumes for untagged HD -- the pipe
+render is 5.6 levels too dark in green (PSNR 33.6 dB against 38.8 read as BT.601). The browser
+path's wrap writes the BT.709 tags; the pipe path is untouched here and still untagged.
+
+What the machine offers (headless Edge, 2026-09-28): H.264 on the GPU in every bitrate mode
+including `quantizer`; HEVC not at all; AV1 in software only.
+
 ### How long a film takes
 
 Machine time for the 60 s film, from its run logs (`--timings` prints them):

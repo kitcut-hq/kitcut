@@ -39,7 +39,7 @@ so for a short film Claude is 85-90% of the wait and the machine is not the limi
 
 | # | change | speeds up | this film, before -> after | status |
 |---|---|---|---|---|
-| 1 | record narration lines in parallel (`sketch-vo.py --jobs`) | narration | synth 341 s -> 52 s per recording (measured) | **on in the studio** (`studio/tools.py` `VOICE_JOBS` = 8), released 2026-09-28 |
+| 1 | record narration lines in parallel (`sketch-vo.py --jobs`) | narration | synth 341 s -> 52 s per recording (measured) | **built, tested, opt-in** (branch `studio-speed`) |
 | 2 | Whisper word timing on the GPU | narration | ~2.5-4 min -> ~20 s per recording (estimate) | not built; the studio reserves the laptop's 4 GB card for the renderer |
 | 3 | backup voice for refused lines | narration | fewer re-recordings | shipped (b20966e), after this film |
 | 4 | encode the video in the browser (`sketch-render.py --encode browser`) | final render | frames 2,218 s -> 536 s (measured, 4.1x) | **built, tested, opt-in** (branch `studio-speed`) |
@@ -63,7 +63,7 @@ No rate-limit answers at 8. The retry on 429/5xx exists for the day one comes.
 
 ## 4. Encoding in the browser: the test
 
-Full numbers on branch `studio-speed`, `docs/reference.md` ("Encoding in the browser"). In short:
+Full numbers in `docs/reference.md` ("Encoding in the browser"). In short:
 
 - **Speed:** 3.1-5.6x on a 33 s film depending on machine load; 4.1x on the 8-minute film.
 - **Quality at the same `cq`:** at least as good on both films scored against the true frames
@@ -84,7 +84,7 @@ browser and Python start-up.
 
 ## Open decisions
 
-1. ~~Switch the studio to parallel narration~~ -- done 2026-09-28, 8 at once.
+1. Switch the studio to parallel narration (`vo.jobs`, e.g. 8)?
 2. Switch the studio to `render.encode: "browser"`, accepting bigger masters?
 3. Build JPEG stills and the parallel motion check (#6)?
 4. Whisper on the GPU (#2) waits on the dedicated render machine.
