@@ -29,11 +29,13 @@ and hand-drawn marks on top.
 4. Write `film.js`: the paintings moving and changing on the spoken words, then call `check`.
 5. Call `stills` with about six times spread over the film -- ten or twelve for a film over
    a minute -- (always 0, and one just before the end), and Read `outputs/review/sheet.png`;
-   then call `motion` once and Read `outputs/review/motion.png`. Look hard: a painting's edge
-   showing inside the frame, words that are hard to read over the picture, a crossfade landing
-   on the wrong word, text that does not match the narration; and from `motion`, any stretch
-   where nothing moves and any change of painting where nothing carries over. Fix and re-check.
-   Two review rounds at most.
+   then call `motion` once and Read `outputs/review/motion.png`. Look first at the sheet as a
+   whole, against film.js's `// For:` line (see "Direction"): would that audience take this film
+   seriously, and does it look professionally made for them? If not, fix that before anything
+   else. Then look hard at the details: a painting's edge showing inside the frame, words that
+   are hard to read over the picture, a crossfade landing on the wrong word, text that does not
+   match the narration; and from `motion`, any stretch where nothing moves and any change of
+   painting where nothing carries over. Fix and re-check. Two review rounds at most.
 6. Write `score.json` and `sfx.json`, then call `sound` once to prove they render. The music
    ducks under the voice by itself.
 7. Finish with one or two sentences: what the film shows and says, and anything from the prompt
@@ -48,8 +50,8 @@ The studio has set `backend`, `model` and `max_images`; leave them. You set:
   one; else choose what suits this subject and its audience -- not by habit. Styles that paint
   well: paper cut-out collage, flat vector poster, 1950s travel poster, claymation diorama,
   ukiyo-e woodblock print, ink and wash, charcoal sketch, gouache concept art, risograph print,
-  pixel art, soft 3D render (like an animated feature), cinematic photoreal. A soft storybook
-  watercolour is for young children's stories only. Name the palette and the light in it too.
+  pixel art, soft 3D render (like an animated feature), cinematic photoreal, watercolour. Name
+  the palette and the light in it too.
 - `images`: `[{"name": "kitchen", "prompt": "..."}, ...]` -- names of lowercase letters, digits,
   `-` and `_`. Describe each picture fully: who, doing what, where, the framing (wide,
   close-up), the light. Never ask for words, letters or signs in a picture. The painter works
@@ -73,10 +75,10 @@ Each painting comes back 1920x1280 (a little taller than the 1920x1080 frame: ro
 - Move slowly: a push-in of about 10% over a shot, or a pan of a few hundred units. Crossfade to
   the next painting over 0.4-0.8 s (`alpha` on `SK.image`), starting on a spoken word.
 - Words on screen: `SK.txt` on a banner (`SK.card` behind it) or with a thick `stroke`, so they
-  read over a busy picture. Hand-drawn marks on top are welcome -- an arrow, a circle, sparkles,
-  hearts (`SK.ink`, `S.*`, `SK.sparkle`, `SK.heart`): a painting with pen notes is a good look.
+  read over a busy picture. Marks can be drawn over a painting: an arrow, a circle, sparkles,
+  hearts (`SK.ink`, `S.*`, `SK.sparkle`, `SK.heart`).
 - `SK.setStyle('clean', { grain: .25, vignette: .15, handheld: .3 })`: the crayon paper and the
   boiling line are for drawings, not paintings. Suit it to the style: `grain: 0, vignette: 0` for
   flat vector, a poster or pixel art; `vignette: .3` for cinematic or moody light.
-- Words and marks over a painting take colours from the painting's own palette (`col`), with a
-  banner or a stroke behind them -- not the same orange every time.
+- Words and marks take any colour (`col`); their defaults come from the paper ground, not from
+  the painting.

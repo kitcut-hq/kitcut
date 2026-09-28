@@ -254,13 +254,33 @@ Anthropic Console.
    stays cached. The film's length, the prompt and what recent films chose come in the first
    message.
 
+   **Who it is for, and one bar.** Before anything else Claude decides from the prompt who the
+   film is for and its mood (never assuming children unless the prompt says so), writes it as
+   film.js's first line -- `// For: <who it is for>; <its mood>`, read back as
+   `direction.audience` -- and holds the whole film to one bar: professionally made for that
+   audience. The review looks at the sheet against that line before any detail.
+
+   **The brief carries no style.** Every sentence of `prompt.md` and `looks/*.md` is one of
+   three kinds: *capability* -- what exists and how to call it (grounds, styles, props, fonts,
+   instruments, voices, sound generators), described by what each thing is, never what it is
+   for; *craft* -- faults in any style (text cut off, overlaps, a blank frame 0, a dead stretch,
+   a scene waiting empty for its subject, levels); or *the bar* above. Nothing says what a film
+   should look or sound like; that is the person's to say in the prompt, or Claude's to choose.
+   The brief used to prescribe -- "characters give a film its charm... an object with a face",
+   "a place, not a page", "pop/boing on appearances", a subject beside every menu entry -- and
+   34 of 46 films drew faces or the cartoon kid, an 8-minute documentary about Dell and HP among
+   them (studio-20260927-171047-mgkibw). A protective style rule ("watercolour is for children
+   only", a checker refusing faces on serious films) is the same mistake pointing the other
+   way. Measure a change to the brief with `bakeoff.py` (below) before it ships.
+
    **Films that don't all look alike.** Every film starts from the same instructions, so the
-   prompt makes Claude choose a direction first -- the place, the ground (`SK.setGround`), the
-   voice and its direction, an ensemble and a tempo, for a painted film the painting style --
-   from menus of choices tested together (`config/sketch/grounds/` renders every ground). The
-   first message then lists what the last eight finished films chose (`recent_films`, counts
-   only, never their prompts), and Claude chooses freshly unless the prompt calls for a repeat.
-   What each film chose is kept as `direction` in its record and in Mongo.
+   prompt makes Claude choose a direction first -- what fills the frame, the ground
+   (`SK.setGround`), the voice and its direction, an ensemble and a tempo, for a painted film the
+   painting style -- from menus of choices tested together (`config/sketch/grounds/` renders
+   every ground). The first message then lists what the last eight finished films chose
+   (`recent_films`, counts only, never their prompts; never the audience), and Claude chooses
+   freshly unless the prompt calls for a repeat. What each film chose is kept as `direction` in
+   its record and in Mongo.
 3. Claude writes the narration and records it (`voice`), writes `film.js` (for a painted film,
    the paintings first), renders review stills and looks at the sheet, runs `motion` -- the film a few
    times a second, reporting its cuts and any stretch where nothing moves for 4 s
@@ -317,6 +337,35 @@ film it vouches is the person's. That film is an episode:
 - **Records.** `studio.json` keeps the project as it was asked for. `studio_runs` gets only
   `project_id` (and every run now has `title`, `name_film`'s when nothing was typed): the site
   lists a project's episodes from there. Limits stay per person, across projects.
+
+## Bake-off: measure a change to the brief before it ships
+
+`bakeoff.py` makes one set of prompts (`bakeoff/<set>.json`, each with the audience it is for)
+with two versions of the studio -- two checkouts, usually a worktree at the base commit and one
+with the change -- then grades every film blind and puts them side by side:
+
+```powershell
+python studio/bakeoff.py --set audience --plan                     # what runs, its rough cost
+python studio/bakeoff.py --set audience --arm before --tree C:\instafill\kitcut-fit-base
+python studio/bakeoff.py --set audience --arm after  --tree C:\instafill\kitcut-fit
+python studio/bakeoff.py --set audience --grade                    # a blind read of each film
+python studio/bakeoff.py --set audience --compare before after     # compare.html + the tallies
+```
+
+- **Made as a release makes a film:** `STUDIO_REPO`/`STUDIO_ENV_FILE` name the main checkout
+  (its keys, the machine's locks) and the tree gets a `models\` junction, as `release.py` gives a
+  snapshot. Remove that junction on its own (`cmd /c rmdir <tree>\models`) before removing the
+  tree: a recursive delete through it empties the main checkout's `models\`.
+- **Kept apart:** each film has a home of its own under `kitcut-studio-bakeoff\<set>\<arm>\`
+  beside the checkout, is link-only (`source: bakeoff`), is not copied online, and gets no
+  recent-films note, so the films of a set cannot steer each other. Each result records whether
+  the film really ran on its tree's brief.
+- **The grade** shows Claude eight frames of the finished film and nothing else -- no prompt, no
+  arm -- and asks who it was made for, how far it looks made for children (0-1) and how
+  professionally made it looks for that audience (1-5). The page also counts what each film used
+  (faces, the doodle people, pops and boings): counts to read, never a rule.
+- `--auth login` (the default) runs on this machine's Claude Code login. A 30 s film costs about
+  $2.5 of Claude and 15-20 minutes; `--jobs 3` makes three at once.
 
 ## Paying for Claude
 

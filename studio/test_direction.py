@@ -60,8 +60,14 @@ def main():
             "# Direction" in a and "Do not assume the audience is children" in a,
         )
         expect(
-            "%s: it offers the ensembles and the voice directions" % look,
-            "jazz cafe" in a and "noir or mystery" in a,
+            "%s: it sets the bar, and asks who the film is for on film.js's first line" % look,
+            "professionally made for that audience" in a
+            and "`// For: <who it is for>; <its mood>`" in a
+            and "`// For:` line" in a,  # the review checks the film against it
+        )
+        expect(
+            "%s: it offers the ensembles" % look,
+            "jazz cafe" in a and "night and mystery" in a,
         )
     drawn = agent.system_prompt("drawn")
     expect(
@@ -84,7 +90,7 @@ def main():
     sf = os.path.join(films.KIT, "models", "soundfonts", "FluidR3_GM")
     if os.path.isdir(sf):
         cached = set(os.listdir(sf))
-        sound = drawn[drawn.index("- The ensemble is half") : drawn.index("- Tempo from the mood")]
+        sound = drawn[drawn.index("- The ensemble is half") : drawn.index("- Sound effects:")]
         named = set(re.findall(r"`([a-z0-9_]+)`", sound))
         expect("every ensemble instrument is cached", named <= cached, sorted(named - cached))
 
@@ -150,13 +156,23 @@ def main():
             "voice_style": "low and wry",
             "instruments": ["acoustic_bass", "vibraphone", "drums"],
             "bpm": 76,
+            "audience": "",
         },
         d,
     )
+    write(f, "film.js", "// For: investors and analysts; calm, serious\r\nSK.film({duration: 10});")
+    expect(
+        "direction: who it is for, from film.js's first line",
+        f.direction()["audience"] == "investors and analysts; calm, serious",
+        f.direction()["audience"],
+    )
     write(f, "film.js", "SK.film({duration: 10, ground: (t) => t < 5 ? 'sky' : 'night'});")
     expect("direction: a ground that changes", f.direction()["ground"] == "changing")
-    write(f, "film.js", "SK.film({duration: 10});")
+    write(f, "film.js", "// for:   SECRET AUDIENCE; hushed  \nSK.film({duration: 10});")
     expect("direction: no ground named is the paper", f.direction()["ground"] == "paper")
+    expect(
+        "direction: the For line, any case", f.direction()["audience"] == "SECRET AUDIENCE; hushed"
+    )
     p = films.Film.create("A dragon learns to cook", 10, "painted", client="t")
     write(p, "paint.json", {"style": "paper cut-out collage, bold primaries", "images": []})
     expect(
@@ -184,6 +200,7 @@ def main():
         msg,
     )
     expect("the note gives no other film's prompt", "lighthouse" not in msg and "dragon" not in msg)
+    expect("the note gives no other film's audience", "SECRET AUDIENCE" not in msg, msg)
     q = films.Film.create("Another", 10, "drawn", client="t")
     expect(
         "a film never sees its own prompt twice",

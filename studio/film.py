@@ -67,6 +67,10 @@ ENGINE = ("engine.js", "props.js")  # the film's own copy, in engine\; Claude ma
 # SK.cast.pip, cast.pip, cast['pip']
 CAST_FILE = re.compile(r"^[a-z][a-z0-9_]{0,30}\.js$")
 CAST_USE = re.compile(r"\bcast\s*(?:\.\s*([a-z][a-z0-9_]*)|\[\s*['\"]([a-z][a-z0-9_]*)['\"]\s*\])")
+# film.js's first line, `// For: <who it is for>; <its mood>`: the audience the film is made for
+FOR_LINE = re.compile(
+    r"^[ \t]*//[ \t]*for:[ \t]*(\S[^\r\n]*?)[ \t]*\r?$", re.MULTILINE | re.IGNORECASE
+)
 # what Claude may not change in paint.json: the painter, and how many paintings a film may cost
 # (8 up to a minute, more for a longer film: limits()["images"], paint_pins)
 PAINT_PINNED = {"backend": "muse", "model": "meta/muse-image", "max_images": 8}
@@ -292,6 +296,9 @@ class Film:
 
         d = {"look": self.look}
         js = load("film.js") or ""
+        # who it is for and its mood, the film's first decision (prompt.md, "# Direction")
+        m = FOR_LINE.search(js)
+        d["audience"] = m.group(1)[:160] if m else ""
         if d["look"] == "drawn":
             g = re.search(r"setGround\(\s*['\"](\w+)", js)
             changes = re.search(r"\bground\s*:\s*\(?\s*\w+\s*\)?\s*=>", js)

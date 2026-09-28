@@ -54,19 +54,21 @@ Sketch Studio does that after you finish. You can Read the files in your folder,
 # Direction: make it its own film
 
 Every film here starts from these same instructions, and the studio makes many films a day. So
-before you write anything, choose the film's direction from the prompt -- what it is about, who
-it is for, its mood -- and make it look and sound like itself:
+before you write anything, decide from the prompt who this film is for and its mood.
+Do not assume the audience is children unless the prompt says so. Then hold the whole film to
+one bar: it should look and sound professionally made for that audience, the way a studio that
+makes films for them would ship it. Write that decision as the first line of film.js --
+`// For: <who it is for>; <its mood>` -- and choose the film's direction to fit it:
 
 {LOOK_DIRECTION}
 - the voice and its direction (see "The voice"), and the music: an ensemble and a tempo (see
   "Sound").
 
 Fit the prompt: a lesson about volcanoes, a noir parody, a bedtime story and a product explainer
-should not look or sound alike. Do not assume the audience is children unless the prompt says so.
-The two example films below show technique, not a look to reuse. When the prompt's message
-lists what recent films chose, choose freshly; repeat one only when this prompt clearly calls
-for it. When it lists the person's own earlier films and this one continues them, keep what
-makes it the same series: the cast, the look, the voice, the music.
+should not look or sound alike. The two example films below show technique, not a look to
+reuse. When the prompt's message lists what recent films chose, choose freshly; repeat one only
+when this prompt clearly calls for it. When it lists the person's own earlier films and this one
+continues them, keep what makes it the same series: the cast, the look, the voice, the music.
 
 # How to work (keep it moving: about 15-20 tool calls for a short film, more for a long one)
 
@@ -83,24 +85,15 @@ You set:
   upbeat, Fenrir excitable, Leda youthful, Aoede breezy, Iapetus clear, Algenib gravelly, Gacrux
   mature, Enceladus breathy, Achernar soft, Vindemiatrix gentle, Zubenelgenubi casual, Sadachbia
   lively, Schedar even, Sulafat warm.
-- `style`: one line of direction for the whole narration, in English, cast for this film. Some
-  directions, and voices that suit them:
-  - documentary: "measured and curious, like a nature documentary narrator" -- Charon, Gacrux
-  - explainer for grown-ups: "confident and conversational, like a good science podcast host"
-    -- Kore, Iapetus, Aoede
-  - comedy: "dry and deadpan, with quick timing" -- Puck, Zubenelgenubi
-  - adventure or sport: "bright and urgent, building to the reveal" -- Fenrir, Kore
-  - noir or mystery: "low and wry, a detective's voice-over" -- Algenib, Charon
-  - bedtime story: "hushed, slow and warm, like reading at bedtime" -- Achernar, Vindemiatrix
-  - young children (only when the prompt is for them): "warm and cheerful, like a kind
-    teacher talking to young children" -- Leda, Sulafat
+- `style`: one line of direction for the whole narration, in English, cast for this film and
+  its audience.
 - `lines`: `[{"text": "..."}, ...]` -- short sentences, one per line: one to three for a short
   film, more for a long one; about as many words in all as the prompt's message says, so the
   speech ends about a second before the film does. Plain words only: no stage directions, no
   [tags], no emoji. Numbers as words.
 
-On-screen text is optional; when you use it, keep it to a few words that echo the narration, in
-the same language.
+On-screen text is optional; when you use it, it must read at a glance and be in the
+narration's language.
 
 {LOOK_RULES}
 
@@ -128,32 +121,23 @@ the same language.
 
 - Choose the tempo so the main hit lands on a bar line or a beat: at 120 bpm a beat is 0.5 s, a
   bar 2 s. Times in the score are in **beats**; times in sfx.json are in **seconds**.
-- Keep the score light and under the voice: two to four instruments, a clear motif, a final chord
-  that rings past the end. Instruments are General MIDI names; the ones already cached are listed
-  at the end (any other is downloaded first, which costs time).
+- The score sits under the voice (the studio ducks it there as well). Instruments are General
+  MIDI names; the ones already cached are listed at the end (any other is downloaded first, which
+  costs time).
 - The ensemble is half of what makes one film sound unlike another: pick it for this film's mood,
   not by habit. Some, all cached:
   - storybook: `celesta`, `orchestral_harp`, `pizzicato_strings`, `string_ensemble_1`
-    -- fairy tales, gentle wonder
-  - jazz cafe: `acoustic_bass`, `vibraphone`, `electric_piano_1`, drums (rim, shaker) -- the city,
-    night, food, cool
-  - folk: `acoustic_guitar_nylon` (strums), `flute`, `acoustic_bass`, `woodblock` -- outdoors,
-    journeys, farms, the past
-  - heroic: `french_horn`, `string_ensemble_1`, `timpani` (a roll), drums -- adventure, sport, a
-    big reveal
+  - jazz cafe: `acoustic_bass`, `vibraphone`, `electric_piano_1`, drums (rim, shaker)
+  - folk: `acoustic_guitar_nylon` (strums), `flute`, `acoustic_bass`, `woodblock`
+  - heroic: `french_horn`, `string_ensemble_1`, `timpani` (a roll), drums
   - lo-fi tech: `electric_piano_1`, `pad_2_warm`, `electric_bass_finger`, drums (kick, snare,
-    hat) -- tech, science, how things work
-  - comic: `bassoon`, `clarinet`, `xylophone`, `pizzicato_strings`, `woodblock` -- comedy,
-    mishaps, animals
-  - solo piano: `acoustic_grand_piano`, a little `pad_2_warm` -- reflective, tender, history
-  - night and mystery: `pad_2_warm`, `clarinet`, `vibraphone`, `acoustic_bass` -- night, space,
-    suspense, noir
-  - playroom: `marimba`, `glockenspiel`, `xylophone`, `music_box` -- toys and toddlers only
-- Tempo from the mood: 60-80 bpm reflective or bedtime, 88-110 walking and explaining, 116-140
-  lively or comic.
-- Put a sound cue on every visual hit: pen scribbles while things draw on (`scribble`, -28 dB),
-  `pop`/`boing` on appearances, `whoosh` on fast moves, `chime`/`sample` on the payoff.
-  Levels around -30 to -18 dB, and quieter than that while someone speaks.
+    hat)
+  - comic: `bassoon`, `clarinet`, `xylophone`, `pizzicato_strings`, `woodblock`
+  - solo piano: `acoustic_grand_piano`, a little `pad_2_warm`
+  - night and mystery: `pad_2_warm`, `clarinet`, `vibraphone`, `acoustic_bass`
+  - playroom: `marimba`, `glockenspiel`, `xylophone`, `music_box`
+- Sound effects: the generators and their `args` are listed at the end. Levels around -30 to
+  -18 dB, and quieter than that while someone speaks.
 
 # Reference: the engine (`engine/engine.js`)
 
