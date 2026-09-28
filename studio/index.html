@@ -26,7 +26,7 @@
 <meta name="twitter:image" content="https://kitcut.ai/og.jpg">
 <meta name="twitter:image:alt" content="Frames from four films made in KitCut: a honey jar, a young dragon, a lighthouse cat and a raindrop">
 <link rel="canonical" href="https://kitcut.ai/">
-<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kitcut.ai/#website", "url": "https://kitcut.ai/", "name": "KitCut", "description": "Claude video maker"}, {"@type": "Organization", "@id": "https://kitcut.ai/#org", "name": "KitCut", "url": "https://kitcut.ai/", "logo": "https://kitcut.ai/logo-256.png", "sameAs": ["https://github.com/kitcut-hq/kitcut"]}, {"@type": "WebApplication", "name": "KitCut: Claude video maker", "url": "https://kitcut.ai/", "applicationCategory": "MultimediaApplication", "operatingSystem": "Any (web browser)", "description": "Make a Claude video from one prompt. Opus 5.5 writes, animates, narrates and scores your idea in minutes: motion graphics, explainers, launch videos. 30 s free.", "publisher": {"@id": "https://kitcut.ai/#org"}, "offers": {"@type": "AggregateOffer", "priceCurrency": "USD", "lowPrice": "0", "highPrice": "849", "offerCount": "13"}}, {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Can Claude make videos?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Claude has no video model: it writes code that draws every frame, the way the Opus 5.5 animations people share on X are made. KitCut has Claude Opus 5.5 write the script, animate every scene, write a narration and compose the music, then renders it all into a finished Claude video."}}, {"@type": "Question", "name": "How do I make a Claude video?", "acceptedAnswer": {"@type": "Answer", "text": "Type one sentence about your idea, pick a length and a look (hand-drawn or painted), and press Make the film. Claude plans it, draws it, looks at stills of its own work and fixes what it doesn't like. The finished video is ready in a few minutes."}}, {"@type": "Question", "name": "Which Claude model makes the videos?", "acceptedAnswer": {"@type": "Answer", "text": "Claude Opus 5.5 directs every video. It writes the script and the code that draws each frame, and reviews the result before it is rendered. For the painted look an image model paints the scenes and Claude animates them; a voice model reads Claude's narration."}}, {"@type": "Question", "name": "Is it free?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, to start: every account gets 30 seconds of film a month, with no card needed. Paid plans give you more minutes, and Pro makes films up to 8 minutes long."}}, {"@type": "Question", "name": "How long can a Claude video be?", "acceptedAnswer": {"@type": "Answer", "text": "Up to 30 seconds on Free, 1 minute on Standard and 8 minutes on Pro."}}, {"@type": "Question", "name": "What can I make with it?", "acceptedAnswer": {"@type": "Answer", "text": "Motion graphics, explainer videos, launch videos, tiny stories, music videos, showreels and lessons, in any language you type in. Every film gets its own page to share."}}]}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kitcut.ai/#website", "url": "https://kitcut.ai/", "name": "KitCut", "description": "Claude video maker"}, {"@type": "Organization", "@id": "https://kitcut.ai/#org", "name": "KitCut", "url": "https://kitcut.ai/", "logo": "https://kitcut.ai/logo-256.png", "sameAs": ["https://github.com/kitcut-hq/kitcut"]}, {"@type": "WebApplication", "name": "KitCut: Claude video maker", "url": "https://kitcut.ai/", "applicationCategory": "MultimediaApplication", "operatingSystem": "Any (web browser)", "description": "Make a Claude video from one prompt. Opus 5.5 writes, animates, narrates and scores your idea in minutes: motion graphics, explainers, launch videos. 30 s free.", "publisher": {"@id": "https://kitcut.ai/#org"}, "offers": {"@type": "AggregateOffer", "priceCurrency": "USD", "lowPrice": "0", "highPrice": "849", "offerCount": "13"}}, {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Can Claude make videos?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Claude has no video model: it writes code that draws every frame, the way the Opus 5.5 animations people share on X are made. KitCut has Claude Opus 5.5 write the script, animate every scene, write a narration and compose the music, then renders it all into a finished Claude video."}}, {"@type": "Question", "name": "How do I make a Claude video?", "acceptedAnswer": {"@type": "Answer", "text": "Type one sentence about your idea, pick a length and a look (hand-drawn or painted), and press Make the film. Claude plans it, draws it, looks at stills of its own work and fixes what it doesn't like. The finished video is ready in a few minutes."}}, {"@type": "Question", "name": "Which Claude model makes the videos?", "acceptedAnswer": {"@type": "Answer", "text": "Claude Opus 5.5 directs every video. It writes the script and the code that draws each frame, and reviews the result before it is rendered. For the painted look an image model paints the scenes and Claude animates them; a voice model reads Claude's narration."}}, {"@type": "Question", "name": "Is it free?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, to start: every account gets 30 seconds of film a month, with no card needed. Paid plans give you more minutes, and Pro makes films up to 8 minutes long."}}, {"@type": "Question", "name": "How long can a Claude video be?", "acceptedAnswer": {"@type": "Answer", "text": "Up to 1 minute on Free and Standard, and 8 minutes on Pro. A month's free credits make one 30-second film."}}, {"@type": "Question", "name": "What can I make with it?", "acceptedAnswer": {"@type": "Answer", "text": "Motion graphics, explainer videos, launch videos, tiny stories, music videos, showreels and lessons, in any language you type in. Every film gets its own page to share."}}]}]}</script>
 <!-- /meta -->
 <style>
 @font-face { font-family: 'Caveat'; src: url(/fonts/Caveat.woff2) format('woff2'); font-weight: 400 700; font-display: swap; }
@@ -172,7 +172,7 @@ a.google { display: flex; justify-content: center; align-items: center; gap: 10p
 a.google:hover { border-color: var(--accent); }
 .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .film div { padding: 8px 10px 10px; font-size: 13px; }
-/* the length slider: 5-60 s usable, and the track carries on, locked, to 5 min */
+/* the length slider: up to the plan's longest usable, and the track carries on, locked, to 8 min */
 .len { flex: 1 1 300px; min-width: 240px; display: grid; gap: 2px; }
 .lenhead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--ink-soft); }
 .lenhead b { font: 700 26px/1 Caveat, cursive; color: var(--ink); min-width: 2.2em; }
@@ -302,7 +302,7 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
         <option value="painted">Painted (AI scenes)</option>
       </select>
       <div class="len">
-        <div class="lenhead"><label for="length">Length</label><b id="lenOut">0:10</b><span id="lenHint" hidden>Films longer than a minute are coming soon.</span></div>
+        <div class="lenhead"><label for="length">Length</label><b id="lenOut">0:10</b><span id="lenHint" hidden>Longer films are on Pro.</span></div>
         <div class="lentrack">
           <input type="range" id="length" min="5" max="60" step="5" value="10" aria-valuetext="10 seconds">
           <button type="button" class="locked" id="lenLocked" title="Longer films are on Pro" aria-label="Longer films are on Pro"></button>
@@ -311,7 +311,7 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
         <p class="note credit" id="credit" hidden></p>
       </div>
       <button id="go" type="submit">Make the film</button>
-      <span class="note">Claude Opus 5.5 directs · Muse paints (painted look) · Gemini narrates · a short film takes about 3-6 minutes<span id="busy"></span></span>
+      <span class="note">Claude Opus 5.5 directs · Muse paints (painted look) · Gemini narrates · a 10-second film takes about 9-14 minutes<span id="busy"></span></span>
     </div>
   </form>
 
@@ -351,7 +351,7 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
       <details><summary>How do I make a Claude video?</summary><p>Type one sentence about your idea, pick a length and a look (hand-drawn or painted), and press Make the film. Claude plans it, draws it, looks at stills of its own work and fixes what it doesn't like. The finished video is ready in a few minutes.</p></details>
       <details><summary>Which Claude model makes the videos?</summary><p>Claude Opus 5.5 directs every video. It writes the script and the code that draws each frame, and reviews the result before it is rendered. For the painted look an image model paints the scenes and Claude animates them; a voice model reads Claude's narration.</p></details>
       <details><summary>Is it free?</summary><p>Yes, to start: every account gets 30 seconds of film a month, with no card needed. Paid plans give you more minutes, and Pro makes films up to 8 minutes long.</p></details>
-      <details><summary>How long can a Claude video be?</summary><p>Up to 30 seconds on Free, 1 minute on Standard and 8 minutes on Pro.</p></details>
+      <details><summary>How long can a Claude video be?</summary><p>Up to 1 minute on Free and Standard, and 8 minutes on Pro. A month's free credits make one 30-second film.</p></details>
       <details><summary>What can I make with it?</summary><p>Motion graphics, explainer videos, launch videos, tiny stories, music videos, showreels and lessons, in any language you type in. Every film gets its own page to share.</p></details>
     </div>
   </section>
@@ -359,7 +359,7 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
   <footer class="site-foot">
     <a class="brand" href="/" aria-label="KitCut home"><img src="/logo-64.png" alt="" width="28" height="28" onerror="this.remove()"><span>KitCut</span></a>
     <nav id="footNav" aria-label="Site" hidden><a href="/">Make a film</a><a href="/studio">Studio</a><a href="/pricing">Pricing</a><a href="/account">Your account</a><a href="/connect">Use it in Claude or ChatGPT</a><a href="mailto:hello@kitcut.ai">hello@kitcut.ai</a></nav>
-    <p>&copy; 2026 KitCut. Films written, drawn, narrated and scored by Claude. <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+    <p>&copy; 2026 KitCut. Films written, drawn, narrated and scored by Claude. <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/docs">Docs</a></p>
   </footer>
 </div>
 
@@ -764,7 +764,7 @@ function paintLength() {
 $('length').addEventListener('input', paintLength);
 let hintTimer = null;
 $('lenLocked').addEventListener('click', () => {
-  $('lenHint').innerHTML = !AUTH ? 'Longer films are coming soon.'
+  $('lenHint').innerHTML = !AUTH ? 'Longer films are made on Pro, at kitcut.ai.'
     : 'Pro makes films up to 8 minutes. <a href="/pricing">See plans</a>';
   $('lenHint').hidden = false; clearTimeout(hintTimer);
   hintTimer = setTimeout(() => { $('lenHint').hidden = true; }, 6000);
