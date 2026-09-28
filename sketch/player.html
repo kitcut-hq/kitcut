@@ -145,7 +145,7 @@ __FILM__
             if (failed) throw failed;
             SK.render(from + i / fps);
             const f = new VideoFrame(cv, { timestamp: Math.round(i * us), duration: Math.round(us) });
-            enc.encode(f, { keyFrame: i % E.gop === 0, avc: { quantizer: E.quantizer } });
+            enc.encode(f, E.config.bitrateMode === 'quantizer' ? { keyFrame: i % E.gop === 0, avc: { quantizer: E.quantizer } } : { keyFrame: i % E.gop === 0 });
             f.close();
             while (enc.encodeQueueSize > 4 && !failed) await new Promise(r => setTimeout(r, 1));
             if (out.length >= fps) await send();

@@ -46,8 +46,12 @@ VOICE_JOBS = 8
 # where the final render's frames are encoded (sketch-render.py --encode): in the page by its
 # hardware H.264 encoder, 2-4x faster than sending raw pixels to ffmpeg, and the only path whose
 # colour matches the drawing (BT.709, tagged); falls back to the pipe where the browser has none.
-# Blind-tested on three films 2026-09-28 (docs/studio-speed.md)
-RENDER_ENCODE = "browser"
+# Blind-tested on three films 2026-09-28 (docs/studio-speed.md). A machine with no GPU encoder
+# sets STUDIO_RENDER_ENCODE from its own measurements (studio/deploy/README.md)
+RENDER_ENCODE = os.environ.get("STUDIO_RENDER_ENCODE") or "browser"
+# browsers one final render draws with (and takes from the browser pool): 3 on the laptop, where
+# more did not help; a CPU-only machine draws in software and scales with cores
+RENDER_JOBS = int(os.environ.get("STUDIO_RENDER_JOBS") or 3)
 
 
 class ToolError(Exception):
@@ -284,14 +288,14 @@ class Tools:
         return balance_text(self.film, levels) or "\n".join(tail[-15:])
 
     async def render(self):
-        """The final video (the studio's step, not Claude's): three browsers at once."""
+        """The final video (the studio's step, not Claude's): RENDER_JOBS browsers at once."""
         async with self.lock:
             self.gate()
             await self._script(
                 "render",
                 "sketch-render.py",
-                ["--jobs", "3", "--encode", RENDER_ENCODE],
-                pools=[("browser", 3)],
+                ["--jobs", str(RENDER_JOBS), "--encode", RENDER_ENCODE],
+                pools=[("browser", RENDER_JOBS)],
                 log=True,
             )
 

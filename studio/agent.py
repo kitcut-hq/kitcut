@@ -1198,6 +1198,11 @@ def main():
     args = ap.parse_args()
     if args.announce:
         url = None if args.announce == "off" else args.announce.rstrip("/")
+        # only the production studio may say where the studio is: a dev server started with the
+        # same scripts on another machine would otherwise point kitcut.ai at itself (or at nothing)
+        if os.environ.get("STUDIO_ANNOUNCE") != "1":
+            print("not announcing %s: STUDIO_ANNOUNCE=1 is set only on the production studio" % url)
+            return
         STORE.announce(url)
         print("kitcut.studio_hosts: studio -> %s" % (url or "offline"))
         return

@@ -49,6 +49,7 @@ import time
 import secrets
 import base64
 import shutil
+import signal
 import argparse
 import tempfile
 import threading
@@ -66,6 +67,19 @@ import _sketch  # noqa: E402
 
 SKETCH = os.path.join(_env.ROOT, "sketch")
 FRAME_BYTES = 1920 * 1080 * 4  # the page exports raw RGBA frames
+# the pipe's RGBA -> YUV is BT.709 and says so, as the browser encoder's is (_encode.webcodecs):
+# ffmpeg's default is BT.601, untagged, which a browser guessing BT.709 for HD shows 5.6 levels
+# too dark in green (docs/studio-speed.md). A CPU-only machine renders through the pipe.
+PIPE_COLOUR = [
+    "-vf",
+    "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p",
+    "-colorspace",
+    "bt709",
+    "-color_primaries",
+    "bt709",
+    "-color_trc",
+    "bt709",
+]
 
 
 # ------------------------------------------------------------------ bundling
@@ -332,14 +346,45 @@ class Session:
 
 def kill_tree(proc):
     """Chromium is a process tree; on Windows killing the parent leaves the renderer and GPU
-    children running (measured: a 1.3 GB renderer outlived its run). Take the whole tree."""
+    children running (measured: a 1.3 GB renderer outlived its run). Take the whole tree.
+
+    On Linux the tree is read off /proc rather than taken as a process group: the browser stays
+    in the step's own group, so the studio's kill of a step (studio/procs.py) still reaches it."""
     if os.name == "nt":
         subprocess.run(
             ["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, check=False
         )
     else:
-        proc.kill()
+        for pid in [*descendants(proc.pid), proc.pid]:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
     proc.wait(timeout=10)
+
+
+def descendants(root):
+    """Every process below `root`, from /proc (empty where there is no /proc, e.g. macOS)."""
+    kids = {}
+    try:
+        names = os.listdir("/proc")
+    except OSError:
+        return []
+    for d in names:
+        if not d.isdigit():
+            continue
+        try:
+            with open("/proc/%s/stat" % d, encoding="utf-8", errors="replace") as f:
+                ppid = int(f.read().rsplit(")", 1)[1].split()[1])  # comm may hold spaces
+        except (OSError, ValueError, IndexError):
+            continue
+        kids.setdefault(ppid, []).append(int(d))
+    out, todo = [], [root]
+    while todo:
+        for c in kids.get(todo.pop(), []):
+            out.append(c)
+            todo.append(c)
+    return out
 
 
 def auto_jobs():
@@ -461,6 +506,7 @@ def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="
         ff = subprocess.Popen(
             ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgba"]
             + ["-s", "1920x1080", "-framerate", str(fps), "-i", "-"]
+            + PIPE_COLOUR
             + _encode.video_args(cfg)
             + [seg],
             stdin=subprocess.PIPE,

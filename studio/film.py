@@ -101,6 +101,9 @@ def limits(length):
     STUDIO_MAX_USD caps Claude's spend on any one film when set."""
     extra = max(0, length - 15)
     cap = os.environ.get("STUDIO_MAX_USD")
+    # the machine steps' timeouts were measured on the laptop; a slower machine (a CPU-only VM)
+    # scales them rather than failing films that are only taking longer (docs/studio-speed.md)
+    slow = float(os.environ.get("STUDIO_MACHINE_SLOWDOWN") or 1)
     return {
         # Claude's working time (waits for the machine excluded): at effort xhigh a 10 s film
         # took 4.6-12 min and a 30 s one 14.5 (2026-09-26); a 60 s one ran past 22.5
@@ -112,9 +115,9 @@ def limits(length):
         "reserve_usd": max(
             float(os.environ.get("STUDIO_RESERVE_USD") or 1.5), 0.35 + 0.06 * length
         ),
-        "render_s": 300 + 15 * length,
-        "sound_s": max(300, 120 + 5 * length),
-        "voice_s": max(300, 180 + 5 * length),
+        "render_s": int(slow * (300 + 15 * length)),
+        "sound_s": int(slow * max(300, 120 + 5 * length)),
+        "voice_s": int(slow * max(300, 180 + 5 * length)),
         "lines": 6 if length <= 15 else max(12, -(-length // 5)),  # narration sentences
         "tts_usd": max(0.30, 0.005 * length),  # what the narration may cost, retakes included
         # recordings (voice runs), retakes included: 6 was plenty up to a minute; an 8-minute film

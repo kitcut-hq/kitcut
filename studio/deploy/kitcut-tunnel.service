@@ -1,0 +1,19 @@
+# The Cloudflare named tunnel in front of the studio (studio.kitcut.ai -> 127.0.0.1:8765).
+# Outbound only: the VM opens no web port. Installed by studio/deploy/install.sh.
+#
+# Only ONE machine may run this tunnel's connector. cloudflared load-balances between every
+# connector of a tunnel, so a second one (the laptop) would send half the films to another disk.
+[Unit]
+Description=KitCut studio tunnel (cloudflared)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=@USER@
+Group=@USER@
+ExecStart=@REPO@/studio/deploy/run-tunnel.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

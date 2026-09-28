@@ -152,7 +152,10 @@ def _duration(path):
 
 
 def web_settings(film):
-    """WEB, with the film's own manifest "web" block over it."""
+    """WEB, with the machine's STUDIO_WEB_PRESET and then the film's own manifest "web" block
+    over it. A CPU-only machine encodes the web copy with libx264, where the speed tier is real
+    time: on the Azure VM (8 vCPU) p2 (veryfast) took 16 s for 48 s of film against p5's 39 s,
+    VMAF 99.99 both, under the same 5 Mbps cap (studio/deploy/README.md)."""
     import json
 
     try:
@@ -160,7 +163,10 @@ def web_settings(film):
             own = json.load(f).get("web") or {}
     except (OSError, ValueError):
         own = {}
-    return WEB | {k: v for k, v in own.items() if not k.startswith("_")}
+    machine = (
+        {"preset": os.environ["STUDIO_WEB_PRESET"]} if os.environ.get("STUDIO_WEB_PRESET") else {}
+    )
+    return WEB | machine | {k: v for k, v in own.items() if not k.startswith("_")}
 
 
 def make_web(film):

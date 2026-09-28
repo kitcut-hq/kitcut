@@ -672,6 +672,27 @@ def video_args(cfg):
     return out
 
 
+# Which of the browser's H.264 encoders `--encode browser` asks for: `render.webcodecs`, else
+# $VIDEDIT_WEBCODECS, else the GPU's. A machine with no GPU encoder (a cloud VM) refuses
+# "prefer-hardware" and the render falls back to the ffmpeg pipe; "software" asks for the
+# browser's own OpenH264 instead, which keeps the frames in the page and the BT.709 tags.
+WEBCODECS_ACCEL = {
+    "hardware": "prefer-hardware",
+    "software": "prefer-software",
+    "any": "no-preference",
+}
+
+
+WEBCODECS_SOFT_BITRATE = "24M"
+
+
+def rate_bits(rate):
+    """A rate as ffmpeg writes it ("24M", "800k", 24000000), in bits per second."""
+    r = str(rate).strip().lower()
+    mult = {"k": 1e3, "m": 1e6}.get(r[-1:], 1)
+    return int(float(r[:-1] if mult != 1 else r) * mult)
+
+
 def webcodecs(cfg, fps, width=1920, height=1080):
     """The same intent for a browser page that encodes its own frames (WebCodecs' VideoEncoder)
     instead of handing ffmpeg raw pixels -- sketch-render's `--encode browser`.
@@ -694,16 +715,29 @@ def webcodecs(cfg, fps, width=1920, height=1080):
     which a browser, guessing BT.709 for HD, shows 5.6 levels too dark in green.)
     """
     q = int(cfg.get("cq", cfg.get("quality", DEFAULT_QUALITY)))
+    accel = cfg.get("webcodecs") or os.environ.get("VIDEDIT_WEBCODECS") or "hardware"
+    if accel not in WEBCODECS_ACCEL:
+        raise ValueError("webcodecs is %r: one of %s" % (accel, ", ".join(WEBCODECS_ACCEL)))
+    config = {
+        "codec": "avc1.64002A",
+        "width": width,
+        "height": height,
+        "framerate": fps,
+        "hardwareAcceleration": WEBCODECS_ACCEL[accel],
+        "bitrateMode": "quantizer",
+        "avc": {"format": "annexb"},
+    }
+    if accel == "software":
+        # the browser's software H.264 (OpenH264) refuses "quantizer" (measured, Edge 154 on
+        # Ubuntu 24.04: variable and constant only), so it gets a target bitrate instead
+        config["bitrateMode"] = "variable"
+        config["bitrate"] = rate_bits(
+            cfg.get("webcodecs_bitrate")
+            or os.environ.get("VIDEDIT_WEBCODECS_BITRATE")
+            or WEBCODECS_SOFT_BITRATE
+        )
     return {
-        "config": {
-            "codec": "avc1.64002A",
-            "width": width,
-            "height": height,
-            "framerate": fps,
-            "hardwareAcceleration": "prefer-hardware",
-            "bitrateMode": "quantizer",
-            "avc": {"format": "annexb"},
-        },
+        "config": config,
         "quantizer": max(0, min(QP_MAX, q + WEBCODECS_QP_OFFSET)),
         "gop": int(cfg.get("gop") or 2 * fps),
         "bsf": "h264_metadata=colour_primaries=1:transfer_characteristics=1"

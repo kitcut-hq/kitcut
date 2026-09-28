@@ -8,6 +8,8 @@
     the page   a film's code, in the renderer, reaches neither the network, nor another
                film's render, nor the studio
     processes  a step's whole tree dies with it, on a cancel and on a timeout
+    cgroups    on Linux under systemd (the VM), also a grandchild that left the process group,
+               and a step past its memory cap
 
 About half a minute (it starts headless browsers).
 """
@@ -212,6 +214,53 @@ async def main():
             "a %s kills the step and what it started %s" % (mode, pids),
             len(pids) == 2 and not any(_gpulock.alive(p) for p in pids),
         )
+
+    # ------------------------------------------------- cgroups (Linux under systemd: the VM)
+    if procs.cgroup_root():
+        # a grandchild in a session of its own is out of the step's process group -- the cgroup
+        # still has it
+        pids = []
+
+        def on(line, pids=pids):
+            if line.startswith("pids"):
+                pids.extend(int(x) for x in line.split()[1:])
+
+        escape = CHILD.replace('time.sleep(120)"])', 'time.sleep(120)"], start_new_session=True)')
+        task = asyncio.create_task(
+            procs.run([sys.executable, "-c", escape], D.dir, procs.step_env(D), 60, on)
+        )
+        for _ in range(100):
+            if len(pids) >= 2:
+                break
+            await asyncio.sleep(0.1)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        await asyncio.sleep(0.5)
+        expect(
+            "a cancel takes a grandchild that left the process group %s" % pids,
+            len(pids) == 2 and not any(_gpulock.alive(p) for p in pids),
+        )
+        was = os.environ.get("STUDIO_FILM_MEM_GB")
+        os.environ["STUDIO_FILM_MEM_GB"] = "0.25"
+        try:
+            hog = "b = b'x' * (1 << 30); print('survived', flush=True)"
+            code, tail = await procs.run([sys.executable, "-c", hog], D.dir, procs.step_env(D), 60)
+        finally:
+            if was is None:
+                os.environ.pop("STUDIO_FILM_MEM_GB")
+            else:
+                os.environ["STUDIO_FILM_MEM_GB"] = was
+        expect(
+            "a step past STUDIO_FILM_MEM_GB is killed (exit %s)" % code,
+            code != 0 and "survived" not in tail,
+        )
+        left = [d for d in os.listdir(procs.cgroup_root()) if d.startswith("step-")]
+        expect("no step cgroup is left behind %s" % left, not left)
+    else:
+        print("skip  cgroups: not a systemd service with a delegated cgroup")
 
     print("%d failed" % len(bad))
     return 1 if bad else 0

@@ -1,0 +1,29 @@
+# The studio's server on the Azure VM. Installed by studio/deploy/install.sh, which fills in the
+# @...@ paths. Restart=always is the supervisor the laptop never had; Delegate=yes hands the unit's
+# cgroup to the server, which gives every step a cgroup of its own with a memory cap
+# (studio/procs.py, Job); KillMode=control-group means a stopped server takes every step with it.
+[Unit]
+Description=KitCut studio server (studio/server.py)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=@USER@
+Group=@USER@
+Environment=STUDIO_HOME=@HOME@
+Environment=STUDIO_REPO=@REPO@
+Environment=STUDIO_ENV_FILE=@REPO@/.env
+Environment=TZ=America/Los_Angeles
+Environment=PYTHONUNBUFFERED=1
+ExecStart=@REPO@/studio/deploy/run-server.sh
+ExecStartPost=@REPO@/studio/deploy/announce.sh up
+ExecStopPost=@REPO@/studio/deploy/announce.sh off
+Restart=always
+RestartSec=5
+Delegate=yes
+KillMode=control-group
+TimeoutStopSec=30
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

@@ -278,10 +278,38 @@ def test_webcodecs():
         _encode.webcodecs({"cq": 99}, 60)["quantizer"] <= _encode.QP_MAX
         and _encode.webcodecs({"cq": -9}, 60)["quantizer"] >= 0,
     )
-    check("quality is a fixed QP per frame", w16["config"]["bitrateMode"] == "quantizer")
+    hw = _encode.webcodecs({"cq": 16, "webcodecs": "hardware"}, 60)
+    check("quality is a fixed QP per frame", hw["config"]["bitrateMode"] == "quantizer")
     check(
-        "the GPU encoder is asked for", w16["config"]["hardwareAcceleration"] == "prefer-hardware"
+        "webcodecs: hardware asks for the GPU encoder",
+        hw["config"]["hardwareAcceleration"] == "prefer-hardware",
     )
+    saved = os.environ.pop("VIDEDIT_WEBCODECS", None)  # the machine's own choice, if it has one
+    try:
+        check(
+            "the GPU encoder is the default",
+            _encode.webcodecs({"cq": 16}, 60)["config"]["hardwareAcceleration"]
+            == "prefer-hardware",
+        )
+    finally:
+        if saved is not None:
+            os.environ["VIDEDIT_WEBCODECS"] = saved
+    sw = _encode.webcodecs({"cq": 16, "webcodecs": "software", "webcodecs_bitrate": "30M"}, 60)
+    check(
+        "software asks for the browser's own encoder, at a bitrate (it refuses quantizer)",
+        sw["config"]["hardwareAcceleration"] == "prefer-software"
+        and sw["config"]["bitrateMode"] == "variable"
+        and sw["config"]["bitrate"] == 30_000_000,
+    )
+    check(
+        "bitrates read as ffmpeg writes them",
+        _encode.rate_bits("800k") == 800_000 and _encode.rate_bits(5_000_000) == 5_000_000,
+    )
+    try:
+        _encode.webcodecs({"webcodecs": "gpu"}, 60)
+        check("an unknown webcodecs choice is refused", False)
+    except ValueError:
+        check("an unknown webcodecs choice is refused", True)
     check("a keyframe every 2 s unless gop says", w16["gop"] == 120)
     check("gop is honoured", _encode.webcodecs({"gop": 30}, 60)["gop"] == 30)
     check(
