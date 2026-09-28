@@ -68,8 +68,8 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    rather than let every browser crawl; `--jobs 1` is the old serial path.
    `--encode browser` has each page encode its own frames on the GPU instead of posting raw
    pixels to ffmpeg: 4x on the 8-minute studio film (2,218 s -> 536 s of frames), quality at
-   least as good at the same `cq`, but a bigger master on grainy films. It is opt-in until the
-   studio switches; it falls back to ffmpeg by itself where the browser cannot encode.
+   least as good at the same `cq`, but a bigger master on grainy films. The studio renders
+   this way; the script's default is still the pipe. It falls back to ffmpeg by itself where the browser cannot encode.
 9. **Publish** with `yt-upload.py --channel <handle>` — unlisted unless told otherwise.
 10. **Report the timings** (`--timings`) with the deliverables.
 

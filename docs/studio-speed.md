@@ -39,10 +39,10 @@ so for a short film Claude is 85-90% of the wait and the machine is not the limi
 
 | # | change | speeds up | this film, before -> after | status |
 |---|---|---|---|---|
-| 1 | record narration lines in parallel (`sketch-vo.py --jobs`) | narration | synth 341 s -> 52 s per recording (measured) | **built, tested, opt-in** (branch `studio-speed`) |
+| 1 | record narration lines in parallel (`sketch-vo.py --jobs`) | narration | synth 341 s -> 52 s per recording (measured) | **on in the studio** (`studio/tools.py` `VOICE_JOBS` = 8), released 2026-09-28 |
 | 2 | Whisper word timing on the GPU | narration | ~2.5-4 min -> ~20 s per recording (estimate) | not built; the studio reserves the laptop's 4 GB card for the renderer |
 | 3 | backup voice for refused lines | narration | fewer re-recordings | shipped (b20966e), after this film |
-| 4 | encode the video in the browser (`sketch-render.py --encode browser`) | final render | frames 2,218 s -> 536 s (measured, 4.1x) | **built, tested, opt-in** (branch `studio-speed`) |
+| 4 | encode the video in the browser (`sketch-render.py --encode browser`) | final render | frames 2,218 s -> 536 s (measured, 4.1x) | **on in the studio** (`studio/tools.py` `RENDER_ENCODE`), released 2026-09-28 after the blind test below |
 | 5 | 30 fps instead of 60 | final render | 15-38% on 30 s films (measured; fixed per-chunk costs) | shipped for Free by plan (2d13a0e); paid stays 60 |
 | 6 | JPEG stills, motion check across 3 browsers | motion checks | PNG 123 ms -> JPEG 54 ms a still (measured); 13 -> ~3 min (estimate) | not built |
 | 7 | soundtrack `master` stage | soundtrack | 66 s a render | not investigated |
@@ -108,7 +108,7 @@ browser and Python start-up.
 
 ## Open decisions
 
-1. Switch the studio to parallel narration (`vo.jobs`, e.g. 8)?
-2. Switch the studio to `render.encode: "browser"`, accepting bigger masters?
+1. ~~Switch the studio to parallel narration~~ -- done 2026-09-28, 8 at once.
+2. ~~Switch the studio to encoding in the browser~~ -- done 2026-09-28: no visible difference but colour, which the browser path gets right; masters up to 1.7x bigger.
 3. Build JPEG stills and the parallel motion check (#6)?
 4. Whisper on the GPU (#2) waits on the dedicated render machine.

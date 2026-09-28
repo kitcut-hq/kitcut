@@ -43,6 +43,11 @@ MAX_STILLS = 12
 # narration takes recorded at once (sketch-vo.py --jobs): an 8-minute film's 70 Gemini lines took
 # 341 s one at a time and 52 s eight at a time, same accuracy and cost (docs/studio-speed.md)
 VOICE_JOBS = 8
+# where the final render's frames are encoded (sketch-render.py --encode): in the page by its
+# hardware H.264 encoder, 2-4x faster than sending raw pixels to ffmpeg, and the only path whose
+# colour matches the drawing (BT.709, tagged); falls back to the pipe where the browser has none.
+# Blind-tested on three films 2026-09-28 (docs/studio-speed.md)
+RENDER_ENCODE = "browser"
 
 
 class ToolError(Exception):
@@ -283,7 +288,11 @@ class Tools:
         async with self.lock:
             self.gate()
             await self._script(
-                "render", "sketch-render.py", ["--jobs", "3"], pools=[("browser", 3)], log=True
+                "render",
+                "sketch-render.py",
+                ["--jobs", "3", "--encode", RENDER_ENCODE],
+                pools=[("browser", 3)],
+                log=True,
             )
 
     async def cast_sheet(self, manifest, times):

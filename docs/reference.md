@@ -3136,7 +3136,7 @@ of t = 30 s both renders score 0.972. `--draft` renders 30 fps.
 `--encode browser` (or `render.encode: "browser"`) has the page encode its own frames with the
 browser's hardware H.264 encoder (WebCodecs `VideoEncoder`, `_encode.webcodecs()`) and POST
 only the stream, one second of film per POST; ffmpeg wraps it without re-encoding
-(`-c copy`), tagging it BT.709. The default is still `pipe` until the switch is decided. A
+(`-c copy`), tagging it BT.709. The script's default is still `pipe`; the studio passes `browser` (`studio/tools.py` `RENDER_ENCODE`, since 2026-09-28, after a blind test on three films in `docs/studio-speed.md`). A
 browser that cannot encode says `no-encoder` and the render falls back to `pipe`, loudly, for
 every remaining chunk.
 
