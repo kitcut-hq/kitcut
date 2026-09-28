@@ -525,7 +525,11 @@ def claude_cli():
         if ver and (best is None or ver > best[0]):
             best = (ver, exe)
     if not best:
-        sys.exit("the Claude Code CLI is not installed (npm i -g @anthropic-ai/claude-code)")
+        # an error, not sys.exit: inside the server this runs in one film's task, and exiting
+        # took the whole studio down with it (found on the Azure VM, which has no login)
+        raise RuntimeError(
+            "the Claude Code CLI is not installed (npm i -g @anthropic-ai/claude-code)"
+        )
     return best[1]
 
 
