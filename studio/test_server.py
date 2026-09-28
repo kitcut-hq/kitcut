@@ -57,6 +57,10 @@ async def fake_claude(film, emit, meter, tools, auth="api", prompt=None, resume=
                 shutil.copy(os.path.join(ex, f), film.dir)
         return
     prompt = film.record().get("prompt", "")
+    if "login gone" in prompt and auth == "login":  # what run_claude raises for a lost login
+        raise agent.SignInError(NOT_LOGGED_IN)
+    if "usage limit" in prompt and auth == "login":  # the login works; the plan is spent
+        raise RuntimeError("Claude stopped early: Usage limit reached")
     if "nothing written" in prompt:
         await asyncio.sleep(60)  # Claude past its time with no film: a failure
         return
@@ -206,15 +210,132 @@ async def projects(c, auth, mem, check):
     check(r.status == 200 and lib["pictures"] == [], "and then it is gone")
 
 
+REAL_RUN_CLAUDE = agent.run_claude
+
+
+class FakeClient:
+    """ClaudeSDKClient answering as Claude Code 2.1.284 did on 2026-09-28 (agent.SignInError):
+    the messages come back, the SDK raises nothing."""
+
+    script = []
+
+    def __init__(self, options):
+        self.options = options
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def query(self, prompt):
+        pass
+
+    async def receive_response(self):
+        for m in FakeClient.script:
+            yield m
+
+
+def reply(error, text, status):
+    """What the CLI sends when the turn ends on an API error: a synthetic assistant message
+    carrying `error`, then an is_error result."""
+    from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
+
+    return [
+        AssistantMessage(content=[TextBlock(text=text)], model="<synthetic>", error=error),
+        ResultMessage(
+            subtype="success",
+            duration_ms=1,
+            duration_api_ms=0,
+            is_error=True,
+            num_turns=1,
+            session_id="s",
+            result=text,
+            api_error_status=status,
+        ),
+    ]
+
+
+async def sign_in(check):
+    """run_claude tells a lost login (SignInError) from every other failure."""
+    real_client, real_cli = agent.ClaudeSDKClient, agent.claude_cli
+    agent.ClaudeSDKClient, agent.claude_cli = FakeClient, lambda: "claude"
+    had_key = "ANTHROPIC_API_KEY" in agent.procs.SECRETS
+    agent.procs.SECRETS.setdefault("ANTHROPIC_API_KEY", "sk-test")  # never used: no real client
+    film = films.Film.create("sign-in probe", 10, client="local", source="test")
+    tools = agent.Tools(film, Sched(), lambda ev: None, agent.Clock())
+
+    async def outcome(auth):
+        try:
+            r = await REAL_RUN_CLAUDE(film, lambda ev: None, agent.Meter(), tools, auth)
+        except agent.SignInError as e:
+            return "signin", e.why
+        return "result", r.result if r else None
+
+    try:
+        cases = [
+            ("logged out", "login", reply("authentication_failed", NOT_LOGGED_IN, None), "signin"),
+            (
+                "a bad or expired token",
+                "login",
+                reply("authentication_failed", BAD_TOKEN, 401),
+                "signin",
+            ),
+            ("a 401 on the result alone", "login", reply(None, "API Error: 401", 401), "signin"),
+            (
+                "the plan's usage limit",
+                "login",
+                reply("rate_limit", "Usage limit reached", 429),
+                "result",
+            ),
+            (
+                "a billing error",
+                "login",
+                reply("billing_error", "Credit balance too low", 400),
+                "result",
+            ),
+            ("an overloaded API", "login", reply("server_error", "Overloaded", 529), "result"),
+            (
+                "the key refused (no login to fall back from)",
+                "api",
+                reply("authentication_failed", BAD_TOKEN, 401),
+                "signin",
+            ),
+        ]
+        for what, auth, script, want in cases:
+            FakeClient.script = script
+            got = await outcome(auth)
+            check(got[0] == want, "sign-in: %s -> %s (%s)" % (what, want, got[1]))
+
+        def no_cli():
+            raise RuntimeError("the Claude Code CLI is not installed")
+
+        agent.claude_cli = no_cli
+        got = await outcome("login")
+        check(got[0] == "signin", "sign-in: no Claude Code on the machine -> signin (%s)" % got[1])
+    finally:
+        agent.ClaudeSDKClient, agent.claude_cli = real_client, real_cli
+        if not had_key:
+            agent.procs.SECRETS.pop("ANTHROPIC_API_KEY", None)
+        # the probe is a queued film on disk: left there, the server below would recover it
+        shutil.rmtree(film.dir, ignore_errors=True)
+
+
+NOT_LOGGED_IN = "Not logged in · Please run /login"
+BAD_TOKEN = "Failed to authenticate. API Error: 401 Invalid bearer token"
+
+
 async def main():
-    agent.run_claude = fake_claude
-    agent.STORE = mem = store.MemoryStore()
     bad = []
 
     def check(ok, what):
         print("%s  %s" % ("ok  " if ok else "FAIL", what))
         if not ok:
             bad.append(what)
+
+    agent.STORE = mem = store.MemoryStore()
+    await sign_in(check)  # the real run_claude, before fake_claude replaces it
+    agent.run_claude = fake_claude
 
     async with TestClient(TestServer(server.make_app(TOKEN))) as c:
         auth = {"Authorization": "Bearer " + TOKEN}
@@ -477,6 +598,47 @@ async def main():
         r = await c.post("/api/films", json={"prompt": "over budget"}, headers=auth)
         check(r.status == 429 and "budget" in (await r.json())["error"], "past the day's budget")
         server.DAILY_USD = 1000
+
+        # ------------------------------------------------ the login fails: the key makes it
+        was = os.environ.pop("STUDIO_LOCAL_AUTH", None)  # this machine's films on the login
+        r1 = await c.post("/api/films", json={"prompt": "login gone"}, headers=auth)
+        r2 = await c.post("/api/films", json={"prompt": "usage limit on the login"}, headers=auth)
+        g, u = (await r1.json())["id"], (await r2.json())["id"]
+        sg, su = await asyncio.gather(wait_for(c, auth, g), wait_for(c, auth, u))
+        if was is not None:
+            os.environ["STUDIO_LOCAL_AUTH"] = was
+        rg, dg = films.Film.open(g).record(), mem.docs[g]
+        check(
+            sg.get("status") == "done"
+            and rg.get("auth") == "api"
+            and (rg.get("fallback") or {}).get("from") == "login"
+            and "login" in rg["fallback"]["why"]
+            and dg.get("auth") == "api"
+            and dg.get("claude_billed") is True
+            and dg.get("via") == "sdk"
+            and dg.get("fallback") == rg["fallback"]
+            and CALLED.count(g) == 2
+            and any(e["type"] == "fallback" for e in sg["all_events"]),
+            "a lost login: the film is made on the key, and its record says so (%s)"
+            % (sg.get("error") or rg.get("fallback")),
+        )
+        check(
+            abs(dg.get("cost_usd", 0) - EXPECT_USD) < 1e-3,
+            "and it is billed as a film on the key ($%.4f)" % dg.get("cost_usd", 0),
+        )
+        check(
+            server.JOBS[g]["auth"] == "api"
+            and server.JOBS[g]["reserve"] == server.reserve(films.Film.open(g).length, "api"),
+            "and held against the day's budget as one (%s)" % server.JOBS[g]["reserve"],
+        )
+        ru = films.Film.open(u).record()
+        check(
+            su.get("status") == "error"
+            and ru.get("auth") == "login"
+            and not ru.get("fallback")
+            and CALLED.count(u) == 1,
+            "any other failure on the login is not retried on the key (%s)" % su.get("error"),
+        )
 
         # ------------------------------------------------ Claude past its time
         real_limits = agent.limits

@@ -106,6 +106,15 @@ class MongoStore:
             upsert=True,
         )
 
+    def note_login(self, ok, why=None):
+        """The daily check of the studio machine's Claude login (agent.py --check-login), beside
+        where the site finds the studio: kitcut.studio_hosts, document "studio", field "login"."""
+        self.col().database["studio_hosts"].update_one(
+            {"_id": "studio"},
+            {"$set": {"login": {"ok": ok, "why": why, "host": HOST, "checked_at": now()}}},
+            upsert=True,
+        )
+
     def sync(self):
         """Send what the outbox holds; returns (sent, left)."""
         if not self.outbox or not os.path.exists(self.outbox):
@@ -153,6 +162,9 @@ class MemoryStore:
 
     def announce(self, url):
         self.url = url
+
+    def note_login(self, ok, why=None):
+        self.login = {"ok": ok, "why": why, "host": HOST, "checked_at": now()}
 
     def sync(self):
         return 0, 0

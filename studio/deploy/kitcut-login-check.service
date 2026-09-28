@@ -1,0 +1,25 @@
+# The daily check of the VM's Claude login (agent.py --check-login): one turn on the login,
+# recorded in kitcut.studio_hosts ("login") and the journal; a failure leaves this unit "failed"
+# (`systemctl --failed`). Started by kitcut-login-check.timer. Installed by install.sh with the
+# @...@ paths filled in; enabled at the move, with the studio (deploy/README.md).
+#
+# Nothing is lost while the login is broken: a film asked for on the machine falls back to the
+# API key (agent.make_film). The check is there so a dead login is noticed before the bill is.
+[Unit]
+Description=KitCut studio: check the machine's Claude login
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+Environment=STUDIO_HOME=@HOME@
+Environment=STUDIO_REPO=@REPO@
+Environment=STUDIO_ENV_FILE=@REPO@/.env
+Environment=TZ=America/Los_Angeles
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/home/@USER@/.local/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=@REPO@
+ExecStart=@REPO@/.venv/bin/python -X utf8 @REPO@/studio/agent.py --check-login
+TimeoutStartSec=300

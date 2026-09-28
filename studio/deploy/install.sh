@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Install the studio's two systemd units on this machine (run on the VM, as the checkout's owner).
+# Install the studio's systemd units on this machine (run on the VM, as the checkout's owner): the
+# server, the tunnel, and the daily Claude login check (a service and its timer).
 #
 #   bash studio/deploy/install.sh [--home /srv/kitcut/studio] [--dry-run]
 #
@@ -25,7 +26,8 @@ run() { if [ "$DRY" = 1 ]; then echo "  would run: $*"; else "$@"; fi; }
 
 run mkdir -p "$HOME_DIR"
 chmod +x "$REPO"/studio/deploy/*.sh "$REPO"/studio/serve.sh
-for unit in kitcut-studio.service kitcut-tunnel.service; do
+for unit in kitcut-studio.service kitcut-tunnel.service \
+  kitcut-login-check.service kitcut-login-check.timer; do
   body="$(sed -e "s#@REPO@#$REPO#g" -e "s#@HOME@#$HOME_DIR#g" -e "s#@USER@#$USER_NAME#g" \
     "$REPO/studio/deploy/$unit")"
   if [ "$DRY" = 1 ]; then

@@ -2,6 +2,7 @@
 """Sketch Studio: one line of text in, a short sketch film out, written by Claude.
 
     python studio/agent.py --smoke [--auth api]        one-turn check: key source, model, cost
+    python studio/agent.py --check-login               the daily login check (kitcut.studio_hosts)
     python studio/agent.py --costs                     what the runs have cost (kitcut.studio_runs)
     python studio/agent.py --sync                      send runs the database missed (the outbox)
     python studio/agent.py --announce <url>|off        tell the public site where the tunnel is
@@ -19,6 +20,7 @@ Several films are made at once: each waits for a free Claude slot, then shares t
 the scheduler (sched.py). Two ways to pay for Claude:
     --auth api     ANTHROPIC_API_KEY, a private config folder per film (the public site)
     --auth login   this machine's Claude Code login (the default: local and internal runs)
+A login film whose sign-in fails (SignInError) is made on the key instead, and its record says so.
 """
 
 import sys
@@ -66,6 +68,7 @@ from claude_agent_sdk import (  # noqa: E402
     AssistantMessage,
     ClaudeAgentOptions,
     ClaudeSDKClient,
+    CLINotFoundError,
     HookMatcher,
     PermissionResultAllow,
     PermissionResultDeny,
@@ -87,6 +90,23 @@ MODEL = "claude-opus-5-5"
 EFFORT = "xhigh"
 # how long Claude may work on a film, and what it may spend, grow with the film's length:
 # film.limits() (20 min of working time for up to 15 s; waiting for the machine does not count)
+
+
+class SignInError(RuntimeError):
+    """Claude could not start on the credentials it was given -- for auth=login, this machine's
+    Claude Code login is gone (logged out, the setup-token expired or was revoked, no CLI).
+
+    The SDK does not raise on it. Measured with Claude Code 2.1.284 (SDK 0.2.x), 2026-09-28: a
+    bogus CLAUDE_CODE_OAUTH_TOKEN and an empty config folder with no token both end the turn
+    normally, with an AssistantMessage whose `error` is "authentication_failed" ("Failed to
+    authenticate. API Error: 401 Invalid bearer token" / "Not logged in · Please run /login")
+    and a ResultMessage with is_error (api_error_status 401 when a token was sent). A usage
+    limit is "rate_limit" / "billing_error" and is not this: the login works, the plan is spent.
+    """
+
+    def __init__(self, why):
+        super().__init__("Claude could not sign in: %s" % why)
+        self.why = why
 
 
 # ------------------------------------------------------------------ the environment Claude runs in
@@ -571,6 +591,12 @@ async def run_claude(film, emit, meter, tools, auth="api", prompt=None, resume=N
     os.makedirs(os.path.dirname(sp), exist_ok=True)
     with open(sp, "w", encoding="utf-8") as f:
         f.write(system_prompt(film.look))
+    cli = None
+    if auth == "login":
+        try:
+            cli = claude_cli()
+        except RuntimeError as e:  # no Claude Code on this machine: the login cannot be used
+            raise SignInError(str(e)) from None
     opts = ClaudeAgentOptions(
         model=MODEL,
         effort=EFFORT,
@@ -591,52 +617,65 @@ async def run_claude(film, emit, meter, tools, auth="api", prompt=None, resume=N
         # as one message (the default limit, 1 MB, failed a painted film)
         max_buffer_size=64 * 1024 * 1024,
         env=claude_env(film, auth),
-        cli_path=claude_cli() if auth == "login" else None,
+        cli_path=cli,
         # the raw stream too: only its message_delta events carry a response's final token count
         include_partial_messages=True,
         resume=resume,
     )
-    streamed = {}
-    async with ClaudeSDKClient(options=opts) as client:
-        await client.query(prompt or ask(film, recent_films(film)))
-        async for msg in client.receive_response():
-            if isinstance(msg, StreamEvent):
-                before = meter.usd()
-                if meter.stream(msg.event, streamed) and round(meter.usd(), 3) != round(before, 3):
-                    emit({"type": "cost", "usd": round(meter.usd(), 4)})
-            elif isinstance(msg, SystemMessage) and msg.subtype == "init":
-                d = msg.data
-                if not resume and d.get("session_id"):  # to wrap up in, if time runs out
-                    film.update(claude_session=d["session_id"])
-                emit(
-                    {
-                        "type": "init",
-                        "model": d.get("model"),
-                        "key": d.get("apiKeySource") or auth,
-                        "tools": [t for t in d.get("tools", []) if t.startswith("mcp__")],
-                    }
-                )
-            elif isinstance(msg, AssistantMessage):
-                before = meter.usd()
-                meter.add(msg.message_id or msg.uuid, msg.usage, msg.model)
-                if meter.usd() != before:
-                    emit({"type": "cost", "usd": round(meter.usd(), 4)})
-                for b in msg.content:
-                    if isinstance(b, TextBlock) and b.text.strip():
-                        emit({"type": "say", "text": b.text.strip()})
-                    elif isinstance(b, ToolUseBlock):
-                        pending[b.id] = (b.name, b.input)
-                        emit({"type": "tool", "text": _describe(b.name, b.input, film)})
-            elif isinstance(msg, UserMessage) and isinstance(msg.content, list):
-                for b in msg.content:
-                    if not isinstance(b, ToolResultBlock):
+    streamed, signin = {}, None
+    try:
+        async with ClaudeSDKClient(options=opts) as client:
+            await client.query(prompt or ask(film, recent_films(film)))
+            async for msg in client.receive_response():
+                if isinstance(msg, StreamEvent):
+                    before = meter.usd()
+                    if meter.stream(msg.event, streamed) and round(meter.usd(), 3) != round(
+                        before, 3
+                    ):
+                        emit({"type": "cost", "usd": round(meter.usd(), 4)})
+                elif isinstance(msg, SystemMessage) and msg.subtype == "init":
+                    d = msg.data
+                    if not resume and d.get("session_id"):  # to wrap up in, if time runs out
+                        film.update(claude_session=d["session_id"])
+                    emit(
+                        {
+                            "type": "init",
+                            "model": d.get("model"),
+                            "key": d.get("apiKeySource") or auth,
+                            "tools": [t for t in d.get("tools", []) if t.startswith("mcp__")],
+                        }
+                    )
+                elif isinstance(msg, AssistantMessage):
+                    if msg.error == "authentication_failed":  # see SignInError
+                        said = [getattr(b, "text", "") for b in msg.content]
+                        signin = " ".join(s for s in said if s).strip() or msg.error
                         continue
-                    pending.pop(b.tool_use_id, None)
-                    text = _result_text(b)
-                    if b.is_error and "hook error" not in text:  # denials were reported
-                        emit({"type": "fail", "text": text.strip()[-400:]})
-            elif isinstance(msg, ResultMessage):
-                result = msg
+                    before = meter.usd()
+                    meter.add(msg.message_id or msg.uuid, msg.usage, msg.model)
+                    if meter.usd() != before:
+                        emit({"type": "cost", "usd": round(meter.usd(), 4)})
+                    for b in msg.content:
+                        if isinstance(b, TextBlock) and b.text.strip():
+                            emit({"type": "say", "text": b.text.strip()})
+                        elif isinstance(b, ToolUseBlock):
+                            pending[b.id] = (b.name, b.input)
+                            emit({"type": "tool", "text": _describe(b.name, b.input, film)})
+                elif isinstance(msg, UserMessage) and isinstance(msg.content, list):
+                    for b in msg.content:
+                        if not isinstance(b, ToolResultBlock):
+                            continue
+                        pending.pop(b.tool_use_id, None)
+                        text = _result_text(b)
+                        if b.is_error and "hook error" not in text:  # denials were reported
+                            emit({"type": "fail", "text": text.strip()[-400:]})
+                elif isinstance(msg, ResultMessage):
+                    result = msg
+                    if msg.is_error and msg.api_error_status == 401:
+                        signin = signin or msg.result or "401 from the API"
+    except CLINotFoundError as e:  # the CLI the login needs is not there
+        raise SignInError(str(e)) from None
+    if signin:
+        raise SignInError(signin)
     return result
 
 
@@ -772,9 +811,31 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
                 )
                 s = time.time()
                 try:
-                    res = await _within(
-                        run_claude(film, emit, meter, tools, auth), clock, limits(length)
-                    )
+                    try:
+                        res = await _within(
+                            run_claude(film, emit, meter, tools, auth), clock, limits(length)
+                        )
+                    except SignInError as e:
+                        if auth != "login":
+                            raise  # the key itself is refused: nothing to fall back to
+                        # this machine's login is gone (a setup-token expired or was revoked, a
+                        # logout, no CLI): the film is made on the key instead of being lost, and
+                        # its record says so -- billed, and why
+                        auth, billed = "api", True
+                        summary.update(auth="api", fallback={"from": "login", "why": e.why})
+                        film.update(auth="api", fallback=summary["fallback"])
+                        await save(film.id, {"auth": "api", "fallback": summary["fallback"]})
+                        emit({"type": "fallback", "from": "login", "to": "api", "why": e.why})
+                        emit(
+                            {
+                                "type": "fail",
+                                "text": "This machine's Claude login failed (%s); making the "
+                                "film on the API key instead" % e.why,
+                            }
+                        )
+                        res = await _within(
+                            run_claude(film, emit, meter, tools, auth), clock, limits(length)
+                        )
                 except TimeoutError:
                     # past its time, Claude may only have been taking a last look at a film it
                     # had written: one that is whole and passes the checks is finished, not lost;
@@ -914,6 +975,8 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
                     "auth",
                 )
             }
+            if summary.get("fallback"):  # made on the key because the login failed
+                final["fallback"] = summary["fallback"]
             # shielded: a cancelled film's record must still be written
             await asyncio.shield(save(film.id, final, final=True))
     return summary
@@ -1060,7 +1123,14 @@ def first_record(film, source, client):
 
 # ------------------------------------------------------------------ command line
 async def smoke(auth="api"):
-    """One turn, no tools: proves the key (or the login), the model and where the bill goes."""
+    """One turn, no tools: proves the key (or the login), the model and where the bill goes.
+    Returns (ok, why): why is the failure in words, None when it worked. A failed sign-in does
+    not raise (see SignInError): it is a reply marked is_error."""
+    try:
+        cli = claude_cli() if auth == "login" else None
+    except RuntimeError as e:
+        print("  FAILED:     %s" % e)
+        return False, str(e)
     opts = ClaudeAgentOptions(
         model=MODEL,
         effort=EFFORT,
@@ -1071,51 +1141,78 @@ async def smoke(auth="api"):
         setting_sources=[],
         max_turns=1,
         env=claude_env(None, auth),
-        cli_path=claude_cli() if auth == "login" else None,
+        cli_path=cli,
         include_partial_messages=True,
     )
     t, meter, streamed = time.time(), Meter(), {}
-    async for m in query(prompt="ping", options=opts):
-        if isinstance(m, StreamEvent):
-            meter.stream(m.event, streamed)
-        elif isinstance(m, SystemMessage) and m.subtype == "init":
-            print("  key source: %s" % m.data.get("apiKeySource"))
-            print("  model:      %s" % m.data.get("model"))
-            print("  mcp:        %s" % ([s.get("name") for s in m.data.get("mcp_servers", [])]))
-        elif isinstance(m, AssistantMessage):
-            meter.add(m.message_id or m.uuid, m.usage, m.model)
-        elif isinstance(m, ResultMessage):
-            print("  reply:      %r%s" % (m.result, "  (ERROR)" if m.is_error else ""))
-            print("  cost:       $%.4f in %.1fs" % (m.total_cost_usd or 0, time.time() - t))
-            print("  metered:    $%.4f  %s" % (meter.usd(), meter.tokens()))
-            saved = STORE.save(
-                "smoke:%s" % m.session_id,
-                {
-                    "kind": "smoke",
-                    "source": "smoke",
-                    "client": "local",
-                    "host": store.HOST,
-                    "prompt": "ping",
-                    "model": MODEL,
-                    "auth": auth,
-                    "state": "failed" if m.is_error else "done",
-                    "ok": not m.is_error,
-                    "error": m.result if m.is_error else None,
-                    "cost_usd": round(m.total_cost_usd or 0, 6) if auth == "api" else 0.0,
-                    "cost_metered_usd": round(meter.usd(), 6),
-                    "tokens": meter.tokens(),
-                    "calls": meter.calls(),
-                    "turns": m.num_turns,
-                    "seconds": round(time.time() - t, 1),
-                    "session_id": m.session_id,
-                    "finished_at": store.now(),
-                },
-                final=True,
-            )
-            print(
-                "  logged:     %s"
-                % ("kitcut.studio_runs" if saved else "outbox (MongoDB unreachable)")
-            )
+    ok, why = False, "no reply from Claude"
+    try:
+        async for m in query(prompt="ping", options=opts):
+            if isinstance(m, StreamEvent):
+                meter.stream(m.event, streamed)
+            elif isinstance(m, SystemMessage) and m.subtype == "init":
+                print("  key source: %s" % m.data.get("apiKeySource"))
+                print("  model:      %s" % m.data.get("model"))
+                print("  mcp:        %s" % ([s.get("name") for s in m.data.get("mcp_servers", [])]))
+            elif isinstance(m, AssistantMessage):
+                meter.add(m.message_id or m.uuid, m.usage, m.model)
+            elif isinstance(m, ResultMessage):
+                ok, why = not m.is_error, (m.result or m.subtype) if m.is_error else None
+                print("  reply:      %r%s" % (m.result, "  (ERROR)" if m.is_error else ""))
+                print("  cost:       $%.4f in %.1fs" % (m.total_cost_usd or 0, time.time() - t))
+                print("  metered:    $%.4f  %s" % (meter.usd(), meter.tokens()))
+                saved = STORE.save(
+                    "smoke:%s" % m.session_id,
+                    {
+                        "kind": "smoke",
+                        "source": "smoke",
+                        "client": "local",
+                        "host": store.HOST,
+                        "prompt": "ping",
+                        "model": MODEL,
+                        "auth": auth,
+                        "state": "failed" if m.is_error else "done",
+                        "ok": not m.is_error,
+                        "error": m.result if m.is_error else None,
+                        "cost_usd": round(m.total_cost_usd or 0, 6) if auth == "api" else 0.0,
+                        "cost_metered_usd": round(meter.usd(), 6),
+                        "tokens": meter.tokens(),
+                        "calls": meter.calls(),
+                        "turns": m.num_turns,
+                        "seconds": round(time.time() - t, 1),
+                        "session_id": m.session_id,
+                        "finished_at": store.now(),
+                    },
+                    final=True,
+                )
+                print(
+                    "  logged:     %s"
+                    % ("kitcut.studio_runs" if saved else "outbox (MongoDB unreachable)")
+                )
+    except CLINotFoundError as e:
+        ok, why = False, str(e)
+    if not ok:
+        print("  FAILED:     %s" % why)
+    return ok, why
+
+
+def check_login():
+    """The daily check (studio/deploy/kitcut-login-check.timer): one turn on this machine's
+    Claude login. Its result goes where the site and the owner can see it -- kitcut.studio_hosts
+    ("login": ok, why, when) and the journal -- and a failure exits 1, so the unit shows failed.
+    A film asked for in the meantime still gets made: it falls back to the key (make_film)."""
+    ok, why = asyncio.run(smoke("login"))
+    try:
+        STORE.note_login(ok, why)
+    except Exception as e:  # noqa: BLE001 -- the check's own result still stands
+        print("  could not record the check in MongoDB: %s" % e)
+    if not ok:
+        print(
+            "LOGIN CHECK FAILED on %s: %s -- films asked for on this machine fall back to the API "
+            "key until it is renewed (`claude setup-token`; studio/deploy/README.md)"
+            % (store.HOST, why)
+        )
+    return ok
 
 
 def print_costs(last=20):
@@ -1196,6 +1293,12 @@ def main():
         help="api: ANTHROPIC_API_KEY (billed per token); login: this machine's Claude Code login",
     )
     ap.add_argument("--smoke", action="store_true", help="a one-turn check, no film")
+    ap.add_argument(
+        "--check-login",
+        action="store_true",
+        help="the daily check: a one-turn check on this machine's Claude login, recorded in "
+        "kitcut.studio_hosts; exits 1 when it fails",
+    )
     ap.add_argument("--costs", action="store_true", help="print what the runs cost, and totals")
     ap.add_argument("--sync", action="store_true", help="send runs the database missed")
     ap.add_argument(
@@ -1221,9 +1324,11 @@ def main():
     if args.costs:
         print_costs()
         return
+    if args.check_login:
+        sys.exit(0 if check_login() else 1)
     if args.smoke:
-        asyncio.run(smoke(args.auth))
-        return
+        ok, _ = asyncio.run(smoke(args.auth))
+        sys.exit(0 if ok else 1)
     if not args.prompt:
         ap.error("give a prompt, or --smoke")
     film = Film.create(args.prompt, args.seconds, args.look, client="local", source="cli")

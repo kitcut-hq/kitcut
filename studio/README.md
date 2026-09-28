@@ -392,6 +392,23 @@ There are two ways to pay:
 
 Never serve the public from a login. Through the tunnel, the server ignores the switch.
 
+**A login that fails falls back to the key.** When a login film cannot sign in -- logged out, a
+`claude setup-token` expired or revoked, no Claude Code installed -- `run_claude` raises
+`SignInError`, and `make_film` runs Claude's part again, once, on the key. The film is made
+instead of lost, and its record tells the truth: `auth: "api"`, billed, and
+`fallback: {"from": "login", "why": "..."}`; the log shows "This machine's Claude login failed";
+the server holds it against the day's budget as a film on the key. The SDK does not raise on a
+failed sign-in (measured 2026-09-28, Claude Code 2.1.284): the turn ends with an assistant
+message whose `error` is `authentication_failed` ("Not logged in · Please run /login", "Failed to
+authenticate. API Error: 401 ...") and an `is_error` result, and that is what is matched. A usage
+limit (`rate_limit`), a billing error or an overloaded API is not a lost login and is never
+retried on the key. `test_server.py` checks both, against the messages the CLI really sent.
+
+**The login is checked every morning** on the Azure VM (`agent.py --check-login`, run by
+`studio/deploy/kitcut-login-check.timer`): one turn on the login, recorded in
+`kitcut.studio_hosts` as `login: {ok, why, host, checked_at}` and in the journal; a failure
+leaves the unit failed, so a dead login is noticed before the key's bill is.
+
 `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` is set because some organisations reject Claude
 Code's default context-management beta with a 400 ("not available for HIPAA-regulated
 organizations without Zero Data Retention").

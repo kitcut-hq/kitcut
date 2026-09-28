@@ -248,6 +248,10 @@ def start(film, finish_only=False):
             J["wait"] = None
         elif ev["type"] == "cost":
             J["cost_usd"] = ev["usd"]
+        elif ev["type"] == "fallback":
+            # the login failed and the film is being made on the key (agent.make_film): from here
+            # it is held against the day's budget as a film on the key
+            J["auth"], J["reserve"] = "api", reserve(film.length, "api")
 
     async def run():
         ok = False

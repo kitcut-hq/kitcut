@@ -1,0 +1,13 @@
+# Once a day, the VM's Claude login is tried (kitcut-login-check.service). Persistent: a check
+# missed while the machine was off runs when it is back. Enabled at the move (deploy/README.md):
+#   sudo systemctl enable --now kitcut-login-check.timer
+[Unit]
+Description=KitCut studio: check the machine's Claude login every morning
+
+[Timer]
+OnCalendar=*-*-* 07:00:00 America/Los_Angeles
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

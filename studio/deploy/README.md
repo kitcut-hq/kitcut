@@ -141,3 +141,12 @@ back what the VM made.
   To renew: run `claude setup-token` on the VM in tmux, open its URL wherever you are signed in
   to claude.ai, press Authorize (a person must; the button refuses automation) and paste the
   code back within a few minutes -- the waiting CLI times out.
+- If that login stops working, nothing is lost: a login film that cannot sign in is made on the
+  API key instead, billed, with `fallback: {"from": "login", "why": ...}` on its record
+  (studio/README.md, Paying for Claude). Every morning at 07:00 Pacific
+  `kitcut-login-check.timer` runs `agent.py --check-login`; the result is in
+  `kitcut.studio_hosts` (`login.ok`, `login.why`, `login.checked_at`) and the journal
+  (`journalctl -u kitcut-login-check`), and a failed check shows in `systemctl --failed`.
+  `install.sh` installs the timer; the move enables it:
+  `sudo systemctl enable --now kitcut-login-check.timer`. No email yet: the site sends the owner
+  mail (sketch-studio `lib/notify.js`) but has no endpoint the studio can call.
