@@ -110,6 +110,9 @@ if [ "$STUDIO" = 1 ]; then
     run .venv/bin/python -c "from faster_whisper import download_model; print('  ', '$m', download_model('$m'))"
   done
 
+  # the studio's steps import these inside functions: prove them now, not on a customer's film
+  run .venv/bin/python -c "from google import genai; import claude_agent_sdk, pymongo, aiohttp; print('  studio imports ok')"
+
   step "6b. Claude Code (films on the machine's own login)"
   if [ -x "$HOME/.local/bin/claude" ]; then
     echo "  present: $("$HOME/.local/bin/claude" --version)"

@@ -15,10 +15,17 @@ laptop, through the scripts in this folder.
 | cost | ~$361/month for the VM + ~$22 the data disk (list prices, 2026-09-28) |
 
 ```bash
-bash studio/deploy/vm.sh ssh kitcut-studio-1 'bash /srv/kitcut/repo/studio/serve.sh status'
-bash studio/deploy/vm.sh ssh kitcut-studio-1 'journalctl -u kitcut-studio -n 100 --no-pager'
-bash studio/deploy/vm.sh open-ssh kitcut-studio-1     # the laptop's IP changed: re-point the SSH rule
+bash studio/deploy/ops.sh status          # health, release, films in progress, disks, errors
+bash studio/deploy/ops.sh logs studio -f  # or tunnel | login
+bash studio/deploy/ops.sh ship            # origin/studio-poc -> tagged, built, drained, live
+bash studio/deploy/ops.sh film "<idea>"   # a film made on the VM itself, followed to the end
+bash studio/deploy/ops.sh forward         # the VM's studio on this laptop's 127.0.0.1:8765
+bash studio/deploy/ops.sh snapshot        # the data disk, incremental; keeps the newest 7
 ```
+
+`ops.sh` is the everyday entry point (its header lists every command; the `studio-vm` skill
+teaches it), `vm.sh` the machine itself, `provision.sh` a rebuild. The VM has no public IP: the
+laptop's WireGuard VPN must be up.
 
 ## Shipping a release
 

@@ -103,7 +103,7 @@ for line in open(path, encoding="utf-8-sig"):
         print(line.rstrip("\r\n"))
 PY
     [ -f "$MACHINE_ENV" ] && grep -vE '^\s*(#|$)' "$MACHINE_ENV"
-  } | vm ssh "$VM" 'set -e; umask 077; cd /srv/kitcut/repo
+  } | tr -d '\r' | vm ssh "$VM" 'set -e; umask 077; cd /srv/kitcut/repo
     cat > .env.new
     # what only the VM holds survives a re-provision: its Claude login, and since the move its
     # right to announce itself and the tunnel (the laptop .env has them commented out now)

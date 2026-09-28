@@ -4,3 +4,8 @@ claude-agent-sdk>=0.2.159
 aiohttp>=3.9
 pymongo[srv]>=4.10
 pywin32>=306; sys_platform == "win32"  # each film's processes live in a Job Object
+# Gemini: the narration (sketch-vo.py), voice-note transcription (_stt.py) and the painter
+# (sketch-paint.py). Imported inside functions, so a machine without it passes every import check
+# and fails only when a film asks for its voice -- the Azure VM's first films on 2026-09-28 went
+# out silent that way ("cannot import name 'genai' from 'google'"). Pinned to the laptop's.
+google-genai==2.25.0
