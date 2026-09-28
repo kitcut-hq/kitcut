@@ -77,7 +77,19 @@ def main():
             ("Bash", {"command": "node --check film.js"}, False),
             ("Glob", {"pattern": "**/*"}, False),
             ("Grep", {"pattern": "KEY"}, False),
-            ("WebFetch", {"url": "https://example.com"}, False),
+            # the web: search at Anthropic, pages on the public internet only (_web.public_url)
+            ("WebSearch", {"query": "instafill.ai logo"}, True),
+            ("WebFetch", {"url": "https://example.com", "prompt": "x"}, True),
+            ("WebFetch", {"url": "http://127.0.0.1:8765/api/health"}, False),
+            ("WebFetch", {"url": "http://localhost:8765/"}, False),
+            ("WebFetch", {"url": "http://169.254.169.254/metadata/instance"}, False),
+            ("WebFetch", {"url": "http://10.0.1.10/"}, False),
+            ("WebFetch", {"url": "http://168.63.129.16/"}, False),
+            ("WebFetch", {"url": "http://[::1]/"}, False),
+            ("WebFetch", {"url": "http://[::ffff:10.0.0.1]/"}, False),
+            ("WebFetch", {"url": "file:///etc/passwd"}, False),
+            ("WebFetch", {"url": "https://user:pw@example.com/"}, False),
+            ("mcp__studio__picture", {"url": "https://example.com/a.png", "name": "a"}, True),
             ("Task", {"prompt": "x"}, False),
         ]
         for tool, inp, want in cases:

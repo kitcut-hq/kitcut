@@ -1,14 +1,18 @@
 """Sketch Studio's permission model: what Claude may do in its film's sandbox.
 
-Claude has three built-in tools (Read, Write, Edit) and the studio's own (mcp__studio__*: check,
-voice, paint, stills, sound), which run the pipeline for it. There is no shell. guard() is the
-PreToolUse hook's answer for every call:
+Claude has five built-in tools (Read, Write, Edit, WebSearch, WebFetch) and the studio's own
+(mcp__studio__*: check, voice, paint, stills, sound, picture, page, font), which run the pipeline
+for it. There is no shell. guard() is the PreToolUse hook's answer for every call:
 
     Read          a file inside the film's folder (film.readable: never temp/, studio.json)
     Write, Edit   film.js, score.json, sfx.json, vo.json, paint.json (painted films), the
                   film's engine copy, engine/engine.js and engine/props.js, and its cast,
                   cast/<name>.js (film.writable)
-    mcp__studio__ the studio's tools; they check their own arguments
+    WebSearch     always: a search runs at Anthropic, not on this machine
+    WebFetch      a URL on the public internet only (_web.public_url): the studio's machine sits on
+                  a private network, and the prompt that asks for a page is a stranger's
+    mcp__studio__ the studio's tools; they check their own arguments (picture and page fetch
+                  through _web, which checks every connection as it is made)
     anything else refused, with a reason Claude can act on
 
 Paths are resolved against the film's folder (Claude's working directory) and then to their real
@@ -20,7 +24,8 @@ import os
 import re
 import json
 
-import validate
+import validate  # puts scripts/ on the path
+import _web
 from film import VO_PINNED, paint_pins, tts_model
 
 STUDIO_TOOLS = "mcp__studio__"
@@ -49,11 +54,16 @@ def guard(tool, inp, film):
         if os.path.isdir(film.path("cast")):
             mine += ", cast/<name>.js (a lowercase name)"
         return False, "You can only write %s, in your working directory." % mine
+    if tool == "WebSearch":
+        return True, ""
+    if tool == "WebFetch":
+        ok, why = _web.public_url(inp.get("url"))
+        return (True, "") if ok else (False, "WebFetch reaches the public internet only: %s" % why)
     if tool.startswith(STUDIO_TOOLS):
         return True, ""
     return False, (
-        "%s is not available here: use Read, Write, Edit and the studio tools "
-        "(check, voice, paint, stills, sound)." % tool
+        "%s is not available here: use Read, Write, Edit, WebSearch, WebFetch and the studio "
+        "tools (check, voice, paint, stills, sound, picture, page, font)." % tool
     )
 
 

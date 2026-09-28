@@ -139,7 +139,7 @@ def bundle(m, audio=True):
         page = f.read()
     faces, loads = [], []
     for fnt in m.get("fonts", []):
-        p = _env.resolve(fnt["file"])
+        p = _sketch.font_file(m, fnt["file"])
         fmt = "woff2" if p.endswith(".woff2") else "truetype"
         faces.append(
             "@font-face { font-family: '%s'; src: url(data:font/%s;base64,%s) format('%s'); "
@@ -743,7 +743,7 @@ def main():
     else:
         print("  encoder: %s" % _encode.describe(cfg))
     for fnt in m.get("fonts", []):
-        if not os.path.exists(_env.resolve(fnt["file"])):
+        if not os.path.exists(_sketch.font_file(m, fnt["file"])):
             sys.exit("font missing: %s" % fnt["file"])
     if args.plan:
         print("\n  --plan: nothing rendered")

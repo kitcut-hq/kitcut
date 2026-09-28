@@ -38,8 +38,11 @@ SCRIPTS = os.path.join(KIT, "scripts")
 # same card as a developer's (scripts/_gpulock.py)
 LOCKS = os.path.join(REPO, "temp", "locks")
 # seconds a step may run; the voice, the mix and the render get longer for a longer film
-TIMEOUT = {"check": 30, "stills": 120, "paint": 300, "automation": 180}
+TIMEOUT = {"check": 30, "stills": 120, "paint": 300, "automation": 180, "web": 150}
 MAX_STILLS = 12
+# what one film may bring in from the web (web-grab.py): pictures and page photographs together,
+# and font families -- each is inlined into the film's page, which a phone downloads whole
+MAX_WEB_PICTURES, MAX_WEB_FONTS = 12, 3
 # narration takes recorded at once (sketch-vo.py --jobs): an 8-minute film's 70 Gemini lines took
 # 341 s one at a time and 52 s eight at a time, same accuracy and cost (docs/studio-speed.md)
 VOICE_JOBS = 8
@@ -225,6 +228,58 @@ class Tools:
             what = "outputs/review/sheet.png"
         return "Rendered %d stills. Read %s to look at them." % (len(ts), what)
 
+    # ---------------------------------------------------------------- from the web
+    def _manifest(self):
+        with open(self.film.manifest, encoding="utf-8") as f:
+            return json.load(f)
+
+    async def picture(self, url, name, width=None):
+        """A picture from the web (a logo, a product photo) into web/, as SK.image('web_<name>')."""
+        have = [k for k in self._manifest().get("images") or {} if k.startswith("web_")]
+        if len(have) >= MAX_WEB_PICTURES and "web_%s" % name not in have:
+            raise ToolError(
+                "That is %d pictures from the web, the limit for one film: reuse or replace one "
+                "(the same name again replaces it)." % MAX_WEB_PICTURES
+            )
+        args = ["--picture", str(url or ""), "--name", str(name or "")]
+        if width:
+            args += ["--width", str(int(width))]
+        async with self.lock:
+            tail = await self._script("web", "web-grab.py", args, pools=[("browser", 1)])
+        return tail[-1] if tail else "saved"
+
+    async def page(self, url, name, width=None, height=None):
+        """A photograph of a web page into web/, as SK.image('web_<name>')."""
+        have = [k for k in self._manifest().get("images") or {} if k.startswith("web_")]
+        if len(have) >= MAX_WEB_PICTURES and "web_%s" % name not in have:
+            raise ToolError(
+                "That is %d pictures from the web, the limit for one film: reuse or replace one "
+                "(the same name again replaces it)." % MAX_WEB_PICTURES
+            )
+        args = ["--page", str(url or ""), "--name", str(name or "")]
+        if width or height:
+            args += ["--size", "%dx%d" % (int(width or 1920), int(height or 1080))]
+        async with self.lock:
+            tail = await self._script("web", "web-grab.py", args, pools=[("browser", 1)])
+        return tail[-1] if tail else "saved"
+
+    async def font(self, family, weights=None):
+        """A Google Fonts family into web/fonts/ and the manifest's fonts."""
+        mine = {f.get("family") for f in self._manifest().get("fonts") or [] if "web/" in f["file"]}
+        if len(mine) >= MAX_WEB_FONTS and family not in mine:
+            raise ToolError(
+                "That is %d font families from the web, the limit for one film." % MAX_WEB_FONTS
+            )
+        args = ["--font", str(family or "")]
+        if weights:
+            try:
+                args += ["--weights", ",".join(str(int(w)) for w in weights)]
+            except (TypeError, ValueError):
+                raise ToolError("weights is a list of numbers, e.g. [400, 700]") from None
+        async with self.lock:
+            tail = await self._script("web", "web-grab.py", args)
+        return tail[-1] if tail else "saved"
+
     async def name_film(self, title):
         """The film's title, when the visitor typed nothing (voice notes or pictures only): the
         record's title (the page and the film's own page show it) and the manifest's."""
@@ -344,6 +399,55 @@ class Tools:
                     "properties": {"retake": {"type": "array", "items": {"type": "string"}}},
                 },
             )(wrap(lambda a: self.paint(a.get("retake")))),
+            tool(
+                "picture",
+                "Save a picture from the web (a logo, a product, a person, a place: its own URL, "
+                "PNG/JPEG/WebP/GIF/ICO/SVG) into web/<name>.png|jpg, shown in film.js with "
+                "SK.image('web_<name>', x, y, w). width: the px an SVG is drawn at (1600).",
+                {
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string"},
+                        "name": {"type": "string", "description": "lowercase, e.g. logo"},
+                        "width": {"type": "integer"},
+                    },
+                    "required": ["url", "name"],
+                },
+            )(wrap(lambda a: self.picture(a.get("url"), a.get("name"), a.get("width")))),
+            tool(
+                "page",
+                "Photograph a web page as a browser sees it (width x height px, 1920x1080 unless "
+                "given; a taller one takes more of the page) into web/<name>.jpg, shown with "
+                "SK.image('web_<name>', x, y, w). Read the file to see it.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string"},
+                        "name": {"type": "string", "description": "lowercase, e.g. site"},
+                        "width": {"type": "integer"},
+                        "height": {"type": "integer"},
+                    },
+                    "required": ["url", "name"],
+                },
+            )(
+                wrap(
+                    lambda a: self.page(a.get("url"), a.get("name"), a.get("width"), a.get("height"))
+                )
+            ),
+            tool(
+                "font",
+                "Add a Google Fonts family to the film (whole fonts, every script they cover), "
+                "for SK.text(..., {font: '<family>', wt: <weight>}). weights: [400, 700] unless "
+                "given.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "family": {"type": "string", "description": "e.g. Inter"},
+                        "weights": {"type": "array", "items": {"type": "integer"}},
+                    },
+                    "required": ["family"],
+                },
+            )(wrap(lambda a: self.font(a.get("family"), a.get("weights")))),
             tool(
                 "stills",
                 "Render review frames of the film at these times (seconds) into "

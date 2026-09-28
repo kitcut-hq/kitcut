@@ -43,6 +43,7 @@ TESTS = (
     "test_library.py",
     "test_youtube.py",
     "test_media.py",
+    "test_web.py",
 )
 
 

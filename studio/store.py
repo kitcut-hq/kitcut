@@ -21,7 +21,7 @@ One document per run, snake_case, real UTC datetimes (the kitcut-web conventions
     cost_metered_usd    the same, priced here from the token counts (a cross-check)
     client              who asked: "u:<account>" through the public site (X-Client-Ip), else
                         the visitor's IP as Cloudflare saw it, or "local"
-    tokens              {input, output, cache_read, cache_write_5m, cache_write_1h}
+    tokens              {input, output, cache_read, cache_write_5m, cache_write_1h, web_search}
     calls               one entry per Claude API response: {message_id, at, model, tokens...,
                         cost_usd}
     created_at, updated_at, finished_at

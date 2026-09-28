@@ -78,6 +78,13 @@ def rel(m, p):
     return p if os.path.isabs(p) else os.path.join(m["_dir"], p)
 
 
+def font_file(m, p):
+    """A manifest font's file: beside the manifest when it is there (one web-grab.py fetched for
+    this film, web/fonts/...), else in the repo (fonts/..., the studio's own)."""
+    here = rel(m, p)
+    return here if os.path.exists(here) else _env.resolve(p)
+
+
 def slug(m):
     return re.sub(r"[^a-z0-9]+", "-", (m.get("slug") or m["_id"]).lower()).strip("-")
 

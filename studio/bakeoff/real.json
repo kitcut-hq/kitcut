@@ -1,0 +1,26 @@
+{
+  "about": "Does a film about something real use the real thing: its facts from the web, its own logo, colours, type and product, instead of an invented stand-in? Made for web research in the studio (2026-09-28), after the Instafill.ai GPT-6 Sol announcement studio-20260928-135513-pizula came out with a drawn stand-in logo, an invented UI in a comic font and no research ('This studio has no web access'). The first prompt is that film's own; the control has nothing real to look up, and must not get worse or go looking.",
+  "seconds": 45,
+  "prompts": [
+    {
+      "id": "instafill",
+      "look": "drawn",
+      "audience": "adults: Instafill.ai's own users, a product announcement",
+      "prompt": "Research about Instafill.ai. we recently upgraded all users to gpt 6 Sol model as default model. We need a video about this that explains that it's smarter and faster and now Instafill.ai users have access to the top tier model"
+    },
+    {
+      "id": "cloudflare",
+      "look": "drawn",
+      "seconds": 30,
+      "audience": "adults: a general audience, a company's product",
+      "prompt": "A short explainer about Cloudflare's 1.1.1.1 DNS resolver: what it is, why it is fast and private, and how to switch to it."
+    },
+    {
+      "id": "lighthouse",
+      "look": "drawn",
+      "seconds": 30,
+      "audience": "children at bedtime (control: nothing real to look up)",
+      "prompt": "A bedtime story about a lighthouse keeper's cat who is afraid of the dark, until one stormy night."
+    }
+  ]
+}
