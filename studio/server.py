@@ -47,6 +47,11 @@ STUDIO_PER_CLIENT_DAILY (default 5) a day.
     POST /api/films/{id}/youtube {"to": <YouTube upload session>, "key"}: the film's own client
                                  sends the finished film into a session the site opened (youtube.py)
     GET  /api/films/{id}/youtube/{key}  how that send is going, and YouTube's answer
+    POST /api/films/{id}/youtube/draft {"channel": {"id", "title", "handle"}, "recent": [...]}:
+                                 the film's own client has its YouTube title, description and
+                                 tags written from the film, in the voice of the channel's latest
+                                 uploads (ytdraft.py); 202 while writing, 200 with the draft
+    GET  /api/films/{id}/youtube/draft/{channel}  that draft: writing, done or failed
     GET  /api/films              the finished films, newest first
     GET  /api/costs              the spend: total, today, this month, per film, latest runs
     GET  /files/{id}/film.mp4    the film (also film_poster.png, review/sheet.png, and card.jpg:
@@ -83,6 +88,7 @@ import procs  # noqa: E402
 import store  # noqa: E402
 import uploads  # noqa: E402
 import youtube  # noqa: E402
+import ytdraft  # noqa: E402
 from film import Film  # noqa: E402
 from sched import Sched  # noqa: E402
 
@@ -590,6 +596,54 @@ async def youtube_sent(req):
     return web.json_response(youtube.public(job))
 
 
+async def youtube_draft(req):
+    """Have the film's YouTube title, description and tags written (ytdraft.py): from the film,
+    in the voice of the channel's latest uploads, which the site read with its grant and sends.
+    The film's owner only; the same film, channel and uploads answer the draft already written."""
+    if DRAINING:
+        return web.json_response(
+            {"error": "The studio is restarting; try again in a minute."}, status=503
+        )
+    f = film_of(req.match_info["id"])
+    rec = f.record()
+    client = client_of(req)
+    if not (from_this_machine(req) or rec.get("client") == client):
+        return web.json_response({"error": "only whoever made a film can publish it"}, status=403)
+    if not rec.get("ok"):
+        return web.json_response({"error": "This film is not finished."}, status=409)
+    try:
+        channel, recent = ytdraft.parse_request(await req.json())
+    except ValueError as e:
+        return web.json_response({"error": str(e) or "expected JSON"}, status=400)
+    # as for a film: this machine's own asks on its login, anyone through the tunnel on the key
+    auth = (os.environ.get("STUDIO_LOCAL_AUTH") or "login") if from_this_machine(req) else "api"
+    try:
+        job = await ytdraft.start(f, client, channel, recent, auth)
+    except ytdraft.DraftError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    return web.json_response(ytdraft.public(job), status=200 if job["state"] == "done" else 202)
+
+
+async def youtube_drafted(req):
+    """The draft for one channel: writing, done (title, description, tags, language) or failed."""
+    f = film_of(req.match_info["id"])
+    channel = req.match_info["channel"]
+    job = ytdraft.get(f.id, channel)
+    if job is not None:
+        if not (from_this_machine(req) or job["client"] == client_of(req)):
+            return web.json_response({"error": "no such draft"}, status=404)
+        return web.json_response(ytdraft.public(job))
+    # written before this server started: what is on disk
+    if not (from_this_machine(req) or f.record().get("client") == client_of(req)):
+        return web.json_response({"error": "no such draft"}, status=404)
+    d = ytdraft.cached(f, {"id": channel}) if ytdraft.CHANNEL.match(channel) else None
+    if d is None:
+        return web.json_response({"error": "no such draft"}, status=404)
+    return web.json_response(
+        ytdraft.public({"film": f.id, "channel": channel, "state": "done", "draft": d})
+    )
+
+
 async def cancel(req):
     f = film_of(req.match_info["id"])
     J = JOBS.get(f.id)
@@ -920,6 +974,8 @@ def make_app(token):
             web.post("/api/films/{id}/cancel", cancel),
             web.post("/api/films/{id}/listed", set_listed),
             web.post("/api/films/{id}/youtube", youtube_send),
+            web.post("/api/films/{id}/youtube/draft", youtube_draft),
+            web.get("/api/films/{id}/youtube/draft/{channel}", youtube_drafted),
             web.get("/api/films/{id}/youtube/{key}", youtube_sent),
             web.post("/api/admin/drain", drain),
             web.post("/api/admin/films/{id}/hidden", hide),

@@ -403,8 +403,10 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
     <fieldset id="ytChans"><legend>Channel</legend></fieldset>
     <a class="more" id="ytAdd" href="/api/youtube/connect">+ Add another channel</a>
     <p class="note" id="ytAgain" hidden></p>
+    <p class="note" id="ytDraftNote" aria-live="polite" hidden></p>
     <label class="field">Title<input type="text" id="ytName" maxlength="100" required></label>
-    <label class="field">Description<textarea id="ytDesc" rows="4" maxlength="5000"></textarea></label>
+    <label class="field">Description<textarea id="ytDesc" rows="8" maxlength="5000"></textarea></label>
+    <label class="field">Tags<input type="text" id="ytTags" maxlength="500" placeholder="Separated by commas"></label>
     <fieldset class="seg" id="ytWho"><legend>Who can watch it</legend>
       <label><input type="radio" name="ytWho" value="public"><span>Public</span></label>
       <label><input type="radio" name="ytWho" value="unlisted"><span>Unlisted</span></label>
@@ -877,6 +879,8 @@ let YT = false;        // /api/me: this account may publish to YouTube
 let ytDoneId = null;   // the finished film on screen
 let ytFilm = null;     // that film, when it is yours: {id, channels, posts, defaults}
 let ytFormFor = null, ytPoll = null, ytPost = null;
+let ytDrafts = {};     // channel id -> its draft for that film: {state, title, description, tags, language, category}
+let ytTyped = {};      // the fields you have typed in: a draft never overwrites them
 const ls = { get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
              set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private window */ } } };
 const WHO = {
@@ -913,8 +917,10 @@ async function ytLoad() {
     if (!r.ok || id !== currentId) return;  // not yours, or you have moved on
     ytFilm = { ...(await r.json()), id };
   } catch (e) { return; }
+  ytDrafts = {}; ytTyped = {};
   $('ytOpen').hidden = false;
   ytList();
+  if (ytChosen()) ytDraft(ytChosen());  // written while you watch, so it is ready when you open the dialog
   const sending = ytFilm.posts.find((p) => p.state === 'sending');
   if (sending) ytTrack(sending);
   if (YT_BACK.said) {
@@ -946,10 +952,67 @@ function ytShow(err, pick) {
   if (f.channels.length) ytForm(pick);
   if (!$('yt').open) $('yt').showModal();
 }
-function ytForm(pick) {
-  const f = ytFilm, ok = f.channels.filter((c) => !c.broken);
+// the channel the form starts on: the one asked for, else the one you used last, else the first
+function ytChosen(pick) {
+  const ok = ((ytFilm && ytFilm.channels) || []).filter((c) => !c.broken);
   const want = pick || ls.get('ytChannel');
-  const chosen = (ok.find((c) => c.id === want) || ok[0] || {}).id;
+  return (ok.find((c) => c.id === want) || ok[0] || {}).id;
+}
+// The title, description and tags, written from the film in the channel's voice (the studio's
+// ytdraft.py reads the film; the site reads the channel's latest uploads). One ask per channel; a
+// field you have typed in is never overwritten; if none can be written, the basics.
+async function ytDraft(channel) {
+  const f = ytFilm;
+  if (!f || !channel) return;
+  if (ytDrafts[channel] && ytDrafts[channel].state !== 'failed') return ytFill(channel);
+  ytDrafts[channel] = { state: 'writing', since: Date.now() };
+  ytFill(channel);
+  let b = { state: 'failed' };
+  try {
+    const r = await fetch('/api/youtube/draft', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ film: f.id, channel }),
+    });
+    if (r.ok) b = await r.json();
+  } catch (e) { /* the basics, then */ }
+  ytDraftSeen(f, channel, b);
+}
+function ytDraftSeen(f, channel, b) {
+  if (ytFilm !== f) return;  // you have moved on to another film
+  const d = ytDrafts[channel] = { ...ytDrafts[channel], ...b };
+  if (d.state === 'none' || (d.state === 'writing' && Date.now() - d.since > 60000)) d.state = 'failed';
+  if (d.state === 'writing') {
+    setTimeout(async () => {
+      let next = { state: 'writing' };
+      try {
+        const r = await fetch(`/api/youtube/draft?film=${encodeURIComponent(f.id)}&channel=${encodeURIComponent(channel)}`, { headers: { Accept: 'application/json' } });
+        if (r.ok) next = await r.json();
+      } catch (e) { /* ask again */ }
+      ytDraftSeen(f, channel, next);
+    }, 1500);
+  }
+  ytFill(channel);
+}
+// a channel's draft into the form, when it is the channel picked
+function ytFill(channel) {
+  const c = document.querySelector('input[name=ytChan]:checked');
+  if (!ytFilm || (c ? c.value : ytChosen()) !== channel) return;
+  const d = ytDrafts[channel] || {}, note = $('ytDraftNote');
+  const put = (id, v) => { if (!ytTyped[id]) $(id).value = v; };
+  if (d.state === 'done') {
+    put('ytName', d.title || ytFilm.defaults.title);
+    put('ytDesc', [d.description, ytFilm.defaults.description].filter(Boolean).join('\n\n'));
+    put('ytTags', (d.tags || []).join(', '));
+  } else if (d.state === 'failed') {
+    put('ytName', ytFilm.defaults.title); put('ytDesc', ytFilm.defaults.description); put('ytTags', '');
+  }
+  note.textContent = d.state === 'writing' ? "Writing a title and description from the film, in this channel's voice..."
+    : d.state === 'failed' ? "They couldn't be written from the film this time, so here are the basics. Change anything you like." : '';
+  note.hidden = !note.textContent;
+}
+for (const id of ['ytName', 'ytDesc', 'ytTags']) $(id).addEventListener('input', () => { ytTyped[id] = true; });
+function ytForm(pick) {
+  const f = ytFilm;
+  const chosen = ytChosen(pick);
   $('ytChans').innerHTML = '<legend>Channel</legend>' + f.channels.map((c) => `
     <label class="chan${c.broken ? ' broken' : ''}">
       <input type="radio" name="ytChan" value="${esc(c.id)}"${c.id === chosen ? ' checked' : ''}${c.broken ? ' disabled' : ''}>
@@ -957,14 +1020,15 @@ function ytForm(pick) {
       <span>${esc(c.title)}${c.handle ? ` <small>${esc(c.handle)}</small>` : ''}</span>
       ${c.broken ? `<a href="${esc($('ytAdd').href)}">Reconnect</a>` : ''}
     </label>`).join('');
-  for (const r of $('ytChans').querySelectorAll('input')) r.onchange = ytAgain;
-  if (ytFormFor !== f.id) {  // a new film starts from its own title; a reopened dialog keeps your edits
+  for (const r of $('ytChans').querySelectorAll('input')) r.onchange = () => { ytAgain(); ytDraft(r.value); };
+  if (ytFormFor !== f.id) {  // a new film starts from its own draft; a reopened dialog keeps your edits
     ytFormFor = f.id;
-    $('ytName').value = f.defaults.title; $('ytDesc').value = f.defaults.description; $('ytKids').checked = false;
+    $('ytName').value = ''; $('ytDesc').value = ''; $('ytTags').value = ''; $('ytKids').checked = false;
     const who = WHO[ls.get('ytWho')] ? ls.get('ytWho') : 'public';
     document.querySelector(`input[name=ytWho][value=${who}]`).checked = true;
   }
   ytWhoNote(); ytAgain();
+  if (chosen) ytDraft(chosen);
 }
 function ytWhoNote() {
   const w = document.querySelector('input[name=ytWho]:checked');
@@ -991,7 +1055,10 @@ $('ytForm').addEventListener('submit', async (e) => {
   try {
     const r = await fetch('/api/youtube/publish', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ film: ytFilm.id, channel: chan.value, title: $('ytName').value, description: $('ytDesc').value, privacy: who.value, kids: $('ytKids').checked }),
+      body: JSON.stringify({
+        film: ytFilm.id, channel: chan.value, title: $('ytName').value, description: $('ytDesc').value, tags: $('ytTags').value,
+        language: (ytDrafts[chan.value] || {}).language, category: (ytDrafts[chan.value] || {}).category, privacy: who.value, kids: $('ytKids').checked,
+      }),
     });
     const b = await r.json().catch(() => ({}));
     if (!r.ok) {
