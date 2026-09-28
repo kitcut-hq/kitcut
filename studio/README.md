@@ -370,6 +370,15 @@ python studio/bakeoff.py --set audience --compare before after     # compare.htm
 - `--auth login` (the default) runs on this machine's Claude Code login. A 30 s film costs about
   $2.5 of Claude and 15-20 minutes; `--jobs 3` makes three at once.
 
+**The first run** (set `audience`, 2026-09-27: 14 films of 30 s, before = b20966e, after = the
+no-style brief): on the five serious prompts the old brief's films read childish 0.39 and fit
+their subject 3.6 of 5 (3 of 5 films fit); the new brief's 0.17 and 4.4 (5 of 5). The controls
+did not move (the bedtime story and the cat-cafe ad: childish 0.70, fit 4.5 in both). Claude
+$2.41 -> $2.53 a film, 16.6 -> 17.2 min. The widest gap was the Pripyat evacuation: a sunlit
+picture book with smiling families (0.70) became muted flat illustration ending at dusk on the
+empty Ferris wheel (0.35) -- better, not solved, since the props' only trees and clouds are
+cartoon ones. That is capability, not instruction.
+
 ## Paying for Claude
 
 There are two ways to pay:
