@@ -370,7 +370,8 @@ def limits_doc():
         "output": {
             "width": 1920,
             "height": 1080,
-            "fps": 60,
+            "fps": 60,  # a paid plan's; a Free film renders at fps_free (X-Fps from the site)
+            "fps_free": 30,
             "video": "H.264 (MP4)",
             "audio": "AAC, stereo, -14 LUFS",
             "subtitles": "a soft track, off by default; also film.srt and film.vtt",
@@ -465,6 +466,9 @@ async def create(req):
     # (the site sends both, trusted like X-Priority)
     source = "mcp" if req.headers.get("X-Source", "").strip() == "mcp" else "web"
     app = req.headers.get("X-App", "").strip()[:40] or None
+    # the frame rate the film renders at: the plan's (the site sends it, trusted like X-Priority:
+    # Free films are 30 fps, paid ones 60); 60 unless it says 30
+    fps = 30 if req.headers.get("X-Fps", "").strip() == "30" else 60
     prune()
     # pictures and voice notes uploaded first (uploads.py): this client's own, and every voice
     # note written out -- which may take a moment, so before the lock
@@ -495,6 +499,7 @@ async def create(req):
             project=project,
             listed=listed,
             app=app,
+            fps=fps,
         )
         uploads.release(client, attached)  # the film has its own copies now
         try:  # the person's cast and earlier films (library.py); a film goes ahead without

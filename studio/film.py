@@ -341,6 +341,7 @@ class Film:
         project=None,
         listed=True,
         app=None,
+        fps=60,
     ):
         """A new film's folder: the manifest (its length set), the engine copy, an empty
         narration, an empty list of paintings for a painted film, and its record.
@@ -394,6 +395,7 @@ class Film:
                     item.update(lang=a.get("lang"))
                 attached.append(item)
         m["duration"], m["poster_t"] = float(seconds), round(seconds - 0.4, 2)
+        m["fps"] = 30 if fps == 30 else 60  # the plan's: Free films 30, paid ones 60
         m["engine"] = "engine"
         m["cast"] = "cast"  # every cast/*.js loads before film.js (sketch-render)
         if look == "painted":
@@ -417,6 +419,7 @@ class Film:
                 "auth": auth,
                 # a Free-plan film: KitCut's watermark and closing (agent.brand, studio/outro.js)
                 "branding": bool(branding),
+                "fps": 30 if fps == 30 else 60,
                 # pictures and voice notes the visitor attached (inputs/): never shown publicly
                 "attachments": attached,
                 # the project it is an episode of (never shown publicly: the brief is theirs)

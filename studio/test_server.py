@@ -264,7 +264,7 @@ async def main():
         # tunnel (refused: api); film 2 asks for the login from this machine
         extra = [
             ({"X-Priority": "1"}, {"auth": "api"}),
-            ({"Cf-Ray": "test", "X-Branding": "1"}, {"auth": "login"}),
+            ({"Cf-Ray": "test", "X-Branding": "1", "X-Fps": "30"}, {"auth": "login"}),
             ({}, {"auth": "login"}),
         ]
         for i in range(3):
@@ -341,6 +341,17 @@ async def main():
             with open(f.path("vo.json"), encoding="utf-8") as fh:
                 vo = json.load(fh)
             check(vo["tts"] == "gemini" and vo["takes"] == 1, "its voice settings put back")
+            rate = subprocess.run(
+                ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries"]
+                + ["stream=r_frame_rate", "-of", "csv=p=0", f.path("outputs", "film.mp4")],
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            want_fps = "30/1" if branded else "60/1"
+            check(
+                rate == want_fps and rec.get("fps") == int(want_fps[:2]),
+                "%s: renders at %s fps" % ("a Free-plan film" if branded else "a paid one", rate),
+            )
             d = mem.docs.get(j, {})
             check(
                 d.get("state") == "done"
