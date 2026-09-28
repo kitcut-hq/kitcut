@@ -68,6 +68,11 @@ def timeline_text(film):
             "line %d  %.2f-%.2f s  acc %.2f  %r\n  words: %s"
             % (L["i"], L["start"], L["end"], L.get("acc", 0), L["text"], words)
         )
+        if L.get("backup_voice"):
+            out.append(
+                "  (Gemini would not read this line; the backup voice %s read it, so it sounds a"
+                " little different. Keep it, or reword it and record it again.)" % L["backup_voice"]
+            )
     return "\n".join(out) or "(no lines)"
 
 

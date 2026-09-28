@@ -43,6 +43,7 @@ NEEDS = {
         "GOOGLE_CLOUD_PROJECT",
         "GOOGLE_CLOUD_LOCATION",
         "GEMINI_API_KEY",
+        "ELEVENLABS_API_KEY",  # the backup voice, for a line Gemini refuses
     ),
     "paint": (
         "OPENROUTER_API_KEY",

@@ -2949,6 +2949,34 @@ Measured on the first Ukrainian film (10 lines x 3 takes, 738 characters): synth
 scoring on large-v3/GPU 48 s. Lily speaks Ukrainian at ~1.8 words a second, not the 2.6 the
 `--plan` estimate assumes: budget ~100 words for a minute.
 
+**A line Gemini will not read.** Gemini TTS's content filter refuses some lines outright
+(`PROHIBITED_CONTENT`: a line naming the investor Carl Icahn in the Dell film, wine words
+in `ssemfm`), and asking again does not help. The same words may pass on another run, or
+with a different voice direction -- the filter is not repeatable. `gemini_take` now raises
+`Refused` for a content block (a glitch with no audio still gets its three tries), and with
+`vo.backup` set -- the studio pins `{"tts": "elevenlabs", "model": "eleven_v3",
+"voices": {"low": "brian", "high": "sarah"}}` -- that one line is read by ElevenLabs
+and the rest stays Gemini's:
+- **low or high** is measured, not looked up: the median pitch of the film's Gemini takes
+  already recorded (`pitch_hz`, below 165 Hz is low). Only when nothing is recorded yet does
+  the Gemini voice's label decide (`GEMINI_FEMALE`). Labels and voices disagree: a voice
+  direction moved Puck, Fenrir and Sadachbia above 220 Hz and Gacrux to 130 in real films.
+- **levelled** to the Gemini lines' median speech level (-18.4 dBFS over 40 lines; v3 came
+  out at -18.1, Turbo at -22.4), trimmed and timed by Whisper exactly as a Gemini take.
+- **recorded** in the timeline as `backup_voice`, and costed at the ElevenLabs API price
+  (`EL_USD_PER_CHAR`: v3 $0.10 per 1,000 characters) into the same `tts_cost_usd`.
+- the studio's `voice` tool tells Claude which line the backup read, so it can keep it or
+  reword it.
+
+Why ElevenLabs, measured 2026-09-27 (`scratchpad voice_bakeoff.py`; the refused line, a
+normal one, a wine line and a Ukrainian one): every candidate read the refused and the wine
+lines; Whisper accuracy was equal; speaker similarity to the film's Gemini narrator (NeMo
+TitaNet, 0.60 for Gemini against itself) was 0.17-0.33 for ElevenLabs `brian` and
+0.03-0.10 for OpenRouter's Microsoft MAI Voice 2 (one English voice, female; its Ukrainian
+slipped into Russian forms). Gemini through OpenRouter is the same model and the same
+filter, so it is no backup. Voice cloning on OpenRouter (Mistral Voxtral, Fish Audio) was
+not reachable with the key's allowed providers; MAI 2 Flash has no cloning endpoint there.
+
 ### The soundtrack: `sketch-audio.py`
 
 Stages: fetch any missing instrument notes (FluidR3 GM, MIT, into

@@ -74,7 +74,10 @@ PAINT_PINNED = {"backend": "muse", "model": "meta/muse-image", "max_images": 8}
 # account's project; STUDIO_TTS_MODEL overrides it (e.g. gemini-3.1-flash-tts-preview)
 TTS_MODEL = "gemini-3.8-flash-tts"
 # what Claude may not change in vo.json: the studio decides the backend, model and take count
-VO_PINNED = {"tts": "gemini", "takes": 1, "lead": 0.5, "gap": 0.35}
+# a line Gemini refuses to read (its content filter: a name, a wine) is read by the backup
+# voice, a low or a high one to go with the film's own narration (scripts/sketch-vo.py)
+VO_BACKUP = {"tts": "elevenlabs", "model": "eleven_v3", "voices": {"low": "brian", "high": "sarah"}}
+VO_PINNED = {"tts": "gemini", "takes": 1, "lead": 0.5, "gap": 0.35, "backup": VO_BACKUP}
 STATES = ("queued", "claude", "finishing", "done", "error", "cancelled", "interrupted")
 ACTIVE = ("queued", "claude", "finishing")
 ID = re.compile(r"^studio-\d{8}-\d{6}(-[a-z2-7]{6})?$")

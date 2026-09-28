@@ -50,6 +50,7 @@ import re
 import json
 import time
 import base64
+import glob
 import hashlib
 import difflib
 import atexit
@@ -150,6 +151,35 @@ GEMINI_VOICES = (
     "Pulcherrima Achird Zubenelgenubi Vindemiatrix Sadachbia Sadaltager Sulafat"
 ).split()
 GEMINI_SR = 24000
+# the voices Google lists as female: how a backup voice is picked (vo["backup"]) only when
+# nothing of the film has been recorded yet -- otherwise the film's own pitch decides
+# (backup_kind), since a voice direction can move a voice a long way from its label
+GEMINI_FEMALE = frozenset(
+    "Zephyr Kore Leda Aoede Callirrhoe Autonoe Despina Erinome Laomedeia Achernar Gacrux "
+    "Pulcherrima Vindemiatrix Sulafat".split()
+)
+LOW_VOICE_HZ = 165  # a narration pitched below this takes the backup's low voice
+# what a refused line's backup is levelled to: the median speech level of a film's Gemini
+# lines (40 lines, 2026-09-27: -18.4 dBFS; ElevenLabs v3 came out at -18.1, Turbo at -22.4)
+BACKUP_LEVEL_DB = -18.4
+# ElevenLabs API list prices, USD per character (elevenlabs.io/pricing/api, 2026-09)
+EL_USD_PER_CHAR = {
+    "eleven_v3": 0.10 / 1000,
+    "eleven_multilingual_v2": 0.10 / 1000,
+    "eleven_turbo_v2_5": 0.05 / 1000,
+    "eleven_flash_v2_5": 0.05 / 1000,
+}
+# what Gemini says when it will not read a line: a content block, not a glitch -- asking
+# again does not help, and rephrasing loses the words (a name, a wine)
+BLOCKED = ("PROHIBITED", "SAFETY", "BLOCKLIST", "SPII", "BLOCKREASON", "BLOCK_REASON")
+
+
+class Refused(Exception):
+    """Gemini TTS will not read this line (its content filter), however often it is asked."""
+
+
+def refused(why):
+    return any(b in str(why).upper().replace(" ", "") for b in BLOCKED)
 
 
 def _google_creds(scopes):
@@ -209,6 +239,8 @@ def gemini_take(text, vo):
                 pcm = parts[0].inline_data.data
                 break
             why = "finish reason %s" % (cand.finish_reason if cand else r.prompt_feedback)
+            if refused(why):
+                raise Refused(why)
             print("  gemini gave no audio for %r (%s); asking again" % (words[:40], why))
             time.sleep(2 * (attempt + 1))
         if pcm is None:
@@ -260,6 +292,11 @@ def gemini_take(text, vo):
         try:
             pcm = base64.b64decode(j["candidates"][0]["content"]["parts"][0]["inlineData"]["data"])
         except (KeyError, IndexError, TypeError):
+            why = j.get("promptFeedback") or [
+                c.get("finishReason") for c in j.get("candidates") or []
+            ]
+            if refused(why):
+                raise Refused(str(why)[:300]) from None
             sys.exit(
                 "Gemini TTS gave no audio for the line %r (%s): rephrase it" % (words, str(j)[:300])
             )
@@ -273,6 +310,83 @@ def gemini_take(text, vo):
     pin, pout = GEMINI_PRICES.get(model, (0.0, 0.0))
     cost = (usage["input"] * pin + usage["output"] * pout) / 1e6
     return y, {"model": model, "voice": voice, "usage": usage, "cost_usd": round(cost, 6)}
+
+
+def pitch_hz(x, sr=SR):
+    """Median pitch of the voiced 40 ms frames (autocorrelation, 70-400 Hz), or None."""
+    from scipy.signal import resample_poly
+
+    y, fs = resample_poly(x, 1, sr // 16000), 16000
+    n, out = int(0.04 * fs), []
+    for i in range(0, len(y) - n, n):
+        f = y[i : i + n] - y[i : i + n].mean()
+        if np.sqrt((f**2).mean()) < 0.02:
+            continue
+        ac = np.correlate(f, f, "full")[n - 1 :]
+        lo, hi = fs // 400, fs // 70
+        k = lo + int(np.argmax(ac[lo:hi]))
+        if ac[k] > 0.4 * ac[0]:
+            out.append(fs / k)
+    return float(np.median(out)) if out else None
+
+
+def backup_kind(vo, vdir):
+    """ "low" or "high": the film's own Gemini takes, measured, else the voice's label."""
+    got = []
+    for js in sorted(glob.glob(os.path.join(vdir, "L*_T*_*.json")))[:8]:
+        with open(js, encoding="utf-8") as f:
+            meta = json.load(f).get("gemini")
+        wav = js[:-5] + ".wav"
+        if meta and not meta.get("backup") and os.path.exists(wav):
+            hz = pitch_hz(_sketch.decode(wav))
+            if hz:
+                got.append(hz)
+    if got:
+        return "low" if float(np.median(got)) < LOW_VOICE_HZ else "high"
+    return "high" if vo.get("voice") in GEMINI_FEMALE else "low"
+
+
+def level_to(x, db):
+    """The take with its speech (20 ms frames within 30 dB of the loudest) at db dBFS RMS, peaks
+    kept under 0 dB."""
+    f = x[: len(x) // 960 * 960].reshape(-1, 960)
+    r = np.sqrt((f**2).mean(axis=1))
+    loud = r[r > r.max() * 10 ** (-30 / 20)] if r.max() > 0 else r  # the voice, not its pauses
+    if not len(loud) or not loud.any():
+        return x
+    y = x * 10 ** ((db - 20 * np.log10(np.sqrt((loud**2).mean()))) / 20)
+    peak = np.abs(y).max()
+    return y * (0.98 / peak) if peak > 0.98 else y
+
+
+def backup_take(text, vo, vdir):
+    """A line Gemini refused, read by the backup voice (vo["backup"]: ElevenLabs, a low and a
+    high voice from config/elevenlabs-voices.json), levelled to Gemini's lines. Returns
+    (samples at SR, meta) like gemini_take; the words are timed by Whisper as Gemini's are."""
+    b = vo["backup"]
+    name = b["voices"][backup_kind(vo, vdir)]
+    vid = import_module("dub-tts").resolve_voice(name, "elevenlabs")
+    model = b.get("model", "eleven_v3")
+    words = spoken(text)
+    mp3, _ = el_take(
+        words,
+        vid,
+        {"model": model, "settings": b.get("settings")} if b.get("settings") else {"model": model},
+    )
+    tmp = os.path.join(vdir, "_backup.mp3")
+    with open(tmp, "wb") as f:
+        f.write(mp3)
+    y = level_to(_sketch.decode(tmp), BACKUP_LEVEL_DB)
+    os.remove(tmp)
+    cost = len(words) * EL_USD_PER_CHAR.get(model, 0.10 / 1000)
+    meta = {
+        "model": model,
+        "voice": name,
+        "backup": "elevenlabs",
+        "usage": {"input": 0, "output": 0, "chars": len(words)},
+        "cost_usd": round(cost, 6),
+    }
+    return y, meta
 
 
 def trim_silence(x, db=-50.0, pad=0.05):
@@ -549,18 +663,33 @@ def main():
                         with open(base + ".mp3", "wb") as f:
                             f.write(mp3)
                     elif tts == "gemini":
-                        audio, meta = gemini_take(ln["text"], vo)
+                        try:
+                            audio, meta = gemini_take(ln["text"], vo)
+                        except Refused as e:
+                            if not vo.get("backup"):
+                                sys.exit(
+                                    "Gemini TTS refused the line %r (%s): rephrase it"
+                                    % (spoken(ln["text"]), e)
+                                )
+                            audio, meta = backup_take(ln["text"], vo, vdir)
+                            meta["refused"] = str(e)[:200]
                         _sketch.write_wav(base + ".wav", audio)
                         align = {"gemini": meta}  # no timings: Whisper supplies the words
-                        print(
-                            "    %.1fs, %d+%d tokens, $%.5f"
-                            % (
-                                len(audio) / SR,
-                                meta["usage"]["input"],
-                                meta["usage"]["output"],
-                                meta["cost_usd"],
+                        if meta.get("backup"):
+                            print(
+                                "    Gemini refused it: read by the backup voice (%s, %s), %.1fs, $%.5f"
+                                % (meta["voice"], meta["model"], len(audio) / SR, meta["cost_usd"])
                             )
-                        )
+                        else:
+                            print(
+                                "    %.1fs, %d+%d tokens, $%.5f"
+                                % (
+                                    len(audio) / SR,
+                                    meta["usage"]["input"],
+                                    meta["usage"]["output"],
+                                    meta["cost_usd"],
+                                )
+                            )
                     else:
                         audio, marks = edge_take(ln["text"], voice, dub)
                         _sketch.write_wav(base + ".wav", audio)
@@ -595,6 +724,9 @@ def main():
                             "clean": ok,
                             "words": words,
                             "tts": align.get("gemini") if base in fresh else None,
+                            "backup": (align.get("gemini") or {}).get("voice")
+                            if (align.get("gemini") or {}).get("backup")
+                            else None,
                         }
                     )
         with st("score"):
@@ -650,6 +782,8 @@ def main():
                         "file": os.path.relpath(b["file"], m["_dir"]).replace("\\", "/"),
                         "dur": round(b["dur"], 3),
                     }
+                    if b.get("backup"):  # Gemini refused it: the backup voice read it
+                        L["backup_voice"] = b["backup"]
                     spent = [c["tts"] for c in cand.get(i, []) if c.get("tts")]
                     if spent:
                         # what this line cost in this run: every take rendered, not only the pick

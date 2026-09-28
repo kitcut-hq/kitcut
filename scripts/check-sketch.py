@@ -199,6 +199,52 @@ def main():
         str([w["text"] for w in words]),
     )
 
+    # ---- the backup voice, for a line Gemini refuses (no API: what decides it)
+    check(
+        "backup: Gemini's content block is a refusal, a glitch is not",
+        vo_mod.refused("finish reason block_reason=<BlockedReason.PROHIBITED_CONTENT: 2>")
+        and vo_mod.refused({"blockReason": "SAFETY"})
+        and not vo_mod.refused("finish reason STOP"),
+    )
+
+    def voiced(hz, s=1.5):  # a buzzy voice-like tone: a fundamental and a few harmonics
+        t = np.arange(int(s * SR)) / SR
+        return 0.2 * sum(np.sin(2 * np.pi * hz * k * t) / k for k in (1, 2, 3, 4))
+
+    low, high = vo_mod.pitch_hz(voiced(115)), vo_mod.pitch_hz(voiced(230))
+    check(
+        "backup: pitch tells a low narrator from a high one",
+        low and high and low < vo_mod.LOW_VOICE_HZ < high,
+        "%s / %s Hz" % (low, high),
+    )
+    vdir = tempfile.mkdtemp(prefix="check-sketch-vo-")
+    try:
+        _sketch.write_wav(os.path.join(vdir, "L00_T0_x.wav"), voiced(230))
+        with open(os.path.join(vdir, "L00_T0_x.json"), "w", encoding="utf-8") as f:
+            json.dump({"gemini": {"model": "m", "voice": "Charon"}}, f)
+        # Charon is labelled male, but this film's recordings are high: the measurement wins
+        check(
+            "backup: the film's own pitch picks the voice",
+            vo_mod.backup_kind({"voice": "Charon"}, vdir) == "high",
+        )
+        empty = tempfile.mkdtemp(prefix="check-sketch-vo-")
+        check(
+            "backup: nothing recorded yet, the voice's label decides",
+            vo_mod.backup_kind({"voice": "Kore"}, empty) == "high"
+            and vo_mod.backup_kind({"voice": "Charon"}, empty) == "low",
+        )
+        shutil.rmtree(empty, ignore_errors=True)
+    finally:
+        shutil.rmtree(vdir, ignore_errors=True)
+    lv = vo_mod.level_to(voiced(115) * 0.01, vo_mod.BACKUP_LEVEL_DB)
+    f = lv[: len(lv) // 960 * 960].reshape(-1, 960)
+    got = 20 * np.log10(np.sqrt((np.sqrt((f**2).mean(axis=1)) ** 2).mean()))
+    check(
+        "backup: levelled to the Gemini lines",
+        abs(got - vo_mod.BACKUP_LEVEL_DB) < 0.5,
+        "%.1f dBFS" % got,
+    )
+
     # ---- captions
     tl = {
         "duration": 10,

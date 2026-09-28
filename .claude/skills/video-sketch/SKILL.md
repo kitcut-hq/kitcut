@@ -89,6 +89,11 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
   per candidate, Whisper large-v3 with no language forced, highest language confidence wins
   (Ukrainian: `lily`). Budget ~1.8 words/s, not 2.6 -- `--plan` overestimates a Ukrainian
   line's speed.
+- **A line Gemini refuses** (its content filter: a name, a wine) is read by the backup
+  voice when `vo.backup` is set -- ElevenLabs, a low or high voice chosen by the film's own
+  measured pitch -- and the timeline marks it `backup_voice`. It sounds a little different;
+  rewording the line and recording again brings it back to Gemini. Without `vo.backup` the
+  run stops and asks for a rephrase, as before.
 - **Films for children** (the air-raid-kids film): no explosions, fire or injury on screen --
   a shoot-down is a puff, danger is a grey silhouette -- and every scene ends on the child
   doing the safe thing. Use the official wording of the safety authority verbatim where it
