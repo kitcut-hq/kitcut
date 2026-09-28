@@ -3090,6 +3090,39 @@ meta, azure, openai and typesafe. So Seedream, Qwen, FLUX.2, Recraft, Riverflow 
 refused, even though they are in the catalogue at a price. `--plan` cannot see that setting;
 paint one scene per model before trusting a price.
 
+### From the web: `web-grab.py`
+
+A film about something real shows the real thing: its logo, its product, its type. `web-grab.py`
+brings each in beside the film's manifest and registers it there, so film.js only names it:
+
+```powershell
+python scripts/web-grab.py --manifest <film>/sketch.json --picture <url> --name logo   # web/logo.png, SK.image('web_logo', ...)
+python scripts/web-grab.py --manifest <film>/sketch.json --page https://example.com --name site --size 1920x1080
+python scripts/web-grab.py --manifest <film>/sketch.json --font "Inter" --weights 400,700
+python scripts/web-grab.py --check <url>                                               # allowed? fetches nothing
+```
+
+A picture's format is read from its bytes, not its Content-Type: PNG, JPEG, WebP, GIF (first
+frame), ICO (its largest size) and SVG, which the browser draws at `--width` as an `<img>` (so it
+loads nothing and runs no script) and which is cropped to its own ink. A picture with
+transparency is kept as PNG, a large opaque one becomes a JPEG (the bundle inlines every
+picture), and nothing is kept larger than 2560 px. A URL that turns out to be an HTML page is
+refused with the hint to take the picture's own URL or photograph the page. `--font` asks Google
+Fonts as a client that is not a browser: a browser is sent per-script WOFF2 slices, anything else
+one whole TTF per weight (Inter: 325 KB, Latin, Cyrillic and Greek). A family Google does not
+have still answers 200, with a stand-in served from `/l/font` -- measured with "Helvetica Neue"
+-- so only files under `/s/` count and the rest is refused. The manifest's `fonts` resolve beside
+the manifest first (`_sketch.font_file`), then in the repo. Every source is in `web/sources.json`.
+
+**Only the public internet.** The fetching machine may sit on a private network, and in the
+studio the URL is chosen by a stranger's prompt. `_web.py` resolves the host and refuses any
+address that is private, loopback, link-local (169.254.169.254, the cloud's metadata service),
+shared (100.64/10), multicast or Azure's host address 168.63.129.16, and it does so **at connect
+time for every connection, redirects included** -- a name that passed the check and then
+resolved to 10.x (DNS rebinding) is refused when it connects, not when it was checked. `ftp:` and
+`file:` never reach it (the opener has only http and https). `studio/test_web.py` covers it
+offline, including a "public" server redirecting to 127.0.0.1.
+
 ### The picture: `sketch-render.py`
 
 Bundles engine + props + film + fonts + images + voice timeline + mastered MP3 into

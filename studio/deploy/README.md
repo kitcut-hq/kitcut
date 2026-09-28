@@ -11,7 +11,7 @@ laptop, through the scripts in this folder.
 | disks | 128 GB OS + 512 GB data at `/srv/kitcut`, both Standard HDD (disk speed is not the bottleneck) |
 | code | `/srv/kitcut/repo`, pushed from the laptop (`push.sh`); the VM holds no GitHub credentials |
 | films | `/srv/kitcut/studio` (`STUDIO_HOME`) |
-| reach | SSH from the laptop's IP only; the studio leaves through the Cloudflare named tunnel (outbound), `studio.kitcut.ai` |
+| reach | SSH from the VPN only (no public IP); the studio leaves through the Cloudflare named tunnel (outbound), `studio.kitcut.ai`; `vm.sh network` also denies outbound to the VNet (`no-network-outbound`: films fetch from the web) |
 | cost | ~$361/month for the VM + ~$22 the data disk (list prices, 2026-09-28) |
 
 ```bash
