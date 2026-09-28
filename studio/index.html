@@ -29,6 +29,11 @@
 <script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kitcut.ai/#website", "url": "https://kitcut.ai/", "name": "KitCut", "description": "Claude video maker"}, {"@type": "Organization", "@id": "https://kitcut.ai/#org", "name": "KitCut", "url": "https://kitcut.ai/", "logo": "https://kitcut.ai/logo-256.png", "sameAs": ["https://github.com/kitcut-hq/kitcut"]}, {"@type": "WebApplication", "name": "KitCut: Claude video maker", "url": "https://kitcut.ai/", "applicationCategory": "MultimediaApplication", "operatingSystem": "Any (web browser)", "description": "Make a Claude video from one prompt. Opus 5.5 writes, animates, narrates and scores your idea in minutes: motion graphics, explainers, launch videos. 30 s free.", "publisher": {"@id": "https://kitcut.ai/#org"}, "offers": {"@type": "AggregateOffer", "priceCurrency": "USD", "lowPrice": "0", "highPrice": "849", "offerCount": "13"}}, {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Can Claude make videos?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Claude has no video model: it writes code that draws every frame, the way the Opus 5.5 animations people share on X are made. KitCut has Claude Opus 5.5 write the script, animate every scene, write a narration and compose the music, then renders it all into a finished Claude video."}}, {"@type": "Question", "name": "How do I make a Claude video?", "acceptedAnswer": {"@type": "Answer", "text": "Type one sentence about your idea, pick a length and a look (hand-drawn or painted), and press Make the film. Claude plans it, draws it, looks at stills of its own work and fixes what it doesn't like. The finished video is ready in a few minutes."}}, {"@type": "Question", "name": "Which Claude model makes the videos?", "acceptedAnswer": {"@type": "Answer", "text": "Claude Opus 5.5 directs every video. It writes the script and the code that draws each frame, and reviews the result before it is rendered. For the painted look an image model paints the scenes and Claude animates them; a voice model reads Claude's narration."}}, {"@type": "Question", "name": "Is it free?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, to start: every account gets 30 seconds of film a month, with no card needed. Paid plans give you more minutes, and Pro makes films up to 8 minutes long."}}, {"@type": "Question", "name": "How long can a Claude video be?", "acceptedAnswer": {"@type": "Answer", "text": "Up to 1 minute on Free and Standard, and 8 minutes on Pro. A month's free credits make one 30-second film."}}, {"@type": "Question", "name": "What can I make with it?", "acceptedAnswer": {"@type": "Answer", "text": "Motion graphics, explainer videos, launch videos, tiny stories, music videos, showreels and lessons, in any language you type in. Every film gets its own page to share."}}]}]}</script>
 <!-- /meta -->
 <style>
+/* site.css */
+/* The public pages' shared frame: palette, page width, header and footer. Home, pricing, connect,
+   privacy, terms and the docs all wear it, so nothing moves when you go from one to another.
+   index.html carries this block inline (it is mirrored to the studio laptop, which serves no
+   /site.css); test/site.test.mjs keeps the two identical. The Studio and account pages use app.css. */
 @font-face { font-family: 'Caveat'; src: url(/fonts/Caveat.woff2) format('woff2'); font-weight: 400 700; font-display: swap; }
 @font-face { font-family: 'Patrick Hand'; src: url(/fonts/PatrickHand-400.woff2) format('woff2'); font-display: swap; }
 @font-face { font-family: 'Inter'; src: url(/fonts/Inter.woff2) format('woff2'); font-weight: 100 900; font-display: swap; }
@@ -42,14 +47,33 @@
           --accent: #e58a58; --accent-ink: #1d1a17; --accent-soft: #3b2a20; --bad: #e07a66; --good: #7cc08c; color-scheme: dark; }
 }
 * { box-sizing: border-box; }
-[hidden] { display: none !important; }  /* .row and .stats set display, which would beat it */
+[hidden] { display: none !important; }  /* a class that sets display would beat it */
 html, body { margin: 0; }
+html { scrollbar-gutter: stable; }  /* a short page and a long one centre on the same line */
 body { background: var(--paper); color: var(--ink); font: 15px/1.5 Inter, system-ui, sans-serif; }
-.wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 60px; display: grid; gap: 22px; }
-.site-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 20px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 60px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; }
+.site-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 20px; min-height: 42px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font: 700 40px/1 Caveat, cursive; letter-spacing: .3px; }
 .brand img { width: 42px; height: 42px; border-radius: 10px; display: block; }
 .brand .tld { color: var(--accent); }
+.brand small { font: 600 14px/1 Inter, system-ui, sans-serif; color: var(--ink-soft); margin-left: 4px; letter-spacing: 0; }
+.account { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-soft); }
+.account img { width: 30px; height: 30px; border-radius: 50%; display: block; }
+.account form { display: inline; }
+.account a.me { color: var(--ink); text-underline-offset: 3px; text-decoration-color: var(--rule); }
+.account a.me:hover { text-decoration-color: var(--accent); }
+.site-head .account button, .site-head .account .button { display: inline-block; margin: 0; padding: 9px 14px; border-radius: 10px; border: 1.5px solid var(--rule);
+  background: transparent; color: var(--ink); font: 600 14px/1 Inter, system-ui, sans-serif; letter-spacing: 0; text-decoration: none; cursor: pointer; }
+.site-foot { border-top: 1.5px solid var(--rule); padding-top: 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; color: var(--ink-soft); font-size: 14px; }
+.site-foot .brand { font-size: 28px; gap: 8px; }
+.site-foot .brand img { width: 28px; height: 28px; border-radius: 7px; }
+.site-foot p { margin: 0; }
+.site-foot nav { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.site-foot a { color: var(--ink-soft); }
+.site-foot a:hover { color: var(--accent); }
+/* a page of reading (privacy, terms, connect): the frame stays full width, the text column does not */
+.wrap.reading > :not(.site-head):not(.site-foot) { width: 100%; max-width: 800px; justify-self: center; }
+/* /site.css */
 .hero h1 { font: 700 54px/1.05 Caveat, cursive; margin: 0; letter-spacing: .3px; }
 .hero p { margin: 6px 0 0; color: var(--ink-soft); font-size: 16px; max-width: 70ch; }
 .hero .spend { font-size: 13.5px; font-variant-numeric: tabular-nums; }
@@ -58,13 +82,6 @@ body { background: var(--paper); color: var(--ink); font: 15px/1.5 Inter, system
 .hero .invited { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 14px 0 0; padding: 10px 14px; border-radius: 12px; border: 1.5px solid var(--accent); font-size: 15px; max-width: none; color: var(--ink); }
 .hero .invited b { font-weight: 650; }
 .hero .invited button { padding: 7px 12px; }
-.site-foot { border-top: 1.5px solid var(--rule); padding-top: 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; color: var(--ink-soft); font-size: 14px; }
-.site-foot .brand { font-size: 28px; gap: 8px; }
-.site-foot .brand img { width: 28px; height: 28px; border-radius: 7px; }
-.site-foot p { margin: 0; }
-.site-foot nav { display: flex; flex-wrap: wrap; gap: 6px 18px; }
-.site-foot a { color: var(--ink-soft); }
-.site-foot a:hover { color: var(--accent); }
 form { display: grid; gap: 10px; }
 textarea { width: 100%; min-height: calc(5 * 1.35em + 28px); resize: vertical; padding: 14px 16px; border-radius: 12px;
   border: 1.5px solid var(--rule); background: var(--sheet); color: var(--ink); font: 22px/1.35 'Patrick Hand', cursive; }
@@ -156,12 +173,6 @@ div.stage { background: var(--sheet); border: 1.5px solid var(--rule); border-ra
 .film { display: block; text-decoration: none; background: var(--sheet); border: 1.5px solid var(--rule); border-radius: 12px; overflow: hidden; cursor: pointer; text-align: left; padding: 0; color: inherit; font: inherit; }
 .film:hover { border-color: var(--accent); }
 .film img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #f7f2e7; }
-.top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 10px 20px; }
-.account { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-soft); padding-top: 8px; }
-.account img { width: 30px; height: 30px; border-radius: 50%; display: block; }
-.account form { display: inline; }
-.account a.me { color: var(--ink); text-underline-offset: 3px; text-decoration-color: var(--rule); }
-.account a.me:hover { text-decoration-color: var(--accent); }
 button.small { font: 600 14px/1 Inter, system-ui, sans-serif; letter-spacing: 0; padding: 9px 14px; }
 button.ghost, a.ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--rule); }
 #signin { border: 1.5px solid var(--rule); border-radius: 16px; background: var(--sheet); color: var(--ink); padding: 22px 24px 24px; width: min(420px, calc(100% - 32px)); }
