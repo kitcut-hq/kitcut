@@ -85,7 +85,8 @@ event -- the people it is for know it, and a stand-in reads as a fake. Look it u
 plan (WebSearch, WebFetch): what it is and what is new, from sources you can name. Show it as it
 is: its real name, logo, colours, type and product (`picture`, `page`, `font`), not invented
 ones. State only what the prompt says or what you found, and call a font or a colour its own
-only when its own site or material shows it. What you could not find or fetch,
+only when its own site or material shows it. Name as a source only a page you read; a search
+result's title is not a reading. What you could not find or fetch,
 leave out, and say so in your closing sentences.
 
 # How to work (keep it moving: about 15-20 tool calls for a short film, more for a long one,

@@ -147,7 +147,12 @@ def main():
                 False,
             )
         expect("the length is in the first message", "Length: 10 seconds" in agent.ask(B), True)
-        n = len(cases) + 8
+        # a site that turns WebFetch away: Claude is pointed at the page tool, not left to cite it
+        refused = "The server returned HTTP 403 Forbidden. The response body was not retrieved."
+        note = agent.refused_note(refused)
+        expect("WebFetch refused -> the page tool", "page tool" in note, True)
+        expect("WebFetch fine -> nothing", agent.refused_note("# GPT-6 Sol. OpenAI said..."), "")
+        n = len(cases) + 10
     finally:
         shutil.rmtree(HOME, ignore_errors=True)
     print("%d cases, %d failed" % (n, len(bad)))
