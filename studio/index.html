@@ -54,6 +54,10 @@ body { background: var(--paper); color: var(--ink); font: 15px/1.5 Inter, system
 .hero p { margin: 6px 0 0; color: var(--ink-soft); font-size: 16px; max-width: 70ch; }
 .hero .spend { font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .hero .spend b { color: var(--ink); font-weight: 600; }
+/* someone arrived through a friend's invite link (lib/referrals.js) */
+.hero .invited { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 14px 0 0; padding: 10px 14px; border-radius: 12px; border: 1.5px solid var(--accent); font-size: 15px; max-width: none; color: var(--ink); }
+.hero .invited b { font-weight: 650; }
+.hero .invited button { padding: 7px 12px; }
 .site-foot { border-top: 1.5px solid var(--rule); padding-top: 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; color: var(--ink-soft); font-size: 14px; }
 .site-foot .brand { font-size: 28px; gap: 8px; }
 .site-foot .brand img { width: 28px; height: 28px; border-radius: 7px; }
@@ -258,6 +262,15 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
     (location.protocol === 'https:' ? '; Secure' : '');
 } catch (e) { /* never worth breaking the page for */ } })();
 </script>
+<script>
+// A random id for this browser (kc_dev, two years), so an invited friend can be told from the
+// person who invited them (lib/referrals.js). It is only ever compared, never shown.
+(() => { try {
+  if (document.cookie.split('; ').some((c) => c.startsWith('kc_dev='))) return;
+  const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  document.cookie = `kc_dev=${id}; Path=/; Max-Age=63072000; SameSite=Lax` + (location.protocol === 'https:' ? '; Secure' : '');
+} catch (e) { /* never worth breaking the page for */ } })();
+</script>
 </head>
 <body>
 <div class="wrap">
@@ -270,6 +283,7 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
     <h1>Type an idea. Get a Claude video.</h1>
     <p>Claude Opus 5.5 writes, animates, narrates and scores a video of any idea in minutes: motion graphics, explainers, launch videos, short films and music videos, hand-drawn or painted, in any language.</p>
     <p class="spend" id="spend" hidden></p>
+    <p class="invited" id="invited" hidden></p>
   </section>
   <!-- /hero -->
 
@@ -318,7 +332,7 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
   <section class="work">
     <div class="stage">
       <div class="screen" id="screen"><div class="idle">Your film appears here.</div></div>
-      <div class="caption"><span id="status">Ready.</span><span class="right"><button class="small ghost yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><button class="small ghost" type="button" id="stop" hidden>Stop</button><span id="clock"></span></span></div>
+      <div class="caption"><span id="status">Ready.</span><span class="right"><button class="small ghost yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><button class="small ghost" type="button" id="share" hidden title="Copy a link to this film">Share</button><button class="small ghost" type="button" id="stop" hidden>Stop</button><span id="clock"></span></span></div>
       <div class="posts" id="ytPosts" hidden></div>
     </div>
     <aside class="log">
@@ -643,6 +657,7 @@ async function follow(since = 0, misses = 0) {
     else if (s.status === 'running' && s.wait) $('status').innerHTML = `<span class="pen"></span>${esc(s.wait)}`;
     if (s.status === 'done') {
       if (s.video_url) play(s.video_url, s.poster_url);
+      $('share').hidden = false;
       ytDoneId = id; ytLoad();
       if (!showedDone && s.seconds != null) {  // a film from before the log was kept: its summary stands in
         stats(s); $('status').textContent = `Done in ${mmss(s.seconds)}.`;
@@ -758,7 +773,7 @@ function paintLength() {
   if (CREDITS) {
     c.classList.toggle('short', short);
     c.innerHTML = `${costOf(v)} credits${costOf(v) > v ? ' (the least a film uses)' : ''} · you have ${mmss(CREDITS.balance)} left · renews ${renews()}` +
-      ' · <a href="/pricing">Get more film</a>';
+      ' · <a href="/pricing">Get more film</a>' + (short ? ', or <a href="/account#invite">invite a friend for free film</a>' : '');
   }
 }
 $('length').addEventListener('input', paintLength);
@@ -787,6 +802,8 @@ async function whoami() {
   } catch (e) { return; }
   renderAccount(); paintLength();
   $('footNav').hidden = false;
+  invited();
+  if (USER) inviteCode();
   const q = new URLSearchParams(location.search), failed = q.get('signin');
   if (failed != null) { history.replaceState(null, '', location.pathname); if (!USER) askSignIn(SIGNIN_ERRORS[failed] || SIGNIN_ERRORS.link); }
   const d = USER && draft.take();
@@ -799,6 +816,46 @@ async function whoami() {
   ytLoad();
 }
 
+
+// ---------------------------------------------------------------- invitations
+// A visitor who came through a friend's link (/i/<code> sends them here with ?invite=<code>) is
+// greeted by the friend's name; the offer is lib/plans.js REFERRAL, told by /api/invites/who. The
+// Share button under a finished film copies its link, and for a signed-in visitor that link is their
+// own invite (/i/<code>?c=film&to=/film/<id>): a friend who signs up from it is theirs.
+let INVITE = null;  // this account's invite code
+async function invited() {
+  const code = new URLSearchParams(location.search).get('invite');
+  if (USER || !code || !/^[a-z0-9]{7}$/.test(code)) return;
+  try {
+    const r = await fetch(`/api/invites/who?code=${encodeURIComponent(code)}`, { headers: { Accept: 'application/json' } });
+    if (!r.ok) return;
+    const w = await r.json();
+    const el = $('invited');
+    el.innerHTML = `<span><b>${w.name ? esc(w.name) : 'A friend'} invited you.</b> Sign up free and make your first film: you both get ${mmss(w.friend_seconds)} more film.</span>` +
+      '<button class="small" type="button" id="invitedGo">Sign up free</button>';
+    el.hidden = false;
+    $('invitedGo').onclick = () => askSignIn();
+  } catch (e) { /* no welcome, the page works the same */ }
+}
+async function inviteCode() {
+  try {
+    const r = await fetch('/api/invites/code', { headers: { Accept: 'application/json' } });
+    if (r.ok) INVITE = (await r.json()).code || null;
+  } catch (e) { /* the Share button copies the plain link */ }
+}
+$('share').addEventListener('click', async () => {
+  const id = currentId;
+  if (!id) return;
+  const url = INVITE ? `${location.origin}/i/${INVITE}?c=film&to=/film/${encodeURIComponent(id)}` : `${location.origin}/film/${id}`;
+  if (INVITE) { try { navigator.sendBeacon('/api/invites/share?c=film'); } catch (e) { /* counting never blocks sharing */ } }
+  if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+    try { await navigator.share({ title: document.title, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(url); } catch (e) { window.prompt('Copy the link:', url); return; }
+  const was = $('status').textContent;
+  $('status').textContent = INVITE ? 'Link copied. A friend who signs up from it gets extra film, and so do you.' : 'Link copied.';
+  setTimeout(() => { if ($('status').textContent.startsWith('Link copied')) $('status').textContent = was; }, 5000);
+});
 
 // ---------------------------------------------------------------- publishing to YouTube
 // Under a finished film of your own: "Publish to YouTube" opens a dialog to pick one of your
@@ -834,7 +891,7 @@ const YT_BACK = (() => {
 })();
 function ytReset() {
   clearTimeout(ytPoll); ytPoll = null; ytPost = null; ytDoneId = null; ytFilm = null;
-  $('ytOpen').hidden = true; $('ytPosts').hidden = true;
+  $('ytOpen').hidden = true; $('ytPosts').hidden = true; $('share').hidden = true;
   if ($('yt').open) $('yt').close();
 }
 async function ytLoad() {
