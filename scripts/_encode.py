@@ -168,6 +168,10 @@ SPEED = {
 # asks for a zero-bitrate VBR target on an encoder that already has a quality
 # target.
 QP_MAX = 51
+# the browser encoder's QP that looks like NVENC's cq of the same number (webcodecs()):
+# measured: docs/reference.md, "Encoding in the browser" -- QP 18 matched NVENC's cq 18 on both
+# films scored, and QP 20 fell below it
+WEBCODECS_QP_OFFSET = 0
 
 
 def amf_quality(q):
@@ -666,6 +670,45 @@ def video_args(cfg):
     out += profile_args(enc, cfg.get("profile"), cfg.get("level"))
     out += ["-pix_fmt", cfg.get("pix_fmt", "yuv420p")]
     return out
+
+
+def webcodecs(cfg, fps, width=1920, height=1080):
+    """The same intent for a browser page that encodes its own frames (WebCodecs' VideoEncoder)
+    instead of handing ffmpeg raw pixels -- sketch-render's `--encode browser`.
+
+    Shipping 8 MB of RGBA per frame out of the page capped a sketch render at ~22 fps however
+    many browsers ran; the page's own hardware encoder takes the canvas where it already is.
+    Measured on headless Edge (2026-09-28): H.264 on the hardware encoder takes every
+    bitrateMode, including "quantizer" -- a fixed QP per frame, 0-51, smaller is better, the
+    contract `cq` carries -- while HEVC is not offered at all and AV1 only in software.
+
+    Returns {"config": the VideoEncoder config, "quantizer": the per-frame QP, "gop": frames
+    between keyframes, "bsf": the bitstream filter the stream is wrapped with}. The browser's
+    encoder is not ffmpeg's, so `preset`, `maxrate`, `tuning` and `profile` have nothing to land
+    on here; High profile at level 4.2 covers 1080p60.
+
+    The colour matrix is BT.709 and the stream says nothing about it. Decoded against the
+    canvas's own pixels (26 frames, 2026-09-28) it scores 39.0 dB read as BT.709 and 36.1 dB
+    read as BT.601, with green off by +2.7 levels -- so the wrap writes the BT.709 tags, and no
+    player is left to guess. (ffmpeg's rgba -> yuv420p in video_args is BT.601 and untagged,
+    which a browser, guessing BT.709 for HD, shows 5.6 levels too dark in green.)
+    """
+    q = int(cfg.get("cq", cfg.get("quality", DEFAULT_QUALITY)))
+    return {
+        "config": {
+            "codec": "avc1.64002A",
+            "width": width,
+            "height": height,
+            "framerate": fps,
+            "hardwareAcceleration": "prefer-hardware",
+            "bitrateMode": "quantizer",
+            "avc": {"format": "annexb"},
+        },
+        "quantizer": max(0, min(QP_MAX, q + WEBCODECS_QP_OFFSET)),
+        "gop": int(cfg.get("gop") or 2 * fps),
+        "bsf": "h264_metadata=colour_primaries=1:transfer_characteristics=1"
+        ":matrix_coefficients=1:video_full_range_flag=0",
+    }
 
 
 def audio_args(cfg, rate=None, channels=2):

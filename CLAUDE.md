@@ -740,6 +740,7 @@ which cannot encode the glyphs at all.
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
 | `scripts/screencast-pipeline.py` | the silent-screencast job as one cached, checkpointed command; the stage scripts it drives are listed under pipeline 7 |
 | `docs/retro-books-giveaway.md` | where six hours went on the first silent-screencast edit, and the rule that now prevents each loss |
+| `docs/studio-speed.md` | where a studio film's time goes (an 8-minute film: 2 h 21 min), what each speed-up measured, and which are built, opt-in or undecided. Read it before buying hardware or re-arguing a switch |
 | `projects/<id>/` | one video: `project.json`, `journal.md`, its manifests + sidecars (committed), and its `sources/ audio/ transcripts/ outputs/ temp/` (gitignored) |
 | `config/presets/` | caption styling |
 | `config/vocab/` | ASR hotword lists per language: the acronyms and code-switched English Whisper has never seen. Names, clients and your own brands go in a gitignored `*.local.txt` beside them, never in a committed list — this repo is public |

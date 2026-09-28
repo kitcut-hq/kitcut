@@ -265,6 +265,31 @@ def test_audio_and_describe():
     )
 
 
+def test_webcodecs():
+    """The browser's encoder (sketch-render --encode browser) takes the same `cq` contract."""
+    print("== browser encoder (WebCodecs) ==")
+    w16, w21 = _encode.webcodecs({"cq": 16}, 60), _encode.webcodecs({"cq": 21}, 60)
+    check(
+        "a smaller cq is a smaller QP (a better picture), as everywhere else",
+        w16["quantizer"] < w21["quantizer"],
+    )
+    check(
+        "QP stays inside 0-51",
+        _encode.webcodecs({"cq": 99}, 60)["quantizer"] <= _encode.QP_MAX
+        and _encode.webcodecs({"cq": -9}, 60)["quantizer"] >= 0,
+    )
+    check("quality is a fixed QP per frame", w16["config"]["bitrateMode"] == "quantizer")
+    check(
+        "the GPU encoder is asked for", w16["config"]["hardwareAcceleration"] == "prefer-hardware"
+    )
+    check("a keyframe every 2 s unless gop says", w16["gop"] == 120)
+    check("gop is honoured", _encode.webcodecs({"gop": 30}, 60)["gop"] == 30)
+    check(
+        "the wrap tags BT.709 (the matrix the browser encodes with)",
+        "matrix_coefficients=1" in w16["bsf"] and "colour_primaries=1" in w16["bsf"],
+    )
+
+
 def test_live(tmp):
     """Hand each usable encoder the exact arguments a render would."""
     print("== live: the args a render would really send ==")
@@ -399,6 +424,7 @@ def main():
     test_speed()
     test_no_key_crosses_a_family()
     test_audio_and_describe()
+    test_webcodecs()
     if not args.table_only:
         test_resolve()
         test_decode()

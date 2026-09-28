@@ -54,7 +54,7 @@ body.render canvas { border-radius: 0; box-shadow: none; }
 // A syntax or top-level error in the film throws before the player below is listening; report the
 // first one now, or a render sits out its 90 s stall timeout and then says nothing useful.
 window.__early = function (e) {
-  if (window.__earlyErr || !/[?&](render|export|stills|automation)=/.test(location.search)) return;
+  if (window.__earlyErr || !/[?&](render|export|encode|stills|automation)=/.test(location.search)) return;
   // a cast member's script names itself (sketch-render: //# sourceURL=cast/<name>.js)
   const cast = /(cast\/[a-z0-9_]+\.js)$/.exec(e.filename || '');
   window.__earlyErr = String(e.message) + ' @' + (cast ? cast[1] + ':' : '') + e.lineno;
@@ -80,11 +80,13 @@ __FILM__
   // Modes (query string):
   //   (none)                interactive player
   //   ?render=1             no UI; window.__frame(t) draws one frame (manual capture)
-  //   ?export=1&fps&from&to  draw every frame and POST each PNG to /frame, then /done  (sketch-render.py)
+  //   ?export=1&fps&from&to  draw every frame and POST its raw RGBA to /frame, then /done  (sketch-render.py)
+  //   ?encode=<json>&fps&from&to  draw every frame into the browser's own H.264 encoder and POST
+  //                         the stream to /h264 in batches, then /done  (sketch-render.py --encode browser)
   //   ?stills=1.5,9,23.8    POST a PNG per time to /still, then /done
   //   ?automation=1         POST SK.automation() JSON to /automation, then /done
   const Q = new URLSearchParams(location.search);
-  const RENDER = Q.has('render') || Q.has('export') || Q.has('stills') || Q.has('automation');
+  const RENDER = Q.has('render') || Q.has('export') || Q.has('encode') || Q.has('stills') || Q.has('automation');
   const audio = document.getElementById('audio');
   const overlay = document.getElementById('overlay');
   const fill = document.getElementById('fill');
@@ -120,6 +122,38 @@ __FILM__
           // ("Failed to fetch" after ~100 frames), and skipping the PNG round trip is faster too
           const cx2 = cv.getContext('2d');
           for (let i = 0; i < n; i++) { SK.render(from + i / fps); await report('frame?i=' + i, cx2.getImageData(0, 0, cv.width, cv.height).data); }
+        }
+        if (Q.has('encode')) {
+          // the canvas goes to the encoder where it already is: no 8 MB readback and POST per
+          // frame, which is what capped ?export (_encode.webcodecs() has the measurements)
+          const fps = +Q.get('fps') || 60, from = +(Q.get('from') || 0), to = +(Q.get('to') || DUR);
+          const n = Math.round((to - from) * fps);
+          const E = JSON.parse(Q.get('encode'));
+          const sup = await VideoEncoder.isConfigSupported(E.config);
+          // sketch-render falls back to ?export on this exact prefix
+          if (!sup.supported) throw new Error('no-encoder: this browser will not encode ' + JSON.stringify(E.config));
+          let failed = null, out = [], coded = 0;
+          const enc = new VideoEncoder({
+            output: (c) => { const b = new Uint8Array(c.byteLength); c.copyTo(b); out.push(b); coded++; },
+            error: (e) => { failed = e; },
+          });
+          enc.configure(E.config);
+          // one POST per second of film: progress for the stall watchdog, and bounded memory
+          const send = async () => { if (out.length) { const body = new Blob(out); out = []; await report('h264?n=' + coded, body); } };
+          const us = 1e6 / fps;
+          for (let i = 0; i < n; i++) {
+            if (failed) throw failed;
+            SK.render(from + i / fps);
+            const f = new VideoFrame(cv, { timestamp: Math.round(i * us), duration: Math.round(us) });
+            enc.encode(f, { keyFrame: i % E.gop === 0, avc: { quantizer: E.quantizer } });
+            f.close();
+            while (enc.encodeQueueSize > 4 && !failed) await new Promise(r => setTimeout(r, 1));
+            if (out.length >= fps) await send();
+          }
+          await enc.flush();
+          if (failed) throw failed;
+          await send();
+          enc.close();
         }
         if (Q.has('stills')) for (const s of Q.get('stills').split(',')) { SK.render(+s); await report('still?t=' + s, await png()); }
         if (Q.has('automation')) await report('automation', JSON.stringify(SK.automation()));
