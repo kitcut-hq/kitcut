@@ -22,6 +22,8 @@ bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--api]   # on the Claude
 bash studio/deploy/ops.sh watch <film-id>
 bash studio/deploy/ops.sh pull <film-id> [dest] [--all]
 bash studio/deploy/ops.sh hide|show <film-id>       # public gallery
+bash studio/deploy/ops.sh replace <film-id> <folder>   # a remade film takes its place: same id
+                                                    # and page, old one to backups/, new URLs
 bash studio/deploy/ops.sh forward [8765]            # the VM's studio on this laptop's 127.0.0.1:8765
 bash studio/deploy/ops.sh snapshot [--keep 7]       # data disk: films, checkout, .env, models
 bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
@@ -47,6 +49,15 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
 - **Films made on the VM itself** (`ops.sh film`, `forward`) run on the Claude login
   (`CLAUDE_CODE_OAUTH_TOKEN`, info@instafill.ai, renew by 2027-09-28 -- a person must press
   Authorize); a sign-in failure falls back to the API key. kitcut.ai's films always use the key.
+
+## Replacing a film
+
+When a person's film should be remade (a studio fix made it better), make the new one with
+`studio/bakeoff.py` on the laptop (its `--only`, one prompt), review it, then
+`ops.sh replace <id> <bakeoff home>/<set>/<arm>/<prompt>/projects/<film>`. The page replays
+the film's log, so the log, review images and source files go with the video; the record keeps
+its person, project, prompt and cost. Check a figure the new film states against the page text
+it read (`web/<name>.txt`) before replacing: the person's name is on it.
 
 ## When something is wrong
 

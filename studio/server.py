@@ -775,7 +775,9 @@ async def status(req):
         ]
 
     r = f.record()
-    if J is None:  # made before this server started: what is on disk is all there is
+    # made before this server started, or since replaced by a remade film (ops.sh replace):
+    # what is on disk is all there is
+    if J is None or (J["status"] == "done" and r.get("replaced")):
         st = f.state
         st = {
             "done": "done",
