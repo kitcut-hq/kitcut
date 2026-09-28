@@ -103,10 +103,19 @@ run uv pip install --python .venv/bin/python $REQS
 run uv pip check --python .venv/bin/python
 
 if [ "$STUDIO" = 1 ]; then
-  step "6. Whisper models (the studio runs offline)"
+  # into $HF_HOME when it is set -- the studio VM keeps them on its data disk, which outlives a
+  # rebuild of the machine (7 GB that would otherwise download again)
+  step "6. Whisper models (the studio runs offline) -> ${HF_HOME:-~/.cache/huggingface}"
   for m in $WHISPER_MODELS; do
     run .venv/bin/python -c "from faster_whisper import download_model; print('  ', '$m', download_model('$m'))"
   done
+
+  step "6b. Claude Code (films on the machine's own login)"
+  if [ -x "$HOME/.local/bin/claude" ]; then
+    echo "  present: $("$HOME/.local/bin/claude" --version)"
+  else
+    run bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
+  fi
 fi
 
 step "7. verify"

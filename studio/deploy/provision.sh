@@ -5,7 +5,8 @@
 #   bash studio/deploy/provision.sh <vm> <size> [--data-gb 512] [--dry-run]
 #   e.g. bash studio/deploy/provision.sh kitcut-studio-1 Standard_D8ads_v5
 #
-# 1. the VM (vm.sh create): Ubuntu 24.04, Standard HDD, SSH from this machine only
+# 1. the VM (vm.sh create): Ubuntu 24.04, Standard HDD, no public IP -- on the WireGuard VPN
+#    (vm.sh network); a rebuild reattaches the existing data disk
 # 2. the data disk formatted and mounted at /srv/kitcut (checkout, studio home)
 # 3. timezone America/Los_Angeles: the studio's daily caps count days in local time, as on the laptop
 # 4. the checkout: pushed from this laptop (push.sh) -- KITCUT_BRANCH (default studio-poc) and the
@@ -52,7 +53,12 @@ step "1. the VM"
 if az vm show -g "${KITCUT_RG:-kitcut-PROD}" -n "$VM" >/dev/null 2>&1; then
   echo "  exists: $VM ($(vm ip "$VM"))"
 else
-  run vm create "$VM" "$SIZE" --data-gb "$DATA_GB"
+  # the data disk outlives the machine: a rebuild reattaches it, films, checkout and .env included
+  if az disk show -g "${KITCUT_RG:-kitcut-PROD}" -n "$VM-data" >/dev/null 2>&1; then
+    run vm create "$VM" "$SIZE" --attach "$VM-data"
+  else
+    run vm create "$VM" "$SIZE" --data-gb "$DATA_GB"
+  fi
 fi
 
 step "2. data disk at /srv/kitcut"
@@ -75,7 +81,7 @@ step "4. the checkout"
 if [ "$DRY" = 1 ]; then echo "  would run: push.sh $VM $BRANCH"; else bash "$HERE/push.sh" "$VM" "$BRANCH"; fi
 
 step "5. the toolchain"
-on 'cd /srv/kitcut/repo && bash scripts/setup-linux.sh --studio 2>&1 | tail -4'
+on 'cd /srv/kitcut/repo && HF_HOME=/srv/kitcut/hf bash scripts/setup-linux.sh --studio 2>&1 | tail -4'
 
 step "6. the studio's .env"
 if [ "$DRY" = 1 ]; then echo "  would write $VM:/srv/kitcut/repo/.env from $ENV_SRC ($KEYS) + $MACHINE_ENV"; else
