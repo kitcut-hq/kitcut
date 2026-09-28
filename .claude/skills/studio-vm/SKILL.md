@@ -5,8 +5,8 @@ description: Operate the production Sketch Studio (kitcut.ai's film maker) on it
 
 # The studio VM
 
-kitcut.ai's studio runs on **kitcut-studio-1** (Azure, `kitcut-PROD`, D8ads_v5, Ubuntu) since
-2026-09-28 -- not on the laptop. It has no public IP: the laptop reaches it over the WireGuard VPN
+kitcut.ai's studio runs on **kitcut-studio-1** (Azure, `kitcut-PROD`, D4ads_v5 -- 4 vCPU, 16 GB,
+down from D8ads_v5 the same evening -- Ubuntu) since 2026-09-28 -- not on the laptop. It has no public IP: the laptop reaches it over the WireGuard VPN
 (10.0.13.4). Nobody logs in by hand; everything below runs from the laptop's checkout.
 `studio/deploy/README.md` is the runbook and holds the measurements.
 
@@ -18,7 +18,8 @@ bash studio/deploy/ops.sh --dry-run ship [<commit>] # what a ship would do
 bash studio/deploy/ops.sh ship [<commit>]           # default: origin/studio-poc's head
 bash studio/deploy/ops.sh releases                  # built releases, current marked *
 bash studio/deploy/ops.sh rollback <sha12>          # back to one already built, no rebuild
-bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--api]   # on the Claude login unless --api
+bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--api] [--unlisted]   # on the Claude login unless --api;
+                                                                  # --unlisted keeps a test out of the gallery
 bash studio/deploy/ops.sh watch <film-id>
 bash studio/deploy/ops.sh pull <film-id> [dest] [--all]
 bash studio/deploy/ops.sh hide|show <film-id>       # public gallery
@@ -71,3 +72,13 @@ it read (`web/<name>.txt`) before replacing: the person's name is on it.
    .venv/bin/python ...`) -- the release shares that venv -- but add it to the requirements too.
 5. The machine itself: `vm.sh` (resize, stop/start); rebuild with `provision.sh` (idempotent,
    reattaches the data disk).
+
+## Resizing
+
+`vm.sh resize <name> <size>` deallocates, resizes and starts (about 3 minutes). Stop the studio
+first so nothing is cut off and the site shows it offline: `vm.sh ssh <name> 'bash
+/srv/kitcut/repo/studio/serve.sh stop'` (it drains). The units start with the machine. Then set
+the pools for the new size in the VM's `.env` (`STUDIO_RENDER_JOBS`, `STUDIO_BROWSERS`: the core
+count; `STUDIO_MACHINE_SLOWDOWN`), `serve.sh restart`, and make one `ops.sh film ... --unlisted`
+to measure it: compare frames per second (length x fps / `stages.render`), not seconds, because
+Free films render at 30 fps. The numbers per size are in `studio/deploy/README.md`.
