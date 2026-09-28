@@ -129,7 +129,7 @@ case "$cmd" in
     disks=()
     [ -n "$ATTACH" ] && disks=(--attach-data-disks "$(az disk show -g "$RG" -n "$ATTACH" --query id -o tsv)")
     run az vm create -g "$RG" -n "$name" -l "$LOC" --image "$IMAGE" --size "$size" \
-      --admin-username "$ADMIN" --ssh-key-values "$KEY.pub" \
+      --admin-username "$ADMIN" --ssh-key-values "$(cat "$KEY.pub")" \
       --storage-sku Standard_LRS --os-disk-size-gb "$OS_GB" "${net[@]}" "${disks[@]}" \
       --tags app=kitcut-studio --os-disk-delete-option Delete \
       --output none
