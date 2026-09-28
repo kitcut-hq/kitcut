@@ -398,8 +398,9 @@ organizations without Zero Data Retention").
 
 ## Other systems
 
-Nothing here is Windows-only in principle, but it has only been run on Windows (the process
-containment is a Job Object there, a process group elsewhere). Elsewhere it needs Python 3.13,
-Node, ffmpeg and Chrome, Chromium or Edge (`html-to-image.py` finds them). `serve.ps1` is
-Windows-only; elsewhere run `server.py` with `STUDIO_HOME` set, and `cloudflared tunnel --url
-http://127.0.0.1:8765` yourself.
+The public studio runs on Linux: an Azure VM, Ubuntu 24.04 under systemd, with no GPU.
+`studio/deploy/README.md` is its runbook: provisioning (`provision.sh`), releases
+(`serve.sh`, the Linux `serve.ps1`), what the VM does differently and the measurements behind each
+setting (the render encodes in the browser in software; a step's containment is a cgroup v2
+instead of a Job Object). `scripts/setup-linux.sh --studio` builds the toolchain on any Ubuntu
+24.04. Outside systemd a step leads a process group of its own and has no memory cap.

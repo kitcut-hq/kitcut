@@ -448,3 +448,26 @@ yet cost a render.
 scenedetect 0.7.1; `auto-reframe.py` on `bbg-nvidia-hf` warns and then completes
 with faces found in 186/186 and 158/160 sampled frames.
 
+### KI-029 · limitation · render · With no GPU, the browser's H.264 takes a bitrate, not a quality
+
+**Symptom.** On a machine with no GPU encoder (the studio's Azure VM) `sketch-render.py --encode
+browser` prints `no-encoder: this browser will not encode {...prefer-hardware...}` and renders
+through the ffmpeg pipe instead, at a third of the speed.
+**Cause.** WebCodecs' H.264 on the GPU accepts `bitrateMode: "quantizer"` (a fixed QP, the `cq`
+contract). The browser's software H.264 (OpenH264) does not: Edge 154 on Ubuntu 24.04 offers only
+`variable` and `constant`. VP9 and AV1 take quantizer in software, but the master must be H.264.
+**Workaround.** `VIDEDIT_WEBCODECS=software` (or `render.webcodecs`) asks for the software encoder
+at `VIDEDIT_WEBCODECS_BITRATE` (default 24M). The VM runs 12M: VMAF 99.1 on a painted film, 99.99
+on line art; 5M scored 91.6 on the painted film. A bitrate is a ceiling the film does not choose,
+so a much busier look than any film so far may want more.
+**Evidence.** `studio/deploy/README.md`: D8ads_v5 35 fps software vs 18.8 fps pipe, same frames.
+
+### KI-030 · limitation · all · A laptop film's Claude session does not resume on the VM
+
+**Symptom.** Resuming a timed-out film's Claude session (`ClaudeAgentOptions(resume=sid)`, the
+`resume_film.py` route) fails, or works in the wrong folder, for a film made before the studio
+moved to the Azure VM.
+**Cause.** Claude Code keys a session transcript to its working directory, and the copied
+transcripts under `STUDIO_HOME/claude/<film>` record the laptop's `C:\` paths.
+**Workaround.** Finish such a film from its files (the studio's tools), not by resuming the
+session. Films made on the VM resume as before.

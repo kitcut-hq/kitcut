@@ -106,9 +106,28 @@ against the PNG), WebP 214 ms, raw pixels 108 ms, a 192x108 copy 58 ms. About 45
 still is drawing, which no format removes. A 12-still review sheet also pays ~3 s of fixed
 browser and Python start-up.
 
+## A CPU-only machine: the Azure VM (2026-09-28)
+
+The studio moved off the laptop to an Azure VM with no GPU (`studio/deploy/README.md` has the
+full tables and the method). On the 8-minute film's frames, quality as VMAF against a lossless
+render of the same frames:
+
+- **The render:** the browser's *software* H.264 (OpenH264) in the page, 12 Mbps: 35 fps on
+  D8ads_v5 (8 vCPU), 45.5 on F16s_v2 (16), VMAF 99.99 (99.1 on a painted film). The pipe on the
+  same machines: 19-25 fps, VMAF 94.6-95.5, up to 3x the memory. The laptop's NVENC path: 54 fps.
+  The software encoder refuses "quantizer", so it runs at a bitrate; 5 Mbps scored 91.6 on the
+  painted film.
+- **Everything else is faster than the laptop:** Whisper word timing for 8 minutes of narration
+  46 s (laptop 2.5-4 min), the soundtrack master 35 s (66 s), a motion-check still 0.22 s (~0.4).
+- **The new cost is the web copy,** libx264 on the CPU: ~2.7 min for 8 minutes at `veryfast`,
+  which scored the same as `medium` (VMAF 99.99) in 40 % of the time.
+- Found on the way: the pipe's colour is fixed on its own (converted to BT.709 and tagged); a
+  lossless pipe render and the browser's software encode now score 99.99 against each other.
+
 ## Open decisions
 
 1. ~~Switch the studio to parallel narration~~ -- done 2026-09-28, 8 at once.
 2. ~~Switch the studio to encoding in the browser~~ -- done 2026-09-28: no visible difference but colour, which the browser path gets right; masters up to 1.7x bigger.
 3. Build JPEG stills and the parallel motion check (#6)?
-4. Whisper on the GPU (#2) waits on the dedicated render machine.
+4. ~~Whisper on the GPU (#2) waits on the dedicated render machine~~ -- moot on the VM: its CPU
+   times 8 minutes of narration in 46 s.

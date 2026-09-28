@@ -8,8 +8,8 @@
 # 1. the VM (vm.sh create): Ubuntu 24.04, Standard HDD, SSH from this machine only
 # 2. the data disk formatted and mounted at /srv/kitcut (checkout, studio home)
 # 3. timezone America/Los_Angeles: the studio's daily caps count days in local time, as on the laptop
-# 4. the checkout: kitcut-hq/kitcut over a read-only deploy key, tags included (release.py), on
-#    KITCUT_BRANCH (default studio-poc)
+# 4. the checkout: pushed from this laptop (push.sh) -- KITCUT_BRANCH (default studio-poc) and the
+#    studio-stable tag; the VM holds no GitHub credentials
 # 5. the toolchain: scripts/setup-linux.sh --studio (ffmpeg, Edge, Python, Whisper models)
 # 6. the studio's .env: only the keys the studio reads (procs.py), never STUDIO_ANNOUNCE -- that
 #    is set at cutover, or a VM that booted would point kitcut.ai at itself -- plus the machine's
@@ -33,9 +33,7 @@ while [ $# -gt 0 ]; do
 done
 ENV_SRC="${KITCUT_ENV_FILE:-$REPO_LOCAL/.env}"
 [ -f "$ENV_SRC" ] || ENV_SRC="$(git -C "$REPO_LOCAL" worktree list | head -1 | cut -d' ' -f1)/.env"
-GITHUB_REPO="kitcut-hq/kitcut"
 BRANCH="${KITCUT_BRANCH:-studio-poc}"
-DEPLOY_KEY="$HOME/.ssh/kitcut-studio-deploy"
 # the keys studio/procs.py hands to steps, and the studio's own settings -- nothing else travels
 KEYS="ANTHROPIC_API_KEY MONGODB_URI GOOGLE_SERVICE_ACCOUNT_KEY GOOGLE_CLOUD_PROJECT GOOGLE_CLOUD_LOCATION GEMINI_API_KEY ELEVENLABS_API_KEY OPENROUTER_API_KEY STUDIO_TOKEN STUDIO_MEDIA_BASE STUDIO_MEDIA_SAS STUDIO_TTS_MODEL STUDIO_TUNNEL STUDIO_TUNNEL_HOST"
 # this machine's own settings (measured on the VMs, 2026-09-28; deploy/README.md)
@@ -70,20 +68,7 @@ step "3. timezone"
 on 'sudo timedatectl set-timezone America/Los_Angeles && timedatectl | grep "Time zone"'
 
 step "4. the checkout"
-[ -f "$DEPLOY_KEY" ] || run ssh-keygen -t ed25519 -N "" -C "$VM deploy (read-only)" -f "$DEPLOY_KEY"
-if ! gh repo deploy-key list -R "$GITHUB_REPO" 2>/dev/null | grep -q "$VM"; then
-  run gh repo deploy-key add "$DEPLOY_KEY.pub" -R "$GITHUB_REPO" --title "$VM (studio VM, read-only)"
-fi
-if [ "$DRY" = 1 ]; then echo "  would copy $DEPLOY_KEY to $VM:~/.ssh/github"; else
-  vm ssh "$VM" 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat > ~/.ssh/github && chmod 600 ~/.ssh/github' < "$DEPLOY_KEY"
-fi
-on 'set -e
-grep -q "Host github.com" ~/.ssh/config 2>/dev/null || printf "Host github.com\n  IdentityFile ~/.ssh/github\n  IdentitiesOnly yes\n  StrictHostKeyChecking accept-new\n" >> ~/.ssh/config
-if [ -d /srv/kitcut/repo/.git ]; then git -C /srv/kitcut/repo fetch --tags --force origin; else
-  git clone git@github.com:'"$GITHUB_REPO"'.git /srv/kitcut/repo; fi
-git -C /srv/kitcut/repo checkout -q '"$BRANCH"'
-git -C /srv/kitcut/repo merge -q --ff-only origin/'"$BRANCH"'
-git -C /srv/kitcut/repo log --oneline -1'
+if [ "$DRY" = 1 ]; then echo "  would run: push.sh $VM $BRANCH"; else bash "$HERE/push.sh" "$VM" "$BRANCH"; fi
 
 step "5. the toolchain"
 on 'cd /srv/kitcut/repo && bash scripts/setup-linux.sh --studio 2>&1 | tail -4'
