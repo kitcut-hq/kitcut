@@ -34,6 +34,12 @@ from sched import Sched  # noqa: E402
 
 from aiohttp.test_utils import TestClient, TestServer  # noqa: E402
 
+# no copy online: with the studio's .env present (a production checkout -- the Azure VM) the stub
+# films were uploaded to the real films container, six of them before anyone noticed. The copy
+# online has its own test against a stand-in (test_media.py).
+os.environ.pop("STUDIO_MEDIA_BASE", None)
+server.procs.SECRETS.pop("STUDIO_MEDIA_SAS", None)
+
 TOKEN = "test-token"
 USAGE = {"input_tokens": 1000, "output_tokens": 2000, "cache_read_input_tokens": 100000}
 CLAUDE_USD = (1000 * 4 + 2000 * 20 + 100000 * 0.2) / 1e6  # Opus 5.5 prices: $0.064
