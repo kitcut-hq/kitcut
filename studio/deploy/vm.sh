@@ -118,14 +118,20 @@ case "$cmd" in
     else
       network
       echo "creating $name ($size) in $RG/$LOC, on the VPN only (no public IP)"
-      net=(--subnet "$(subnet_id)" --public-ip-address "" --nsg "")
+      # the NIC first, then the VM on it: `vm create --subnet <id>` refuses a subnet in another
+      # resource group ("does not exist", az 2.49) although the id is right
+      if ! az network nic show -g "$RG" -n "${name}-nic" >/dev/null 2>&1; then
+        run az network nic create -g "$RG" -n "${name}-nic" -l "$LOC" --subnet "$(subnet_id)" \
+          --tags app=kitcut-studio --output none
+      fi
+      net=(--nics "$(az network nic show -g "$RG" -n "${name}-nic" --query id -o tsv 2>/dev/null)")
     fi
     disks=()
     [ -n "$ATTACH" ] && disks=(--attach-data-disks "$(az disk show -g "$RG" -n "$ATTACH" --query id -o tsv)")
     run az vm create -g "$RG" -n "$name" -l "$LOC" --image "$IMAGE" --size "$size" \
       --admin-username "$ADMIN" --ssh-key-values "$KEY.pub" \
       --storage-sku Standard_LRS --os-disk-size-gb "$OS_GB" "${net[@]}" "${disks[@]}" \
-      --tags app=kitcut-studio --os-disk-delete-option Delete --nic-delete-option Delete \
+      --tags app=kitcut-studio --os-disk-delete-option Delete \
       --output none
     if [ "$PUBLIC" = 1 ]; then
       run az network nsg rule create -g "$RG" --nsg-name "${name}NSG" -n ssh-laptop \
@@ -160,6 +166,9 @@ case "$cmd" in
     run az network public-ip delete -g "$RG" -n "${name}PublicIP" 2>/dev/null || true
     run az network vnet delete -g "$RG" -n "${name}VNET" 2>/dev/null || true
     run az network nsg delete -g "$RG" -n "${name}NSG" 2>/dev/null || true
+    # its NIC: made by us on the VPN (-nic), or by az beside a --public machine (VMNic)
+    run az network nic delete -g "$RG" -n "${name}-nic" 2>/dev/null || true
+    run az network nic delete -g "$RG" -n "${name}VMNic" 2>/dev/null || true
     ;;
   price)
     size="${args[0]}"
