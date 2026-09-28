@@ -133,5 +133,11 @@ back what the VM made.
 
 - A Claude session transcript from the laptop records Windows paths, so resuming a timed-out
   laptop film's Claude session (`resume_film.py`) works only for films made on the VM.
-- `auth=login` (the machine's own Claude subscription) is not set up on the VM; public films
-  always use the API key.
+- Films asked for on the VM itself run on the Claude subscription (`auth=login`), as on the
+  laptop; films from kitcut.ai always use the API key. Claude Code is installed natively
+  (`curl -fsSL https://claude.ai/install.sh | bash`, `~/.local/bin/claude`) and signed in by
+  `CLAUDE_CODE_OAUTH_TOKEN` in the VM's `.env` -- a 1-year token from `claude setup-token`
+  (made 2026-09-28 for info@instafill.ai; renew before 2027-09-28). `provision.sh` keeps it.
+  To renew: run `claude setup-token` on the VM in tmux, open its URL wherever you are signed in
+  to claude.ai, press Authorize (a person must; the button refuses automation) and paste the
+  code back within a few minutes -- the waiting CLI times out.

@@ -35,7 +35,7 @@ ENV_SRC="${KITCUT_ENV_FILE:-$REPO_LOCAL/.env}"
 [ -f "$ENV_SRC" ] || ENV_SRC="$(git -C "$REPO_LOCAL" worktree list | head -1 | cut -d' ' -f1)/.env"
 BRANCH="${KITCUT_BRANCH:-studio-poc}"
 # the keys studio/procs.py hands to steps, and the studio's own settings -- nothing else travels
-KEYS="ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN MONGODB_URI GOOGLE_SERVICE_ACCOUNT_KEY GOOGLE_CLOUD_PROJECT GOOGLE_CLOUD_LOCATION GEMINI_API_KEY ELEVENLABS_API_KEY OPENROUTER_API_KEY STUDIO_TOKEN STUDIO_MEDIA_BASE STUDIO_MEDIA_SAS STUDIO_TTS_MODEL STUDIO_TUNNEL STUDIO_TUNNEL_HOST"
+KEYS="ANTHROPIC_API_KEY MONGODB_URI GOOGLE_SERVICE_ACCOUNT_KEY GOOGLE_CLOUD_PROJECT GOOGLE_CLOUD_LOCATION GEMINI_API_KEY ELEVENLABS_API_KEY OPENROUTER_API_KEY STUDIO_TOKEN STUDIO_MEDIA_BASE STUDIO_MEDIA_SAS STUDIO_TTS_MODEL STUDIO_TUNNEL STUDIO_TUNNEL_HOST"
 # this machine's own settings (measured on the VMs, 2026-09-28; deploy/README.md)
 MACHINE_ENV="${KITCUT_MACHINE_ENV:-$HERE/machine.env}"
 
@@ -89,7 +89,12 @@ for line in open(path, encoding="utf-8-sig"):
         print(line.rstrip("\r\n"))
 PY
     [ -f "$MACHINE_ENV" ] && grep -vE '^\s*(#|$)' "$MACHINE_ENV"
-  } | vm ssh "$VM" 'umask 077 && cat > /srv/kitcut/repo/.env && grep -c = /srv/kitcut/repo/.env | sed "s/^/  keys: /"'
+  } | vm ssh "$VM" 'set -e; umask 077; cd /srv/kitcut/repo
+    cat > .env.new
+    # what only the VM holds survives a re-provision: its Claude login and, after the move, its
+    # right to announce itself
+    [ -f .env ] && grep -E "^(CLAUDE_CODE_OAUTH_TOKEN|STUDIO_ANNOUNCE)=" .env >> .env.new || true
+    mv .env.new .env && grep -c = .env | sed "s/^/  keys: /"'
 fi
 
 step "7. tunnel credentials and the units"
