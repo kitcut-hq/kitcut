@@ -217,6 +217,22 @@ curl -s $BASE/api/films/<id>/youtube/<post id> -H "Authorization: Bearer $TOKEN"
 - **Sends are kept in memory.** After a restart the site asks again, and the send picks up from
   what YouTube already has. The studio never holds a Google token.
 
+**The title and description** (`ytdraft.py`) are written from the film, in the channel's voice.
+The site reads the channel's latest uploads with its grant and sends them; the studio adds what
+the film is (the narration with its times, who it is for, the pages its facts came from, what
+Claude said it made) and asks Claude once:
+
+```bash
+curl -s -X POST $BASE/api/films/<id>/youtube/draft -H "Authorization: Bearer $TOKEN" -H "X-Client-Ip: u:<account>"      -H "Content-Type: application/json" -d '{"channel": {"id": "UC...", "title": "...", "handle": "@..."}, "recent": [{"title", "description", "tags"}]}'
+# 202 {"state": "writing"}, or 200 with the draft when it is already written
+curl -s $BASE/api/films/<id>/youtube/draft/<channel id> -H "Authorization: Bearer $TOKEN" -H "X-Client-Ip: u:<account>"
+# {"state": "writing|done|failed", "title", "description", "tags", "language", "error"}
+```
+
+Only links it was given survive, chapters must fit the film, and a draft that pastes the prompt
+back is refused. Try one by hand with `python studio/ytdraft.py --film <id> --sample-from @handle`
+(`--plan` prints the ask and its price). Details: `docs/reference.md`.
+
 ## What it costs, and where that is recorded
 
 Every run is a document in **MongoDB `kitcut.studio_runs`**. That's the database kitcut-web uses:

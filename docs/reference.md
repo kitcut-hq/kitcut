@@ -3282,7 +3282,7 @@ Lite first and Whisper turbo if that fails. Three things the table does not show
 
 A person connects one or more YouTube channels on kitcut.ai and publishes a finished film of their
 own to any of them. The design and the page are in the site's README ("YouTube"). This is the
-studio's half, which is only the bytes:
+studio's half: the bytes, and the draft of the title and description (next section).
 
 - **The site owns everything Google-facing.** It holds the channel grants, sealed in
   `kitcut.youtube_channels`, and opens a resumable upload session with the title, description and
@@ -3312,6 +3312,44 @@ studio's half, which is only the bytes:
   - a pre-filled session gets only the rest;
   - a repeated key sends nothing new;
   - someone else's send is invisible.
+
+#### The title and description: `studio/ytdraft.py`
+
+The publish dialog opens with a title, a description and tags written from the film, not the
+prompt pasted in. Each side brings what only it has:
+
+- **The site brings the channel's voice.** With the `youtube.readonly` scope it already holds, it
+  reads the channel's latest uploads (titles, descriptions, tags; KitCut's own earlier posts left
+  out, so a pasted prompt cannot teach the voice). It posts them to
+  `POST /api/films/<id>/youtube/draft` `{"channel": {"id", "title", "handle"}, "recent": [...]}`.
+  Nothing of them is stored on either side.
+- **The studio brings the film.** `material()` reads the narration with each line's times
+  (`audio/vo/timeline.json`), who it was made for (film.js line 1) and the maker's note under it,
+  the paintings' prompts, the pages the facts came from (`web/sources.json` for pages read in the
+  browser, `events.jsonl` for WebFetch), what Claude said when it finished (its "please check"
+  notes included), the project, and the review sheet as one image. The prompt goes in marked
+  private: the request, not the film.
+- **One call, no tools.** Opus 5.5 at effort medium: 6-13 s and $0.05-0.13 a draft, measured
+  2026-09-28 on five films. Sonnet 5 wrote a correct but plainer draft at half the price; Opus
+  followed the channel's own structure ("In this video:", its links, its tagline).
+- **`check()` holds the answer to its inputs.** Only links that appear in the channel's own
+  descriptions or among the pages read survive; chapters must start at 0:00, be in order and end
+  inside the film, or the block goes with its heading; the title is one line cut at a word to 100
+  characters, the description 4,500 bytes (the site adds its credit line), the tags 500
+  characters counted YouTube's way. A draft that shares a run of 7 words with the prompt that
+  the film itself does not say is asked for again once, then given up; the site falls back to
+  its own defaults.
+- **Kept, and costed.** A draft is saved as `youtube/draft-<channel>.json` in the film, keyed by
+  everything it was written from, so asking again is free until the film or the uploads change
+  (`ops.sh replace` makes a new one). `youtube_drafts` and `youtube_draft_cost_usd` go on the
+  record and the run; on the key the cost joins `cost_usd`, so the day's budget sees it. At most
+  12 drafts per film.
+- **Try it by hand.** `python studio/ytdraft.py --film <id|folder> --sample-from @handle --plan`
+  prints the ask and its price and calls nothing; without `--plan` it writes the draft (on this
+  machine's login, not logged). `--sample-from` reads a public channel with yt-dlp.
+- **The test.** `python studio/test_ytdraft.py` stands in for Claude: the material, the link and
+  chapter rules, the prompt check, the cache, the cost, and the API (owner only, finished only,
+  202 then the draft).
 
 ## Projects: one folder and two files per video
 
