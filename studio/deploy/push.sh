@@ -26,5 +26,5 @@ if [ ! -d /srv/kitcut/repo/.git ]; then git clone -q /srv/kitcut/git /srv/kitcut
 cd /srv/kitcut/repo
 git fetch -q --force --tags origin
 # the checkout only ever mirrors what was pushed (its .env and .venv are untracked)
-git checkout -q -B '"$BRANCH"' origin/'"$BRANCH"'
+git checkout -q -f -B '"$BRANCH"' origin/'"$BRANCH"'
 echo "  $(hostname): $(git log --oneline -1)"'

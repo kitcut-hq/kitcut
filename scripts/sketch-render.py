@@ -326,7 +326,15 @@ class Session:
                 "--no-pings",
             ]
         cmd.append(url)
-        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        env, sock = None, None
+        if os.name != "nt":
+            # Chromium's singleton socket goes in $TMPDIR, and a Unix socket's path may not pass
+            # 107 bytes. The studio puts TMPDIR inside the film (projects/<film>/temp/tmp), which
+            # on the VM reached 108 and every browser died at start (FATAL "Socket path too
+            # long", exit -6). The socket gets a short private folder; the profile stays put.
+            sock = tempfile.mkdtemp(prefix="skr-", dir="/tmp")
+            env = {**os.environ, "TMPDIR": sock}
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
         try:
             while not self.done.wait(1.0):
                 if proc.poll() is not None:
@@ -339,6 +347,8 @@ class Session:
             kill_tree(proc)
             self.server.shutdown()
             shutil.rmtree(prof, ignore_errors=True)
+            if sock:
+                shutil.rmtree(sock, ignore_errors=True)
         if self.error and fatal:
             sys.exit("page error: %s" % self.error)
         return self.error

@@ -50,7 +50,12 @@ def main():
             ("Read", {"file_path": kit_env}, False),
             ("Read", {"file_path": os.path.join(films.KIT, "sketch", "engine.js")}, False),
             ("Read", {"file_path": "/c/instafill/kitcut/.env"}, False),
-            ("Read", {"file_path": "C:/Windows/win.ini"}, False),
+            # a system file: on Linux "C:/..." is only a relative name inside the film
+            (
+                "Read",
+                {"file_path": "C:/Windows/win.ini" if os.name == "nt" else "/etc/passwd"},
+                False,
+            ),
             ("Read", {"file_path": os.path.join(HOME, "claude", A.id, ".claude.json")}, False),
             ("Write", {"file_path": "film.js"}, True),
             ("Write", {"file_path": A.path("score.json")}, True),
