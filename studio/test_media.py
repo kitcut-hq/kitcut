@@ -179,6 +179,18 @@ async def main():
         n = await media.delete(f.id)
         check(n == 5 and not BLOBS, "delete removes them all", (n, list(BLOBS)))
         check(await media.delete(f.id) == 0, "deleting again finds nothing, and says so")
+
+        # a film whose picture was replaced: its files under new URLs (the old ones are cached
+        # for a year), and a delete given its record's URLs finds them there
+        await media.publish(f)
+        urls = await media.publish(f, revision="r2")
+        check(
+            all("/%s/r2/" % f.id in u for u in urls.values()) and len(urls) == 5,
+            "a revision: every file under <id>/r2/",
+            urls,
+        )
+        n = await media.delete(f.id, urls=urls.values())
+        check(n == 10 and not BLOBS, "delete with the record's URLs removes both", (n, list(BLOBS)))
     finally:
         await srv.close()
     print("%d failed" % len(bad))
