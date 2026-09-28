@@ -121,6 +121,10 @@ def claude_env(film=None, auth="api"):
         cfg = film.claude_dir if film else os.path.join(HOME, "claude", "_smoke")
         os.makedirs(cfg, exist_ok=True)
         env.update(ANTHROPIC_API_KEY=key, CLAUDE_CONFIG_DIR=cfg)
+    elif procs.secret("CLAUDE_CODE_OAUTH_TOKEN"):
+        # a machine nobody logs into (the Azure VM) carries its login as a long-lived token
+        # (`claude setup-token`), not as an interactive /login in its config folder
+        env["CLAUDE_CODE_OAUTH_TOKEN"] = procs.secret("CLAUDE_CODE_OAUTH_TOKEN")
     return env
 
 

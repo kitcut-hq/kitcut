@@ -15,6 +15,8 @@ Environment=STUDIO_REPO=@REPO@
 Environment=STUDIO_ENV_FILE=@REPO@/.env
 Environment=TZ=America/Los_Angeles
 Environment=PYTHONUNBUFFERED=1
+# Claude Code's native install (~/.local/bin/claude), for films on the machine's login
+Environment=PATH=/home/@USER@/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=@REPO@/studio/deploy/run-server.sh
 ExecStartPost=@REPO@/studio/deploy/announce.sh up
 ExecStopPost=@REPO@/studio/deploy/announce.sh off
