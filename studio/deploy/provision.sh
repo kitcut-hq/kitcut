@@ -105,15 +105,25 @@ PY
     [ -f "$MACHINE_ENV" ] && grep -vE '^\s*(#|$)' "$MACHINE_ENV"
   } | vm ssh "$VM" 'set -e; umask 077; cd /srv/kitcut/repo
     cat > .env.new
-    # what only the VM holds survives a re-provision: its Claude login and, after the move, its
-    # right to announce itself
-    [ -f .env ] && grep -E "^(CLAUDE_CODE_OAUTH_TOKEN|STUDIO_ANNOUNCE)=" .env >> .env.new || true
+    # what only the VM holds survives a re-provision: its Claude login, and since the move its
+    # right to announce itself and the tunnel (the laptop .env has them commented out now)
+    if [ -f .env ]; then
+      for k in CLAUDE_CODE_OAUTH_TOKEN STUDIO_ANNOUNCE STUDIO_TUNNEL STUDIO_TUNNEL_HOST; do
+        grep -q "^$k=" .env.new || grep -E "^$k=" .env >> .env.new || true
+      done
+    fi
     mv .env.new .env && grep -c = .env | sed "s/^/  keys: /"'
 fi
 
 step "7. tunnel credentials and the units"
-if [ "$DRY" = 1 ]; then echo "  would copy ~/.cloudflared/*.json and cert.pem"; else
-  tar -C "$HOME/.cloudflared" -cf - . | vm ssh "$VM" 'mkdir -p ~/.cloudflared && chmod 700 ~/.cloudflared && tar -xf - -C ~/.cloudflared && chmod 600 ~/.cloudflared/*'
+# only onto a VM that has none: since the move the VM holds the tunnel, and the laptop keeps its
+# copy in ~/.cloudflared/backup-*/ for a rollback (so it cannot start a second connector)
+if [ "$DRY" = 1 ]; then echo "  would copy ~/.cloudflared (if the VM has no tunnel credentials)"; else
+  if vm ssh "$VM" 'ls ~/.cloudflared/*.json >/dev/null 2>&1'; then
+    echo "  the VM already holds the tunnel credentials"
+  else
+    tar -C "$HOME/.cloudflared" -cf - --exclude='backup-*' . | vm ssh "$VM" 'mkdir -p ~/.cloudflared && chmod 700 ~/.cloudflared && tar -xf - -C ~/.cloudflared && chmod 600 ~/.cloudflared/*'
+  fi
 fi
 on 'bash /srv/kitcut/repo/studio/deploy/install.sh --home /srv/kitcut/studio'
 
