@@ -7,6 +7,7 @@
 #
 # Then ship it: bash studio/deploy/vm.sh ssh <vm> 'bash /srv/kitcut/repo/studio/serve.sh release'
 set -euo pipefail
+unset MSYS_NO_PATHCONV  # git (a Windows exe) must still get /c/... paths translated; vm.sh sets its own
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_LOCAL="$(cd "$HERE/../.." && pwd)"
 VM="${1:?vm name}"

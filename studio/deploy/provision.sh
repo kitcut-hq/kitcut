@@ -19,6 +19,7 @@
 #
 # It does not start the studio: that is the cutover (deploy/README.md).
 set -euo pipefail
+unset MSYS_NO_PATHCONV  # git (a Windows exe) must still get /c/... paths translated; vm.sh sets its own
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_LOCAL="$(cd "$HERE/../.." && pwd)"
 VM="${1:?vm name}"; SIZE="${2:?vm size}"; shift 2
