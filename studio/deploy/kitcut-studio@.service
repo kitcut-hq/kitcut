@@ -1,0 +1,55 @@
+# One studio server per release, on the Azure VM: kitcut-studio@<instance>, instance
+# "<sha12>-<YYYYmmddHHMMSS>" (serve.sh switch names it; run-server.sh runs releases/<sha12>).
+# Installed by studio/deploy/install.sh, which fills in the @...@ paths.
+#
+# A ship starts the new release's instance beside the one serving, and both bind 127.0.0.1:8765
+# with SO_REUSEPORT, so the tunnel never moves. The old one hands off (stops listening, takes no
+# new films), finishes the films it is making and exits 0 by itself: nothing waits on it and
+# nothing kills it (a restart killed a paying film 28 minutes in: docs/known-issues.md KI-031).
+# studio/peers.py is the contract between them (STUDIO_HOME/servers/).
+#
+# Restart=on-failure, not always: an instance that exits 0 has handed off and finished, or was
+# never current, and must stay down; one that crashes comes back (its films are adopted by the
+# leader meanwhile). 78 is run-server.sh refusing (no such release), which no retry fixes.
+# Delegate=yes, one unit per server: each server owns its unit's cgroup and gives every step a
+# cgroup of its own with a memory cap (studio/procs.py) -- and at start it kills the step groups
+# it finds there, so two servers must never share a unit. KillMode=mixed: a stop sends SIGTERM to
+# the server alone, which records each film it is making as interrupted (or leaves it finishing
+# for the leader) and kills the film's steps itself; whatever is left after it exits, or after
+# TimeoutStopSec, is SIGKILLed. announce.sh off says "offline" only when no other studio server
+# unit is up, so an old instance leaving does not take the public studio down with it.
+#
+# %i, not %I: %I unescapes "-" to "/", which would mangle the instance's timestamp.
+[Unit]
+Description=KitCut studio server %i (studio/server.py)
+After=network-online.target
+Wants=network-online.target
+# the data disk (mounted nofail): the checkout, the venv and the studio's home are all on it
+RequiresMountsFor=@HOME@ @REPO@
+
+[Service]
+User=@USER@
+Group=@USER@
+Environment=STUDIO_HOME=@HOME@
+Environment=STUDIO_REPO=@REPO@
+Environment=STUDIO_ENV_FILE=@REPO@/.env
+Environment=STUDIO_INSTANCE=%i
+Environment=TZ=America/Los_Angeles
+Environment=PYTHONUNBUFFERED=1
+# the Whisper models, on the data disk beside the checkout (setup-linux.sh put them there)
+Environment=HF_HOME=@REPO@/../hf
+# Claude Code's native install (~/.local/bin/claude), for films on the machine's login
+Environment=PATH=/home/@USER@/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=@REPO@/studio/deploy/run-server.sh %i
+ExecStartPost=@REPO@/studio/deploy/announce.sh up
+ExecStopPost=@REPO@/studio/deploy/announce.sh off %n
+Restart=on-failure
+RestartSec=5
+RestartPreventExitStatus=78
+Delegate=yes
+KillMode=mixed
+TimeoutStopSec=60
+LimitNOFILE=65536
+
+# No [Install]: an instance is never enabled. kitcut-studio-boot.service starts the current one
+# (servers/current) at boot; older ones were finishing films that a reboot ended anyway.

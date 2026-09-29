@@ -1,0 +1,26 @@
+# At boot, start the studio server instance that should serve: STUDIO_HOME/servers/current,
+# which `serve.sh switch` (every ship, rollback and restart) writes. The instances themselves
+# (kitcut-studio@.service) are never enabled -- each ship names a new one -- so this is the one
+# unit that is. Installed by studio/deploy/install.sh, which fills in the @...@ paths; enabled by
+# `serve.sh migrate` (once) or `serve.sh start`.
+#
+# Root (no User=): it runs systemctl. --no-block: the instance's own start (and its announce) is
+# not this unit's business, and a start job waiting inside the boot transaction is how a
+# systemctl call from a unit deadlocks. No servers/current: nothing to start (a fresh machine;
+# `serve.sh release` starts the first instance). RequiresMountsFor: the data disk is mounted
+# `nofail`, so without it the condition could be read before /srv/kitcut is there, and a oneshot
+# skipped is not retried (the legacy unit's Restart=always used to paper over that).
+[Unit]
+Description=KitCut studio: start the current server instance at boot
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor=@HOME@
+ConditionPathExists=@HOME@/servers/current
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'i="$$(head -n1 @HOME@/servers/current | tr -d "[:space:]")"; [ -n "$$i" ] || { echo "@HOME@/servers/current is empty" >&2; exit 1; }; echo "starting kitcut-studio@$$i"; exec systemctl start --no-block "kitcut-studio@$$i.service"'
+
+[Install]
+WantedBy=multi-user.target
