@@ -488,6 +488,8 @@ function countPrompt() {
 $('prompt').addEventListener('input', countPrompt);
 let t0 = 0, timer = null, poll = null;
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+// a length for reading: "45 s" under a minute, "3:15" from one up (never "195 s")
+const dur = (s) => (s >= 60 ? mmss(s) : `${Math.round(s)} s`);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // Three homes for this one page:
@@ -540,7 +542,7 @@ function play(video, poster) {
 function stats(ev) {
   const st = ev.stages || {};
   const cells = [
-    ['Made in', mmss(ev.seconds)], ['Claude', mmss(st.claude || 0)], ['Render', `${Math.round(st.render || 0)} s`],
+    ['Made in', mmss(ev.seconds)], ['Claude', mmss(st.claude || 0)], ['Render', dur(st.render || 0)],
     ...(ev.cost_usd != null ? [['API cost', `$${ev.cost_usd.toFixed(2)}`]] : []),
     ...(ev.tts_cost_usd != null ? [['Voice cost', `$${ev.tts_cost_usd.toFixed(4)}`]] : []),
     ...(ev.images ? [['Paintings', ev.image_cost_usd != null ? `${ev.images} · $${ev.image_cost_usd.toFixed(2)}` : String(ev.images)]] : []),
@@ -573,7 +575,7 @@ async function recent() {
     $('films').innerHTML = list.map((f, i) => `
       <a class="film" href="/film/${esc(f.id)}" data-i="${i}">
         <img src="${esc(f.poster_url)}" alt="" loading="lazy">
-        <div><p>${esc(f.prompt || f.title || 'A film from pictures and a voice note')}</p><small>${f.length || 5} s ${f.look === 'painted' ? 'painted' : 'drawn'} film · made in ${mmss(f.seconds || 0)}${f.cost_usd != null ? ' · $' + f.cost_usd.toFixed(2) : ''}</small></div>
+        <div><p>${esc(f.prompt || f.title || 'A film from pictures and a voice note')}</p><small>${dur(f.length || 5)} ${f.look === 'painted' ? 'painted' : 'drawn'} film · made in ${mmss(f.seconds || 0)}${f.cost_usd != null ? ' · $' + f.cost_usd.toFixed(2) : ''}</small></div>
       </a>`).join('');
     for (const b of $('films').querySelectorAll('.film')) {
       const f = list[+b.dataset.i];
