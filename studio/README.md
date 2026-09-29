@@ -409,6 +409,17 @@ python studio/bakeoff.py --set audience --grade                    # a blind rea
 python studio/bakeoff.py --set audience --compare before after     # compare.html + the tallies
 ```
 
+Two looks from one tree: `--look` makes every film of an arm in that look, whatever the
+prompt says (`result.json` records it). The `collage` set is for the collage look:
+
+```powershell
+python studio/bakeoff.py --set collage --arm collage --tree C:\instafill\kitcut-collage --look collage
+python studio/bakeoff.py --set collage --arm painted --tree C:\instafill\kitcut-collage --look painted
+python studio/bakeoff.py --set collage --arm drawn   --tree C:\instafill\kitcut-collage --look drawn --only stroke,ledgerly,pripyat
+python studio/bakeoff.py --set collage --grade
+python studio/bakeoff.py --set collage --compare collage painted
+```
+
 - **Made as a release makes a film:** `STUDIO_REPO`/`STUDIO_ENV_FILE` name the main checkout
   (its keys, the machine's locks) and the tree gets a `models\` junction, as `release.py` gives a
   snapshot. Remove that junction on its own (`cmd /c rmdir <tree>\models`) before removing the
@@ -423,7 +434,10 @@ python studio/bakeoff.py --set audience --compare before after     # compare.htm
   fits its subject and how professionally made it looks (1-5 each). It is a mild grader -- the
   Dell film's googly-eyed first minutes scored childish 0.40, fits 3 -- so compare the arms, and
   look at the frames. The page also counts what each film used (faces, the doodle people, pops
-  and boings): counts to read, never a rule.
+  and boings; a collage film's cut-outs, stamps, newsprint and print faces): counts to read,
+  never a rule. A set may ask the grader more (`grade_extra`): `newspaper` (does it look like
+  one -- tallied over the prompts marked `newspaper_wrong`) and `legible` (1-5); a set that
+  asks nothing more gets the same question as before.
 - `--auth login` (the default) runs on this machine's Claude Code login. A 30 s film costs about
   $2.5 of Claude and 15-20 minutes; `--jobs 3` makes three at once.
 

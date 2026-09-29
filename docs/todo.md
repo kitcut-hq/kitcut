@@ -256,18 +256,42 @@ reference: "Collage films" in `docs/reference.md`. It answers a Runway + Opus 5.
 "newspaper cutout / mixed media"), made a film at its level with no human edits in 21 minutes --
 17 cut-outs $0.20, voice $0.11, Claude $4.43 at API prices, 43 turns.
 
+**Decided 2026-09-29 (the owner approved):** a third *look* people pick -- Hand-drawn, Painted,
+Collage -- not capability checkboxes: people choose by the picture they want, only tested
+combinations can be promised, a ticked box becomes an order Claude must obey, and every
+capability is prompt Claude re-reads each turn at one flat price per second. Underneath, a look
+is a recipe of capabilities (`film.CAPS`, `RECIPES`), so parts can later move between looks
+(cut-outs in Painted, collage pieces in Drawn), each after its own bake-off. Checkboxes fit only
+delivery switches (no music, burned captions, 9:16), later. The plan: the owner's
+`concurrent-purring-biscuit` plan file, 2026-09-29.
+
+**Done 2026-09-29:** rebased onto studio-poc; looks as recipes of capabilities, prompts and new
+films byte-identical for all three looks; collage.js an opt-in engine module (the jelly
+branch's mechanism); the labels ("painting the cut-outs"), `/api/limits` cut-outs, the check
+tool covering `engine/collage.js`, a drawn film refused it; Cyrillic stand-in faces (IBM Plex
+Mono added); the stop-motion clock dividing 30 fps; the studio's copy of the example without
+its newspaper (196 -> 189 KB); collage direction and recent-films rows; `bakeoff.py --look`,
+`grade_extra` and the `collage` set (9 prompts).
+
 Open, in order:
-- **Blind bake-off** (`studio/bakeoff.py`) on 6-8 prompts across subjects and audiences, serious
-  and playful, before the look is offered: the brief rule. Watch whether the example film (a
-  newspaper, because of its subject) makes every collage film a newspaper; the one run so far
-  was asked for one.
-- **The site** (sketch-studio): a third look in the picker and in the MCP tool's look enum, the
-  docs and screenshots. The progress line says "painting the scenes (Muse)" for collage films
-  too (`agent.py`'s tool labels do not know the look).
+- **Run the bake-off** (`studio/README.md`, "Two looks from one tree"): collage and painted on
+  all nine, drawn on three; the owner watches the collage films and says go. The bar: all
+  made with no human edits; professional within 0.25 of painted; fits the subject 4+ on 7 of
+  9; childish at most 0.3 on the serious ones, the bedtime control still fits; a newspaper on
+  at most 1 of the 4 prompts where one is wrong; no missing Cyrillic; Claude's cost at most
+  1.3x painted's; if suez (120 s) fails, launch collage capped at 60 s.
+- **The site** (sketch-studio, a worktree from `origin/main`): three preview tiles for the
+  picker, the MCP enum and its descriptions ("when the idea names a style, pick the look that
+  matches"), projects, the gallery and film-page labels, pricing and privacy copy, the docs
+  (looks.md: painted's "collage" style becomes "paper-cut illustration"), the page mirror.
+- **VM pre-flight** before the ship: `import cv2` and WebP in the VM's venv, OpenRouter allows
+  `openai/gpt-image-2.5-flare`.
 - **Narration length, every look**: the first message asks for 2.2 words a second; Gemini reads
   nearer 1.9 (the collage run re-recorded four times to fit 60 s; by hand, 140 words ran 72 s
   against a 58 s plan). Measure over recent films and lower it -- a brief change, so bake-off.
-- **Cost**: the collage prompt is ~195 KB against ~133 KB (collage.js + the example film ride
-  along), so cache reads cost ~45% more per turn; trim the example if the bake-off allows.
+- **Cost**: the collage prompt is ~189 KB against ~133 KB. The studio's collage film called
+  nothing in props.js (59 KB of every prompt): leaving it out of collage films is a cost test
+  of its own. Separately, `lib/plans.js` `filmCost` is below measured cost in every look
+  (filmCost(60) $2.73; the 60 s collage film $4.74 at API prices).
 - **Release** with the studio-vm skill, after the user approves; then merge `sketch-collage`
   into `studio-poc` (`--ff-only` after a rebase).
