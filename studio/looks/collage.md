@@ -68,8 +68,9 @@ The studio has set `backend`, `model`, `max_images` and `cutouts`; leave them. Y
 # Pages and pieces (`engine/collage.js`)
 
 - Call `SK.setStyle('collage')` first. Under it every piece shakes by a pixel or so twelve
-  times a second, entrances move on the same 12-a-second clock, and the grain changes at that
-  rate: paper animated under a camera. `SK.setGround(...)` names the table under the pages.
+  times a second (ten in a film rendered at 30 fps), entrances move on the same clock, and the
+  grain changes about as often: paper animated under a camera. `SK.setGround(...)` names the
+  table under the pages.
 - The pieces, each centred on its x, y (the source is below): `SK.sheet` (a page: `col`,
   `edges` -- which sides are torn, `''` for a cut sheet), `SK.cutout(name, x, y, w)`,
   `SK.tape` (words on a strip; returns its size), `SK.headline` (display type; `distress` inks
@@ -93,8 +94,12 @@ The studio has set `backend`, `model`, `max_images` and `cutouts`; leave them. Y
   line; a reveal on a line's last word is covered by the next page unless that page waits.
 - Typefaces in this film, besides the engine's (Caveat, Patrick Hand, Balsamiq Sans):
   `'Abril Fatface'`, `'UnifrakturMaguntia'`, `'Oswald'` (200-700), `'Old Standard TT'` (400, 700,
-  italic), `'Playfair Display'` (400-900, italic), `'Courier Prime'` (400, 700), `'Anton'`. Only
-  Oswald, Old Standard TT and Playfair Display (and Caveat, Balsamiq Sans) carry Cyrillic.
+  italic), `'Playfair Display'` (400-900, italic), `'Courier Prime'` (400, 700), `'Anton'`,
+  `'IBM Plex Mono'` (400, 700). Oswald, Old Standard TT, Playfair Display and IBM Plex Mono (and
+  Caveat, Balsamiq Sans) carry Cyrillic. The pieces set a line with Cyrillic letters in a face
+  that has them (`SK.face`): Abril Fatface as Playfair Display 900, Anton as Oswald 700,
+  UnifrakturMaguntia as Old Standard TT 700, Courier Prime as IBM Plex Mono. `SK.txt` and your
+  own canvas text do not: give them a face that carries the letters.
 - Words take any colour; check that each reads on what it sits on.
 
 # Reference: the collage pieces (`engine/collage.js`)
@@ -105,9 +110,9 @@ The studio has set `backend`, `model`, `max_images` and `cutouts`; leave them. Y
 
 # Reference: an example collage film (technique, not a look to reuse)
 
-"A Brief History of Paperwork" (66 s): ten pages that slide over one another, cut-outs, labels,
-stamps and a timeline, every piece on a word. Its papers, faces and palette were chosen for its
-subject; choose this film's own.
+"A Brief History of Paperwork" (66 s): pages that slide over one another, cut-outs, labels,
+stamps and a timeline, every piece on a word (some of its ten pages are left out of this copy).
+Its papers, faces and palette were chosen for its subject; choose this film's own.
 
 ```js
 {EXAMPLE_COLLAGE}

@@ -38,6 +38,7 @@ import secrets
 import difflib
 import contextlib
 import subprocess
+from collections import Counter
 from datetime import datetime
 
 import locks
@@ -121,7 +122,11 @@ COLLAGE_FONTS = [
     {"file": "fonts/CourierPrime-Regular.ttf", "family": "Courier Prime", "weight": "400"},
     {"file": "fonts/CourierPrime-Bold.ttf", "family": "Courier Prime", "weight": "700"},
     {"file": "fonts/Anton-Regular.ttf", "family": "Anton", "weight": "400"},
+    # sets a Cyrillic line where Courier Prime cannot (collage.js SK.face)
+    {"file": "fonts/IBMPlexMono-Regular.ttf", "family": "IBM Plex Mono", "weight": "400"},
+    {"file": "fonts/IBMPlexMono-Bold.ttf", "family": "IBM Plex Mono", "weight": "700"},
 ]
+PRINT_FACES = tuple(dict.fromkeys(f["family"] for f in COLLAGE_FONTS))
 # What a film may be made of beyond what every film has. A look is a recipe of these, and a
 # capability is one kind of material with everything the studio does for it:
 #   modules    sketch/<m>.js, copied into the film's engine\ beside engine.js and props.js
@@ -153,6 +158,7 @@ CAPS = {
             "label": "painting the cut-outs",
             "noun": "cut-outs",
         },
+        "direction": ("paint_style",),  # the medium they are painted in
     },
     "collage": {
         "modules": ("collage",),
@@ -161,6 +167,8 @@ CAPS = {
             "COLLAGE": ("sketch", "collage.js"),
             "EXAMPLE_COLLAGE": ("config", "sketch", "collage-example", "film.js"),
         },
+        # the print faces it names most, and whether a newspaper page lies under it
+        "direction": ("faces", "newsprint"),
     },
 }
 RECIPES = {
@@ -509,6 +517,11 @@ class Film:
         if "paint_style" in fields:
             paint = load("paint.json") or {}
             d["paint_style"] = (paint.get("style") or "")[:120] if isinstance(paint, dict) else ""
+        if "faces" in fields:  # a face named in its code, most used first
+            named = Counter({f: js.count("'%s'" % f) + js.count('"%s"' % f) for f in PRINT_FACES})
+            d["faces"] = [f for f, n in named.most_common(3) if n]
+        if "newsprint" in fields:
+            d["newsprint"] = "SK.newsprint(" in js
         cast = sorted({a or b for a, b in CAST_USE.findall(js)})
         if cast:
             d["cast"] = cast

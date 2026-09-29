@@ -120,6 +120,7 @@ __FILM__
         if (Q.has('export')) {
           const fps = +Q.get('fps') || 60, from = +(Q.get('from') || 0), to = +(Q.get('to') || DUR);
           const n = Math.round((to - from) * fps);
+          SK.FPS = fps; // a clock in the film may divide it (collage.js SK.stepFps)
           // raw RGBA, not PNG: toBlob() fills Chromium's blob store faster than GC frees it
           // ("Failed to fetch" after ~100 frames), and skipping the PNG round trip is faster too
           const cx2 = cv.getContext('2d');
@@ -130,6 +131,7 @@ __FILM__
           // frame, which is what capped ?export (_encode.webcodecs() has the measurements)
           const fps = +Q.get('fps') || 60, from = +(Q.get('from') || 0), to = +(Q.get('to') || DUR);
           const n = Math.round((to - from) * fps);
+          SK.FPS = fps; // a clock in the film may divide it (collage.js SK.stepFps)
           const E = JSON.parse(Q.get('encode'));
           const sup = await VideoEncoder.isConfigSupported(E.config);
           // sketch-render falls back to ?export on this exact prefix

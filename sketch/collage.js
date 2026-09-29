@@ -42,13 +42,22 @@
 
   /* ------------------------------------------------------------ time on twos, and the nudge */
   SK.NUDGE_FPS = 12;
+  /** A clock of about `want` ticks a second that divides the frame rate being rendered (SK.FPS,
+   *  which the player sets), so every tick holds the same number of frames: 12 at 24 or 60 fps,
+   *  10 at 30 fps (a Free film), where 12 would hold 2 frames, then 3. `want` with no rate. */
+  SK.stepFps = function (want = SK.NUDGE_FPS) {
+    const f = SK.FPS;
+    if (!f || f % want === 0) return want;
+    const fits = [8, 9, 10, 11, 12, 13, 14, 15].filter((d) => f % d === 0);
+    return fits.length ? fits.reduce((a, d) => (Math.abs(d - want) < Math.abs(a - want) ? d : a)) : want;
+  };
   /** t held to the last step of a clock ticking fps times a second (After Effects' Posterize Time) */
-  SK.step = (t, fps = SK.NUDGE_FPS) => Math.floor(t * fps + 1e-4) / fps;
+  SK.step = (t, fps = SK.NUDGE_FPS) => { const k = SK.stepFps(fps); return Math.floor(t * k + 1e-4) / k; };
   /** [dx, dy, rot]: a small offset that changes NUDGE_FPS times a second (0 unless the style nudges) */
   SK.nudge = function (seed, amp = 1) {
     amp *= SK.style.nudge ?? 0;
     if (!amp) return [0, 0, 0];
-    const f = Math.floor(SK.T * SK.NUDGE_FPS + 1e-4), r = mulberry((seed * 9973 + f * 7919 + 17) | 0);
+    const f = Math.floor(SK.T * SK.stepFps() + 1e-4), r = mulberry((seed * 9973 + f * 7919 + 17) | 0);
     return [(r() - .5) * 2.2 * amp, (r() - .5) * 2.2 * amp, (r() - .5) * .006 * amp];
   };
   const hash = (s) => { let h = 2166136261; s = String(s); for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return (h >>> 0) % 100000; };
@@ -255,7 +264,26 @@
   };
 
   /* ------------------------------------------------------------ type */
-  const fontOf = (o, def) => `${o.italic ? 'italic ' : ''}${o.wt ?? def.wt} ${o.size ?? def.size}px "${o.font ?? def.font}"`;
+  // The print faces with no Cyrillic, and the face that sets a Cyrillic line in their place: the
+  // same kind of letter, at a weight that prints alike (0: the weight asked for). Measured over the
+  // Ukrainian alphabet (fonts/SOURCES.md); scripts/check-sketch.py holds this table to the files.
+  SK.NO_CYRILLIC = {
+    'Abril Fatface': ['Playfair Display', 900],
+    'Anton': ['Oswald', 700],
+    'UnifrakturMaguntia': ['Old Standard TT', 700],
+    'Courier Prime': ['IBM Plex Mono', 0],
+  };
+  const CYRILLIC = /[\u0400-\u04ff]/;
+  /** [family, weight] to set `text` in: the face asked for, or the one standing in for it when the
+   *  text has Cyrillic letters that face cannot draw -- a Ukrainian film keeps printed type. */
+  SK.face = (family, wt, text) => {
+    const sub = CYRILLIC.test(String(text ?? '')) ? SK.NO_CYRILLIC[family] : null;
+    return sub ? [sub[0], sub[1] || wt] : [family, wt];
+  };
+  const fontOf = (o, def, text) => {
+    const [fam, wt] = SK.face(o.font ?? def.font, o.wt ?? def.wt, text);
+    return `${o.italic ? 'italic ' : ''}${wt} ${o.size ?? def.size}px "${fam}"`;
+  };
   // speckle holes and faint mottling in whatever is already drawn on g (ink that did not take)
   function distress(g, w, h, amount, seed) {
     if (!(amount > 0)) return;
@@ -304,8 +332,8 @@
     const lines = String(text).split('\n');
     let size = o.size ?? 90;
     const ls = o.ls ?? 0;
-    if (o.maxW) { const w0 = Math.max(...measureLines(fontOf({ ...o, size }, { wt: 400, size, font: 'Abril Fatface' }), lines, ls)); if (w0 > o.maxW) size *= o.maxW / w0; }
-    const font = fontOf({ ...o, size }, { wt: 400, size, font: 'Abril Fatface' });
+    if (o.maxW) { const w0 = Math.max(...measureLines(fontOf({ ...o, size }, { wt: 400, size, font: 'Abril Fatface' }, text), lines, ls)); if (w0 > o.maxW) size *= o.maxW / w0; }
+    const font = fontOf({ ...o, size }, { wt: 400, size, font: 'Abril Fatface' }, text);
     const key = ['head', text, font, ls, o.col, o.lh, o.distress, o.align, JSON.stringify(o.stroke || 0), o.seed].join('|');
     const S = cached(key, () => {
       const ws = measureLines(font, lines, ls), lh = (o.lh ?? 1.05) * size;
@@ -348,7 +376,7 @@
    */
   SK.tape = function (text, x, y, o = {}) {
     const size = o.size ?? 36, col = o.col ?? '#f3ce4f', seed = o.seed ?? hash(text + col);
-    const font = fontOf(o, { wt: 600, size, font: 'Oswald' }), ls = o.ls ?? size * .03;
+    const font = fontOf(o, { wt: 600, size, font: 'Oswald' }, text), ls = o.ls ?? size * .03;
     const sh = shadowOf(o, { blur: 7, x: 1, y: 3, col: 'rgba(30,20,10,.32)' });
     const key = ['tape', text, font, ls, col, o.ink, o.padX, o.padY, o.lh, o.ends, o.tex, o.distress, o.align, seed, JSON.stringify(sh)].join('|');
     const S = cached(key, () => {
@@ -391,7 +419,8 @@
       const r = mulberry(seed * 97 + i * 31);
       if (ch === ' ') { pick.push(null); total += size * .45; return; }
       const f = fonts[Math.floor(r() * fonts.length)], col = cols[Math.floor(r() * cols.length)], sz = size * (.88 + r() * .26);
-      const w = measureLines(`${f[1]} ${sz}px "${f[0]}"`, [ch], 0)[0] + sz * .36;
+      const [fam, fw] = SK.face(f[0], f[1], ch); // what SK.tape will set it in
+      const w = measureLines(`${fw} ${sz}px "${fam}"`, [ch], 0)[0] + sz * .36;
       pick.push({ ch, f, col, sz, w, dy: (r() - .5) * size * .16, rot: (r() - .5) * .22 });
       total += w + gap;
     });
@@ -431,7 +460,7 @@
       const r = o.r ?? 110, W = shape === 'rect' ? o.w ?? 300 : 2 * r, H = shape === 'rect' ? o.h ?? 130 : 2 * r, pad = 10;
       const cv = mkCanvas(W + 2 * pad, H + 2 * pad), g = cv.getContext('2d');
       g.translate(W / 2 + pad, H / 2 + pad); g.fillStyle = col; g.strokeStyle = col; g.textAlign = 'center'; g.textBaseline = 'middle';
-      const fitFont = (s, fam, wt, maxW, maxS) => { let sz = maxS; g.font = `${wt} ${sz}px "${fam}"`; const mw = g.measureText(s).width; if (mw > maxW) sz *= maxW / mw; g.font = `${wt} ${sz}px "${fam}"`; return sz; };
+      const fitFont = (s, fam0, wt0, maxW, maxS) => { const [fam, wt] = SK.face(fam0, wt0, s); let sz = maxS; g.font = `${wt} ${sz}px "${fam}"`; const mw = g.measureText(s).width; if (mw > maxW) sz *= maxW / mw; g.font = `${wt} ${sz}px "${fam}"`; return sz; };
       if (shape === 'rect') {
         g.lineWidth = Math.max(4, H * .05); g.strokeRect(-W / 2 + g.lineWidth, -H / 2 + g.lineWidth, W - 2 * g.lineWidth, H - 2 * g.lineWidth);
         g.lineWidth = Math.max(2, H * .018); g.strokeRect(-W / 2 + H * .11, -H / 2 + H * .11, W - H * .22, H - H * .22);
@@ -443,7 +472,8 @@
         g.lineWidth = r * .055; g.beginPath(); g.arc(0, 0, r * .95, 0, TAU); g.stroke();
         const ring = o.top || o.bottom;
         if (ring) { g.lineWidth = r * .022; g.beginPath(); g.arc(0, 0, r * .66, 0, TAU); g.stroke(); }
-        g.font = `600 ${r * .15}px "${o.ringFont ?? 'Oswald'}"`; g.letterSpacing = r * .02 + 'px';
+        const [rf, rw] = SK.face(o.ringFont ?? 'Oswald', 600, (o.top ?? '') + (o.bottom ?? ''));
+        g.font = `${rw} ${r * .15}px "${rf}"`; g.letterSpacing = r * .02 + 'px';
         if (o.top) arcText(g, o.top, r * .8, -Math.PI / 2, false);
         if (o.bottom) arcText(g, o.bottom, r * .8, Math.PI / 2, true);
         g.letterSpacing = '0px';
@@ -572,11 +602,13 @@
         if (c) { g.lineWidth = 1; g.beginPath(); g.moveTo(x0 - gut / 2, 30); g.lineTo(x0 - gut / 2, H - 30); g.stroke(); }
         while (y < H - 30) {
           if (r() < (o.headEvery ?? .045)) { // now and then a section head over the column
-            g.font = `400 ${size * 2}px "${o.headFont ?? 'Abril Fatface'}"`; g.letterSpacing = '1px';
+            const [hf, hw] = SK.face(o.headFont ?? 'Abril Fatface', 400, heads.join(' '));
+            g.font = `${hw} ${size * 2}px "${hf}"`; g.letterSpacing = '1px';
             y += size * 2.2; g.fillText(heads[Math.floor(r() * heads.length)], x0, y, cw); g.letterSpacing = '0px';
             y += size * .6; g.fillRect(x0, y, cw, 1.5); y += size * .9;
           }
-          g.font = `400 ${size}px "${o.font ?? 'Old Standard TT'}"`;
+          const [bf, bw] = SK.face(o.font ?? 'Old Standard TT', 400, text);
+          g.font = `${bw} ${size}px "${bf}"`;
           let line = '';
           while (true) { const nw = words[wi % words.length]; const test = line ? line + ' ' + nw : nw; if (g.measureText(test).width > cw && line) break; line = test; wi++; }
           y += size * 1.28; g.fillText(line, x0, y);

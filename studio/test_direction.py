@@ -180,6 +180,35 @@ def main():
         p.direction()["paint_style"].startswith("paper cut-out"),
     )
 
+    c = films.Film.create("The history of ice cream", 10, "collage", client="t")
+    write(c, "paint.json", {"style": "hand-tinted copperplate engraving", "images": []})
+    write(
+        c,
+        "film.js",
+        "SK.setStyle('collage');\nSK.newsprint({});\n"
+        "SK.headline('A', 0, 0, { font: 'Playfair Display' });\n"
+        "SK.tape('B', 0, 0, { font: 'Oswald' }); SK.tape('C', 0, 0, { font: \"Oswald\" });\n"
+        "SK.film({duration: 10});",
+    )
+    d = c.direction()
+    expect(
+        "direction: a collage film's medium, faces and newspaper",
+        (d["paint_style"], d["faces"], d["newsprint"], "ground" in d),
+        ("hand-tinted copperplate engraving", ["Oswald", "Playfair Display"], True, False),
+    )
+    note = agent.recent_note("collage", [d, dict(d, faces=["Anton"], newsprint=False)])
+    expect(
+        "recent: a collage film's rows",
+        "- painting styles: hand-tinted copperplate engraving" in note
+        and "- print faces: Oswald, Playfair Display, Anton" in note
+        and "- a newspaper page under the film: 1 of the last 2" in note,
+        note,
+    )
+    expect(
+        "recent: no collage rows for a drawn film",
+        "print faces" not in agent.recent_note("drawn", [d]),
+    )
+
     # ---- the note in the first message
     f.update(state="done")
     p.update(state="done")
