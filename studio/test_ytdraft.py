@@ -90,7 +90,7 @@ def fixture_film(client="u:alice", length=15):
 
 THUMBS = [
     {"at": 3.5, "layout": "headline", "words": "*Faster* forms", "place": "top"},
-    {"at": 8.6, "layout": "slab", "words": "Nothing to change", "place": "left"},
+    {"at": 8.6, "layout": "card", "words": "Nothing to change", "place": "left"},
     {"at": 12.6, "layout": "panel", "words": "Right fields, first time", "place": "right"},
     {"at": 6.0, "layout": "still", "words": ""},
 ]
@@ -170,10 +170,10 @@ async def main():
     long = [dict(THUMBS[0], words="one two three four five"), *THUMBS[1:]]
     _, _, probs = ytdraft.check_thumbs(good(thumbnails=long), mat, title)
     check(any("too long" in p["text"] for p in probs), "five words are too many", probs)
-    twice = [dict(t, layout="slab") for t in THUMBS]
+    twice = [dict(t, layout="card") for t in THUMBS]
     cs, notes, _ = ytdraft.check_thumbs(good(thumbnails=twice), mat, title)
     check(
-        sorted(c["layout"] for c in cs) == sorted(["headline", "slab", "panel", "still"]),
+        sorted(c["layout"] for c in cs) == sorted(["headline", "card", "panel", "still"]),
         "one of each layout, the repeats given the missing ones",
         [c["layout"] for c in cs],
     )

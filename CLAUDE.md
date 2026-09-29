@@ -670,11 +670,15 @@ ducker, the tail-word cut and the bundler; no API, no browser, seconds.
 **Thumbnails for a film** — kitcut.ai's "Publish to YouTube" offers four, each **a still of the
 film itself** with at most four words; the draft's Claude call picks the moments and the words
 (`studio/ytdraft.py`), `scripts/_thumb.py` makes and checks them (legible at 168 px, 4.5:1
-contrast, clear of YouTube's duration stamp, never over the film's own words), and
-`scripts/thumb-options.py` runs it on any film by hand. Every threshold in
+contrast, clear of YouTube's duration stamp, never cutting into the film's own words), and
+`scripts/thumb-options.py` runs it on any film by hand. **The film draws its own thumbnail**:
+`sketch/thumb.js` runs ahead of the film's code (the manifest's `head`), notes every type, card,
+colour and logo the film uses, and draws the words in them -- an Instafill film's thumbnail is in
+Instafill's serif and amber on its white cards, never a stock slab. Every threshold in
 `config/thumbnails/thumbnails.json` was measured on real films; `docs/reference.md` "Thumbnail
 options" has the bake-off. After touching any of it, run `python scripts/check-thumbnail.py`
-(seconds, one browser shot) and `python studio/test_thumbs.py` (end to end, ~35 s).
+(the rules, then the example film drawn; ~40 s) and `python studio/test_thumbs.py` (end to end,
+~35 s).
 
 ## Projects: the memory that outlives the session
 
@@ -743,7 +747,7 @@ which cannot encode the glyphs at all.
 | `scripts/check-zoom.py` | the Zoom/emphasis self-test: folder rules, part ordering, phrase matching |
 | `scripts/checklist-card.py` | an animated checklist end screen (ticks drawn one by one), words in the project, look in `config/cards/checklist/`; `edl-cut.py` plays it as an EDL entry |
 | `scripts/make-thumbnail.py` | a 1280x720 YouTube thumbnail in the channel's house style from a spec; `yt-upload.py --thumbnail` sets it |
-| `scripts/thumb-options.py` | four YouTube thumbnail options for a sketch film, each a still of the film with a few words, checked; `_thumb.py` is the machinery (kitcut.ai's publish dialog uses it via `studio/thumbs.py`), `check-thumbnail.py` its test |
+| `scripts/thumb-options.py` | four YouTube thumbnail options for a sketch film, each a still of the film with a few words in the film's own look, checked; `_thumb.py` is the machinery and `sketch/thumb.js` the film-side probe and overlay (kitcut.ai's publish dialog uses it via `studio/thumbs.py`), `check-thumbnail.py` its test |
 | `scripts/edl-cut.py` | a film from hand-chosen ranges of a few silent takes, with an elapsed counter driven by SOURCE time so it stays true over a sped-up wait |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
 | `sketch/` | the sketch-film engine (`engine.js`), cast (`props.js`), collage pieces (`collage.js`) and player page (`player.html`); `scripts/_sketch.py` and `_sketchaudio.py` are the Python half, `check-sketch.py` their test |

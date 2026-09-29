@@ -26,6 +26,8 @@ render ({cq, preset, audio_bitrate, encoder, encode}: encode "browser" has the p
 frames, see --encode),
 tail ({secs, scripts, images, audio}: a closing after the film -- `secs` more of picture, drawn by
 `scripts` run after film.js, which lengthen SK._film; its sound is sketch-audio's),
+head ({scripts}: run just before film.js, in its scope -- sketch/thumb.js, a thumbnail's probe and
+overlay; a stills run saves what the page's SK.REPORT() returns as <into>/report.json),
 cast ("cast": a folder whose <name>.js files each run before film.js, as SK.cast.<name>),
 modules (["collage"]: engine extensions a film opts into, sketch/<name>.js -- the film's own
 engine folder first -- run after props.js; "collage" is the cut-outs and paper pieces).
@@ -201,6 +203,10 @@ def bundle(m, audio=True):
         **m.get("player", {}),
     }
     film = read_text(_sketch.rel(m, m.get("film", "film.js")))
+    # scripts that run before the film's own code, in its scope (a thumbnail's probe must see the
+    # film pick up SK's functions, and a film may take them into locals at its top)
+    for p in reversed((m.get("head") or {}).get("scripts", [])):
+        film = read_text(_sketch.rel(m, p)) + "\n;\n" + film
     tail = m.get("tail") or {}
     for p in tail.get("scripts", []):  # a closing drawn after the film (it lengthens SK._film)
         film += "\n;\n" + read_text(_sketch.rel(m, p))
@@ -269,6 +275,7 @@ class Session:
         self.on_frame, self.on_still, self.on_h264 = on_frame, on_still, on_h264
         self.done = threading.Event()
         self.error, self.automation, self.frames, self.last = None, None, 0, time.time()
+        self.report = None  # what the page's SK.REPORT() said after its stills, if it has one
         self.key = "/" + secrets.token_hex(12) + "/"
         sess = self
 
@@ -313,6 +320,8 @@ class Session:
                         sess.on_still(q.split("=")[1], body)
                     elif path == "/automation":
                         sess.automation = json.loads(body)
+                    elif path == "/report":
+                        sess.report = json.loads(body)
                     elif path == "/error":
                         sess.error = body.decode("utf-8", "replace")
                         sess.done.set()
@@ -833,7 +842,11 @@ def main():
                         f.write(body)
                     got.append(p)
 
-                Session(light, on_still=save).run("stills=" + args.stills)
+                sess = Session(light, on_still=save)
+                sess.run("stills=" + args.stills)
+                if sess.report is not None:  # the page's SK.REPORT(), beside the stills
+                    with open(os.path.join(rdir, "report.json"), "w", encoding="utf-8") as f:
+                        json.dump(sess.report, f, ensure_ascii=False)
                 if args.sheet:
                     contact_sheet(
                         got, os.path.join(rdir, "sheet.png"), cols=2 if len(got) <= 4 else 4

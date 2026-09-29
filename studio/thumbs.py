@@ -3,10 +3,11 @@
 The draft (ytdraft.py) picks them: Claude, which already writes the title and description from
 the film, is shown the film's moments -- a sheet of clean stills with their times, made here --
 and answers with four {at, words, layout, place}. The options are then made from the film with
-scripts/_thumb.py: the frame near each moment that is not mid-transition, the words set where they
-hide the least of it, checked to be legible at YouTube's smallest size, in contrast, and clear of
-its duration stamp. An option that fails a check falls back (a scrim, a slab, the still alone)
-before anyone sees it.
+scripts/_thumb.py, drawn by the film itself in its own look (its headline type, colours, cards,
+logo): the frame near each moment that is not mid-transition, the words set where they hide the
+least of it, checked to be legible at YouTube's smallest size, in contrast, and clear of its
+duration stamp and of the film's own words. An option that fails a check falls back (a glow of
+the film's paper, one of its cards, the still alone) before anyone sees it.
 
     outputs/youtube/<channel>/thumb-<n>.jpg   the options (served by /files, token or signed)
     youtube/thumbs-<channel>.json             what they are, keyed by the draft they came from
@@ -122,9 +123,7 @@ def make_now(film, channel, draft):
     if len(concepts) < 4:
         concepts = _thumb.fill_concepts(concepts, moments(film), length(film))
     d = out_dir(film, channel)
-    opts = _thumb.make_options(
-        film.dir, concepts, d, title=draft.get("title") or "", log=lambda *_: None
-    )
+    opts = _thumb.make_options(film.dir, concepts, d, log=lambda *_: None)
     rec = {
         "key": draft.get("key"),
         "channel": channel,

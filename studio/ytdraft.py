@@ -94,9 +94,11 @@ Then choose four thumbnails for it. Each is a still of the film at a moment you 
 sheet of its moments (the time is printed on every frame), with a few words set on it:
 - "at": the moment, in seconds, from the sheet -- one where what the film is about is on screen \
 and fully drawn. Four different moments.
-- "layout": one each of "headline" (the words large over the picture), "slab" (the words on a \
-block of colour), "panel" (the picture on one side, the words on a flat panel beside it) and \
-"still" (the picture alone, no words).
+- "layout": one each of "headline" (the words large over the picture), "card" (the words on \
+one of the film's own cards, with its logo when it shows one), "panel" (the picture on one side, \
+the words on a panel of the film's paper beside it) and "still" (the picture alone, no words). \
+All of them are drawn in the film's own look -- its headline type, its colours, its cards -- so \
+write the words the way the film writes its own titles.
 - "words": at most 4 words and 32 characters, in the film's language, that make the right \
 viewer want to watch: they add to the title and never repeat it, and like everything above they \
 hold to the film -- no number or claim it does not show or say. Star one word to colour it \

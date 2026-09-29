@@ -1,22 +1,27 @@
-"""Thumbnail options from a film's own stills: which frame, where the words go, how they look,
-and proof that the result reads where YouTube shows it smallest.
+"""Thumbnail options from a film's own stills, in the film's own look: which frame, where the
+words go, what they look like, and proof that the result reads where YouTube shows it smallest.
 
-The picture is always a frame of the film itself. The words are laid out here, in Python, with
-the same font files the browser paints them with -- so the line breaks, the font size and the
-cap height are numbers this module chose, not whatever a page happened to do -- and the browser
-only paints them (config/thumbnails/layouts/*.svg; one headless shot holds every option). Each
-layer is shot twice, as it will look and as a bare white mask of its letters, and the checks
-read the finished picture through the mask.
+The picture is always a frame of the film, and so is everything added to it: the words are set
+in the film's own headline type and colours, on its own cards and paper, with its own logo --
+drawn by the film's engine (sketch/thumb.js, run ahead of the film's code), not laid over it by a
+template. What the film's look is, is read off the film while it draws: every text style, card
+and picture it uses (the probe), so an editorial film in Source Serif gets a Source Serif
+headline, a crayon film its hand-drawn type and paper. The words are laid out here, in Python,
+with the same font files the page draws them with, so the line breaks, the size and the cap
+height are numbers this module chose. Each option is drawn three times -- as it will look, its
+letters alone, and everything it added -- and the checks read the finished picture through those.
 
-    stills     clean frames of a sketch film: its manifest copied without the Free plan's
-               closing mark ("tail") and rendered by sketch-render.py --stills
+    stills     clean frames of a sketch film (its manifest copied without the Free plan's
+               closing), rendered by sketch-render.py --stills, the probe riding along
+    look       the film's headline type, ink, accent, paper, cards and logo, from the probe
     moments    the times a writer chooses from, and the labelled sheet it sees them on
-    concepts   four {at, words, layout}, checked: inside the film, apart, short, not the title
+    concepts   four {at, words, layout, place}, checked: inside the film, apart, short, not the title
     settle     the frame near a moment that is not mid-transition, and not a thin one
-    layout     font (glyphs covered), size, line breaks, the quietest place, the colours
-    paint      one browser shot of every layer and every mask
-    checks     cap height at 168 px, contrast, YouTube's overlays, overflow, file size
-    fallbacks  a scrim, then a slab, then the still alone -- an option that fails is never shown
+    layout     size, line breaks and the quietest place for the words, in the film's type
+    draw       one browser run for every option: the thumbnail, its letters, its footprint
+    checks     cap height at 168 px, contrast, YouTube's overlays, the film's own words kept clear
+    fallbacks  a glow of the film's paper, then a card, then the still alone -- an option that
+               fails is never shown
 
 Config: config/thumbnails/thumbnails.json. CLI: scripts/thumb-options.py. Studio:
 studio/thumbs.py. Self-test: scripts/check-thumbnail.py.
@@ -27,13 +32,11 @@ import re
 import sys
 import json
 import math
+import colorsys
 import time
 import shutil
-import colorsys
 import hashlib
 import difflib
-import pathlib
-import importlib
 import itertools
 import subprocess
 from io import BytesIO
@@ -41,11 +44,12 @@ from io import BytesIO
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 import numpy as np  # noqa: E402
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont  # noqa: E402
+from PIL import Image, ImageColor, ImageDraw, ImageFont  # noqa: E402
 
 CONFIG = "config/thumbnails/thumbnails.json"
-LAYOUT_DIR = "config/thumbnails/layouts"
-LAYOUTS = ("headline", "slab", "panel", "still")
+THUMB_JS = os.path.join(_env.ROOT, "sketch", "thumb.js")
+LAYOUTS = ("headline", "card", "panel", "still")
+RENAMED = {"slab": "card"}  # a writer (or an older draft) may still say slab
 WORD = re.compile(r"[\w'’-]+", re.UNICODE)
 STOP = {
     "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "how", "in", "is", "it",
@@ -114,73 +118,28 @@ def fit_contrast(rgb, against, target):
     return c
 
 
-def _small(img, w=240):
-    h = max(1, round(img.height * w / img.width))
-    return img.convert("RGB").resize((w, h), Image.BILINEAR)
-
-
-def accent_colour(img):
-    """The film's own accent: the vivid colour that stands out -- the yellow stars on a night
-    sky, the red of a crossed-out weekend on a white app screen -- or the default when the frame
-    has none (pencil on paper, a dark wine film).
-
-    Each vivid colour (quantised, on a 320-px copy so a few small stars still count) scores its
-    pixel count ** 0.3 times its Lab distance from the frame's mean ** 1.5: difference outweighs
-    area. The ground's own hue is never the accent -- a blueprint's blue is everywhere on it. Of
-    four scorings compared on twelve frames of eight films (2026-09-29), this one picked the
-    colour that pops on nine; count-weighted ones picked the sky, the trunk or the paper."""
-    c = cfg()["colours"]
-    sm = img.convert("RGB").resize((320, 180), Image.BILINEAR)
-    hsv = np.asarray(sm.convert("HSV"), dtype="float64") / 255.0
-    rgb = np.asarray(sm, dtype="float64")
-    lab = np.asarray(sm.convert("LAB"), dtype="float64")
-    vivid = (hsv[..., 1] > c["accent_min_sat"]) & (hsv[..., 2] > c["accent_min_val"])
-    if vivid.sum() < 5:
-        return hex_rgb(c["accent_default"])
-    frame = lab.reshape(-1, 3).mean(axis=0)
-    gh, gs, _ = colorsys.rgb_to_hsv(*(np.asarray(ground_colour(img)) / 255.0))
-    pix, lpix = rgb[vivid], lab[vivid]
-    q = (pix // 32).astype(int)
-    keys = q[:, 0] * 64 + q[:, 1] * 8 + q[:, 2]
-    best, mean = -1.0, None
-    for k in np.unique(keys):
-        m = keys == k
-        if m.sum() < max(5, 0.0005 * rgb.shape[0] * rgb.shape[1]):
-            continue
-        col = pix[m].mean(axis=0)
-        h, s_, _ = colorsys.rgb_to_hsv(*(col / 255.0))
-        if gs > 0.25 and min(abs(h - gh), 1 - abs(h - gh)) < c["accent_ground_hue"] / 360:
-            continue  # the ground's own colour
-        score = m.sum() ** 0.3 * float(np.linalg.norm(lpix[m].mean(axis=0) - frame)) ** 1.5
-        if score > best:
-            best, mean = score, col
-    if mean is None:
-        return hex_rgb(c["accent_default"])
-    h, s, v = colorsys.rgb_to_hsv(*(mean / 255.0))
-    return tuple(x * 255 for x in colorsys.hsv_to_rgb(h, max(s, 0.62), max(v, 0.82)))
-
-
-def ground_colour(img):
-    """The frame's commonest colour -- on a drawn film, its paper."""
-    rgb = np.asarray(_small(img, 160), dtype="float64").reshape(-1, 3)
-    q = (rgb // 24).astype(int)
-    keys = q[:, 0] * 4096 + q[:, 1] * 64 + q[:, 2]
-    top = np.bincount(keys).argmax()
-    return tuple(rgb[keys == top].mean(axis=0))
+def colour(s, default=(0, 0, 0)):
+    """A CSS colour a film used ("#1a1a1a", "rgb(26,26,26)", a name) as (r, g, b)."""
+    try:
+        return tuple(ImageColor.getrgb(str(s))[:3])
+    except (ValueError, TypeError, AttributeError):
+        return tuple(default)
 
 
 # ------------------------------------------------------------------ fonts
-def font_chain(look):
-    f = cfg()["fonts"]
-    return list(f.get(look) or []) + list(f["fallback"])
+def _tt(path):
+    k = ("tt", path)
+    if k not in _CACHE:
+        from fontTools.ttLib import TTFont
+
+        _CACHE[k] = TTFont(_env.resolve(path), lazy=True)
+    return _CACHE[k]
 
 
 def _cmap(path):
     k = ("cmap", path)
     if k not in _CACHE:
-        from fontTools.ttLib import TTFont
-
-        t = TTFont(_env.resolve(path), lazy=True)
+        t = _tt(path)
         os2 = t["OS/2"]
         _CACHE[k] = (
             set(t.getBestCmap()),
@@ -198,24 +157,106 @@ def cap_ratio(path):
     return _cmap(path)[1]
 
 
-def pick_font(text, look):
-    """The first font of the look that has a glyph for every character, as a spec dict."""
-    for spec in font_chain(look):
-        t = text.upper() if spec.get("upper") else text
-        if covers(spec["file"], t):
-            return spec
-    return None
+def readable(path):
+    """Can this module measure it? A .ttf or .otf that is there (a .woff2 needs Brotli, which
+    the venv does not carry -- such a film font is drawn by the page but not chosen here)."""
+    p = _env.resolve(path)
+    return p.lower().endswith((".ttf", ".otf")) and os.path.exists(p)
 
 
-def pil_font(path, px):
-    k = ("pil", path, px)
+def _weight(wt):
+    n = re.findall(r"\d+", str(wt))
+    return int(n[0]) if n else 400
+
+
+def pil_font(path, px, wt=None):
+    """Pillow's font at `px`; a variable font (Caveat's is) set to the weight it is drawn at, so
+    what is measured here is what the page draws."""
+    k = ("pil", path, px, str(wt))
     if k not in _CACHE:
-        _CACHE[k] = ImageFont.truetype(_env.resolve(path), px)
+        f = ImageFont.truetype(_env.resolve(path), px)
+        if wt is not None:
+            try:
+                axes = f.get_variation_axes()
+            except (OSError, AttributeError):
+                axes = None
+            if axes:
+                vals = []
+                for a in axes:
+                    name = a.get("name") or b""
+                    name = name.decode("latin-1") if isinstance(name, bytes) else str(name)
+                    v = a.get("default", a.get("minimum", 0))
+                    if name.lower().startswith("weight") or name.lower() == "wght":
+                        v = min(a["maximum"], max(a["minimum"], _weight(wt)))
+                    vals.append(v)
+                f.set_variation_by_axes(vals)
+        _CACHE[k] = f
     return _CACHE[k]
 
 
-def font_uri(path):
-    return pathlib.Path(_env.resolve(path)).resolve().as_uri()
+def tooling_fonts():
+    """{family: [(file, variable, weight class)]} of the .ttf/.otf files in the tooling's fonts/."""
+    if "tooling" not in _CACHE:
+        from fontTools.ttLib import TTFont
+
+        out = {}
+        d = os.path.join(_env.ROOT, "fonts")
+        for n in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+            if not n.lower().endswith((".ttf", ".otf")):
+                continue
+            try:
+                t = TTFont(os.path.join(d, n), lazy=True)
+                fam = t["name"].getDebugName(16) or t["name"].getDebugName(1)
+                out.setdefault(fam, []).append(
+                    (os.path.join(d, n), "fvar" in t, t["OS/2"].usWeightClass)
+                )
+            except Exception:  # noqa: BLE001 -- a font this cannot read is one it does not offer
+                continue
+        _CACHE["tooling"] = out
+    return _CACHE["tooling"]
+
+
+def film_fonts(film_dir):
+    """The fonts a film declares (its sketch.json), [{family, weights, file}] with each file found
+    -- a font the film fetched for itself beside it (web/fonts/...), the tooling's in fonts/.
+
+    One this module cannot measure (a .woff2: the example film's Caveat) stands in as the
+    tooling's .ttf of the same family when there is one -- a variable one at any weight the film
+    declares, a static one only at its own. The page still draws the film's file; sketch/thumb.js
+    holds each line to the width planned here, so a stand-in that runs narrower only sets the
+    words a touch smaller, never outside their box."""
+    with open(os.path.join(film_dir, "sketch.json"), encoding="utf-8") as f:
+        m = json.load(f)
+    out = []
+    for x in m.get("fonts") or []:
+        if not isinstance(x, dict) or not isinstance(x.get("file"), str):
+            continue
+        p = x["file"]
+        if not os.path.isabs(p):
+            here = os.path.join(film_dir, p)
+            p = here if os.path.exists(here) else _env.resolve(p)
+        ws = [int(w) for w in re.findall(r"\d+", str(x.get("weight", "400")))] or [400]
+        if readable(p):
+            out.append({"family": x.get("family"), "weights": ws, "file": p})
+            continue
+        for f, var, wc in tooling_fonts().get(x.get("family"), []):
+            if var or (ws[0] <= wc <= ws[-1] if len(ws) >= 2 else wc in ws):
+                out.append({"family": x.get("family"), "weights": ws if var else [wc], "file": f})
+    return out
+
+
+def font_for(fonts, family, wt):
+    """The file that draws `family` at weight `wt` (a variable font's range counts), or None."""
+    w = _weight(wt)
+    cands = [f for f in fonts if f["family"] == family and readable(f["file"])]
+    if not cands:
+        return None
+
+    def off(f):
+        ws = f["weights"]
+        return 0 if len(ws) >= 2 and ws[0] <= w <= ws[-1] else min(abs(x - w) for x in ws)
+
+    return min(cands, key=off)["file"]
 
 
 # ------------------------------------------------------------------ words
@@ -288,6 +329,7 @@ def check_concepts(raw, length, title=""):
             notes.append("thumbnail %d moved from %.2f s inside the film" % (i, at))
             at = min(hi, max(lo, at))
         lay = str(x.get("layout") or "").strip().lower()
+        lay = RENAMED.get(lay, lay)
         words = " ".join(str(x.get("words") or "").split())
         stars = re.findall(r"\*[^*\s]+\*", words)
         if len(stars) > 1:
@@ -369,11 +411,41 @@ def auto_concepts(length, fractions=(0.25, 0.5, 0.75)):
 
 
 # ------------------------------------------------------------------ stills
-def clean_manifest(film_dir, into):
+def film_images(film_dir, m=None):
+    """{name: path} of the pictures a film shows: the ones its manifest names (a logo the page
+    tool fetched, a picture the person gave) and its painted scenes."""
+    if m is None:
+        with open(os.path.join(film_dir, "sketch.json"), encoding="utf-8") as f:
+            m = json.load(f)
+
+    def ab(p):
+        return p if os.path.isabs(p) else os.path.join(film_dir, p)
+
+    images = {k: ab(v) for k, v in (m.get("images") or {}).items() if isinstance(v, str)}
+    paint = m.get("paint")
+    if paint:
+        pj = paint
+        if isinstance(paint, str):
+            try:
+                with open(ab(paint), encoding="utf-8") as f:
+                    pj = json.load(f)
+            except (OSError, ValueError):
+                pj = {}
+        for im in pj.get("images") or []:
+            name = str(im.get("name") or "")
+            p = os.path.join(film_dir, "images", name + ".jpg")
+            if re.fullmatch(r"[a-z][a-z0-9_]{0,40}", name) and os.path.exists(p):
+                images.setdefault(name, p)
+    return images
+
+
+def clean_manifest(film_dir, into, head=None, fonts=()):
     """A copy of the film's manifest that draws the film and nothing added after it: no Free
     plan closing, whose mark sits exactly where YouTube stamps the duration. Every path is made
-    absolute (painted scenes included -- sketch-render finds them beside the manifest
-    otherwise), and the copy renders into its own folder, never the film's outputs."""
+    absolute (a font or picture the film keeps in its own folder included), and the copy renders
+    into its own folder, never the film's outputs. `head` runs before the film's code (default:
+    sketch/thumb.js, whose probe notes the film's look as it draws); `fonts` are added for the
+    page to load (a fallback for words the film's own type has no glyphs for)."""
     with open(os.path.join(film_dir, "sketch.json"), encoding="utf-8") as f:
         m = json.load(f)
     m.pop("tail", None)
@@ -393,25 +465,26 @@ def clean_manifest(film_dir, into):
         else f
         for f in m.get("fonts") or []
     ]
-    for k in ("vo", "engine", "cast"):
+    have = {(f.get("family"), str(f.get("weight"))) for f in m["fonts"] if isinstance(f, dict)}
+    for f in fonts:
+        if (f["family"], str(f["weight"])) not in have:
+            m["fonts"].append(
+                {"file": f["file"], "family": f["family"], "weight": str(f["weight"])}
+            )
+    for k in (
+        "vo",
+        "engine",
+        "cast",
+        "scenes",
+    ):  # a long film made in scenes keeps them in a folder
         if isinstance(m.get(k), str):
             m[k] = ab(m[k])
-    images = {k: ab(v) for k, v in (m.get("images") or {}).items()}
-    paint = m.pop("paint", None)
-    if paint:
-        pj = paint
-        if isinstance(paint, str):
-            with open(ab(paint), encoding="utf-8") as f:
-                pj = json.load(f)
-        for im in pj.get("images") or []:
-            name = str(im.get("name") or "")
-            p = os.path.join(film_dir, "images", name + ".jpg")
-            if re.fullmatch(r"[a-z][a-z0-9_]{0,40}", name) and os.path.exists(p):
-                images.setdefault(name, p)
-    m["images"] = images
+    m["images"] = film_images(film_dir, m)
+    m.pop("paint", None)
     audio = dict(m.get("audio") or {})
     audio["vo_timeline"] = ab(audio.get("vo_timeline") or "audio/vo/timeline.json")
     m["audio"] = {"vo_timeline": audio["vo_timeline"]}  # stills need no score or effects
+    m["head"] = {"scripts": list(head if head is not None else [THUMB_JS])}
     m["slug"] = "thumbs"
     os.makedirs(into, exist_ok=True)
     out = os.path.join(into, "sketch.json")
@@ -442,20 +515,58 @@ def stills_dir(film_dir):
     return os.path.join(film_dir, "temp", "thumbs", "stills-" + film_key(film_dir))
 
 
+def style_path(film_dir):
+    return os.path.join(stills_dir(film_dir), "style.json")
+
+
 def still_name(t):
     return "%06.2f.png" % t
 
 
-def render_stills(film_dir, times, into=None, env=None, timeout=900):
-    """{t: path} of clean 1920x1080 frames, rendering only the ones not already made. One
-    browser run for all of them (~0.12 s a still after ~3 s of start-up)."""
+def merge_report(old, new):
+    """Two probe reports as one: text styles and cards added up by kind, the largest kept."""
+    if not old:
+        return new
+
+    def fold(a, b, key, add, top):
+        d = {key(x): dict(x) for x in a}
+        for x in b:
+            k = key(x)
+            if k not in d:
+                d[k] = dict(x)
+                continue
+            for f in add:
+                d[k][f] = d[k].get(f, 0) + x.get(f, 0)
+            for f in top:
+                d[k][f] = max(d[k].get(f, 0), x.get(f, 0))
+        return list(d.values())
+
+    out = dict(new)
+    out["txt"] = fold(old.get("txt") or [], new.get("txt") or [],
+                      lambda x: (x["font"], x["wt"], x["col"]), ("n", "chars"), ("max",))  # fmt: skip
+    out["card"] = fold(old.get("card") or [], new.get("card") or [],
+                       lambda x: (x["fill"], x["r"], x.get("stroke"), x.get("shadow")), ("n", "area"), ())  # fmt: skip
+    img = dict(old.get("img") or {})
+    for k, v in (new.get("img") or {}).items():
+        o = img.get(k) or {"n": 0, "w": 0}
+        img[k] = {"n": o["n"] + v.get("n", 0), "w": max(o["w"], v.get("w", 0))}
+    out["img"] = img
+    return out
+
+
+def render_stills(
+    film_dir, times, into=None, env=None, head=None, fonts=(), style=True, timeout=900
+):
+    """{t: path} of 1920x1080 frames, rendering only the ones not already made. One browser run
+    for all of them (~0.12 s a still after ~3 s of start-up). With `style`, what the probe saw
+    while they were drawn is folded into the film's recorded look (style.json)."""
     into = into or stills_dir(film_dir)
     os.makedirs(into, exist_ok=True)
     ts = sorted({round(float(t), 2) for t in times})
     have = {t: os.path.join(into, still_name(t)) for t in ts}
     need = [t for t, p in have.items() if not os.path.exists(p)]
     if need:
-        man = clean_manifest(film_dir, os.path.join(into, "manifest"))
+        man = clean_manifest(film_dir, os.path.join(into, "manifest"), head=head, fonts=fonts)
         cmd = _env.PY + [
             os.path.join(_env.ROOT, "scripts", "sketch-render.py"),
             "--manifest",
@@ -475,7 +586,36 @@ def render_stills(film_dir, times, into=None, env=None, timeout=900):
                 "no still at %s: %s"
                 % (", ".join("%.2f" % t for t in missing[:4]), " | ".join(said))
             )
+        rep = os.path.join(into, "report.json")
+        if os.path.exists(rep):
+            if style:
+                with open(rep, encoding="utf-8") as f:
+                    new = json.load(f)
+                p = style_path(film_dir)
+                old = None
+                if os.path.exists(p):
+                    with open(p, encoding="utf-8") as f:
+                        old = json.load(f)
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                with open(p + ".tmp", "w", encoding="utf-8") as f:
+                    json.dump(merge_report(old, new), f, ensure_ascii=False)
+                os.replace(p + ".tmp", p)
+            os.remove(rep)
     return have
+
+
+def probe(film_dir, env=None):
+    """The film's look as its probe recorded it; a few of its moments are drawn first when none
+    of its stills ever was with the probe (a film made before thumbnails)."""
+    p = style_path(film_dir)
+    if not os.path.exists(p):
+        ts = moment_times(narration(film_dir), film_length(film_dir))
+        tmp = os.path.join(film_dir, "temp", "thumbs", "probe")
+        shutil.rmtree(tmp, ignore_errors=True)
+        render_stills(film_dir, ts, into=tmp, env=env)
+        shutil.rmtree(tmp, ignore_errors=True)
+    with open(p, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def load_still(path):
@@ -648,14 +788,9 @@ def ocr():
     return _CACHE["ocr"]
 
 
-def text_boxes(img):
-    """The words the film itself draws in this frame, as pixel boxes grown a little: RapidOCR
-    (local) on a half-size copy, 0.2-0.7 s a frame. Measured on the studio's films it finds
-    headings, thin labels, handwriting, Cyrillic and a rotated bottle label. The thumbnail's own
-    words, slabs and panels may cover none of them: a bake-off option that slid a panel over a
-    wine film's "DEEP - FLORAL" and a slab over an app ad's "Month-end" is why (2026-09-29).
-    Words under min_h_px tall are left to the subject map: an app's screen is full of them, and
-    protecting every one left no room for a slab anywhere on it."""
+def _ocr_lines(img):
+    """Every line of words the film draws in this frame, [(x0, y0, x1, y1, height)] grown a
+    little: RapidOCR (local) on a half-size copy, 0.2-0.7 s a frame."""
     if "_text" in img.info:
         return img.info["_text"]
     W, H = size()
@@ -668,25 +803,23 @@ def text_boxes(img):
         if score < t["min_score"]:
             continue
         xs, ys = [float(q[0]) * 2 for q in box], [float(q[1]) * 2 for q in box]
-        if max(ys) - min(ys) < t["min_h_px"]:
-            continue  # a phone's or a card's own small print: part of the picture, not a line to read
         g = t["grow_px"]
-        out.append(
-            (max(0, min(xs) - g), max(0, min(ys) - g), min(W, max(xs) + g), min(H, max(ys) + g))
-        )
+        out.append((max(0, min(xs) - g), max(0, min(ys) - g), min(W, max(xs) + g),
+                    min(H, max(ys) + g), max(ys) - min(ys)))  # fmt: skip
     img.info["_text"] = out
     return out
 
 
-def text_grid(img, cell=8):
-    """text_boxes on the detail map's grid: True where the film has words."""
-    W, H = size()
-    g = np.zeros((H // cell, W // cell), dtype=bool)
-    for x0, y0, x1, y1 in text_boxes(img):
-        g[
-            int(y0 // cell) : int(math.ceil(y1 / cell)), int(x0 // cell) : int(math.ceil(x1 / cell))
-        ] = True
-    return g
+def text_boxes(img, min_h=None):
+    """The words the film itself draws in this frame that a thumbnail may not cover, as pixel
+    boxes. Measured on the studio's films, OCR finds headings, thin labels, handwriting,
+    Cyrillic and a rotated bottle label. A card or a panel may hide a phone's or a card's own
+    small print (under min_h_px: an app screen is full of it, and protecting every one left no
+    room for a card anywhere on it); words drawn straight on the picture may cross none of the
+    film's words (headline_min_h_px) -- "On for everyone" set over an "AI MODEL UPDATE" label
+    and a "Default" chip read as a collision (2026-09-29)."""
+    h = cfg()["text"]["min_h_px"] if min_h is None else min_h
+    return [b[:4] for b in _ocr_lines(img) if b[4] >= h]
 
 
 def region(name):
@@ -710,11 +843,15 @@ def _hits(a, b):
     return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
 
 
-def place(bw, bh, dmap, smap=None, area=None, centre_penalty=0.0, cell=8, tmap=None):
-    """Where a bw x bh block goes, inside `area`, clear of the badge and of the film's own words
-    (tmap): (x0, y0, busy, cover), or None. Busy is the mean detail under the block; cover is the
-    share of the subjects (smap) it would hide. It goes where it hides least, then where it is
-    quietest."""
+def place(bw, bh, dmap, smap=None, area=None, centre_penalty=0.0, cell=8, busy_weight=1.0,
+          avoid=(), whole=False):  # fmt: skip
+    """Where a bw x bh block goes, inside `area`, clear of the badge and of the film's own words:
+    (x0, y0, busy, cover), or None. Busy is the mean detail under the block; cover is the share of
+    the subjects (smap) it would hide. It goes where it hides least, then where it is quietest.
+
+    `avoid` are the film's words (text_boxes). Words drawn straight on the picture may touch none
+    of them; an opaque block (`whole`: a card) may hide one entirely, like a sticker over it, but
+    never cut through one -- a half-hidden "Month-e" reads broken, a covered chip does not."""
     W, H = size()
     safe, badge = safe_rects()
     ax0, ay0, ax1, ay1 = area or safe
@@ -725,28 +862,31 @@ def place(bw, bh, dmap, smap=None, area=None, centre_penalty=0.0, cell=8, tmap=N
     ii = np.pad(dmap, ((1, 0), (1, 0))).cumsum(0).cumsum(1)
     sm = smap if smap is not None else np.zeros_like(dmap)
     si = np.pad(sm, ((1, 0), (1, 0))).cumsum(0).cumsum(1)
-    tm = tmap if tmap is not None else np.zeros(dmap.shape, dtype=bool)
-    ti = np.pad(tm.astype("int32"), ((1, 0), (1, 0))).cumsum(0).cumsum(1)
     cw, ch = max(1, math.ceil(bw / cell)), max(1, math.ceil(bh / cell))
     best = None
     step = 2 * cell
     xs = list(range(ax0, ax1 - bw + 1, step)) + [ax1 - bw]
     ys = list(range(ay0, ay1 - bh + 1, step)) + [ay1 - bh]
-    for y in ys:
-        for x in xs:
-            if _hits((x, y, x + bw, y + bh), badge):
+    X, Y = np.array(xs), np.array(ys)
+    bad = np.zeros((len(ys), len(xs)), dtype=bool)
+    for bx0, by0, bx1, by1 in avoid:
+        touch = np.outer((Y < by1) & (Y + bh > by0), (X < bx1) & (X + bw > bx0))
+        if whole:
+            touch &= ~np.outer((Y <= by0) & (Y + bh >= by1), (X <= bx0) & (X + bw >= bx1))
+        bad |= touch
+    for iy, y in enumerate(ys):
+        for ix, x in enumerate(xs):
+            if bad[iy, ix] or _hits((x, y, x + bw, y + bh), badge):
                 continue
             cx, cy = x // cell, y // cell
             cx1, cy1 = min(dmap.shape[1], cx + cw), min(dmap.shape[0], cy + ch)
-            if ti[cy1, cx1] - ti[cy, cx1] - ti[cy1, cx] + ti[cy, cx]:
-                continue  # it would hide words the film itself shows
             s = ii[cy1, cx1] - ii[cy, cx1] - ii[cy1, cx] + ii[cy, cx]
             busy = float(s / max(1, (cy1 - cy) * (cx1 - cx)))
             cover = float(si[cy1, cx1] - si[cy, cx1] - si[cy1, cx] + si[cy, cx])
             # a small nudge off dead centre, where the subject usually is
             dx = abs((x + bw / 2) / W - 0.5) * 2
             dy = abs((y + bh / 2) / H - 0.5) * 2
-            score = cover + busy + centre_penalty * (1 - max(dx, dy)) * 0.01
+            score = cover + busy_weight * busy + centre_penalty * (1 - max(dx, dy)) * 0.01
             if best is None or score < best[4]:
                 best = (x, y, busy, cover, score)
     return best[:4] if best else None
@@ -766,7 +906,7 @@ def block_at(toks, font, cap, max_w, max_h, max_lines, gap_frac, pad=0.0):
     a dict of lines with their widths and ink extents, or None."""
     ratio = cap_ratio(font["file"])
     px = max(8, round(cap / ratio))
-    f = pil_font(font["file"], px)
+    f = pil_font(font["file"], px, font.get("weight"))
     tr = font.get("tracking", 0.0) * px
     up = font.get("upper")
     words = [[(t.upper() if up else t, a) for t, a in segs] for segs in toks]
@@ -793,12 +933,13 @@ def block_at(toks, font, cap, max_w, max_h, max_lines, gap_frac, pad=0.0):
 
 
 def runs(ws, ink, accent):
-    """A line's words as SVG runs: the accented part in the accent, the rest in ink."""
+    """A line's words as runs for sketch/thumb.js: the accented part in the accent, the rest in
+    ink, a space after each word but the last."""
     out = []
     for i, segs in enumerate(ws):
         for j, (t, a) in enumerate(segs):
             space = " " if j == len(segs) - 1 and i < len(ws) - 1 else ""
-            out.append({"text": t + space, "fill": rgb_hex(accent if a else ink)})
+            out.append({"text": t + space, "col": rgb_hex(accent if a else ink)})
     return out
 
 
@@ -808,7 +949,6 @@ def _mean_rgb(img, box):
     return tuple(a.reshape(-1, 3).mean(axis=0))
 
 
-# ------------------------------------------------------------------ layouts
 def tries(wanted):
     """(cap height, area) to try, largest first: inside the writer's place, then anywhere."""
     c = cfg()["cap"]
@@ -816,35 +956,157 @@ def tries(wanted):
     return [(cap, area) for area in ([wanted, None] if wanted else [None]) for cap in caps]
 
 
-def layout_headline(img, words, look, scrim=False, where=None):
-    """Words large over the picture where they hide the least of it (inside the writer's
-    `where` when given): an option dict, or None when they cannot be set legibly there."""
+# ------------------------------------------------------------------ the film's own look
+def film_style(film_dir, env=None):
+    """How this film looks, for its thumbnails, from what its probe saw it draw:
+
+    crayon      hand-drawn (it boils) or clean
+    paper, text, ink, accent, accent_fill   its palette (SK.C: the ground's colours, as the
+                film set them), as (r, g, b)
+    heads       the type to set words in, best first: the film's own text styles, biggest
+                first (its headline), each with its colour -- then, for words its type has no
+                glyphs for or a film with no text of its own, the studio's print hand (drawn)
+                or a plain sans (clean)
+    card        its cards: fill, corners, outline, shadow (or a hand-drawn note on crayon)
+    logo        a logo it shows ({name, file, aspect}), or None
+    """
+    rep = probe(film_dir, env)
+    c = cfg()
+    C = rep.get("C") or {}
+    crayon = bool((rep.get("style") or {}).get("boil"))
+    paper = colour(C.get("paper"), (247, 242, 231))
+    text = colour(C.get("text") or C.get("ink"), (42, 37, 33))
+    ink = colour(C.get("ink"), text)
+    accent = colour(C.get("accentText") or C.get("accent"), text)
+    accent_fill = colour(C.get("accent"), accent)
+    fonts = film_fonts(film_dir)
+    heads, seen = [], set()
+    styles = [x for x in rep.get("txt") or [] if x.get("chars", 0) >= 2 and x.get("max", 0) >= 24]
+    for x in sorted(styles, key=lambda x: (-x["max"], -x["n"])):
+        f = font_for(fonts, x["font"], x["wt"])
+        if f and (x["font"], _weight(x["wt"])) not in seen:
+            seen.add((x["font"], _weight(x["wt"])))
+            k = x.get("stroke") or None
+            heads.append({"file": f, "family": x["font"], "weight": str(_weight(x["wt"])),
+                          "col": colour(x["col"], text), "size": x["max"], "film": True,
+                          "stroke": {"w": float(k["w"]), "col": colour(k["col"], ink)} if k else None})  # fmt: skip
+    for f in c["fonts"]["no_text"]["crayon" if crayon else "clean"] + c["fonts"]["fallback"]:
+        heads.append(dict(f, col=text, film=False))
+    card = max(rep.get("card") or [], key=lambda x: x.get("area", 0), default=None)
+    if card:
+        card = {
+            "fill": colour(card["fill"], (255, 255, 255)),
+            "r": float(card.get("r") or 18),
+            "stroke": colour(card["stroke"]) if card.get("stroke") else None,
+            "strokeW": float(card.get("strokeW") or 2),
+            "shadow": bool(card.get("shadow")),
+            "sketch": False,
+        }
+    else:  # a film with no cards of its own: one made of its paper, edged in its accent (a
+        # hand-drawn note on crayon) -- a stock white card sat on a black-and-gold wine film
+        d = c["card"]["default_crayon" if crayon else "default_clean"]
+        card = {
+            "fill": paper,
+            "r": d["r"],
+            "stroke": ink if d.get("sketch") else accent_fill,
+            "strokeW": d.get("strokeW", 3),
+            "shadow": d.get("shadow", False),
+            "sketch": bool(d.get("sketch")),
+        }
+    logo = None
+    shown = rep.get("img") or {}
+    names = [n for n in rep.get("images") or [] if "logo" in n.lower()]
+    names.sort(key=lambda n: -(shown.get(n) or {}).get("n", 0))
+    files = film_images(film_dir)
+    for n in names:
+        p = files.get(n)
+        if p and os.path.exists(p):
+            with Image.open(p) as im:
+                logo = {"name": n, "file": p, "aspect": im.width / max(1, im.height)}
+            break
+    return {"crayon": crayon, "paper": paper, "text": text, "ink": ink, "accent": accent,
+            "accent_fill": accent_fill, "heads": heads, "card": card, "logo": logo}  # fmt: skip
+
+
+def pick_head(st, words):
+    """The film's type that has every glyph of the words (its headline first)."""
+    for h in st["heads"]:
+        if covers(h["file"], plain(words)):
+            return h
+    return None
+
+
+def _reads(a, b):
+    return float(contrast(luminance(a), luminance(b)))
+
+
+def _ink(st, head, under):
+    """The words' ink: the film's own colour for this type where it reads on what is under it
+    (with room to spare: grain and paper texture take a little off it on the picture), else the
+    one of the film's text, ink and paper colours that does, else the best of them deepened --
+    or lightened -- just enough, its hue kept. A crayon film's own text colour on its own paper
+    measured 4.2-4.5:1 once drawn (2026-09-29): a touch darker reads at 168 px and looks the same."""
+    need = cfg()["contrast_min"] + cfg()["ink_margin"]
+    cands = [head["col"], st["text"], st["ink"], st["paper"]]
+    for c in cands:
+        if _reads(c, under) >= need:
+            return c
+    best = max(cands, key=lambda c: _reads(c, under))
+    return fit_contrast(best, under, need)
+
+
+def _accent(st, ink, under):
+    """The starred word's colour: the film's accent for words, or its accent, where it reads with
+    the ink's margin to spare (a crayon film's rust accent on its pale card: 4.6:1 as colours,
+    4.2:1 once drawn under the grain and vignette, 2026-09-29) -- else deepened just enough."""
+    need = cfg()["contrast_min"] + cfg()["ink_margin"]
+    for c in (st["accent"], st["accent_fill"]):
+        if c != ink and _reads(c, under) >= need:
+            return c
+    return fit_contrast(st["accent"], under, need + 0.3)
+
+
+def _lines(b, ax, top, anchor, head, ink, accent, rot=0.0, cx=0.0, cy=0.0, stroke=None):
+    out, y = [], top + b["ascent"]
+    for L in b["lines"]:
+        x = {"start": ax, "end": ax - L["w"], "middle": ax - L["w"] / 2}[anchor]
+        out.append({"x": round(x, 1), "y": round(y, 1), "size": b["px"], "w": round(L["w"], 1),
+                    "family": head["family"], "wt": head["weight"], "runs": runs(L["words"], ink, accent),
+                    "rot": rot, "cx": round(cx, 1), "cy": round(cy, 1),
+                    "stroke": {"w": round(stroke["w"] * b["px"], 1), "col": rgb_hex(stroke["col"])} if stroke else None})  # fmt: skip
+        y += b["step"]
+    return out
+
+
+def _font(head):
+    return {"file": head["file"], "weight": head["weight"], "tracking": 0.0, "upper": False}
+
+
+# ------------------------------------------------------------------ layouts
+def layout_headline(img, words, st, glow=False, where=None):
+    """The words large over the picture, in the film's headline type and colours, where they
+    hide the least of it (inside the writer's `where` when it has room). On a busy part of the
+    picture, a soft glow of the film's paper goes behind them -- the film's own ground, not an
+    outline the film never uses. None when they cannot be set legibly."""
     c, h = cfg(), cfg()["headline"]
     W, H = size()
     toks = tokens(words)
-    font = pick_font(plain(words), look)
-    if not font or not toks:
+    head = pick_head(st, words)
+    if not head or not toks:
         return None
-    dm, sm, tm = detail_map(img), subject_map(img), text_grid(img)
-    stroke = h["stroke_frac"]
+    font = _font(head)
+    dm, sm = detail_map(img), subject_map(img)
+    avoid = text_boxes(img, min_h=cfg()["text"]["headline_min_h_px"])
     tried = []
     for cap, area in tries(region(where)):
         if tried and area is None and tried[-1][2] is not None:
             break  # the writer's place had room: keep to it
-        pad = stroke * cap / cap_ratio(font["file"]) / 2
-        b = block_at(
-            toks,
-            font,
-            cap,
-            W * h["max_w_frac"],
-            H * 0.62,
-            h["max_lines"],
-            c["cap"]["line_gap"],
-            pad,
-        )
+        pad = h["pad_frac"] * cap + (c["glow"]["grow_frac"] * cap if glow else 0)
+        b = block_at(toks, font, cap, W * h["max_w_frac"], H * 0.62, h["max_lines"], c["cap"]["line_gap"], pad)  # fmt: skip
         if not b:
             continue
-        p = place(round(b["w"]), round(b["h"]), dm, sm, area, h["centre_penalty"], tmap=tm)
+        p = place(round(b["w"]), round(b["h"]), dm, sm, area, h["centre_penalty"], avoid=avoid,
+                  whole=glow, busy_weight=h["busy_weight"])  # fmt: skip
         if not p:
             continue
         tried.append((b, p, area))
@@ -857,258 +1119,241 @@ def layout_headline(img, words, look, scrim=False, where=None):
     x0, y0, busy, cover = p
     box = (x0, y0, x0 + round(b["w"]), y0 + round(b["h"]))
     under = _mean_rgb(img, box)
-    light = luminance(under) > 0.36
-    col = c["colours"]
-    ink = hex_rgb(col["ink_dark"] if light else col["ink_light"])
-    edge = hex_rgb(col["ink_light"] if light else col["ink_dark"])
-    accent = fit_contrast(accent_colour(img), edge, c["contrast_min"] + 0.5)
-    anchor = (
-        "start"
-        if (x0 + b["w"] / 2) < W * 0.42
-        else ("end" if (x0 + b["w"] / 2) > W * 0.58 else "middle")
-    )
-    pad = stroke * b["px"] / 2
+    ink = _ink(st, head, under)
+    if not glow and (busy > h["quiet_max"] or _reads(ink, under) < c["contrast_min"] + 1):
+        return layout_headline(img, words, st, glow=True, where=where)
+    grow = c["glow"]["grow_frac"] * b["cap"]
+    halo = None
+    if glow:
+        g = c["glow"]
+        # the film's paper where it reads with the ink, else the plainest tone that does
+        col = st["paper"] if _reads(ink, st["paper"]) >= c["contrast_min"] + 1 else (
+            (255, 255, 255) if luminance(ink) < 0.4 else (0, 0, 0))  # fmt: skip
+        gb = box  # the glow is the block: the words sit inside it, their padding its edge
+        halo = {"x": round(gb[0]), "y": round(gb[1]), "w": round(gb[2] - gb[0]), "h": round(gb[3] - gb[1]),
+                "r": round(grow * 0.5), "col": rgb_hex(col), "alpha": g["alpha"],
+                "blur": round(g["blur_frac"] * b["cap"])}  # fmt: skip
+        under = col
+    accent = _accent(st, ink, under)
+    mid = x0 + b["w"] / 2
+    anchor = "start" if mid < W * 0.42 else ("end" if mid > W * 0.58 else "middle")
+    pad = h["pad_frac"] * b["cap"] + (grow if glow else 0)
     ax = {"start": x0 + pad, "end": box[2] - pad, "middle": (box[0] + box[2]) / 2}[anchor]
-    lines, y = [], y0 + pad + b["ascent"]
-    for L in b["lines"]:
-        lines.append(
-            {
-                "x": round(ax, 1),
-                "y": round(y, 1),
-                "anchor": anchor,
-                "runs": runs(L["words"], ink, accent),
-            }
-        )
-        y += b["step"]
     return {
         "layout": "headline",
         "words": words,
-        "font": font,
+        "head": head,
         "cap": b["cap"],
         "px": b["px"],
         "box": box,
         "busy": round(busy, 4),
         "cover": round(cover, 3),
-        "scrim": scrim or busy > h["quiet_max"],
-        "scrim_dark": not light,
-        "ctx": {
-            "family": font["family"],
-            "weight": font["weight"],
-            "size": b["px"],
-            "tracking": round(b["tracking"], 2),
-            "ink": rgb_hex(ink),
-            "stroke": rgb_hex(edge),
-            "stroke_w": round(stroke * b["px"], 1),
-            "shadow": col["shadow"] if not light else rgb_hex(edge),
-            "shadow_blur": round(h["shadow_blur_frac"] * b["px"], 1),
-            "shadow_dy": round(h["shadow_dy_frac"] * b["px"], 1),
-            "lines": [
-                dict(
-                    L,
-                    family=font["family"],
-                    weight=font["weight"],
-                    size=b["px"],
-                    tracking=round(b["tracking"], 2),
-                )
-                for L in lines
-            ],  # fmt: skip
-        },
+        "glow": bool(halo),
+        "spec": {
+            "lines": _lines(
+                b,
+                ax,
+                y0 + pad,
+                anchor,
+                head,
+                ink,
+                accent,
+                stroke=head.get("stroke") if ink == head["col"] and not halo else None,
+            ),
+            "glow": halo,
+        },  # fmt: skip
     }
 
 
-def layout_slab(img, words, look, where=None):
-    """Each line of words on its own block of the film's accent, tilted a touch."""
-    c, s = cfg(), cfg()["slab"]
+def layout_card(img, words, st, where=None, logo_ok=True):
+    """The words on one of the film's own cards -- its fill, corners, outline and shadow (a
+    hand-drawn note on a crayon film, tilted a touch) -- where it hides the least."""
+    c, k = cfg(), cfg()["card"]
     W, H = size()
     toks = tokens(words)
-    font = pick_font(plain(words), look)
-    if not font or not toks:
+    head = pick_head(st, words)
+    if not head or not toks:
         return None
-    dm, sm, tm = detail_map(img), subject_map(img), text_grid(img)
-    slab = accent_colour(img)
-    col = c["colours"]
-    inks = [hex_rgb(col["ink_dark"]), hex_rgb(col["ink_light"])]
-    ink = max(inks, key=lambda k: float(contrast(luminance(k), luminance(slab))))
-    if float(contrast(luminance(ink), luminance(slab))) < c["contrast_min"]:
-        slab = fit_contrast(slab, ink, c["contrast_min"] + 0.5)
+    font = _font(head)
+    look = st["card"]
+    fill = look["fill"]
+    ink = _ink(st, head, fill)
+    accent = _accent(st, ink, fill)
+    tilt = k["tilt_crayon"] if st["crayon"] else 0.0
+    logo = st["logo"] if logo_ok else None
+    dm, sm = detail_map(img), subject_map(img)
+    avoid = text_boxes(img, min_h=cfg()["text"]["headline_min_h_px"])
     chosen = None
     for cap, area in tries(region(where)):
         if chosen and area is None and chosen[-1] is not None:
             break  # the writer's place had room: keep to it
-        px_, py_ = s["pad_frac"][0] * cap, s["pad_frac"][1] * cap
-        b = block_at(
-            toks,
-            font,
-            cap,
-            W * s["max_w_frac"] - 2 * px_,
-            H * 0.7,
-            s["max_lines"],
-            c["cap"]["line_gap"],
-        )
+        px_, py_ = k["pad_frac"][0] * cap, k["pad_frac"][1] * cap
+        lh = k["logo_h_frac"] * cap if logo else 0.0
+        lgap = k["logo_gap_frac"] * cap if logo else 0.0
+        b = block_at(toks, font, cap, W * k["max_w_frac"] - 2 * px_, H * 0.6 - 2 * py_ - lh - lgap, k["max_lines"], c["cap"]["line_gap"])  # fmt: skip
         if not b:
             continue
-        rows = []
-        for L in b["lines"]:
-            rh = (L["bottom"] - min(L["top"], -cap)) + 2 * py_
-            rows.append({"L": L, "rw": L["w"] + 2 * px_, "rh": rh})
-        gap = s["gap_frac"] * cap
-        bw = max(r["rw"] for r in rows) + 0.05 * cap  # the tilt reaches past the widest slab
-        bh = sum(r["rh"] for r in rows) + gap * (len(rows) - 1) + 0.04 * bw
-        p = place(round(bw), round(bh), dm, sm, area, cfg()["headline"]["centre_penalty"], tmap=tm)
-        if p and (chosen is None or p[3] < chosen[2][3]):
-            chosen = (b, rows, p, px_, py_, gap, bw, bh, area)
+        cw = max(b["w"], lh * st["logo"]["aspect"] if logo else 0) + 2 * px_
+        ch = b["h"] + 2 * py_ + lh + lgap
+        room = abs(math.sin(math.radians(tilt))) * cw  # a tilted card reaches past its box
+        p = place(round(cw + room), round(ch + room), dm, sm, area, cfg()["headline"]["centre_penalty"],
+                  avoid=avoid, whole=True, busy_weight=cfg()["headline"]["busy_weight"])  # fmt: skip
+        if p and (chosen is None or p[3] < chosen[1][3]):
+            chosen = (b, p, px_, py_, cw, ch, room, lh, lgap, area)
         if p and p[3] <= cfg()["headline"]["cover_max"]:
-            chosen = (b, rows, p, px_, py_, gap, bw, bh, area)
+            chosen = (b, p, px_, py_, cw, ch, room, lh, lgap, area)
             break
     if not chosen:
         return None
-    b, rows, (x0, y0, busy, cover), px_, py_, gap, bw, bh, _ = chosen
-    out, y = [], y0 + 0.02 * bw
-    for r in rows:
-        L = r["L"]
-        top = min(L["top"], -b["cap"])
-        base = y + py_ - top
-        ry = y
-        out.append({
-            "rx": round(x0, 1), "ry": round(ry, 1), "rw": round(r["rw"], 1), "rh": round(r["rh"], 1),
-            "cx": round(x0 + r["rw"] / 2, 1), "cy": round(ry + r["rh"] / 2, 1),
-            "x": round(x0 + px_, 1), "y": round(base, 1),
-            "runs": runs(L["words"], ink, ink),
-            "family": font["family"], "weight": font["weight"], "size": b["px"],
-            "tracking": round(b["tracking"], 2),
-        })  # fmt: skip
-        y += r["rh"] + gap
+    b, (x0, y0, busy, cover), px_, py_, cw, ch, room, lh, lgap, _ = chosen
+    x, y = x0 + room / 2, y0 + room / 2
+    rot = math.radians(tilt)
+    cx, cy = x + cw / 2, y + ch / 2
+    card = {"x": round(x, 1), "y": round(y, 1), "w": round(cw, 1), "h": round(ch, 1), "r": look["r"],
+            "fill": rgb_hex(fill), "stroke": rgb_hex(look["stroke"]) if look["stroke"] else None,
+            "strokeW": look["strokeW"], "shadow": look["shadow"], "sketch": look["sketch"], "rot": rot}  # fmt: skip
+    extra = {}
+    if logo:  # the logo sits in the card's top band, above the words
+        extra["logo"] = {"name": st["logo"]["name"], "x": round(x + px_, 1), "y": round(y + py_ + lh / 2, 1),
+                         "w": round(lh * st["logo"]["aspect"], 1), "h": round(lh, 1)}  # fmt: skip
     return {
-        "layout": "slab",
+        "layout": "card",
         "words": words,
-        "font": font,
+        "head": head,
         "cap": b["cap"],
         "px": b["px"],
-        "box": (x0, y0, round(x0 + bw), round(y0 + bh)),
+        "box": (round(x0), round(y0), round(x0 + cw + room), round(y0 + ch + room)),
         "busy": round(busy, 4),
         "cover": round(cover, 3),
-        "scrim": False,
-        "ctx": {
-            "tilt": s["tilt"],
-            "radius": round(s["radius_frac"] * b["cap"], 1),
-            "slab": rgb_hex(slab),
-            "ink": rgb_hex(ink),
-            "shadow": c["colours"]["shadow"],
-            "shadow_blur": round(0.06 * b["cap"], 1),
-            "shadow_dy": round(0.05 * b["cap"], 1),
-            "lines": out,
+        "spec": {
+            "cards": [card],
+            "lines": _lines(
+                b, x + px_, y + py_ + lh + lgap, "start", head, ink, accent, rot, cx, cy
+            ),
+            **extra,
         },
     }
 
 
-def layout_panel(img, words, look, where=None):
-    """The picture on one side, the words on a panel of the film's ground on the other; the
-    picture slides so its busy part stays in view."""
+def layout_panel(img, words, st, where=None):
+    """The picture on one side, the words on a panel of the film's own paper on the other, a rule
+    of its accent between them and its logo above the words when it shows one. The picture slides
+    (the film's camera moves; nothing is stretched) so its busy part stays in view and the film's
+    own words are never under the panel."""
     c, pnl = cfg(), cfg()["panel"]
     W, H = size()
     toks = tokens(words)
-    font = pick_font(plain(words), look)
-    if not font or not toks:
+    head = pick_head(st, words)
+    if not head or not toks:
         return None
+    font = _font(head)
     dm = detail_map(img)
     third = dm.shape[1] * 2 // 5
     sm = subject_map(img)
-    words_in_film = text_boxes(img)
+    words_in_film = text_boxes(img, min_h=cfg()["text"]["headline_min_h_px"])
     if where and "left" in where:
         sides = [True, False]
     elif where and "right" in where:
         sides = [False, True]
     else:  # the side that hides less of the subjects first
         sides = [True, False] if sm[:, :third].sum() <= sm[:, -third:].sum() else [False, True]
-    ground = ground_colour(img)
-    col = c["colours"]
-    inks = [hex_rgb(col["ink_dark"]), hex_rgb(col["ink_light"])]
-    ink = max(inks, key=lambda k: float(contrast(luminance(k), luminance(ground))))
-    accent = fit_contrast(accent_colour(img), ground, c["contrast_min"] + 0.5)
+    fill = st["paper"]
+    ink = _ink(st, head, fill)
+    accent = _accent(st, ink, fill)
     safe, badge = safe_rects()
     cols = dm.mean(axis=0)
     cx = float((cols * np.arange(len(cols))).sum() / max(1e-6, cols.sum())) * 8
+    logo = st["logo"]
     chosen = None
-    for left_quiet, frac in ((s_, f) for f in pnl["w_fracs"] for s_ in sides):
+    for left, frac in ((s_, f) for f in pnl["w_fracs"] for s_ in sides):
         pw = round(W * frac)
-        px0 = 0 if left_quiet else W - pw
-        # slide the picture so the middle of what is drawn lands in the middle of what shows. It
-        # may only slide under the panel, never away from the far edge, and the film's own words
-        # must stay in view -- not under the panel, not slid off the frame
-        if left_quiet:
+        px0 = 0 if left else W - pw
+        if left:
             want, lo, hi, view = pw + (W - pw) / 2 - cx, 0, pw, (pw, W)
         else:
             want, lo, hi, view = (W - pw) / 2 - cx, -pw, 0, (0, W - pw)
-        for x0_, _, x1_, _ in words_in_film:
-            lo, hi = max(lo, view[0] - x0_), min(hi, view[1] - x1_)
-        if lo > hi:
-            continue  # no slide keeps them all in view: the other side, a wider panel, or a slab
-        shift = min(hi, max(lo, want))
+        # every line of the film's words either wholly in view or wholly under the panel -- never
+        # sliced at its edge or slid off the frame
+        ok = []
+        for sh in np.arange(lo, hi + 1, 8.0):
+            if all(
+                (x0_ + sh >= view[0] and x1_ + sh <= view[1])
+                or (x0_ + sh >= px0 and x1_ + sh <= px0 + pw)
+                for x0_, _, x1_, _ in words_in_film
+            ):
+                ok.append(float(sh))
+        if not ok:
+            continue  # no slide does: the other side, a wider panel, or a card
+        shift = min(ok, key=lambda sh: abs(sh - want))
         inner = pw * 0.1
         area = (max(px0 + inner, safe[0]), safe[1], min(px0 + pw - inner, safe[2]), safe[3])
+        aw = area[2] - area[0]
+        lw = lh = gap = 0
+        if logo:
+            lw = aw * pnl["logo_w_frac"]
+            lh = lw / logo["aspect"]
+            if lh > H * pnl["logo_max_h_frac"]:
+                lh = H * pnl["logo_max_h_frac"]
+                lw = lh * logo["aspect"]
         for cap in range(c["cap"]["max_px"], c["cap"]["min_px"] - 1, -c["cap"]["step_px"]):
-            b = block_at(
-                toks,
-                font,
-                cap,
-                area[2] - area[0],
-                area[3] - area[1],
-                pnl["max_lines"],
-                c["cap"]["line_gap"],
-            )
+            gap = pnl["logo_gap_frac"] * cap if logo else 0
+            b = block_at(toks, font, cap, aw, area[3] - area[1] - lh - gap, pnl["max_lines"], c["cap"]["line_gap"])  # fmt: skip
             if not b:
                 continue
-            # centred in the panel, clear of the duration badge when the panel is on the right
-            x0 = area[0]
-            y0 = (H - b["h"]) / 2
-            box = (x0, y0, x0 + b["w"], y0 + b["h"])
-            if _hits(box, badge):
-                y0 = max(area[1], badge[1] - b["h"] - 8)
-                box = (x0, y0, x0 + b["w"], y0 + b["h"])
-                if _hits(box, badge) or y0 < area[1]:
+            total = lh + gap + b["h"]
+            y0 = (H - total) / 2
+            tb = (area[0], y0 + lh + gap, area[0] + b["w"], y0 + total)
+            if _hits(tb, badge):
+                y0 = max(area[1], badge[1] - total - 8)
+                tb = (area[0], y0 + lh + gap, area[0] + b["w"], y0 + total)
+                if _hits(tb, badge) or y0 < area[1]:
                     continue
-            chosen = (b, x0, y0, left_quiet, pw, px0, shift)
+            chosen = (b, left, pw, px0, shift, area, y0, lh, lw, gap)
             break
         if chosen:
             break
     if not chosen:
         return None
-    b, x0, y0, left_quiet, pw, px0, shift = chosen
-    lines, y = [], y0 + b["ascent"]
-    for L in b["lines"]:
-        lines.append({"x": round(x0, 1), "y": round(y, 1), "anchor": "start",
-                      "runs": runs(L["words"], ink, accent), "family": font["family"],
-                      "weight": font["weight"], "size": b["px"], "tracking": round(b["tracking"], 2)})  # fmt: skip
-        y += b["step"]
-    rule = fit_contrast(accent_colour(img), ground, 3.0)
+    b, left, pw, px0, shift, area, y0, lh, lw, gap = chosen
     rw = pnl["rule_px"]
+    spec = {
+        "panel": {
+            "x": px0,
+            "w": pw,
+            "fill": rgb_hex(fill),
+            "rule": {
+                "x": (pw - rw) if left else (W - pw),
+                "w": rw,
+                "col": rgb_hex(st["accent_fill"]),
+            },
+        },  # fmt: skip
+        "lines": _lines(b, area[0], y0 + lh + gap, "start", head, ink, accent),
+        "camera": {"shift": round(shift)} if shift else None,
+    }
+    if logo:
+        spec["logo"] = {"name": logo["name"], "x": round(area[0], 1), "y": round(y0 + lh / 2, 1),
+                        "w": round(lw, 1), "h": round(lh, 1)}  # fmt: skip
     return {
         "layout": "panel",
         "words": words,
-        "font": font,
+        "head": head,
         "cap": b["cap"],
         "px": b["px"],
-        "box": (round(x0), round(y0), round(x0 + b["w"]), round(y0 + b["h"])),
+        "box": (
+            round(area[0]),
+            round(y0 + lh + gap),
+            round(area[0] + b["w"]),
+            round(y0 + lh + gap + b["h"]),
+        ),
         "busy": 0.0,
-        "scrim": False,
         "shift": round(shift),
-        "ctx": {
-            "px": px0,
-            "pw": pw,
-            "h": H,
-            "panel": rgb_hex(ground),
-            "rule": rgb_hex(rule),
-            "rule_x": (pw - rw) if left_quiet else (W - pw),
-            "rule_w": rw,
-            "ink": rgb_hex(ink),
-            "lines": lines,
-        },
+        "spec": spec,
     }
 
 
 def layout_still(img):
-    """The picture alone, graded -- and pushed in a little toward its subjects, but only when
-    the push keeps them whole (a star cut by the top edge looks like a mistake)."""
+    """The picture alone -- the film's camera pushed in a little toward its subjects, but only
+    when the push keeps them, and the film's own words, whole."""
     W, H = size()
     sm = subject_map(img)
     ys, xs = np.indices(sm.shape)
@@ -1119,160 +1364,82 @@ def layout_still(img):
     y0 = min(H - ch, max(0, cy - ch / 2))
     kept = float(sm[int(y0 // 8) : int((y0 + ch) // 8), int(x0 // 8) : int((x0 + cw) // 8)].sum())
     cut = any(a < x0 or b < y0 or c > x0 + cw or d > y0 + ch for a, b, c, d in text_boxes(img))
-    if kept < cfg()["still"]["keep_min"] or cut:
-        z = 1.0
-    return {"layout": "still", "words": "", "zoom": z, "centre": (cx, cy), "scrim": False}
+    camera = None
+    if kept >= cfg()["still"]["keep_min"] and not cut:
+        # the point the push keeps in place, so the crop [x0, x0 + cw] is what shows
+        px = x0 * z / (z - 1)
+        py = y0 * z / (z - 1)
+        camera = {"zoom": z, "cx": round(px, 1), "cy": round(py, 1)}
+    return {"layout": "still", "words": "", "spec": {"camera": camera} if camera else {}}
 
 
-def layout(kind, img, words, look, scrim=False, where=None):
+def layout(kind, img, words, st, glow=False, where=None):
     if kind == "headline":
-        return layout_headline(img, words, look, scrim, where)
-    if kind == "slab":
-        return layout_slab(img, words, look, where)
+        return layout_headline(img, words, st, glow, where)
+    if kind == "card":  # with the film's logo when it fits, else the words alone
+        return layout_card(img, words, st, where) or (
+            layout_card(img, words, st, where, logo_ok=False) if st["logo"] else None
+        )
     if kind == "panel":
-        return layout_panel(img, words, look, where)
+        return layout_panel(img, words, st, where)
     return layout_still(img)
 
 
-# ------------------------------------------------------------------ the plate
-def plate(img, o):
-    """The picture under the words: graded, slid (panel), zoomed (still), scrimmed."""
-    W, H = size()
-    g = cfg()["grade"]
-    im = (
-        img.convert("RGB").resize((W, H), Image.LANCZOS)
-        if img.size != (W, H)
-        else img.convert("RGB")
-    )
-    im = ImageEnhance.Color(im).enhance(g["colour"])
-    im = ImageEnhance.Contrast(im).enhance(g["contrast"])
-    if o["layout"] == "still" and o.get("zoom", 1) > 1:
-        z = o["zoom"]
-        cw, ch = W / z, H / z
-        cx, cy = o["centre"]
-        x0 = min(W - cw, max(0, cx - cw / 2))
-        y0 = min(H - ch, max(0, cy - ch / 2))
-        im = im.crop((round(x0), round(y0), round(x0 + cw), round(y0 + ch))).resize(
-            (W, H), Image.LANCZOS
+# ------------------------------------------------------------------ drawn by the film
+def paint(film_dir, options, work, st, env=None):
+    """Every option drawn by the film itself (sketch/thumb.js), in one browser run:
+    {n: (the thumbnail, its letters, its footprint)} -- the last two white on black."""
+    keys, used = {}, set()
+    for o in options:
+        k = round(o["t"], 2)
+        while k in used:
+            k = round(k + 0.01, 2)
+        used.add(k)
+        keys[o["n"]] = k
+    os.makedirs(work, exist_ok=True)
+    js = os.path.join(work, "spec.js")
+    spec = {"%.2f" % keys[o["n"]]: o.get("spec") or {} for o in options}
+    with open(js, "w", encoding="utf-8") as f:
+        f.write("SK.THUMB = %s;\n" % json.dumps({"options": spec}, ensure_ascii=False))
+    fonts = [h for h in st["heads"] if not h.get("film")]
+    times = [base + keys[o["n"]] for o in options for base in (1000, 2000, 3000)]
+    shots = render_stills(film_dir, times, into=work, env=env, head=[js, THUMB_JS], fonts=fonts, style=False)  # fmt: skip
+    out = {}
+    for o in options:
+        k = keys[o["n"]]
+        out[o["n"]] = (
+            Image.open(shots[round(1000 + k, 2)]).convert("RGB"),
+            Image.open(shots[round(2000 + k, 2)]).convert("L"),
+            Image.open(shots[round(3000 + k, 2)]).convert("L"),
         )
-    if o["layout"] == "panel" and o.get("shift"):
-        canvas = Image.new("RGB", (W, H), hex_rgb(o["ctx"]["panel"]))
-        canvas.paste(im, (o["shift"], 0))
-        im = canvas
-    if o.get("scrim"):
-        s = cfg()["scrim"]
-        x0, y0, x1, y1 = o["box"]
-        grow = s["grow_frac"] * o["cap"]
-        m = Image.new("L", (W, H), 0)
-        ImageDraw.Draw(m).rounded_rectangle(
-            [x0 - grow, y0 - grow, x1 + grow, y1 + grow],
-            radius=grow,
-            fill=round(255 * s["strength"]),
-        )
-        m = m.filter(ImageFilter.GaussianBlur(s["feather_px"]))
-        tone = (0, 0, 0) if o.get("scrim_dark", True) else (255, 255, 255)
-        im = Image.composite(Image.new("RGB", (W, H), tone), im, m)
-    return im
+    return out
 
 
-# ------------------------------------------------------------------ paint
-def _h2i():
-    if "h2i" not in _CACHE:
-        _CACHE["h2i"] = importlib.import_module("html-to-image")
-    return _CACHE["h2i"]
-
-
-def _template(name):
-    k = ("tpl", name)
-    if k not in _CACHE:
-        with open(_env.resolve(os.path.join(LAYOUT_DIR, name)), encoding="utf-8") as f:
-            _CACHE[k] = f.read()
-    return _CACHE[k]
-
-
-def render_template(tpl, ctx):
-    if "mc" not in _CACHE:
-        _CACHE["mc"] = importlib.import_module("make-card")
-    return _CACHE["mc"].render_template(tpl, ctx)
-
-
-def paint(options, into, browser=None):
-    """Every option's layer and letter mask in one headless shot: [(layer RGBA, mask L)] in
-    the order given (a still option gets (None, None))."""
-    W, H = size()
-    todo = [o for o in options if o["layout"] != "still"]
-    if not todo:
-        return [(None, None) for _ in options]
-    fonts, panels = {}, []
-    for i, o in enumerate(todo):
-        f = o["font"]
-        fonts[(f["family"], f["weight"])] = {
-            "family": f["family"],
-            "weight": f["weight"],
-            "url": font_uri(f["file"]),
-        }
-        tpl = _template(o["layout"] + ".svg")
-        for mask in (False, True):
-            ctx = dict(o["ctx"], n=i, mask=mask, w=W)
-            panels.append({"w": W, "h": H, "body": render_template(tpl, ctx)})
-    page = render_template(
-        _template("_page.html"), {"fonts": list(fonts.values()), "panels": panels}
-    )
-    os.makedirs(into, exist_ok=True)
-    html_path = os.path.join(into, "layers.html")
-    png = os.path.join(into, "layers.png")
-    with open(html_path, "w", encoding="utf-8") as f:
-        f.write(page)
-    try:
-        _h2i().render(
-            html_path, png, browser=browser, viewport=(W, H * len(panels)), scale=1, crop=False
-        )
-    except SystemExit as e:  # html-to-image reports by exiting; a caller wants an exception
-        raise RuntimeError("the layers did not paint: %s" % e) from None
-    big = Image.open(png).convert("RGBA")
-    if big.size != (W, H * len(panels)):
-        raise RuntimeError(
-            "the layers came back %dx%d, not %dx%d" % (*big.size, W, H * len(panels))
-        )
-    shots = iter(
-        (
-            big.crop((0, k * H, W, (k + 1) * H)),
-            big.crop((0, (k + 1) * H, W, (k + 2) * H)).getchannel("A"),
-        )
-        for k in range(0, len(panels), 2)
-    )
-    return [next(shots) if o["layout"] != "still" else (None, None) for o in options]
-
-
-def compose(img, o, layer):
-    im = plate(img, o).convert("RGBA")
-    if layer is not None:
-        im.alpha_composite(layer)
-    return im.convert("RGB")
-
-
-# ------------------------------------------------------------------ checks
-def jpeg(im, quality=None):
-    buf = BytesIO()
-    im.save(buf, "JPEG", quality=quality or cfg()["jpeg_quality"], optimize=True, progressive=True)
-    return buf.getvalue()
-
-
-def covered_text(o, layer):
-    """Pixels of the film's own words that this option's graphics hide (letters, slab, panel)."""
-    if layer is None:
+def covered_text(o, foot):
+    """Pixels of the film's own words that this option's additions cut into (letters, card,
+    panel, logo), from its footprint pass -- the film's words where the camera slide moved them.
+    A card or a panel may hide a line of them whole (98% of it); words drawn straight on the
+    picture may touch none."""
+    if foot is None:
         return 0
-    a = np.asarray(layer.getchannel("A")) > 160
-    shift = o.get("shift") or 0
+    a = np.asarray(foot) > 127
+    shift = ((o.get("spec") or {}).get("camera") or {}).get("shift") or 0
     W, H = size()
+    whole_ok = o["layout"] in ("card", "panel") or bool(o.get("glow"))
     n = 0
-    for x0, y0, x1, y1 in text_boxes(o["img"]):
+    for x0, y0, x1, y1 in text_boxes(o["img"], min_h=cfg()["text"]["headline_min_h_px"]):
         x0, x1 = int(max(0, x0 + shift)), int(min(W, x1 + shift))
-        n += int(a[int(y0) : int(y1), x0:x1].sum()) if x1 > x0 else 0
+        if x1 <= x0:
+            continue
+        hit = a[int(y0) : int(y1), x0:x1]
+        k = int(hit.sum())
+        if k and whole_ok and k >= 0.9 * hit.size:
+            continue
+        n += k
     return n
 
 
-def checks(o, final, mask, layer=None):
+def checks(o, final, mask, foot=None):
     """Every rule the option is held to: (scores, failures). Scores are what the bake-off and
     the CLI print; failures are the rules broken."""
     from scipy import ndimage
@@ -1286,15 +1453,14 @@ def checks(o, final, mask, layer=None):
         fails.append("the JPEG is %.1f MB" % (len(data) / 1e6))
     if o["layout"] == "still":
         return res, fails
-    res["hides_text"] = covered_text(o, layer)
-    if res["hides_text"] > cfg()["text"]["hide_max_px"]:
+    res["hides_text"] = covered_text(o, foot)
+    if res["hides_text"] > c["text"]["hide_max_px"]:
         fails.append("it hides %d pixels of the film's own words" % res["hides_text"])
     m = np.asarray(mask) > 127
     if m.sum() < 50:
-        fails.append("no letters were painted")
+        fails.append("no letters were drawn")
         return res, fails
-    # legibility where YouTube shows it smallest: the cap height it was set at, and the cap
-    # height the letters really reached (the ink of the tallest line)
+    # legibility where YouTube shows it smallest: the cap height the words were set at
     small = c["feed"]["smallest_w"] / W
     res["cap_px"] = o["cap"]
     res["cap_168"] = round(o["cap"] * small, 1)
@@ -1307,9 +1473,9 @@ def checks(o, final, mask, layer=None):
     res["ink_box"] = ink
     # the letters stay where they were put, and out of YouTube's corner and margins
     safe, badge = safe_rects()
-    tol = 0.12 * o["cap"]
+    tol = 0.25 * o["cap"]  # a hand font's glyphs overhang their origin
     x0, y0, x1, y1 = o["box"]
-    if o["layout"] != "slab" and (
+    if o["layout"] != "card" and (
         ink[0] < x0 - tol or ink[1] < y0 - tol or ink[2] > x1 + tol or ink[3] > y1 + tol
     ):
         fails.append("the letters ran outside their box %s: %s" % (o["box"], ink))
@@ -1325,12 +1491,12 @@ def checks(o, final, mask, layer=None):
     res["in_margin"] = edge
     if edge > 0.002 * m.sum():
         fails.append("%d letter pixels in the margins" % edge)
-    # contrast: the letters against the ring of pixels immediately around them (the outline,
-    # where there is one), on the finished picture; 90% of letter pixels must reach it
+    # contrast: the letters against the ring of pixels just around them, on the finished
+    # picture; 90% of letter pixels must reach it
     r = max(2, round(0.045 * o["px"]))
     inner = ndimage.binary_erosion(m, iterations=2)
     ring = ndimage.binary_dilation(m, iterations=r) & ~ndimage.binary_dilation(m, iterations=1)
-    L = luminance_map(final)
+    L = ndimage.gaussian_filter(luminance_map(final), c["contrast_smooth_px"])
     if inner.sum() < 20 or ring.sum() < 20:
         fails.append("the letters are too thin to measure")
     else:
@@ -1340,6 +1506,139 @@ def checks(o, final, mask, layer=None):
         if res["contrast"] < c["contrast_min"]:
             fails.append("contrast %.2f:1 against what is around the letters" % res["contrast"])
     return res, fails
+
+
+# ------------------------------------------------------------------ the whole thing
+DROP = ("spec", "box", "head", "cap", "px", "busy", "cover", "glow", "shift")
+FALLBACK = {
+    "headline": ["headline+glow", "card", "still"],
+    "card": ["still"],
+    "panel": ["card", "still"],
+}
+
+
+def _lay(o, kind, st):
+    if kind == "headline+glow":
+        return layout_headline(o["img"], o["words"], st, glow=True, where=o["place"])
+    if kind == "still" or not o["words"]:
+        return layout_still(o["img"])
+    return layout(kind, o["img"], o["words"], st, where=o["place"])
+
+
+def first_layout(o, kind, st):
+    """The first layout, from `kind` down its fallbacks, that can be set at all (the still
+    alone always can)."""
+    while True:
+        lay = _lay(o, kind, st)
+        if lay is not None:
+            return lay
+        o["notes"].append("the words could not be set as %s" % kind)
+        o["tried"].append(kind)
+        kind = _next(o)
+
+
+def _next(o):
+    """What an option that failed becomes."""
+    steps = FALLBACK.get(o["requested"], ["still"])
+    done = o.get("tried", [])
+    for s in steps:
+        if s not in done:
+            return s
+    return "still"
+
+
+def film_length(film_dir):
+    with open(os.path.join(film_dir, "sketch.json"), encoding="utf-8") as f:
+        return float(json.load(f).get("duration") or 0)
+
+
+def make_options(film_dir, concepts, out_dir, env=None, log=print):
+    """Four finished options for a film, in its own look: [{n, file, layout, requested, at, t,
+    words, font, checks, notes, final}], every one of them passing. Stills are cached per film;
+    the JPEGs go to out_dir."""
+    t0 = time.time()
+    length = film_length(film_dir)
+    work = os.path.join(film_dir, "temp", "thumbs", "work")
+    shutil.rmtree(work, ignore_errors=True)
+    # 1. every frame the settle step looks at, in one browser run (the probe rides along)
+    want = set()
+    for o in concepts:
+        want |= set(settle_times(o["at"], length)[1])
+    stills = render_stills(film_dir, want, env=env)
+    st = film_style(film_dir, env)
+    t_stills = time.time() - t0
+    # 2. the frame, then the words on it, in the film's look
+    opts = []
+    for i, cpt in enumerate(concepts, 1):
+        t, _ = settle(cpt["at"], stills, length)
+        kind = RENAMED.get(cpt["layout"], cpt["layout"])
+        o = {"n": i, "at": cpt["at"], "t": t, "requested": kind, "words": cpt["words"],
+             "place": cpt.get("place"), "notes": [], "tried": []}  # fmt: skip
+        if abs(t - cpt["at"]) > 0.01:
+            o["notes"].append("settled at %.2f s (asked %.2f s)" % (t, cpt["at"]))
+        o["img"] = load_still(stills[t])
+        o.update(first_layout(o, kind, st))
+        opts.append(o)
+    # 3. draw, check, fall back -- until every option passes
+    for rnd in range(4):
+        pending = [o for o in opts if "final" not in o]
+        if not pending:
+            break
+        shots = paint(film_dir, pending, os.path.join(work, "round%d" % rnd), st, env)
+        for o in pending:
+            final, mask, foot = shots[o["n"]]
+            res, fails = checks(o, final, mask, foot)
+            o["checks"] = res
+            if not fails:
+                o["final"] = final
+                continue
+            tag = o["layout"] + ("+glow" if o.get("glow") else "")
+            o["notes"].append("%s failed: %s" % (tag, "; ".join(fails)))
+            o["tried"].append(tag)
+            lay = first_layout(o, _next(o), st)
+            for k in DROP:
+                o.pop(k, None)
+            o.update(lay)
+            if o["layout"] == "still":
+                o["words"] = ""
+    for o in opts:
+        if "final" not in o:  # out of rounds: the frame as the film drew it, which fails nothing
+            for k in DROP:
+                o.pop(k, None)
+            o.update({"layout": "still", "words": "", "spec": {}})
+            o["final"] = o["img"]
+            o["checks"], _ = checks(o, o["final"], None)
+    # 4. write
+    os.makedirs(out_dir, exist_ok=True)
+    out = []
+    for o in opts:
+        path = os.path.join(out_dir, "thumb-%d.jpg" % o["n"])
+        with open(path, "wb") as f:
+            f.write(jpeg(o["final"]))
+        out.append({
+            "n": o["n"], "file": path, "layout": o["layout"], "requested": o["requested"],
+            "at": o["at"], "t": o["t"], "words": o["words"] if o["layout"] != "still" else "",
+            "place": o.get("place"),
+            "font": (o.get("head") or {}).get("family"), "checks": o.get("checks", {}),
+            "notes": o["notes"], "final": o["final"],
+        })  # fmt: skip
+    log(
+        "  thumbnails: %d options in %.1f s (stills %.1f s, %d frames); type %s"
+        % (
+            len(out),
+            time.time() - t0,
+            t_stills,
+            len(want),
+            ", ".join(sorted({x["font"] for x in out if x["font"]})) or "-",
+        )  # fmt: skip
+    )
+    return out
+
+
+def jpeg(im, quality=None):
+    buf = BytesIO()
+    im.save(buf, "JPEG", quality=quality or cfg()["jpeg_quality"], optimize=True, progressive=True)
+    return buf.getvalue()
 
 
 def ocr_recall(final, words, widths=None):
@@ -1366,144 +1665,6 @@ def ocr_recall(final, words, widths=None):
             return m.size >= 0.8 * len(x)
 
         out[w] = round(sum(1 for x in want if x and read(x)) / max(1, len(want)), 2)
-    return out
-
-
-# ------------------------------------------------------------------ the whole thing
-DROP = ("ctx", "box", "font", "cap", "px", "shift", "zoom", "centre", "busy", "cover", "scrim_dark")
-FALLBACK = {
-    "headline": ["headline+scrim", "slab", "still"],
-    "slab": ["still"],
-    "panel": ["slab", "still"],
-}
-
-
-def _lay(o, kind, look):
-    if kind == "headline+scrim":
-        return layout_headline(o["img"], o["words"], look, scrim=True, where=o["place"])
-    if kind == "still" or not o["words"]:
-        return layout_still(o["img"])
-    return layout(kind, o["img"], o["words"], look, where=o["place"])
-
-
-def first_layout(o, kind, look):
-    """The first layout, from `kind` down its fallbacks, that can be set at all (the still
-    alone always can)."""
-    while True:
-        lay = _lay(o, kind, look)
-        if lay is not None:
-            return lay
-        o["notes"].append("the words could not be set as %s" % kind)
-        o["tried"].append(kind)
-        kind = _next(o)
-
-
-def _next(o):
-    """What an option that failed becomes."""
-    steps = FALLBACK.get(o["requested"], ["still"])
-    done = o.get("tried", [])
-    for s in steps:
-        if s not in done:
-            return s
-    return "still"
-
-
-def film_look(film_dir):
-    """crayon / clean / painted, from the studio's record of the film (clean when unknown)."""
-    try:
-        with open(os.path.join(film_dir, "studio.json"), encoding="utf-8") as f:
-            r = json.load(f)
-    except (OSError, ValueError):
-        r = {}
-    if r.get("look") == "painted" or os.path.exists(os.path.join(film_dir, "paint.json")):
-        return "painted"
-    style = ((r.get("direction") or {}).get("style") or "").lower()
-    return "crayon" if style == "crayon" else "clean"
-
-
-def film_length(film_dir):
-    with open(os.path.join(film_dir, "sketch.json"), encoding="utf-8") as f:
-        return float(json.load(f).get("duration") or 0)
-
-
-def make_options(
-    film_dir, concepts, out_dir, title="", look=None, env=None, browser=None, log=print
-):
-    """Four finished options for a film: [{n, file, layout, requested, at, t, words, checks,
-    notes}], every one of them passing. Stills are cached per film; the JPEGs go to out_dir."""
-    t0 = time.time()
-    W, H = size()
-    look = look or film_look(film_dir)
-    length = film_length(film_dir)
-    work = os.path.join(film_dir, "temp", "thumbs", "work")
-    shutil.rmtree(work, ignore_errors=True)
-    # 1. every frame the settle step looks at, in one browser run
-    want = set()
-    for o in concepts:
-        want |= set(settle_times(o["at"], length)[1])
-    stills = render_stills(film_dir, want, env=env)
-    t_stills = time.time() - t0
-    # 2. the frame, then the words on it
-    opts = []
-    for i, cpt in enumerate(concepts, 1):
-        t, rows = settle(cpt["at"], stills, length)
-        o = {"n": i, "at": cpt["at"], "t": t, "requested": cpt["layout"], "words": cpt["words"],
-             "place": cpt.get("place"), "notes": [], "tried": []}  # fmt: skip
-        if abs(t - cpt["at"]) > 0.01:
-            o["notes"].append("settled at %.2f s (asked %.2f s)" % (t, cpt["at"]))
-        o["img"] = load_still(stills[t])
-        o.update(first_layout(o, cpt["layout"], look))
-        opts.append(o)
-    # 3. paint, check, fall back -- until every option passes
-    for rnd in range(4):
-        pending = [o for o in opts if "final" not in o]
-        if not pending:
-            break
-        shots = paint(pending, os.path.join(work, "round%d" % rnd), browser=browser)
-        for o, (layer, mask) in zip(pending, shots):
-            final = compose(o["img"], o, layer)
-            res, fails = checks(o, final, mask, layer)
-            o["checks"] = res
-            if not fails:
-                o["final"] = final
-                continue
-            o["notes"].append(
-                "%s failed: %s"
-                % (o["layout"] + ("+scrim" if o.get("scrim") else ""), "; ".join(fails))
-            )
-            o["tried"].append(o["layout"] + ("+scrim" if o.get("scrim") else ""))
-            lay = first_layout(o, _next(o), look)
-            for k in DROP:
-                o.pop(k, None)
-            o.update(lay)
-            if o["layout"] == "still":
-                o["words"] = ""
-    for o in opts:
-        if "final" not in o:  # out of rounds: the picture alone, which has nothing to fail
-            for k in DROP:
-                o.pop(k, None)
-            o.update(layout_still(o["img"]))
-            o["words"] = ""
-            o["final"] = compose(o["img"], o, None)
-            o["checks"], _ = checks(o, o["final"], None)
-    # 4. write
-    os.makedirs(out_dir, exist_ok=True)
-    out = []
-    for o in opts:
-        path = os.path.join(out_dir, "thumb-%d.jpg" % o["n"])
-        with open(path, "wb") as f:
-            f.write(jpeg(o["final"]))
-        out.append({
-            "n": o["n"], "file": path, "layout": o["layout"], "requested": o["requested"],
-            "at": o["at"], "t": o["t"], "words": o["words"] if o["layout"] != "still" else "",
-            "place": o.get("place"),
-            "font": (o.get("font") or {}).get("family"), "checks": o.get("checks", {}),
-            "notes": o["notes"], "final": o["final"],
-        })  # fmt: skip
-    log(
-        "  thumbnails: %d options in %.1f s (stills %.1f s, %d frames)"
-        % (len(out), time.time() - t0, t_stills, len(want))
-    )
     return out
 
 

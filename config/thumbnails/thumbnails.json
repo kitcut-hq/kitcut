@@ -1,5 +1,5 @@
 {
-  "_comment": "Thumbnail options from a film's own stills (scripts/_thumb.py, scripts/thumb-options.py, studio/thumbs.py). Geometry is in the 1920x1080 design space the options are written at. Every threshold names where it came from; the ones marked _measured were set by the bake-off in docs/reference.md 'Thumbnail options'.",
+  "_comment": "Thumbnail options from a film's own stills, drawn in the film's own look (scripts/_thumb.py, sketch/thumb.js, scripts/thumb-options.py, studio/thumbs.py). Geometry is in the 1920x1080 design space. Every threshold names where it came from; the ones marked _measured were set by the bake-offs in docs/reference.md 'Thumbnail options'.",
   "size": [
     1920,
     1080
@@ -39,62 +39,33 @@
     "_source": "Paddy Galloway's glance test: title and thumbnail are one unit and should complement, not repeat. 'Under 4 words' is a practitioner default, not a measured fact."
   },
   "fonts": {
-    "_comment": "Tried in order; the first whose glyphs cover every character of the words is used. Anton has no Cyrillic, so a Ukrainian line falls through to Montserrat.",
-    "crayon": [
-      {
-        "file": "fonts/BalsamiqSans-Bold.ttf",
-        "family": "Thumb Balsamiq",
-        "weight": 700,
-        "upper": false,
-        "tracking": 0.0
-      }
-    ],
-    "clean": [
-      {
-        "file": "fonts/Anton-Regular.ttf",
-        "family": "Thumb Anton",
-        "weight": 400,
-        "upper": true,
-        "tracking": 0.01
-      },
-      {
-        "file": "fonts/Montserrat-Bold.ttf",
-        "family": "Thumb Montserrat",
-        "weight": 700,
-        "upper": true,
-        "tracking": 0.0
-      }
-    ],
-    "painted": [
-      {
-        "file": "fonts/Anton-Regular.ttf",
-        "family": "Thumb Anton",
-        "weight": 400,
-        "upper": true,
-        "tracking": 0.01
-      },
-      {
-        "file": "fonts/Montserrat-Bold.ttf",
-        "family": "Thumb Montserrat",
-        "weight": 700,
-        "upper": true,
-        "tracking": 0.0
-      }
-    ],
+    "_comment": "The words are set in the film's own type -- its text styles as the probe saw it draw them, biggest first. These are for a film that draws no text of its own, and for words its type has no glyphs for (the page loads them too).",
+    "no_text": {
+      "crayon": [
+        {
+          "file": "fonts/BalsamiqSans-Bold.ttf",
+          "family": "Thumb Balsamiq",
+          "weight": "700"
+        }
+      ],
+      "clean": [
+        {
+          "file": "fonts/Montserrat-Bold.ttf",
+          "family": "Thumb Montserrat",
+          "weight": "700"
+        }
+      ]
+    },
     "fallback": [
       {
         "file": "fonts/Montserrat-Bold.ttf",
         "family": "Thumb Montserrat",
-        "weight": 700,
-        "upper": true,
-        "tracking": 0.0
+        "weight": "700"
       },
       {
         "file": "fonts/BalsamiqSans-Bold.ttf",
         "family": "Thumb Balsamiq",
-        "weight": 700,
-        "upper": false,
-        "tracking": 0.0
+        "weight": "700"
       }
     ]
   },
@@ -107,24 +78,13 @@
   "headline": {
     "max_w_frac": 0.62,
     "max_lines": 2,
-    "stroke_frac": 0.16,
-    "shadow_blur_frac": 0.05,
-    "shadow_dy_frac": 0.035,
     "quiet_max": 0.045,
     "centre_penalty": 0.15,
     "cover_max": 0.1,
-    "_measured": "quiet_max is the mean detail (|dx|+|dy| of the grey frame at 1/8 scale) under a text-sized block above which the words get a scrim. Measured over the moment stills of 8 studio films (2026-09-29): a 320x160 block on an empty ground scores 0.001-0.02, a busy one 0.04-0.13; painted films sit at 0.05-0.09 through most of the frame. cover_max is the share of the frame's subject saliency the words may hide."
-  },
-  "slab": {
-    "max_w_frac": 0.62,
-    "max_lines": 2,
-    "pad_frac": [
-      0.3,
-      0.22
-    ],
-    "tilt": -2.0,
-    "gap_frac": 0.16,
-    "radius_frac": 0.06
+    "_measured": "quiet_max is the mean detail (|dx|+|dy| of the grey frame at 1/8 scale) under a text-sized block above which the words get a scrim. Measured over the moment stills of 8 studio films (2026-09-29): a 320x160 block on an empty ground scores 0.001-0.02, a busy one 0.04-0.13; painted films sit at 0.05-0.09 through most of the frame. cover_max is the share of the frame's subject saliency the words may hide.",
+    "pad_frac": 0.06,
+    "busy_weight": 6.0,
+    "_busy_weight": "A block's score is the share of the subjects it hides plus busy_weight x the mean detail under it: detail runs 0.001-0.13, subject shares 0-0.3, so at 1 a busy spot barely counted and a headline landed on a UI card's labels (2026-09-29)."
   },
   "panel": {
     "max_lines": 4,
@@ -132,22 +92,15 @@
     "w_fracs": [
       0.4,
       0.5
-    ]
+    ],
+    "logo_w_frac": 0.55,
+    "logo_max_h_frac": 0.16,
+    "logo_gap_frac": 0.6
   },
   "still": {
     "max_zoom": 1.1,
     "keep_min": 0.97,
     "_why": "A still is pushed in (subject as large as possible, YouTube Help 12340300) only when the crop keeps 97% of the frame's subject saliency; otherwise it is shown whole."
-  },
-  "scrim": {
-    "grow_frac": 0.45,
-    "feather_px": 70,
-    "strength": 0.62
-  },
-  "grade": {
-    "colour": 1.08,
-    "contrast": 1.04,
-    "_why": "Colourfulness and brightness predict how much of a branded video people watch (Koh & Cui 2022, Decision Support Systems 157). A light lift only: the films' flat fills clip if it is pushed."
   },
   "settle": {
     "offsets": [
@@ -173,20 +126,11 @@
     "min_gap": 1.0,
     "layouts": [
       "headline",
-      "slab",
+      "card",
       "panel",
       "still"
     ],
     "_min_gap": "The same as the moments sheet's own spacing: four picks from the sheet are four different frames. It was 2 s, which the sheet itself breaks (moments 1 s apart), and the first real draft spent a second call on it (2026-09-29)."
-  },
-  "colours": {
-    "accent_default": "#FFC72C",
-    "ink_light": "#FFFFFF",
-    "ink_dark": "#15110F",
-    "shadow": "#000000",
-    "accent_min_sat": 0.45,
-    "accent_min_val": 0.35,
-    "accent_ground_hue": 20
   },
   "places": {
     "top": [
@@ -239,7 +183,40 @@
     "hide_max_px": 40,
     "_measured": "OCR (RapidOCR, local) finds the words a film draws -- headings, thin labels, handwriting, Cyrillic, a rotated bottle label -- in 0.2-0.7 s a frame at half size (6 frames of 6 films, 2026-09-29). Boxes are grown by grow_px; a box read with less than min_score confidence is texture, not words. hide_max_px allows a drop shadow's fringe.",
     "min_h_px": 32,
-    "_min_h_px": "Measured on 7 frames of 6 films (2026-09-29): an app screen's own print is 22-30 px tall at 1080p, the labels and captions people read 34-70 px (a wine's tasting notes 34-42, a diagram's labels 52-66), headings 70-116."
+    "_min_h_px": "Measured on 7 frames of 6 films (2026-09-29): an app screen's own print is 22-30 px tall at 1080p, the labels and captions people read 34-70 px (a wine's tasting notes 34-42, a diagram's labels 52-66), headings 70-116.",
+    "headline_min_h_px": 12
   },
-  "_contrast_measured": "Same bake-off: contrast of the 24 worded options 4.81-12.4:1, median 9.07."
+  "_contrast_measured": "Same bake-off: contrast of the 24 worded options 4.81-12.4:1, median 9.07.",
+  "card": {
+    "max_w_frac": 0.62,
+    "max_lines": 2,
+    "pad_frac": [
+      0.42,
+      0.34
+    ],
+    "tilt_crayon": -2.0,
+    "default_clean": {
+      "r": 18,
+      "shadow": true,
+      "strokeW": 3
+    },
+    "default_crayon": {
+      "r": 12,
+      "sketch": true,
+      "strokeW": 3
+    },
+    "_why": "The film's own card (the probe's biggest) when it draws any; else one of its paper edged in its accent (a hand-drawn note on crayon) -- a stock white card looked foreign on a dark wine film (2026-09-29).",
+    "logo_h_frac": 0.62,
+    "logo_gap_frac": 0.38
+  },
+  "glow": {
+    "grow_frac": 0.35,
+    "blur_frac": 0.1,
+    "alpha": 0.97,
+    "_why": "Behind words on a busy part of the picture: a soft patch of the film's own paper, where the first design put a black outline and a drop shadow the film never used.",
+    "_measured": "At 0.86 alpha and a blur of 0.18 cap the glow left a ghost of a UI card under the words (the Instafill film, 2026-09-29): it reads as a smudge over crisp line art. Near-opaque with a short soft edge it is a borderless patch of the film's paper."
+  },
+  "ink_margin": 0.8,
+  "contrast_smooth_px": 1.5,
+  "_contrast_smooth_px": "The picture is smoothed (a Gaussian of this many pixels) before the letters' contrast is read: a crayon film's grain lies over its words as over everything, and per pixel it pulled plainly legible text to 4.2-4.5:1 (2026-09-29). Grain is finer than a letter's stroke at the sizes allowed, so this takes the noise out and leaves the ink."
 }

@@ -580,3 +580,24 @@ answer/9890437): the channel needs a verified phone number. `thumbnails.set` ans
 `forbidden` without one.
 **Workaround.** The person verifies at youtube.com/verify and picks the thumbnail in YouTube Studio.
 The publish itself never fails on it (`api/youtube.js` setThumb).
+
+### KI-038 · limitation · thumbnails · A film that titles itself without SK.txt gets a stock type
+
+**Symptom.** A film's thumbnail words are in the tooling's Montserrat (or Balsamiq on a drawn
+film), coloured in the film's own text and accent colours, rather than in the type its titles use.
+**Cause.** The probe (`sketch/thumb.js`) learns a film's type from its `SK.txt` calls. The wine
+film `studio-20260928-110106-skiird` writes every title with its own vector pen
+(`P.lineText`, strokes in code, no font file), so there is no font to measure or draw with; 1 of
+40 films on the laptop (2026-09-29).
+**Workaround.** None yet. If more films take the pen, the probe can report its advance widths and
+`thumb.js` draw with it; the layout needs only widths and a cap height.
+
+### KI-039 · limitation · thumbnails · A card, panel or glow can cover the edge of a drawing
+
+**Symptom.** A thumbnail's words sit on a glow or card that hides the bottom of a calendar card
+or a phone in the frame: readable, but it looks like a collision.
+**Cause.** Only the film's *words* are protected exactly (OCR boxes: hidden whole or not at all).
+Everything else is weighed by the subject map, which misses flat UI drawings on clean films as
+it misses big painted subjects (KI-036).
+**Workaround.** The draft's `place` steers it; the person picks one of four and can choose
+another.

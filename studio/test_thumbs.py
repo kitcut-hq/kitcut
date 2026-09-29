@@ -194,13 +194,31 @@ def main():
         "title": "Pass It On: the invite you never used",
         "thumbnails": [
             {"at": 3.6, "layout": "headline", "words": "Still *waiting*?", "place": "top"},
-            {"at": 6.6, "layout": "slab", "words": "Send it on", "place": None},
+            {
+                "at": 6.6,
+                "layout": "slab",
+                "words": "Send it on",
+                "place": None,
+            },  # an old draft's name
             {"at": 8.6, "layout": "panel", "words": "A friend can *use* it", "place": None},
             {"at": 11.0, "layout": "still", "words": ""},
         ],
     }
     rec = thumbs.make_now(f, "UCtest", draft)
     opts = rec["options"]
+    with open(_thumb.style_path(f.dir), encoding="utf-8") as fh:
+        look = json.load(fh)
+    heads = [x["font"] for x in sorted(look.get("txt") or [], key=lambda x: -x["max"])]
+    check(
+        heads[:1] == ["Caveat"] and look["style"]["boil"],
+        "the probe read the film's own look: hand-drawn, in Caveat",
+        heads,
+    )
+    check(
+        [o["layout"] for o in opts] == ["headline", "card", "panel", "still"],
+        "each in its layout (an old draft's slab is a card)",
+        [(o["layout"], o["notes"]) for o in opts],
+    )
     check([o["n"] for o in opts] == [1, 2, 3, 4], "four options", [o["n"] for o in opts])
     for o in opts:
         p = f.path("outputs", o["path"])

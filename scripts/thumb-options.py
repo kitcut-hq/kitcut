@@ -7,8 +7,8 @@ config/thumbnails/thumbnails.json, and for looking at what a film would be offer
 
   --film DIR        a finished film's folder (its sketch.json, film.js, voice timeline)
   --concepts FILE   four {"at", "words", "layout"} as JSON (a list, or {"thumbnails": [...]});
-                    layout is one each of headline, slab, panel, still; one word may be
-                    *starred* for the accent colour
+                    layout is one each of headline, card, panel, still; one word may be
+                    *starred* for the film's accent colour
   --auto            no concepts: the picture alone at 25/50/75% of the film -- about what
                     YouTube offers when it picks for itself (the baseline)
   --moments         only the labelled sheet of moments a writer chooses from
@@ -50,13 +50,9 @@ def main():
     if not os.path.exists(os.path.join(film, "sketch.json")):
         sys.exit("no sketch.json in %s" % film)
     length = _thumb.film_length(film)
-    look = _thumb.film_look(film)
     lines = _thumb.narration(film)
     moments = _thumb.moment_times(lines, length)
-    print(
-        "  film %s: %.1f s, %s, %d narration lines"
-        % (os.path.basename(film), length, look, len(lines))
-    )
+    print("  film %s: %.1f s, %d narration lines" % (os.path.basename(film), length, len(lines)))
     print("  moments: %s" % ", ".join("%.1f" % t for t in moments))
     out = a.out or os.path.join(film, "temp", "thumbs", "options")
 
@@ -81,7 +77,7 @@ def main():
             print("  PROBLEM: %s" % p["text"])
         concepts = _thumb.fill_concepts(concepts, moments, length)
 
-    opts = _thumb.make_options(film, concepts, out, title=a.title, look=look)
+    opts = _thumb.make_options(film, concepts, out)
     for o in opts:
         ck = dict(o["checks"])
         ck.pop("ink_box", None)

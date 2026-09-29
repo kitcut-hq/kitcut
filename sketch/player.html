@@ -161,6 +161,8 @@ __SCENES__
           enc.close();
         }
         if (Q.has('stills')) for (const s of Q.get('stills').split(',')) { SK.render(+s); await report('still?t=' + s, await png()); }
+        // what a script in the page learned while the stills were drawn (sketch/thumb.js: the film's own styles)
+        if (Q.has('stills') && typeof SK.REPORT === 'function') await report('report', JSON.stringify(SK.REPORT()));
         if (Q.has('automation')) await report('automation', JSON.stringify(SK.automation()));
       } catch (e) { await report('error', String(e && e.stack || e)); }
       if (!Q.has('render')) await report('done', '');

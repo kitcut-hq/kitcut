@@ -2747,50 +2747,90 @@ python scripts/thumb-options.py --film <film dir> --concepts c.json --list  # fr
 python scripts/thumb-options.py --film <film dir> --concepts c.json --title "..." [--ocr]
 python scripts/thumb-options.py --film <film dir> --auto                    # the baseline: frames at 25/50/75%, no words
 python studio/ytdraft.py --film <film dir> --thumbs                         # Claude's own concepts, then the options
-python scripts/check-thumbnail.py                                           # the rules, plus one real browser shot
+python scripts/check-thumbnail.py                                           # the rules, plus the example film drawn
 python studio/test_thumbs.py                                                # end to end on the example film
 ```
 
-A concept is `{"at": s, "words": "Can't *sleep*?", "layout": "headline|slab|panel|still",
-"place": "top|bottom|left|right|top-left|top-right|bottom-left"}`; one word may be starred for the
-accent colour. Output: `thumb-N.jpg` (1920x1080, well under YouTube's 2 MB), `sheet.jpg` (side by
-side) and `feed.jpg` (at YouTube's 360/246/168-px sizes, dark and light).
+A concept is `{"at": s, "words": "Can't *sleep*?", "layout": "headline|card|panel|still",
+"place": "top|bottom|left|right|top-left|top-right|bottom-left"}` (an older draft's `slab` is read
+as `card`); one word may be starred for the film's accent colour. Output: `thumb-N.jpg`
+(1920x1080, well under YouTube's 2 MB), `sheet.jpg` (side by side) and `feed.jpg` (at YouTube's
+360/246/168-px sizes, dark and light).
+
+**The film draws its own thumbnail.** A thumbnail has to look like the film it sells -- an
+Instafill film's thumbnail in Instafill's serif, amber and white cards, a crayon film's in its
+hand lettering on its paper. So nothing is laid over the picture from outside: the words, cards,
+panels and logo are drawn by the film's own engine, in the film's own type and palette, by
+`sketch/thumb.js`, which runs ahead of the film's code (the manifest's `head` scripts, a
+`sketch-render.py` key for exactly this) and does two jobs:
+
+- *The probe* wraps `SK.txt`, `SK.card` and `SK.image` while the stills render and notes every
+  text style (font, weight, colour, largest size, outline), card (fill, corners, outline,
+  shadow, area) and picture (a logo) the film draws. With the palette (`SK.C`), the ground and
+  the style (crayon boils, clean does not), `SK.REPORT()` returns it; `player.html` posts it to
+  `/report` after the stills and `sketch-render.py` writes it as `report.json` beside them.
+  `_thumb.film_style()` reads it (cached as `style.json`, merged over every stills run).
+- *The overlay*: `SK.THUMB.options`, keyed by a still's time, says what to add -- lines of word
+  runs, a card, a panel with a rule, a logo, a glow, a camera slide or push -- already laid out
+  in Python. A still's time picks the pass: `t` the film alone, `1000+t` the thumbnail,
+  `2000+t` its letters white on black, `3000+t` everything it added white on black (grain and
+  vignette off for the two masks). One browser run draws every option's three passes.
 
 **How an option is made.**
 1. *Stills* come from a copy of the film's manifest without its `tail`: a Free film's "made with
    kitcut.ai" mark sits exactly under YouTube's duration stamp and cannot be read at feed size, so
-   thumbnails are clean on every plan. All paths in the copy are absolute; it renders into its own
-   folder (`temp/thumbs/stills-<film key>/`), never the film's outputs.
+   thumbnails are clean on every plan. All paths in the copy are absolute (fonts and images
+   too); it renders into its own folder (`temp/thumbs/stills-<film key>/`), never the film's
+   outputs. The probe rides along.
 2. *Moments*: just before each narration line ends (what the line is about is drawn by then),
    6-12 of them, a second apart, on one labelled sheet that the draft's Claude call sees.
 3. *Settle*: around each chosen moment (±0.6 s) the frame whose ±0.2 s neighbours differ least,
    among the ones that are not thin (a scene not drawn in yet, a fade).
-4. *Layout*, in Python, with the font files the browser uses: the font whose glyphs cover the
-   words (Anton has no Cyrillic, so Ukrainian falls through to Montserrat), the largest cap
-   height that fits in at most two lines, and the place that hides the least of the subjects --
-   inside the writer's `place` first, then anywhere -- never over the film's own words.
-5. *Paint*: every option's layer and a white mask of its letters, stacked, in one headless shot
-   (`config/thumbnails/layouts/*.svg`); the plate (grade, scrim, slide, zoom) is Pillow.
-6. *Checks* on the finished picture through the mask; *fallbacks* (headline -> +scrim -> slab ->
-   still; panel -> slab -> still) until every option passes.
+4. *The film's look* (`film_style`): its text styles biggest first (its headline type) with
+   their colours and outlines, then the tooling's type for words its type has no glyphs for or
+   a film with no text of its own; its paper, text, ink and accent; its biggest card (else one of
+   its paper edged in its accent -- a hand-drawn note on crayon); a picture named `*logo*`.
+   A `.woff2` film font is measured through the tooling's `.ttf` of the same family (the
+   example film's Caveat), a variable font at the weight the film draws it.
+5. *Layout*, in Python, with the font files the page draws with: the largest cap height that
+   fits in at most two lines (four on a panel), in the film's ink where it reads with a margin
+   (`ink_margin`) and otherwise the nearest of its colours deepened just enough, the starred
+   word in its accent; placed where it hides the least of the subjects -- inside the writer's
+   `place` first. Layouts: *headline* (words on the picture, touching none of the film's own;
+   on a busy spot, a soft glow of the film's paper goes behind them), *card* (the film's card,
+   its logo in a top band, tilted a touch on crayon), *panel* (the film's paper on one side, a
+   rule of its accent, its logo above the words, the camera slid so the picture's busy part
+   stays in view), *still* (the camera pushed in a little when that keeps the subjects whole).
+6. *Draw* (`paint`): one browser run of the film with the spec, three passes an option;
+   `thumb.js` holds each line to the width Python planned, so a page that draws a font wider
+   trims it rather than letting it leave its box.
+7. *Checks* on the finished picture through the letters and footprint passes; *fallbacks*
+   (headline -> headline with its glow -> card -> still; panel -> card -> still; card -> still)
+   until every option passes.
 
 **The rules** (`config/thumbnails/thumbnails.json`, each with its source there):
 
 | rule | value | why |
 |---|---|---|
 | cap height at 168 px wide | >= 8 px (>= 92 px at 1080p) | the "up next" sidebar is YouTube's smallest place with a title |
-| contrast, letters vs the ring around them | >= 4.5:1 | WCAG 2.2 1.4.3; the ring is the outline where there is one |
+| contrast, letters vs the ring around them | >= 4.5:1 at the 10th percentile | WCAG 2.2 1.4.3; read on the picture smoothed by 1.5 px, because a crayon film's grain lies over its words too |
 | no letters in the bottom-right 15% x 15%, bottom 3%, 5% margins | 0 px | YouTube's duration stamp and progress bar |
 | words | <= 4 words, 32 characters, <= half of them in the title | glance test: complement the title, never repeat it |
-| film's own words covered | <= 40 px (a shadow's fringe) | a slab over "Month-end" looked broken |
-| layouts | one each of headline, slab, panel, still | four options are only a choice if they differ |
+| film's own words | words on the picture touch none; a card, panel or glow hides a line whole (>= 90%) or not at all; <= 40 px otherwise | "On for everyone" set over an "AI MODEL UPDATE" label read as a collision; a half-hidden "Month-e" reads broken, a covered chip does not |
+| layouts | one each of headline, card, panel, still | four options are only a choice if they differ |
 
-**Measured** (2026-09-29, 8 studio films -- crayon, clean, blueprint, two painted, a Ukrainian one
--- 32 options from Claude's own concepts, ~$0.06 and 6-17 s a draft, 7-11 s of options each):
-- every worded option set at a cap height of 8.4-17.5 px at 168 px; RapidOCR read every word back
-  on all 21 Latin-script ones at 168, 246 and 360 px -- the smallest included, so the 8 px floor is
-  not too lax. OCR cannot read Cyrillic (KI-035); for the Ukrainian film only the cap height vouches.
-- contrast 4.81-12.4:1, median 9.07.
+**Measured** (2026-09-29, 8 studio films -- three crayon, a clean app film, a blueprint, a dark
+wine film, a photographic one and a painted Ukrainian one -- from Claude's own concepts; the
+film's-own-look version, 8-14 s of options a film):
+- all 24 worded options passed on the layout Claude asked for (no fallbacks); cap height 8.4-16.8
+  px at 168 px; RapidOCR read every word back on the 21 Latin-script ones at 246 and 360 px and
+  all but one word of one at 168 px. OCR cannot read Cyrillic (KI-035); for the Ukrainian film
+  only the cap height vouches.
+- contrast 4.81-11.08:1, median 5.89 -- lower than the stock-type version's 9.07 because the
+  words now wear the film's own colours (a crayon film's brown ink on its cream paper) rather
+  than white with a black outline; every one clears 4.5.
+- the type was the film's own on every film that titles itself with `SK.txt` (7 of 8); the wine
+  film draws its titles with its own pen and got Montserrat in its cream and gold (KI-038).
 - YouTube-like frames at 25/50/75% caught the film moving (mean difference over ±0.2 s > 0.03) in
   10 of 24; the settled frames in 6 of 32; median movement 0.0149 -> 0.0054.
 
@@ -2798,12 +2838,8 @@ side) and `feed.jpg` (at YouTube's 360/246/168-px sizes, dark and light).
 - *Saliency* (spectral residual, Hou & Zhang 2007) finds the characters, a phone, a bottle and
   ignores hatching on drawn and clean films, and misses big subjects on painted ones (KI-036). So
   Claude names a `place` from the sheet, and saliency only fine-tunes inside it.
-- *Accent colour*: the commonest vivid colour was the sky, the trunk or the paper. The one that
-  pops wins now: count^0.3 x Lab distance^1.5 on a 320-px copy, never the ground's own hue (a
-  blueprint's blue). Of four scorings on 12 frames it picked the popping colour on 9.
-- *The film's own words* (OCR boxes >= 32 px tall; an app screen's own print is 22-30 px and is
-  left to the subject map) may not be covered: a panel slides the picture to keep them in view,
-  or moves side, widens, or falls back to a slab.
+- *The film's own words* may not be cut into: a panel slides the picture to keep them wholly in
+  view or wholly under it, or moves side, widens, or falls back to a card.
 - *The quiet threshold* was 0.35 on a scale where an empty ground scores 0.001-0.02 and a busy
   one 0.04-0.13: the largest size always won. It is 0.045, measured.
 - *Moments two seconds apart* was stricter than the sheet (moments one second apart), and cost a
@@ -2821,6 +2857,25 @@ side) and `feed.jpg` (at YouTube's 360/246/168-px sizes, dark and light).
   description took 25-35 s where they had taken 10-16. A finished film now makes its sheet in the
   background (`thumbs.premake`, from `server.run`), and one film's sheet is made once however many
   ask at the same moment.
+
+**What the film's own look changed** (2026-09-29). The first version set every film's words in
+Anton or Balsamiq, white or near-black with an outline, on a stock slab and a scrim: legible, and
+on an Instafill film nothing like Instafill -- no Source Serif, no amber, no white cards, no logo.
+Rebuilt so the film draws its own thumbnail (above). What the rebuild had to learn:
+- *Protecting every word the film shows left no room on an app screen*, which is full of small
+  print. Words drawn straight on the picture avoid every line of the film's words 12 px and up;
+  a card, panel or glow may hide one whole, like a sticker, never cut through it.
+- *A busy spot re-places the words with the glow planned in* rather than adding a glow that
+  reaches past the block (it ghosted a UI card). The glow is the block, 97% opaque.
+- *A crayon film's own ink on its own paper read 4.2-4.5:1 once drawn* under its grain and
+  vignette though the colours alone measure more: the ink and the accent need a 0.8 margin, and
+  contrast is read on the picture smoothed by 1.5 px (grain is finer than any stroke allowed).
+- *A film that outlines its titles* (cream letters edged in its ink, to read over dark scenes)
+  gets its thumbnail's words edged the same way.
+- *Canvas drew Caveat wider than Pillow measured it*: `thumb.js` holds each line to the width
+  planned here.
+- *A film with no cards of its own* got a stock white card, which sat on the black-and-gold wine
+  film like a label from another shop; it gets one of its paper edged in its accent now.
 
 The draft costs ~$0.01 more with the sheet and four concepts. Thumbnails are opt-out, never
 forced: the dialog has "Let YouTube pick a frame", and a channel that YouTube will not let use

@@ -82,7 +82,9 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    --thumbs` (Claude picks the moments and words; ~$0.06) or `python scripts/thumb-options.py
    --film <folder> --concepts c.json` (your own), then look at `feed.jpg` -- the options at
    YouTube's feed sizes -- and pass the one you pick to `yt-upload.py --thumbnail`. Every option
-   has already passed the checks (legible at 168 px, contrast, clear of the duration stamp).
+   has already passed the checks (legible at 168 px, contrast, clear of the duration stamp), and
+   is drawn by the film in its own type, colours, cards and logo -- so give the film's titles to
+   `SK.txt` and its logo a name with `logo` in it, and the thumbnail finds them.
 10. **Report the timings** (`--timings`) with the deliverables.
 
 ## A collage film (mixed media, paper cut-out, "newspaper" motion design)
