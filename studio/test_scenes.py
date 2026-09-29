@@ -91,15 +91,26 @@ LOOK = "// For: a test; calm\nSK.look = {};\nSK.film({ duration: %d, camera: SK.
 
 # ------------------------------------------------------------------ the stubbed Claude, per pass
 OPENINGS = []  # (pass, opening length, resumed)
+EFFORTS = []  # (pass, the effort it was run at)
 STALL_ON, HOLD_ON, NEVER_ON = [None], [None], [None]
 HELD = []
 
 
 async def fake_claude(
-    film, emit, meter, tools, auth="api", prompt=None, resume=None, budget_usd=None, system=None
+    film,
+    emit,
+    meter,
+    tools,
+    auth="api",
+    prompt=None,
+    resume=None,
+    budget_usd=None,
+    system=None,
+    effort=None,
 ):
     key = tools.pass_name
     OPENINGS.append((key, len(prompt or ""), bool(resume)))
+    EFFORTS.append((key, effort))
     if not resume:
         tools.session = "fake-%s-%d" % (key, len(OPENINGS))
     meter.add("msg-%d" % len(OPENINGS), USAGE)
@@ -277,7 +288,7 @@ async def main():
         m["duration"] = float(n)
         with open(film.manifest, "w", encoding="utf-8") as fh:
             json.dump(m, fh)
-        del OPENINGS[:]
+        del OPENINGS[:], EFFORTS[:]
         STALL_ON[0] = "03-part" if n == 480 else None
         r = await agent.make_film(film, lambda ev: None, Sched(), auth="api")
         plan = scenes.plan(film)
@@ -297,6 +308,17 @@ async def main():
                 and scenes.progress(film)["03-part"]["tries"] == 1
                 and r.get("stalls") == 1,
                 "a scene that goes silent is picked up in its own session, once, and finishes",
+            )
+            check(
+                EFFORTS and all(e == scenes.EFFORT for _, e in EFFORTS),
+                "every pass, a picked-up one too, thinks at %s (%s)"
+                % (scenes.EFFORT, sorted({e for _, e in EFFORTS}, key=str)),
+            )
+            check(
+                agent.limits(n)["claude_s"] < scenes.film_claude_s(film)
+                and scenes.pass_limits(film, "scene", (0, 40))["claude_s"] >= 20 * 60,
+                "a scene gets 20+ minutes, and the film all its passes' (%d min, not %d)"
+                % (scenes.film_claude_s(film) // 60, agent.limits(n)["claude_s"] // 60),
             )
             check(
                 mem.docs[film.id]["state"] == "done"

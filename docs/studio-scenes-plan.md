@@ -75,9 +75,11 @@ instructions come in its first message (studio/prompts/director.md, scene.md, ed
 - **The watchdog** (Pulse, talk_to_claude) wraps every conversation; a stalled scene is picked
   up again in its own short session.
 - **Accounting.** One Meter across the passes (cost and calls merged in the record, as resume
-  already does); the film's working-time limit spans all passes; per-pass limits (director
-  ~25 min, a scene ~6 + 1.5 per minute of scene, editor ~20 min) keep one pass from eating the
-  rest. `ops.sh claude-log` lists each session (director, scene N, editor) from scenes.json.
+  already does); the film's working-time limit is the sum of its passes' (`scenes.film_claude_s`);
+  per-pass limits (director 40 min + 20 s per minute of film, a scene 20 + 3 per minute of scene,
+  editor ~20 min) keep one pass from eating the rest. Every pass thinks at effort high, not the
+  single conversation's xhigh (KI-040: at xhigh a 40 s scene thought for 10+ minutes before its
+  first word). `ops.sh claude-log` lists each session (director, scene N, editor) from scenes.json.
 - **Page.** Stages read "Claude is writing scene 7 of 16", so a long film shows progress.
 
 ## 2 in detail: the three passes, file by file

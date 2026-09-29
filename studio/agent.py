@@ -670,7 +670,16 @@ def claude_cli():
 
 
 async def run_claude(
-    film, emit, meter, tools, auth="api", prompt=None, resume=None, budget_usd=None, system=None
+    film,
+    emit,
+    meter,
+    tools,
+    auth="api",
+    prompt=None,
+    resume=None,
+    budget_usd=None,
+    system=None,
+    effort=None,
 ):
     """Claude's part: write, review and fix. Returns the SDK's ResultMessage (or None). With
     `resume` (a session id) and a `prompt`, one more turn of a session that was stopped;
@@ -714,7 +723,7 @@ async def run_claude(
             raise SignInError(str(e)) from None
     opts = ClaudeAgentOptions(
         model=MODEL,
-        effort=EFFORT,
+        effort=effort or EFFORT,  # a pass of a film made in scenes thinks less (scenes.EFFORT)
         cwd=film.dir,
         system_prompt={"type": "file", "path": sp},
         tools=["Read", "Write", "Edit"],
@@ -955,7 +964,7 @@ async def make_film(
     summary = {
         "prompt": prompt,
         "model": MODEL,
-        "effort": EFFORT,
+        "effort": scenes.EFFORT if film.mode == "scenes" else EFFORT,
         "length": length,
         "look": look,
         "release": RELEASE,
@@ -1039,6 +1048,10 @@ async def make_film(
         emit({"type": "wait", "pool": pool, "ahead": ahead, "text": waiting_text(pool, ahead)})
 
     lim, talk = limits(length), {}
+    if film.mode == "scenes":  # every pass's allowance (scenes.film_claude_s), waits on top
+        need = scenes.film_claude_s(film)
+        if need > lim["claude_s"]:
+            lim = lim | {"claude_s": need, "wall_s": lim["wall_s"] + need - lim["claude_s"]}
     if resume:  # what is left of the film's working time and budget, and the turn that picks it up
         used = (carry.get("stages") or {}).get("claude") or carry.get("seconds") or 0
         # what the film's own limit has left (a film stopped before its picture was written needs
@@ -1091,7 +1104,7 @@ async def make_film(
                     "prompt": OVER_LIMIT % round(left / 60),
                     "resume": sid,
                     "budget_usd": max(1.0, budget0 - (meter.usd() - m0)),
-                } | ({"system": say["system"]} if say.get("system") else {})
+                } | {k: say[k] for k in ("system", "effort") if say.get(k)}  # a scenes pass's
                 continue
             except Stalled as e:
                 silent = int(e.args[0]) if e.args else STALL_S
@@ -1121,7 +1134,7 @@ async def make_film(
                     "prompt": STALLED % (silent // 60, round(left / 60)),
                     "resume": sid,
                     "budget_usd": max(1.0, budget0 - (meter.usd() - m0)),
-                } | ({"system": say["system"]} if say.get("system") else {})  # a scenes pass's
+                } | {k: say[k] for k in ("system", "effort") if say.get(k)}  # a scenes pass's
                 attempt += 1
 
     async def to_key(why):
@@ -1163,7 +1176,12 @@ async def make_film(
             s0, res = time.time(), None
             try:
                 res = await talk_to_claude(
-                    {"prompt": opening, "system": system, "budget_usd": allowance["budget_usd"]},
+                    {
+                        "prompt": opening,
+                        "system": system,
+                        "budget_usd": allowance["budget_usd"],
+                        "effort": scenes.EFFORT,
+                    },
                     within,
                 )
             except TimeoutError:

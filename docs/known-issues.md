@@ -601,3 +601,20 @@ Everything else is weighed by the subject map, which misses flat UI drawings on 
 it misses big painted subjects (KI-036).
 **Workaround.** The draft's `place` steers it; the person picks one of four and can choose
 another.
+
+### KI-040 · fixed · studio · A scene pass thought past its whole allowance before writing a line
+
+**Symptom.** The first real film made in scenes (i4d52n, 8 minutes, 12 scenes, collage, on the
+login) failed with "the scene did not finish in 2 tries". Scene 2 read its files, then Claude
+Code received only keep-alive pings (36 bytes every 30 s, `[Stall] stream_idle_partial`) until
+the pass's time ran out, twice. No API errors, no rate limit; the login's output speed matched the
+key's (316 vs 317-321 tokens/s on comparable films).
+**Cause.** At effort xhigh, Opus thought for over 10 minutes before the first token of a
+40-second scene, and a scene pass got 8 min + 3 per minute of scene, i.e. 10 minutes. The
+director had also needed a second try: its 28 minutes went on narration retakes. And the film's
+own limit (film.limits, sized for one conversation: 136 min at 8 minutes) could not have held
+a director plus eleven scenes at any per-scene figure that works.
+**Fix.** Passes in scenes mode think at `scenes.EFFORT` = high (a picked-up pass too); a scene
+gets 20 min + 3 per minute, the director 40 min + 20 s per minute of film; a scenes film's Claude
+time is the sum of its passes' (`scenes.film_claude_s`). i4d52n was resumed onto it.
+**Evidence.** `ops.sh claude-log studio-20260929-103129-i4d52n --all`.

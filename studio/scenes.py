@@ -32,6 +32,10 @@ PROMPTS = os.path.join(HERE, "prompts")
 DIRECTOR, EDITOR = "_director", "_editor"  # their entries in studio.json's `scenes`
 LEAD = 0.3  # the engine's default: a scene starts this long before its first line is spoken
 TRIES = 2  # fresh conversations one pass may take before the film fails
+# how hard each pass thinks: "high", not the single conversation's xhigh (agent.EFFORT). At xhigh
+# a pass writing a 40 s scene thought for over 10 minutes before its first word, twice, and the
+# film failed (i4d52n, 2026-09-29); a pass has one scene to think about, not the whole film
+EFFORT = "high"
 PER_SHEET = 12  # stills on one sheet (tools.MAX_STILLS)
 
 
@@ -111,15 +115,33 @@ def pass_limits(film, kind, span=None):
     """Claude's working time (s) and budget (USD) for one pass: bounded by what the pass is, not
     by the film's length -- that is the point. The film's own limit still caps the sum."""
     film_budget = limits(film.length)["budget_usd"]
+    # raised 2026-09-29 after i4d52n (8 min, 12 scenes): its director needed a second try, having
+    # spent its 28 minutes on narration retakes, and a scene pass got 10 minutes and used them all
+    # thinking before it wrote a line
     if kind == "director":
-        work, usd = 25 * 60 + 20 * min(film.length, 1800) // 60, max(4.0, 0.03 * film.length)
+        work, usd = 40 * 60 + 20 * min(film.length, 1800) // 60, max(4.0, 0.03 * film.length)
     elif kind == "scene":
         mins = (span[1] - span[0]) / 60 if span else 1.0
-        work, usd = int(8 * 60 + 3 * 60 * mins), 1.5 + 1.5 * mins
+        work, usd = int(20 * 60 + 3 * 60 * mins), 1.5 + 1.5 * mins
     else:  # the editor
         n = len(plan(film))
         work, usd = min(40 * 60, 15 * 60 + 30 * n), 3.0 + 0.1 * n
     return {"claude_s": int(work), "budget_usd": round(min(usd, film_budget), 2)}
+
+
+def film_claude_s(film):
+    """Claude's working time for the whole film made in scenes: every pass's allowance, so the
+    film's own limit (film.limits, sized for one conversation) does not starve the last scenes."""
+    try:
+        planned = [(a, b) for _, a, b in spans(film)]
+    except (KeyError, IndexError, TypeError):
+        planned = []
+    # before the director has planned it: a scene about every 40 s, as i4d52n's 12 in 8 minutes
+    guess = [(0, 40)] * max(1, round(film.length / 40))
+    scenes = sum(pass_limits(film, "scene", s)["claude_s"] for s in planned or guess)
+    return (
+        pass_limits(film, "director")["claude_s"] + scenes + pass_limits(film, "editor")["claude_s"]
+    )
 
 
 # ------------------------------------------------------------------ what each pass is told
