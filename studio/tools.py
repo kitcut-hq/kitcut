@@ -4,7 +4,7 @@ Each one runs a kitcut script on the film's own manifest, and nothing else:
 
     check()                  node --check on film.js, the engine copy and the cast
     voice(retake_line?)      sketch-vo.py: records the narration and times every word
-    paint(retake?)           sketch-paint.py (painted films): paints the scenes, tiles a sheet
+    paint(retake?)           sketch-paint.py (a film that paints): its pictures, tiled on a sheet
     stills(times, sheet?)    sketch-render.py --stills: review frames, tiled into a sheet
     sound(levels?)           sketch-audio.py (after --automation when a cue needs it)
     name_film(title)         the title, for a film whose visitor typed nothing (voice or pictures)
@@ -29,7 +29,7 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 import motion
 import procs
 import validate
-from film import HOME, KIT, REPO, _write_json, limits
+from film import HOME, KIT, REPO, _write_json, limits, paint_kinds, paint_words
 from guard import pin_paint, pin_vo
 from sched import waiting_text
 
@@ -167,7 +167,8 @@ class Tools:
             else []
         )
         async with self.lock:
-            for rel in ["film.js", "engine/engine.js", "engine/props.js"] + cast:
+            engine = ["engine/" + n for n in self.film.engine_files()]
+            for rel in ["film.js"] + engine + cast:
                 p = self.film.path(*rel.split("/"))
                 if not os.path.exists(p):
                     if rel == "film.js":
@@ -217,7 +218,7 @@ class Tools:
         )
 
     async def paint(self, retake=None):
-        if self.film.look not in ("painted", "collage"):
+        if not paint_kinds(self.film.caps):
             raise ToolError("This film is drawn, not painted: there is nothing to paint.")
         args = []
         if retake:
@@ -226,7 +227,8 @@ class Tools:
         async with self.lock:
             self.gate()
             tail = await self._script("paint", "sketch-paint.py", args)
-        return "\n".join(tail[-8:]) + "\n\nRead images/sheet.jpg to look at the paintings."
+        noun = paint_words(self.film.caps)[1]
+        return "\n".join(tail[-8:]) + "\n\nRead images/sheet.jpg to look at the %s." % noun
 
     async def stills(self, times, sheet=True):
         try:
@@ -405,7 +407,7 @@ class Tools:
         ]
         if self.film.record().get("prompt", "").strip():  # a typed idea is the title already
             tools = [t for t in tools if t.name != "name_film"]
-        if self.film.look not in ("painted", "collage"):
+        if not paint_kinds(self.film.caps):
             tools = [t for t in tools if t.name != "paint"]
         return create_sdk_mcp_server("studio", tools=tools)
 

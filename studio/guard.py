@@ -5,9 +5,9 @@ voice, paint, stills, sound), which run the pipeline for it. There is no shell. 
 PreToolUse hook's answer for every call:
 
     Read          a file inside the film's folder (film.readable: never temp/, studio.json)
-    Write, Edit   film.js, score.json, sfx.json, vo.json, paint.json (painted films), the
-                  film's engine copy, engine/engine.js and engine/props.js, and its cast,
-                  cast/<name>.js (film.writable)
+    Write, Edit   film.js, score.json, sfx.json, vo.json, paint.json (a film that paints), the
+                  film's engine copy -- engine/engine.js, engine/props.js and its capabilities'
+                  modules (film.CAPS) -- and its cast, cast/<name>.js (film.writable)
     mcp__studio__ the studio's tools; they check their own arguments
     anything else refused, with a reason Claude can act on
 
@@ -45,7 +45,7 @@ def guard(tool, inp, film):
     if tool in ("Write", "Edit"):
         if film.writable(_path(inp.get("file_path"), film)):
             return True, ""
-        mine = ", ".join(film.editable() + ("engine/engine.js", "engine/props.js"))
+        mine = ", ".join(film.editable() + tuple("engine/" + n for n in film.engine_files()))
         if os.path.isdir(film.path("cast")):
             mine += ", cast/<name>.js (a lowercase name)"
         return False, "You can only write %s, in your working directory." % mine
@@ -101,7 +101,7 @@ def pin_vo(film):
 
 def pin_paint(film):
     """paint.json: the painter, its model and the cap on paintings are the studio's."""
-    return _pin(film, "paint.json", paint_pins(film.length, film.look), keep=validate.PAINT_KEYS)
+    return _pin(film, "paint.json", paint_pins(film.length, film.caps), keep=validate.PAINT_KEYS)
 
 
 def pin_after(file_path, film):

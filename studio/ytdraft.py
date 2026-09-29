@@ -198,6 +198,7 @@ def material(film, events=None):
         "audience": ((films.FOR_LINE.search(js) or [None, ""])[1] or "").strip()[:300],
         "header": _header(js),
         "narration": _narration(film),
+        "pictures": films.paint_words(film.caps)[1],  # paintings, cut-outs
         "scenes": [
             str(i.get("prompt") or "")[:400]
             for i in paint.get("images") or []
@@ -280,7 +281,7 @@ def ask_text(mat, channel, recent):
     for s, e, text in mat["narration"]:
         parts.append(("%5.1f-%5.1f s  %s" % (s, e, text)) if s is not None else "  " + text)
     if mat["scenes"]:
-        parts.append("\nThe paintings it is made of:")
+        parts.append("\nThe %s it is made of:" % mat.get("pictures", "paintings"))
         parts += ["- " + p for p in mat["scenes"]]
     if mat["sources"]:
         parts.append("\nThe pages its facts came from:")
