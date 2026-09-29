@@ -29,8 +29,9 @@ tail ({secs, scripts, images, audio}: a closing after the film -- `secs` more of
 head ({scripts}: run just before film.js, in its scope -- sketch/thumb.js, a thumbnail's probe and
 overlay; a stills run saves what the page's SK.REPORT() returns as <into>/report.json),
 cast ("cast": a folder whose <name>.js files each run before film.js, as SK.cast.<name>),
-modules (["collage"]: engine extensions a film opts into, sketch/<name>.js -- the film's own
-engine folder first -- run after props.js; "collage" is the cut-outs and paper pieces).
+modules (["collage"], ["jelly"]: engine extensions a film opts into, sketch/<name>.js -- the film's own
+engine folder first -- run after props.js; "collage" is the cut-outs and paper pieces,
+"jelly" the soft-body specimen, SK.jelly).
 
 Invoke as:
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --plan
@@ -159,7 +160,7 @@ def scene_scripts(m):
 
 
 def module_scripts(m):
-    """ "modules": ["collage"] -- engine extensions only some films need, so every other film's
+    """ "modules": ["collage"], ["jelly"] -- engine extensions only some films need, so every other film's
     page does not carry them. Each is sketch/<name>.js, or the same file in the film's own
     engine folder when it has one (Sketch Studio's per-film copy may extend it), and names
     the one it ran from in an error: engine/<name>.js is the film's copy."""

@@ -774,7 +774,8 @@
     if (fin > 0 || fout > 0) { ctx.fillStyle = SK.C.paper; ctx.globalAlpha = Math.max(fin, fout); ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
   };
 
-  /** Per-track motion for the sound design: speed (screen px/s) and pan (-1..1) of a moving thing. */
+  /** Per-track motion for the sound design: speed (screen px/s) and pan (-1..1) of a moving thing,
+   *  plus `_cues`: whatever SK.film({ sounds() }) returns, sfx cues computed by the film. */
   SK.automation = function (step = .01) {
     const F = SK._film, out = {};
     for (const [name, tr] of Object.entries(F.automation || {})) {
@@ -785,6 +786,9 @@
       }
       out[name] = { t, speed, pan };
     }
+    // sound cues the film works out from its own picture (a jelly film: from the simulation);
+    // sketch-audio adds them to sfx.json's
+    if (F.sounds) out._cues = F.sounds();
     return out;
   };
 })();

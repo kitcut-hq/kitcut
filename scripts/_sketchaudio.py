@@ -461,6 +461,38 @@ def fx_boing(f0=240, f1=520, sec=0.38):
     return np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t * 7) * np.minimum(1, t * 200)
 
 
+def fx_squish(sec=0.3, f0=900, f1=260, q=5.0, seed=0, bubbles=5):
+    """A wet squelch: noise through a resonant formant sliding f0 -> f1, with a few tiny
+    bubbles popping in it. Falling is jelly pressed or taken hold of; rising is jelly let go."""
+    rng = np.random.default_rng(seed)
+    n = int(sec * SR)
+    x = svf_sweep(noise(sec, rng), f0, f1, q=q, curve=0.6)
+    u = np.linspace(0, 1, n)
+    x *= np.minimum(1, u * 12) * (1 - u) ** 1.5
+    peak = np.abs(x).max() + 1e-9
+    for _ in range(bubbles):
+        d = rng.uniform(0.012, 0.03)
+        b = sweep_sine(rng.uniform(350, 700), rng.uniform(900, 1800), d, 0.7)
+        b = b * env_exp(len(b), d / 3) * peak * rng.uniform(0.15, 0.45)
+        i = int(rng.uniform(0, 0.7) * n)
+        m = min(len(b), n - i)
+        x[i : i + m] += b[:m]
+    return x
+
+
+def fx_plop(sec=0.35, f0=210, f1=85, wobble=9.0):
+    """A soft jelly landing: a dull low thud whose pitch wobbles as it settles, and a wet slap."""
+    n = int(sec * SR)
+    t = np.arange(n) / SR
+    f = f0 * (f1 / f0) ** np.minimum(1, t / (sec * 0.5))
+    f = f * (1 + 0.08 * np.sin(2 * np.pi * wobble * t) * np.exp(-t * 8))
+    y = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t * 11) * np.minimum(1, t * 400)
+    slap = lp(noise(min(sec, 0.06)), 2500)
+    slap = slap * env_exp(len(slap), 0.01) * 0.5
+    y[: len(slap)] += slap
+    return y
+
+
 def fx_thunk(sec=0.45):
     y = sweep_sine(120, 45, sec, 0.4) * env_exp(int(sec * SR), 0.09)
     y = y + lp(noise(sec), 900) * env_exp(int(sec * SR), 0.025) * 0.8

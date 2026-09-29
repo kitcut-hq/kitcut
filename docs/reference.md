@@ -3185,6 +3185,7 @@ voice is edge-tts.
 | `sketch/collage.js` | the collage pieces, a module a film opts into (`"modules": ["collage"]`, loaded after the props): cut-out pictures, torn sheets, tape labels, headlines, stamps, bursts, halftone dots, ransom letters, marker lines, masking tape, a newspaper backdrop, groups, and the in/out motion they share; `SK.setStyle('collage')` (see "Collage films") |
 | `sketch/props.js` | the cast: ticket character, seated person with poses, a standing/walking/sitting kid (`P.kid`, also the grown-up at s ~1.4), paper plane, laptop, table, lightbulb, rocket, padlock, coin, stamp, browser window, thought bubble, confetti, architectural houses, phone, window (cracks), street siren, delta-wing drone, missile, stopwatch, debris; scenery: tree (round, pine, bare), bush, cloud, sun, moon (full, crescent), mountain, building |
 | `config/sketch/grounds/` | every ground and three places built from the backdrops, one a second: render its stills after changing any of them |
+| `sketch/jelly.js` | a module (`"modules": ["jelly"]`): a simulated soft-body specimen lit as candy, see *Jelly* below |
 | `sketch/player.html` | the page: player UI, and the export modes the renderer drives |
 | `projects/<id>/film.js` | the film: `SK.film({duration, camera, draw(t, vis)})` |
 | `projects/<id>/score.json` | the music, as data (notation below) |
@@ -3224,7 +3225,8 @@ without `scenes` renders exactly as before. Sketch Studio makes films this way p
 **Every frame is a pure function of time.** Nothing in a film may keep state between frames
 (no physics integration, no `Math.random`); randomness is `SK.rnd(seed)`, motion is `t`. That
 single rule is what lets the browser play the film against its audio *and* the renderer export
-frame 2,317 on its own.
+frame 2,317 on its own. Physics is possible only by baking it first, deterministically, as the
+jelly module does.
 
 **Cue visuals to words, not to seconds.** The bundler injects the voice timeline, and
 `SK.w(line, "word")` returns when a word starts. A film written that way survives a
@@ -3786,6 +3788,118 @@ Traps, each found on the example:
   and what is written on it takes `nudge: 0`, or the words drift across the paper.
 - **Gemini narration ran 24% longer than `--plan`'s 2.6 words a second** (140 words: 72 s, not
   58 s); a "brisk" style note barely moved it. Budget ~1.9 words a second.
+
+### Jelly: a simulated soft body (`sketch/jelly.js`)
+
+A **specimen** is a gummy object -- today a watermelon slice -- that a scripted hand grabs,
+stretches, twists, pokes, lifts and drops, lit as translucent candy in a studio. The look is
+the "Melon Jelly" material study (vib3coded's prompt, 2026-09-26): a real soft-body
+simulation, not keyframed squash-and-stretch, because the part that sells it is the slice
+folding, stretching and wobbling back. The example is `config/sketch/jelly/` (copy it to
+`projects/<id>/`, as with the sketch example).
+
+```powershell
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 0.9,2,4.25 --sheet
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --automation  # the physics' sound cues
+python scripts/sketch-audio.py  --manifest projects/<id>/sketch.json --levels
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --encode browser
+```
+
+A film opts in with `"modules": ["jelly"]` (the bundler inlines `sketch/<name>.js`, the film's
+own engine folder first, after props.js; a film that does not ask does not carry it), then:
+
+```js
+const melon = SK.jelly.specimen({ preset: 'crimson', firmness: 0.4, damping: 0.32, actions: [
+  { t: 1.35, grab: 'tip', path: [[0.55, [-0.3, 0.44, 0.16]], [0.95, [-0.36, 0.52, 0.2]]], twist: [[0.95, 16]] },
+  { t: 3.9, poke: 'flesh', depth: 0.12, dur: 0.75 },
+  { t: 7.55, nudge: 1.1 },
+]});
+SK.film({ duration: 12, camera: SK.camera([[0, [0, 0, 1]]]), handheld: false, speedLines: false,
+  draw(t) { melon.draw(t); }, sounds: () => melon.sounds() });
+```
+
+**The pure-function rule holds by baking.** The simulation runs forward from t = 0 in fixed
+steps and keeps one snapshot per frame; `draw(t)` only reads snapshots (interpolating between
+two). The same inputs give the same numbers, so a still at 9 s matches frame 540 of the video
+and a render chunk that starts at 8 s rebakes 0-8 s and lands on the same frames. Nothing reads
+the clock or `Math.random`. The cost: the bake is ~0.5-0.8 s of machine time per second of film
+(a 12 s film ~10 s under Node), paid by every browser a render starts -- and by the live player,
+which bakes to the poster frame while it loads.
+
+World units: the slice's radius is 1, y is up, the floor is y = 0.
+
+| key | default | |
+|---|---|---|
+| `wedge` | `{radius 1, angle 58, thickness .3, round .075, corner .09}` | the shape: a pie, corners rounded, extruded with rounded edges |
+| `rind` | `{skin .045, pale .065}` | the green skin and the pale layer under it, by radius |
+| `preset` | `crimson` | `crimson`, `golden`, `rose`, or an object over crimson: `absorb` (Beer-Lambert per unit, linear RGB), `body` (scatter colour), `cloud` (how fast scattering hides what is behind), `pale*`, `skin`, `stripe`, `seed`, `shadow` |
+| `firmness` / `damping` | `.4` / `.45` | the reference panel's two sliders, 0..1 |
+| `rindFirmness`, `bulk` | `2.5`, `25` | rind edges this much stiffer; volume stiffness as a multiple of the elastic one |
+| `cell`, `surfaceCell` | `.05`, `.0125` | tet grid and render-surface grid spacing |
+| `fps`, `substeps`, `gravity`, `friction` | `60`, `10`, `30`, `.55` | |
+| `seeds`, `bubbles` | three rows top and bottom; 16 | inclusions, embedded in the tets |
+| `pose` | `{at [0, .3, 0], yaw 35}` | where the centre starts, `at[1]` the underside's height (> 0 drops it) |
+| `camera` | `{dist 3, elev 36, azim 0, fov 28, orbit 0, shift [0,0], follow .6, lag .8}` | `orbit` degrees over the film; `shift` a lens shift in NDC; `follow` how much of the slice's wandering the camera takes up, smoothed over `lag` s |
+| `ss` | 2 rendering, 1 live | supersampling |
+| `cursor` | `true` | a touch indicator where the hand is |
+| `debug` | -- | `'scene'` draws only what the jelly reads through itself (floor, shadows, seeds, bubbles): the first look when the jelly looks wrong |
+
+**The hand** is `actions`, each at `t` seconds:
+
+- `grab`: a point in the slice's own space -- `tip`, `flesh`, `centre`, `rind`, `corner-left`,
+  `corner-right`, or `[x, y, z]` -- and every particle within `radius` (.17) of it, weighted.
+  `path` is `[[seconds after the grab, [dx, dy, dz], ease?], ...]`, `twist` `[[s, degrees]]`
+  about `axis` (up). It lets go at the last key, and the slice keeps the hand's velocity.
+- `poke`: press `depth` (.1) into a point over `dur` (.6 s) with a finger of `radius` (.09).
+- `nudge`: a kick (`1` = the reference's "Give it a nudge"), `hop: 0` for no hop.
+
+Readouts for type on screen: `stats(t)` gives `mass` (g), `volume` (fraction of rest),
+`kinetic` (µJ, illustrative scale from `scale: {cm, gcc}`), `minTet`, `pen`; `hand(t)`,
+`follow(t)`, `project([x, y, z])` -> screen px.
+
+**Sound comes off the simulation.** `events()` lists grab / release / poke from the script and
+every landing from the physics -- a frame where the floor stopped a lot of downward motion, a
+peak over the quietest frame of the last 0.3 s (a slice at rest presses on the floor every
+step, so an absolute threshold hears a landing every 0.2 s), none while the hand holds it.
+`sounds()` turns them into cues: `plop` per landing (louder the harder it hit), `squish`
+falling on grab and poke, rising on release, panned to the screen. The film returns them from
+`SK.film({ sounds })`; `sketch-render --automation` writes them into `temp/automation.json` as
+`_cues`, and `sketch-audio` adds them to `sfx.json`'s. Re-run both after changing an action.
+
+**Light.** Floor (a lit pool, a contact shadow and a cast shadow along the key, tinted by the
+flesh), seeds and bubbles render first into a half-float target; the jelly's back faces give
+its thickness; the front faces then read that picture *through* the jelly: a refracted lookup,
+blurred by depth (a mip level per unit of path), Beer-Lambert absorption per channel, light
+scattered back out reddened by its own path, and key light leaking through thin parts; then
+Fresnel reflection of a studio with dark walls, a softbox and a strip light. Flesh, pale layer
+and skin are chosen by each point's rest radius, so the layers deform with the slice.
+
+**Measured** (the 12 s example, this laptop):
+
+| | |
+|---|---|
+| wobble after a kick, firmness .4 | 4-5.5 Hz, down to 10% in ~1.3 s at damping .45 |
+| volume | 99.5% at rest (the sag), 94% for one frame at a hard landing |
+| mesh | 2,425 particles, 10,824 tets, 16,674 surface vertices |
+| render, 720 frames | 71 s `--encode browser`, 106 s pipe (4 browsers, headless Edge on the Intel UHD) |
+
+Three calibrations that cost time, and why:
+
+- **The first stiffness rang at 7-10 Hz and died in 0.2 s** -- rubber, not jelly. The
+  measured cause was not the damper: an edge-spring tet lattice is several times stiffer than
+  the modulus it is given, and the kick's hop landed inelastically. Firmness now maps to a
+  modulus five times lower; lowering `bulk` (volumetric locking was the suspect) changed
+  nothing, so it stays 25. Measure the wobble with a sideways kick and `hop: 0`.
+- **Scattering reads as plastic.** A `cloud` of 5.5 made the flesh one flat red; 2.6 with
+  stronger absorption lets the floor and the seeds show through, deep where it is thick and
+  light at the edges. A bright studio veiled everything in grey reflection; product
+  photographers hang black flags, and so does the environment map now.
+- **Measure thickness where the colour is read.** Thickness from the unrefracted pixel and
+  colour from the refracted one showed each seed as a grey lens with a white crescent -- the
+  floor, seen through no jelly at all.
+
+Not measured yet: the public studio's Azure VM has no GPU, so WebGL2 there would be a software
+rasteriser if the browser offers one at all -- time a still there before offering the look.
 
 ### Sketch Studio: a prompt box that makes a short film (`studio/`)
 
@@ -4468,6 +4582,10 @@ everything in `temp/` regenerates in seconds.
   `getImageData` instead (also twice as fast: no PNG encode or decode). An HTTP/1.0 server
   opened a new connection per 8 MB frame and a render died on the one that got reset, so the
   frame server speaks HTTP/1.1 keep-alive and the page retries a failed POST.
+- **A velocity kick applied after the positions move is lost.** Position-based dynamics
+  recomputes velocity from the positions at the end of each step, so the jelly's first "nudge"
+  (added mid-step) did nothing at all; kicks go in before integration. The same family: a
+  refracted colour lookup needs its thickness measured at the refracted pixel too (*Jelly*).
 - **Killing Chromium's parent on Windows leaves its children running.** A 1.3 GB renderer
   outlived its run; `sketch-render.py` takes the whole tree with `taskkill /T`.
 - **Python's `hash()` of a string is salted per process.** A drum seeded from `hash(piece)`

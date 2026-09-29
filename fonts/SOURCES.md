@@ -11,6 +11,7 @@ All are SIL Open Font License 1.1 (text in OFL.txt), from Google Fonts.
 | Inter.woff2 (variable 100-900) | Inter | sketch films, clean look |
 | Caveat-Cyrillic-VF.ttf (variable 400-700, full glyph set) | Caveat | sketch films in Ukrainian (crayon look) |
 | BalsamiqSans-Regular.ttf, BalsamiqSans-Bold.ttf (full glyph set) | Balsamiq Sans | sketch films in Ukrainian: friendly, legible print for children |
+| InstrumentSerif-Regular.ttf, InstrumentSerif-Italic.ttf (full glyph set) | Instrument Serif | the jelly example's editorial type ("Melon / Jelly."); the italic is registered as its own family, `Instrument Serif Italic`, since the bundler's @font-face carries no style |
 | AbrilFatface-Regular.ttf | Abril Fatface | collage films: headlines (Latin only) |
 | UnifrakturMaguntia-Book.ttf | UnifrakturMaguntia | collage films: newspaper mastheads (Latin only) |
 | Oswald-VF.ttf (variable 200-700) | Oswald | collage films: tape labels, chapter tags, ruler (Latin and Cyrillic) |

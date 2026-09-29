@@ -1,6 +1,6 @@
 ---
 name: video-sketch
-description: Make an animated explainer film with no footage — a hand-drawn/whimsical, a clean editorial, or a mixed-media paper-collage animation (cut-out pictures from an image model animated with type, tape labels, rubber stamps and torn paper, the "newspaper cutout" motion-design look) written as JavaScript, with an AI voice-over, an original score on sampled instruments and synthesised sound effects, rendered to MP4 and to a self-contained HTML player. Use when asked for an animation, an animated explainer or promo, a motion-graphics or motion-design video, a "whimsical hand-drawn" video, a collage / mixed-media / cut-out / scrapbook / newspaper-style video, a product or feature explainer, a 30-60 second ad, or anything that should be illustrated rather than filmed.
+description: Make an animated explainer film with no footage — a hand-drawn/whimsical, a clean editorial, or a mixed-media paper-collage animation (cut-out pictures from an image model animated with type, tape labels, rubber stamps and torn paper, the "newspaper cutout" motion-design look) written as JavaScript, or a 3D "jelly" material study (a simulated gummy object grabbed, stretched and dropped, lit as translucent candy), with an AI voice-over, an original score on sampled instruments and synthesised sound effects, rendered to MP4 and to a self-contained HTML player. Use when asked for an animation, an animated explainer or promo, a motion-graphics or motion-design video, a "whimsical hand-drawn" video, a collage / mixed-media / cut-out / scrapbook / newspaper-style video, a jelly / gummy / soft-body / squishy 3D clip, a product or feature explainer, a 30-60 second ad, or anything that should be illustrated rather than filmed.
 ---
 
 # A sketch film: an explainer written as code
@@ -21,6 +21,27 @@ the cast `sketch/props.js`, the collage pieces `sketch/collage.js`, the page
 real brand film (clean, 60 s, real estate) described in the reference, and the committed
 `config/sketch/collage-example/` (collage, 66 s: 17 cut-outs, ten sheets, stamps, a timeline
 ruler, `score.py` and `sfx.py` beside it). Copy an example into `projects/<id>/` to start.
+
+## Jelly: a simulated gummy object instead of drawings
+
+For "jelly style", a squishy/gummy 3D object, or a soft-body clip: start from
+`config/sketch/jelly/` instead of the example (`"modules": ["jelly"]`, a `film.js` that makes
+`SK.jelly.specimen({...})` and draws it). The reference section *Jelly* has every key and
+the measurements.
+
+- **Direct the hand, not the frames.** `actions` are grabs (`tip`, `flesh`, `rind`,
+  `corner-left`, ... with a `path` of offsets and an optional `twist`), pokes and nudges. The
+  wobble, folds and landings are simulated. Leave ~1.3 s after a release for it to settle.
+- **Review motion from frame strips**, not single stills: render, then tile 10 fps across each
+  release (`ffmpeg ... -vf "fps=10,crop=...,tile=6x3"`). A still cannot show a rubbery 10 Hz
+  buzz or a dead landing.
+- **Sound is off the simulation.** Return `melon.sounds()` from `SK.film({ sounds })`, then run
+  `sketch-render --automation` before `sketch-audio`: every landing gets a plop sized to the
+  impact, every grab/poke/release a squish. Changing an action means re-running both.
+- **Render with `--encode browser`** (71 s against 106 s for 12 s). The bake is re-run by each
+  render chunk and by the live player on load (~0.5-0.8 s per film second).
+- Colours are presets (`crimson`, `golden`, `rose`) or an object: absorption is what makes it
+  candy -- a high `cloud` turns it into red plastic.
 
 ## The project folder comes first
 
@@ -138,7 +159,8 @@ an engine module the manifest opts into with `"modules": ["collage"]`:
   thumbnail of the same house); if a new prop has hard-coded sizes inside, give it the same
   scale treatment before using it small.
 - Every frame must be a pure function of `t`; any state kept between frames breaks the
-  exported video while looking fine in the browser.
+  exported video while looking fine in the browser. Physics goes through a bake (the jelly
+  module): simulate forward in fixed steps from 0, keep snapshots, draw from them.
 - **A film in another language** needs four things, or it fails silently: `vo.language`
   (e.g. `"uk"`), a `tail` in that language (`"Добре."`), fonts that carry the script (the
   committed woff2 files are Latin subsets -- use the full `.ttf` in `fonts/`), and cue words

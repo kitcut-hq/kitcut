@@ -1,0 +1,10 @@
+{
+  "bpm": 100,
+  "drum_gain": 0.3,
+  "events": [
+    {"inst": "vibraphone", "vel": 0.26, "notes": "0 F3+A3+C4+E4 4; 4 D3+F3+A3+C4 4; 8 Bb2+D3+F3+A3 4; 12 C3+E3+G3+Bb3 4; 16 F3+A3+C4+E4 4"},
+    {"inst": "marimba", "vel": 0.34, "notes": "0 C5 .5; .5 F5 .5; 1 A5 .5; 2 G5 .5; 2.5 F5 .5; 3 C5 1; 4 D5 .5; 4.5 F5 .5; 5 A5 .5; 6 C6 .5; 6.5 A5 .5; 7 F5 1; 8 D5 .5; 8.5 F5 .5; 9 Bb5 .5; 10 A5 .5; 10.5 F5 .5; 11 D5 1; 12 E5 .5; 12.5 G5 .5; 13 Bb5 .5; 14 C6 .5; 14.5 Bb5 .5; 15 G5 1; 16 F5 .5; 16.5 A5 .5; 17 C6 2"},
+    {"inst": "pizzicato_strings", "vel": 0.42, "notes": "0 F2 .5; 2 C3 .5; 4 D2 .5; 6 A2 .5; 8 Bb1 .5; 10 F2 .5; 12 C2 .5; 14 G2 .5; 16 F2 1"},
+    {"type": "drums", "from": 4, "bars": 3, "kit": {"shaker": "o.o.o.o.o.o.o.o."}, "vel": 0.35}
+  ]
+}

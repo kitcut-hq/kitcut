@@ -3,7 +3,9 @@
 
 Reads `projects/<id>/sketch.json`: its `audio.score` (sampled-instrument score, see
 _sketchaudio.py for the notation), `audio.sfx` (timed sound cues), the VO timeline written by
-sketch-vo.py, and optional plane/object automation written by sketch-render.py --automation.
+sketch-vo.py, and optional plane/object automation written by sketch-render.py --automation
+-- including `_cues`, sound cues the film computed from its own picture (a jelly film's
+landings and grabs, SK.film({ sounds })), which join sfx.json's.
 Renders music, SFX and voice, ducks the music under speech, holds it at least
 `voice_margin_db` under the voice wherever the voice speaks (the voice gate: a score written too
 loud cannot bury the narration), mixes, and masters to EBU R128 (-14 LUFS, -1.5 dBTP by default)
@@ -105,6 +107,9 @@ def main():
     cues, _ = load_json(m, "sfx")
     cues = cues or []
     autom, _ = load_json(m, "automation", "temp/automation.json")
+    # cues the film computed from its own picture (SK.film({ sounds }), e.g. a jelly's landings)
+    film_cues = (autom or {}).get("_cues") or []
+    cues = cues + film_cues
     tl_path = _sketch.rel(m, au.get("vo_timeline", "audio/vo/timeline.json"))
     timeline = None
     if not args.no_vo and os.path.exists(tl_path):
@@ -131,7 +136,12 @@ def main():
         % (len(events), len({e[0] for e in events}), last)
     )
     print(
-        "  sfx:    %d cues (%s)" % (len(cues), ", ".join(sorted({c["fx"] for c in cues})) or "none")
+        "  sfx:    %d cues (%s)%s"
+        % (
+            len(cues),
+            ", ".join(sorted({c["fx"] for c in cues})) or "none",
+            ", %d of them from the film" % len(film_cues) if film_cues else "",
+        )
     )
     print(
         "  voice:  %s"

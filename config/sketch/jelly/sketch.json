@@ -1,0 +1,51 @@
+{
+  "title": "Melon Jelly",
+  "description": "A 12-second jelly example: a watermelon gummy dropped, stretched, pressed, lifted and nudged -- simulated soft body, candy lighting.",
+  "slug": "melon-jelly",
+  "duration": 12.0,
+  "fps": 60,
+  "film": "film.js",
+  "modules": [
+    "jelly"
+  ],
+  "poster_t": 2.25,
+  "fonts": [
+    {
+      "file": "fonts/InstrumentSerif-Italic.ttf",
+      "family": "Instrument Serif Italic",
+      "weight": "400"
+    },
+    {
+      "file": "fonts/InstrumentSerif-Regular.ttf",
+      "family": "Instrument Serif",
+      "weight": "400"
+    },
+    {
+      "file": "fonts/Inter.woff2",
+      "family": "Inter",
+      "weight": "100 900",
+      "load": "400 500 600"
+    }
+  ],
+  "player": {
+    "accent": "#c8313a",
+    "paper": "#dedad3",
+    "ink": "#221e1b",
+    "hint": "melon jelly · 12s",
+    "hint_font": "'Instrument Serif Italic', serif"
+  },
+  "render": {
+    "cq": 17,
+    "preset": "p5",
+    "audio_bitrate": "192k",
+    "encode": "browser"
+  },
+  "audio": {
+    "score": "score.json",
+    "sfx": "sfx.json",
+    "mix": {
+      "music_db": 4.0,
+      "sfx_db": 5.0
+    }
+  }
+}

@@ -668,10 +668,16 @@ live and the renderer exports any frame on its own), and **cues hang off words**
 moves its visuals with it. Three looks share one engine: `SK.setStyle('crayon')` (boiling
 hand-drawn lines), `'clean'` (editorial line art, cards, flat fills) and `'collage'` (mixed
 media: pictures cut out of paper by `sketch-paint.py` `"cutout": true`, animated with torn
-sheets, tape labels, stamps and type from `sketch/collage.js`, nudged on twos like stop motion). Each script times
+sheets, tape labels, stamps and type from `sketch/collage.js`, nudged on twos like stop motion). Another kind of film
+is **jelly** (`"modules": ["jelly"]`, `sketch/jelly.js`, example `config/sketch/jelly/`): a
+soft-body gummy object, simulated (XPBD on tets) and lit as translucent candy in WebGL2, which a
+scripted hand grabs, pokes and drops. Physics keeps the pure-function rule by **baking** --
+fixed steps from t = 0, one snapshot per frame -- and its landings and grabs become the sound
+cues (`SK.film({ sounds })` -> `--automation` -> sketch-audio). Each script times
 its stages into the run log; `--timings` answers "how long does a film take". After touching
 any of it, run `python scripts/check-sketch.py` — the notation, every sound generator, the
-ducker, the tail-word cut and the bundler; no API, no browser, seconds.
+ducker, the tail-word cut, the bundler, and (under Node) the jelly bake: determinism, volume,
+inversion, the floor, settling and landing detection; no API, no browser, seconds.
 
 **Thumbnails for a film** — kitcut.ai's "Publish to YouTube" offers four, each **a still of the
 film itself** with at most four words; the draft's Claude call picks the moments and the words
@@ -756,8 +762,9 @@ which cannot encode the glyphs at all.
 | `scripts/thumb-options.py` | four YouTube thumbnail options for a sketch film, each a still of the film with a few words in the film's own look, checked; `_thumb.py` is the machinery and `sketch/thumb.js` the film-side probe and overlay (kitcut.ai's publish dialog uses it via `studio/thumbs.py`), `check-thumbnail.py` its test |
 | `scripts/edl-cut.py` | a film from hand-chosen ranges of a few silent takes, with an elapsed counter driven by SOURCE time so it stays true over a sped-up wait |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
-| `sketch/` | the sketch-film engine (`engine.js`), cast (`props.js`), collage pieces (`collage.js`) and player page (`player.html`); `scripts/_sketch.py` and `_sketchaudio.py` are the Python half, `check-sketch.py` their test |
+| `sketch/` | the sketch-film engine (`engine.js`), cast (`props.js`), player page (`player.html`) and opt-in modules (`collage.js`: the collage pieces; `jelly.js`: a simulated soft-body specimen); `scripts/_sketch.py` and `_sketchaudio.py` are the Python half, `check-sketch.py` their test |
 | `config/sketch/example/` | a 12 s sketch film to copy into a new project: manifest, `film.js`, score, cues |
+| `config/sketch/jelly/` | a 12 s jelly film ("Melon Jelly") to copy into a new project the same way |
 | `scripts/resolve-export.py` | the cut as an OTIO/EDL/FCP7 XML timeline plus an SRT, for DaVinci Resolve (free edition); `check-resolve.py` is its test, `docs/davinci-resolve.md` the research behind it |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
 | `scripts/screencast-pipeline.py` | the silent-screencast job as one cached, checkpointed command; the stage scripts it drives are listed under pipeline 7 |

@@ -20,6 +20,7 @@ import re
 import json
 import shutil
 import argparse
+import subprocess
 import tempfile
 from importlib import import_module
 
@@ -483,11 +484,124 @@ def main():
         with open(os.path.join(ex, "score.json"), encoding="utf-8") as f:
             ev = A.score_events(json.load(f))
         check("example score parses", len(ev) > 20, str(len(ev)))
+        check("bundle: no module unless asked", "sourceURL=sketch/jelly.js" not in page)
+        # a film that lists "modules" carries them; one that names a missing module is refused
+        jx = os.path.join(_env.ROOT, "config", "sketch", "jelly")
+        shutil.copytree(jx, os.path.join(tmp, "jelly"))
+        mj = _sketch.load(os.path.join(tmp, "jelly", "sketch.json"))
+        check("bundle: modules inlined", "sourceURL=sketch/jelly.js" in render.bundle(mj, False))
+        mj["modules"] = ["nope"]
+        try:
+            render.bundle(mj, audio=False)
+            check("bundle: unknown module refused", False)
+        except SystemExit:
+            check("bundle: unknown module refused", True)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
+    check_jelly()
+
     print("\n%d failed" % len(FAILS) if FAILS else "\nall passed")
     sys.exit(1 if FAILS else 0)
+
+
+# The jelly's physics half has no DOM, so Node bakes a coarse specimen: a drop, a grab and a
+# nudge. What is checked is what a render would otherwise be the first to show -- a bake that
+# differs run to run (a still would not match its video), tets turned inside out, volume
+# lost, the floor crossed, a wobble that never settles, a landing the sound never hears.
+JELLY_HARNESS = r"""
+globalThis.window = globalThis;
+require(process.argv[2]);
+const mk = () => SK.jelly.specimen({
+  cell: 0.075, surfaceCell: 0.03, bubbles: { n: 2, seed: 3 },
+  seeds: { rows: [0.5], spacing: 0.12, size: [0.06, 0.034, 0.017], depth: 0.045, both: false,
+    seed: 7 },
+  pose: { at: [0, 0.25, 0], yaw: 30 },
+  actions: [
+    { t: 0.6, grab: 'tip', path: [[0.35, [-0.2, 0.35, 0.1]]], twist: [[0.35, 15]] },
+    { t: 1.6, nudge: 1 },
+  ],
+});
+const a = mk(), b = mk();
+a.bakeTo(3.2); b.bakeTo(3.2);
+const pa = a.positions(2.5), pb = b.positions(2.5);
+let same = true;
+for (let i = 0; i < pa.length; i++) if (pa[i] !== pb[i]) { same = false; break; }
+let minTet = Infinity, pen = 0, vmin = 9, vmax = 0, keNudge = 0, squashed = 0;
+for (let f = 0; f <= 192; f++) {
+  const s = a.stats(f / 60);
+  minTet = Math.min(minTet, s.minTet); pen = Math.max(pen, s.pen);
+  vmin = Math.min(vmin, s.volume); vmax = Math.max(vmax, s.volume); squashed += s.volume < 0.97;
+  if (f / 60 > 1.6) keNudge = Math.max(keNudge, s.keSim);
+}
+const top = (t) => {
+  const P = a.positions(t);
+  let y = 0;
+  for (let i = 0; i < a.n; i++) y = Math.max(y, P[i * 3 + 1]);
+  return y;
+};
+const M = a._mesh, tets = [...M.surfE.tet, ...M.inclE.tet];
+let wsum = 0;
+for (let i = 0; i < M.surfE.w.length; i += 4) {
+  const w = M.surfE.w;
+  wsum = Math.max(wsum, Math.abs(w[i] + w[i + 1] + w[i + 2] + w[i + 3] - 1));
+}
+console.log(JSON.stringify({
+  same, minTet, pen, vmin, vmax, squashed, vEnd: a.stats(3.2).volume,
+  keNudge, keEnd: a.stats(3.2).keSim,
+  lift: top(0.95) - top(0.55), embedded: tets.every((t) => t >= 0 && t < a.tets), wsum,
+  events: a.events(3.2).map((e) => [e.kind, +e.t.toFixed(2)]),
+}));
+"""
+
+
+def check_jelly():
+    node = shutil.which("node")
+    if not node:
+        print("skip  jelly physics: node not found")
+        return
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as f:
+        f.write(JELLY_HARNESS)
+    try:
+        r = subprocess.run(
+            [node, f.name, os.path.join(_env.ROOT, "sketch", "jelly.js")],
+            capture_output=True,
+            text=True,
+            timeout=180,
+            check=False,
+        )
+    finally:
+        os.unlink(f.name)
+    if r.returncode:
+        check("jelly: bakes under node", False, r.stderr.strip()[-400:])
+        return
+    j = json.loads(r.stdout.strip().splitlines()[-1])
+    ev = j["events"]
+    check("jelly: two bakes are identical", j["same"])
+    check("jelly: no tet inverts", j["minTet"] > 0.1, "min tet volume %.2f of rest" % j["minTet"])
+    check("jelly: never below the floor", j["pen"] < 1e-9, "%.2g" % j["pen"])
+    # a landing squashes it for a frame or two (measured: 94% for one frame, then 98%+) --
+    # that is the impact, and is allowed; a slice that stays small is not
+    check(
+        "jelly: volume held (a landing may squash it briefly)",
+        j["vmin"] > 0.9 and j["vmax"] < 1.05 and j["squashed"] <= 4 and abs(j["vEnd"] - 1) < 0.015,
+        "%.3f .. %.3f, %d frames under 97%%, %.3f at rest"
+        % (j["vmin"], j["vmax"], j["squashed"], j["vEnd"]),
+    )
+    check("jelly: the grab lifts the tip", j["lift"] > 0.2, "%.3f" % j["lift"])
+    check(
+        "jelly: a nudge settles",
+        j["keEnd"] < 0.03 * j["keNudge"],
+        "%.3g of %.3g" % (j["keEnd"], j["keNudge"]),
+    )
+    check("jelly: every surface point rides a tet", j["embedded"] and j["wsum"] < 1e-4)
+    lands = [t for k, t in ev if k == "land"]
+    check("jelly: the drop is heard", any(0.05 < t < 0.4 for t in lands), str(ev))
+    check(
+        "jelly: the release lands",
+        ["release", 0.95] in ev and any(0.95 < t < 1.6 for t in lands),
+        str(ev),
+    )
 
 
 if __name__ == "__main__":
