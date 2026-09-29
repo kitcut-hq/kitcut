@@ -15,6 +15,8 @@
 #   bash studio/deploy/ops.sh migrate [<commit>]      ONCE: from the legacy one-server unit to one
 #                                                     server per release (deploy/README.md); waits,
 #                                                     on the VM, for the running films to finish
+#   bash studio/deploy/ops.sh claude-log <film-id> [--all] [--grep T]   what Claude did, its API
+#                                                     errors and waits, Claude Code's debug log
 #   bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]   pick up a film the studio
 #                                                     stopped half-way (studio/resume.py), in the
 #                                                     same film; --plan spends nothing
@@ -237,6 +239,15 @@ EOF
     change_on "cd $REMOTE && STUDIO_HOME=$HOME_DIR bash studio/serve.sh use $rel"
     ;;
 
+  claude-log)
+    # what Claude did on a film and what went wrong: its transcript and Claude Code's debug log,
+    # read on the VM into one short page (studio/claude_log.py). Reads only
+    id="${1:?claude-log <film-id> [--all] [--debug N] [--grep TEXT]}"; shift
+    [[ "$id" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $id"
+    args=""; for a in "$@"; do args="$args $(printf '%q' "$a")"; done  # quoted for the VM's shell
+    on "cd $REMOTE && STUDIO_HOME=$HOME_DIR $REMOTE/.venv/bin/python -X utf8 studio/claude_log.py $id$args"
+    ;;
+
   resume)
     id="${1:?resume <film-id> [--plan] [--finish] [--minutes N]}"; shift
     [[ "$id" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $id"
@@ -325,5 +336,5 @@ EOF
     az_ snapshot list -g "$RG" --query "sort_by([?tags.app=='kitcut-studio-snapshot'], &timeCreated)[].{name:name, created:timeCreated, gb:diskSizeGb}" -o table
     ;;
 
-  *) sed -n 2,32p "$0"; exit 2 ;;
+  *) sed -n 2,34p "$0"; exit 2 ;;
 esac

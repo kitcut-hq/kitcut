@@ -79,6 +79,11 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
 1. `ops.sh status` -- is the studio answering, is studio.kitcut.ai the same release, any errors?
 2. `ops.sh logs studio -n 300` and the film's `events.jsonl` (`vm.sh ssh ... 'tail
    /srv/kitcut/studio/projects/<id>/events.jsonl'`).
+   A film that is slow or stuck in Claude's part: `ops.sh claude-log <film-id>` -- one page of
+   every reply (when, how long it waited, context size, output tokens, what it did), the API
+   errors Claude Code retried, whether it is waiting for a reply right now, and Claude Code's own
+   debug log (`--grep TEXT` to search it). A reply that never comes after a long one (writing a
+   long film's picture) is a timeout, not a dead CLI: 2026-09-28, film llwtme.
 3. A step that fails on the VM and not on the laptop is usually the environment: compare
    `uv pip list` there with the laptop's venv, and look for imports inside functions.
 4. Fix in the repo (worktree, commit, merge to studio-poc), then `ops.sh ship`. A missing package

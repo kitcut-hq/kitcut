@@ -664,6 +664,11 @@ async def run_claude(
         # the raw stream too: only its message_delta events carry a response's final token count
         include_partial_messages=True,
         resume=resume,
+        # Claude Code's own log of the run (its requests, retries, timeouts), one file a run, beside
+        # the transcript and outside the film, so Claude never reads it and it never ships. Without
+        # it a stalled film showed only "Request timed out." (llwtme, 2026-09-28); claude_log.py
+        # reads the two together
+        extra_args={"debug-file": debug_log(film)},
     )
     streamed, signin = {}, None
     try:
@@ -720,6 +725,13 @@ async def run_claude(
     if signin:
         raise SignInError(signin)
     return result
+
+
+def debug_log(film):
+    """Where this run of Claude Code writes its debug log: STUDIO_HOME/claude/<film>/logs/."""
+    d = os.path.join(film.claude_dir, "logs")
+    os.makedirs(d, exist_ok=True)
+    return os.path.join(d, "claude-%s.log" % datetime.now().strftime("%Y%m%d-%H%M%S"))
 
 
 async def _within(coro, clock, lim):

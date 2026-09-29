@@ -156,6 +156,8 @@ resumes) stay on the data disk. `studio/resume.py` picks it up in the same film 
 and link -- with one more turn of that session, then the mix and the render as usual:
 
 ```bash
+bash studio/deploy/ops.sh claude-log <film-id>      # what Claude did, how long each reply took, the
+                                                    # API errors, Claude Code's debug log: read first
 bash studio/deploy/ops.sh resume <film-id> --plan   # session found? what is missing? spends nothing
 bash studio/deploy/ops.sh resume <film-id>          # its own unit (kitcut-resume-...), followed
 bash studio/deploy/ops.sh resume <film-id> --finish # Claude's part is whole: mix and render only
