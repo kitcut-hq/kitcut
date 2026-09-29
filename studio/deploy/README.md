@@ -15,9 +15,9 @@ laptop, through the scripts in this folder.
 | cost | ~$361/month for the VM + ~$22 the data disk (list prices, 2026-09-28) |
 
 ```bash
-bash studio/deploy/ops.sh status          # health, release, films in progress, disks, errors
-bash studio/deploy/ops.sh logs studio -f  # or tunnel | login
-bash studio/deploy/ops.sh ship            # origin/studio-poc -> tagged, built, drained, live
+bash studio/deploy/ops.sh status          # health, the servers and their films, disks, errors
+bash studio/deploy/ops.sh logs studio -f  # every server unit; or tunnel | login
+bash studio/deploy/ops.sh ship            # origin/studio-poc -> tagged, built, its server leading
 bash studio/deploy/ops.sh film "<idea>"   # a film made on the VM itself, followed to the end
 bash studio/deploy/ops.sh forward         # the VM's studio on this laptop's 127.0.0.1:8765
 bash studio/deploy/ops.sh snapshot        # the data disk, incremental; keeps the newest 7
@@ -29,43 +29,123 @@ laptop's WireGuard VPN must be up.
 
 ## Shipping a release
 
-The same model as the laptop (studio/README.md, Releases): the server runs a frozen `git archive`
-of a tag, never the working tree.
+The same model as the laptop (studio/README.md, Releases): a server runs a frozen `git archive`
+of a commit, never the working tree. What differs is that a ship on the VM never restarts
+anything: **one server per release**. The new release's server starts beside the running one and
+takes the new films; the old one finishes the films it is making, then exits by itself.
 
 ```bash
-git tag -f studio-stable <commit>                                   # on the laptop: the decision to ship
-bash studio/deploy/push.sh kitcut-studio-1 studio-poc                # the branch + the tag, over SSH
-bash studio/deploy/vm.sh ssh kitcut-studio-1 'bash /srv/kitcut/repo/studio/serve.sh release'
+bash studio/deploy/ops.sh --dry-run ship      # what it would do
+bash studio/deploy/ops.sh ship [<commit>]     # default origin/studio-poc's head
+bash studio/deploy/ops.sh rollback <sha12>    # any release still built (ops.sh releases)
 ```
 
-Code reaches the VM only from the laptop: `push.sh` pushes into a bare repo on the VM
-(`/srv/kitcut/git`) and moves the checkout to it. kitcut-hq/kitcut has deploy keys disabled, and
-a VM with no GitHub credentials cannot leak any.
+What a ship does:
 
-`serve.sh release` snapshots the tag, runs the release's tests inside it, drains the running
-server (no new films; the ones being made finish, up to 20 min) and restarts it. systemd brings
-the server and the tunnel back after a crash or a reboot (`Restart=always`); the laptop never had
-that.
+1. **On the laptop** (`ops.sh`): refuses a commit that is not on origin/studio-poc, tags it
+   `studio-stable`, and `push.sh` pushes that commit into a bare repo on the VM
+   (`/srv/kitcut/git`) and moves the checkout to it. Code reaches the VM only from the laptop:
+   kitcut-hq/kitcut has deploy keys disabled, and a VM with no GitHub credentials cannot leak any.
+2. **`serve.sh release`** on the VM: `release.py` snapshots the tag into
+   `STUDIO_HOME/releases/<sha12>` and runs the release's tests inside it, then `serve.sh switch`.
+   A sha that already leads is left alone.
+3. **`serve.sh switch <sha12>`** names a new instance, `<sha12>-<YYYYmmddHHMMSS>`, writes it to
+   `STUDIO_HOME/servers/current` and starts `kitcut-studio@<instance>`. It binds 127.0.0.1:8765
+   beside the running server (both set `SO_REUSEPORT`), so the tunnel never moves. The old leader
+   sees the current instance serving and hands off: it lets go of `leader.lock`, stops listening,
+   takes no new films, finishes its own and exits 0 -- in a minute or in two hours; nobody waits.
+   `switch` returns as soon as the new server's heartbeat says *serving*, *leader* and the right
+   release, and prints the older servers still finishing films. If it does not lead within 120 s,
+   `current` goes back, the new unit is stopped, its journal is printed and the ship fails (and
+   if the old one had already handed off, a fresh server of the old release is started).
+4. **The check**: `/api/health`'s `release` is the leader's, whichever server answers; `ops.sh`
+   reads it on the VM and through studio.kitcut.ai, and lists the servers.
 
-Two guards, both from one bad evening (2026-09-28, film `rts664` killed after 28 minutes):
+| word | what it is |
+|---|---|
+| instance | one server unit, `kitcut-studio@<sha12>-<timestamp>` (`kitcut-studio@.service`). A fresh server of the same code is a new instance |
+| `servers/current` | the intent: the instance that should serve. `serve.sh` writes it; a server of another instance that starts exits 0 at once |
+| leader | the fact: the one server holding `servers/leader.lock`. It admits films and adopts what a dead server left; `/api/health`'s `release` is its |
+| handed off | an old server finishing its films: not listening, taking nothing new. It exits 0 when done, and `Restart=on-failure` leaves it down (a crash brings it back) |
+| heartbeat | `servers/<instance>.<pid>.json` (mode, leader, release, films), beside the `.lock` the server holds for its whole life (`studio/peers.py`) |
 
-- **The release is built where the server reads it.** `serve.sh` takes `STUDIO_HOME` from the
-  `kitcut-studio` unit when it is not set. Without it `release.py` fell back to
-  `/srv/kitcut/kitcut-studio` (`film.py`'s default for a laptop), the server's
-  `/srv/kitcut/studio/releases/current` never moved, and the restart came back on the old code.
-  `serve.sh release` now refuses to restart unless `current` names the sha it just built, and
-  skips the restart when that sha is already live.
-- **One deploy at a time.** `release`, `use` (a rollback), `restart` and `stop` take
-  `STUDIO_HOME/deploy.lock` (`flock`). Three ships overlapped that evening, each draining and
-  restarting on its own; a second one now stops at once and prints who holds the lock.
-- **A restart says what it did.** A stop reaches the server as SIGTERM, and `server.shutdown()`
-  tells each film it is making before cancelling it: one Claude was writing is recorded
-  *interrupted* ("The studio restarted before this film was finished." on its page; kitcut.ai
-  gives the credits back), one being mixed or rendered stays *finishing* and the next server
-  finishes it, a queued one stays queued. Only its person's Stop records *cancelled*. The unit
-  runs `KillMode=mixed` (SIGTERM to the server alone, which stops the film's steps itself;
-  `control-group` sent it to every step at once) and `TimeoutStopSec=60` -- a change to the unit
-  file needs `bash studio/deploy/install.sh` on the VM (it re-renders the units and reloads).
+- **Rollback** is a switch to an older built release: `ops.sh rollback <sha12>` (`serve.sh use`).
+  Nothing is stopped either way.
+- **Restart** (`serve.sh restart`) is a switch to the leader's own release: a fresh server of the
+  same code, e.g. after an `.env` change. The old server keeps the settings it started with until
+  its films are done.
+- **The shared venv.** Every release runs on `/srv/kitcut/repo/.venv` (and shares `models/`), so
+  installing a changed requirement changes the steps of the films the old server is still making.
+  `ops.sh ship` warns when `requirements*.txt` changed between the leader's release and the one
+  shipped: install and ship at a quiet moment (`ops.sh status` shows no films).
+- **Only maintenance stops a film.** `serve.sh stop` drains (no new films; up to 20 min for the
+  running ones), then stops every server and the tunnel. `serve.sh start` brings back the tunnel
+  and the current instance, and enables both at boot. Never `systemctl restart` or `stop` a
+  `kitcut-studio@...` unit by hand: its films stop with it.
+- **A reboot** starts `servers/current`'s instance (`kitcut-studio-boot.service`, the one studio
+  unit that is enabled). Older servers were ended by the reboot; the leader adopts their films as
+  it would a crashed server's.
+- **Offline is said once.** Each instance runs `announce.sh up` when it starts; `announce.sh off`
+  does nothing while any other studio server unit is up, so an old server leaving never marks the
+  public studio offline.
+- **The kernel setting.** `install.sh` puts `net.ipv4.tcp_migrate_req = 1` in
+  `/etc/sysctl.d/60-kitcut.conf`: when the old server closes its listener, the connections already
+  queued on it move to the new one instead of being reset.
+- **The guards from before stay.** Releases are built where the servers read them (`serve.sh`
+  takes `STUDIO_HOME` from the units, or refuses). One deploy at a time: every command but
+  `status` takes `STUDIO_HOME/deploy.lock` (`flock`); a second one stops at once and prints who
+  holds it. A stopped server says what it did (`server.shutdown()`: a film Claude was writing is
+  *interrupted*, one being mixed or rendered stays *finishing* for the leader, a queued one stays
+  queued), under `KillMode=mixed` and `TimeoutStopSec=60`. A change to a unit file needs
+  `bash studio/deploy/install.sh` on the VM; a running server keeps its unit as it started, and
+  the next ship's server gets the new one.
+
+**Why (KI-031).** Until the migration below the VM ran one server, `kitcut-studio.service`, and a
+ship drained it for up to 20 minutes and then restarted it. On 2026-09-28 three overlapping ships did
+that; the first one's drain ran out while a paying 150 s film (`rts664`) was 28 minutes in, the
+restart killed it -- recorded *cancelled* -- and, the release having been built outside
+`STUDIO_HOME`, the studio came back on its old code. The lock, the `STUDIO_HOME` check and the
+*interrupted* record came that night; one server per release is the end of it: a ship no longer
+waits on a film or stops one.
+
+### The migration, once per machine
+
+The legacy unit does not set `SO_REUSEPORT` and restarts on every ship, so the first move to one
+server per release is a step of its own. `ops.sh ship` refuses while the legacy unit is installed.
+
+```bash
+bash studio/deploy/ops.sh --dry-run migrate   # the plan (the VM's own dry run, once it has the scripts)
+bash studio/deploy/ops.sh migrate [<commit>]  # at a quiet moment
+```
+
+`ops.sh migrate` pushes the commit like a ship, runs `install.sh` on the VM (the template, the
+boot unit, the sysctl; the legacy unit is left as it is), then runs `serve.sh migrate` there in a
+unit of its own (`kitcut-migrate-<time>`) and follows it: it waits for films with no timeout, and
+must not depend on the laptop staying awake. Ctrl+C stops the following, not the migration
+(`vm.sh ssh kitcut-studio-1 "journalctl -u 'kitcut-migrate-*' -f"` picks it up again).
+`serve.sh migrate`:
+
+1. builds and tests the release, then puts `releases/current` back to the legacy server's, so a
+   legacy server restarted by a crash meanwhile comes back on its own code;
+2. starts `kitcut-studio@<instance>` with `servers/current` naming it. The legacy server holds
+   the port without `SO_REUSEPORT`, so the new one retries the bind every 0.2 s, and it cannot
+   lead or adopt a film until it has the port: the legacy server keeps every film meanwhile;
+3. waits, **with no timeout**, until the legacy server has nothing running or queued (progress
+   every minute). A studio that keeps receiving films keeps it waiting: it never cuts one;
+4. drains the legacy server (`/api/admin/drain`), so a film asked for in the gap stays queued for
+   the new server, and waits until nothing runs;
+5. empties the legacy unit's `ExecStopPost` (a drop-in: stopping it must not announce the studio
+   offline) and `systemctl disable --now kitcut-studio` -- the new server gets the port within
+   0.2 s of the old one letting go;
+6. waits up to 60 s for the new server to serve and lead; if it does not, stops it, puts the
+   legacy server back and exits 1;
+7. enables `kitcut-studio-boot`, and `releases/current` names the new release;
+8. removes the legacy unit file and the drop-in;
+9. announces the studio once more, and prints where it stands: health, servers, units, the
+   legacy unit (`not-found`), `net.ipv4.tcp_migrate_req`.
+
+Run it again after any failure: each step checks what is already done (a server of the release
+already running is kept, a legacy server already stopped is not waited on).
 
 ## A film the studio stopped half-way
 
@@ -137,11 +217,13 @@ All of the above sit in `machine.env`, each with its number: `STUDIO_RENDER_ENCO
 `VIDEDIT_WEBCODECS=software`, `VIDEDIT_WEBCODECS_BITRATE=12M`, `STUDIO_RENDER_JOBS=6`,
 `STUDIO_BROWSERS=6`, `STUDIO_WEB_PRESET=p2`, `STUDIO_MACHINE_SLOWDOWN=2`.
 
-**Process containment is a cgroup.** On Windows each step is a Job Object. Here the unit is
-`Delegate=yes`, and `procs.Job` gives every step a cgroup v2 of its own: `memory.max` is the
-`STUDIO_FILM_MEM_GB` cap, `cgroup.kill` takes everything the step started (a browser that left
-its process group included), and stopping the service takes every step with it.
-`studio/test_isolation.py` checks all three on the VM.
+**Process containment is a cgroup.** On Windows each step is a Job Object. Here each server's
+unit (`kitcut-studio@<instance>`) is `Delegate=yes`, and `procs.Job` gives every step a cgroup v2
+of its own: `memory.max` is the `STUDIO_FILM_MEM_GB` cap, `cgroup.kill` takes everything the step
+started (a browser that left its process group included), and stopping a server's unit takes
+every step with it. One unit per server, never two in one: a server clears the step groups it
+finds in its own unit's cgroup when it starts. `studio/test_isolation.py` checks all three on the
+VM.
 
 **Only the production studio may announce itself.** `agent.py --announce` (which writes where
 kitcut.ai finds the studio) does nothing unless the `.env` has `STUDIO_ANNOUNCE=1`, and only the
@@ -157,8 +239,10 @@ bash studio/deploy/provision.sh kitcut-studio-1 Standard_D8ads_v5              #
 The VM, the data disk, the timezone (America/Los_Angeles: the studio's daily caps count local
 days, as on the laptop), the checkout, `scripts/setup-linux.sh --studio`, a `.env` holding only
 the keys the studio reads plus `machine.env`, the tunnel's credentials, and the systemd units --
+the server template, the boot unit, the tunnel, the login check (and `tcp_migrate_req`) --
 installed, not enabled. The units are enabled at the move, never before: the tunnel may run on
-one machine only, and a studio that came up at boot would announce itself.
+one machine only, and a studio that came up at boot would announce itself. On a rebuild the data
+disk still holds `servers/current`, so `serve.sh start` brings back the instance that served.
 
 ## The move (cutover), and back
 
@@ -176,7 +260,10 @@ credentials were moved to `~/.cloudflared/backup-20260928-moved-to-vm`, so a lap
    load-balances between every connector of a tunnel, which would send half the films to the
    other disk.
 4. Copy the films made since step 1 (`rsync`/`azcopy sync`).
-5. On the VM: add `STUDIO_ANNOUNCE=1` to `/srv/kitcut/repo/.env`, then `bash studio/serve.sh start`.
+5. On the VM: add `STUDIO_ANNOUNCE=1` to `/srv/kitcut/repo/.env`, then `bash studio/serve.sh start`
+   (the tunnel and the current server, and both at every boot). A home with no server yet needs
+   `bash studio/serve.sh release` first. (The 2026-09-28 move ran the legacy one-server unit;
+   `serve.sh migrate` moved it to one server per release afterwards.)
 6. On the laptop: remove `STUDIO_ANNOUNCE`, `STUDIO_TUNNEL` and `STUDIO_TUNNEL_HOST` from `.env`.
 
 Back: `serve.sh stop` on the VM, restore those three lines on the laptop, `serve.ps1`, and copy

@@ -2,13 +2,19 @@
 # Everyday work on the production studio VM, from the laptop (over the WireGuard VPN). vm.sh is the
 # machine itself (create, resize, delete); this is the studio on it. Nobody logs into the VM.
 #
-#   bash studio/deploy/ops.sh status                  health, release, films in progress, disks,
+#   bash studio/deploy/ops.sh status                  health, the servers and their films, disks,
 #                                                     the daily login check, errors in the last day
-#   bash studio/deploy/ops.sh logs [studio|tunnel|login] [-n N] [-f]
-#   bash studio/deploy/ops.sh ship [<commit>]         tag studio-stable, push, build the release on
-#                                                     the VM, drain, restart, prove the new release
-#   bash studio/deploy/ops.sh releases                what is built there, and which is current
-#   bash studio/deploy/ops.sh rollback <sha12>        back to a release already built (no rebuild)
+#   bash studio/deploy/ops.sh logs [studio|tunnel|login] [-n N] [-f]   studio: every server unit
+#   bash studio/deploy/ops.sh ship [<commit>]         tag studio-stable, push, build and test the
+#                                                     release on the VM, start its server beside the
+#                                                     running one, return once it leads. Films being
+#                                                     made carry on: the old server finishes them
+#   bash studio/deploy/ops.sh releases                what is built there, and which one leads
+#   bash studio/deploy/ops.sh rollback <sha12>        back to a release already built (no rebuild):
+#                                                     a switch like a ship, nothing is stopped
+#   bash studio/deploy/ops.sh migrate [<commit>]      ONCE: from the legacy one-server unit to one
+#                                                     server per release (deploy/README.md); waits,
+#                                                     on the VM, for the running films to finish
 #   bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]   pick up a film the studio
 #                                                     stopped half-way (studio/resume.py), in the
 #                                                     same film; --plan spends nothing
@@ -45,6 +51,58 @@ change_on() { if [ "$DRY" = 1 ]; then echo "  would run on $VM: $*"; else on "$@
 TOKEN_SH="TOKEN=\$(grep -E '^STUDIO_TOKEN=' $REMOTE/.env | tail -1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[\"\x27]//' -e 's/[\"\x27]\$//')"
 az_() { MSYS_NO_PATHCONV=1 az "$@"; }
 
+# The commit to ship: only what the team can see (on origin/studio-poc). Sets sha.
+resolve() {
+  local ref="${1:-origin/studio-poc}"
+  git -C "$REPO_LOCAL" fetch -q origin
+  sha="$(git -C "$REPO_LOCAL" rev-parse --verify "$ref^{commit}")" || die "no commit $ref"
+  git -C "$REPO_LOCAL" merge-base --is-ancestor "$sha" origin/studio-poc ||
+    die "$ref (${sha:0:12}) is not on origin/studio-poc -- merge and push it first"
+}
+# What the VM runs now, in one call: whether the legacy one-server unit is still installed
+# ("loaded" until ops.sh migrate), and its /api/health. Sets legacy, health, leader.
+vm_state() {
+  local out=""
+  out="$(on "systemctl show kitcut-studio.service -p LoadState --value; curl -s --max-time 5 http://127.0.0.1:$PORT/api/health; echo")" ||
+    { [ "$DRY" = 1 ] || die "cannot reach $VM"; echo "  (cannot reach $VM: its state is not checked in this dry run)"; }
+  legacy="$(printf '%s\n' "$out" | sed -n 1p | tr -d '\r')"
+  health="$(printf '%s\n' "$out" | sed -n 2p)"
+  leader="$(printf '%s' "$health" | release_of)"
+}
+release_of() { python -c 'import json,sys; print(json.load(sys.stdin).get("release", ""))' 2>/dev/null || true; }
+# a /api/health reply (stdin): the leader's release, and every server with its films
+servers() {
+  python -c '
+import json, sys
+try:
+    h = json.load(sys.stdin)
+except ValueError:
+    sys.exit("  (no answer from the studio)")
+print("  leader runs %s: %s running, %s queued" % (h.get("release"), h.get("running"), h.get("queued")))
+for i in h.get("instances") or []:
+    print("  %-34s %-12s %-10s %-6s %s running" % (i.get("id"), i.get("release"), i.get("mode"), "leader" if i.get("leader") else "", i.get("running")))
+'
+}
+# Tag studio-stable and put the commit on the VM (push.sh: the VM holds no GitHub credentials).
+# The commit itself, not this clone's studio-poc (behind origin's in a worktree).
+deliver() {
+  echo "shipping ${sha:0:12}: $(git -C "$REPO_LOCAL" log --format=%s -1 "$sha")"
+  change git -C "$REPO_LOCAL" tag -f studio-stable "$sha"
+  change git -C "$REPO_LOCAL" push -q -f origin refs/tags/studio-stable
+  if [ "$DRY" = 1 ]; then echo "  would run: push.sh $VM studio-poc $sha"; else bash "$HERE/push.sh" "$VM" studio-poc "$sha"; fi
+}
+# Follow a transient unit on the VM to its end (Ctrl+C stops the following, not the unit).
+follow() {
+  echo "following $1 (Ctrl+C stops following, not the work; ops.sh logs shows the servers)"
+  on "journalctl -u $1 -f -n 100 --no-pager -o cat & j=\$!
+    while systemctl is-active -q $1; do sleep 5; done; sleep 2; kill \$j
+    r=\$(systemctl show $1 -p Result --value); echo \"$1: \${r:-success}\"; [ \"\${r:-success}\" = success ]"
+}
+# the server units' environment (kitcut-studio@.service) for a transient unit: keep in sync with it
+UNIT_ENV="--setenv=STUDIO_HOME=$HOME_DIR --setenv=STUDIO_REPO=$REMOTE --setenv=STUDIO_ENV_FILE=$REMOTE/.env"
+UNIT_ENV="$UNIT_ENV --setenv=TZ=America/Los_Angeles --setenv=PYTHONUNBUFFERED=1 --setenv=HF_HOME=$REMOTE/../hf"
+UNIT_ENV="$UNIT_ENV --setenv=PATH=\$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+
 case "$cmd" in
   status)
     printf 'VM %s: %s\n' "$VM" "$(az_ vm show -d -g "$RG" -n "$VM" --query powerState -o tsv 2>/dev/null || echo '?')"
@@ -59,10 +117,14 @@ except ValueError:
 s = h["slots"]
 print("studio: release %s  running %s  queued %s%s" % (h["release"], h["running"], h["queued"], "  DRAINING" if h.get("draining") else ""))
 print("  pools: " + "  ".join("%s %d/%d (+%d waiting)" % (k, v["used"], v["capacity"], v["waiting"]) for k, v in s.items()))
+# one server per release: the leader takes new films, an old one only finishes its own, then exits
+for i in h.get("instances") or []:
+    print("  server %-34s %-12s %-10s %-6s %s running" % (i.get("id"), i.get("release"), i.get("mode"), "leader" if i.get("leader") else "", i.get("running")))
 PY
 public=$(curl -s --max-time 8 https://studio.kitcut.ai/api/health | python3 -c 'import json,sys; print(json.load(sys.stdin)["release"])' 2>/dev/null || echo "NOT REACHABLE")
 echo "studio.kitcut.ai: $public"
-echo "units: $(for u in kitcut-studio kitcut-tunnel kitcut-login-check.timer; do printf '%s=%s ' $u $(systemctl is-active $u); done)"
+echo "units: $(for u in kitcut-tunnel kitcut-studio-boot kitcut-login-check.timer; do printf '%s=%s ' $u $(systemctl is-active $u); done)"
+systemctl list-units --all --no-legend --plain 'kitcut-studio@*' kitcut-studio.service | awk '{ printf "  %s %s/%s\n", $1, $3, $4 }'
 python3 - <<'PY'
 import glob, json, os
 home = os.environ["HOME_DIR"]
@@ -73,7 +135,7 @@ for p in glob.glob(home + "/projects/*/studio.json"):
     except (OSError, ValueError):
         continue
     if s.get("state") in ("queued", "claude", "finishing"):
-        live.append("  %s  %-9s %3ss  %s  %s" % (os.path.basename(os.path.dirname(p)), s["state"], s.get("length", "?"), s.get("auth", "?"), (s.get("prompt") or "")[:60]))
+        live.append("  %s  %-9s %3ss  %s  %-24s %s" % (os.path.basename(os.path.dirname(p)), s["state"], s.get("length", "?"), s.get("auth", "?"), s.get("server") or "", (s.get("prompt") or "")[:50]))
 print("films in progress: %d" % len(live))
 print("\n".join(sorted(live)))
 PY
@@ -82,17 +144,19 @@ res=$(systemctl show kitcut-login-check.service -p Result --value)
 next=$(systemctl show kitcut-login-check.timer -p NextElapseUSecRealtime --value)
 if [ -n "$at" ]; then echo "login check: $res at $at (next $next)"; else echo "login check: not run yet (first $next)"; fi
 echo "disks: $(df -h / | awk 'NR==2{print "system "$3"/"$2}')  $(df -h /srv/kitcut | awk 'NR==2{print "data "$3"/"$2}')   load $(cut -d' ' -f1-3 /proc/loadavg)   mem free $(free -g | awk '/Mem:/{print $7}') GB"
-n=$(journalctl -u kitcut-studio -u kitcut-tunnel --since -24h -p err --no-pager -q | wc -l)
+n=$(journalctl -u 'kitcut-studio@*' -u kitcut-studio -u kitcut-tunnel --since -24h -p err --no-pager -q | wc -l)
 echo "errors in the last 24 h: $n"
-[ "$n" = 0 ] || journalctl -u kitcut-studio -u kitcut-tunnel --since -24h -p err --no-pager -q | tail -5 | cut -c1-200
+[ "$n" = 0 ] || journalctl -u 'kitcut-studio@*' -u kitcut-studio -u kitcut-tunnel --since -24h -p err --no-pager -q | tail -5 | cut -c1-200
 EOF
     ;;
 
   logs)
-    unit=kitcut-studio; n=100; follow=""
+    # studio: every server, one unit per release (kitcut-studio@<instance>), and the legacy unit's
+    # history; with-unit prefixes each line with its unit, so two servers' lines can be told apart
+    unit="'kitcut-studio@*' -u kitcut-studio -o with-unit"; n=100; follow=""
     while [ $# -gt 0 ]; do
       case "$1" in
-        studio) unit=kitcut-studio ;; tunnel) unit=kitcut-tunnel ;; login) unit=kitcut-login-check ;;
+        studio) ;; tunnel) unit=kitcut-tunnel ;; login) unit=kitcut-login-check ;;
         -n) n="$2"; shift ;; -f) follow="-f" ;; *) die "logs [studio|tunnel|login] [-n N] [-f]" ;;
       esac
       shift
@@ -101,24 +165,63 @@ EOF
     ;;
 
   ship)
-    ref="${1:-origin/studio-poc}"
-    git -C "$REPO_LOCAL" fetch -q origin
-    sha="$(git -C "$REPO_LOCAL" rev-parse --verify "$ref^{commit}")" || die "no commit $ref"
-    # only what the team can see ships: a commit that is not on origin/studio-poc is refused
-    git -C "$REPO_LOCAL" merge-base --is-ancestor "$sha" origin/studio-poc ||
-      die "$ref (${sha:0:12}) is not on origin/studio-poc -- merge and push it first"
-    echo "shipping ${sha:0:12}: $(git -C "$REPO_LOCAL" log --format=%s -1 "$sha")"
-    change git -C "$REPO_LOCAL" tag -f studio-stable "$sha"
-    change git -C "$REPO_LOCAL" push -q -f origin refs/tags/studio-stable
-    # the commit itself, not this clone's studio-poc (behind origin's in a worktree)
-    if [ "$DRY" = 1 ]; then echo "  would run: push.sh $VM studio-poc $sha"; else bash "$HERE/push.sh" "$VM" studio-poc "$sha"; fi
-    # release.py tests the snapshot before making it current; serve.sh drains before restarting,
-    # and builds into the home the server reads (STUDIO_HOME: the unit's, named here as well)
+    resolve "${1:-}"
+    vm_state
+    [ "$legacy" != loaded ] ||
+      die "$VM still runs the legacy one-server unit, which a ship would restart: ops.sh migrate (once; deploy/README.md)"
+    echo "on $VM now:"; printf '%s' "$health" | servers || true
+    # The releases share one venv ($REMOTE/.venv): a changed dependency, once installed, changes
+    # what the old server's films run too, in the middle of those films
+    if [[ "$leader" =~ ^[0-9a-f]{12}$ ]] && git -C "$REPO_LOCAL" cat-file -e "$leader^{commit}" 2>/dev/null; then
+      changed="$(git -C "$REPO_LOCAL" diff --name-only "$leader" "$sha" -- '*requirements*.txt')"
+      [ -z "$changed" ] || echo "ops.sh: WARNING: ${changed//$'\n'/ } changed since $leader. Every release shares $REMOTE/.venv, so installing them changes the steps of the films the old server is still making -- ship this at a quiet moment (ops.sh status shows no films)." >&2
+    else
+      echo "ops.sh: warning: cannot compare requirements*.txt with the leader's release '${leader:-?}'" >&2
+    fi
+    deliver
+    # release.py builds into the home the servers read (STUDIO_HOME: the units', named here as well)
+    # and tests the snapshot; serve.sh then starts its server beside the running one and returns
+    # once it leads. Nothing is drained or restarted: films being made finish on the old server.
     change_on "cd $REMOTE && STUDIO_HOME=$HOME_DIR bash studio/serve.sh release"
     if [ "$DRY" = 0 ]; then
-      got="$(on "curl -s --max-time 5 http://127.0.0.1:$PORT/api/health" | python -c 'import json,sys; print(json.load(sys.stdin)["release"])')"
-      [ "$got" = "${sha:0:12}" ] && echo "live: $got" || die "the studio reports $got, expected ${sha:0:12}"
+      # the health's release is the leader's, whichever server answers: here, and through the tunnel
+      out="$(on "curl -s --max-time 5 http://127.0.0.1:$PORT/api/health; echo; curl -s --max-time 8 https://studio.kitcut.ai/api/health; echo")"
+      got="$(printf '%s\n' "$out" | sed -n 1p | release_of)"
+      pub="$(printf '%s\n' "$out" | sed -n 2p | release_of)"
+      printf '%s\n' "$out" | sed -n 1p | servers || true
+      [ "$got" = "${sha:0:12}" ] || die "the studio reports ${got:-nothing}, expected ${sha:0:12}"
+      echo "live: $got   studio.kitcut.ai: ${pub:-NOT REACHABLE}"
+      [ "$pub" = "$got" ] || echo "ops.sh: warning: studio.kitcut.ai does not report $got" >&2
     fi
+    ;;
+
+  migrate)
+    # ONCE: the legacy one-server unit becomes one server per release (deploy/README.md, "The
+    # migration"). The code first (push.sh), then the units (install.sh), then serve.sh migrate on
+    # the VM in a unit of its own: it waits for the legacy server's films with no timeout, which
+    # can take hours, so it must not depend on this laptop staying awake.
+    ref=""
+    for a in "$@"; do case "$a" in --dry-run) DRY=1 ;; *) ref="$a" ;; esac; done
+    resolve "$ref"
+    vm_state
+    [ "$legacy" = loaded ] || [ "$DRY" = 1 ] ||
+      die "$VM has no legacy kitcut-studio unit: already migrated (ops.sh ship ships)"
+    echo "on $VM now:"; printf '%s' "$health" | servers || true
+    deliver
+    change_on "bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR"
+    unit="kitcut-migrate-$(date +%Y%m%d-%H%M%S)"
+    if [ "$DRY" = 1 ]; then
+      # what the VM's own scripts would do -- only once they are the ones that know how
+      if on "grep -q 'kitcut-studio@' $REMOTE/studio/deploy/install.sh" 2>/dev/null; then
+        on "bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR --dry-run
+          cd $REMOTE && STUDIO_HOME=$HOME_DIR bash studio/serve.sh --dry-run migrate"
+      else
+        echo "  would run on $VM, detached ($unit): STUDIO_HOME=$HOME_DIR bash studio/serve.sh migrate"
+      fi
+      exit 0
+    fi
+    on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE $UNIT_ENV bash $REMOTE/studio/serve.sh migrate"
+    follow "$unit"
     ;;
 
   releases)
@@ -126,6 +229,8 @@ EOF
     ;;
 
   rollback)
+    # a switch like a ship: a server of the older release starts beside the running one and leads;
+    # the one it replaces finishes its films
     rel="${1:?rollback <sha12> (see: ops.sh releases)}"
     [[ "$rel" =~ ^[0-9a-f]{12}$ ]] || die "not a release: $rel"
     on "test -f $HOME_DIR/releases/$rel/studio/server.py" || die "no release $rel built on $VM"
@@ -143,18 +248,12 @@ EOF
     # the plan first, always: it spends nothing, and it refuses a film that may not be picked up
     on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env $py --plan" || exit 1
     [ "$plan" = 1 ] && exit 0
-    # a unit of its own with the server's environment (kitcut-studio.service): each step gets its
-    # cgroup (Delegate), the log goes to the journal, and the film goes on if this laptop sleeps
+    # a unit of its own with the servers' environment (UNIT_ENV): each step gets its cgroup
+    # (Delegate), the log goes to the journal, and the film goes on if this laptop sleeps
     unit="kitcut-resume-${id#studio-}"
-    env="--setenv=STUDIO_HOME=$HOME_DIR --setenv=STUDIO_REPO=$REMOTE --setenv=STUDIO_ENV_FILE=$REMOTE/.env"
-    env="$env --setenv=TZ=America/Los_Angeles --setenv=PYTHONUNBUFFERED=1 --setenv=HF_HOME=$REMOTE/../hf"
-    env="$env --setenv=PATH=\$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
-    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p Delegate=yes -p KillMode=control-group $env $py"
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p Delegate=yes -p KillMode=control-group $UNIT_ENV $py"
     [ "$DRY" = 1 ] && exit 0
-    echo "following $unit (Ctrl+C stops following, not the film; ops.sh logs shows the server)"
-    on "journalctl -u $unit -f -n 100 --no-pager -o cat & j=\$!
-      while systemctl is-active -q $unit; do sleep 5; done; sleep 2; kill \$j
-      r=\$(systemctl show $unit -p Result --value); echo \"$unit: \${r:-success}\""
+    follow "$unit"
     ;;
 
   film)
@@ -221,5 +320,5 @@ EOF
     az_ snapshot list -g "$RG" --query "sort_by([?tags.app=='kitcut-studio-snapshot'], &timeCreated)[].{name:name, created:timeCreated, gb:diskSizeGb}" -o table
     ;;
 
-  *) sed -n 2,26p "$0"; exit 2 ;;
+  *) sed -n 2,32p "$0"; exit 2 ;;
 esac

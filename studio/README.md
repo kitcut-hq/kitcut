@@ -441,5 +441,7 @@ The public studio runs on Linux: an Azure VM, Ubuntu 24.04 under systemd, with n
 `studio/deploy/README.md` is its runbook: provisioning (`provision.sh`), releases
 (`serve.sh`, the Linux `serve.ps1`), what the VM does differently and the measurements behind each
 setting (the render encodes in the browser in software; a step's containment is a cgroup v2
-instead of a Job Object). `scripts/setup-linux.sh --studio` builds the toolchain on any Ubuntu
+instead of a Job Object). The biggest difference: the VM never restarts to ship. Each release runs
+as a server of its own (systemd `kitcut-studio@<instance>`, all on one port); the new one takes
+the new films while the old one finishes its own and exits, so a ship stops no film. `scripts/setup-linux.sh --studio` builds the toolchain on any Ubuntu
 24.04. Outside systemd a step leads a process group of its own and has no memory cap.
