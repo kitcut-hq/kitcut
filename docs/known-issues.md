@@ -649,3 +649,29 @@ Collage paints too (its recipe carries `cutouts`), so the director's two writes 
 **Fix.** `agent.director_files()` allows it whenever `film.paint_kinds(film.caps)` is not empty;
 `test_scenes.py` checks every look.
 **Evidence.** `blocked` events at 395.1 and 1991.6 in i4d52n's events.jsonl.
+
+### KI-043 · open · studio · A non-English narration's word timing starves behind renders on the 4-vCPU VM
+
+**Symptom.** c6ckpu (90 s, Spanish, drawn, 2026-09-29) spent 17.6 of its 38 Claude minutes in
+one `voice` call, then stalled 13 minutes thinking before its first line of film.js and ran out
+("Claude ran past the 38-minute limit"). Resumed, it wrote the whole film in 124 s of Claude time.
+**Cause.** sketch-vo.py's `score` stage (Whisper, word times for Gemini's takes) took 1,040 s for
+13 lines, and 288 s to re-time one. English scores on small.en; every other language on
+large-v3, on the CPU (int8). At that moment the 4-vCPU machine was rendering four things (load
+9-13): two films on the handed-off server, one on the new leader, and a `resume --finish` unit.
+Each server and each resume unit has its own pools (browser 4, cpu 2), so a ship's handover or a
+resume multiplies the machine's real concurrency; and the step cgroups enable only the memory
+controller, so nothing gives a scoring step priority over a render.
+**Measured.** On the laptop's CPU, int8, 4 threads, the real takes of c6ckpu (13 es) and 4kr5hv
+(15 uk): large-v3 128 s / 157 s, large-v3-turbo 103 s / 113 s (1.2x / 1.4x faster); mean acc
+0.904 -> 0.908 (es), 0.947 -> 0.967 (uk), turbo equal or better on every line; word starts differ
+by a median 0.08-0.10 s, max 0.72 s. So the model is not the lever -- uncontended, large-v3 times
+a 90 s narration in ~2 minutes; contention cost 15 more.
+**Options (not done).** Make renders yield: `cpu` in the delegated subtree_control and a low
+`cpu.weight` on the final render's and web copy's step cgroups (nice works only inside one
+server's cgroup, and this incident's load came from other units); count other servers' and
+resume units' renders in the browser pool; turbo as the multilingual default (measured above:
+modest speed, no loss). Until then: do not `resume --finish` or ship while a non-English film is
+recording its voice.
+**Evidence.** `/srv/kitcut/studio/projects/studio-20260929-130142-c6ckpu/temp/pipeline/runs/`,
+`ops.sh claude-log studio-20260929-130142-c6ckpu`.
