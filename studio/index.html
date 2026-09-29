@@ -248,6 +248,23 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
 #yt .err { color: var(--bad); font-weight: 600; }
 #yt label.field { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
 #yt input[type=text], #yt textarea { width: 100%; padding: 9px 11px; border-radius: 10px; border: 1.5px solid var(--rule); background: var(--paper); color: var(--ink); font: 15px/1.4 Inter, system-ui, sans-serif; resize: vertical; min-height: 0; }
+/* while the words are being written: grey lines where they will go, gone the moment you type */
+#yt .box { position: relative; display: block; }
+#yt .skel { display: none; position: absolute; inset: 0; padding: 15px 13px; gap: 10px; align-content: start; pointer-events: none; }
+#yt .box.wait .skel { display: grid; }
+#yt .box.wait ::placeholder { color: transparent; }
+#yt .skel i { display: block; height: 11px; border-radius: 6px; background: linear-gradient(90deg, var(--rule) 20%, var(--accent-soft) 50%, var(--rule) 80%); background-size: 250% 100%; animation: shimmer 1.4s linear infinite; }
+#ytName + .skel i { width: 68%; }
+#ytTags + .skel i { width: 46%; }
+#ytDesc + .skel i:nth-child(1) { width: 96%; } #ytDesc + .skel i:nth-child(2) { width: 89%; }
+#ytDesc + .skel i:nth-child(3) { width: 93%; } #ytDesc + .skel i:nth-child(4) { width: 57%; }
+#ytDesc + .skel i:nth-child(5) { visibility: hidden; } #ytDesc + .skel i:nth-child(6) { width: 82%; }
+#ytDesc + .skel i:nth-child(7) { width: 38%; }
+/* the words were written for another of your channels: write them for this one, when you ask */
+#yt .redo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 10px; border-radius: 10px; background: var(--accent-soft); font-size: 13px; color: var(--ink); }
+#yt .redo span { flex: 1 1 220px; min-width: 0; }
+#yt .redo button { flex: none; margin: 0; padding: 6px 12px; border-radius: 8px; border: 1.5px solid var(--accent); background: var(--sheet); color: var(--ink); font: 600 13px/1.2 Inter, system-ui, sans-serif; letter-spacing: 0; cursor: pointer; }
+#yt .redo button:hover { background: var(--paper); }
 #yt fieldset { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
 #yt legend { font-size: 13px; font-weight: 600; color: var(--ink-soft); padding: 0; margin-bottom: 4px; }
 .chan { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 8px 10px; border: 1.5px solid var(--rule); border-radius: 12px; cursor: pointer; font-size: 15px; }
@@ -286,6 +303,7 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
 .thumb:has(input:checked) .tick { display: block; }
 .shimmer { aspect-ratio: 16 / 9; border-radius: 10px; background: linear-gradient(90deg, var(--rule) 20%, var(--accent-soft) 50%, var(--rule) 80%); background-size: 250% 100%; animation: shimmer 1.4s linear infinite; }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+@media (prefers-reduced-motion: reduce) { .shimmer, #yt .skel i { animation: none; } }
 #yt .own { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 #yt .own input { accent-color: var(--accent); margin: 0; }
 .feed { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 10px; background: #fff; color: #0f0f0f; border: 1.5px solid var(--rule); }
@@ -445,16 +463,17 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
     <fieldset id="ytChans"><legend>Channel</legend></fieldset>
     <a class="more" id="ytAdd" href="/api/youtube/connect">+ Add another channel</a>
     <p class="note" id="ytAgain" hidden></p>
+    <p class="redo" id="ytRedo" hidden><span id="ytRedoText"></span><button type="button" id="ytRedoBtn"></button></p>
     <p class="note" id="ytDraftNote" aria-live="polite" hidden></p>
-    <label class="field">Title<input type="text" id="ytName" maxlength="100" required></label>
-    <label class="field">Description<textarea id="ytDesc" rows="8" maxlength="5000"></textarea></label>
+    <label class="field">Title<span class="box"><input type="text" id="ytName" maxlength="100" required><span class="skel" aria-hidden="true"><i></i></span></span></label>
+    <label class="field">Description<span class="box"><textarea id="ytDesc" rows="8" maxlength="5000"></textarea><span class="skel" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span></label>
     <fieldset class="thumbs" id="ytThumbs" hidden><legend>Thumbnail</legend>
       <div class="thumbgrid" id="ytThumbGrid"></div>
       <label class="own"><input type="radio" name="ytThumb" value="none"> Let YouTube pick a frame</label>
       <p class="note" id="ytThumbNote" aria-live="polite" hidden></p>
       <div class="feed" id="ytFeed" hidden aria-label="How it looks in YouTube's feed"><img id="ytFeedImg" alt=""><div><b id="ytFeedTitle"></b><small id="ytFeedChan"></small></div></div>
     </fieldset>
-    <label class="field">Tags<input type="text" id="ytTags" maxlength="500" placeholder="Separated by commas"></label>
+    <label class="field">Tags<span class="box"><input type="text" id="ytTags" maxlength="500" placeholder="Separated by commas"><span class="skel" aria-hidden="true"><i></i></span></span></label>
     <fieldset class="seg" id="ytWho"><legend>Who can watch it</legend>
       <label><input type="radio" name="ytWho" value="public"><span>Public</span></label>
       <label><input type="radio" name="ytWho" value="unlisted"><span>Unlisted</span></label>
@@ -980,6 +999,11 @@ let ytFormFor = null, ytPoll = null, ytPost = null;
 let ytDrafts = {};     // channel id -> its draft for that film: {state, title, description, tags, language, category}
 let ytTyped = {};      // the fields you have typed in: a draft never overwrites them
 let ytThumbPick = {};  // channel id -> {v, n}: the thumbnail picked among that draft's options (n 1..4, or 'none')
+// The draft the form shows (its channel's id). The film's first is written for the channel you
+// publish to most, while you watch; another channel's only when you ask for it (a Claude call
+// each): picking a channel shows the draft it already has, else keeps these words and offers to
+// write them for it. ytPrev: the one shown before you asked, back again if the new one fails.
+let ytBase = null, ytPrev = null, ytSaid = '';
 const ls = { get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
              set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private window */ } } };
 const WHO = {
@@ -1016,7 +1040,7 @@ async function ytLoad() {
     if (!r.ok || id !== currentId) return;  // not yours, or you have moved on
     ytFilm = { ...(await r.json()), id };
   } catch (e) { return; }
-  ytDrafts = {}; ytTyped = {}; ytThumbPick = {};
+  ytDrafts = {}; ytTyped = {}; ytThumbPick = {}; ytBase = null; ytPrev = null; ytSaid = '';
   $('ytOpen').hidden = false;
   ytList();
   if (ytChosen()) ytDraft(ytChosen());  // written while you watch, so it is ready when you open the dialog
@@ -1058,14 +1082,16 @@ function ytChosen(pick) {
   return (ok.find((c) => c.id === want) || ok[0] || {}).id;
 }
 // The title, description and tags, written from the film in the channel's voice (the studio's
-// ytdraft.py reads the film; the site reads the channel's latest uploads). One ask per channel; a
-// field you have typed in is never overwritten; if none can be written, the basics.
+// ytdraft.py reads the film; the site reads the channel's latest uploads), and the thumbnails with
+// them. One ask per channel, and only the first without asking; a field you have typed in is
+// never overwritten; if none can be written, the basics.
 async function ytDraft(channel) {
   const f = ytFilm;
   if (!f || !channel) return;
-  if (ytDrafts[channel] && ytDrafts[channel].state !== 'failed') return ytFill(channel);
+  ytBase = channel;
+  if (ytDrafts[channel] && ['writing', 'done'].includes(ytDrafts[channel].state)) return ytRender();
   ytDrafts[channel] = { state: 'writing', since: Date.now() };
-  ytFill(channel);
+  ytRender();
   let b = { state: 'failed' };
   try {
     const r = await fetch('/api/youtube/draft', {
@@ -1073,6 +1099,21 @@ async function ytDraft(channel) {
     });
     if (r.ok) b = await r.json();
   } catch (e) { /* the basics, then */ }
+  ytDraftSeen(f, channel, b);
+}
+// a channel's draft if it has one already (written earlier, on another visit): a look costs nothing
+async function ytPeek(channel) {
+  const f = ytFilm;
+  ytDrafts[channel] = { state: 'looking' };
+  ytRender();
+  let b = { state: 'none' };
+  try {
+    const r = await fetch(`/api/youtube/draft?film=${encodeURIComponent(f.id)}&channel=${encodeURIComponent(channel)}`, { headers: { Accept: 'application/json' } });
+    if (r.ok) b = await r.json();
+  } catch (e) { /* none, then */ }
+  if (ytFilm !== f) return;
+  if (b.state !== 'done' && b.state !== 'writing') { ytDrafts[channel] = { state: 'none' }; return ytRender(); }
+  ytDrafts[channel] = { since: Date.now() };
   ytDraftSeen(f, channel, b);
 }
 function ytDraftSeen(f, channel, b) {
@@ -1099,27 +1140,78 @@ function ytDraftSeen(f, channel, b) {
       ytDraftSeen(f, channel, next);
     }, 1500);
   }
-  ytFill(channel);
+  ytRender();
 }
-// a channel's draft into the form, when it is the channel picked
-function ytFill(channel) {
+const YT_FIELDS = ['ytName', 'ytDesc', 'ytTags'];
+function ytChecked() {
   const c = document.querySelector('input[name=ytChan]:checked');
-  if (!ytFilm || (c ? c.value : ytChosen()) !== channel) return;
-  const d = ytDrafts[channel] || {}, note = $('ytDraftNote');
+  return c ? c.value : ytChosen();
+}
+function ytChanTitle(id) {
+  const ch = ((ytFilm && ytFilm.channels) || []).find((x) => x.id === id);
+  return ch ? ch.title : 'that channel';
+}
+// picking a channel: its own draft if it has one, else a look for one (free), else the offer
+function ytSwitch(channel) {
+  ytAgain(); ytSaid = '';
+  if (!ytBase) return ytDraft(channel);
+  if (!ytDrafts[channel] || ytDrafts[channel].state === 'none') return ytPeek(channel);
+  ytRender();
+}
+$('ytRedoBtn').addEventListener('click', () => {
+  const c = ytChecked();
+  if (!c || c === ytBase) return;
+  ytPrev = { base: ytBase, to: c }; ytSaid = '';
+  delete ytDrafts[c];  // one that failed is asked for again
+  ytDraft(c);
+});
+// the form from the draft it shows: the words (or grey lines while they are written), what is
+// going on, the offer to write them for the channel picked, the thumbnails
+function ytRender() {
+  if (!ytFilm) return;
+  const c = ytChecked();
+  if (!c) return;
+  const own = ytDrafts[c];
+  if (own && ['writing', 'done'].includes(own.state)) ytBase = c;  // the channel's own, once there is one
+  if (!ytBase) ytBase = c;
+  if (ytPrev && ytBase !== ytPrev.to) ytPrev = null;
+  let b = ytBase, d = ytDrafts[b] || {};
+  if (d.state === 'failed' && ytPrev) {  // the one you asked for could not be written: back to before
+    ytSaid = `They couldn't be written for ${ytChanTitle(b)} this time, so these are still the ones written for ${ytChanTitle(ytPrev.base)}.`;
+    b = ytBase = ytPrev.base; d = ytDrafts[b] || {}; ytPrev = null;
+  }
   const put = (id, v) => { if (!ytTyped[id]) $(id).value = v; };
   if (d.state === 'done') {
     put('ytName', d.title || ytFilm.defaults.title);
     put('ytDesc', [d.description, ytFilm.defaults.description].filter(Boolean).join('\n\n'));
     put('ytTags', (d.tags || []).join(', '));
+  } else if (d.state === 'writing') {
+    for (const id of YT_FIELDS) put(id, '');
   } else if (d.state === 'failed') {
     put('ytName', ytFilm.defaults.title); put('ytDesc', ytFilm.defaults.description); put('ytTags', '');
   }
-  note.textContent = d.state === 'writing' ? "Writing a title and description from the film, in this channel's voice..."
-    : d.state === 'failed' ? "They couldn't be written from the film this time, so here are the basics. Change anything you like." : '';
+  ytSkel();
+  const note = $('ytDraftNote');
+  note.textContent = ytSaid || (d.state === 'writing' ? `Writing a title and description from the film, in the voice of ${ytChanTitle(b)}...`
+    : d.state === 'failed' ? "They couldn't be written from the film this time, so here are the basics. Change anything you like." : '');
   note.hidden = !note.textContent;
-  ytThumbsFill(channel, d);
+  // another channel picked: these words stay until you ask for its own (nothing is spent unasked)
+  const offer = c !== b && !(own && ['looking', 'writing', 'done'].includes(own.state));
+  $('ytRedo').hidden = !offer;
+  if (offer) {
+    $('ytRedoText').textContent = d.state === 'done' ? `The title, description and thumbnails were written for ${ytChanTitle(b)}.`
+      : d.state === 'writing' ? `The title, description and thumbnails are being written for ${ytChanTitle(b)}.` : 'These are the basics.';
+    $('ytRedoBtn').textContent = own && own.state === 'failed' ? `Try again for ${ytChanTitle(c)}` : `Write them for ${ytChanTitle(c)}`;
+  }
+  ytThumbsFill(b, d);
 }
-// the four thumbnails for the channel's draft: the first is the one picked unless you pick another
+// grey lines in an empty field while its words are being written
+function ytSkel() {
+  const d = (ytBase && ytDrafts[ytBase]) || {};
+  for (const id of YT_FIELDS) $(id).parentNode.classList.toggle('wait', d.state === 'writing' && !$(id).value);
+  $('ytForm').setAttribute('aria-busy', String(d.state === 'writing'));
+}
+// the four thumbnails for the draft shown: the first is the one picked unless you pick another
 function ytThumbsFill(channel, d) {
   const t = d.thumbs || {}, grid = $('ytThumbGrid'), note = $('ytThumbNote');
   const making = d.state === 'writing' || t.state === 'making';
@@ -1163,18 +1255,17 @@ function ytThumbsFill(channel, d) {
 // the thumbnail picked, where people meet it: 168 pixels wide beside its title, as in YouTube's
 // "up next" list -- if the words cannot be read here, they cannot be read there
 function ytFeed() {
-  const c = document.querySelector('input[name=ytChan]:checked');
-  const d = (c && ytDrafts[c.value]) || {}, t = d.thumbs || {}, p = c && ytThumbPick[c.value];
+  const c = ytChecked();
+  const d = (ytBase && ytDrafts[ytBase]) || {}, t = d.thumbs || {}, p = ytBase && ytThumbPick[ytBase];
   const o = t.state === 'done' && p && p.n !== 'none' && t.options.find((x) => x.n === p.n);
   $('ytFeed').hidden = !o;
   if (!o) return;
   if ($('ytFeedImg').getAttribute('src') !== o.src) $('ytFeedImg').src = o.src;
   $('ytFeedTitle').textContent = $('ytName').value.trim() || ytFilm.defaults.title;
-  const ch = ytFilm.channels.find((x) => x.id === c.value);
-  $('ytFeedChan').textContent = ch ? ch.title : '';
+  $('ytFeedChan').textContent = ytFilm.channels.some((x) => x.id === c) ? ytChanTitle(c) : '';
 }
 $('ytName').addEventListener('input', ytFeed);
-for (const id of ['ytName', 'ytDesc', 'ytTags']) $(id).addEventListener('input', () => { ytTyped[id] = true; });
+for (const id of YT_FIELDS) $(id).addEventListener('input', () => { ytTyped[id] = true; ytSkel(); });
 function ytForm(pick) {
   const f = ytFilm;
   const chosen = ytChosen(pick);
@@ -1185,15 +1276,15 @@ function ytForm(pick) {
       <span>${esc(c.title)}${c.handle ? ` <small>${esc(c.handle)}</small>` : ''}</span>
       ${c.broken ? `<a href="${esc($('ytAdd').href)}">Reconnect</a>` : ''}
     </label>`).join('');
-  for (const r of $('ytChans').querySelectorAll('input')) r.onchange = () => { ytAgain(); ytDraft(r.value); };
+  for (const r of $('ytChans').querySelectorAll('input')) r.onchange = () => ytSwitch(r.value);
   if (ytFormFor !== f.id) {  // a new film starts from its own draft; a reopened dialog keeps your edits
     ytFormFor = f.id;
     $('ytName').value = ''; $('ytDesc').value = ''; $('ytTags').value = ''; $('ytKids').checked = false;
     const who = WHO[ls.get('ytWho')] ? ls.get('ytWho') : 'public';
     document.querySelector(`input[name=ytWho][value=${who}]`).checked = true;
   }
-  ytWhoNote(); ytAgain();
-  if (chosen) ytDraft(chosen);
+  ytWhoNote();
+  if (chosen) ytSwitch(chosen);
 }
 function ytWhoNote() {
   const w = document.querySelector('input[name=ytWho]:checked');
@@ -1222,8 +1313,9 @@ $('ytForm').addEventListener('submit', async (e) => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         film: ytFilm.id, channel: chan.value, title: $('ytName').value, description: $('ytDesc').value, tags: $('ytTags').value,
-        language: (ytDrafts[chan.value] || {}).language, category: (ytDrafts[chan.value] || {}).category, privacy: who.value, kids: $('ytKids').checked,
-        thumb: ytThumbChosen(chan.value),
+        language: (ytDrafts[ytBase] || {}).language, category: (ytDrafts[ytBase] || {}).category, privacy: who.value, kids: $('ytKids').checked,
+        // the thumbnail picked, and the channel whose draft made it (when it was another's)
+        thumb: ytThumbChosen(ytBase), ...(ytBase && ytBase !== chan.value ? { thumb_from: ytBase } : {}),
       }),
     });
     const b = await r.json().catch(() => ({}));
@@ -1236,7 +1328,7 @@ $('ytForm').addEventListener('submit', async (e) => {
   } catch (err) { ytErr(String(err.message || err)); }
   $('ytGo').disabled = false;
 });
-// the thumbnail to set on the video: the option picked, when the options are there
+// the thumbnail to set on the video: the option picked in a draft's options, when they are there
 function ytThumbChosen(channel) {
   const t = (ytDrafts[channel] || {}).thumbs || {}, p = ytThumbPick[channel];
   return t.state === 'done' && p && p.v === t.v && p.n !== 'none' ? p.n : null;
