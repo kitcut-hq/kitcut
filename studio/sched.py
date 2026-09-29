@@ -16,6 +16,20 @@ where it stands (on_wait), and the page shows "waiting for the renderer -- 1 fil
 Pools are only ever taken in the order browser -> cpu, and nothing waits for a claude slot while
 holding another, so no two films can deadlock.
 
+Two servers, one machine. During a ship the new release runs beside the old one, which finishes
+its films (peers.py; a ship that restarted the studio killed a paying film: docs/known-issues.md
+KI-031). Each has its own pools, but the browsers and the CPU are the machine's, so a pool also
+counts what the other servers hold (set_peers, fed from their heartbeats by the server):
+
+    peer_used   slots the other live servers hold now
+    peer_want   what the first waiter of each OLDER server wants (0: none waiting)
+
+A request goes in when it is first in line and used + peer_used + peer_want + weight fits. Wants
+count one way only, older first: the old server's final render (3 browsers) is never starved by
+the new one taking a browser at a time, and since a server only ever waits on older ones' wants,
+two servers can never wait on each other. The counts come from heartbeats, so for a moment after
+a change both may take a slot the other has just taken: the machine is briefly over, never stuck.
+
 Clock: time a film spends waiting for a pool does not count against its Claude time limit.
 """
 
@@ -31,6 +45,9 @@ class Pool:
     def __init__(self, name, capacity):
         self.name, self.capacity, self.used = name, max(1, int(capacity)), 0
         self.waiting = []  # tickets, in arrival order
+        # the other servers on this machine (set_peers): what they hold, and what the first
+        # waiter of each older one wants
+        self.peer_used, self.peer_want = 0, 0
         self._cond = None
 
     @property
@@ -46,8 +63,27 @@ class Pool:
                 return i
         return None
 
+    def head_want(self):
+        """The weight the first in line waits for (0 when nobody waits): what this server tells
+        the newer ones to leave free."""
+        return self.waiting[0][0] if self.waiting else 0
+
+    def fits(self, weight):
+        return self.used + self.peer_used + self.peer_want + weight <= self.capacity
+
+    async def set_peers(self, used=0, want=0):
+        """What the other servers hold and (the older ones) want, from their heartbeats. Every
+        call wakes the line: slots a peer gives back must reach a waiter here at once, or a
+        waiter that went to sleep while the machine was full would sleep until a local release."""
+        used, want = max(0, int(used or 0)), max(0, int(want or 0))
+        async with self.cond:
+            self.peer_used, self.peer_want = used, want
+            self.cond.notify_all()
+
     async def acquire(self, weight=1, who="", on_wait=None, priority=0):
-        """Wait for `weight` slots. Returns the seconds spent waiting."""
+        """Wait for `weight` slots, and for the machine to have them (the peers' counts). More
+        than the pool has is the whole pool: it waits until nothing else holds any. Returns the
+        seconds spent waiting."""
         weight = min(max(1, weight), self.capacity)
         ticket = (weight, who, object(), priority)
         t0, told = time.time(), None
@@ -58,7 +94,7 @@ class Pool:
                 i -= 1
             self.waiting.insert(i, ticket)
             try:
-                while not (self.waiting[0] is ticket and self.used + weight <= self.capacity):
+                while not (self.waiting[0] is ticket and self.fits(weight)):
                     n = self.waiting.index(ticket)
                     if on_wait and n != told:
                         told = n
@@ -92,7 +128,12 @@ class Pool:
             await asyncio.shield(self.release(weight))
 
     def snapshot(self):
-        return {"capacity": self.capacity, "used": self.used, "waiting": len(self.waiting)}
+        return {
+            "capacity": self.capacity,
+            "used": self.used,
+            "waiting": len(self.waiting),
+            "peers": self.peer_used,  # held by the other servers on this machine
+        }
 
 
 class Sched:
@@ -109,6 +150,20 @@ class Sched:
 
     def snapshot(self):
         return {k: p.snapshot() for k, p in self.pools.items()}
+
+    def usage(self):
+        """What this server holds and its first waiters want, pool by pool, for its heartbeat
+        (peers.heartbeat slots): {pool: {"used": n, "want": n}}."""
+        return {k: {"used": p.used, "want": p.head_want()} for k, p in self.pools.items()}
+
+    async def set_peers(self, peers):
+        """The other servers' counts, {pool: {"used": u, "want": w}}: used summed over every live
+        peer, want over the peers that started before this one only (older first; the module
+        docstring says why). A pool missing from it has no peers (0)."""
+        peers = peers or {}
+        for k, p in self.pools.items():
+            got = peers.get(k) or {}
+            await p.set_peers(got.get("used", 0), got.get("want", 0))
 
 
 class Clock:
