@@ -675,3 +675,17 @@ modest speed, no loss). Until then: do not `resume --finish` or ship while a non
 recording its voice.
 **Evidence.** `/srv/kitcut/studio/projects/studio-20260929-130142-c6ckpu/temp/pipeline/runs/`,
 `ops.sh claude-log studio-20260929-130142-c6ckpu`.
+
+### KI-044 · open · studio · A film that ends on a fade or on bare paper gets a blank gallery card
+
+**Symptom.** Apollo 13 (w3vfyn, painted) showed in kitcut.ai's gallery as a black tile with a
+ghost of its title: its poster is the frame 0.4 s before the end (`film.py`: `poster_t`), which
+was the fade-out of its closing card.
+**Measured.** The 70 posters in the public gallery on 2026-09-29: 2 near-black (mean < 30,
+contrast < 25: 2ohqb3, ekvghs) and 4 near-white bare paper (mean > 250, contrast < 10: l7bd42,
+il6box, 7c7q5d, ebqs2d) -- 6 of 70. `media.make_card` already swaps a mid-fade poster for the
+liveliest of four frames, but only for card.jpg (link previews); the gallery and the film page
+show the poster itself.
+**Workaround.** Replace `outputs/film_poster.png` with a chosen frame, delete `card.jpg`, then
+`studio/media.py --film <id>` in the current release with the studio's env (done for w3vfyn at
+144 s). **Fix (not done):** give the poster make_card's fallback, or let the gallery use the card.
