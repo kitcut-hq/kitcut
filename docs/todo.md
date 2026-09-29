@@ -20,7 +20,8 @@ cost grows faster than length, and one stall puts the whole film at risk. The Ph
 (write in parts, the stall watchdog, lean narration results) push the limits out; they do not
 remove them.
 
-The redesign, agreed 2026-09-29, to build behind a switch for films over ~5 minutes:
+The redesign, agreed 2026-09-29, to build behind a switch for films over ~5 minutes (the
+step-by-step implementation plan, files and tests: docs/studio-scenes-plan.md):
 
 1. **Engine.** `SK.scene({lines: [a, b], draw(t, local)})` registered by `scenes/NN-*.js` files
    loaded after `cast/`; the film's own draw composes the scenes covering t. A film is then a
