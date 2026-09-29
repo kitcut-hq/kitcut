@@ -5,8 +5,10 @@ Exercises the pieces a paid or slow run would otherwise be the first to reach: t
 notation and every event type, every SFX and drum generator, the speech ducker, the
 tail-word cut that fixes eleven_v3's clipped endings, word timings with [audio tags],
 caption chunking, the cut-outs a collage is built from (specks, trim, paper border, the key off
-a white ground, and cache keys that stay put for scenes), and the page bundler against the
-committed example film.
+a white ground, and cache keys that stay put for scenes), the page bundler against the
+committed example films, and -- under Node, skipped without it -- the jelly module's bake
+(determinism, volume, inversion, the floor, settling, landing detection) and its live mode
+(the per-draw step budget, the pointer hand).
 
 After touching _sketch.py, _sketchaudio.py, sketch-vo.py, sketch-audio.py, sketch-render.py or
 anything under sketch/, run it.
@@ -546,7 +548,22 @@ for (let i = 0; i < M.surfE.w.length; i += 4) {
   const w = M.surfE.w;
   wsum = Math.max(wsum, Math.abs(w[i] + w[i + 1] + w[i + 2] + w[i + 3] - 1));
 }
+// live: the wall clock drives it -- one draw steps at most catchUp frames, the readouts a film
+// draws beside it step nothing, the pointer takes hold only on the slice and drags it
+const L = mk();
+L.bakeTo(0.5); L.goLive();
+let f0 = L.frameCount(); L.advance(5); const liveStep = L.frameCount() - f0;
+f0 = L.frameCount(); L.stats(9); L.hand(9); L.follow(9); L.positions(9);
+const readStep = L.frameCount() - f0;
+const tip = L.pointNow('tip');
+const grabMiss = L.grab([tip[0] + 3, 3, tip[2] + 3], [0, -1, 0]);
+const grabHit = L.grab([tip[0], tip[1] + 3, tip[2]], [0, -1, 0]);
+L.drag([tip[0] - 0.3, tip[1] + 3, tip[2]], [0, -1, 0]);
+for (let k = 0; k < 40; k++) L.advance(6 + k);
+const dragMoved = tip[0] - L.pointNow('tip')[0];
+L.release(); L.reset();
 console.log(JSON.stringify({
+  liveStep, readStep, grabMiss, grabHit, dragMoved, resetT: L.simTime(),
   same, minTet, pen, vmin, vmax, squashed, vEnd: a.stats(3.2).volume,
   keNudge, keEnd: a.stats(3.2).keSim,
   lift: top(0.95) - top(0.55), embedded: tets.every((t) => t >= 0 && t < a.tets), wsum,
@@ -595,6 +612,14 @@ def check_jelly():
         "%.3g of %.3g" % (j["keEnd"], j["keNudge"]),
     )
     check("jelly: every surface point rides a tet", j["embedded"] and j["wsum"] < 1e-4)
+    check("jelly live: a draw steps at most 2 frames", j["liveStep"] == 2, str(j["liveStep"]))
+    check("jelly live: readouts step nothing", j["readStep"] == 0, str(j["readStep"]))
+    check(
+        "jelly live: a press takes hold on the slice, not the floor",
+        j["grabHit"] and not j["grabMiss"],
+    )
+    check("jelly live: the drag moves the tip", j["dragMoved"] > 0.2, "%.3f" % j["dragMoved"])
+    check("jelly live: reset starts the clock again", j["resetT"] == 0)
     lands = [t for k, t in ev if k == "land"]
     check("jelly: the drop is heard", any(0.05 < t < 0.4 for t in lands), str(ev))
     check(

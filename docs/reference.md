@@ -3842,6 +3842,7 @@ World units: the slice's radius is 1, y is up, the floor is y = 0.
 | `camera` | `{dist 3, elev 36, azim 0, fov 28, orbit 0, shift [0,0], follow .6, lag .8}` | `orbit` degrees over the film; `shift` a lens shift in NDC; `follow` how much of the slice's wandering the camera takes up, smoothed over `lag` s |
 | `ss` | 2 rendering, 1 live | supersampling |
 | `cursor` | `true` | a touch indicator where the hand is |
+| `live` | `{cell .06, substeps 8, catchUp 2}` | swapped in on a live page (below) |
 | `debug` | -- | `'scene'` draws only what the jelly reads through itself (floor, shadows, seeds, bubbles): the first look when the jelly looks wrong |
 
 **The hand** is `actions`, each at `t` seconds:
@@ -3897,6 +3898,52 @@ Three calibrations that cost time, and why:
 - **Measure thickness where the colour is read.** Thickness from the unrefracted pixel and
   colour from the refracted one showed each seed as a grey lens with a white crescent -- the
   floor, seen through no jelly at all.
+
+**Live: the physics in real time, the pointer as a hand.** Baking is how a *video* gets
+frame-exact; nothing about the physics needs it. The player's `?live=1` runs the same
+simulation from the wall clock, as a three.js page would: the scripted `actions` start the
+movement, the physics follows, and pressing on the slice takes hold of it (mouse or touch,
+pointer capture) -- the script stops at the first touch and the hand is the viewer's. Buttons
+(or N, R, S): *Give it a nudge*, *Reset*, *1/4 speed*. Only the latest frame is kept, and each
+drawn frame simulates at most `catchUp` frames, so a slow machine plays in slow motion rather
+than in catch-up bursts.
+
+```powershell
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --live 10              # record 960x540
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --live 10 --ss 1 --record none
+```
+
+`--live N` plays it headless for N seconds with the pointer scripted by the manifest's
+`live.drags` (`[[t, handle, dx, dy], ...]`: press on a named point of the specimen at t, drag
+dx, dy film pixels over 0.8 s, let go), records the page to `outputs/<slug>_live.mp4`, and
+prints the frame rate, the physics and drawing time per frame, and how much of real time the
+physics kept after the first second. `live` in the manifest: `ss` (the 3D's render scale),
+`record` (`WxH` or `none`), `drags`; `--ss` and `--record` override.
+
+Measured on the laptop (Intel UHD, headless Edge, whose frame clock tops out near 56 fps):
+
+| 3D | recording | fps after 1 s | physics kept |
+|---|---|---|---|
+| 960x540 | 960x540 | 56.5 | 100% |
+| 1920x1080 | none | 56.0 | 100% |
+| 1920x1080 | 1920x1080 | 23.5 | 77% |
+
+The picture size barely matters; the physics (one thread, 6-8 ms a frame) and a full-HD
+recording (a copy and an H.264 encode in the page every frame) do. Earlier runs with other
+processes holding the CPU at 84% gave 46-52 fps and 94-95%. A 10 s live capture takes ~17 s of
+wall clock against ~63 s for the baked render -- but it is 960x540, silent, and its frame pacing
+is the machine's, so the film is still the baked render; the live one is the toy and the proof.
+
+Three things the first live run got wrong (11.6 fps, 68% of real time):
+
+- **Readouts stepped the physics.** The film's type asks `stats(t)` and `hand(t)` every frame,
+  and each call spent the frame's step budget again: 3.3 simulated frames per drawn frame. Only
+  `draw()` advances the live clock now (`check-sketch` asserts the readouts step nothing).
+- **The film's mesh is too fine for real time.** 9.5 ms a simulated frame at cell .05 x 10
+  substeps, 6.6 ms at .06 x 8 (best of 3, same ~5 Hz wobble); a live page swaps in `live`.
+- **The first frames stall.** Shaders compile on the first draw (2.2 s) and the recorder's
+  encoder on its first frame (2.4 s); a clock already running lost that time from the physics.
+  The page draws four frames at t = 0 before the clock starts.
 
 Not measured yet: the public studio's Azure VM has no GPU, so WebGL2 there would be a software
 rasteriser if the browser offers one at all -- time a still there before offering the look.

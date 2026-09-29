@@ -88,6 +88,10 @@ __SCENES__
   //                         the stream to /h264 in batches, then /done  (sketch-render.py --encode browser)
   //   ?stills=1.5,9,23.8    POST a PNG per time to /still, then /done
   //   ?automation=1         POST SK.automation() JSON to /automation, then /done
+  //   ?live=1[&ss=.5]       real time from the wall clock, no sound: a module's physics runs live
+  //                         and the pointer is a hand (SK.pointers); N nudge, R reset, S 1/4 speed
+  //   ?live=1&probe=10&drags=<json>&rec=960x540  the same, headless, for 10 s, the pointer driven
+  //                         by `drags`: POST the recording to /live and the timings to /perf, /done
   const Q = new URLSearchParams(location.search);
   const RENDER = Q.has('render') || Q.has('export') || Q.has('encode') || Q.has('stills') || Q.has('automation');
   const audio = document.getElementById('audio');
@@ -105,7 +109,7 @@ __SCENES__
     }
   };
   window.removeEventListener('error', window.__early);
-  window.addEventListener('error', (e) => { if (RENDER) report('error', String(e.message) + ' @' + e.lineno); });
+  window.addEventListener('error', (e) => { if (RENDER || Q.has('probe')) report('error', String(e.message) + ' @' + e.lineno); });
 
   SK.init(cv);
   const faces = __FONT_LOADS__, IMAGES = __IMAGES__;
@@ -168,9 +172,118 @@ __SCENES__
       if (!Q.has('render')) await report('done', '');
       return;
     }
+    if (Q.has('live')) return live();
     SK.render(POSTER_T);
     requestAnimationFrame(loop);
   });
+
+  /* ---- live: the film on the wall clock, a module's physics stepping as it goes */
+  function live() {
+    const probe = +Q.get('probe') || 0;
+    overlay.remove(); bar.remove();
+    if (probe) { document.body.classList.add('render'); }
+    let speed = 1, simT = 0, last = null, frames = 0;
+    // the film's type holds where its fade-out would begin; the physics clock runs on
+    const hold = Math.max(0, DUR - (SK._film.fadeOut ?? 0.45) - 0.05);
+    SK.LIVE = { now: () => simT, ss: +Q.get('ss') || 0 };
+    const hands = () => SK.pointers || [];
+    const film = (e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * SK.W, (e.clientY - r.top) / r.height * SK.H]; };
+    cv.style.touchAction = 'none'; cv.style.cursor = 'grab';
+    cv.addEventListener('pointerdown', (e) => {
+      const [x, y] = film(e);
+      if (hands().map((h) => h('down', x, y)).some(Boolean)) { cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; e.preventDefault(); }
+    });
+    cv.addEventListener('pointermove', (e) => { const [x, y] = film(e); hands().forEach((h) => h('move', x, y)); });
+    const up = (e) => { hands().forEach((h) => h('up')); cv.style.cursor = 'grab'; try { cv.releasePointerCapture(e.pointerId); } catch (_) { /* not captured */ } };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    const ctl = () => SK.liveControls || {};
+    const reset = () => { simT = 0; ctl().reset && ctl().reset(); };
+    const slow = () => { speed = speed === 1 ? 0.25 : 1; };
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'n' || e.key === 'N') ctl().nudge && ctl().nudge();
+      if (e.key === 'r' || e.key === 'R') reset();
+      if (e.key === 's' || e.key === 'S') slow();
+    });
+    let fpsEl = null;
+    if (!probe) {
+      const bar2 = document.createElement('div');
+      bar2.style.cssText = 'position:absolute;right:1.4%;bottom:2%;display:flex;gap:8px;align-items:center;font:600 13px system-ui;color:var(--ink)';
+      for (const [label, fn] of [['Give it a nudge', () => ctl().nudge && ctl().nudge()], ['Reset', reset], ['\u00bc speed', slow]]) {
+        const b = document.createElement('button'); b.textContent = label; b.onclick = fn;
+        b.style.cssText = 'font:inherit;padding:6px 12px;border:1px solid rgba(0,0,0,.25);border-radius:4px;background:rgba(255,255,255,.85);cursor:pointer';
+        bar2.appendChild(b);
+      }
+      fpsEl = document.createElement('span'); fpsEl.style.cssText = 'min-width:6em;text-align:right;opacity:.6';
+      bar2.appendChild(fpsEl);
+      document.getElementById('stage').appendChild(bar2);
+    }
+    // ---- the probe: the pointer scripted, the picture recorded, every frame timed
+    const drags = probe ? JSON.parse(Q.get('drags') || '[]') : [];
+    let rec = null, recCv = null, recCtx = null, chunks = [], mime = '';
+    const times = [], perf = [];
+    if (probe && Q.get('rec') !== 'none') {
+      const [rw, rh] = (Q.get('rec') || '960x540').split('x').map(Number);
+      recCv = document.createElement('canvas'); recCv.width = rw; recCv.height = rh; recCtx = recCv.getContext('2d');
+      mime = ['video/mp4;codecs=avc1.640028', 'video/mp4;codecs=avc1.42E01F', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m)) || '';
+      rec = new MediaRecorder(recCv.captureStream(60), { mimeType: mime, videoBitsPerSecond: 12e6 });
+      rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    }
+    const pointerAt = (t) => { // [kind, x, y] for this frame, from drags [[t, handle, dx, dy], ...]
+      for (const d of drags) {
+        const [t0, name, dx, dy] = d, u = t - t0;
+        if (u < 0 || u > 1.1) continue;
+        if (!d.from) d.from = ctl().handle ? ctl().handle(name) : [SK.W / 2, SK.H / 2];
+        const k = Math.min(1, u / 0.8), e = k * k * (3 - 2 * k), x = d.from[0] + dx * e, y = d.from[1] + dy * e;
+        if (!d.down) { d.down = true; hands().forEach((h) => h('down', x, y)); return; }
+        if (u < 1.05) { hands().forEach((h) => h('move', x, y)); return; }
+        if (!d.up) { d.up = true; hands().forEach((h) => h('up')); }
+      }
+    };
+    const J = SK.jelly && SK.jelly.perf;
+    let warm = 4; // frames drawn at t = 0 before the clock starts: see below
+    function frame(ts) {
+      if (warm > 0) { if (warm-- === 4 && rec) rec.start(1000); SK.render(0); requestAnimationFrame(frame); return; }
+      if (last === null) last = ts;
+      const dt = Math.min(0.1, (ts - last) / 1000);
+      last = ts;
+      simT += dt * speed;
+      if (probe) pointerAt(simT);
+      const a = J ? { ...J } : null;
+      SK.render(Math.min(simT, hold));
+      if (recCtx) recCtx.drawImage(cv, 0, 0, recCv.width, recCv.height);
+      frames++;
+      times.push(ts);
+      if (J) perf.push([J.physMs - a.physMs, J.drawMs - a.drawMs, J.simFrames - a.simFrames]);
+      if (fpsEl && frames % 15 === 0 && times.length > 30) {
+        const n = times.length, f = 30 / ((times[n - 1] - times[n - 31]) / 1000);
+        fpsEl.textContent = f.toFixed(0) + ' fps' + (speed < 1 ? ' \u00b7 \u00bc' : '');
+      }
+      if (probe && times.length > 1 && (ts - times[0]) / 1000 >= probe) return finish();
+      requestAnimationFrame(frame);
+    }
+    async function finish() {
+      try {
+        if (rec) {
+          const stopped = new Promise((r) => { rec.onstop = r; });
+          rec.stop(); await stopped;
+          await report('live?type=' + encodeURIComponent(mime), new Blob(chunks, { type: mime }));
+        }
+        const gl = document.createElement('canvas').getContext('webgl2'), dbg = gl && gl.getExtension('WEBGL_debug_renderer_info');
+        await report('perf', JSON.stringify({
+          wall: (times[times.length - 1] - times[0]) / 1000, frames: times.length,
+          gaps: times.slice(1).map((t, i) => +(t - times[i]).toFixed(2)), perf,
+          simTime: ctl().simTime ? ctl().simTime() : null, glSize: ctl().size ? ctl().size() : null,
+          simFps: ctl().fps ? ctl().fps() : 60,
+          mime, gpu: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : null,
+        }));
+      } catch (e) { await report('error', String(e && e.stack || e)); }
+      await report('done', '');
+    }
+    // frames before the clock starts: shaders compile on the first draw and the recorder's
+    // encoder on its first frame (2.2 s and 2.4 s measured on the laptop), and a clock already
+    // running would lose that time from the physics
+    requestAnimationFrame(frame);
+  }
 
   function now() {
     const a = audio.currentTime;

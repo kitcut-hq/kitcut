@@ -29,8 +29,8 @@ tail ({secs, scripts, images, audio}: a closing after the film -- `secs` more of
 head ({scripts}: run just before film.js, in its scope -- sketch/thumb.js, a thumbnail's probe and
 overlay; a stills run saves what the page's SK.REPORT() returns as <into>/report.json),
 cast ("cast": a folder whose <name>.js files each run before film.js, as SK.cast.<name>),
-modules (["collage"], ["jelly"]: engine extensions a film opts into, sketch/<name>.js -- the film's own
-engine folder first -- run after props.js; "collage" is the cut-outs and paper pieces,
+modules (["collage", "jelly"]: engine extensions a film opts into, sketch/<name>.js -- the film's
+own engine folder first -- run after props.js; "collage" is the cut-outs and paper pieces,
 "jelly" the soft-body specimen, SK.jelly).
 
 Invoke as:
@@ -43,6 +43,14 @@ Invoke as:
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --draft    (30 fps, faster)
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --encode browser --jobs 6
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --timings
+    python scripts/sketch-render.py --manifest projects/<id>/sketch.json --live 10 --ss 0.5
+
+--live N plays the film in REAL TIME for N seconds, headless, the way a viewer's browser would --
+a jelly film's physics stepping live from the wall clock, the pointer driven by the manifest's
+`live.drags` ([[t, handle, dx, dy], ...]: press on a named point of the specimen at t, drag by
+dx, dy film pixels over 0.8 s, let go) -- records what it drew to outputs/<slug>_live.mp4 and
+reports the frame rate and how much of real time the physics kept. `--ss` (or `live.ss`) is the
+jelly's render scale: .5 draws its 3D at 960x540. The HTML player does the same with ?live=1.
 """
 
 import sys
@@ -160,8 +168,8 @@ def scene_scripts(m):
 
 
 def module_scripts(m):
-    """ "modules": ["collage"], ["jelly"] -- engine extensions only some films need, so every other film's
-    page does not carry them. Each is sketch/<name>.js, or the same file in the film's own
+    """ "modules": ["collage", "jelly"] -- engine extensions only some films need, so every other
+    film's page does not carry them. Each is sketch/<name>.js, or the same file in the film's own
     engine folder when it has one (Sketch Studio's per-film copy may extend it), and names
     the one it ran from in an error: engine/<name>.js is the film's copy."""
     out = []
@@ -271,12 +279,14 @@ class Session:
     The page lives under a random prefix (/<key>/film.html) and posts to paths relative to it; a
     request without the key is refused, so nothing else on the machine can feed this render."""
 
-    def __init__(self, page, on_frame=None, on_still=None, on_h264=None):
+    def __init__(self, page, on_frame=None, on_still=None, on_h264=None, on_live=None):
         self.page = page.encode("utf-8")
         self.on_frame, self.on_still, self.on_h264 = on_frame, on_still, on_h264
+        self.on_live = on_live
         self.done = threading.Event()
         self.error, self.automation, self.frames, self.last = None, None, 0, time.time()
         self.report = None  # what the page's SK.REPORT() said after its stills, if it has one
+        self.perf = None
         self.key = "/" + secrets.token_hex(12) + "/"
         sess = self
 
@@ -323,6 +333,10 @@ class Session:
                         sess.automation = json.loads(body)
                     elif path == "/report":
                         sess.report = json.loads(body)
+                    elif path == "/live" and sess.on_live:
+                        sess.on_live(urllib.parse.unquote(q.partition("=")[2]), body)
+                    elif path == "/perf":
+                        sess.perf = json.loads(body)
                     elif path == "/error":
                         sess.error = body.decode("utf-8", "replace")
                         sess.done.set()
@@ -685,6 +699,90 @@ def contact_sheet(paths, out, cols=4):
     S.save(out)
 
 
+def pct(xs, q):
+    """The q-th percentile of a list (nearest rank); 0 for an empty one."""
+    xs = sorted(xs)
+    return xs[min(len(xs) - 1, int(q / 100 * len(xs)))] if xs else 0.0
+
+
+def live_test(m, slug, secs, ss, cfg, record=None):
+    """Play the film in real time for `secs`, headless: a module's physics steps from the wall
+    clock, the pointer follows `live.drags`, the page records itself. Returns the recording's
+    path and a one-line verdict. Measured, not assumed: whether this machine keeps a live
+    jelly at real time is the question the numbers answer."""
+    lv = m.get("live") or {}
+    ss = ss or lv.get("ss", 0.5)
+    got = {}
+
+    def save(mime, body):
+        got["mime"], got["body"] = mime, body
+
+    sess = Session(bundle(m, audio=False), on_live=save)
+    q = "live=1&probe=%g&ss=%g&rec=%s&drags=%s" % (
+        secs,
+        ss,
+        record or lv.get("record", "960x540"),
+        urllib.parse.quote(json.dumps(lv.get("drags", []))),
+    )
+    sess.run(q, stall=secs + 90)
+    p = sess.perf or {}
+    if not p.get("frames"):
+        sys.exit("the live page reported nothing")
+    gaps, perf = p["gaps"], p["perf"]
+    fps = (p["frames"] - 1) / p["wall"]
+    kept = (p["simTime"] or 0) / p["wall"]
+    # the first second pays for shader compiles and the recorder starting: reported apart
+    k, acc = 0, 0.0
+    while k < len(gaps) and acc < 1000:
+        acc += gaps[k]
+        k += 1
+    steady, sp = gaps[k:], perf[k + 1 :]
+    phys = [x[0] for x in sp]
+    draw = [x[1] - x[0] for x in sp]  # drawMs includes the physics draw() advanced
+    print("  %d frames in %.1f s: %.1f fps overall" % (p["frames"], p["wall"], fps))
+    print("  first second: %d frames, the first %.0f ms" % (k, gaps[0] if gaps else 0))
+    if steady:
+        print(
+            "  after it:    %.1f fps; frame median %.1f ms, slowest 5%% %.1f ms, worst %.1f ms"
+            % (1000 * len(steady) / sum(steady), pct(steady, 50), pct(steady, 95), max(steady))
+        )
+        fps = 1000 * len(steady) / sum(steady)
+    if sp:
+        print(
+            "  physics     %.1f ms a frame (95th pct %.1f), %.2f sim frames per drawn frame"
+            % (sum(phys) / len(phys), pct(phys, 95), sum(x[2] for x in sp) / len(sp))
+        )
+        print(
+            "  drawing     %.1f ms a frame on the CPU besides it (95th pct %.1f)"
+            % (sum(draw) / len(draw), pct(draw, 95))
+        )
+        if steady:
+            kept = sum(x[2] for x in sp) / (sum(steady) / 1000 * p.get("simFps", 60))
+            print("  after the first second the physics kept %.0f%% of real time" % (kept * 100))
+        print("  sim clock   %.1f s simulated in %.1f s" % (p["simTime"], p["wall"]))
+    if p.get("glSize"):
+        print("  3D at %dx%d on %s" % (p["glSize"][0], p["glSize"][1], p.get("gpu")))
+    if "body" not in got:
+        return None, fps, kept
+    raw = os.path.join(m["_temp"], slug + "_live." + ("mp4" if "mp4" in got["mime"] else "webm"))
+    with open(raw, "wb") as f:
+        f.write(got["body"])
+    # MediaRecorder stamps frames as they came; a constant 60 fps shows a dropped frame as a
+    # held one, which is what a viewer saw
+    out = os.path.join(m["_outputs"], slug + "_live.mp4")
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-i", raw, "-fps_mode", "cfr", "-r", "60"]
+        + _encode.video_args(cfg)
+        + ["-an", "-movflags", "+faststart", out],
+        check=True,
+    )
+    print(
+        "  %s  (%s, %.1f MB)"
+        % (os.path.relpath(out, _env.ROOT), got["mime"], len(got["body"]) / 1e6)
+    )
+    return out, fps, kept
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--manifest", required=True)
@@ -736,6 +834,22 @@ def main():
         "--timings",
         action="store_true",
         help="print the latest stage timings of every sketch tool for this project",
+    )
+    ap.add_argument(
+        "--live",
+        type=float,
+        metavar="SECONDS",
+        help="play the film in real time for this long, headless (a jelly's physics live, the "
+        "pointer from the manifest's live.drags); record it and report the frame rate",
+    )
+    ap.add_argument(
+        "--ss", type=float, help="with --live: the jelly's render scale (default live.ss, else .5)"
+    )
+    ap.add_argument(
+        "--record",
+        metavar="WxH",
+        help="with --live: the recording's size (default live.record, else 960x540); 'none' "
+        "measures only -- recording costs the page a copy and an encode every frame",
     )
     args = ap.parse_args()
 
@@ -803,6 +917,20 @@ def main():
             sys.exit("font missing: %s" % fnt["file"])
     if args.plan:
         print("\n  --plan: nothing rendered")
+        return
+    if args.live:
+        with _sketch.Stages(m, "sketch-render", ["live"], argv=sys.argv[1:]) as st, st("live"):
+            out, fps, kept = live_test(m, slug, args.live, args.ss, cfg, args.record)
+        if out:
+            _project.record(
+                m["_id"],
+                "live test: %.0f fps, physics at %.0f%% of real time" % (fps, kept * 100),
+                out=out,
+                script=__file__,
+                argv=sys.argv[1:],
+                kind="review",
+                manifest=m["_path"],
+            )
         return
 
     names = (

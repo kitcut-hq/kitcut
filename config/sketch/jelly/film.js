@@ -31,6 +31,7 @@
 
   const INK = '#221e1b', SOFT = '#6f675e', RULE = 'rgba(34,30,27,.22)';
   const hintAt = (t) => {
+    if (SK.LIVE && melon.touched()) return 'Your hand now: grab it anywhere, pull, let go.';
     let h = 'Dropped from a little way up. It settles.';
     for (const a of ACTS) if (t >= a.t - 0.15) h = a.hint;
     return h;

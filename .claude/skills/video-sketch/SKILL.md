@@ -42,6 +42,11 @@ the measurements.
   render chunk and by the live player on load (~0.5-0.8 s per film second).
 - Colours are presets (`crimson`, `golden`, `rose`) or an object: absorption is what makes it
   candy -- a high `cloud` turns it into red plastic.
+- **It also runs live**, like a three.js page: open the player with `?live=1` and grab the
+  slice with the mouse (the script plays until the first touch). `sketch-render --live 10`
+  proves a machine keeps real time and records it (960x540: 56 fps, 100% real time on the
+  laptop); the pointer comes from the manifest's `live.drags`. The baked render is still the
+  film -- full HD, frame-exact, with sound; the live capture is the toy and the proof.
 
 ## The project folder comes first
 

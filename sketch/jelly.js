@@ -29,6 +29,13 @@
    a strip light), and key light leaking through thin parts. The flesh, the pale layer and the
    striped skin each have their own response.
 
+   LIVE (the player's ?live=1): the same simulation stepped from the wall clock instead of baked --
+   start the movement and the physics follows, as in a three.js page. Only the latest frame is
+   kept, at most two frames are simulated per drawn frame (a slow machine gets slow motion, not
+   catch-up bursts), and the pointer is a hand: press on the slice, drag, let go. The scripted
+   `actions` play until the first touch, then the hand is yours. sketch-render.py --live N runs
+   it headless for N seconds, records it and reports whether the physics kept real time.
+
    The physics half runs without a DOM (scripts/check-sketch.py bakes a specimen under Node and
    checks volume, inversion, settling, determinism and floor contact).
 */
@@ -101,7 +108,11 @@
     scale: { cm: 6, gcc: 1.3 }, // readouts only: 1 world unit = cm, gummy density g/cm3
     ss: null, // supersampling; default 2 when rendering a file, 1 when playing live
     cursor: true,
+    // a live page (?live=1) swaps these in: measured best-of-3 on the laptop, a simulated frame
+    // costs 9.5 ms at cell .05 x 10 substeps and 6.6 ms at .06 x 8, with the same ~5 Hz wobble
+    live: { cell: 0.06, substeps: 8, catchUp: 2 },
   };
+  const LIVE_PAGE = typeof location !== 'undefined' && /[?&]live=/.test(location.search);
   function merge(a, b) {
     const o = { ...a };
     for (const k of Object.keys(b || {})) {
@@ -342,6 +353,7 @@
   /* ------------------------------------------------------------ the specimen */
   J.specimen = function (spec = {}) {
     const o = merge(DEFAULTS, spec);
+    if (LIVE_PAGE) Object.assign(o, o.live);
     const P = typeof o.preset === 'string' ? { ...(J.PRESETS[o.preset] || J.PRESETS.crimson) } : { ...J.PRESETS.crimson, ...o.preset };
     const w = o.wedge, R = w.radius, T = w.thickness;
     const sdf = wedgeSDF(w);
@@ -492,9 +504,22 @@
     const dt = 1 / (o.fps * o.substeps), g = o.gravity, mu = o.friction;
     const dampRate = 3.2 * clamp(o.damping), kd = 1 - Math.exp(-dampRate * dt); // per second, on top of the solver's own
     let step = 0, impact = 0;
+    // live: the pointer's hand (touching the slice ends the script), and a nudge asked for
+    let user = null, touched = false, pendingNudge = 0;
+    const X0 = new Float64Array(X);
+    function applyUser() {
+      const s = user, D = s.D;
+      for (let q = 0; q < s.sel.length; q++) {
+        const i = s.sel[q], f = s.wt[q] * 0.6;
+        const tx = s.c[0] + D[0] + s.anchor[q * 3], ty = Math.max(0, s.c[1] + D[1] + s.anchor[q * 3 + 1]), tz = s.c[2] + D[2] + s.anchor[q * 3 + 2];
+        X[i * 3] += (tx - X[i * 3]) * f; X[i * 3 + 1] += (ty - X[i * 3 + 1]) * f; X[i * 3 + 2] += (tz - X[i * 3 + 2]) * f;
+      }
+      return { p: [s.c[0] + D[0], s.c[1] + D[1] + s.lift, s.c[2] + D[2]], press: 1, kind: 'grab', u: step * dt - s.t0, dur: Infinity };
+    }
     function substep() {
       const tau = step * dt;
-      for (const a of acts) if (a.kind === 'nudge' && !a.st && tau >= a.t) { a.st = 1; nudge(a); } // a kick is a velocity: before the positions move
+      if (pendingNudge) { nudge({ nudge: pendingNudge }); pendingNudge = 0; }
+      if (!touched) for (const a of acts) if (a.kind === 'nudge' && !a.st && tau >= a.t) { a.st = 1; nudge(a); } // a kick is a velocity: before the positions move
       for (let i = 0; i < n; i++) {
         const b = i * 3;
         V[b + 1] -= g * dt;
@@ -502,7 +527,7 @@
         X[b] += V[b] * dt; X[b + 1] += V[b + 1] * dt; X[b + 2] += V[b + 2] * dt;
       }
       let hand = null;
-      for (const a of acts) {
+      if (!touched) for (const a of acts) {
         if (tau < a.t) continue;
         if (a.kind === 'nudge') continue;
         const u = tau - a.t;
@@ -511,6 +536,7 @@
         if (a.kind === 'grab') hand = { p: applyGrab(a, u), press: 1, kind: 'grab', u, dur: a.dur };
         else { const r = applyPoke(a, u); hand = { p: r.slice(0, 3), press: r[3], kind: 'poke', u, dur: a.dur }; }
       }
+      if (user) hand = applyUser();
       // edges
       const dt2 = dt * dt;
       for (let e = 0; e < ne; e++) {
@@ -584,9 +610,10 @@
       }
     }
 
-    // ---- baking: one snapshot per frame, forward only
+    // ---- baking: one snapshot per frame, forward only. frames[k] is frame base + k: a film keeps
+    // them all (base stays 0); live keeps the latest two
     const frames = [], stats = [], hands = [], follow = [];
-    let ema = null;
+    let ema = null, base = 0, live = null;
     const kEma = 1 - Math.exp(-1 / (o.fps * Math.max(1e-3, o.camera.lag || 0.8)));
     const snap = (hand) => {
       frames.push(new Float32Array(X));
@@ -603,19 +630,32 @@
       stats.push({ volume: v / vol0, ke, minTet: minr, pen, impact: impact / vol0 });
       impact = 0;
       hands.push(hand);
+      while (live && frames.length > 2) { frames.shift(); stats.shift(); hands.shift(); follow.shift(); base++; }
     };
     snap(null);
+    const clock = typeof performance !== 'undefined' ? () => performance.now() : () => Date.now();
     function bakeTo(t) {
-      const want = Math.min(Math.ceil(t * o.fps + 1e-6) + 1, 1e6);
-      while (frames.length <= want) {
+      const want = Math.min(Math.ceil(t * o.fps + 1e-6) + (live ? 0 : 1), 1e6);
+      let budget = live ? live.catchUp : Infinity;
+      const t0 = clock();
+      while (base + frames.length <= want && budget-- > 0) {
         let hand = null;
         for (let s = 0; s < o.substeps; s++) hand = substep() || hand;
         snap(hand);
+        J.perf.simFrames++;
       }
+      J.perf.physMs += clock() - t0;
     }
-    const at_ = (t) => { const f = Math.max(0, t * o.fps); bakeTo(t); const i = Math.floor(f + 1e-6); return { i, a: f - i < 1e-6 ? 0 : f - i }; };
+    const at_ = (t) => {
+      // live: the latest frame, always -- only draw() moves the clock on (advance), so the
+      // readouts a film draws beside it cannot spend the frame's physics budget twice
+      if (live) return { i: base + frames.length - 1, a: 0 };
+      bakeTo(t);
+      const f = Math.max(0, t * o.fps), i = Math.floor(f + 1e-6);
+      return { i, a: f - i < 1e-6 ? 0 : f - i };
+    };
     function positions(t, out) {
-      const { i, a } = at_(t), A = frames[i], B = frames[i + 1] || A;
+      const { i, a } = at_(t), A = frames[i - base], B = frames[i + 1 - base] || A;
       if (!out) out = new Float64Array(n * 3);
       for (let k = 0; k < n * 3; k++) out[k] = A[k] + (B[k] - A[k]) * a;
       return out;
@@ -628,18 +668,92 @@
       bakeTo,
       positions,
       stats(t) {
-        const { i } = at_(t), s = stats[i];
+        const { i } = at_(t), s = stats[i - base];
         // KE: sim mass fraction x real mass (kg), sim velocity x cm/100 (m/s) -> microjoules
         return { mass: massG, volume: s.volume, kinetic: (s.ke / vol0) * (massG / 1000) * (cm / 100) ** 2 * 1e6, minTet: s.minTet, pen: s.pen, keSim: s.ke };
       },
-      hand(t) { const { i } = at_(t); return hands[i]; },
+      hand(t) { const { i } = at_(t); return hands[i - base]; },
       /** where the camera looks, x and z: the smoothed centroid (pure function of t) */
-      follow(t) { const { i, a } = at_(t), A = follow[i], B = follow[i + 1] || A; return [A[0] + (B[0] - A[0]) * a, A[1] + (B[1] - A[1]) * a]; },
-      frameCount: () => frames.length,
+      follow(t) { const { i, a } = at_(t), A = follow[i - base], B = follow[i + 1 - base] || A; return [A[0] + (B[0] - A[0]) * a, A[1] + (B[1] - A[1]) * a]; },
+      frameCount: () => base + frames.length,
+      /* ---- live */
+      /** step from the wall clock from now on (SK.LIVE.now()), keeping only the latest frame;
+       *  at most `catchUp` frames are simulated per drawn frame */
+      /** live: simulate toward t, at most catchUp frames */
+      advance: (t) => bakeTo(t),
+      goLive(opt = {}) {
+        live = { catchUp: opt.catchUp || o.live.catchUp || 2 };
+        const k = frames.length - 1;
+        for (const arr of [frames, stats, hands, follow]) arr.splice(0, k);
+        base += k;
+      },
+      isLive: () => !!live,
+      touched: () => touched,
+      simTime: () => step * dt,
+      /** take hold where a ray (o, d: world, d unit) meets the slice: the particle nearest the eye
+       *  within 0.1 of the ray, and everything within `radius` of it. false when it misses. */
+      grab(o3, d3, radius = 0.17) {
+        let best = -1, bestT = Infinity;
+        for (let i = 0; i < n; i++) {
+          const px = X[i * 3] - o3[0], py = X[i * 3 + 1] - o3[1], pz = X[i * 3 + 2] - o3[2];
+          const tt = px * d3[0] + py * d3[1] + pz * d3[2];
+          if (tt <= 0) continue;
+          const qx = px - d3[0] * tt, qy = py - d3[1] * tt, qz = pz - d3[2] * tt;
+          if (qx * qx + qy * qy + qz * qz < 0.01 && tt < bestT) { bestT = tt; best = i; }
+        }
+        if (best < 0) return false;
+        const gp = [X[best * 3], X[best * 3 + 1], X[best * 3 + 2]], sel = [], wt = [];
+        let sw = 0, c = [0, 0, 0], top = -Infinity;
+        for (let i = 0; i < n; i++) {
+          const d = Math.hypot(X[i * 3] - gp[0], X[i * 3 + 1] - gp[1], X[i * 3 + 2] - gp[2]);
+          if (d >= radius) continue;
+          const f = 1 - clamp((d - radius * 0.35) / (radius * 0.65)), k = f * f * (3 - 2 * f);
+          sel.push(i); wt.push(k); sw += k;
+          c[0] += X[i * 3] * k; c[1] += X[i * 3 + 1] * k; c[2] += X[i * 3 + 2] * k;
+          top = Math.max(top, X[i * 3 + 1]);
+        }
+        c = c.map((v) => v / sw);
+        const anchor = new Float64Array(sel.length * 3);
+        sel.forEach((i, q) => anchor.set([X[i * 3] - c[0], X[i * 3 + 1] - c[1], X[i * 3 + 2] - c[2]], q * 3));
+        const hit0 = [o3[0] + d3[0] * bestT, o3[1] + d3[1] * bestT, o3[2] + d3[2] * bestT];
+        user = { sel, wt, c, anchor, D: [0, 0, 0], hit0, nrm: d3.slice(), t0: step * dt, lift: top - c[1] };
+        touched = true;
+        return true;
+      },
+      /** move the hand to where a ray meets the plane it took hold in (facing the eye) */
+      drag(o3, d3) {
+        if (!user) return;
+        const u = user, den = d3[0] * u.nrm[0] + d3[1] * u.nrm[1] + d3[2] * u.nrm[2];
+        if (Math.abs(den) < 1e-6) return;
+        const k = ((u.hit0[0] - o3[0]) * u.nrm[0] + (u.hit0[1] - o3[1]) * u.nrm[1] + (u.hit0[2] - o3[2]) * u.nrm[2]) / den;
+        u.D = [o3[0] + d3[0] * k - u.hit0[0], Math.max(-u.c[1], o3[1] + d3[1] * k - u.hit0[1]), o3[2] + d3[2] * k - u.hit0[2]];
+      },
+      release() { user = null; },
+      holding: () => !!user,
+      nudgeNow(amount = 1) { pendingNudge += amount; },
+      /** back to the first frame: the slice drops again (the script stays off once touched) */
+      reset() {
+        X.set(X0); V.fill(0); step = 0; impact = 0; ema = null; user = null;
+        for (const a of acts) a.st = null;
+        for (const arr of [frames, stats, hands, follow]) arr.length = 0;
+        base = 0;
+        snap(null);
+      },
+      /** where a named point of the slice is now (the particle nearest it at rest), world */
+      pointNow(name) {
+        const rp = restPoint(name);
+        let best = 0, bd = Infinity;
+        for (let i = 0; i < n; i++) {
+          const d = Math.hypot(mesh.rest[i * 3] - rp[0], mesh.rest[i * 3 + 1] - rp[1], mesh.rest[i * 3 + 2] - rp[2]);
+          if (d < bd) { bd = d; best = i; }
+        }
+        return [X[best * 3], X[best * 3 + 1], X[best * 3 + 2]];
+      },
       /** what happened, for the sound: grab / release / poke from the script, land from the
        *  simulation (a frame where the floor stopped a lot of downward motion, a local peak at
        *  least 0.18 s after the last). Bakes to `until` (default: the film's duration). */
       events(until) {
+        if (live) return []; // a live run has no history to listen to
         const end = until ?? ((SK._film && SK._film.duration) || 10);
         bakeTo(end);
         const ev = [];
@@ -701,6 +815,9 @@
     return [0, 1, 2].map((r) => (inv[r * 3] * b[0] + inv[r * 3 + 1] * b[1] + inv[r * 3 + 2] * b[2]) / det);
   }
 
+  /** what the live test reports: milliseconds spent simulating and drawing, frames simulated */
+  J.perf = { physMs: 0, drawMs: 0, simFrames: 0 };
+
   /* ================================================================ drawing (browser only) */
   const RENDERING = typeof location !== 'undefined' && /[?&](render|export|encode|stills)=/.test(location.search);
   const painters = new WeakMap();
@@ -712,6 +829,9 @@
     return p;
   }
   function draw(s, t) {
+    if (SK.LIVE && !s.isLive()) goLive(s);
+    const t0 = performance.now();
+    if (s.isLive()) { t = SK.LIVE.now(); s.advance(t); } // the physics runs on the wall clock, whatever the film's type shows
     lastT.set(s, t);
     const ctx = SK.ctx(), W = SK.W, H = SK.H;
     const p = painterOf(s);
@@ -727,6 +847,28 @@
     ctx.drawImage(p.canvas, 0, 0, W, H);
     if (s.o.cursor) cursor(ctx, s, p, t);
     ctx.restore();
+    J.perf.drawMs += performance.now() - t0;
+  }
+  /* live: the pointer is a hand. The player hands every module in SK.pointers its pointer events
+     in film pixels ('down' returns whether it took hold), and SK.liveControls its buttons. */
+  function goLive(s) {
+    s.goLive(SK.LIVE.catchUp ? { catchUp: SK.LIVE.catchUp } : {});
+    const p = painterOf(s), now = () => SK.LIVE.now();
+    (SK.pointers = SK.pointers || []).push((kind, x, y) => {
+      if (kind === 'down') { const r = p.ray(x, y, now()); return s.grab(r.o, r.d); }
+      if (kind === 'move') { if (s.holding()) { const r = p.ray(x, y, now()); s.drag(r.o, r.d); } return s.holding(); }
+      if (kind === 'up') s.release();
+      return false;
+    });
+    SK.liveControls = {
+      nudge: () => s.nudgeNow(1.1),
+      reset: () => s.reset(),
+      simTime: () => s.simTime(),
+      /** where to press to take hold of a named point: film pixels */
+      handle: (name) => p.project(s.pointNow(name), now()),
+      size: () => [p.W, p.H],
+      fps: () => s.o.fps,
+    };
   }
   /* a touch indicator where the hand is: a soft white disc that tightens while it holds */
   function cursor(ctx, s, p, t) {
@@ -943,8 +1085,8 @@ void main() {
 
   function Painter(s) {
     this.s = s;
-    const ss = s.o.ss || (RENDERING ? 2 : 1);
-    const W = SK.W * ss, H = SK.H * ss;
+    const ss = (SK.LIVE && SK.LIVE.ss) || s.o.ss || (RENDERING ? 2 : 1);
+    const W = Math.round(SK.W * ss), H = Math.round(SK.H * ss);
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const gl = cv.getContext('webgl2', { antialias: true, alpha: false, premultipliedAlpha: false, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
     this.canvas = cv; this.gl = gl; this.W = W; this.H = H; this.ok = !!gl;
@@ -1018,7 +1160,7 @@ void main() {
   Painter.prototype.camera = function (t) {
     const s = this.s, c = s.o.camera, T = s._mesh.T;
     const dur = (SK._film && SK._film.duration) || 10;
-    const az = ((c.azim + (c.orbit || 0) * (t / dur)) * Math.PI) / 180, el = (c.elev * Math.PI) / 180;
+    const az = ((c.azim + (c.orbit || 0) * Math.min(1, t / dur)) * Math.PI) / 180, el = (c.elev * Math.PI) / 180;
     const base = c.target || [s.o.pose.at[0], T * 0.4, s.o.pose.at[2]], f0 = s.follow(0), ft = s.follow(t), k = c.follow ?? 0;
     const tg = [base[0] + (ft[0] - f0[0]) * k, base[1], base[2] + (ft[1] - f0[1]) * k];
     const eye = [tg[0] + Math.sin(az) * Math.cos(el) * c.dist, tg[1] + Math.sin(el) * c.dist, tg[2] + Math.cos(az) * Math.cos(el) * c.dist];
@@ -1028,6 +1170,18 @@ void main() {
     // lens shift: slide the picture without changing the perspective
     Pm[8] = -(c.shift?.[0] || 0) * 1; Pm[9] = -(c.shift?.[1] || 0) * 1;
     return { eye, VP: mul4(Pm, V), near, far };
+  };
+  /** the ray through a film pixel: origin at the eye, unit direction, world */
+  Painter.prototype.ray = function (px, py, t) {
+    const { VP } = this.camera(t), inv = invert4(VP);
+    const nx = (px / SK.W) * 2 - 1, ny = 1 - (py / SK.H) * 2;
+    const un = (z) => {
+      const x = inv[0] * nx + inv[4] * ny + inv[8] * z + inv[12], y = inv[1] * nx + inv[5] * ny + inv[9] * z + inv[13];
+      const zz = inv[2] * nx + inv[6] * ny + inv[10] * z + inv[14], w = inv[3] * nx + inv[7] * ny + inv[11] * z + inv[15];
+      return [x / w, y / w, zz / w];
+    };
+    const a = un(-1), b = un(1), d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], l = Math.hypot(...d);
+    return { o: a, d: d.map((v) => v / l) };
   };
   Painter.prototype.project = function (p, t) {
     const { VP } = this.camera(t);
@@ -1157,6 +1311,19 @@ void main() {
     const y = cross(z, x);
     return [x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0,
       -(x[0] * e[0] + x[1] * e[1] + x[2] * e[2]), -(y[0] * e[0] + y[1] * e[1] + y[2] * e[2]), -(z[0] * e[0] + z[1] * e[1] + z[2] * e[2]), 1];
+  }
+  function invert4(m) { // column-major 4x4 inverse (cofactors)
+    const [a00, a01, a02, a03, a10, a11, a12, a13, a20, a21, a22, a23, a30, a31, a32, a33] = m;
+    const b00 = a00 * a11 - a01 * a10, b01 = a00 * a12 - a02 * a10, b02 = a00 * a13 - a03 * a10, b03 = a01 * a12 - a02 * a11;
+    const b04 = a01 * a13 - a03 * a11, b05 = a02 * a13 - a03 * a12, b06 = a20 * a31 - a21 * a30, b07 = a20 * a32 - a22 * a30;
+    const b08 = a20 * a33 - a23 * a30, b09 = a21 * a32 - a22 * a31, b10 = a21 * a33 - a23 * a31, b11 = a22 * a33 - a23 * a32;
+    const det = 1 / (b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06);
+    return [
+      (a11 * b11 - a12 * b10 + a13 * b09) * det, (a02 * b10 - a01 * b11 - a03 * b09) * det, (a31 * b05 - a32 * b04 + a33 * b03) * det, (a22 * b04 - a21 * b05 - a23 * b03) * det,
+      (a12 * b08 - a10 * b11 - a13 * b07) * det, (a00 * b11 - a02 * b08 + a03 * b07) * det, (a32 * b02 - a30 * b05 - a33 * b01) * det, (a20 * b05 - a22 * b02 + a23 * b01) * det,
+      (a10 * b10 - a11 * b08 + a13 * b06) * det, (a01 * b08 - a00 * b10 - a03 * b06) * det, (a30 * b04 - a31 * b02 + a33 * b00) * det, (a21 * b02 - a20 * b04 - a23 * b00) * det,
+      (a11 * b07 - a10 * b09 - a12 * b06) * det, (a00 * b09 - a01 * b07 + a02 * b06) * det, (a31 * b01 - a30 * b03 - a32 * b00) * det, (a20 * b03 - a21 * b01 + a22 * b00) * det,
+    ];
   }
   function mul4(a, b) { // column-major a*b
     const o = new Array(16);

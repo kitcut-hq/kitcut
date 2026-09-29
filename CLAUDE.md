@@ -673,7 +673,9 @@ is **jelly** (`"modules": ["jelly"]`, `sketch/jelly.js`, example `config/sketch/
 soft-body gummy object, simulated (XPBD on tets) and lit as translucent candy in WebGL2, which a
 scripted hand grabs, pokes and drops. Physics keeps the pure-function rule by **baking** --
 fixed steps from t = 0, one snapshot per frame -- and its landings and grabs become the sound
-cues (`SK.film({ sounds })` -> `--automation` -> sketch-audio). Each script times
+cues (`SK.film({ sounds })` -> `--automation` -> sketch-audio). The same physics also runs
+**live** (`?live=1`: the wall clock drives it and the pointer grabs the slice);
+`sketch-render --live 10` measures and records that (56 fps, real time, on the laptop). Each script times
 its stages into the run log; `--timings` answers "how long does a film take". After touching
 any of it, run `python scripts/check-sketch.py` — the notation, every sound generator, the
 ducker, the tail-word cut, the bundler, and (under Node) the jelly bake: determinism, volume,
