@@ -79,6 +79,11 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
   `ops.sh watch <id> <id> ...`. Never background a following `film` in a shell that exits: the
   POST can already have gone when the shell kills it, and a retry makes the film twice (two
   Apollo 13s, 2026-09-29). The VM makes 3 at once (`pools: claude`); the rest queue by themselves.
+  Leave a slot for customers: a queued film of ours waits in front of theirs. `/api/health`'s
+  `slots.claude.used` is this server's only -- add `peers` (a handing-over server's films).
+- **The 4 vCPUs are shared by every unit** -- each server and each `resume` has its own pools, so a
+  ship or a `resume --finish` during another film's narration starves its word timing (KI-043: a
+  Spanish film lost 17 of its 38 minutes). Do them when no non-English film is recording its voice.
 
 ## When something is wrong
 
