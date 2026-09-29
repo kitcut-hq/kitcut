@@ -2,7 +2,7 @@
 
     STUDIO_HOME\\projects\\studio-20260925-181500-k3f9qa\\
         sketch.json  studio.json  events.jsonl           the studio's (Claude reads, never writes)
-        inputs\\upload1.jpg inputs\\voice1.webm         what the visitor attached (uploads.py)
+        inputs\\upload1.jpg voice1.webm doc1.md         what the visitor attached (uploads.py)
         film.js score.json sfx.json vo.json [paint.json] Claude's
         engine\\engine.js engine\\props.js                 the film's own copy of the engine
         cast\\<name>.js                                   the person's cast (library.py): loaded
@@ -352,7 +352,8 @@ class Film:
         attachments: what the visitor attached (uploads.take), each meta with its file as "src",
         copied into inputs/. A picture becomes upload1.jpg... and joins the manifest's images
         under that name, so film.js can draw it with SK.image('upload1', ...); a voice note
-        becomes voice1..., with its words in the record.
+        becomes voice1..., with its words in the record; a document becomes doc1.txt (or .md),
+        with the name it came with.
 
         project: the site's project the film is an episode of, {id, name, brief,
         from_account_cast}, checked by the caller; its library is the project's (library.py)."""
@@ -383,16 +384,20 @@ class Film:
         attached = []
         if attachments:
             os.makedirs(film.path("inputs"))
-            n = {"image": 0, "audio": 0}
+            n = {"image": 0, "audio": 0, "text": 0}
+            stems = {"image": "upload%d", "audio": "voice%d", "text": "doc%d"}
             for a in attachments:
                 n[a["kind"]] += 1
-                stem = ("upload%d" if a["kind"] == "image" else "voice%d") % n[a["kind"]]
+                stem = stems[a["kind"]] % n[a["kind"]]
                 rel = "inputs/%s.%s" % (stem, a["ext"])
                 shutil.copyfile(a["src"], film.path("inputs", "%s.%s" % (stem, a["ext"])))
                 item = {"kind": a["kind"], "file": rel}
                 if a["kind"] == "image":
                     m.setdefault("images", {})[stem] = rel
                     item.update(name=stem, w=a.get("w"), h=a.get("h"))
+                elif a["kind"] == "text":
+                    item.update(name=a.get("name") or "", chars=a.get("chars"))
+                    item.update(words=a.get("words"))
                 else:
                     item.update(secs=a.get("secs"), transcript=a.get("transcript") or "")
                     item.update(lang=a.get("lang"))
@@ -423,7 +428,8 @@ class Film:
                 # a Free-plan film: KitCut's watermark and closing (agent.brand, studio/outro.js)
                 "branding": bool(branding),
                 "fps": 30 if fps == 30 else 60,
-                # pictures and voice notes the visitor attached (inputs/): never shown publicly
+                # pictures, voice notes and documents the visitor attached (inputs/): never
+                # shown publicly
                 "attachments": attached,
                 # the project it is an episode of (never shown publicly: the brief is theirs)
                 **({"project": project} if project else {}),

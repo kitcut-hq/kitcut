@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Pictures and voice notes attached to a film request (uploads.py), end to end through the API,
+"""Pictures, voice notes and documents attached to a film request (uploads.py), end to end through the API,
 with the speech-to-text stubbed and no film made: no API calls, no cost, seconds.
 
     python studio/test_uploads.py
@@ -237,6 +237,75 @@ async def main():
             "named",
             said,
         )
+
+        # documents: a .txt or .md, read off its bytes as text
+        brief_md = "# Sunny Crumbs\r\n\r\nOpen 7am. Sourdough is **$6**.\r\n"
+        r = await c.post(
+            "/api/uploads?name=C:%5Cfakepath%5Cbrief.md",
+            data=brief_md.encode(),
+            headers={**me, "Content-Type": "text/markdown"},
+        )
+        md = await r.json()
+        check(
+            r.status == 201 and md["kind"] == "text" and md["name"] == "brief.md",
+            "a markdown brief, its name cleaned",
+            md,
+        )
+        r = await c.post(
+            "/api/uploads",
+            data="Сценарій: пекарня".encode("utf-16"),
+            headers={**me, "Content-Type": "text/plain"},
+        )
+        u16 = await r.json()
+        check(r.status == 201 and u16["kind"] == "text", "a UTF-16 text file (Notepad)", u16)
+        st, j = await up(b"\x00\x01\x02binary\x00", ctype="text/plain")
+        check(st == 415 and j["reason"] == "type", "binary called text is refused", j)
+        st, j = await up(b"caf\xe9 latin-1 " * 3, ctype="text/plain")
+        check(st == 415 and j["reason"] == "type", "a text file not in UTF-8 is refused", j)
+        st, j = await up(b" \n\t\n ", ctype="text/plain")
+        check(st == 400 and j["reason"] == "empty", "a blank text file is refused", j)
+        st, j = await up(b"word " * (uploads.MAX_TEXT_CHARS // 5 + 10), ctype="text/plain")
+        check(st == 413 and j["reason"] == "long", "a book is refused", j)
+        st, big = await up(("A long script. " * 600).encode(), ctype="text/plain")
+        body = {"prompt": "", "seconds": 10, "attachments": [md["id"], u16["id"], big["id"]]}
+        r = await c.post("/api/films", json=body, headers=me)
+        j = await r.json()
+        check(r.status == 202 and j.get("attachments") == ["text"] * 3, "a film from documents", j)
+        f3 = Film.open(j.get("id"))
+        with open(f3.path("inputs", "doc1.md"), encoding="utf-8") as fh:
+            kept = fh.read()
+        check(
+            kept == brief_md.replace("\r\n", "\n").strip() + "\n"
+            and os.path.exists(f3.path("inputs", "doc2.txt")),
+            "documents in inputs/, as plain UTF-8",
+            os.listdir(f3.path("inputs")),
+        )
+        check(f3.readable(f3.path("inputs", "doc3.txt")), "Claude may read them")
+        brief = agent.ask(f3)
+        check(
+            'Document 1 "brief.md"' in brief
+            and "Sourdough is **$6**" in brief
+            and "Сценарій" in brief
+            and "Read inputs/doc3.txt" in brief
+            and "A long script" not in brief
+            and "name_film" in brief,
+            "the brief quotes the short ones and names the long one",
+            brief[-1500:],
+        )
+        first = agent.first_record(f3, "web", "u:alice")
+        check(
+            "Sourdough" not in json.dumps(first) and first["attachments"][0].get("chars"),
+            "the run record keeps no words",
+            first.get("attachments"),
+        )
+        ids = [
+            (await up(b"note %d" % i, ctype="text/plain"))[1]["id"]
+            for i in range(uploads.MAX_DOCS + 1)
+        ]
+        r = await c.post(
+            "/api/films", json={"prompt": "x" * 10, "seconds": 10, "attachments": ids}, headers=me
+        )
+        check(r.status == 400, "too many documents for one film")
 
         # a day later, what no film took is gone
         st, stale = await up(png(50, 50))

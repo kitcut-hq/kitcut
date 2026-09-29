@@ -225,7 +225,8 @@ def ask(film, recent=()):
 def attached_note(film):
     """What the visitor attached (studio.json attachments, files in inputs/), and how to take it:
     a picture may be something to show, a reference, or the brief itself, and nobody says which,
-    so Claude looks, decides, and says what it decided (the first thing the page shows)."""
+    so Claude looks, decides, and says what it decided (the first thing the page shows). A short
+    document is quoted here; a long one is named, for Claude to Read."""
     rec = film.record()
     items = rec.get("attachments") or []
     if not items:
@@ -233,11 +234,34 @@ def attached_note(film):
     lines = ["", "", "Attached by the person:"]
     notes = [a for a in items if a["kind"] == "audio"]
     pics = [a for a in items if a["kind"] == "image"]
+    docs = [a for a in items if a["kind"] == "text"]
     for i, a in enumerate(notes, 1):
         lines.append(
             '- Voice note %d (%s, written out by speech recognition; a name may be misheard): "%s"'
             % (i, _mmss(a.get("secs") or 0), (a.get("transcript") or "").strip())
         )
+    for i, a in enumerate(docs, 1):
+        head = "- Document %d%s (%s words, %s)" % (
+            i,
+            ' "%s"' % a["name"] if a.get("name") else "",
+            a.get("words"),
+            a["file"],
+        )
+        text = _read(film.path(*a["file"].split("/")))
+        if text is not None and len(text) <= DOC_INLINE:
+            lines += [head + ":", "<<<", text.strip(), ">>>"]
+        else:
+            lines.append(head + ": Read %s." % a["file"])
+    if docs:
+        lines += [
+            "",
+            "The documents are the person's own brief, written or chosen for this film: a script, "
+            "notes, facts about a product or a business, a list of scenes. Read every one before "
+            "you plan and take what it says as part of the prompt; where the typed prompt and a "
+            "document disagree, the typed prompt wins. A script's words may be the narration "
+            "itself, but the film keeps its length: cut to what matters most rather than cram. "
+            "Keep names, figures and quoted lines exactly as written.",
+        ]
     for a in pics:
         lines.append(
             "- Picture %s (%sx%s): Read %s to see it. On screen: SK.image('%s', x, y, w)."
@@ -266,6 +290,17 @@ def attached_note(film):
 
 def _mmss(s):
     return "%d:%02d" % (int(s) // 60, int(s) % 60)
+
+
+DOC_INLINE = 6000  # a document up to this many characters is in the first message; longer, Read
+
+
+def _read(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return None
 
 
 PICTURE = r"upload\d+|pic_[a-z0-9_]+"  # the visitor's pictures, and their project's
@@ -1203,7 +1238,7 @@ def first_record(film, source, client):
         **({"app": rec["app"]} if rec.get("app") else {}),
         # what came with the idea: kinds and sizes only (the words and pictures stay here)
         "attachments": [
-            {k: a.get(k) for k in ("kind", "secs", "w", "h") if a.get(k) is not None}
+            {k: a.get(k) for k in ("kind", "secs", "w", "h", "chars") if a.get(k) is not None}
             for a in rec.get("attachments") or []
         ],
         # what the film got from its library (library.seed): counts only
