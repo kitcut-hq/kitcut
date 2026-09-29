@@ -508,3 +508,19 @@ server ran uncapped for its whole life.
 **Fix.** `server.main()` (and `resume.py`) call `procs.cgroup_root()` at start, before any child.
 **Evidence.** `/sys/fs/cgroup/system.slice/kitcut-studio.service`: `subtree_control` empty, no
 `server/`, on 2026-09-28 after films had run; the same EBUSY in the first `ops.sh resume` unit.
+
+### KI-033 · fixed · studio · A switch hung one request ~5 s through the tunnel
+
+**Symptom.** At each of the first two switches on the VM, one request through studio.kitcut.ai
+took the probe's whole timeout (5-8 s) about 3 s after the old server handed over; 398 requests
+straight to the port in another switch all answered in 2 ms.
+**Cause.** The old server closed the tunnel's held keep-alive connections itself at the handoff
+(aiohttp `pre_shutdown`), which can cut a request already on one.
+**Fix.** `server.bye()`: after the handoff the old server answers what still reaches it on those
+connections and tells the client to close each after its reply. Measured after: 44 requests through
+a switch, none failed, slowest 1.2 s. The first switch after shipping this fix still blips once
+(the old code does the handing over).
+**Verified on the VM 2026-09-29.** A film made on an old server through two switches finished done;
+rollback took 11 s and stopped nothing; a SIGKILLed leader restarted, led, and marked its orphaned
+film interrupted with a line on its page, leaving another server's films alone. Still to check at a
+quiet moment: a reboot (`kitcut-studio-boot` starting the current instance).
