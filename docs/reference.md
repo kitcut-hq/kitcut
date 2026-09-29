@@ -2811,6 +2811,17 @@ side) and `feed.jpg` (at YouTube's 360/246/168-px sizes, dark and light).
 - *The prompt's example words* ("Only *3* steps") came back as "Just 4 steps": the example is now
   just `*word*`, and the thumbnail words are held to the film like the description is.
 
+**What the first real publish changed** (2026-09-29, a 45 s film on kitcut.ai):
+- *A film's own fonts.* A film that fetched a web font keeps it in its own folder
+  (`web/fonts/Inter-400.ttf`, in its `sketch.json`); the manifest copy left that path relative,
+  sketch-render looked for it beside the tooling, and every still failed ("font missing"). The
+  copy now makes a font path absolute when the film has the file. `studio/test_thumbs.py`'s
+  fixture carries one.
+- *The wait.* The draft made the moments sheet before its Claude call, so the title and
+  description took 25-35 s where they had taken 10-16. A finished film now makes its sheet in the
+  background (`thumbs.premake`, from `server.run`), and one film's sheet is made once however many
+  ask at the same moment.
+
 The draft costs ~$0.01 more with the sheet and four concepts. Thumbnails are opt-out, never
 forced: the dialog has "Let YouTube pick a frame", and a channel that YouTube will not let use
 custom thumbnails (unverified, KI-037) gets its video published with YouTube's frame and a line
