@@ -15,11 +15,20 @@ A voice note is written out in the background (_stt.py, the engines in order of 
 first that answers wins) and the page polls GET /api/uploads/<id> for the words. A film asked for
 while one is still being written out waits for it (take()).
 
+During a ship two servers share the home (peers.py, KI-031), and the film may be asked of the new
+one while the old one is still writing its note out. The work is in the old one's memory (TASKS),
+so the meta names the server doing it: take() on another server waits for that one (polling the
+meta) instead of paying for a second transcription, and starts its own only when nobody is at it
+-- that server is gone, or the note has been "transcribing" for longer than any engine takes
+(FRESH_S). A server names what it is writing out in its heartbeat (in_flight()), so an old one
+does not exit halfway through.
+
 Only the client that uploaded a file can see it or put it in a film; an id is unguessable and
 checked before it names a path. Anything a film did not take is deleted after KEEP_S.
 
 meta: {id, kind: image|audio, mime, ext, bytes, created, w, h (image), secs (audio),
-       state: ready|transcribing|failed, transcript, lang, engine, stt_seconds, stt_cost_usd, error}
+       state: ready|transcribing|failed, transcript, lang, engine, stt_seconds, stt_cost_usd, error,
+       server, stt_started (who is writing it out, since when: peers.SERVER_ID, epoch s)}
 """
 
 import os
@@ -31,12 +40,15 @@ import shutil
 import asyncio
 import hashlib
 import secrets
+import contextlib
 
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 )
 import _stt  # noqa: E402
 
+import locks  # noqa: E402
+import peers  # noqa: E402
 import procs  # noqa: E402
 from film import HOME  # noqa: E402
 
@@ -60,6 +72,11 @@ STT_KEYS = (
     "OPENROUTER_API_KEY",
 )
 TASKS = {}  # id -> the task writing that voice note out
+# a note "transcribing" this long after it was started is one nobody is writing out any more:
+# each engine gives up after 90 s, and there are two
+FRESH_S = 300
+WAIT_S = 120  # how long take() waits for a note, here or on another server
+POLL_S = 1.0  # how often it looks at the meta of a note another server is writing out
 
 
 class UploadError(Exception):
@@ -105,9 +122,20 @@ def _meta_path(client, uid):
 
 
 def _write(path, data):
-    tmp = path + ".tmp"
+    """Atomically, through a temp file of this process's own (two servers may write one meta)."""
+    tmp = "%s.%d.tmp" % (path, os.getpid())
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
+    _replace(tmp, path)
+
+
+def _replace(tmp, path):
+    for i in range(20):  # Windows refuses the rename for a moment while a reader has it open
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            time.sleep(0.02 * (i + 1))
     os.replace(tmp, path)
 
 
@@ -167,12 +195,29 @@ def _spent_today(d):
     return n, total, keep
 
 
+def _spend(d, size):
+    """Put an upload on the client's ledger (ledger.jsonl, a line a file: the day's quota). The
+    ledger is read again and rewritten under ledger.lock: two uploads of one client stored at the
+    same moment -- on one server, or on two during a ship -- would otherwise each write it as it
+    was before the other's line. A lock that cannot be had costs the quota a line, never the
+    upload."""
+    with contextlib.ExitStack() as held:
+        with contextlib.suppress(OSError):  # locks.LockTimeout is one too
+            held.enter_context(locks.locked(os.path.join(d, "ledger.lock"), timeout=10))
+        _, _, keep = _spent_today(d)
+        path = os.path.join(d, "ledger.jsonl")
+        tmp = "%s.%d.tmp" % (path, os.getpid())
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.writelines(keep + [json.dumps({"t": time.time(), "bytes": size}) + "\n"])
+        _replace(tmp, path)
+
+
 async def receive(req, client, stt=None):
     """One upload from the request body: stored, checked, and (a voice note) sent to be written
     out. Returns its meta; raises UploadError."""
     d = client_dir(client)
     os.makedirs(d, exist_ok=True)
-    n, spent, keep = _spent_today(d)
+    n, spent, _ = _spent_today(d)
     if n >= DAY_FILES or spent >= DAY_BYTES:
         raise UploadError(429, "quota", "That is a lot of uploads for one day. Try again tomorrow.")
     uid = "up-" + "".join(secrets.choice(_B32) for _ in range(12))
@@ -220,7 +265,9 @@ async def receive(req, client, stt=None):
             secs = await asyncio.to_thread(_stt.normalise, path, flac)
             if secs > MAX_AUDIO_S:
                 raise UploadError(413, "long", "Voice notes can be up to 3 minutes long.")
-            meta.update(secs=round(secs, 1), state="transcribing")
+            # this server writes it out: another one's take() waits for it (_elsewhere)
+            meta.update(secs=round(secs, 1), state="transcribing", server=peers.SERVER_ID)
+            meta["stt_started"] = time.time()
     except UploadError:
         _remove(d, uid)
         raise
@@ -229,8 +276,7 @@ async def receive(req, client, stt=None):
         what = "picture" if kind == "image" else "recording"
         raise UploadError(400, "unreadable", "That %s could not be opened." % what) from e
     _write(_meta_path(client, uid), meta)
-    with open(os.path.join(d, "ledger.jsonl"), "w", encoding="utf-8") as f:
-        f.writelines(keep + [json.dumps({"t": time.time(), "bytes": size}) + "\n"])
+    await asyncio.to_thread(_spend, d, size)  # it may wait for the ledger's lock
     if kind == "audio":
         TASKS[uid] = asyncio.create_task(_transcribe(client, uid, stt))
     return meta
@@ -257,36 +303,94 @@ def engines():
 
 async def _transcribe(client, uid, stt=None):
     """Write a voice note out: each engine in turn until one answers. The meta says how it went."""
-    d = client_dir(client)
-    flac = os.path.join(d, uid + ".flac")
-    keys = {k: procs.secret(k) for k in STT_KEYS if procs.secret(k)}
-    errors = []
-    result = None
-    for eng in stt or engines():
-        try:
-            result = await asyncio.to_thread(_stt.transcribe, flac, eng, (), keys)
-            break
-        except _stt.SttError as e:
-            errors.append(str(e))
-            print("upload %s: %s" % (uid, e), file=sys.stderr, flush=True)
-    meta = get(client, uid)
-    if meta is None:  # removed meanwhile
-        return
-    if result is None:
-        meta.update(state="failed", error="The voice note could not be written out.")
-        meta["errors"] = errors
-    else:
-        meta.update(
-            state="ready",
-            transcript=result["text"],
-            lang=result.get("lang"),
-            engine=result["engine"],
-            stt_seconds=result["seconds"],
-            stt_cost_usd=result.get("cost_usd"),
-            no_speech=bool(result.get("no_speech")),
-        )
+    try:
+        d = client_dir(client)
+        flac = os.path.join(d, uid + ".flac")
+        keys = {k: procs.secret(k) for k in STT_KEYS if procs.secret(k)}
+        errors = []
+        result = None
+        for eng in stt or engines():
+            try:
+                result = await asyncio.to_thread(_stt.transcribe, flac, eng, (), keys)
+                break
+            except _stt.SttError as e:
+                errors.append(str(e))
+                print("upload %s: %s" % (uid, e), file=sys.stderr, flush=True)
+        meta = get(client, uid)
+        if meta is None:  # removed meanwhile
+            return
+        if result is None:
+            meta.update(state="failed", error="The voice note could not be written out.")
+            meta["errors"] = errors
+        else:
+            meta.update(
+                state="ready",
+                transcript=result["text"],
+                lang=result.get("lang"),
+                engine=result["engine"],
+                stt_seconds=result["seconds"],
+                stt_cost_usd=result.get("cost_usd"),
+                no_speech=bool(result.get("no_speech")),
+            )
+        _write(_meta_path(client, uid), meta)
+    finally:  # however it ended, this server is no longer writing it out (in_flight)
+        TASKS.pop(uid, None)
+
+
+def in_flight():
+    """The upload ids whose voice note this process is writing out now. The server names them in
+    its heartbeat (peers.heartbeat transcribing), so an old server handing over does not exit
+    halfway through one (KI-031)."""
+    return sorted(uid for uid, t in TASKS.items() if not t.done())
+
+
+def _elsewhere(meta, now=None):
+    """Is another server writing this voice note out? The one its meta names, while that one is
+    alive (peers.alive: its lock is held) and the note is fresh. A note from a release before
+    servers were named has no name: fresh is all there is to go on."""
+    started = meta.get("stt_started") or meta.get("created") or 0
+    if (now or time.time()) - started >= FRESH_S:
+        return False  # no engine takes this long: whoever had it lost it
+    sid = meta.get("server")
+    return not sid or (sid != peers.SERVER_ID and peers.alive(sid))
+
+
+def _start(client, uid, meta):
+    """Write a voice note out here, saying so in its meta first, so another server's take()
+    waits for this one rather than starting a third."""
+    meta.update(server=peers.SERVER_ID, stt_started=time.time())
     _write(_meta_path(client, uid), meta)
-    TASKS.pop(uid, None)
+    task = TASKS[uid] = asyncio.create_task(_transcribe(client, uid))
+    return task
+
+
+async def _written_out(client, uid, meta, wait_s=None):
+    """A voice note's meta once it is written out, waiting up to WAIT_S s: for this process's
+    task when it has one, for another server's work while that server is at it (_elsewhere; its
+    meta read every POLL_S s), and otherwise for a task of its own, started once (a restart lost
+    the one that was writing it out). Returns the meta as it is then: None if it was removed,
+    still "transcribing" if the wait ran out."""
+    deadline = time.monotonic() + (WAIT_S if wait_s is None else wait_s)
+    started = False
+    while meta is not None and meta.get("state") == "transcribing":
+        left = deadline - time.monotonic()
+        if left <= 0:
+            break
+        task = TASKS.get(uid)
+        if task is None and not started and not _elsewhere(meta):
+            task, started = _start(client, uid, meta), True
+        if task is None:
+            await asyncio.sleep(min(POLL_S, left))
+        else:
+            try:
+                await asyncio.wait_for(asyncio.shield(task), left)
+            except TimeoutError:
+                pass
+            except Exception as e:  # noqa: BLE001 -- the meta says what became of it
+                print("upload %s: %r" % (uid, e), file=sys.stderr, flush=True)
+                await asyncio.sleep(min(POLL_S, max(0, deadline - time.monotonic())))
+        meta = get(client, uid)
+    return meta
 
 
 def _remove(d, uid):
@@ -299,8 +403,9 @@ def _remove(d, uid):
 
 
 async def take(client, ids):
-    """The metas of the uploads a film names, in order, once every voice note is written out.
-    Raises UploadError naming the first that is missing, foreign, failed or silent."""
+    """The metas of the uploads a film names, in order, once every voice note is written out --
+    here, or by the server that took the note in (_written_out). Raises UploadError naming the
+    first that is missing, foreign, failed, silent or still being written out after WAIT_S."""
     if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids):
         raise UploadError(400, "attachments", "attachments must be a list of upload ids")
     ids = list(dict.fromkeys(ids))
@@ -312,16 +417,15 @@ async def take(client, ids):
                 409, "attachment", "An attachment is no longer here; add it again.", uid
             )
         if meta["state"] == "transcribing":
-            task = TASKS.get(uid)
-            if task is None:  # a restart lost the task: write it out now
-                task = TASKS[uid] = asyncio.create_task(_transcribe(client, uid))
-            try:
-                await asyncio.wait_for(asyncio.shield(task), 120)
-            except TimeoutError as e:
+            meta = await _written_out(client, uid, meta)
+            if meta is None:
+                raise UploadError(
+                    409, "attachment", "An attachment is no longer here; add it again.", uid
+                )
+            if meta["state"] == "transcribing":
                 raise UploadError(
                     503, "voice", "Still writing out a voice note; try again in a minute.", uid
-                ) from e
-            meta = get(client, uid)
+                )
         if meta["state"] == "failed":
             raise UploadError(
                 422, "voice", "A voice note could not be written out; record it again.", uid
@@ -369,6 +473,6 @@ def prune(now=None):
             if old and fn[:-5] not in TASKS:
                 _remove(d, fn[:-5])
                 gone += 1
-        if not [f for f in os.listdir(d) if f != "ledger.jsonl"]:
+        if not [f for f in os.listdir(d) if f not in ("ledger.jsonl", "ledger.lock")]:
             shutil.rmtree(d, ignore_errors=True)
     return gone
