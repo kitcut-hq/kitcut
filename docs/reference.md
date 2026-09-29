@@ -2885,7 +2885,7 @@ voice is edge-tts.
 | file | what it is |
 |---|---|
 | `sketch/engine.js` | the renderer: strokes that boil, cel fills, write-on text, camera, flight paths, paper, grain; `SK.setStyle('crayon' \| 'clean')`; the ground, `SK.setGround(name)` (paper, white, kraft, sky, mint, butter, blush, night, chalkboard, blueprint: the paper, its grain and the text colours that read on it, `C.text` `C.textSoft` `C.accent` `C.accentText`), or `ground: (t) => name` in `SK.film`; backdrops that cover whatever the camera shows: `SK.sky`, `SK.band` (ground, hills, waves, grass; returns `edge(x)`), `SK.stars` |
-| `sketch/collage.js` | the collage pieces, loaded between the engine and the props: cut-out pictures, torn sheets, tape labels, headlines, stamps, bursts, halftone dots, ransom letters, marker lines, masking tape, a newspaper backdrop, groups, and the in/out motion they share; `SK.setStyle('collage')` (see "Collage films") |
+| `sketch/collage.js` | the collage pieces, a module a film opts into (`"modules": ["collage"]`, loaded after the props): cut-out pictures, torn sheets, tape labels, headlines, stamps, bursts, halftone dots, ransom letters, marker lines, masking tape, a newspaper backdrop, groups, and the in/out motion they share; `SK.setStyle('collage')` (see "Collage films") |
 | `sketch/props.js` | the cast: ticket character, seated person with poses, a standing/walking/sitting kid (`P.kid`, also the grown-up at s ~1.4), paper plane, laptop, table, lightbulb, rocket, padlock, coin, stamp, browser window, thought bubble, confetti, architectural houses, phone, window (cracks), street siren, delta-wing drone, missile, stopwatch, debris; scenery: tree (round, pine, bare), bush, cloud, sun, moon (full, crescent), mountain, building |
 | `config/sketch/grounds/` | every ground and three places built from the backdrops, one a second: render its stills after changing any of them |
 | `sketch/player.html` | the page: player UI, and the export modes the renderer drives |
@@ -2903,6 +2903,12 @@ after it, as loud as the narration. `poster_t` stays in the film.
 `<name>.js` files each run in their own scope after props.js and before film.js, and register one
 member as `SK.cast.<name> = {about, draw(x, y, o)}`. An error in one names its file. Sketch
 Studio keeps each signed-in person's cast between their films (`studio/library.py`).
+
+**Engine modules** are the manifest's `modules`: engine extensions only some films need
+(`["collage"]`), each `sketch/<name>.js` -- or the same file in the film's own `engine` folder,
+which wins -- inlined after props.js and before the cast. A film that does not ask does not
+carry it, and an error in one names the file it ran from (`sketch/collage.js`, or
+`engine/collage.js` for a film's own copy). A name with no file stops the bundle.
 
 **Every frame is a pure function of time.** Nothing in a film may keep state between frames
 (no physics integration, no `Math.random`); randomness is `SK.rnd(seed)`, motion is `t`. That
@@ -3324,9 +3330,10 @@ picture is one object (an engraving, a product photograph) with a transparent ba
 white scissor-cut border, pinned onto coloured sheets with torn edges, and the motion design is
 everything around it -- display type, tape labels, rubber stamps, marker arrows, ransom-note
 letters, halftone dots, a running timeline. `SK.setStyle('collage')` turns it on; the pieces are
-`sketch/collage.js`, which the bundler loads after engine.js and before props.js, so a film's
-own props or film.js can override any piece (the film's engine copy of it when it has one,
-`sketch/collage.js` otherwise).
+`sketch/collage.js`, an engine module: the manifest's `"modules": ["collage"]` has the bundler
+load it after engine.js and props.js, so film.js can override any piece (the film's engine
+copy of it when it has one, `sketch/collage.js` otherwise). A film that does not ask for it
+does not carry it.
 
 **Why it exists.** On 2026-09-28 a Runway employee (@notiansans, status 2104676565829505527)
 posted a 60 s "newspaper cutout / mixed media" history of ice cream made by Opus 5.5 with the
@@ -3468,6 +3475,17 @@ Measured on the first two films (one at a time, before narration), wall clock fr
 
 Most of the cost is cache reads of the ~100 KB system prompt that carries the engine and the
 cast; it depends only on the look, so films made close together share the cache.
+
+**A look is a recipe of capabilities** (`studio/film.py` `CAPS`, `RECIPES`). The person picks a
+look (drawn, painted, collage); a capability is one kind of material and everything the studio
+does for it -- the engine modules a film carries, the fonts, the pictures it may paint (their
+pins, cap and keys in paint.json), the prompt references only its looks' briefs use, and the
+choices recorded for the recent-films note. Drawn is `grounds`, painted `paintings`, collage
+`cutouts` + `collage`. A film's capabilities are written into its record when it is made, so a
+later recipe change never reaches a film in the making. Granting a capability to another look
+is a recipe change, and so a brief change: proven with `studio/bakeoff.py` first. Refactored
+onto capabilities on 2026-09-29 with the drawn, painted and collage system prompts and new
+films' files byte-identical before and after.
 
 At 192k, the AAC encode pushed the rocket's confetti transients to -0.1 dBFS, against -1.5 dBTP
 in the master WAV, so the template now encodes at 320k.

@@ -82,7 +82,8 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
 The look of the Runway + Opus 5.5 demos: every picture is one object cut out of paper (an
 engraving, a product photo), pinned onto coloured sheets with torn edges, and the motion design
 is everything around it -- display type, tape labels, rubber stamps, marker arrows, ransom
-letters, halftone dots, a running timeline. `SK.setStyle('collage')` plus `sketch/collage.js`:
+letters, halftone dots, a running timeline. `SK.setStyle('collage')` plus `sketch/collage.js`,
+an engine module the manifest opts into with `"modules": ["collage"]`:
 
 1. **Cut-outs** come from the manifest's `paint` block with `"cutout": true` on each image
    (`"aspect": "2:3"` for a tall one). The block's `"cutouts": {"model", "quality", "border",

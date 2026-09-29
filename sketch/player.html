@@ -54,9 +54,10 @@ body.render canvas { border-radius: 0; box-shadow: none; }
 // A syntax or top-level error in the film throws before the player below is listening; report the
 // first one now, or a render sits out its 90 s stall timeout and then says nothing useful.
 window.__early = function (e) {
-  if (window.__earlyErr || !/[?&](render|export|encode|stills|automation)=/.test(location.search)) return;
-  // a cast member's script names itself (sketch-render: //# sourceURL=cast/<name>.js)
-  const cast = /(cast\/[a-z0-9_]+\.js)$/.exec(e.filename || '');
+  if (window.__earlyErr || !/[?&](render|export|encode|stills|automation|probe)=/.test(location.search)) return;
+  // a cast member or a module names itself (sketch-render: //# sourceURL=cast/<name>.js,
+  // sketch/<name>.js, or engine/<name>.js for a film's own copy of a module)
+  const cast = /((?:cast|sketch|engine)\/[a-z0-9_]+\.js)$/.exec(e.filename || '');
   window.__earlyErr = String(e.message) + ' @' + (cast ? cast[1] + ':' : '') + e.lineno;
   fetch('error', { method: 'POST', body: window.__earlyErr });
 };
@@ -66,11 +67,9 @@ window.addEventListener('error', window.__early);
 __ENGINE__
 </script>
 <script>
-__COLLAGE__
-</script>
-<script>
 __PROPS__
 </script>
+__MODULES__
 __CAST__
 <script>
 SK.VO = __VO__;
