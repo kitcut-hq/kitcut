@@ -20,10 +20,11 @@
 #   bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]   pick up a film the studio
 #                                                     stopped half-way (studio/resume.py), in the
 #                                                     same film; --plan spends nothing
-#   bash studio/deploy/ops.sh film "<idea>" [--seconds N] [--look L] [--unlisted] [--api]
+#   bash studio/deploy/ops.sh film "<idea>" [--seconds N] [--look L] [--unlisted] [--api] [--no-watch]
 #                                                    a film made on the VM itself
-#                                                     (on the Claude login unless --api), followed
-#   bash studio/deploy/ops.sh watch <film-id>         follow a film to the end
+#                                                     (on the Claude login unless --api), followed;
+#                                                     --no-watch prints its id and returns
+#   bash studio/deploy/ops.sh watch <film-id>...      follow films to the end (one line per change)
 #   bash studio/deploy/ops.sh pull <film-id> [dest] [--all]   its outputs (or the whole folder) here
 #   bash studio/deploy/ops.sh hide|show <film-id>     out of / back into the public gallery
 #   bash studio/deploy/ops.sh forward [port]          the VM's studio on this laptop's 127.0.0.1:port
@@ -278,11 +279,11 @@ EOF
     ;;
 
   film)
-    idea="${1:?film \"<idea>\" [--seconds N] [--look L] [--unlisted] [--api]}"; shift
-    secs=30; auth=""; look=drawn; listed=1
+    idea="${1:?film \"<idea>\" [--seconds N] [--look L] [--unlisted] [--api] [--no-watch]}"; shift
+    secs=30; auth=""; look=drawn; listed=1; follow=1
     while [ $# -gt 0 ]; do
       case "$1" in --seconds) secs="$2"; shift ;; --look) look="$2"; shift ;; --unlisted) listed=0 ;;
-        --api) auth=', "auth": "api"' ;; esac
+        --api) auth=', "auth": "api"' ;; --no-watch) follow=0 ;; esac
       shift
     done
     # --look: drawn, painted, collage (the studio refuses one it does not have); --unlisted: link-only
@@ -291,11 +292,30 @@ EOF
     [ "$DRY" = 1 ] && { echo "  would POST $body to the VM's studio"; exit 0; }
     id="$(printf '%s' "$body" | on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/films -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' --data-binary @-" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("id") or sys.exit(json.dumps(d)))')"
     echo "film $id"
+    # --no-watch: to start several, start each this way and `watch` them together. Never put a
+    # following `film` in the background of a shell that exits: the POST may already have gone
+    # when the shell kills it, and a retry then makes the film twice (2026-09-29: two Apollo 13s)
+    [ "$follow" = 1 ] || exit 0
     exec bash "$0" watch "$id"
     ;;
 
   watch)
-    id="${1:?watch <film-id>}"
+    id="${1:?watch <film-id>...}"
+    if [ $# -gt 1 ]; then
+      # several: one line per film whose status or stage changed, until every one has finished
+      on "$TOKEN_SH; declare -A last; while :; do
+        open=0
+        for i in $*; do
+          s=\$(curl -s http://127.0.0.1:$PORT/api/films/\$i -H \"Authorization: Bearer \$TOKEN\" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get(\"status\"), d.get(\"stage\"), round(d.get(\"cost_usd\") or 0, 2), (d.get(\"error\") or \"\")[:100])' 2>/dev/null) || s='unreadable'
+          k=\"\${s%% *} \$(echo \"\$s\" | cut -d' ' -f2)\"
+          [ \"\$k\" != \"\${last[\$i]:-}\" ] && echo \"\$(date +%T)  \$i  \$s\"; last[\$i]=\$k
+          case \"\$s\" in done*|error*|cancelled*|lost*) ;; *) open=1 ;; esac
+        done
+        [ \$open = 0 ] && break
+        sleep 30
+      done"
+      exit 0
+    fi
     on "$TOKEN_SH; last=''; while :; do
       d=\$(curl -s http://127.0.0.1:$PORT/api/films/$id -H \"Authorization: Bearer \$TOKEN\")
       s=\$(printf '%s' \"\$d\" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get(\"status\"), d.get(\"stage\"), d.get(\"wait\") or \"\")' 2>/dev/null) || s='unreadable'

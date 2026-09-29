@@ -19,6 +19,7 @@ bash studio/deploy/ops.sh status          # health, the servers and their films,
 bash studio/deploy/ops.sh logs studio -f  # every server unit; or tunnel | login
 bash studio/deploy/ops.sh ship            # origin/studio-poc -> tagged, built, its server leading
 bash studio/deploy/ops.sh film "<idea>"   # a film made on the VM itself, followed to the end
+                                          # (--no-watch: print its id; `watch <id>...` follows several)
 bash studio/deploy/ops.sh forward         # the VM's studio on this laptop's 127.0.0.1:8765
 bash studio/deploy/ops.sh snapshot        # the data disk, incremental; keeps the newest 7
 ```

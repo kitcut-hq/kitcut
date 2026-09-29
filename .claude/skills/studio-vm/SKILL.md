@@ -19,9 +19,9 @@ bash studio/deploy/ops.sh ship [<commit>]           # default: origin/studio-poc
 bash studio/deploy/ops.sh releases                  # built releases, the leader's marked *
 bash studio/deploy/ops.sh rollback <sha12>          # back to one already built, no rebuild
 bash studio/deploy/ops.sh migrate [<commit>]        # ONCE per machine (see the rules)
-bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--look collage] [--unlisted] [--api]
+bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--look collage] [--unlisted] [--api] [--no-watch]
                                                     # on the Claude login unless --api
-bash studio/deploy/ops.sh watch <film-id>
+bash studio/deploy/ops.sh watch <film-id>...        # one or several, a line per change
 bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]  # finish a film the studio stopped
 bash studio/deploy/ops.sh pull <film-id> [dest] [--all]
 bash studio/deploy/ops.sh hide|show <film-id>       # public gallery
@@ -73,7 +73,12 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
   prefixed with its unit.
 - **Films made on the VM itself** (`ops.sh film`, `forward`) run on the Claude login
   (`CLAUDE_CODE_OAUTH_TOKEN`, info@instafill.ai, renew by 2027-09-28 -- a person must press
-  Authorize); a sign-in failure falls back to the API key. kitcut.ai's films always use the key.
+  Authorize); a sign-in failure falls back to the API key. kitcut.ai's films use the same login
+  too unless `STUDIO_SITE_AUTH=api` (a film that runs out of the plan carries on on the key).
+- **Several films at once:** start each with `ops.sh film ... --no-watch` in the foreground, then
+  `ops.sh watch <id> <id> ...`. Never background a following `film` in a shell that exits: the
+  POST can already have gone when the shell kills it, and a retry makes the film twice (two
+  Apollo 13s, 2026-09-29). The VM makes 3 at once (`pools: claude`); the rest queue by themselves.
 
 ## When something is wrong
 
