@@ -44,6 +44,7 @@ TESTS = (
     "test_youtube.py",
     "test_ytdraft.py",
     "test_media.py",
+    "test_multi.py",  # two servers on one home (peers.py): the ship that never stops a film
 )
 
 
