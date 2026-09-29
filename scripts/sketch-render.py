@@ -29,9 +29,10 @@ tail ({secs, scripts, images, audio}: a closing after the film -- `secs` more of
 head ({scripts}: run just before film.js, in its scope -- sketch/thumb.js, a thumbnail's probe and
 overlay; a stills run saves what the page's SK.REPORT() returns as <into>/report.json),
 cast ("cast": a folder whose <name>.js files each run before film.js, as SK.cast.<name>),
+vars ({...}: data a film reads as SK.VARS -- one film.js, several cuts: {"text": false}),
 modules (["collage", "jelly"]: engine extensions a film opts into, sketch/<name>.js -- the film's
 own engine folder first -- run after props.js; "collage" is the cut-outs and paper pieces,
-"jelly" the soft-body specimen, SK.jelly).
+"jelly" the soft-body specimen, SK.jelly; "gl3d" a WebGL2 scene and "drink" a glass on it).
 
 Invoke as:
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --plan
@@ -241,6 +242,7 @@ def bundle(m, audio=True):
         "__SCENES__": scene_scripts(m),
         "__AUDIO__": src,
         "__VO__": json.dumps(vo_timeline(m)),
+        "__VARS__": json.dumps(m.get("vars") or {}),
         "__IMAGES__": json.dumps(
             {
                 k: "data:%s;base64,%s" % (mime(v), b64(_sketch.rel(m, v)))

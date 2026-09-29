@@ -8,7 +8,8 @@ caption chunking, the cut-outs a collage is built from (specks, trim, paper bord
 a white ground, and cache keys that stay put for scenes), the page bundler against the
 committed example films, and -- under Node, skipped without it -- the jelly module's bake
 (determinism, volume, inversion, the floor, settling, landing detection) and its live mode
-(the per-draw step budget, the pointer hand).
+(the per-draw step budget, the pointer hand), and the drink module's (the pour's volume, the
+level, flotation, the glass wall, the straw's rest, the surface settling, the sound's events).
 
 After touching _sketch.py, _sketchaudio.py, sketch-vo.py, sketch-audio.py, sketch-render.py or
 anything under sketch/, run it.
@@ -436,6 +437,7 @@ def main():
                 "__FILM__",
                 "__FONTFACES__",
                 "__VO__",
+                "__VARS__",
                 "__IMAGES__",
             )
             if k in page
@@ -492,6 +494,17 @@ def main():
         shutil.copytree(jx, os.path.join(tmp, "jelly"))
         mj = _sketch.load(os.path.join(tmp, "jelly", "sketch.json"))
         check("bundle: modules inlined", "sourceURL=sketch/jelly.js" in render.bundle(mj, False))
+        # the drink: two modules in order, and the film's vars
+        shutil.copytree(
+            os.path.join(_env.ROOT, "config", "sketch", "mojito"), os.path.join(tmp, "mojito")
+        )
+        md = _sketch.load(os.path.join(tmp, "mojito", "sketch-clean.json"))
+        pg = render.bundle(md, False)
+        check(
+            "bundle: gl3d before drink, vars inlined",
+            0 < pg.find("sourceURL=sketch/gl3d.js") < pg.find("sourceURL=sketch/drink.js")
+            and 'SK.VARS = {"text": false}' in pg,
+        )
         mj["modules"] = ["nope"]
         try:
             render.bundle(mj, audio=False)
@@ -502,6 +515,7 @@ def main():
         shutil.rmtree(tmp, ignore_errors=True)
 
     check_jelly()
+    check_drink()
 
     print("\n%d failed" % len(FAILS) if FAILS else "\nall passed")
     sys.exit(1 if FAILS else 0)
@@ -627,6 +641,104 @@ def check_jelly():
         ["release", 0.95] in ev and any(0.95 < t < 1.6 for t in lands),
         str(ev),
     )
+
+
+# The drink's physics half has no DOM either: a short pour, two cubes and a straw. What a render
+# would be the first to show otherwise -- a still that does not match its video, poured volume
+# lost or invented, ice that sinks, a straw through the glass, a surface that never settles.
+DRINK_HARNESS = r"""
+globalThis.window = globalThis;
+require(process.argv[2]);
+const drops = [
+  { t: 1.2, kind: 'ice', at: [0.04, -0.02] }, { t: 1.45, kind: 'ice', at: [-0.1, 0.06] },
+  { t: 1.7, kind: 'straw', at: [-0.06, -0.05], tilt: 10, yaw: 0.2, spin: 0.3, height: 0.12 },
+];
+const mk = () => SK.drink.glass({ drops, pour: { t0: 0.1, t1: 1.0, fill: 1.1 }, waves: { grid: 48 } });
+const a = mk(), b = mk();
+a.bakeTo(4.5); b.bakeTo(4.5);
+const fa = a.frameAt(4.5), fb = b.frameAt(4.5);
+const same = fa.level === fb.level && JSON.stringify(fa.bodies) === JSON.stringify(fb.bodies);
+const GL = a.GL, rot = (q, v) => {
+  const [x, y, z, w] = q, ix = w * v[0] + y * v[2] - z * v[1], iy = w * v[1] + z * v[0] - x * v[2];
+  const iz = w * v[2] + x * v[1] - y * v[0], iw = -x * v[0] - y * v[1] - z * v[2];
+  return [ix * w + iw * -x + iy * -z - iz * -y, iy * w + iw * -y + iz * -x - ix * -z, iz * w + iw * -z + ix * -y - iy * -x];
+};
+let wall = 0;
+for (let f = 60; f <= 270; f += 3) {
+  const fr = a.frameAt(f / 60);
+  a.bodies.forEach((bd, i) => {
+    const B = fr.bodies[i];
+    if (!B) return;
+    for (const r0 of bd.spheres) {
+      const o = rot(B.slice(3), r0), p = [B[0] + o[0], B[1] + o[1], B[2] + o[2]];
+      if (p[1] > GL.yb && p[1] < GL.rim.y) wall = Math.max(wall, Math.hypot(p[0], p[2]) - GL.rIn(p[1]));
+    }
+  });
+}
+const ice = a.bodies.map((bd, i) => (bd.kind === 'ice' ? fa.bodies[i][1] : null)).filter((v) => v !== null);
+const si = a.bodies.findIndex((bd) => bd.kind === 'straw'), S = fa.bodies[si];
+const up = rot(S.slice(3), [0, 1, 0]);
+let wave = 0;
+for (const v of fa.H) wave = Math.max(wave, Math.abs(v));
+const ev = a.events(4.5), pour = ev.find((e) => e.kind === 'pour');
+console.log(JSON.stringify({
+  same, poured: fa.vliq, want: a.pourVolume, level: fa.level, fill: GL.levelOf(a.pourVolume), ice,
+  wall, strawTilt: Math.acos(Math.min(1, Math.abs(up[1]))) * 180 / Math.PI, strawInside: Math.hypot(S[0], S[2]) < GL.rim.r,
+  wave, pour: pour ? [pour.f0, pour.f1] : null, enters: ev.filter((e) => e.kind === 'enter').length,
+}));
+"""
+
+
+def check_drink():
+    node = shutil.which("node")
+    if not node:
+        print("skip  drink physics: node not found")
+        return
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as f:
+        f.write(DRINK_HARNESS)
+    try:
+        r = subprocess.run(
+            [node, f.name, os.path.join(_env.ROOT, "sketch", "drink.js")],
+            capture_output=True,
+            text=True,
+            timeout=180,
+            check=False,
+        )
+    finally:
+        os.unlink(f.name)
+    if r.returncode:
+        check("drink: bakes under node", False, r.stderr.strip()[-400:])
+        return
+    j = json.loads(r.stdout.strip().splitlines()[-1])
+    check("drink: two bakes are identical", j["same"])
+    check(
+        "drink: every drop poured lands in the glass",
+        abs(j["poured"] - j["want"]) < 1e-9,
+        "%.5f of %.5f" % (j["poured"], j["want"]),
+    )
+    check(
+        "drink: the ice lifts the level above the pour's own",
+        j["fill"] < j["level"] < j["fill"] + 0.1,
+        "%.3f against %.3f" % (j["level"], j["fill"]),
+    )
+    check(
+        "drink: ice floats just under the surface",
+        all(j["level"] - 0.12 < y < j["level"] for y in j["ice"]),
+        "centres %s, surface %.3f" % (j["ice"], j["level"]),
+    )
+    check("drink: nothing crosses the glass", j["wall"] < 0.01, "%.3f past the wall" % j["wall"])
+    check(
+        "drink: the straw leans on the rim, inside",
+        j["strawInside"] and 10 < j["strawTilt"] < 45,
+        "%.1f deg" % j["strawTilt"],
+    )
+    check("drink: the surface settles", j["wave"] < 0.03, "%.3f" % j["wave"])
+    check(
+        "drink: the pour's pitch rises as it fills",
+        bool(j["pour"]) and j["pour"][1] > j["pour"][0] * 1.2,
+        str(j["pour"]),
+    )
+    check("drink: each thing that goes in is heard", j["enters"] >= 3, str(j["enters"]))
 
 
 if __name__ == "__main__":

@@ -48,6 +48,23 @@ the measurements.
   laptop); the pointer comes from the manifest's `live.drags`. The baked render is still the
   film -- full HD, frame-exact, with sound; the live capture is the toy and the proof.
 
+## A drink made on camera: glass, pour, ice
+
+For a drink, a glass filling, liquid and ice, or the KitCut "made with" end card: start from
+`config/sketch/mojito/` (`"modules": ["gl3d", "drink"]`). The reference section *A drink* has
+every key, the measurements and the traps.
+
+- **Direct the drops, not the frames.** `drops` are `{t, kind: ice|mint|lime|straw, at}`; the
+  pour is `{t0, t1, fill}`; the level, splashes, bobbing, clinks and bubbles are simulated.
+- **Where things settle is the physics' call.** To get a straw leaning a given way, sweep drop
+  points in Node (`SK.drink.glass({...}).frameAt(t)`) and keep the ones that land right.
+- **Two cuts from one film:** `sketch-clean.json` sets `"vars": {"text": false}` (read as
+  `SK.VARS`) -- the lockup for an end card, the clean glass for B-roll.
+- **Sound:** `sketch-render --automation`, then `sketch-audio` -- the pour's pitch rises with
+  the real level; re-run both after changing a drop.
+- Glass wants a light tent (`light.room` high); the dark flags that make candy pop turn a
+  glass foot grey.
+
 ## The project folder comes first
 
 `python scripts/project-scan.py --init <id>`, then copy `config/sketch/example/*` in and

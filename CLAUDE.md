@@ -675,11 +675,16 @@ scripted hand grabs, pokes and drops. Physics keeps the pure-function rule by **
 fixed steps from t = 0, one snapshot per frame -- and its landings and grabs become the sound
 cues (`SK.film({ sounds })` -> `--automation` -> sketch-audio). The same physics also runs
 **live** (`?live=1`: the wall clock drives it and the pointer grabs the slice);
-`sketch-render --live 10` measures and records that (56 fps, real time, on the laptop). Each script times
+`sketch-render --live 10` measures and records that (56 fps, real time, on the laptop). A
+**drink** is the other 3D film (`["gl3d", "drink"]`, example `config/sketch/mojito/`: the
+"Made with KitCut" end card): a glass filled by a simulated pour, its level exact to the volume,
+waves on its surface, ice, mint, lime and straws as rigid bodies that float, clink and splash;
+`sketch-clean.json` (`"vars": {"text": false}`) is the same film without the lockup. Each script times
 its stages into the run log; `--timings` answers "how long does a film take". After touching
 any of it, run `python scripts/check-sketch.py` — the notation, every sound generator, the
-ducker, the tail-word cut, the bundler, and (under Node) the jelly bake: determinism, volume,
-inversion, the floor, settling and landing detection; no API, no browser, seconds.
+ducker, the tail-word cut, the bundler, and (under Node) the jelly and drink bakes: determinism,
+volume, inversion, the glass wall, flotation, settling and the sound's events; no API, no
+browser, seconds.
 
 **Thumbnails for a film** — kitcut.ai's "Publish to YouTube" offers four, each **a still of the
 film itself** with at most four words; the draft's Claude call picks the moments and the words
@@ -767,6 +772,7 @@ which cannot encode the glyphs at all.
 | `sketch/` | the sketch-film engine (`engine.js`), cast (`props.js`), player page (`player.html`) and opt-in modules (`collage.js`: the collage pieces; `jelly.js`: a simulated soft-body specimen); `scripts/_sketch.py` and `_sketchaudio.py` are the Python half, `check-sketch.py` their test |
 | `config/sketch/example/` | a 12 s sketch film to copy into a new project: manifest, `film.js`, score, cues |
 | `config/sketch/jelly/` | a 12 s jelly film ("Melon Jelly") to copy into a new project the same way |
+| `config/sketch/mojito/` | the 10 s "Made with KitCut" mojito: an end card, and its clean cut for B-roll |
 | `scripts/resolve-export.py` | the cut as an OTIO/EDL/FCP7 XML timeline plus an SRT, for DaVinci Resolve (free edition); `check-resolve.py` is its test, `docs/davinci-resolve.md` the research behind it |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
 | `scripts/screencast-pipeline.py` | the silent-screencast job as one cached, checkpointed command; the stage scripts it drives are listed under pipeline 7 |

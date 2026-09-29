@@ -1,0 +1,24 @@
+{
+  "title": "Made with KitCut",
+  "description": "A 10-second mojito: a hurricane glass filled from a pour, ice, mint, lime and straws dropped in, all simulated; the KitCut lockup settles under it.",
+  "slug": "made-with-kitcut",
+  "duration": 10.0,
+  "fps": 60,
+  "film": "film.js",
+  "modules": ["gl3d", "drink"],
+  "poster_t": 9.5,
+  "images": {"logo": "assets/kitcut-logo.png"},
+  "vars": {"text": true},
+  "fonts": [
+    {"file": "fonts/Inter.woff2", "family": "Inter", "weight": "100 900", "load": "400 600 700"}
+  ],
+  "player": {
+    "accent": "#5a8f2a",
+    "paper": "#e6e5df",
+    "ink": "#1f2a1c",
+    "hint": "made with kitcut · 10s",
+    "hint_font": "Inter, sans-serif"
+  },
+  "audio": {"score": "score.json", "sfx": "sfx.json", "mix": {"music_db": 3.0, "sfx_db": 6.0}},
+  "render": {"cq": 17, "preset": "p5", "audio_bitrate": "192k", "encode": "browser"}
+}

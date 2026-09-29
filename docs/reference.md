@@ -3186,6 +3186,7 @@ voice is edge-tts.
 | `sketch/props.js` | the cast: ticket character, seated person with poses, a standing/walking/sitting kid (`P.kid`, also the grown-up at s ~1.4), paper plane, laptop, table, lightbulb, rocket, padlock, coin, stamp, browser window, thought bubble, confetti, architectural houses, phone, window (cracks), street siren, delta-wing drone, missile, stopwatch, debris; scenery: tree (round, pine, bare), bush, cloud, sun, moon (full, crescent), mountain, building |
 | `config/sketch/grounds/` | every ground and three places built from the backdrops, one a second: render its stills after changing any of them |
 | `sketch/jelly.js` | a module (`"modules": ["jelly"]`): a simulated soft-body specimen lit as candy, see *Jelly* below |
+| `sketch/gl3d.js`, `sketch/drink.js` | modules (`["gl3d", "drink"]`): the shared 3D base, and a glass filled on camera -- pour, level, waves, ice, garnish -- see *A drink* below |
 | `sketch/player.html` | the page: player UI, and the export modes the renderer drives |
 | `projects/<id>/film.js` | the film: `SK.film({duration, camera, draw(t, vis)})` |
 | `projects/<id>/score.json` | the music, as data (notation below) |
@@ -3947,6 +3948,100 @@ Three things the first live run got wrong (11.6 fps, 68% of real time):
 
 Not measured yet: the public studio's Azure VM has no GPU, so WebGL2 there would be a software
 rasteriser if the browser offers one at all -- time a still there before offering the look.
+
+### A drink: a glass, a pour, ice (`sketch/drink.js` on `sketch/gl3d.js`)
+
+The KitCut mojito, made on camera: a hurricane glass fills from a pour, ice, mint and lime
+drop in and float, two paper straws fall against the rim, a lime wheel lands on it, and the
+"Made with KitCut" lockup settles under the glass -- ten seconds, reusable as an end card or,
+from the clean cut, as B-roll. The example is `config/sketch/mojito/` (copy it to
+`projects/<id>/`): `sketch.json` renders it with the lockup, `sketch-clean.json` without
+(`"vars": {"text": false}` -- the bundler hands a manifest's `vars` to the film as `SK.VARS`,
+so one `film.js` gives both cuts; the two manifests share the project's soundtrack).
+
+```powershell
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --automation   # the physics' cues
+python scripts/sketch-audio.py  --manifest projects/<id>/sketch.json --levels
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json
+python scripts/sketch-render.py --manifest projects/<id>/sketch-clean.json
+```
+
+`"modules": ["gl3d", "drink"]`, in that order. `gl3d.js` is the shared base for 3D modules --
+camera maths, a studio (a sweep of floor, curve and wall, so a camera near the horizon sees
+paper and not void; soft contact and tinted cast shadows; an environment whose walls and
+ceiling are a setting, `light.room`), half-float targets, the tone curve. `jelly.js` predates it
+and still carries its own copies.
+
+```js
+const glass = SK.drink.glass({
+  drops: [{ t: 4.3, kind: 'ice', at: [0.04, -0.02] }, { t: 4.9, kind: 'mint', at: [0.08, 0.1] },
+          { t: 5.85, kind: 'lime', at: [-0.08, 0.05] },
+          { t: 6.3, kind: 'straw', at: [-0.06, -0.05], tilt: 10, yaw: 0.2, spin: 0.3, height: 0.12 }],
+  rimLime: { t: 7.05, angle: 28, size: 0.19 },
+});
+SK.film({ duration: 10, ..., draw(t) { glass.draw(t); }, sounds: () => glass.sounds() });
+```
+
+**What is simulated** (baked forward from t = 0, a snapshot a frame -- the same rule as jelly):
+the **level**, exactly the volume poured plus what floats in it displaces, read off the glass's
+own inner profile (a hurricane glass fills fast at the belly, slowly at the waist); the
+**surface**, a wave equation on a grid over the glass's cross-section, reflecting off the wall;
+the **pour**, a ballistic stream drawn as one tube that thins as it speeds up, aimed by solving
+its launch through `pour.aim`; **ice, mint, lime and straws**, rigid bodies as clusters of
+spheres held by shape matching, colliding with the inner and outer walls, the rim and each
+other, buoyed sphere by sphere by how far under the surface they are (ice at 0.92 floats with
+its top just out, lime at 1.04 sinks, a soaked straw rests on the bottom against the rim);
+**droplets** thrown when something goes in fast; **soda bubbles** from the bottom and off the
+ice. The lime wheel on the rim is placed, not simulated.
+
+**Light**: floor and shadows; the glass's far wall (its reflection only, composited behind);
+the ice (the floor bent through it) and the other things in the glass; the liquid, reading all
+of that through itself (thickness from its back faces, absorption, a little haze, blur with
+depth); the glass's near wall reading the whole drink through its own thickness -- a thin
+wall barely bends the picture, the stem and foot bend and tint it.
+
+**Sound off the physics**: `events()` gives the pour (its first and last landing, and the
+air column's quarter-wave pitch at the level at each end -- 729 Hz empty to 1,768 Hz full here:
+the rising note of a filling glass), everything entering the liquid, and contacts on glass and
+on ice; `sounds()` makes them `pour`, `fizz`, `bloop` and `clink` cues (the first three are new
+generators in `_sketchaudio.py`).
+
+| key | default | |
+|---|---|---|
+| `glass` | `hurricane` | or `{foot, outer, inner}`: `[r, y]` control points, splined (1 unit = 10 cm) |
+| `liquid` | `{absorb [.55 .2 1.45], body [.62 .78 .3], cloud .55}` | a pale mojito |
+| `pour` | `{t0 .5, t1 4, from, aim, vy0, radius, fill 1.26, rate 240}` | fills to the height `fill` |
+| `drops` | `[]` | `{t, kind, at [x, z], height, tilt, yaw, spin, size}` |
+| `rimLime` | none | `{t, angle, size, tilt}` |
+| `waves` | `{speed 1.05, damping 2, grid 72, couple .35, cap .05}` | |
+| `drag` | `[8, 7]` | water on a body, linear and quadratic |
+| `camera` | `{elev 17, dist 6.2, fov 28, orbit 12, push -.35, ...}` | high enough to see what floats |
+| `light.room` | `[.86, .92]` | walls and ceiling: a light tent |
+
+Measured on the laptop: 10 s bakes in 3-4 s under Node; 600 frames render in 55 s with the
+browser encoding; volume is conserved to the last blob (`check-sketch`).
+
+Seven things that cost time, and why:
+
+- **A displacement pushed into the wave VELOCITY is a runaway.** It keeps pushing every step
+  until damped: the surface pinned itself at the clamp and a floating cube sat 25 cm under.
+  Bodies change the surface's height (weights summing to 1); only impacts touch its velocity.
+- **A hand-aimed stream missed the glass and the level rose anyway.** The launch is solved
+  from `aim` now, and only blobs that land inside the cavity count.
+- **Shape matching holds the spheres' mean fixed.** A leaf whose spheres were not centred on
+  its mesh was shoved by the offset every iteration and flew off at 100 units/s; spheres and
+  mesh are centred on construction.
+- **Inside or outside is not a per-sphere decision.** Sphere by sphere, a straw falling across
+  the rim was split and passed through the wall; body by body, a straw whose end crossed the
+  rim plane outside was yanked 20 cm through it and launched. The body decides while above the
+  rim, a sphere already well outside stays outside, and speeds are capped -- and straws go in
+  as people drop them, nearly upright.
+- **Where a straw ends up leaning is the physics' call.** Drop points were swept and the two
+  that lean away from the lime wheel kept (a straw leans toward the side it went in).
+- **Dark flags make glass grey.** The candy studio's dark walls turned a glass foot seen at a
+  low angle into a grey disc (37% of what you see there is reflection); glass wants a light
+  tent, so the room is a setting.
+- **A camera near the horizon saw the void above a floor plane.** The studio is a sweep.
 
 ### Sketch Studio: a prompt box that makes a short film (`studio/`)
 

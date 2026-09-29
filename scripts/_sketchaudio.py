@@ -493,6 +493,50 @@ def fx_plop(sec=0.35, f0=210, f1=85, wobble=9.0):
     return y
 
 
+def fx_pour(sec=3.0, f0=700, f1=1800, seed=0):
+    """Liquid poured into a glass: splashy noise through the air column's resonance, which rises as
+    the glass fills (f0 -> f1: a quarter-wave tube getting shorter), fluttering as a stream does."""
+    rng = np.random.default_rng(seed)
+    n = int(sec * SR)
+    x = noise(sec, rng)
+    res = svf_sweep(x, f0, f1, q=5.0)
+    hiss = hp(x, 3500) * 0.22
+    k = SR // 40
+    am = lp(np.repeat(rng.uniform(0.45, 1.0, n // k + 2), k)[:n], 25)
+    u = np.arange(n) / SR
+    env = np.minimum(1, u / 0.06) * np.minimum(1, (sec - u) / 0.25).clip(0)
+    return (res * 0.9 + hiss) * am * env
+
+
+def fx_fizz(sec=6.0, seed=0, rate=170):
+    """Soda: bubbles bursting at the surface -- sparse bright ticks over a faint hiss, fading as
+    the drink goes flat."""
+    rng = np.random.default_rng(seed)
+    n = int(sec * SR)
+    y = np.zeros(n)
+    idx = rng.integers(0, n, int(rate * sec))
+    y[idx] += rng.uniform(0.2, 1.0, len(idx)) ** 2 * rng.choice([-1, 1], len(idx))
+    y = bp(y, 2500, 11000) + hp(noise(sec, rng), 6000) * 0.012
+    u = np.arange(n) / SR
+    return (
+        y
+        * np.minimum(1, u / 0.5)
+        * np.exp(-u / (sec * 1.3))
+        * np.minimum(1, (sec - u) / 0.3).clip(0)
+    )
+
+
+def fx_bloop(f0=520, f1=1300, sec=0.2):
+    """Something dropped into a drink: the entrained bubble ringing up in pitch, and a wet splash."""
+    n = int(sec * SR)
+    t = np.arange(n) / SR
+    f = f0 * (f1 / f0) ** np.minimum(1, t / (sec * 0.4))
+    y = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t * 22) * np.minimum(1, t * 600)
+    sp = bp(noise(min(sec, 0.08)), 1500, 7000)
+    y[: len(sp)] += sp * env_exp(len(sp), 0.02) * 0.6
+    return y
+
+
 def fx_thunk(sec=0.45):
     y = sweep_sine(120, 45, sec, 0.4) * env_exp(int(sec * SR), 0.09)
     y = y + lp(noise(sec), 900) * env_exp(int(sec * SR), 0.025) * 0.8
