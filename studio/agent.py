@@ -165,6 +165,18 @@ def _read(*parts):
         return f.read()
 
 
+# a part of a reference the studio's copy leaves out: from a line `// studio: cut` to a line
+# `// studio: end cut` (the collage example's newspaper furniture, film.CAPS "fills")
+CUT = re.compile(
+    r"^[ \t]*// studio: cut\b.*?^[ \t]*// studio: end cut\b[^\n]*\n", re.MULTILINE | re.DOTALL
+)
+
+
+def _reference(*parts):
+    """A file a capability puts in the system prompt, without the parts marked to leave out."""
+    return CUT.sub("", _read(*parts))
+
+
 def system_prompt(look, caps=None):
     """prompt.md with the engine, the cast, the example and the sound notation filled in, read
     fresh so it always matches the code. It depends only on the look and what it is made of
@@ -197,7 +209,7 @@ def system_prompt(look, caps=None):
         "INSTRUMENTS": ", ".join(inst) or "(none yet)",
     }
     # a capability's own references, read only for the looks made of it (film.CAPS "fills")
-    fill.update({k: _read(*parts) for k, parts in fills(caps or RECIPES[look]).items()})
+    fill.update({k: _reference(*parts) for k, parts in fills(caps or RECIPES[look]).items()})
     # the look's own sections (studio/looks/<look>.md, "## NAME" headed) go in first, since
     # they carry placeholders of their own
     sections = {}
@@ -395,11 +407,20 @@ def recent_note(look, dirs, series=False, project=False):
 
     same = [d for d in dirs if d.get("look") == look]
     mine = direction_fields(RECIPES.get(look, ()))  # what films of this look record
+    news = sum(1 for d in same if d.get("newsprint"))
     rows = [
         ("grounds", tally(d.get("ground") for d in same) if "ground" in mine else ""),
         (
             "painting styles",
             firsts((d.get("paint_style") for d in same), 6) if "paint_style" in mine else "",
+        ),
+        (
+            "print faces",
+            tally((f for d in same for f in d.get("faces") or []), 6) if "faces" in mine else "",
+        ),
+        (
+            "a newspaper page under the film",
+            "%d of the last %d" % (news, len(same)) if "newsprint" in mine and news else "",
         ),
         ("voices", tally(d.get("voice") for d in dirs)),
         ("voice directions", firsts((d.get("voice_style") for d in dirs), 8)),

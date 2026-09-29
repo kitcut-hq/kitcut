@@ -18,10 +18,20 @@ All are SIL Open Font License 1.1 (text in OFL.txt), from Google Fonts.
 | PlayfairDisplay-VF.ttf, PlayfairDisplay-Italic-VF.ttf (variable 400-900) | Playfair Display | collage films: italic kickers, heavy display type in Cyrillic |
 | CourierPrime-Regular.ttf, CourierPrime-Bold.ttf | Courier Prime | collage films: typewriter notes (Latin only) |
 | Anton-Regular.ttf | Anton | thumbnails; collage films: condensed labels (Latin only) |
+| IBMPlexMono-Regular.ttf, IBMPlexMono-Bold.ttf | IBM Plex Mono | collage films: a typewriter line in Cyrillic, where Courier Prime has no letters (Latin and Cyrillic) |
 
 The collage fonts are the complete `.ttf` files from github.com/google/fonts (`ofl/<family>/`),
 fetched 2026-09-28; the variable ones are renamed from `<Family>[wght].ttf` to `<Family>-VF.ttf`.
-An italic face of a family goes in a manifest with `"style": "italic"`.
+An italic face of a family goes in a manifest with `"style": "italic"`. IBM Plex Mono came
+from the same place on 2026-09-29.
+
+**Cyrillic in collage films.** Measured with fontTools over the Ukrainian alphabet (66 letters
+and the apostrophe): Abril Fatface, Anton, Courier Prime and UnifrakturMaguntia have none of
+it; Oswald, Old Standard TT, Playfair Display and IBM Plex Mono have all of it. So
+`sketch/collage.js` sets a line with Cyrillic letters in a stand-in (`SK.NO_CYRILLIC`,
+`SK.face`): Abril Fatface as Playfair Display 900, Anton as Oswald 700, UnifrakturMaguntia
+as Old Standard TT 700 (a face first cut for Russian printing), Courier Prime as IBM Plex
+Mono. `scripts/check-sketch.py` holds that table to these files.
 
 The woff2 files are the Latin subsets Google Fonts serves; a film that needs other scripts
 should add that subset beside them. The `.ttf` files above are the complete fonts from

@@ -1,4 +1,4 @@
-// For: curious adults scrolling YouTube and X; wry, brisk, polished newspaper-collage explainer
+// For: curious adults scrolling YouTube and X; wry, brisk, polished paper-collage explainer
 // A Brief History of Paperwork -- ten scenes, each a sheet of paper that slides over the last,
 // every piece cued to the narrator's words. Built from sketch/collage.js.
 SK.setStyle('collage');
@@ -28,6 +28,7 @@ function title(text, t0, o = {}) {
 }
 const typed = (t, t0, n, cps = 14) => clamp((SK.step(t) - t0) / (n / cps));
 
+// studio: cut -- the studio's copy of this example leaves this out (agent.CUT)
 /* ---------------------------------------------------------------- 0. the front page */
 scene(0, null, (t) => {
   SK.rules(-880, 880, -498, { w: 5 });
@@ -43,6 +44,7 @@ scene(0, null, (t) => {
   SK.headline('From clay tablets to AI:\nfive thousand years of filling in the blanks.', -840, 215, { font: 'Old Standard TT', size: 38, align: 'left', lh: 1.25, in: { t: 2.2, type: 'rise' } });
   SK.stamp(215, 300, { top: 'SPECIAL', bottom: 'EDITION', text: 'EXTRA', r: 122, t: w(0, 'paperwork', 3.74) });
 });
+// studio: end cut
 
 /* ---------------------------------------------------------------- I. Mesopotamia */
 scene(at(1), 'l', (t, t0) => {
@@ -123,6 +125,7 @@ scene(at(3), 't', (t, t0) => {
   SK.stamp(790, 300, { text: '1880s', top: 'THE', r: 98, t: w(3, 'eighteen-eighties', 20.8) + .5, rot: .14, col: '#2c4fa3' });
 });
 
+// studio: cut -- the studio's copy of this example leaves this out (agent.CUT)
 /* ---------------------------------------------------------------- IV. 1913 */
 function form1040(t, t0, o) {
   SK.layer({ x: -420, y: 20, rot: -.012, nudge: 1, w: 820, h: 780, ...o }, () => {
@@ -155,6 +158,7 @@ scene(at(4), 'r', (t, t0) => {
   SK.mark(S.ell(-560, 400, 150, 58, -2.3, .3, -.03), { in: { t: t4 + .55, d: .4 } });
   SK.stamp(715, 345, { shape: 'rect', w: 340, h: 118, top: 'INSTRUCTIONS', text: 'INCLUDED', t: w(4, 'Instructions', 31.6) + .1, rot: -.08, col: INK });
 });
+// studio: end cut
 
 /* ---------------------------------------------------------------- V. the fifties */
 scene(at(5), 'l', (t, t0) => {
@@ -214,6 +218,7 @@ scene(at(7), 'r', (t, t0) => {
   SK.tape('TYPE IN THE BOXES', 400, 370, { col: '#f3ce4f', size: 34, in: { t: w(7, 'boxes', 48.5), type: 'slap' } });
 });
 
+// studio: cut -- the studio's copy of this example leaves this out (agent.CUT)
 /* ---------------------------------------------------------------- VII. 2000, no ink */
 function signature(x0, y0, wd) {
   const pts = [], n = 320;
@@ -281,6 +286,7 @@ scene(at(10), 'l', (t, t0) => {
   SK.tape('JUST FASTER.', -470, 140, { font: 'Abril Fatface', wt: 400, size: 130, col: '#7fcfb4', ls: 2, padX: 34, padY: 4, distress: .3, rot: -.02, in: { t: w(10, 'Just', 62.9) - .05, type: 'wipe', d: .4 } });
   SK.stamp(720, 380, { shape: 'rect', w: 330, h: 120, text: 'THE END', t: 64.29, rot: -.07 }); // on the music's button
 });
+// studio: end cut
 
 /* ---------------------------------------------------------------- the timeline along the bottom */
 const YEARS = ['3100 BC', '1454', '1880s', '1913', '1950s', '1993', '2000', 'TODAY'];
@@ -309,7 +315,9 @@ SK.film({
   fadeOut: .6,
   handheld: false,
   draw(t) {
+    // studio: cut -- the studio's copy of this example leaves this out (agent.CUT)
     SK.newsprint({ heads: ['LOCAL NEWS', 'NOTICES', 'COMMERCE', 'LETTERS'], text: 'The clerk reports that the forms arrived in triplicate, as the regulation requires, and were filed in the green cabinet on the second floor. A notice is hereby given to all citizens that returns must be delivered before the fifteenth, signed in ink, with the receipt attached.' });
+    // studio: end cut
     SCENES.forEach((sc, i) => {
       const next = SCENES[i + 1], end = next ? next.t0 + .9 : DUR + 1;
       if (t < sc.t0 || t > end) return;

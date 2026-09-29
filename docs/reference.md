@@ -3524,6 +3524,27 @@ burst that turns into the waffle cone. 21 minutes from prompt to MP4 (Claude 20.
 times to fit (Gemini's pace again) and once asked the drum kit for a `crash` it does not have;
 `validate.py` now names an unknown drum before the soundtrack is rendered.
 
+**Made to sell (2026-09-29).** Four changes before the look is offered:
+- **Cyrillic.** Abril Fatface, Anton, Courier Prime and UnifrakturMaguntia have no Cyrillic
+  (fontTools over the Ukrainian alphabet), and the pieces default to Abril, so a Ukrainian
+  headline fell back to a system face. `SK.face(family, wt, text)` now sets a line with
+  Cyrillic letters in a stand-in from `SK.NO_CYRILLIC` -- Playfair Display 900, Oswald 700,
+  Old Standard TT 700, IBM Plex Mono (added) -- in every piece: headline, tape, ransom,
+  stamp, newsprint. `check-sketch` holds the table to the font files. `SK.txt` and a film's
+  own canvas text do not swap: the brief says to give them a face that has the letters.
+- **The clock at 30 fps.** 12 ticks a second hold 2 frames then 3 at 30 fps (a Free film).
+  `SK.stepFps(want)` picks the rate nearest 12 that divides the frame rate being rendered
+  (`SK.FPS`, which the player sets for `?export` and `?encode`): 12 at 24 and 60 fps, 10 at
+  30. Stills, which have no rate, keep 12.
+- **Less newspaper.** The only collage example is a newspaper, so the studio's copy of it
+  (`agent._reference`) leaves out what is marked `// studio: cut` ... `// studio: end cut`:
+  the "Daily Form" front page and closing page, the newsprint under every page, and three
+  of the ten pages. The collage prompt went from 196 KB to 189 KB.
+- **Variety.** A collage film records its cut-outs' medium (paint.json `style`), the print
+  faces its code names most and whether a newspaper page lies under it; the next collage
+  films are told (`recent_note`: "print faces", "a newspaper page under the film: n of the
+  last m"), as drawn films are told their grounds.
+
 Traps, each found on the example:
 - **A sheet that overshoots bares the page under it** (the first slide bounced 4.5%, 90 px on a
   full-width sheet, and showed the title page at the edge): slides land with no overshoot now.

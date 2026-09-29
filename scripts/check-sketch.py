@@ -16,6 +16,7 @@ Invoke as:  python scripts/check-sketch.py
 
 import sys
 import os
+import re
 import json
 import shutil
 import argparse
@@ -26,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
 import numpy as np  # noqa: E402
+from fontTools.ttLib import TTFont  # noqa: E402
 
 import _sketch  # noqa: E402
 import _sketchaudio as A  # noqa: E402
@@ -41,6 +43,35 @@ def check(name, ok, detail=""):
     )
     if not ok:
         FAILS.append(name)
+
+
+def cyrillic():
+    """Cyrillic in collage films: every face collage.js stands in for (SK.NO_CYRILLIC) lacks the
+    Ukrainian letters, and every stand-in has all of them (fonts/SOURCES.md)."""
+    uk = "АБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯ"
+    uk += uk.lower() + "\u2019"
+    cover = {}  # family -> does every face of it draw every letter
+    for n in os.listdir(os.path.join(_env.ROOT, "fonts")):
+        if n.endswith(".ttf"):
+            f = TTFont(os.path.join(_env.ROOT, "fonts", n), lazy=True)
+            fam, cmap = f["name"].getDebugName(1), f.getBestCmap()
+            cover[fam] = cover.get(fam, True) and all(ord(c) in cmap for c in uk)
+    with open(os.path.join(_env.ROOT, "sketch", "collage.js"), encoding="utf-8") as f:
+        src = f.read()
+    table = re.findall(
+        r"'([^']+)': \['([^']+)', \d+\]", src.split("SK.NO_CYRILLIC = {")[1].split("};")[0]
+    )
+    check("cyrillic: a stand-in for each Latin-only face", len(table) == 4, str(table))
+    check(
+        "cyrillic: the faces stood in for have no Cyrillic",
+        all(cover.get(a) is False for a, _ in table),
+        str({a: cover.get(a) for a, _ in table}),
+    )
+    check(
+        "cyrillic: every stand-in has all of it",
+        all(cover.get(b) is True for _, b in table),
+        str({b: cover.get(b) for _, b in table}),
+    )
 
 
 def main():
@@ -343,6 +374,8 @@ def main():
         p.get("background") == "transparent" and p.get("aspect_ratio") == "2:3",
         str(p),
     )
+
+    cyrillic()
 
     # ---- the bundler, against the committed example
     ex = os.path.join(_env.ROOT, "config", "sketch", "example")
