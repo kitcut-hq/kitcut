@@ -280,6 +280,14 @@ def base_url(req):
     return "%s://%s" % (proto, req.host)
 
 
+def site_auth():
+    """How the films asked for through the tunnel (the site, the MCP server) pay for Claude:
+    STUDIO_SITE_AUTH, "login" by default (this machine's Claude login; a film that runs out of
+    the plan carries on on the key, agent.PlanLimit) or "api" (the key, per token). Read per
+    film, so the switch needs no restart."""
+    return "api" if os.environ.get("STUDIO_SITE_AUTH", "").strip() == "api" else "login"
+
+
 def reserve(seconds, auth="api"):
     """What a film being made may still spend, held against the day's budget: all of it on the
     key; on this machine's login only the voice and the paintings are paid for."""
@@ -993,10 +1001,10 @@ async def create(req):
     # a plan that lets an account make more than one film at a time (Pro: 2)
     at_once = at_once_of(req)
     # this machine's own films (tests, internal runs) are made on its Claude Code login unless
-    # they ask for the key ("auth": "api"); anyone through the tunnel always on the key. A
-    # machine with no login of its own (the Azure VM) sets STUDIO_LOCAL_AUTH=api.
+    # they ask for the key ("auth": "api"); anyone through the tunnel as site_auth() says. A
+    # machine with no login of its own sets STUDIO_LOCAL_AUTH=api.
     local = "api" if body.get("auth") == "api" else os.environ.get("STUDIO_LOCAL_AUTH") or "login"
-    auth = local if from_this_machine(req) else "api"
+    auth = local if from_this_machine(req) else site_auth()
     # a Free-plan film gets KitCut's watermark and closing (the site sends it, trusted like
     # X-Priority; this machine may ask for it to try it)
     branding = req.headers.get("X-Branding", "").strip() == "1" or (
@@ -1175,8 +1183,10 @@ async def youtube_draft(req):
     writing = {"film": f.id, "channel": channel["id"], "state": "writing"}
     if ytdraft.get(f.id, channel["id"]) is None and peer_has("drafts", [f.id, channel["id"]]):
         return web.json_response(writing, status=202)  # another server is writing it
-    # as for a film: this machine's own asks on its login, anyone through the tunnel on the key
-    auth = (os.environ.get("STUDIO_LOCAL_AUTH") or "login") if from_this_machine(req) else "api"
+    # as for a film: this machine's own asks on its login, anyone through the tunnel site_auth()
+    auth = (
+        (os.environ.get("STUDIO_LOCAL_AUTH") or "login") if from_this_machine(req) else site_auth()
+    )
     try:
         job = await ytdraft.start(f, client, channel, recent, auth)
     except ytdraft.DraftError as e:

@@ -58,6 +58,13 @@ async def fake_claude(
     CALLED.append(film.id)
     ex = os.path.join(films.KIT, "config", "sketch", "example")
     said = film.record().get("prompt", "")
+    if "usage limit" in said and auth == "login" and not resume:
+        # the login works and Claude has written part of the film on the plan, then the plan's
+        # limit ends the turn (agent.PlanLimit): the session is there to pick up on the key
+        film.update(claude_session="fake-session")
+        meter.add("msg_login_" + film.id, USAGE)
+        emit({"type": "cost", "usd": round(meter.usd(), 4)})
+        raise agent.PlanLimit("Usage limit reached")
     if "never answers" in said or ("goes silent once" in said and not resume):
         # a reply that never comes (the stall watchdog's case): the session exists, the narration
         # is recorded, and then nothing at all -- no message, no event, no tool at work
@@ -80,8 +87,6 @@ async def fake_claude(
     prompt = film.record().get("prompt", "")
     if "login gone" in prompt and auth == "login":  # what run_claude raises for a lost login
         raise agent.SignInError(NOT_LOGGED_IN)
-    if "usage limit" in prompt and auth == "login":  # the login works; the plan is spent
-        raise RuntimeError("Claude stopped early: Usage limit reached")
     if "nothing written" in prompt:
         await asyncio.sleep(60)  # Claude past its time with no film: a failure
         return
@@ -291,6 +296,8 @@ async def sign_in(check):
             r = await REAL_RUN_CLAUDE(film, lambda ev: None, agent.Meter(), tools, auth)
         except agent.SignInError as e:
             return "signin", e.why
+        except agent.PlanLimit as e:
+            return "limit", e.why
         return "result", r.result if r else None
 
     try:
@@ -307,12 +314,18 @@ async def sign_in(check):
                 "the plan's usage limit",
                 "login",
                 reply("rate_limit", "Usage limit reached", 429),
-                "result",
+                "limit",
             ),
             (
                 "a billing error",
                 "login",
                 reply("billing_error", "Credit balance too low", 400),
+                "limit",
+            ),
+            (
+                "a rate limit on the key (nothing to fall back to)",
+                "api",
+                reply("rate_limit", "Rate limited", 429),
                 "result",
             ),
             ("an overloaded API", "login", reply("server_error", "Overloaded", 529), "result"),
@@ -409,13 +422,14 @@ async def main():
         # ------------------------------------------------ three films at once, three clients
         ids = []
         # film 0 is a priority plan's, and asks for the key from this machine (which otherwise
-        # uses its login); film 1 is a Free plan's (branded), and asks for the login through the
-        # tunnel (refused: api); film 2 asks for the login from this machine
+        # uses its login); film 1 is a Free plan's (branded), through the tunnel: on the login,
+        # as server.site_auth() says by default; film 2 asks for the login from this machine
         extra = [
             ({"X-Priority": "1"}, {"auth": "api"}),
             ({"Cf-Ray": "test", "X-Branding": "1", "X-Fps": "30"}, {"auth": "login"}),
             ({}, {"auth": "login"}),
         ]
+        site_was = os.environ.pop("STUDIO_SITE_AUTH", None)
         for i in range(3):
             r = await c.post(
                 "/api/films",
@@ -448,14 +462,15 @@ async def main():
                 sheets and all("/files/%s/" % j in e["url"] and "sig=" in e["url"] for e in sheets),
                 "its review sheet is its own, signed",
             )
-            want = TTS_USD if i == 2 else EXPECT_USD  # on the login, Claude is not billed
+            want = TTS_USD if i else EXPECT_USD  # on the login, Claude is not billed
             check(
                 abs((st.get("cost_usd") or 0) - want) < 1e-4,
                 "its cost, Claude + voice ($%s)" % st.get("cost_usd"),
             )
             rec = f.record()
             check(
-                (rec.get("priority"), rec.get("auth")) == [(1, "api"), (0, "api"), (0, "login")][i]
+                (rec.get("priority"), rec.get("auth"))
+                == [(1, "api"), (0, "login"), (0, "login")][i]
                 and mem.docs[j].get("priority") == rec.get("priority"),
                 "its priority and way to pay (%s, %s)" % (rec.get("priority"), rec.get("auth")),
             )
@@ -546,6 +561,19 @@ async def main():
         )
         st = await (await c.get("/api/films/%s" % ids[0], headers=auth)).json()
         check(st.get("status") == "done", "and its own page still works")
+
+        # ------------------------------------------------ the site's films: the switch
+        os.environ["STUDIO_SITE_AUTH"] = "api"
+        on_key = server.site_auth()
+        os.environ["STUDIO_SITE_AUTH"] = "login"
+        on_login = server.site_auth()
+        os.environ.pop("STUDIO_SITE_AUTH")
+        check(
+            (on_key, on_login, server.site_auth()) == ("api", "login", "login"),
+            "STUDIO_SITE_AUTH=api puts the site's films back on the key; the login otherwise",
+        )
+        if site_was is not None:
+            os.environ["STUDIO_SITE_AUTH"] = site_was
 
         # ------------------------------------------------ link-only: its maker's switch
         tunnel_as = auth | {"Cf-Ray": "t"}
@@ -707,7 +735,43 @@ async def main():
             and ru.get("auth") == "login"
             and not ru.get("fallback")
             and CALLED.count(u) == 1,
-            "any other failure on the login is not retried on the key (%s)" % su.get("error"),
+            "a plan limit on a login with no token of its own: the session cannot move to the "
+            "key, so the film fails (%s)" % su.get("error"),
+        )
+
+        # ------------------------------------------------ the plan runs out: on the key from there
+        had_token = "CLAUDE_CODE_OAUTH_TOKEN" in agent.procs.SECRETS
+        agent.procs.SECRETS.setdefault("CLAUDE_CODE_OAUTH_TOKEN", "sk-ant-oat-test")
+        os.environ.pop("STUDIO_LOCAL_AUTH", None)
+        r = await c.post("/api/films", json={"prompt": "usage limit half-way"}, headers=auth)
+        p = (await r.json())["id"]
+        sp = await wait_for(c, auth, p)
+        if was is not None:
+            os.environ["STUDIO_LOCAL_AUTH"] = was
+        if not had_token:
+            agent.procs.SECRETS.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
+        rp, dp = films.Film.open(p).record(), mem.docs[p]
+        check(
+            sp.get("status") == "done"
+            and rp.get("auth") == "api"
+            and (rp.get("fallback") or {}).get("limit") is True
+            and "Usage limit" in rp["fallback"]["why"]
+            and dp.get("claude_billed") is True
+            and CALLED.count(p) == 2
+            and any(e["type"] == "fallback" for e in sp["all_events"]),
+            "a plan limit half-way: the same session carries on on the key, on record (%s)"
+            % (sp.get("error") or rp.get("fallback")),
+        )
+        check(
+            abs(dp.get("cost_usd", 0) - CLAUDE_USD) < 1e-3
+            and abs(dp.get("claude_cost_usd", 0) - 2 * CLAUDE_USD) < 1e-3,
+            "and only what it spent on the key is billed ($%.4f of $%.4f)"
+            % (dp.get("cost_usd", 0), dp.get("claude_cost_usd", 0)),
+        )
+        check(
+            server.JOBS[p]["auth"] == "api"
+            and server.JOBS[p]["reserve"] == server.reserve(films.Film.open(p).length, "api"),
+            "and held against the day's budget as a film on the key from then",
         )
 
         # ------------------------------------------------ Claude past its time

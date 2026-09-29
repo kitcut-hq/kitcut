@@ -18,9 +18,12 @@ the soundtrack and renders the video with the ordinary sketch scripts.
 
 Several films are made at once: each waits for a free Claude slot, then shares the machine through
 the scheduler (sched.py). Two ways to pay for Claude:
-    --auth api     ANTHROPIC_API_KEY, a private config folder per film (the public site)
-    --auth login   this machine's Claude Code login (the default: local and internal runs)
-A login film whose sign-in fails (SignInError) is made on the key instead, and its record says so.
+    --auth api     ANTHROPIC_API_KEY, a private config folder per film
+    --auth login   this machine's Claude Code login (the default; the public site's films too,
+                   unless STUDIO_SITE_AUTH=api -- server.site_auth)
+A login film whose sign-in fails (SignInError) is made on the key instead, and its record says so;
+one that runs into the plan's usage limit half-way (PlanLimit) carries on on the key, in the same
+session, and only what it spends from there is billed.
 """
 
 import sys
@@ -99,6 +102,16 @@ EFFORT = "xhigh"
 # film.limits() (20 min of working time for up to 15 s; waiting for the machine does not count)
 
 
+class PlanLimit(RuntimeError):
+    """The login works but its plan is spent for now: the reply is an AssistantMessage whose
+    `error` is "rate_limit" or "billing_error" (Claude Code has already done its own retrying of
+    a passing 429 by then). A film on the login then carries on on the key (make_film)."""
+
+    def __init__(self, why):
+        super().__init__("Claude's plan limit: %s" % why)
+        self.why = why
+
+
 class SignInError(RuntimeError):
     """Claude could not start on the credentials it was given -- for auth=login, this machine's
     Claude Code login is gone (logged out, the setup-token expired or was revoked, no CLI).
@@ -157,8 +170,14 @@ def claude_env(film=None, auth="api"):
         env.update(ANTHROPIC_API_KEY=key, CLAUDE_CONFIG_DIR=cfg)
     elif procs.secret("CLAUDE_CODE_OAUTH_TOKEN"):
         # a machine nobody logs into (the Azure VM) carries its login as a long-lived token
-        # (`claude setup-token`), not as an interactive /login in its config folder
-        env["CLAUDE_CODE_OAUTH_TOKEN"] = procs.secret("CLAUDE_CODE_OAUTH_TOKEN")
+        # (`claude setup-token`), not as an interactive /login in its config folder -- so a film
+        # needs no shared folder either: it gets its own, as on the key (no other film's history,
+        # settings or memory), and a film that runs out of the plan resumes there on the key
+        cfg = film.claude_dir if film else os.path.join(HOME, "claude", "_smoke")
+        os.makedirs(cfg, exist_ok=True)
+        env.update(
+            CLAUDE_CODE_OAUTH_TOKEN=procs.secret("CLAUDE_CODE_OAUTH_TOKEN"), CLAUDE_CONFIG_DIR=cfg
+        )
     return env
 
 
@@ -656,7 +675,7 @@ async def run_claude(
     """Claude's part: write, review and fix. Returns the SDK's ResultMessage (or None). With
     `resume` (a session id) and a `prompt`, one more turn of a session that was stopped;
     `budget_usd` then caps what that turn may add (the film's own cap less what it spent)."""
-    pending, result = {}, None
+    pending, result, limited = {}, None, None
 
     async def pre_tool(inp, tool_use_id, ctx):
         ok, why = guard(inp["tool_name"], inp["tool_input"], film, getattr(tools, "allow", None))
@@ -758,6 +777,10 @@ async def run_claude(
                         said = [getattr(b, "text", "") for b in msg.content]
                         signin = " ".join(s for s in said if s).strip() or msg.error
                         continue
+                    if auth == "login" and msg.error in ("rate_limit", "billing_error"):
+                        said = [getattr(b, "text", "") for b in msg.content]
+                        limited = " ".join(s for s in said if s).strip() or msg.error
+                        continue
                     before = meter.usd()
                     meter.add(msg.message_id or msg.uuid, msg.usage, msg.model)
                     if meter.usd() != before:
@@ -788,6 +811,8 @@ async def run_claude(
         raise SignInError(str(e)) from None
     if signin:
         raise SignInError(signin)
+    if limited:
+        raise PlanLimit(limited)
     return result
 
 
@@ -810,6 +835,13 @@ STALLED = (
     "off. This is the same session, and everything before that reply is on disk as it was. Carry "
     "on from where you were, in shorter replies: write or change film.js a few scenes at a time, "
     "never the whole picture in one reply. You have about %d minutes left."
+)
+
+
+OVER_LIMIT = (
+    "Your last reply was cut off by a usage limit on the studio's side, not by anything you did; "
+    "that is lifted now. This is the same session, and everything before that reply is on disk as "
+    "it was. Carry on from where you were. You have about %d minutes left."
 )
 
 
@@ -930,7 +962,11 @@ async def make_film(
         "auth": auth,
     }
     summary.update(
-        {k: carry[k] for k in ("turns", "claude_said", "session", "overtime") if k in carry}
+        {
+            k: carry[k]
+            for k in ("turns", "claude_said", "session", "overtime", "claude_login_usd")
+            if k in carry
+        }
     )
     emit({"type": "job", "id": film.id, "model": MODEL, "length": length, "look": look})
 
@@ -955,7 +991,10 @@ async def make_film(
                 tokens[k] = tokens.get(k, 0) + v
         summary.update(
             # everything this film cost: Claude + the voice + the paintings
-            cost_usd=round((claude if billed else 0) + tts + img, 4),
+            # on the key after the plan ran out (to_key): only what it spent from there
+            cost_usd=round(
+                (claude - summary.get("claude_login_usd", 0) if billed else 0) + tts + img, 4
+            ),
             claude_cost_usd=claude,
             claude_billed=billed,
             via="sdk" if billed else "login",
@@ -1024,19 +1063,36 @@ async def make_film(
         that never comes (Stalled) is cut off and the same session picked up again with STALLED,
         at most STALL_RETRIES times; its working time and budget go on counting from where they
         were. Past that the film fails -- and is refunded -- rather than sitting for hours in
-        Claude Code's own retries."""
+        Claude Code's own retries. A conversation on the login that runs into the plan's limit
+        (PlanLimit) is picked up the same way, on the key (to_key)."""
+        nonlocal auth, billed
         say = dict(talk if say is None else say)
         within = lim if within is None else within
         m0 = meter.usd()
         budget0 = say.get("budget_usd") or max(
             1.0, limits(length)["budget_usd"] - (carry.get("claude_cost_usd") or 0)
         )
-        for attempt in range(STALL_RETRIES + 1):
+        attempt = 0  # stalls so far (a plan limit is picked up once, and does not count)
+        while True:
             tools.pulse.beat()
             try:
                 return await _within(
                     run_claude(film, emit, meter, tools, auth, **say), clock, within, tools.pulse
                 )
+            except PlanLimit as e:
+                sid = tools.session or film.record().get("claude_session")
+                if not sid or not procs.secret("CLAUDE_CODE_OAUTH_TOKEN"):
+                    # the session is in this machine's own config folder (an interactive login),
+                    # which the key cannot read: nothing to pick up
+                    raise RuntimeError("Claude's plan ran out: %s" % e.why) from None
+                auth, billed = await to_key(e.why)
+                left = max(RESUME_MIN_S, within["claude_s"] - clock.active())
+                say = {
+                    "prompt": OVER_LIMIT % round(left / 60),
+                    "resume": sid,
+                    "budget_usd": max(1.0, budget0 - (meter.usd() - m0)),
+                } | ({"system": say["system"]} if say.get("system") else {})
+                continue
             except Stalled as e:
                 silent = int(e.args[0]) if e.args else STALL_S
                 summary["stalls"] = summary.get("stalls", 0) + 1
@@ -1066,7 +1122,21 @@ async def make_film(
                     "resume": sid,
                     "budget_usd": max(1.0, budget0 - (meter.usd() - m0)),
                 } | ({"system": say["system"]} if say.get("system") else {})  # a scenes pass's
-        return None
+                attempt += 1
+
+    async def to_key(why):
+        """The plan is spent half-way through the film: from here it is made on the key -- the
+        record says so and why, and only what Claude spends from now on is billed."""
+        price()
+        summary["claude_login_usd"] = summary["claude_cost_usd"]
+        summary.update(auth="api", fallback={"from": "login", "why": why, "limit": True})
+        film.update(
+            auth="api", fallback=summary["fallback"], claude_login_usd=summary["claude_login_usd"]
+        )
+        await save(film.id, {"auth": "api", "fallback": summary["fallback"]})
+        print("film %s: PLAN LIMIT, on the key from here: %s" % (film.id, why), file=sys.stderr)
+        emit({"type": "fallback", "from": "login", "to": "api", "why": why})
+        return "api", True
 
     pass_base = [meter.usd()]  # the meter where the last finished pass of a scenes film left it
 

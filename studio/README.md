@@ -479,13 +479,18 @@ cartoon ones. That is capability, not instruction.
 There are two ways to pay:
 - **`--auth api`** runs on `ANTHROPIC_API_KEY` from `.env` and a config folder per film, with
   `setting_sources=[]`: it never uses a local Claude Code login, its settings, its memory or its
-  skills. Every film through the tunnel, which means the public site, runs this way.
+  skills.
 - **`--auth login`** runs the newest installed Claude Code on this machine's login instead.
   Claude's tokens are then covered by the plan and recorded as not billed, so they don't count
   against the day's budget. Films made on this machine run this way by default: the command
   line, and a POST from this machine itself. `{"auth": "api"}` in the POST puts one on the key.
+  With a `CLAUDE_CODE_OAUTH_TOKEN` (the VM) a login film gets its own config folder too, as on
+  the key: no other film's history, settings or memory.
 
-Never serve the public from a login. Through the tunnel, the server ignores the switch.
+**The site's films follow `STUDIO_SITE_AUTH`** (`server.site_auth()`): `login` by default since
+2026-09-29, when the user chose to try the site on the subscription; `STUDIO_SITE_AUTH=api` in the
+`.env` puts them back on the key. It is read per film, so the switch needs no restart. The
+`{"auth": ...}` in a POST through the tunnel is ignored either way.
 
 **A login that fails falls back to the key.** When a login film cannot sign in -- logged out, a
 `claude setup-token` expired or revoked, no Claude Code installed -- `run_claude` raises
@@ -495,9 +500,18 @@ instead of lost, and its record tells the truth: `auth: "api"`, billed, and
 the server holds it against the day's budget as a film on the key. The SDK does not raise on a
 failed sign-in (measured 2026-09-28, Claude Code 2.1.284): the turn ends with an assistant
 message whose `error` is `authentication_failed` ("Not logged in · Please run /login", "Failed to
-authenticate. API Error: 401 ...") and an `is_error` result, and that is what is matched. A usage
-limit (`rate_limit`), a billing error or an overloaded API is not a lost login and is never
-retried on the key. `test_server.py` checks both, against the messages the CLI really sent.
+authenticate. API Error: 401 ...") and an `is_error` result, and that is what is matched. An
+overloaded API is not a lost login and is never retried on the key. `test_server.py` checks
+both, against the messages the CLI really sent.
+
+**A plan that runs out carries on on the key.** When a login film's turn ends on `rate_limit` or
+`billing_error` (Claude Code has done its own retrying of a passing 429 by then), `run_claude`
+raises `PlanLimit` and `talk_to_claude` picks the same session up on the key with `OVER_LIMIT`
+-- nothing written is lost, and it does not count as a stall. That needs the session where the
+key can read it, i.e. the per-film folder a token login gets; on an interactive login (the
+laptop) the film fails instead. The record says `auth: "api"`,
+`fallback: {"from": "login", "why": ..., "limit": true}` and `claude_login_usd` (what was spent on
+the plan, which `cost_usd` leaves out); `PLAN LIMIT` in `ops.sh logs studio`.
 
 **The login is checked every morning** on the Azure VM (`agent.py --check-login`, run by
 `studio/deploy/kitcut-login-check.timer`): one turn on the login, recorded in
