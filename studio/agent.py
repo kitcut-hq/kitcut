@@ -68,6 +68,7 @@ from film import (  # noqa: E402
     direction_fields,
     fills,
     limits,
+    mark_note,
     paint_kinds,
     paint_words,
 )
@@ -283,7 +284,7 @@ def ask(film, recent=()):
     )
     if n > LONG_S and film.mode != "scenes":  # a scenes film is written in passes anyway
         text += LONG_FILM
-    text += attached_note(film)
+    text += attached_note(film) + mark_note(film)
     mine = library.note(film)  # the project, or the person's own cast and earlier films
     project = bool(film.record().get("project"))
     note = recent_note(film.look, recent, series=bool(mine), project=project)

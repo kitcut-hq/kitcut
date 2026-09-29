@@ -25,7 +25,7 @@ import os
 import json
 
 import validate
-from film import limits
+from film import limits, mark_note
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROMPTS = os.path.join(HERE, "prompts")
@@ -215,7 +215,7 @@ def scene_message(film, k, sheet=None):
             if existing
             else "Write %s from scratch." % scene_file(scene)
         ),
-    )
+    ) + mark_note(film)
 
 
 def editor_message(film, sheets):
@@ -238,7 +238,7 @@ def editor_message(film, sheets):
         PLAN=plan_text,
         SHEETS="\n".join("- " + p for p in sheets) or "(none)",
         MINUTES=pass_limits(film, "editor")["claude_s"] // 60,
-    )
+    ) + mark_note(film)
 
 
 def contact_times(film):

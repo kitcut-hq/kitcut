@@ -6,6 +6,8 @@
 
    - The watermark: "made with" over "kitcut.ai", bottom right, throughout the film, as far
      from the right edge as from the bottom (measured, not guessed). It gives way to the closing.
+     Claude never sees it, so a branded film is told to keep that corner clear: film.MARK_BOX,
+     film.mark_note -- move the mark and that box moves with it.
    - The closing, `secs` (3) after the film: the film's last frame turns into a tilted snapshot
      on the film's own ground, and beside it the logo, "Make your own film" and kitcut.ai. The
      film is held at its end underneath (every frame is a pure function of t, so holding it is

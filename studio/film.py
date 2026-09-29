@@ -263,6 +263,26 @@ def fonts(caps):
     return [f for c in caps for f in CAPS[c].get("fonts", ())]
 
 
+# where a Free-plan film's "made with kitcut.ai" mark sits (studio/outro.js: 40 px from the right
+# and bottom edges), with room around it: x0, y0, x1, y1 on the 1920x1080 frame. Its ink measured
+# x 1748-1880, y 980-1042 on i4d52n, where the film's own race timer ran underneath it
+MARK_BOX = (1660, 950, 1920, 1080)
+
+
+def mark_note(film):
+    """For a film that will carry KitCut's mark: keep that corner clear. Claude never sees the
+    mark -- it is drawn at the final render only (agent.brand) -- so it has to be told."""
+    if not film.record().get("branding"):
+        return ""
+    x0, y0, x1, y1 = MARK_BOX
+    return (
+        '\n\nThe corner is taken: this film carries KitCut\'s small "made with kitcut.ai" mark '
+        "in its bottom-right corner (x %d-%d, y %d-%d), drawn over everything at the final render "
+        "-- your stills will not show it. Put nothing there that has to be read (no timer, "
+        "counter, caption, label or logo); the picture itself may run under it." % (x0, x1, y0, y1)
+    )
+
+
 def paint_kinds(caps):
     """The kinds of picture these capabilities paint ([] when the film paints nothing)."""
     return [CAPS[c]["paint"] for c in caps if "paint" in CAPS[c]]

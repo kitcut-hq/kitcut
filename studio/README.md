@@ -379,7 +379,10 @@ docs/studio-scenes-plan.md.
 "made with kitcut.ai" in the corner and end with a 3-second closing: the last frame as a tilted
 snapshot beside the logo and kitcut.ai, with a chime and "Make yours at KitCut AI" (one recording,
 `brand/closing.wav`). `studio/outro.js` draws both; `agent.brand` adds them to the manifest as a
-`tail` at the final render only, so Claude's review stills never show them.
+`tail` at the final render only, so Claude's review stills never show them. So Claude is told
+instead (`film.mark_note`, in the first message, and in each scene's and the editor's for a film
+made in scenes): the corner `film.MARK_BOX` (x 1660-1920, y 950-1080) is taken, nothing to be
+read goes there. Before that, i4d52n ran its race timer under the mark.
 
 **A series: the person's cast and memory** (`library.py`). A signed-in person (the site's
 `u:<id>` client) has a library that outlives their films, next to `projects\`, never in git:

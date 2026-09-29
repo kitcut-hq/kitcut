@@ -264,6 +264,31 @@ async def main():
     )
     check(any("split it" in x for x in validate._scenes(one, g)), "a two-minute scene is refused")
     check(any("join it" in x for x in validate._scenes(tiny, g)), "a ten-second scene is refused")
+
+    # a Free-plan film: every pass that draws is told the mark's corner is taken
+    with open(g.path("scenes.json"), "w", encoding="utf-8") as fh:
+        json.dump(ok, fh)
+
+    def told():
+        return [
+            "kitcut.ai" in m
+            for m in (
+                agent.ask(g),
+                scenes.director_message(g, agent.ask(g)),
+                scenes.scene_message(g, 1),
+                scenes.editor_message(g, []),
+            )
+        ]
+
+    plain = told()
+    g.update(branding=True)
+    branded = told()
+    g.update(branding=False)
+    check(
+        plain == [False] * 4 and branded == [True] * 4,
+        "a Free-plan film's director, scenes and editor are told to keep the mark's corner clear "
+        "(%s, %s)" % (plain, branded),
+    )
     check(
         guard.guard("Write", {"file_path": "scenes/03-c.js"}, g, ["scenes/03-c.js"])[0]
         and not guard.guard("Write", {"file_path": "scenes/02-b.js"}, g, ["scenes/03-c.js"])[0]
