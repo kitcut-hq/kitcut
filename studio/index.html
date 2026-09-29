@@ -26,7 +26,7 @@
 <meta name="twitter:image" content="https://kitcut.ai/og.jpg">
 <meta name="twitter:image:alt" content="Frames from four films made in KitCut: a honey jar, a young dragon, a lighthouse cat and a raindrop">
 <link rel="canonical" href="https://kitcut.ai/">
-<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kitcut.ai/#website", "url": "https://kitcut.ai/", "name": "KitCut", "description": "Claude video maker"}, {"@type": "Organization", "@id": "https://kitcut.ai/#org", "name": "KitCut", "url": "https://kitcut.ai/", "logo": "https://kitcut.ai/logo-256.png", "sameAs": ["https://github.com/kitcut-hq/kitcut"]}, {"@type": "WebApplication", "name": "KitCut: Claude video maker", "url": "https://kitcut.ai/", "applicationCategory": "MultimediaApplication", "operatingSystem": "Any (web browser)", "description": "Make a Claude video from one prompt. Opus 5.5 writes, animates, narrates and scores your idea in minutes: motion graphics, explainers, launch videos. 30 s free.", "publisher": {"@id": "https://kitcut.ai/#org"}, "offers": {"@type": "AggregateOffer", "priceCurrency": "USD", "lowPrice": "0", "highPrice": "849", "offerCount": "13"}}, {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Can Claude make videos?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Claude has no video model: it writes code that draws every frame, the way the Opus 5.5 animations people share on X are made. KitCut has Claude Opus 5.5 write the script, animate every scene, write a narration and compose the music, then renders it all into a finished Claude video."}}, {"@type": "Question", "name": "How do I make a Claude video?", "acceptedAnswer": {"@type": "Answer", "text": "Type one sentence about your idea, pick a length and a look (hand-drawn or painted), and press Make the film. Claude plans it, draws it, looks at stills of its own work and fixes what it doesn't like. The finished video is ready in a few minutes."}}, {"@type": "Question", "name": "Which Claude model makes the videos?", "acceptedAnswer": {"@type": "Answer", "text": "Claude Opus 5.5 directs every video. It writes the script and the code that draws each frame, and reviews the result before it is rendered. For the painted look an image model paints the scenes and Claude animates them; a voice model reads Claude's narration."}}, {"@type": "Question", "name": "Is it free?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, to start: every account gets 30 seconds of film a month, with no card needed. Paid plans give you more minutes, and Pro makes films up to 8 minutes long."}}, {"@type": "Question", "name": "How long can a Claude video be?", "acceptedAnswer": {"@type": "Answer", "text": "Up to 1 minute on Free and Standard, and 8 minutes on Pro. A month's free credits make one 30-second film."}}, {"@type": "Question", "name": "What can I make with it?", "acceptedAnswer": {"@type": "Answer", "text": "Motion graphics, explainer videos, launch videos, tiny stories, music videos, showreels and lessons, in any language you type in. Every film gets its own page to share."}}]}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kitcut.ai/#website", "url": "https://kitcut.ai/", "name": "KitCut", "description": "Claude video maker"}, {"@type": "Organization", "@id": "https://kitcut.ai/#org", "name": "KitCut", "url": "https://kitcut.ai/", "logo": "https://kitcut.ai/logo-256.png", "sameAs": ["https://github.com/kitcut-hq/kitcut"]}, {"@type": "WebApplication", "name": "KitCut: Claude video maker", "url": "https://kitcut.ai/", "applicationCategory": "MultimediaApplication", "operatingSystem": "Any (web browser)", "description": "Make a Claude video from one prompt. Opus 5.5 writes, animates, narrates and scores your idea in minutes: motion graphics, explainers, launch videos. 30 s free.", "publisher": {"@id": "https://kitcut.ai/#org"}, "offers": {"@type": "AggregateOffer", "priceCurrency": "USD", "lowPrice": "0", "highPrice": "849", "offerCount": "13"}}, {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Can Claude make videos?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Claude has no video model: it writes code that draws every frame, the way the Opus 5.5 animations people share on X are made. KitCut has Claude Opus 5.5 write the script, animate every scene, write a narration and compose the music, then renders it all into a finished Claude video."}}, {"@type": "Question", "name": "How do I make a Claude video?", "acceptedAnswer": {"@type": "Answer", "text": "Type one sentence about your idea, pick a length and a look (hand-drawn, painted or collage), and press Make the film. Claude plans it, draws it, looks at stills of its own work and fixes what it doesn't like. The finished video is ready in a few minutes."}}, {"@type": "Question", "name": "Which Claude model makes the videos?", "acceptedAnswer": {"@type": "Answer", "text": "Claude Opus 5.5 directs every video. It writes the script and the code that draws each frame, and reviews the result before it is rendered. For the painted look an image model paints the scenes and Claude animates them; for the collage look one paints pictures cut out of paper and Claude builds pages round them; a voice model reads Claude's narration."}}, {"@type": "Question", "name": "Is it free?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, to start: every account gets 30 seconds of film a month, with no card needed. Paid plans give you more minutes, and Pro makes films up to 8 minutes long."}}, {"@type": "Question", "name": "How long can a Claude video be?", "acceptedAnswer": {"@type": "Answer", "text": "Up to 1 minute on Free and Standard, and 8 minutes on Pro. A month's free credits make one 30-second film."}}, {"@type": "Question", "name": "What can I make with it?", "acceptedAnswer": {"@type": "Answer", "text": "Motion graphics, explainer videos, launch videos, tiny stories, music videos, showreels and lessons, in any language you type in. Every film gets its own page to share."}}]}]}</script>
 <!-- /meta -->
 <style>
 /* site.css */
@@ -132,6 +132,20 @@ textarea:focus, select:focus, button:focus-visible { outline: 2px solid var(--ac
 .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 #token { flex: 1 1 280px; min-width: 0; padding: 10px 12px; border-radius: 10px; border: 1.5px solid var(--rule); background: var(--sheet); color: var(--ink); font: inherit; }
 select { padding: 9px 12px; border-radius: 10px; border: 1.5px solid var(--rule); background: var(--sheet); color: var(--ink); font: inherit; }
+/* the look: three tiles, each a radio with a still that plays while pointed at or focused */
+.lookpick { display: grid; gap: 4px; max-width: 360px; }
+.looks { display: flex; gap: 8px; }
+.lk { position: relative; display: grid; gap: 3px; width: 112px; cursor: pointer; text-align: center;
+  font: 600 12.5px/1.2 Inter, system-ui, sans-serif; color: var(--ink-soft); }
+.lk input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.lk .pv { position: relative; display: block; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden;
+  border: 1.5px solid var(--rule); background: var(--paper); }
+.lk .pv img, .lk .pv video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.lk:hover .pv { border-color: var(--accent); }
+.lk input:checked + .pv { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.lk input:checked ~ b { color: var(--ink); }
+.lk input:focus-visible + .pv { outline: 2px solid var(--accent); outline-offset: 3px; }
+#lookAbout { margin: 0; min-height: 2.6em; }
 button { padding: 10px 22px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink);
   font: 700 24px/1 Caveat, cursive; cursor: pointer; letter-spacing: .5px; }
 button:disabled { opacity: .5; cursor: progress; }
@@ -316,7 +330,7 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
   <!-- hero -->
   <section class="hero">
     <h1>Type an idea. Get a Claude video.</h1>
-    <p>Claude Opus 5.5 writes, animates, narrates and scores a video of any idea in minutes: motion graphics, explainers, launch videos, short films and music videos, hand-drawn or painted, in any language.</p>
+    <p>Claude Opus 5.5 writes, animates, narrates and scores a video of any idea in minutes: motion graphics, explainers, launch videos, short films and music videos, hand-drawn, painted or collage, in any language.</p>
     <p class="spend" id="spend" hidden></p>
     <p class="invited" id="invited" hidden></p>
   </section>
@@ -346,10 +360,14 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
     </div>
     <p class="note count" id="promptCount" aria-live="polite" hidden></p>
     <div class="row">
-      <select id="look" aria-label="Look">
-        <option value="drawn" selected>Hand-drawn</option>
-        <option value="painted">Painted (AI scenes)</option>
-      </select>
+      <div class="lookpick">
+        <div class="looks" role="radiogroup" aria-label="Look">
+          <label class="lk"><input type="radio" name="look" value="drawn" checked><span class="pv"><img src="/looks/drawn.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/looks/drawn.mp4"></video></span><b>Hand-drawn</b></label>
+          <label class="lk"><input type="radio" name="look" value="painted"><span class="pv"><img src="/looks/painted.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/looks/painted.mp4"></video></span><b>Painted</b></label>
+          <label class="lk"><input type="radio" name="look" value="collage"><span class="pv"><img src="/looks/collage.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/looks/collage.mp4"></video></span><b>Collage</b></label>
+        </div>
+        <p class="note" id="lookAbout" aria-live="polite"></p>
+      </div>
       <div class="len">
         <div class="lenhead"><label for="length">Length</label><b id="lenOut">0:30</b><span id="lenHint" hidden>Longer films are on Pro.</span></div>
         <div class="lentrack">
@@ -360,7 +378,7 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
         <p class="note credit" id="credit" hidden></p>
       </div>
       <button id="go" type="submit">Make the film</button>
-      <span class="note">Claude Opus 5.5 directs · Muse paints (painted look) · Gemini narrates · a 10-second film takes about 9-14 minutes<span id="busy"></span></span>
+      <span class="note">Claude Opus 5.5 directs · Muse paints (painted look) · GPT Image cuts out (collage look) · Gemini narrates · a 10-second film takes about 9-14 minutes<span id="busy"></span></span>
     </div>
   </form>
 
@@ -387,7 +405,7 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
     <h2>Claude video, from one prompt</h2>
     <p>KitCut is a Claude video maker. You write one sentence and Claude Opus 5.5 turns it into a short animated video with a narrator and music: the same kind of Opus 5.5 video and Claude animation people post, without writing code or setting anything up.</p>
     <div class="cards">
-      <div><h3>Claude draws every frame</h3><p>No video model. Claude writes the code that draws each frame, hand-drawn or painted, and checks stills of its own work before the video is rendered.</p></div>
+      <div><h3>Claude draws every frame</h3><p>No video model. Claude writes the code that draws each frame, hand-drawn, painted or collage, and checks stills of its own work before the video is rendered.</p></div>
       <div><h3>Written, voiced and scored</h3><p>Claude writes the script and the narration, a voice reads it, and Claude composes the music. You get a finished video, not a silent clip.</p></div>
       <div><h3>Any idea, any language</h3><p>Motion graphics, explainer videos, launch videos, stories and lessons, in the language you type in. Every film has its own page to share.</p></div>
     </div>
@@ -397,8 +415,8 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
     <h2>Questions about Claude video</h2>
     <div>
       <details><summary>Can Claude make videos?</summary><p>Yes. Claude has no video model: it writes code that draws every frame, the way the Opus 5.5 animations people share on X are made. KitCut has Claude Opus 5.5 write the script, animate every scene, write a narration and compose the music, then renders it all into a finished Claude video.</p></details>
-      <details><summary>How do I make a Claude video?</summary><p>Type one sentence about your idea, pick a length and a look (hand-drawn or painted), and press Make the film. Claude plans it, draws it, looks at stills of its own work and fixes what it doesn't like. The finished video is ready in a few minutes.</p></details>
-      <details><summary>Which Claude model makes the videos?</summary><p>Claude Opus 5.5 directs every video. It writes the script and the code that draws each frame, and reviews the result before it is rendered. For the painted look an image model paints the scenes and Claude animates them; a voice model reads Claude's narration.</p></details>
+      <details><summary>How do I make a Claude video?</summary><p>Type one sentence about your idea, pick a length and a look (hand-drawn, painted or collage), and press Make the film. Claude plans it, draws it, looks at stills of its own work and fixes what it doesn't like. The finished video is ready in a few minutes.</p></details>
+      <details><summary>Which Claude model makes the videos?</summary><p>Claude Opus 5.5 directs every video. It writes the script and the code that draws each frame, and reviews the result before it is rendered. For the painted look an image model paints the scenes and Claude animates them; for the collage look one paints pictures cut out of paper and Claude builds pages round them; a voice model reads Claude's narration.</p></details>
       <details><summary>Is it free?</summary><p>Yes, to start: every account gets 30 seconds of film a month, with no card needed. Paid plans give you more minutes, and Pro makes films up to 8 minutes long.</p></details>
       <details><summary>How long can a Claude video be?</summary><p>Up to 1 minute on Free and Standard, and 8 minutes on Pro. A month's free credits make one 30-second film.</p></details>
       <details><summary>What can I make with it?</summary><p>Motion graphics, explainer videos, launch videos, tiny stories, music videos, showreels and lessons, in any language you type in. Every film gets its own page to share.</p></details>
@@ -489,9 +507,35 @@ const IDEAS = [
   'Why cats purr: an explainer for curious grown-ups',
   'A shy moon who is afraid of the dark: a bedtime story',
   'How a lever lets one person lift a car, drawn as a blueprint',
+  'The history of the bicycle, as a paper collage of old engravings and bold print',
+  'Five things to know before your first marathon, as a cut-out magazine spread',
   'A tiny startup launches its app at 3 a.m., and the first user signs up',
 ];
 if ($('prompt').value === $('prompt').defaultValue) $('prompt').value = IDEAS[Math.floor(Math.random() * IDEAS.length)];
+// the look (lib/looks.js has the list): a radio per tile, its line under them, its preview
+// playing while the tile is pointed at or focused (never for someone who asked for less motion)
+const LOOK_ABOUT = {
+  drawn: 'Everything drawn in code: lines, characters, diagrams and type.',
+  painted: 'An image model paints the scenes; Claude animates them.',
+  collage: 'Cut-out pictures on paper, with bold print type, tape and stamps, moving like stop-motion.',
+};
+const lookOf = () => (document.querySelector('input[name=look]:checked') || { value: 'drawn' }).value;
+const lookLine = () => { $('lookAbout').textContent = LOOK_ABOUT[lookOf()] || ''; };
+function setLook(v) {
+  const r = document.querySelector(`input[name=look][value="${v}"]`);
+  if (r) { r.checked = true; lookLine(); }
+}
+const STILL = matchMedia('(prefers-reduced-motion: reduce)');
+for (const lk of document.querySelectorAll('.lk')) {
+  const v = lk.querySelector('video'), input = lk.querySelector('input');
+  const play = () => { if (STILL.matches) return; if (!v.src) v.src = v.dataset.src; v.play().catch(() => {}); };
+  const stop = () => { v.pause(); };
+  lk.addEventListener('mouseenter', play); lk.addEventListener('mouseleave', stop);
+  input.addEventListener('focus', play); input.addEventListener('blur', stop);
+  input.addEventListener('change', lookLine);
+  v.addEventListener('error', () => v.remove());
+}
+lookLine();
 // the example idea in the box, until someone types: attaching a picture or a voice note clears it,
 // so a film about a bakery does not also get a paper plane nobody asked for
 let example = $('prompt').value;
@@ -570,7 +614,7 @@ function stats(ev) {
     ['Made in', mmss(ev.seconds)], ['Claude', mmss(st.claude || 0)], ['Render', dur(st.render || 0)],
     ...(ev.cost_usd != null ? [['API cost', `$${ev.cost_usd.toFixed(2)}`]] : []),
     ...(ev.tts_cost_usd != null ? [['Voice cost', `$${ev.tts_cost_usd.toFixed(4)}`]] : []),
-    ...(ev.images ? [['Paintings', ev.image_cost_usd != null ? `${ev.images} · $${ev.image_cost_usd.toFixed(2)}` : String(ev.images)]] : []),
+    ...(ev.images ? [[ev.look === 'collage' ? 'Cut-outs' : 'Paintings', ev.image_cost_usd != null ? `${ev.images} · $${ev.image_cost_usd.toFixed(2)}` : String(ev.images)]] : []),
     ['Turns', ev.turns ?? 'n/a'],
   ];
   $('stats').innerHTML = cells.map(([k, v]) => `<div class="stat"><small>${k}</small><b>${v}</b></div>`).join('');
@@ -600,7 +644,7 @@ async function recent() {
     $('films').innerHTML = list.map((f, i) => `
       <a class="film" href="/film/${esc(f.id)}" data-i="${i}">
         <img src="${esc(f.poster_url)}" alt="" loading="lazy">
-        <div><p>${esc(f.prompt || f.title || 'A film from pictures and a voice note')}</p><small>${dur(f.length || 5)} ${f.look === 'painted' ? 'painted' : 'drawn'} film · made in ${mmss(f.seconds || 0)}${f.cost_usd != null ? ' · $' + f.cost_usd.toFixed(2) : ''}</small></div>
+        <div><p>${esc(f.prompt || f.title || 'A film from pictures and a voice note')}</p><small>${dur(f.length || 5)} ${{ painted: 'painted', collage: 'collage' }[f.look] || 'drawn'} film · made in ${mmss(f.seconds || 0)}${f.cost_usd != null ? ' · $' + f.cost_usd.toFixed(2) : ''}</small></div>
       </a>`).join('');
     for (const b of $('films').querySelectorAll('.film')) {
       const f = list[+b.dataset.i];
@@ -695,7 +739,7 @@ async function follow(since = 0, misses = 0) {
     if (since === 0) {  // first look: the prompt, and a clock that carries on from the run's start
       if (s.prompt) { $('prompt').value = s.prompt; countPrompt(); }
       if (s.length) { $('length').value = String(s.length); paintLength(); }
-      if (s.look) $('look').value = s.look;
+      if (s.look) setLook(s.look);
       if (s.status === 'queued' || s.status === 'running') { startClock(s.elapsed_s); screen('<div class="idle">Claude is thinking up the film...</div>'); }
     }
     for (const ev of s.events) onEvent(ev);
@@ -735,7 +779,7 @@ const SIGNIN_ERRORS = {
 };
 // the idea typed before signing in, kept in this browser until the visitor is back
 const draft = {
-  save() { try { localStorage.setItem('studioDraft', JSON.stringify({ prompt: $('prompt').value, look: $('look').value, length: $('length').value })); } catch (e) { /* private window */ } },
+  save() { try { localStorage.setItem('studioDraft', JSON.stringify({ prompt: $('prompt').value, look: lookOf(), length: $('length').value })); } catch (e) { /* private window */ } },
   take() {
     try {
       const d = JSON.parse(localStorage.getItem('studioDraft') || 'null');
@@ -858,7 +902,7 @@ async function whoami() {
   const d = USER && draft.take();
   if (d) {
     if (d.prompt) { $('prompt').value = d.prompt; countPrompt(); }
-    if (d.look) $('look').value = d.look;
+    if (d.look) setLook(d.look);
     if (d.length) { $('length').value = d.length; paintLength(); }
     if (!currentId) $('status').textContent = 'Signed in. Your idea is back in the box: press "Make the film".';
   }
@@ -1601,7 +1645,7 @@ $('form').addEventListener('submit', async (e) => {
   try {
     const ids = await attachmentIds((t) => screen(`<div class="idle">${t}</div>`));
     const send = (attachments) => api('/api/films', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, seconds: +$('length').value, look: $('look').value, ...(attachments.length ? { attachments } : {}) }) });
+      body: JSON.stringify({ prompt, seconds: +$('length').value, look: lookOf(), ...(attachments.length ? { attachments } : {}) }) });
     let r = await send(ids);
     if (r.status === 409) {  // an attachment the studio no longer has (a day old): send it again, once
       const why = await r.clone().json().catch(() => ({}));
