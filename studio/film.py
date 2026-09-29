@@ -65,11 +65,13 @@ LEGACY = os.path.join(REPO, "projects")
 # seconds a visitor may ask for: the site sells them by the second, and decides who may have
 # what (films over a minute are for its Pro plan, up to 8 minutes)
 LENGTHS = tuple(range(5, 485, 5))
-# drawn: everything drawn in code; painted: an image model paints the scenes, the code animates
-LOOKS = ("drawn", "painted")
+# drawn: everything drawn in code; painted: an image model paints the scenes, the code animates;
+# collage: an image model paints single objects cut out of paper, the code builds pages round them
+LOOKS = ("drawn", "painted", "collage")
 EDITABLE = ("film.js", "score.json", "sfx.json", "vo.json")
 MADE = ("film.js", "score.json", "sfx.json")  # what a finished film must have
-ENGINE = ("engine.js", "props.js")  # the film's own copy, in engine\; Claude may extend it
+# the film's own copy, in engine\; Claude may extend it (collage.js: collage films only)
+ENGINE = ("engine.js", "props.js", "collage.js")
 # a member of the person's cast, cast\<name>.js (library.py), and one named in film code:
 # SK.cast.pip, cast.pip, cast['pip']
 CAST_FILE = re.compile(r"^[a-z][a-z0-9_]{0,30}\.js$")
@@ -81,6 +83,43 @@ FOR_LINE = re.compile(
 # what Claude may not change in paint.json: the painter, and how many paintings a film may cost
 # (8 up to a minute, more for a longer film: limits()["images"], paint_pins)
 PAINT_PINNED = {"backend": "muse", "model": "meta/muse-image", "max_images": 8}
+# a collage film's cut-outs: a model that paints on a transparent background (sketch-paint.py)
+CUTOUTS_PINNED = {
+    "model": "openai/gpt-image-2.5-flare",
+    "quality": "medium",
+    "border": 12,
+    "cut": "scissor",
+}
+# the print faces a collage film's pieces use (sketch/collage.js), on top of the template's
+COLLAGE_FONTS = [
+    {"file": "fonts/AbrilFatface-Regular.ttf", "family": "Abril Fatface", "weight": "400"},
+    {"file": "fonts/UnifrakturMaguntia-Book.ttf", "family": "UnifrakturMaguntia", "weight": "400"},
+    {"file": "fonts/Oswald-VF.ttf", "family": "Oswald", "weight": "200 700", "load": "500 600 700"},
+    {"file": "fonts/OldStandard-Regular.ttf", "family": "Old Standard TT", "weight": "400"},
+    {"file": "fonts/OldStandard-Bold.ttf", "family": "Old Standard TT", "weight": "700"},
+    {
+        "file": "fonts/OldStandard-Italic.ttf",
+        "family": "Old Standard TT",
+        "weight": "400",
+        "style": "italic",
+    },
+    {
+        "file": "fonts/PlayfairDisplay-VF.ttf",
+        "family": "Playfair Display",
+        "weight": "400 900",
+        "load": "700 900",
+    },
+    {
+        "file": "fonts/PlayfairDisplay-Italic-VF.ttf",
+        "family": "Playfair Display",
+        "weight": "400 900",
+        "style": "italic",
+        "load": "400 700",
+    },
+    {"file": "fonts/CourierPrime-Regular.ttf", "family": "Courier Prime", "weight": "400"},
+    {"file": "fonts/CourierPrime-Bold.ttf", "family": "Courier Prime", "weight": "700"},
+    {"file": "fonts/Anton-Regular.ttf", "family": "Anton", "weight": "400"},
+]
 # the voice: Google's Gemini text-to-speech. 3.8 needs the Gemini API enabled in the service
 # account's project; STUDIO_TTS_MODEL overrides it (e.g. gemini-3.1-flash-tts-preview)
 TTS_MODEL = "gemini-3.8-flash-tts"
@@ -135,14 +174,19 @@ def limits(length):
         "drum_bars": max(64, length),
         # paintings, repaints included: 12 up to 4 minutes, then one about every 20 s
         "images": 8 if length <= 60 else min(24, max(12, length // 20)),
+        # a collage film's cut-outs, repaints included: pages hold several each (the reference
+        # 60 s collage used ~19); ~$0.014 each
+        "cutouts": 10 if length <= 15 else min(40, max(14, length // 3)),
         # the agent's turns: 60 was enough up to 2 minutes; a longer film writes and checks
         # more scenes (a turn is one of Claude's replies, its tool calls included)
         "turns": 60 + max(0, length - 120) // 6,
     }
 
 
-def paint_pins(length):
-    """What the studio sets in a painted film's paint.json."""
+def paint_pins(length, look="painted"):
+    """What the studio sets in a painted (or collage) film's paint.json."""
+    if look == "collage":
+        return PAINT_PINNED | {"max_images": limits(length)["cutouts"], "cutouts": CUTOUTS_PINNED}
     return PAINT_PINNED | {"max_images": limits(length)["images"]}
 
 
@@ -263,6 +307,8 @@ class Film:
 
     @property
     def look(self):
+        if self.record().get("look") == "collage":  # it has a paint.json too, for its cut-outs
+            return "collage"
         return "painted" if os.path.exists(self.path("paint.json")) else "drawn"
 
     @property
@@ -272,7 +318,7 @@ class Film:
 
     # ---------------------------------------------------------------- what Claude may touch
     def editable(self):
-        return EDITABLE + (("paint.json",) if self.look == "painted" else ())
+        return EDITABLE + (("paint.json",) if self.look in ("painted", "collage") else ())
 
     def readable(self, p):
         """Inside the film's own folder, except the studio's bookkeeping. Checked on the real
@@ -408,7 +454,8 @@ class Film:
         os.makedirs(film.path("engine"))
         os.makedirs(film.path("cast"))  # the person's cast: library.seed fills it
         os.makedirs(film.path("temp", "tmp"))
-        for name in ENGINE:  # copyfile, not copy2: a release's files are read-only
+        copies = ENGINE if look == "collage" else ENGINE[:2]
+        for name in copies:  # copyfile, not copy2: a release's files are read-only
             shutil.copyfile(os.path.join(KIT, "sketch", name), film.path("engine", name))
         with open(os.path.join(HERE, "template", "sketch.json"), encoding="utf-8") as f:
             m = json.load(f)
@@ -439,9 +486,12 @@ class Film:
         m["fps"] = 30 if fps == 30 else 60  # the plan's: Free films 30, paid ones 60
         m["engine"] = "engine"
         m["cast"] = "cast"  # every cast/*.js loads before film.js (sketch-render)
-        if look == "painted":
+        if look in ("painted", "collage"):
             m["paint"] = "paint.json"
-            _write_json(film.path("paint.json"), paint_pins(seconds) | {"style": "", "images": []})
+            pins = paint_pins(seconds, look)
+            _write_json(film.path("paint.json"), pins | {"style": "", "images": []})
+        if look == "collage":
+            m["fonts"] = list(m.get("fonts") or []) + COLLAGE_FONTS
         _write_json(film.manifest, m)
         vo = {**VO_PINNED, "model": tts_model(), "voice": "Kore", "style": "", "language": "en"}
         _write_json(film.path("vo.json"), vo | {"lines": []})

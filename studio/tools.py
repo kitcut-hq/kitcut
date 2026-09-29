@@ -217,7 +217,7 @@ class Tools:
         )
 
     async def paint(self, retake=None):
-        if self.film.look != "painted":
+        if self.film.look not in ("painted", "collage"):
             raise ToolError("This film is drawn, not painted: there is nothing to paint.")
         args = []
         if retake:
@@ -405,7 +405,7 @@ class Tools:
         ]
         if self.film.record().get("prompt", "").strip():  # a typed idea is the title already
             tools = [t for t in tools if t.name != "name_film"]
-        if self.film.look != "painted":
+        if self.film.look not in ("painted", "collage"):
             tools = [t for t in tools if t.name != "paint"]
         return create_sdk_mcp_server("studio", tools=tools)
 
