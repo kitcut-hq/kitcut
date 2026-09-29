@@ -5,6 +5,9 @@
                                                                       costs; makes nothing
     python studio/bakeoff.py --set audience --arm A --tree <checkout> make the set's films with
                                                                       that checkout's studio code
+    python studio/bakeoff.py --set collage --arm painted --tree <checkout> --look painted
+                                                                      every film of the arm in
+                                                                      one look (two looks, one tree)
     python studio/bakeoff.py --set audience --grade                   a blind read of each film
     python studio/bakeoff.py --set audience --compare A B             the side-by-side page
 
@@ -23,7 +26,8 @@ run an arm again to finish it (--redo makes them afresh).
 --grade renders eight frames spread over each finished film and has Claude read them blind -- no
 prompt, no arm -- for what it is about, how much its look belongs in children's animation (0-1,
 whatever the subject), how well the look fits the subject, and how professionally made it looks
-(1-5 each). --compare writes compare.html: per prompt, each arm's frames, choices, grade, cost and
+(1-5 each), and whatever else the set asks ("grade_extra": "newspaper" -- does it look like a
+newspaper; "legible" -- do its words read at a glance). --compare writes compare.html: per prompt, each arm's frames, choices, grade, cost and
 time; and prints the tallies: per arm, the means, and how many films' look fits their subject (4
 or 5 of 5). Calibrated on the Dell documentary this was built for: its googly-eyed first minutes
 read childish 0.40, fits 3 -- a mild grader, so compare the arms, never one number to a bar.
@@ -70,8 +74,20 @@ GRADE_ASK = (
     "its subject -- 0 = not at all, 1 = entirely>, "
     '"fits_subject": <1-5: how well the look suits the subject and its seriousness>, '
     '"professional": <1-5: how professionally made it looks>, '
-    '"why": "one sentence"}' % FRAMES
+    '%s"why": "one sentence"}'
 )
+# what a set may ask besides (its "grade_extra"): a collage look can turn every film into a
+# newspaper, and a page of print can be unreadable at a glance
+GRADE_EXTRA = {
+    "newspaper": '"newspaper": <true or false: does it look like a newspaper -- a masthead, '
+    "columns of small print, a front page>, ",
+    "legible": '"legible": <1-5: how easily its words can be read at a glance>, ',
+}
+
+
+def grade_ask(s):
+    """The grader's question for a set: the same for every set, plus what the set asks besides."""
+    return GRADE_ASK % (FRAMES, "".join(GRADE_EXTRA[k] for k in s.get("grade_extra", [])))
 
 
 def main_checkout():
@@ -192,7 +208,9 @@ def worker(spec_path):
     t0 = time.time()
     asyncio.run(go())
     rec = film.record()
-    brief = agent.system_prompt(spec["look"])
+    # what the film was given: its capabilities too, in a tree that has them (film.CAPS)
+    caps = getattr(film, "caps", None)
+    brief = agent.system_prompt(spec["look"], caps) if caps else agent.system_prompt(spec["look"])
     try:
         with open(film.path("temp", "system-prompt.md"), encoding="utf-8") as f:
             used = f.read() == brief
@@ -207,6 +225,7 @@ def worker(spec_path):
             "commit": spec["commit"],
             "dirty": spec["dirty"],
             "film": film.dir,
+            "look": spec["look"],
             "ok": bool(rec.get("ok")),
             "error": rec.get("error"),
             "minutes": round((time.time() - t0) / 60, 1),
@@ -267,7 +286,7 @@ def run_arm(args, s, root, repo):
             "home": home,
             "prompt": p["prompt"],
             "seconds": p.get("seconds") or s["seconds"],
-            "look": p.get("look", "drawn"),
+            "look": args.look or p.get("look", "drawn"),
             "auth": args.auth,
             "commit": commit,
             "dirty": dirty,
@@ -342,7 +361,8 @@ def plan(args, s, root):
                 "%s: %s" % (a, "made" if r and r.get("ok") else "failed" if r else "to make")
             )
             left += 0 if r and r.get("ok") else 1
-        print("  %-16s %-8s %s" % (p["id"], p.get("look", "drawn"), "   ".join(row) or "-"))
+        look = args.look or p.get("look", "drawn")
+        print("  %-16s %-8s %s" % (p["id"], look, "   ".join(row) or "-"))
     per = [
         r
         for a in known
@@ -397,7 +417,7 @@ def frames_sheet(film_dir, seconds, out):
     sheet.save(out)
 
 
-async def ask_blind(png):
+async def ask_blind(png, question):
     """Claude's read of the sheet, shown nothing but the frames."""
     import agent
     from claude_agent_sdk import (
@@ -421,7 +441,7 @@ async def ask_blind(png):
                         "type": "image",
                         "source": {"type": "base64", "media_type": "image/png", "data": data},
                     },
-                    {"type": "text", "text": GRADE_ASK},
+                    {"type": "text", "text": question},
                 ],
             },
             "parent_tool_use_id": None,
@@ -474,7 +494,7 @@ def grade(args, s, root):
     for a, p, r, d in todo:
         sheet = os.path.join(d, "sheet.png")
         frames_sheet(r["film"], p.get("seconds") or s["seconds"], sheet)
-        g = asyncio.run(ask_blind(sheet))
+        g = asyncio.run(ask_blind(sheet, grade_ask(s)))
         write_json(os.path.join(d, "grade.json"), g)
         print(
             "%-8s %-16s childish %.2f  fits %s  professional %s  (%s)"
@@ -510,11 +530,17 @@ def counts(film_dir):
             pass
     sfx = read_json(os.path.join(film_dir, "sfx.json"), [])
     fx = [e.get("fx") for e in sfx if isinstance(e, dict)] if isinstance(sfx, list) else []
+    images = os.path.join(film_dir, "images")
+    webp = [n for n in os.listdir(images) if n.endswith(".webp")] if os.path.isdir(images) else []
     return {
         "faces": len(re.findall(r"\bP\.face\.(?:eyes|mouth)\b|\bface\s*:", js)),
         "kid_or_person": len(re.findall(r"\bP\.(?:kid|person)\s*\(", js)),
         "pop_boing": sum(1 for f in fx if f in ("pop", "boing")),
         "sfx": len(fx),
+        # a collage film's: its cut-outs, stamps, and the newspaper under it (sketch/collage.js)
+        "cutouts": len(webp),
+        "stamps": js.count("SK.stamp("),
+        "newsprint": "SK.newsprint(" in js,
     }
 
 
@@ -537,6 +563,17 @@ def tallies(root, name, arm, prompts):
                 for k in ("childish", "fits_subject", "professional")
             }
             out[label]["fit"] = sum(1 for g in graded if num(g, "fits_subject") >= 4)
+            if any("legible" in g for g in graded):
+                out[label]["legible"] = round(
+                    sum(num(g, "legible") for g in graded) / len(graded), 2
+                )
+    # a newspaper where the set says one is wrong (its prompts' "newspaper_wrong")
+    wrong = [x[2] for x in rows if x[0].get("newspaper_wrong") and x[2]]
+    if any("newspaper" in g for g in wrong):
+        out["newspaper_where_wrong"] = "%d of %d" % (
+            sum(1 for g in wrong if g.get("newspaper") is True),
+            len(wrong),
+        )
     if rows:
         out["claude_usd"] = round(
             sum(x[1].get("claude_cost_usd") or 0 for x in rows) / len(rows), 2
@@ -579,7 +616,7 @@ def compare(args, s, root):
         return (
             "<td><img src='%s' loading=lazy>%s<div class=facts>For: %s<br>%s %s &middot; %s, "
             "&ldquo;%s&rdquo; &middot; %s &middot; %s bpm<br>faces %d &middot; kid/person %d "
-            "&middot; pop/boing %d of %d cues<br>Claude $%.2f &middot; %s min &middot; %s turns"
+            "&middot; pop/boing %d of %d cues%s<br>Claude $%.2f &middot; %s min &middot; %s turns"
             "</div></td>"
             % (
                 img,
@@ -595,6 +632,20 @@ def compare(args, s, root):
                 c["kid_or_person"],
                 c["pop_boing"],
                 c["sfx"],
+                (
+                    "<br>cut-outs %d &middot; stamps %d &middot; newsprint %s &middot; faces %s%s"
+                    % (
+                        c["cutouts"],
+                        c["stamps"],
+                        "yes" if c["newsprint"] else "no",
+                        html.escape(", ".join(d.get("faces") or []) or "-"),
+                        " &middot; <b>looks like a newspaper</b>"
+                        if g and g.get("newspaper")
+                        else "",
+                    )
+                    if c["cutouts"] or "faces" in d
+                    else ""
+                ),
                 r.get("claude_cost_usd") or 0,
                 r.get("minutes"),
                 r.get("turns"),
@@ -617,6 +668,8 @@ def compare(args, s, root):
                         v[k]["professional"],
                     )
                 )
+        if "newspaper_where_wrong" in v:
+            parts.append("a newspaper where one is wrong: %s" % v["newspaper_where_wrong"])
         if "claude_usd" in v:
             parts.append("Claude $%.2f and %.1f min a film" % (v["claude_usd"], v["minutes"]))
         return "<li><b>%s</b>: %s</li>" % (html.escape(x), "; ".join(parts))
@@ -670,6 +723,11 @@ def main():
     ap.add_argument("--plan", action="store_true", help="what would run, and its rough cost")
     ap.add_argument("--arm", help="the arm's name, e.g. before or after")
     ap.add_argument("--tree", help="the checkout whose studio code makes the arm's films")
+    ap.add_argument(
+        "--look",
+        choices=("drawn", "painted", "collage"),
+        help="make every film of the arm in this look (else each prompt's own, default drawn)",
+    )
     ap.add_argument("--grade", action="store_true", help="read every finished film blind")
     ap.add_argument("--compare", nargs=2, metavar=("A", "B"), help="two arms side by side")
     ap.add_argument("--only", help="some of the set's prompt ids, comma-separated")

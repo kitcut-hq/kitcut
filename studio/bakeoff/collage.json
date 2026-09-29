@@ -1,0 +1,59 @@
+{
+  "about": "Is the collage look ready to sell? Nine prompts across subjects and audiences, made in collage and in the look it competes with (painted, which also paints its pictures with a model), and three of them hand-drawn too. Read against the bar: professional for its audience, fits the subject, childish only where it should be, and not a newspaper where a newspaper is wrong (the one collage example is a newspaper, so watch for every film becoming one). icecream is the Runway post's own prompt (2026-09-28), borshch is in Ukrainian (the print faces' Cyrillic), suez is two minutes long. Built 2026-09-29 for the collage look (studio/looks/collage.md).",
+  "seconds": 30,
+  "grade_extra": ["newspaper", "legible"],
+  "prompts": [
+    {
+      "id": "icecream",
+      "seconds": 60,
+      "audience": "adults: a portfolio piece for social video",
+      "prompt": "Create a 60 second motion graphic explainer video about the history of ice cream from the inception, to present day. The art style should be newspaper cutout / mixed media aesthetic with a high degree of polish. This piece is for your portfolio, so make sure to make it great."
+    },
+    {
+      "id": "pripyat",
+      "audience": "adults: a sombre piece of history",
+      "prompt": "The evacuation of Pripyat on 27 April 1986, the day after the accident at the Chernobyl nuclear plant."
+    },
+    {
+      "id": "stroke",
+      "audience": "adults: a patient's family, worried",
+      "prompt": "What happens in the first hour after someone arrives at hospital with a stroke, explained for the family waiting outside."
+    },
+    {
+      "id": "ledgerly",
+      "audience": "adults: a startup's customers",
+      "newspaper_wrong": true,
+      "prompt": "A launch video for Ledgerly, an expense app: snap a photo of a receipt, and it is read, filed, approved and paid back within a day."
+    },
+    {
+      "id": "festival",
+      "audience": "young adults: an event promo",
+      "newspaper_wrong": true,
+      "prompt": "A promo for a street-food festival in Lisbon: three nights, forty stalls and live music by the river."
+    },
+    {
+      "id": "volcano",
+      "audience": "children aged 10-12: a science lesson",
+      "newspaper_wrong": true,
+      "prompt": "Why volcanoes erupt, explained for a class of 10 to 12 year olds."
+    },
+    {
+      "id": "bedtime",
+      "audience": "young children, at bedtime",
+      "control": true,
+      "newspaper_wrong": true,
+      "prompt": "A bedtime story for a four-year-old: a paper boat sails across the bath to find the rubber duck."
+    },
+    {
+      "id": "borshch",
+      "audience": "adults: Ukrainian-speaking viewers",
+      "prompt": "Коротке пояснювальне відео українською: звідки взявся борщ, як він став символом України і що в ньому головне."
+    },
+    {
+      "id": "suez",
+      "seconds": 120,
+      "audience": "adults: curious viewers, a news explainer",
+      "prompt": "Why one ship stuck in the Suez Canal in March 2021 held up about ten billion dollars of trade a day: the canal, the ship, the six days, and what it showed about world trade."
+    }
+  ]
+}
