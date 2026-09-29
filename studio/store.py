@@ -33,12 +33,18 @@ The document is written when a film is asked for (state queued, so it counts tow
 limits at once), when it starts, as its cost grows and at the end, so a run that dies half-way (a
 crash, a power cut) still shows what it spent. If the database cannot be reached the final record
 goes to the outbox (STUDIO_HOME/outbox.jsonl), and `python studio/agent.py --sync` sends it later.
+During a ship two servers share the home (peers.py, KI-031) and may both append while a sync
+rewrites the file, so every append and every rewrite happens under outbox.jsonl.lock (locks.py),
+and a row appended while a sync is sending is still there after it.
 """
 
 import os
 import json
 import socket
+import contextlib
 from datetime import UTC, datetime
+
+import locks
 
 COLLECTION = "studio_runs"
 DB = "kitcut"
@@ -84,12 +90,32 @@ class MongoStore:
             return True
         except Exception as e:  # noqa: BLE001 -- a logging failure must never fail a film
             if final and self.outbox:
-                os.makedirs(os.path.dirname(self.outbox), exist_ok=True)
-                with open(self.outbox, "a", encoding="utf-8") as f:
-                    row = {"_id": run_id, "created_at": created, **doc}
-                    f.write(json.dumps(row, default=str) + "\n")
-                print("  cost log: could not write to MongoDB (%s); kept in %s" % (e, self.outbox))
+                row = {"_id": run_id, "created_at": created, **doc}
+                try:
+                    self._append(json.dumps(row, default=str))
+                    kept = "kept in %s" % self.outbox
+                except OSError as err:
+                    kept = "and could not keep it in %s either (%s)" % (self.outbox, err)
+                print("  cost log: could not write to MongoDB (%s); %s" % (e, kept))
             return False
+
+    def _append(self, line):
+        """One row onto the outbox. Two servers may finish films at once during a ship (peers.py,
+        KI-031), and sync() rewrites the file: so the row goes on in ONE write to an O_APPEND
+        descriptor (never interleaved with another row), under the outbox's lock (never between
+        sync's read and its rewrite). A lock that cannot be had (its file cannot be made, or a
+        stalled peer holds it) does not lose the row: it is appended without the lock."""
+        os.makedirs(os.path.dirname(self.outbox) or ".", exist_ok=True)
+        data = (line + "\n").encode("utf-8")
+        flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_BINARY", 0)
+        with contextlib.ExitStack() as held:
+            with contextlib.suppress(OSError):  # locks.LockTimeout is one too
+                held.enter_context(locks.locked(self.outbox + ".lock"))
+            fd = os.open(self.outbox, flags, 0o644)
+            try:
+                os.write(fd, data)
+            finally:
+                os.close(fd)
 
     def get(self, run_id):
         """One run's document, per-call detail included; None when there is none or the database
@@ -123,27 +149,48 @@ class MongoStore:
             upsert=True,
         )
 
+    def _rows(self):
+        """The outbox's rows as written, one string each (none when there is no outbox)."""
+        try:
+            with open(self.outbox, encoding="utf-8") as f:
+                return [x.strip() for x in f if x.strip()]
+        except FileNotFoundError:
+            return []
+
     def sync(self):
-        """Send what the outbox holds; returns (sent, left)."""
+        """Send what the outbox holds; returns (sent, left).
+
+        The rows are read under the outbox's lock and sent without it (the database may take
+        seconds a row to refuse, and a server finishing a film must not wait on that to append).
+        Then, under the lock again, the file is rewritten as it is NOW less one copy of each row
+        sent: a row another server appended meanwhile stays, and a row a second sync sent too is
+        taken out once (a run's document is an upsert, so sending it twice does no harm)."""
         if not self.outbox or not os.path.exists(self.outbox):
             return 0, 0
-        with open(self.outbox, encoding="utf-8") as f:
-            pending = [json.loads(x) for x in f if x.strip()]
-        left = []
-        for d in pending:
+        with locks.locked(self.outbox + ".lock"):
+            pending = self._rows()
+        sent = []
+        for line in pending:
+            d = json.loads(line)
             run_id = d.pop("_id")
             for k in ("created_at", "updated_at", "finished_at"):
                 if isinstance(d.get(k), str):
                     d[k] = datetime.fromisoformat(d[k])
-            if not self.save(run_id, d):
-                left.append({"_id": run_id, **d})
-        if left:
-            with open(self.outbox, "w", encoding="utf-8") as f:
-                for d in left:
-                    f.write(json.dumps(d, default=str) + "\n")
-        else:
-            os.remove(self.outbox)
-        return len(pending) - len(left), len(left)
+            if self.save(run_id, d):
+                sent.append(line)
+        with locks.locked(self.outbox + ".lock"):
+            now = self._rows()
+            for line in sent:
+                if line in now:
+                    now.remove(line)
+            if now:
+                tmp = "%s.%d.tmp" % (self.outbox, os.getpid())
+                with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+                    f.writelines(x + "\n" for x in now)
+                os.replace(tmp, self.outbox)
+            elif os.path.exists(self.outbox):
+                os.remove(self.outbox)
+        return len(sent), len(pending) - len(sent)
 
 
 class MemoryStore:

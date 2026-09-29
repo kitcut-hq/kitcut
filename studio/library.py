@@ -6,6 +6,8 @@
         cast\\<name>\\thumb.png         its latest version drawn alone
         cast.png                        every member on one sheet, named
         films\\<film id>.jpg            a small poster of each film in the memory
+        .lock                           held while the index or a version is written: two
+                                        servers may share the home during a ship (_lock)
 
 A cast member is a file a film wrote in its cast/ folder, `SK.cast.<name> = {about, draw(x, y,
 o)}`: a character, a place or a prop the person may want again. Every new film of theirs gets
@@ -43,8 +45,10 @@ import json
 import shutil
 import hashlib
 import threading
+import contextlib
 from datetime import datetime
 
+import locks
 from film import CAST_USE, HOME, PROJECT_ID, Film, _write_json
 
 ROOT = os.path.join(HOME, "library")
@@ -86,11 +90,21 @@ def dir_of(lib):
     return os.path.join(d, project) if project else d
 
 
+@contextlib.contextmanager
 def _lock(lib):
     """The library's own lock: a film keeping its cast and the person removing a member (or a
-    picture) at the same moment must not each write an index the other has not seen."""
+    picture) at the same moment must not each write an index the other has not seen, nor two
+    films both write cast/<name>/v3.js. Two locks, taken in this order: a thread lock (this
+    process's films queue on it without polling), then <library>/.lock (locks.py), because during
+    a ship two servers run on one home (peers.py, KI-031) and either may be keeping a film of the
+    same person's. Not reentrant."""
+    d = dir_of(lib)
     with _LOCKS_LOCK:
-        return _LOCKS.setdefault(dir_of(lib), threading.Lock())
+        mine = _LOCKS.setdefault(d, threading.Lock())
+    with mine:
+        os.makedirs(d, exist_ok=True)
+        with locks.locked(os.path.join(d, ".lock")):
+            yield
 
 
 def _hash(code):

@@ -18,6 +18,10 @@ outside its folder: Claude's cwd is the folder, it may read only inside it (read
 only its own files there (writable), and every pipeline step runs on its manifest with TEMP
 pointed into it. The film's id is unguessable, so one film's page cannot be found from another's.
 
+During a ship two servers share the home (peers.py): the one making a film writes its record while
+the other may hide it or change its listing. So the record is changed under temp\\record.lock
+(Film.update), and read without one (every write replaces the whole file).
+
 STUDIO_HOME defaults to a folder next to the code (C:\\instafill\\kitcut-studio beside the
 kitcut checkout); a release snapshot lives inside it (releases\\<sha>), and then its parent's
 parent is the home. It must be on the same drive as the code: the scripts write paths relative
@@ -31,8 +35,11 @@ import time
 import shutil
 import secrets
 import difflib
+import contextlib
 import subprocess
 from datetime import datetime
+
+import locks
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # the code this studio runs: a release snapshot (STUDIO_HOME\releases\<sha>), or the working tree
@@ -215,10 +222,36 @@ class Film:
             return {}
 
     def update(self, **fields):
-        rec = self.record()
-        rec.update(fields)
-        _write_json(self.path("studio.json"), rec)
-        return rec
+        """Change these fields of the record, keeping the rest. Read, changed and written under
+        the film's record lock (temp/record.lock): during a ship two servers run on one home
+        (peers.py, KI-031), and a person hiding a film on one must not undo the state its maker
+        on the other has just written, nor be undone by it. Not reentrant: nothing may update
+        inside an update. Reading (record) takes no lock: every write is a whole-file rename."""
+        with contextlib.ExitStack() as held:
+            try:
+                if self._temp():
+                    held.enter_context(locks.locked(self.path("temp", "record.lock")))
+            except locks.LockTimeout as e:  # a peer stalled halfway through its write
+                print("%s: %s; writing the record without it" % (self.id, e), flush=True)
+            except OSError:
+                pass  # no lock file can be made here: write as it always did
+            rec = self.record()
+            rec.update(fields)
+            _write_json(self.path("studio.json"), rec)
+            return rec
+
+    def _temp(self):
+        """Make sure temp/ is there, for the record lock; False when it cannot be -- a film from
+        before the studio had a home, in a working tree this process may not write to, or a
+        folder that is gone. Then a record is written without the lock, as it always was: a lock
+        is never the reason a film fails. mkdir, not makedirs: a removed film stays removed."""
+        try:
+            os.mkdir(self.path("temp"))
+        except FileExistsError:
+            pass
+        except OSError:
+            return False
+        return True
 
     @property
     def state(self):
