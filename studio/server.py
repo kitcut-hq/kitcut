@@ -467,6 +467,8 @@ def start(film, finish_only=False):
             )
             ok = r.get("ok")
             J["status"] = "done" if ok else "error"
+            if ok:  # its moments sheet now, so a YouTube draft does not wait for it
+                thumbs.premake(film)
         except asyncio.CancelledError:
             c = J["control"]  # drain() requeued it; shutdown() stopped it; else its person did
             J["status"] = (

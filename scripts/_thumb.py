@@ -382,6 +382,17 @@ def clean_manifest(film_dir, into):
         return p if os.path.isabs(p) else os.path.join(film_dir, p)
 
     m["film"] = ab(m.get("film") or "film.js")
+    # a font the film fetched for itself lives in the film (web/fonts/...); the tooling's own are
+    # ROOT-relative (fonts/...) and stay as they are. Missing this failed the first real publish.
+    m["fonts"] = [
+        dict(f, file=ab(f["file"]))
+        if isinstance(f, dict)
+        and isinstance(f.get("file"), str)
+        and not os.path.isabs(f["file"])
+        and os.path.exists(ab(f["file"]))
+        else f
+        for f in m.get("fonts") or []
+    ]
     for k in ("vo", "engine", "cast"):
         if isinstance(m.get(k), str):
             m[k] = ab(m[k])

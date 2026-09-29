@@ -17,6 +17,7 @@ are kept, keyed by the draft, and told to the site without anything of the studi
 import os
 import sys
 import json
+import asyncio
 import shutil
 import tempfile
 
@@ -62,6 +63,17 @@ def fixture_film():
         m = json.load(f)
     m["slug"] = "film"
     m["tail"] = {"secs": 0, "scripts": ["temp/brand/red.js"]}
+    # a font the film fetched for itself (the page tool keeps them in the film's web/fonts): its
+    # path is the film's, not the tooling's -- the first real publish failed on exactly this
+    os.makedirs(os.path.join(d, "web", "fonts"), exist_ok=True)
+    shutil.copyfile(
+        os.path.join(_env.ROOT, "fonts", "Montserrat-Bold.ttf"),
+        os.path.join(d, "web", "fonts", "Own-700.ttf"),
+    )
+    m["fonts"] = [
+        *m.get("fonts", []),
+        {"file": "web/fonts/Own-700.ttf", "family": "Own", "weight": "700"},
+    ]
     with open(os.path.join(d, "sketch.json"), "w", encoding="utf-8") as f:
         json.dump(m, f, indent=1)
     with open(os.path.join(d, "temp", "brand", "red.js"), "w", encoding="utf-8") as f:
@@ -107,6 +119,23 @@ def main():
     sheet = thumbs.sheet_now(f)
     im = Image.open(__import__("io").BytesIO(sheet))
     check(im.format == "JPEG" and im.width == 1920, "the sheet is one JPEG, four across", im.size)
+    # a finished film's premake and a draft asking at the same moment make it once, not twice
+    os.remove(thumbs.sheet_path(f))
+    made, real = [], _thumb.moments_sheet
+
+    def counted(stills, out, **kw):
+        made.append(out)
+        return real(stills, out, **kw)
+
+    _thumb.moments_sheet = counted
+
+    async def both():
+        return await asyncio.gather(thumbs.premake(f), thumbs.sheet(f))
+
+    got = asyncio.run(both())
+    _thumb.moments_sheet = real
+    check(got[0] == got[1] == sheet and len(made) == 1, "two asks at once: made once", len(made))
+    check(os.path.exists(thumbs.sheet_path(f)), "and kept for the next draft")
 
     # ---------------------------------------------------------------- the film's own frames
     man = _thumb.clean_manifest(f.dir, os.path.join(HOME, "copy"))
@@ -117,13 +146,21 @@ def main():
         os.path.isabs(m["film"]) and os.path.isabs(m["audio"]["vo_timeline"]),
         "and every path is absolute",
     )
+    own = [x["file"] for x in m["fonts"] if x["family"] == "Own"]
+    check(own and os.path.isabs(own[0]), "the film's own font too, where the film keeps it", own)
+    # the control: the same copy with the tail put back, as the film's final render draws it
+    ctl = dict(m, tail={"secs": 0, "scripts": [f.path("temp", "brand", "red.js")]})
+    os.makedirs(os.path.join(HOME, "control"), exist_ok=True)
+    ctl_man = os.path.join(HOME, "control", "sketch.json")
+    with open(ctl_man, "w", encoding="utf-8") as fh:
+        json.dump(ctl, fh)
     raw = os.path.join(HOME, "raw")
     r = __import__("subprocess").run(
         _env.PY
         + [
             os.path.join(_env.ROOT, "scripts", "sketch-render.py"),
             "--manifest",
-            f.manifest,
+            ctl_man,
             "--stills",
             "3.00",
             "--into",

@@ -65,15 +65,32 @@ def sheet_now(film):
         return f.read()
 
 
+_SHEETS = {}  # film id -> asyncio.Lock: one film's sheet is made once, however many ask at once
+
+
 async def sheet(film):
     """sheet_now, off the event loop and through the gate; None when the film will not draw (the
-    draft then sees its review sheet or poster instead, as it did before thumbnails)."""
-    async with gate():
+    draft then sees its review sheet or poster instead, as it did before thumbnails). A second
+    ask while the first is making it waits for that one, then reads what it made."""
+    async with _SHEETS.setdefault(film.id, asyncio.Lock()):
         try:
-            return await asyncio.to_thread(sheet_now, film)
+            if os.path.exists(sheet_path(film)):
+                return await asyncio.to_thread(sheet_now, film)  # made already: just read
+            async with gate():
+                return await asyncio.to_thread(sheet_now, film)
         except Exception as e:  # noqa: BLE001 -- a draft without the sheet is still a draft
             print("thumbs: no moments sheet for %s: %s" % (film.id, e), flush=True)
             return None
+
+
+def premake(film):
+    """Make a finished film's moments sheet now, in the background, so the draft finds it made:
+    the sheet is ~10-20 s of browser, and a draft that had to make it first took 25-35 s instead
+    of the 10-16 s the dialog had before thumbnails (the first real publish, 2026-09-29)."""
+    try:
+        return asyncio.get_running_loop().create_task(sheet(film))
+    except RuntimeError:  # no loop (a script): the draft makes it when it is asked for
+        return None
 
 
 def out_dir(film, channel):
