@@ -161,6 +161,8 @@ div.stage { background: var(--sheet); border: 1.5px solid var(--rule); border-ra
 .caption b { color: var(--ink); font-weight: 600; }
 .caption .right { display: flex; align-items: center; gap: 10px; }
 .caption button.small { padding: 5px 10px; font-size: 12px; }
+.fresh { font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fresh.bad { color: var(--bad); }
 .pen { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); margin-right: 8px; animation: pulse 1s ease-in-out infinite; vertical-align: 1px; }
 @keyframes pulse { 50% { opacity: .25; } }
 .log { background: var(--sheet); border: 1.5px solid var(--rule); border-radius: 14px; padding: 12px 14px; max-height: 560px; overflow: auto; }
@@ -403,7 +405,7 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
   <section class="work">
     <div class="stage">
       <div class="screen" id="screen"><div class="idle">Your film appears here.</div></div>
-      <div class="caption"><span id="status">Ready.</span><span class="right"><button class="small ghost yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><button class="small ghost" type="button" id="share" hidden title="Copy a link to this film">Share</button><button class="small ghost" type="button" id="stop" hidden>Stop</button><span id="clock"></span></span></div>
+      <div class="caption"><span id="status">Ready.</span><span class="right"><button class="small ghost yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><button class="small ghost" type="button" id="share" hidden title="Copy a link to this film">Share</button><button class="small ghost" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span id="clock"></span></span></div>
       <div class="posts" id="ytPosts" hidden></div>
     </div>
     <aside class="log">
@@ -574,7 +576,7 @@ function countPrompt() {
     : `${n.toLocaleString()} / ${max} characters`;
 }
 $('prompt').addEventListener('input', countPrompt);
-let t0 = 0, timer = null, poll = null;
+let t0 = 0, timer = null, poll = null, pending = null, freshAt = 0;
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 // a length for reading: "45 s" under a minute, "3:15" from one up (never "195 s")
 const dur = (s) => (s >= 60 ? mmss(s) : `${Math.round(s)} s`);
@@ -720,7 +722,7 @@ $('stop').addEventListener('click', async () => {
 let currentId = null, lastCost = null;
 function tick() { $('clock').textContent = (lastCost != null ? `${usd(lastCost)} so far · ` : '') + mmss((Date.now() - t0) / 1000); }
 function startClock(elapsed) { t0 = Date.now() - (elapsed || 0) * 1000; clearInterval(timer); tick(); timer = setInterval(tick, 500); }
-function finish() { clearInterval(timer); timer = null; clearTimeout(poll); poll = null; $('go').disabled = !studioUp; $('stop').hidden = true; }
+function finish() { clearInterval(timer); timer = null; clearTimeout(poll); poll = null; pending = null; unfresh(); $('go').disabled = !studioUp; $('stop').hidden = true; }
 function reset() {
   finish(); ytReset(); t0 = 0; lastCost = null; lastLog = null; showedDone = false;
   $('stats').hidden = true; $('log').innerHTML = ''; $('clock').textContent = '';
@@ -745,7 +747,37 @@ window.addEventListener('popstate', () => {
   if (m) openFilm(m[1], false); else home();
 });
 
-// polling, not server-sent events: Cloudflare quick tunnels do not carry an event stream
+// How fresh the film on screen is, while it is being made: when the studio last answered ("Updated
+// 12:41:07"), or "Reconnecting..." while it does not, so nobody has to reload to be sure.
+const clockAt = (t) => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+function fresh(ok) {
+  const el = $('fresh');
+  if (ok) freshAt = Date.now();
+  el.hidden = false;
+  el.classList.toggle('bad', !ok);
+  el.textContent = ok ? `Updated ${clockAt(freshAt)}` : `Reconnecting…${freshAt ? ` · last update ${clockAt(freshAt)}` : ''}`;
+}
+function unfresh() { freshAt = 0; $('fresh').hidden = true; }
+
+// The next look at the film, kept so that coming back to the page (a phone unlocked, the tab shown
+// again, the network back) looks at once instead of waiting out a timer the phone had frozen.
+function later(ms, since, misses) {
+  clearTimeout(poll);
+  pending = { since, misses };
+  poll = setTimeout(() => { pending = null; follow(since, misses); }, ms);
+}
+function followNow() {
+  if (!pending || document.hidden) return;
+  const { since, misses } = pending;
+  pending = null; clearTimeout(poll);
+  follow(since, misses);
+}
+document.addEventListener('visibilitychange', followNow);
+window.addEventListener('online', followNow);
+window.addEventListener('pageshow', followNow);
+
+// polling, not server-sent events: Cloudflare quick tunnels do not carry an event stream. It never
+// gives up on a film being made: a phone asleep or out of signal only makes it look less often.
 async function follow(since = 0, misses = 0) {
   const id = currentId;
   try {
@@ -779,11 +811,12 @@ async function follow(since = 0, misses = 0) {
     if (s.status === 'lost') { screen('<div class="idle">This film was interrupted.</div>'); $('status').textContent = 'The studio restarted before this film finished.'; }
     if (s.status === 'cancelled') { if (since === 0 && !s.events.length) line('error', 'This film was stopped.'); $('status').textContent = 'Stopped.'; }
     if (['done', 'error', 'lost', 'cancelled'].includes(s.status)) { if (mine.has(id)) refreshCredits(); return finish(); }
-    poll = setTimeout(() => follow(s.next, 0), 1500);
+    if (live) fresh(true);
+    later(document.hidden ? 10000 : 1500, s.next, 0);
   } catch (err) {
     if (id !== currentId) return;
-    if (misses >= 5) { line('error', 'Lost the connection to the studio: ' + err.message); return finish(); }
-    poll = setTimeout(() => follow(since, misses + 1), 3000);
+    fresh(false);
+    later(Math.min(30000, 3000 * 2 ** Math.min(misses, 4)), since, misses + 1);
   }
 }
 
