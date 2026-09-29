@@ -20,6 +20,10 @@
 #   bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]   pick up a film the studio
 #                                                     stopped half-way (studio/resume.py), in the
 #                                                     same film; --plan spends nothing
+#   bash studio/deploy/ops.sh share <film-id>|--missing [--dry-run] [--limit N]   a finished film's
+#                                                     share-page title, description and picture
+#                                                     (studio/share.py); the price is printed
+#                                                     first, and --dry-run stops there
 #   bash studio/deploy/ops.sh film "<idea>" [--seconds N] [--look L] [--unlisted] [--api] [--no-watch]
 #                                                    a film made on the VM itself
 #                                                     (on the Claude login unless --api), followed;
@@ -278,6 +282,34 @@ EOF
     follow "$unit"
     ;;
 
+  share)
+    # a finished film's share (studio/share.py): the price first, always -- it spends nothing --
+    # then the work in a unit of its own, like resume, so it goes on if this laptop sleeps
+    use="share <film-id>|--missing [--dry-run] [--limit N]"
+    what="${1:?$use}"; shift
+    if [ "$what" = "--missing" ]; then args="--missing"
+    else
+      [[ "$what" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $what"
+      args="--film $what"
+    fi
+    only_price=0
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --dry-run) only_price=1 ;;
+        --limit) [[ "${2:-}" =~ ^[0-9]+$ ]] || die "--limit needs a number"; args="$args --limit $2"; shift ;;
+        *) die "$use" ;;
+      esac
+      shift
+    done
+    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/share.py $args"
+    on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env $py --dry-run" || exit 1
+    [ "$only_price" = 1 ] && exit 0
+    unit="kitcut-share-$(date +%Y%m%d-%H%M%S)"
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE $UNIT_ENV $py"
+    [ "$DRY" = 1 ] && exit 0
+    follow "$unit"
+    ;;
+
   film)
     idea="${1:?film \"<idea>\" [--seconds N] [--look L] [--unlisted] [--api] [--no-watch]}"; shift
     secs=30; auth=""; look=drawn; listed=1; follow=1
@@ -363,5 +395,5 @@ EOF
     az_ snapshot list -g "$RG" --query "sort_by([?tags.app=='kitcut-studio-snapshot'], &timeCreated)[].{name:name, created:timeCreated, gb:diskSizeGb}" -o table
     ;;
 
-  *) sed -n 2,34p "$0"; exit 2 ;;
+  *) sed -n 2,38p "$0"; exit 2 ;;
 esac

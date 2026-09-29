@@ -43,6 +43,7 @@ TESTS = (
     "test_library.py",
     "test_youtube.py",
     "test_ytdraft.py",
+    "test_share.py",  # a finished film's share page: title, description, picture (stubbed)
     "test_thumbs.py",  # a film's four YouTube thumbnail options, drawn for real
     "test_media.py",
     "test_multi.py",  # two servers on one home (peers.py): the ship that never stops a film

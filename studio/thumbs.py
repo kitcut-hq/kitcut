@@ -116,12 +116,13 @@ def saved(film, channel, key=None):
     return rec
 
 
-def make_now(film, channel, draft):
-    """The four options for a draft (blocking: stills, layout, one browser shot, checks)."""
+def make_now(film, channel, draft, want=4):
+    """The `want` options for a draft -- four for YouTube (blocking: stills, layout, one browser
+    shot, checks). Fewer concepts than that are made up from the film; more are cut."""
     t0 = time.time()
-    concepts = draft.get("thumbnails") or []
-    if len(concepts) < 4:
-        concepts = _thumb.fill_concepts(concepts, moments(film), length(film))
+    concepts = (draft.get("thumbnails") or [])[:want]
+    if len(concepts) < want:
+        concepts = _thumb.fill_concepts(concepts, moments(film), length(film), n=want)
     d = out_dir(film, channel)
     opts = _thumb.make_options(film.dir, concepts, d, log=lambda *_: None)
     rec = {
@@ -152,14 +153,14 @@ def make_now(film, channel, draft):
     return rec
 
 
-async def make(film, channel, draft):
+async def make(film, channel, draft, want=4):
     """make_now off the event loop and through the gate; the saved options when they already
     match this draft."""
     hit = saved(film, channel, draft.get("key"))
     if hit:
         return hit
     async with gate():
-        return await asyncio.to_thread(make_now, film, channel, draft)
+        return await asyncio.to_thread(make_now, film, channel, draft, want)
 
 
 def public(rec, state=None):

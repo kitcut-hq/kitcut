@@ -297,8 +297,12 @@ def title_overlap(words, title):
 
 
 # ------------------------------------------------------------------ concepts
-def check_concepts(raw, length, title=""):
-    """Four {at, words, layout} held to the rules: (concepts, notes, problems).
+NUMBER = {1: "one", 2: "two", 3: "three", 4: "four"}
+
+
+def check_concepts(raw, length, title="", n=4, layouts=None):
+    """Four {at, words, layout} held to the rules: (concepts, notes, problems). `n` and `layouts`
+    ask for another number of them, from fewer layouts (the share image: two, headline or card).
 
     `notes` are what was put right here; `problems` ({n, text}; n is the thumbnail, None for
     all of them) are what only the writer can fix -- words that are too long or repeat the
@@ -307,11 +311,12 @@ def check_concepts(raw, length, title=""):
     c, notes, problems = cfg(), [], []
     edge = cfg()["moments"]["edge"]
     items = [x for x in (raw if isinstance(raw, list) else []) if isinstance(x, dict)]
-    if len(items) != 4:
+    count = NUMBER.get(n, str(n))
+    if len(items) != n:
         problems.append(
-            {"n": None, "text": "give exactly four thumbnails (you gave %d)" % len(items)}
+            {"n": None, "text": "give exactly %s thumbnails (you gave %d)" % (count, len(items))}
         )
-    items = items[:4]
+    items = items[:n]
     out = []
     for i, x in enumerate(items, 1):
         try:
@@ -348,10 +353,11 @@ def check_concepts(raw, length, title=""):
     for o in out:
         if o["layout"] in LAYOUTS:
             seen.add(o["layout"])
-    free = [x for x in c["concepts"]["layouts"] if x not in seen]
+    allowed = list(layouts or c["concepts"]["layouts"])
+    free = [x for x in allowed if x not in seen]
     taken = set()
     for o in out:
-        if o["layout"] not in LAYOUTS or o["layout"] in taken:
+        if o["layout"] not in allowed or o["layout"] in taken:
             if free:
                 notes.append("a %r thumbnail became %r" % (o["layout"] or "?", free[0]))
                 o["layout"] = free.pop(0)
@@ -376,22 +382,25 @@ def check_concepts(raw, length, title=""):
     ats = sorted(o["at"] for o in out)
     gap = c["concepts"]["min_gap"]
     if any(b - a < gap for a, b in zip(ats, ats[1:])):
-        problems.append({"n": None, "text": "the four moments must be at least %.0f s apart" % gap})
+        problems.append(
+            {"n": None, "text": "the %s moments must be at least %.0f s apart" % (count, gap)}
+        )
     return out, notes, problems
 
 
-def fill_concepts(concepts, moments, length):
+def fill_concepts(concepts, moments, length, n=4):
     """What a writer's answer could not supply, made up from the film: a missing thumbnail is
-    the picture alone at a moment nobody chose, and moments too close together are spread."""
+    the picture alone at a moment nobody chose, and moments too close together are spread. `n`
+    is how many there are to be."""
     gap = cfg()["concepts"]["min_gap"]
     out = []
     for o in concepts:
         if all(abs(o["at"] - p["at"]) >= gap for p in out):
             out.append(dict(o))
     spare = [t for t in moments if all(abs(t - p["at"]) >= gap for p in out)]
-    for t in spread(spare, 4 - len(out)):
+    for t in spread(spare, n - len(out)):
         out.append({"at": round(t, 2), "words": "", "layout": "still"})
-    return out[:4]
+    return out[:n]
 
 
 def spread(times, k):

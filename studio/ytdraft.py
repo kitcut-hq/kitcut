@@ -300,8 +300,14 @@ def ask_text(mat, channel, recent):
                 parts.append("Tags: " + ", ".join(v["tags"]))
     else:
         parts.append("(No uploads to learn from.)")
-    parts += [
-        "",
+    parts += ["", *film_text(mat), "", "# What to write", ASK.format(language=mat["language"])]
+    return "\n".join(parts)
+
+
+def film_text(mat):
+    """The film's half of the ask, as lines: what it is and says, the brief marked private, the
+    sheet. share.py sends it too."""
+    parts = [
         "# The film",
         "Length: %d seconds. Language: %s." % (mat["length"], mat["language"]),
     ]
@@ -336,8 +342,7 @@ def ask_text(mat, channel, recent):
             "\nThe image is a sheet of frames from the film, in order. Choose the thumbnails' "
             "moments from these times: %s s." % ", ".join("%.1f" % t for t in mat["moments"])
         )
-    parts += ["", "# What to write", ASK.format(language=mat["language"])]
-    return "\n".join(parts)
+    return parts
 
 
 def key_of(mat, channel, recent, model, effort):
@@ -476,32 +481,40 @@ def check(d, mat, recent):
     return out, notes
 
 
-def check_thumbs(d, mat, title):
-    """The draft's four thumbnails held to _thumb's rules: (concepts, notes, problems). A problem
-    is something only the writer can put right; it is asked once, then repair() decides."""
-    return _thumb.check_concepts(d.get("thumbnails"), mat["length"] or 0, title)
+def check_thumbs(d, mat, title, n=4, layouts=None):
+    """The draft's four thumbnails (or `n`, of `layouts`) held to _thumb's rules: (concepts,
+    notes, problems). A problem is something only the writer can put right; it is asked once,
+    then repair() decides."""
+    return _thumb.check_concepts(d.get("thumbnails"), mat["length"] or 0, title, n, layouts)
 
 
-def repair(concepts, problems, mat):
+def repair(concepts, problems, mat, n=4):
     """What is left of a second answer that still broke the rules: a thumbnail whose words were
     the problem becomes the picture alone, and missing or crowded moments are made up from the
-    film's own. (concepts, note)."""
+    film's own, to `n` of them. (concepts, note)."""
     bad = {p["n"] for p in problems if p.get("n")}
     out = [dict(c, words="", layout="still") if i in bad else c for i, c in enumerate(concepts, 1)]
-    out = _thumb.fill_concepts(out, mat.get("moments") or [], mat["length"] or 0)
+    out = _thumb.fill_concepts(out, mat.get("moments") or [], mat["length"] or 0, n=n)
     return out, "thumbnails put right from the film: %s" % "; ".join(p["text"] for p in problems)
 
 
 # ------------------------------------------------------------------ writing it
 async def _call(mat, channel, recent, auth, film, model, effort, note=None):
     """One Claude call: (the parsed JSON, cost in USD)."""
+    text = ask_text(mat, channel, recent) + ("\n\n" + note if note else "")
+    return await ask_json(text, mat["sheet"], auth, film, model, effort, WRITER, "youtube-draft")
+
+
+async def ask_json(text, sheet, auth, film, model, effort, system, session):
+    """One Claude call with no tools -- the text, and the sheet (JPEG bytes) as an image before
+    it -- on the film's key (auth "api") or this machine's login: (the parsed JSON object, cost
+    in USD). share.py asks through it too."""
     from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ResultMessage, TextBlock
     from claude_agent_sdk import query
 
-    text = ask_text(mat, channel, recent) + ("\n\n" + note if note else "")
     content = [{"type": "text", "text": text}]
-    if mat["sheet"]:
-        img = base64.b64encode(mat["sheet"]).decode("ascii")
+    if sheet:
+        img = base64.b64encode(sheet).decode("ascii")
         content.insert(
             0,
             {
@@ -515,13 +528,13 @@ async def _call(mat, channel, recent, auth, film, model, effort, note=None):
             "type": "user",
             "message": {"role": "user", "content": content},
             "parent_tool_use_id": None,
-            "session_id": "youtube-draft",
+            "session_id": session,
         }
 
     opts = ClaudeAgentOptions(
         model=model,
         effort=effort,
-        system_prompt=WRITER,
+        system_prompt=system,
         tools=[],
         strict_mcp_config=True,
         setting_sources=[],

@@ -25,6 +25,7 @@ python studio/test_isolation.py                 # names, the gate, secrets, the 
 python studio/test_direction.py                 # one cached prompt per look, a film's choices, the recent note
 python studio/test_server.py                    # the API end to end, 3 films at once, Claude stubbed out, no cost
 python studio/test_media.py                     # the copy online, against a stand-in for Azure
+python studio/test_share.py                     # a film's share page words and picture, Claude stubbed
 ```
 
 `serve.ps1` writes the tunnel URL to `STUDIO_HOME\url.txt` and to MongoDB `kitcut.studio_hosts`.
@@ -259,6 +260,15 @@ one picked with `thumbnails.set` on its own grant; a failure (most often an unve
 never fails the publish. They cost no model time beyond the draft's (+~$0.01): CPU and a browser,
 at most `STUDIO_THUMB_JOBS` (2) at once. Try them by hand with `python studio/ytdraft.py --film <id>
 --thumbs`, or on hand-written concepts with `python scripts/thumb-options.py --film <folder>`.
+
+**The share page** (`share.py`): when a film is done, the studio also writes what its public page on
+kitcut.ai shows -- a title (at most 70 characters), a one-line description (at most 155), its
+language, and a picture in the film's own look (the thumbnail machinery above, two concepts instead
+of four; `outputs/share.jpg` 1200x628 and `outputs/thumb.jpg` 1280x720, copied online beside the
+film). It lands on the record as `share` (only that field is written) and in `GET /api/films/{id}`.
+It runs in the background and never fails the film; about $0.05-0.13 on the key. Earlier films:
+`python studio/share.py --missing --dry-run` prices it, without it does it (`ops.sh share` on the
+VM). Details: `docs/reference.md` "Share title and image".
 
 ## What it costs, and where that is recorded
 

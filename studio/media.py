@@ -16,6 +16,8 @@ Where: STUDIO_MEDIA_BASE, the container's URL (https://kitcutst.blob.core.window
 anonymous read of blobs), and STUDIO_MEDIA_SAS, a container SAS allowing create, write and delete
 (a secret: the studio's .env). Without both nothing is copied, and films play from the tunnel as
 before. Each file is one Put Blob call, <id>/<name>; the film's record keeps the URLs as "media".
+The share page's two pictures (share.jpg, thumb.jpg: make_share, publish_share) go up the same
+way when share.py has made them; their URLs are kept in the record's "share".
 
 Never the films' own container `media`: the catalog site's upload-media.py prunes that one of
 everything that is not one of its own films.
@@ -107,7 +109,7 @@ def make_card(outputs, length=None):
     not cut: scaled to the card's height, with the thin strips either side filled by a blurred
     stretch of the same frame (on paper it disappears; on a painting it reads as the picture
     going on)."""
-    from PIL import Image, ImageFilter, ImageStat
+    from PIL import Image, ImageStat
 
     def contrast(im):
         return ImageStat.Stat(im.convert("L")).stddev[0]
@@ -120,12 +122,63 @@ def make_card(outputs, length=None):
         alt = max(frames, key=contrast, default=None)
         if alt is not None and contrast(alt) > 1.4 * contrast(best):
             best = alt
-    card = best.resize(CARD, Image.LANCZOS).filter(ImageFilter.GaussianBlur(24))
-    w = round(best.width * CARD[1] / best.height)
-    card.paste(best.resize((w, CARD[1]), Image.LANCZOS), ((CARD[0] - w) // 2, 0))
-    tmp = os.path.join(outputs, "card.%d.tmp" % os.getpid())
-    card.save(tmp, "JPEG", quality=85, optimize=True, progressive=True)
-    os.replace(tmp, os.path.join(outputs, "card.jpg"))
+    _save_jpeg(pillarbox(best), os.path.join(outputs, "card.jpg"))
+
+
+def pillarbox(img):
+    """A 16:9 picture as a 1200x628 link preview, nothing of it cut: scaled to the card's height
+    and centred, the thin strips either side a blurred stretch of the same picture."""
+    from PIL import Image, ImageFilter
+
+    img = img.convert("RGB")
+    card = img.resize(CARD, Image.LANCZOS).filter(ImageFilter.GaussianBlur(24))
+    w = round(img.width * CARD[1] / img.height)
+    card.paste(img.resize((w, CARD[1]), Image.LANCZOS), ((CARD[0] - w) // 2, 0))
+    return card
+
+
+def _save_jpeg(img, path):
+    """JPEG q85, progressive, written whole (a reader never sees half a file)."""
+    tmp = "%s.%d.tmp" % (path, os.getpid())
+    img.save(tmp, "JPEG", quality=85, optimize=True, progressive=True)
+    os.replace(tmp, path)
+
+
+# ------------------------------------------------------------------ the share page's pictures
+SHARE_FILES = (("image", "share.jpg"), ("thumb", "thumb.jpg"))  # (key in the share, file)
+THUMB = (1280, 720)
+
+
+def make_share(outputs, src_jpg):
+    """The share page's pictures from one worded thumbnail (thumbs.py, 1920x1080): share.jpg, the
+    link preview (1200x628, pillarboxed as the card is), and thumb.jpg (1280x720, the thumbnail
+    scaled down). Returns their paths, {"image", "thumb"}."""
+    from PIL import Image
+
+    with Image.open(src_jpg) as im:
+        src = im.convert("RGB")
+    os.makedirs(outputs, exist_ok=True)
+    out = {"image": os.path.join(outputs, "share.jpg"), "thumb": os.path.join(outputs, "thumb.jpg")}
+    _save_jpeg(pillarbox(src), out["image"])
+    _save_jpeg(src.resize(THUMB, Image.LANCZOS), out["thumb"])
+    return out
+
+
+async def publish_share(film, timeout=300):
+    """Copy the share pictures online: {"image": url, "thumb": url} (the ones there are), or {}
+    when copying is off. Raises when a copy is refused."""
+    if not enabled():
+        return {}
+    import aiohttp
+
+    urls = {}
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
+        for key, name in SHARE_FILES:
+            p = film.path("outputs", name)
+            if os.path.isfile(p):
+                await _put(s, "%s/%s" % (film.id, name), p, "image/jpeg")
+                urls[key] = url_of(film.id, name)
+    return urls
 
 
 def ensure_card(outputs, length=None):
@@ -280,7 +333,7 @@ async def delete(fid, timeout=60):
 
     gone = 0
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
-        for _, name, _ in FILES:
+        for name in [n for _, n, _ in FILES] + [n for _, n in SHARE_FILES]:
             url = "%s/%s?%s" % (base(), quote("%s/%s" % (fid, name)), sas())
             async with s.delete(url, headers={"x-ms-version": VERSION}) as r:
                 if r.status in (200, 202):

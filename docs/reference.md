@@ -2882,6 +2882,68 @@ forced: the dialog has "Let YouTube pick a frame", and a channel that YouTube wi
 custom thumbnails (unverified, KI-037) gets its video published with YouTube's frame and a line
 saying why.
 
+## Share title and image
+
+Every finished film on kitcut.ai gets a public page of its own (`kitcut.ai/v/<short>/<slug>`),
+and a link to it shows a preview wherever it is posted. The studio writes what that page and its
+preview say, the moment the film is done (`studio/share.py`):
+
+- **a title** a person would click -- at most 70 characters, no full stop, in the film's language,
+  never the request pasted back and never "AI-generated";
+- **a description** of one or two sentences saying what the film shows (at most 155 characters, the
+  length a search result or a link preview shows whole);
+- **a picture in the film's own look**: a still of the film with a few words on it, drawn by the
+  film itself -- the same machinery as the YouTube thumbnail options (`thumbs.py`,
+  `scripts/_thumb.py`), asked for two concepts (a headline and a card) instead of four. The first
+  one whose words survive the checks is used, cut two ways: `outputs/share.jpg` (1200x628, the link
+  preview, the whole frame in the middle with blurred sides, exactly as `card.jpg` is made) and
+  `outputs/thumb.jpg` (1280x720).
+
+The words come from what the YouTube draft reads (`ytdraft.material`: the narration with its
+times, who it was made for, what Claude said, the pages its facts came from, the sheet of the
+film's moments), in one Claude call with no tools; a pasted brief or a film called generated is
+asked once more, then given up. The two pictures go to the same Azure container as the film
+(`<id>/share.jpg`, `<id>/thumb.jpg`). The film's record -- `studio.json` and `kitcut.studio_runs`,
+where only `share` is set -- then holds what the site reads:
+
+```json
+"share": {"title": "<= 70 chars", "description": "<= 155 chars", "language": "en",
+          "image": "https://kitcutst.blob.core.windows.net/films/<id>/share.jpg",
+          "thumb": "https://kitcutst.blob.core.windows.net/films/<id>/thumb.jpg",
+          "at": "2026-09-29T23:33:24Z", "key": "<draft key>"}
+```
+
+`language` is a short code (`en`, `uk`, `es`) whatever the film's voice settings say (`en-US`,
+`Ukrainian`). `image` and `thumb` are left out when the picture could not be made or copying online
+is off (the site then shows `card.jpg`); the files stay in `outputs/`. `GET /api/films/{id}` answers
+`share` = `{title, description, language, image, thumb}` for a film that has one.
+
+**It never fails a film.** It starts as a background task beside the moments sheet once the film is
+`done`; a failure is logged as `SHARE <id> failed: ...` and noted on the record as `share_error`,
+and the film's state is never touched. `STUDIO_SHARE=0` turns it off; it also stays off while
+Claude is a stub (the studio's tests), so a test never makes a paid call.
+
+**Cost:** about $0.05-0.13 a film on the key (one call with the moments sheet; occasionally two),
+kept on the record as `share_cost_usd` and added to `cost_usd`; on the Claude login it is counted
+but not charged. The draft is kept in `share/draft.json`, keyed by what it was written from, so
+asking again costs nothing until the film changes. The picture is CPU and a headless browser, at
+most `STUDIO_THUMB_JOBS` at once.
+
+```bash
+python studio/share.py --film <id>                     # write (or remake) one film's share
+python studio/share.py --missing [--limit N]           # every finished film without one, newest first
+python studio/share.py --missing --dry-run             # which films, and the estimated cost; no call
+bash studio/deploy/ops.sh share <id>                   # the same on the VM: the price first, then the work
+bash studio/deploy/ops.sh share --missing --limit 20   #   in a unit of its own (goes on if the laptop sleeps)
+bash studio/deploy/ops.sh share --missing --dry-run    # price only
+python studio/test_share.py                            # stubbed: the rules, the pictures, the record, the API
+```
+
+`--missing` also picks up a film whose share has no picture online when copying is on: its draft
+is kept, so that costs no model time. The pictures go up with the film files' year-long immutable
+cache header, so a remade `share.jpg` may be served stale by a browser or a link-preview cache that
+already fetched the old one.
+
 ## Chapter markers on a published video
 
 Turn a transcript into YouTube chapters, then write them into the video's own
