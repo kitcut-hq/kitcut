@@ -134,6 +134,10 @@ def claude_env(film=None, auth="api"):
         # a studio tool may wait for the machine, then run its step; the steps time out on their
         # own, and the voice and the mix grow with the film (an 8-minute one: about 43 min)
         "MCP_TOOL_TIMEOUT": str(tool_timeout_s(film.length if film else 0) * 1000),
+        # one API request may run long: at effort xhigh, the reply that plans and writes an 8-minute
+        # film's picture thought past Claude Code's own timeout, and was retried from scratch every
+        # 5 minutes for an hour with nothing to show (llwtme, 2026-09-28, 205k tokens of context)
+        "API_TIMEOUT_MS": str(30 * 60 * 1000),
     }
     if auth == "api":
         key = procs.secret("ANTHROPIC_API_KEY")
@@ -1161,7 +1165,9 @@ RESUME = (
     "where it stopped. Everything you wrote is on disk as you left it and the narration is "
     "recorded -- do not record it again. Look once at where the film stands (one set of review "
     "stills), fix only what is clearly wrong, then write whatever is still missing of film.js, "
-    "score.json and sfx.json, call check, and stop with one sentence. You have about %d minutes."
+    "score.json and sfx.json, call check, and stop with one sentence. Write a long film.js in parts "
+    "-- the first scenes with Write, the rest with Edit a few scenes at a time -- so that no single "
+    "reply runs for many minutes. You have about %d minutes."
 )
 
 
