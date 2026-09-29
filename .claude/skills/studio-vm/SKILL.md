@@ -83,7 +83,10 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
    every reply (when, how long it waited, context size, output tokens, what it did), the API
    errors Claude Code retried, whether it is waiting for a reply right now, and Claude Code's own
    debug log (`--grep TEXT` to search it). A reply that never comes after a long one (writing a
-   long film's picture) is a timeout, not a dead CLI: 2026-09-28, film llwtme.
+   long film's picture) is a timeout, not a dead CLI: 2026-09-28, film llwtme. Since 2026-09-29 the
+   studio catches that itself: 20 silent minutes and it picks the session up again (at most
+   twice, `STALL` in `ops.sh logs studio`), so a stuck film fails in about an hour, refunded,
+   instead of never.
 3. A step that fails on the VM and not on the laptop is usually the environment: compare
    `uv pip list` there with the laptop's venv, and look for imports inside functions.
 4. Fix in the repo (worktree, commit, merge to studio-poc), then `ops.sh ship`. A missing package

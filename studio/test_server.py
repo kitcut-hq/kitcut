@@ -57,6 +57,16 @@ async def fake_claude(
 ):
     CALLED.append(film.id)
     ex = os.path.join(films.KIT, "config", "sketch", "example")
+    said = film.record().get("prompt", "")
+    if "never answers" in said or ("goes silent once" in said and not resume):
+        # a reply that never comes (the stall watchdog's case): the session exists, the narration
+        # is recorded, and then nothing at all -- no message, no event, no tool at work
+        film.update(claude_session="fake-session")
+        os.makedirs(film.path("audio", "vo"), exist_ok=True)
+        with open(film.path("audio", "vo", "timeline.json"), "w", encoding="utf-8") as f:
+            json.dump({"lines": []}, f)
+        await asyncio.sleep(120)
+        return
     if (
         resume
     ):  # the last turn after the time ran out, or a stopped film picked up: what was missing
@@ -894,6 +904,94 @@ async def main():
             "the record keeps both attempts' calls",
         )
         check(resume.refuse(stopped, False) is not None, "a done film is not picked up again")
+
+        # ------------------------------------------------ a reply that never comes (the watchdog)
+        real_stall = agent.STALL_S
+        agent.STALL_S = 2  # seconds here; 20 minutes in the studio
+        try:
+            quiet = films.Film.create(
+                "goes silent once, then carries on", 5, "drawn", client="u:w1"
+            )
+            r = await agent.make_film(quiet, lambda ev: None, server.SCHED, auth="api")
+            check(
+                r.get("ok") and quiet.state == "done" and r.get("stalls") == 1,
+                "a Claude that goes silent is cut off, picked up again in its session, and the "
+                "film finishes (%s, %s stall)" % (quiet.state, r.get("stalls")),
+            )
+            check(
+                mem.docs[quiet.id].get("stalls") == 1 and quiet.id in CALLED,
+                "and the record says it stalled once",
+            )
+            mute = films.Film.create("never answers", 5, "drawn", client="u:w2")
+            t0 = time.time()
+            said = []
+            r = await agent.make_film(mute, said.append, server.SCHED, auth="api")
+            check(
+                not r.get("ok")
+                and mute.state == "error"
+                and "stopped answering" in (r.get("error") or "")
+                and r.get("stalls") == agent.STALL_RETRIES + 1
+                and time.time() - t0 < 60,
+                "one that never answers fails after %d pick-ups, in seconds not hours (%s)"
+                % (agent.STALL_RETRIES, r.get("error")),
+            )
+            check(
+                sum(
+                    1
+                    for e in said
+                    if e.get("type") == "fail" and "not answered" in e.get("text", "")
+                )
+                == agent.STALL_RETRIES,
+                "and its page says each time what the studio did",
+            )
+        finally:
+            agent.STALL_S = real_stall
+
+        # ------------------------------------------------ a long film's rules and its narration
+        check(
+            agent.closing_s(30) == 1 and agent.closing_s(480) == 4 and agent.closing_s(120) == 2,
+            "the narration stops a beat before a short film ends, a few seconds before a long one",
+        )
+
+        def not_made(prompt, n):  # a film only asked about: never queued, so nothing adopts it
+            f = films.Film.create(prompt, n, "drawn", client="u:w3")
+            f.update(state="done")
+            return f
+
+        long_ask = agent.ask(not_made("a long one", 480))
+        short_ask = agent.ask(not_made("a short one", 30))
+        check(
+            "work in parts" in long_ask
+            and "work in parts" not in short_ask
+            and "ending by about 476 s" in long_ask,
+            "a long film is told to write its picture in parts, and to end its narration in time",
+        )
+        tl_film = not_made("a long narration", 480)
+        os.makedirs(tl_film.path("audio", "vo"), exist_ok=True)
+        lines = [
+            {
+                "i": i,
+                "text": "line %d" % i,
+                "start": i * 7.0,
+                "end": i * 7.0 + 6.5,
+                "acc": 0.98,
+                "words": [{"text": "word", "s": i * 7.0 + k} for k in range(12)],
+            }
+            for i in range(67)
+        ]
+        with open(tl_film.path("audio", "vo", "timeline.json"), "w", encoding="utf-8") as f:
+            json.dump({"lines": lines}, f)
+        import tools as tools_mod  # noqa: PLC0415 -- the tools module, as the studio calls it
+
+        every = tools_mod.timeline_text(tl_film)
+        one = tools_mod.timeline_text(tl_film, retake=5)
+        check(
+            every.count("words:") == 0
+            and one.count("words:") == 1
+            and sum(x.startswith("line ") for x in every.splitlines()) == 67,
+            "a long narration comes back as its lines' spans, words only for the line re-recorded "
+            "(%d characters, not %d)" % (len(every), sum(len(json.dumps(x)) for x in lines)),
+        )
 
         # ------------------------------------------------ the server stops: interrupted, not cancelled
         r = await c.post(

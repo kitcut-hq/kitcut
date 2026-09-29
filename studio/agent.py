@@ -138,6 +138,9 @@ def claude_env(film=None, auth="api"):
         # film's picture thought past Claude Code's own timeout, and was retried from scratch every
         # 5 minutes for an hour with nothing to show (llwtme, 2026-09-28, 205k tokens of context)
         "API_TIMEOUT_MS": str(30 * 60 * 1000),
+        # the model's own cap on one reply (Opus 5.5: 128K tokens), not whatever lower default
+        # this Claude Code version picks; a long film writes in parts anyway (LONG_FILM, STALLED)
+        "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "128000",
     }
     if auth == "api":
         key = procs.secret("ANTHROPIC_API_KEY")
@@ -202,6 +205,23 @@ def system_prompt(look):
     return re.sub(r"\{([A-Z_]+)\}", lambda m: fill.get(m.group(1), m.group(0)), text)
 
 
+# a film longer than this is written in parts (LONG_FILM): its picture in one reply ran to 57k
+# tokens and 7.7 minutes at 8 minutes of film (llwtme, 2026-09-28), and the per-reply cap is 128K
+LONG_S = 90
+LONG_FILM = (
+    "\n\nThis is a long film, so work in parts: write film.js as the look, the helpers and the "
+    "camera first, then add the scenes a few at a time (Edit), and check each batch -- never the "
+    "whole picture in one reply. A reply that runs for many minutes is cut off and lost. Let the "
+    "narration breathe too: a short pause (half a second to a second) between its sections."
+)
+
+
+def closing_s(n):
+    """How long before the end the narration should stop: a beat for a short film, a few
+    seconds for a long one (the 480 s film llwtme was told 479 s and used every one of them)."""
+    return 1 if n <= 60 else min(4, round(1 + n / 120))
+
+
 def ask(film, recent=()):
     """The first message: the film's own facts, then the visitor's prompt, then what recent
     films chose -- here and not in the system prompt, which stays the same for every film of a
@@ -214,12 +234,14 @@ def ask(film, recent=()):
         % (
             n,
             round(n * 2.2 - 3),
-            n - 1,
+            n - closing_s(n),
             limits(n)["claude_s"] // 60,
             film.record().get("prompt", "").strip()
             or "(nothing typed: the idea is in what is attached)",
         )
     )
+    if n > LONG_S:
+        text += LONG_FILM
     text += attached_note(film)
     mine = library.note(film)  # the project, or the person's own cast and earlier films
     project = bool(film.record().get("project"))
@@ -674,7 +696,10 @@ async def run_claude(
     try:
         async with ClaudeSDKClient(options=opts) as client:
             await client.query(prompt or ask(film, recent_films(film)))
+            pulse = getattr(tools, "pulse", None)
             async for msg in client.receive_response():
+                if pulse is not None:
+                    pulse.beat()
                 if isinstance(msg, StreamEvent):
                     before = meter.usd()
                     if meter.stream(msg.event, streamed) and round(meter.usd(), 3) != round(
@@ -707,12 +732,16 @@ async def run_claude(
                             emit({"type": "say", "text": b.text.strip()})
                         elif isinstance(b, ToolUseBlock):
                             pending[b.id] = (b.name, b.input)
+                            if pulse is not None:
+                                pulse.busy = len(pending)
                             emit({"type": "tool", "text": _describe(b.name, b.input, film)})
                 elif isinstance(msg, UserMessage) and isinstance(msg.content, list):
                     for b in msg.content:
                         if not isinstance(b, ToolResultBlock):
                             continue
                         pending.pop(b.tool_use_id, None)
+                        if pulse is not None:
+                            pulse.busy = len(pending)
                         text = _result_text(b)
                         if b.is_error and "hook error" not in text:  # denials were reported
                             emit({"type": "fail", "text": text.strip()[-400:]})
@@ -734,9 +763,46 @@ def debug_log(film):
     return os.path.join(d, "claude-%s.log" % datetime.now().strftime("%Y%m%d-%H%M%S"))
 
 
-async def _within(coro, clock, lim):
+# How long Claude may go without a word -- no message from Claude Code, no event of the film's,
+# and no tool of the studio's running -- before the studio calls it stalled and picks the session
+# up again (make_film). Under Claude Code's own request timeout (API_TIMEOUT_MS), so the studio
+# acts before Claude Code starts the same reply again from scratch: that is how film llwtme sat
+# for an hour, twice, on 2026-09-28, with the CLI alive and the API answering other requests.
+STALL_S = int(os.environ.get("STUDIO_STALL_S") or 20 * 60)
+STALL_RETRIES = 2  # picked up at most this many times; then the film fails, and is refunded
+STALLED = (
+    "Your last reply never arrived: the studio waited %d minutes, got nothing back and cut it "
+    "off. This is the same session, and everything before that reply is on disk as it was. Carry "
+    "on from where you were, in shorter replies: write or change film.js a few scenes at a time, "
+    "never the whole picture in one reply. You have about %d minutes left."
+)
+
+
+class Stalled(Exception):
+    pass
+
+
+class Pulse:
+    """When Claude last showed a sign of life (run_claude beats on every message from Claude
+    Code, make_film on every event of the film's), and how many of the studio's tools it is
+    waiting on: a tool at work is not a stall, its step has a timeout of its own."""
+
+    def __init__(self):
+        self.at, self.busy = time.time(), 0
+
+    def beat(self):
+        self.at = time.time()
+
+    def silent(self):
+        return 0 if self.busy else time.time() - self.at
+
+    def stalled(self):
+        return self.silent() > STALL_S
+
+
+async def _within(coro, clock, lim, pulse=None):
     """Run Claude's part, stopping it past its working time (the clock does not count waits for
-    the machine) or its wall time (lim: film.limits)."""
+    the machine) or its wall time (lim: film.limits), or once it has gone silent (Stalled)."""
     task = asyncio.ensure_future(coro)
     try:
         while True:
@@ -745,6 +811,8 @@ async def _within(coro, clock, lim):
                 return task.result()
             if clock.active() > lim["claude_s"] or clock.wall() > lim["wall_s"]:
                 raise TimeoutError()
+            if pulse is not None and pulse.stalled():
+                raise Stalled(pulse.silent())
     finally:
         if not task.done():
             task.cancel()
@@ -815,6 +883,7 @@ async def make_film(
     t0, stages, meter, res = time.time(), {}, Meter(), None
     clock = Clock()
     tools = Tools(film, sched, emit, clock)
+    tools.pulse = Pulse()  # the stall watchdog's (talk_to_claude)
     billed = auth == "api"  # on the login, Claude's tokens are covered by the plan
     summary = {
         "prompt": prompt,
@@ -877,6 +946,7 @@ async def make_film(
 
     def emit(ev):  # noqa: F811 -- the same emit, keeping the record's cost current as it grows
         outer(ev)
+        tools.pulse.beat()  # anything the film reports is a sign of life
         if ev["type"] == "cost" and time.time() - saved_at[0] > 5:
             saved_at[0] = time.time()
             price()
@@ -911,6 +981,49 @@ async def make_film(
             "earlier_usd": spent,
         }
 
+    async def talk_to_claude():
+        """One run of Claude's part. A reply that never comes (Stalled) is cut off and the session
+        picked up again with STALLED, at most STALL_RETRIES times; its working time and budget go
+        on counting from where they were. Past that the film fails -- and is refunded -- rather
+        than sitting for hours in Claude Code's own retries."""
+        nonlocal talk
+        for attempt in range(STALL_RETRIES + 1):
+            tools.pulse.beat()
+            try:
+                return await _within(
+                    run_claude(film, emit, meter, tools, auth, **talk), clock, lim, tools.pulse
+                )
+            except Stalled as e:
+                silent = int(e.args[0]) if e.args else STALL_S
+                summary["stalls"] = summary.get("stalls", 0) + 1
+                sid = film.record().get("claude_session")
+                print(
+                    "film %s: STALL, no reply from Claude for %d s (%d of %d)"
+                    % (film.id, silent, attempt + 1, STALL_RETRIES + 1),
+                    file=sys.stderr,
+                    flush=True,
+                )
+                if attempt == STALL_RETRIES or not sid:
+                    raise RuntimeError(
+                        "Claude stopped answering (%d minutes without a reply, %d times)"
+                        % (silent // 60, attempt + 1)
+                    ) from None
+                left = max(RESUME_MIN_S, lim["claude_s"] - clock.active())
+                emit(
+                    {
+                        "type": "fail",
+                        "text": "Claude had not answered for %d minutes; the studio picked the "
+                        "film up again where it was" % (silent // 60),
+                    }
+                )
+                spent = meter.usd() + (carry.get("claude_cost_usd") or 0)
+                talk = {
+                    "prompt": STALLED % (silent // 60, round(left / 60)),
+                    "resume": sid,
+                    "budget_usd": max(1.0, limits(length)["budget_usd"] - spent),
+                }
+        return None
+
     state = "error"
     try:
         if not finish_only:
@@ -936,9 +1049,7 @@ async def make_film(
                 s = time.time()
                 try:
                     try:
-                        res = await _within(
-                            run_claude(film, emit, meter, tools, auth, **talk), clock, lim
-                        )
+                        res = await talk_to_claude()
                     except SignInError as e:
                         if auth != "login":
                             raise  # the key itself is refused: nothing to fall back to
@@ -957,9 +1068,7 @@ async def make_film(
                                 "film on the API key instead" % e.why,
                             }
                         )
-                        res = await _within(
-                            run_claude(film, emit, meter, tools, auth, **talk), clock, lim
-                        )
+                        res = await talk_to_claude()
                 except TimeoutError:
                     # past its time, Claude may only have been taking a last look at a film it
                     # had written: one that is whole and passes the checks is finished, not lost;
@@ -1102,6 +1211,7 @@ async def make_film(
                 "title": film.record().get("title"),  # name_film's, when nothing was typed
                 "media": summary.get("media"),  # its lasting copy online (media.py)
                 "overtime": summary.get("overtime", False),
+                "stalls": summary.get("stalls", 0),  # replies that never came (talk_to_claude)
                 "finished_at": store.now(),
             } | {
                 k: summary[k]

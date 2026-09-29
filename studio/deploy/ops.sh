@@ -96,9 +96,13 @@ deliver() {
 # Follow a transient unit on the VM to its end (Ctrl+C stops the following, not the unit).
 follow() {
   echo "following $1 (Ctrl+C stops following, not the work; ops.sh logs shows the servers)"
+  # the unit's own Result decides the exit, not the journal follower's (killing it could leak a
+  # non-zero status: a resume that finished its film was reported as failed, 2026-09-29)
   on "journalctl -u $1 -f -n 100 --no-pager -o cat & j=\$!
-    while systemctl is-active -q $1; do sleep 5; done; sleep 2; kill \$j
-    r=\$(systemctl show $1 -p Result --value); echo \"$1: \${r:-success}\"; [ \"\${r:-success}\" = success ]"
+    while systemctl is-active -q $1; do sleep 5; done; sleep 2
+    kill \$j 2>/dev/null; wait \$j 2>/dev/null
+    r=\$(systemctl show $1 -p Result --value); echo \"$1: \${r:-success}\"
+    if [ \"\${r:-success}\" = success ]; then exit 0; else exit 1; fi"
 }
 # the server units' environment (kitcut-studio@.service) for a transient unit: keep in sync with it
 UNIT_ENV="--setenv=STUDIO_HOME=$HOME_DIR --setenv=STUDIO_REPO=$REMOTE --setenv=STUDIO_ENV_FILE=$REMOTE/.env"

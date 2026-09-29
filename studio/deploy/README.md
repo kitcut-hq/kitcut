@@ -147,6 +147,26 @@ must not depend on the laptop staying awake. Ctrl+C stops the following, not the
 Run it again after any failure: each step checks what is already done (a server of the release
 already running is kept, a legacy server already stopped is not waited on).
 
+## A film Claude stops answering on
+
+The studio watches every film's Claude part (agent.py `Pulse`, `talk_to_claude`): 20 minutes with
+no message from Claude Code, no event and no tool at work, and it cuts the reply off and picks the
+same session up again, telling Claude to work in shorter replies -- at most twice, then the film
+fails (and kitcut.ai refunds it) instead of waiting hours. The journal says `STALL` with the film's
+id (`ops.sh logs studio | grep STALL`), the film's page says what happened, the record counts
+`stalls`, and `ops.sh claude-log <film>` shows the replies and their waits. The case it was built
+for: an 8-minute film whose picture, written in one reply, took longer than Claude Code waits,
+retried from scratch every 5 minutes for an hour (docs/known-issues.md KI-034). A film over 90 s
+is now told to write its picture in parts; the redesign for much longer films is docs/todo.md #7.
+
+## Nothing moves the VM backwards
+
+The VM's repo (`/srv/kitcut/git`) refuses any push that would move a branch or a tag back
+(`receive.denyNonFastForwards`), `--force` or not. A clone that had not pulled once pushed an older
+studio-poc from its own old scripts and drained the live studio; a check in the scripts could not
+stop that, since the stale clone runs its own copies. To go back to an earlier release, use
+`ops.sh rollback <sha12>`; a ship refused this way means: pull origin, then ship.
+
 ## A film the studio stopped half-way
 
 A restart while Claude is working stops the film (up to 2026-09-29 it was even recorded as

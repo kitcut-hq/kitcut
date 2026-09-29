@@ -22,11 +22,21 @@ vm() { bash "$HERE/vm.sh" "$@"; }
 
 ip="$(vm ip "$VM")"
 export GIT_SSH_COMMAND="ssh -i $KEY -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts.kitcut"
-vm ssh "$VM" '[ -d /srv/kitcut/git ] || git init -q --bare /srv/kitcut/git'
+# The VM's repo refuses to move a branch or a tag backwards, whoever pushes. On 2026-09-28 a clone
+# that had not pulled force-pushed an older studio-poc from its own old push.sh, the checkout went
+# back with it, and its old serve.sh drained the live studio. A check in this script would not
+# have helped -- the stale clone runs its own copy -- so the refusal lives on the VM (git's
+# receive.denyNonFastForwards); set again here each time, and a rebuilt VM gets it on first push.
+vm ssh "$VM" '[ -d /srv/kitcut/git ] || git init -q --bare /srv/kitcut/git
+git -C /srv/kitcut/git config receive.denyNonFastForwards true'
 refs=("$REV:refs/heads/$BRANCH")
 git -C "$REPO_LOCAL" rev-parse -q --verify refs/tags/studio-stable >/dev/null &&
   refs+=("+refs/tags/studio-stable:refs/tags/studio-stable")
-git -C "$REPO_LOCAL" push -q --force "ssh://kitcut@$ip/srv/kitcut/git" "${refs[@]}"
+git -C "$REPO_LOCAL" push -q --force "ssh://kitcut@$ip/srv/kitcut/git" "${refs[@]}" || {
+  echo "push.sh: the VM refused -- it has newer code than this clone ($(git -C "$REPO_LOCAL" rev-parse --short "$REV")):" \
+    "pull origin, then ship. (To go back to an older release: ops.sh rollback <sha12>.)" >&2
+  exit 1
+}
 vm ssh "$VM" 'set -e
 if [ ! -d /srv/kitcut/repo/.git ]; then git clone -q /srv/kitcut/git /srv/kitcut/repo; fi
 cd /srv/kitcut/repo

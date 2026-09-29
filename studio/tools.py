@@ -66,20 +66,36 @@ def _tts_spent(film):
         return sum(json.loads(x).get("cost_usd") or 0 for x in f if x.strip())
 
 
-def timeline_text(film):
-    """The narration's timing as Claude needs it for cues: each line's span and every word."""
+# Up to this many lines, every word's time comes back with each recording; past it only the line
+# re-recorded brings its words. Every recording of film llwtme (67 lines) returned all of them,
+# 24,000 characters a time, kept in Claude's context for the rest of the film -- 17% of it --
+# while SK.w(line, word) finds a word's time by itself when the film plays.
+WORDS_UP_TO = 24
+
+
+def timeline_text(film, retake=None):
+    """The narration's timing as Claude needs it for cues: each line's span, and its words (all of
+    them for a short narration; for a long one only the line just re-recorded)."""
     try:
         with open(film.path("audio", "vo", "timeline.json"), encoding="utf-8") as f:
             tl = json.load(f)
     except (OSError, ValueError):
         return "(no timeline)"
+    lines = tl.get("lines", [])
+    every = len(lines) <= WORDS_UP_TO
     out = []
-    for L in tl.get("lines", []):
-        words = " | ".join("%s %.2f" % (w["text"], w["s"]) for w in L.get("words", []))
-        out.append(
-            "line %d  %.2f-%.2f s  acc %.2f  %r\n  words: %s"
-            % (L["i"], L["start"], L["end"], L.get("acc", 0), L["text"], words)
-        )
+    for L in lines:
+        if every or L["i"] == retake:
+            words = " | ".join("%s %.2f" % (w["text"], w["s"]) for w in L.get("words", []))
+            out.append(
+                "line %d  %.2f-%.2f s  acc %.2f  %r\n  words: %s"
+                % (L["i"], L["start"], L["end"], L.get("acc", 0), L["text"], words)
+            )
+        else:
+            out.append(
+                "line %d  %.2f-%.2f s  acc %.2f  %r"
+                % (L["i"], L["start"], L["end"], L.get("acc", 0), L["text"][:60])
+            )
         if L.get("backup_voice"):
             out.append(
                 "  (Gemini would not read this line; the backup voice %s read it, so it sounds a"
@@ -189,9 +205,15 @@ class Tools:
             # only recordings that worked count: a TTS that gave no audio cost nothing (and the
             # narration's budget above caps what a film may spend on its voice either way)
             self.voice_runs += 1
+        text = timeline_text(self.film, retake_line)
+        if text.count("  words: ") < text.count("\nline ") + 1:  # a long narration: words on demand
+            text += (
+                "\n\n(A line's words and their times are in audio/vo/timeline.json: Read it for "
+                "the lines you place cues on -- SK.w(line, 'word') finds them by itself.)"
+            )
         return (
             "Recorded. The timeline (also in audio/vo/timeline.json), times on the film clock:\n"
-            + timeline_text(self.film)
+            + text
         )
 
     async def paint(self, retake=None):

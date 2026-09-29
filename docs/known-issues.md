@@ -524,3 +524,27 @@ a switch, none failed, slowest 1.2 s. The first switch after shipping this fix s
 rollback took 11 s and stopped nothing; a SIGKILLed leader restarted, led, and marked its orphaned
 film interrupted with a line on its page, leaving another server's films alone. Still to check at a
 quiet moment: a reboot (`kitcut-studio-boot` starting the current instance).
+
+### KI-034 · fixed · studio · A long film's picture, written in one reply, never came back
+
+**Symptom.** The 8-minute film llwtme sat for about an hour, twice, right after its narration was
+recorded: no events, no cost, the Claude Code process alive, its transcript showing `Request timed
+out.` every 5 minutes (retry n of 10). The API answered other requests at once.
+**Cause.** The next reply was the whole picture: 56,863 output tokens, 7.7 minutes (measured once
+the timeout was raised). Claude Code's request timeout was shorter, so it cut the reply off and
+asked again from scratch, forever. Three things grow with a film's length and meet here: the
+reply that writes the picture (57k tokens at 8 minutes; one reply may not pass 128K), the context
+Claude carries (73k at the start, 371k at the end: ~37k a minute of film, against a 1M window),
+and the narration tool's results (all 67 lines' word timings, 24,000 characters, every recording).
+**Fix.** `API_TIMEOUT_MS` 30 min and `CLAUDE_CODE_MAX_OUTPUT_TOKENS` 128000 (agent.claude_env); a film
+over 90 s is told to write its picture in parts and to leave a closing breath (agent.LONG_FILM,
+closing_s); a long narration's result carries each line's span and only the re-recorded line's
+words (tools.timeline_text); and a stall watchdog (agent.Pulse, talk_to_claude): 20 minutes with
+no message from Claude Code, no event and no tool at work cuts the reply off and picks the session
+up again with "shorter replies", at most twice -- then the film fails, and is refunded, instead of
+waiting hours. `ops.sh claude-log <film>` shows a film's replies, waits and stalls in one page.
+**Still open.** The film is one file written by one conversation that grows with it: past ~18
+minutes the picture cannot be written in one reply at all, past ~25 the conversation outgrows the
+window. The plan -- scenes as the unit of work, each in a fresh bounded conversation -- is in
+`docs/todo.md`.
+**Evidence.** `ops.sh claude-log studio-20260928-220505-llwtme --all`.
