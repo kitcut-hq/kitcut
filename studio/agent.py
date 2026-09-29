@@ -68,6 +68,7 @@ from film import (  # noqa: E402
     direction_fields,
     fills,
     limits,
+    paint_kinds,
     paint_words,
 )
 from guard import _path, guard, pin_after, pin_paint, pin_vo  # noqa: E402
@@ -669,6 +670,15 @@ def claude_cli():
     return best[1]
 
 
+def director_files(film):
+    """What the director of a film made in scenes may write: the narration, the look, the plan,
+    scene 1, the cast -- and paint.json when the film paints anything. It asked for the painted
+    look by name, so a collage film's director could order no cut-outs, and i4d52n's twelve
+    scenes drew their bikes in code (2026-09-29)."""
+    allow = ["vo.json", "film.js", "scenes.json", "scenes/01-*.js", "cast/*.js", "engine/props.js"]
+    return allow + (["paint.json"] if paint_kinds(film.caps) else [])
+
+
 async def run_claude(
     film,
     emit,
@@ -1215,8 +1225,7 @@ async def make_film(
             return ((res.result if res is not None else "") or "").strip()[:n]
 
         # the director: the narration, the look, the plan, and scene 1 as the pilot
-        allow = ["vo.json", "film.js", "scenes.json", "scenes/01-*.js", "cast/*.js"]
-        allow += ["engine/props.js"] + (["paint.json"] if film.look == "painted" else [])
+        allow = director_files(film)
         while not scenes.done(film, scenes.DIRECTOR):
             res = await one(
                 "director",

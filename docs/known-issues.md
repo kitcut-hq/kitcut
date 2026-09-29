@@ -637,3 +637,15 @@ when the narration ends after the film (`tools.timeline_text`, test_server). Sti
 that has used its last recording can only keep the overrun, and loses the words past the end.
 **Evidence.** `/srv/kitcut/studio/projects/studio-20260929-121021-u3edgl` (events.jsonl,
 outputs/film.srt).
+
+### KI-042 · fixed · studio · A collage film made in scenes could order no cut-outs
+
+**Symptom.** i4d52n (collage, 8 minutes, scenes) has no pictures at all: every scene drew its
+bikes in code ("there are no painted images yet"), and scene 2 went looking for
+`images/spec-epic.webp`, which was never painted.
+**Cause.** The director's write list allowed `paint.json` only when `film.look == "painted"`.
+Collage paints too (its recipe carries `cutouts`), so the director's two writes of `paint.json`
+(at 395 s and 1992 s) were refused, and no later pass may write it.
+**Fix.** `agent.director_files()` allows it whenever `film.paint_kinds(film.caps)` is not empty;
+`test_scenes.py` checks every look.
+**Evidence.** `blocked` events at 395.1 and 1991.6 in i4d52n's events.jsonl.

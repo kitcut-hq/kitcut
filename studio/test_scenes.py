@@ -215,6 +215,13 @@ async def main():
     # ------------------------------------------------ the switch, set after film.py was imported
     # (the studio's .env is read after it: a value read at import would never have been seen)
     os.environ["STUDIO_SCENES_OVER_S"] = "300"
+    for look in films.LOOKS:
+        f = films.Film.create("who paints", 480, look, mode="scenes")
+        check(
+            ("paint.json" in agent.director_files(f)) == bool(films.paint_kinds(f.caps)),
+            "a %s film's director %s order its pictures"
+            % (look, "may" if films.paint_kinds(f.caps) else "has none to"),
+        )
     long_one = films.Film.create("five and a bit", 305, "drawn")
     short_one = films.Film.create("five exactly", 300, "drawn")
     os.environ.pop("STUDIO_SCENES_OVER_S")
