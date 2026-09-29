@@ -9,8 +9,11 @@ read and fetched, what Claude said) and that the brief goes in marked private; t
 YouTube and to its inputs -- a link nobody gave removed, chapters past the end or not from 0:00
 removed with their heading, good ones kept, the title cut at a word, the tags to 500; the brief
 pasted back refused, once asked again, twice given up; a draft kept and reused until the film
-changes; what it cost on the record; and the API: the owner only, a finished film only, 202 while
-writing, then the draft. Everything happens in a throwaway STUDIO_HOME.
+changes; what it cost on the record; the four thumbnails with it -- held to the rules, asked once
+more when they break them, then put right from the film, and made after the draft (the stills and
+the browser are stood in for here: studio/test_thumbs.py runs them for real); and the API: the
+owner only, a finished film only, 202 while writing, then the draft, then its thumbnails.
+Everything happens in a throwaway STUDIO_HOME.
 """
 
 import os
@@ -26,6 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import server  # noqa: E402 -- imports agent, which imports _env first
 import agent  # noqa: E402
 import store  # noqa: E402
+import thumbs  # noqa: E402
 import ytdraft  # noqa: E402
 from film import Film  # noqa: E402
 
@@ -84,11 +88,20 @@ def fixture_film(client="u:alice", length=15):
     return f
 
 
+THUMBS = [
+    {"at": 3.5, "layout": "headline", "words": "*Faster* forms", "place": "top"},
+    {"at": 8.6, "layout": "slab", "words": "Nothing to change", "place": "left"},
+    {"at": 12.6, "layout": "panel", "words": "Right fields, first time", "place": "right"},
+    {"at": 6.0, "layout": "still", "words": ""},
+]
+
+
 def good(**over):
     d = {
         "title": "Acme now runs on the new engine | Acme",
         "description": "Every account now runs on the new engine.\n\nTry Acme: https://acme.example",
         "tags": ["acme", "new engine"],
+        "thumbnails": THUMBS,
     }
     return d | over
 
@@ -123,6 +136,53 @@ async def main():
     check("## How to fill out PDF forms" in text, "the channel's uploads in the ask")
     none = ytdraft.ask_text(mat, {"id": "x", "title": "New"}, [])
     check("No uploads to learn from" in none, "a channel with no uploads says so")
+    check(
+        '"thumbnails"' in text and "never the bottom right" in text, "the thumbnails are asked for"
+    )
+    check(mat["sheet"] is None and mat["moments"], "no sheet made here, but the moments", mat)
+    moments = ytdraft.ask_text(dict(mat, sheet=b"jpeg", moments_sheet=True), CHANNEL, [])
+    check("the film's moments, in order" in moments, "the sheet is the film's moments")
+    k1 = ytdraft.key_of(mat, CHANNEL, [], "m", "e")
+    k2 = ytdraft.key_of(dict(mat, sheet=b"other", moments_sheet=True), CHANNEL, [], "m", "e")
+    check(k1 == k2, "the key is the film's, not the sheet's bytes")
+
+    # ---------------------------------------------------------------- the thumbnails' rules
+    title = good()["title"]
+    cs, _, probs = ytdraft.check_thumbs(good(), mat, title)
+    check(len(cs) == 4 and not probs, "four good thumbnails pass", probs)
+    check(cs[0]["place"] == "top" and cs[3]["words"] == "", "with their places; a still, no words")
+    bad_thumbs = [
+        dict(THUMBS[0], words="Acme runs the new engine"),
+        *THUMBS[1:3],
+        dict(THUMBS[3], words="dropped"),
+    ]
+    cs, notes, probs = ytdraft.check_thumbs(good(thumbnails=bad_thumbs), mat, title)
+    check(
+        any("repeat the title" in p["text"] and p["n"] == 1 for p in probs),
+        "words that repeat the title are a problem",
+        probs,
+    )
+    check(
+        cs[3]["words"] == "" and any("dropped" in n for n in notes),
+        "a still's words are dropped, and said so",
+        notes,
+    )
+    long = [dict(THUMBS[0], words="one two three four five"), *THUMBS[1:]]
+    _, _, probs = ytdraft.check_thumbs(good(thumbnails=long), mat, title)
+    check(any("too long" in p["text"] for p in probs), "five words are too many", probs)
+    twice = [dict(t, layout="slab") for t in THUMBS]
+    cs, notes, _ = ytdraft.check_thumbs(good(thumbnails=twice), mat, title)
+    check(
+        sorted(c["layout"] for c in cs) == sorted(["headline", "slab", "panel", "still"]),
+        "one of each layout, the repeats given the missing ones",
+        [c["layout"] for c in cs],
+    )
+    fixed, note = ytdraft.repair(cs[:1], [{"n": 1, "text": "x"}], mat)
+    check(
+        len(fixed) == 4 and fixed[0]["layout"] == "still" and "put right" in note,
+        "repaired: the bad one the picture alone, the missing made up from the film",
+        fixed,
+    )
 
     # ---------------------------------------------------------------- held to its inputs
     recent = ytdraft.sample(RECENT)
@@ -195,7 +255,31 @@ async def main():
         calls.append(note)
         return answers.pop(0), 0.05
 
+    sheets, made = [], []
+
+    async def fake_sheet(film):
+        sheets.append(film.id)
+        return b"moments-jpeg"
+
+    async def fake_make(film, channel, draft):
+        made.append((film.id, channel))
+        await asyncio.sleep(0.1)
+        opts = [
+            {
+                "n": i,
+                "path": "youtube/%s/thumb-%d.jpg" % (channel, i),
+                "layout": t["layout"],
+                "words": t["words"],
+                "at": t["at"],
+                "t": t["at"],
+            }
+            for i, t in enumerate(draft["thumbnails"], 1)
+        ]
+        return {"key": draft.get("key"), "channel": channel, "options": opts}
+
     real_call, ytdraft._call = ytdraft._call, fake_call
+    real_sheet, real_make = thumbs.sheet, thumbs.make
+    thumbs.sheet, thumbs.make = fake_sheet, fake_make
     try:
         answers[:] = [good(title=PROMPT), good()]
         before = f.record().get("cost_usd") or 0
@@ -215,6 +299,12 @@ async def main():
             "and in the run log",
             mem.docs.get(f.id),
         )
+        check(sheets == [f.id], "the moments sheet is made for the call", sheets)
+        check(
+            len(d["thumbnails"]) == 4 and d["thumbnails"][0]["words"] == "*Faster* forms",
+            "the draft keeps its thumbnails",
+            d["thumbnails"],
+        )
         n = len(calls)
         again = await ytdraft.write(f, CHANNEL, recent, "api")
         check(len(calls) == n and again["key"] == d["key"], "asked again: the kept draft")
@@ -223,6 +313,22 @@ async def main():
         answers[:] = [good(title="Rewritten")]
         d2 = await ytdraft.write(f, CHANNEL, recent, "api")
         check(d2["title"] == "Rewritten", "a changed film is written again")
+        answers[:] = [good(thumbnails=bad_thumbs, title="Once more"), good(title="Once more")]
+        n = len(calls)
+        d3 = await ytdraft.write(f, dict(CHANNEL, id="UCthird"), recent, "api")
+        check(
+            len(calls) == n + 2 and "thumbnails broke the rules" in (calls[-1] or ""),
+            "thumbnails that break the rules are asked again, and told why",
+            calls[-1],
+        )
+        check(d3["thumbnails"][0]["words"] == "*Faster* forms", "and the second answer is kept")
+        answers[:] = [good(thumbnails=bad_thumbs, title="Twice")] * 2
+        d4 = await ytdraft.write(f, dict(CHANNEL, id="UCfourth"), recent, "api")
+        check(
+            d4["thumbnails"][0]["layout"] == "still" and any("put right" in x for x in d4["notes"]),
+            "twice: put right from the film, the draft still written",
+            d4["notes"],
+        )
         answers[:] = [good(title=PROMPT), good(title=PROMPT)]
         try:
             await ytdraft.write(f, dict(CHANNEL, id="UCother"), recent, "login")
@@ -231,7 +337,7 @@ async def main():
             check("repeating the brief" in str(e), "twice the brief is given up", e)
         rec = f.record()
         check(
-            rec["youtube_drafts"] == 3 and abs(rec["cost_usd"] - before - 0.15) < 1e-6,
+            rec["youtube_drafts"] == 5 and abs(rec["cost_usd"] - before - 0.35) < 1e-6,
             "a draft on the login is counted, but not in cost_usd",
             rec,
         )
@@ -275,6 +381,28 @@ async def main():
                 "then the draft, and nothing of the studio's",
                 j,
             )
+            th = j.get("thumbs") or {}
+            check(th.get("state") == "making", "then its thumbnails, being made", th)
+            check(
+                [g.id, CHANNEL["id"]] in ytdraft.in_flight(), "which the heartbeat counts as work"
+            )
+            for _ in range(100):
+                r = await c.get(
+                    "/api/films/%s/youtube/draft/%s" % (g.id, CHANNEL["id"]), headers=me
+                )
+                j = await r.json()
+                if (j.get("thumbs") or {}).get("state") != "making":
+                    break
+                await asyncio.sleep(0.02)
+            th = j.get("thumbs") or {}
+            check(
+                th.get("state") == "done"
+                and [o["n"] for o in th.get("options", [])] == [1, 2, 3, 4]
+                and th["options"][0]["path"] == "youtube/%s/thumb-1.jpg" % CHANNEL["id"],
+                "then the four options, each with its picture's path",
+                th,
+            )
+            check([g.id, CHANNEL["id"]] not in ytdraft.in_flight(), "and the work is over")
             r = await c.get("/api/films/%s/youtube/draft/%s" % (g.id, CHANNEL["id"]), headers=other)
             check(r.status == 404, "nobody else sees it", r.status)
             n = len(calls)
@@ -285,6 +413,20 @@ async def main():
             r = await c.get("/api/films/%s/youtube/draft/%s" % (g.id, CHANNEL["id"]), headers=me)
             j = await r.json()
             check(j.get("title") == "From the API", "and after a restart, from disk", j)
+            check(j.get("thumbs") == {"state": "none"}, "no thumbnails on disk read none", j)
+            n = len(made)
+            r = await c.post("/api/films/%s/youtube/draft" % g.id, json=ask, headers=me)
+            j = await r.json()
+            check(
+                r.status == 200 and j["thumbs"]["state"] == "making",
+                "asked again, the kept draft has them made",
+                j.get("thumbs"),
+            )
+            for _ in range(100):
+                if not ytdraft.in_flight():
+                    break
+                await asyncio.sleep(0.02)
+            check(len(made) == n + 1, "once", made)
             answers[:] = [RuntimeError]
 
             async def broken(*a, **k):
@@ -305,6 +447,7 @@ async def main():
             check(j.get("state") == "failed" and j.get("error"), "a failure says so", j)
     finally:
         ytdraft._call = real_call
+        thumbs.sheet, thumbs.make = real_sheet, real_make
 
     shutil.rmtree(HOME, ignore_errors=True)
     print("\n%d failed" % len(bad) if bad else "\nall passed")

@@ -43,6 +43,7 @@ TESTS = (
     "test_library.py",
     "test_youtube.py",
     "test_ytdraft.py",
+    "test_thumbs.py",  # a film's four YouTube thumbnail options, drawn for real
     "test_media.py",
     "test_multi.py",  # two servers on one home (peers.py): the ship that never stops a film
     "test_shared.py",  # the files two servers share, raced by real processes (locks.py)

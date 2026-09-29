@@ -1,0 +1,21 @@
+<!--
+  Slab: each line of words on its own block of the film's accent colour,
+  tilted a touch, like a sticker on the picture. The block is the contrast,
+  so the letters need no outline.
+
+  Geometry comes from _thumb.layout_slab(); with `mask` set only the letters
+  are painted, in white.
+-->
+{{^mask}}<defs>
+  <filter id="sh{{n}}" x="-10%" y="-30%" width="120%" height="170%">
+    <feDropShadow dx="0" dy="{{shadow_dy}}" stdDeviation="{{shadow_blur}}"
+                  flood-color="{{shadow}}" flood-opacity="0.45"/>
+  </filter>
+</defs>{{/mask}}
+{{#lines}}<g transform="rotate({{tilt}} {{cx}} {{cy}})">
+  {{^mask}}<rect x="{{rx}}" y="{{ry}}" width="{{rw}}" height="{{rh}}" rx="{{radius}}"
+        fill="{{slab}}" filter="url(#sh{{n}})"/>{{/mask}}
+  <text x="{{x}}" y="{{y}}" text-anchor="start" font-family="{{family}}" font-weight="{{weight}}"
+    font-size="{{size}}" letter-spacing="{{tracking}}" fill="{{#mask}}#fff{{/mask}}{{^mask}}{{ink}}{{/mask}}">{{#runs}}<tspan{{^mask}} fill="{{fill}}"{{/mask}}>{{text}}</tspan>{{/runs}}</text>
+</g>
+{{/lines}}

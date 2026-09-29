@@ -116,6 +116,7 @@ import media  # noqa: E402
 import peers  # noqa: E402
 import procs  # noqa: E402
 import store  # noqa: E402
+import thumbs  # noqa: E402
 import uploads  # noqa: E402
 import youtube  # noqa: E402
 import ytdraft  # noqa: E402
@@ -1185,8 +1186,13 @@ async def youtube_drafted(req):
     d = ytdraft.cached(f, {"id": channel}) if ytdraft.CHANNEL.match(channel) else None
     if d is None:
         return web.json_response({"error": "no such draft"}, status=404)
+    # its thumbnails as they were made; none on disk reads "none", and the page asks for the
+    # draft again (POST), which makes them
+    th = thumbs.saved(f, channel, d.get("key"))
     return web.json_response(
-        ytdraft.public({"film": f.id, "channel": channel, "state": "done", "draft": d})
+        ytdraft.public(
+            {"film": f.id, "channel": channel, "state": "done", "draft": d, "thumbs": th}
+        )
     )
 
 

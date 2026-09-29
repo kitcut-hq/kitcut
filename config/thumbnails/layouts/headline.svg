@@ -1,0 +1,19 @@
+<!--
+  Headline: the words large over the picture, in its quietest part, with an
+  outline and a drop shadow so they hold on anything underneath.
+
+  Geometry (x, y = baseline, size, anchor) comes from _thumb.layout_headline();
+  this file is only the look. With `mask` set it paints the bare letters in
+  white and nothing else -- the checks read the finished picture through that.
+-->
+{{^mask}}<defs>
+  <filter id="sh{{n}}" x="-15%" y="-40%" width="130%" height="190%">
+    <feDropShadow dx="0" dy="{{shadow_dy}}" stdDeviation="{{shadow_blur}}"
+                  flood-color="{{shadow}}" flood-opacity="0.6"/>
+  </filter>
+</defs>{{/mask}}
+{{#lines}}<text x="{{x}}" y="{{y}}" text-anchor="{{anchor}}" font-family="{{family}}"
+  font-weight="{{weight}}" font-size="{{size}}" letter-spacing="{{tracking}}"
+  {{^mask}}fill="{{ink}}" stroke="{{stroke}}" stroke-width="{{stroke_w}}" stroke-linejoin="round"
+  paint-order="stroke fill" filter="url(#sh{{n}})"{{/mask}}{{#mask}}fill="#fff"{{/mask}}>{{#runs}}<tspan{{^mask}} fill="{{fill}}"{{/mask}}>{{text}}</tspan>{{/runs}}</text>
+{{/lines}}

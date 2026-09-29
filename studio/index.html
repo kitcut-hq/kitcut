@@ -260,6 +260,25 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
 .progress.wait i { width: 30% !important; animation: slide 1.2s ease-in-out infinite alternate; }
 @keyframes slide { from { margin-left: 0; } to { margin-left: 70%; } }
 .okmark { color: var(--good); font-weight: 700; }
+/* the thumbnail: four stills of the film with a few words on them (the studio's thumbs.py), and
+   the one picked as it will sit in YouTube's feed, beside its title */
+.thumbgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.thumb { position: relative; display: block; aspect-ratio: 16 / 9; border: 2px solid var(--rule); border-radius: 10px; overflow: hidden; cursor: pointer; background: var(--rule); }
+.thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.thumb input { position: absolute; opacity: 0; pointer-events: none; }
+.thumb:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.thumb:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 3px; }
+.thumb .tick { display: none; position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font: 700 13px/22px Inter, system-ui, sans-serif; text-align: center; }
+.thumb:has(input:checked) .tick { display: block; }
+.shimmer { aspect-ratio: 16 / 9; border-radius: 10px; background: linear-gradient(90deg, var(--rule) 20%, var(--accent-soft) 50%, var(--rule) 80%); background-size: 250% 100%; animation: shimmer 1.4s linear infinite; }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+#yt .own { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+#yt .own input { accent-color: var(--accent); margin: 0; }
+.feed { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 10px; background: #fff; color: #0f0f0f; border: 1.5px solid var(--rule); }
+.feed img { width: 168px; height: 94.5px; flex: none; display: block; border-radius: 8px; object-fit: cover; }
+.feed b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font: 600 14px/1.35 Roboto, Arial, sans-serif; }
+.feed small { display: block; margin-top: 3px; color: #606060; font: 12px/1.4 Roboto, Arial, sans-serif; }
+@media (prefers-color-scheme: dark) { .feed { background: #0f0f0f; color: #f1f1f1; } .feed small { color: #aaa; } }
 </style>
 <script>
 // Where this visitor came from, for the sign-up to record (lib/attribution.js): the link's utm_*
@@ -411,6 +430,12 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
     <p class="note" id="ytDraftNote" aria-live="polite" hidden></p>
     <label class="field">Title<input type="text" id="ytName" maxlength="100" required></label>
     <label class="field">Description<textarea id="ytDesc" rows="8" maxlength="5000"></textarea></label>
+    <fieldset class="thumbs" id="ytThumbs" hidden><legend>Thumbnail</legend>
+      <div class="thumbgrid" id="ytThumbGrid"></div>
+      <label class="own"><input type="radio" name="ytThumb" value="none"> Let YouTube pick a frame</label>
+      <p class="note" id="ytThumbNote" aria-live="polite" hidden></p>
+      <div class="feed" id="ytFeed" hidden aria-label="How it looks in YouTube's feed"><img id="ytFeedImg" alt=""><div><b id="ytFeedTitle"></b><small id="ytFeedChan"></small></div></div>
+    </fieldset>
     <label class="field">Tags<input type="text" id="ytTags" maxlength="500" placeholder="Separated by commas"></label>
     <fieldset class="seg" id="ytWho"><legend>Who can watch it</legend>
       <label><input type="radio" name="ytWho" value="public"><span>Public</span></label>
@@ -910,6 +935,7 @@ let ytFilm = null;     // that film, when it is yours: {id, channels, posts, def
 let ytFormFor = null, ytPoll = null, ytPost = null;
 let ytDrafts = {};     // channel id -> its draft for that film: {state, title, description, tags, language, category}
 let ytTyped = {};      // the fields you have typed in: a draft never overwrites them
+let ytThumbPick = {};  // channel id -> {v, n}: the thumbnail picked among that draft's options (n 1..4, or 'none')
 const ls = { get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
              set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private window */ } } };
 const WHO = {
@@ -946,7 +972,7 @@ async function ytLoad() {
     if (!r.ok || id !== currentId) return;  // not yours, or you have moved on
     ytFilm = { ...(await r.json()), id };
   } catch (e) { return; }
-  ytDrafts = {}; ytTyped = {};
+  ytDrafts = {}; ytTyped = {}; ytThumbPick = {};
   $('ytOpen').hidden = false;
   ytList();
   if (ytChosen()) ytDraft(ytChosen());  // written while you watch, so it is ready when you open the dialog
@@ -1009,7 +1035,17 @@ function ytDraftSeen(f, channel, b) {
   if (ytFilm !== f) return;  // you have moved on to another film
   const d = ytDrafts[channel] = { ...ytDrafts[channel], ...b };
   if (d.state === 'none' || (d.state === 'writing' && Date.now() - d.since > 60000)) d.state = 'failed';
-  if (d.state === 'writing') {
+  // the thumbnails come after the words: follow them for up to two minutes; a draft written before
+  // (another server's, or before a restart) is asked for once more, which has them made
+  const t = d.thumbs || {};
+  if (d.state === 'done' && t.state === 'making' && Date.now() - d.since > 120000) d.thumbs = { state: 'failed' };
+  if (d.state === 'done' && t.state === 'none' && !d.again) {
+    d.again = true;
+    fetch('/api/youtube/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ film: f.id, channel }) })
+      .then((r) => (r.ok ? r.json() : { state: 'done' })).catch(() => ({ state: 'done' }))
+      .then((next) => ytDraftSeen(f, channel, next));
+  }
+  if (d.state === 'writing' || (d.state === 'done' && (d.thumbs || {}).state === 'making')) {
     setTimeout(async () => {
       let next = { state: 'writing' };
       try {
@@ -1037,7 +1073,54 @@ function ytFill(channel) {
   note.textContent = d.state === 'writing' ? "Writing a title and description from the film, in this channel's voice..."
     : d.state === 'failed' ? "They couldn't be written from the film this time, so here are the basics. Change anything you like." : '';
   note.hidden = !note.textContent;
+  ytThumbsFill(channel, d);
 }
+// the four thumbnails for the channel's draft: the first is the one picked unless you pick another
+function ytThumbsFill(channel, d) {
+  const t = d.thumbs || {}, grid = $('ytThumbGrid'), note = $('ytThumbNote');
+  const making = d.state === 'writing' || t.state === 'making';
+  $('ytThumbs').hidden = !(making || t.state === 'done');
+  if ($('ytThumbs').hidden) return ytFeed();
+  if (t.state === 'done') {
+    const had = ytThumbPick[channel];
+    if (!had || had.v !== t.v) ytThumbPick[channel] = { v: t.v, n: t.options[0].n };
+    const pick = ytThumbPick[channel].n;
+    if (grid.dataset.v !== `${channel}:${t.v}`) {
+      grid.dataset.v = `${channel}:${t.v}`;
+      grid.innerHTML = t.options.map((o) => `
+        <label class="thumb" title="${esc(o.words || 'The picture alone')}">
+          <input type="radio" name="ytThumb" value="${o.n}">
+          <img src="${esc(o.src)}" alt="${esc(`Thumbnail ${o.n}: ${o.words || 'the picture alone'}`)}">
+          <span class="tick" aria-hidden="true">&#10003;</span>
+        </label>`).join('');
+    }
+    for (const r of document.querySelectorAll('input[name=ytThumb]')) {
+      r.checked = r.value === String(pick);
+      r.onchange = () => { ytThumbPick[channel] = { v: t.v, n: r.value === 'none' ? 'none' : Number(r.value) }; ytFeed(); };
+    }
+    note.hidden = true;
+  } else {
+    grid.dataset.v = '';
+    grid.innerHTML = '<div class="shimmer"></div>'.repeat(4);
+    note.textContent = 'Making four thumbnails from stills of the film...';
+    note.hidden = false;
+  }
+  ytFeed();
+}
+// the thumbnail picked, where people meet it: 168 pixels wide beside its title, as in YouTube's
+// "up next" list -- if the words cannot be read here, they cannot be read there
+function ytFeed() {
+  const c = document.querySelector('input[name=ytChan]:checked');
+  const d = (c && ytDrafts[c.value]) || {}, t = d.thumbs || {}, p = c && ytThumbPick[c.value];
+  const o = t.state === 'done' && p && p.n !== 'none' && t.options.find((x) => x.n === p.n);
+  $('ytFeed').hidden = !o;
+  if (!o) return;
+  if ($('ytFeedImg').getAttribute('src') !== o.src) $('ytFeedImg').src = o.src;
+  $('ytFeedTitle').textContent = $('ytName').value.trim() || ytFilm.defaults.title;
+  const ch = ytFilm.channels.find((x) => x.id === c.value);
+  $('ytFeedChan').textContent = ch ? ch.title : '';
+}
+$('ytName').addEventListener('input', ytFeed);
 for (const id of ['ytName', 'ytDesc', 'ytTags']) $(id).addEventListener('input', () => { ytTyped[id] = true; });
 function ytForm(pick) {
   const f = ytFilm;
@@ -1087,6 +1170,7 @@ $('ytForm').addEventListener('submit', async (e) => {
       body: JSON.stringify({
         film: ytFilm.id, channel: chan.value, title: $('ytName').value, description: $('ytDesc').value, tags: $('ytTags').value,
         language: (ytDrafts[chan.value] || {}).language, category: (ytDrafts[chan.value] || {}).category, privacy: who.value, kids: $('ytKids').checked,
+        thumb: ytThumbChosen(chan.value),
       }),
     });
     const b = await r.json().catch(() => ({}));
@@ -1099,6 +1183,11 @@ $('ytForm').addEventListener('submit', async (e) => {
   } catch (err) { ytErr(String(err.message || err)); }
   $('ytGo').disabled = false;
 });
+// the thumbnail to set on the video: the option picked, when the options are there
+function ytThumbChosen(channel) {
+  const t = (ytDrafts[channel] || {}).thumbs || {}, p = ytThumbPick[channel];
+  return t.state === 'done' && p && p.v === t.v && p.n !== 'none' ? p.n : null;
+}
 // follow one publish: the bar while the studio sends the file, then the link
 function ytTrack(p) {
   if (!ytFilm || ytFilm.id !== p.film) return;
@@ -1128,10 +1217,11 @@ function ytTrack(p) {
   }
   $('ytSendText').innerHTML = `<span class="okmark">&#10003;</span> Published to <b>${esc(p.channel.title)}</b>`;
   $('ytWatch').href = p.url;
-  $('ytDoneNote').textContent = p.held
+  $('ytDoneNote').textContent = (p.held
     ? "YouTube is keeping it private for now, while Google reviews KitCut's access to YouTube."
     : p.state === 'live' ? `It is on YouTube now, as ${WHO[p.privacy].label.toLowerCase()}.`
-      : 'YouTube takes a few minutes to get a new video ready. Until then it may say "processing".';
+      : 'YouTube takes a few minutes to get a new video ready. Until then it may say "processing".')
+    + (!p.thumb ? '' : p.thumb.state === 'set' ? ' It has the thumbnail you picked.' : p.thumb.state === 'failed' ? ` The thumbnail wasn't set: ${p.thumb.error}` : '');
 }
 
 

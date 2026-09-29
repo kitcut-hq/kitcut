@@ -70,7 +70,12 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    pixels to ffmpeg: 4x on the 8-minute studio film (2,218 s -> 536 s of frames), quality at
    least as good at the same `cq`, but a bigger master on grainy films. The studio renders
    this way; the script's default is still the pipe. It falls back to ffmpeg by itself where the browser cannot encode.
-9. **Publish** with `yt-upload.py --channel <handle>` — unlisted unless told otherwise.
+9. **Publish** with `yt-upload.py --channel <handle>` — unlisted unless told otherwise. For a
+   thumbnail, make four from the film's own stills: `python studio/ytdraft.py --film <folder>
+   --thumbs` (Claude picks the moments and words; ~$0.06) or `python scripts/thumb-options.py
+   --film <folder> --concepts c.json` (your own), then look at `feed.jpg` -- the options at
+   YouTube's feed sizes -- and pass the one you pick to `yt-upload.py --thumbnail`. Every option
+   has already passed the checks (legible at 168 px, contrast, clear of the duration stamp).
 10. **Report the timings** (`--timings`) with the deliverables.
 
 ## Traps already paid for

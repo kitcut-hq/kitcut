@@ -2734,6 +2734,88 @@ refuses opaque pages. `yt-upload.py --thumbnail` sets the image after the
 upload. A failure there (an unverified channel) is printed and does not undo
 the upload.
 
+## Thumbnail options: four stills of the film (`thumb-options.py`, `_thumb.py`)
+
+kitcut.ai's "Publish to YouTube" offers four thumbnails, and the person picks one. Each is **a
+still of the film itself** with at most four words on it -- no stock art, no generated imagery.
+The studio makes them (`studio/thumbs.py`, see `studio/README.md`); the machinery is
+`scripts/_thumb.py`, and this CLI runs it on any finished sketch film:
+
+```powershell
+python scripts/thumb-options.py --film <film dir> --moments                 # the labelled moments sheet only
+python scripts/thumb-options.py --film <film dir> --concepts c.json --list  # frames, layouts, every check; no JPEGs
+python scripts/thumb-options.py --film <film dir> --concepts c.json --title "..." [--ocr]
+python scripts/thumb-options.py --film <film dir> --auto                    # the baseline: frames at 25/50/75%, no words
+python studio/ytdraft.py --film <film dir> --thumbs                         # Claude's own concepts, then the options
+python scripts/check-thumbnail.py                                           # the rules, plus one real browser shot
+python studio/test_thumbs.py                                                # end to end on the example film
+```
+
+A concept is `{"at": s, "words": "Can't *sleep*?", "layout": "headline|slab|panel|still",
+"place": "top|bottom|left|right|top-left|top-right|bottom-left"}`; one word may be starred for the
+accent colour. Output: `thumb-N.jpg` (1920x1080, well under YouTube's 2 MB), `sheet.jpg` (side by
+side) and `feed.jpg` (at YouTube's 360/246/168-px sizes, dark and light).
+
+**How an option is made.**
+1. *Stills* come from a copy of the film's manifest without its `tail`: a Free film's "made with
+   kitcut.ai" mark sits exactly under YouTube's duration stamp and cannot be read at feed size, so
+   thumbnails are clean on every plan. All paths in the copy are absolute; it renders into its own
+   folder (`temp/thumbs/stills-<film key>/`), never the film's outputs.
+2. *Moments*: just before each narration line ends (what the line is about is drawn by then),
+   6-12 of them, a second apart, on one labelled sheet that the draft's Claude call sees.
+3. *Settle*: around each chosen moment (±0.6 s) the frame whose ±0.2 s neighbours differ least,
+   among the ones that are not thin (a scene not drawn in yet, a fade).
+4. *Layout*, in Python, with the font files the browser uses: the font whose glyphs cover the
+   words (Anton has no Cyrillic, so Ukrainian falls through to Montserrat), the largest cap
+   height that fits in at most two lines, and the place that hides the least of the subjects --
+   inside the writer's `place` first, then anywhere -- never over the film's own words.
+5. *Paint*: every option's layer and a white mask of its letters, stacked, in one headless shot
+   (`config/thumbnails/layouts/*.svg`); the plate (grade, scrim, slide, zoom) is Pillow.
+6. *Checks* on the finished picture through the mask; *fallbacks* (headline -> +scrim -> slab ->
+   still; panel -> slab -> still) until every option passes.
+
+**The rules** (`config/thumbnails/thumbnails.json`, each with its source there):
+
+| rule | value | why |
+|---|---|---|
+| cap height at 168 px wide | >= 8 px (>= 92 px at 1080p) | the "up next" sidebar is YouTube's smallest place with a title |
+| contrast, letters vs the ring around them | >= 4.5:1 | WCAG 2.2 1.4.3; the ring is the outline where there is one |
+| no letters in the bottom-right 15% x 15%, bottom 3%, 5% margins | 0 px | YouTube's duration stamp and progress bar |
+| words | <= 4 words, 32 characters, <= half of them in the title | glance test: complement the title, never repeat it |
+| film's own words covered | <= 40 px (a shadow's fringe) | a slab over "Month-end" looked broken |
+| layouts | one each of headline, slab, panel, still | four options are only a choice if they differ |
+
+**Measured** (2026-09-29, 8 studio films -- crayon, clean, blueprint, two painted, a Ukrainian one
+-- 32 options from Claude's own concepts, ~$0.06 and 6-17 s a draft, 7-11 s of options each):
+- every worded option set at a cap height of 8.4-17.5 px at 168 px; RapidOCR read every word back
+  on all 21 Latin-script ones at 168, 246 and 360 px -- the smallest included, so the 8 px floor is
+  not too lax. OCR cannot read Cyrillic (KI-035); for the Ukrainian film only the cap height vouches.
+- contrast 4.81-12.4:1, median 9.07.
+- YouTube-like frames at 25/50/75% caught the film moving (mean difference over ±0.2 s > 0.03) in
+  10 of 24; the settled frames in 6 of 32; median movement 0.0149 -> 0.0054.
+
+**What the bake-off changed, and why** -- each was a visible defect in a round of 32 options:
+- *Saliency* (spectral residual, Hou & Zhang 2007) finds the characters, a phone, a bottle and
+  ignores hatching on drawn and clean films, and misses big subjects on painted ones (KI-036). So
+  Claude names a `place` from the sheet, and saliency only fine-tunes inside it.
+- *Accent colour*: the commonest vivid colour was the sky, the trunk or the paper. The one that
+  pops wins now: count^0.3 x Lab distance^1.5 on a 320-px copy, never the ground's own hue (a
+  blueprint's blue). Of four scorings on 12 frames it picked the popping colour on 9.
+- *The film's own words* (OCR boxes >= 32 px tall; an app screen's own print is 22-30 px and is
+  left to the subject map) may not be covered: a panel slides the picture to keep them in view,
+  or moves side, widens, or falls back to a slab.
+- *The quiet threshold* was 0.35 on a scale where an empty ground scores 0.001-0.02 and a busy
+  one 0.04-0.13: the largest size always won. It is 0.045, measured.
+- *Moments two seconds apart* was stricter than the sheet (moments one second apart), and cost a
+  second paid call on the first film. It is one second now.
+- *The prompt's example words* ("Only *3* steps") came back as "Just 4 steps": the example is now
+  just `*word*`, and the thumbnail words are held to the film like the description is.
+
+The draft costs ~$0.01 more with the sheet and four concepts. Thumbnails are opt-out, never
+forced: the dialog has "Let YouTube pick a frame", and a channel that YouTube will not let use
+custom thumbnails (unverified, KI-037) gets its video published with YouTube's frame and a line
+saying why.
+
 ## Chapter markers on a published video
 
 Turn a transcript into YouTube chapters, then write them into the video's own

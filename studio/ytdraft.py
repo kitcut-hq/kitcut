@@ -1,16 +1,20 @@
 #!/usr/bin/env python
-"""A finished film's YouTube title, description and tags, written from what the film is.
+"""A finished film's YouTube title, description, tags and four thumbnails, from what the film is.
 
 The site (kitcut-hq/sketch-studio, api/youtube.js) knows the channel: it reads the channel's
 latest uploads with the grant it already holds, and sends them here. The studio knows the film:
 its narration and when each line is said, who it was made for, what Claude said it made and
-what it could not confirm, the pages its facts came from, a sheet of its frames. One Claude call
-with no tools puts the two together -- the title and description this channel's owner would have
-written for this film -- and check() then holds the answer to what YouTube takes and to what it
-was given: no link nobody gave, no chapter past the end, and never the prompt pasted back.
+what it could not confirm, the pages its facts came from, a sheet of its moments (clean stills
+with their times, thumbs.py). One Claude call with no tools puts the two together -- the title
+and description this channel's owner would have written for this film, and four thumbnails
+(a moment, a few words, a layout, where the words go) -- and check() then holds the answer to what
+YouTube takes and to what it was given: no link nobody gave, no chapter past the end, never the
+prompt pasted back, and thumbnails held to _thumb's rules. Once written, the job makes the
+thumbnail options (thumbs.py) and the draft's answer carries them.
 
     python studio/ytdraft.py --film <id|folder> --sample-from @instafill_ai --plan
     python studio/ytdraft.py --film <id|folder> --sample sample.json [--model M] [--effort E]
+    python studio/ytdraft.py --film <id|folder> --thumbs      (and make the thumbnail options)
 
 --plan prints what Claude would be sent and what it would cost, and calls nothing. A draft is
 kept in the film's youtube/ folder, keyed by everything it was written from, so asking again
@@ -35,6 +39,8 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "scripts"))
 import agent  # noqa: E402 -- imports _env first
 import film as films  # noqa: E402
+import thumbs  # noqa: E402
+import _thumb  # noqa: E402
 import _ytchapters  # noqa: E402
 
 MODEL = agent.MODEL
@@ -51,10 +57,11 @@ CHANNEL = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 URL = re.compile(r"https?://[^\s<>\"'()\[\]{}]+")
 
 WRITER = (
-    "You write the title and description a finished video goes onto YouTube with. You are "
-    "given the film -- its narration as spoken, with times; who it was made for; what its maker "
-    "said about it; the pages its facts came from; a sheet of its frames -- and the channel it is "
-    "going to, through that channel's latest uploads. Answer only with the JSON object asked for."
+    "You write the title and description a finished video goes onto YouTube with, and choose "
+    "its thumbnails. You are given the film -- its narration as spoken, with times; who it was "
+    "made for; what its maker said about it; the pages its facts came from; a sheet of its "
+    "frames -- and the channel it is going to, through that channel's latest uploads. Answer "
+    "only with the JSON object asked for."
 )
 
 ASK = """\
@@ -83,8 +90,25 @@ would.
 YouTube's limits: the title at most 100 characters, the description at most 4500, the tags at \
 most 500 characters together.
 
+Then choose four thumbnails for it. Each is a still of the film at a moment you pick from the \
+sheet of its moments (the time is printed on every frame), with a few words set on it:
+- "at": the moment, in seconds, from the sheet -- one where what the film is about is on screen \
+and fully drawn. Four different moments.
+- "layout": one each of "headline" (the words large over the picture), "slab" (the words on a \
+block of colour), "panel" (the picture on one side, the words on a flat panel beside it) and \
+"still" (the picture alone, no words).
+- "words": at most 4 words and 32 characters, in the film's language, that make the right \
+viewer want to watch: they add to the title and never repeat it, and like everything above they \
+hold to the film -- no number or claim it does not show or say. Star one word to colour it \
+(write it as *word*). The "still" has none.
+- "place": where the words go so they hide nothing that matters in that frame: top, bottom, \
+left, right, top-left, top-right or bottom-left (never the bottom right, where YouTube shows the \
+duration). For a "panel", the side the panel goes.
+Put first the one you would choose yourself.
+
 Answer with one JSON object and nothing else:
-{{"title": "...", "description": "...", "tags": ["...", "..."]}}"""
+{{"title": "...", "description": "...", "tags": ["...", "..."], "thumbnails": [{{"at": 0.0, \
+"layout": "headline", "words": "...", "place": "top"}}, ...]}}"""
 
 # (film id, channel id) -> {"film", "channel", "client", "state", "draft", "error", "t", "task"}
 JOBS = {}
@@ -165,7 +189,8 @@ def _sources(film, events=None):
 
 
 def _sheet(film):
-    """The film's frames as one JPEG (the review sheet, else the poster), or None."""
+    """The film's frames as one JPEG when its moments sheet cannot be made (the review sheet,
+    else the poster), or None."""
     for p in (film.path("outputs", "review", "sheet.png"), film.path("outputs", "film_poster.png")):
         if os.path.exists(p):
             from io import BytesIO
@@ -180,8 +205,10 @@ def _sheet(film):
     return None
 
 
-def material(film, events=None):
-    """Everything the draft is written from, on the film's side."""
+def material(film, events=None, sheet=False):
+    """Everything the draft is written from, on the film's side. The sheet of the film's moments
+    (thumbs.py) takes a browser to make, so it is left out unless asked for: write() adds it in
+    the background. The draft's key names the film itself (film_key), not the sheet's bytes."""
     rec = film.record()
     vo = _read(film.path("vo.json"), True) or {}
     js = _read(film.path("film.js")) or ""
@@ -208,7 +235,10 @@ def material(film, events=None):
         "project": {"name": project.get("name"), "brief": (project.get("brief") or "")[:1000]}
         if project
         else None,
-        "sheet": _sheet(film),
+        "film_key": _thumb.film_key(film.dir),
+        "moments": thumbs.moments(film) if os.path.exists(film.manifest) else [],
+        "sheet": thumbs.sheet_now(film) if sheet else None,
+        "moments_sheet": bool(sheet),
     }
 
 
@@ -293,8 +323,16 @@ def ask_text(mat, channel, recent):
         p = mat["project"]
         parts.append('\nIt is an episode of the series "%s". %s' % (p["name"], p["brief"]))
     parts.append("\nThe brief it was made from (private):\n" + (mat["prompt"] or "(none)"))
-    if mat["sheet"]:
-        parts.append("\nThe image is a sheet of frames from the film, in order.")
+    if mat["sheet"] and mat.get("moments_sheet"):
+        parts.append(
+            "\nThe image is the film's moments, in order: clean stills, each with its time "
+            "printed on it (%s s)." % ", ".join("%.1f" % t for t in mat["moments"])
+        )
+    elif mat["sheet"]:
+        parts.append(
+            "\nThe image is a sheet of frames from the film, in order. Choose the thumbnails' "
+            "moments from these times: %s s." % ", ".join("%.1f" % t for t in mat["moments"])
+        )
     parts += ["", "# What to write", ASK.format(language=mat["language"])]
     return "\n".join(parts)
 
@@ -309,8 +347,12 @@ def key_of(mat, channel, recent, model, effort):
         effort,
         json.dumps(channel, sort_keys=True),
         json.dumps(recent, sort_keys=True),
-        json.dumps({k: v for k, v in mat.items() if k != "sheet"}, sort_keys=True, default=str),
-        hashlib.sha256(mat["sheet"] or b"").hexdigest(),
+        # the sheet is drawn from the film, which film_key names: its bytes are not part of it
+        json.dumps(
+            {k: v for k, v in mat.items() if k not in ("sheet", "moments_sheet")},
+            sort_keys=True,
+            default=str,
+        ),
     ):
         h.update(part.encode("utf-8") + b"\0")
     return h.hexdigest()[:24]
@@ -431,6 +473,22 @@ def check(d, mat, recent):
     return out, notes
 
 
+def check_thumbs(d, mat, title):
+    """The draft's four thumbnails held to _thumb's rules: (concepts, notes, problems). A problem
+    is something only the writer can put right; it is asked once, then repair() decides."""
+    return _thumb.check_concepts(d.get("thumbnails"), mat["length"] or 0, title)
+
+
+def repair(concepts, problems, mat):
+    """What is left of a second answer that still broke the rules: a thumbnail whose words were
+    the problem becomes the picture alone, and missing or crowded moments are made up from the
+    film's own. (concepts, note)."""
+    bad = {p["n"] for p in problems if p.get("n")}
+    out = [dict(c, words="", layout="still") if i in bad else c for i, c in enumerate(concepts, 1)]
+    out = _thumb.fill_concepts(out, mat.get("moments") or [], mat["length"] or 0)
+    return out, "thumbnails put right from the film: %s" % "; ".join(p["text"] for p in problems)
+
+
 # ------------------------------------------------------------------ writing it
 async def _call(mat, channel, recent, auth, film, model, effort, note=None):
     """One Claude call: (the parsed JSON, cost in USD)."""
@@ -510,14 +568,17 @@ async def write(
     mat=None,
 ):
     """The draft for this film on this channel: from the cache, else one call (and one more if
-    the first repeated the brief). Records what it cost on the film and in the run log, unless
-    record is False (a draft tried by hand)."""
+    the first repeated the brief or broke the thumbnails' rules). Records what it cost on the
+    film and in the run log, unless record is False (a draft tried by hand)."""
     mat = mat or await asyncio.to_thread(material, film, events)
     key = key_of(mat, channel, recent, model, effort)
     hit = cached(film, channel, key)
     if hit:
         return hit
     t0, spent, note = time.time(), 0.0, None
+    if mat.get("sheet") is None:  # the film's moments, else its review sheet or poster
+        got = await thumbs.sheet(film)
+        mat = dict(mat, sheet=got, moments_sheet=True) if got else dict(mat, sheet=_sheet(film))
     for attempt in (1, 2):
         try:
             d, cost = await _call(mat, channel, recent, auth, film, model, effort, note)
@@ -534,20 +595,34 @@ async def write(
                 raise RuntimeError("no draft: %s" % e) from None
             note = "Your last answer had no title. Answer with the whole JSON object."
             continue
+        concepts, tnotes, problems = check_thumbs(d, mat, out["title"])
         why = leak(out, mat)
-        if not why:
+        if not why and not problems:
             break
         if attempt == 2:
-            if record:
-                await _spent(film, spent, auth)
-            raise RuntimeError("the draft kept repeating the brief (%s)" % why)
-        note = (
-            "Your last answer repeated the brief (%s). The brief is private: write the title "
-            "and description from the film itself." % why
-        )
+            if why:
+                if record:
+                    await _spent(film, spent, auth)
+                raise RuntimeError("the draft kept repeating the brief (%s)" % why)
+            concepts, fixed = repair(concepts, problems, mat)
+            tnotes.append(fixed)
+            break
+        asks = []
+        if why:
+            asks.append(
+                "Your last answer repeated the brief (%s). The brief is private: write the title "
+                "and description from the film itself." % why
+            )
+        if problems:
+            asks.append(
+                "Your last answer's thumbnails broke the rules: %s. Answer with the whole JSON "
+                "object again, the thumbnails put right." % "; ".join(p["text"] for p in problems)
+            )
+        note = " ".join(asks)
     draft = out | {
+        "thumbnails": concepts,
         "language": mat["language"],
-        "notes": notes,
+        "notes": notes + tnotes,
         "model": model,
         "effort": effort,
         "key": key,
@@ -582,6 +657,8 @@ def public(job):
     out = {k: job[k] for k in ("film", "channel", "state", "error") if job.get(k) is not None}
     d = job.get("draft") or {}
     out.update({k: d[k] for k in ("title", "description", "tags", "language") if k in d})
+    if job.get("state") == "done":
+        out["thumbs"] = thumbs.public(job.get("thumbs"))
     return out
 
 
@@ -589,16 +666,51 @@ def get(film_id, channel_id):
     return JOBS.get((film_id, channel_id))
 
 
+def busy(job):
+    """Still at work: the draft being written, or its thumbnails being made."""
+    return job["state"] == "writing" or (job.get("thumbs") or {}).get("state") == "making"
+
+
 def in_flight():
-    """The drafts being written, as [film, channel], for this server's heartbeat (peers.py)."""
-    return [list(k) for k, j in JOBS.items() if j["state"] == "writing"]
+    """The drafts being written (or their thumbnails made), as [film, channel], for this
+    server's heartbeat (peers.py)."""
+    return [list(k) for k, j in JOBS.items() if busy(j)]
 
 
 def prune():
     now = time.time()
     for k, j in list(JOBS.items()):
-        if j["state"] != "writing" and now - j["t"] > KEEP_S:
+        if not busy(j) and now - j["t"] > KEEP_S:
             del JOBS[k]
+
+
+def chain_thumbs(job, film):
+    """A written draft's thumbnails onto its job: the saved ones at once, else "making" at once
+    (so the answer that goes out now already says so) and made in the background."""
+    hit = thumbs.saved(film, job["channel"], (job.get("draft") or {}).get("key"))
+    if hit:
+        job["thumbs"] = hit
+        return
+    job["thumbs"] = {"state": "making"}
+    job["task"] = asyncio.get_running_loop().create_task(make_thumbs(job, film))
+
+
+async def make_thumbs(job, film):
+    """The draft's thumbnail options (thumbs.py), onto the job: the ones already made for this
+    draft, else made now. A failure leaves the draft standing: the site then offers none."""
+    d = job.get("draft") or {}
+    hit = thumbs.saved(film, job["channel"], d.get("key"))
+    if hit:
+        job["thumbs"] = hit
+        return
+    job["thumbs"] = {"state": "making"}
+    try:
+        job["thumbs"] = await thumbs.make(film, job["channel"], d)
+    except Exception as e:  # noqa: BLE001 -- a publish without a thumbnail is still a publish
+        job["thumbs"] = {"state": "failed", "error": str(e)[:300]}
+        print("youtube thumbs %s/%s failed: %s" % (film.id, job["channel"], e), flush=True)
+    finally:
+        job["t"] = time.time()
 
 
 async def start(film, client, channel, recent, auth="api"):
@@ -607,7 +719,7 @@ async def start(film, client, channel, recent, auth="api"):
     prune()
     k = (film.id, channel["id"])
     job = JOBS.get(k)
-    if job and job["state"] == "writing":
+    if job and busy(job):
         return job
     mat = await asyncio.to_thread(material, film)
     job = {
@@ -619,11 +731,14 @@ async def start(film, client, channel, recent, auth="api"):
         "error": None,
         "t": time.time(),
     }
+    if job["draft"] is not None:  # written before: its thumbnails too, else make them now
+        chain_thumbs(job, film)
     if job["draft"] is None:
         if (film.record().get("youtube_drafts") or 0) >= PER_FILM:
             job["draft"] = cached(film, channel)  # the last one written, if any
             if job["draft"] is None:
                 raise DraftError(429, "This film has had all the drafts it can have written.")
+            chain_thumbs(job, film)
         else:
             job["state"] = "writing"
 
@@ -636,8 +751,10 @@ async def start(film, client, channel, recent, auth="api"):
                     print(
                         "youtube draft %s/%s failed: %s" % (film.id, channel["id"], e), flush=True
                     )
+                    return
                 finally:
                     job["t"] = time.time()
+                await make_thumbs(job, film)
 
             job["task"] = asyncio.get_running_loop().create_task(run())
     JOBS[k] = job
@@ -708,7 +825,7 @@ async def _main(a):
     if a.save_sample:
         with open(a.save_sample, "w", encoding="utf-8") as fh:
             json.dump({"channel": channel, "recent": recent}, fh, indent=1, ensure_ascii=False)
-    mat = material(f, a.events)
+    mat = material(f, a.events, sheet=True)
     if a.plan:
         text = ask_text(mat, channel, recent)
         t, usd = estimate(mat, text, a.model)
@@ -725,10 +842,19 @@ async def _main(a):
             )
         )
         return
-    d = await write(f, channel, recent, a.auth, a.model, a.effort, a.events, record=False)
+    d = await write(f, channel, recent, a.auth, a.model, a.effort, a.events, record=False, mat=mat)
     if a.out:
         films._write_json(a.out, d)
     print("TITLE: %s\n\n%s\n\nTAGS: %s" % (d["title"], d["description"], ", ".join(d["tags"])))
+    for t in d.get("thumbnails") or []:
+        print(
+            "THUMB: %6.2f s  %-8s %-11s %s"
+            % (t["at"], t["layout"], t.get("place") or "-", t["words"])
+        )
+    if a.thumbs:
+        rec = await thumbs.make(f, channel["id"], d)
+        for o in rec["options"]:
+            print("  %s  %s" % (f.path("outputs", o["path"]), "; ".join(o["notes"])))
     print(
         "\n--- %s effort %s: %.1f s, $%.4f%s"
         % (
@@ -756,6 +882,7 @@ def main():
     ap.add_argument("--auth", choices=("login", "api"), default="login")
     ap.add_argument("--out", help="also write the draft to this JSON file")
     ap.add_argument("--plan", action="store_true", help="print the ask and its price; call nothing")
+    ap.add_argument("--thumbs", action="store_true", help="also make the thumbnail options")
     asyncio.run(_main(ap.parse_args()))
 
 

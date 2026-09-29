@@ -548,3 +548,35 @@ minutes the picture cannot be written in one reply at all, past ~25 the conversa
 window. The plan -- scenes as the unit of work, each in a fresh bounded conversation -- is in
 `docs/todo.md`.
 **Evidence.** `ops.sh claude-log studio-20260928-220505-llwtme --all`.
+
+### KI-035 · limitation · thumbnails · OCR cannot vouch for a thumbnail's words in Cyrillic
+
+**Symptom.** `thumb-options.py --ocr` (and the bake-off) report `None` for a Ukrainian option's
+legibility at feed size.
+**Cause.** RapidOCR's recognition model reads Latin script only: at 168 px it read "Знахідка в
+лісі" as "3HAXIAKA BΛICI" -- the shapes are legible, the alphabet is not its own.
+**Workaround.** None needed for the check that gates: the cap height at 168 px (>= 8 px) is
+measured from the layout and holds for any script. Only the second opinion is missing.
+
+### KI-036 · limitation · thumbnails · Saliency misses a painted film's big subjects
+
+**Symptom.** On painted films (`look: painted`), the subject map lights scattered specks and
+leaves the hedgehog and the squirrel that fill the frame dark; words placed by it alone would sit
+on them.
+**Cause.** Spectral-residual saliency finds what is small and different; a subject that fills half
+a painted frame is neither. Coarser scales did not fix it and lit up whole clean frames instead
+(bake-off 2026-09-29, `docs/reference.md` "Thumbnail options").
+**Workaround.** The draft's Claude call, which sees the moments, names each option's `place`; the
+subject map only fine-tunes inside it. An option with no `place` on a painted film can still land
+on a subject.
+
+### KI-037 · limitation · youtube · A channel that is not verified cannot take a custom thumbnail
+
+**Symptom.** A kitcut.ai publish finishes, and the dialog says "The thumbnail wasn't set: YouTube
+lets a channel use its own thumbnails once the channel is verified...". The video has YouTube's
+own frame.
+**Cause.** Custom thumbnails are an "intermediate" YouTube feature (support.google.com/youtube/
+answer/9890437): the channel needs a verified phone number. `thumbnails.set` answers 403
+`forbidden` without one.
+**Workaround.** The person verifies at youtube.com/verify and picks the thumbnail in YouTube Studio.
+The publish itself never fails on it (`api/youtube.js` setThumb).

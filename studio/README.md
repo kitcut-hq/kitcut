@@ -237,6 +237,28 @@ Only links it was given survive, chapters must fit the film, and a draft that pa
 back is refused. Try one by hand with `python studio/ytdraft.py --film <id> --sample-from @handle`
 (`--plan` prints the ask and its price). Details: `docs/reference.md`.
 
+**The thumbnail** (`thumbs.py`, `scripts/_thumb.py`): four options, each a still of the film itself
+with a few words on it, offered in the publish dialog. The same Claude call chooses them: it sees
+a sheet of the film's clean moments with their times (made first, ~12 stills; no Free-plan mark)
+and answers four `{at, words, layout, place}` -- one each of headline, slab, panel and the picture
+alone. Once the draft is written, the job makes the options: the settled frame near each moment,
+the words where they hide nothing that matters, one browser shot for every layer, and checks
+(legible at 168 px wide, 4.5:1 contrast, clear of YouTube's duration stamp, none of the film's own
+words covered). An option that fails falls back (a scrim, a slab, the still alone) before anyone
+sees it. The draft's answer carries them:
+
+```bash
+# ... "thumbs": {"state": "making"} while they are made (~10-15 s), then
+# ... "thumbs": {"state": "done", "v": "<draft key>", "options": [{"n", "path", "layout", "words", "at", "t"}]}
+curl -s $BASE/files/<id>/youtube/<channel id>/thumb-1.jpg -H "Authorization: Bearer $TOKEN" > thumb-1.jpg
+```
+
+The site shows them through its own owner-only relay and, once YouTube has the video, sets the
+one picked with `thumbnails.set` on its own grant; a failure (most often an unverified channel)
+never fails the publish. They cost no model time beyond the draft's (+~$0.01): CPU and a browser,
+at most `STUDIO_THUMB_JOBS` (2) at once. Try them by hand with `python studio/ytdraft.py --film <id>
+--thumbs`, or on hand-written concepts with `python scripts/thumb-options.py --film <folder>`.
+
 ## What it costs, and where that is recorded
 
 Every run is a document in **MongoDB `kitcut.studio_runs`**. That's the database kitcut-web uses:
