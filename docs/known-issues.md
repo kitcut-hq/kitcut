@@ -655,6 +655,9 @@ Collage paints too (its recipe carries `cutouts`), so the director's two writes 
 **Symptom.** c6ckpu (90 s, Spanish, drawn, 2026-09-29) spent 17.6 of its 38 Claude minutes in
 one `voice` call, then stalled 13 minutes thinking before its first line of film.js and ran out
 ("Claude ran past the 38-minute limit"). Resumed, it wrote the whole film in 124 s of Claude time.
+Its Ukrainian twin 4kr5hv (90 s, collage, started 16 minutes later) went the same way: its first
+`voice` + `paint` call took 19.5 minutes, two more voice runs 10, then the limit. Both English
+films made beside them (small.en) finished on time.
 **Cause.** sketch-vo.py's `score` stage (Whisper, word times for Gemini's takes) took 1,040 s for
 13 lines, and 288 s to re-time one. English scores on small.en; every other language on
 large-v3, on the CPU (int8). At that moment the 4-vCPU machine was rendering four things (load
