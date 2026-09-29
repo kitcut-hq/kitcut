@@ -105,6 +105,10 @@ textarea { width: 100%; min-height: calc(5 * 1.35em + 28px); resize: vertical; p
 .att.voice .play { width: 100%; height: 100%; padding: 14px 0 0; border-radius: 10px; background: none; color: var(--ink);
   display: grid; place-items: center; gap: 2px; font: 600 12px/1 Inter, system-ui, sans-serif; letter-spacing: 0; }
 .att.voice .play svg { width: 20px; height: 20px; color: var(--accent); }
+.att.doc { min-width: 72px; max-width: 136px; height: 72px; border-radius: 10px; border: 1.5px solid var(--rule); background: var(--paper);
+  display: grid; place-items: center; align-content: center; gap: 4px; padding: 0 6px; }
+.att.doc svg { width: 20px; height: 20px; color: var(--accent); }
+.att.doc span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 11px/1.2 Inter, system-ui, sans-serif; }
 .tools, .recbar { display: flex; align-items: center; gap: 10px; padding: 4px 10px 10px; }
 .tools .grow { flex: 1; min-width: 0; }
 .tools .grow button { margin-left: 6px; }
@@ -306,11 +310,11 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
 
   <form id="form">
     <div class="composer" id="composer">
-      <textarea id="prompt" rows="5" aria-label="What should the film show?" aria-describedby="promptCount" placeholder="Type your idea, or say it with the microphone. Add pictures with +.">A paper plane delivers a cup of coffee to a sleepy developer, who wakes up delighted</textarea>
+      <textarea id="prompt" rows="5" aria-label="What should the film show?" aria-describedby="promptCount" placeholder="Type your idea, or say it with the microphone. Add pictures or text files with +.">A paper plane delivers a cup of coffee to a sleepy developer, who wakes up delighted</textarea>
       <div class="tray" id="tray" hidden></div>
       <div class="tools" id="tools">
-        <button type="button" class="icon" id="attach" aria-label="Add pictures" title="Add pictures: a logo, a photo, a sketch, a screenshot of your brief">+</button>
-        <input type="file" id="files" accept="image/*" multiple hidden>
+        <button type="button" class="icon" id="attach" aria-label="Add pictures or text files" title="Add pictures (a logo, a photo, a sketch, a screenshot of your brief) or text files (.txt, .md: a script, notes, facts about your product)">+</button>
+        <input type="file" id="files" accept="image/*,.txt,.md,.markdown,text/plain,text/markdown" multiple hidden>
         <span class="note grow" id="attachNote" aria-live="polite"></span>
         <button type="button" class="icon" id="mic" aria-label="Record a voice note" title="Say your idea instead of typing it" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
       </div>
@@ -1111,19 +1115,22 @@ function ytTrack(p) {
 }
 
 
-// ---------------------------------------------------------------- pictures and voice notes
+// ---------------------------------------------------------------- pictures, voice notes, text files
 // Attached to the idea, alongside the words or instead of them. A picture is shrunk here (2048 px;
-// redrawing it drops the camera's location data) and a voice note recorded here; each goes up to
-// the studio as soon as the visitor is signed in (api/uploads.js), and a voice note comes back
-// written out (its words are the tile's tooltip). Everything waits in this browser
-// (IndexedDB) until a film takes it, so it survives the sign-in link and a reload.
-const MAX_PICS = 6, MAX_NOTES = 3, REC_MAX = 180, REC_WARN = 165;
-const ATT = [];  // {kind: 'image'|'audio', blob, url, w, h, secs, id, state, transcript, error}
+// redrawing it drops the camera's location data), a voice note recorded here, and a text file
+// (.txt, .md: a script, notes, facts) sent as it is, with its name; each goes up to the studio as
+// soon as the visitor is signed in (api/uploads.js), and a voice note comes back written out (its
+// words are the tile's tooltip). Everything waits in this browser (IndexedDB) until a film takes
+// it, so it survives the sign-in link and a reload.
+const MAX_PICS = 6, MAX_NOTES = 3, MAX_DOCS = 3, DOC_MAX_BYTES = 400 * 1024, REC_MAX = 180, REC_WARN = 165;
+const ATT = [];  // {kind: 'image'|'audio'|'text', blob, url, w, h, secs, name, id, state, transcript, error}
 let known = false;  // whoami() has answered: uploads wait for it
 const canUpload = () => known && (!AUTH || !!USER);
 function note(html) { $('attachNote').innerHTML = html || ''; }
 const pics = () => ATT.filter((a) => a.kind === 'image').length;
 const notes = () => ATT.filter((a) => a.kind === 'audio').length;
+const docs = () => ATT.filter((a) => a.kind === 'text').length;
+const isDoc = (f) => /\.(txt|md|markdown)$/i.test(f.name) || /^text\/(plain|markdown|x-markdown)\b/i.test(f.type);
 
 const shelf = {
   db: null,
@@ -1135,8 +1142,8 @@ const shelf = {
     }));
   },
   async save() {
-    const items = ATT.map(({ kind, blob, w, h, secs, id, transcript, state }) =>
-      ({ kind, blob, w, h, secs, id, transcript, state: state === 'ready' || state === 'transcribing' ? state : 'local' }));
+    const items = ATT.map(({ kind, blob, w, h, secs, name, id, transcript, state }) =>
+      ({ kind, blob, w, h, secs, name, id, transcript, state: state === 'ready' || state === 'transcribing' ? state : 'local' }));
     try {
       const db = await this.open();
       db.transaction('draft', 'readwrite').objectStore('draft').put(items, 'attachments');
@@ -1156,12 +1163,21 @@ const shelf = {
 function renderTray() {
   const tray = $('tray');
   tray.hidden = !ATT.length;
-  $('attach').disabled = pics() >= MAX_PICS;
-  let n = { image: 0, audio: 0 };
+  $('attach').disabled = pics() >= MAX_PICS && docs() >= MAX_DOCS;
+  let n = { image: 0, audio: 0, text: 0 };
   tray.replaceChildren(...ATT.map((a) => attEl(a, ++n[a.kind])));
 }
 function attEl(a, n) {
   const busy = a.state === 'uploading';
+  if (a.kind === 'text') {
+    const f = document.createElement('figure');
+    f.className = `att doc${busy ? ' busy' : ''}${a.state === 'error' ? ' bad' : ''}`;
+    f.title = a.error || a.name || `Text file ${n}`;
+    f.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>' +
+      `<span>${esc(a.name || `Text ${n}`)}</span><button type="button" class="x" aria-label="Remove text file ${n}">&times;</button>`;
+    f.querySelector('.x').onclick = () => removeAtt(a);
+    return f;
+  }
   if (a.kind === 'image') {
     const f = document.createElement('figure');
     f.className = `att pic${busy ? ' busy' : ''}${a.state === 'error' ? ' bad' : ''}`;
@@ -1234,9 +1250,18 @@ async function shrink(file, side = 2048) {
   return { blob, w, h };
 }
 async function addFiles(list) {
-  const files = [...list].filter((f) => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
-  if (!files.length) { note('Only pictures can be added here (JPG, PNG, WebP).'); return; }
+  const texts = [...list].filter(isDoc);
+  const files = [...list].filter((f) => !isDoc(f) && (f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name)));
+  if (!files.length && !texts.length) { note('Only pictures (JPG, PNG, WebP) and text files (.txt, .md) can be added here.'); return; }
   dropExample(); note('');
+  for (const f of texts) {
+    if (docs() >= MAX_DOCS) { note(`Up to ${MAX_DOCS} text files a film.`); break; }
+    if (f.size > DOC_MAX_BYTES) { note(`“${esc(f.name)}” is too long (up to ${DOC_MAX_BYTES / 1024} KB of text).`); continue; }
+    if (!f.size) { note(`“${esc(f.name)}” is empty.`); continue; }
+    // the type says which: a .md stays Markdown for the studio (the bytes say it is text)
+    const type = /\.(md|markdown)$/i.test(f.name) || /markdown/i.test(f.type) ? 'text/markdown' : 'text/plain';
+    addAtt({ kind: 'text', state: 'local', name: f.name.slice(-80), blob: new Blob([f], { type }) });
+  }
   for (const f of files) {
     if (pics() >= MAX_PICS) { note(`Up to ${MAX_PICS} pictures a film.`); break; }
     try {
@@ -1278,7 +1303,8 @@ function sync() {
         if (a.id || a.state === 'error' || !ATT.includes(a)) continue;
         a.state = 'uploading'; renderTray();
         try {
-          const r = await api('/api/uploads', { method: 'POST', headers: { 'Content-Type': a.blob.type || 'application/octet-stream' }, body: a.blob });
+          const named = a.kind === 'text' && a.name ? `?name=${encodeURIComponent(a.name)}` : '';
+          const r = await api(`/api/uploads${named}`, { method: 'POST', headers: { 'Content-Type': a.blob.type || 'application/octet-stream' }, body: a.blob });
           const b = await r.json().catch(() => ({}));
           if (r.status === 401) { a.state = 'local'; if (b.reason === 'signin') { AUTH = true; USER = null; renderAccount(); } break; }
           if (!r.ok) { a.state = 'error'; a.error = b.error || 'This one could not be uploaded.'; continue; }
@@ -1314,9 +1340,13 @@ async function attachmentIds(show) {
   if (!ATT.length) return [];
   for (let i = 0; i < 120; i++) {
     const bad = ATT.find((a) => a.state === 'error' || a.state === 'failed');
-    if (bad) throw new Error(bad.kind === 'audio' ? 'A voice note could not be written out: delete it or record it again.' : 'A picture could not be uploaded: remove it and add it again.');
+    if (bad) {
+      throw new Error(bad.kind === 'audio' ? 'A voice note could not be written out: delete it or record it again.'
+        : bad.kind === 'text' ? `${bad.error || 'A text file could not be uploaded.'} Remove it and add it again.`
+          : 'A picture could not be uploaded: remove it and add it again.');
+    }
     if (ATT.every((a) => a.id && a.state === 'ready')) break;
-    show(ATT.some((a) => a.state === 'transcribing') ? 'Writing out your voice note...' : 'Sending your pictures and voice notes...');
+    show(ATT.some((a) => a.state === 'transcribing') ? 'Writing out your voice note...' : 'Sending what you attached...');
     if (ATT.some((a) => a.state === 'local')) await sync();
     ATT.filter((a) => a.state === 'transcribing').forEach(watch);
     await new Promise((ok) => setTimeout(ok, 1000));
@@ -1431,7 +1461,7 @@ $('form').addEventListener('submit', async (e) => {
   if (rec) await stopRec(true);  // pressed while recording: what was said is attached, not lost
   const prompt = $('prompt').value.trim();
   if (!prompt && !ATT.length) {
-    $('status').textContent = 'Type your idea, say it with the microphone, or add a picture.';
+    $('status').textContent = 'Type your idea, say it with the microphone, or add a picture or a text file.';
     $('prompt').focus(); return;
   }
   if (prompt.length > PROMPT_MAX) {

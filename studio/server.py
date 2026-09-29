@@ -46,7 +46,7 @@ its plan allows: X-At-Once, up to STUDIO_AT_ONCE_MAX, default 2) and STUDIO_PER_
     POST /api/films/{id}/cancel  the film's own client (or this machine) stops it
     POST /api/films/{id}/listed  {"listed": true|false}: the film's own client shows it in the
                                  gallery or keeps it link-only
-    GET  /api/uploads            the asker's pictures and voice notes no film has taken yet
+    GET  /api/uploads            the asker's pictures, voice notes and documents no film has taken
     POST /api/films/{id}/youtube {"to": <YouTube upload session>, "key"}: the film's own client
                                  sends the finished film into a session the site opened (youtube.py)
     GET  /api/films/{id}/youtube/{key}  how that send is going, and YouTube's answer
@@ -821,6 +821,10 @@ def limits_doc():
             "picture_max_pixels": uploads.MAX_PIXELS,
             "voice_note_max_bytes": uploads.MAX_BYTES["audio"],
             "voice_note_max_seconds": uploads.MAX_AUDIO_S,
+            "documents_per_film": uploads.MAX_DOCS,
+            "document_types": ["txt", "md"],
+            "document_max_bytes": uploads.MAX_BYTES["text"],
+            "document_max_chars": uploads.MAX_TEXT_CHARS,
             "unused_kept_hours": uploads.KEEP_S // 3600,
             "per_account_per_day": {"files": uploads.DAY_FILES, "bytes": uploads.DAY_BYTES},
         },
@@ -1045,7 +1049,8 @@ async def create(req):
 
 
 async def upload(req):
-    """One picture or voice note, as raw bytes (uploads.py): its id, kind and state."""
+    """One picture, voice note or document, as raw bytes (uploads.py; a document may add
+    ?name=): its id, kind and state."""
     if DRAINING or MODE == "stopping":
         return web.json_response({"error": RESTARTING}, status=503)
     try:

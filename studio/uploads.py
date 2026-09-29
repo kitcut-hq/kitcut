@@ -1,15 +1,22 @@
-"""Pictures and voice notes a visitor attaches to a film request, kept until a film takes them.
+"""Pictures, voice notes and documents a visitor attaches to a film request, kept until a film
+takes them.
 
     STUDIO_HOME\\uploads\\<client key>\\up-<12 chars>.<ext>    the file as it came
                                      up-<12 chars>.json     what it is (below)
                                      up-<12 chars>.flac     a voice note, as every engine hears it
                                      ledger.jsonl           what this client sent today (the quota)
 
-The page sends each picture or recording on its own request (POST /api/uploads, the raw bytes)
-as soon as it is attached, so a film request only names ids. The bytes are streamed to disk
-against the kind's own cap -- the server's 64 KB body limit stays for everything else -- and the
-kind is read off the file's first bytes, never off its name or Content-Type. A picture must open
-in Pillow and stay under MAX_PIXELS; a recording must decode, and last at most MAX_AUDIO_S.
+The page sends each picture, recording or document on its own request (POST /api/uploads, the
+raw bytes) as soon as it is attached, so a film request only names ids. The bytes are streamed to
+disk against the kind's own cap -- the server's 64 KB body limit stays for everything else -- and
+the kind is read off the file's first bytes, never off its name or Content-Type. A picture must
+open in Pillow and stay under MAX_PIXELS; a recording must decode, and last at most MAX_AUDIO_S.
+
+A document (a .txt or .md: a script, notes, facts about what the film is for) has no magic bytes,
+so it is whatever is left that reads as text -- UTF-8 (a BOM or not) or UTF-16 with its BOM, no
+control characters but whitespace -- and it is re-written as plain UTF-8, at most MAX_TEXT_CHARS.
+Only its extension comes from outside (a text/markdown Content-Type, or a ?name= ending .md);
+the name the page sends is kept, cleaned, for Claude to see, and never names a path.
 
 A voice note is written out in the background (_stt.py, the engines in order of STUDIO_STT; the
 first that answers wins) and the page polls GET /api/uploads/<id> for the words. A film asked for
@@ -26,7 +33,8 @@ does not exit halfway through.
 Only the client that uploaded a file can see it or put it in a film; an id is unguessable and
 checked before it names a path. Anything a film did not take is deleted after KEEP_S.
 
-meta: {id, kind: image|audio, mime, ext, bytes, created, w, h (image), secs (audio),
+meta: {id, kind: image|audio|text, mime, ext, bytes, created, w, h (image), secs (audio),
+       name, chars, words (text),
        state: ready|transcribing|failed, transcript, lang, engine, stt_seconds, stt_cost_usd, error,
        server, stt_started (who is writing it out, since when: peers.SERVER_ID, epoch s)}
 """
@@ -36,6 +44,7 @@ import re
 import sys
 import json
 import time
+import codecs
 import shutil
 import asyncio
 import hashlib
@@ -55,12 +64,16 @@ from film import HOME  # noqa: E402
 ROOT = os.path.join(HOME, "uploads")
 ID = re.compile(r"^up-[a-z2-7]{12}$")
 _B32 = "abcdefghijklmnopqrstuvwxyz234567"
-MAX_BYTES = {"image": 8 * 1024 * 1024, "audio": 10 * 1024 * 1024}
+MAX_BYTES = {"image": 8 * 1024 * 1024, "audio": 10 * 1024 * 1024, "text": 400 * 1024}
+MAX_TEXT_CHARS = 100_000  # about 25k tokens: a brief, not a book
 MAX_PIXELS = 40_000_000  # a 12000 x 12000 PNG is a decompression bomb, not a logo
 MAX_AUDIO_S = 185  # the page stops at 3:00
 KEEP_S = 24 * 3600  # an upload no film took
 DAY_FILES, DAY_BYTES = 60, 120 * 1024 * 1024  # per client, per 24 h
-MAX_IMAGES, MAX_NOTES = 6, 3  # per film
+MAX_IMAGES, MAX_NOTES, MAX_DOCS = 6, 3, 3  # per film
+# a control character that is not whitespace: binary, not a document
+CONTROL = re.compile(r"[\x00-\x08\x0b\x0e-\x1f\x7f]")
+TYPES = "Only pictures (JPG, PNG, WebP), voice notes and text files (.txt, .md) work here."
 # the engines that write a voice note out, in order: the first that answers wins
 # (scripts/stt-compare.py measured them; STUDIO_STT overrides, comma-separated)
 STT = ("vertex:gemini-3.1-flash-lite", "whisper:large-v3-turbo")
@@ -112,6 +125,52 @@ def sniff(head):
     return None
 
 
+def sniff_text(head):
+    """("text", mime, ext) when a file's first chunk reads as text, or None. The whole file is
+    decoded again once it is all here (read_text): a chunk may end inside a character."""
+    if head.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        return "text", "text/plain", "txt"
+    try:
+        start = codecs.getincrementaldecoder("utf-8-sig")().decode(head, final=False)
+    except UnicodeDecodeError:
+        return None
+    if CONTROL.search(start):  # an empty one is read_text's to refuse
+        return None
+    return "text", "text/plain", "txt"
+
+
+def read_text(path):
+    """A document's words: UTF-8 (a BOM or not) or UTF-16 (its BOM), line endings made \\n, the
+    ends trimmed. Raises UploadError when it is not text after all, empty, or too long."""
+    with open(path, "rb") as f:
+        raw = f.read()
+    bom16 = raw.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE))
+    try:
+        text = raw.decode("utf-16" if bom16 else "utf-8-sig")
+    except UnicodeDecodeError as e:
+        raise UploadError(415, "type", "Save the text file as UTF-8 and add it again.") from e
+    if CONTROL.search(text):
+        raise UploadError(415, "type", TYPES)
+    text = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not text:
+        raise UploadError(400, "empty", "That text file has no words in it.")
+    if len(text) > MAX_TEXT_CHARS:
+        raise UploadError(
+            413,
+            "long",
+            "That text file is too long (up to %d characters, about %d pages)."
+            % (MAX_TEXT_CHARS, MAX_TEXT_CHARS // 3000),
+        )
+    return text
+
+
+def clean_name(name):
+    """The file name the page sent, for Claude to see: its last part, no control characters,
+    at most 80 characters; "" when there is none."""
+    name = re.split(r"[\\/]", str(name or ""))[-1]
+    return " ".join(CONTROL.sub(" ", name).split())[:80]
+
+
 def client_dir(client):
     """The client's own folder: a hash of who they are, so no id or IP becomes a path."""
     return os.path.join(ROOT, hashlib.sha256(client.encode()).hexdigest()[:20])
@@ -152,7 +211,8 @@ def get(client, uid):
 
 def public(meta):
     """What the page is told about an upload."""
-    keys = ("id", "kind", "state", "w", "h", "secs", "transcript", "lang", "error")
+    keys = ("id", "kind", "state", "w", "h", "secs", "transcript", "lang")
+    keys += ("name", "chars", "words", "error")
     return {k: meta[k] for k in keys if meta.get(k) is not None}
 
 
@@ -214,7 +274,7 @@ def _spend(d, size):
 
 async def receive(req, client, stt=None):
     """One upload from the request body: stored, checked, and (a voice note) sent to be written
-    out. Returns its meta; raises UploadError."""
+    out. Returns its meta; raises UploadError. A document may carry its file name (?name=)."""
     d = client_dir(client)
     os.makedirs(d, exist_ok=True)
     n, spent, _ = _spent_today(d)
@@ -223,26 +283,33 @@ async def receive(req, client, stt=None):
     uid = "up-" + "".join(secrets.choice(_B32) for _ in range(12))
     part = os.path.join(d, uid + ".part")
     size, kind = 0, None
+    ctype = req.headers.get("Content-Type", "").lower()
     try:
         with open(part, "wb") as f:
             async for chunk in req.content.iter_chunked(64 * 1024):
                 if kind is None:
-                    found = sniff(chunk[:16])
+                    # text has no magic bytes, so it is only text when it is not sent as
+                    # something else: a page called a picture stays refused
+                    found = sniff(chunk[:16]) or (
+                        None if ctype.startswith(("image/", "audio/")) else sniff_text(chunk)
+                    )
                     if not found:
-                        raise UploadError(
-                            415, "type", "Only pictures (JPG, PNG, WebP) and voice notes work here."
-                        )
+                        raise UploadError(415, "type", TYPES)
                     kind, mime, ext = found
                 size += len(chunk)
                 if size > MAX_BYTES[kind]:
-                    raise UploadError(
-                        413,
-                        "size",
-                        "That file is too big (up to %d MB)." % (MAX_BYTES[kind] // 2**20),
-                    )
+                    cap = MAX_BYTES[kind]
+                    cap = "%d MB" % (cap // 2**20) if cap >= 2**20 else "%d KB" % (cap // 1024)
+                    raise UploadError(413, "size", "That file is too big (up to %s)." % cap)
                 f.write(chunk)
         if kind is None:
             raise UploadError(400, "empty", "The file was empty.")
+        name = clean_name(req.query.get("name")) if kind == "text" else ""
+        if kind == "text" and (
+            ctype.startswith(("text/markdown", "text/x-markdown"))
+            or re.search(r"\.(md|markdown)$", name, re.I)
+        ):
+            mime, ext = "text/markdown", "md"
         path = os.path.join(d, "%s.%s" % (uid, ext))
         os.replace(part, path)
     finally:
@@ -260,6 +327,11 @@ async def receive(req, client, stt=None):
     try:
         if kind == "image":
             meta.update(await asyncio.to_thread(_check_image, path), state="ready")
+        elif kind == "text":
+            text = await asyncio.to_thread(read_text, path)
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(text + "\n")
+            meta.update(name=name, chars=len(text), words=len(text.split()), state="ready")
         else:
             flac = os.path.join(d, uid + ".flac")
             secs = await asyncio.to_thread(_stt.normalise, path, flac)
@@ -273,7 +345,7 @@ async def receive(req, client, stt=None):
         raise
     except (_stt.SttError, OSError, ValueError) as e:
         _remove(d, uid)
-        what = "picture" if kind == "image" else "recording"
+        what = {"image": "picture", "audio": "recording"}.get(kind, "file")
         raise UploadError(400, "unreadable", "That %s could not be opened." % what) from e
     _write(_meta_path(client, uid), meta)
     await asyncio.to_thread(_spend, d, size)  # it may wait for the ledger's lock
@@ -439,6 +511,8 @@ async def take(client, ids):
         raise UploadError(400, "attachments", "Up to %d pictures a film." % MAX_IMAGES)
     if sum(m["kind"] == "audio" for m in metas) > MAX_NOTES:
         raise UploadError(400, "attachments", "Up to %d voice notes a film." % MAX_NOTES)
+    if sum(m["kind"] == "text" for m in metas) > MAX_DOCS:
+        raise UploadError(400, "attachments", "Up to %d text files a film." % MAX_DOCS)
     return metas
 
 
