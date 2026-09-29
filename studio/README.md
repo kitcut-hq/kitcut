@@ -1,6 +1,6 @@
 # Sketch Studio
 
-One prompt in, and Claude writes, reviews and scores a **short hand-drawn (or painted) film** on
+One prompt in, and Claude writes, reviews and scores a **short hand-drawn (or painted, or collage) film** on
 the kitcut sketch engine, narrated, 5 s to 8 minutes. It's a JSON API for an app backend, plus a page with
 one prompt box. The public one runs on an Azure VM (`kitcut-studio-1`, since 2026-09-28;
 `studio/deploy/README.md`), is reachable from outside through a Cloudflare named tunnel
@@ -73,7 +73,7 @@ Each film is a folder of its own (`film.py`), and nothing it does reaches outsid
 
 | | |
 |---|---|
-| **Claude** | its working directory is the film's folder; it may Read only there (not `temp\`, `studio.json`), and Write/Edit only `film.js`, `score.json`, `sfx.json`, `vo.json`, `paint.json` (painted films) and its own engine copy, `engine\engine.js` and `engine\props.js` (`guard.py`). Paths are checked on their real path, so neither `..\` nor a link leads out. |
+| **Claude** | its working directory is the film's folder; it may Read only there (not `temp\`, `studio.json`), and Write/Edit only `film.js`, `score.json`, `sfx.json`, `vo.json`, `paint.json` (painted and collage films) and its own engine copy, `engine\engine.js`, `engine\props.js` and, in a collage film, `engine\collage.js` (`guard.py`). Paths are checked on their real path, so neither `..\` nor a link leads out. |
 | **No shell** | Claude has no Bash. It drives the pipeline through the studio's own tools (`tools.py`, an in-process MCP server): `check`, `voice`, `paint`, `stills`, `sound`. Each runs one kitcut script on the film's manifest, and nothing else. |
 | **Its files** | pinned and checked after every write and before every tool (`validate.py`): a painting's or an instrument's name can never name a path (the scripts refuse them too), and there are caps on lines, paintings, sounds and sizes. |
 | **Secrets** | read into memory at start and taken out of the environment (`procs.py`). Claude Code gets only its auth; each step only what it needs (the voice the Google keys and ElevenLabs' for the backup voice, the painter OpenRouter's; the render and the mix none). |
@@ -294,7 +294,11 @@ Anthropic Console.
    **Claude Agent SDK**, which is Claude Code's agent loop as a library. The system prompt is
    `prompt.md` and the look's `looks/<look>.md`, with the engine, the cast, the two example films
    (`examples/`) and the sound notation read fresh from the code (written to a file: at ~130 KB
-   it is too long for a Windows command line). It is the same for every film of a look, so it
+   it is too long for a Windows command line). The **collage** look (`looks/collage.md`) also
+   carries `sketch/collage.js` and the example `config/sketch/collage-example/film.js` (~195 KB
+   in all): its `paint.json` asks for cut-outs (`"cutout": true`, painted on a transparent
+   background by the pinned `cutouts` model, `limits()["cutouts"]` of them), its engine copy
+   includes `collage.js`, and its manifest adds the print faces (`film.COLLAGE_FONTS`). It is the same for every film of a look, so it
    stays cached. The film's length, the prompt and what recent films chose come in the first
    message.
 

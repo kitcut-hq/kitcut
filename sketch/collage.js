@@ -133,8 +133,21 @@
   SK.layer = function (o, fn) { return place({ nudge: 0, ...o }, o.w ?? 1920, o.h ?? 1080, fn); };
 
   /* ------------------------------------------------------------ caches: pixels derived from arguments */
-  const CACHE = new Map();
-  function cached(key, make) { let v = CACHE.get(key); if (!v) { v = make(); CACHE.set(key, v); } return v; }
+  // least recently used first out, past ~480 MB of pixels: a long film played in one page (the
+  // HTML player) would otherwise keep every page it ever showed
+  const CACHE = new Map(), CACHE_PX = 120e6;
+  let cachePx = 0;
+  const pxOf = (v) => (v && v.cv ? v.cv.width * v.cv.height : 1024 * 1024);
+  function cached(key, make) {
+    let v = CACHE.get(key);
+    if (v) { CACHE.delete(key); CACHE.set(key, v); return v; }
+    v = make(); CACHE.set(key, v); cachePx += pxOf(v);
+    for (const [k, old] of CACHE) {
+      if (cachePx <= CACHE_PX || k === key) break;
+      CACHE.delete(k); cachePx -= pxOf(old);
+    }
+    return v;
+  }
   function mkCanvas(w, h) { const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.ceil(w)); cv.height = Math.max(1, Math.ceil(h)); return cv; }
   const shadowOf = (o, def) => (o.shadow === false ? null : { ...def, ...(o.shadow || {}) });
   function rgb(hex) { const n = parseInt(String(hex).replace('#', '').slice(0, 6), 16); return [n >> 16, n >> 8 & 255, n & 255]; }
@@ -265,9 +278,19 @@
     }
     g.restore();
   }
+  let MEASURE = null;
+  const MEASURED = new Map();
   function measureLines(font, lines, ls) {
-    const g = mkCanvas(4, 4).getContext('2d'); g.font = font; g.letterSpacing = ls + 'px';
-    return lines.map((s) => g.measureText(s).width);
+    const key = font + '|' + ls + '|' + lines.join('\u0001');
+    let v = MEASURED.get(key);
+    if (!v) {
+      MEASURE = MEASURE || mkCanvas(4, 4).getContext('2d');
+      MEASURE.font = font; MEASURE.letterSpacing = ls + 'px';
+      v = lines.map((s) => MEASURE.measureText(s).width);
+      if (MEASURED.size > 5000) MEASURED.clear();
+      MEASURED.set(key, v);
+    }
+    return v;
   }
   /**
    * Display type as one piece: a title, a date, a masthead. Anchored at (x, y) by o.align

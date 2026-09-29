@@ -187,6 +187,9 @@ def system_prompt(look):
         "EXAMPLE_NIGHT_SFX": _read("studio", "examples", "night", "sfx.json"),
         "EXAMPLE_BLUEPRINT": _read("studio", "examples", "blueprint", "film.js"),
         "EXAMPLE_BLUEPRINT_SCORE": _read("studio", "examples", "blueprint", "score.json"),
+        # the collage look's own references (looks/collage.md names them; other looks do not)
+        "COLLAGE": _read("sketch", "collage.js"),
+        "EXAMPLE_COLLAGE": _read("config", "sketch", "collage-example", "film.js"),
         "NOTATION": ref[a:b].strip() + "\n\n```\n" + notation + "\n```",
         "FX": fx,
         "INSTRUMENTS": ", ".join(inst) or "(none yet)",

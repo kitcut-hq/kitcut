@@ -101,7 +101,7 @@ def pin_vo(film):
 
 def pin_paint(film):
     """paint.json: the painter, its model and the cap on paintings are the studio's."""
-    return _pin(film, "paint.json", paint_pins(film.length), keep=validate.PAINT_KEYS)
+    return _pin(film, "paint.json", paint_pins(film.length, film.look), keep=validate.PAINT_KEYS)
 
 
 def pin_after(file_path, film):

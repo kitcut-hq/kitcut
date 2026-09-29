@@ -18,6 +18,7 @@ os.environ["STUDIO_HOME"] = HOME
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import agent  # noqa: E402
 import film as films  # noqa: E402
+import validate  # noqa: E402
 from guard import guard, pin_after  # noqa: E402
 
 
@@ -85,6 +86,64 @@ def main():
         # a painted film: its paint.json is its own
         expect("painted: Write paint.json", guard("Write", {"file_path": "paint.json"}, B)[0], True)
 
+        # a collage film: cut-outs in its paint.json, the collage pieces and the print faces
+        C = films.Film.create("a collage test", 30, "collage")
+        expect("collage: the look", (A.look, B.look, C.look), ("drawn", "painted", "collage"))
+        expect(
+            "collage: only it gets collage.js",
+            (
+                os.path.exists(C.path("engine", "collage.js")),
+                os.path.exists(A.path("engine", "collage.js")),
+            ),
+            (True, False),
+        )
+        with open(C.manifest, encoding="utf-8") as f:
+            cfonts = {x["family"] for x in json.load(f)["fonts"]}
+        with open(A.manifest, encoding="utf-8") as f:
+            afonts = {x["family"] for x in json.load(f)["fonts"]}
+        expect(
+            "collage: the print faces",
+            ("Abril Fatface" in cfonts, "Abril Fatface" in afonts),
+            (True, False),
+        )
+        with open(C.path("paint.json"), encoding="utf-8") as f:
+            cp = json.load(f)
+        expect(
+            "collage: cut-outs pinned",
+            (cp["cutouts"], cp["max_images"]),
+            (films.CUTOUTS_PINNED, films.limits(30)["cutouts"]),
+        )
+        expect("collage: Write paint.json", guard("Write", {"file_path": "paint.json"}, C)[0], True)
+        expect(
+            "collage: Write its collage.js",
+            guard("Write", {"file_path": "engine/collage.js"}, C)[0],
+            True,
+        )
+        cut = {"name": "cone", "prompt": "a waffle cone", "cutout": {"border": 0}, "aspect": "2:3"}
+        for f_, film_ in ((C, C), (B, B)):
+            with open(f_.path("paint.json"), encoding="utf-8") as f:
+                d = json.load(f)
+            d["images"] = [cut]
+            with open(f_.path("paint.json"), "w", encoding="utf-8") as f:
+                json.dump(d, f)
+        expect("collage: a cut-out is fine", validate.problems(C, "paint.json"), [])
+        expect("painted: a cut-out is not", bool(validate.problems(B, "paint.json")), True)
+        with open(C.path("paint.json"), encoding="utf-8") as f:
+            d = json.load(f)
+        d["images"] = [dict(cut, cutout={"border": 99}, aspect="5:1")]
+        d["cutouts"] = {"model": "somebody/else"}
+        with open(C.path("paint.json"), "w", encoding="utf-8") as f:
+            json.dump(d, f)
+        note = pin_after("paint.json", C)
+        with open(C.path("paint.json"), encoding="utf-8") as f:
+            back = json.load(f)
+        expect("collage: the cut-out model pinned back", back["cutouts"], films.CUTOUTS_PINNED)
+        expect(
+            "collage: a bad border and shape are named",
+            ("cutout" in note, "aspect" in note),
+            (True, True),
+        )
+
         # a link inside a film that leads to another film does not get through (real paths)
         link = A.path("link")
         if os.name == "nt":
@@ -135,7 +194,7 @@ def main():
                 False,
             )
         expect("the length is in the first message", "Length: 10 seconds" in agent.ask(B), True)
-        n = len(cases) + 8
+        n = len(cases) + 20
     finally:
         shutil.rmtree(HOME, ignore_errors=True)
     print("%d cases, %d failed" % (n, len(bad)))
