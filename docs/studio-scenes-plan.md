@@ -76,6 +76,83 @@ instructions come in its first message (studio/prompts/director.md, scene.md, ed
   rest. `ops.sh claude-log` lists each session (director, scene N, editor) from scenes.json.
 - **Page.** Stages read "Claude is writing scene 7 of 16", so a long film shows progress.
 
+## 2 in detail: the three passes, file by file
+
+### Decisions (defaults; say if any should change)
+
+- **The director writes scene 1 as the pilot.** It settles the look on a real scene, with stills,
+  before anyone else draws -- every later scene copies a proven style, not a description of one.
+- **Scenes one after another in v1**, in one Claude slot like a film today. Two at once is a later,
+  measured option (it only saves wall time, and must never take a slot another person's film is
+  waiting for).
+- **A crash no longer loses a scenes film.** The live server carries it on from the next scene
+  (adopt), up to 3 times; today a mid-Claude film can only be marked interrupted.
+- **Short films keep today's path** until step 3's measurements say otherwise.
+
+### What Claude may touch, per conversation
+
+| Pass | May write | Sees in its first message |
+|---|---|---|
+| director | vo.json, film.js (the shared look), scenes.json (the plan), scenes/01-*.js (the pilot) | the brief, attachments, the series note -- as today |
+| scene k | scenes/k-*.js only (the guard is told per conversation) | the direction (film.js's first line), film.js (the look, kept under ~300 lines), scene k's plan entry and its lines with word times, the neighbours' plan entries and summaries, a sheet of scene k-1's last frames |
+| editor | any scenes/*.js, score.json, sfx.json | scenes.json with every scene's summary, the timeline's spans, contact sheets the studio rendered (boundaries +-0.5 s and each scene's middle) |
+
+### The plan file, scenes.json (written by the director, checked by validate.py)
+
+`{"scenes": [{"id": "01-orbit", "title": "...", "lines": [0, 4], "shows": "...", "notes": "..."}]}` --
+ids `NN-slug`, in order, lines contiguous and covering every narration line, each scene 12-75 s
+long once the narration is timed, at most one per 12 s of film. Progress is the studio's, not
+Claude's: studio.json `"scenes": {"01-orbit": {"state": "todo|done", "session", "summary",
+"cost_usd", "seconds", "tries"}}` (never readable by Claude, so it cannot mark itself done).
+
+### Files and functions
+
+- **studio/scenes.py (new):** load and validate the plan; progress in studio.json; each pass's
+  first message (from studio/prompts/director.md, scene.md, editor.md); per-pass limits; the
+  studio-rendered sheets (neighbour frames, the editor's contact sheets, through Tools).
+- **studio/agent.py:** `make_film` hands a scenes film's Claude part to `make_scenes()`: director
+  (unless its outputs are already done), then each scene not done, then the editor; each pass is
+  one `talk_to_claude()` with its own first message, a fresh session (no resume) and its own
+  limits inside the film's. `run_claude` keeps a pass's session id on the pass, not over the
+  film's `claude_session`; the stall watchdog resumes the pass's own session. One Meter across
+  passes (the record's cost and calls add up, as resume already does); the record gains
+  `passes: [{pass, session, cost_usd, seconds, turns, stalls}]`.
+- **studio/prompt_scenes.md (new system prompt):** the same reference as today (engine, props,
+  notation -- identical across every pass of every scenes film, so it stays cached), with a
+  "how a scenes film is made" section in place of the single-file "How to work". The single-file
+  prompt is not touched: today's films are not changed by this work.
+- **studio/guard.py:** `guard(tool, input, film, allow=None)` -- with `allow`, Write and Edit only
+  to those files; the pass sets it.
+- **studio/film.py:** `scenes/NN-slug.js` and `scenes.json` writable in scenes films;
+  `MADE` for them includes every planned scene's file; the manifest gets `"scenes": "scenes"`;
+  `mode` in the record.
+- **studio/validate.py:** the plan's checks above; scene files under a size cap; at the editor's
+  end, every planned scene present (the engine draws a missing one blank while scenes are being
+  written -- a requirement on step 1: an uncovered stretch renders empty, never fails the bundle).
+- **studio/tools.py:** `check` covers scenes/*.js; `stills` and `motion` take the pass's time
+  range (a scene looks at its own stretch, not the whole film); a studio-side `sheets(times)`.
+- **studio/server.py:** adopt() carries a scenes film in `claude` on (`start(f, scenes=True)`,
+  `tries` capped); stage texts "Claude is planning the film", "Claude is writing scene 7 of 16",
+  "Claude is checking the whole film" reach the page as today's stage text does.
+- **studio/resume.py:** a scenes film resumes as `make_scenes()` from where it stands -- no
+  session to replay. **studio/claude_log.py:** one block per pass (its session, replies, stalls).
+
+### Tests (studio/test_scenes.py, fake Claude that answers per pass)
+
+- 8-, 16- and 30-minute films run all three passes: sessions = 1 + scenes + 1; every first
+  message and every conversation stays under a bound that does not grow with the film.
+- A scene conversation that tries to write another scene's file is refused.
+- A stall in scene 3 is picked up in scene 3's own session; the others do not rerun.
+- The server stopped during scene 5: the next leader continues from scene 5 (scenes 1-4 not
+  called again), and gives up after 3 tries with the film failed and refunded.
+- A plan with a gap, an overlap or a 2-minute scene is refused with a reason Claude can act on.
+- Sound and render stubbed for the ladder (their real paths are covered elsewhere).
+
+### Size
+
+About 2-3 days: scenes.py and the prompts (1), agent/guard/film/validate/tools (1), server,
+resume, claude_log and the tests (0.5-1). Ships behind STUDIO_SCENES_OVER_S, off.
+
 ## 3. Prove it before adopting it (house rule: measure, don't assume)
 
 - **Stub ladder** (test_server.py / a new test_scenes.py, fake Claude): 8-, 16- and 30-minute
