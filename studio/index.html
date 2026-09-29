@@ -29,233 +29,399 @@
 <script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kitcut.ai/#website", "url": "https://kitcut.ai/", "name": "KitCut", "description": "Claude video maker"}, {"@type": "Organization", "@id": "https://kitcut.ai/#org", "name": "KitCut", "url": "https://kitcut.ai/", "logo": "https://kitcut.ai/logo-256.png", "sameAs": ["https://github.com/kitcut-hq/kitcut"]}, {"@type": "WebApplication", "name": "KitCut: Claude video maker", "url": "https://kitcut.ai/", "applicationCategory": "MultimediaApplication", "operatingSystem": "Any (web browser)", "description": "Make a Claude video from one prompt. Opus 5.5 writes, animates, narrates and scores your idea in minutes: motion graphics, explainers, launch videos. 30 s free.", "publisher": {"@id": "https://kitcut.ai/#org"}, "offers": {"@type": "AggregateOffer", "priceCurrency": "USD", "lowPrice": "0", "highPrice": "849", "offerCount": "13"}}, {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Can Claude make videos?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Claude has no video model: it writes code that draws every frame, the way the Opus 5.5 animations people share on X are made. KitCut has Claude Opus 5.5 write the script, animate every scene, write a narration and compose the music, then renders it all into a finished Claude video."}}, {"@type": "Question", "name": "How do I make a Claude video?", "acceptedAnswer": {"@type": "Answer", "text": "Type one sentence about your idea, pick a length and a look (hand-drawn, painted or collage), and press Make the film. Claude plans it, draws it, looks at stills of its own work and fixes what it doesn't like. The finished video is ready in a few minutes."}}, {"@type": "Question", "name": "Which Claude model makes the videos?", "acceptedAnswer": {"@type": "Answer", "text": "Claude Opus 5.5 directs every video. It writes the script and the code that draws each frame, and reviews the result before it is rendered. For the painted look an image model paints the scenes and Claude animates them; for the collage look one paints pictures cut out of paper and Claude builds pages round them; a voice model reads Claude's narration."}}, {"@type": "Question", "name": "Is it free?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, to start: every account gets 30 seconds of film a month, with no card needed. Paid plans give you more minutes, and Pro makes films up to 8 minutes long."}}, {"@type": "Question", "name": "How long can a Claude video be?", "acceptedAnswer": {"@type": "Answer", "text": "Up to 1 minute on Free and Standard, and 8 minutes on Pro. A month's free credits make one 30-second film."}}, {"@type": "Question", "name": "What can I make with it?", "acceptedAnswer": {"@type": "Answer", "text": "Motion graphics, explainer videos, launch videos, tiny stories, music videos, showreels and lessons, in any language you type in. Every film gets its own page to share."}}]}]}</script>
 <!-- /meta -->
 <style>
-/* site.css */
-/* The public pages' shared frame: palette, page width, header and footer. Home, pricing, connect,
-   privacy, terms and the docs all wear it, so nothing moves when you go from one to another.
-   index.html carries this block inline (it is mirrored to the studio laptop, which serves no
-   /site.css); test/site.test.mjs keeps the two identical. The Studio and account pages use app.css. */
+/* app.css */
+/* The KitCut look, on every page: the Studio (/studio, projects.html), the account page, the home
+   and film page, pricing, connect, privacy, terms, the upload link and the docs. Colours, type,
+   buttons, the bar with its account menu, the sidebar (shell.js draws both), panels, forms,
+   banners, dialogs, the sign-in panel and a column of reading. Page-only styles stay in each page.
+   index.html carries this file inline between its markers (it is mirrored to the studio machine,
+   which serves no /app.css); test/site.test.mjs keeps the two identical. */
 @font-face { font-family: 'Caveat'; src: url(/fonts/Caveat.woff2) format('woff2'); font-weight: 400 700; font-display: swap; }
-@font-face { font-family: 'Patrick Hand'; src: url(/fonts/PatrickHand-400.woff2) format('woff2'); font-display: swap; }
 @font-face { font-family: 'Inter'; src: url(/fonts/Inter.woff2) format('woff2'); font-weight: 100 900; font-display: swap; }
+/* The workspace: KitCut's orange on warm neutrals, for the actions only. Light and dark follow
+   the device, as on the rest of the site (and data-theme, where a host sets one). */
 :root {
-  --paper: #f7f2e7; --sheet: #fffdf8; --ink: #2a2521; --ink-soft: #6b625a; --rule: #e4dccb;
-  --accent: #d9733f; --accent-ink: #fff; --accent-soft: #f6e0d2; --bad: #b3412e; --good: #3f7d4e;
+  --bg: #f5f3ef; --panel: #ffffff; --side: #efebe5; --sunk: #f1ede7; --hover: #e9e4dc;
+  --ink: #1d1a17; --ink-2: #5d564e; --ink-3: #8a8279;
+  --line: #e5e0d8; --line-2: #d4cdc2;
+  --accent: #d9733f; --accent-2: #c3602c; --accent-ink: #ffffff; --accent-soft: #fbeadf;
+  --good: #2f7a47; --good-soft: #e2f0e6; --bad: #b3412e; --bad-soft: #f8e4df;
+  --paper: #ffffff; --check: #ece8e2; --seg-on: #ffffff;
+  --ring: 0 0 0 3px rgba(217, 115, 63, .3);
+  --lift: 0 1px 2px rgba(29, 26, 23, .06), 0 8px 24px rgba(29, 26, 23, .08);
+  --dialog: 0 24px 64px rgba(29, 26, 23, .24);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --paper: #1d1a17; --sheet: #26221e; --ink: #f1ebe0; --ink-soft: #a89e92; --rule: #3a342e;
-          --accent: #e58a58; --accent-ink: #1d1a17; --accent-soft: #3b2a20; --bad: #e07a66; --good: #7cc08c; color-scheme: dark; }
+  :root:not([data-theme="light"]) {
+    --bg: #141210; --panel: #1c1a17; --side: #181613; --sunk: #211e1a; --hover: #26221e;
+    --ink: #f3eee7; --ink-2: #b6aea3; --ink-3: #867e74;
+    --line: #2c2824; --line-2: #3b3630;
+    --accent: #e5894f; --accent-2: #f09c68; --accent-ink: #1a120c; --accent-soft: #3a2518;
+    --good: #6cc189; --good-soft: #1b2e22; --bad: #ec8a74; --bad-soft: #3a201a;
+    --check: #d9d4cc; --seg-on: #3a352f;
+    --lift: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .4);
+    --dialog: 0 24px 64px rgba(0, 0, 0, .6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141210; --panel: #1c1a17; --side: #181613; --sunk: #211e1a; --hover: #26221e;
+  --ink: #f3eee7; --ink-2: #b6aea3; --ink-3: #867e74;
+  --line: #2c2824; --line-2: #3b3630;
+  --accent: #e5894f; --accent-2: #f09c68; --accent-ink: #1a120c; --accent-soft: #3a2518;
+  --good: #6cc189; --good-soft: #1b2e22; --bad: #ec8a74; --bad-soft: #3a201a;
+  --check: #d9d4cc; --seg-on: #3a352f;
+  --lift: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .4);
+  --dialog: 0 24px 64px rgba(0, 0, 0, .6);
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
-[hidden] { display: none !important; }  /* a class that sets display would beat it */
-html, body { margin: 0; }
-html { scrollbar-gutter: stable; }  /* a short page and a long one centre on the same line */
-body { background: var(--paper); color: var(--ink); font: 15px/1.5 Inter, system-ui, sans-serif; }
-.wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 60px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; }
-.site-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 20px; min-height: 42px; }
-.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font: 700 40px/1 Caveat, cursive; letter-spacing: .3px; }
-.brand img { width: 42px; height: 42px; border-radius: 10px; display: block; }
-.brand .tld { color: var(--accent); }
-.brand small { font: 600 14px/1 Inter, system-ui, sans-serif; color: var(--ink-soft); margin-left: 4px; letter-spacing: 0; }
-.account { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-soft); }
-.account img { width: 30px; height: 30px; border-radius: 50%; display: block; }
-.account form { display: inline; }
-.account a.me { color: var(--ink); text-underline-offset: 3px; text-decoration-color: var(--rule); }
-.account a.me:hover { text-decoration-color: var(--accent); }
-.site-head .account button, .site-head .account .button { display: inline-block; margin: 0; padding: 9px 14px; border-radius: 10px; border: 1.5px solid var(--rule);
-  background: transparent; color: var(--ink); font: 600 14px/1 Inter, system-ui, sans-serif; letter-spacing: 0; text-decoration: none; cursor: pointer; }
-.site-foot { border-top: 1.5px solid var(--rule); padding-top: 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; color: var(--ink-soft); font-size: 14px; }
-.site-foot .brand { font-size: 28px; gap: 8px; }
-.site-foot .brand img { width: 28px; height: 28px; border-radius: 7px; }
-.site-foot p { margin: 0; }
-.site-foot nav { display: flex; flex-wrap: wrap; gap: 6px 18px; }
-.site-foot a { color: var(--ink-soft); }
-.site-foot a:hover { color: var(--accent); }
-/* a page of reading (privacy, terms, connect): the frame stays full width, the text column does not */
-.wrap.reading > :not(.site-head):not(.site-foot) { width: 100%; max-width: 800px; justify-self: center; }
-/* /site.css */
-.hero h1 { font: 700 54px/1.05 Caveat, cursive; margin: 0; letter-spacing: .3px; }
-.hero p { margin: 6px 0 0; color: var(--ink-soft); font-size: 16px; max-width: 70ch; }
-.hero .spend { font-size: 13.5px; font-variant-numeric: tabular-nums; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+button, input, textarea, select { font: inherit; color: inherit; }
+:focus-visible { outline: none; box-shadow: var(--ring); border-radius: 6px; }
+.num { font-variant-numeric: tabular-nums; }
+.label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.muted { color: var(--ink-2); }
+.faint { color: var(--ink-3); }
+svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---- buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); font-weight: 550; font-size: 14px; cursor: pointer; text-decoration: none; white-space: nowrap; transition: background .12s, border-color .12s, color .12s; }
+.btn:hover { background: var(--hover); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover:not(:disabled) { background: var(--accent-2); border-color: var(--accent-2); }
+.btn.quiet { border-color: transparent; background: transparent; color: var(--ink-2); }
+.btn.quiet:hover { background: var(--hover); color: var(--ink); }
+.btn.danger { color: var(--bad); }
+.btn.danger.sure { background: var(--bad); border-color: var(--bad); color: #fff; }
+.btn.sm { height: 30px; padding: 0 10px; font-size: 13px; gap: 6px; }
+.btn.icon { width: 36px; padding: 0; }
+
+/* ---- the shell: a bar, a sidebar of projects, the work */
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; color: var(--ink); }
+.brand img { width: 28px; height: 28px; border-radius: 7px; display: block; }
+.brand b { font: 700 26px/1 Caveat, cursive; letter-spacing: .2px; }
+.brand .sep { width: 1px; height: 20px; background: var(--line-2); margin: 0 3px; }
+.brand span { font-weight: 600; font-size: 15px; color: var(--ink-2); }
+.bar .grow { flex: 1; }
+.credits { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 999px; background: var(--sunk); color: var(--ink-2); font-size: 13px; text-decoration: none; }
+.credits b { color: var(--ink); font-weight: 600; }
+.me { position: relative; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--accent-soft); color: var(--ink); display: grid; place-items: center; font-weight: 600; font-size: 13px; cursor: pointer; padding: 0; overflow: hidden; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.menu { position: absolute; right: 0; top: 40px; min-width: 240px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--lift); padding: 6px; display: grid; }
+.menu .who { padding: 8px 10px 10px; border-bottom: 1px solid var(--line); margin-bottom: 4px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.menu a, .menu button { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; text-decoration: none; background: none; border: 0; text-align: left; cursor: pointer; font-size: 14px; }
+.menu a:hover, .menu button:hover { background: var(--hover); }
+.menu form { margin: 0; display: grid; }
+
+.app { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: calc(100% - 56px); }
+.side { background: var(--side); border-right: 1px solid var(--line); padding: 16px 10px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 56px; height: calc(100vh - 56px); overflow-y: auto; }
+.side .label { padding: 6px 10px; }
+.side a.item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; text-decoration: none; color: var(--ink-2); font-weight: 500; }
+.side a.item:hover { background: var(--hover); color: var(--ink); }
+.side a.item.on { background: var(--panel); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+.side a.item .n { margin-left: auto; font-size: 12px; color: var(--ink-3); }
+.side a.item .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side .new { margin-top: 6px; justify-content: flex-start; background: transparent; border-style: dashed; color: var(--ink-2); }
+.side .foot { margin-top: auto; padding: 12px 10px 0; font-size: 12px; color: var(--ink-3); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.side .foot a { color: var(--ink-3); }
+#sideNav { display: contents; }
+.side .pitch { margin: 14px 4px 0; padding: 12px; border-radius: 10px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.side .pitch b { color: var(--ink); font-size: 13.5px; }
+.side .pitch .btn { justify-self: start; margin-top: 2px; }
+.side .docs ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.side .docs a { display: block; padding: 5px 10px; border-radius: 8px; text-decoration: none; color: var(--ink-2); font-size: 13.5px; }
+.side .docs a:hover { background: var(--hover); color: var(--ink); }
+.side .docs a[aria-current] { background: var(--panel); color: var(--ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--line); }
+.side .more { display: grid; gap: 4px; margin: 10px 10px 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; }
+.side .more a { color: var(--ink-3); }
+.swatch { width: 22px; height: 22px; border-radius: 6px; flex: none; display: grid; place-items: center; color: #fff; font-size: 11px; font-weight: 700; font-style: normal; }
+
+.main { min-width: 0; padding: 28px 32px 48px; }
+.page { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+#tabBody { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.phone-nav { display: none; }
+/* a page with no sidebar (the upload link, or the home page where shell.js is not served) */
+.app.solo { grid-template-columns: minmax(0, 1fr); }
+.app.solo .side { display: none; }
+.legal { max-width: 1180px; margin: 40px auto 0; padding-top: 16px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 12px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; }
+.legal a { color: var(--ink-3); }
+
+/* ---- headings */
+.head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+.head h1 { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 650; letter-spacing: -.015em; text-wrap: balance; }
+.head p { margin: 4px 0 0; max-width: 64ch; color: var(--ink-2); }
+.crumbs { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-3); margin-bottom: 6px; }
+.crumbs a { color: var(--ink-3); text-decoration: none; }
+.crumbs a:hover { color: var(--ink); }
+.facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 999px; background: var(--sunk); color: var(--ink-2); font-size: 12.5px; font-weight: 500; }
+.chip.accent { background: var(--accent-soft); color: var(--ink); }
+.chip.good { background: var(--good-soft); color: var(--good); }
+.chip.bad { background: var(--bad-soft); color: var(--bad); }
+.brief { margin: 8px 0 0; color: var(--ink-2); max-width: 72ch; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+
+.banner { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px; background: var(--accent-soft); font-size: 13.5px; }
+.banner .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.banner.bad { background: var(--bad-soft); color: var(--bad); }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; transform: scale(.8); } }
+/* ---- panels and forms */
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.say { margin: 0; font-size: 13px; color: var(--ink-2); }
+.say.bad { color: var(--bad); }
+.say.count { margin-top: -6px; text-align: right; }
+.field { display: grid; gap: 6px; }
+.field > span { font-size: 13px; font-weight: 600; }
+.field small { color: var(--ink-3); font-size: 12.5px; }
+.input, textarea.input { width: 100%; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel); padding: 9px 11px; font-size: 14px; }
+textarea.input { min-height: 150px; resize: vertical; line-height: 1.55; }
+.input:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; }
+.check input { margin-top: 3px; accent-color: var(--accent); }
+.empty { padding: 40px 24px; display: grid; justify-items: center; text-align: center; gap: 10px; }
+.empty .ico { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.empty .ico svg { width: 22px; height: 22px; }
+.empty h2 { margin: 4px 0 0; font-size: 17px; font-weight: 650; }
+.empty p { margin: 0; max-width: 52ch; color: var(--ink-2); }
+.skeleton { background: linear-gradient(90deg, var(--sunk), var(--hover), var(--sunk)); background-size: 200% 100%; animation: sk 1.4s ease-in-out infinite; border-radius: 10px; }
+@keyframes sk { to { background-position: -200% 0; } }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 4px; }
+.section-head h2 { margin: 0; font-size: 15px; font-weight: 650; }
+
+/* a page's opening: a title and a line under it */
+.hero h1 { margin: 0; font-size: 28px; line-height: 1.2; font-weight: 650; letter-spacing: -.02em; text-wrap: balance; }
+.hero p { margin: 6px 0 0; max-width: 72ch; color: var(--ink-2); font-size: 15px; }
+
+/* ---- a column of reading: the docs, connect, privacy and terms */
+.prose { width: 100%; max-width: 780px; font-size: 15px; line-height: 1.65; }
+.prose a { text-underline-offset: 3px; text-decoration-color: var(--line-2); }
+.prose a:hover { color: var(--accent-2); text-decoration-color: currentColor; }
+.prose h1 { margin: 0 0 6px; font-size: 28px; line-height: 1.2; font-weight: 650; letter-spacing: -.02em; }
+.prose h2 { margin: 32px 0 8px; font-size: 18px; line-height: 1.3; font-weight: 650; }
+.prose h3 { margin: 22px 0 6px; font-size: 15px; font-weight: 650; }
+.prose p, .prose li { margin: 0 0 10px; }
+.prose ul, .prose ol { padding-left: 22px; margin: 0 0 12px; }
+.prose .lead { font-size: 16.5px; color: var(--ink-2); }
+.prose .meta, .prose .updated { color: var(--ink-3); font-size: 13px; margin: 0 0 18px; }
+.prose code { font: 13px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; background: var(--sunk); padding: 1px 5px; border-radius: 5px; }
+.prose pre { background: var(--sunk); border: 1px solid var(--line); padding: 12px 14px; border-radius: 10px; overflow-x: auto; }
+.prose pre code { padding: 0; background: none; }
+.prose blockquote { margin: 0 0 14px; padding: 10px 16px; border-left: 3px solid var(--accent); background: var(--panel); border-radius: 0 10px 10px 0; }
+.prose blockquote p:last-child { margin: 0; }
+.prose .table { overflow-x: auto; margin: 0 0 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.prose table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.prose th, .prose td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.prose tr:last-child td { border-bottom: 0; }
+.prose th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); background: var(--sunk); }
+.prose figure { margin: 6px 0 20px; }
+.prose figure img { display: block; max-width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); }
+.prose figure.phone img { max-width: 340px; }
+.prose figcaption { color: var(--ink-3); font-size: 13px; margin-top: 6px; }
+
+/* dialogs */
+dialog { border: 0; padding: 0; border-radius: 14px; background: var(--panel); color: var(--ink); box-shadow: var(--dialog); width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
+dialog::backdrop { background: rgba(20, 18, 16, .5); backdrop-filter: blur(2px); }
+dialog .dhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+dialog .dhead h2 { margin: 0; font-size: 16px; font-weight: 650; }
+dialog .dbody { padding: 20px; display: grid; gap: 16px; }
+dialog .dfoot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--line); background: var(--sunk); border-radius: 0 0 14px 14px; }
+.signin { max-width: 440px; margin: 8vh auto 0; padding: 28px; display: grid; gap: 14px; }
+.signin h1 { margin: 0; font-size: 22px; font-weight: 650; }
+.signin p { margin: 0; color: var(--ink-2); }
+.signin .or { text-align: center; color: var(--ink-3); font-size: 12px; }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+@media (max-width: 860px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .side { display: none; }
+  .main { padding: 16px 16px 40px; }
+  .phone-nav { display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px; background: var(--side); border-bottom: 1px solid var(--line); scrollbar-width: none; }
+  .phone-nav a { flex: none; display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px 0 6px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); text-decoration: none; font-size: 13px; font-weight: 550; color: var(--ink-2); }
+  .phone-nav a.on { color: var(--ink); border-color: var(--accent); }
+  .phone-nav a .swatch { width: 20px; height: 20px; border-radius: 50%; font-size: 10px; }
+  .phone-nav a.plain { padding-left: 12px; }
+  .brand .sep, .brand span, .bar .home span, .bar .wide-only { display: none; }
+}
+@media (max-width: 460px) {
+  .credits span { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+/* /app.css */
+/* The home page and a film's page (/film/<id>), in the Studio's shell: the idea box, the film with
+   Claude's notes beside it, the gallery. Only what is theirs; the rest is app.css above. */
+.hero .spend { font-size: 13px; font-variant-numeric: tabular-nums; }
 .hero .spend b { color: var(--ink); font-weight: 600; }
 /* someone arrived through a friend's invite link (lib/referrals.js) */
-.hero .invited { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 14px 0 0; padding: 10px 14px; border-radius: 12px; border: 1.5px solid var(--accent); font-size: 15px; max-width: none; color: var(--ink); }
+.hero .invited { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 14px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--accent-soft); font-size: 14px; max-width: none; color: var(--ink); }
 .hero .invited b { font-weight: 650; }
-.hero .invited button { padding: 7px 12px; }
-form { display: grid; gap: 10px; }
-textarea { width: 100%; min-height: calc(5 * 1.35em + 28px); resize: vertical; padding: 14px 16px; border-radius: 12px;
-  border: 1.5px solid var(--rule); background: var(--sheet); color: var(--ink); font: 22px/1.35 'Patrick Hand', cursive; }
+#form, #emailForm, #ytForm { display: grid; gap: 10px; margin: 0; }
+#tokenForm { margin: 0; }
+#token { flex: 1 1 280px; min-width: 0; width: auto; }
 .count { margin: -4px 2px 0; text-align: right; }
+.count.over { color: var(--bad); font-weight: 600; }
 /* the prompt card: the words, then what is attached, then + and the microphone */
-.composer { display: grid; border: 1.5px solid var(--rule); border-radius: 12px; background: var(--sheet); }
-.composer:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.composer { display: grid; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); transition: border-color .12s, box-shadow .12s; }
+.composer:focus-within { border-color: var(--accent); box-shadow: var(--ring); }
 .composer.drop { border-color: var(--accent); background: var(--accent-soft); }
-.composer textarea { border: 0; border-radius: 12px 12px 0 0; background: transparent; }
-.composer textarea:focus { outline: none; }
+.composer textarea { width: 100%; min-height: calc(5 * 1.5em + 28px); resize: vertical; padding: 14px 16px; border: 0; border-radius: 12px 12px 0 0; background: transparent; color: var(--ink); font: 16px/1.5 Inter, system-ui, sans-serif; }
+.composer textarea:focus, .composer textarea:focus-visible { outline: none; box-shadow: none; }
 .tray { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 14px 6px; }
 .att { position: relative; margin: 0; }
-.att .x { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; padding: 0; border-radius: 50%;
-  background: rgba(20, 16, 12, .72); color: #fff; font: 600 15px/24px Inter, system-ui, sans-serif; letter-spacing: 0; }
-.att.pic { width: 72px; height: 72px; border-radius: 10px; overflow: hidden; border: 1.5px solid var(--rule); background: var(--paper); }
+.att .x { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  background: rgba(20, 16, 12, .72); color: #fff; font: 600 15px/24px Inter, system-ui, sans-serif; }
+.att.pic { width: 72px; height: 72px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--sunk); }
 .att.pic img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
 .att.busy::after { content: ''; position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px;
   border: 3px solid rgba(255, 255, 255, .9); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
 .att.bad { border-color: var(--bad); }
-.att.voice { width: 72px; height: 72px; border-radius: 10px; border: 1.5px solid var(--rule); background: var(--paper); }
-.att.voice .play { width: 100%; height: 100%; padding: 14px 0 0; border-radius: 10px; background: none; color: var(--ink);
-  display: grid; place-items: center; gap: 2px; font: 600 12px/1 Inter, system-ui, sans-serif; letter-spacing: 0; }
+.att.voice { width: 72px; height: 72px; border-radius: 10px; border: 1px solid var(--line); background: var(--sunk); }
+.att.voice .play { width: 100%; height: 100%; padding: 14px 0 0; border: 0; border-radius: 10px; background: none; color: var(--ink); cursor: pointer;
+  display: grid; place-items: center; gap: 2px; font: 600 12px/1 Inter, system-ui, sans-serif; }
 .att.voice .play svg { width: 20px; height: 20px; color: var(--accent); }
-.att.doc { min-width: 72px; max-width: 136px; height: 72px; border-radius: 10px; border: 1.5px solid var(--rule); background: var(--paper);
+.att.doc { min-width: 72px; max-width: 136px; height: 72px; border-radius: 10px; border: 1px solid var(--line); background: var(--sunk);
   display: grid; place-items: center; align-content: center; gap: 4px; padding: 0 6px; }
 .att.doc svg { width: 20px; height: 20px; color: var(--accent); }
 .att.doc span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 11px/1.2 Inter, system-ui, sans-serif; }
 .tools, .recbar { display: flex; align-items: center; gap: 10px; padding: 4px 10px 10px; }
 .tools .grow { flex: 1; min-width: 0; }
 .tools .grow button { margin-left: 6px; }
-button.icon { flex: none; width: 42px; height: 42px; padding: 0; border-radius: 50%; display: inline-grid; place-items: center;
-  background: transparent; color: var(--ink); border: 1.5px solid var(--rule); font: 400 26px/1 Inter, system-ui, sans-serif; letter-spacing: 0; }
-button.icon:hover:not(:disabled) { background: var(--accent-soft); }
-button.icon svg { width: 20px; height: 20px; }
+button.icon { flex: none; width: 38px; height: 38px; padding: 0; border-radius: 50%; display: inline-grid; place-items: center; cursor: pointer;
+  background: var(--panel); color: var(--ink-2); border: 1px solid var(--line-2); font: 400 22px/1 Inter, system-ui, sans-serif; }
+button.icon:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+button.icon svg { width: 18px; height: 18px; }
 button.icon.send { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .recbar canvas { flex: 1; min-width: 0; height: 36px; color: var(--accent); }
-.rectime { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; color: var(--ink-soft);
+.rectime { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; color: var(--ink-2);
   font: 600 14px/1 Inter, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
 .rectime i { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); animation: blink 1s steps(2) infinite; }
 .rectime.late { color: var(--bad); }
 @keyframes blink { 50% { opacity: .2; } }
 @keyframes spin { to { transform: rotate(360deg); } }
-#peek { border: 0; padding: 0; background: none; max-width: min(96vw, 1200px); }
+#peek { width: auto; max-width: min(96vw, 1200px); background: none; box-shadow: none; }
 #peek::backdrop { background: rgba(20, 16, 12, .7); }
 #peek img { display: block; max-width: 100%; max-height: 88vh; border-radius: 10px; cursor: zoom-out; }
-.count.over { color: var(--bad); font-weight: 600; }
-textarea:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-#token { flex: 1 1 280px; min-width: 0; padding: 10px 12px; border-radius: 10px; border: 1.5px solid var(--rule); background: var(--sheet); color: var(--ink); font: inherit; }
-select { padding: 9px 12px; border-radius: 10px; border: 1.5px solid var(--rule); background: var(--sheet); color: var(--ink); font: inherit; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
 /* the look: three tiles, each a radio with a still that plays while pointed at or focused */
 .lookpick { display: grid; gap: 4px; max-width: 360px; }
 .looks { display: flex; gap: 8px; }
-.lk { position: relative; display: grid; gap: 3px; width: 112px; cursor: pointer; text-align: center;
-  font: 600 12.5px/1.2 Inter, system-ui, sans-serif; color: var(--ink-soft); }
+.lk { position: relative; display: grid; gap: 4px; width: 112px; cursor: pointer; text-align: center;
+  font: 550 12.5px/1.2 Inter, system-ui, sans-serif; color: var(--ink-2); }
 .lk input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
 .lk .pv { position: relative; display: block; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden;
-  border: 1.5px solid var(--rule); background: var(--paper); }
+  border: 1px solid var(--line); background: var(--sunk); }
 .lk .pv img, .lk .pv video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-.lk:hover .pv { border-color: var(--accent); }
+.lk:hover .pv { border-color: var(--line-2); }
 .lk input:checked + .pv { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
-.lk input:checked ~ b { color: var(--ink); }
-.lk input:focus-visible + .pv { outline: 2px solid var(--accent); outline-offset: 3px; }
+.lk b { font-weight: 550; }
+.lk input:checked ~ b { color: var(--ink); font-weight: 650; }
+.lk input:focus-visible + .pv { box-shadow: 0 0 0 2px var(--accent), var(--ring); }
 #lookAbout { margin: 0; min-height: 2.6em; }
-button { padding: 10px 22px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink);
-  font: 700 24px/1 Caveat, cursive; cursor: pointer; letter-spacing: .5px; }
-button:disabled { opacity: .5; cursor: progress; }
-.note { color: var(--ink-soft); font-size: 13px; }
-.work { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 18px; align-items: start; }
-@media (max-width: 860px) { .work { grid-template-columns: 1fr; } }
-div.stage { background: var(--sheet); border: 1.5px solid var(--rule); border-radius: 14px; overflow: hidden; } /* the video's panel, not the log's stage lines */
-.screen { aspect-ratio: 16 / 9; max-width: 100%; display: grid; place-items: center; background: var(--paper); position: relative; }
-.screen video, .screen img { width: 100%; height: 100%; object-fit: contain; display: block; background: #f7f2e7; }
-.screen .idle { font: 700 34px/1.2 Caveat, cursive; color: var(--ink-soft); text-align: center; padding: 20px; }
-.screen .idle a { font: 600 15px/2.4 Inter, system-ui, sans-serif; color: var(--accent); }
-.caption { display: flex; justify-content: space-between; gap: 10px; padding: 10px 14px; border-top: 1.5px solid var(--rule); font-size: 13px; color: var(--ink-soft); }
+.btn.go { height: 44px; padding: 0 22px; font-size: 15px; }
+.btn.go.short { background: var(--sunk); border-color: var(--line-2); color: var(--ink-2); }
+.note { color: var(--ink-2); font-size: 13px; }
+.work { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1100px) { .work { grid-template-columns: minmax(0, 1fr); } }
+div.stage { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; } /* the video's panel, not the log's stage lines */
+.screen { aspect-ratio: 16 / 9; max-width: 100%; display: grid; place-items: center; background: var(--sunk); position: relative; }
+.screen video, .screen img { width: 100%; height: 100%; object-fit: contain; display: block; background: var(--sunk); }
+.screen .idle { font: 500 16px/1.4 Inter, system-ui, sans-serif; color: var(--ink-3); text-align: center; padding: 20px; }
+.screen .idle a { font-weight: 600; line-height: 2.4; color: var(--accent-2); }
+.caption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 10px; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-2); }
 .caption b { color: var(--ink); font-weight: 600; }
-.caption .right { display: flex; align-items: center; gap: 10px; }
-.caption button.small { padding: 5px 10px; font-size: 12px; }
+.caption .right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .fresh { font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .fresh.bad { color: var(--bad); }
-.pen { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); margin-right: 8px; animation: pulse 1s ease-in-out infinite; vertical-align: 1px; }
-@keyframes pulse { 50% { opacity: .25; } }
-.log { background: var(--sheet); border: 1.5px solid var(--rule); border-radius: 14px; padding: 12px 14px; max-height: 560px; overflow: auto; }
-.log h2 { font: 700 26px/1 Caveat, cursive; margin: 2px 0 10px; }
+.pen { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 8px; animation: pulse 1.6s ease-in-out infinite; vertical-align: 1px; }
+.log { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; max-height: 560px; overflow: auto; }
+.log h2 { margin: 0 0 10px; font-size: 15px; font-weight: 650; }
 .log ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
 .log li { display: grid; grid-template-columns: 40px 1fr; gap: 8px; font-size: 13.5px; }
-.log time { color: var(--ink-soft); font-variant-numeric: tabular-nums; font-size: 12px; padding-top: 1px; }
-.log .say { font-style: italic; }
-.log .stage { font-weight: 700; color: var(--accent); }
+.log time { color: var(--ink-3); font-variant-numeric: tabular-nums; font-size: 12px; padding-top: 1px; }
+.log .say { font-style: italic; font-size: inherit; color: var(--ink); }
+.log .stage { font-weight: 650; color: var(--accent-2); }
 .log .blocked, .log .fail, .log .error { color: var(--bad); white-space: pre-wrap; overflow-wrap: anywhere; }
-.log .done { color: var(--good); font-weight: 700; }
-.log .sub { color: var(--ink-soft); font-size: 12px; font-family: ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
-.stat { background: var(--sheet); border: 1.5px solid var(--rule); border-radius: 12px; padding: 10px 12px; }
-.stat small { display: block; color: var(--ink-soft); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
-.stat b { font-size: 20px; font-variant-numeric: tabular-nums; }
-.recent h2 { font: 700 30px/1 Caveat, cursive; margin: 0 0 10px; }
-.about { display: grid; gap: 14px; }
-.about h2 { font: 700 34px/1.05 Caveat, cursive; margin: 0; }
-.about > p { margin: 0; color: var(--ink-soft); font-size: 16px; max-width: 75ch; }
+.log .done { color: var(--good); font-weight: 650; }
+.log .sub { color: var(--ink-3); font-size: 12px; font-family: ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.stat small { display: block; color: var(--ink-3); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
+.stat b { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.recent h2, .about h2 { margin: 0 0 12px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; }
+.about { display: grid; gap: 12px; }
+.about h2 { margin: 0; }
+.about > p { margin: 0; color: var(--ink-2); font-size: 15px; max-width: 75ch; }
 .about .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
-.about .cards div { background: var(--sheet); border: 1.5px solid var(--rule); border-radius: 12px; padding: 14px 16px; }
-.about h3 { margin: 0 0 4px; font-size: 16px; }
-.about .cards p { margin: 0; color: var(--ink-soft); font-size: 14px; }
-.faq details { border-bottom: 1.5px solid var(--rule); padding: 10px 0; }
-.faq summary { cursor: pointer; font-weight: 600; font-size: 15.5px; }
-.faq details p { margin: 8px 0 2px; color: var(--ink-soft); font-size: 14.5px; max-width: 80ch; }
-.films { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
-.film { display: block; text-decoration: none; background: var(--sheet); border: 1.5px solid var(--rule); border-radius: 12px; overflow: hidden; cursor: pointer; text-align: left; padding: 0; color: inherit; font: inherit; }
-.film:hover { border-color: var(--accent); }
-.film img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #f7f2e7; }
-button.small { font: 600 14px/1 Inter, system-ui, sans-serif; letter-spacing: 0; padding: 9px 14px; }
-button.ghost, a.ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--rule); }
-#signin { border: 1.5px solid var(--rule); border-radius: 16px; background: var(--sheet); color: var(--ink); padding: 22px 24px 24px; width: min(420px, calc(100% - 32px)); }
-#signin::backdrop { background: rgba(20, 16, 12, .45); }
-#signin h2 { font: 700 34px/1.05 Caveat, cursive; margin: 0 28px 4px 0; }
-#signin p { margin: 6px 0; }
-#signin .close { position: absolute; top: 10px; right: 12px; background: none; color: var(--ink-soft); font: 400 26px/1 Inter, system-ui, sans-serif; padding: 4px 8px; }
-#signin .err { color: var(--bad); font-weight: 600; }
-#signin .or { text-align: center; color: var(--ink-soft); font-size: 13px; }
-#signin input[type=email] { padding: 11px 12px; border-radius: 10px; border: 1.5px solid var(--rule); background: var(--paper); color: var(--ink); font: inherit; }
-a.google { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 14px; padding: 11px 14px; border-radius: 10px; text-decoration: none; font-weight: 600; }
-a.google:hover { border-color: var(--accent); }
+.about .cards div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+.about h3 { margin: 0 0 4px; font-size: 15px; font-weight: 650; }
+.about .cards p { margin: 0; color: var(--ink-2); font-size: 14px; }
+.faq details { border-bottom: 1px solid var(--line); padding: 12px 0; }
+.faq summary { cursor: pointer; font-weight: 600; font-size: 15px; }
+.faq details p { margin: 8px 0 2px; color: var(--ink-2); font-size: 14.5px; max-width: 80ch; }
+/* the gallery: the Studio's cards, a picture and two lines under it */
+.films { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px 16px; }
+.film { display: grid; gap: 8px; align-content: start; text-decoration: none; color: inherit; cursor: pointer; }
+.film img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; border-radius: 12px; border: 1px solid var(--line); background: var(--sunk); transition: box-shadow .15s, transform .15s; }
+.film:hover img { box-shadow: var(--lift); transform: translateY(-1px); }
+.film div { padding: 0 2px; font-size: 13px; }
+.film p { margin: 0 0 2px; font-size: 14px; font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.film small { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+/* the two dialogs of the page's own: signing in, and publishing to YouTube */
+#signin, #yt { padding: 22px 24px 24px; }
+#signin { width: min(420px, calc(100% - 32px)); }
+#signin h2, #yt h2 { margin: 0 36px 6px 0; font-size: 18px; font-weight: 650; }
+#signin p, #yt p { margin: 6px 0; }
+dialog .close { position: absolute; top: 12px; right: 12px; font-size: 22px; font-weight: 400; }
+#signin .err, #yt .err { color: var(--bad); font-weight: 600; }
+#signin .or { text-align: center; color: var(--ink-3); font-size: 12px; }
+a.google { width: 100%; margin-top: 14px; }
 .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
-.film div { padding: 8px 10px 10px; font-size: 13px; }
 /* the length slider: up to the plan's longest usable, and the track carries on, locked, to 8 min */
 .len { flex: 1 1 300px; min-width: 240px; display: grid; gap: 2px; }
-.lenhead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--ink-soft); }
-.lenhead b { font: 700 26px/1 Caveat, cursive; color: var(--ink); min-width: 2.2em; }
+.lenhead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--ink-2); }
+.lenhead b { font: 650 18px/1 Inter, system-ui, sans-serif; font-variant-numeric: tabular-nums; color: var(--ink); min-width: 2.6em; }
 .lentrack { display: flex; align-items: center; height: 28px; }
 #length { --p: .09; --fill-color: var(--accent); flex: 0 0 70%; width: 70%; margin: 0; height: 28px; background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer; }
-#length::-webkit-slider-runnable-track { height: 8px; border-radius: 4px 0 0 4px;
-  background: linear-gradient(to right, var(--fill-color) 0 calc(11px + (100% - 22px) * var(--p)), var(--rule) 0); }
-#length::-moz-range-track { height: 8px; border-radius: 4px 0 0 4px;
-  background: linear-gradient(to right, var(--fill-color) 0 calc(11px + (100% - 22px) * var(--p)), var(--rule) 0); }
-#length::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -7px; border-radius: 50%;
-  background: var(--fill-color); border: 3px solid var(--sheet); box-shadow: 0 0 0 1.5px var(--fill-color); }
-#length::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--fill-color);
-  border: 3px solid var(--sheet); box-shadow: 0 0 0 1.5px var(--fill-color); }
-#length:focus-visible { outline: none; }
-#length:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 4.5px var(--fill-color); }
-.locked { flex: 1 1 auto; height: 8px; padding: 0; border: 0; border-radius: 0 4px 4px 0; cursor: not-allowed;
-  background: repeating-linear-gradient(135deg, var(--rule) 0 3px, transparent 3px 7px); box-shadow: inset 0 0 0 1px var(--rule); }
-.ticks { position: relative; height: 16px; font-size: 11.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+#length::-webkit-slider-runnable-track { height: 6px; border-radius: 3px 0 0 3px;
+  background: linear-gradient(to right, var(--fill-color) 0 calc(10px + (100% - 20px) * var(--p)), var(--line-2) 0); }
+#length::-moz-range-track { height: 6px; border-radius: 3px 0 0 3px;
+  background: linear-gradient(to right, var(--fill-color) 0 calc(10px + (100% - 20px) * var(--p)), var(--line-2) 0); }
+#length::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; margin-top: -7px; border-radius: 50%;
+  background: var(--fill-color); border: 3px solid var(--panel); box-shadow: 0 0 0 1px var(--fill-color); }
+#length::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--fill-color);
+  border: 3px solid var(--panel); box-shadow: 0 0 0 1px var(--fill-color); }
+#length:focus-visible { outline: none; box-shadow: none; }
+#length:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 4px var(--fill-color); }
+.locked { flex: 1 1 auto; height: 6px; padding: 0; border: 0; border-radius: 0 3px 3px 0; cursor: not-allowed;
+  background: repeating-linear-gradient(135deg, var(--line-2) 0 3px, transparent 3px 7px); box-shadow: inset 0 0 0 1px var(--line); }
+.ticks { position: relative; height: 16px; font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .ticks span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
 .ticks .dim { opacity: .5; }
-#lenHint a, .credit a, #status a { color: var(--accent); }
+#lenHint a, .credit a, #status a { color: var(--accent-2); }
 .credit { margin: 4px 0 0; }
 .credit.short { color: var(--bad); }
-button.short { background: var(--rule); color: var(--ink-soft); }
-.film p { margin: 0 0 4px; font: 18px/1.2 'Patrick Hand', cursive; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.film small { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 /* publishing to YouTube: a button under a finished film of your own, and the dialog it opens */
 .ytmark { width: 20px; height: 14px; flex: none; display: block; }
-button.yt { display: inline-flex; align-items: center; gap: 7px; }
-.posts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 0 14px 10px; font-size: 13px; color: var(--ink-soft); }
-.posts a { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); text-decoration: none; border: 1.5px solid var(--rule); border-radius: 999px; padding: 3px 10px 3px 4px; }
-.posts a:hover { border-color: var(--accent); }
+.posts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 0 14px 10px; font-size: 13px; color: var(--ink-2); }
+.posts a { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); text-decoration: none; border: 1px solid var(--line-2); border-radius: 999px; padding: 3px 10px 3px 4px; }
+.posts a:hover { background: var(--hover); }
 .posts img, .chan img { width: 22px; height: 22px; border-radius: 50%; display: block; }
-#yt { border: 1.5px solid var(--rule); border-radius: 16px; background: var(--sheet); color: var(--ink); padding: 22px 24px 24px; width: min(480px, calc(100% - 32px)); }
-#yt::backdrop { background: rgba(20, 16, 12, .45); }
-#yt h2 { font: 700 34px/1.05 Caveat, cursive; margin: 0 28px 10px 0; }
-#yt p { margin: 6px 0; }
-#yt .close { position: absolute; top: 10px; right: 12px; background: none; color: var(--ink-soft); font: 400 26px/1 Inter, system-ui, sans-serif; padding: 4px 8px; }
-#yt .err { color: var(--bad); font-weight: 600; }
-#yt label.field { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
-#yt input[type=text], #yt textarea { width: 100%; padding: 9px 11px; border-radius: 10px; border: 1.5px solid var(--rule); background: var(--paper); color: var(--ink); font: 15px/1.4 Inter, system-ui, sans-serif; resize: vertical; min-height: 0; }
+#yt { width: min(480px, calc(100% - 32px)); }
+#yt label.field { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
+#yt input[type=text], #yt textarea { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font: 14px/1.45 Inter, system-ui, sans-serif; resize: vertical; min-height: 0; }
+#yt input[type=text]:focus, #yt textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
 /* while the words are being written: grey lines where they will go, gone the moment you type */
 #yt .box { position: relative; display: block; }
 #yt .skel { display: none; position: absolute; inset: 0; padding: 15px 13px; gap: 10px; align-content: start; pointer-events: none; }
 #yt .box.wait .skel { display: grid; }
 #yt .box.wait ::placeholder { color: transparent; }
-#yt .skel i { display: block; height: 11px; border-radius: 6px; background: linear-gradient(90deg, var(--rule) 20%, var(--accent-soft) 50%, var(--rule) 80%); background-size: 250% 100%; animation: shimmer 1.4s linear infinite; }
+#yt .skel i { display: block; height: 11px; border-radius: 6px; background: linear-gradient(90deg, var(--sunk) 20%, var(--hover) 50%, var(--sunk) 80%); background-size: 250% 100%; animation: shimmer 1.4s linear infinite; }
 #ytName + .skel i { width: 68%; }
 #ytTags + .skel i { width: 46%; }
 #ytDesc + .skel i:nth-child(1) { width: 96%; } #ytDesc + .skel i:nth-child(2) { width: 89%; }
@@ -265,30 +431,28 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
 /* the words were written for another of your channels: write them for this one, when you ask */
 #yt .redo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 10px; border-radius: 10px; background: var(--accent-soft); font-size: 13px; color: var(--ink); }
 #yt .redo span { flex: 1 1 220px; min-width: 0; }
-#yt .redo button { flex: none; margin: 0; padding: 6px 12px; border-radius: 8px; border: 1.5px solid var(--accent); background: var(--sheet); color: var(--ink); font: 600 13px/1.2 Inter, system-ui, sans-serif; letter-spacing: 0; cursor: pointer; }
-#yt .redo button:hover { background: var(--paper); }
+#yt .redo button { flex: none; margin: 0; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font: 550 13px/1 Inter, system-ui, sans-serif; cursor: pointer; }
+#yt .redo button:hover { background: var(--hover); }
 #yt fieldset { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
-#yt legend { font-size: 13px; font-weight: 600; color: var(--ink-soft); padding: 0; margin-bottom: 4px; }
-.chan { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 8px 10px; border: 1.5px solid var(--rule); border-radius: 12px; cursor: pointer; font-size: 15px; }
+#yt legend { font-size: 13px; font-weight: 600; padding: 0; margin-bottom: 4px; }
+.chan { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 10px; cursor: pointer; font-size: 14px; }
 .chan:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
 .chan input { accent-color: var(--accent); margin: 0; }
 .chan span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chan small { color: var(--ink-soft); }
+.chan small { color: var(--ink-2); }
 .chan.broken { cursor: default; opacity: .8; }
-.chan a { color: var(--accent); font-size: 13px; font-weight: 600; }
+.chan a { color: var(--accent-2); font-size: 13px; font-weight: 600; }
 .seg { display: flex !important; flex-wrap: wrap; gap: 6px; }
 .seg label { flex: 1 1 0; min-width: 90px; }
 .seg input { position: absolute; opacity: 0; pointer-events: none; }
-.seg span { display: block; text-align: center; padding: 8px 6px; border: 1.5px solid var(--rule); border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.seg span { display: block; text-align: center; padding: 7px 6px; border: 1px solid var(--line-2); border-radius: 8px; cursor: pointer; font-size: 13.5px; font-weight: 550; }
 .seg input:checked + span { border-color: var(--accent); background: var(--accent-soft); }
-.seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+.seg input:focus-visible + span { box-shadow: var(--ring); }
 #yt .check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 #yt .check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
-#yt a.more { font-size: 13px; color: var(--accent); justify-self: start; }
+#yt a.more { font-size: 13px; color: var(--accent-2); justify-self: start; }
 #yt .go { justify-self: end; }
-#yt .button { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 10px 18px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font: 700 22px/1 Caveat, cursive; letter-spacing: .5px; }
-#yt .button.ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--rule); }
-.progress { height: 10px; border-radius: 5px; background: var(--rule); overflow: hidden; margin: 10px 0 4px; }
+.progress { height: 8px; border-radius: 4px; background: var(--sunk); overflow: hidden; margin: 10px 0 4px; }
 .progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .6s ease; }
 .progress.wait i { width: 30% !important; animation: slide 1.2s ease-in-out infinite alternate; }
 @keyframes slide { from { margin-left: 0; } to { margin-left: 70%; } }
@@ -296,23 +460,23 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
 /* the thumbnail: four stills of the film with a few words on them (the studio's thumbs.py), and
    the one picked as it will sit in YouTube's feed, beside its title */
 .thumbgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.thumb { position: relative; display: block; aspect-ratio: 16 / 9; border: 2px solid var(--rule); border-radius: 10px; overflow: hidden; cursor: pointer; background: var(--rule); }
+.thumb { position: relative; display: block; aspect-ratio: 16 / 9; border: 2px solid var(--line); border-radius: 10px; overflow: hidden; cursor: pointer; background: var(--sunk); }
 .thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .thumb input { position: absolute; opacity: 0; pointer-events: none; }
 .thumb:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
-.thumb:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 3px; }
+.thumb:has(input:focus-visible) { box-shadow: 0 0 0 2px var(--accent), var(--ring); }
 .thumb .tick { display: none; position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font: 700 13px/22px Inter, system-ui, sans-serif; text-align: center; }
 .thumb:has(input:checked) .tick { display: block; }
-.shimmer { aspect-ratio: 16 / 9; border-radius: 10px; background: linear-gradient(90deg, var(--rule) 20%, var(--accent-soft) 50%, var(--rule) 80%); background-size: 250% 100%; animation: shimmer 1.4s linear infinite; }
+.shimmer { aspect-ratio: 16 / 9; border-radius: 10px; background: linear-gradient(90deg, var(--sunk) 20%, var(--hover) 50%, var(--sunk) 80%); background-size: 250% 100%; animation: shimmer 1.4s linear infinite; }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
 @media (prefers-reduced-motion: reduce) { .shimmer, #yt .skel i { animation: none; } }
 #yt .own { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 #yt .own input { accent-color: var(--accent); margin: 0; }
-.feed { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 10px; background: #fff; color: #0f0f0f; border: 1.5px solid var(--rule); }
+.feed { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 10px; background: #fff; color: #0f0f0f; border: 1px solid var(--line); }
 .feed img { width: 168px; height: 94.5px; flex: none; display: block; border-radius: 8px; object-fit: cover; }
 .feed b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font: 600 14px/1.35 Roboto, Arial, sans-serif; }
 .feed small { display: block; margin-top: 3px; color: #606060; font: 12px/1.4 Roboto, Arial, sans-serif; }
-@media (prefers-color-scheme: dark) { .feed { background: #0f0f0f; color: #f1f1f1; } .feed small { color: #aaa; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .feed { background: #0f0f0f; color: #f1f1f1; } :root:not([data-theme="light"]) .feed small { color: #aaa; } }
 </style>
 <script>
 // Where this visitor came from, for the sign-up to record (lib/attribution.js): the link's utm_*
@@ -342,11 +506,16 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
 </script>
 </head>
 <body>
-<div class="wrap">
-  <header class="site-head">
-    <a class="brand" href="/" aria-label="KitCut home"><img src="/logo-64.png" alt="" width="42" height="42" onerror="this.remove()"><span>KitCut<span class="tld">.ai</span></span></a>
-    <nav class="account" id="account" aria-label="Account" hidden></nav>
-  </header>
+<header class="bar">
+  <a class="brand" href="/" aria-label="KitCut home"><img src="/logo-64.png" alt="" width="28" height="28" onerror="this.remove()"><b>KitCut</b><i class="sep"></i><span id="barPage">Make a film</span></a>
+  <div class="grow"></div>
+  <div id="barRight" style="display:flex;align-items:center;gap:10px"></div>
+</header>
+<nav class="phone-nav" id="phoneNav" aria-label="KitCut" hidden></nav>
+<div class="app" id="app">
+  <aside class="side" id="side" aria-label="KitCut"></aside>
+  <main class="main">
+  <div class="page home">
   <!-- hero -->
   <section class="hero">
     <h1>Type an idea. Get a Claude video.</h1>
@@ -357,8 +526,8 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
   <!-- /hero -->
 
   <form id="tokenForm" class="row" hidden>
-    <input id="token" type="password" autocomplete="off" placeholder="Studio token" aria-label="Studio token">
-    <button type="submit">Use token</button>
+    <input class="input" id="token" type="password" autocomplete="off" placeholder="Studio token" aria-label="Studio token">
+    <button class="btn" type="submit">Use token</button>
   </form>
 
   <form id="form">
@@ -397,7 +566,7 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
         <div class="ticks" id="ticks" aria-hidden="true"></div>
         <p class="note credit" id="credit" hidden></p>
       </div>
-      <button id="go" type="submit">Make the film</button>
+      <button class="btn primary go" id="go" type="submit">Make the film</button>
       <span class="note">Claude Opus 5.5 directs · Muse paints (painted look) · GPT Image cuts out (collage look) · Gemini narrates · a 10-second film takes about 9-14 minutes<span id="busy"></span></span>
     </div>
   </form>
@@ -405,7 +574,7 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
   <section class="work">
     <div class="stage">
       <div class="screen" id="screen"><div class="idle">Your film appears here.</div></div>
-      <div class="caption"><span id="status">Ready.</span><span class="right"><button class="small ghost yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><button class="small ghost" type="button" id="share" hidden title="Copy a link to this film">Share</button><button class="small ghost" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span id="clock"></span></span></div>
+      <div class="caption"><span id="status">Ready.</span><span class="right"><button class="btn sm yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><button class="btn sm" type="button" id="share" hidden title="Copy a link to this film">Share</button><button class="btn sm" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span id="clock"></span></span></div>
       <div class="posts" id="ytPosts" hidden></div>
     </div>
     <aside class="log">
@@ -443,22 +612,20 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
     </div>
   </section>
 
-  <footer class="site-foot">
-    <a class="brand" href="/" aria-label="KitCut home"><img src="/logo-64.png" alt="" width="28" height="28" onerror="this.remove()"><span>KitCut</span></a>
-    <nav id="footNav" aria-label="Site" hidden><a href="/">Make a film</a><a href="/studio">Studio</a><a href="/pricing">Pricing</a><a href="/account">Your account</a><a href="/connect">Use it in Claude or ChatGPT</a><a href="mailto:hello@kitcut.ai">hello@kitcut.ai</a></nav>
-    <p>&copy; 2026 KitCut. Films written, drawn, narrated and scored by Claude. <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/docs">Docs</a></p>
-  </footer>
+  </div>
+  <footer class="legal"><span>&copy; 2026 KitCut. Films written, drawn, narrated and scored by Claude.</span><span id="footNav" hidden><a href="/studio">Studio</a> · <a href="/pricing">Pricing</a> · <a href="/connect">Use it in Claude or ChatGPT</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/docs">Docs</a> · <a href="mailto:hello@kitcut.ai">hello@kitcut.ai</a></span></footer>
+  </main>
 </div>
 
 <dialog id="peek" aria-label="Picture"><img alt=""></dialog>
 <dialog id="yt" aria-labelledby="ytTitle">
-  <form method="dialog"><button class="close" aria-label="Close">&times;</button></form>
+  <form method="dialog"><button class="btn quiet icon close" aria-label="Close">&times;</button></form>
   <h2 id="ytTitle">Publish to YouTube</h2>
   <p class="err" id="ytErr" hidden></p>
   <div id="ytConnect" hidden>
     <p>Connect your YouTube channel once, then publish any of your films to it from here.</p>
     <p class="note">KitCut only uploads the films you choose, and you can disconnect it any time from your account page.</p>
-    <p><a class="button" id="ytConnectBtn" href="/api/youtube/connect"><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Connect YouTube</a></p>
+    <p><a class="btn primary" id="ytConnectBtn" href="/api/youtube/connect"><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Connect YouTube</a></p>
     <p class="note">Google will ask which account to use. If your channel belongs to a business or brand, choose the channel's name there.</p>
   </div>
   <form id="ytForm" hidden>
@@ -483,7 +650,7 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
     </fieldset>
     <p class="note" id="ytWhoNote"></p>
     <label class="check"><input type="checkbox" id="ytKids"> Made for kids</label>
-    <button class="go" type="submit" id="ytGo">Publish</button>
+    <button class="btn primary go" type="submit" id="ytGo">Publish</button>
   </form>
   <div id="ytSend" hidden>
     <p id="ytSendText" aria-live="polite">Sending your film to YouTube...</p>
@@ -491,28 +658,29 @@ button.yt { display: inline-flex; align-items: center; gap: 7px; }
     <div id="ytDone" hidden>
       <p id="ytDoneText"></p>
       <p class="note" id="ytDoneNote"></p>
-      <p class="row"><a class="button" id="ytWatch" target="_blank" rel="noopener">Watch on YouTube</a><button class="small ghost" type="button" id="ytMore">Publish to another channel</button></p>
+      <p class="row"><a class="btn primary" id="ytWatch" target="_blank" rel="noopener">Watch on YouTube</a><button class="btn" type="button" id="ytMore">Publish to another channel</button></p>
     </div>
   </div>
 </dialog>
 <dialog id="signin" aria-labelledby="signinTitle">
-  <form method="dialog"><button class="close" aria-label="Close">&times;</button></form>
+  <form method="dialog"><button class="btn quiet icon close" aria-label="Close">&times;</button></form>
   <h2 id="signinTitle">Sign in to make your film</h2>
   <p class="note">It's free. No password: continue with Google, or get a one-time link by email.</p>
   <p class="err" id="signinErr" hidden></p>
-  <a class="google ghost" id="googleBtn" href="/api/auth/signin" hidden>
+  <a class="btn google" id="googleBtn" href="/api/auth/signin" hidden>
     <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
     Continue with Google
   </a>
   <p class="or" id="signinOr" hidden>or</p>
   <form id="emailForm">
-    <input id="email" type="email" required autocomplete="email" placeholder="you@example.com" aria-label="Email address">
+    <input class="input" id="email" type="email" required autocomplete="email" placeholder="you@example.com" aria-label="Email address">
     <input class="hp" id="website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
-    <button type="submit">Email me a sign-in link</button>
+    <button class="btn primary" type="submit">Email me a sign-in link</button>
   </form>
   <p id="sent" hidden>Check your inbox: a sign-in link is on its way to <b id="sentTo"></b>. It works once, for 30 minutes. Your idea is kept here until you are back.</p>
 </dialog>
 
+<script src="/shell.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 // a different idea in the box on each visit, of every kind, so the films people start from are
@@ -728,7 +896,7 @@ function reset() {
   $('stats').hidden = true; $('log').innerHTML = ''; $('clock').textContent = '';
 }
 function home() {
-  reset(); currentId = null;
+  reset(); currentId = null; drawSide();
   screen('<div class="idle">Your film appears here.</div>');
   $('status').textContent = studioUp ? 'Ready.' : 'The studio is offline right now.';
 }
@@ -737,7 +905,7 @@ function home() {
 const canAnother = () => !!(CREDITS && CREDITS.at_once > 1);
 function openFilm(id, push) {
   if (push && location.pathname !== '/film/' + id) history.pushState({ id }, '', '/film/' + id);
-  reset(); currentId = id; $('go').disabled = !(studioUp && canAnother());
+  reset(); currentId = id; drawSide(); $('go').disabled = !(studioUp && canAnother());
   screen('<div class="idle">Loading the film...</div>');
   $('status').innerHTML = '<span class="pen"></span>Loading';
   follow(0);
@@ -840,16 +1008,25 @@ const draft = {
     } catch (e) { return null; }
   },
 };
+// The bar and the sidebar are the Studio's (shell.js, as KC): a visitor's links, or credits, the
+// account menu and the projects. The studio machine serves index.html alone, with no /shell.js:
+// there the bar keeps its wordmark and the sidebar goes.
+const KC = window.KC || null;
+if (!KC) $('app').classList.add('solo');
+let PROJECTS = null;  // the account's projects, for the sidebar (null: a visitor)
+function drawSide() {
+  $('barPage').textContent = currentId ? 'Film' : 'Make a film';
+  if (KC && AUTH) KC.side(USER ? PROJECTS || [] : null, { here: currentId ? 'films' : 'make' });
+}
 function renderAccount() {
-  const a = $('account');
-  a.hidden = false;
-  const pricing = '<a class="me" href="/pricing">Pricing</a>';
-  if (USER) {
-    a.innerHTML = pricing + '<a class="me" href="/studio" title="Your projects: a series or a channel, with its cast and pictures">Studio</a>' + (USER.picture ? `<img src="${esc(USER.picture)}" alt="" referrerpolicy="no-referrer">` : '') +
-      `<a class="me" href="/account" title="Your credits, billing cycle and films">${esc(USER.email)}</a><form method="post" action="/api/auth/signout"><button class="small ghost" type="submit">Sign out</button></form>`;
-  } else {
-    a.innerHTML = pricing + '<button class="small ghost" type="button" id="signinBtn">Sign in</button>';
-    $('signinBtn').onclick = () => askSignIn();
+  if (!KC) return;
+  KC.bar(USER ? { user: USER, credits: CREDITS } : null, { onSignIn: () => askSignIn() });
+  drawSide();
+  if (USER && !PROJECTS) {
+    fetch('/api/projects', { headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)).then((b) => {
+      if (!b) return;
+      PROJECTS = b.projects || []; KC.setHues(PROJECTS); drawSide();
+    }).catch(() => { /* the sidebar keeps its links without projects */ });
   }
 }
 function askSignIn(err) {
@@ -933,7 +1110,7 @@ async function refreshCredits() {
   try {
     const r = await fetch('/api/me', { headers: { Accept: 'application/json' } });
     const me = r.ok ? await r.json() : null;
-    if (me && me.credits) { CREDITS = me.credits; paintLength(); }
+    if (me && me.credits) { CREDITS = me.credits; paintLength(); if (KC) KC.bar({ user: USER, credits: CREDITS }, { onSignIn: () => askSignIn() }); }
   } catch (e) { /* the balance on screen stays as it was */ }
 }
 
@@ -941,9 +1118,9 @@ async function whoami() {
   try {
     const r = await fetch('/api/me', { headers: { Accept: 'application/json' } });
     const me = r.ok ? await r.json() : null;
-    if (!me || !me.auth) return;
+    if (!me || !me.auth) { if (KC) $('app').classList.add('solo'); return; }
     AUTH = true; USER = me.user; GOOGLE = !!me.google; CREDITS = me.credits || null; YT = !!me.youtube;
-  } catch (e) { return; }
+  } catch (e) { if (KC) $('app').classList.add('solo'); return; }
   renderAccount(); paintLength();
   if (currentId && timer && studioUp && canAnother()) $('go').disabled = false;  // opened before the plan was known
   $('footNav').hidden = false;
@@ -995,7 +1172,7 @@ async function invited() {
       return;
     }
     el.innerHTML = `<span><b>${who} invited you.</b> Sign up free and make your first film: you both get ${mmss(w.friend_seconds)} more film. Already have an account? Sign in to accept.</span>` +
-      '<button class="small" type="button" id="invitedGo">Sign up free</button>';
+      '<button class="btn primary sm" type="button" id="invitedGo">Sign up free</button>';
     el.hidden = false;
     $('invitedGo').onclick = () => askSignIn();
   } catch (e) { /* no welcome, the page works the same */ }
@@ -1716,7 +1893,7 @@ function stopRec(keep) {
       const a = { kind: 'audio', state: 'local', blob, secs };
       if (!keep) {
         if (secs > 10 && blob.size) {  // a long one thrown away by mistake can come back
-          note('Recording deleted. <button type="button" class="small ghost" id="undoRec">Undo</button>');
+          note('Recording deleted. <button type="button" class="btn sm" id="undoRec">Undo</button>');
           const t = setTimeout(() => { if ($('undoRec')) note(''); }, 5000);
           $('undoRec').onclick = () => { clearTimeout(t); note(''); addAtt(a); };
         }
