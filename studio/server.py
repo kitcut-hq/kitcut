@@ -237,6 +237,25 @@ def signature_ok(req):
 
 
 @web.middleware
+async def bye(req, handler):
+    """A server that has handed over (handoff()) answers what still reaches it on a connection the
+    tunnel already holds, and tells the client to close that connection after the reply, so its
+    next request opens a new one and reaches the new server. Closing the connections from this
+    side instead (aiohttp's pre_shutdown) can cut a request already in flight on one: seen at
+    every switch on 2026-09-28 as a single request hanging ~5 s through the tunnel, while 398
+    requests straight to the port in the same switch all answered in 2 ms."""
+    try:
+        resp = await handler(req)
+    except web.HTTPException as e:
+        if MODE == "handed_off":
+            e.force_close()
+        raise
+    if MODE == "handed_off":
+        resp.force_close()
+    return resp
+
+
+@web.middleware
 async def need_token(req, handler):
     p = req.path
     guarded = p.startswith(("/api/", "/files/")) and p not in ("/api/health", "/api/limits")
@@ -614,8 +633,8 @@ async def handoff():
     waiting for a Claude slot go back to the queue with no maker, for the new leader (a film that
     has its slot keeps it: cancelling it would record it cancelled); this server's heartbeat says
     so at once, so the new leader's limits count exactly what is left here; then it lets go of
-    the lead and of the port, and closes its idle connections so the tunnel's next requests reach
-    the new server. The films it is making it finishes; then tick() sees it idle and it exits."""
+    the lead and of the port, and has bye() close each connection after its next reply so the tunnel's requests reach
+    the new server (bye()). The films it is making it finishes; then tick() sees it idle and it exits."""
     global MODE
     async with ADMIT:
         MODE = "handed_off"
@@ -642,11 +661,8 @@ async def handoff():
     site, LIFE["site"] = LIFE["site"], None
     if site is not None:
         await site.stop()
-    runner = LIFE["runner"]
-    if runner is not None and runner.server is not None:
-        # an idle keep-alive connection closes now, a busy one once its request is answered: the
-        # tunnel opens new ones, and those reach the new server
-        runner.server.pre_shutdown()
+    # the connections the tunnel holds stay open here until their next request, which bye() answers
+    # and then closes (or aiohttp's keep-alive timeout does): none is cut with a request on it
 
 
 def begin():
@@ -1581,7 +1597,7 @@ async def list_films(req):
 def make_app(token):
     global TOKEN
     TOKEN = token
-    app = web.Application(middlewares=[need_token], client_max_size=64 * 1024)
+    app = web.Application(middlewares=[bye, need_token], client_max_size=64 * 1024)
     app.add_routes(
         [
             web.get("/", index),

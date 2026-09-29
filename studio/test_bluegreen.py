@@ -236,6 +236,10 @@ async def main():
                     await asyncio.sleep(0.3)
 
             poller = asyncio.create_task(poll())
+            # a connection the tunnel holds open to the old server (keep-alive), idle
+            held = aiohttp.ClientSession()
+            async with held.get(old_url + "/api/health") as r0:
+                await r0.read()
             peers.set_current("new")
             t0 = time.monotonic()
             new_task = asyncio.create_task(server.serve(p_new, TOKEN))
@@ -253,6 +257,22 @@ async def main():
                 not await asyncio.to_thread(listening, p_old),
                 "the old server no longer listens: new connections reach the new one",
             )
+
+            # its next request on that held connection is answered, and the connection closed
+            # after the reply -- not cut from this side with a request possibly on it
+            try:
+                async with held.get(old_url + "/api/health") as r1:
+                    body = await r1.json()
+                    check(
+                        r1.status == 200
+                        and body.get("server", "").startswith("old.")
+                        and r1.headers.get("Connection", "").lower() == "close",
+                        "a request on a connection held to the old server is answered, "
+                        "and the connection told to close",
+                    )
+            except aiohttp.ClientError as e:
+                check(False, "a request on a held connection to the old server failed: %r" % e)
+            await held.close()
 
             # ------------------------------------------------ what the new leader adopted
             check(
