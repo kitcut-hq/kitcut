@@ -843,19 +843,37 @@ async function whoami() {
 
 // ---------------------------------------------------------------- invitations
 // A visitor who came through a friend's link (/i/<code> sends them here with ?invite=<code>) is
-// greeted by the friend's name; the offer is lib/plans.js REFERRAL, told by /api/invites/who. The
+// greeted by the friend's name; the offer is lib/plans.js REFERRAL, told by /api/invites/who. One
+// who already has an account and is signed in has accepted it by opening the link (api/auth.js), and
+// is told so, or why it adds nothing (another friend's already, their own link, a friend's own). The
 // Share button under a finished film copies its link, and for a signed-in visitor that link is their
 // own invite (/i/<code>?c=film&to=/film/<id>): a friend who signs up from it is theirs.
 let INVITE = null;  // this account's invite code
 async function invited() {
   const code = new URLSearchParams(location.search).get('invite');
-  if (USER || !code || !/^[a-z0-9]{7}$/.test(code)) return;
+  if (!code || !/^[a-z0-9]{7}$/.test(code)) return;
   try {
     const r = await fetch(`/api/invites/who?code=${encodeURIComponent(code)}`, { headers: { Accept: 'application/json' } });
     if (!r.ok) return;
     const w = await r.json();
     const el = $('invited');
-    el.innerHTML = `<span><b>${w.name ? esc(w.name) : 'A friend'} invited you.</b> Sign up free and make your first film: you both get ${mmss(w.friend_seconds)} more film.</span>` +
+    const who = w.name ? esc(w.name) : 'A friend';
+    const whose = w.name ? `${esc(w.name)}'s` : "your friend's";
+    if (USER) {
+      const said = {
+        accepted: w.state === 'joined'
+          ? `<b>You accepted ${whose} invitation.</b> When your next film is done, you both get ${mmss(w.friend_seconds)} more film.`
+          : `<b>You accepted ${whose} invitation.</b> <a href="/account#invite">See what it earned you</a>`,
+        taken: `<b>${who} invited you,</b> but you already joined through another invitation, and an account accepts only one.`,
+        mutual: `<b>${who} invited you,</b> but you invited them first, so this invitation adds nothing.`,
+        self: '<b>This is your own invite link.</b> Share it: a friend who joins through it and makes a film gets you both film. <a href="/account#invite">Your invitations</a>',
+      }[w.you];
+      if (!said) return;
+      el.innerHTML = `<span>${said}</span>`;
+      el.hidden = false;
+      return;
+    }
+    el.innerHTML = `<span><b>${who} invited you.</b> Sign up free and make your first film: you both get ${mmss(w.friend_seconds)} more film. Already have an account? Sign in to accept.</span>` +
       '<button class="small" type="button" id="invitedGo">Sign up free</button>';
     el.hidden = false;
     $('invitedGo').onclick = () => askSignIn();
