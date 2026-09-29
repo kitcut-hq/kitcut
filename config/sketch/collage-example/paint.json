@@ -1,0 +1,115 @@
+{
+  "backend": "muse",
+  "style": "",
+  "cutouts": {
+    "model": "openai/gpt-image-2.5-flare",
+    "quality": "medium",
+    "border": 12,
+    "cut": "scissor"
+  },
+  "max_images": 24,
+  "images": [
+    {
+      "name": "tablet",
+      "cutout": true,
+      "aspect": "3:2",
+      "prompt": "Museum studio photograph of an ancient Sumerian clay tablet: a small rounded slab of warm terracotta clay covered in neat rows of tiny wedge-shaped impressions, chipped corners, seen slightly from above. Soft even studio light, sharp focus."
+    },
+    {
+      "name": "barley",
+      "cutout": true,
+      "aspect": "2:3",
+      "prompt": "A 19th-century botanical steel engraving of a sheaf of barley stalks tied with twine, long whiskered ears of grain, drawn alone with nothing behind it. Fine black cross-hatching, antique encyclopedia illustration, black ink."
+    },
+    {
+      "name": "jar",
+      "cutout": true,
+      "aspect": "2:3",
+      "prompt": "A 19th-century steel engraving of an ancient Mesopotamian clay beer jar with a wide mouth and two small loop handles. Fine black cross-hatching, antique encyclopedia illustration, black ink on white paper."
+    },
+    {
+      "name": "press",
+      "cutout": true,
+      "aspect": "1:1",
+      "prompt": "A 19th-century steel engraving of a 15th-century wooden hand printing press with a massive wooden screw and a long iron lever, three-quarter view. Fine black cross-hatching, antique encyclopedia illustration, black ink on white paper."
+    },
+    {
+      "name": "printer",
+      "cutout": true,
+      "aspect": "2:3",
+      "prompt": "An engraved portrait in the style of a 16th-century woodcut of a bearded German printer in a fur-trimmed robe and a soft cap, half-length, proudly holding up a freshly printed blank sheet of paper. Fine line engraving in black ink."
+    },
+    {
+      "name": "typewriter",
+      "cutout": true,
+      "aspect": "3:2",
+      "prompt": "A 19th-century steel engraving of an 1870s typewriter with round keys on long levers, a cylindrical platen and an ornate cast-iron frame, three-quarter view. Fine black cross-hatching, antique encyclopedia illustration, black ink on white paper."
+    },
+    {
+      "name": "inkwell",
+      "cutout": true,
+      "aspect": "1:1",
+      "prompt": "Studio product photograph of an antique cut-glass inkwell with a wooden dip pen leaning in it. Soft even studio light, sharp focus."
+    },
+    {
+      "name": "puzzled",
+      "cutout": true,
+      "aspect": "2:3",
+      "prompt": "An early-20th-century engraved portrait of a moustached gentleman in a bowler hat and a stiff collar, frowning in puzzlement at a long sheet of paper he holds in both hands, half-length. Fine line engraving in black ink."
+    },
+    {
+      "name": "spectacles",
+      "cutout": true,
+      "aspect": "3:2",
+      "prompt": "Studio product photograph of a pair of antique round wire-rimmed spectacles, folded. Soft even studio light, sharp focus."
+    },
+    {
+      "name": "cabinet",
+      "cutout": true,
+      "aspect": "2:3",
+      "prompt": "Studio product photograph of a 1950s mint-green metal four-drawer office filing cabinet with chrome handles, the top drawer pulled open with manila folders inside, three-quarter view. Soft even studio light, sharp focus."
+    },
+    {
+      "name": "stamper",
+      "cutout": true,
+      "aspect": "2:3",
+      "prompt": "Studio product photograph of a vintage office rubber stamp with a turned wooden handle and a red rubber base, standing upright. Soft even studio light, sharp focus."
+    },
+    {
+      "name": "papers",
+      "cutout": true,
+      "aspect": "2:3",
+      "prompt": "Studio product photograph of a tall, untidy stack of old paper files and manila folders with sheets sticking out, tied with string. Soft even studio light, sharp focus."
+    },
+    {
+      "name": "computer",
+      "cutout": true,
+      "aspect": "1:1",
+      "prompt": "Studio product photograph of a beige early-1990s desktop computer: a boxy CRT monitor sitting on a flat case, with a beige keyboard and a mouse in front, the screen dark grey and blank, three-quarter view. Soft even studio light, sharp focus."
+    },
+    {
+      "name": "floppy",
+      "cutout": true,
+      "aspect": "1:1",
+      "prompt": "Studio product photograph of a blue 3.5-inch floppy disk with a silver metal shutter, slightly angled. Soft even studio light, sharp focus."
+    },
+    {
+      "name": "pda",
+      "cutout": true,
+      "aspect": "2:3",
+      "prompt": "Studio product photograph of a late-1990s grey handheld PDA with a small green-grey monochrome screen, and a thin stylus lying beside it. Soft even studio light, sharp focus."
+    },
+    {
+      "name": "laptop",
+      "cutout": true,
+      "aspect": "3:2",
+      "prompt": "Studio product photograph of a modern thin silver laptop, open, three-quarter view, the screen a soft even blue glow. Soft even studio light, sharp focus."
+    },
+    {
+      "name": "robohand",
+      "cutout": true,
+      "aspect": "1:1",
+      "prompt": "Studio product photograph of a sleek white robotic hand holding a black fountain pen as if about to write, three-quarter view. Soft even studio light, sharp focus."
+    }
+  ]
+}

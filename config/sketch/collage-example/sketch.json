@@ -1,0 +1,152 @@
+{
+  "title": "A Brief History of Paperwork",
+  "description": "A 66-second mixed-media collage explainer: five thousand years of filling in the blanks, from clay receipts to AI. The worked example of the collage look (sketch/collage.js): copy it into projects/<id>/, then sketch-paint (17 cut-outs, ~$0.20), sketch-vo (Gemini, or --tts edge for free), score.py and sfx.py, sketch-audio, sketch-render.",
+  "slug": "paperwork",
+  "duration": 66.0,
+  "fps": 24,
+  "film": "film.js",
+  "poster_t": 3.4,
+  "fonts": [
+    {
+      "file": "fonts/AbrilFatface-Regular.ttf",
+      "family": "Abril Fatface",
+      "weight": "400"
+    },
+    {
+      "file": "fonts/UnifrakturMaguntia-Book.ttf",
+      "family": "UnifrakturMaguntia",
+      "weight": "400"
+    },
+    {
+      "file": "fonts/Oswald-VF.ttf",
+      "family": "Oswald",
+      "weight": "200 700",
+      "load": "500 600 700"
+    },
+    {
+      "file": "fonts/OldStandard-Regular.ttf",
+      "family": "Old Standard TT",
+      "weight": "400"
+    },
+    {
+      "file": "fonts/OldStandard-Bold.ttf",
+      "family": "Old Standard TT",
+      "weight": "700"
+    },
+    {
+      "file": "fonts/OldStandard-Italic.ttf",
+      "family": "Old Standard TT",
+      "weight": "400",
+      "style": "italic"
+    },
+    {
+      "file": "fonts/PlayfairDisplay-VF.ttf",
+      "family": "Playfair Display",
+      "weight": "400 900",
+      "load": "700 900"
+    },
+    {
+      "file": "fonts/PlayfairDisplay-Italic-VF.ttf",
+      "family": "Playfair Display",
+      "weight": "400 900",
+      "style": "italic",
+      "load": "400 700"
+    },
+    {
+      "file": "fonts/CourierPrime-Regular.ttf",
+      "family": "Courier Prime",
+      "weight": "400"
+    },
+    {
+      "file": "fonts/CourierPrime-Bold.ttf",
+      "family": "Courier Prime",
+      "weight": "700"
+    },
+    {
+      "file": "fonts/Anton-Regular.ttf",
+      "family": "Anton",
+      "weight": "400"
+    },
+    {
+      "file": "fonts/Caveat.woff2",
+      "family": "Caveat",
+      "weight": "400 700",
+      "load": "700"
+    }
+  ],
+  "player": {
+    "accent": "#c63a32",
+    "paper": "#ebe3d1",
+    "ink": "#1d1a17",
+    "hint": "a brief history of paperwork · sound on",
+    "hint_font": "'Old Standard TT', serif"
+  },
+  "vo": {
+    "tts": "gemini",
+    "model": "gemini-3.1-flash-tts-preview",
+    "voice": "Charon",
+    "style": "A warm, wry documentary narrator with a brisk, lively pace: clear and confident, with a smile in the voice, like a museum audio guide that enjoys its subject.",
+    "takes": 2,
+    "lead": 0.5,
+    "gap": 0.35,
+    "language": "en",
+    "hotwords": [
+      "Mesopotamian",
+      "Mainz",
+      "PDF"
+    ],
+    "lines": [
+      {
+        "text": "Long before inboxes, there was paperwork."
+      },
+      {
+        "text": "Five thousand years ago, Mesopotamian scribes pressed receipts into clay: barley in, beer out."
+      },
+      {
+        "text": "In fourteen fifty-four, Mainz printed the first forms: indulgences, with blanks for a name."
+      },
+      {
+        "text": "By the eighteen-eighties, typewriters and carbon paper turned one form into three."
+      },
+      {
+        "text": "In nineteen thirteen, the first Form ten-forty ran four pages. Instructions included."
+      },
+      {
+        "text": "By the fifties, offices ran on filing cabinets and rubber stamps."
+      },
+      {
+        "text": "Approved. Denied. Resubmit."
+      },
+      {
+        "text": "In nineteen ninety-three, the PDF put forms on screens. Soon you could type in the boxes."
+      },
+      {
+        "text": "By two thousand, a signature no longer needed ink."
+      },
+      {
+        "text": "Today, AI reads the form and fills in every field in seconds."
+      },
+      {
+        "text": "Five thousand years later, it's still paperwork. Just faster."
+      }
+    ]
+  },
+  "paint": "paint.json",
+  "audio": {
+    "score": "score.json",
+    "sfx": "sfx.json",
+    "mix": {
+      "music_db": 6.0,
+      "sfx_db": 3.0,
+      "fade_out": 0.6
+    }
+  },
+  "captions": {
+    "max_words": 8
+  },
+  "render": {
+    "cq": 18,
+    "preset": "p5",
+    "audio_bitrate": "320k"
+  }
+}

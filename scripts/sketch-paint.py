@@ -8,8 +8,9 @@ Reads the `paint` block of the manifest (inline, or a file: "paint": "paint.json
                          {"name": "table", "prompt": "...", "ref": "kitchen"}],
               "max_images": 12}
 
-Every image becomes images/<name>.jpg next to the manifest, and joins the manifest's images
-(_sketch.load does that), so film.js draws it with SK.image(name, x, y, w). The style line goes
+Every image becomes images/<name>.jpg (a cut-out: .webp) next to the manifest, and joins the
+manifest's images (_sketch.load does that), so film.js draws it with SK.image(name, x, y, w) (a
+cut-out with SK.cutout). The style line goes
 in front of every prompt, so the scenes share one look; the text-free, border-free suffix goes
 behind (an image model letters signs and frames pictures unless told not to). A contact sheet of
 all of them, images/sheet.jpg, is what to look at before animating.
@@ -25,6 +26,15 @@ Backends:
             the catalogue, so it is sent what it always was, and it takes no reference.
     gemini  a Gemini image model on Vertex AI (GOOGLE_SERVICE_ACCOUNT_KEY), default
             gemini-3.1-flash-image: 1376x768, ~10 s.
+
+A cut-out -- `"cutout": true` on an image, or `{"border": 0}` / `{"border": 16, "cut": "round"}`
+-- is one subject alone, for a collage: it is asked for isolated, with a transparent background
+where the model offers one (the block's `"cutouts": {"model", "quality", "border", "cut"}` names
+that model; openai/gpt-image-2.5-flare, the default, returns real alpha), or keyed off its white
+ground where it does not; stray specks are dropped, it is trimmed, and a paper border `border` px
+wide (at 1024 px on the long side; 12 by default, 0 for none) is cut round it in straight
+`scissor` snips or a `round` outline. It becomes images/<name>.webp, and film.js draws it with
+SK.cutout(name, ...). "aspect" ("1:1", "2:3", "3:2", ...) shapes the canvas it is painted on.
 
 "ref" names an image already painted, which goes in as a reference picture wherever the model
 takes one (gemini, and the OpenRouter models whose catalogue entry lists input_references): the
@@ -74,24 +84,54 @@ NO_TEXT = (
     "Fill the entire frame with the illustration: no border, frame, margin, drop shadow or "
     "torn-paper edge."
 )
+# the suffix for a cut-out: one subject alone, room round it, nothing behind it
+CUTOUT_TEXT = (
+    "A single isolated subject, centred, with the whole subject in frame and a generous margin "
+    "round it. No background scenery, no ground, no cast shadow, no frame or border, and no text, "
+    "lettering, labels or watermarks anywhere."
+)
+CUTOUT_ON_WHITE = " Set it on a plain, flat, pure white background."
+CUTOUT_MODEL = "openai/gpt-image-2.5-flare"  # real alpha, 16 references, ~$0.014 at medium
+PAPER_WHITE = (251, 249, 243)
 # Gemini image models: USD per 1M output tokens where a list price is known (2.5 flash image:
 # $30/M, ~1290 tokens a picture). Others are recorded by tokens with the cost left empty.
 GEMINI_OUT_PRICE = {"gemini-2.5-flash-image": 30.0}
+
+
+def cut_spec(spec, im):
+    """An image's cut-out settings, {model, quality, border, cut}, or None for a scene."""
+    c = im.get("cutout")
+    if not c:
+        return None
+    base = dict(spec.get("cutouts") or {})
+    out = {
+        "model": base.get("model", CUTOUT_MODEL),
+        "quality": base.get("quality", "medium"),
+        "border": base.get("border", 12),
+        "cut": base.get("cut", "scissor"),
+    }
+    if isinstance(c, dict):
+        out.update({k: c[k] for k in ("border", "cut") if k in c})
+    return out
 
 
 def fingerprint(spec, im, ref_fp=None):
     parts = [spec.get("backend"), spec.get("model"), spec.get("style"), im["prompt"], ref_fp]
     if spec.get("quality"):  # only when set, so every painting made before it keeps its key
         parts.append(spec["quality"])
+    cs = cut_spec(spec, im)
+    if cs:  # only for cut-outs, so every scene painted before them keeps its key
+        parts.append([cs, im.get("aspect")])
     key = json.dumps(parts, sort_keys=True)
     return hashlib.sha1(key.encode(), usedforsecurity=False).hexdigest()[:10]
 
 
-def full_prompt(spec, im):
+def full_prompt(spec, im, transparent=False):
     style = (spec.get("style") or "").strip()
-    return (
-        ("%s.\n\n" % style.rstrip(".") if style else "") + im["prompt"].strip() + "\n\n" + NO_TEXT
-    )
+    tail = NO_TEXT
+    if cut_spec(spec, im):
+        tail = CUTOUT_TEXT + ("" if transparent else CUTOUT_ON_WHITE)
+    return ("%s.\n\n" % style.rstrip(".") if style else "") + im["prompt"].strip() + "\n\n" + tail
 
 
 _CAPS = {}
@@ -118,20 +158,22 @@ def _ratio(a):
     return w / h
 
 
-def pick_params(caps, quality=None):
-    """The request's settings for a model: 16:9 (or the landscape ratio nearest it), 2K (or the
-    nearest below), jpeg where the model offers it, and `quality` if the model has the setting.
-    Anything the catalogue does not list is not sent."""
+def pick_params(caps, quality=None, aspect="16:9", transparent=False):
+    """The request's settings for a model: `aspect` (16:9, or the ratio nearest it), 2K (or the
+    nearest below), jpeg where the model offers it (png for a transparent cut-out), and `quality`
+    if the model has the setting. Anything the catalogue does not list is not sent."""
     if caps is None:
         return dict(UNLISTED)
     sp = caps.get("supported_parameters") or {}
     out = {}
     ars = [a for a in (sp.get("aspect_ratio") or {}).get("values") or [] if ":" in a]
-    if "16:9" in ars:
-        out["aspect_ratio"] = "16:9"
+    if aspect in ars:
+        out["aspect_ratio"] = aspect
     elif ars:
-        wide = [a for a in ars if _ratio(a) >= 1] or ars
-        out["aspect_ratio"] = min(wide, key=lambda a: abs(_ratio(a) - 16 / 9))
+        same = [a for a in ars if (_ratio(a) >= 1) == (_ratio(aspect) >= 1)] or ars
+        out["aspect_ratio"] = min(same, key=lambda a: abs(_ratio(a) - _ratio(aspect)))
+    if transparent:
+        out["background"] = "transparent"
     res = (sp.get("resolution") or {}).get("values") or []
     if res:
         order = ["512", "1K", "2K", "4K"]
@@ -139,10 +181,17 @@ def pick_params(caps, quality=None):
         out["resolution"] = max(below, key=order.index) if below else res[0]
     fmts = (sp.get("output_format") or {}).get("values") or []
     if fmts:
-        out["output_format"] = "jpeg" if "jpeg" in fmts else fmts[0]
+        want = "png" if transparent else "jpeg"
+        out["output_format"] = want if want in fmts else fmts[0]
     if quality and quality in ((sp.get("quality") or {}).get("values") or []):
         out["quality"] = quality
     return out
+
+
+def gives_alpha(caps):
+    """Whether the catalogue says the model paints on a transparent background."""
+    bg = ((caps or {}).get("supported_parameters") or {}).get("background") or {}
+    return "transparent" in (bg.get("values") or [])
 
 
 def takes_refs(caps):
@@ -151,19 +200,21 @@ def takes_refs(caps):
     return refs.get("max", 0) >= 1
 
 
-def paint_openrouter(prompt, model, ref=None, quality=None):
-    """One picture from an OpenRouter image model; `ref` (a JPEG path) goes in as a reference
-    picture when the model takes one, and is dropped (as Muse always dropped it) when not."""
+def paint_openrouter(prompt, model, ref=None, quality=None, aspect="16:9", transparent=False):
+    """One picture from an OpenRouter image model; `ref` (a JPEG, PNG or WebP path) goes in as a
+    reference picture when the model takes one, and is dropped (as Muse always dropped it) when
+    not. `transparent` asks for a transparent background (sent only where the model has it)."""
     import httpx
 
     key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY is not set (put it in .env)")
     caps = model_caps(model)
-    body = {"model": model, "prompt": prompt, **pick_params(caps, quality)}
+    body = {"model": model, "prompt": prompt, **pick_params(caps, quality, aspect, transparent)}
     if ref and takes_refs(caps):
+        kind = {".png": "png", ".webp": "webp"}.get(os.path.splitext(ref)[1].lower(), "jpeg")
         with open(ref, "rb") as f:
-            url = "data:image/jpeg;base64," + base64.b64encode(f.read()).decode()
+            url = "data:image/%s;base64," % kind + base64.b64encode(f.read()).decode()
         body["input_references"] = [{"type": "image_url", "image_url": {"url": url}}]
         body["prompt"] = KEEP_REF + prompt
     r = httpx.post(
@@ -226,12 +277,99 @@ def paint_gemini(prompt, model, ref=None):
     }
 
 
+def ext(spec, im):
+    """The file an image becomes: .webp for a cut-out (it keeps its transparency), else .jpg."""
+    return ".webp" if cut_spec(spec, im) else ".jpg"
+
+
 def to_jpeg(data, path):
     from PIL import Image
 
     im = Image.open(io.BytesIO(data)).convert("RGB")
     im.save(path, "JPEG", quality=90, optimize=True)
     return im.size
+
+
+def matte_white(rgba):
+    """Key a picture painted on white off its ground: the near-white region that reaches the edge
+    of the picture becomes transparent. White inside the subject stays (a paper border covers any
+    hole the key leaves where the subject's own white touches the ground)."""
+    import numpy as np
+    import cv2
+
+    rgb = rgba[..., :3].astype(np.int16)
+    near = ((255 - rgb.min(axis=2)) < 22).astype(np.uint8)
+    _n, lab = cv2.connectedComponents(near, connectivity=4)
+    edge = np.unique(np.r_[lab[0], lab[-1], lab[:, 0], lab[:, -1]])
+    ground = np.isin(lab, edge[edge > 0]) & (near == 1)
+    alpha = cv2.GaussianBlur(np.where(ground, 0, 255).astype(np.uint8), (3, 3), 0)
+    out = rgba.copy()
+    out[..., 3] = np.minimum(out[..., 3], alpha)
+    return out
+
+
+def cutout(data, border=12, cut="scissor", long_side=1024):
+    """A cut-out from a painted picture: its subject on a transparent background (matted off
+    white when the picture came back opaque), specks dropped, trimmed, scaled to `long_side`, with
+    a paper border `border` px wide cut round it -- straight `scissor` snips that bridge the
+    notches a pair of scissors would skip, or a `round` outline; 0 for none. A PIL RGBA image."""
+    import numpy as np
+    import cv2
+    from PIL import Image
+
+    a = np.asarray(Image.open(io.BytesIO(data)).convert("RGBA")).copy()
+    if a[..., 3].min() > 250:
+        a = matte_white(a)
+    solid = (a[..., 3] > 40).astype(np.uint8)
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(solid, connectivity=8)
+    if n > 1:  # keep the subject and the pieces that belong to it, not the model's stray specks
+        big = stats[1:, cv2.CC_STAT_AREA].max()
+        drop = [i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] < big * 0.015]
+        if drop:
+            gone = np.isin(lab, drop)
+            a[gone, 3] = 0
+            solid[gone] = 0
+    ys, xs = np.nonzero(solid)
+    if not len(xs):
+        raise RuntimeError("the cut-out came back empty")
+    a = a[ys.min() : ys.max() + 1, xs.min() : xs.max() + 1]
+    k = long_side / max(a.shape[:2])
+    if abs(k - 1) > 0.01:
+        size = (max(1, round(a.shape[1] * k)), max(1, round(a.shape[0] * k)))
+        a = np.asarray(Image.fromarray(a).resize(size, Image.LANCZOS))
+    return paper_border(a, int(border), cut)
+
+
+def paper_border(a, b, cut):
+    """The subject `a` (an RGBA array) on a white paper backing b px wide, cut round it in
+    straight snips (`scissor`) or following its outline (`round`); b <= 0 leaves it bare."""
+    import numpy as np
+    import cv2
+    from PIL import Image
+
+    if b <= 0:
+        return Image.fromarray(a)
+    p = 4 * b
+    a = np.pad(a, ((p, p), (p, p), (0, 0)))
+    m = (a[..., 3] > 60).astype(np.uint8) * 255
+    disc = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * b + 1, 2 * b + 1))
+    grown = cv2.dilate(m, disc)
+    if cut == "scissor":
+        wide = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5 * b + 1, 5 * b + 1))
+        grown = cv2.morphologyEx(grown, cv2.MORPH_CLOSE, wide)
+    cnts, _ = cv2.findContours(grown, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    back = np.zeros(grown.shape, np.uint8)
+    for c in cnts:
+        if cv2.contourArea(c) < grown.size * 0.002:
+            continue
+        poly = cv2.approxPolyDP(c, max(1.5, b * 0.5), True) if cut == "scissor" else c
+        cv2.fillPoly(back, [poly], 255, lineType=cv2.LINE_AA)
+    base = np.zeros_like(a)
+    base[..., :3] = PAPER_WHITE
+    base[..., 3] = back
+    out = Image.alpha_composite(Image.fromarray(base), Image.fromarray(a))
+    bb = out.getbbox()
+    return out.crop((max(0, bb[0] - 2), max(0, bb[1] - 2), bb[2] + 2, bb[3] + 2)) if bb else out
 
 
 def contact_sheet(files, out):
@@ -243,7 +381,12 @@ def contact_sheet(files, out):
     sheet = Image.new("RGB", (cols * tw, rows * (th + 28)), (247, 242, 231))
     d = ImageDraw.Draw(sheet)
     for k, (name, p) in enumerate(files):
-        im = Image.open(p).convert("RGB")
+        im = Image.open(p)
+        if im.mode == "RGBA":  # a cut-out: on a mid blue, so its edge and border show
+            bg = Image.new("RGBA", im.size, (96, 150, 205, 255))
+            bg.alpha_composite(im)
+            im = bg
+        im = im.convert("RGB")
         im.thumbnail((tw, th))
         x, y = (k % cols) * tw, (k // cols) * (th + 28)
         sheet.paste(im, (x + (tw - im.width) // 2, y))
@@ -292,7 +435,7 @@ def main():
         if ref and ref not in by_name:
             sys.exit("image %s: ref %r is not one of the images" % (im["name"], ref))
         fps[im["name"]] = fingerprint(spec, im, fps.get(ref) if ref else None)
-        cached = os.path.join(idir, "%s_%s.jpg" % (im["name"], fps[im["name"]]))
+        cached = os.path.join(idir, "%s_%s%s" % (im["name"], fps[im["name"]], ext(spec, im)))
         retake = im["name"] in only and args.retake and os.path.exists(cached)
         if retake:
             discard.append(cached)  # only once the cap below allows the repaint
@@ -323,12 +466,20 @@ def main():
         with st("paint"):
 
             def one(im):
-                prompt = full_prompt(spec, im)
-                ref = os.path.join(idir, im["ref"] + ".jpg") if im.get("ref") else None
+                cs = cut_spec(spec, im)
+                alpha = bool(cs) and gives_alpha(model_caps(cs["model"]))
+                prompt = full_prompt(spec, im, transparent=alpha)
+                r = im.get("ref")
+                ref = os.path.join(idir, r + ext(spec, by_name[r])) if r else None
                 t, err = time.time(), None
                 for attempt in range(3):
                     try:
-                        if backend == "gemini":
+                        if cs:  # a cut-out: its own model, square unless told, alpha if it has it
+                            shape = im.get("aspect", "1:1")
+                            data, meta = paint_openrouter(
+                                prompt, cs["model"], ref, cs["quality"], shape, alpha
+                            )
+                        elif backend == "gemini":
                             data, meta = paint_gemini(prompt, model, ref)
                         else:
                             data, meta = paint_openrouter(prompt, model, ref, spec.get("quality"))
@@ -338,8 +489,14 @@ def main():
                         time.sleep(2 * (attempt + 1))
                 else:
                     raise RuntimeError("%s: %s" % (im["name"], err))
-                path = os.path.join(idir, "%s_%s.jpg" % (im["name"], fps[im["name"]]))
-                w, h = to_jpeg(data, path)
+                path = os.path.join(idir, "%s_%s%s" % (im["name"], fps[im["name"]], ext(spec, im)))
+                if cs:
+                    pic = cutout(data, cs["border"], cs["cut"])
+                    pic.save(path, "WEBP", quality=92, method=6)
+                    w, h = pic.size
+                    meta = {**meta, "model": cs["model"], "alpha": "model" if alpha else "matted"}
+                else:
+                    w, h = to_jpeg(data, path)
                 return im["name"], path, w, h, meta, time.time() - t
 
             done, refs = [], [im for im in todo if not im.get("ref")]
@@ -350,7 +507,7 @@ def main():
                         # the current version under its plain name, for the film to draw
                         with (
                             open(path, "rb") as a,
-                            open(os.path.join(idir, name + ".jpg"), "wb") as b,
+                            open(os.path.join(idir, name + ext(spec, by_name[name])), "wb") as b,
                         ):
                             b.write(a.read())
                         done.append(meta)
@@ -375,15 +532,16 @@ def main():
                         )
             # a cached image may be the current one again (a retake undone): refresh plain names
             for im in images:
-                src = os.path.join(idir, "%s_%s.jpg" % (im["name"], fps[im["name"]]))
-                dst = os.path.join(idir, im["name"] + ".jpg")
+                e = ext(spec, im)
+                src = os.path.join(idir, "%s_%s%s" % (im["name"], fps[im["name"]], e))
+                dst = os.path.join(idir, im["name"] + e)
                 if os.path.exists(src):
                     with open(src, "rb") as a, open(dst, "wb") as b:
                         b.write(a.read())
             spent = sum(x.get("cost_usd") or 0 for x in done)
             print("  painted %d this run, $%.4f" % (len(done), spent))
         with st("sheet"):
-            files = [(n, os.path.join(idir, n + ".jpg")) for n in names]
+            files = [(n, os.path.join(idir, n + ext(spec, by_name[n]))) for n in names]
             sheet = os.path.join(idir, "sheet.jpg")
             contact_sheet([f for f in files if os.path.exists(f[1])], sheet)
             print("  %s" % os.path.relpath(sheet, _env.ROOT))
