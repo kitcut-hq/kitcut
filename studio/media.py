@@ -17,7 +17,8 @@ anonymous read of blobs), and STUDIO_MEDIA_SAS, a container SAS allowing create,
 (a secret: the studio's .env). Without both nothing is copied, and films play from the tunnel as
 before. Each file is one Put Blob call, <id>/<name>; the film's record keeps the URLs as "media".
 The share page's two pictures (share.jpg, thumb.jpg: make_share, publish_share) go up the same
-way when share.py has made them; their URLs are kept in the record's "share".
+way when share.py has made them, as share-<v>.jpg and thumb-<v>.jpg (<v> a hash of their bytes,
+so a remake gets a new URL); their URLs are kept in the record's "share".
 
 Never the films' own container `media`: the catalog site's upload-media.py prunes that one of
 everything that is not one of its own films.
@@ -27,6 +28,7 @@ film is served from here as before.
 """
 
 import os
+import re
 import sys
 import asyncio
 import argparse
@@ -164,21 +166,68 @@ def make_share(outputs, src_jpg):
     return out
 
 
+def share_version(outputs):
+    """The share pictures' version: the first 8 hex of a hash of their bytes. It is in their blob
+    names (share-<v>.jpg, thumb-<v>.jpg), so a remade picture gets a new URL -- the files go up
+    with the year-long immutable CACHE, and a browser or a link-preview cache would otherwise keep
+    showing the old one."""
+    import hashlib
+
+    h = hashlib.sha256()
+    for _, name in SHARE_FILES:
+        p = os.path.join(outputs, name)
+        if os.path.isfile(p):
+            with open(p, "rb") as f:
+                h.update(f.read())
+    return h.hexdigest()[:8]
+
+
+def share_blob(name, v):
+    """share.jpg -> share-<v>.jpg"""
+    stem, ext = os.path.splitext(name)
+    return "%s-%s%s" % (stem, v, ext)
+
+
+SHARE_BLOB = re.compile(r"^(share|thumb)(-[0-9a-f]{8})?\.jpg$")
+
+
 async def publish_share(film, timeout=300):
-    """Copy the share pictures online: {"image": url, "thumb": url} (the ones there are), or {}
-    when copying is off. Raises when a copy is refused."""
+    """Copy the share pictures online under versioned names (share_version): {"image": url,
+    "thumb": url} (the ones there are), or {} when copying is off. Raises when a copy is
+    refused. A remake's older copies are left where they are: a preview already posted may still
+    point at them."""
     if not enabled():
         return {}
     import aiohttp
 
+    v = share_version(film.path("outputs"))
     urls = {}
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
         for key, name in SHARE_FILES:
             p = film.path("outputs", name)
             if os.path.isfile(p):
-                await _put(s, "%s/%s" % (film.id, name), p, "image/jpeg")
-                urls[key] = url_of(film.id, name)
+                blob = share_blob(name, v)
+                await _put(s, "%s/%s" % (film.id, blob), p, "image/jpeg")
+                urls[key] = url_of(film.id, blob)
     return urls
+
+
+def share_blobs(fid):
+    """The share pictures' blob names a film's record names (its "share" URLs), and the
+    unversioned ones of before."""
+    names = [n for _, n in SHARE_FILES]
+    try:
+        from film import Film
+
+        f = Film.open(fid)
+        sh = (f.record().get("share") or {}) if f is not None else {}
+    except Exception:  # noqa: BLE001 -- no record: the fixed names only
+        sh = {}
+    for key, _ in SHARE_FILES:
+        name = str(sh.get(key) or "").rsplit("/", 1)[-1]
+        if SHARE_BLOB.match(name) and name not in names:
+            names.append(name)
+    return names
 
 
 def ensure_card(outputs, length=None):
@@ -333,7 +382,7 @@ async def delete(fid, timeout=60):
 
     gone = 0
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
-        for name in [n for _, n, _ in FILES] + [n for _, n in SHARE_FILES]:
+        for name in [n for _, n, _ in FILES] + share_blobs(fid):
             url = "%s/%s?%s" % (base(), quote("%s/%s" % (fid, name)), sas())
             async with s.delete(url, headers={"x-ms-version": VERSION}) as r:
                 if r.status in (200, 202):

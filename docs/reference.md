@@ -2903,13 +2903,14 @@ The words come from what the YouTube draft reads (`ytdraft.material`: the narrat
 times, who it was made for, what Claude said, the pages its facts came from, the sheet of the
 film's moments), in one Claude call with no tools; a pasted brief or a film called generated is
 asked once more, then given up. The two pictures go to the same Azure container as the film
-(`<id>/share.jpg`, `<id>/thumb.jpg`). The film's record -- `studio.json` and `kitcut.studio_runs`,
+as `<id>/share-<v>.jpg` and `<id>/thumb-<v>.jpg`, where `<v>` is the first 8 hex characters of a
+hash of the two pictures' bytes. The film's record -- `studio.json` and `kitcut.studio_runs`,
 where only `share` is set -- then holds what the site reads:
 
 ```json
 "share": {"title": "<= 70 chars", "description": "<= 155 chars", "language": "en",
-          "image": "https://kitcutst.blob.core.windows.net/films/<id>/share.jpg",
-          "thumb": "https://kitcutst.blob.core.windows.net/films/<id>/thumb.jpg",
+          "image": "https://kitcutst.blob.core.windows.net/films/<id>/share-0c636175.jpg",
+          "thumb": "https://kitcutst.blob.core.windows.net/films/<id>/thumb-0c636175.jpg",
           "at": "2026-09-29T23:33:24Z", "key": "<draft key>"}
 ```
 
@@ -2940,9 +2941,14 @@ python studio/test_share.py                            # stubbed: the rules, the
 ```
 
 `--missing` also picks up a film whose share has no picture online when copying is on: its draft
-is kept, so that costs no model time. The pictures go up with the film files' year-long immutable
-cache header, so a remade `share.jpg` may be served stale by a browser or a link-preview cache that
-already fetched the old one.
+is kept, so that costs no model time.
+
+**Why the names carry a version.** The pictures go up with the film files' year-long immutable
+cache header. Under a fixed name, a remade picture would keep being served stale by any browser or
+link-preview cache that had fetched the old one. With the version in the name, the same picture
+keeps its URL and a different one gets a new URL. A remake leaves the older copies in place,
+because a preview already posted may still point at them. `media.py --delete <id>` removes the
+pair the record names (and any unversioned `share.jpg`/`thumb.jpg`).
 
 ## Chapter markers on a published video
 

@@ -89,9 +89,12 @@ def good(**over):
     return d | over
 
 
+TINT = [30]  # the first quadrant's green: changed to remake a different picture
+
+
 def picture(path, size=(1920, 1080)):
     """A 16:9 test picture: four coloured quadrants, so a crop or a shift shows."""
-    im = Image.new("RGB", size, (200, 30, 30))
+    im = Image.new("RGB", size, (200, TINT[0], 30))
     w, h = size
     im.paste((30, 160, 40), (w // 2, 0, w, h // 2))
     im.paste((30, 40, 200), (0, h // 2, w // 2, h))
@@ -106,6 +109,12 @@ async def put(req):
         return web.Response(status=403)
     BLOBS[req.match_info["name"]] = (dict(req.headers), await req.read())
     return web.Response(status=201)
+
+
+async def delete(req):
+    if req.query_string != SAS:
+        return web.Response(status=403)
+    return web.Response(status=202 if BLOBS.pop(req.match_info["name"], None) else 404)
 
 
 class Recording(store.MemoryStore):
@@ -256,7 +265,7 @@ async def main():
     real = share._call, thumbs.sheet, thumbs.make
     share._call, thumbs.sheet, thumbs.make = fake_call, fake_sheet, fake_make
     app = web.Application(client_max_size=16 * 2**20)
-    app.add_routes([web.put("/films/{name:.+}", put)])
+    app.add_routes([web.put("/films/{name:.+}", put), web.delete("/films/{name:.+}", delete)])
     blob = TestServer(app, host="127.0.0.1")
     await blob.start_server()
     try:
@@ -326,16 +335,22 @@ async def main():
         before = {k: v for k, v in f.record().items() if k != "share"}
         sh = await share.run(f, "api", log=lambda s: None)
         base = "http://127.0.0.1:%d/films/%s/" % (blob.port, f.id)
+        v = media.share_version(f.path("outputs"))
         check(
-            sh.get("image") == base + "share.jpg" and sh.get("thumb") == base + "thumb.jpg",
-            "the pictures' lasting URLs",
+            len(v) == 8
+            and sh.get("image") == base + "share-%s.jpg" % v
+            and sh.get("thumb") == base + "thumb-%s.jpg" % v,
+            "the pictures' lasting URLs, versioned",
             sh,
         )
-        h1, body = BLOBS.get("%s/share.jpg" % f.id, ({}, b""))
+        h1, body = BLOBS.get("%s/share-%s.jpg" % (f.id, v), ({}, b""))
+        with open(f.path("outputs", "share.jpg"), "rb") as fh:
+            same = body == fh.read()
         check(
-            body[:3] == b"\xff\xd8\xff"
+            same
             and h1.get("x-ms-blob-content-type") == "image/jpeg"
-            and "%s/thumb.jpg" % f.id in BLOBS,
+            and "%s/thumb-%s.jpg" % (f.id, v) in BLOBS
+            and "%s/share.jpg" % f.id not in BLOBS,
             "both copied online, as JPEG",
             list(BLOBS),
         )
@@ -363,6 +378,36 @@ async def main():
             "and the run's other fields stay",
             doc,
         )
+
+        # a remade picture gets a new URL; the same picture keeps its URL
+        again = await share.run(f, "api", log=lambda s: None)
+        check(again["image"] == sh["image"], "the same picture: the same URL", again)
+        TINT[0] = 90
+        new = await share.run(f, "api", log=lambda s: None)
+        TINT[0] = 30
+        v2 = media.share_version(f.path("outputs"))
+        check(
+            v2 != v
+            and new["image"] == base + "share-%s.jpg" % v2
+            and new["thumb"] == base + "thumb-%s.jpg" % v2,
+            "a remade picture: a new URL",
+            (sh["image"], new["image"]),
+        )
+        check(f.record()["share"]["image"] == new["image"], "the record names the new one")
+        n = await media.delete(f.id)
+        check(
+            n == 2
+            and "%s/share-%s.jpg" % (f.id, v2) not in BLOBS
+            and "%s/thumb-%s.jpg" % (f.id, v2) not in BLOBS,
+            "delete removes the pictures the record names",
+            (n, sorted(BLOBS)),
+        )
+        check(
+            "%s/share-%s.jpg" % (f.id, v) in BLOBS,
+            "an earlier version is left for the previews already posted",
+            sorted(BLOBS),
+        )
+        sh = new
 
         # no picture: the words still go on the record
         async def no_make(film, channel, draft, want=4):

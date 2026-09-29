@@ -14,7 +14,8 @@ frame and words in its own look), and cut to the page's two sizes (media.make_sh
     outputs/thumb.jpg   1280x720, the thumbnail
     share/draft.json    the words and concepts, keyed by everything they were written from
 
-Both pictures go online beside the film (media.py), and the record gets
+Both pictures go online beside the film (media.py) as share-<v>.jpg and thumb-<v>.jpg, <v> a
+hash of their bytes, so a remade picture gets a new URL. The record gets
     share = {title, description, language, image, thumb, at, key}
 -- image and thumb only when they were made and copied. Nothing here ever fails a film: premake()
 runs after the film is done, and a failure is logged (SHARE) and noted as share_error.

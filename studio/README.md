@@ -265,7 +265,7 @@ at most `STUDIO_THUMB_JOBS` (2) at once. Try them by hand with `python studio/yt
 kitcut.ai shows -- a title (at most 70 characters), a one-line description (at most 155), its
 language, and a picture in the film's own look (the thumbnail machinery above, two concepts instead
 of four; `outputs/share.jpg` 1200x628 and `outputs/thumb.jpg` 1280x720, copied online beside the
-film). It lands on the record as `share` (only that field is written) and in `GET /api/films/{id}`.
+film under names carrying a hash of the pictures, so a remade picture gets a new URL). It lands on the record as `share` (only that field is written) and in `GET /api/films/{id}`.
 It runs in the background and never fails the film; about $0.05-0.13 on the key. Earlier films:
 `python studio/share.py --missing --dry-run` prices it, without it does it (`ops.sh share` on the
 VM). Details: `docs/reference.md` "Share title and image".
