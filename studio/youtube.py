@@ -14,12 +14,16 @@ stopped after a dropped connection, and reports what YouTube answered.
 
 A send is keyed by the site's post id, so asking twice (a retry, a double click, the site
 resuming after this server restarted) never uploads twice: a live send is answered as it stands,
-a finished one with its result. Sends live in memory only. After a restart the site asks again,
-and the session itself says how much of the file YouTube already has.
+a finished one with its result. A send in progress lives in the memory of the server making it
+(its heartbeat names it, so another server answers "sending" rather than start it again); its
+outcome is also written beside the film (youtube/send-<key>.json), so the server a ship handed
+over to can answer for it once the old one has gone. After a crash the site asks again, and the
+session itself says how much of the file YouTube already has.
 """
 
 import os
 import re
+import json
 import time
 import asyncio
 
@@ -53,8 +57,44 @@ def public(job):
     }
 
 
-def get(key):
-    return SENDS.get(key)
+def get(key, film=None):
+    """The send with this key: this server's, else (given its film) the outcome on disk."""
+    job = SENDS.get(key)
+    if job is None and film is not None and isinstance(key, str) and KEY.match(key):
+        job = saved(film, key)
+    return job
+
+
+def in_flight():
+    """The keys of the sends still going, for this server's heartbeat (peers.py)."""
+    return [k for k, j in SENDS.items() if j["state"] == "sending"]
+
+
+def _saved_path(film, key):
+    return film.path("youtube", "send-%s.json" % key)
+
+
+def saved(film, key):
+    """How a send of this film ended (done or failed) as written when it did, or None."""
+    try:
+        with open(_saved_path(film, key), encoding="utf-8") as f:
+            job = json.load(f)
+    except (OSError, ValueError):
+        return None
+    return job if isinstance(job, dict) and job.get("film") == film.id else None
+
+
+def _save(film, job):
+    """A send's outcome beside the film (never fails the send: it is only a record)."""
+    try:
+        path = _saved_path(film, job["key"])
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = "%s.%d.tmp" % (path, os.getpid())
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({k: v for k, v in job.items() if k != "task"}, f)
+        os.replace(tmp, path)
+    except OSError:
+        pass
 
 
 def start(film, client, to, key):
@@ -66,7 +106,7 @@ def start(film, client, to, key):
     path = film.path("outputs", "film.mp4")
     if not os.path.isfile(path):
         raise SendError(409, "This film has no video to send.")
-    job = SENDS.get(key)
+    job = SENDS.get(key) or saved(film, key)
     if job is not None:
         if job["film"] != film.id or job["client"] != client:
             raise SendError(409, "that key belongs to another send")
@@ -77,7 +117,7 @@ def start(film, client, to, key):
     job["size"] = os.path.getsize(path)
     job["t"] = time.time()
     SENDS[key] = job
-    job["task"] = asyncio.get_running_loop().create_task(_run(job, path, to))
+    job["task"] = asyncio.get_running_loop().create_task(_run(job, film, path, to))
     return job
 
 
@@ -87,7 +127,7 @@ def prune(now=None):
         del SENDS[k]
 
 
-async def _run(job, path, to):
+async def _run(job, film, path, to):
     try:
         job["video"] = await _send(job, path, to)
         job["state"] = "done"
@@ -96,6 +136,7 @@ async def _run(job, path, to):
     except Exception as e:  # noqa: BLE001 -- a send must end in a state the site can show
         job["state"], job["error"] = "failed", "The upload stopped: %s" % e
     job["t"] = time.time()
+    _save(film, job)
 
 
 async def _send(job, path, to):
