@@ -868,6 +868,61 @@ async def main():
         )
         check(resume.refuse(stopped, False) is not None, "a done film is not picked up again")
 
+        # ------------------------------------------------ the server stops: interrupted, not cancelled
+        r = await c.post(
+            "/api/films",
+            json={"prompt": "slow, writing when the server stops"},
+            headers=auth | {"X-Client-Ip": "u:s1"},
+        )
+        writing = films.Film.open((await r.json())["id"])
+        rendering = films.Film.create("rendering when the server stops", 5, "drawn", client="u:s2")
+        for f in films.MADE:
+            shutil.copy(os.path.join(ex, f), rendering.dir)
+        rendering.update(state="finishing", claude_cost_usd=0.25)
+        server.start(rendering, finish_only=True)
+        for _ in range(50):  # until the one is in Claude's part and the other past its start
+            await asyncio.sleep(0.2)
+            if writing.state == "claude":
+                break
+        await server.shutdown(None)  # what systemd's SIGTERM runs (app.on_shutdown)
+        with open(writing.path("events.jsonl"), encoding="utf-8") as f:
+            said = [json.loads(x).get("text") for x in f if x.strip()]
+        check(
+            writing.state == "interrupted"
+            and mem.docs[writing.id]["state"] == "interrupted"
+            and said[-1] == agent.INTERRUPTED,
+            "a film being written when the server stops is interrupted, and its page says why",
+        )
+        check(
+            rendering.state == "finishing"
+            and mem.docs.get(rendering.id, {}).get("state") != "failed",
+            "a film being rendered is left finishing, its record not closed (%s)" % rendering.state,
+        )
+        for f in (writing, rendering):  # the next server's memory starts empty
+            server.JOBS.pop(f.id, None)
+        await server.recover(None)
+        st_r = await wait_for(c, auth, rendering.id)
+        check(
+            st_r.get("status") == "done" and abs(st_r.get("claude_cost_usd", 0) - 0.25) < 1e-9,
+            "and the next server finishes it, keeping Claude's cost",
+        )
+        crashed = films.Film.create("left mid-Claude by a crash", 5, "drawn", client="u:s3")
+        crashed.update(state="claude")
+        with open(crashed.path("events.jsonl"), "w", encoding="utf-8") as f:
+            f.write(json.dumps({"type": "tool", "text": "edited film.js", "t": 12.5}) + "\n")
+        await server.recover(None)
+        last = json.loads(open(crashed.path("events.jsonl"), encoding="utf-8").readlines()[-1])
+        check(
+            crashed.state == "interrupted"
+            and last
+            == {
+                "type": "error",
+                "text": agent.INTERRUPTED,
+                "t": 12.5,
+            },
+            "a crash's interrupted film says so on its page too",
+        )
+
         # ------------------------------------------------ drain: running ones finish, queued stay
         server.SCHED = Sched(claude=1)
         r1 = await c.post(

@@ -1,7 +1,11 @@
 # The studio's server on the Azure VM. Installed by studio/deploy/install.sh, which fills in the
 # @...@ paths. Restart=always is the supervisor the laptop never had; Delegate=yes hands the unit's
 # cgroup to the server, which gives every step a cgroup of its own with a memory cap
-# (studio/procs.py, Job); KillMode=control-group means a stopped server takes every step with it.
+# (studio/procs.py, Job). KillMode=mixed: a stop sends SIGTERM to the server alone, which records
+# each film it is making as interrupted (or leaves it finishing for the next server) and kills the
+# film's steps itself; whatever is still running after it exits, or after TimeoutStopSec, is
+# SIGKILLed. control-group sent the SIGTERM to every step at once, so a step could die first and
+# fail its film before the server knew it was stopping.
 [Unit]
 Description=KitCut studio server (studio/server.py)
 After=network-online.target
@@ -25,8 +29,8 @@ ExecStopPost=@REPO@/studio/deploy/announce.sh off
 Restart=always
 RestartSec=5
 Delegate=yes
-KillMode=control-group
-TimeoutStopSec=30
+KillMode=mixed
+TimeoutStopSec=60
 LimitNOFILE=65536
 
 [Install]

@@ -59,7 +59,8 @@ its plan allows: X-At-Once, up to STUDIO_AT_ONCE_MAX, default 2) and STUDIO_PER_
     GET  /api/costs              the spend: total, today, this month, per film, latest runs
     GET  /files/{id}/film.mp4    the film (also film_poster.png, review/sheet.png, and card.jpg:
                                  its 1200x628 link preview, made on first request)
-    GET  /api/health             {"ok", "running", "queued", "slots", "draining"}   (no token)
+    GET  /api/health             {"ok", "busy", "running", "queued", "active", "slots", "draining",
+                                 "release"}   (no token)
     POST /api/admin/films/<id>/hidden  (this machine) {"hidden": true|false}: out of the gallery
                                  (its page and link still work), or back in
     POST /api/admin/drain        (this machine) take no new films, let the running ones finish:
@@ -67,9 +68,12 @@ its plan allows: X-At-Once, up to STUDIO_AT_ONCE_MAX, default 2) and STUDIO_PER_
                                  still queued stay queued, and the next server makes them.
 
 Poll the status; there is no push, because Cloudflare quick tunnels do not carry server-sent
-events. A server that starts finds the films the last one left: queued ones are made, ones that
-were being mixed or rendered are finished, and ones Claude was still writing are marked
-interrupted.
+events. A server that stops (SIGTERM: a restart, a ship, a reboot) tells its films so before it
+cancels them (shutdown()): one Claude was writing is recorded interrupted, one being mixed or
+rendered is left finishing, a queued one stays queued -- only a person's Stop records cancelled.
+A server that starts finds the films the last one left: queued ones are made, ones that were being
+mixed or rendered are finished, and ones Claude was still writing (a crash) are marked
+interrupted. An interrupted film can be picked up again: studio/resume.py.
 """
 
 import os
@@ -80,6 +84,7 @@ import time
 import asyncio
 import secrets
 import argparse
+import contextlib
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -114,6 +119,9 @@ PER_CLIENT_DAILY = int(os.environ.get("STUDIO_PER_CLIENT_DAILY") or 5)
 # never more than this
 AT_ONCE_MAX = int(os.environ.get("STUDIO_AT_ONCE_MAX") or 2)
 KEEP_S = 3600  # a finished film's events stay in memory this long; then they come from disk
+# how long a stopping server waits for its films to write their records (shutdown()): well inside
+# the unit's TimeoutStopSec, after which systemd kills whatever is left
+SHUTDOWN_WAIT_S = 20
 
 
 # ------------------------------------------------------------------ the token
@@ -276,7 +284,10 @@ def start(film, finish_only=False):
             ok = r.get("ok")
             J["status"] = "done" if ok else "error"
         except asyncio.CancelledError:
-            J["status"] = "queued" if J["control"].get("requeue") else "cancelled"
+            c = J["control"]  # drain() requeued it; shutdown() stopped it; else its person did
+            J["status"] = (
+                "queued" if c.get("requeue") else "error" if c.get("shutdown") else "cancelled"
+            )
         except Exception as e:  # noqa: BLE001 -- make_film reports its own; this is the backstop
             emit({"type": "error", "text": str(e)})
             J["status"] = "error"
@@ -304,11 +315,40 @@ async def recover(app):
                 error=why,
                 finished=datetime.now().isoformat(timespec="seconds"),
             )
+            # and on its page, which otherwise shows its log stopping mid-sentence
+            last_word(f, {"type": "error", "text": agent.INTERRUPTED})
             await agent.save(
                 f.id,
                 {"state": "interrupted", "ok": False, "error": why, "finished_at": store.now()},
                 final=True,
             )
+
+
+def last_word(film, ev):
+    """One more line on the log of a film no server is making (its time: the log's last)."""
+    log = film.path("events.jsonl")
+    t = 0.0
+    with contextlib.suppress(OSError, ValueError, IndexError, KeyError):
+        with open(log, encoding="utf-8") as f:
+            t = json.loads([x for x in f if x.strip()][-1])["t"]
+    with open(log, "a", encoding="utf-8") as f:
+        f.write(json.dumps({**ev, "t": t}, ensure_ascii=False) + "\n")
+
+
+async def shutdown(app):
+    """systemd is stopping the server (a restart, a ship, a reboot): every film being made is told
+    why before it is cancelled, so it is recorded interrupted, or left finishing for the next
+    server to mix and render, or left queued -- not cancelled, which is its person pressing Stop.
+    Until 2026-09-29 a restart and a Stop were the same bare cancel, and a ship's restart recorded
+    a paying film as cancelled by its person (docs/known-issues.md KI-031). The films' own records
+    are written before this returns (make_film's finally), inside the unit's TimeoutStopSec."""
+    tasks = []
+    for J in live(("queued", "running")):
+        J["control"]["shutdown"] = True
+        J["task"].cancel()
+        tasks.append(J["task"])
+    if tasks:
+        await asyncio.wait(tasks, timeout=SHUTDOWN_WAIT_S)
 
 
 # ------------------------------------------------------------------ routes
@@ -1014,6 +1054,7 @@ def make_app(token):
         ]
     )
     app.on_startup.append(recover)
+    app.on_shutdown.append(shutdown)
     return app
 
 
@@ -1025,13 +1066,18 @@ def main():
     args = ap.parse_args()
     if not procs.secret("ANTHROPIC_API_KEY"):  # fail now, not on the first request
         sys.exit("ANTHROPIC_API_KEY is not set (put it in the studio's .env)")
+    # the steps' cgroups, before any child exists: set up lazily at the first step, a Claude Code
+    # child already in the unit's cgroup made it fail (EBUSY) and every step ran uncapped
+    procs.cgroup_root()
     app = make_app(ensure_token())
     print(
         "Sketch Studio on http://127.0.0.1:%d  (code %s, home %s)"
         % (args.port, films.RELEASE, films.HOME),
         flush=True,
     )
-    web.run_app(app, host="127.0.0.1", port=args.port, print=None)
+    # a short wait for open requests (page polls), so the films' records are written well inside
+    # the unit's TimeoutStopSec (kitcut-studio.service) rather than cut off by its SIGKILL
+    web.run_app(app, host="127.0.0.1", port=args.port, print=None, shutdown_timeout=5)
 
 
 if __name__ == "__main__":

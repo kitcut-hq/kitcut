@@ -134,6 +134,7 @@ def main():
     if args.plan:
         return
     emit = logger(film)
+    agent.procs.cgroup_root()  # the steps' cgroups, before Claude Code is started (server.main)
     if args.finish:
         film.update(state="finishing", ok=None, error=None, finished=None)
     r = asyncio.run(

@@ -969,8 +969,18 @@ async def make_film(
         emit({"type": "done", **summary})
     except asyncio.CancelledError:
         tools.kill()
-        if control.get("requeue") and film.state == "queued":
+        # a stopping server (server.shutdown) says so first: that is not its person pressing Stop
+        stopping = control.get("shutdown")
+        if (control.get("requeue") or stopping) and film.state == "queued":
             state = "queued"  # the next server makes it; nothing was spent
+            raise
+        if stopping and film.state == "finishing":
+            state = "finishing"  # Claude's part is whole: the next server mixes and renders it
+            raise
+        if stopping:
+            state = "interrupted"
+            summary.update(ok=False, error=INTERRUPTED, seconds=round(time.time() - t0, 1))
+            emit({"type": "error", "text": INTERRUPTED})
             raise
         state = "cancelled"
         summary.update(ok=False, error="cancelled", seconds=round(time.time() - t0, 1))
@@ -984,7 +994,7 @@ async def make_film(
         emit({"type": "error", "text": text})
     finally:
         tools.kill()  # nothing of this film's keeps running
-        if state != "queued":
+        if state not in ("queued", "finishing"):  # those two are the next server's to finish
             summary.setdefault("ok", False)
             if not summary["ok"]:
                 summary.setdefault("error", "stopped before it finished")
@@ -994,7 +1004,13 @@ async def make_film(
                 state=state, **summary, finished=datetime.now().isoformat(timespec="seconds")
             )
             final = {
-                "state": {"done": "done", "cancelled": "cancelled"}.get(state, "failed"),
+                # kitcut.ai settles its credits on these names (sketch-studio lib/credits.js):
+                # done is charged, the rest given back
+                "state": {
+                    "done": "done",
+                    "cancelled": "cancelled",
+                    "interrupted": "interrupted",
+                }.get(state, "failed"),
                 "ok": summary["ok"],
                 "error": summary.get("error"),
                 "calls": meter.calls(),
@@ -1073,6 +1089,8 @@ WRAP_UP = (
 )
 
 
+# what a film the studio stopped under it says (make_film on a shutdown; server.recover after a crash)
+INTERRUPTED = "The studio restarted before this film was finished."
 # a film picked up after the studio stopped under it (make_film resume=True): at most this much
 # working time, and at least this much, whatever the film's own limit has left
 RESUME_S, RESUME_MIN_S = 20 * 60, 5 * 60

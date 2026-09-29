@@ -487,9 +487,24 @@ rendering was recorded cancelled too, so the next server never finished it.
 **Fix.** `serve.sh` reads `STUDIO_HOME` from the unit, refuses to restart unless `current` names
 what it built, skips a restart onto what is already live, and holds `deploy.lock`. `ops.sh resume`
 (`studio/resume.py`) finishes a stopped film through Claude's own saved session, in the same film,
-its earlier cost carried. Still to come: a shutdown recorded as `interrupted` (and a film that was
-mixing left for the next server to finish), then deploys that never wait on or stop a film -- one
-server per release, the old one finishing its films while the new one takes the new ones.
+its earlier cost carried. A stopping server tells its films why (`server.shutdown()`): one Claude
+was writing is recorded `interrupted` with a line on its page, one being mixed or rendered is left
+`finishing` for the next server, and the unit runs `KillMode=mixed`. Still to come: deploys that
+never wait on or stop a film -- one server per release, the old one finishing its films while the
+new one takes the new ones.
 **Evidence.** VM journal 2026-09-28 17:19:13 PDT (`Stopping kitcut-studio.service` in the same second
 as the film's last event); `/srv/kitcut/kitcut-studio/releases/266ba5829609` built beside the
 server's home; ship sessions from the laptop at 16:58, 17:08 and 17:13.
+
+### KI-032 · fixed · studio · On the VM every film step ran with no memory cap
+
+**Symptom.** The studio's log on the VM: `procs: no delegated cgroup ([Errno 16] Device or resource
+busy): steps run with no memory cap` (2026-09-28 13:40 and 16:08, once per server start). The unit's
+cgroup had no `server/` leaf and an empty `cgroup.subtree_control`.
+**Cause.** `procs.cgroup_root()` was set up lazily, at the first step. By then the first film's
+Claude Code child was already running in the unit's cgroup, and cgroup v2 refuses to hand the memory
+controller to children while the group itself holds a process. The failure is cached, so the
+server ran uncapped for its whole life.
+**Fix.** `server.main()` (and `resume.py`) call `procs.cgroup_root()` at start, before any child.
+**Evidence.** `/sys/fs/cgroup/system.slice/kitcut-studio.service`: `subtree_control` empty, no
+`server/`, on 2026-09-28 after films had run; the same EBUSY in the first `ops.sh resume` unit.

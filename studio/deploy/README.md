@@ -58,6 +58,14 @@ Two guards, both from one bad evening (2026-09-28, film `rts664` killed after 28
 - **One deploy at a time.** `release`, `use` (a rollback), `restart` and `stop` take
   `STUDIO_HOME/deploy.lock` (`flock`). Three ships overlapped that evening, each draining and
   restarting on its own; a second one now stops at once and prints who holds the lock.
+- **A restart says what it did.** A stop reaches the server as SIGTERM, and `server.shutdown()`
+  tells each film it is making before cancelling it: one Claude was writing is recorded
+  *interrupted* ("The studio restarted before this film was finished." on its page; kitcut.ai
+  gives the credits back), one being mixed or rendered stays *finishing* and the next server
+  finishes it, a queued one stays queued. Only its person's Stop records *cancelled*. The unit
+  runs `KillMode=mixed` (SIGTERM to the server alone, which stops the film's steps itself;
+  `control-group` sent it to every step at once) and `TimeoutStopSec=60` -- a change to the unit
+  file needs `bash studio/deploy/install.sh` on the VM (it re-renders the units and reloads).
 
 ## A film the studio stopped half-way
 
