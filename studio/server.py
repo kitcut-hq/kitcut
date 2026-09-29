@@ -467,6 +467,8 @@ def start(film, finish_only=False):
             )
             ok = r.get("ok")
             J["status"] = "done" if ok else "error"
+            if ok:  # its moments sheet now, so a YouTube draft does not wait for it
+                thumbs.premake(film)
         except asyncio.CancelledError:
             c = J["control"]  # drain() requeued it; shutdown() stopped it; else its person did
             J["status"] = (
@@ -867,6 +869,7 @@ def limits_doc():
             str(n): {
                 "claude_minutes": films.limits(n)["claude_s"] // 60,
                 "paintings": films.limits(n)["images"],
+                "cutouts": films.limits(n)["cutouts"],  # a collage film's (film.CAPS)
                 "narration_lines": films.limits(n)["lines"],
             }
             for n in sample

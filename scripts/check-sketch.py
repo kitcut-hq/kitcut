@@ -4,7 +4,9 @@
 Exercises the pieces a paid or slow run would otherwise be the first to reach: the score
 notation and every event type, every SFX and drum generator, the speech ducker, the
 tail-word cut that fixes eleven_v3's clipped endings, word timings with [audio tags],
-caption chunking, and the page bundler against the committed example film.
+caption chunking, the cut-outs a collage is built from (specks, trim, paper border, the key off
+a white ground, and cache keys that stay put for scenes), and the page bundler against the
+committed example film.
 
 After touching _sketch.py, _sketchaudio.py, sketch-vo.py, sketch-audio.py, sketch-render.py or
 anything under sketch/, run it.
@@ -14,6 +16,7 @@ Invoke as:  python scripts/check-sketch.py
 
 import sys
 import os
+import re
 import json
 import shutil
 import argparse
@@ -24,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
 import numpy as np  # noqa: E402
+from fontTools.ttLib import TTFont  # noqa: E402
 
 import _sketch  # noqa: E402
 import _sketchaudio as A  # noqa: E402
@@ -39,6 +43,35 @@ def check(name, ok, detail=""):
     )
     if not ok:
         FAILS.append(name)
+
+
+def cyrillic():
+    """Cyrillic in collage films: every face collage.js stands in for (SK.NO_CYRILLIC) lacks the
+    Ukrainian letters, and every stand-in has all of them (fonts/SOURCES.md)."""
+    uk = "АБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯ"
+    uk += uk.lower() + "\u2019"
+    cover = {}  # family -> does every face of it draw every letter
+    for n in os.listdir(os.path.join(_env.ROOT, "fonts")):
+        if n.endswith(".ttf"):
+            f = TTFont(os.path.join(_env.ROOT, "fonts", n), lazy=True)
+            fam, cmap = f["name"].getDebugName(1), f.getBestCmap()
+            cover[fam] = cover.get(fam, True) and all(ord(c) in cmap for c in uk)
+    with open(os.path.join(_env.ROOT, "sketch", "collage.js"), encoding="utf-8") as f:
+        src = f.read()
+    table = re.findall(
+        r"'([^']+)': \['([^']+)', \d+\]", src.split("SK.NO_CYRILLIC = {")[1].split("};")[0]
+    )
+    check("cyrillic: a stand-in for each Latin-only face", len(table) == 4, str(table))
+    check(
+        "cyrillic: the faces stood in for have no Cyrillic",
+        all(cover.get(a) is False for a, _ in table),
+        str({a: cover.get(a) for a, _ in table}),
+    )
+    check(
+        "cyrillic: every stand-in has all of it",
+        all(cover.get(b) is True for _, b in table),
+        str({b: cover.get(b) for _, b in table}),
+    )
 
 
 def main():
@@ -268,6 +301,82 @@ def main():
         str(cues),
     )
 
+    # ---- cut-outs (sketch-paint.py): a collage's pictures, made without a single paid call
+    import io
+
+    from PIL import Image
+
+    paint = import_module("sketch-paint")
+    a = np.zeros((400, 400, 4), np.uint8)
+    yy, xx = np.mgrid[:400, :400]
+    disc = (xx - 200) ** 2 + (yy - 200) ** 2 < 90**2
+    a[disc] = (40, 60, 90, 255)
+    a[10:14, 10:14] = (0, 0, 0, 255)  # a stray speck, the kind image models leave
+    buf = io.BytesIO()
+    Image.fromarray(a).save(buf, "PNG")
+    cut = np.asarray(paint.cutout(buf.getvalue(), border=12, cut="scissor", long_side=400))
+    h, w = cut.shape[:2]
+    check("cutout: trimmed round the subject", abs(w - h) < 6 and 400 < w < 470, "%dx%d" % (w, h))
+    check("cutout: the speck is gone, the corners clear", cut[0, 0, 3] == 0 and cut[4, 4, 3] == 0)
+    rim = cut[h // 2, 6]  # just inside the left edge: the paper border, not the subject
+    check("cutout: a white paper border round it", rim[3] > 200 and min(rim[:3]) > 230, str(rim))
+    mid = cut[h // 2, w // 2]
+    check(
+        "cutout: the subject itself untouched",
+        all(abs(int(v) - c) <= 2 for v, c in zip(mid[:3], (40, 60, 90), strict=True)),
+        str(mid),
+    )
+    bare = np.asarray(paint.cutout(buf.getvalue(), border=0, long_side=400))
+    edge = bare[bare.shape[0] // 2, 2]
+    check(
+        "cutout: border 0 leaves it bare",
+        max(bare.shape[:2]) == 400 and bare[0, 0, 3] == 0 and max(edge[:3]) < 120,
+        "%s %s" % (bare.shape, edge),
+    )
+    white = np.full((300, 300, 3), 255, np.uint8)
+    white[100:200, 100:200] = (30, 30, 30)
+    white[140:160, 140:160] = 255  # white inside the subject stays
+    k = paint.matte_white(np.dstack([white, np.full((300, 300), 255, np.uint8)]))
+    check(
+        "matte: the white ground keyed off, the subject and its own white kept",
+        k[5, 5, 3] == 0 and k[150, 110, 3] == 255 and k[150, 150, 3] == 255,
+    )
+    scene = {"name": "kitchen", "prompt": "a kitchen"}
+    spec = {"backend": "muse", "model": "meta/muse-image", "style": "ink"}
+    check(
+        "cutouts: a scene keeps its cache key when the block gains cut-outs",
+        paint.fingerprint(spec, scene)
+        == paint.fingerprint({**spec, "cutouts": {"border": 9}}, scene),
+    )
+    cutim = {"name": "cone", "prompt": "a cone", "cutout": True}
+    check(
+        "cutouts: a cut-out is a .webp with its own model",
+        paint.ext(spec, cutim) == ".webp"
+        and paint.ext(spec, scene) == ".jpg"
+        and paint.cut_spec(spec, cutim)["model"] == paint.CUTOUT_MODEL,
+    )
+    check(
+        "cutouts: asked for alone, on white only when the model cannot do alpha",
+        paint.CUTOUT_TEXT in paint.full_prompt(spec, cutim, transparent=True)
+        and paint.CUTOUT_ON_WHITE not in paint.full_prompt(spec, cutim, transparent=True)
+        and paint.CUTOUT_ON_WHITE in paint.full_prompt(spec, cutim)
+        and paint.NO_TEXT in paint.full_prompt(spec, scene),
+    )
+    caps = {
+        "supported_parameters": {
+            "background": {"values": ["auto", "transparent"]},
+            "aspect_ratio": {"values": ["1:1", "2:3", "3:2", "16:9"]},
+        }
+    }
+    p = paint.pick_params(caps, aspect="2:3", transparent=True)
+    check(
+        "cutouts: alpha and shape sent where offered",
+        p.get("background") == "transparent" and p.get("aspect_ratio") == "2:3",
+        str(p),
+    )
+
+    cyrillic()
+
     # ---- the bundler, against the committed example
     ex = os.path.join(_env.ROOT, "config", "sketch", "example")
     tmp = tempfile.mkdtemp(prefix="check-sketch-")
@@ -282,6 +391,7 @@ def main():
                 "__TITLE__",
                 "__ENGINE__",
                 "__PROPS__",
+                "__MODULES__",
                 "__FILM__",
                 "__FONTFACES__",
                 "__VO__",
@@ -291,6 +401,42 @@ def main():
         ]
         check("bundle: every placeholder filled", not left, str(left))
         check("bundle: fonts inlined", "data:font/woff2;base64," in page)
+        check("bundle: no module a film did not ask for", "SK.cutout = function" not in page)
+        page3 = render.bundle(dict(m, modules=["collage"]), audio=False)
+        check(
+            "bundle: a module it asks for, named in an error",
+            "SK.cutout = function" in page3 and "sourceURL=sketch/collage.js" in page3,
+        )
+        own = os.path.join(tmp, "engine")  # a film's own engine copy (Sketch Studio's)
+        os.makedirs(own)
+        for n in ("engine.js", "props.js", "collage.js"):
+            shutil.copyfile(os.path.join(_env.ROOT, "sketch", n), os.path.join(own, n))
+        with open(os.path.join(own, "collage.js"), "a", encoding="utf-8") as f:
+            f.write("\n// the film's own collage.js\n")
+        page4 = render.bundle(dict(m, modules=["collage"], _engine=own), audio=False)
+        check(
+            "bundle: the film's own copy of a module wins",
+            "the film's own collage.js" in page4 and "sourceURL=engine/collage.js" in page4,
+        )
+        try:
+            render.bundle(dict(m, modules=["nope"]), audio=False)
+            unknown = False
+        except SystemExit:
+            unknown = True
+        check("bundle: a module there is none of stops it", unknown)
+        m["fonts"].append(
+            {
+                "file": "fonts/OldStandard-Italic.ttf",
+                "family": "Old Standard TT",
+                "weight": "400",
+                "style": "italic",
+            }
+        )
+        page2 = render.bundle(m, audio=False)
+        check(
+            "bundle: an italic face is declared and loaded as italic",
+            "font-style: italic" in page2 and 'italic 400 60px \\"Old Standard TT\\"' in page2,
+        )
         art = render.artifact_flavour(page)
         check(
             "artifact: no html/head/body wrapper",

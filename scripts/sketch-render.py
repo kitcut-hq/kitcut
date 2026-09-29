@@ -26,7 +26,9 @@ render ({cq, preset, audio_bitrate, encoder, encode}: encode "browser" has the p
 frames, see --encode),
 tail ({secs, scripts, images, audio}: a closing after the film -- `secs` more of picture, drawn by
 `scripts` run after film.js, which lengthen SK._film; its sound is sketch-audio's),
-cast ("cast": a folder whose <name>.js files each run before film.js, as SK.cast.<name>).
+cast ("cast": a folder whose <name>.js files each run before film.js, as SK.cast.<name>),
+modules (["collage"]: engine extensions a film opts into, sketch/<name>.js -- the film's own
+engine folder first -- run after props.js; "collage" is the cut-outs and paper pieces).
 
 Invoke as:
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --plan
@@ -154,6 +156,25 @@ def scene_scripts(m):
     return "\n".join(out)
 
 
+def module_scripts(m):
+    """ "modules": ["collage"] -- engine extensions only some films need, so every other film's
+    page does not carry them. Each is sketch/<name>.js, or the same file in the film's own
+    engine folder when it has one (Sketch Studio's per-film copy may extend it), and names
+    the one it ran from in an error: engine/<name>.js is the film's copy."""
+    out = []
+    for name in m.get("modules") or []:
+        _sketch.safe_name(name, "module")
+        for d in (m["_engine"], SKETCH):
+            p = os.path.join(d, name + ".js")
+            if os.path.exists(p):
+                break
+        else:
+            sys.exit("module %r: no sketch/%s.js" % (name, name))
+        where = "sketch" if os.path.samefile(d, SKETCH) else "engine"
+        out.append("<script>\n%s\n//# sourceURL=%s/%s.js\n</script>" % (read_text(p), where, name))
+    return "\n".join(out)
+
+
 def bundle(m, audio=True):
     """The player page with everything inlined. Returns the HTML text."""
     with open(os.path.join(SKETCH, "player.html"), encoding="utf-8") as f:
@@ -162,13 +183,15 @@ def bundle(m, audio=True):
     for fnt in m.get("fonts", []):
         p = _env.resolve(fnt["file"])
         fmt = "woff2" if p.endswith(".woff2") else "truetype"
+        style = fnt.get("style", "normal")  # "italic" for a family's italic face
         faces.append(
             "@font-face { font-family: '%s'; src: url(data:font/%s;base64,%s) format('%s'); "
-            "font-weight: %s; font-display: block; }"
-            % (fnt["family"], fmt, b64(p), fmt, fnt.get("weight", "400"))
+            "font-weight: %s; font-style: %s; font-display: block; }"
+            % (fnt["family"], fmt, b64(p), fmt, fnt.get("weight", "400"), style)
         )
+        italic = "italic " if fnt.get("style") == "italic" else ""
         for w in str(fnt.get("load", fnt.get("weight", "400"))).split():
-            loads.append('%s 60px "%s"' % (w, fnt["family"]))
+            loads.append('%s%s 60px "%s"' % (italic, w, fnt["family"]))
     pl = {
         "accent": "#d9733f",
         "paper": "#f7f2e7",
@@ -197,6 +220,7 @@ def bundle(m, audio=True):
         # the film's own engine folder when its manifest names one (Sketch Studio's per-film copy)
         "__ENGINE__": read_text(os.path.join(m["_engine"], "engine.js")),
         "__PROPS__": read_text(os.path.join(m["_engine"], "props.js")),
+        "__MODULES__": module_scripts(m),
         "__CAST__": cast_scripts(m),
         "__FILM__": film,
         "__SCENES__": scene_scripts(m),

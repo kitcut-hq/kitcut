@@ -19,7 +19,8 @@ bash studio/deploy/ops.sh ship [<commit>]           # default: origin/studio-poc
 bash studio/deploy/ops.sh releases                  # built releases, the leader's marked *
 bash studio/deploy/ops.sh rollback <sha12>          # back to one already built, no rebuild
 bash studio/deploy/ops.sh migrate [<commit>]        # ONCE per machine (see the rules)
-bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--api]   # on the Claude login unless --api
+bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--look collage] [--unlisted] [--api]
+                                                    # on the Claude login unless --api
 bash studio/deploy/ops.sh watch <film-id>
 bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]  # finish a film the studio stopped
 bash studio/deploy/ops.sh pull <film-id> [dest] [--all]

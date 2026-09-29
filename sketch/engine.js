@@ -619,6 +619,8 @@
     PAPER = PAPERS.get(key).paper; TOOTH = PAPERS.get(key);
   }
   function tooth() { return (TOOTH.tooth ??= ctx.createPattern(paperCanvas(null, TOOTH.T), 'repeat')); }
+  /** the paper's grain on `fill` in tints T (collage.js makes sheets of any colour from it) */
+  SK.paperCanvas = (fill, T) => paperCanvas(fill, { ...TINT, ...(T || {}) });
   SK.makeTextures = function () {
     PAPERS.clear(); makePaper();
     GRAIN.length = 0;
@@ -762,7 +764,7 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
     if (F.speedLines !== false) speedLines(F.camera, t);
     if (F.overlay) F.overlay(t);
-    const gb = Math.floor(t * 8);
+    const gb = Math.floor(t * (SK.style.grainFps ?? 8));
     if (SK.style.grain > 0) { ctx.globalAlpha = SK.style.grain; ctx.fillStyle = GRAIN[gb % 4]; ctx.save(); ctx.translate((gb * 37) % 256, (gb * 71) % 256); ctx.fillRect(-256, -256, W + 512, H + 512); ctx.restore(); ctx.globalAlpha = 1; }
     const vg = ctx.createRadialGradient(W / 2, H / 2, H * .45, W / 2, H / 2, H * 1.05), vrgb = SK.ground.vignette ?? '60,40,20';
     vg.addColorStop(0, `rgba(${vrgb},0)`); vg.addColorStop(1, `rgba(${SK.style.vignetteRGB ?? vrgb},${SK.style.vignette})`);

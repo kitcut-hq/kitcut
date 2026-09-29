@@ -20,7 +20,8 @@
 #   bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]   pick up a film the studio
 #                                                     stopped half-way (studio/resume.py), in the
 #                                                     same film; --plan spends nothing
-#   bash studio/deploy/ops.sh film "<idea>" [--seconds N] [--api]   a film made on the VM itself
+#   bash studio/deploy/ops.sh film "<idea>" [--seconds N] [--look L] [--unlisted] [--api]
+#                                                    a film made on the VM itself
 #                                                     (on the Claude login unless --api), followed
 #   bash studio/deploy/ops.sh watch <film-id>         follow a film to the end
 #   bash studio/deploy/ops.sh pull <film-id> [dest] [--all]   its outputs (or the whole folder) here
@@ -277,13 +278,15 @@ EOF
     ;;
 
   film)
-    idea="${1:?film \"<idea>\" [--seconds N] [--api]}"; shift
-    secs=30; auth=""
+    idea="${1:?film \"<idea>\" [--seconds N] [--look L] [--unlisted] [--api]}"; shift
+    secs=30; auth=""; look=drawn; listed=1
     while [ $# -gt 0 ]; do
-      case "$1" in --seconds) secs="$2"; shift ;; --api) auth=', "auth": "api"' ;; esac
+      case "$1" in --seconds) secs="$2"; shift ;; --look) look="$2"; shift ;; --unlisted) listed=0 ;;
+        --api) auth=', "auth": "api"' ;; esac
       shift
     done
-    body="$(python -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1], "seconds": int(sys.argv[2])}))' "$idea" "$secs")"
+    # --look: drawn, painted, collage (the studio refuses one it does not have); --unlisted: link-only
+    body="$(python -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1], "seconds": int(sys.argv[2]), "look": sys.argv[3], "listed": sys.argv[4] == "1"}))' "$idea" "$secs" "$look" "$listed")"
     body="${body%\}}$auth}"
     [ "$DRY" = 1 ] && { echo "  would POST $body to the VM's studio"; exit 0; }
     id="$(printf '%s' "$body" | on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/films -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' --data-binary @-" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("id") or sys.exit(json.dumps(d)))')"

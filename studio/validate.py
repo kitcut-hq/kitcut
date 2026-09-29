@@ -24,18 +24,20 @@ sys.path.insert(
 import _sketch  # noqa: E402
 import _sketchaudio as A  # noqa: E402
 
-from film import ENGINE, PAINT_PINNED, VO_PINNED, limits  # noqa: E402
+from film import PAINT_PINNED, VO_PINNED, limits, paint_kinds  # noqa: E402
 
 VOICES = tuple(import_module("sketch-vo").GEMINI_VOICES)
 MAX_JS = 256 * 1024  # film.js: the prompt asks for ~200 lines
-MAX_ENGINE_JS = 400 * 1024  # engine.js + props.js are ~85 KB together
+MAX_ENGINE_JS = 400 * 1024  # each engine file: engine.js + props.js are ~105 KB together
 MAX_CAST_JS = 64 * 1024  # one cast member (library.MAX_BYTES)
 MAX_JSON = 64 * 1024
 MAX_SCENE_JS = 64 * 1024  # one scene of a film made in scenes: 12-75 s, not a whole film
 VO_KEYS = set(VO_PINNED) | {"model", "voice", "style", "language", "lines"}
 VO_LINE_KEYS = {"text", "start"}
 MAX_LINE_CHARS = 300  # and at most film.limits()["lines"] lines
-PAINT_KEYS = set(PAINT_PINNED) | {"style", "images"}
+PAINT_KEYS = set(PAINT_PINNED) | {"style", "images", "cutouts"}
+# a cut-out (film.CAPS "cutouts") is painted on a canvas of its own shape
+ASPECTS = ("1:1", "2:3", "3:2", "3:4", "4:3", "16:9", "9:16")
 LANG = re.compile(r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$")
 
 
@@ -93,7 +95,7 @@ def _vo(d, max_lines, length=60):
     return out
 
 
-def _paint(d, length):
+def _paint(d, length, caps):
     out = []
     if not isinstance(d, dict):
         return ["paint.json must be an object"]
@@ -103,7 +105,9 @@ def _paint(d, length):
     if not isinstance(d.get("style", ""), str) or len(d.get("style", "")) > 400:
         out.append("paint.json: style is one line of text (at most 400 characters)")
     ims = d.get("images", [])
-    cap = limits(length)["images"]
+    kinds = paint_kinds(caps)  # what this film's capabilities paint (film.CAPS)
+    cap = sum(limits(length)[kind["cap"]] for kind in kinds)
+    keys = {"name", "prompt", "ref"} | {k for kind in kinds for k in kind["keys"]}
     if not isinstance(ims, list) or len(ims) > cap:
         return out + ["paint.json: images is a list of at most %d" % cap]
     names = [im.get("name") for im in ims if isinstance(im, dict)]
@@ -119,11 +123,29 @@ def _paint(d, length):
             out.append("paint.json: image %d needs a prompt (at most 2000 characters)" % i)
         if "ref" in im and (im["ref"] not in names or im["ref"] == im.get("name")):
             out.append("paint.json: image %d ref must name another image" % i)
-        if set(im) - {"name", "prompt", "ref"}:
-            out.append("paint.json: image %d may only have name, prompt and ref" % i)
+        if set(im) - keys:
+            out.append("paint.json: image %d may only have %s" % (i, ", ".join(sorted(keys))))
+        c = im.get("cutout", False)
+        if not (isinstance(c, bool) or (isinstance(c, dict) and _cut_ok(c))):
+            out.append(
+                'paint.json: image %d cutout is true, or {"border": 0-40, "cut": "scissor"|"round"}'
+                % i
+            )
+        if "aspect" in im and im["aspect"] not in ASPECTS:
+            out.append("paint.json: image %d aspect is one of %s" % (i, ", ".join(ASPECTS)))
     if len(set(names)) != len(names):
         out.append("paint.json: image names must be unique")
     return out
+
+
+def _cut_ok(c):
+    b = c.get("border", 12)
+    return (
+        not set(c) - {"border", "cut"}
+        and isinstance(b, int)
+        and 0 <= b <= 40
+        and c.get("cut", "scissor") in ("scissor", "round")
+    )
 
 
 def _inst(where, inst, out):
@@ -153,6 +175,14 @@ def _score(d, length=60):
         bars = limits(length)["drum_bars"]
         if e.get("type") == "drums" and not _num(e.get("bars", 1), 0, bars):
             out.append("score.json event %d: drums bars at most %d" % (i, bars))
+        # a piece the kit has no sound for fails only when the soundtrack renders (a collage
+        # film asked for a 'crash' on 2026-09-28): name it here, with the ones there are
+        kit = e.get("kit") if e.get("type") == "drums" else None
+        if isinstance(kit, dict) and set(kit) - set(A.DRUM_PAN):
+            out.append(
+                "score.json event %d: drums has no %s; the kit is %s"
+                % (i, ", ".join(sorted(set(kit) - set(A.DRUM_PAN))), ", ".join(A.DRUM_PAN))
+            )
     return out
 
 
@@ -185,7 +215,7 @@ def _sfx(d, length):
 
 def problems(film, name):
     """What is wrong with one of Claude's files ([] when nothing, or when it is not there yet)."""
-    if name in ENGINE or name.startswith("engine"):
+    if name.startswith("engine"):
         p = film.path("engine", os.path.basename(name))
         if os.path.exists(p) and os.path.getsize(p) > MAX_ENGINE_JS:
             return ["%s is over %d KB" % (name, MAX_ENGINE_JS // 1024)]
@@ -213,7 +243,7 @@ def problems(film, name):
     if name == "vo.json":
         return _vo(d, limits(film.length)["lines"], film.length)
     if name == "paint.json":
-        return _paint(d, film.length)
+        return _paint(d, film.length, film.caps)
     if name == "score.json":
         return _score(d, film.length)
     if name == "sfx.json":
@@ -313,7 +343,7 @@ def _scenes(d, film):
 def gate(film):
     """Everything wrong in all of Claude's files."""
     out = []
-    names = film.editable() + tuple("engine/" + n for n in ENGINE)
+    names = film.editable() + tuple("engine/" + n for n in film.engine_files())
     if os.path.isdir(film.path("scenes")):
         names += tuple("scenes/" + n for n in sorted(os.listdir(film.path("scenes"))))
     for name in names:

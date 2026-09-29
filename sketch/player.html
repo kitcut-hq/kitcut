@@ -54,9 +54,10 @@ body.render canvas { border-radius: 0; box-shadow: none; }
 // A syntax or top-level error in the film throws before the player below is listening; report the
 // first one now, or a render sits out its 90 s stall timeout and then says nothing useful.
 window.__early = function (e) {
-  if (window.__earlyErr || !/[?&](render|export|encode|stills|automation)=/.test(location.search)) return;
-  // a cast member's or a scene's script names itself (sketch-render: //# sourceURL=cast/<name>.js)
-  const cast = /((?:cast|scenes)\/[a-z0-9_-]+\.js)$/.exec(e.filename || '');
+  if (window.__earlyErr || !/[?&](render|export|encode|stills|automation|probe)=/.test(location.search)) return;
+  // a cast member, a scene or a module names itself (sketch-render: //# sourceURL=cast/<name>.js,
+  // scenes/<NN-slug>.js, sketch/<name>.js, or engine/<name>.js for a film's own copy of a module)
+  const cast = /((?:cast|scenes|sketch|engine)\/[a-z0-9_-]+\.js)$/.exec(e.filename || '');
   window.__earlyErr = String(e.message) + ' @' + (cast ? cast[1] + ':' : '') + e.lineno;
   fetch('error', { method: 'POST', body: window.__earlyErr });
 };
@@ -68,6 +69,7 @@ __ENGINE__
 <script>
 __PROPS__
 </script>
+__MODULES__
 __CAST__
 <script>
 SK.VO = __VO__;
@@ -119,6 +121,7 @@ __SCENES__
         if (Q.has('export')) {
           const fps = +Q.get('fps') || 60, from = +(Q.get('from') || 0), to = +(Q.get('to') || DUR);
           const n = Math.round((to - from) * fps);
+          SK.FPS = fps; // a clock in the film may divide it (collage.js SK.stepFps)
           // raw RGBA, not PNG: toBlob() fills Chromium's blob store faster than GC frees it
           // ("Failed to fetch" after ~100 frames), and skipping the PNG round trip is faster too
           const cx2 = cv.getContext('2d');
@@ -129,6 +132,7 @@ __SCENES__
           // frame, which is what capped ?export (_encode.webcodecs() has the measurements)
           const fps = +Q.get('fps') || 60, from = +(Q.get('from') || 0), to = +(Q.get('to') || DUR);
           const n = Math.round((to - from) * fps);
+          SK.FPS = fps; // a clock in the film may divide it (collage.js SK.stepFps)
           const E = JSON.parse(Q.get('encode'));
           const sup = await VideoEncoder.isConfigSupported(E.config);
           // sketch-render falls back to ?export on this exact prefix

@@ -4,7 +4,8 @@
         sketch.json  studio.json  events.jsonl           the studio's (Claude reads, never writes)
         inputs\\upload1.jpg voice1.webm doc1.md         what the visitor attached (uploads.py)
         film.js score.json sfx.json vo.json [paint.json] Claude's
-        engine\\engine.js engine\\props.js                 the film's own copy of the engine
+        engine\\engine.js engine\\props.js                 the film's own copy of the engine, and
+        [engine\\collage.js]                             its capabilities' modules (CAPS)
         cast\\<name>.js                                   the person's cast (library.py): loaded
                                                          before film.js, kept for their next films
         library\\                                        their earlier films, the cast drawn (read)
@@ -37,6 +38,7 @@ import secrets
 import difflib
 import contextlib
 import subprocess
+from collections import Counter
 from datetime import datetime
 
 import locks
@@ -65,11 +67,14 @@ LEGACY = os.path.join(REPO, "projects")
 # seconds a visitor may ask for: the site sells them by the second, and decides who may have
 # what (films over a minute are for its Pro plan, up to 8 minutes)
 LENGTHS = tuple(range(5, 485, 5))
-# drawn: everything drawn in code; painted: an image model paints the scenes, the code animates
-LOOKS = ("drawn", "painted")
+# drawn: everything drawn in code; painted: an image model paints the scenes, the code animates;
+# collage: an image model paints single objects cut out of paper, the code builds pages round them.
+# The person's choice; each is a recipe of capabilities (RECIPES, below)
+LOOKS = ("drawn", "painted", "collage")
 EDITABLE = ("film.js", "score.json", "sfx.json", "vo.json")
 MADE = ("film.js", "score.json", "sfx.json")  # what a finished film must have
-ENGINE = ("engine.js", "props.js")  # the film's own copy, in engine\; Claude may extend it
+# the film's own copy, in engine\; Claude may extend it. Its capabilities' modules join it
+ENGINE = ("engine.js", "props.js")
 # a member of the person's cast, cast\<name>.js (library.py), and one named in film code:
 # SK.cast.pip, cast.pip, cast['pip']
 CAST_FILE = re.compile(r"^[a-z][a-z0-9_]{0,30}\.js$")
@@ -85,6 +90,96 @@ FOR_LINE = re.compile(
 # what Claude may not change in paint.json: the painter, and how many paintings a film may cost
 # (8 up to a minute, more for a longer film: limits()["images"], paint_pins)
 PAINT_PINNED = {"backend": "muse", "model": "meta/muse-image", "max_images": 8}
+# a collage film's cut-outs: a model that paints on a transparent background (sketch-paint.py)
+CUTOUTS_PINNED = {
+    "model": "openai/gpt-image-2.5-flare",
+    "quality": "medium",
+    "border": 12,
+    "cut": "scissor",
+}
+# the print faces a collage film's pieces use (sketch/collage.js), on top of the template's
+COLLAGE_FONTS = [
+    {"file": "fonts/AbrilFatface-Regular.ttf", "family": "Abril Fatface", "weight": "400"},
+    {"file": "fonts/UnifrakturMaguntia-Book.ttf", "family": "UnifrakturMaguntia", "weight": "400"},
+    {"file": "fonts/Oswald-VF.ttf", "family": "Oswald", "weight": "200 700", "load": "500 600 700"},
+    {"file": "fonts/OldStandard-Regular.ttf", "family": "Old Standard TT", "weight": "400"},
+    {"file": "fonts/OldStandard-Bold.ttf", "family": "Old Standard TT", "weight": "700"},
+    {
+        "file": "fonts/OldStandard-Italic.ttf",
+        "family": "Old Standard TT",
+        "weight": "400",
+        "style": "italic",
+    },
+    {
+        "file": "fonts/PlayfairDisplay-VF.ttf",
+        "family": "Playfair Display",
+        "weight": "400 900",
+        "load": "700 900",
+    },
+    {
+        "file": "fonts/PlayfairDisplay-Italic-VF.ttf",
+        "family": "Playfair Display",
+        "weight": "400 900",
+        "style": "italic",
+        "load": "400 700",
+    },
+    {"file": "fonts/CourierPrime-Regular.ttf", "family": "Courier Prime", "weight": "400"},
+    {"file": "fonts/CourierPrime-Bold.ttf", "family": "Courier Prime", "weight": "700"},
+    {"file": "fonts/Anton-Regular.ttf", "family": "Anton", "weight": "400"},
+    # sets a Cyrillic line where Courier Prime cannot (collage.js SK.face)
+    {"file": "fonts/IBMPlexMono-Regular.ttf", "family": "IBM Plex Mono", "weight": "400"},
+    {"file": "fonts/IBMPlexMono-Bold.ttf", "family": "IBM Plex Mono", "weight": "700"},
+]
+PRINT_FACES = tuple(dict.fromkeys(f["family"] for f in COLLAGE_FONTS))
+# What a film may be made of beyond what every film has. A look is a recipe of these, and a
+# capability is one kind of material with everything the studio does for it:
+#   modules    sketch/<m>.js, copied into the film's engine\ beside engine.js and props.js
+#   fonts      faces added to the film's manifest
+#   paint      pictures it may paint: cap (a limits() key; a film's kinds add up), pins (set in
+#              paint.json over PAINT_PINNED), keys (an image's own beyond name/prompt/ref),
+#              label (the page's line while they paint), noun (what they are called)
+#   fills      the system prompt's {PLACEHOLDERS} its looks' briefs use: files under KIT
+#   direction  what Film.direction() records of the film's choices (agent.recent_note)
+# Granting a capability to another look is a change to RECIPES -- a brief change, so it is
+# proven with studio/bakeoff.py first.
+CAPS = {
+    "grounds": {"direction": ("ground",)},
+    "paintings": {
+        "paint": {
+            "cap": "images",
+            "pins": {},
+            "keys": (),
+            "label": "painting the scenes (Muse)",
+            "noun": "paintings",
+        },
+        "direction": ("paint_style",),
+    },
+    "cutouts": {
+        "paint": {
+            "cap": "cutouts",
+            "pins": {"cutouts": CUTOUTS_PINNED},
+            "keys": ("cutout", "aspect"),
+            "label": "painting the cut-outs",
+            "noun": "cut-outs",
+        },
+        "direction": ("paint_style",),  # the medium they are painted in
+    },
+    "collage": {
+        "modules": ("collage",),
+        "fonts": COLLAGE_FONTS,
+        "fills": {
+            "COLLAGE": ("sketch", "collage.js"),
+            "EXAMPLE_COLLAGE": ("config", "sketch", "collage-example", "film.js"),
+        },
+        # the print faces it names most, and whether a newspaper page lies under it
+        "direction": ("faces", "newsprint"),
+    },
+}
+RECIPES = {
+    "drawn": ("grounds",),
+    "painted": ("paintings",),
+    "collage": ("cutouts", "collage"),
+}
 # the voice: Google's Gemini text-to-speech. 3.8 needs the Gemini API enabled in the service
 # account's project; STUDIO_TTS_MODEL overrides it (e.g. gemini-3.1-flash-tts-preview)
 TTS_MODEL = "gemini-3.8-flash-tts"
@@ -139,15 +234,62 @@ def limits(length):
         "drum_bars": max(64, length),
         # paintings, repaints included: 12 up to 4 minutes, then one about every 20 s
         "images": 8 if length <= 60 else min(24, max(12, length // 20)),
+        # a collage film's cut-outs, repaints included: pages hold several each (the reference
+        # 60 s collage used ~19); ~$0.014 each
+        "cutouts": 10 if length <= 15 else min(40, max(14, length // 3)),
         # the agent's turns: 60 was enough up to 2 minutes; a longer film writes and checks
         # more scenes (a turn is one of Claude's replies, its tool calls included)
         "turns": 60 + max(0, length - 120) // 6,
     }
 
 
-def paint_pins(length):
-    """What the studio sets in a painted film's paint.json."""
-    return PAINT_PINNED | {"max_images": limits(length)["images"]}
+def modules(caps):
+    """The engine modules these capabilities bring (sketch/<name>.js)."""
+    return tuple(m for c in caps for m in CAPS[c].get("modules", ()))
+
+
+def fonts(caps):
+    """The faces these capabilities add to the manifest."""
+    return [f for c in caps for f in CAPS[c].get("fonts", ())]
+
+
+def paint_kinds(caps):
+    """The kinds of picture these capabilities paint ([] when the film paints nothing)."""
+    return [CAPS[c]["paint"] for c in caps if "paint" in CAPS[c]]
+
+
+def image_keys(caps):
+    """What an image in paint.json may say besides its name, prompt and ref."""
+    return {k for kind in paint_kinds(caps) for k in kind["keys"]}
+
+
+def fills(caps):
+    """The system prompt's placeholders these capabilities fill: {NAME: path parts}."""
+    return {k: v for c in caps for k, v in CAPS[c].get("fills", {}).items()}
+
+
+def direction_fields(caps):
+    """The choices of a film with these capabilities that Film.direction() records."""
+    return {f for c in caps for f in CAPS[c].get("direction", ())}
+
+
+def paint_words(caps):
+    """(label, noun) for its pictures: the page's line while they paint, and their name."""
+    kinds = paint_kinds(caps)
+    if len(kinds) == 1:
+        return kinds[0]["label"], kinds[0]["noun"]
+    return "painting the pictures", "pictures"
+
+
+def paint_pins(length, caps):
+    """What the studio sets in the paint.json of a film with these capabilities: the painter,
+    each kind's own settings, and the cap on pictures (repaints included), its kinds' caps
+    added up."""
+    kinds = paint_kinds(caps)
+    pins = dict(PAINT_PINNED)
+    for kind in kinds:
+        pins |= kind["pins"]
+    return pins | {"max_images": sum(limits(length)[kind["cap"]] for kind in kinds)}
 
 
 def _release():
@@ -267,7 +409,25 @@ class Film:
 
     @property
     def look(self):
+        """Its record's (since 2026-09-25); an older film is painted if it has a paint.json."""
+        look = self.record().get("look")
+        if look in LOOKS:
+            return look
         return "painted" if os.path.exists(self.path("paint.json")) else "drawn"
+
+    @property
+    def caps(self):
+        """What it may be made of (CAPS): fixed in its record when it was made, so a later change
+        to its look's recipe never reaches a film already made, or one picked up after a ship.
+        A film from before capabilities has its look's recipe."""
+        got = self.record().get("caps")
+        if isinstance(got, list) and got and all(c in CAPS for c in got):
+            return tuple(got)
+        return RECIPES[self.look]
+
+    def engine_files(self):
+        """Its engine copy's files: every film's, and its capabilities' modules."""
+        return ENGINE + tuple(m + ".js" for m in modules(self.caps))
 
     @property
     def length(self):
@@ -278,7 +438,7 @@ class Film:
     def editable(self):
         return (
             EDITABLE
-            + (("paint.json",) if self.look == "painted" else ())
+            + (("paint.json",) if paint_kinds(self.caps) else ())
             + (("scenes.json",) if self.mode == "scenes" else ())
         )
 
@@ -308,7 +468,7 @@ class Film:
         if parent == _norm(self.path("scenes")):  # a scene of a film made in scenes
             asked = os.path.basename(os.path.realpath(raw))
             return self.mode == "scenes" and bool(SCENE_FILE.match(asked))
-        return parent == _norm(self.path("engine")) and name in ENGINE
+        return parent == _norm(self.path("engine")) and name in self.engine_files()
 
     # ---------------------------------------------------------------- the engine copy
     def engine_diff(self):
@@ -316,7 +476,7 @@ class Film:
         studio runs (the curator's raw material), written to outputs/engine.diff. Returns the
         number of changed lines."""
         out, n = [], 0
-        for name in ENGINE:
+        for name in self.engine_files():
             try:
                 with open(os.path.join(KIT, "sketch", name), encoding="utf-8") as f:
                     a = f.read().splitlines(keepends=True)
@@ -347,11 +507,12 @@ class Film:
                 return None
 
         d = {"look": self.look}
+        fields = direction_fields(self.caps)
         js = load("film.js") or ""
         # who it is for and its mood, the film's first decision (prompt.md, "# Direction")
         m = FOR_LINE.search(js)
         d["audience"] = m.group(1)[:160] if m else ""
-        if d["look"] == "drawn":
+        if "ground" in fields:
             g = re.search(r"setGround\(\s*['\"](\w+)", js)
             changes = re.search(r"\bground\s*:\s*\(?\s*\w+\s*\)?\s*=>", js)
             d["ground"] = "changing" if changes else (g.group(1) if g else "paper")
@@ -369,9 +530,14 @@ class Film:
             drums = any(isinstance(e, dict) and e.get("type") == "drums" for e in ev)
             d["instruments"] = sorted(inst) + (["drums"] if drums else [])
             d["bpm"] = score.get("bpm")
-        if d["look"] == "painted":
+        if "paint_style" in fields:
             paint = load("paint.json") or {}
             d["paint_style"] = (paint.get("style") or "")[:120] if isinstance(paint, dict) else ""
+        if "faces" in fields:  # a face named in its code, most used first
+            named = Counter({f: js.count("'%s'" % f) + js.count('"%s"' % f) for f in PRINT_FACES})
+            d["faces"] = [f for f, n in named.most_common(3) if n]
+        if "newsprint" in fields:
+            d["newsprint"] = "SK.newsprint(" in js
         cast = sorted({a or b for a, b in CAST_USE.findall(js)})
         if cast:
             d["cast"] = cast
@@ -409,6 +575,7 @@ class Film:
         from_account_cast}, checked by the caller; its library is the project's (library.py)."""
         seconds = seconds if seconds in LENGTHS else LENGTHS[0]
         look = look if look in LOOKS else LOOKS[0]
+        caps = RECIPES[look]
         projects = os.path.join(HOME, "projects")
         os.makedirs(projects, exist_ok=True)
         for _ in range(50):
@@ -425,7 +592,8 @@ class Film:
         os.makedirs(film.path("engine"))
         os.makedirs(film.path("cast"))  # the person's cast: library.seed fills it
         os.makedirs(film.path("temp", "tmp"))
-        for name in ENGINE:  # copyfile, not copy2: a release's files are read-only
+        for name in ENGINE + tuple(m + ".js" for m in modules(caps)):
+            # copyfile, not copy2: a release's files are read-only
             shutil.copyfile(os.path.join(KIT, "sketch", name), film.path("engine", name))
         with open(os.path.join(HERE, "template", "sketch.json"), encoding="utf-8") as f:
             m = json.load(f)
@@ -461,9 +629,14 @@ class Film:
         if mode == "scenes":
             m["scenes"] = "scenes"
             os.makedirs(film.path("scenes"))
-        if look == "painted":
+        if modules(caps):  # engine/<name>.js, its own copy, loaded after props.js
+            m["modules"] = list(modules(caps))
+        if paint_kinds(caps):
             m["paint"] = "paint.json"
-            _write_json(film.path("paint.json"), paint_pins(seconds) | {"style": "", "images": []})
+            pins = paint_pins(seconds, caps)
+            _write_json(film.path("paint.json"), pins | {"style": "", "images": []})
+        if fonts(caps):
+            m["fonts"] = list(m.get("fonts") or []) + fonts(caps)
         _write_json(film.manifest, m)
         vo = {**VO_PINNED, "model": tts_model(), "voice": "Kore", "style": "", "language": "en"}
         _write_json(film.path("vo.json"), vo | {"lines": []})
@@ -473,6 +646,7 @@ class Film:
                 "id": fid,
                 "prompt": prompt,
                 "look": look,
+                "caps": list(caps),  # what its look was made of when it was made (CAPS)
                 "length": seconds,  # the film's; "seconds" is later how long making it took
                 "client": client,
                 "source": source,

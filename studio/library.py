@@ -467,6 +467,8 @@ def sheet(film, names):
         "film": "film.js",
         "fonts": m.get("fonts", []),
         "cast": film.path("cast"),
+        # a member may draw with its film's modules (a collage film's pieces)
+        **({"modules": m["modules"]} if m.get("modules") else {}),
     }
     _write_json(os.path.join(d, "sketch.json"), man)
     times = [t for i in range(len(names)) for t in (i + 0.25, i + 0.75)]

@@ -59,9 +59,13 @@ from film import (  # noqa: E402
     LENGTHS,
     LOOKS,
     MADE,
+    RECIPES,
     RELEASE,
     Film,
+    direction_fields,
+    fills,
     limits,
+    paint_words,
 )
 from guard import _path, guard, pin_after, pin_paint, pin_vo  # noqa: E402
 from sched import Clock, Sched, waiting_text  # noqa: E402
@@ -163,11 +167,24 @@ def _read(*parts):
         return f.read()
 
 
-def system_prompt(look):
+# a part of a reference the studio's copy leaves out: from a line `// studio: cut` to a line
+# `// studio: end cut` (the collage example's newspaper furniture, film.CAPS "fills")
+CUT = re.compile(
+    r"^[ \t]*// studio: cut\b.*?^[ \t]*// studio: end cut\b[^\n]*\n", re.MULTILINE | re.DOTALL
+)
+
+
+def _reference(*parts):
+    """A file a capability puts in the system prompt, without the parts marked to leave out."""
+    return CUT.sub("", _read(*parts))
+
+
+def system_prompt(look, caps=None):
     """prompt.md with the engine, the cast, the example and the sound notation filled in, read
-    fresh so it always matches the code. It depends only on the look -- the film's own facts
-    (its length, the prompt) come in the first message -- so films made close together share
-    Claude's prompt cache."""
+    fresh so it always matches the code. It depends only on the look and what it is made of
+    (caps: the film's, else the look's recipe) -- the film's own facts (its length, the
+    prompt) come in the first message -- so films made close together share Claude's prompt
+    cache."""
     A = import_module("_sketchaudio")
     ref = _read("docs", "reference.md")
     a = ref.index("**Score notation**")
@@ -193,6 +210,8 @@ def system_prompt(look):
         "FX": fx,
         "INSTRUMENTS": ", ".join(inst) or "(none yet)",
     }
+    # a capability's own references, read only for the looks made of it (film.CAPS "fills")
+    fill.update({k: _reference(*parts) for k, parts in fills(caps or RECIPES[look]).items()})
     # the look's own sections (studio/looks/<look>.md, "## NAME" headed) go in first, since
     # they carry placeholders of their own
     sections = {}
@@ -389,11 +408,21 @@ def recent_note(look, dirs, series=False, project=False):
         return "; ".join(list(seen)[:k])
 
     same = [d for d in dirs if d.get("look") == look]
+    mine = direction_fields(RECIPES.get(look, ()))  # what films of this look record
+    news = sum(1 for d in same if d.get("newsprint"))
     rows = [
-        ("grounds", tally(d.get("ground") for d in same) if look == "drawn" else ""),
+        ("grounds", tally(d.get("ground") for d in same) if "ground" in mine else ""),
         (
             "painting styles",
-            firsts((d.get("paint_style") for d in same), 6) if look == "painted" else "",
+            firsts((d.get("paint_style") for d in same), 6) if "paint_style" in mine else "",
+        ),
+        (
+            "print faces",
+            tally((f for d in same for f in d.get("faces") or []), 6) if "faces" in mine else "",
+        ),
+        (
+            "a newspaper page under the film",
+            "%d of the last %d" % (news, len(same)) if "newsprint" in mine and news else "",
         ),
         ("voices", tally(d.get("voice") for d in dirs)),
         ("voice directions", firsts((d.get("voice_style") for d in dirs), 8)),
@@ -426,7 +455,7 @@ def _describe(name, inp, film):
     if name == "Read":
         p = rel(inp.get("file_path"))
         if p.endswith("images/sheet.jpg"):
-            return "looking at the paintings"
+            return "looking at the %s" % paint_words(film.caps)[1]
         if p.endswith("motion.png"):
             return "looking at the cuts"
         return "looking at the review sheet" if p.endswith("sheet.png") else "read %s" % p
@@ -447,7 +476,7 @@ def _describe(name, inp, film):
         return (
             "repainting %s" % ", ".join(inp["retake"])
             if inp.get("retake")
-            else ("painting the scenes (Muse)")
+            else paint_words(film.caps)[0]
         )
     return name
 
@@ -657,7 +686,7 @@ async def run_claude(
     sp = film.path("temp", "system-prompt.md")
     os.makedirs(os.path.dirname(sp), exist_ok=True)
     with open(sp, "w", encoding="utf-8") as f:
-        f.write(system or system_prompt(film.look))
+        f.write(system or system_prompt(film.look, film.caps))
     cli = None
     if auth == "login":
         try:
@@ -1046,7 +1075,7 @@ async def make_film(
         done, then the editor -- each a fresh conversation with its own opening, limits and the
         files it may write; each pass's state and cost go to studio.json as it ends, so a crash
         or a restart costs only the pass in progress."""
-        system = system_prompt(film.look) + scenes.system_section()
+        system = system_prompt(film.look, film.caps) + scenes.system_section()
         passes = summary.setdefault("passes", [])
 
         async def one(kind, key, opening, allow, span=None, text=""):
