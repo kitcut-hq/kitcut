@@ -7,9 +7,11 @@ A stand-in for run_claude() writes the committed example film's files, then call
 real tools (check, stills) the way Claude would, and reports a known token count. Everything
 else is real: films made side by side in their own folders, the scheduler, the soundtrack, the
 renders, status polling, the files, the token checks, the per-client and daily limits, cancel,
-a restart that picks up the films the last server left, a drain, and each run's cost record (kept
-in memory, not written to MongoDB). A few minutes, most of it rendering. Everything happens in a
-throwaway STUDIO_HOME, removed at the end.
+the server leading on its own and adopting the films a dead server left (a film a live one is
+making left alone), a stop that leaves its films for the next, a drain, and each run's cost
+record (kept in memory, not written to MongoDB). Two servers handing over is test_bluegreen.py.
+A few minutes, most of it rendering. Everything happens in a throwaway STUDIO_HOME, removed at
+the end.
 """
 
 import os
@@ -31,6 +33,7 @@ import film as films  # noqa: E402
 import store  # noqa: E402
 import validate  # noqa: E402
 import resume  # noqa: E402
+import peers  # noqa: E402
 from sched import Sched  # noqa: E402
 
 from aiohttp.test_utils import TestClient, TestServer  # noqa: E402
@@ -792,17 +795,39 @@ async def main():
 
         await projects(c, auth, mem, check)
 
-        # ------------------------------------------------ a restart finds what was left
+        # ------------------------------------------------ the leader adopts what a dead server left
+        check(
+            peers.leads() and server.LEADER.is_set(),
+            "a server alone leads (it admits the films, and adopts what is left)",
+        )
+        gone = "old-release.4242"  # a server that is not running: nobody holds its lock
         q = films.Film.create("left queued", 5, "drawn", client="u:r1")
+        q.update(server=gone)
         fin = films.Film.create("left mid-render", 5, "drawn", client="u:r2")
         ex = os.path.join(films.KIT, "config", "sketch", "example")
         for f in films.MADE:
             shutil.copy(os.path.join(ex, f), fin.dir)
-        fin.update(state="finishing", claude_cost_usd=0.5)
+        fin.update(state="finishing", claude_cost_usd=0.5, server=gone)
         mid = films.Film.create("left while Claude wrote", 5, "drawn", client="u:r3")
-        mid.update(state="claude")
+        mid.update(state="claude", server=gone)
+        # one whose maker is alive (this process stands in for the other server) is not touched
+        elsewhere = films.Film.create("made by another server", 5, "drawn", client="u:r6")
+        elsewhere.update(state="claude", server=peers.SERVER_ID)
         before = len(CALLED)
-        await server.recover(None)
+        await server.adopt()
+        check(
+            q.record().get("server") == peers.SERVER_ID and q.id in server.JOBS,
+            "an adopted film is the leader's now (its record names it)",
+        )
+        st_e = await (await c.get("/api/films/%s" % elsewhere.id, headers=auth)).json()
+        check(
+            elsewhere.state == "claude"
+            and elsewhere.id not in server.JOBS
+            and st_e.get("status") == "running",
+            "a film a live server is making is left to it, and its page says running (%s)"
+            % st_e.get("status"),
+        )
+        elsewhere.update(state="error")  # nobody is really making it
         st_q, st_f = await asyncio.gather(wait_for(c, auth, q.id), wait_for(c, auth, fin.id))
         check(st_q.get("status") == "done", "a queued film is made after a restart")
         check(
@@ -900,9 +925,13 @@ async def main():
             and mem.docs.get(rendering.id, {}).get("state") != "failed",
             "a film being rendered is left finishing, its record not closed (%s)" % rendering.state,
         )
+        check(
+            rendering.record().get("server") is None,
+            "and it is nobody's: the next leader takes it",
+        )
         for f in (writing, rendering):  # the next server's memory starts empty
             server.JOBS.pop(f.id, None)
-        await server.recover(None)
+        await server.adopt()
         st_r = await wait_for(c, auth, rendering.id)
         check(
             st_r.get("status") == "done" and abs(st_r.get("claude_cost_usd", 0) - 0.25) < 1e-9,
@@ -912,7 +941,7 @@ async def main():
         crashed.update(state="claude")
         with open(crashed.path("events.jsonl"), "w", encoding="utf-8") as f:
             f.write(json.dumps({"type": "tool", "text": "edited film.js", "t": 12.5}) + "\n")
-        await server.recover(None)
+        await server.recover(None)  # the old name: a record from before owners (no "server")
         last = json.loads(open(crashed.path("events.jsonl"), encoding="utf-8").readlines()[-1])
         check(
             crashed.state == "interrupted"

@@ -589,6 +589,11 @@ def get(film_id, channel_id):
     return JOBS.get((film_id, channel_id))
 
 
+def in_flight():
+    """The drafts being written, as [film, channel], for this server's heartbeat (peers.py)."""
+    return [list(k) for k, j in JOBS.items() if j["state"] == "writing"]
+
+
 def prune():
     now = time.time()
     for k, j in list(JOBS.items()):

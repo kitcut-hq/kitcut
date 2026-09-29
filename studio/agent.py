@@ -45,6 +45,7 @@ import procs  # noqa: E402
 import film as films  # noqa: E402
 import library  # noqa: E402
 import media  # noqa: E402
+import peers  # noqa: E402
 
 # the studio's keys, out of the environment before anything is started (procs.py)
 procs.load_secrets(os.environ.get("STUDIO_ENV_FILE") or os.path.join(films.REPO, ".env"))
@@ -728,10 +729,17 @@ async def make_film(
     picks it up (RESUME), then the film is finished as usual. Either way what the earlier attempt
     spent is carried into the record, not replaced. control: a dict the server may set
     {"requeue": True} in before it cancels a film still waiting for its slot -- the film then
-    stays queued for the next server instead of being marked cancelled."""
+    stays queued for the next server instead of being marked cancelled.
+
+    The process making a film owns it (studio.json "server", peers.py) for as long as it lives,
+    so the leading server never adopts a film someone is making -- a server's, or resume.py's
+    picking one up by hand. A film left queued or finishing goes back to nobody, for the leader."""
     emit = emit or (lambda ev: None)
     sched = sched or Sched()
     control = control if control is not None else {}
+    peers.hold_own()
+    if film.record().get("server") != peers.SERVER_ID:
+        film.update(server=peers.SERVER_ID)
     rec = film.record()
     prompt, length, look = rec.get("prompt", ""), film.length, film.look
     # an earlier attempt's Claude part, costed by the server that ran it: carried, not replaced
@@ -979,9 +987,11 @@ async def make_film(
         stopping = control.get("shutdown")
         if (control.get("requeue") or stopping) and film.state == "queued":
             state = "queued"  # the next server makes it; nothing was spent
+            film.update(server=None)  # nobody's: the leader gives it to whoever makes it next
             raise
         if stopping and film.state == "finishing":
             state = "finishing"  # Claude's part is whole: the next server mixes and renders it
+            film.update(server=None)  # its steps are killed (above): the leader may take it now
             raise
         if stopping:
             state = "interrupted"
@@ -1095,7 +1105,7 @@ WRAP_UP = (
 )
 
 
-# what a film the studio stopped under it says (make_film on a shutdown; server.recover after a crash)
+# what a film the studio stopped under it says (make_film on a shutdown; server.adopt after a crash)
 INTERRUPTED = "The studio restarted before this film was finished."
 # a film picked up after the studio stopped under it (make_film resume=True): at most this much
 # working time, and at least this much, whatever the film's own limit has left
