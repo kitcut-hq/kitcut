@@ -247,7 +247,7 @@ def attached_note(film):
             a.get("words"),
             a["file"],
         )
-        text = _read(film.path(*a["file"].split("/")))
+        text = _doc_text(film.path(*a["file"].split("/")))
         if text is not None and len(text) <= DOC_INLINE:
             lines += [head + ":", "<<<", text.strip(), ">>>"]
         else:
@@ -295,7 +295,7 @@ def _mmss(s):
 DOC_INLINE = 6000  # a document up to this many characters is in the first message; longer, Read
 
 
-def _read(path):
+def _doc_text(path):
     try:
         with open(path, encoding="utf-8") as f:
             return f.read()
