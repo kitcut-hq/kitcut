@@ -138,6 +138,7 @@ div.stage { background: var(--sheet); border: 1.5px solid var(--rule); border-ra
 .screen { aspect-ratio: 16 / 9; max-width: 100%; display: grid; place-items: center; background: var(--paper); position: relative; }
 .screen video, .screen img { width: 100%; height: 100%; object-fit: contain; display: block; background: #f7f2e7; }
 .screen .idle { font: 700 34px/1.2 Caveat, cursive; color: var(--ink-soft); text-align: center; padding: 20px; }
+.screen .idle a { font: 600 15px/2.4 Inter, system-ui, sans-serif; color: var(--accent); }
 .caption { display: flex; justify-content: space-between; gap: 10px; padding: 10px 14px; border-top: 1.5px solid var(--rule); font-size: 13px; color: var(--ink-soft); }
 .caption b { color: var(--ink); font-weight: 600; }
 .caption .right { display: flex; align-items: center; gap: 10px; }
@@ -635,9 +636,12 @@ function home() {
   screen('<div class="idle">Your film appears here.</div>');
   $('status').textContent = studioUp ? 'Ready.' : 'The studio is offline right now.';
 }
+// a plan that makes more than one film at a time (Pro: 2, the site's lib/plans.js) may start the
+// next while this one is being made; the studio refuses one past the plan's number
+const canAnother = () => !!(CREDITS && CREDITS.at_once > 1);
 function openFilm(id, push) {
   if (push && location.pathname !== '/film/' + id) history.pushState({ id }, '', '/film/' + id);
-  reset(); currentId = id; $('go').disabled = true;
+  reset(); currentId = id; $('go').disabled = !(studioUp && canAnother());
   screen('<div class="idle">Loading the film...</div>');
   $('status').innerHTML = '<span class="pen"></span>Loading';
   follow(0);
@@ -814,6 +818,7 @@ async function whoami() {
     AUTH = true; USER = me.user; GOOGLE = !!me.google; CREDITS = me.credits || null; YT = !!me.youtube;
   } catch (e) { return; }
   renderAccount(); paintLength();
+  if (currentId && timer && studioUp && canAnother()) $('go').disabled = false;  // opened before the plan was known
   $('footNav').hidden = false;
   invited();
   if (USER) inviteCode();
@@ -1440,6 +1445,7 @@ $('form').addEventListener('submit', async (e) => {
       `Credits renew on ${renews()}, or <a href="/pricing">get more film</a>.`;
     return;
   }
+  const was = currentId;  // the film on screen, if any: still being made when the plan makes two at once
   reset(); $('go').disabled = true;
   screen('<div class="idle">Claude is thinking up the film...</div>');
   startClock(0);
@@ -1469,6 +1475,12 @@ $('form').addEventListener('submit', async (e) => {
       if (CREDITS) { CREDITS.balance = body.have; paintLength(); }
       $('status').textContent = `This film needs ${mmss(body.need)} of credit and you have ${mmss(body.have)}.` +
         (body.renews_at ? ` Credits renew on ${new Date(body.renews_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.` : '');
+      return;
+    }
+    if (r.status === 429) {  // films already being made, a full queue, or the day's limit: say which, and where to look
+      finish(); $('status').textContent = body.error || 'The studio cannot take this film right now.';
+      screen(`<div class="idle">${esc(body.error || 'The studio cannot take this film right now.')}` +
+        (was ? `<br><a href="/film/${esc(was)}">Back to the film</a>` : '') + (USER ? `${was ? ' · ' : '<br>'}<a href="/account">Your films</a>` : '') + '</div>');
       return;
     }
     if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);

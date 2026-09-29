@@ -127,7 +127,11 @@ Limits on everything that reaches the studio, checked and taken together under o
   second).
 - **Lengths:** 5-480 s in 5 s steps. Who may ask for what (over a minute is Pro) is the site's
   business; so are its plans and credits.
-- **One film in the making per client**, and `STUDIO_PER_CLIENT_DAILY` (default 5) a day.
+- **One film in the making per client**, or as many as its plan allows (the site sends
+  `X-At-Once: 2` for Pro, trusted like `X-Priority`; never more than `STUDIO_AT_ONCE_MAX`,
+  default 2), and `STUDIO_PER_CLIENT_DAILY` (default 5) a day. Two films from one account each
+  take a Claude slot. The same upload sent with both goes to the first; the second is told to
+  add it again.
 
 Past a limit, the request gets a 429 with a plain-English reason.
 

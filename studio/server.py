@@ -18,13 +18,16 @@ STUDIO_HOME with its own Claude session, and share the machine through the sched
 the rest wait their turn, up to STUDIO_MAX_QUEUE (default 5) of them. Anyone can reach this
 through the public site, so the day's spend is capped (STUDIO_DAILY_USD, default 100, counting
 a reserve for every film still being made, by its length), and each client -- the account the site
-forwards as X-Client-Ip "u:<id>", else the IP -- may have one film in the making and
-STUDIO_PER_CLIENT_DAILY (default 5) a day.
+forwards as X-Client-Ip "u:<id>", else the IP -- may have one film in the making (more when
+its plan allows: X-At-Once, up to STUDIO_AT_ONCE_MAX, default 2) and STUDIO_PER_CLIENT_DAILY
+(default 5) a day.
 
     POST /api/films              {"prompt", "seconds", "look", "attachments", "listed"}  ->  202
                                  {"id", "status", "position"}. X-Priority: 1 (from the site, for
                                  a plan with priority): the film goes ahead of the others in every
-                                 queue. "listed": false keeps it out of the gallery (link-only).
+                                 queue. X-At-Once: N (from the site, for a plan that allows it):
+                                 the account may have N films in the making instead of one.
+                                 "listed": false keeps it out of the gallery (link-only).
                                  X-Source: mcp and X-App: <name> (from the site): it was asked for
                                  through an assistant. {"auth": "login"} (this machine only):
                                  Claude runs on its Claude Code login.
@@ -107,6 +110,9 @@ PROMPT_MAX = 12000  # characters of a prompt: a long pasted brief with its narra
 # film.limits)
 DAILY_USD = float(os.environ.get("STUDIO_DAILY_USD") or 100)
 PER_CLIENT_DAILY = int(os.environ.get("STUDIO_PER_CLIENT_DAILY") or 5)
+# films in the making per account: one, or what its plan allows (the site's X-At-Once; Pro: 2),
+# never more than this
+AT_ONCE_MAX = int(os.environ.get("STUDIO_AT_ONCE_MAX") or 2)
 KEEP_S = 3600  # a finished film's events stay in memory this long; then they come from disk
 
 
@@ -347,6 +353,7 @@ def limits_doc():
         "prompt": {"max_chars": PROMPT_MAX, "min_chars": 3},
         "films": {
             "at_once_per_account": 1,
+            "at_once_per_account_max": AT_ONCE_MAX,  # what a plan may allow (X-At-Once)
             "per_account_per_day": PER_CLIENT_DAILY,
             "waiting_max": MAX_QUEUE,
             "made_at_once": SCHED["claude"].capacity,
@@ -394,7 +401,17 @@ async def limits_route(req):
     return web.json_response(limits_doc())
 
 
-async def over_limit(client, seconds, auth="api"):
+def at_once_of(req):
+    """How many films the asker may have in the making at once: its plan's (the site sends
+    X-At-Once, trusted like X-Client-Ip), else one; never more than AT_ONCE_MAX."""
+    try:
+        n = int(req.headers.get("X-At-Once", "").strip() or 1)
+    except ValueError:
+        n = 1
+    return max(1, min(n, AT_ONCE_MAX))
+
+
+async def over_limit(client, seconds, auth="api", at_once=1):
     """Why this request must wait (for now, or until tomorrow), or None. Today is local time.
     Nothing is refused to this machine itself except by the budget."""
     midnight = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -412,8 +429,14 @@ async def over_limit(client, seconds, auth="api"):
         return "Today's budget ($%.0f) is used up. Please try again tomorrow." % DAILY_USD
     if client == "local":
         return None
-    if any(j["client"] == client for j in live()):
-        return "You already have a film in the making; wait for it to finish (or cancel it)."
+    making = sum(1 for j in live() if j["client"] == client)
+    if making >= at_once:
+        if making == 1:
+            return "You already have a film in the making; wait for it to finish (or cancel it)."
+        return (
+            "You already have %d films in the making; wait for one to finish (or cancel it)."
+            % making
+        )
     mine = sum(1 for r in rows if r.get("client") == client and r.get("kind") == "film")
     if mine >= PER_CLIENT_DAILY:
         return "That is %d films today, the limit for now. Please try again tomorrow." % mine
@@ -462,6 +485,8 @@ async def create(req):
     client = client_of(req)
     # a plan whose films go first (the site sends it, trusted like X-Client-Ip)
     priority = 1 if req.headers.get("X-Priority", "").strip() == "1" else 0
+    # a plan that lets an account make more than one film at a time (Pro: 2)
+    at_once = at_once_of(req)
     # this machine's own films (tests, internal runs) are made on its Claude Code login unless
     # they ask for the key ("auth": "api"); anyone through the tunnel always on the key. A
     # machine with no login of its own (the Azure VM) sets STUDIO_LOCAL_AUTH=api.
@@ -495,9 +520,17 @@ async def create(req):
     async with ADMIT:
         if len(live(("queued",))) >= MAX_QUEUE:
             return web.json_response({"error": "the queue is full; try again later"}, status=429)
-        refused = await over_limit(client, seconds, auth)
+        refused = await over_limit(client, seconds, auth, at_once)
         if refused:
             return web.json_response({"error": refused}, status=429)
+        # an account that may make two at once can send the same upload twice: the film admitted
+        # first takes it (release, below), and this one must not start without it
+        gone = next((a for a in attached if uploads.get(client, a["id"]) is None), None)
+        if gone:
+            e = uploads.UploadError(
+                409, "attachment", "An attachment is no longer here; add it again.", gone["id"]
+            )
+            return web.json_response(e.body(), status=e.status)
         f = Film.create(
             prompt,
             seconds,

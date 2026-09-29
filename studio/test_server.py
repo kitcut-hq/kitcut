@@ -347,7 +347,8 @@ async def main():
             lim["lengths"] == {"min": films.LENGTHS[0], "max": films.LENGTHS[-1], "step": 5}
             and lim["prompt"]["max_chars"] == server.PROMPT_MAX
             and lim["attachments"]["pictures_per_film"] == server.uploads.MAX_IMAGES
-            and lim["films"]["per_account_per_day"] == server.PER_CLIENT_DAILY,
+            and lim["films"]["per_account_per_day"] == server.PER_CLIENT_DAILY
+            and lim["films"]["at_once_per_account_max"] == server.AT_ONCE_MAX,
             "the limits are the constants the studio enforces (%s)" % lim["lengths"],
         )
         check(
@@ -592,6 +593,54 @@ async def main():
             "and it is cancelled, on record too",
         )
         check(server.SCHED["claude"].used == 0, "its Claude slot is free again")
+
+        # ------------------------------------------------ two at once, on a plan that allows it
+        # (the site's X-At-Once: Pro), never past the studio's own ceiling. The same picture sent
+        # with two films at the same moment: the first takes it, the second is told to add it again
+        import io
+
+        from PIL import Image
+
+        pro = auth | {"X-Client-Ip": "u:pro", "X-At-Once": "2"}
+        buf = io.BytesIO()
+        Image.new("RGB", (640, 360), (200, 90, 30)).save(buf, "PNG")
+        r = await c.post(
+            "/api/uploads", data=buf.getvalue(), headers=pro | {"Content-Type": "image/png"}
+        )
+        up = (await r.json()).get("id")
+        both = await asyncio.gather(
+            *(
+                c.post(
+                    "/api/films", json={"prompt": "a slow one", "attachments": [up]}, headers=pro
+                )
+                for _ in range(2)
+            )
+        )
+        answers = sorted([(r.status, await r.json()) for r in both], key=lambda a: a[0])
+        check(
+            [a[0] for a in answers] == [202, 409] and answers[1][1].get("reason") == "attachment",
+            "one picture sent with two films at once: the first takes it, the second is told",
+        )
+        two = [answers[0][1]["id"]]
+        r = await c.post("/api/films", json={"prompt": "a slow one"}, headers=pro)
+        two.append((await r.json()).get("id"))
+        check(r.status == 202, "an account whose plan allows two has a second film in the making")
+        r = await c.post(
+            "/api/films", json={"prompt": "and a third"}, headers=pro | {"X-At-Once": "5"}
+        )
+        check(
+            r.status == 429 and "2 films" in (await r.json())["error"],
+            "a third waits, even when asked for more than the studio allows (%d)"
+            % server.AT_ONCE_MAX,
+        )
+        for jid in two:
+            r = await c.post(
+                "/api/films/%s/cancel" % jid, headers=tunnel | {"X-Client-Ip": "u:pro"}
+            )
+            check(r.status == 202, "each can be stopped")
+        for jid in two:
+            await wait_for(c, auth, jid, limit=60)
+        check(server.SCHED["claude"].used == 0, "and both Claude slots are free again")
 
         # ------------------------------------------------ the day's budget
         server.DAILY_USD = EXPECT_USD
