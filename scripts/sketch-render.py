@@ -26,7 +26,9 @@ render ({cq, preset, audio_bitrate, encoder, encode}: encode "browser" has the p
 frames, see --encode),
 tail ({secs, scripts, images, audio}: a closing after the film -- `secs` more of picture, drawn by
 `scripts` run after film.js, which lengthen SK._film; its sound is sketch-audio's),
-cast ("cast": a folder whose <name>.js files each run before film.js, as SK.cast.<name>).
+cast ("cast": a folder whose <name>.js files each run before film.js, as SK.cast.<name>),
+modules (["collage"]: engine extensions a film opts into, sketch/<name>.js -- the film's own
+engine folder first -- run after props.js; "collage" is the cut-outs and paper pieces).
 
 Invoke as:
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --plan
@@ -133,10 +135,23 @@ def cast_scripts(m):
     return "\n".join(out)
 
 
-def collage_path(m):
-    """sketch/collage.js, or the film's own copy of it beside its engine copy."""
-    own = os.path.join(m["_engine"], "collage.js")
-    return own if os.path.exists(own) else os.path.join(SKETCH, "collage.js")
+def module_scripts(m):
+    """ "modules": ["collage"] -- engine extensions only some films need, so every other film's
+    page does not carry them. Each is sketch/<name>.js, or the same file in the film's own
+    engine folder when it has one (Sketch Studio's per-film copy may extend it), and names
+    the one it ran from in an error: engine/<name>.js is the film's copy."""
+    out = []
+    for name in m.get("modules") or []:
+        _sketch.safe_name(name, "module")
+        for d in (m["_engine"], SKETCH):
+            p = os.path.join(d, name + ".js")
+            if os.path.exists(p):
+                break
+        else:
+            sys.exit("module %r: no sketch/%s.js" % (name, name))
+        where = "sketch" if os.path.samefile(d, SKETCH) else "engine"
+        out.append("<script>\n%s\n//# sourceURL=%s/%s.js\n</script>" % (read_text(p), where, name))
+    return "\n".join(out)
 
 
 def bundle(m, audio=True):
@@ -184,8 +199,7 @@ def bundle(m, audio=True):
         # the film's own engine folder when its manifest names one (Sketch Studio's per-film copy)
         "__ENGINE__": read_text(os.path.join(m["_engine"], "engine.js")),
         "__PROPS__": read_text(os.path.join(m["_engine"], "props.js")),
-        # the collage pieces (sketch/collage.js), from the film's engine copy when it has one
-        "__COLLAGE__": read_text(collage_path(m)),
+        "__MODULES__": module_scripts(m),
         "__CAST__": cast_scripts(m),
         "__FILM__": film,
         "__AUDIO__": src,

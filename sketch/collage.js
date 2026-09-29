@@ -1,7 +1,8 @@
 /* sketch/collage.js -- paper collage and mixed-media motion design on the sketch engine.
 
-   Loaded after engine.js and before props.js (a film's own props may override any piece). Like
-   the engine it is brand-free and scene-free: it adds
+   A module: a film opts in with "modules": ["collage"] in its manifest, and sketch-render
+   loads it after engine.js and props.js (the film's own copy first; film.js may override any
+   piece). Like the engine it is brand-free and scene-free: it adds
    the pieces a collage is built from, each with an entrance and an exit --
 
      SK.cutout    a picture with a transparent background (a cut-out made by sketch-paint.py),

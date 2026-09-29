@@ -47,6 +47,11 @@ def caps_cases(expect, A, B, C):
         (A.engine_files(), C.engine_files()),
         (("engine.js", "props.js"), ("engine.js", "props.js", "collage.js")),
     )
+    mods = []
+    for film in (A, B, C):
+        with open(film.manifest, encoding="utf-8") as f:
+            mods.append(json.load(f).get("modules"))
+    expect("caps: the manifest names its modules", mods, [None, None, ["collage"]])
     # a film from before looks were recorded: painted if it has a paint.json
     old = films.Film.create("an old painted film", 5, "painted")
     rec = old.record()

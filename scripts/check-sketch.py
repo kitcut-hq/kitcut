@@ -358,7 +358,7 @@ def main():
                 "__TITLE__",
                 "__ENGINE__",
                 "__PROPS__",
-                "__COLLAGE__",
+                "__MODULES__",
                 "__FILM__",
                 "__FONTFACES__",
                 "__VO__",
@@ -368,7 +368,29 @@ def main():
         ]
         check("bundle: every placeholder filled", not left, str(left))
         check("bundle: fonts inlined", "data:font/woff2;base64," in page)
-        check("bundle: the collage pieces ride along", "SK.cutout = function" in page)
+        check("bundle: no module a film did not ask for", "SK.cutout = function" not in page)
+        page3 = render.bundle(dict(m, modules=["collage"]), audio=False)
+        check(
+            "bundle: a module it asks for, named in an error",
+            "SK.cutout = function" in page3 and "sourceURL=sketch/collage.js" in page3,
+        )
+        own = os.path.join(tmp, "engine")  # a film's own engine copy (Sketch Studio's)
+        os.makedirs(own)
+        for n in ("engine.js", "props.js", "collage.js"):
+            shutil.copyfile(os.path.join(_env.ROOT, "sketch", n), os.path.join(own, n))
+        with open(os.path.join(own, "collage.js"), "a", encoding="utf-8") as f:
+            f.write("\n// the film's own collage.js\n")
+        page4 = render.bundle(dict(m, modules=["collage"], _engine=own), audio=False)
+        check(
+            "bundle: the film's own copy of a module wins",
+            "the film's own collage.js" in page4 and "sourceURL=engine/collage.js" in page4,
+        )
+        try:
+            render.bundle(dict(m, modules=["nope"]), audio=False)
+            unknown = False
+        except SystemExit:
+            unknown = True
+        check("bundle: a module there is none of stops it", unknown)
         m["fonts"].append(
             {
                 "file": "fonts/OldStandard-Italic.ttf",

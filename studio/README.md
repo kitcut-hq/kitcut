@@ -73,7 +73,7 @@ Each film is a folder of its own (`film.py`), and nothing it does reaches outsid
 
 | | |
 |---|---|
-| **Claude** | its working directory is the film's folder; it may Read only there (not `temp\`, `studio.json`), and Write/Edit only `film.js`, `score.json`, `sfx.json`, `vo.json`, `paint.json` (painted and collage films) and its own engine copy, `engine\engine.js`, `engine\props.js` and, in a collage film, `engine\collage.js` (`guard.py`). Paths are checked on their real path, so neither `..\` nor a link leads out. |
+| **Claude** | its working directory is the film's folder; it may Read only there (not `temp\`, `studio.json`), and Write/Edit only `film.js`, `score.json`, `sfx.json`, `vo.json`, `paint.json` (painted and collage films) and its own engine copy, `engine\engine.js`, `engine\props.js` and its capabilities' modules -- a collage film's `engine\collage.js` (`film.engine_files`, `guard.py`). Paths are checked on their real path, so neither `..\` nor a link leads out. |
 | **No shell** | Claude has no Bash. It drives the pipeline through the studio's own tools (`tools.py`, an in-process MCP server): `check`, `voice`, `paint`, `stills`, `sound`. Each runs one kitcut script on the film's manifest, and nothing else. |
 | **Its files** | pinned and checked after every write and before every tool (`validate.py`): a painting's or an instrument's name can never name a path (the scripts refuse them too), and there are caps on lines, paintings, sounds and sizes. |
 | **Secrets** | read into memory at start and taken out of the environment (`procs.py`). Claude Code gets only its auth; each step only what it needs (the voice the Google keys and ElevenLabs' for the backup voice, the painter OpenRouter's; the render and the mix none). |
@@ -296,10 +296,19 @@ Anthropic Console.
    (`examples/`) and the sound notation read fresh from the code (written to a file: at ~130 KB
    it is too long for a Windows command line). The **collage** look (`looks/collage.md`) also
    carries `sketch/collage.js` and the example `config/sketch/collage-example/film.js` (~195 KB
-   in all): its `paint.json` asks for cut-outs (`"cutout": true`, painted on a transparent
-   background by the pinned `cutouts` model, `limits()["cutouts"]` of them), its engine copy
-   includes `collage.js`, and its manifest adds the print faces (`film.COLLAGE_FONTS`). It is the same for every film of a look, so it
-   stays cached. The film's length, the prompt and what recent films chose come in the first
+   in all). It is the same for every film of a look, so it stays cached.
+
+   **A look is a recipe of capabilities** (`film.CAPS`, `film.RECIPES`). A capability is one
+   kind of material and everything the studio does for it: engine modules (copied into the
+   film's `engine\` and named in its manifest's `"modules"`, so sketch-render loads them),
+   fonts, the pictures it may paint (pins, cap and image keys in `paint.json`), the prompt
+   references only its looks' briefs use (`fills`), and the choices `Film.direction()` records.
+   Drawn is `grounds`; painted is `paintings` (Muse scenes, `limits()["images"]`); collage is
+   `cutouts` (`"cutout": true` images, painted on a transparent background by the pinned
+   `cutouts` model, `limits()["cutouts"]` of them) plus `collage` (`sketch/collage.js` and the
+   print faces, `film.COLLAGE_FONTS`). A film's capabilities are fixed in its record when it is
+   made (`Film.caps`); granting one to another look is a brief change, proven with
+   `bakeoff.py` first. The film's length, the prompt and what recent films chose come in the first
    message.
 
    **Who it is for, and one bar.** Before anything else Claude decides from the prompt who the

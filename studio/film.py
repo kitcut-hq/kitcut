@@ -594,6 +594,8 @@ class Film:
         m["fps"] = 30 if fps == 30 else 60  # the plan's: Free films 30, paid ones 60
         m["engine"] = "engine"
         m["cast"] = "cast"  # every cast/*.js loads before film.js (sketch-render)
+        if modules(caps):  # engine/<name>.js, its own copy, loaded after props.js
+            m["modules"] = list(modules(caps))
         if paint_kinds(caps):
             m["paint"] = "paint.json"
             pins = paint_pins(seconds, caps)
