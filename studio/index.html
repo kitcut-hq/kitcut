@@ -1079,7 +1079,10 @@ function ytFill(channel) {
 function ytThumbsFill(channel, d) {
   const t = d.thumbs || {}, grid = $('ytThumbGrid'), note = $('ytThumbNote');
   const making = d.state === 'writing' || t.state === 'making';
-  $('ytThumbs').hidden = !(making || t.state === 'done');
+  // made, being made, or could not be made: the section stays and says which. It used to vanish
+  // when they failed, and nobody could tell there should have been four (the first real publish)
+  const failed = d.state === 'done' && (t.state === 'failed' || (t.state === 'none' && d.again));
+  $('ytThumbs').hidden = !(making || failed || t.state === 'done');
   if ($('ytThumbs').hidden) return ytFeed();
   if (t.state === 'done') {
     const had = ytThumbPick[channel];
@@ -1099,6 +1102,12 @@ function ytThumbsFill(channel, d) {
       r.onchange = () => { ytThumbPick[channel] = { v: t.v, n: r.value === 'none' ? 'none' : Number(r.value) }; ytFeed(); };
     }
     note.hidden = true;
+  } else if (failed) {
+    grid.dataset.v = '';
+    grid.innerHTML = '';
+    for (const r of document.querySelectorAll('input[name=ytThumb]')) r.checked = r.value === 'none';
+    note.textContent = "The thumbnails couldn't be made from this film this time, so YouTube will pick a frame. Reopen this page to try again.";
+    note.hidden = false;
   } else {
     grid.dataset.v = '';
     grid.innerHTML = '<div class="shimmer"></div>'.repeat(4);
