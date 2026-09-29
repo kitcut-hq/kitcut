@@ -857,8 +857,10 @@ async def main():
         check(
             abs(rec["claude_cost_usd"] - (0.5 + CLAUDE_USD)) < 1e-6
             and rec["tokens"]["output"] == 20 + USAGE["output_tokens"]
-            and rec["resumed"]["earlier_usd"] == 0.5,
-            "what the stopped attempt spent is carried, not replaced (%s)" % rec["claude_cost_usd"],
+            and rec["resumed"]["earlier_usd"] == 0.5
+            and rec["seconds"] > 100,
+            "what the stopped attempt spent, and the time it took, are carried (%s, %ss)"
+            % (rec["claude_cost_usd"], rec["seconds"]),
         )
         check(
             doc["state"] == "done"

@@ -799,6 +799,12 @@ async def make_film(
             tokens=tokens,
         )
 
+    # how long the film took: a picked-up film's earlier attempt counts too (the site says it)
+    before_s = (carry.get("seconds") or 0) if resume else 0
+
+    def took():
+        return round(before_s + time.time() - t0, 1)
+
     loop = asyncio.get_running_loop()
     saved_at = [time.time()]
     outer = emit
@@ -962,7 +968,7 @@ async def make_film(
             poster="film_poster.png",
             engine_changed=changed,
             direction=film.direction(),
-            seconds=round(time.time() - t0, 1),
+            seconds=took(),
             stages={k: round(v, 1) for k, v in stages.items()},
         )
         state = "done"
@@ -979,18 +985,18 @@ async def make_film(
             raise
         if stopping:
             state = "interrupted"
-            summary.update(ok=False, error=INTERRUPTED, seconds=round(time.time() - t0, 1))
+            summary.update(ok=False, error=INTERRUPTED, seconds=took())
             emit({"type": "error", "text": INTERRUPTED})
             raise
         state = "cancelled"
-        summary.update(ok=False, error="cancelled", seconds=round(time.time() - t0, 1))
+        summary.update(ok=False, error="cancelled", seconds=took())
         emit({"type": "error", "text": "The film was cancelled."})
         raise
     except Exception as e:  # noqa: BLE001 -- every failure goes to the page, not just the console
         text = str(e) or type(e).__name__
         if isinstance(e, TimeoutError):
             text = "Claude ran past the %d-minute limit" % (lim["claude_s"] // 60)
-        summary.update(ok=False, error=text, seconds=round(time.time() - t0, 1))
+        summary.update(ok=False, error=text, seconds=took())
         emit({"type": "error", "text": text})
     finally:
         tools.kill()  # nothing of this film's keeps running
@@ -998,7 +1004,7 @@ async def make_film(
             summary.setdefault("ok", False)
             if not summary["ok"]:
                 summary.setdefault("error", "stopped before it finished")
-                summary.setdefault("seconds", round(time.time() - t0, 1))
+                summary.setdefault("seconds", took())
             price()
             film.update(
                 state=state, **summary, finished=datetime.now().isoformat(timespec="seconds")

@@ -110,7 +110,8 @@ EOF
     echo "shipping ${sha:0:12}: $(git -C "$REPO_LOCAL" log --format=%s -1 "$sha")"
     change git -C "$REPO_LOCAL" tag -f studio-stable "$sha"
     change git -C "$REPO_LOCAL" push -q -f origin refs/tags/studio-stable
-    if [ "$DRY" = 1 ]; then echo "  would run: push.sh $VM studio-poc"; else bash "$HERE/push.sh" "$VM" studio-poc; fi
+    # the commit itself, not this clone's studio-poc (behind origin's in a worktree)
+    if [ "$DRY" = 1 ]; then echo "  would run: push.sh $VM studio-poc $sha"; else bash "$HERE/push.sh" "$VM" studio-poc "$sha"; fi
     # release.py tests the snapshot before making it current; serve.sh drains before restarting,
     # and builds into the home the server reads (STUDIO_HOME: the unit's, named here as well)
     change_on "cd $REMOTE && STUDIO_HOME=$HOME_DIR bash studio/serve.sh release"

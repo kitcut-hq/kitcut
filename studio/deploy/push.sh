@@ -3,7 +3,11 @@
 # repo on the VM, then move the VM's checkout to it. The VM holds no GitHub credentials at all
 # (and kitcut-hq/kitcut has deploy keys disabled): code only ever arrives from here.
 #
-#   bash studio/deploy/push.sh <vm> [branch]     default branch: studio-poc
+#   bash studio/deploy/push.sh <vm> [branch] [commit]   default branch: studio-poc
+#
+# With a commit, that commit is what the VM's branch becomes (ops.sh ship passes the one it ships);
+# without, this clone's own branch -- which in a worktree, or any clone that has not pulled, is an
+# older commit than origin's, and the VM would then run an older serve.sh than the one shipped.
 #
 # Then ship it: bash studio/deploy/vm.sh ssh <vm> 'bash /srv/kitcut/repo/studio/serve.sh release'
 set -euo pipefail
@@ -12,13 +16,14 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_LOCAL="$(cd "$HERE/../.." && pwd)"
 VM="${1:?vm name}"
 BRANCH="${2:-studio-poc}"
+REV="${3:-refs/heads/$BRANCH}"
 KEY="${KITCUT_SSH_KEY:-$HOME/.ssh/kitcut-studio}"
 vm() { bash "$HERE/vm.sh" "$@"; }
 
 ip="$(vm ip "$VM")"
 export GIT_SSH_COMMAND="ssh -i $KEY -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts.kitcut"
 vm ssh "$VM" '[ -d /srv/kitcut/git ] || git init -q --bare /srv/kitcut/git'
-refs=("refs/heads/$BRANCH:refs/heads/$BRANCH")
+refs=("$REV:refs/heads/$BRANCH")
 git -C "$REPO_LOCAL" rev-parse -q --verify refs/tags/studio-stable >/dev/null &&
   refs+=("+refs/tags/studio-stable:refs/tags/studio-stable")
 git -C "$REPO_LOCAL" push -q --force "ssh://kitcut@$ip/srv/kitcut/git" "${refs[@]}"
