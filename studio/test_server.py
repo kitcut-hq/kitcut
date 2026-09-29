@@ -30,6 +30,7 @@ import agent  # noqa: E402
 import film as films  # noqa: E402
 import store  # noqa: E402
 import validate  # noqa: E402
+import resume  # noqa: E402
 from sched import Sched  # noqa: E402
 
 from aiohttp.test_utils import TestClient, TestServer  # noqa: E402
@@ -48,13 +49,20 @@ EXPECT_USD = CLAUDE_USD + TTS_USD
 CALLED = []  # the films the stub was asked to write
 
 
-async def fake_claude(film, emit, meter, tools, auth="api", prompt=None, resume=None):
+async def fake_claude(
+    film, emit, meter, tools, auth="api", prompt=None, resume=None, budget_usd=None
+):
     CALLED.append(film.id)
     ex = os.path.join(films.KIT, "config", "sketch", "example")
-    if resume:  # the last turn after the time ran out: what was missing
+    if (
+        resume
+    ):  # the last turn after the time ran out, or a stopped film picked up: what was missing
         for f in films.MADE:
             if not os.path.exists(film.path(f)):
                 shutil.copy(os.path.join(ex, f), film.dir)
+        if prompt != agent.WRAP_UP:  # picked up (agent.RESUME): a turn that costs
+            meter.add("msg_resume_" + film.id, USAGE)
+            emit({"type": "cost", "usd": round(meter.usd(), 4)})
         return
     prompt = film.record().get("prompt", "")
     if "login gone" in prompt and auth == "login":  # what run_claude raises for a lost login
@@ -806,6 +814,59 @@ async def main():
             mid.state == "interrupted" and mem.docs.get(mid.id, {}).get("state") == "interrupted",
             "a film left mid-Claude is marked interrupted",
         )
+
+        # ------------------------------------------------ a stopped film picked up (resume.py)
+        stopped = films.Film.create("stopped half-way by a restart", 5, "drawn", client="u:r4")
+        shutil.copy(os.path.join(ex, "film.js"), stopped.dir)
+        os.makedirs(stopped.path("audio", "vo"), exist_ok=True)
+        with open(stopped.path("audio", "vo", "timeline.json"), "w", encoding="utf-8") as f:
+            json.dump({"lines": []}, f)
+        earlier = dict.fromkeys(("input", "cache_write_5m", "cache_write_1h"), 0)
+        earlier.update(output=20, cache_read=30)
+        stopped.update(
+            state="cancelled",
+            ok=False,
+            error="cancelled",
+            claude_session="fake-session",
+            claude_cost_usd=0.5,
+            cost_metered_usd=0.5,
+            tokens=earlier,
+            seconds=100,
+        )
+        mem.save(stopped.id, {"state": "cancelled", "calls": [{"message_id": "msg_before"}]})
+        check(
+            "no saved Claude session" in (resume.refuse(stopped, False) or ""),
+            "a film is not picked up without its saved session",
+        )
+        sess = os.path.join(stopped.claude_dir, "projects", "-film")
+        os.makedirs(sess)
+        open(os.path.join(sess, "fake-session.jsonl"), "w").close()
+        p = resume.plan(stopped)
+        check(
+            resume.refuse(stopped, False) is None
+            and p["missing"] == ["score.json", "sfx.json"]
+            and p["working_minutes"] == round((films.limits(5)["claude_s"] - 100) / 60, 1),
+            "its plan: the session found, the music and cues missing, what is left of its time",
+        )
+        r = await agent.make_film(stopped, lambda ev: None, server.SCHED, auth="api", resume=True)
+        rec, doc = stopped.record(), mem.docs[stopped.id]
+        check(
+            r.get("ok") and stopped.state == "done" and rec.get("error") is None,
+            "a stopped film picked up is done, its old verdict gone",
+        )
+        check(
+            abs(rec["claude_cost_usd"] - (0.5 + CLAUDE_USD)) < 1e-6
+            and rec["tokens"]["output"] == 20 + USAGE["output_tokens"]
+            and rec["resumed"]["earlier_usd"] == 0.5,
+            "what the stopped attempt spent is carried, not replaced (%s)" % rec["claude_cost_usd"],
+        )
+        check(
+            doc["state"] == "done"
+            and [x["message_id"] for x in doc["calls"]]
+            == ["msg_before", "msg_resume_" + stopped.id],
+            "the record keeps both attempts' calls",
+        )
+        check(resume.refuse(stopped, False) is not None, "a done film is not picked up again")
 
         # ------------------------------------------------ drain: running ones finish, queued stay
         server.SCHED = Sched(claude=1)

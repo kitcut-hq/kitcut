@@ -557,9 +557,12 @@ def claude_cli():
     return best[1]
 
 
-async def run_claude(film, emit, meter, tools, auth="api", prompt=None, resume=None):
+async def run_claude(
+    film, emit, meter, tools, auth="api", prompt=None, resume=None, budget_usd=None
+):
     """Claude's part: write, review and fix. Returns the SDK's ResultMessage (or None). With
-    `resume` (a session id) and a `prompt`, one more turn of a session that was stopped."""
+    `resume` (a session id) and a `prompt`, one more turn of a session that was stopped;
+    `budget_usd` then caps what that turn may add (the film's own cap less what it spent)."""
     pending, result = {}, None
 
     async def pre_tool(inp, tool_use_id, ctx):
@@ -612,7 +615,7 @@ async def run_claude(film, emit, meter, tools, auth="api", prompt=None, resume=N
         },
         can_use_tool=can_use,
         max_turns=limits(film.length)["turns"],
-        max_budget_usd=limits(film.length)["budget_usd"],
+        max_budget_usd=budget_usd or limits(film.length)["budget_usd"],
         # a review sheet of painted frames is a PNG of several MB, and it comes back to the SDK
         # as one message (the default limit, 1 MB, failed a painted film)
         max_buffer_size=64 * 1024 * 1024,
@@ -712,13 +715,18 @@ async def save(run_id, fields, final=False):
     return await asyncio.to_thread(STORE.save, run_id, fields, final)
 
 
-async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, control=None):
+async def make_film(
+    film, emit=None, sched=None, auth="api", finish_only=False, control=None, resume=False
+):
     """The whole film, from its Claude slot to the video. Every step is reported through
     emit(dict); returns the final summary. Whatever happens, the run's cost goes to
     kitcut.studio_runs (STORE) and studio.json.
 
     finish_only: Claude's part is already done (a film a restart interrupted while mixing or
-    rendering); only the soundtrack and the video are made. control: a dict the server may set
+    rendering); only the soundtrack and the video are made. resume: Claude's part was stopped
+    half-way (the studio restarted under it); one more turn of the film's own saved session
+    picks it up (RESUME), then the film is finished as usual. Either way what the earlier attempt
+    spent is carried into the record, not replaced. control: a dict the server may set
     {"requeue": True} in before it cancels a film still waiting for its slot -- the film then
     stays queued for the next server instead of being marked cancelled."""
     emit = emit or (lambda ev: None)
@@ -726,6 +734,14 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
     control = control if control is not None else {}
     rec = film.record()
     prompt, length, look = rec.get("prompt", ""), film.length, film.look
+    # an earlier attempt's Claude part, costed by the server that ran it: carried, not replaced
+    carry = rec if (finish_only or resume) else {}
+    prior_calls = None  # finish_only: the record's per-call detail is left as it is
+    if resume:
+        if not rec.get("claude_session"):
+            raise RuntimeError("%s has no Claude session to pick up" % film.id)
+        doc = await asyncio.to_thread(STORE.get, film.id)
+        prior_calls = (doc.get("calls") or []) if doc else None
     fps = 60
     with contextlib.suppress(OSError, ValueError):
         with open(film.manifest, encoding="utf-8") as f:
@@ -743,19 +759,28 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
         "release": RELEASE,
         "auth": auth,
     }
+    summary.update(
+        {k: carry[k] for k in ("turns", "claude_said", "session", "overtime") if k in carry}
+    )
     emit({"type": "job", "id": film.id, "model": MODEL, "length": length, "look": look})
 
     def price():
-        # the SDK's own figure when the run reached its end; the meter's when it did not
+        # the SDK's own figure when the run reached its end; the meter's when it did not. Not
+        # for a resumed session: Claude Code may restore what the session spent before, and the
+        # meter counts this attempt's responses only
         metered = round(meter.usd(), 4)
-        sdk = res.total_cost_usd if res is not None else None
+        sdk = res.total_cost_usd if res is not None and not resume else None
         claude = round(sdk, 4) if sdk is not None else metered
+        tokens = meter.tokens()
         tts_rows = _spend(film, "audio", "vo", "spend.jsonl")
         img_rows = _spend(film, "images", "spend.jsonl")
         tts = round(sum(r["cost_usd"] for r in tts_rows), 6)
         img = round(sum(r.get("cost_usd") or 0 for r in img_rows), 6)
-        if finish_only and not meter.msgs:  # Claude's part was costed by the earlier server
-            claude = rec.get("claude_cost_usd") or 0
+        if carry:  # plus what Claude's earlier attempt spent
+            claude = round(claude + (carry.get("claude_cost_usd") or 0), 4)
+            metered = round(metered + (carry.get("cost_metered_usd") or 0), 4)
+            for k, v in (carry.get("tokens") or {}).items():
+                tokens[k] = tokens.get(k, 0) + v
         summary.update(
             # everything this film cost: Claude + the voice + the paintings
             cost_usd=round((claude if billed else 0) + tts + img, 4),
@@ -771,7 +796,7 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
             },
             tts_model=tts_rows[-1]["model"] if tts_rows else None,
             cost_metered_usd=metered,
-            tokens=meter.tokens(),
+            tokens=tokens,
         )
 
     loop = asyncio.get_running_loop()
@@ -785,8 +810,8 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
             price()
             now = {
                 "cost_usd": summary["cost_usd"],
-                "tokens": meter.tokens(),
-                "calls": meter.calls(),
+                "tokens": summary["tokens"],
+                "calls": (prior_calls or []) + meter.calls(),
             }
             loop.run_in_executor(None, STORE.save, film.id, now)
 
@@ -795,25 +820,50 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
     def on_wait(pool, ahead):
         emit({"type": "wait", "pool": pool, "ahead": ahead, "text": waiting_text(pool, ahead)})
 
+    lim, talk = limits(length), {}
+    if resume:  # what is left of the film's working time and budget, and the turn that picks it up
+        used = (carry.get("stages") or {}).get("claude") or carry.get("seconds") or 0
+        work = min(RESUME_S, max(RESUME_MIN_S, lim["claude_s"] - used))
+        lim = lim | {"claude_s": work, "wall_s": work + 20 * 60}
+        spent = carry.get("claude_cost_usd") or 0
+        talk = {
+            "prompt": RESUME % round(work / 60),
+            "resume": rec["claude_session"],
+            "budget_usd": max(1.0, lim["budget_usd"] - spent),
+        }
+        summary["resumed"] = {
+            "after": carry.get("error") or carry.get("state"),
+            "earlier_s": carry.get("seconds"),
+            "earlier_usd": spent,
+        }
+
     state = "error"
     try:
         if not finish_only:
             async with sched["claude"].hold(1, film.id, on_wait, priority=rec.get("priority", 0)):
                 clock.t0, clock.paused = time.time(), 0.0  # the queue was not Claude's time
-                film.update(state="claude", started=datetime.now().isoformat(timespec="seconds"))
-                await save(film.id, {"state": "running", "started_at": store.now()})
+                if resume:  # the stopped attempt's verdict goes; its start and its cost stay
+                    film.update(state="claude", ok=None, error=None, finished=None)
+                    await save(film.id, {"state": "running", "ok": None, "error": None})
+                else:
+                    film.update(
+                        state="claude", started=datetime.now().isoformat(timespec="seconds")
+                    )
+                    await save(film.id, {"state": "running", "started_at": store.now()})
                 emit(
                     {
                         "type": "stage",
                         "name": "claude",
-                        "text": "Claude is writing and reviewing the film",
+                        "text": "Claude is picking the film up where it stopped"
+                        if resume
+                        else "Claude is writing and reviewing the film",
                     }
                 )
                 s = time.time()
                 try:
                     try:
                         res = await _within(
-                            run_claude(film, emit, meter, tools, auth), clock, limits(length)
+                            run_claude(film, emit, meter, tools, auth, **talk), clock, lim
                         )
                     except SignInError as e:
                         if auth != "login":
@@ -834,7 +884,7 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
                             }
                         )
                         res = await _within(
-                            run_claude(film, emit, meter, tools, auth), clock, limits(length)
+                            run_claude(film, emit, meter, tools, auth, **talk), clock, lim
                         )
                 except TimeoutError:
                     # past its time, Claude may only have been taking a last look at a film it
@@ -857,7 +907,11 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
                 stages["waited"] = clock.paused
             price()
             if res is not None:
-                summary.update(turns=res.num_turns, claude_said=res.result, session=res.session_id)
+                summary.update(
+                    turns=res.num_turns + (summary.get("turns") or 0),
+                    claude_said=res.result,
+                    session=res.session_id,
+                )
                 if res.is_error:
                     raise RuntimeError("Claude stopped early: %s" % (res.result or res.subtype))
             missing = [f for f in MADE if not os.path.exists(film.path(f))]
@@ -925,7 +979,7 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
     except Exception as e:  # noqa: BLE001 -- every failure goes to the page, not just the console
         text = str(e) or type(e).__name__
         if isinstance(e, TimeoutError):
-            text = "Claude ran past the %d-minute limit" % (limits(length)["claude_s"] // 60)
+            text = "Claude ran past the %d-minute limit" % (lim["claude_s"] // 60)
         summary.update(ok=False, error=text, seconds=round(time.time() - t0, 1))
         emit({"type": "error", "text": text})
     finally:
@@ -977,6 +1031,12 @@ async def make_film(film, emit=None, sched=None, auth="api", finish_only=False, 
             }
             if summary.get("fallback"):  # made on the key because the login failed
                 final["fallback"] = summary["fallback"]
+            if summary.get("resumed"):
+                final["resumed"] = summary["resumed"]
+            if prior_calls is not None:  # the stopped attempt's responses, then this one's
+                final["calls"] = prior_calls + final["calls"]
+            elif carry:  # the earlier detail could not be read: leave the record's as it is
+                del final["calls"]
             # shielded: a cancelled film's record must still be written
             await asyncio.shield(save(film.id, final, final=True))
     return summary
@@ -1010,6 +1070,18 @@ WRAP_UP = (
     "Time is up. Do not review or render stills again. Write whatever is still missing of "
     "film.js, score.json and sfx.json now -- keep them simple -- call check if you changed "
     "film.js, and stop with one sentence."
+)
+
+
+# a film picked up after the studio stopped under it (make_film resume=True): at most this much
+# working time, and at least this much, whatever the film's own limit has left
+RESUME_S, RESUME_MIN_S = 20 * 60, 5 * 60
+RESUME = (
+    "The studio restarted while you were making this film; this is the same session, picking up "
+    "where it stopped. Everything you wrote is on disk as you left it and the narration is "
+    "recorded -- do not record it again. Look once at where the film stands (one set of review "
+    "stills), fix only what is clearly wrong, then write whatever is still missing of film.js, "
+    "score.json and sfx.json, call check, and stop with one sentence. You have about %d minutes."
 )
 
 

@@ -47,6 +47,39 @@ server (no new films; the ones being made finish, up to 20 min) and restarts it.
 the server and the tunnel back after a crash or a reboot (`Restart=always`); the laptop never had
 that.
 
+Two guards, both from one bad evening (2026-09-28, film `rts664` killed after 28 minutes):
+
+- **The release is built where the server reads it.** `serve.sh` takes `STUDIO_HOME` from the
+  `kitcut-studio` unit when it is not set. Without it `release.py` fell back to
+  `/srv/kitcut/kitcut-studio` (`film.py`'s default for a laptop), the server's
+  `/srv/kitcut/studio/releases/current` never moved, and the restart came back on the old code.
+  `serve.sh release` now refuses to restart unless `current` names the sha it just built, and
+  skips the restart when that sha is already live.
+- **One deploy at a time.** `release`, `use` (a rollback), `restart` and `stop` take
+  `STUDIO_HOME/deploy.lock` (`flock`). Three ships overlapped that evening, each draining and
+  restarting on its own; a second one now stops at once and prints who holds the lock.
+
+## A film the studio stopped half-way
+
+A restart while Claude is working stops the film (up to 2026-09-29 it was even recorded as
+*cancelled*, exactly as if its person had pressed Stop). Its work is not lost: `film.js`, the
+narration and Claude's own session (`STUDIO_HOME/claude/<film>/`, the transcript Claude Code
+resumes) stay on the data disk. `studio/resume.py` picks it up in the same film -- the same page
+and link -- with one more turn of that session, then the mix and the render as usual:
+
+```bash
+bash studio/deploy/ops.sh resume <film-id> --plan   # session found? what is missing? spends nothing
+bash studio/deploy/ops.sh resume <film-id>          # its own unit (kitcut-resume-...), followed
+bash studio/deploy/ops.sh resume <film-id> --finish # Claude's part is whole: mix and render only
+```
+
+Claude gets what the film's limit has left of its working time (at most 20 min) and of its
+budget. What the stopped attempt spent is carried into the record, not replaced, and both
+attempts' calls stay in `kitcut.studio_runs`. On kitcut.ai a stopped film's credits were already
+given back (cancelled, interrupted and failed are all refunded, and only a spend still *held* is
+ever charged), so a film finished this way is free to its person: check `credit_spends` for the
+film before running if it matters.
+
 ## What is different from the laptop, and why
 
 **The render encodes in software, in the page.** There is no GPU. The browser refuses its

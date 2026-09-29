@@ -471,3 +471,25 @@ moved to the Azure VM.
 transcripts under `STUDIO_HOME/claude/<film>` record the laptop's `C:\` paths.
 **Workaround.** Finish such a film from its files (the studio's tools), not by resuming the
 session. Films made on the VM resume as before.
+
+### KI-031 · fixed · studio · A ship stopped a film and called it cancelled, then restarted onto the old code
+
+**Symptom.** A kitcut.ai film (`studio-20260928-165122-rts664`, 150 s) stopped 28 minutes in with
+"The film was cancelled." Nobody had pressed Stop. The studio came back on the release it already
+ran, not the one being shipped.
+**Cause.** Three things at once. (1) Three `ops.sh ship` runs overlapped, with no lock. (2) The
+first one's drain waited its 20 minutes (a 150 s film on the VM may take ~2 h), then restarted
+anyway. (3) `serve.sh release` ran `release.py` without `STUDIO_HOME`, so the release was built in
+`/srv/kitcut/kitcut-studio`, while the server reads `/srv/kitcut/studio/releases/current`: the
+restart changed nothing. On a restart, SIGTERM reaches `make_film` as a plain task cancel, the
+same path as the Stop button, so the film was recorded `cancelled`. A film that was mixing or
+rendering was recorded cancelled too, so the next server never finished it.
+**Fix.** `serve.sh` reads `STUDIO_HOME` from the unit, refuses to restart unless `current` names
+what it built, skips a restart onto what is already live, and holds `deploy.lock`. `ops.sh resume`
+(`studio/resume.py`) finishes a stopped film through Claude's own saved session, in the same film,
+its earlier cost carried. Still to come: a shutdown recorded as `interrupted` (and a film that was
+mixing left for the next server to finish), then deploys that never wait on or stop a film -- one
+server per release, the old one finishing its films while the new one takes the new ones.
+**Evidence.** VM journal 2026-09-28 17:19:13 PDT (`Stopping kitcut-studio.service` in the same second
+as the film's last event); `/srv/kitcut/kitcut-studio/releases/266ba5829609` built beside the
+server's home; ship sessions from the laptop at 16:58, 17:08 and 17:13.

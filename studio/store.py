@@ -91,6 +91,14 @@ class MongoStore:
                 print("  cost log: could not write to MongoDB (%s); kept in %s" % (e, self.outbox))
             return False
 
+    def get(self, run_id):
+        """One run's document, per-call detail included; None when there is none or the database
+        cannot be reached (a caller that must not overwrite what it could not read checks)."""
+        try:
+            return self.col().find_one({"_id": run_id})
+        except Exception:  # noqa: BLE001 -- as save(): the record must never fail a film
+            return None
+
     def runs(self, limit=None, since=None):
         """Every run (or those created since a datetime), oldest first, without the per-call detail."""
         q = {"created_at": {"$gte": since}} if since else {}
@@ -148,6 +156,9 @@ class MemoryStore:
         d = self.docs.setdefault(run_id, {"_id": run_id, "created_at": now()})
         d.update(fields, updated_at=now())
         return True
+
+    def get(self, run_id):
+        return self.docs.get(run_id)
 
     def runs(self, limit=None, since=None):
         rows = sorted(

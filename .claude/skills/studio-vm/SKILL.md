@@ -1,6 +1,6 @@
 ---
 name: studio-vm
-description: Operate the production Sketch Studio (kitcut.ai's film maker) on its Azure VM, kitcut-studio-1 -- check its health, read its logs, ship a release, roll back, make or follow a film, pull a film's files, hide a film from the gallery, forward the studio to this laptop, snapshot its disk, or rebuild the machine. Use when asked about the studio's status or errors, "is kitcut.ai working", to deploy/ship/release studio code, to look at the VM or its logs, to make a test film on the studio, to back up or rebuild the studio machine, or when a session used to reach the studio on 127.0.0.1:8765 on the laptop (it now lives on the VM).
+description: Operate the production Sketch Studio (kitcut.ai's film maker) on its Azure VM, kitcut-studio-1 -- check its health, read its logs, ship a release, roll back, make or follow a film, finish (resume) a film that was cancelled or interrupted half-way, pull a film's files, hide a film from the gallery, forward the studio to this laptop, snapshot its disk, or rebuild the machine. Use when asked about the studio's status or errors, "is kitcut.ai working", to deploy/ship/release studio code, to look at the VM or its logs, to make a test film on the studio, to back up or rebuild the studio machine, or when a session used to reach the studio on 127.0.0.1:8765 on the laptop (it now lives on the VM).
 ---
 
 # The studio VM
@@ -20,6 +20,7 @@ bash studio/deploy/ops.sh releases                  # built releases, current ma
 bash studio/deploy/ops.sh rollback <sha12>          # back to one already built, no rebuild
 bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--api]   # on the Claude login unless --api
 bash studio/deploy/ops.sh watch <film-id>
+bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]  # finish a film the studio stopped
 bash studio/deploy/ops.sh pull <film-id> [dest] [--all]
 bash studio/deploy/ops.sh hide|show <film-id>       # public gallery
 bash studio/deploy/ops.sh forward [8765]            # the VM's studio on this laptop's 127.0.0.1:8765
@@ -36,6 +37,16 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
   `studio-stable`, pushes the code to the VM (`push.sh`: the VM holds no GitHub credentials),
   builds and tests the release there, drains the running films (up to 20 min) and restarts, then
   proves the studio reports the new release.
+- **A ship can still stop a film: look before you ship.** `ops.sh status` lists the films in
+  progress; a film on the VM takes 25-40 min (a 150 s one up to ~2 h), longer than the drain waits.
+  One deploy runs at a time (`deploy.lock`): if a ship says another is running, wait for it --
+  never start a second one to hurry it. On 2026-09-28 three overlapping ships killed a paying
+  film 28 minutes in, and restarted onto the old code (the release was built outside
+  `STUDIO_HOME`; serve.sh now reads it from the unit).
+- **A film the studio stopped is not lost.** `ops.sh resume <id> --plan`, then without `--plan`:
+  one more turn of Claude's own saved session, in the same film (same page and link), its earlier
+  cost carried into the record. Check the film's `credit_spends` first -- a spend already released
+  stays free; only a still-*held* one is charged when the film comes out done.
 - **Read the film's own events, not only the journal.** A step's failure lands in
   `projects/<film>/events.jsonl` as `{"type": "fail"}` and Claude works around it -- the first
   films on the VM went out *silent* because `google-genai` was missing and the narration step

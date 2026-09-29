@@ -9,6 +9,9 @@
 #                                                     the VM, drain, restart, prove the new release
 #   bash studio/deploy/ops.sh releases                what is built there, and which is current
 #   bash studio/deploy/ops.sh rollback <sha12>        back to a release already built (no rebuild)
+#   bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]   pick up a film the studio
+#                                                     stopped half-way (studio/resume.py), in the
+#                                                     same film; --plan spends nothing
 #   bash studio/deploy/ops.sh film "<idea>" [--seconds N] [--api]   a film made on the VM itself
 #                                                     (on the Claude login unless --api), followed
 #   bash studio/deploy/ops.sh watch <film-id>         follow a film to the end
@@ -108,8 +111,9 @@ EOF
     change git -C "$REPO_LOCAL" tag -f studio-stable "$sha"
     change git -C "$REPO_LOCAL" push -q -f origin refs/tags/studio-stable
     if [ "$DRY" = 1 ]; then echo "  would run: push.sh $VM studio-poc"; else bash "$HERE/push.sh" "$VM" studio-poc; fi
-    # release.py tests the snapshot before making it current; serve.sh drains before restarting
-    change_on "cd $REMOTE && bash studio/serve.sh release"
+    # release.py tests the snapshot before making it current; serve.sh drains before restarting,
+    # and builds into the home the server reads (STUDIO_HOME: the unit's, named here as well)
+    change_on "cd $REMOTE && STUDIO_HOME=$HOME_DIR bash studio/serve.sh release"
     if [ "$DRY" = 0 ]; then
       got="$(on "curl -s --max-time 5 http://127.0.0.1:$PORT/api/health" | python -c 'import json,sys; print(json.load(sys.stdin)["release"])')"
       [ "$got" = "${sha:0:12}" ] && echo "live: $got" || die "the studio reports $got, expected ${sha:0:12}"
@@ -122,8 +126,34 @@ EOF
 
   rollback)
     rel="${1:?rollback <sha12> (see: ops.sh releases)}"
+    [[ "$rel" =~ ^[0-9a-f]{12}$ ]] || die "not a release: $rel"
     on "test -f $HOME_DIR/releases/$rel/studio/server.py" || die "no release $rel built on $VM"
-    change_on "echo $rel > $HOME_DIR/releases/current.tmp && mv $HOME_DIR/releases/current.tmp $HOME_DIR/releases/current && cd $REMOTE && bash studio/serve.sh restart"
+    change_on "cd $REMOTE && STUDIO_HOME=$HOME_DIR bash studio/serve.sh use $rel"
+    ;;
+
+  resume)
+    id="${1:?resume <film-id> [--plan] [--finish]}"; shift
+    [[ "$id" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $id"
+    plan=0; how=""
+    for a in "$@"; do
+      case "$a" in --plan) plan=1 ;; --finish) how="--finish" ;; *) die "resume <film-id> [--plan] [--finish]" ;; esac
+    done
+    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/resume.py $id $how"
+    # the plan first, always: it spends nothing, and it refuses a film that may not be picked up
+    on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env $py --plan" || exit 1
+    [ "$plan" = 1 ] && exit 0
+    # a unit of its own with the server's environment (kitcut-studio.service): each step gets its
+    # cgroup (Delegate), the log goes to the journal, and the film goes on if this laptop sleeps
+    unit="kitcut-resume-${id#studio-}"
+    env="--setenv=STUDIO_HOME=$HOME_DIR --setenv=STUDIO_REPO=$REMOTE --setenv=STUDIO_ENV_FILE=$REMOTE/.env"
+    env="$env --setenv=TZ=America/Los_Angeles --setenv=PYTHONUNBUFFERED=1 --setenv=HF_HOME=$REMOTE/../hf"
+    env="$env --setenv=PATH=\$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p Delegate=yes -p KillMode=control-group $env $py"
+    [ "$DRY" = 1 ] && exit 0
+    echo "following $unit (Ctrl+C stops following, not the film; ops.sh logs shows the server)"
+    on "journalctl -u $unit -f -n 100 --no-pager -o cat & j=\$!
+      while systemctl is-active -q $unit; do sleep 5; done; sleep 2; kill \$j
+      r=\$(systemctl show $unit -p Result --value); echo \"$unit: \${r:-success}\""
     ;;
 
   film)
