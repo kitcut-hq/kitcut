@@ -10,6 +10,7 @@ import re
 import sys
 import json
 import shutil
+import asyncio
 import tempfile
 import subprocess
 
@@ -20,6 +21,73 @@ import agent  # noqa: E402
 import film as films  # noqa: E402
 import validate  # noqa: E402
 from guard import guard, pin_after  # noqa: E402
+from sched import Sched  # noqa: E402
+from tools import ToolError, Tools  # noqa: E402
+
+
+def caps_cases(expect, A, B, C):
+    """A look is a recipe of capabilities (film.CAPS), fixed in the film's record: what each film
+    is given, what the page says, and that the syntax check covers a module too."""
+    expect(
+        "caps: each look's recipe",
+        (A.caps, B.caps, C.caps),
+        (("grounds",), ("paintings",), ("cutouts", "collage")),
+    )
+    expect("caps: in the record", C.record().get("caps"), ["cutouts", "collage"])
+    for look, recipe in films.RECIPES.items():
+        for c in recipe:
+            cap = films.CAPS[c]
+            there = [os.path.join(films.KIT, "sketch", m + ".js") for m in cap.get("modules", ())]
+            there += [os.path.join(films.KIT, f["file"]) for f in cap.get("fonts", ())]
+            there += [os.path.join(films.KIT, *p) for p in cap.get("fills", {}).values()]
+            missing = [p for p in there if not os.path.exists(p)]
+            expect("caps: %s/%s files exist" % (look, c), missing, [])
+    expect(
+        "caps: engine files",
+        (A.engine_files(), C.engine_files()),
+        (("engine.js", "props.js"), ("engine.js", "props.js", "collage.js")),
+    )
+    # a film from before looks were recorded: painted if it has a paint.json
+    old = films.Film.create("an old painted film", 5, "painted")
+    rec = old.record()
+    for k in ("look", "caps"):
+        rec.pop(k)
+    with open(old.path("studio.json"), "w", encoding="utf-8") as f:
+        json.dump(rec, f)
+    expect("caps: an old film's look", (old.look, old.caps), ("painted", ("paintings",)))
+    # what the page says while it paints, and when Claude looks at the sheet
+    paint = "mcp__studio__paint"
+    expect(
+        "labels: painting",
+        (agent._describe(paint, {}, B), agent._describe(paint, {}, C)),
+        ("painting the scenes (Muse)", "painting the cut-outs"),
+    )
+    expect(
+        "labels: the sheet",
+        agent._describe("Read", {"file_path": "images/sheet.jpg"}, C),
+        "looking at the cut-outs",
+    )
+    # a refused write names only the film's own engine files
+    why_a = guard("Write", {"file_path": "engine/extra.js"}, A)[1]
+    why_c = guard("Write", {"file_path": "engine/extra.js"}, C)[1]
+    expect(
+        "refusal: engine files",
+        ("collage.js" in why_a, "engine/collage.js" in why_c),
+        (False, True),
+    )
+    # the syntax check covers every engine file the film has, its modules too
+    if not shutil.which("node"):
+        return
+    with open(C.path("film.js"), "w", encoding="utf-8") as f:
+        f.write("// For: a test\nSK.film({ duration: 30, draw() {} });\n")
+    with open(C.path("engine", "collage.js"), "a", encoding="utf-8") as f:
+        f.write("\nSK.broken = function ( {\n")
+    try:
+        asyncio.run(Tools(C, Sched(), lambda ev: None).check())
+        said = ""
+    except ToolError as e:
+        said = str(e)
+    expect("check: engine/collage.js is checked", "engine/collage.js" in said, True)
 
 
 def main():
@@ -65,6 +133,7 @@ def main():
             ("Edit", {"file_path": "engine/props.js"}, True),
             ("Write", {"file_path": "engine/engine.js"}, True),
             ("Write", {"file_path": "engine/extra.js"}, False),
+            ("Write", {"file_path": "engine/collage.js"}, False),  # a collage film's module
             ("Write", {"file_path": "sketch.json"}, False),
             ("Write", {"file_path": "studio.json"}, False),
             ("Write", {"file_path": "paint.json"}, False),  # a drawn film has no paintings
@@ -144,6 +213,8 @@ def main():
             (True, True),
         )
 
+        caps_cases(expect, A, B, C)
+
         # a link inside a film that leads to another film does not get through (real paths)
         link = A.path("link")
         if os.name == "nt":
@@ -194,7 +265,7 @@ def main():
                 False,
             )
         expect("the length is in the first message", "Length: 10 seconds" in agent.ask(B), True)
-        n = len(cases) + 20
+        n = len(cases) + 32
     finally:
         shutil.rmtree(HOME, ignore_errors=True)
     print("%d cases, %d failed" % (n, len(bad)))

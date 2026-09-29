@@ -857,6 +857,7 @@ def limits_doc():
             str(n): {
                 "claude_minutes": films.limits(n)["claude_s"] // 60,
                 "paintings": films.limits(n)["images"],
+                "cutouts": films.limits(n)["cutouts"],  # a collage film's (film.CAPS)
                 "narration_lines": films.limits(n)["lines"],
             }
             for n in sample
