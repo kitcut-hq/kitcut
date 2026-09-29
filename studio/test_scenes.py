@@ -201,6 +201,23 @@ async def main():
     except tools_mod.ToolError as e:
         check("scenes/02-green.js" in str(e), "and one that does not parse is named by check")
 
+    # ------------------------------------------------ the switch, set after film.py was imported
+    # (the studio's .env is read after it: a value read at import would never have been seen)
+    os.environ["STUDIO_SCENES_OVER_S"] = "300"
+    long_one = films.Film.create("five and a bit", 305, "drawn")
+    short_one = films.Film.create("five exactly", 300, "drawn")
+    os.environ.pop("STUDIO_SCENES_OVER_S")
+    unset = films.Film.create("no switch", 480, "drawn")
+    check(
+        long_one.mode == "scenes"
+        and os.path.isdir(long_one.path("scenes"))
+        and short_one.mode == "single"
+        and unset.mode == "single",
+        "STUDIO_SCENES_OVER_S=300 makes a 305 s film in scenes, a 300 s one in one piece; unset, none",
+    )
+    for x in (long_one, short_one, unset):
+        x.update(state="done")  # asked about only: nothing is to make them
+
     # ------------------------------------------------ the plan's rules, and the guard per pass
     g = films.Film.create("a plan", 120, "drawn", mode="scenes")
     timeline(g, 12)

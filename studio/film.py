@@ -80,8 +80,18 @@ ENGINE = ("engine.js", "props.js")
 CAST_FILE = re.compile(r"^[a-z][a-z0-9_]{0,30}\.js$")
 # a film made in scenes (studio/scenes.py): its plan, and a file per scene, scenes/NN-slug.js
 SCENE_FILE = re.compile(r"^[0-9]{2}-[a-z0-9-]{1,40}\.js$")
+
+
 # films longer than this (seconds) are made in scenes; 0: none are (docs/studio-scenes-plan.md)
-SCENES_OVER_S = int(os.environ.get("STUDIO_SCENES_OVER_S") or 0)
+def scenes_over_s():
+    """STUDIO_SCENES_OVER_S, read when a film is made: this module is imported before the studio's
+    .env is (agent.py), so a value read at import would never see it."""
+    try:
+        return int(os.environ.get("STUDIO_SCENES_OVER_S") or 0)
+    except ValueError:
+        return 0
+
+
 CAST_USE = re.compile(r"\bcast\s*(?:\.\s*([a-z][a-z0-9_]*)|\[\s*['\"]([a-z][a-z0-9_]*)['\"]\s*\])")
 # film.js's first line, `// For: <who it is for>; <its mood>`: the audience the film is made for
 FOR_LINE = re.compile(
@@ -625,7 +635,8 @@ class Film:
         m["engine"] = "engine"
         m["cast"] = "cast"  # every cast/*.js loads before film.js (sketch-render)
         # a long film is made a scene at a time (studio/scenes.py): scenes/*.js load after film.js
-        mode = mode or ("scenes" if SCENES_OVER_S and seconds > SCENES_OVER_S else "single")
+        over = scenes_over_s()
+        mode = mode or ("scenes" if over and seconds > over else "single")
         if mode == "scenes":
             m["scenes"] = "scenes"
             os.makedirs(film.path("scenes"))
