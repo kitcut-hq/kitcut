@@ -173,6 +173,14 @@ def _score(d, length=60):
         bars = limits(length)["drum_bars"]
         if e.get("type") == "drums" and not _num(e.get("bars", 1), 0, bars):
             out.append("score.json event %d: drums bars at most %d" % (i, bars))
+        # a piece the kit has no sound for fails only when the soundtrack renders (a collage
+        # film asked for a 'crash' on 2026-09-28): name it here, with the ones there are
+        kit = e.get("kit") if e.get("type") == "drums" else None
+        if isinstance(kit, dict) and set(kit) - set(A.DRUM_PAN):
+            out.append(
+                "score.json event %d: drums has no %s; the kit is %s"
+                % (i, ", ".join(sorted(set(kit) - set(A.DRUM_PAN))), ", ".join(A.DRUM_PAN))
+            )
     return out
 
 

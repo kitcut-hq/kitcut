@@ -242,3 +242,31 @@ rebuilding rather than rediscovering:**
    way `check-resolve.py` pins the interchange arithmetic.
 
 Do not open a third implementation.
+
+## 7. Ship the collage look on kitcut.ai
+
+**Built 2026-09-28 on branch `sketch-collage`, not released.** A third studio look, `collage`:
+an image model paints single objects cut out of paper (`sketch-paint.py` `"cutout": true`,
+openai/gpt-image-2.5-flare with real alpha, ~$0.012 each) and Claude builds pages round them
+with `sketch/collage.js` (sheets, tape labels, stamps, type, marker lines, ransom letters, the
+stop-motion nudge). Brief: `studio/looks/collage.md`; example: `config/sketch/collage-example/`;
+reference: "Collage films" in `docs/reference.md`. It answers a Runway + Opus 5.5 demo
+(@notiansans, 2026-09-28): the studio, given that post's own prompt (60 s, history of ice cream,
+"newspaper cutout / mixed media"), made a film at its level with no human edits in 21 minutes --
+17 cut-outs $0.20, voice $0.11, Claude $4.43 at API prices, 43 turns.
+
+Open, in order:
+- **Blind bake-off** (`studio/bakeoff.py`) on 6-8 prompts across subjects and audiences, serious
+  and playful, before the look is offered: the brief rule. Watch whether the example film (a
+  newspaper, because of its subject) makes every collage film a newspaper; the one run so far
+  was asked for one.
+- **The site** (sketch-studio): a third look in the picker and in the MCP tool's look enum, the
+  docs and screenshots. The progress line says "painting the scenes (Muse)" for collage films
+  too (`agent.py`'s tool labels do not know the look).
+- **Narration length, every look**: the first message asks for 2.2 words a second; Gemini reads
+  nearer 1.9 (the collage run re-recorded four times to fit 60 s; by hand, 140 words ran 72 s
+  against a 58 s plan). Measure over recent films and lower it -- a brief change, so bake-off.
+- **Cost**: the collage prompt is ~195 KB against ~133 KB (collage.js + the example film ride
+  along), so cache reads cost ~45% more per turn; trim the example if the bake-off allows.
+- **Release** with the studio-vm skill, after the user approves; then merge `sketch-collage`
+  into `studio-poc` (`--ff-only` after a rebase).
