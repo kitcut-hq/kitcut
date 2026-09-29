@@ -12,7 +12,7 @@ Lifetime. On Windows every step runs in a Job Object of its own: killing it (a t
 cancelled film) takes down the step and everything it started -- browsers, ffmpeg -- in one call,
 and since the job is set to die with its last handle, a server that is killed outright takes all
 of them with it. A step may use at most STUDIO_FILM_MEM_GB (12) of memory. On Linux under
-systemd (the Azure VM: studio/deploy/kitcut-studio.service, Delegate=yes) the same is a cgroup v2
+systemd (the Azure VM: studio/deploy/kitcut-studio@.service, Delegate=yes) the same is a cgroup v2
 per step: memory.max is the cap, cgroup.kill the one call, and stopping the service takes every
 step's cgroup with it. Anywhere else the step leads a process group of its own and the group is
 killed, with no memory cap.

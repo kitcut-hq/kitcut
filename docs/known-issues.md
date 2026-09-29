@@ -489,9 +489,9 @@ what it built, skips a restart onto what is already live, and holds `deploy.lock
 (`studio/resume.py`) finishes a stopped film through Claude's own saved session, in the same film,
 its earlier cost carried. A stopping server tells its films why (`server.shutdown()`): one Claude
 was writing is recorded `interrupted` with a line on its page, one being mixed or rendered is left
-`finishing` for the next server, and the unit runs `KillMode=mixed`. Still to come: deploys that
-never wait on or stop a film -- one server per release, the old one finishing its films while the
-new one takes the new ones.
+`finishing` for the next server, and the unit runs `KillMode=mixed`. Then (2026-09-29) one server per release: a ship starts the new release as its own
+`kitcut-studio@<instance>` beside the running one, which finishes its films and exits; nothing
+waits and nothing is stopped (`studio/peers.py`, `serve.sh switch`, `studio/deploy/README.md`).
 **Evidence.** VM journal 2026-09-28 17:19:13 PDT (`Stopping kitcut-studio.service` in the same second
 as the film's last event); `/srv/kitcut/kitcut-studio/releases/266ba5829609` built beside the
 server's home; ship sessions from the laptop at 16:58, 17:08 and 17:13.
