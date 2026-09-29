@@ -4,12 +4,13 @@ the soundtrack and the video as usual, into the same film (its page and link sta
 
     python studio/resume.py <film-id> --plan      what is there, what is missing, what it may cost
     python studio/resume.py <film-id>             pick it up (make_film resume=True)
+    python studio/resume.py <film-id> --minutes N  with N minutes of Claude's working time
     python studio/resume.py <film-id> --finish    Claude's part is whole: mix and render only
 
 For a film the studio stopped under it -- a restart while Claude was still working records it
 cancelled (before 2026-09-29) or interrupted -- not for one its person stopped. The Claude session
 is the film's own (STUDIO_HOME/claude/<id>/ for a film on the key), so Claude remembers what it
-drew and why; its working time is what the film's limit has left, at most agent.RESUME_S. What the
+drew and why; its working time is what the film's limit has left (--minutes to set it). What the
 stopped attempt spent is carried into the record (studio.json and kitcut.studio_runs), not
 replaced, and the events go on in the film's events.jsonl, so its page shows the rest of the run.
 
@@ -47,12 +48,12 @@ def session_file(film):
     return None
 
 
-def plan(film):
+def plan(film, minutes=None):
     """What resuming would do, from the files alone: nothing is spent."""
     rec = film.record()
     lim = limits(film.length)
     used = (rec.get("stages") or {}).get("claude") or rec.get("seconds") or 0
-    work = min(agent.RESUME_S, max(agent.RESUME_MIN_S, lim["claude_s"] - used))
+    work = minutes * 60 if minutes else max(agent.RESUME_MIN_S, lim["claude_s"] - used)
     missing = [f for f in MADE if not os.path.exists(film.path(f))]
     if not os.path.exists(film.path("audio", "vo", "timeline.json")):
         missing.append("audio/vo/timeline.json (the narration)")
@@ -122,11 +123,16 @@ def main():
     ap.add_argument(
         "--finish", action="store_true", help="no Claude: its part is whole, mix and render only"
     )
+    ap.add_argument(
+        "--minutes",
+        type=int,
+        help="Claude's working time (default: what the film's limit has left, at least 5)",
+    )
     args = ap.parse_args()
     film = Film.open(args.film)
     if film is None:
         sys.exit("no film %s in %s" % (args.film, agent.HOME))
-    p = plan(film)
+    p = plan(film, args.minutes)
     print(json.dumps(p, indent=2))
     why = refuse(film, args.finish)
     if why:
@@ -139,7 +145,13 @@ def main():
         film.update(state="finishing", ok=None, error=None, finished=None)
     r = asyncio.run(
         agent.make_film(
-            film, emit, Sched(), auth=p["auth"], finish_only=args.finish, resume=not args.finish
+            film,
+            emit,
+            Sched(),
+            auth=p["auth"],
+            finish_only=args.finish,
+            resume=not args.finish,
+            resume_minutes=args.minutes,
         )
     )
     if r.get("ok"):

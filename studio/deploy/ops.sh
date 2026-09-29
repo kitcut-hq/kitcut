@@ -238,11 +238,16 @@ EOF
     ;;
 
   resume)
-    id="${1:?resume <film-id> [--plan] [--finish]}"; shift
+    id="${1:?resume <film-id> [--plan] [--finish] [--minutes N]}"; shift
     [[ "$id" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $id"
     plan=0; how=""
-    for a in "$@"; do
-      case "$a" in --plan) plan=1 ;; --finish) how="--finish" ;; *) die "resume <film-id> [--plan] [--finish]" ;; esac
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --plan) plan=1 ;; --finish) how="$how --finish" ;;
+        --minutes) [[ "${2:-}" =~ ^[0-9]+$ ]] || die "--minutes needs a number"; how="$how --minutes $2"; shift ;;
+        *) die "resume <film-id> [--plan] [--finish] [--minutes N]" ;;
+      esac
+      shift
     done
     py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/resume.py $id $how"
     # the plan first, always: it spends nothing, and it refuses a film that may not be picked up

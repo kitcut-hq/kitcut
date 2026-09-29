@@ -752,7 +752,14 @@ async def save(run_id, fields, final=False):
 
 
 async def make_film(
-    film, emit=None, sched=None, auth="api", finish_only=False, control=None, resume=False
+    film,
+    emit=None,
+    sched=None,
+    auth="api",
+    finish_only=False,
+    control=None,
+    resume=False,
+    resume_minutes=None,
 ):
     """The whole film, from its Claude slot to the video. Every step is reported through
     emit(dict); returns the final summary. Whatever happens, the run's cost goes to
@@ -872,7 +879,9 @@ async def make_film(
     lim, talk = limits(length), {}
     if resume:  # what is left of the film's working time and budget, and the turn that picks it up
         used = (carry.get("stages") or {}).get("claude") or carry.get("seconds") or 0
-        work = min(RESUME_S, max(RESUME_MIN_S, lim["claude_s"] - used))
+        # what the film's own limit has left (a film stopped before its picture was written needs
+        # most of it), or what the operator gives it (resume.py --minutes)
+        work = resume_minutes * 60 if resume_minutes else max(RESUME_MIN_S, lim["claude_s"] - used)
         lim = lim | {"claude_s": work, "wall_s": work + 20 * 60}
         spent = carry.get("claude_cost_usd") or 0
         talk = {
@@ -1142,9 +1151,11 @@ WRAP_UP = (
 
 # what a film the studio stopped under it says (make_film on a shutdown; server.adopt after a crash)
 INTERRUPTED = "The studio restarted before this film was finished."
-# a film picked up after the studio stopped under it (make_film resume=True): at most this much
-# working time, and at least this much, whatever the film's own limit has left
-RESUME_S, RESUME_MIN_S = 20 * 60, 5 * 60
+# a film picked up after the studio stopped under it (make_film resume=True) gets what its own
+# limit has left of Claude's working time, and at least this much. (It was capped at 20 minutes,
+# right for a film missing only its music; an 8-minute film stopped before its picture was
+# written -- llwtme, 2026-09-28 -- needs most of its limit.)
+RESUME_MIN_S = 5 * 60
 RESUME = (
     "The studio restarted while you were making this film; this is the same session, picking up "
     "where it stopped. Everything you wrote is on disk as you left it and the narration is "

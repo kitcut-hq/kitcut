@@ -161,7 +161,7 @@ bash studio/deploy/ops.sh resume <film-id>          # its own unit (kitcut-resum
 bash studio/deploy/ops.sh resume <film-id> --finish # Claude's part is whole: mix and render only
 ```
 
-Claude gets what the film's limit has left of its working time (at most 20 min) and of its
+Claude gets what the film's limit has left of its working time (`--minutes N` to set it) and of its
 budget. What the stopped attempt spent is carried into the record, not replaced, and both
 attempts' calls stay in `kitcut.studio_runs`. On kitcut.ai a stopped film's credits were already
 given back (cancelled, interrupted and failed are all refunded, and only a spend still *held* is
