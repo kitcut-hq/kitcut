@@ -659,8 +659,10 @@ Start from `config/sketch/example/` (copied into the project; it runs free on ed
 Two rules carry the design: **every frame is a pure function of t** (the browser plays it
 live and the renderer exports any frame on its own), and **cues hang off words**
 (`SK.w(line, "word")` reads the voice timeline the bundler injects), so a re-recorded line
-moves its visuals with it. Two looks share one engine: `SK.setStyle('crayon')` (boiling
-hand-drawn lines) and `'clean'` (editorial line art, cards, flat fills). Each script times
+moves its visuals with it. Three looks share one engine: `SK.setStyle('crayon')` (boiling
+hand-drawn lines), `'clean'` (editorial line art, cards, flat fills) and `'collage'` (mixed
+media: pictures cut out of paper by `sketch-paint.py` `"cutout": true`, animated with torn
+sheets, tape labels, stamps and type from `sketch/collage.js`, nudged on twos like stop motion). Each script times
 its stages into the run log; `--timings` answers "how long does a film take". After touching
 any of it, run `python scripts/check-sketch.py` — the notation, every sound generator, the
 ducker, the tail-word cut and the bundler; no API, no browser, seconds.
@@ -734,7 +736,7 @@ which cannot encode the glyphs at all.
 | `scripts/make-thumbnail.py` | a 1280x720 YouTube thumbnail in the channel's house style from a spec; `yt-upload.py --thumbnail` sets it |
 | `scripts/edl-cut.py` | a film from hand-chosen ranges of a few silent takes, with an elapsed counter driven by SOURCE time so it stays true over a sped-up wait |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
-| `sketch/` | the sketch-film engine (`engine.js`), cast (`props.js`) and player page (`player.html`); `scripts/_sketch.py` and `_sketchaudio.py` are the Python half, `check-sketch.py` their test |
+| `sketch/` | the sketch-film engine (`engine.js`), cast (`props.js`), collage pieces (`collage.js`) and player page (`player.html`); `scripts/_sketch.py` and `_sketchaudio.py` are the Python half, `check-sketch.py` their test |
 | `config/sketch/example/` | a 12 s sketch film to copy into a new project: manifest, `film.js`, score, cues |
 | `scripts/resolve-export.py` | the cut as an OTIO/EDL/FCP7 XML timeline plus an SRT, for DaVinci Resolve (free edition); `check-resolve.py` is its test, `docs/davinci-resolve.md` the research behind it |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |

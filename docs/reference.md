@@ -2885,6 +2885,7 @@ voice is edge-tts.
 | file | what it is |
 |---|---|
 | `sketch/engine.js` | the renderer: strokes that boil, cel fills, write-on text, camera, flight paths, paper, grain; `SK.setStyle('crayon' \| 'clean')`; the ground, `SK.setGround(name)` (paper, white, kraft, sky, mint, butter, blush, night, chalkboard, blueprint: the paper, its grain and the text colours that read on it, `C.text` `C.textSoft` `C.accent` `C.accentText`), or `ground: (t) => name` in `SK.film`; backdrops that cover whatever the camera shows: `SK.sky`, `SK.band` (ground, hills, waves, grass; returns `edge(x)`), `SK.stars` |
+| `sketch/collage.js` | the collage pieces, loaded between the engine and the props: cut-out pictures, torn sheets, tape labels, headlines, stamps, bursts, halftone dots, ransom letters, marker lines, masking tape, a newspaper backdrop, groups, and the in/out motion they share; `SK.setStyle('collage')` (see "Collage films") |
 | `sketch/props.js` | the cast: ticket character, seated person with poses, a standing/walking/sitting kid (`P.kid`, also the grown-up at s ~1.4), paper plane, laptop, table, lightbulb, rocket, padlock, coin, stamp, browser window, thought bubble, confetti, architectural houses, phone, window (cracks), street siren, delta-wing drone, missile, stopwatch, debris; scenery: tree (round, pine, bare), bush, cloud, sun, moon (full, crescent), mountain, building |
 | `config/sketch/grounds/` | every ground and three places built from the backdrops, one a second: render its stills after changing any of them |
 | `sketch/player.html` | the page: player UI, and the export modes the renderer drives |
@@ -2913,7 +2914,7 @@ frame 2,317 on its own.
 re-recorded line: the visuals move with the voice. Hand-copied timestamps silently drift the
 first time a take changes.
 
-**Two looks, one engine.** `crayon` re-jitters every line 8 times a second (the traced-cel
+**Three looks, one engine** (the third, `collage`, has its own section below). `crayon` re-jitters every line 8 times a second (the traced-cel
 boil), adds a faint second pencil pass, and prints fills a few pixels off their outlines;
 `clean` turns all of that off for crisp editorial line art with flat fills, soft card shadows
 (`SK.card`), a drafting grid and letters that rise instead of pop. Both have shipped: a
@@ -3202,6 +3203,227 @@ a brand explainer), wall clock:
 
 The first film, which produced these tools, took most of a day; the saving is the engine,
 the cast, the voice/audio/render pipeline and the traps already paid for.
+
+### The picture: `sketch-render.py`
+
+Bundles engine + props + film + fonts + images + voice timeline + mastered MP3 into
+`outputs/<slug>.html` (one file, plays offline) and `outputs/artifact/<slug>.html` (the same
+without html/head/body, for claude.ai Artifacts). `--stills` and `--sheet` are the review
+loop: 18 stills in 8.6 s. The video is rendered by opening the page in headless Edge/Chrome
+(`html-to-image.py`'s browser finder, so no Node and no Playwright): the page draws each frame
+and POSTs its raw pixels to a local server here, which pipes them into ffmpeg with
+`_encode.video_args`. The mux uses `-t`, never `-shortest` (see the gotchas), asserts the
+duration, and adds a soft subtitle track and the poster.
+
+The frames are drawn in chunks (`--chunk`, 8 s of film each), each in a fresh browser: measured
+on the 63.5 s air-raid film, a single session fell from 13.8 to 1.5 frames a second and then
+stopped answering at frame ~2,700 of 3,810. `--jobs` browsers draw chunks at once (default a
+quarter of the logical cores, at most 6), each into its own encoder and segment file under
+`temp/`, and the segments are joined by stream copy. One browser is serial -- draw, read the
+canvas back, POST 8 MB, wait for the encoder -- so it left most of the machine idle. A film
+shorter than jobs x chunk is split evenly across the browsers instead, down to 1 s each.
+
+Every segment's frames are counted (`ffprobe -count_packets`) before it is accepted, and a
+chunk that fails or comes back short is redrawn from its start, up to three times -- safe
+because every frame is a pure function of t. The count is not paranoia: the first parallel
+run produced a segment with no moov atom whose chunk had reported clean, and the join is
+where that surfaced. The joined file is counted again against the frame total.
+
+Measured on an i9-11900H (8 cores/16 threads) + RTX 3050 Ti laptop, shared with other sessions:
+
+| render | jobs | wall clock | frames/s |
+|---|---|---|---|
+| air-raid, 63.5 s at 60 fps | 1 (the old serial path) | 809 s | 4.7 |
+| air-raid, 63.5 s at 60 fps | 4 | 269 s | 14.1 |
+| 32 s of it, chunk 4 | 2 / 4 / 6 / 8 | 219 / 108 / 102 / 95 s | 8.8 / 17.8 / 18.9 / 20.3 |
+| a 5 s studio-length film | 1 / 4 | 28 / 15 s | 10.8 / 20.1 |
+
+Past four browsers the gain flattens, which is why the default is a quarter of the cores.
+Speed also moves with the machine: the same 6 s ran at 13.8 fps and, an hour later with other
+sessions busy, at 2.3. A parallel render is not bit-identical to a serial one after the first
+chunk (SSIM 0.98 between them): each segment is its own encode, so a frame's compression no
+longer leans on the chunk before it. The drawn picture is the same -- against a lossless still
+of t = 30 s both renders score 0.972. `--draft` renders 30 fps.
+
+#### Encoding in the browser: `--encode browser`
+
+`--encode browser` (or `render.encode: "browser"`) has the page encode its own frames with the
+browser's hardware H.264 encoder (WebCodecs `VideoEncoder`, `_encode.webcodecs()`) and POST
+only the stream, one second of film per POST; ffmpeg wraps it without re-encoding
+(`-c copy`), tagging it BT.709. The script's default is still `pipe`; the studio passes `browser` (`studio/tools.py` `RENDER_ENCODE`, since 2026-09-28, after a blind test on three films in `docs/studio-speed.md`). A
+browser that cannot encode says `no-encoder` and the render falls back to `pipe`, loudly, for
+every remaining chunk.
+
+Why: profiled per frame on one browser (2026-09-28), a frame costs ~3 ms of draw calls, ~50 ms
+of actual drawing (deferred until the pixels are read), ~3 ms to copy them out, and ~28 ms to
+POST 8 MB to Python and ffmpeg; ffmpeg alone encodes ~170 frames/s. The POST is why `pipe`
+stopped scaling: the 33 s Clamly film took 87 s at 3 browsers and 91 s at 6. In the browser
+the frame never leaves the GPU:
+
+| film | pipe (today) | browser, 6 jobs |
+|---|---|---|
+| Clamly, 33 s at 60 fps | 87 s at 3 jobs (145 s with the machine busy) | 26-28 s |
+| the 8-minute studio film, 28,800 frames | 2,218 s at 3 jobs (13 fps) | **536 s (54 fps)** |
+
+Quality, scored against the true frames (PNG stills of the same t -- frames are a pure
+function of t -- decoded with each file's own colour matrix):
+
+| render | PSNR | SSIM (worst) | size |
+|---|---|---|---|
+| Clamly, pipe cq 18 | 38.8 dB | 0.967 (0.963) | 108 MB |
+| Clamly, browser QP 18 / 17 / 16 | 39.0 / 39.2 / 39.6 | 0.959 / 0.963 / 0.967 | 110 / 141 / 177 MB |
+| Clamly, browser at pipe's bitrate (VBR 26 Mbps) | 39.0 | 0.957 | 111 MB |
+| 8-min film, one minute: pipe cq 18 | 37.8 | 0.951 (0.907) | 273 MB |
+| same minute, browser QP 18 / 20 / 22 | 38.8 / 37.6 / 35.9 | 0.959 / 0.935 / 0.878 | 485 / 373 / 182 MB |
+| 8-min film, whole | pipe 38.1 dB, 0.955 (0.938), 2.2 GB | browser QP 18: 38.6 dB, 0.959 (0.956), 3.8 GB | |
+
+QP = cq (`WEBCODECS_QP_OFFSET` 0) is the one setting at least as good as pipe on both films;
+its price is file size on a grainy film (+75% here), because a fixed QP spends bits where
+NVENC's VBR and adaptive quantisation would not. Viewers get the 5 Mbps web copy either way;
+the master's size costs upload time and storage.
+
+The colour matrix: the browser encodes BT.709 and writes no tags; `pipe`'s rgba -> yuv420p is
+BT.601, also untagged. Decoded as BT.709 -- what a browser assumes for untagged HD -- the pipe
+render is 5.6 levels too dark in green (PSNR 33.6 dB against 38.8 read as BT.601). The browser
+path's wrap writes the BT.709 tags; the pipe path is untouched here and still untagged.
+
+What the machine offers (headless Edge, 2026-09-28): H.264 on the GPU in every bitrate mode
+including `quantizer`; HEVC not at all; AV1 in software only.
+
+### How long a film takes
+
+Machine time for the 60 s film, from its run logs (`--timings` prints them):
+
+| stage | seconds |
+|---|---|
+| voice (27 takes, scoring, placing) | ~185 |
+| soundtrack (first run, incl. sample fetch) | ~80 |
+| review stills (per round of 18) | ~9 |
+| final render, 60 fps | ~420 |
+
+The rest is authoring. Measured on the second film built with these tools (60 s, clean look,
+a brand explainer), wall clock:
+
+| phase | minutes |
+|---|---|
+| research: the product's claims and their sources, the brand's rules and assets | 9 |
+| script + manifest | 2 |
+| voice (`sketch-vo.py`, 27 takes) | 5 |
+| `film.js`, first pass | 5 |
+| review rounds (stills), fixes, score and cue list | 8 |
+| final render | 8 |
+| **total** | **~37** |
+
+The first film, which produced these tools, took most of a day; the saving is the engine,
+the cast, the voice/audio/render pipeline and the traps already paid for.
+
+### Collage films: cut-outs and mixed media (`sketch/collage.js`)
+
+A collage film animates pictures cut out of paper rather than whole painted scenes: each
+picture is one object (an engraving, a product photograph) with a transparent background and a
+white scissor-cut border, pinned onto coloured sheets with torn edges, and the motion design is
+everything around it -- display type, tape labels, rubber stamps, marker arrows, ransom-note
+letters, halftone dots, a running timeline. `SK.setStyle('collage')` turns it on; the pieces are
+`sketch/collage.js`, which the bundler loads after engine.js and before props.js, so a film's
+own props or film.js can override any piece (the film's engine copy of it when it has one,
+`sketch/collage.js` otherwise).
+
+**Why it exists.** On 2026-09-28 a Runway employee (@notiansans, status 2104676565829505527)
+posted a 60 s "newspaper cutout / mixed media" history of ice cream made by Opus 5.5 with the
+Runway MCP, prompt verbatim: *Create a [60 second] motion graphic explainer video about [the
+history of ice cream from the inception, to present day]. All of the visual images should be
+handled by Runway, and all the motion graphics elements and animations should be handled by
+you. The art style should be [newspaper cutout / mixed media aesthetic] with a high degree of
+polish.* Measured off the post (1440 frames, 24 fps, 1080p): ten chapters of about 5 s, one per
+narration line (136 words over a swing groove, visuals cued to words); 18-20 cut-outs, each with
+a white scissor-cut border and a paper shadow; every piece shifts by a pixel or so on every
+second frame (frame differences alternate ~1 and 4-14 grey levels) and the grain re-rolls at
+12 fps -- stop motion on twos. Runway's hosted MCP (`https://mcp.runwayml.com/mcp`, OAuth,
+Pro/Max plans) lists `generate_image`, `remove_image_background`, `generate_speech` and
+`generate_music`, which is every asset in the film; the post does not say what rendered it.
+Everything else in it was already this engine's: the page is code, frames are a pure function
+of t, the voice is timed word by word. What was missing -- pictures as cut-outs, the collage
+pieces, print typefaces and the 12 fps nudge -- is this section.
+
+**The pieces.** Every one takes `in` / `out` specs `{t, type, d, from, dist, spin}`, `rot`,
+`s`, `alpha`, `nudge` (0 for none), and draws centred on its x, y:
+
+| piece | what | notable options |
+|---|---|---|
+| `SK.cutout(name, x, y, w)` | a cut-out picture with its paper shadow | `shadow` (fractions of its long side), `flip` |
+| `SK.sheet(x, y, w, h)` | a sheet of paper; torn sides show a white fibre rim | `col`, `edges` ('tblr', '' for cut), `amp`, `rim`, `tex`, `light`, `seed` |
+| `SK.tape(text, x, y)` | a strip of paper or tape carrying words; returns {w, h} | `font`, `size`, `col`, `ink` (reads on col by default), `ends` (cut, torn, zig), `distress` |
+| `SK.headline(text, x, y)` | display type in one piece | `font`, `size`, `italic`, `ls`, `align`, `distress` (letterpress), `stroke`, `maxW` |
+| `SK.stamp(x, y)` | a rubber stamp printed in ink (multiply) | `shape` (circle, rect), `text`, `top`/`bottom` (round the ring), `col`, `t` (its hit) |
+| `SK.burst(x, y, r)`, `SK.disc` | a starburst; a hand-cut paper circle | `spikes`, `inner`, `col`, `spin` |
+| `SK.halftone(x, y, w, h)` | printed dots fading away from a side or corner | `from`, `step`, `max`, `pow`, `angle` |
+| `SK.ransom(text, x, y)` | letters cut from different pages, landing in turn | `size`, `fonts`, `cols`, `stagger` |
+| `SK.mark(pts)`, `SK.arrow(x1, y1, x2, y2)` | a marker line drawn on | `in.d`, `col`, `w`, `head`, `bow` |
+| `SK.maskingTape(x, y, w)` | translucent masking tape with torn ends | `rot` |
+| `SK.newsprint()` | a newspaper page behind everything | `text`, `heads`, `headEvery`, `cols`, `size`, `ink` |
+| `SK.layer(o, fn)` | a group: everything fn draws moves, enters and leaves together | `w`, `h` (for a wipe), `steps` |
+
+`SK.motion(o, t)` is the state behind every entrance, `SK.place(o, w, h, fn)` draws in an
+element's own frame, `SK.step(t)` holds t on a 12 fps clock, `SK.nudge(seed)` is the per-piece
+shake. Entrance types: `pop` (overshooting scale and a turn), `grow`, `drop` (falls onto the
+page and settles), `slap` (a label slapped down), `thump` (a stamp), `slide` (a sheet from a
+side, landing with no overshoot), `wipe` (revealed from a side), `rise`, `fade`, `none`.
+
+**The stop-motion feel is the style, not the film.** Under `collage` every piece is nudged
+(~1 px, ~0.2 degrees) twelve times a second, entrances run on the same 12 fps clock (a layer
+with `steps: 0` moves smoothly: a full-width sheet stepped at 12 fps jumps 240 px a frame), the
+grain re-rolls at 12 fps (`style.grainFps`) and there is no handheld camera. Render at 24 fps,
+like the reference; it also halves the frames against 60.
+
+**Cut-outs** are painted by `sketch-paint.py` (see above): `"cutout": true` on an image, the
+block's `"cutouts"` for the model, quality, border and cut. The default model,
+`openai/gpt-image-2.5-flare`, is asked for `background: transparent` because OpenRouter's
+catalogue lists it; any model without it is asked for a white ground, keyed off it
+(`matte_white`: the near-white region connected to the picture's edge), and the paper border
+covers any hole the key leaves where the subject's own white touched the ground. Then specks
+under 1.5% of the subject are dropped, the subject is trimmed and scaled to 1024 px, and a
+border of `border` px is cut round it: the mask dilated by the border, closed over notches up
+to ~5 borders wide (scissors do not follow every notch) and simplified to straight snips
+(`approxPolyDP`) for `scissor`, or left smooth for `round`. Saved as WebP with alpha: 70-340 KB
+each, against 1.1-1.8 MB for the PNG the model sends.
+
+Measured (2026-09-28): 17 cut-outs for the example film at medium quality, $0.197 in all
+($0.0107-0.0137 each), 78 s of wall clock four at a time; one repaint $0.011. Tested both ways
+on three subjects (an engraved freezer, a photographed cone, an engraved portrait): Flare's
+alpha and Muse-on-white keyed by `matte_white` both came out clean enough that the border hid
+any difference. Flare takes 16 reference pictures; Muse takes none but has the most detail per
+dollar. One cut-out of 17 came back with a white paper shape painted behind it (an engraving
+of barley); "drawn alone with nothing behind it" in the prompt fixed it.
+
+**Fonts** (`fonts/SOURCES.md`): Abril Fatface (headlines), UnifrakturMaguntia (mastheads),
+Oswald (labels), Old Standard TT (body, datelines, with an italic), Playfair Display (italic
+kickers, heavy display in Cyrillic), Courier Prime (typewriter), with Anton and Caveat already
+here. Only Oswald, Old Standard TT and Playfair Display carry Cyrillic. A manifest font entry
+takes `"style": "italic"` for an italic face of a family.
+
+**Performance.** Each sheet, sticker, stamp, burst, dot field and label is drawn once per render
+chunk into an offscreen canvas with its shadow baked in; a frame is then a few dozen
+`drawImage` calls. The 66 s example (1584 frames) renders in 24-28 s with six browsers
+encoding in the browser (57-67 fps) on the laptop; a round of ten review stills takes ~8 s.
+
+**The example**, `config/sketch/collage-example/` (made as the local project
+`collage-paperwork` and copied in): "A Brief History of Paperwork", 66 s, eleven
+narration lines (Gemini 3.1 Flash TTS, Charon, $0.07), 17 cut-outs, ten scenes, a timeline
+ruler, a swing score from a chord chart (`score.py`) and 109 sound cues computed from the word
+times (`sfx.py`). `film.js` is ~320 lines: a `scene(t0, from, draw)` per sheet, drawn inside
+one sliding `SK.layer`, older scenes first. Built in one evening together with the pieces
+themselves; the review rounds are in the project journal.
+
+Traps, each found on the example:
+- **A sheet that overshoots bares the page under it** (the first slide bounced 4.5%, 90 px on a
+  full-width sheet, and showed the title page at the edge): slides land with no overshoot now.
+- **A payoff on a line's last word gets covered** by the next sheet. Start a sheet 0.15 s before
+  its line, let a page arrive composed (label, title, main picture ride in on the sheet) and
+  land only details on words, and move a big reveal to an earlier word.
+- **Text on a card must shake with the card**: the card is its own `SK.layer({nudge: 1})`
+  and what is written on it takes `nudge: 0`, or the words drift across the paper.
+- **Gemini narration ran 24% longer than `--plan`'s 2.6 words a second** (140 words: 72 s, not
+  58 s); a "brisk" style note barely moved it. Budget ~1.9 words a second.
 
 ### Sketch Studio: a prompt box that makes a short film (`studio/`)
 

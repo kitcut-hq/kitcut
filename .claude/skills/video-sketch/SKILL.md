@@ -1,6 +1,6 @@
 ---
 name: video-sketch
-description: Make an animated explainer film with no footage — a hand-drawn/whimsical or clean editorial animation written as JavaScript, with an AI voice-over, an original score on sampled instruments and synthesised sound effects, rendered to MP4 and to a self-contained HTML player. Use when asked for an animation, an animated explainer or promo, a motion-graphics video, a "whimsical hand-drawn" video, a product or feature explainer, a 30-60 second ad, or anything that should be illustrated rather than filmed.
+description: Make an animated explainer film with no footage — a hand-drawn/whimsical, a clean editorial, or a mixed-media paper-collage animation (cut-out pictures from an image model animated with type, tape labels, rubber stamps and torn paper, the "newspaper cutout" motion-design look) written as JavaScript, with an AI voice-over, an original score on sampled instruments and synthesised sound effects, rendered to MP4 and to a self-contained HTML player. Use when asked for an animation, an animated explainer or promo, a motion-graphics or motion-design video, a "whimsical hand-drawn" video, a collage / mixed-media / cut-out / scrapbook / newspaper-style video, a product or feature explainer, a 30-60 second ad, or anything that should be illustrated rather than filmed.
 ---
 
 # A sketch film: an explainer written as code
@@ -16,9 +16,11 @@ python scripts/sketch-render.py --manifest projects/<id>/sketch.json --timings
 ```
 
 `docs/reference.md` has the reference under "Sketch films". The engine is `sketch/engine.js`,
-the cast `sketch/props.js`, the page `sketch/player.html`. A finished example with both
-looks' conventions: the committed `config/sketch/example/` (crayon), and a real brand film
-built the same way (clean, 60 s, real estate) is described in the reference.
+the cast `sketch/props.js`, the collage pieces `sketch/collage.js`, the page
+`sketch/player.html`. Finished examples: the committed `config/sketch/example/` (crayon), a
+real brand film (clean, 60 s, real estate) described in the reference, and the committed
+`config/sketch/collage-example/` (collage, 66 s: 17 cut-outs, ten sheets, stamps, a timeline
+ruler, `score.py` and `sfx.py` beside it). Copy an example into `projects/<id>/` to start.
 
 ## The project folder comes first
 
@@ -34,7 +36,9 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    cannot source; say so in the report.
 2. **Brand before design.** Use the brand's real logo file (`"images": {"logo": ...}` →
    `SK.image('logo', ...)`), its colours and its typefaces (woff2 in `fonts/`). Pick the look
-   for the audience: `crayon` is whimsical; `clean` is editorial (agents, finance, B2B).
+   for the audience: `crayon` is whimsical; `clean` is editorial (agents, finance, B2B);
+   `collage` is mixed media -- real pictures cut out of paper and animated as motion design
+   (history, explainers, anything with things to show). See "A collage film" below.
 3. **Script.** About 2.6 words a second: 60 s is ~130 words, 40 s ~90. One idea per line.
    `sketch-vo.py --plan` prints the layout and the credit cost; nothing is spent.
 4. **Voice.** `sketch-vo.py`. Read the take table it prints: accuracy under ~0.8 is usually
@@ -73,6 +77,43 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
 9. **Publish** with `yt-upload.py --channel <handle>` — unlisted unless told otherwise.
 10. **Report the timings** (`--timings`) with the deliverables.
 
+## A collage film (mixed media, paper cut-out, "newspaper" motion design)
+
+The look of the Runway + Opus 5.5 demos: every picture is one object cut out of paper (an
+engraving, a product photo), pinned onto coloured sheets with torn edges, and the motion design
+is everything around it -- display type, tape labels, rubber stamps, marker arrows, ransom
+letters, halftone dots, a running timeline. `SK.setStyle('collage')` plus `sketch/collage.js`:
+
+1. **Cut-outs** come from the manifest's `paint` block with `"cutout": true` on each image
+   (`"aspect": "2:3"` for a tall one). The block's `"cutouts": {"model", "quality", "border",
+   "cut"}` default to `openai/gpt-image-2.5-flare`, which paints on a real transparent
+   background (~$0.011-0.014, ~15 s, 4 at once); a model with no alpha is asked for a white
+   ground and keyed off it. Each becomes `images/<name>.webp` with a white scissor-cut paper
+   border; the sheet shows them on blue so a bad edge shows. Write each prompt as the medium
+   plus the thing: "A 19th-century steel engraving of ..." or "Studio product photograph of
+   ...". A model sometimes paints a paper shape behind an engraving (the barley did): repaint
+   with "drawn alone with nothing behind it".
+2. **Fonts** are the print faces in `fonts/` (see `fonts/SOURCES.md`): Abril Fatface
+   (headlines), UnifrakturMaguntia (mastheads), Oswald (labels), Old Standard TT (body,
+   datelines), Playfair Display (italic kickers), Courier Prime (typewriter), Anton, Caveat
+   (handwriting). Only Oswald, Old Standard TT and Playfair Display carry Cyrillic.
+3. **Pieces**: `SK.sheet` (a page; torn `edges`), `SK.cutout`, `SK.tape` (labels, banners, a
+   big title on a strip), `SK.headline` (`distress` for letterpress), `SK.stamp` (`t:` its
+   hit), `SK.burst`/`SK.disc`, `SK.halftone`, `SK.ransom`, `SK.mark`/`SK.arrow` (drawn on),
+   `SK.maskingTape`, `SK.newsprint` (call first), `SK.rules`. Every piece takes `in`/`out`
+   specs `{t, type, d, from}`: pop, grow, drop, slap, thump, slide, wipe, rise, fade.
+4. **One scene = one sheet** inside `SK.layer({in: {t, type: 'slide', from}, steps: 0})`, so
+   the sheet and everything on it slide in together, over the scene before. A card with words
+   on it is its own `SK.layer({nudge: 1})` with `nudge: 0` on what is written on it.
+5. **Pages arrive composed**: the chapter label, title and main picture ride in on the sheet;
+   only the details land later, each on the word that names it. Start a sheet 0.15 s before
+   its line; a payoff on the line's last word then still has ~0.8 s before the next sheet.
+6. **The stop-motion feel is automatic**: the style nudges every piece a pixel or so 12 times
+   a second, steps entrances on twos and grains the frame at 12 fps. Render at 24 fps.
+7. Cue the sound from the timeline with `sfx.py` beside the manifest (a whoosh and a paper
+   landing per sheet, a thunk per stamp, a pop per pop, keys for typing, a scribble per marker
+   line) and write the score from a chord chart with `score.py`; see `config/sketch/collage-example/`.
+
 ## Traps already paid for
 
 - **Never open on a blank page.** A fade in from paper, or a draw-on that starts at zero,
@@ -105,3 +146,13 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
   exists (ДСНС: «Стій! Не чіпай! Телефонуй 101!») and list what was left out in `_sources`.
 - Cue sound effects from the voice timeline with a small `sfx_gen.py` beside the manifest
   (see `projects/air-raid-kids/`), not with hand-copied seconds: a retake moves them too.
+- **Gemini reads slower than `--plan` thinks.** The collage film's 140-word script planned at
+  58 s and came back at 72 s (Charon, a documentary direction); "brisk" in the style barely
+  moved it. Budget ~1.9 words a second for Gemini narration and cut words, not the pace note.
+- **A sheet that overshoots bares the page under it.** Slides land with no bounce; keep the
+  overshoot for things that drop onto a page.
+- **A payoff on a line's last word gets covered** by the next sheet unless the next sheet waits
+  (see 5 above); move the big reveal to an earlier word ("one form into three": fan on "one").
+- **A `//` comment inside a one-line object** swallows its closing brackets; the render then
+  fails in every chunk with "Unexpected end of input". `node --check film.js` catches it in a
+  second.

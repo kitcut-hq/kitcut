@@ -64,7 +64,8 @@ def load(path):
                 m["_paint_file"], m["paint"] = rel(m, m["paint"]), json.load(f)
         m["images"] = dict(m.get("images") or {})
         for im in m["paint"].get("images", []):
-            p = os.path.join("images", safe_name(im.get("name"), "paint image name") + ".jpg")
+            kind = ".webp" if im.get("cutout") else ".jpg"  # a cut-out keeps its transparency
+            p = os.path.join("images", safe_name(im.get("name"), "paint image name") + kind)
             if os.path.exists(rel(m, p)):
                 m["images"].setdefault(im["name"], p)
     # "engine": "engine" -- a folder holding the film's own engine.js and props.js (Sketch Studio

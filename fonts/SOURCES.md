@@ -11,6 +11,17 @@ All are SIL Open Font License 1.1 (text in OFL.txt), from Google Fonts.
 | Inter.woff2 (variable 100-900) | Inter | sketch films, clean look |
 | Caveat-Cyrillic-VF.ttf (variable 400-700, full glyph set) | Caveat | sketch films in Ukrainian (crayon look) |
 | BalsamiqSans-Regular.ttf, BalsamiqSans-Bold.ttf (full glyph set) | Balsamiq Sans | sketch films in Ukrainian: friendly, legible print for children |
+| AbrilFatface-Regular.ttf | Abril Fatface | collage films: headlines (Latin only) |
+| UnifrakturMaguntia-Book.ttf | UnifrakturMaguntia | collage films: newspaper mastheads (Latin only) |
+| Oswald-VF.ttf (variable 200-700) | Oswald | collage films: tape labels, chapter tags, ruler (Latin and Cyrillic) |
+| OldStandard-Regular.ttf, OldStandard-Bold.ttf, OldStandard-Italic.ttf | Old Standard TT | collage films: body type, datelines, newsprint (Latin and Cyrillic) |
+| PlayfairDisplay-VF.ttf, PlayfairDisplay-Italic-VF.ttf (variable 400-900) | Playfair Display | collage films: italic kickers, heavy display type in Cyrillic |
+| CourierPrime-Regular.ttf, CourierPrime-Bold.ttf | Courier Prime | collage films: typewriter notes (Latin only) |
+| Anton-Regular.ttf | Anton | thumbnails; collage films: condensed labels (Latin only) |
+
+The collage fonts are the complete `.ttf` files from github.com/google/fonts (`ofl/<family>/`),
+fetched 2026-09-28; the variable ones are renamed from `<Family>[wght].ttf` to `<Family>-VF.ttf`.
+An italic face of a family goes in a manifest with `"style": "italic"`.
 
 The woff2 files are the Latin subsets Google Fonts serves; a film that needs other scripts
 should add that subset beside them. The `.ttf` files above are the complete fonts from
