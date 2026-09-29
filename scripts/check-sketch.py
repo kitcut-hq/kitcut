@@ -300,6 +300,21 @@ def main():
         cues[0][2] == "One two three." and len(cues) == 2,
         str(cues),
     )
+    # a narration that runs past the film (u3edgl: its last line began at 150.99 s of 150): no cue
+    # from the end on, none running backwards, none outlasting the picture
+    late = {
+        "duration": 10,
+        "lines": [
+            {"start": 8.0, "end": 9.9, "words": [{"text": "Almost", "s": 8.0, "e": 9.9}]},
+            {"start": 10.2, "end": 12, "words": [{"text": "gone.", "s": 10.2, "e": 12}]},
+        ],
+    }
+    cues = _sketch.captions(late)
+    check(
+        "captions: nothing after the film's end, nothing backwards",
+        [c[2] for c in cues] == ["Almost"] and all(s < e <= 10 for s, e, _ in cues),
+        str(cues),
+    )
 
     # ---- cut-outs (sketch-paint.py): a collage's pictures, made without a single paid call
     import io

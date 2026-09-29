@@ -216,9 +216,13 @@ def chunk_words(words, max_words=9):
 
 
 def captions(timeline, max_words=9):
-    """[(start, end, text)] from a VO timeline; a line may carry its own 'captions' split."""
+    """[(start, end, text)] from a VO timeline; a line may carry its own 'captions' split.
+    Nothing is captioned from the film's end on: a line spoken after it is never heard, and a cue
+    starting there (its end clamped to the film's) ran backwards, outlasted the picture and made
+    the render refuse the whole film (u3edgl, 2026-09-29: "rendered 150.96s, expected 150.00s")."""
     cues = []
     lines = timeline["lines"]
+    film_end = timeline.get("duration")
     for li, L in enumerate(lines):
         words = L["words"]
         if not words:
@@ -230,13 +234,17 @@ def captions(timeline, max_words=9):
             else timeline.get("duration", L["end"] + 1)
         )
         for ci, ch in enumerate(chunks):
-            s = ch[0]["s"] - 0.05
+            s = max(0.0, ch[0]["s"] - 0.05)
+            if film_end is not None and s >= film_end - 0.15:
+                break
             e = (
                 chunks[ci + 1][0]["s"] - 0.08
                 if ci + 1 < len(chunks)
                 else min(ch[-1]["e"] + 0.6, nxt - 0.05)
             )
-            cues.append((max(0.0, s), e, " ".join(w["text"] for w in ch).replace(" ,", ",")))
+            if film_end is not None:
+                e = min(e, film_end - 0.05)
+            cues.append((s, max(e, s + 0.1), " ".join(w["text"] for w in ch).replace(" ,", ",")))
     return cues
 
 

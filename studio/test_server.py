@@ -1056,6 +1056,14 @@ async def main():
             "a long narration comes back as its lines' spans, words only for the line re-recorded "
             "(%d characters, not %d)" % (len(every), sum(len(json.dumps(x)) for x in lines)),
         )
+        # a narration past the film's end is said to Claude, not only to sketch-vo.py's log (u3edgl)
+        with open(tl_film.path("audio", "vo", "timeline.json"), "w", encoding="utf-8") as f:
+            json.dump({"duration": 460, "lines": lines}, f)
+        over = tools_mod.timeline_text(tl_film)
+        check(
+            "NOTE" not in every and over.startswith("NOTE: the narration ends at 468.50 s"),
+            "a narration that runs past the film's end says so, and how much",
+        )
 
         # ------------------------------------------------ the server stops: interrupted, not cancelled
         r = await c.post(

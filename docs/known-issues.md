@@ -618,3 +618,22 @@ a director plus eleven scenes at any per-scene figure that works.
 gets 20 min + 3 per minute, the director 40 min + 20 s per minute of film; a scenes film's Claude
 time is the sum of its passes' (`scenes.film_claude_s`). i4d52n was resumed onto it.
 **Evidence.** `ops.sh claude-log studio-20260929-103129-i4d52n --all`.
+
+### KI-041 · fixed · studio · A narration that ran past the film's end failed the whole film at the mux
+
+**Symptom.** u3edgl (2:30, painted, on the login) wrote, painted and rendered all 9,000 frames,
+then failed: `mux failed ... rendered 150.96s, expected 150.00s`. Its twin from the same prompt
+(w3vfyn) came out fine.
+**Cause.** Its narration overran: it spent the film's six recordings ("keep the narration you
+have") and its last line was placed at 150.99 s of 150. `_sketch.captions` clamped each cue's end
+to the film's end but not its start, so the last cue ran backwards (`00:02:30,987 -->
+00:02:29,950`); ffmpeg's `-t` trims the audio and video but a mov_text sample keeps its length, so
+the subtitle track outlasted the picture and the duration check refused the file. Claude never
+knew: `sketch-vo.py` prints "voice ends at ..., after the film's ..." only to its own log, and the
+voice tool hands back just the timeline.
+**Fix.** No cue from the film's end on, none backwards, none past the picture (`_sketch.captions`,
+check-sketch "captions: nothing after the film's end"); the voice tool's result opens with a NOTE
+when the narration ends after the film (`tools.timeline_text`, test_server). Still open: a film
+that has used its last recording can only keep the overrun, and loses the words past the end.
+**Evidence.** `/srv/kitcut/studio/projects/studio-20260929-121021-u3edgl` (events.jsonl,
+outputs/film.srt).

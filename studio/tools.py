@@ -84,6 +84,15 @@ def timeline_text(film, retake=None):
     lines = tl.get("lines", [])
     every = len(lines) <= WORDS_UP_TO
     out = []
+    # sketch-vo.py only prints this to its own log: a narration past the film's end loses its last
+    # words (and before _sketch.captions was fixed, the whole film: u3edgl, 2026-09-29)
+    end, over = tl.get("duration"), max((L["end"] for L in lines), default=0)
+    if end and over > end:
+        out.append(
+            "NOTE: the narration ends at %.2f s, after the film's %g s: every word after %g s is"
+            " cut and never heard. Shorten or drop lines, or close the gaps, and record again."
+            % (over, end, end)
+        )
     for L in lines:
         if every or L["i"] == retake:
             words = " | ".join("%s %.2f" % (w["text"], w["s"]) for w in L.get("words", []))
