@@ -3507,6 +3507,16 @@ times (`sfx.py`). `film.js` is ~320 lines: a `scene(t0, from, draw)` per sheet, 
 one sliding `SK.layer`, older scenes first. Built in one evening together with the pieces
 themselves; the review rounds are in the project journal.
 
+**The studio makes them too** (`studio/looks/collage.md`, the third look). Given the Runway
+post's own prompt, 60 s, the studio (Opus 5.5, CLI, 2026-09-28) planned ten pages, chose one
+medium for all 17 cut-outs ("hand-tinted antique copperplate engraving", none repainted, $0.20),
+and invented its own furniture with the pieces: a newspaper header and footer on every page, a
+flip counter of years, a code-drawn thermometer that falls to -21 C as "ICE + SALT" lands, a "?"
+burst that turns into the waffle cone. 21 minutes from prompt to MP4 (Claude 20.3, render 1.0),
+43 turns, Claude $4.43 at API prices, voice $0.11, -14.0 LUFS. It recorded the narration four
+times to fit (Gemini's pace again) and once asked the drum kit for a `crash` it does not have;
+`validate.py` now names an unknown drum before the soundtrack is rendered.
+
 Traps, each found on the example:
 - **A sheet that overshoots bares the page under it** (the first slide bounced 4.5%, 90 px on a
   full-width sheet, and showed the title page at the edge): slides land with no overshoot now.
