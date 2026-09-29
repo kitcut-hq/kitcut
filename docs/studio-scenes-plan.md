@@ -1,6 +1,8 @@
 # Studio: scenes as the unit of work -- implementation plan
 
-Approved 2026-09-29. Why: docs/todo.md #7 and docs/known-issues.md KI-034. A film is today one
+Approved 2026-09-29. **Status:** steps 1 and 2 built on branch `studio-scenes` (engine scenes,
+the three passes, checkpoints, carry-on after a restart, `test_scenes.py`), off by default; the
+per-scene render cache (in step 1) and step 3's real films are still to do. Why: docs/todo.md #7 and docs/known-issues.md KI-034. A film is today one
 `film.js` written by one Claude conversation that grows with it (8-minute film: 73k -> 371k tokens,
 the picture's first draft one 57k-token reply). Opus 5.5 allows 128K per reply and 1M per
 conversation: the picture cannot be written in one reply past ~18 minutes of film, the conversation

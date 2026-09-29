@@ -2985,6 +2985,20 @@ after it, as loud as the narration. `poster_t` stays in the film.
 member as `SK.cast.<name> = {about, draw(x, y, o)}`. An error in one names its file. Sketch
 Studio keeps each signed-in person's cast between their films (`studio/library.py`).
 
+**A film in scenes** is the manifest's `scenes`: a folder (`"scenes": "scenes"`) whose
+`NN-slug.js` files each run in their own scope after film.js, in name order, and register one
+scene: `SK.scene({id, lines: [a, b], draw(t, local, vis), camera?, out?, lead = .3})`. film.js then
+holds only what every scene shares -- the look, helpers in `SK.look`, the camera -- and calls
+`SK.film({duration, camera})` without a `draw`: the film draws the scene covering t. A scene
+starts `lead` s before line a is spoken (the scene of line 0 at 0 s) and ends where line b+1
+would start, so a stretch whose scene is not written yet draws nothing instead of failing the
+render or letting the scene before it run on; `local` is seconds since the scene began (its camera
+runs on it), `t` the film clock for `SK.w` cues, and `out` cross-fades into the scene that follows.
+A scene that throws at load names its file in the error; one that does not parse is named by a
+syntax check (a script that fails to parse never reads its own name -- cast members alike). A film
+without `scenes` renders exactly as before. Sketch Studio makes films this way past
+`STUDIO_SCENES_OVER_S` (`studio/scenes.py`; why: docs/known-issues.md KI-034).
+
 **Every frame is a pure function of time.** Nothing in a film may keep state between frames
 (no physics integration, no `Math.random`); randomness is `SK.rnd(seed)`, motion is `t`. That
 single rule is what lets the browser play the film against its audio *and* the renderer export

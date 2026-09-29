@@ -86,7 +86,9 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
    long film's picture) is a timeout, not a dead CLI: 2026-09-28, film llwtme. Since 2026-09-29 the
    studio catches that itself: 20 silent minutes and it picks the session up again (at most
    twice, `STALL` in `ops.sh logs studio`), so a stuck film fails in about an hour, refunded,
-   instead of never.
+   instead of never. A film made in scenes (past `STUDIO_SCENES_OVER_S`) has a conversation per
+   pass: `claude-log` prints a line per pass and details the one under way (`--pass <id>`); a
+   restart carries it on from that pass by itself, and `ops.sh resume` does the same by hand.
 3. A step that fails on the VM and not on the laptop is usually the environment: compare
    `uv pip list` there with the laptop's venv, and look for imports inside functions.
 4. Fix in the repo (worktree, commit, merge to studio-poc), then `ops.sh ship`. A missing package

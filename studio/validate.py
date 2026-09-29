@@ -31,6 +31,7 @@ MAX_JS = 256 * 1024  # film.js: the prompt asks for ~200 lines
 MAX_ENGINE_JS = 400 * 1024  # engine.js + props.js are ~85 KB together
 MAX_CAST_JS = 64 * 1024  # one cast member (library.MAX_BYTES)
 MAX_JSON = 64 * 1024
+MAX_SCENE_JS = 64 * 1024  # one scene of a film made in scenes: 12-75 s, not a whole film
 VO_KEYS = set(VO_PINNED) | {"model", "voice", "style", "language", "lines"}
 VO_LINE_KEYS = {"text", "start"}
 MAX_LINE_CHARS = 300  # and at most film.limits()["lines"] lines
@@ -194,6 +195,13 @@ def problems(film, name):
         if os.path.exists(p) and os.path.getsize(p) > MAX_JS:
             return ["film.js is over %d KB; keep it short" % (MAX_JS // 1024)]
         return []
+    if name.startswith("scenes/"):  # a scene of a film made in scenes (studio/scenes.py)
+        p = film.path(*name.split("/"))
+        if os.path.exists(p) and os.path.getsize(p) > MAX_SCENE_JS:
+            return [
+                "%s is over %d KB: a scene is 12-75 s, keep it lean" % (name, MAX_SCENE_JS // 1024)
+            ]
+        return []
     if name.startswith("cast/"):  # a cast member (library.py): kept only while it is small
         p = film.path(*name.split("/"))
         if os.path.exists(p) and os.path.getsize(p) > MAX_CAST_JS:
@@ -210,12 +218,104 @@ def problems(film, name):
         return _score(d, film.length)
     if name == "sfx.json":
         return _sfx(d, film.length)
+    if name == "scenes.json":
+        return _scenes(d, film)
     return []
+
+
+# a film made in scenes (studio/scenes.py): its plan, scenes.json
+SCENE_ID = re.compile(r"^[0-9]{2}-[a-z0-9-]{1,40}$")
+SCENE_MIN_S, SCENE_MAX_S = 12, 75  # a scene's length once the narration is timed
+
+
+def _timed(film):
+    """The narration's timed lines (audio/vo/timeline.json), or [] before it is recorded."""
+    try:
+        with open(film.path("audio", "vo", "timeline.json"), encoding="utf-8") as f:
+            return json.load(f).get("lines", [])
+    except (OSError, ValueError, AttributeError):
+        return []
+
+
+def _scenes(d, film):
+    """scenes.json: the scenes in order, each a stretch of narration lines [first, last] -- no
+    gaps, no overlaps, every line covered -- and, once the narration is timed, 12-75 s long."""
+    sc = d.get("scenes") if isinstance(d, dict) else None
+    if not isinstance(sc, list) or not sc:
+        return [
+            'scenes.json needs "scenes": a list of {"id", "title", "lines": [first, last], "shows"}'
+        ]
+    try:
+        with open(film.path("vo.json"), encoding="utf-8") as f:
+            n = len(json.load(f).get("lines", []))
+    except (OSError, ValueError, AttributeError):
+        n = 0
+    out, ids, want = [], set(), 0
+    for i, s in enumerate(sc):
+        where = "scene %d" % (i + 1)
+        if not isinstance(s, dict):
+            out.append(where + " is not an object")
+            continue
+        sid = s.get("id")
+        if not isinstance(sid, str) or not SCENE_ID.match(sid):
+            out.append('%s: id %r -- use "NN-slug" (01-orbit, 02-first-failure)' % (where, sid))
+        elif sid in ids:
+            out.append("%s: id %s is used twice" % (where, sid))
+        elif not sid.startswith("%02d-" % (i + 1)):
+            out.append(
+                "%s: its id must start %02d- (the scenes are numbered in order)" % (where, i + 1)
+            )
+        ids.add(sid)
+        ln = s.get("lines")
+        if not (
+            isinstance(ln, list)
+            and len(ln) == 2
+            and all(isinstance(x, int) and not isinstance(x, bool) for x in ln)
+            and 0 <= ln[0] <= ln[1]
+        ):
+            out.append("%s: lines must be [first, last], line indexes in vo.json" % where)
+        else:
+            if ln[0] != want:
+                out.append(
+                    "%s starts at line %d, but the scene before it ended at line %d: start at %d "
+                    "(no gaps, no overlaps)" % (where, ln[0], want - 1, want)
+                )
+            want = ln[1] + 1
+        if not str(s.get("shows") or "").strip():
+            out.append("%s: say what it shows (shows)" % where)
+    if out:
+        return out
+    if n and want != n:
+        return [
+            "the scenes cover lines 0-%d, but the narration has %d lines (0-%d)"
+            % (want - 1, n, n - 1)
+        ]
+    if len(sc) > max(1, film.length // SCENE_MIN_S):
+        out.append(
+            "%d scenes is too many for %d s: at most one per %d s"
+            % (len(sc), film.length, SCENE_MIN_S)
+        )
+    tl = _timed(film)
+    if len(tl) == n and n:
+        starts = [0.0] + [max(0.0, tl[s["lines"][0]]["start"] - 0.3) for s in sc[1:]]
+        for i, s in enumerate(sc):
+            dur = (starts[i + 1] if i + 1 < len(sc) else film.length) - starts[i]
+            if dur < SCENE_MIN_S and len(sc) > 1:
+                out.append(
+                    "%s runs %.1f s: at least %d s -- join it to a neighbour"
+                    % (s["id"], dur, SCENE_MIN_S)
+                )
+            elif dur > SCENE_MAX_S:
+                out.append("%s runs %.1f s: at most %d s -- split it" % (s["id"], dur, SCENE_MAX_S))
+    return out
 
 
 def gate(film):
     """Everything wrong in all of Claude's files."""
     out = []
-    for name in film.editable() + tuple("engine/" + n for n in ENGINE):
+    names = film.editable() + tuple("engine/" + n for n in ENGINE)
+    if os.path.isdir(film.path("scenes")):
+        names += tuple("scenes/" + n for n in sorted(os.listdir(film.path("scenes"))))
+    for name in names:
         out += problems(film, name)
     return out

@@ -285,6 +285,30 @@ cache. If the database can't be reached, the final record goes to `STUDIO_HOME\o
 and `python studio/agent.py --sync` sends it later. The authoritative bill is still the
 Anthropic Console.
 
+## How a long film is made: in scenes
+
+Past `STUDIO_SCENES_OVER_S` seconds (unset: never), a film is not one conversation that grows
+with it -- the 8-minute film llwtme reached 371k tokens and wrote its whole picture in one
+57k-token reply, which cannot be written at all past ~18 minutes (docs/known-issues.md KI-034).
+`scenes.py` makes it in passes, each a fresh conversation (`agent.make_scenes`):
+
+- **director** -- the narration, recorded; `film.js` as the shared look (no draw); the plan,
+  `scenes.json` (12-75 s scenes covering every line, `validate._scenes`); scene 1 as the pilot.
+- **scene k** -- may write only `scenes/<id>.js` (the guard is given the file); is told the look,
+  its own lines with their words' times, its neighbours' plans and summaries, and shown the last
+  frames of the scene before; `stills` and `motion` look only at its own stretch.
+- **editor** -- contact sheets of every boundary, the plan with what each scene became; fixes
+  continuity, writes score.json and sfx.json.
+
+Each pass's state and cost go to studio.json (`scenes`, never readable by Claude) as it ends. A
+stall is picked up in the pass's own session; a pass gets 2 fresh tries; a stopping server leaves
+the film in `claude` and the next leader carries it on from the pass under way (up to 3 times);
+`resume.py` does the same by hand. Every opening is bounded -- a scene's is ~1.4k characters at
+8, 16 and 30 minutes alike (`test_scenes.py`). The system prompt is today's with `prompts/scenes.md`
+appended after its references, so it shares the cache with every other film up to there.
+`ops.sh claude-log <film>` shows a line per pass. The design and what is still to measure:
+docs/studio-scenes-plan.md.
+
 ## How a film is made
 
 1. `server.py` (aiohttp, 127.0.0.1 only) admits the request, makes the film's folder

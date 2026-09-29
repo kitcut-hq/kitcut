@@ -541,6 +541,18 @@ async def adopt(app=None):
                 start(f)
             elif st == "finishing":
                 start(f, finish_only=True)
+            elif st == "claude" and f.mode == "scenes" and rec.get("carried_on", 0) < 3:
+                # a film made in scenes keeps its finished passes (scenes.py): it goes on from the
+                # first one not done, and only the pass that was under way is written again
+                f.update(carried_on=rec.get("carried_on", 0) + 1)
+                last_word(
+                    f,
+                    {
+                        "type": "fail",
+                        "text": "The studio restarted; it carries on from the scene it was on.",
+                    },
+                )
+                start(f)
             elif st == "claude":
                 why = "the studio restarted while Claude was working on it"
                 await put_down(f, "interrupted", why, agent.INTERRUPTED)

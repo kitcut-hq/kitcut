@@ -41,9 +41,10 @@ NOTABLE = re.compile(
 )
 
 
-def transcript(film):
-    """The session's transcript: the film's own config folder (on the key), else the login's."""
-    sid = film.record().get("claude_session")
+def transcript(film, sid=None):
+    """A session's transcript (the film's own by default): the film's own config folder (on the
+    key), else the login's."""
+    sid = sid or film.record().get("claude_session")
     if not sid:
         return None
     for root in (film.claude_dir, os.path.expanduser("~/.claude")):
@@ -128,7 +129,42 @@ def replies(rows):
     return out, pending
 
 
-def show(film, all_=False, debug=40, grep=None):
+def passes(film, pick=None):
+    """A film made in scenes (studio/scenes.py): a line per pass -- its state, tries, cost and its
+    conversation's replies -- and the transcript to detail: the pass asked for, else the one under
+    way (the first not done), else the editor's."""
+    pr = film.record().get("scenes") or {}
+    keys = ["_director"] + sorted(k for k in pr if not k.startswith("_")) + ["_editor"]
+    detail = None
+    for k in keys:
+        v = pr.get(k)
+        if v is None:
+            print("  %-28s not started" % k)
+            continue
+        path = transcript(film, v.get("session")) if v.get("session") else None
+        n = errs = 0
+        if path:
+            with open(path, encoding="utf-8") as f:
+                items, _ = replies([json.loads(x) for x in f if x.strip()])
+            n = sum(1 for i in items if i["kind"] == "reply")
+            errs = sum(1 for i in items if i["kind"] == "error")
+        print(
+            "  %-28s %-5s tries %d  $%.2f  %3d replies%s"
+            % (
+                k,
+                v.get("state", "?"),
+                v.get("tries", 0),
+                v.get("cost_usd") or 0,
+                n,
+                "  %d API errors" % errs if errs else "",
+            )
+        )
+        if pick == k or (pick is None and detail is None and v.get("state") != "done"):
+            detail = v.get("session")
+    return detail or (pr.get(pick or "_editor") or {}).get("session")
+
+
+def show(film, all_=False, debug=40, grep=None, pick=None):
     rec = film.record()
     print(
         "%s  %s  %ss  %s  claude $%.2f"
@@ -140,7 +176,11 @@ def show(film, all_=False, debug=40, grep=None):
             rec.get("claude_cost_usd") or 0,
         )
     )
-    path = transcript(film)
+    sid = None
+    if rec.get("mode") == "scenes":
+        print("  made in scenes: a conversation per pass")
+        sid = passes(film, pick)
+    path = transcript(film, sid)
     if not path:
         print("  no transcript (no Claude session recorded yet)")
     else:
@@ -211,11 +251,16 @@ def main():
     ap.add_argument("--all", action="store_true", help="every reply, not the last 25")
     ap.add_argument("--debug", type=int, default=40, help="debug-log lines to show (0: none)")
     ap.add_argument("--grep", help="debug-log lines containing this, instead of the notable ones")
+    ap.add_argument(
+        "--pass",
+        dest="pick",
+        help="a film made in scenes: the pass to detail (_director, an id, _editor)",
+    )
     args = ap.parse_args()
     film = Film.open(args.film)
     if film is None:
         sys.exit("no film %s" % args.film)
-    show(film, args.all, args.debug, args.grep)
+    show(film, args.all, args.debug, args.grep, args.pick)
 
 
 if __name__ == "__main__":

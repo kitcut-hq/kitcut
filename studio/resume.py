@@ -30,6 +30,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import agent  # noqa: E402 -- imports _env first
 from film import MADE, Film, limits  # noqa: E402
+import scenes  # noqa: E402
 from sched import Sched  # noqa: E402
 
 # a film in one of these the server is not making, and nobody chose to stop
@@ -85,6 +86,8 @@ def refuse(film, finish):
     if finish:
         missing = [f for f in MADE if not os.path.exists(film.path(f))]
         return "Claude's part is not whole (%s missing)" % ", ".join(missing) if missing else None
+    if film.mode == "scenes":  # its finished passes are kept: nothing to replay (scenes.py)
+        return None
     if not session_file(film):
         return "no saved Claude session for %s (%s)" % (
             film.id,
@@ -143,6 +146,17 @@ def main():
     agent.procs.cgroup_root()  # the steps' cgroups, before Claude Code is started (server.main)
     if args.finish:
         film.update(state="finishing", ok=None, error=None, finished=None)
+    elif film.mode == "scenes":
+        # a film made in scenes goes on from its first pass not done (agent.make_scenes), each
+        # of those with its tries counted afresh; the ones done stay done
+        for key, v in scenes.progress(film).items():
+            if v.get("state") != "done":
+                scenes.mark(film, key, tries=0)
+        film.update(ok=None, error=None, finished=None)
+        r = asyncio.run(agent.make_film(film, emit, Sched(), auth=p["auth"]))
+        if r.get("ok"):
+            print("  %s" % film.path("outputs", "film.mp4"))
+        sys.exit(0 if r.get("ok") else 1)
     r = asyncio.run(
         agent.make_film(
             film,

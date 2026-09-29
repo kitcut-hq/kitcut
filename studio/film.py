@@ -73,6 +73,10 @@ ENGINE = ("engine.js", "props.js")  # the film's own copy, in engine\; Claude ma
 # a member of the person's cast, cast\<name>.js (library.py), and one named in film code:
 # SK.cast.pip, cast.pip, cast['pip']
 CAST_FILE = re.compile(r"^[a-z][a-z0-9_]{0,30}\.js$")
+# a film made in scenes (studio/scenes.py): its plan, and a file per scene, scenes/NN-slug.js
+SCENE_FILE = re.compile(r"^[0-9]{2}-[a-z0-9-]{1,40}\.js$")
+# films longer than this (seconds) are made in scenes; 0: none are (docs/studio-scenes-plan.md)
+SCENES_OVER_S = int(os.environ.get("STUDIO_SCENES_OVER_S") or 0)
 CAST_USE = re.compile(r"\bcast\s*(?:\.\s*([a-z][a-z0-9_]*)|\[\s*['\"]([a-z][a-z0-9_]*)['\"]\s*\])")
 # film.js's first line, `// For: <who it is for>; <its mood>`: the audience the film is made for
 FOR_LINE = re.compile(
@@ -272,7 +276,16 @@ class Film:
 
     # ---------------------------------------------------------------- what Claude may touch
     def editable(self):
-        return EDITABLE + (("paint.json",) if self.look == "painted" else ())
+        return (
+            EDITABLE
+            + (("paint.json",) if self.look == "painted" else ())
+            + (("scenes.json",) if self.mode == "scenes" else ())
+        )
+
+    @property
+    def mode(self):
+        """ "scenes": made a scene at a time (studio/scenes.py); "single": one film.js, as always."""
+        return self.record().get("mode", "single")
 
     def readable(self, p):
         """Inside the film's own folder, except the studio's bookkeeping. Checked on the real
@@ -292,6 +305,9 @@ class Film:
             # the name as asked for: Windows would fold Pip.js into pip.js
             asked = os.path.basename(os.path.realpath(raw))
             return bool(CAST_FILE.match(asked)) and os.path.isdir(self.path("cast"))
+        if parent == _norm(self.path("scenes")):  # a scene of a film made in scenes
+            asked = os.path.basename(os.path.realpath(raw))
+            return self.mode == "scenes" and bool(SCENE_FILE.match(asked))
         return parent == _norm(self.path("engine")) and name in ENGINE
 
     # ---------------------------------------------------------------- the engine copy
@@ -378,6 +394,7 @@ class Film:
         listed=True,
         app=None,
         fps=60,
+        mode=None,
     ):
         """A new film's folder: the manifest (its length set), the engine copy, an empty
         narration, an empty list of paintings for a painted film, and its record.
@@ -439,6 +456,11 @@ class Film:
         m["fps"] = 30 if fps == 30 else 60  # the plan's: Free films 30, paid ones 60
         m["engine"] = "engine"
         m["cast"] = "cast"  # every cast/*.js loads before film.js (sketch-render)
+        # a long film is made a scene at a time (studio/scenes.py): scenes/*.js load after film.js
+        mode = mode or ("scenes" if SCENES_OVER_S and seconds > SCENES_OVER_S else "single")
+        if mode == "scenes":
+            m["scenes"] = "scenes"
+            os.makedirs(film.path("scenes"))
         if look == "painted":
             m["paint"] = "paint.json"
             _write_json(film.path("paint.json"), paint_pins(seconds) | {"style": "", "images": []})
@@ -461,6 +483,7 @@ class Film:
                 # a Free-plan film: KitCut's watermark and closing (agent.brand, studio/outro.js)
                 "branding": bool(branding),
                 "fps": 30 if fps == 30 else 60,
+                "mode": mode,
                 # pictures, voice notes and documents the visitor attached (inputs/): never
                 # shown publicly
                 "attachments": attached,

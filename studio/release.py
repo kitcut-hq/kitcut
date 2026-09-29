@@ -48,6 +48,7 @@ TESTS = (
     "test_multi.py",  # two servers on one home (peers.py): the ship that never stops a film
     "test_shared.py",  # the files two servers share, raced by real processes (locks.py)
     "test_bluegreen.py",  # an old server handing over to a new one, end to end
+    "test_scenes.py",  # a film made in scenes: SK.scene on real stills, the passes, carrying on
 )
 
 

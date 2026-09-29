@@ -653,7 +653,81 @@
    * is the world box on screen this frame. ground(t), if given, names the ground at time t (a
    * film that goes from day to night); otherwise the one SK.setGround chose holds throughout.
    */
-  SK.film = function (def) { SK._film = def; };
+  SK.film = function (def) {
+    // a film made in scenes (below) has no draw() of its own: it draws the scene covering t, with
+    // that scene's camera when it has one. Set here, not in render, so anything that wraps the
+    // film (Sketch Studio's closing, studio/outro.js) wraps this too.
+    if (!def.draw) {
+      def.draw = (t, vis) => drawScenes(t, vis);
+      const base = def.camera || SK.camera([[0, [0, 0, 1]]]);
+      def.camera = {
+        ...base,
+        at: (t) => { const s = sceneAt(t); return s && s.def.camera ? s.def.camera.at(t - s.start) : base.at(t); },
+        shake: (t) => { const s = sceneAt(t); return s && s.def.camera ? (s.def.camera.shake ? s.def.camera.shake(t - s.start) : 0) : base.shake(t); },
+      };
+    }
+    SK._film = def;
+  };
+
+  /* ------------------------------------------------------------ scenes
+   * A long film is written a scene at a time (Sketch Studio's scenes mode): its film.js holds the
+   * shared look (palette, helpers in SK.look, the camera) and calls SK.film without a draw(); each
+   * scenes/NN-slug.js registers one scene.
+   *
+   * SK.scene({ id, lines: [a, b], lead = .3, draw(t, local, vis), camera, out = 0 })
+   *
+   * A scene covers narration lines a..b: it starts `lead` s before line a is spoken (or at `from`
+   * seconds, for a stretch with no narration) and runs until the next scene starts; the last one
+   * runs to the film's end. local = t - its start, so a scene is written in its own time and word
+   * cues work as anywhere (SK.w(line, word) is on the film clock). Its camera, if it has one, runs
+   * on local time. out > 0 cross-fades it into the next scene over that many seconds. A stretch no
+   * scene covers yet draws nothing -- while a film's scenes are still being written, its stills
+   * must render -- and every frame is still a pure function of t.
+   */
+  SK.scenes = [];
+  SK.scene = function (def) { SK.scenes.push(def); SCENES = null; };
+  let SCENES = null;
+  function sceneTable() {
+    if (SCENES) return SCENES;
+    const D = SK._film ? SK._film.duration : Infinity;
+    const at = (d) => {
+      if (typeof d.from === 'number') return d.from;
+      const L = d.lines ? SK.VO.lines[d.lines[0]] : null;
+      return L ? Math.max(0, L.start - (d.lead ?? .3)) : null;
+    };
+    const rows = SK.scenes.map((def) => ({ def, start: at(def) })).filter((r) => r.start !== null);
+    rows.sort((a, b) => a.start - b.start);
+    // the scene of line 0 opens the film, whatever comes before its first word
+    if (rows.length && rows[0].def.lines && rows[0].def.lines[0] === 0) rows[0].start = 0;
+    rows.forEach((r, i) => {
+      r.i = i;
+      const next = i + 1 < rows.length ? rows[i + 1].start : D;
+      // it ends where the line after its last would start: a scene not written yet leaves its
+      // own stretch empty rather than the one before it running on over it
+      const after = r.def.lines ? SK.VO.lines[r.def.lines[1] + 1] : null;
+      r.end = after ? Math.min(next, Math.max(r.start, after.start - (r.def.lead ?? .3))) : next;
+    });
+    return (SCENES = rows);
+  }
+  function sceneAt(t) {
+    const rows = sceneTable();
+    let lo = 0, hi = rows.length - 1, hit = null;
+    while (lo <= hi) { const m = (lo + hi) >> 1; if (rows[m].start <= t) { hit = rows[m]; lo = m + 1; } else hi = m - 1; }
+    const D = SK._film ? SK._film.duration : Infinity;
+    return hit && (t < hit.end || hit.end >= D) ? hit : null;
+  }
+  SK.sceneAt = sceneAt;
+  function drawScenes(t, vis) {
+    const s = sceneAt(t);
+    if (!s) return;
+    const nx = sceneTable()[s.i + 1], out = s.def.out || 0;
+    const next = nx && Math.abs(nx.start - s.end) < .01 ? nx : null; // only into the scene that follows on
+    const k = next && out > 0 ? clamp((t - (s.end - out)) / out) : 0;
+    if (k > 0) {
+      SK.alpha(1 - k, () => s.def.draw(t, t - s.start, vis));
+      SK.alpha(k, () => next.def.draw(t, t - next.start, vis));
+    } else s.def.draw(t, t - s.start, vis);
+  }
   SK.init = function (canvas) { canvas.width = W; canvas.height = H; ctx = canvas.getContext('2d'); };
 
   SK.render = function (t) {

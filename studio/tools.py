@@ -110,6 +110,9 @@ class Tools:
         self.lock = asyncio.Lock()  # one step of this film at a time
         self.jobs = set()  # the steps running now (procs.Job), killed on cancel
         self.voice_runs, self.sheet_v = 0, 0
+        # a pass of a film made in scenes (scenes.py): its name, the stretch of the film it looks
+        # at, the files it may write, and its Claude session
+        self.pass_name, self.span, self.allow, self.session = None, None, None, None
         self.priority = film.record().get("priority", 0)
 
     # ---------------------------------------------------------------- plumbing
@@ -166,8 +169,14 @@ class Tools:
             if os.path.isdir(d)
             else []
         )
+        sd = self.film.path("scenes")
+        scenes = (
+            sorted("scenes/" + n for n in os.listdir(sd) if n.endswith(".js"))
+            if os.path.isdir(sd)
+            else []
+        )
         async with self.lock:
-            for rel in ["film.js", "engine/engine.js", "engine/props.js"] + cast:
+            for rel in ["film.js", "engine/engine.js", "engine/props.js"] + cast + scenes:
                 p = self.film.path(*rel.split("/"))
                 if not os.path.exists(p):
                     if rel == "film.js":
@@ -234,8 +243,9 @@ class Tools:
         except (TypeError, ValueError):
             raise ToolError("times is a list of seconds, e.g. [0, 1.5, 3, 4.9]") from None
         n = self.film.length
-        if not ts or len(ts) > MAX_STILLS or any(t < 0 or t > n for t in ts):
-            raise ToolError("give 1-%d times between 0 and %d seconds" % (MAX_STILLS, n))
+        lo, hi = self.span or (0, n)  # a scene's pass: its own stretch of the film (scenes.py)
+        if not ts or len(ts) > MAX_STILLS or any(t < lo or t > hi for t in ts):
+            raise ToolError("give 1-%d times between %g and %g seconds" % (MAX_STILLS, lo, hi))
         args = ["--stills", ",".join("%g" % t for t in ts)] + (["--sheet"] if sheet else [])
         async with self.lock:
             self.gate()
@@ -264,6 +274,8 @@ class Tools:
         """The film a few times a second, for what a sheet of stills cannot show: its cuts, and
         any stretch where nothing moves (studio/motion.py)."""
         ts = motion.times(self.film.length)
+        if self.span:  # a scene's pass: only its stretch
+            ts = [t for t in ts if self.span[0] <= t <= self.span[1]]
         shutil.rmtree(self.film.path("temp", "motion"), ignore_errors=True)
         args = ["--stills", ",".join("%g" % t for t in ts), "--into", "temp/motion"]
         async with self.lock:
@@ -320,6 +332,22 @@ class Tools:
                 pools=[("browser", RENDER_JOBS)],
                 log=True,
             )
+
+    async def sheet_of(self, times, name):
+        """Stills the studio renders for Claude to look at (scenes.py: the scene before's last
+        frames, the editor's contact sheets), tiled into outputs/review/<name>.png. Its path."""
+        ts = [round(float(t), 3) for t in times][:MAX_STILLS]
+        args = ["--stills", ",".join("%g" % t for t in ts), "--sheet"]
+        async with self.lock:
+            self.gate()
+            await self._script("stills", "sketch-render.py", args, pools=[("browser", 1)])
+        src, dst = (
+            self.film.path("outputs", "review", "sheet.png"),
+            self.film.path("outputs", "review", name + ".png"),
+        )
+        if os.path.exists(src):
+            shutil.copyfile(src, dst)
+        return "outputs/review/%s.png" % name
 
     async def cast_sheet(self, manifest, times):
         """Stills of library.sheet()'s small film (each new cast member drawn alone), for their

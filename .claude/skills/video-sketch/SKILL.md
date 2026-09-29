@@ -41,7 +41,10 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    numbers ("45" vs "forty-five"), not a bad take; `HARD-CUT` means no silence was found before
    the tail word — pick another take with `"pick"` on the line. Put brand names in `hotwords`.
    A long script: `--jobs 8` records eight takes at once (70 Gemini lines: 341 s -> 52 s).
-5. **Picture.** Write `film.js` scene by scene, every cue on a word: `SK.w(line, "word")`.
+5. **Picture.** Write `film.js` scene by scene, every cue on a word: `SK.w(line, "word")`. A long
+   film can be a file per scene instead -- `"scenes": "scenes"` in the manifest, film.js the
+   shared look with no `draw`, `scenes/NN-slug.js` each an `SK.scene({id, lines, draw})`
+   (docs/reference.md, "A film in scenes").
    Lay scenes out in world space and move the camera between them (`SK.camera` keys with
    easing); keep each scene's content inside ±900 x ±500 of its centre at zoom 1.
    For a painted film, `sketch-paint.py` makes the pictures from the manifest's `paint` block

@@ -133,6 +133,27 @@ def cast_scripts(m):
     return "\n".join(out)
 
 
+SCENE_FILE = re.compile(r"[0-9]{2}-[a-z0-9-]{1,40}\.js")
+
+
+def scene_scripts(m):
+    """ "scenes": "scenes" -- a film written a scene at a time (Sketch Studio's scenes mode): each
+    scenes/NN-slug.js registers one scene (SK.scene, engine.js) and loads after film.js, which holds
+    the shared look, in name order and in its own function scope, naming itself in an error like a
+    cast member. "" for a manifest without scenes."""
+    if not m.get("scenes"):
+        return ""
+    d = _sketch.rel(m, m["scenes"])
+    out = []
+    for n in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if SCENE_FILE.fullmatch(n):
+            out.append(
+                "<script>\n(function () {\n%s\n})();\n//# sourceURL=scenes/%s\n</script>"
+                % (read_text(os.path.join(d, n)), n)
+            )
+    return "\n".join(out)
+
+
 def bundle(m, audio=True):
     """The player page with everything inlined. Returns the HTML text."""
     with open(os.path.join(SKETCH, "player.html"), encoding="utf-8") as f:
@@ -178,6 +199,7 @@ def bundle(m, audio=True):
         "__PROPS__": read_text(os.path.join(m["_engine"], "props.js")),
         "__CAST__": cast_scripts(m),
         "__FILM__": film,
+        "__SCENES__": scene_scripts(m),
         "__AUDIO__": src,
         "__VO__": json.dumps(vo_timeline(m)),
         "__IMAGES__": json.dumps(

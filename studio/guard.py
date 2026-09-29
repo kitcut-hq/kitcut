@@ -17,6 +17,7 @@ the studio decides in vo.json and paint.json and says what else is wrong (valida
 """
 
 import os
+import fnmatch
 import re
 import json
 
@@ -36,14 +37,22 @@ def _path(p, film):
     return os.path.abspath(os.path.join(film.dir, p))
 
 
-def guard(tool, inp, film):
-    """(allowed, reason) for one tool call by Claude working on `film`."""
+def guard(tool, inp, film, allow=None):
+    """(allowed, reason) for one tool call by Claude working on `film`. allow: the only files
+    (relative to the film's folder) this conversation may write -- a scene of a film made in
+    scenes writes its own file and nothing else (studio/scenes.py)."""
     if tool == "Read":
         if film.readable(_path(inp.get("file_path"), film)):
             return True, ""
         return False, "Read is limited to your film's folder (your working directory)."
     if tool in ("Write", "Edit"):
-        if film.writable(_path(inp.get("file_path"), film)):
+        p = _path(inp.get("file_path"), film)
+        if allow is not None:  # names relative to the film's folder, or patterns (scenes/01-*.js)
+            rel = os.path.relpath(p, film.dir).replace(os.sep, "/")
+            if not any(fnmatch.fnmatchcase(rel, a) for a in allow) or not film.writable(p):
+                return False, "In this pass you may write only %s." % ", ".join(sorted(allow))
+            return True, ""
+        if film.writable(p):
             return True, ""
         mine = ", ".join(film.editable() + ("engine/engine.js", "engine/props.js"))
         if os.path.isdir(film.path("cast")):

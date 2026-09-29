@@ -55,8 +55,8 @@ body.render canvas { border-radius: 0; box-shadow: none; }
 // first one now, or a render sits out its 90 s stall timeout and then says nothing useful.
 window.__early = function (e) {
   if (window.__earlyErr || !/[?&](render|export|encode|stills|automation)=/.test(location.search)) return;
-  // a cast member's script names itself (sketch-render: //# sourceURL=cast/<name>.js)
-  const cast = /(cast\/[a-z0-9_]+\.js)$/.exec(e.filename || '');
+  // a cast member's or a scene's script names itself (sketch-render: //# sourceURL=cast/<name>.js)
+  const cast = /((?:cast|scenes)\/[a-z0-9_-]+\.js)$/.exec(e.filename || '');
   window.__earlyErr = String(e.message) + ' @' + (cast ? cast[1] + ':' : '') + e.lineno;
   fetch('error', { method: 'POST', body: window.__earlyErr });
 };
@@ -75,6 +75,7 @@ SK.VO = __VO__;
 <script>
 __FILM__
 </script>
+__SCENES__
 <script>
 (function () {
   // Modes (query string):

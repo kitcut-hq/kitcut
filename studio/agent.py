@@ -51,6 +51,8 @@ import peers  # noqa: E402
 procs.load_secrets(os.environ.get("STUDIO_ENV_FILE") or os.path.join(films.REPO, ".env"))
 
 import store  # noqa: E402
+import scenes  # noqa: E402
+import validate  # noqa: E402
 from film import (  # noqa: E402
     HOME,
     KIT,
@@ -240,7 +242,7 @@ def ask(film, recent=()):
             or "(nothing typed: the idea is in what is attached)",
         )
     )
-    if n > LONG_S:
+    if n > LONG_S and film.mode != "scenes":  # a scenes film is written in passes anyway
         text += LONG_FILM
     text += attached_note(film)
     mine = library.note(film)  # the project, or the person's own cast and earlier films
@@ -620,7 +622,7 @@ def claude_cli():
 
 
 async def run_claude(
-    film, emit, meter, tools, auth="api", prompt=None, resume=None, budget_usd=None
+    film, emit, meter, tools, auth="api", prompt=None, resume=None, budget_usd=None, system=None
 ):
     """Claude's part: write, review and fix. Returns the SDK's ResultMessage (or None). With
     `resume` (a session id) and a `prompt`, one more turn of a session that was stopped;
@@ -628,7 +630,7 @@ async def run_claude(
     pending, result = {}, None
 
     async def pre_tool(inp, tool_use_id, ctx):
-        ok, why = guard(inp["tool_name"], inp["tool_input"], film)
+        ok, why = guard(inp["tool_name"], inp["tool_input"], film, getattr(tools, "allow", None))
         if not ok:
             emit({"type": "blocked", "text": why})
         out = {"hookEventName": "PreToolUse", "permissionDecision": "allow" if ok else "deny"}
@@ -637,7 +639,7 @@ async def run_claude(
         return {"hookSpecificOutput": out}
 
     async def can_use(name, inp, ctx):  # backstop: the hook above decides first
-        ok, why = guard(name, inp, film)
+        ok, why = guard(name, inp, film, getattr(tools, "allow", None))
         return PermissionResultAllow() if ok else PermissionResultDeny(message=why)
 
     async def post_tool(inp, tool_use_id, ctx):
@@ -655,7 +657,7 @@ async def run_claude(
     sp = film.path("temp", "system-prompt.md")
     os.makedirs(os.path.dirname(sp), exist_ok=True)
     with open(sp, "w", encoding="utf-8") as f:
-        f.write(system_prompt(film.look))
+        f.write(system or system_prompt(film.look))
     cli = None
     if auth == "login":
         try:
@@ -709,7 +711,11 @@ async def run_claude(
                 elif isinstance(msg, SystemMessage) and msg.subtype == "init":
                     d = msg.data
                     if not resume and d.get("session_id"):  # to wrap up in, if time runs out
-                        film.update(claude_session=d["session_id"])
+                        tools.session = d["session_id"]
+                        # a pass of a film made in scenes keeps its own (scenes.py); a film's is
+                        # the one conversation that makes it
+                        if getattr(tools, "pass_name", None) is None:
+                            film.update(claude_session=d["session_id"])
                     emit(
                         {
                             "type": "init",
@@ -911,7 +917,9 @@ async def make_film(
         img_rows = _spend(film, "images", "spend.jsonl")
         tts = round(sum(r["cost_usd"] for r in tts_rows), 6)
         img = round(sum(r.get("cost_usd") or 0 for r in img_rows), 6)
-        if carry:  # plus what Claude's earlier attempt spent
+        if film.mode == "scenes":  # every pass's own cost (scenes.py), and the one under way
+            claude = metered = round(scenes.spent(film) + meter.usd() - pass_base[0], 4)
+        elif carry:  # plus what Claude's earlier attempt spent
             claude = round(claude + (carry.get("claude_cost_usd") or 0), 4)
             metered = round(metered + (carry.get("cost_metered_usd") or 0), 4)
             for k, v in (carry.get("tokens") or {}).items():
@@ -981,22 +989,30 @@ async def make_film(
             "earlier_usd": spent,
         }
 
-    async def talk_to_claude():
-        """One run of Claude's part. A reply that never comes (Stalled) is cut off and the session
-        picked up again with STALLED, at most STALL_RETRIES times; its working time and budget go
-        on counting from where they were. Past that the film fails -- and is refunded -- rather
-        than sitting for hours in Claude Code's own retries."""
-        nonlocal talk
+    async def talk_to_claude(say=None, within=None):
+        """One conversation with Claude: the film's, or one pass of a film made in scenes (say:
+        run_claude's opening -- prompt, resume, budget, system; within: its limits). A reply
+        that never comes (Stalled) is cut off and the same session picked up again with STALLED,
+        at most STALL_RETRIES times; its working time and budget go on counting from where they
+        were. Past that the film fails -- and is refunded -- rather than sitting for hours in
+        Claude Code's own retries."""
+        say = dict(talk if say is None else say)
+        within = lim if within is None else within
+        m0 = meter.usd()
+        budget0 = say.get("budget_usd") or max(
+            1.0, limits(length)["budget_usd"] - (carry.get("claude_cost_usd") or 0)
+        )
         for attempt in range(STALL_RETRIES + 1):
             tools.pulse.beat()
             try:
                 return await _within(
-                    run_claude(film, emit, meter, tools, auth, **talk), clock, lim, tools.pulse
+                    run_claude(film, emit, meter, tools, auth, **say), clock, within, tools.pulse
                 )
             except Stalled as e:
                 silent = int(e.args[0]) if e.args else STALL_S
                 summary["stalls"] = summary.get("stalls", 0) + 1
-                sid = film.record().get("claude_session")
+                # the conversation's own session: a pass's, or the film's
+                sid = tools.session or film.record().get("claude_session")
                 print(
                     "film %s: STALL, no reply from Claude for %d s (%d of %d)"
                     % (film.id, silent, attempt + 1, STALL_RETRIES + 1),
@@ -1008,7 +1024,7 @@ async def make_film(
                         "Claude stopped answering (%d minutes without a reply, %d times)"
                         % (silent // 60, attempt + 1)
                     ) from None
-                left = max(RESUME_MIN_S, lim["claude_s"] - clock.active())
+                left = max(RESUME_MIN_S, within["claude_s"] - clock.active())
                 emit(
                     {
                         "type": "fail",
@@ -1016,13 +1032,136 @@ async def make_film(
                         "film up again where it was" % (silent // 60),
                     }
                 )
-                spent = meter.usd() + (carry.get("claude_cost_usd") or 0)
-                talk = {
+                say = {
                     "prompt": STALLED % (silent // 60, round(left / 60)),
                     "resume": sid,
-                    "budget_usd": max(1.0, limits(length)["budget_usd"] - spent),
-                }
+                    "budget_usd": max(1.0, budget0 - (meter.usd() - m0)),
+                } | ({"system": say["system"]} if say.get("system") else {})  # a scenes pass's
         return None
+
+    pass_base = [meter.usd()]  # the meter where the last finished pass of a scenes film left it
+
+    async def make_scenes():
+        """A film made in scenes (scenes.py): the director unless its work is done, each scene not
+        done, then the editor -- each a fresh conversation with its own opening, limits and the
+        files it may write; each pass's state and cost go to studio.json as it ends, so a crash
+        or a restart costs only the pass in progress."""
+        system = system_prompt(film.look) + scenes.system_section()
+        passes = summary.setdefault("passes", [])
+
+        async def one(kind, key, opening, allow, span=None, text=""):
+            n = scenes.tries(film, key)
+            if n >= scenes.TRIES:
+                raise RuntimeError("the %s did not finish in %d tries" % (kind, scenes.TRIES))
+            scenes.mark(film, key, state="todo", tries=n + 1)
+            allowance = scenes.pass_limits(film, kind, span)
+            within = lim | {
+                "claude_s": min(lim["claude_s"], clock.active() + allowance["claude_s"]),
+                "wall_s": min(lim["wall_s"], clock.wall() + allowance["claude_s"] + 30 * 60),
+            }
+            tools.pass_name, tools.allow, tools.span, tools.session = key, allow, span, None
+            emit({"type": "stage", "name": "claude", "text": text})
+            s0, res = time.time(), None
+            try:
+                res = await talk_to_claude(
+                    {"prompt": opening, "system": system, "budget_usd": allowance["budget_usd"]},
+                    within,
+                )
+            except TimeoutError:
+                pass  # past its time: judged by what it left, like any pass
+            finally:
+                tools.pass_name, tools.allow, tools.span = None, None, None
+            cost = round(meter.usd() - pass_base[0], 4)
+            pass_base[0] = meter.usd()
+            prev = scenes.progress(film).get(key, {}).get("cost_usd") or 0
+            scenes.mark(film, key, session=tools.session, cost_usd=round(prev + cost, 4))
+            film.update(claude_cost_usd=scenes.spent(film))
+            passes.append(
+                {
+                    "pass": key,
+                    "session": tools.session,
+                    "cost_usd": cost,
+                    "seconds": round(time.time() - s0, 1),
+                    "turns": res.num_turns if res is not None else None,
+                }
+            )
+            return res
+
+        async def parses():
+            try:
+                await tools.check()
+                return True
+            except ToolError:
+                return False
+
+        def said(res, n=1500):
+            return ((res.result if res is not None else "") or "").strip()[:n]
+
+        # the director: the narration, the look, the plan, and scene 1 as the pilot
+        allow = ["vo.json", "film.js", "scenes.json", "scenes/01-*.js", "cast/*.js"]
+        allow += ["engine/props.js"] + (["paint.json"] if film.look == "painted" else [])
+        while not scenes.done(film, scenes.DIRECTOR):
+            res = await one(
+                "director",
+                scenes.DIRECTOR,
+                scenes.director_message(film, ask(film, recent_films(film))),
+                allow,
+                text="Claude is planning the film",
+            )
+            rows = scenes.spans(film)
+            if (
+                rows
+                and scenes.timed(film)
+                and os.path.exists(film.path(*scenes.scene_file(rows[0][0]).split("/")))
+                and await parses()
+            ):
+                scenes.mark(film, scenes.DIRECTOR, state="done", summary=said(res))
+                scenes.mark(film, rows[0][0]["id"], state="done", summary=rows[0][0].get("shows"))
+        # the scenes, one fresh conversation each
+        rows = scenes.spans(film)
+        for k, (sc, a, b) in enumerate(rows):
+            if scenes.done(film, sc["id"]):
+                continue
+            sheet = await tools.sheet_of(
+                [max(a - d, 0) for d in (1.2, 0.6, 0.1)], "before-" + sc["id"]
+            )
+            while not scenes.done(film, sc["id"]):
+                res = await one(
+                    "scene",
+                    sc["id"],
+                    scenes.scene_message(film, k, sheet),
+                    [scenes.scene_file(sc)],
+                    span=(a, b),
+                    text="Claude is writing scene %d of %d" % (k + 1, len(rows)),
+                )
+                ok = os.path.exists(film.path(*scenes.scene_file(sc).split("/"))) and await parses()
+                if ok:
+                    try:  # its middle draws: a scene that throws is not done
+                        await tools.sheet_of([(a + b) / 2], "check-" + sc["id"])
+                    except ToolError:
+                        ok = False
+                if ok:
+                    scenes.mark(film, sc["id"], state="done", summary=said(res, 600))
+        # the editor: the whole film, the music and the cues
+        while not scenes.done(film, scenes.EDITOR):
+            sheets = []
+            for i, ts in enumerate(scenes.contact_times(film)):
+                sheets.append(await tools.sheet_of(ts, "contact-%d" % (i + 1)))
+            res = await one(
+                "editor",
+                scenes.EDITOR,
+                scenes.editor_message(film, sheets),
+                ["scenes/*.js", "score.json", "sfx.json"],
+                text="Claude is checking the whole film",
+            )
+            if (
+                all(os.path.exists(film.path(f)) for f in ("score.json", "sfx.json"))
+                and not validate.gate(film)
+                and await parses()
+            ):
+                scenes.mark(film, scenes.EDITOR, state="done", summary=said(res))
+                summary["claude_said"] = said(res, 4000)
+        summary["turns"] = sum(p["turns"] or 0 for p in passes)
 
     state = "error"
     try:
@@ -1049,7 +1188,7 @@ async def make_film(
                 s = time.time()
                 try:
                     try:
-                        res = await talk_to_claude()
+                        res = await (make_scenes() if film.mode == "scenes" else talk_to_claude())
                     except SignInError as e:
                         if auth != "login":
                             raise  # the key itself is refused: nothing to fall back to
@@ -1068,13 +1207,14 @@ async def make_film(
                                 "film on the API key instead" % e.why,
                             }
                         )
-                        res = await talk_to_claude()
+                        res = await (make_scenes() if film.mode == "scenes" else talk_to_claude())
                 except TimeoutError:
                     # past its time, Claude may only have been taking a last look at a film it
                     # had written: one that is whole and passes the checks is finished, not lost;
                     # one with its picture written gets one short last turn for what is missing
-                    if not await written(film, tools) and not await wrap_up(
-                        film, emit, meter, tools, auth
+                    if film.mode == "scenes" or (
+                        not await written(film, tools)
+                        and not await wrap_up(film, emit, meter, tools, auth)
                     ):
                         raise
                     res = None
@@ -1162,6 +1302,13 @@ async def make_film(
             state = "finishing"  # Claude's part is whole: the next server mixes and renders it
             film.update(server=None)  # its steps are killed (above): the leader may take it now
             raise
+        if stopping and film.mode == "scenes" and film.state == "claude":
+            # its finished passes are kept (scenes.py): the next server carries it on from the
+            # pass under way (server.adopt), so nothing is final here
+            state = "claude"
+            film.update(server=None)
+            emit({"type": "fail", "text": "The studio is restarting; the film carries on after."})
+            raise
         if stopping:
             state = "interrupted"
             summary.update(ok=False, error=INTERRUPTED, seconds=took())
@@ -1179,7 +1326,11 @@ async def make_film(
         emit({"type": "error", "text": text})
     finally:
         tools.kill()  # nothing of this film's keeps running
-        if state not in ("queued", "finishing"):  # those two are the next server's to finish
+        if state not in (
+            "queued",
+            "finishing",
+            "claude",
+        ):  # those two are the next server's to finish
             summary.setdefault("ok", False)
             if not summary["ok"]:
                 summary.setdefault("error", "stopped before it finished")
