@@ -685,7 +685,10 @@ def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="
 def choose_cover(m, page):
     """The film time the video's first frame shows: the manifest's `cover` when it is a number,
     else the poster unless a clearly livelier later moment beats it (_sketch.pick_cover), drawn
-    as stills in one browser and scored by contrast. None: `cover` is false."""
+    as stills in one browser and scored by contrast. None: `cover` is false.
+
+    Never fails a render: when the stills do not come back (a browser that would not close in
+    10 s on a busy laptop, 2026-09-30), the cover is the poster, unscored."""
     want = m.get("cover", True)
     if want is False:
         return None
@@ -700,7 +703,15 @@ def choose_cover(m, page):
             scored.append((float(t), ImageStat.Stat(im.convert("L")).stddev[0]))
 
     times = _sketch.cover_candidates(m)
-    Session(page, on_still=save).run("stills=" + ",".join("%r" % t for t in times))
+    try:
+        err = Session(page, on_still=save).run(
+            "stills=" + ",".join("%r" % t for t in times), fatal=False
+        )
+    except Exception as e:  # noqa: BLE001 -- the cover is a nicety; the film must still render
+        err = "%s: %s" % (type(e).__name__, e)
+    if err or len(scored) != len(times):
+        print("  cover: %.2fs, the poster -- the candidates were not drawn (%s)" % (times[0], err))
+        return times[0]
     scored.sort(key=lambda s: times.index(s[0]))
     t = _sketch.pick_cover(scored)
     print(
