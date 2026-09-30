@@ -3107,6 +3107,28 @@ public watch pages anonymously, with a 2 s pause per page, because YouTube
 answers 429 after about 130 back-to-back pages. A 429 prints as `429?` rather
 than failing the run.
 
+### Can we see the watermark ourselves? No (measured 2026-09-30)
+
+YouTube says it labels undisclosed content from C2PA metadata and Google's
+SynthID. Every studio film's voice is Gemini TTS (`studio/film.py`, `VO_PINNED`),
+and Google watermarks Gemini audio with SynthID. So the likely trigger is the
+voice. We probed 18 raw Gemini takes (Sulafat ×2 films, Leda) against 12
+ElevenLabs takes (lily, george) and 6 edge-tts lines (Aria, Guy):
+
+| probe | result |
+|---|---|
+| C2PA / provenance metadata | none. The API returns bare PCM with no container to carry it, and none of our renders carries a `c2pa`/`jumb` box (the one grep hit was bytes inside the compressed video) |
+| narrow tones in the quiet floor | none common to the Gemini takes |
+| periodic modulation (5–60 Hz, 4–11 kHz band) | only the syllable rate (5–10 Hz), the same in every engine |
+| noise floor | **Gemini never reaches silence.** Its quietest frames sit 10–30 dB above ElevenLabs (MP3 floor) and edge-tts (exact digital zero between words), and the floor's shape correlates 0.95–0.97 across Gemini voices |
+
+The floor fingerprints the engine; it is not the watermark. SynthID's audio
+mark is keyed and learned to sit under the speech, so without Google's detector
+it cannot be found by inspection, and a spectrum does not show it. The detectors
+that exist are Google's: the Gemini app ("was this made with Google AI?") and
+the SynthID Detector portal (waitlist). Both are cloud uploads, so they suit a
+published film's audio, not unpublished footage.
+
 Policy: YouTube requires "yes" for realistic content that could mislead, such as
 a real person's cloned voice or a photo of a real person made to speak.
 Animation with a generic narrator does not need it.

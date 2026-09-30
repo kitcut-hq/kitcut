@@ -711,3 +711,17 @@ at once); 200 stills now hold 597 MB instead of 1,244. `ops.sh share` runs the b
 films were made again as their owners through the site's createFilm (pzk2ay, py7ko5).
 **Lesson.** A batch job beside the live server needs a memory cap before it starts; watch
 `free -m` while it runs.
+
+### KI-046 · limitation · studio · YouTube labels some studio films "Made with AI", and we cannot see why
+
+**Symptom.** `watMf06668M` and `V25n5_k7v_c` (public studio films on @kitcut-hq) show "How this was
+made: Made with AI" under the player. No upload on either channel has `containsSyntheticMedia` set,
+and an explicit "no" through `yt-set-disclosure.py` did not remove it.
+**Cause (likely, not proven).** YouTube's own labelling from Google's SynthID watermark in the
+Gemini TTS voice every studio film uses. Other studio films carry no label yet, so the voice is not
+a sufficient trigger on its own, or the check runs late.
+**Limit.** The watermark is not visible to local analysis (reference: "Can we see the watermark
+ourselves?"). Only Google's detectors can confirm it: the Gemini app, or the SynthID Detector
+portal behind its waitlist.
+**Evidence.** `yt-set-disclosure.py --list --labels` on both channels, 2026-09-30; the Gemini vs
+ElevenLabs vs edge-tts probe in the same reference section.
