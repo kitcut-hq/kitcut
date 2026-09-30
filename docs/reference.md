@@ -3804,9 +3804,7 @@ python scripts/portrait-cutout.py --src projects/<id>/sources/speakers --out pro
 
 **A film with no narration.** Leave out `vo`: sketch-audio mixes the score and the effects and
 masters them, and nothing is ducked. Its cues then come from film.js's own clock rather than a
-voice timeline: the project's `sfx.py` copies the film's timing constants by name, and where the
-film uses its seeded random (how many times each split-flap letter flips) it ports `SK.rnd` --
-mulberry32, checked bit for bit against the browser -- so every click lands on its flap's frame.
+voice timeline -- written by the film itself (below), so every click lands on its flap's frame.
 The score was checked against the reference promo's own soundtrack with a band-by-band spectrum
 (each band relative to its own total): the first mix sat 7-20 dB brighter above 1.6 kHz and thin
 below 630 Hz. The synthesised snare, clap and hats are band-passed noise and carried the top end,
@@ -3816,6 +3814,45 @@ one instrument that is not a sample: `sub_bass`, a sine with a trace of its 2nd 
 (`_sketchaudio.SYNTHS`; check-sketch asserts it sounds at its note and needs no download). The
 effects were set by their level over the music at their moment: impacts +1 to +4 dB, the whip
 +6.5, a turn's swoosh and thunk 4-7 dB under.
+
+**A film that is a template: its content in `"data"`, its sound from its own code.** For kitcut.ai's
+templates the promo was made so another conference is a data edit, proven by rendering it both ways:
+with the Web Summit content moved out of the code it reproduces the approved master at 60 moments in
+both frames (118 of 120 stills pixel-identical, the other two one level off), its score byte for byte
+and its 275 sounds exactly.
+
+- `"data": {"content": "content.json"}` in the manifest: each named JSON file is the film's
+  `SK.DATA.<name>`, inlined into the page in a script block of its own before the engine's film code
+  runs (`sketch-render.film_data`). The promo's `content.json` holds every word (`event`, and `copy`
+  for the labels, whose `{year}`/`{city}`/`{city_code}` are filled from the event), the `palette`,
+  the `logo` and the `speakers`. Nothing of the event is left in film.js.
+- **Three colours are enough.** `palette` needs `ground` (the dark one the type sits on), `accent` and
+  `second`; film.js works out every shade it draws (flap cells, the board, shadows, the soft text)
+  by HSL lightness from those three unless the file names it, and darkens a ground too light for its
+  light type until they reach 7:1.
+- **A logo with or without what was measured off it.** `logo.mark` (the symbol as two polygons,
+  and the point to dive into) and `logo.letters` (column spans) make the symbol rise and the letters
+  rise one by one, as Web Summit's did; without them the whole image wipes on, and the opening dives
+  into a disc of the accent instead of the symbol's peak.
+- **Content that never moves the clock.** The carousel always makes 5 stops: the speakers with a
+  `name` are the featured, in order, and fewer than five come round again (the counter reads 01/03,
+  02/03, 01/03...); the ring always has at least 12 slots, repeating people when a line-up is short;
+  a long city or venue name is fitted, not cut. So the timing, and every sound on it, is the same
+  for any content -- checked with a made-up Helsinki event, three featured of seven, a green and
+  orange palette and a logo with no measurements.
+- **`SK.film({sound: {score(), sfx()}})` and `sketch-render.py --sound-data`.** The film returns
+  its own score.json object and sfx.json list, worked out from its clock and its content: one flap
+  click per letter the board actually flips (from the same `SK.rnd` the picture uses), one pop per
+  ring slot, one tick per measured logo letter. `--sound-data` opens the page with `?sound=1` and
+  writes the manifest's `audio.score`/`audio.sfx`; then sketch-audio mixes them as any. The project
+  scripts `score.py`/`sfx.py` and their hand-copied constants are retired. A sound that repeats
+  with the same level and pan is one cue with `times` (render_sfx already played them), which took
+  the promo from 275 cues to 143, under the studio's 200.
+
+```powershell
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --sound-data
+python scripts/sketch-audio.py  --manifest projects/<id>/sketch.json
+```
 
 **A copy to post: `sketch-render.py --web`.** The browser-encoded master of a 1080x1080 60 fps
 film runs ~31 Mbps (26 s: 110 MB). `--web` writes `<slug>_web.mp4` beside it through `_encode`,

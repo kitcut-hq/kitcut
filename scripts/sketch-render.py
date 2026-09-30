@@ -195,6 +195,18 @@ def module_scripts(m):
     return "\n".join(out)
 
 
+def film_data(m):
+    """ "data": {"content": "content.json"} -- JSON files the film reads as SK.DATA.<name>: what a
+    template film is about (its words, people and colours) kept out of its code, so a form can fill
+    them and the code stays the template's."""
+    out = {}
+    for name, p in (m.get("data") or {}).items():
+        _sketch.safe_name(name, "data")
+        with open(_sketch.rel(m, p), encoding="utf-8") as f:
+            out[name] = json.load(f)
+    return out
+
+
 def bundle(m, audio=True):
     """The player page with everything inlined. Returns the HTML text."""
     with open(os.path.join(SKETCH, "player.html"), encoding="utf-8") as f:
@@ -252,6 +264,7 @@ def bundle(m, audio=True):
         "__SCENES__": scene_scripts(m),
         "__AUDIO__": src,
         "__VO__": json.dumps(vo_timeline(m)),
+        "__DATA__": json.dumps(film_data(m), ensure_ascii=False),
         "__IMAGES__": json.dumps(
             {
                 k: "data:%s;base64,%s" % (mime(v), b64(_sketch.rel(m, v)))
@@ -265,6 +278,27 @@ def bundle(m, audio=True):
     }
     # one pass, so a placeholder-looking string inside the film code is never re-substituted
     return re.sub("|".join(re.escape(k) for k in rep), lambda mo: rep[mo.group(0)], page)
+
+
+def write_sound(m, page, size):
+    """The film's SK.film({sound: {score(), sfx()}}) -> the manifest's audio.score and audio.sfx
+    files, which sketch-audio.py then plays as it plays any."""
+    s = Session(page, size=size)
+    s.run("sound=1")
+    got = s.sound or {}
+    if got.get("score") is None and got.get("sfx") is None:
+        sys.exit("--sound-data: the film has no sound (SK.film({sound: {score(), sfx()}}))")
+    audio = m.get("audio") or {}
+    for key, default in (("score", "score.json"), ("sfx", "sfx.json")):
+        if got.get(key) is None:
+            continue
+        p = _sketch.rel(m, audio.get(key, default))
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(got[key], f, indent=1, ensure_ascii=False)
+        n = len(got[key]) if key == "sfx" else len(got[key].get("events", []))
+        print(
+            "  %s: %d %s" % (os.path.relpath(p, _env.ROOT), n, "cues" if key == "sfx" else "events")
+        )
 
 
 def artifact_flavour(page):
@@ -300,6 +334,7 @@ class Session:
         self.on_frame, self.on_still, self.on_h264 = on_frame, on_still, on_h264
         self.done = threading.Event()
         self.error, self.automation, self.frames, self.last = None, None, 0, time.time()
+        self.sound = None  # what the film says its score and cues are (?sound=1)
         self.report = None  # what the page's SK.REPORT() said after its stills, if it has one
         self.key = "/" + secrets.token_hex(12) + "/"
         sess = self
@@ -345,6 +380,8 @@ class Session:
                         sess.on_still(q.split("=")[1], body)
                     elif path == "/automation":
                         sess.automation = json.loads(body)
+                    elif path == "/sound":
+                        sess.sound = json.loads(body)
                     elif path == "/report":
                         sess.report = json.loads(body)
                     elif path == "/error":
@@ -817,6 +854,12 @@ def main():
         help="write temp/automation.json for sketch-audio's 'air' cues",
     )
     ap.add_argument(
+        "--sound-data",
+        action="store_true",
+        help="write score.json and sfx.json from the film's own SK.film({sound}): music and cues "
+        "worked out from its clock and its words, so new content brings its own",
+    )
+    ap.add_argument(
         "--draft", action="store_true", help="30 fps, lower quality: a fast preview render"
     )
     ap.add_argument("--fps", type=int)
@@ -942,8 +985,9 @@ def main():
         ["bundle"]
         + (["stills"] if args.stills else [])
         + (["automation"] if args.automation else [])
+        + (["sound"] if args.sound_data else [])
     )
-    full = not (args.bundle or args.stills or args.automation)
+    full = not (args.bundle or args.stills or args.automation or args.sound_data)
     if full:
         names += (["cover"] if args.t0 == 0 and m.get("cover", True) is not False else []) + [
             "frames",
@@ -1006,6 +1050,10 @@ def main():
                     "  %s: %s"
                     % (os.path.relpath(p, _env.ROOT), ", ".join(s.automation or {}) or "no tracks")
                 )
+
+        if args.sound_data:
+            with st("sound"):
+                write_sound(m, light, size)
 
         if not full:
             return

@@ -935,6 +935,31 @@ def main():
             except ValueError:
                 pass
         check("frame: odd, tiny, huge or malformed sizes are refused", not bad, str(bad))
+        # "data": a template film's words and people, kept out of its code (SK.DATA)
+        check("bundle: a film with no data gets an empty SK.DATA", "SK.DATA = {};" in page)
+        with open(os.path.join(tmp, "example", "content.json"), "w", encoding="utf-8") as f:
+            json.dump({"event": {"city": "Kyiv"}, "speakers": [{"name": "Ада"}]}, f)
+        dp = render.bundle(dict(m, data={"content": "content.json"}), audio=False)
+        with open(os.path.join(ex, "film.js"), encoding="utf-8") as f:
+            film_head = f.readline().strip()
+        check(
+            "bundle: data files are the film's SK.DATA, before its code, not escaped",
+            'SK.DATA = {"content": {"event": {"city": "Kyiv"}, "speakers": [{"name": "Ада"}]}};'
+            in dp
+            and dp.index('SK.DATA = {"content"') < dp.index(film_head),
+        )
+        try:
+            render.bundle(dict(m, data={"../content": "content.json"}), audio=False)
+            refused = False
+        except ValueError:
+            refused = True
+        check("bundle: a data name that is not a plain name is refused", refused)
+        check(
+            "sound: the page reports the film's own score and cues (?sound=1, SK.soundData)",
+            "Q.has('sound')" in page
+            and "report('sound', JSON.stringify(SK.soundData()))" in page
+            and "SK.soundData = function" in page,
+        )
         art = render.artifact_flavour(page)
         check(
             "artifact: no html/head/body wrapper",

@@ -54,7 +54,7 @@ body.render canvas { border-radius: 0; box-shadow: none; }
 // A syntax or top-level error in the film throws before the player below is listening; report the
 // first one now, or a render sits out its 90 s stall timeout and then says nothing useful.
 window.__early = function (e) {
-  if (window.__earlyErr || !/[?&](render|export|encode|stills|automation|probe)=/.test(location.search)) return;
+  if (window.__earlyErr || !/[?&](render|export|encode|stills|automation|sound|probe)=/.test(location.search)) return;
   // a cast member, a scene or a module names itself (sketch-render: //# sourceURL=cast/<name>.js,
   // scenes/<NN-slug>.js, sketch/<name>.js, or engine/<name>.js for a film's own copy of a module)
   const cast = /((?:cast|scenes|sketch|engine)\/[a-z0-9_-]+\.js)$/.exec(e.filename || '');
@@ -78,6 +78,9 @@ __CAST__
 SK.VO = __VO__;
 </script>
 <script>
+SK.DATA = __DATA__;
+</script>
+<script>
 __FILM__
 </script>
 __SCENES__
@@ -93,8 +96,9 @@ __SCENES__
   //                         the film's cover, what X and a phone show before play)
   //   ?stills=1.5,9,23.8    POST a PNG per time to /still, then /done
   //   ?automation=1         POST SK.automation() JSON to /automation, then /done
+  //   ?sound=1              POST SK.soundData() JSON (the film's own score and cues) to /sound
   const Q = new URLSearchParams(location.search);
-  const RENDER = Q.has('render') || Q.has('export') || Q.has('encode') || Q.has('stills') || Q.has('automation');
+  const RENDER = Q.has('render') || Q.has('export') || Q.has('encode') || Q.has('stills') || Q.has('automation') || Q.has('sound');
   const audio = document.getElementById('audio');
   const overlay = document.getElementById('overlay');
   const fill = document.getElementById('fill');
@@ -173,6 +177,7 @@ __SCENES__
         // what a script in the page learned while the stills were drawn (sketch/thumb.js: the film's own styles)
         if (Q.has('stills') && typeof SK.REPORT === 'function') await report('report', JSON.stringify(SK.REPORT()));
         if (Q.has('automation')) await report('automation', JSON.stringify(SK.automation()));
+        if (Q.has('sound')) await report('sound', JSON.stringify(SK.soundData()));
       } catch (e) { await report('error', String(e && e.stack || e)); }
       if (!Q.has('render')) await report('done', '');
       return;

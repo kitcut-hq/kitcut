@@ -181,11 +181,19 @@ Effects piece in the conference's own look. What it takes:
    event's own line-up does.
 5. **3D**: `"modules": ["space"]`. `SK.view3` then `SK.face3`/`SK.box3`/`SK.poly3`; give a low
    piece its own view with `sx`/`sy` so the camera looks at it level; `SK.fx` for blur and whips.
-6. **Sound without a voice**: leave out `vo`; write `score.py` (a chord chart; hits on the beats the
-   picture lands on) and `sfx.py` (every visual event, times copied from film.js by name). Compare
-   the mix's band balance with the reference's soundtrack; keep the noise drums (snare, clap,
-   hats) well back and put `sub_bass` under the bass.
-7. **Render** `--encode browser --web`: the master and a ~8 Mbps copy to post.
+6. **Sound without a voice, written by the film**: leave out `vo`; give `SK.film` a
+   `sound: {score(), sfx()}` that works the score (a chord chart; hits on the beats the picture lands
+   on) and every cue out of the film's own clock and content, then `sketch-render.py --sound-data`
+   writes score.json and sfx.json. Never copy timings into a script beside the film: they drift. A
+   sound that repeats at one level and pan is one cue with `times` (the studio allows 200 cues).
+   Compare the mix's band balance with the reference's soundtrack; keep the noise drums (snare,
+   clap, hats) well back and put `sub_bass` under the bass.
+7. **Content in data, when the film could be a template**: `"data": {"content": "content.json"}`
+   makes the file `SK.DATA.content`; keep every word, colour, logo and person there and none in the
+   code, work shades out of three brand colours, and never let the content move the clock (a fixed
+   number of carousel stops; repeat people when there are few). Prove it: stills at 60 moments
+   before and after must match, and a made-up event must render without a broken frame.
+8. **Render** `--encode browser --web`: the master and a ~8 Mbps copy to post.
 
 Check the whip, the turns and every transition frame by frame from a `--draft` render
 (`ffmpeg ... -vf "fps=30,scale=216:216,tile=6x5"`), not only from stills: an empty frame between two

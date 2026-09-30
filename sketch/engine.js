@@ -512,6 +512,7 @@
   /* ------------------------------------------------------------ the voice-over clock (sketch-vo's timeline, injected by the bundler)
      Cue visuals to words, not to hand-copied seconds, so a re-recorded line moves its visuals with it. */
   SK.VO = SK.VO || { lines: [] };
+  SK.DATA = SK.DATA || {};
   // letters of any script: an a-z class strips a Cyrillic word to '' and every cue matches word 0
   const norm = s => String(s).toLowerCase().replace(/[’']/g, '').replace(/[^\p{L}\p{N}$]/gu, '');
   /** start (or end, with edge 'e') of word `w` (index or text; n-th match) in VO line `li` */
@@ -777,6 +778,15 @@
     // no fade-in by default: a fade from blank paper reads as empty frames at the head of the film
     const fin = F.fadeIn ? 1 - tw(t, 0, F.fadeIn) : 0, fout = tw(t, F.duration - (F.fadeOut ?? .45), F.duration);
     if (fin > 0 || fout > 0) { ctx.fillStyle = SK.C.paper; ctx.globalAlpha = Math.max(fin, fout); ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  };
+
+  /** The film's own sound, worked out from its clock and its words: SK.film({ sound: { score(), sfx() } })
+      returns score.json's object and sfx.json's list (sketch-render.py --sound-data writes them), so a
+      film whose content changes -- another city on a split-flap board, more people on a ring -- brings
+      the clicks and pops to go with it. Either may be left out. */
+  SK.soundData = function () {
+    const s = (SK._film && SK._film.sound) || {};
+    return { score: s.score ? s.score() : null, sfx: s.sfx ? s.sfx() : null };
   };
 
   /** Per-track motion for the sound design: speed (screen px/s) and pan (-1..1) of a moving thing. */
