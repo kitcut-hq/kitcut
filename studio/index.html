@@ -120,6 +120,19 @@ svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
 .menu a, .menu button { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; text-decoration: none; background: none; border: 0; text-align: left; cursor: pointer; font-size: 14px; }
 .menu a:hover, .menu button:hover { background: var(--hover); }
 .menu form { margin: 0; display: grid; }
+.menu .sep { height: 1px; background: var(--line); margin: 4px 0; }
+/* the workspace switcher, beside the wordmark (shell.js) */
+.orgsw { position: relative; min-width: 0; }
+.orgsw > button { display: inline-flex; align-items: center; gap: 8px; height: 34px; max-width: 260px; padding: 0 8px 0 5px; border-radius: 9px; border: 1px solid transparent; background: transparent; cursor: pointer; font-weight: 600; }
+.orgsw > button:hover, .orgsw > button[aria-expanded="true"] { background: var(--hover); }
+.orgsw .swatch { width: 24px; height: 24px; }
+.orgsw .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.orgsw .caret { color: var(--ink-3); width: 14px; height: 14px; }
+.orgmenu { left: 0; right: auto; min-width: 280px; }
+.orgmenu a.org .nm { flex: 1; display: grid; }
+.orgmenu a.org small { color: var(--ink-3); font-size: 12px; }
+.orgmenu a.org .role { font-size: 12px; color: var(--ink-3); }
+.orgmenu a.org.on { background: var(--sunk); }
 
 .app { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: calc(100% - 56px); }
 .side { background: var(--side); border-right: 1px solid var(--line); padding: 16px 10px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 56px; height: calc(100vh - 56px); overflow-y: auto; }
@@ -251,11 +264,66 @@ dialog .dfoot { display: flex; justify-content: flex-end; gap: 8px; padding: 14p
   .phone-nav a.on { color: var(--ink); border-color: var(--accent); }
   .phone-nav a .swatch { width: 20px; height: 20px; border-radius: 50%; font-size: 10px; }
   .phone-nav a.plain { padding-left: 12px; }
-  .brand .sep, .brand span, .bar .home span, .bar .wide-only { display: none; }
+  .brand .sep, .brand span, .bar .home span, .bar .wide-only, .orgsw .nm { display: none; }
 }
 @media (max-width: 460px) {
   .credits span { display: none; }
 }
+/* people drawn into a film (lib/people.js), in the home page's composer and a project's episode
+   composer: a tile that shows what adding one does (their photo, then them talking as a drawn
+   character), a tile per person with their name, then the style they are drawn in -- a radio per
+   style, each playing its sample while pointed at -- and the permission tick */
+.people { display: grid; gap: 10px; padding: 12px 14px 14px; border: 1px dashed var(--line-2); border-radius: 12px; }
+.people.on { border-style: solid; border-color: var(--line); background: var(--panel); }
+/* nobody yet: the add tile, and beside it what it does */
+.people:not(.on) { grid-template-columns: auto minmax(0, 1fr); column-gap: 18px; align-items: center; }
+.people:not(.on) .prow { order: -1; }
+.people:not(.on) .phead { display: grid; gap: 4px; font-size: 14px; }
+.people:not(.on) .phead b { font-size: 15px; }
+@media (max-width: 600px) { .people:not(.on) { grid-template-columns: minmax(0, 1fr); } .people:not(.on) .prow { order: 0; } }
+.people .phead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 0; font-size: 13px; color: var(--ink-2); }
+.people .phead b { font: 650 14px/1.3 Inter, system-ui, sans-serif; color: var(--ink); }
+.people .prow { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+.people .person { position: relative; display: grid; gap: 6px; width: 112px; margin: 0; }
+.people .person .ph { position: relative; display: block; width: 112px; height: 112px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--sunk); }
+.people .person .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.people .person .x { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  background: rgba(20, 16, 12, .72); color: #fff; font: 600 15px/24px Inter, system-ui, sans-serif; }
+.people .person input { width: 100%; height: 30px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel); color: var(--ink); font: 13px/1 Inter, system-ui, sans-serif; }
+.people .person.busy .ph::after { content: ''; position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px;
+  border: 3px solid rgba(255, 255, 255, .9); border-top-color: var(--accent); border-radius: 50%; animation: pspin .8s linear infinite; }
+.people .person.bad .ph { border-color: var(--bad); }
+.people .padd { display: grid; gap: 8px; justify-items: center; padding: 10px 14px; border: 1px dashed var(--line-2); border-radius: 10px; background: var(--sunk);
+  color: var(--ink); cursor: pointer; font: 600 13.5px/1.2 Inter, system-ui, sans-serif; }
+.people .padd:hover:not(:disabled) { border-color: var(--accent); }
+.people .padd:disabled { cursor: default; opacity: .55; }
+.people .padd .demo { display: flex; align-items: center; gap: 6px; }
+.people .padd .src { width: 58px; height: 58px; border-radius: 8px; object-fit: cover; filter: saturate(.9); }
+.people .padd .demo svg { width: 22px; height: 22px; color: var(--accent); }
+.people .padd .toon { position: relative; width: 84px; height: 84px; border-radius: 10px; overflow: hidden; background: #fbfaf7; }
+.people .padd .toon img, .people .padd .toon video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.people .padd b::before { content: '+ '; color: var(--accent); }
+/* once someone is in: a tile the size of a person's, since what it does has been seen */
+.people.on .padd { width: 112px; height: 112px; padding: 8px; align-content: center; gap: 6px; font-size: 12px; }
+.people.on .padd .src, .people.on .padd .demo svg { display: none; }
+.people.on .padd .toon { width: 56px; height: 56px; border-radius: 8px; }
+.people .pstyle { display: grid; gap: 8px; }
+.people .styles { display: grid; grid-template-columns: repeat(7, 76px); gap: 10px 8px; }
+@media (max-width: 700px) { .people .styles { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); } }
+.people .st { position: relative; display: grid; align-content: start; gap: 4px; cursor: pointer; text-align: center; font: 550 11.5px/1.2 Inter, system-ui, sans-serif; color: var(--ink-2); }
+.people .st input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.people .st .pv { position: relative; display: block; aspect-ratio: 1; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: #fbfaf7; }
+.people .st .pv img, .people .st .pv video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.people .st .pv i { position: absolute; left: 4px; top: 4px; padding: 1px 5px; border-radius: 5px; background: var(--accent); color: var(--accent-ink); font: 700 10px/1.4 Inter, system-ui, sans-serif; font-style: normal; }
+.people .st:hover .pv { border-color: var(--line-2); }
+.people .st input:checked + .pv { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.people .st input:checked ~ b { color: var(--ink); font-weight: 650; }
+.people .st input:focus-visible + .pv { box-shadow: 0 0 0 2px var(--accent), var(--ring); }
+.people .st b { font-weight: 550; }
+.people .consent { display: flex; gap: 8px; align-items: center; width: fit-content; padding: 4px 8px 4px 2px; border-radius: 8px; font-size: 13.5px; color: var(--ink); cursor: pointer; }
+.people .consent input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.people .consent.need { background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent); }
+@keyframes pspin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 /* /app.css */
 /* The home page and a film's page (/film/<id>), in the Studio's shell: the idea box, the film with
@@ -327,59 +395,6 @@ button.icon.send { background: var(--accent); color: var(--accent-ink); border-c
 .lk input:checked ~ b { color: var(--ink); font-weight: 650; }
 .lk input:focus-visible + .pv { box-shadow: 0 0 0 2px var(--accent), var(--ring); }
 #lookAbout { margin: 0; min-height: 2.6em; }
-/* people drawn into the film (lib/people.js): a tile that shows what adding one does (their photo,
-   then them talking as a drawn character), a tile per person with their name, then the style they
-   are drawn in -- a radio per style, each playing its sample while pointed at -- and the permission tick */
-.people { display: grid; gap: 10px; padding: 12px 14px 14px; border: 1px dashed var(--line-2); border-radius: 12px; }
-.people.on { border-style: solid; border-color: var(--line); background: var(--panel); }
-/* nobody yet: the add tile, and beside it what it does */
-.people:not(.on) { grid-template-columns: auto minmax(0, 1fr); column-gap: 18px; align-items: center; }
-.people:not(.on) .prow { order: -1; }
-.people:not(.on) .phead { display: grid; gap: 4px; font-size: 14px; }
-.people:not(.on) .phead b { font-size: 15px; }
-@media (max-width: 600px) { .people:not(.on) { grid-template-columns: minmax(0, 1fr); } .people:not(.on) .prow { order: 0; } }
-.phead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 0; font-size: 13px; color: var(--ink-2); }
-.phead b { font: 650 14px/1.3 Inter, system-ui, sans-serif; color: var(--ink); }
-.prow { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
-.person { position: relative; display: grid; gap: 6px; width: 112px; margin: 0; }
-.person .ph { position: relative; display: block; width: 112px; height: 112px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--sunk); }
-.person .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.person .x { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
-  background: rgba(20, 16, 12, .72); color: #fff; font: 600 15px/24px Inter, system-ui, sans-serif; }
-.person input { width: 100%; height: 30px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel); color: var(--ink); font: 13px/1 Inter, system-ui, sans-serif; }
-.person.busy .ph::after { content: ''; position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px;
-  border: 3px solid rgba(255, 255, 255, .9); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
-.person.bad .ph { border-color: var(--bad); }
-.padd { display: grid; gap: 8px; justify-items: center; padding: 10px 14px; border: 1px dashed var(--line-2); border-radius: 10px; background: var(--sunk);
-  color: var(--ink); cursor: pointer; font: 600 13.5px/1.2 Inter, system-ui, sans-serif; }
-.padd:hover:not(:disabled) { border-color: var(--accent); }
-.padd:disabled { cursor: default; opacity: .55; }
-.padd .demo { display: flex; align-items: center; gap: 6px; }
-.padd .src { width: 58px; height: 58px; border-radius: 8px; object-fit: cover; filter: saturate(.9); }
-.padd .demo svg { width: 22px; height: 22px; color: var(--accent); }
-.padd .toon { position: relative; width: 84px; height: 84px; border-radius: 10px; overflow: hidden; background: #fbfaf7; }
-.padd .toon img, .padd .toon video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-.padd b::before { content: '+ '; color: var(--accent); }
-/* once someone is in: a tile the size of a person's, since what it does has been seen */
-.people.on .padd { width: 112px; height: 112px; padding: 8px; align-content: center; gap: 6px; font-size: 12px; }
-.people.on .padd .src, .people.on .padd .demo svg { display: none; }
-.people.on .padd .toon { width: 56px; height: 56px; border-radius: 8px; }
-.pstyle { display: grid; gap: 8px; }
-.styles { display: grid; grid-template-columns: repeat(7, 76px); gap: 10px 8px; }
-@media (max-width: 700px) { .styles { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); } }
-.st { position: relative; display: grid; align-content: start; gap: 4px; cursor: pointer; text-align: center; font: 550 11.5px/1.2 Inter, system-ui, sans-serif; color: var(--ink-2); }
-.st input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
-.st .pv { position: relative; display: block; aspect-ratio: 1; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: #fbfaf7; }
-.st .pv img, .st .pv video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-.st .pv i { position: absolute; left: 4px; top: 4px; padding: 1px 5px; border-radius: 5px; background: var(--accent); color: var(--accent-ink); font: 700 10px/1.4 Inter, system-ui, sans-serif; font-style: normal; }
-.st:hover .pv { border-color: var(--line-2); }
-.st input:checked + .pv { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
-.st input:checked ~ b { color: var(--ink); font-weight: 650; }
-.st input:focus-visible + .pv { box-shadow: 0 0 0 2px var(--accent), var(--ring); }
-.st b { font-weight: 550; }
-.consent { display: flex; gap: 8px; align-items: center; width: fit-content; padding: 4px 8px 4px 2px; border-radius: 8px; font-size: 13.5px; color: var(--ink); cursor: pointer; }
-.consent input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
-.consent.need { background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent); }
 .btn.go { height: 44px; padding: 0 22px; font-size: 15px; }
 .btn.go.short { background: var(--sunk); border-color: var(--line-2); color: var(--ink-2); }
 .note { color: var(--ink-2); font-size: 13px; }
