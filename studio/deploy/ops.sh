@@ -28,6 +28,8 @@
 #                                                    a film made on the VM itself
 #                                                     (on the Claude login unless --api), followed;
 #                                                     --no-watch prints its id and returns
+#                                                     --person "Name=photo.jpg" (up to 4), --style felt:
+#                                                     people drawn into it as characters who talk
 #   bash studio/deploy/ops.sh watch <film-id>...      follow films to the end (one line per change)
 #   bash studio/deploy/ops.sh pull <film-id> [dest] [--all]   its outputs (or the whole folder) here
 #   bash studio/deploy/ops.sh hide|show <film-id>     out of / back into the public gallery
@@ -322,15 +324,30 @@ EOF
     ;;
 
   film)
-    idea="${1:?film \"<idea>\" [--seconds N] [--look L] [--unlisted] [--api] [--no-watch]}"; shift
-    secs=30; auth=""; look=drawn; listed=1; follow=1
+    idea="${1:?film \"<idea>\" [--seconds N] [--look L] [--unlisted] [--api] [--no-watch] [--person Name=photo ...] [--style S]}"; shift
+    secs=30; auth=""; look=drawn; listed=1; follow=1; people=(); style=auto
     while [ $# -gt 0 ]; do
       case "$1" in --seconds) secs="$2"; shift ;; --look) look="$2"; shift ;; --unlisted) listed=0 ;;
-        --api) auth=', "auth": "api"' ;; --no-watch) follow=0 ;; esac
+        --api) auth=', "auth": "api"' ;; --no-watch) follow=0 ;;
+        --person) people+=("$2"); shift ;; --style) style="$2"; shift ;; esac
       shift
     done
+    # --person "Name=photo.jpg" (or just the photo), up to 4: a real person drawn into the film as a
+    # character who talks (studio "people"), in --style (auto: the look's own). Each photo is uploaded
+    # to the VM's studio first, as the site does; only with that person's permission.
+    ppl="[]"
+    for p in "${people[@]}"; do
+      case "$p" in *=*) name="${p%%=*}"; f="${p#*=}" ;; *) name=""; f="$p" ;; esac
+      [ -f "$f" ] || { echo "no photo: $f" >&2; exit 2; }
+      case "$f" in *.png|*.PNG) ct=image/png ;; *.webp|*.WEBP) ct=image/webp ;; *) ct=image/jpeg ;; esac
+      if [ "$DRY" = 1 ]; then up="up-dryrun"; echo "  would upload $f ($ct) as $name"
+      else
+        up="$(on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/uploads -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: $ct' --data-binary @-" < "$f" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("id") or sys.exit(json.dumps(d)))')"
+      fi
+      ppl="$(python -c 'import json,sys; l=json.loads(sys.argv[1]); l.append({"upload": sys.argv[2], "name": sys.argv[3]}); print(json.dumps(l))' "$ppl" "$up" "$name")"
+    done
     # --look: drawn, painted, collage (the studio refuses one it does not have); --unlisted: link-only
-    body="$(python -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1], "seconds": int(sys.argv[2]), "look": sys.argv[3], "listed": sys.argv[4] == "1"}))' "$idea" "$secs" "$look" "$listed")"
+    body="$(python -c 'import json,sys; ppl=json.loads(sys.argv[5]); print(json.dumps({"prompt": sys.argv[1], "seconds": int(sys.argv[2]), "look": sys.argv[3], "listed": sys.argv[4] == "1", **({"people": ppl, "character_style": sys.argv[6]} if ppl else {})}))' "$idea" "$secs" "$look" "$listed" "$ppl" "$style")"
     body="${body%\}}$auth}"
     [ "$DRY" = 1 ] && { echo "  would POST $body to the VM's studio"; exit 0; }
     id="$(printf '%s' "$body" | on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/films -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' --data-binary @-" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("id") or sys.exit(json.dumps(d)))')"

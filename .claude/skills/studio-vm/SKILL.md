@@ -20,6 +20,7 @@ bash studio/deploy/ops.sh releases                  # built releases, the leader
 bash studio/deploy/ops.sh rollback <sha12>          # back to one already built, no rebuild
 bash studio/deploy/ops.sh migrate [<commit>]        # ONCE per machine (see the rules)
 bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--look collage] [--unlisted] [--api] [--no-watch]
+                                                    # [--person "Alex=alex.jpg" ...] [--style felt]: people drawn into it
                                                     # on the Claude login unless --api
 bash studio/deploy/ops.sh watch <film-id>...        # one or several, a line per change
 bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]  # finish a film the studio stopped
