@@ -228,6 +228,15 @@ def heads():
         )
         plain = render.bundle(dict(m, heads={}), audio=False)
         check("heads: a film without heads carries none of it", "SK.RIGS" not in plain)
+        wav = os.path.join(d, "audio", "vo", "l0.wav")
+        before = hd._cache_path(m, wav)
+        saved = dict(hd.TRACK)
+        hd.TRACK["lead"] = saved["lead"] + 0.05
+        try:
+            after = hd._cache_path(m, wav)
+        finally:
+            hd.TRACK.update(saved)
+        check("heads: new track settings are not served old cached tracks", before != after)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
