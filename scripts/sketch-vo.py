@@ -19,6 +19,11 @@ A film in another language sets "language" (ISO 639-1, e.g. "uk") and a TAIL in 
 ("Добре."): an English tail on a Ukrainian line switches the voice's accent for the last words.
 Scoring then runs a multilingual Whisper ("whisper", default large-v3 on the GPU).
 
+Who scores: SKETCH_SCORER (the machine) or "whisper" (the film) -- a local faster-whisper model,
+or "openrouter:<model>", a transcription service (e.g. openrouter:microsoft/mai-transcribe-2,
+OPENROUTER_API_KEY), several takes at once. Each take's score is remembered beside it
+(<take>.score.json), so a re-recording scores only the takes that changed.
+
 Why the tail word: eleven_v3 clips the last syllable of most takes (measured: 16 of 18 takes
 ended above -30 dBFS). Rendering "line + tail" and cutting in the silence between them gives the
 line a sentence-final ending and a clean decay. Only mp3_44100_128 is available below the
@@ -57,6 +62,7 @@ import hashlib
 import difflib
 import atexit
 import argparse
+import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from importlib import import_module
 
@@ -584,9 +590,107 @@ def _whisper(lang, name):
     return _WHISPER
 
 
+OPENROUTER_STT = "https://openrouter.ai/api/v1/audio/transcriptions"
+
+
+def scorer(model=None):
+    """Who listens to the takes: SKETCH_SCORER (the machine's choice, e.g. the studio VM's) wins
+    over the film's "whisper"; "openrouter:<model>" is a transcription model OpenRouter serves
+    (openrouter.ai/api/v1/models?output_modalities=transcription), anything else a local
+    faster-whisper model name (None: small.en / large-v3 by language)."""
+    return os.environ.get("SKETCH_SCORER", "").strip() or model
+
+
+def remote(model):
+    return bool(model) and model.startswith("openrouter:")
+
+
+def openrouter_heard(path, lang, model, hotwords=()):
+    """What an OpenRouter transcription model heard in the take: (text, [(word, start, end)]).
+    The take goes up as 16 kHz mono WAV (a third of the 48 kHz bytes; speech needs no more).
+    OpenRouter ignores a prompt; Azure's models (MAI-Transcribe) take the hotwords as a phrase
+    list instead, the others go without."""
+    import httpx
+
+    key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if not key:
+        sys.exit("set OPENROUTER_API_KEY to score takes on %s" % model)
+    wav = subprocess.run(  # 16-bit PCM: not every provider reads the float WAVs written here
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-i",
+            path,
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-c:a",
+            "pcm_s16le",
+            "-f",
+            "wav",
+            "-",
+        ],
+        capture_output=True,
+        check=True,
+    ).stdout
+    body = {
+        "model": model.split(":", 1)[1],
+        "input_audio": {"data": base64.b64encode(wav).decode(), "format": "wav"},
+        "language": lang,
+        "response_format": "verbose_json",
+        "timestamp_granularities": ["word"],
+        "temperature": 0,
+    }
+    if hotwords and model.startswith("openrouter:microsoft/"):
+        body["provider"] = {"options": {"azure": {"phraseList": {"phrases": list(hotwords)}}}}
+    for attempt in range(BUSY_TRIES):
+        try:
+            r = httpx.post(
+                OPENROUTER_STT,
+                headers={"Authorization": "Bearer " + key},
+                json=body,
+                timeout=120,
+            )
+        except httpx.TransportError as e:  # a dropped connection is busy too
+            r = None
+            why = type(e).__name__
+        if r is not None and (r.status_code not in BUSY or attempt == BUSY_TRIES - 1):
+            break
+        wait = busy_wait(attempt)
+        print(
+            "  %s busy (%s); asking again in %.0fs"
+            % (model, why if r is None else r.status_code, wait)
+        )
+        time.sleep(wait)
+    if r is None or r.status_code != 200:
+        raise RuntimeError("%s %s: %s" % (model, r and r.status_code, r and r.text[:300]))
+    j = r.json()
+    ws = [(w.get("word", ""), float(w["start"]), float(w["end"])) for w in j.get("words") or []]
+    if not ws:  # a model that times segments only: its words, spread over each segment
+        for seg in j.get("segments") or []:
+            toks = seg.get("text", "").split()
+            step = (seg["end"] - seg["start"]) / max(len(toks), 1)
+            ws += [
+                (t, seg["start"] + k * step, seg["start"] + (k + 1) * step)
+                for k, t in enumerate(toks)
+            ]
+    return j.get("text", ""), ws
+
+
 def whisper_score(path, text, hotwords, lang="en", model=None, words=False):
     """(accuracy against the script, what was heard) -- plus, with words=True, Whisper's word
     timestamps [(text, start, end)] for a backend that gives none (Gemini)."""
+    model = scorer(model)
+    if remote(model):
+        try:
+            heard, ws = openrouter_heard(path, lang, model, hotwords)
+            acc = difflib.SequenceMatcher(None, words_of(text), words_of(heard)).ratio()
+            return (acc, heard.strip(), ws) if words else (acc, heard.strip())
+        except (RuntimeError, ValueError, KeyError) as e:  # the service is down: slower, same job
+            print("  %s failed (%s); scoring this take here" % (model, str(e)[:120]))
+            model = None
     segs, _ = _whisper(lang, model).transcribe(
         path,
         language=lang,
@@ -601,6 +705,33 @@ def whisper_score(path, text, hotwords, lang="en", model=None, words=False):
         return acc, heard.strip()
     ws = [(w.word.strip(), w.start, w.end) for s in segs for w in (s.words or [])]
     return acc, heard.strip(), ws
+
+
+def cached_score(base, path, text, hotwords, lang="en", model=None, words=False):
+    """whisper_score, remembered beside the take (base.score.json) under a key of everything the
+    answer depends on: the audio's bytes, the script line, the hotwords, the language and the
+    model. A re-recording re-scores only the takes that changed -- scoring every take again cost
+    an 8-minute film 180-225 s per recording on the studio's 4-CPU VM, for lines whose audio was
+    the same file as last time (studio-20260929-103129-i4d52n: 18 of its 23 narration minutes)."""
+    with open(path, "rb") as f:
+        audio = hashlib.sha1(f.read()).hexdigest()
+    key = hashlib.sha1(
+        json.dumps([audio, text, list(hotwords or []), lang, scorer(model), words]).encode("utf-8")
+    ).hexdigest()
+    memo = base + ".score.json"
+    if os.path.exists(memo):
+        try:
+            with open(memo, encoding="utf-8") as f:
+                got = json.load(f)
+            if got.get("key") == key:
+                return tuple(got["got"])
+        except (OSError, ValueError, KeyError):
+            pass  # a torn or older memo: score again
+    got = whisper_score(path, text, hotwords, lang, model, words)
+    with open(memo + ".tmp", "w", encoding="utf-8") as f:
+        json.dump({"key": key, "got": got}, f)
+    os.replace(memo + ".tmp", memo)
+    return got
 
 
 def main():
@@ -704,7 +835,7 @@ def main():
                 for k in range(takes):
                     base = os.path.join(vdir, "L%02d_T%d_%s" % (i, k, fp))
                     if args.retake and os.path.exists(base + ".json"):
-                        for ext in (".mp3", ".wav", ".json"):
+                        for ext in (".mp3", ".wav", ".json", ".score.json"):
                             if os.path.exists(base + ext):
                                 os.remove(base + ext)
                     if not os.path.exists(base + ".json"):
@@ -797,6 +928,7 @@ def main():
                     cand.setdefault(i, []).append(
                         {
                             "take": k,
+                            "base": base,
                             "file": out,
                             "dur": len(y) / SR,
                             "clean": ok,
@@ -808,19 +940,29 @@ def main():
                         }
                     )
         with st("score"):
-            for i, cs in cand.items():
-                for c in cs:
-                    got = whisper_score(
-                        c["file"],
-                        lines[i]["text"],
-                        vo.get("hotwords", []),
-                        _sketch.language(m),
-                        vo.get("whisper"),
-                        words=c["words"] is None,
-                    )
+            # a scoring service answers several takes at once (--jobs, as the voice does); the
+            # local model has the CPU to itself, one take at a time
+            flat = [(i, c) for i, cs in cand.items() for c in cs]
+
+            def score(job):
+                i, c = job
+                return cached_score(
+                    c["base"],
+                    c["file"],
+                    lines[i]["text"],
+                    vo.get("hotwords", []),
+                    _sketch.language(m),
+                    vo.get("whisper"),
+                    words=c["words"] is None,
+                )
+
+            n_jobs = jobs if remote(scorer(vo.get("whisper"))) else 1
+            with ThreadPoolExecutor(max_workers=max(1, min(n_jobs, len(flat) or 1))) as pool:
+                for (i, c), got in zip(flat, pool.map(score, flat)):
                     c["acc"], c["heard"] = got[0], got[1]
                     if c["words"] is None:  # gemini: the script's words, timed by Whisper
                         c["words"] = align_words(lines[i]["text"], got[2])
+            for i, cs in cand.items():
                 med = float(np.median([c["dur"] for c in cs]))
                 for c in cs:
                     # accuracy first, then a clean cut, then the take nearest the median length

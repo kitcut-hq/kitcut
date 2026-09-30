@@ -150,6 +150,20 @@ async def main():
         "the voice gets the Google keys and nothing else of ours",
         {k for k in voice if k in kept} <= set(procs.NEEDS["voice"]),
     )
+    expect(
+        "the voice's takes are scored by the service, and only the voice is told to",
+        voice.get("SKETCH_SCORER") == procs.SCORER
+        and "SKETCH_SCORER" not in render
+        and ("OPENROUTER_API_KEY" in voice) == bool(procs.SECRETS.get("OPENROUTER_API_KEY")),
+    )
+    os.environ["STUDIO_SCORER"] = "local"
+    try:
+        expect(
+            "STUDIO_SCORER=local puts Whisper back",
+            "SKETCH_SCORER" not in procs.step_env(D, "voice"),
+        )
+    finally:
+        os.environ.pop("STUDIO_SCORER")
     expect("TEMP is inside the film", render["TEMP"].startswith(D.dir))
 
     # ---------------------------------------------------------------- the page

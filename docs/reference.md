@@ -3182,6 +3182,16 @@ keeps what it finished. Word timing (`score`, Whisper) is unchanged and was the 
 Measured, 9 lines x 3 takes of `eleven_v3` (839 characters, ~2,500 credits): synth 91 s,
 trim 2.5 s, Whisper scoring (small.en, CPU) 81-99 s.
 
+**The scorer.** A take's score is remembered beside it (`<take>.score.json`, keyed on the
+audio, the line, the hotwords, the language and the scorer), so a re-recording scores only
+what changed. `SKETCH_SCORER` (the machine) or `vo.whisper` (the film) picks who listens:
+a local faster-whisper model, or `openrouter:<model>` -- a transcription model OpenRouter
+serves, scored `--jobs` at a time, needing `OPENROUTER_API_KEY`, and falling back to local
+Whisper for a take the service fails. `openrouter:microsoft/mai-transcribe-2` takes the
+hotwords as a phrase list; the other OpenRouter models ignore them. Compare scorers on a
+finished film with `scripts/vo-scorer-bench.py` (`--plan` prices them); the numbers are in
+`docs/studio-speed.md`.
+
 **A film in another language** sets `vo.language` (ISO 639-1) and a `tail` in that language
 (`"Добре."` for Ukrainian -- an English tail flips the voice's accent on the line's last
 words). Scoring then runs a multilingual Whisper (`vo.whisper`, default `large-v3` on the

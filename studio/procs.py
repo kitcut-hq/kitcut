@@ -49,6 +49,7 @@ NEEDS = {
         "GOOGLE_CLOUD_LOCATION",
         "GEMINI_API_KEY",
         "ELEVENLABS_API_KEY",  # the backup voice, for a line Gemini refuses
+        "OPENROUTER_API_KEY",  # the scorer that listens to the takes (SCORER)
     ),
     "paint": (
         "OPENROUTER_API_KEY",
@@ -57,6 +58,12 @@ NEEDS = {
         "GOOGLE_CLOUD_LOCATION",
     ),
 }
+# who listens to the narration's takes (sketch-vo.py's SKETCH_SCORER): Microsoft's MAI-Transcribe 2
+# through OpenRouter scored an 8-minute film's 78 lines in 10 s, where Whisper small.en took 265 s
+# on the VM's 4 CPUs -- same accuracy, word starts within 0.14 s, $0.012 a film, and it takes the
+# film's hotwords (scripts/vo-scorer-bench.py, docs/studio-speed.md). STUDIO_SCORER=local puts
+# Whisper back (a machine with a GPU); a failed call scores that take locally either way.
+SCORER = "openrouter:microsoft/mai-transcribe-2"
 # what a Windows (or other) process needs to start at all, and nothing else of ours
 BASICS = (
     "SystemRoot",
@@ -150,6 +157,12 @@ def step_env(film, kind=None, locks=None, home=None):
         SKETCH_RENDER_OFFLINE="1",  # the render page reaches nothing but its own server
         SKETCH_WHISPER_DEVICE="cpu",  # the GPU stays free for the renders
     )
+    if kind == "voice":
+        scorer = os.environ.get("STUDIO_SCORER", "").strip() or SCORER
+        if scorer != "local" and (
+            not scorer.startswith("openrouter:") or SECRETS.get("OPENROUTER_API_KEY")
+        ):
+            env["SKETCH_SCORER"] = scorer
     if locks:
         env["KITCUT_LOCKS_DIR"] = locks
     for k in NEEDS.get(kind, ()):

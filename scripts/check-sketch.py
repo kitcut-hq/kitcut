@@ -269,6 +269,29 @@ def main():
         shutil.rmtree(empty, ignore_errors=True)
     finally:
         shutil.rmtree(vdir, ignore_errors=True)
+    # ---- a take's score is remembered: a re-recording re-scores only what changed
+    vdir = tempfile.mkdtemp(prefix="check-sketch-vo-")
+    real, calls = vo_mod.whisper_score, []
+    try:
+        vo_mod.whisper_score = lambda path, text, *a, **k: (
+            calls.append(text) or (0.9, text, [(text, 0.0, 0.5)])
+        )
+        base, wav = os.path.join(vdir, "L00_T0_x"), os.path.join(vdir, "L00_T0_x_line.wav")
+        _sketch.write_wav(wav, voiced(230, 0.5))
+        first = vo_mod.cached_score(base, wav, "Hi there", ["Acme"], words=True)
+        again = vo_mod.cached_score(base, wav, "Hi there", ["Acme"], words=True)
+        check(
+            "score memo: the same take is not scored twice, and reads back the same",
+            len(calls) == 1 and list(again[:2]) == list(first[:2]) and again[2][0][0] == "Hi there",
+            str(calls),
+        )
+        vo_mod.cached_score(base, wav, "Hi there", ["Acme", "Bpo"], words=True)
+        _sketch.write_wav(wav, voiced(115, 0.5))
+        vo_mod.cached_score(base, wav, "Hi there", ["Acme", "Bpo"], words=True)
+        check("score memo: new hotwords or new audio score again", len(calls) == 3, str(calls))
+    finally:
+        vo_mod.whisper_score = real
+        shutil.rmtree(vdir, ignore_errors=True)
     lv = vo_mod.level_to(voiced(115) * 0.01, vo_mod.BACKUP_LEVEL_DB)
     f = lv[: len(lv) // 960 * 960].reshape(-1, 960)
     got = 20 * np.log10(np.sqrt((np.sqrt((f**2).mean(axis=1)) ** 2).mean()))

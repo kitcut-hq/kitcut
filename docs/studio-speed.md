@@ -129,5 +129,38 @@ render of the same frames:
 1. ~~Switch the studio to parallel narration~~ -- done 2026-09-28, 8 at once.
 2. ~~Switch the studio to encoding in the browser~~ -- done 2026-09-28: no visible difference but colour, which the browser path gets right; masters up to 1.7x bigger.
 3. Build JPEG stills and the parallel motion check (#6)?
-4. ~~Whisper on the GPU (#2) waits on the dedicated render machine~~ -- moot on the VM: its CPU
-   times 8 minutes of narration in 46 s.
+4. ~~Whisper on the GPU (#2) waits on the dedicated render machine~~ -- replaced, 2026-09-29:
+   the takes are scored by a transcription service (below). The 46 s above was an 8-vCPU test
+   machine; production on the 4-vCPU VM, beside other films, measured 180-265 s a recording.
+
+## Scoring the narration off the machine (2026-09-29)
+
+The bike film (`studio-20260929-103129-i4d52n`, 8 minutes, 78 lines) recorded its narration
+7 times: **23 minutes, of which Gemini's voice was ~5 and Whisper's word timing ~18.** Gemini
+was never rate-limited (78 lines in 10-89 s, 8 at once); the time was `score`, one take after
+another through Whisper small.en on the VM's 4 vCPUs (~3.4 s a line).
+
+Two fixes, both in `scripts/sketch-vo.py`:
+
+- **A take's score is remembered** (`<take>.score.json`, keyed on the audio's bytes, the line,
+  the hotwords, the language and the scorer). Four of the film's recordings re-scored all 78
+  lines for 180-225 s when only a few had changed; now they score only those.
+- **The studio scores on a service** (`SKETCH_SCORER`, set by `studio/procs.py` `SCORER`;
+  `STUDIO_SCORER=local` puts Whisper back). The kitcut OpenRouter account allows only the meta,
+  azure, openai and typesafe providers, which leaves few candidates. Measured with
+  `scripts/vo-scorer-bench.py` against the film's own timeline (small.en's words):
+
+| scorer | 78 lines | accuracy mean / lines < 0.9 | word starts vs small.en | first word vs the sound | cost |
+|---|---|---|---|---|---|
+| Whisper small.en, VM CPU (the film) | 265 s | 0.935 / 24 | -- | -0.08 s early | $0 |
+| **microsoft/mai-transcribe-2** | **9.7 s** | 0.945 / 21 | +0.14 s (p95 0.32) | +0.11 s late | $0.012 |
+| openai/whisper-1 | 18.7 s | 0.946 / 19 | +0.08 s (p95 0.26) | -0.08 s early | $0.045 |
+| meta/muse-voice-transcribe-1.0 | -- | text only: no word times | | | |
+| openai/gpt-transcribe | -- | text only: no word times | | | |
+
+  MAI-Transcribe 2 is the studio's: 27x faster, as accurate, and the only one that takes the
+  hotwords (Azure's phrase list; OpenRouter drops a prompt) -- with them, "Next up, Shrek"
+  became "Trek". Its words land ~0.1 s after the sound begins where Whisper's land ~0.1 s
+  before; a cue a tenth late reads as on the word. Whisper-large-v3 on Groq, Deepgram, Qwen
+  and Grok would need those providers allowed in OpenRouter's privacy settings. A failed call
+  scores that take locally, so the service being down costs time, not the film.
