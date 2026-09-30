@@ -517,10 +517,8 @@ a.google { width: 100%; margin-top: 14px; }
   document.cookie = `kc_dev=${id}; Path=/; Max-Age=63072000; SameSite=Lax` + (location.protocol === 'https:' ? '; Secure' : '');
 } catch (e) { /* never worth breaking the page for */ } })();
 </script>
-<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
-<script defer src="/_vercel/insights/script.js"></script>
 </head>
-<body>
+<body data-here="make">
 <header class="bar">
   <a class="brand" href="/" aria-label="KitCut home"><img src="/logo-64.png" alt="" width="28" height="28" onerror="this.remove()"><b>KitCut</b><i class="sep"></i><span id="barPage">Make a film</span></a>
   <div class="grow"></div>
@@ -566,8 +564,8 @@ a.google { width: 100%; margin-top: 14px; }
     <div class="row">
       <div class="lookpick">
         <div class="looks" role="radiogroup" aria-label="Look">
-          <label class="lk"><input type="radio" name="look" value="drawn" checked><span class="pv"><img src="/looks/drawn.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/looks/drawn.mp4"></video></span><b>Hand-drawn</b></label>
-          <label class="lk"><input type="radio" name="look" value="painted"><span class="pv"><img src="/looks/painted.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/looks/painted.mp4"></video></span><b>Painted</b></label>
+          <label class="lk"><input type="radio" name="look" value="drawn" checked><span class="pv"><img src="/looks/drawn.jpg?v=2" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/looks/drawn.mp4?v=2"></video></span><b>Hand-drawn</b></label>
+          <label class="lk"><input type="radio" name="look" value="painted"><span class="pv"><img src="/looks/painted.jpg?v=2" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/looks/painted.mp4?v=2"></video></span><b>Painted</b></label>
           <label class="lk"><input type="radio" name="look" value="collage"><span class="pv"><img src="/looks/collage.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/looks/collage.mp4"></video></span><b>Collage</b></label>
         </div>
         <p class="note" id="lookAbout" aria-live="polite"></p>
@@ -582,7 +580,7 @@ a.google { width: 100%; margin-top: 14px; }
         <p class="note credit" id="credit" hidden></p>
       </div>
       <button class="btn primary go" id="go" type="submit">Make the film</button>
-      <span class="note">Claude Opus 5.5 directs · Muse paints (painted look) · GPT Image cuts out (collage look) · Gemini narrates · a 10-second film takes about 9-14 minutes<span id="busy"></span></span>
+      <span class="note"><span id="makers">Claude Opus 5.5 directs and draws every frame · Gemini narrates</span> · a 10-second film takes about 9-14 minutes<span id="busy"></span></span>
     </div>
   </form>
 
@@ -736,8 +734,14 @@ const LOOK_ABOUT = {
   painted: 'An image model paints the scenes; Claude animates them.',
   collage: 'Cut-out pictures on paper, with bold print type, tape and stamps, moving like stop-motion.',
 };
+// who makes a film in each look, in the line under the button
+const LOOK_MAKERS = {
+  drawn: 'Claude Opus 5.5 directs and draws every frame · Gemini narrates',
+  painted: 'Claude Opus 5.5 directs and animates · Muse paints the scenes · Gemini narrates',
+  collage: 'Claude Opus 5.5 directs and builds the pages · GPT Image cuts out the pictures · Gemini narrates',
+};
 const lookOf = () => (document.querySelector('input[name=look]:checked') || { value: 'drawn' }).value;
-const lookLine = () => { $('lookAbout').textContent = LOOK_ABOUT[lookOf()] || ''; };
+const lookLine = () => { $('lookAbout').textContent = LOOK_ABOUT[lookOf()] || ''; $('makers').textContent = LOOK_MAKERS[lookOf()] || LOOK_MAKERS.drawn; };
 function setLook(v) {
   const r = document.querySelector(`input[name=look][value="${v}"]`);
   if (r) { r.checked = true; lookLine(); }
@@ -900,6 +904,7 @@ function onEvent(ev) {
 // ---- one film per address: /film/<id>. Starting a film goes there, so a reload (or a shared
 // link) asks the studio for that film again and rebuilds the log, or plays the finished video.
 const FILM_PATH = /^\/film\/(studio-\d{8}-\d{6}(?:-[a-z0-9]{6})?)\/?$/;
+$('barPage').textContent = FILM_PATH.test(location.pathname) ? 'Film' : 'Make a film';  // at once, not when the film loads
 const mine = {
   all() { try { return JSON.parse(localStorage.getItem('studioMine') || '[]'); } catch (e) { return []; } },
   add(id) { try { localStorage.setItem('studioMine', JSON.stringify([id, ...this.all()].slice(0, 20))); } catch (e) { /* private window */ } },
@@ -1044,11 +1049,11 @@ if (!KC) $('app').classList.add('solo');
 let PROJECTS = null;  // the account's projects, for the sidebar (null: a visitor)
 function drawSide() {
   $('barPage').textContent = currentId ? 'Film' : 'Make a film';
-  if (KC && AUTH) KC.side(USER ? PROJECTS || [] : null, { here: currentId ? 'films' : 'make' });
+  if (KC && AUTH) KC.side(USER ? PROJECTS || [] : null, { here: currentId ? 'films' : 'make', soon: !PROJECTS });
 }
 function renderAccount() {
   if (!KC) return;
-  KC.bar(USER ? { user: USER, credits: CREDITS } : null, { onSignIn: () => askSignIn() });
+  KC.bar({ user: USER, credits: USER ? CREDITS : null }, { onSignIn: () => askSignIn() });
   drawSide();
   if (USER && !PROJECTS) {
     fetch('/api/projects', { headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)).then((b) => {
@@ -1146,9 +1151,9 @@ async function whoami() {
   try {
     const r = await fetch('/api/me', { headers: { Accept: 'application/json' } });
     const me = r.ok ? await r.json() : null;
-    if (!me || !me.auth) { if (KC) $('app').classList.add('solo'); return; }
+    if (!me || !me.auth) return;  // no accounts here, or not answered: the remembered bar stays
     AUTH = true; USER = me.user; GOOGLE = !!me.google; CREDITS = me.credits || null; YT = !!me.youtube;
-  } catch (e) { if (KC) $('app').classList.add('solo'); return; }
+  } catch (e) { return; }
   renderAccount(); paintLength();
   if (currentId && timer && studioUp && canAnother()) $('go').disabled = false;  // opened before the plan was known
   $('footNav').hidden = false;
