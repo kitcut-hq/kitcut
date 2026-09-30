@@ -963,23 +963,14 @@ window.addEventListener('popstate', () => {
   if (m) openFilm(m[1], false); else home();
 });
 
-// A finished film opened here is a view (the site's lib/views.js): counted once per browser and
-// film every half hour (kcSeen keeps when), and the number shown under it. Where there is no
-// /api/views (the studio's own machine) nothing shows.
-const VIEW_AGAIN = 30 * 60 * 1000;
+// A finished film opened here is a view (the site's lib/views.js), every time it is opened, as
+// page views are counted: the number shown under it. Where there is no /api/views (the studio's
+// own machine) nothing shows.
 async function countView(id) {
-  let seen = {};
-  try { seen = JSON.parse(localStorage.getItem('kcSeen') || '{}') || {}; } catch (e) { /* private window */ }
-  const again = Date.now() - (seen[id] || 0) < VIEW_AGAIN;
   try {
-    const r = await fetch(`/api/views/${encodeURIComponent(id)}`, { method: again ? 'GET' : 'POST', keepalive: true });
+    const r = await fetch(`/api/views/${encodeURIComponent(id)}`, { method: 'POST', keepalive: true });
     if (!r.ok) return;
     const { views } = await r.json();
-    if (!again) {
-      seen[id] = Date.now();
-      for (const k of Object.keys(seen)) if (Date.now() - seen[k] > 86400000) delete seen[k];
-      try { localStorage.setItem('kcSeen', JSON.stringify(seen)); } catch (e) { /* private window */ }
-    }
     if (id !== currentId || !Number.isFinite(views)) return;
     $('views').textContent = `${views.toLocaleString()} view${views === 1 ? '' : 's'}`;
     $('views').hidden = false;
