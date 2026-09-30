@@ -156,6 +156,13 @@ res=$(systemctl show kitcut-login-check.service -p Result --value)
 next=$(systemctl show kitcut-login-check.timer -p NextElapseUSecRealtime --value)
 if [ -n "$at" ]; then echo "login check: $res at $at (next $next)"; else echo "login check: not run yet (first $next)"; fi
 echo "disks: $(df -h / | awk 'NR==2{print "system "$3"/"$2}')  $(df -h /srv/kitcut | awk 'NR==2{print "data "$3"/"$2}')   load $(cut -d' ' -f1-3 /proc/loadavg)   mem free $(free -g | awk '/Mem:/{print $7}') GB"
+# below 2 GB a film's Claude may not start at all ("Control request timeout: initialize", KI-045):
+# say so loudly, and name what holds the memory
+avail=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)
+if [ "$avail" -lt 2048 ]; then
+  echo "WARNING: only $avail MB of memory available -- films may fail to start Claude (KI-045). Biggest:"
+  ps -eo pid,rss,etime,args --sort=-rss | head -4 | cut -c1-160
+fi
 n=$(journalctl -u 'kitcut-studio@*' -u kitcut-studio -u kitcut-tunnel --since -24h -p err --no-pager -q | wc -l)
 echo "errors in the last 24 h: $n"
 [ "$n" = 0 ] || journalctl -u 'kitcut-studio@*' -u kitcut-studio -u kitcut-tunnel --since -24h -p err --no-pager -q | tail -5 | cut -c1-200
@@ -232,6 +239,7 @@ EOF
       fi
       exit 0
     fi
+    # memory: uncapped -- this unit becomes the server itself; its films' steps have their own caps
     on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE $UNIT_ENV bash $REMOTE/studio/serve.sh migrate"
     follow "$unit"
     ;;
@@ -275,9 +283,10 @@ EOF
     on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env $py --plan" || exit 1
     [ "$plan" = 1 ] && exit 0
     # a unit of its own with the servers' environment (UNIT_ENV): each step gets its cgroup
-    # (Delegate), the log goes to the journal, and the film goes on if this laptop sleeps
+    # (Delegate), the log goes to the journal, and the film goes on if this laptop sleeps. Capped
+    # like any job beside the live server (KI-045): a film peaks near 3 GB, the servers keep the rest
     unit="kitcut-resume-${id#studio-}"
-    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p Delegate=yes -p KillMode=control-group $UNIT_ENV $py"
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p Delegate=yes -p KillMode=control-group -p MemoryHigh=6G -p MemoryMax=8G $UNIT_ENV $py"
     [ "$DRY" = 1 ] && exit 0
     follow "$unit"
     ;;

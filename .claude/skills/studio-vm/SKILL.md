@@ -81,6 +81,12 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
   Apollo 13s, 2026-09-29). The VM makes 3 at once (`pools: claude`); the rest queue by themselves.
   Leave a slot for customers: a queued film of ours waits in front of theirs. `/api/health`'s
   `slots.claude.used` is this server's only -- add `peers` (a handing-over server's films).
+- **So are its 16 GB, and a batch job can take them all.** An uncapped `share --missing` held
+  15 GB and two customers' films failed at Claude's start (KI-045). Every job `ops.sh` starts runs
+  under `MemoryMax`, and `studio/test_memory.py` fails a release whose deploy scripts start one
+  without it -- a new job gets a cap, or `# memory: uncapped -- <why>` on the line above. Before
+  and while a batch runs, `ops.sh status`: under 2 GB available it prints a WARNING and names the
+  biggest process. Stop the batch, never the films.
 - **The 4 vCPUs are shared by every unit** -- each server and each `resume` has its own pools, so a
   ship or a `resume --finish` during another film's narration starves its word timing (KI-043: a
   Spanish film lost 17 of its 38 minutes). Do them when no non-English film is recording its voice.

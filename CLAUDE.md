@@ -570,6 +570,12 @@ one process (KI-024). Launch it detached and let it checkpoint (KI-025).
 `film_blur` on the manifest is the escape hatch for what OCR cannot read, in
 film seconds, and no review decision clears it (KI-026).
 
+**A batch job beside a live server gets a memory cap before it starts.** A share back-fill kept
+every decoded still in a process-lifetime cache, held 15 GB of the studio VM's 16, and two
+customers' films could not start Claude (KI-045). Bound any module-level cache of large objects,
+and start jobs through `ops.sh`, whose `systemd-run` lines `studio/test_memory.py` holds to
+`MemoryMax`.
+
 `docs/known-issues.md` is the register — what the tools cannot do, what is
 known and unfixed, what already bit us. The pipeline prints the entries for
 the stages it is about to run; read it before designing anything here, and

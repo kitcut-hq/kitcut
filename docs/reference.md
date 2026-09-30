@@ -4348,6 +4348,16 @@ everything in `temp/` regenerates in seconds.
 
 ## Gotchas worth knowing
 
+- **A cache that lives as long as the process grows with the batch, not with the film.** The
+  studio server makes one film's pictures and moves on; `share.py --missing` ran 55 films in
+  one process, `_thumb.load_still` kept every decoded still (2,196, 13.7 GB), and two films being
+  made on the same 16 GB VM failed with `Control request timeout: initialize` -- Claude could not
+  even start (KI-045). Two rules now, both enforced by `studio/test_memory.py` in the release
+  gate: a module-level cache of anything large is bounded (`_thumb.STILLS_MB`, least recently
+  used first); and every `systemd-run` in the deploy scripts carries `-p MemoryMax=` or says on
+  the line above `# memory: uncapped -- <why>`. `ops.sh status` warns under 2 GB available and
+  names the biggest process -- read it before and during any batch job on the VM.
+
 - **`-shortest` with a subtitle track cuts the film where the subtitles end.** A film's last
   caption ends before its last frame, and `-shortest` counts the subtitle stream: a 40 s film
   came out 38.57 s with its end card gone. Mux with `-t <duration>` and assert the duration
