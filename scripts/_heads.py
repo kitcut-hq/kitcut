@@ -29,8 +29,17 @@ import numpy as np
 import _sketch
 
 FPS = 50  # mouth samples a second
-LEAD = 0.04  # the mouth moves this much before its sound
 SR = 16000
+# the track's knobs (mouth-bench.py --sweep prices them against a real mouth):
+#   range_db  how many dB under the line's loud parts the mouth is still open at all
+#   power     the curve from loudness to opening (over 1: shut sooner, wide only when loud)
+#   attack, release   how much of the way to its target the mouth goes each 20 ms, opening
+#             and closing (a mouth opens faster than it closes)
+#   lead      seconds the mouth moves before its sound: measured on two phone takes of a man
+#             talking to camera, a real mouth leads its sound by 80-140 ms (mouth-bench.py,
+#             2026-09-30; the literature says 100-300); 40 ms, the first guess, was late
+TRACK = {"range_db": 28.0, "power": 1.35, "attack": 0.75, "release": 0.4, "lead": 0.08}
+LEAD = TRACK["lead"]
 
 
 def specs(m):
@@ -90,8 +99,10 @@ def _cache_path(m, path):
     return os.path.join(d, "%s_%d.json" % (h, FPS))
 
 
-def mouth_track(x, sr=SR, fps=FPS):
-    """{fps, o, w} for one line's samples (mono float). See the module docstring."""
+def mouth_track(x, sr=SR, fps=FPS, **knobs):
+    """{fps, o, w} for one line's samples (mono float). See the module docstring; knobs
+    override TRACK (mouth-bench.py --sweep)."""
+    k_ = {**TRACK, **knobs}
     hop = sr // fps
     win = hop * 2
     n = max(1, int(np.ceil(len(x) / hop)))
@@ -109,18 +120,18 @@ def mouth_track(x, sr=SR, fps=FPS):
     db = 10 * np.log10(e_all + 1e-12)
     voiced = db > db.max() - 45
     peak = np.percentile(db[voiced], 92) if voiced.any() else db.max()
-    floor = peak - 28
-    target = np.clip((db - floor) / (peak - floor), 0, 1) ** 1.35
+    floor = peak - k_["range_db"]
+    target = np.clip((db - floor) / (peak - floor), 0, 1) ** k_["power"]
     o = np.zeros(n)
     cur = 0.0
     for i in range(n):  # a mouth opens faster than it closes
-        k = 0.75 if target[i] > cur else 0.4
+        k = k_["attack"] if target[i] > cur else k_["release"]
         cur += (target[i] - cur) * k
         o[i] = cur
     ratio = e_hi / (e_lo + e_hi + 1e-12)
     mid = np.median(ratio[target > 0.3]) if (target > 0.3).any() else 0.5
     wv = np.clip(0.5 + (ratio - mid) * 1.6, 0, 1) * (o > 0.05) + 0.5 * (o <= 0.05)
-    lead = int(round(LEAD * fps))
+    lead = int(round(k_["lead"] * fps))
     o = np.concatenate([o[lead:], np.zeros(lead)])
     wv = np.concatenate([wv[lead:], np.full(lead, 0.5)])
     return {
