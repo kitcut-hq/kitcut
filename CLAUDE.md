@@ -400,6 +400,8 @@ grant picks one silently, so it asserts which channel the token really points at
 before a byte leaves. Uploads are resumable, are re-read afterwards to confirm
 the title and privacy came back as asked, and write a `.youtube.json` sidecar
 beside the render. Privacy defaults to `unlisted` — the end you can widen later.
+`--publish-at <ISO time>` schedules a release instead: it uploads private and
+YouTube makes it public then; the read-back asserts the schedule.
 Both scripts share the one `youtube.force-ssl` grant, so there is no second
 consent to give.
 

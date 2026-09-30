@@ -2811,6 +2811,20 @@ later run confidently wrong. The channel is asserted by handle and reported by
 **id**, because an owner can rename a handle and cannot change an id; the id is
 what belongs in a project file.
 
+## Scheduling a release: `yt-upload.py --publish-at`
+
+```powershell
+python scripts/yt-upload.py <mp4> --title "..." --channel @handle --publish-at 2026-10-02T15:45 --dry-run
+```
+
+The API takes a `publishAt` only on a **private** video, so the upload goes up
+private and YouTube flips it to public at that instant; the flag says so and
+sets the privacy itself. A time without an offset is this machine's zone, a
+past time is refused, and the read-back asserts `publishAt` next to the title
+and privacy, so a schedule that did not take is a failure, not a surprise on
+the day. The sidecar and `project.json` carry `publish_at`. First used on
+`acord-commercial` S1 (https://youtu.be/7TtH4EKyagE, Fri 2026-10-02 15:45).
+
 ## A thumbnail in the channel's style: `make-thumbnail.py`
 
 ```powershell
