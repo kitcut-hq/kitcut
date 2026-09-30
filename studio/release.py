@@ -143,6 +143,20 @@ def test(dest):
         if r.returncode:
             print(r.stdout[-3000:] + r.stderr[-2000:])
             return False
+    # every live template drawn again by this release (templates.py check): an engine or renderer
+    # change that would draw someone's template differently stops the ship
+    r = subprocess.run(
+        [sys.executable, "-X", "utf8", os.path.join(dest, "studio", "templates.py"), "check"],
+        env=dict(env, STUDIO_HOME=films.HOME),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    last = (r.stdout.strip().splitlines() or ["(no output)"])[-1]
+    print("  %-18s %s" % ("templates", last))
+    if r.returncode:
+        print(r.stdout[-3000:] + r.stderr[-2000:])
+        return False
     return True
 
 

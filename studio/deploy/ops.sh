@@ -24,6 +24,11 @@
 #                                                     share-page title, description and picture
 #                                                     (studio/share.py); the price is printed
 #                                                     first, and --dry-run stops there
+#   bash studio/deploy/ops.sh template push <templates/t-x/vN folder> | publish|retire|draft <t-x> <N>
+#                                  | list | check      kitcut.ai's templates (studio/templates.py):
+#                                                     push copies a version made on this laptop into
+#                                                     the VM's home as a draft (a version never
+#                                                     changes: it refuses one already there)
 #   bash studio/deploy/ops.sh film "<idea>" [--seconds N] [--look L] [--unlisted] [--api] [--no-watch]
 #                                                    a film made on the VM itself
 #                                                     (on the Claude login unless --api), followed;
@@ -393,6 +398,30 @@ EOF
     mkdir -p "$dest/$id"
     on "cd $HOME_DIR/projects/$id && tar -cf - $what" | tar -xf - -C "$dest/$id"
     echo "$(du -sh "$dest/$id" | cut -f1)  $dest/$id"
+    ;;
+
+  template)
+    use="template push <folder .../templates/t-x/vN> | publish|retire|draft <t-x> <N> | list | check"
+    sub="${1:?$use}"; shift
+    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/templates.py"
+    envs="STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE"
+    case "$sub" in
+      push)
+        dir="${1:?$use}"; v="$(basename "$dir")"; id="$(basename "$(dirname "$dir")")"
+        [[ "$id" =~ ^t-[a-z0-9-]+$ && "$v" =~ ^v[0-9]+$ && -f "$dir/template.json" ]]           || die "not a template version folder: $dir"
+        dest="$HOME_DIR/templates/$id/$v"
+        on "test ! -e $dest" || die "$id $v is on the VM already: a version never changes (make v$((${v#v} + 1)))"
+        if [ "$DRY" = 1 ]; then echo "  would copy $dir to $VM:$dest as a draft"; exit 0; fi
+        tar -C "$dir" -cf - . | on "mkdir -p $dest && tar -xf - -C $dest && find $dest -type f -exec chmod a-w {} + && cd $REMOTE && $envs $py draft $id ${v#v} >/dev/null && echo pushed $id $v, a draft"
+        ;;
+      publish|retire|draft)
+        [[ "${1:-}" =~ ^t-[a-z0-9-]+$ && "${2:-}" =~ ^[0-9]+$ ]] || die "$use"
+        change_on "cd $REMOTE && $envs $py $sub $1 $2"
+        ;;
+      list) on "cd $REMOTE && $envs $py list" ;;
+      check) on "cd $REMOTE && $envs nice -n 10 $py check" ;;
+      *) die "$use" ;;
+    esac
     ;;
 
   hide|show)

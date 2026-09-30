@@ -690,10 +690,14 @@ def make(folder, tid, spec, owner="kitcut"):
 
 
 def set_status(tid, v, status):
+    """A version's status: draft, live or retired. A version folder copied in from another
+    machine (ops.sh template push) joins the index here."""
     idx = index(tid)
-    if str(int(v)) not in (idx.get("versions") or {}):
+    known = str(int(v)) in (idx.get("versions") or {})
+    if not known and not os.path.isfile(os.path.join(vdir(tid, v), "template.json")):
         raise TemplateError("%s has no version %s" % (tid, v))
-    idx["versions"][str(int(v))] = status
+    idx.setdefault("versions", {})[str(int(v))] = status
+    idx["latest"] = max(int(idx.get("latest") or 0), int(v))
     _write_json(os.path.join(root(), tid, "index.json"), idx)
     return idx
 
