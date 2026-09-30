@@ -3735,8 +3735,11 @@ the cast, the voice/audio/render pipeline and the traps already paid for.
 The first film made this way is a 26 s speaker promo for Web Summit 2026 (`projects/websummit-speakers/`,
 local): the structure of a motion designer's After Effects promo for another conference -- logo on
 a moving pattern, the date as 3D type, a creature carrying a ticket, a speaker carousel with a
-name block that turns, the ticket, a poster -- rebuilt in the conference's own look. Five pieces
-it needed that the engine did not have; each is general.
+name block that turns, the ticket, a poster -- rebuilt in the conference's own look. Its film.js is
+written for any frame: every scene reads `SK.W`/`SK.H` (`CX`, and `WIDE` where a landscape frame
+wants a different layout -- a wider ring, a counter beside the name block, a poster with the speakers
+on its right), so the one film renders 1920x1080 for YouTube or 1080x1080 for a feed by changing
+`"frame"`. Five pieces it needed that the engine did not have; each is general.
 
 **A frame of any shape.** The manifest's `"frame": [1080, 1080]` (or `[1080, 1920]` for a
 vertical film) sets the canvas, `SK.W`/`SK.H`, the player's aspect, the renderer's window, the

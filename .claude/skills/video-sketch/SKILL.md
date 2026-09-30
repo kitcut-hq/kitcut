@@ -174,8 +174,11 @@ Effects piece in the conference's own look. What it takes:
    and its typeface -- or the nearest open one when it is licensed (`fonts/SOURCES.md`).
 3. **People**: `scripts/portrait-cutout.py --frame --tone mono` (local BiRefNet; `--plan` first),
    then `"images": {"sp-<id>": "images/speakers/<id>.webp"}`, drawn inside a circle clip.
-4. **The frame**: `"frame": [1080, 1080]`; lay everything out in `SK.W`/`SK.H` and put the 2D
-   camera on the frame's middle so world units are pixels.
+4. **The frame**: `"frame": [1920, 1080]` for YouTube (the default the user wants), `[1080, 1080]` for
+   a feed. Lay everything out from `SK.W`/`SK.H` (`CX`, a `WIDE` flag for layouts that differ) so one
+   film renders both, and put the 2D camera on the frame's middle so world units are pixels.
+   Pick people by checking who they are: never feature Russian public figures, even when the
+   event's own line-up does.
 5. **3D**: `"modules": ["space"]`. `SK.view3` then `SK.face3`/`SK.box3`/`SK.poly3`; give a low
    piece its own view with `sx`/`sy` so the camera looks at it level; `SK.fx` for blur and whips.
 6. **Sound without a voice**: leave out `vo`; write `score.py` (a chord chart; hits on the beats the
