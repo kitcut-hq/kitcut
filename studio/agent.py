@@ -323,7 +323,10 @@ def people_note(film):
 
 
 # ------------------------------------------------------------------ before a template's film
-CUT_S_PER_PHOTO = 60  # portrait-cutout's time a photo, with room (10.5 s on the laptop, ~2x the VM)
+# portrait-cutout's time a photo, with room: 10.5 s on the laptop with every core, 54 s with two
+# threads (the first template film: 7 photos took 6 minutes before Claude could start)
+CUT_S_PER_PHOTO = 90
+CUT_THREADS = max(2, (os.cpu_count() or 4) // 2)  # half the machine: other films' steps run too
 
 
 async def template_ready(film, tools, emit):
@@ -342,7 +345,8 @@ async def template_ready(film, tools, emit):
         for key, photo, _, _ in todo:
             shutil.copyfile(photo, os.path.join(src, key + os.path.splitext(photo)[1]))
         argv = [procs.python(), "-X", "utf8", os.path.join(KIT, "scripts", "portrait-cutout.py")]
-        argv += ["--src", src, "--out", out, "--threads", "2"] + templates.cut_args(spec)
+        argv += ["--src", src, "--out", out, "--threads", str(CUT_THREADS)]
+        argv += templates.cut_args(spec)
         async with tools.sched["cpu"].hold(1, film.id, tools._on_wait, None, tools.priority):
             code, tail = await procs.run(
                 argv,

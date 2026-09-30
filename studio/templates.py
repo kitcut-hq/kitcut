@@ -545,6 +545,8 @@ def leftovers(film):
         return []
     sample = _read(os.path.join(t["_dir"], "content.sample.json"), {})
     kept = set(_strings({k: sample.get(k) for k in t.get("keep") or ()}))
+    # a field's default is the template's own word for everyone ("BOOK TICKETS"), not the sample's
+    kept |= {str(f["default"]) for f in t.get("fields") or () if f.get("default") is not None}
     words = {
         s.strip()
         for s in _strings({k: v for k, v in sample.items() if k not in (t.get("keep") or ())})

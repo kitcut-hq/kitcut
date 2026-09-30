@@ -56,7 +56,12 @@ SK.film({
 """
 SAMPLE = {
     "_about": "a test template",
-    "event": {"name": "SAMPLE FEST", "city": "SAMPLEVILLE", "url": "samplefest.example"},
+    "event": {
+        "name": "SAMPLE FEST",
+        "city": "SAMPLEVILLE",
+        "url": "samplefest.example",
+        "cta": "GET TICKETS",
+    },
     "copy": {"speakers": "{city} SPEAKERS"},
     "palette": {"ground": "#102030"},
     "logo": {"image": "wordmark"},
@@ -95,7 +100,13 @@ SPEC = {
             "label": "Dates",
             "paths": {"short": "event.dates", "long": "event.dates_long", "year": "event.year"},
         },
-        {"key": "cta", "kind": "text", "label": "Button", "path": "event.cta", "default": "GO"},
+        {
+            "key": "cta",
+            "kind": "text",
+            "label": "Button",
+            "path": "event.cta",
+            "default": "GET TICKETS",
+        },
         {"key": "url", "kind": "url", "label": "Website", "path": "event.url", "required": True},
         {"key": "logo", "kind": "logo", "label": "Logo", "path": "logo", "required": True},
         {
@@ -301,7 +312,7 @@ async def main():
         content,
     )
     check(
-        content["event"]["cta"] == "GO"
+        content["event"]["cta"] == "GET TICKETS"
         and content["event"]["code"] == "HEL"
         and content["event"]["dates"] == "MAY 20–21"
         and content["event"]["year"] == "2027",
@@ -460,7 +471,19 @@ async def main():
         with open(f.path("film.js"), "a", encoding="utf-8") as fh:
             fh.write("\n// SAMPLE FEST was here\n")
         left = templates.leftovers(f)
-        check(left == ["SAMPLE FEST"], "the sample's words left in the code are caught", left)
+        check(
+            left == ["SAMPLE FEST"],
+            "the sample's words left in the code are caught (a default it shares is not)",
+            left,
+        )
+        import validate  # noqa: PLC0415
+
+        sc = {"bpm": 120, "events": [{"inst": "sub_bass", "notes": "0 F1 1 .5"}]}
+        check(
+            not [x for x in validate._score(sc, 5) if "instrument" in x],
+            "a template's synthesised instrument (sub_bass) passes the score check",
+            validate._score(sc, 5),
+        )
         form2 = {
             **form,
             "name": "Sample Fest",

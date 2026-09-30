@@ -192,10 +192,12 @@ def _cut_ok(c):
 
 
 def _inst(where, inst, out):
-    if inst not in A.GM:
+    # a General MIDI name (a sampled instrument), or one the engine synthesises (_sketchaudio
+    # SYNTHS: sub_bass) -- a template's music uses one, and the studio refused it (2026-09-30)
+    if inst not in A.GM and inst not in A.SYNTHS:
         out.append(
             "%s: instrument %r is not a General MIDI name (e.g. celesta, marimba, "
-            "string_ensemble_1)" % (where, inst)
+            "string_ensemble_1) nor one of %s" % (where, inst, ", ".join(sorted(A.SYNTHS)))
         )
 
 
