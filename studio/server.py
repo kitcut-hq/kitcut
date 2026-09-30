@@ -21,7 +21,8 @@ a reserve for every film still being made, by its length), and each client -- th
 site forwards as X-Client-Ip "o:<id>" ("u:<id>" before workspaces: the same one, clients.py),
 else the IP -- may have one film in the making (more when
 its plan allows: X-At-Once, up to STUDIO_AT_ONCE_MAX, default 2) and STUDIO_PER_CLIENT_DAILY
-(default 5) a day.
+(default 5) a day -- except the workspaces in STUDIO_DAILY_EXEMPT (the operator's own), which
+the day's budget still holds.
 
     POST /api/films              {"prompt", "seconds", "look", "attachments", "listed",
                                   "people": [{"upload", "name"}], "character_style"}  ->  202
@@ -152,6 +153,14 @@ PROMPT_MAX = 12000  # characters of a prompt: a long pasted brief with its narra
 # film.limits)
 DAILY_USD = float(os.environ.get("STUDIO_DAILY_USD") or 100)
 PER_CLIENT_DAILY = int(os.environ.get("STUDIO_PER_CLIENT_DAILY") or 5)
+# workspaces the films-a-day count does not apply to ("o:<id>" or "u:<id>", comma separated): the
+# operator's own account, named in the machine's .env and never in the code. The day's budget
+# (DAILY_USD) and the films-at-once limit still hold for them.
+DAILY_EXEMPT = {
+    clients.canon(c.strip())
+    for c in (os.environ.get("STUDIO_DAILY_EXEMPT") or "").split(",")
+    if c.strip()
+}
 # where a film's narrator may come from (narrator_of): KitCut's own voices, pinned or chosen by
 # Claude; and, once STUDIO_OWN_VOICE=1, a person's own ElevenLabs voice through the site's relay
 OWN_VOICE = os.environ.get("STUDIO_OWN_VOICE", "").strip() == "1"
@@ -1061,7 +1070,7 @@ async def over_limit(client, seconds, auth="api", at_once=1, others=None):
             % making
         )
     mine = sum(1 for r in rows if clients.same(r.get("client"), client) and r.get("kind") == "film")
-    if mine >= PER_CLIENT_DAILY:
+    if mine >= PER_CLIENT_DAILY and clients.canon(client) not in DAILY_EXEMPT:
         return "That is %d films today, the limit for now. Please try again tomorrow." % mine
     return None
 

@@ -510,6 +510,19 @@ async def main():
             and lim["films"]["at_once_per_account_max"] == server.AT_ONCE_MAX,
             "the limits are the constants the studio enforces (%s)" % lim["lengths"],
         )
+        # the films-a-day count, and the operator's own workspace it does not apply to
+        per_day, exempt = server.PER_CLIENT_DAILY, server.DAILY_EXEMPT
+        server.PER_CLIENT_DAILY, server.DAILY_EXEMPT = 0, {"o:owner1"}
+        try:
+            capped = await server.over_limit("u:someone1", 5)
+            free = await server.over_limit("u:owner1", 5)  # "u:" and "o:" are one owner
+        finally:
+            server.PER_CLIENT_DAILY, server.DAILY_EXEMPT = per_day, exempt
+        check(
+            capped and "films today" in capped and free is None,
+            "the films-a-day limit holds for everyone but the exempt workspace (%r, %r)"
+            % (capped, free),
+        )
         check(
             not any(k in json.dumps(lim) for k in ("usd", "budget", "reserve", "cost")),
             "the limits say nothing about money",
