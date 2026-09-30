@@ -692,3 +692,22 @@ show the poster itself.
 **Workaround.** Replace `outputs/film_poster.png` with a chosen frame, delete `card.jpg`, then
 `studio/media.py --film <id>` in the current release with the studio's env (done for w3vfyn at
 144 s). **Fix (not done):** give the poster make_card's fallback, or let the gallery use the card.
+
+### KI-045 · fixed · studio · A share back-fill held 15 GB, and the films being made could not start Claude
+
+**Symptom.** 2026-09-29 21:38 PDT: two films failed 80 s in with `Control request timeout:
+initialize` (wtv3gp, and g3lna7, a Pro project episode). The Claude CLI could not start: the VM
+had 132 MB available of 16 GB. The page then showed the failed episode as a dead tile (site
+f567f72 fixed that: open, Try again, Edit idea).
+**Cause.** `ops.sh share --missing` (studio/share.py, started 19:41 for 97 films) ran every film's
+thumbnails in one process, and `scripts/_thumb.py load_still` kept every decoded still in a
+module-level dict, never evicted. Measured: 55 films' stills on disk = 2,196 stills of 1920x1080
+= 13.66 GB decoded RGB, against the process's 15.4 GB RSS. The server makes one film's pictures at
+a time and never grew enough to notice; a back-fill does many. Its own pictures then failed too
+("no progress from the page for 90s"), because the browser had no memory either.
+**Fix.** `load_still` is a least-recently-used cache capped at `THUMB_STILLS_MB` (600: two films
+at once); 200 stills now hold 597 MB instead of 1,244. `ops.sh share` runs the back-fill with
+`MemoryHigh=2G MemoryMax=3G Nice=10`, so a leak there kills the back-fill, not the films. The two
+films were made again as their owners through the site's createFilm (pzk2ay, py7ko5).
+**Lesson.** A batch job beside the live server needs a memory cap before it starts; watch
+`free -m` while it runs.

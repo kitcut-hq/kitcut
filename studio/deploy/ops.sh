@@ -305,7 +305,9 @@ EOF
     on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env $py --dry-run" || exit 1
     [ "$only_price" = 1 ] && exit 0
     unit="kitcut-share-$(date +%Y%m%d-%H%M%S)"
-    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE $UNIT_ENV $py"
+    # capped, and behind the films: an uncapped --missing grew to 15 GB of the VM's 16 on
+    # 2026-09-29 and the films being made could not start Claude (KI-045)
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=2G -p MemoryMax=3G -p Nice=10 $UNIT_ENV $py"
     [ "$DRY" = 1 ] && exit 0
     follow "$unit"
     ;;

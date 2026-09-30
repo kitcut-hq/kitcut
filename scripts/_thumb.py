@@ -38,7 +38,9 @@ import shutil
 import hashlib
 import difflib
 import itertools
+import threading
 import subprocess
+import collections
 from io import BytesIO
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -58,6 +60,13 @@ STOP = {
 
 _CFG = None
 _CACHE = {}
+# Decoded stills, least recently used first, up to STILLS_MB. A 1080p still is 6.2 MB decoded and a
+# film's thumbnails look at ~40, so an unbounded cache grows by ~250 MB a film in a process that
+# makes many: `share.py --missing` held 15 GB of the studio VM's 16 after 55 films (2026-09-29),
+# and the films being made could not start Claude. The cap holds two films at once (thumbs.JOBS).
+STILLS_MB = int(os.environ.get("THUMB_STILLS_MB", "600"))
+_STILLS = collections.OrderedDict()  # path -> (image, bytes)
+_STILLS_LOCK = threading.Lock()  # thumbnails run in threads (thumbs.py: asyncio.to_thread)
 
 
 def cfg():
@@ -628,10 +637,20 @@ def probe(film_dir, env=None):
 
 
 def load_still(path):
-    k = ("img", path)
-    if k not in _CACHE:
-        _CACHE[k] = Image.open(path).convert("RGB")
-    return _CACHE[k]
+    """A still, decoded once while it is in use; the least recently used go past STILLS_MB."""
+    with _STILLS_LOCK:
+        if path in _STILLS:
+            _STILLS.move_to_end(path)
+            return _STILLS[path][0]
+    img = Image.open(path).convert("RGB")
+    size = img.width * img.height * 3
+    with _STILLS_LOCK:
+        _STILLS[path] = (img, size)
+        total = sum(n for _, n in _STILLS.values())
+        while total > STILLS_MB * 1_000_000 and len(_STILLS) > 1:
+            _, (_, n) = _STILLS.popitem(last=False)
+            total -= n
+    return img
 
 
 # ------------------------------------------------------------------ moments
