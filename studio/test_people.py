@@ -151,6 +151,16 @@ async def main():
             )
             check(r.status == 400, "refused: " + what, await r.json())
 
+        r = await c.get("/people-row.js")
+        page = await (await c.get("/", headers=me)).text()
+        check(
+            r.status == 200
+            and "const PeopleRow" in await r.text()
+            and '<script src="/people-row.js"></script>' in page,
+            "the page's People row is served beside it (index.html needs /people-row.js)",
+            r.status,
+        )
+
         lim = server.limits_doc()["people"]
         check(
             lim["per_film"] == 4

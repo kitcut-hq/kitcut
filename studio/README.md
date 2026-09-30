@@ -100,7 +100,7 @@ among its own.
 
 The public site is https://kitcut.ai (create.kitcut.ai redirects there), from
 [kitcut-hq/sketch-studio](https://github.com/kitcut-hq/sketch-studio) on Vercel:
-- It serves a copy of `index.html`; keep the two the same.
+- It serves a copy of `index.html`, and beside it `people-row.js` (the People row the page draws with, `/people-row.js`); keep both the same as the site's.
   - The page carries the site's sign-in UI and its credit line: what a film costs (one credit a
     second) and what is left this cycle, under the length slider.
   - Both appear only where `/api/me` answers, which is on the site and not here. On this

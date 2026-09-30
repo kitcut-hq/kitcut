@@ -906,6 +906,13 @@ async def index(req):
     return web.Response(text=page, content_type="text/html", headers={"Cache-Control": "no-store"})
 
 
+async def people_row(req):
+    """The People row index.html draws with (the site's people-row.js, mirrored here beside it)."""
+    return web.FileResponse(
+        os.path.join(HERE, "people-row.js"), headers={"Cache-Control": "no-cache"}
+    )
+
+
 async def font(req):
     name = req.match_info["name"]
     if name not in ("Caveat.woff2", "PatrickHand-400.woff2", "Inter.woff2"):
@@ -1972,6 +1979,7 @@ def make_app(token):
             web.get("/", index),
             web.get("/film/{id}", index),  # one film's page: the page reads the id from the path
             web.get("/fonts/{name}", font),
+            web.get("/people-row.js", people_row),
             web.get("/api/health", health),
             web.get("/api/limits", limits_route),
             web.get("/api/films", list_films),

@@ -323,6 +323,7 @@ dialog .dfoot { display: flex; justify-content: flex-end; gap: 8px; padding: 14p
 .people .consent { display: flex; gap: 8px; align-items: center; width: fit-content; padding: 4px 8px 4px 2px; border-radius: 8px; font-size: 13.5px; color: var(--ink); cursor: pointer; }
 .people .consent input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 .people .consent.need { background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent); }
+.people .pnote { margin: 0; font-size: 13px; color: var(--bad); }
 @keyframes pspin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 /* /app.css */
@@ -642,37 +643,7 @@ a.google { width: 100%; margin-top: 14px; }
       </div>
     </div>
     <p class="note count" id="promptCount" aria-live="polite" hidden></p>
-    <section class="people" id="people" aria-labelledby="peopleHead">
-      <p class="phead"><b id="peopleHead">People in the film</b><span id="peopleAbout">Add a photo of anyone who should be in the film: they become a drawn character who talks in their own voice.</span></p>
-      <div class="prow">
-        <div class="prow" id="ptiles"></div>
-        <button type="button" class="padd" id="addPerson" title="A photo of one person, face to the camera, like a passport photo or a profile picture">
-          <span class="demo" aria-hidden="true"><img class="src" src="/people/photo.jpg" alt="" onerror="this.remove()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg><span class="toon"><img src="/people/cycle.jpg" alt="" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/cycle.mp4"></video></span></span>
-          <b>Add a person</b>
-        </button>
-        <input type="file" id="personFile" accept="image/*" hidden>
-      </div>
-      <div class="pstyle" id="pstyle" hidden>
-        <p class="phead"><b>Drawn as</b><span id="styleAbout" aria-live="polite"></span></p>
-        <div class="styles" role="radiogroup" aria-label="Character style">
-          <label class="st"><input type="radio" name="cstyle" value="auto" checked><span class="pv"><img id="autoImg" src="/people/crayon.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/crayon.mp4"></video><i>Auto</i></span><b>Auto</b></label>
-          <label class="st"><input type="radio" name="cstyle" value="crayon"><span class="pv"><img src="/people/crayon.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/crayon.mp4"></video></span><b>Crayon</b></label>
-          <label class="st"><input type="radio" name="cstyle" value="papercut"><span class="pv"><img src="/people/papercut.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/papercut.mp4"></video></span><b>Paper cut-out</b></label>
-          <label class="st"><input type="radio" name="cstyle" value="newspaper"><span class="pv"><img src="/people/newspaper.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/newspaper.mp4"></video></span><b>Newspaper</b></label>
-          <label class="st"><input type="radio" name="cstyle" value="woodcut"><span class="pv"><img src="/people/woodcut.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/woodcut.mp4"></video></span><b>Woodcut</b></label>
-          <label class="st"><input type="radio" name="cstyle" value="watercolour"><span class="pv"><img src="/people/watercolour.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/watercolour.mp4"></video></span><b>Watercolour</b></label>
-          <label class="st"><input type="radio" name="cstyle" value="popart"><span class="pv"><img src="/people/popart.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/popart.mp4"></video></span><b>Pop art</b></label>
-          <label class="st"><input type="radio" name="cstyle" value="courtroom"><span class="pv"><img src="/people/courtroom.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/courtroom.mp4"></video></span><b>Courtroom sketch</b></label>
-          <label class="st"><input type="radio" name="cstyle" value="chalk"><span class="pv"><img src="/people/chalk.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/chalk.mp4"></video></span><b>Chalk</b></label>
-          <label class="st"><input type="radio" name="cstyle" value="sticker"><span class="pv"><img src="/people/sticker.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/sticker.mp4"></video></span><b>Sticker</b></label>
-          <label class="st"><input type="radio" name="cstyle" value="felt"><span class="pv"><img src="/people/felt.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/felt.mp4"></video></span><b>Felt puppet</b></label>
-          <label class="st"><input type="radio" name="cstyle" value="knit"><span class="pv"><img src="/people/knit.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/knit.mp4"></video></span><b>Knitted doll</b></label>
-          <label class="st"><input type="radio" name="cstyle" value="peg"><span class="pv"><img src="/people/peg.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/peg.mp4"></video></span><b>Wooden toy</b></label>
-          <label class="st"><input type="radio" name="cstyle" value="sock"><span class="pv"><img src="/people/sock.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/sock.mp4"></video></span><b>Sock puppet</b></label>
-        </div>
-        <label class="consent" id="consentRow"><input type="checkbox" id="consent"> I have permission to use these people's photos.</label>
-      </div>
-    </section>
+    <div id="peopleRow"></div>
     <div class="row">
       <div class="lookpick">
         <div class="looks" role="radiogroup" aria-label="Look">
@@ -819,6 +790,7 @@ a.google { width: 100%; margin-top: 14px; }
 </dialog>
 
 <script src="/shell.js"></script>
+<script src="/people-row.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 // a different idea in the box on each visit, of every kind, so the films people start from are
@@ -853,14 +825,15 @@ const LOOK_MAKERS = {
   collage: 'Claude Opus 5.5 directs and builds the pages · GPT Image cuts out the pictures · Gemini narrates',
 };
 const lookOf = () => (document.querySelector('input[name=look]:checked') || { value: 'drawn' }).value;
-const lookLine = () => { $('lookAbout').textContent = LOOK_ABOUT[lookOf()] || ''; $('makers').textContent = LOOK_MAKERS[lookOf()] || LOOK_MAKERS.drawn; };
+let onLook = () => {};  // the People row's Auto follows the look (set once the row exists)
+const lookLine = () => { $('lookAbout').textContent = LOOK_ABOUT[lookOf()] || ''; $('makers').textContent = LOOK_MAKERS[lookOf()] || LOOK_MAKERS.drawn; onLook(); };
 function setLook(v) {
   const r = document.querySelector(`input[name=look][value="${v}"]`);
   if (r) { r.checked = true; lookLine(); }
 }
 const STILL = matchMedia('(prefers-reduced-motion: reduce)');
 const playOf = (v) => () => { if (STILL.matches || !v.isConnected) return; if (!v.src) v.src = v.dataset.src; v.play().catch(() => {}); };
-for (const lk of document.querySelectorAll('.lk, .st')) {
+for (const lk of document.querySelectorAll('.lk')) {
   const v = lk.querySelector('video'), input = lk.querySelector('input');
   const play = playOf(v), stop = () => { v.pause(); };
   lk.addEventListener('mouseenter', play); lk.addEventListener('mouseleave', stop);
@@ -868,30 +841,7 @@ for (const lk of document.querySelectorAll('.lk, .st')) {
   input.addEventListener('change', lookLine);
   v.addEventListener('error', () => v.remove());
 }
-// the people's style (lib/people.js has the list): "Auto" shows, and says, what it will draw them as
-// for the look picked
-const STYLE_LABEL = {
-  auto: 'Auto', crayon: 'Crayon', papercut: 'Paper cut-out', newspaper: 'Newspaper', woodcut: 'Woodcut',
-  watercolour: 'Watercolour', popart: 'Pop art', courtroom: 'Courtroom sketch', chalk: 'Chalk',
-  sticker: 'Sticker', felt: 'Felt puppet', knit: 'Knitted doll', peg: 'Wooden toy', sock: 'Sock puppet',
-};
-const STYLE_AUTO = { drawn: 'crayon', painted: 'watercolour', collage: 'papercut' };
-const LOOK_NAME = { drawn: 'Hand-drawn', painted: 'Painted', collage: 'Collage' };
-const styleOf = () => (document.querySelector('input[name=cstyle]:checked') || { value: 'auto' }).value;
-function styleLine() {
-  const auto = STYLE_AUTO[lookOf()] || 'crayon', img = $('autoImg');  // gone where /people/ is not served
-  if (img && !img.src.endsWith(`/people/${auto}.jpg`)) {
-    img.src = `/people/${auto}.jpg`;
-    const v = img.nextElementSibling;
-    if (v && v.tagName === 'VIDEO') { v.pause(); v.removeAttribute('src'); v.dataset.src = `/people/${auto}.mp4`; v.load(); }
-  }
-  const st = styleOf();
-  $('styleAbout').textContent = st === 'auto'
-    ? `${STYLE_LABEL[auto]}, to suit the ${LOOK_NAME[lookOf()] || 'Hand-drawn'} look. Pick another to draw everyone that way.`
-    : `Everyone in the film is drawn as a ${STYLE_LABEL[st].toLowerCase()} character.`;
-}
-for (const r of document.querySelectorAll('input[name=look], input[name=cstyle]')) r.addEventListener('change', styleLine);
-lookLine(); styleLine();
+lookLine();
 // a link can start a film: /?look=collage&idea=... (the news emails' "Make this film" links,
 // lib/mailblocks.js). The idea only goes in the box; nothing is made until the person presses the
 // button. The two words then leave the address bar, so a reload keeps what they have typed since.
@@ -1864,17 +1814,14 @@ function ytTrack(p) {
 // soon as the visitor is signed in (api/uploads.js), and a voice note comes back written out (its
 // words are the tile's tooltip). Everything waits in this browser (IndexedDB) until a film takes
 // it, so it survives the sign-in link and a reload.
-const MAX_PEOPLE = 4, MAX_PICS = 6, MAX_NOTES = 3, MAX_DOCS = 3, DOC_MAX_BYTES = 400 * 1024, REC_MAX = 180, REC_WARN = 165;
-// a person (kind 'person') is a photo too, with their name: uploaded like a picture, drawn in the
-// People row under the box, and sent as the film's people rather than its attachments
-const ATT = [];  // {kind: 'image'|'audio'|'text'|'person', blob, url, w, h, secs, name, id, state, transcript, error}
+const MAX_PICS = 6, MAX_NOTES = 3, MAX_DOCS = 3, DOC_MAX_BYTES = 400 * 1024, REC_MAX = 180, REC_WARN = 165;
+const ATT = [];  // {kind: 'image'|'audio'|'text', blob, url, w, h, secs, name, id, state, transcript, error}
 let known = false;  // whoami() has answered: uploads wait for it
 const canUpload = () => known && (!AUTH || !!USER);
 function note(html) { $('attachNote').innerHTML = html || ''; }
 const pics = () => ATT.filter((a) => a.kind === 'image').length;
 const notes = () => ATT.filter((a) => a.kind === 'audio').length;
 const docs = () => ATT.filter((a) => a.kind === 'text').length;
-const people = () => ATT.filter((a) => a.kind === 'person');
 const isDoc = (f) => /\.(txt|md|markdown)$/i.test(f.name) || /^text\/(plain|markdown|x-markdown)\b/i.test(f.type);
 
 const shelf = {
@@ -1890,70 +1837,55 @@ const shelf = {
     const items = ATT.map(({ kind, blob, w, h, secs, name, id, transcript, state }) =>
       ({ kind, blob, w, h, secs, name, id, transcript, state: state === 'ready' || state === 'transcribing' ? state : 'local' }));
     try {
-      const db = await this.open();
-      db.transaction('draft', 'readwrite').objectStore('draft').put(items, 'attachments');
+      const db = await this.open(), store = db.transaction('draft', 'readwrite').objectStore('draft');
+      store.put(items, 'attachments');
+      store.put(PPL.save(), 'people');
     } catch (e) { /* a private window: kept for this visit only */ }
   },
-  async load() {
+  async load(key = 'attachments') {
     try {
       const db = await this.open();
       return await new Promise((ok) => {
-        const r = db.transaction('draft').objectStore('draft').get('attachments');
+        const r = db.transaction('draft').objectStore('draft').get(key);
         r.onsuccess = () => ok(r.result || []); r.onerror = () => ok([]);
       });
     } catch (e) { return []; }
   },
 };
 
+// the People row (people-row.js, shared with a project's episode box): its photos go up like the
+// pictures, once the visitor is signed in, and wait in this browser's draft until then
+async function uploadPerson(blob) {
+  let r;
+  try { r = await api('/api/uploads', { method: 'POST', headers: { 'Content-Type': blob.type || 'image/jpeg' }, body: blob }); }
+  catch (e) { throw PeopleRow.later('offline'); }  // sent again by the next sync
+  const b = await r.json().catch(() => ({}));
+  if (r.status === 401) { if (b.reason === 'signin') { AUTH = true; USER = null; renderAccount(); } throw PeopleRow.later('signin'); }
+  if (!r.ok) throw new Error(b.error || 'This photo could not be uploaded.');
+  return b;
+}
+$('prompt').dataset.placeholder = $('prompt').placeholder;
+const PPL = PeopleRow.create({
+  shrink,
+  upload: uploadPerson,
+  canUpload: () => canUpload(),
+  peek: (url) => { $('peek').querySelector('img').src = url; $('peek').showModal(); },
+  onChange: (why, n) => {
+    if (why === 'add') dropExample();
+    $('prompt').placeholder = n ? 'What should they talk about? For example: the two of us introduce our bakery and what we bake each morning.'
+      : $('prompt').dataset.placeholder;
+    if (why !== 'restore') shelf.save();
+  },
+});
+PPL.mount($('peopleRow'), { look: lookOf() });
+onLook = () => PPL.setLook(lookOf());
+
 function renderTray() {
-  const tray = $('tray'), shown = ATT.filter((a) => a.kind !== 'person');
-  tray.hidden = !shown.length;
+  const tray = $('tray');
+  tray.hidden = !ATT.length;
   $('attach').disabled = pics() >= MAX_PICS && docs() >= MAX_DOCS;
   let n = { image: 0, audio: 0, text: 0 };
-  tray.replaceChildren(...shown.map((a) => attEl(a, ++n[a.kind])));
-  renderPeople();
-}
-// the People row: a tile per person (their photo, their name), the add tile while there is room,
-// and once there is anyone, the style they are drawn in and the permission tick
-function renderPeople() {
-  const ps = people(), on = ps.length > 0;
-  $('people').classList.toggle('on', on);
-  $('pstyle').hidden = !on;
-  $('addPerson').hidden = ps.length >= MAX_PEOPLE;
-  $('peopleAbout').textContent = on
-    ? 'Each becomes a drawn character who talks in their own voice. Say in your idea what they talk about; a name lets the film introduce them.'
-    : 'Add a photo of anyone who should be in the film: they become a drawn character who talks in their own voice.';
-  if (!on) { $('consent').checked = false; $('consentRow').classList.remove('need'); }
-  const tiles = $('ptiles');
-  // the name fields keep their focus and caret: tiles are only added and taken away, never redrawn
-  for (const el of [...tiles.children]) if (!ps.includes(el._att)) el.remove();
-  ps.forEach((a, i) => {
-    let f = [...tiles.children].find((el) => el._att === a);
-    if (!f) {
-      f = document.createElement('figure');
-      f._att = a;
-      f.innerHTML = '<span class="ph"><img alt=""></span><button type="button" class="x">&times;</button>' +
-        '<input type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Name, e.g. Alex">';
-      f.querySelector('img').src = a.url;
-      f.querySelector('img').onclick = () => { $('peek').querySelector('img').src = a.url; $('peek').showModal(); };
-      f.querySelector('.x').onclick = () => removeAtt(a);
-      const name = f.querySelector('input');
-      name.value = a.name || '';
-      name.addEventListener('input', () => { a.name = name.value; });
-      name.addEventListener('change', () => shelf.save());
-      tiles.append(f);
-    }
-    f.className = `person${a.state === 'uploading' ? ' busy' : ''}${a.state === 'error' ? ' bad' : ''}`;
-    f.title = a.error || '';
-    f.querySelector('img').alt = `Person ${i + 1}`;
-    f.querySelector('.x').setAttribute('aria-label', `Remove person ${i + 1}`);
-    f.querySelector('input').setAttribute('aria-label', `Person ${i + 1}'s name`);
-    const at = tiles.children[i];
-    if (at !== f) tiles.insertBefore(f, at);
-  });
-  $('prompt').placeholder = on
-    ? 'What should they talk about? For example: the two of us introduce our bakery and what we bake each morning.'
-    : $('prompt').dataset.placeholder;
+  tray.replaceChildren(...ATT.map((a) => attEl(a, ++n[a.kind])));
 }
 function attEl(a, n) {
   const busy = a.state === 'uploading';
@@ -2078,35 +2010,6 @@ $('prompt').addEventListener('paste', (e) => {  // a screenshot pasted into the 
 });
 $('peek').addEventListener('click', () => $('peek').close());
 
-// a person: one photo at a time, from its own button (a picture dropped on the box stays a picture)
-async function addPerson(list) {
-  const f = [...list].find((x) => x.type.startsWith('image/') || /\.(heic|heif)$/i.test(x.name));
-  if (!f) { note('A person is a photo (JPG, PNG, WebP).'); return; }
-  if (people().length >= MAX_PEOPLE) { note(`Up to ${MAX_PEOPLE} people a film.`); return; }
-  dropExample(); note('');
-  try {
-    addAtt({ kind: 'person', state: 'local', name: '', ...(await shrink(f)) });
-    const names = $('ptiles').querySelectorAll('input');
-    if (names.length) names[names.length - 1].focus();
-  } catch (e) {
-    note(`“${esc(f.name)}” could not be opened here. Try a JPG or PNG (on an iPhone, a screenshot of the photo works).`);
-  }
-}
-$('addPerson').addEventListener('click', () => $('personFile').click());
-$('personFile').addEventListener('change', (e) => { addPerson(e.target.files); e.target.value = ''; });
-$('prompt').dataset.placeholder = $('prompt').placeholder;
-// the add tile shows what it does: the photo, then that person talking as a drawn character, in
-// every style in turn (people/cycle.mp4, kitcut scripts/speaker-loops.py --cycle)
-(() => {
-  const v = $('addPerson').querySelector('video');
-  v.addEventListener('error', () => v.remove());
-  const go = playOf(v);
-  if ('IntersectionObserver' in window) {
-    new IntersectionObserver((es) => es.forEach((e) => (e.isIntersecting ? go() : v.pause()))).observe($('addPerson'));
-  } else go();
-})();
-$('consent').addEventListener('change', () => $('consentRow').classList.remove('need'));
-
 // uploads, in order, as soon as the visitor may; a voice note is then watched until written out
 let syncing = null;
 function sync() {
@@ -2160,7 +2063,6 @@ async function attachmentIds(show) {
     if (bad) {
       throw new Error(bad.kind === 'audio' ? 'A voice note could not be written out: delete it or record it again.'
         : bad.kind === 'text' ? `${bad.error || 'A text file could not be uploaded.'} Remove it and add it again.`
-        : bad.kind === 'person' ? `${bad.error || "A person's photo could not be uploaded."} Remove it and add it again.`
           : 'A picture could not be uploaded: remove it and add it again.');
     }
     if (ATT.every((a) => a.id && a.state === 'ready')) break;
@@ -2171,7 +2073,7 @@ async function attachmentIds(show) {
   }
   if (!ATT.every((a) => a.id && a.state === 'ready')) throw new Error('Your attachments are taking too long to send. Try again in a minute.');
   if (ATT.some((a) => a.kind === 'audio' && !a.transcript)) throw new Error('A voice note has no words in it: delete it or record it again.');
-  return ATT.filter((a) => a.kind !== 'person').map((a) => a.id);
+  return ATT.map((a) => a.id);
 }
 
 // the microphone: record, then attach (the check) or throw away (the cross, or Esc)
@@ -2265,13 +2167,16 @@ $('recCancel').addEventListener('click', () => stopRec(false));
 document.addEventListener('keydown', (e) => { if (rec && e.key === 'Escape') { e.preventDefault(); stopRec(false); } });
 
 // what was attached last time, back in the tray
-shelf.load().then((saved) => {
+shelf.load().then(async (saved) => {
+  const older = saved.filter((s) => s.kind === 'person');  // kept as attachments until 2026-09-30
   for (const s of saved) {
-    if (!s.blob) continue;
+    if (!s.blob || s.kind === 'person') continue;
     const state = s.id ? (s.kind === 'audio' && s.state !== 'ready' ? 'transcribing' : 'ready') : 'local';
     ATT.push({ ...s, state, url: URL.createObjectURL(s.blob) });
   }
   if (ATT.length) { dropExample(); renderTray(); sync(); }
+  PPL.restore(older.length ? { people: older } : await shelf.load('people'));
+  if (PPL.count()) { dropExample(); PPL.sync(); }
 });
 
 $('form').addEventListener('submit', async (e) => {
@@ -2279,7 +2184,8 @@ $('form').addEventListener('submit', async (e) => {
   if (rec) await stopRec(true);  // pressed while recording: what was said is attached, not lost
   const prompt = $('prompt').value.trim();
   if (!prompt && !ATT.length) {
-    $('status').textContent = 'Type your idea, say it with the microphone, or add a picture or a text file.';
+    $('status').textContent = PPL.count() ? 'Say in the idea what they talk about, then make the film.'  // people, and nothing about them
+      : 'Type your idea, say it with the microphone, or add a picture or a text file.';
     $('prompt').focus(); return;
   }
   if (prompt.length > PROMPT_MAX) {
@@ -2287,15 +2193,8 @@ $('form').addEventListener('submit', async (e) => {
     $('status').textContent = `The idea is ${prompt.length.toLocaleString()} characters; the studio reads up to ${PROMPT_MAX.toLocaleString()}. Shorten it, then make the film.`;
     return;
   }
-  if (!prompt && ATT.every((a) => a.kind === 'person')) {  // people and nothing about them: ask what they say
-    $('status').textContent = 'Say in the idea what they talk about, then make the film.';
-    $('prompt').focus(); return;
-  }
-  if (people().length && !$('consent').checked) {
-    $('consentRow').classList.add('need'); $('consent').focus();
-    $('status').textContent = "Tick the box to say you may use these people's photos, then make the film.";
-    return;
-  }
+  const cant = PPL.check();  // the permission tick, or a photo that failed
+  if (cant) { $('status').textContent = cant; return; }
   if (AUTH && !USER) { draft.save(); shelf.save(); return askSignIn(); }
   if (shortOf(+$('length').value)) {
     $('status').innerHTML = `This film needs ${mmss(costOf(+$('length').value))} of credit and you have ${mmss(CREDITS.balance)}. ` +
@@ -2307,16 +2206,17 @@ $('form').addEventListener('submit', async (e) => {
   screen('<div class="idle">Claude is thinking up the film...</div>');
   startClock(0);
   try {
-    const ids = await attachmentIds((t) => screen(`<div class="idle">${t}</div>`));
-    const cast = () => people().map((a) => ({ upload: a.id, name: (a.name || '').trim() }));
+    const show = (t) => screen(`<div class="idle">${t}</div>`);
+    const ids = await attachmentIds(show);
+    await PPL.ready(show);
     const send = (attachments) => api('/api/films', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, seconds: +$('length').value, look: lookOf(), ...(attachments.length ? { attachments } : {}),
-        ...(people().length ? { people: cast(), character_style: styleOf(), people_consent: $('consent').checked } : {}) }) });
+      body: JSON.stringify({ prompt, seconds: +$('length').value, look: lookOf(), ...(attachments.length ? { attachments } : {}), ...PPL.body() }) });
     let r = await send(ids);
     if (r.status === 409) {  // an attachment the studio no longer has (a day old): send it again, once
       const why = await r.clone().json().catch(() => ({}));
       const lost = ATT.find((a) => a.id === why.id);
-      if (lost) { lost.id = null; lost.state = 'local'; r = await send(await attachmentIds((t) => screen(`<div class="idle">${t}</div>`))); }
+      if (lost) { lost.id = null; lost.state = 'local'; r = await send(await attachmentIds(show)); }
+      else if (PPL.lost(why.id)) { await PPL.ready(show); r = await send(ids); }  // a person's photo
     }
     if (r.status === 401) {
       const why = await r.json().catch(() => ({}));
@@ -2343,7 +2243,7 @@ $('form').addEventListener('submit', async (e) => {
       return;
     }
     if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
-    clearAttachments();  // the film has them now
+    clearAttachments(); PPL.clear();  // the film has them now
     if (CREDITS && body.credits) { CREDITS.balance = body.credits.balance; paintLength(); }
     mine.add(body.id);
     openFilm(body.id, true);
@@ -2351,7 +2251,7 @@ $('form').addEventListener('submit', async (e) => {
 });
 
 paintLength();
-whoami().finally(() => { known = true; sync(); });
+whoami().finally(() => { known = true; sync(); PPL.sync(); });
 online().then((up) => {
   const m = location.pathname.match(FILM_PATH);
   if (m && up) openFilm(m[1], false);
