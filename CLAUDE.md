@@ -690,7 +690,10 @@ options" has the bake-off. After touching any of it, run `python scripts/check-t
 `"heads"` names the photos, `head-rig.py` measures each once on the CPU (MediaPipe landmarks and
 segmentation, kept in `models/heads/`), `vo.cast` + a line's `who` give each speaker a voice, and
 `sketch/heads.js` draws them -- bobble-heads, puppet cut-outs, or a newspaper photo or painting
-where only the mouth moves -- each mouth moved by its own lines' audio. Start from
+where only the mouth moves -- each mouth moved by its own lines' audio. A head with a `"look"`
+(brick, blocky, newspaper, caricature, clay) is the person redrawn from their photo by an image
+model, with its own mouth shapes swapped on the voice -- the owner's preferred route; no video
+model, no deepfake. Start from
 `config/sketch/heads-example/` (a 1903 front page that talks; free on edge-tts).
 
 ## Projects: the memory that outlives the session

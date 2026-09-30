@@ -36,7 +36,7 @@ def main():
 
     from googleapiclient.discovery import build
 
-    yt = build("youtube", "v3", credentials=_yt.credentials())
+    yt = build("youtube", "v3", credentials=_yt.credentials(args.channel))
 
     r = yt.channels().list(part="snippet", mine=True).execute()
     items = r.get("items") or []

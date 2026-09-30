@@ -142,6 +142,11 @@ figure -- and you have their photos, make them talk instead of drawing stand-ins
    `photo`, not a `cutout` or `bobble`.
 2. Give each speaker a voice in `vo.cast` and each line its `who`; a line without one is the
    narrator. Pick voices that are told apart at once (one low, one high).
+   **Drawn characters are the default choice** (the owner found a photo that talks, and every
+   photoreal model, cringe): add `"look": "brick" | "blocky" | "newspaper" | "caricature" |
+   "clay"` to a head and the person is redrawn in that look from their photo, with their own
+   mouth shapes and a blink (~$0.11 a person, cached; `head-rig.py --list` prices it; the photo
+   goes to the image model). If the model refuses a photo, try another look or photo.
 3. In film.js, `SK.head(name, x, y, h, {style, mouth, tone})`: `photo` + `warp` for "only the
    mouth moves" (a newspaper photo with `tone: 'news'`, a portrait in a frame); `cutout` or
    `bobble` + `chin`/`dummy`/`flap` for the puppet looks. Lay heads out with `SK.headBox`; a

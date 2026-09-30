@@ -101,6 +101,39 @@ def heads():
         "heads: the dummy's slits run down from the mouth corners",
         all(np.dot(s[1] - s[0], down) > H * 0.08 for s in sl),
     )
+    # toon looks: every look draws a base and four edits; a mouth patch is cut where it changed
+    toon = import_module("_toon")
+    cfg = toon.looks()
+    ps = toon.prompts("brick", cfg)
+    check(
+        "heads: a look is a base and its edits (three mouths and a blink)",
+        set(ps) == {"base", "small", "open", "round", "blink"}
+        and all("{change}" not in v for v in ps.values()),
+    )
+    check(
+        "heads: no look's prompt names a trademark",
+        not any(w in json.dumps(cfg).lower() for w in ("lego", "minecraft", "roblox", "pixar")),
+    )
+    k1, k2 = toon.key("aaa", "brick", cfg), toon.key("bbb", "brick", cfg)
+    check("heads: a new photo redraws every picture", all(k1[k] != k2[k] for k in k1))
+    base = np.full((200, 200, 4), 255, np.uint8)
+    base[..., :3] = (180, 150, 120)
+    base[118:122, 80:120, :3] = 40  # a closed mouth: a line
+    var = base.copy()
+    var[110:135, 82:118, :3] = 25  # the same mouth, open
+    var[20:24, 10:14, :3] = 0  # a stray change far from the mouth
+    x, y, pt = toon.patch(base, var, (100, 122), (30, 22))
+    check(
+        "heads: a mouth patch covers the open mouth and nothing far from it",
+        x <= 82
+        and y <= 110
+        and x + pt.shape[1] >= 118
+        and y + pt.shape[0] >= 135
+        and x > 30
+        and y > 40
+        and pt[..., 3].max() == 255,
+        "%s %s %s" % (x, y, pt.shape),
+    )
     # a photo of two founders: faces counted left to right, a small face behind them not counted
     boxes = [(600, 100, 200, 240, 0.9), (100, 120, 180, 220, 0.9), (400, 30, 40, 50, 0.8)]
     got = [b[0] for b in rig.main_faces(boxes)]

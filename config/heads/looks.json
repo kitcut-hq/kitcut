@@ -1,0 +1,21 @@
+{
+  "_about": "Looks head-rig.py can turn a real person's photo into (a manifest's heads.<name>.look). Each is one prompt put before LIKENESS and FRONT; the photo goes in as the model's reference picture. Every look is drawn by an image model (the photo leaves the machine for OpenRouter), then made to talk by swapping mouth shapes the same model draws, cut out as patches -- no video model. Names describe the object, never a trademark.",
+  "model": "openai/gpt-image-2.5-flare",
+  "quality": "medium",
+  "likeness": "Make it clearly this particular person from the reference photo: keep their face shape, hairstyle and hair colour, facial hair, skin tone, eyebrows, glasses if they wear them, and the clothes they wear. ",
+  "front": "Front view, looking straight at the viewer, head and shoulders, the mouth closed in a relaxed neutral expression, the eyes open. A single subject on a plain transparent background, no text, no logos, no watermark.",
+  "looks": {
+    "brick": "Turn the person in the reference photo into a plastic toy brick minifigure: the classic cylindrical toy head with a simple printed face (dot eyes, printed eyebrows, printed stubble or beard if they have one), their hair as a moulded plastic hair piece, their clothes printed on the minifigure torso, glossy plastic, studio product photo. ",
+    "blocky": "Turn the person in the reference photo into a blocky voxel game character: a perfectly cubic head and body made of big square pixels, a flat pixel-art face in their skin tone with pixel eyes, pixel hair and pixel beard matching theirs, their clothes as pixel textures. ",
+    "newspaper": "Redraw the person in the reference photo as a newspaper stipple-and-hatch portrait (a 'hedcut'): black ink dots and fine lines on white, like the portraits printed in business newspapers. ",
+    "caricature": "Draw the person in the reference photo as a friendly caricature for a bobble-head doll: a big head on a small body, gently exaggerated features, clean colourful illustration. ",
+    "clay": "Turn the person in the reference photo into a chunky handmade plasticine puppet for a stop-motion film: simplified rounded features, a slightly oversized head, visible thumbprints and seams in the clay, obviously a puppet, never lifelike. "
+  },
+  "variants": {
+    "small": "the mouth slightly open, as if in the middle of saying 'eh', the teeth just showing",
+    "open": "the mouth open, as if in the middle of saying 'ah'",
+    "round": "the lips rounded and pushed forward, as if in the middle of saying 'oo'",
+    "blink": "the eyes closed, as in the middle of a blink, the mouth closed as it is now"
+  },
+  "edit": "This exact picture, identical in every way -- the same character, pose, framing, size, position, lighting, colours and transparent background -- with one change only: {change}, in the picture's own style. Nothing else moves or changes."
+}

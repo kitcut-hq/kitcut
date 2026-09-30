@@ -23,6 +23,10 @@ Models (downloaded once by --fetch-models into models/heads/; YuNet is models/fa
 same file shot-detect uses): face_landmarker.task (Apache-2.0) and
 selfie_multiclass_256x256.tflite (Apache-2.0).
 
+A head may instead be the person REDRAWN from the photo: "look": "brick" (or blocky, newspaper,
+caricature, clay -- config/heads/looks.json) has an image model draw the character and its mouth
+shapes, and the rig is those pictures (_toon.py). That photo leaves the machine for OpenRouter.
+
 A manifest names its rigs in "heads": {"alex": {"photo": "sources/alex.png"}, ...}; the
 rigs are built into rigs/<name>/ beside it and rebuilt only when the photo or this script's
 RIG_VERSION changes. `--list` says which would be built without building anything.
@@ -48,6 +52,8 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
 import numpy as np  # noqa: E402
 import cv2  # noqa: E402
+
+import _toon  # noqa: E402
 
 RIG_VERSION = 1  # bump when the rig format or the geometry changes: every rig is rebuilt
 MODELS = {
@@ -877,11 +883,11 @@ def manifest_heads(mpath):
             spec = {"photo": spec}
         photo = spec["photo"] if os.path.isabs(spec["photo"]) else os.path.join(d, spec["photo"])
         rdir = os.path.join(d, spec.get("rig") or os.path.join("rigs", name))
-        out.append((name, photo, rdir, int(spec.get("face", 0))))
+        out.append((name, photo, rdir, int(spec.get("face", 0)), spec.get("look")))
     return out
 
 
-def stale(photo, rdir):
+def stale(photo, rdir, look=None):
     """Why a rig needs building, or '' when the one on disk is current."""
     p = os.path.join(rdir, "rig.json")
     if not os.path.exists(p):
@@ -897,7 +903,105 @@ def stale(photo, rdir):
         return "photo missing: %s" % photo
     if r.get("fingerprint") != fingerprint(photo):
         return "photo changed"
+    if (r.get("look") or None) != (look or None):
+        return "look %s -> %s" % (r.get("look") or "photo", look or "photo")
+    if look:
+        todo, usd = _toon.plan(r["fingerprint"], look, rdir)
+        if todo:
+            return "draw %d pictures, ~$%.2f" % (len(todo), usd)
+        if r.get("toon") != _toon.TOON_VERSION:
+            return "toon rig v%s -> v%d" % (r.get("toon"), _toon.TOON_VERSION)
     return ""
+
+
+def build_toon(ms, photo_path, name, out_dir, face_index, look):
+    """A look's rig: the photo's person redrawn by an image model (_toon.py), talking by
+    swapped mouth patches. Returns the rig dict."""
+    t0 = time.time()
+    rgba = load_photo(photo_path)
+    rgba, _ = resize_max(rgba, 2048)
+    boxes = main_faces(ms.faces(flatten(rgba)))
+    if not boxes:
+        raise SystemExit("%s: no face found" % photo_path)
+    if face_index >= len(boxes):
+        raise SystemExit("%s: %d face(s), no index %d" % (photo_path, len(boxes), face_index))
+    x, y, w, h, _ = boxes[face_index]
+    # head and shoulders: the model draws the clothes too, and a group photo is one person
+    side = int(round(max(w, h) * 3.4))
+    cx, cy = x + w / 2, y + h / 2 + h * 0.35
+    x0, y0 = int(round(cx - side / 2)), int(round(cy - side / 2))
+    pad = (
+        (max(0, -y0), max(0, y0 + side - rgba.shape[0])),
+        (max(0, -x0), max(0, x0 + side - rgba.shape[1])),
+    )
+    big = np.pad(rgba, pad + ((0, 0),), mode="edge")
+    crop = big[y0 + pad[0][0] : y0 + pad[0][0] + side, x0 + pad[1][0] : x0 + pad[1][0] + side]
+    crop, _ = resize_max(crop, 1024)
+    os.makedirs(out_dir, exist_ok=True)
+    ref = os.path.join(out_dir, "ref.png")
+    cv2.imwrite(ref, cv2.cvtColor(flatten(crop), cv2.COLOR_RGB2BGR))
+    fp = fingerprint(_env.resolve(photo_path))
+    spent = _toon.generate(ref, fp, look, out_dir)
+    P, patches = _toon.cut(ms, out_dir)
+    # the drawn picture comes with wide empty margins: keep the character, so a film can lay it
+    # out by what is visible (SK.headBox), and move every coordinate with the crop
+    base = cv2.imread(os.path.join(out_dir, "gen_base.png"), cv2.IMREAD_UNCHANGED)
+    if base.shape[2] == 4 and (base[..., 3] < 8).any():
+        ys, xs = np.nonzero(base[..., 3] > 8)
+        mg = int(0.02 * max(base.shape[:2]))
+        bx0, by0 = max(0, xs.min() - mg), max(0, ys.min() - mg)
+        bx1, by1 = min(base.shape[1], xs.max() + mg + 1), min(base.shape[0], ys.max() + mg + 1)
+        base = base[by0:by1, bx0:bx1]
+        P = P - [bx0, by0]
+        for pt in patches.values():
+            pt["x"], pt["y"] = int(pt["x"] - bx0), int(pt["y"] - by0)
+    cv2.imwrite(os.path.join(out_dir, "base.png"), base)
+    bh, bw = base.shape[:2]
+    fr = frame(P)
+    o, right, down, W, H = fr
+    r2 = lambda a: np.round(np.asarray(a, np.float64), 1).tolist()  # noqa: E731
+    cheek = np.vstack([P[117], P[118], P[101], P[36], P[205], P[187]])
+    m = poly_mask(base.shape, cheek) > 0.5
+    skin = np.median(base[..., :3][m][:, ::-1], axis=0) if m.any() else np.array([200, 160, 130])
+    rig = {
+        "v": RIG_VERSION,
+        "toon": _toon.TOON_VERSION,
+        "type": "sprite",
+        "name": name,
+        "look": look,
+        "src": os.path.relpath(_env.resolve(photo_path), out_dir).replace("\\", "/"),
+        "fingerprint": fp,
+        "base": {"file": "base.png", "w": bw, "h": bh},
+        # the drawn character is both the "head" (a cut-out: it comes with its own alpha) and
+        # the "photo"; head.png's pixel (0,0) is the picture's
+        "head": {"file": "base.png", "w": bw, "h": bh, "x": 0, "y": 0, "s": 1},
+        "photo": {"file": "base.png", "w": bw, "h": bh},
+        "face": {
+            "o": r2(o),
+            "right": np.round(right, 5).tolist(),
+            "down": np.round(down, 5).tolist(),
+            "w": round(float(W), 1),
+            "h": round(float(H), 1),
+            "roll": round(float(np.degrees(np.arctan2(right[1], right[0]))), 2),
+            "mouth_w": round(float(np.linalg.norm(P[291] - P[61])), 1),
+        },
+        "lm": {
+            "oval": r2(P[OVAL]),
+            "top": r2(P[TOP]),
+            "chin": r2(P[CHIN]),
+            "nose": r2(P[NOSE_TIP]),
+        },
+        "patches": patches,
+        "col": {"skin": hexcol(skin)},
+        "faces": len(boxes),
+        "index": face_index,
+        "warnings": [] if "open" in patches else ["no mouth patch: the mouth will not move"],
+    }
+    with open(os.path.join(out_dir, "rig.json"), "w", encoding="utf-8") as f:
+        json.dump(rig, f, separators=(",", ":"))
+    rig["_secs"] = round(time.time() - t0, 2)
+    rig["_usd"] = round(spent, 3)
+    return rig
 
 
 def main():
@@ -905,12 +1009,17 @@ def main():
     ap.add_argument("--photo", help="one photo to rig")
     ap.add_argument("--name", help="the rig's name (with --photo)")
     ap.add_argument("--out", help="folder the rig folder goes in (with --photo)")
-    ap.add_argument("--face", type=int, default=0, help="which face, biggest first (default 0)")
+    ap.add_argument(
+        "--face", type=int, default=0, help="which person, counted left to right (default 0)"
+    )
     ap.add_argument("--manifest", help='a sketch manifest: build every rig its "heads" names')
     ap.add_argument("--list", action="store_true", help="say which rigs would be built; build none")
     ap.add_argument("--force", action="store_true", help="rebuild rigs that are current")
     ap.add_argument("--sheet", action="store_true", help="also write sheet.png, a proof of the cut")
     ap.add_argument("--fetch-models", action="store_true", help="download the models and stop")
+    ap.add_argument(
+        "--look", help="with --photo: redraw the person in a look (config/heads/looks.json)"
+    )
     a = ap.parse_args()
     if a.fetch_models:
         fetch_models()
@@ -918,21 +1027,54 @@ def main():
     if a.manifest:
         jobs = manifest_heads(a.manifest)
     elif a.photo and a.name and a.out:
-        jobs = [(a.name, _env.resolve(a.photo), os.path.join(_env.resolve(a.out), a.name), a.face)]
+        jobs = [
+            (
+                a.name,
+                _env.resolve(a.photo),
+                os.path.join(_env.resolve(a.out), a.name),
+                a.face,
+                a.look,
+            )
+        ]
     else:
         ap.error("give --manifest, or --photo with --name and --out")
     todo = []
-    for name, photo, rdir, face in jobs:
-        why = "forced" if a.force else stale(photo, rdir)
-        print("  %-12s %-28s %s" % (name, why or "current", os.path.relpath(photo, _env.ROOT)))
+    for name, photo, rdir, face, look in jobs:
+        why = "forced" if a.force else stale(photo, rdir, look)
+        print(
+            "  %-12s %-10s %-28s %s"
+            % (name, look or "photo", why or "current", os.path.relpath(photo, _env.ROOT))
+        )
         if why:
-            todo.append((name, photo, rdir, face))
+            todo.append((name, photo, rdir, face, look))
     if a.list or not todo:
         if a.list:
             print("\n  --list: nothing built")
         return
     ms = Measurer()
-    for name, photo, rdir, face in todo:
+    failed = []
+    for name, photo, rdir, face, look in todo:
+        if look:
+            try:
+                rig = build_toon(ms, photo, name, rdir, face, look)
+            except SystemExit as e:  # a refusal or a failure is this head's, not the whole cast's
+                print("  %-12s %s: NOT BUILT -- %s" % (name, look, e))
+                failed.append(name)
+                continue
+            print(
+                "  %-12s %s: %s, face %d px, %.1fs, $%.3f"
+                % (
+                    name,
+                    look,
+                    ", ".join(rig["patches"]) or "no patches",
+                    rig["face"]["h"],
+                    rig["_secs"],
+                    rig["_usd"],
+                )
+            )
+            for w in rig["warnings"]:
+                print("    WARNING %s" % w)
+            continue
         rig = build(ms, photo, name, rdir, face)
         f = rig["face"]
         print(
@@ -955,6 +1097,8 @@ def main():
         if a.sheet:
             print("    sheet %s" % sheet(rig, rdir, os.path.join(rdir, "sheet.png")))
     ms.close()
+    if failed:
+        sys.exit("%d head(s) not built: %s" % (len(failed), ", ".join(failed)))
 
 
 if __name__ == "__main__":

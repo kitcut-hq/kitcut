@@ -85,9 +85,13 @@ def rigs_script(m):
 def images(m):
     """{'rig:<name>:head': path, 'rig:<name>:photo': path} for the page's image loader."""
     out = {}
-    for n, (_r, head, photo) in rigs(m).items():
+    for n, (r, head, photo) in rigs(m).items():
         out["rig:%s:head" % n] = head
-        out["rig:%s:photo" % n] = photo
+        if r.get("type") == "sprite":  # a drawn character: one picture, and its mouth patches
+            for k, pt in (r.get("patches") or {}).items():
+                out["rig:%s:%s" % (n, k)] = os.path.join(os.path.dirname(head), pt["file"])
+        else:
+            out["rig:%s:photo" % n] = photo
     return out
 
 

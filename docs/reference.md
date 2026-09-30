@@ -3977,6 +3977,38 @@ Traps, each found on the test footage:
   taken from the face's own box.
 - **A white teeth band glows in a dim photo**: teeth take the face's skin colour, lightened.
 
+**Characters drawn from the photo** (`"look"` on a head, `scripts/_toon.py`,
+`config/heads/looks.json`). The owner's verdict on the first round (2026-09-30): the photo that
+talks and the photoreal models look cringe; the drawn looks are the product. So a head can be
+the person *redrawn*: `"heads": {"alex": {"photo": "sources/alex.png", "look": "brick"}}`. An
+image model (gpt-image-2.5-flare through OpenRouter, the photo -- cropped to that person, head and
+shoulders -- as its reference) draws the character, then draws it four more times with one change
+each: the mouth a little open ("eh"), open ("ah"), rounded ("oo"), and the eyes shut. The edits
+come back aligned to within half a pixel (phase correlation over 15 pairs: 0.1-0.4 px), so only
+what changed is kept: MediaPipe's landmarks on the drawn character place a window round the mouth
+(or each eye), the change inside it, joined to an ellipse there, grown and feathered, becomes a
+patch. The film draws the character and lays the mouth the voice asks for over it -- shut under
+15% open, "oo" when the lips round, "eh" under half open, "ah" above -- changing on twos (12 a
+second) like stop-motion replacement mouths, and the blink patch on the rig's blink clock.
+Looks: `brick` (a toy brick minifigure), `blocky` (a voxel game character), `newspaper` (a
+stipple "hedcut"), `caricature`, `clay`. Prompts name objects, never trademarks (check-sketch).
+
+Measured on three people (a phone frame, a NASA portrait, a 1905 glass plate) and a painting:
+likeness held in every look; the landmarker found the face on 12 of 15 drawn characters as drawn
+and on the stipple portraits once their dots are blurred into tones; every mouth patch and blink
+landed. A character costs five pictures, **$0.11** (0.022 each), 30-60 s; everything is cached by
+photo, prompt and model, so a rebuild is free. The picture is cropped to the character's outline
+(it comes with wide empty margins) so `SK.headBox` lays it out by what is visible.
+
+Traps: **the photo leaves the machine** (to the image model) -- the one step in talking heads that
+does; **OpenAI's safety filter refuses some pictures, not repeatably**: an edit refused once was
+drawn on the next try (so a refusal is retried twice), but the 1840 Lovelace portrait (bare
+shoulders) was refused as a toy brick figure four times in a row while two photographs went
+through; the build names the head it could not make and carries on with the rest. A picture the
+model redraws whole (a stipple portrait re-stipples everywhere) still swaps cleanly, because only
+the window round the mouth is ever taken from the edit. Search the change globally and a stipple
+portrait's noise wins: the first cut put one mouth in an image corner.
+
 **The example**, `config/sketch/heads-example/`: "The Brothers Speak", 9.5 s, a 1903 front page
 (collage) whose two public-domain photos of Wilbur and Orville Wright talk in halftone, one
 voice each (edge, free), a stamp on "seconds" from `sfx.py`. `wilbur.landmarks.json` is the
