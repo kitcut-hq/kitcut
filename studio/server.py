@@ -1524,7 +1524,8 @@ async def library_delete(req):
 
 async def picture_add(req):
     """Put one of the asker's uploads into their project as a picture its episodes get:
-    {"project": id, "upload": "up-...", "name": "logo"}. The upload goes; the picture stays."""
+    {"project": id, "upload": "up-...", "name": "logo"}. The upload goes; the picture stays. The
+    upload is the person's (uploader_of: X-Member), the project the workspace's (the client)."""
     try:
         body = await req.json()
     except ValueError:
@@ -1534,7 +1535,8 @@ async def picture_add(req):
     client, project = client_of(req), str(body.get("project") or "")
     if not films.PROJECT_ID.match(project) or not library.owner(client, project):
         return web.json_response({"error": "No such project."}, status=404)
-    meta = uploads.get(client, body.get("upload"))
+    uploader = uploader_of(req)
+    meta = uploads.get(uploader, body.get("upload"))
     if meta is None:
         return web.json_response(
             {"error": "That upload is no longer here; add it again.", "reason": "attachment"},
@@ -1548,12 +1550,12 @@ async def picture_add(req):
             client,
             project,
             str(body.get("name") or ""),
-            uploads.file_of(client, meta),
+            uploads.file_of(uploader, meta),
             meta["ext"],
         )
     except library.PictureError as e:
         return web.json_response({"error": e.text}, status=e.status)
-    uploads.release(client, [meta])
+    uploads.release(uploader, [meta])
     return web.json_response(entry, status=201)
 
 

@@ -264,6 +264,24 @@ async def projects(c, auth, mem, check):
     r = await c.get("/api/library/pictures/logo/thumb.png?project=" + P, headers=other)
     check(r.status == 404, "its person's only")
 
+    # an organisation's project: a member's own upload becomes the organisation's picture
+    member = auth | {"X-Client-Ip": "u:tm-jo"}
+    team = auth | {"X-Client-Ip": "o:tm-northwind", "X-Member": "u:tm-jo"}
+    r = await c.post(
+        "/api/uploads", data=buf.getvalue(), headers=member | {"Content-Type": "image/png"}
+    )
+    tup = (await r.json()).get("id")
+    r = await c.post(
+        "/api/library/pictures",
+        json={"project": "p-tmtmtmtmtm", "upload": tup, "name": "brand"},
+        headers=team,
+    )
+    check(r.status == 201, "a member's upload joins the organisation's project (X-Member)")
+    r = await c.get("/api/library/pictures/brand/thumb.png?project=p-tmtmtmtmtm", headers=team)
+    check(r.status == 200, "and is the organisation's")
+    r = await c.get("/api/library/pictures/brand/thumb.png?project=p-tmtmtmtmtm", headers=member)
+    check(r.status == 404, "not the member's own")
+
     project = {"id": P, "name": "Pip's Channel", "brief": "Short, funny, for kids."}
     r = await c.post("/api/films", json={"prompt": "x", "project": {"id": "nope"}}, headers=me)
     check(r.status == 400, "a film's project must be one")
