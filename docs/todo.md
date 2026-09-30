@@ -294,3 +294,45 @@ Open, in order:
   (filmCost(60) $2.73; the 60 s collage film $4.74 at API prices).
 - **Release** with the studio-vm skill, after the user approves; then merge `sketch-collage`
   into `studio-poc` (`--ff-only` after a rebase).
+
+## 8. Talking heads on kitcut.ai
+
+**Built 2026-09-29/30 on branch `sketch-heads` (on top of `sketch-collage`), not released.** A
+photo of a person becomes a character who talks in the film -- a bobble-head doll, a puppet
+cut-out, a ventriloquist's dummy, a head whose top lifts like a lid, or the whole photo (a
+newspaper picture, a painting in a frame) where only the mouth moves -- each speaker in their
+own voice. No video model: `head-rig.py` measures the photo once on the CPU (~1-2 s), and
+`sketch/heads.js` animates it from each voice line's own audio. Reference: "Talking heads" in
+`docs/reference.md`; example: `config/sketch/heads-example/`.
+
+**Recommended to the owner (not decided): a capability, not a fourth look.** Looks are visual
+media; who is on screen is not. Every look gets it (drawn: bobble-heads on drawn bodies;
+collage: newspaper photos and cut-outs; painted: a portrait that talks), switched on by what the
+person attaches -- photos of people -- rather than by a picker tile. Marketing then says it
+("attach photos of your team and they'll talk") and shows one gallery film.
+
+The studio work, in order, behind a switch:
+1. **Rig the attachments.** At film start, `head-rig.py` on each attached picture; a picture
+   with a face gets `rigs/<name>/` and joins the manifest's `"heads"` (one rig per person in a
+   group photo, left to right); `head-rig.py --fetch-models` on the VM (Linux wheels exist).
+2. **Tell Claude** in `agent.attached_note`: which pictures have faces, how many, their
+   warnings (turned, cropped), and that `SK.head(name, ...)` makes that picture speak its lines
+   (vo.json lines with `"who"`, voices in `"cast"`). The brief gets the capability, described
+   by what it is, never what it is for (see the brief rule), and `sketch/heads.js` as a
+   reference fill like `{COLLAGE}`.
+3. **Voices.** `VO_PINNED` keeps Gemini; `cast` voices must be Gemini voices, checked by
+   `validate.py` with `who` against the rigs.
+4. **Bake-off** (`studio/bakeoff.py`): five prompts with photos attached (a founder duo, a team
+   of four in one photo, a painting, a historical photo, a selfie cropped at the top); bar: the
+   right face on the right lines, no clipped or flat-topped heads on screen, the film still
+   judged professional for its audience.
+5. **Owner questions before release:** consent (a line in the upload UI and the terms: the
+   person has the right to animate everyone in the photos); YouTube's altered-content
+   disclosure for realistic styles (a photo that talks with a natural voice) when publishing
+   through the site; a public figure's photo.
+
+Later, if customers ask for the person to look real rather than animated: a neural talking
+head per line on a GPU (Ditto, Apache-2.0, was the best of four measured on the laptop in
+`C:\instafill\th-bench\` on 2026-09-30), composited where the photo would be; or an API
+(Hedra, Kling Avatar, OmniHuman: ~$0.03-0.12 per second of face). And cloning the founders'
+own voices from a voice note (ElevenLabs), with their consent.
