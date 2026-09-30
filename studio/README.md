@@ -463,6 +463,20 @@ film it vouches is the person's. That film is an episode:
   `project_id` (and every run now has `title`, `name_film`'s when nothing was typed): the site
   lists a project's episodes from there. Limits stay per person, across projects.
 
+## A film made outside the studio: `import_film.py`
+
+A sketch film made by hand with `scripts/sketch-render.py` (a `projects/<id>/` folder) becomes an
+account's film and an episode of one of its projects with `studio/import_film.py`: a new studio id
+and folder (the manifest as slug "film", the film's code and pictures, the engine it was drawn with
+in `engine/`, `outputs/film.mp4` and its poster), a done `studio.json` with `source: "import"`, its
+`kitcut.studio_runs` record (owner, `project_id`, state done) written before anything goes online,
+then `media.publish` (web copy, card, blobs), and with `--vm` the folder copied into the VM's home,
+where the film page, Download and Publish to YouTube read it. No credits are spent and no Claude
+call is made; `--unlisted` keeps it link-only; `--plan` says what it would do. Run it on the laptop
+with `STUDIO_ENV_FILE` naming the studio's `.env` (MONGODB_URI, the media SAS); the VPN must be up
+for `--vm`. The first import (2026-09-30): the Web Summit speaker promo,
+`studio-20260930-114530-nhdy7i`, in project `p-s2alo2aepx`.
+
 ## Bake-off: measure a change to the brief before it ships
 
 `bakeoff.py` makes one set of prompts (`bakeoff/<set>.json`, each with the audience it is for)
