@@ -333,7 +333,7 @@ The studio work, in order, behind a switch:
    through the site; a public figure's photo.
 
 Later, if customers ask for the person to look real rather than animated: a neural talking
-head per line on a GPU (Ditto, Apache-2.0, was the best of four measured on the laptop in
-`C:\instafill\th-bench\` on 2026-09-30), composited where the photo would be; or an API
+head per line on a GPU (Ditto, Apache-2.0, was the best of four measured on the laptop's 4 GB
+card on 2026-09-30, in a bench kept outside the repo), composited where the photo would be; or an API
 (Hedra, Kling Avatar, OmniHuman: ~$0.03-0.12 per second of face). And cloning the founders'
 own voices from a voice note (ElevenLabs), with their consent.
