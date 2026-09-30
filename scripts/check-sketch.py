@@ -293,6 +293,32 @@ def main():
         vo_mod.whisper_score = real
         shutil.rmtree(vdir, ignore_errors=True)
 
+    # ---- the voice track: a line that runs over is cut at the end; one that starts after the end
+    # is named, not a numpy broadcast error (film ewwd6b)
+    vdir = tempfile.mkdtemp(prefix="check-sketch-vo-")
+    try:
+        wav = os.path.join(vdir, "L00_T0_x_line.wav")
+        _sketch.write_wav(wav, voiced(230, 1.0))
+        tl = {"lines": [{"i": 0, "start": 0.2, "file": wav}, {"i": 1, "start": 1.6, "file": wav}]}
+        vo = A.build_vo(tl, 2.0, base=vdir)
+        check(
+            "voice track: a line that runs over the end is cut there",
+            len(vo) == int(2.0 * SR) and np.abs(vo[-100:]).max() > 0,
+        )
+        tl["lines"].append({"i": 2, "start": 2.4, "file": wav})
+        try:
+            A.build_vo(tl, 2.0, base=vdir)
+            err = ""
+        except ValueError as e:
+            err = str(e)
+        check(
+            "voice track: a line that starts after the end is named",
+            "line 2 at 2.40 s" in err and "line 1" not in err,
+            err,
+        )
+    finally:
+        shutil.rmtree(vdir, ignore_errors=True)
+
     # ---- approved voice lines: a project's recording plays for the same words in the same voice
     K = _sketch.voice_line_key
     vo = {"tts": "gemini", "voice": "Sadachbia", "model": "gemini-3.1-flash-tts-preview"}

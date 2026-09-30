@@ -1073,6 +1073,51 @@ async def main():
             "NOTE" not in every and over.startswith("NOTE: the narration ends at 468.50 s"),
             "a narration that runs past the film's end says so, and how much",
         )
+        # ...and it may still be made to fit: a line that starts after the end fails the mix, so a
+        # film at its recording limit gets FIT_RUNS more while it does not fit (ewwd6b)
+        late_film = not_made("a narration past the end", 60)
+        os.makedirs(late_film.path("audio", "vo"), exist_ok=True)
+
+        def lay(*spans):
+            tl = {
+                "duration": 60,
+                "lines": [
+                    {"i": i, "text": "x", "start": s, "end": e} for i, (s, e) in enumerate(spans)
+                ],
+            }
+            with open(late_film.path("audio", "vo", "timeline.json"), "w", encoding="utf-8") as f:
+                json.dump(tl, f)
+
+        runs, fit = films.limits(60)["voice_runs"], tools_mod.FIT_RUNS
+        lay((1, 50), (50.5, 59.5), (61, 66))
+        late = tools_mod.narration_over(late_film)
+        refused = tools_mod.recording_refused(late_film, runs + fit)
+        check(
+            late["ends"] == 66
+            and [L["i"] for L in late["late"]] == [2]
+            and tools_mod.recording_refused(late_film, runs) is None
+            and tools_mod.recording_refused(late_film, runs + fit - 1) is None
+            and "still ends at 66.00 s" in refused,
+            "a narration past the end may be recorded %d more times than the limit, then not" % fit,
+        )
+        t = tools_mod.Tools(late_film, None, lambda e: None)
+        t.voice_runs = runs
+        try:
+            await t.sound()
+            said = ""
+        except tools_mod.ToolError as e:
+            said = str(e)
+        check(
+            "line 2 starts 61.00 s" in said and "(2 recordings left" in said,
+            "the mix names the lines after the end, and the recordings left, before it runs: %r"
+            % said,
+        )
+        lay((1, 50), (50.5, 59.5))
+        check(
+            tools_mod.narration_over(late_film) is None
+            and "keep the narration you have" in tools_mod.recording_refused(late_film, runs),
+            "a narration that fits has the film's limit, no more",
+        )
 
         # ------------------------------------------------ the server stops: interrupted, not cancelled
         r = await c.post(

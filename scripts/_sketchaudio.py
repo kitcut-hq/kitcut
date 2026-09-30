@@ -764,6 +764,19 @@ def build_vo(timeline, duration, target_db=-17.0, base=None):
     """base: the manifest's folder, which the line files are relative to (older timelines were
     written relative to the repo root, and still resolve there)."""
     vo = np.zeros(int(duration * SR))
+    # a line that starts after the end has nowhere to go: the slice below was empty against a
+    # negative stop on x, a numpy broadcast error nobody could act on (film ewwd6b, 2026-09-30).
+    # A line that only runs over is cut at the end, as before.
+    late = [L for L in timeline["lines"] if int(L["start"] * SR) >= len(vo)]
+    if late:
+        raise ValueError(
+            "the narration runs past the film's end (%g s): %s start after it. Shorten or drop"
+            " lines and record the narration again, or make the film longer."
+            % (
+                duration,
+                ", ".join("line %s at %.2f s" % (L.get("i", "?"), L["start"]) for L in late),
+            )
+        )
     for L in timeline["lines"]:
         p = L["file"]
         if base and not os.path.isabs(p) and os.path.exists(os.path.join(base, p)):

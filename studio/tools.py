@@ -83,6 +83,56 @@ def approved_line(film, i):
         return False
 
 
+# Recordings past a film's limit, allowed only while its narration runs past the film's end. The
+# mix cannot place a line that starts after the end, so such a film fails at its finish; with no
+# recording left Claude could only watch it fail (ewwd6b, 2026-09-30: all 6 recordings spent, 4 on
+# retakes of lines with long tails, and the narration still ended at 199.8 s of 180).
+FIT_RUNS = 2
+
+
+def narration_over(film):
+    """The last recording's overrun, or None when it fits the film (or there is none yet):
+    {"ends": where the narration ends, "length": the film's length, "late": the lines that start
+    after the end, which the mix cannot place}."""
+    try:
+        with open(film.path("audio", "vo", "timeline.json"), encoding="utf-8") as f:
+            tl = json.load(f)
+    except (OSError, ValueError):
+        return None
+    lines = tl.get("lines") or []
+    length = tl.get("duration") or film.length
+    ends = max((L.get("end", 0) for L in lines), default=0)
+    if not length or ends <= length:
+        return None
+    return {"ends": ends, "length": length, "late": [L for L in lines if L["start"] >= length]}
+
+
+def recording_refused(film, done):
+    """Why the film may not record again after `done` recordings, or None: the film's limit, plus
+    FIT_RUNS while the narration does not fit the film."""
+    runs = limits(film.length)["voice_runs"]  # recordings per film, retakes included
+    over = narration_over(film)
+    if done < runs or (over and done < runs + FIT_RUNS):
+        return None
+    if over:
+        return (
+            "That is %d recordings, the limit for one film, and the narration still ends at"
+            " %.2f s, after the film's %g s." % (done, over["ends"], over["length"])
+        )
+    return "That is %d recordings, the limit for one film: keep the narration you have." % done
+
+
+def fit_advice(film, done):
+    """How to make a narration that runs past the end fit, and how many recordings are left for
+    it (the film's limit plus FIT_RUNS)."""
+    left = max(0, limits(film.length)["voice_runs"] + FIT_RUNS - done)
+    return (
+        "Cut words or whole lines in vo.json and record the narration again (%d recording%s left,"
+        " retakes included); retaking a line makes it shorter only when it has fewer words."
+        % (left, "" if left == 1 else "s")
+    )
+
+
 def timeline_text(film, retake=None):
     """The narration's timing as Claude needs it for cues: each line's span, and its words (all of
     them for a short narration; for a long one only the line just re-recorded)."""
@@ -220,11 +270,9 @@ class Tools:
         )
 
     async def voice(self, retake_line=None):
-        runs = limits(self.film.length)["voice_runs"]  # recordings per film, retakes included
-        if self.voice_runs >= runs:
-            raise ToolError(
-                "That is %d recordings, the limit for one film: keep the narration you have." % runs
-            )
+        refused = recording_refused(self.film, self.voice_runs)
+        if refused:
+            raise ToolError(refused)
         if _tts_spent(self.film) >= limits(self.film.length)["tts_usd"]:
             raise ToolError("The narration's budget is spent: keep the recording you have.")
         args = ["--jobs", str(VOICE_JOBS)]
@@ -251,6 +299,12 @@ class Tools:
         return (
             "Recorded. The timeline (also in audio/vo/timeline.json), times on the film clock:\n"
             + text
+            + (
+                "\n\nThe narration does not fit the film yet. "
+                + fit_advice(self.film, self.voice_runs)
+                if narration_over(self.film)
+                else ""
+            )
         )
 
     async def paint(self, retake=None):
@@ -344,6 +398,20 @@ class Tools:
         stays under the narration, always, and with levels the balance per 2 s. Both come from
         audio/balance.json: only a script's last lines come back, and they were the stage timings,
         so a score whose strings played 28 dB too loud over the voice was reported as fine."""
+        over = narration_over(self.film)
+        if over and over["late"]:  # the mix cannot place them: say so, not a numpy traceback
+            raise ToolError(
+                "The narration ends at %.2f s, after the film's %g s, and the soundtrack cannot"
+                " be mixed: %s after the end. %s"
+                % (
+                    over["ends"],
+                    over["length"],
+                    ", ".join(
+                        "line %s starts %.2f s" % (L.get("i"), L["start"]) for L in over["late"]
+                    ),
+                    fit_advice(self.film, self.voice_runs),
+                )
+            )
         async with self.lock:
             self.gate()
             await self._automation_if_needed()

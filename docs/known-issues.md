@@ -775,3 +775,23 @@ stills cache key names how stills are drawn (`_thumb.STILLS`, now v2), so every 
 made again, and options saved under the old design are remade (`_thumb.DESIGN`).
 **Lesson.** Two copies of one path rule drift; and a check that reads only the finished picture
 (legible, in contrast) passes a picture of nothing. Look at the frames.
+
+### KI-049 · fixed · studio · A narration past the film's end, with no recording left, failed the film at its mix
+
+**Symptom.** 2026-09-30: film ewwd6b (a 3-minute KitCut explainer, owner account) failed after 24
+minutes with `ValueError: operands could not be broadcast together with shapes (0,) (189094,)`
+from `_sketchaudio.build_vo`. Its narration ended at 199.8 s of 180.
+**Cause.** Two things. The prompt asked for more than 3 minutes of narration: the first recording
+ran 267 s. The second ran past the end too, and Claude spent the other four recordings (the
+limit is 6, retakes included) re-taking lines whose Gemini takes had long tails, which never made
+the narration shorter. With no recording left it could not fit the narration, could not edit
+`timeline.json`, and every sound check crashed. A line that *starts* after the end has nowhere to
+go; `x[: len(vo) - i0]` with a negative stop is not empty, hence numpy's error.
+**Fix.** `build_vo` names the lines that start after the end. The sound tool says the same before
+it runs, with the recordings left. While the narration does not fit, a film may record
+`tools.FIT_RUNS` (2) times past its limit. After a recording that does not fit, the voice tool
+says how many are left and that only fewer words make a line shorter. (`check-sketch.py`,
+`test_server.py`.)
+**Lesson.** A limit with no way out turns a fixable fault into a failed film: when a limit stops
+the fix, the fix gets its own allowance. And a dense brief is the first cause. The remake with
+the narration held to about 400 words fitted (36 lines, 206.8 s of 210).
