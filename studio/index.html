@@ -143,6 +143,10 @@ svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
 .side .more { display: grid; gap: 4px; margin: 10px 10px 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; }
 .side .more a { color: var(--ink-3); }
 .swatch { width: 22px; height: 22px; border-radius: 6px; flex: none; display: grid; place-items: center; color: #fff; font-size: 11px; font-weight: 700; font-style: normal; }
+/* a project whose episodes go to a YouTube channel wears the channel's picture, round as YouTube shows it */
+.swatch { position: relative; overflow: hidden; }
+.swatch.yt { border-radius: 50%; }
+.swatch img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .main { min-width: 0; padding: 28px 32px 48px; }
 .page { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
@@ -517,8 +521,6 @@ a.google { width: 100%; margin-top: 14px; }
   document.cookie = `kc_dev=${id}; Path=/; Max-Age=63072000; SameSite=Lax` + (location.protocol === 'https:' ? '; Secure' : '');
 } catch (e) { /* never worth breaking the page for */ } })();
 </script>
-<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
-<script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body data-here="make">
 <header class="bar">
@@ -759,6 +761,17 @@ for (const lk of document.querySelectorAll('.lk')) {
   v.addEventListener('error', () => v.remove());
 }
 lookLine();
+// a link can start a film: /?look=collage&idea=... (the news emails' "Make this film" links,
+// lib/mailblocks.js). The idea only goes in the box; nothing is made until the person presses the
+// button. The two words then leave the address bar, so a reload keeps what they have typed since.
+(() => { try {
+  const q = new URLSearchParams(location.search), look = q.get('look'), idea = (q.get('idea') || '').trim();
+  if (!look && !idea) return;
+  if (look) setLook(look);
+  if (idea) $('prompt').value = idea.slice(0, 2000);
+  q.delete('look'); q.delete('idea');
+  history.replaceState(null, '', location.pathname + (q.size ? `?${q}` : '') + location.hash);
+} catch (e) { /* the example idea stays */ } })();
 // the example idea in the box, until someone types: attaching a picture or a voice note clears it,
 // so a film about a bakery does not also get a paper plane nobody asked for
 let example = $('prompt').value;
