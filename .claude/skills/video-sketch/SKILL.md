@@ -134,7 +134,10 @@ an engine module the manifest opts into with `"modules": ["collage"]`:
 - **Never open on a blank page.** A fade in from paper, or a draw-on that starts at zero,
   reads as empty frames at the head of the film. The engine no longer fades in by default;
   start the first draw-ons around 20% (`clamp(.2 + .8 * E.out(...))`) so frame 0 already
-  shows the pen at work. Check frame 0 in the stills every time.
+  shows the pen at work. Check frame 0 in the stills every time. (The video file's own frame 0
+  is the film's cover -- the poster, or a livelier moment -- because X and a phone show it
+  before play; `sketch-render.py` draws it, manifest `cover` overrides. That does not excuse
+  a blank opening: frame 1 is what plays.)
 - `-shortest` with a subtitle track shortens the film to the last caption. `sketch-render.py`
   muxes with `-t`; do the same in any hand-run mux.
 - `eleven_v3` clips final syllables: always go through `sketch-vo.py` (tail word + cut).

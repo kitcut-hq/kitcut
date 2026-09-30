@@ -17,11 +17,16 @@ Outputs (projects/<id>/outputs/):
     artifact/<slug>.html        the same, without html/head/body, for claude.ai Artifacts
     <slug>.mp4                  the film (audio + a soft English subtitle track when captions exist)
     <slug>_poster.png           the poster frame
+    (the video's first frame is the film's cover -- see `cover` below)
     review/<t>.png, review/sheet.png    (--stills / --sheet)
 
 Manifest keys: title, description, slug, duration, fps, film ("film.js"), fonts
 ([{"file", "family", "weight", "load"}]), images ({"logo": "assets/logo.png"} -> SK.IMG.logo),
 player ({accent, paper, ink, hint, hint_font}), poster_t,
+cover (the video's first frame -- X, iMessage and a phone's player show it before play, and a film
+that opens on bare paper shows there as an empty rectangle: true (default) draws the poster, or a
+livelier later moment when the film ends on paper, as frame 0 -- 1/fps of a second, unseen in
+play; a number is that film time; false keeps the film's own opening),
 render ({cq, preset, audio_bitrate, encoder, encode}: encode "browser" has the page encode its own
 frames, see --encode),
 tail ({secs, scripts, images, audio}: a closing after the film -- `secs` more of picture, drawn by
@@ -49,6 +54,7 @@ import os
 import re
 import json
 import html
+import io
 import time
 import secrets
 import base64
@@ -470,7 +476,7 @@ def packets(path):
     return int(r.stdout.strip() or 0) if r.returncode == 0 else 0
 
 
-def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="pipe"):
+def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="pipe", cover=None):
     """Draw frames [0, n_frames) into `silent`. The film is cut into chunks of `chunk` seconds;
     `jobs` browsers draw chunks at once, each into its own encoder and segment file, and the
     segments are joined by stream copy. One browser is serial -- draw, read back, POST 8 MB,
@@ -482,6 +488,8 @@ def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="
     (2026-09-28): pipe ran 87 s at 3 browsers and 91 s at 6 -- the 8 MB per frame, not the
     drawing, was the wall -- and browser 28 s at 6. A browser that cannot encode falls back to
     pipe, loudly, for the rest of the render.
+
+    `cover`: a film time the video's first frame draws instead of t0 (choose_cover).
 
     A fresh browser per chunk: measured on a 63.5 s film, one session fell from 13.8 to 1.5 fps
     and then stopped answering at frame ~2700. A chunk that fails is redrawn from its start
@@ -516,6 +524,9 @@ def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="
                     flush=True,
                 )
 
+    def cover_q(a):
+        return "&cover=%r" % cover if cover is not None and a == 0 else ""
+
     def encode_in_browser(a, b, seg):
         """One chunk through the page's own encoder: the stream arrives in batches, is written
         as raw H.264, and ffmpeg wraps it without re-encoding."""
@@ -537,7 +548,8 @@ def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="
                     fps,
                     t0 + a / fps,
                     t0 + b / fps,
-                ),
+                )
+                + cover_q(a),
                 fatal=False,
             )
         if not err and got[0] != b - a:
@@ -593,7 +605,8 @@ def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="
             progress(1)
 
         err = Session(page, on_frame=frame).run(
-            "export=1&fps=%d&from=%r&to=%r" % (fps, t0 + a / fps, t0 + b / fps), fatal=False
+            "export=1&fps=%d&from=%r&to=%r" % (fps, t0 + a / fps, t0 + b / fps) + cover_q(a),
+            fatal=False,
         )
         try:
             ff.stdin.close()
@@ -667,6 +680,34 @@ def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="
         )
     )
     return mode[0]
+
+
+def choose_cover(m, page):
+    """The film time the video's first frame shows: the manifest's `cover` when it is a number,
+    else the poster unless a clearly livelier later moment beats it (_sketch.pick_cover), drawn
+    as stills in one browser and scored by contrast. None: `cover` is false."""
+    want = m.get("cover", True)
+    if want is False:
+        return None
+    if not isinstance(want, bool):
+        return float(want)
+    from PIL import Image, ImageStat
+
+    scored = []
+
+    def save(t, body):
+        with Image.open(io.BytesIO(body)) as im:
+            scored.append((float(t), ImageStat.Stat(im.convert("L")).stddev[0]))
+
+    times = _sketch.cover_candidates(m)
+    Session(page, on_still=save).run("stills=" + ",".join("%r" % t for t in times))
+    scored.sort(key=lambda s: times.index(s[0]))
+    t = _sketch.pick_cover(scored)
+    print(
+        "  cover: %.2fs  (%s)"
+        % (t, ", ".join("%.2fs %.0f" % s for s in scored) + " -- contrast of each candidate")
+    )
+    return t
 
 
 def contact_sheet(paths, out, cols=4):
@@ -800,6 +841,17 @@ def main():
     for fnt in m.get("fonts", []):
         if not os.path.exists(_env.resolve(fnt["file"])):
             sys.exit("font missing: %s" % fnt["file"])
+    cv = m.get("cover", True)
+    print(
+        "  cover:   %s"
+        % (
+            "the film's own opening (cover: false)"
+            if cv is False
+            else "%.2fs of the film, as frame 0" % float(cv)
+            if not isinstance(cv, bool)
+            else "the poster, or a livelier moment if the film ends on paper, as frame 0"
+        )
+    )
     if args.plan:
         print("\n  --plan: nothing rendered")
         return
@@ -811,7 +863,11 @@ def main():
     )
     full = not (args.bundle or args.stills or args.automation)
     if full:
-        names += ["frames", "mux", "poster"]
+        names += (["cover"] if args.t0 == 0 and m.get("cover", True) is not False else []) + [
+            "frames",
+            "mux",
+            "poster",
+        ]
     with _sketch.Stages(m, "sketch-render", names, argv=sys.argv[1:]) as st:
         with st("bundle"):
             page = bundle(m)
@@ -868,10 +924,24 @@ def main():
         if not full:
             return
 
+        cover = None
+        if "cover" in names:
+            with st("cover"):
+                cover = choose_cover(m, light)
         silent = os.path.join(m["_temp"], slug + "_silent.mp4")
         with st("frames"):
             how = render_frames(
-                light, cfg, fps, args.t0, n_frames, args.chunk, jobs, m["_temp"], silent, how
+                light,
+                cfg,
+                fps,
+                args.t0,
+                n_frames,
+                args.chunk,
+                jobs,
+                m["_temp"],
+                silent,
+                how,
+                cover,
             )
 
         out = os.path.join(m["_outputs"], slug + ("_draft" if args.draft else "") + ".mp4")
