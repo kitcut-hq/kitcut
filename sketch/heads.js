@@ -94,13 +94,14 @@
   /** the picture in a tone. box: the face's box in the picture's pixels (its darks and lights
    *  set the levels, not a bright window behind it); fh: the face's height there (the size of
    *  the halftone screen follows the face, not the picture) */
-  function toned(img, tone, key, box, fh) {
-    return cached(key + ':' + tone, () => {
+  function toned(img, tone, key, box, fh, plain) {
+    return cached(key + ':' + tone + (plain ? ':plain' : ''), () => {
       const c = canvas(img.width, img.height), g = c.getContext('2d');
       if (tone === 'mono' || tone === 'news') g.filter = 'grayscale(1)';
       else if (tone === 'sepia') g.filter = 'sepia(.85) contrast(1.05) brightness(1.02)';
       g.drawImage(img, 0, 0); g.filter = 'none';
-      if (tone === 'mono' || tone === 'news') levels(c, box);
+      // a patch laid over a picture must match it pixel for pixel: no levels of its own
+      if ((tone === 'mono' || tone === 'news') && !plain) levels(c, box);
       if (tone === 'news') halftone(c, fh);
       return c;
     });
@@ -362,7 +363,7 @@
   }
 
   /* ------------------------------------------------------------ SK.head */
-  const MOUTHS = { jaw: 'chin', chin: 'chin', dummy: 'dummy', muppet: 'muppet', flap: 'flap', warp: 'warp', none: 'none' };
+  const MOUTHS = { jaw: 'chin', chin: 'chin', dummy: 'dummy', muppet: 'muppet', flap: 'flap', warp: 'warp', swap: 'swap', none: 'none' };
   SK.headBox = function (name, x, y, h) {
     const R = rigOf(name), F = R.face, mid = [(R.lm.top[0] + R.lm.chin[0]) / 2, (R.lm.top[1] + R.lm.chin[1]) / 2], k = h / F.h;
     const H = R.head;
@@ -371,16 +372,19 @@
   SK.head = function (name, x, y, h, o = {}) {
     const ctx = SK.ctx(), R = rigOf(name), t = o.t ?? SK.T;
     const style = o.style || 'cutout', tone = o.tone || 'color', cut = style !== 'photo';
-    let mouth = MOUTHS[o.mouth || (style === 'photo' ? 'warp' : 'chin')];
+    const toon = R.type === 'sprite'; // a drawn character: its own mouths, swapped
+    let mouth = toon ? (o.mouth === 'none' ? 'none' : 'swap') : MOUTHS[o.mouth || (style === 'photo' ? 'warp' : 'chin')];
     if (!mouth) throw new Error('SK.head: mouth ' + JSON.stringify(o.mouth) + ' is not one of ' + Object.keys(MOUTHS).join(', '));
     if (mouth === 'flap' && !cut) mouth = 'chin';
     const who = o.who ?? name;
     // a collage film moves on its own clock (twos); the mouth keeps to it too
-    const steps = o.steps ?? (SK.style.steps && SK.step ? SK.stepFps(SK.style.steps) : 0);
+    // a collage film moves on its own clock; a drawn character's mouths change on twos, as
+    // replacement mouths do in stop motion (a shape held for one frame reads as flicker)
+    const steps = o.steps ?? (SK.style.steps && SK.step ? SK.stepFps(SK.style.steps) : toon ? (SK.stepFps ? SK.stepFps(12) : 12) : 0);
     const tt = steps ? Math.floor(t * steps + 1e-4) / steps : t;
     const tk = SK.talk(who, tt);
     let open = tk.open;
-    if (mouth !== 'warp') open = clamp((open - .14) / .86); // a rigid jaw: shut, not a slit, when nearly shut
+    if (mouth !== 'warp' && mouth !== 'swap') open = clamp((open - .14) / .86); // a rigid jaw: shut, not a slit, when nearly shut
     open *= o.jaw ?? 1;
     const wide = tk.wide;
     const blink = typeof o.blink === 'number' ? o.blink : o.blink === false ? 0 : blinkAt(name, t);
@@ -392,7 +396,7 @@
     // how far a mouth at full open travels, in face heights: a photo's jaw as far as a jaw
     // goes; a puppet's further, so a cut-out reads from across the room
     const J = F.h * ({ warp: .11, muppet: .15, flap: 0 }[mouth] ?? .13);
-    const imgHead = SK.IMG['rig:' + name + ':head'], imgPhoto = SK.IMG['rig:' + name + ':photo'];
+    const imgHead = SK.IMG['rig:' + name + ':head'], imgPhoto = SK.IMG['rig:' + name + ':photo'] || imgHead;
     if (!imgHead || !imgPhoto) return { x, y, h, open };
     const nudge = SK.nudge ? SK.nudge(name.length * 131 + 7) : [0, 0, 0];
     ctx.save(); ctx.globalAlpha *= alpha;
@@ -417,7 +421,8 @@
     for (const [px, py] of R.lm.oval) { fx0 = Math.min(fx0, px); fy0 = Math.min(fy0, py); fx1 = Math.max(fx1, px); fy1 = Math.max(fy1, py); }
     if (cut) {
       const hb = [(fx0 - R.head.x) / R.head.s, (fy0 - R.head.y) / R.head.s, (fx1 - R.head.x) / R.head.s, (fy1 - R.head.y) / R.head.s];
-      tex = edged(toned(imgHead, tone, name + ':head', hb, F.h / R.head.s), edge, o.edgeCol || '#fdfbf6', name + ':' + tone);
+      const tn = toon && tone === 'news' ? 'mono' : tone; // a character's patches take its tone plain, so it does too
+      tex = edged(toned(imgHead, tn, name + ':head', hb, F.h / R.head.s, toon), edge, o.edgeCol || '#fdfbf6', name + ':' + tone);
       texS = R.head.s; texO = [R.head.x - edge * texS, R.head.y - edge * texS];
     } else {
       tex = toned(imgPhoto, tone, name + ':photo', [fx0, fy0, fx1, fy1], F.h); texO = [0, 0]; texS = 1;
@@ -439,6 +444,20 @@
     };
     const toTex = (p) => [(p[0] - texO[0]) / texS, (p[1] - texO[1]) / texS];
     const base = name + ':' + tone + ':' + edge;
+    if (toon) {
+      // the character, then the mouth shape the voice asks for, then the blink
+      draw(tex, base);
+      const PT = R.patches || {}, pick = mouth === 'none' || open < .15 ? null
+        : PT.round && wide < -.3 ? 'round' : PT.small && open < .5 ? 'small' : PT.open ? 'open' : PT.small ? 'small' : null;
+      const lay = (k) => {
+        const pt = PT[k], im = SK.IMG['rig:' + name + ':' + k]; if (!pt || !im) return;
+        ctx.drawImage(toned(im, tone === 'news' ? 'mono' : tone, name + ':' + k, null, null, true), pt.x, pt.y, pt.w, pt.h);
+      };
+      if (pick) lay(pick);
+      if (blink > .5) lay('blink');
+      ctx.restore();
+      return { x, y, h, open };
+    }
     if (mouth === 'none' || mouth === 'warp' || open <= .003) {
       draw(tex, base);
       if (mouth === 'warp' && (open > .003 || Math.abs(wide) > .02)) {
