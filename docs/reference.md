@@ -3903,6 +3903,14 @@ mesh: the 468 face points plus a still ring round the face, Delaunay-triangulate
 inner mouth left as a hole, and per point how far it follows the jaw (`wj`), the upper lip's
 lift (`wu`), the lips spreading (`wc`) and a blink (`b`). ~1-2 s a photo on the laptop CPU.
 
+A photo of several people is several rigs: `"face": n` counts the photo's people left to right
+(faces at least a third the area of the biggest; a passer-by or a face on a poster is not one
+of them), so two founders photographed together are `"face": 0` and `"face": 1`. The rig says
+how many there were, and warns (`warnings` in rig.json, printed by the build) about a face
+turned from the camera (the nose over 45% of the half-face off centre: a mouth moved on it reads
+best small or as a puppet's; on the Curies' 1904 lab photo Marie, looking down at her work,
+measured 149%) and about a head the photo cuts off (a cut-out of it has a straight edge there).
+
 Runtime: MediaPipe 1.0.1's wheel asks for `opencv-contrib-python`, which would fight the venv's
 `opencv-python` over the one `cv2` (and `setup-python.ps1`'s pip-check repair would install it),
 so `--fetch-models` installs it `--no-deps` into `models/heads/py/`, beside its two models

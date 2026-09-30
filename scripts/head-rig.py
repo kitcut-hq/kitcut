@@ -193,6 +193,9 @@ def _mediapipe():
     drawing helpers this never calls; a missing matplotlib is stood in for."""
     if os.path.isdir(runtime_dir()) and runtime_dir() not in sys.path:
         sys.path.insert(0, runtime_dir())
+    # its C++ side logs every model it loads to stderr; errors still show
+    os.environ.setdefault("GLOG_minloglevel", "2")
+    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
     try:
         import matplotlib  # noqa: F401
     except ImportError:
@@ -503,17 +506,29 @@ def mesh(P, fr, eye_gap):
 
 
 # ------------------------------------------------------------------ the rig
+def main_faces(boxes):
+    """The photo's people, numbered left to right: faces at least a third the area of the
+    biggest (a face on a poster behind them, or a passer-by, is not one of them). "face": 0 is
+    the leftmost -- in a photo of two founders, "the one on the left" -- not the biggest."""
+    if not boxes:
+        return []
+    big = max(b[2] * b[3] for b in boxes)
+    return sorted((b for b in boxes if b[2] * b[3] >= big / 3), key=lambda b: b[0] + b[2] / 2)
+
+
 def build(ms, photo_path, name, out_dir, face_index=0):
     """Measure one photo and write its rig folder. Returns the rig dict."""
     t0 = time.time()
     rgba = load_photo(photo_path)
     rgba, _ = resize_max(rgba, max(PHOTO_MAX, CROP_MAX * 2))
     rgb = flatten(rgba)
-    boxes = ms.faces(rgb)
+    boxes = main_faces(ms.faces(rgb))
     if not boxes:
         raise SystemExit("%s: no face found" % photo_path)
     if face_index >= len(boxes):
-        raise SystemExit("%s: %d face(s), no index %d" % (photo_path, len(boxes), face_index))
+        raise SystemExit(
+            "%s: %d face(s), left to right, no index %d" % (photo_path, len(boxes), face_index)
+        )
     x, y, w, h, score = boxes[face_index]
     # a square crop round the face with room for hair: the segmenter works at 256 px, so the
     # head must fill a good part of what it sees
@@ -599,15 +614,15 @@ def build(ms, photo_path, name, out_dir, face_index=0):
         alpha = np.minimum(alpha, crop[..., 3].astype(np.float32) / 255)
     # the flap cut: the lip line carried out from each mouth corner to the head's own edge
     flap_ends = []
-    for side, corner in ((-1, P_c[61]), (1, P_c[291])):
-        p, step = corner.copy(), side * right_c * max(1.0, S / 800)
+    for sgn, corner in ((-1, P_c[61]), (1, P_c[291])):
+        p, step = corner.copy(), sgn * right_c * max(1.0, S / 800)
         for _ in range(4 * S):
             q = p + step
             xi, yi = int(round(q[0])), int(round(q[1]))
             if not (0 <= xi < S and 0 <= yi < S) or alpha[yi, xi] < 0.35:
                 break
             p = q
-        flap_ends.append(p + side * right_c * W_c * 0.01)
+        flap_ends.append(p + sgn * right_c * W_c * 0.01)
     ys, xs = np.nonzero(alpha > 0.02)
     if not len(xs):
         raise SystemExit("%s: nothing left of the head after segmentation" % photo_path)
@@ -642,6 +657,40 @@ def build(ms, photo_path, name, out_dir, face_index=0):
     iris_l = np.append(P[IRIS_L[0]], np.linalg.norm(P[IRIS_L[1]] - P[IRIS_L[3]]) / 2)
     iris_r = np.append(P[IRIS_R[0]], np.linalg.norm(P[IRIS_R[1]] - P[IRIS_R[3]]) / 2)
     gap = float(np.mean(np.linalg.norm(P[LIP_IL] - P[LIP_IU], axis=1)))
+    # what the film should know before it picks a style for this face
+    warn = []
+    turn = float(np.dot(P[NOSE_TIP] - (P[CHEEK_L] + P[CHEEK_R]) / 2, right) / (W / 2))
+    if abs(turn) > 0.45:
+        warn.append(
+            "turned: the face looks to the %s of the frame (nose %.0f%% off centre); a mouth "
+            "moved on a turned face reads best small, or as a puppet's; a photo facing the "
+            "camera is better" % ("left" if turn < 0 else "right", abs(turn) * 100)
+        )
+
+    # the photo's own edges, in the crop's pixels: a head that reaches one was cut off by it
+    def touches(rows=None, cols=None):
+        a = alpha[rows] if rows is not None else alpha[:, cols]
+        return a.size > 0 and float(a.max()) > 0.5
+
+    im_h, im_w = rgb.shape[:2]
+    top_r, left_c, right_c_ = int(-y0 / k), int(-x0 / k), int((im_w - x0) / k) - 1
+    cropped = [
+        edge
+        for edge, hit in (
+            ("top", y0 < 0 and touches(rows=slice(top_r, top_r + 3))),
+            ("left", x0 < 0 and touches(cols=slice(left_c, left_c + 3))),
+            ("right", x0 + side > im_w and touches(cols=slice(right_c_ - 2, right_c_ + 1))),
+        )
+        if hit
+    ]
+    if y0 >= 0 and hy0 <= 1 and im_h > 0:  # the crop itself stops the head: still cut off
+        cropped = cropped or ["top"] if touches(rows=slice(0, 3)) else cropped
+    if cropped:
+        warn.append(
+            "cropped: the photo cuts the head off at the %s, so a cut-out of it has a straight "
+            "edge there; show it as a photo (or use a photo with the whole head)"
+            % " and ".join(cropped)
+        )
     r2 = lambda a: np.round(np.asarray(a, np.float64), 1).tolist()  # noqa: E731
     rig = {
         "v": RIG_VERSION,
@@ -715,6 +764,10 @@ def build(ms, photo_path, name, out_dir, face_index=0):
             )
         },
         "col": {"skin": hexcol(skin), "lip": hexcol(lip), "brow": hexcol(brow)},
+        "faces": len(boxes),  # people in the photo; this rig is "face": index, left to right
+        "index": face_index,
+        "turn": round(turn, 3),
+        "warnings": warn,
     }
     os.makedirs(out_dir, exist_ok=True)
     cv2.imwrite(
@@ -895,6 +948,10 @@ def main():
                 rig["_secs"],
             )
         )
+        if rig["faces"] > 1:
+            print("    face %d of %d, counted left to right" % (rig["index"], rig["faces"]))
+        for w in rig["warnings"]:
+            print("    WARNING %s" % w)
         if a.sheet:
             print("    sheet %s" % sheet(rig, rdir, os.path.join(rdir, "sheet.png")))
     ms.close()
