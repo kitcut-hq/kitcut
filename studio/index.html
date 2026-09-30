@@ -1322,7 +1322,7 @@ const WHO = {
 const YT_SAID = {
   again: "That channel was already connected. To add a different one, pick it on Google's screen: a business or brand channel is listed under its own name.",
   cancelled: 'Connecting was cancelled, so nothing changed.',
-  noscope: 'KitCut needs both permissions Google asks for, to publish for you. Try again and leave both boxes ticked.',
+  noscope: 'KitCut needs the permissions to upload and to see your channel\'s videos, to publish for you. Try again and leave those boxes ticked.',
   nochannel: 'That Google account has no YouTube channel yet. Create one on youtube.com, then connect it here.',
   failed: "Connecting didn't work. Please try again.",
 };
@@ -1361,12 +1361,16 @@ async function ytLoad() {
 function ytErr(text) { $('ytErr').textContent = text || ''; $('ytErr').hidden = !text; }
 // where the film already is on YouTube, under the film
 function ytList() {
-  const list = ((ytFilm && ytFilm.posts) || []).filter((p) => p.state !== 'failed');
+  // where each video stands on YouTube now (it may have been made private or removed there since),
+  // a removed one included; a publish that never got there is left out
+  const list = ((ytFilm && ytFilm.posts) || []).filter((p) => p.state !== 'failed' || p.url);
   $('ytPosts').hidden = !list.length;
   $('ytPosts').innerHTML = !list.length ? '' : '<span>On YouTube:</span>' + list.map((p) => {
     const face = (p.channel.thumb ? `<img src="${esc(p.channel.thumb)}" alt="" referrerpolicy="no-referrer">` : '') + esc(p.channel.title);
+    const st = p.status || { label: WHO[p.held ? 'private' : p.privacy].label, detail: '' };
+    const seen = p.views != null ? ` · ${p.views.toLocaleString()} view${p.views === 1 ? '' : 's'} there` : '';
     return p.url
-      ? `<a href="${esc(p.url)}" target="_blank" rel="noopener" title="${esc(p.title)}">${face} · ${WHO[p.held ? 'private' : p.privacy].label}</a>`
+      ? `<a href="${esc(p.url)}" target="_blank" rel="noopener" title="${esc([p.title, st.detail].filter(Boolean).join('. '))}">${face} · ${esc(st.label)}${seen}</a>`
       : `<a href="#" data-sending="1">${face} · sending ${p.pct}%</a>`;
   }).join('');
   for (const a of $('ytPosts').querySelectorAll('[data-sending]')) a.onclick = (e) => { e.preventDefault(); $('yt').showModal(); };
@@ -1382,10 +1386,12 @@ function ytShow(err, pick) {
   if (f.channels.length) ytForm(pick);
   if (!$('yt').open) $('yt').showModal();
 }
-// the channel the form starts on: the one asked for, else the one you used last, else the first
+// the channel the form starts on: the one asked for, else the episode's project's (the one it last
+// published to, or picked in its Settings), else the one you used last here, else the first
 function ytChosen(pick) {
   const ok = ((ytFilm && ytFilm.channels) || []).filter((c) => !c.broken);
-  const want = pick || ls.get('ytChannel');
+  const has = (id) => id && ok.some((c) => c.id === id);
+  const want = [pick, ytFilm && ytFilm.project_channel, ls.get('ytChannel')].find(has);
   return (ok.find((c) => c.id === want) || ok[0] || {}).id;
 }
 // The title, description and tags, written from the film in the channel's voice (the studio's
