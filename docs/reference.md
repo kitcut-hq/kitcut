@@ -4035,11 +4035,18 @@ a 20 s film with two people (a phone frame and the 1840 Lovelace painting, crayo
 parallel before Claude needed them, $0.22 of pictures, 38 turns, 15.5 minutes in all.
 
 The site's style tiles are cut from the thirteen-looks film with `speaker-loops.py`: each
-speaker's own line, cropped square and looped, silent, with a poster frame.
+speaker's own line, cropped square and looped, silent, with a poster frame. `--cycle <name>`
+makes the "Add a person" tile's one loop instead: every style talking for `--step` (1.95 s) and
+dissolving into the next over `--fade` (0.35 s), the last back into the first, trimmed so the
+loop point falls between two identical frames (25 s, 246 KB for thirteen). Each window is one
+step plus one dissolve and must end `--clear` (0.45 s) before the film's next line, when the next
+character arrives -- `--list` names any that would not (`--trim-in 0.2` fits all thirteen).
 
 ```powershell
 python scripts/speaker-loops.py --page <film>.html --video <film>.mp4 --outdir <site>/people `
     --crop 960,450,720 --size 200 --only crayon,papercut,news --rename news=newspaper --list
+python scripts/speaker-loops.py --page <film>.html --video <film>.mp4 --outdir <site>/people `
+    --cycle cycle --trim-in 0.2 --only crayon,papercut,news,woodcut,watercolour,popart,courtroom,chalk,sticker,felt,knit,peg,sock
 ```
 
 ### Sketch Studio: a prompt box that makes a short film (`studio/`)

@@ -626,7 +626,7 @@ a.google { width: 100%; margin-top: 14px; }
       <div class="prow">
         <div class="prow" id="ptiles"></div>
         <button type="button" class="padd" id="addPerson" title="A photo of one person, face to the camera, like a passport photo or a profile picture">
-          <span class="demo" aria-hidden="true"><img class="src" src="/people/photo.jpg" alt="" onerror="this.remove()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg><span class="toon"><img src="/people/sticker.jpg" alt="" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/sticker.mp4"></video></span></span>
+          <span class="demo" aria-hidden="true"><img class="src" src="/people/photo.jpg" alt="" onerror="this.remove()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg><span class="toon"><img src="/people/cycle.jpg" alt="" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/people/cycle.mp4"></video></span></span>
           <b>Add a person</b>
         </button>
         <input type="file" id="personFile" accept="image/*" hidden>
@@ -2036,7 +2036,8 @@ async function addPerson(list) {
 $('addPerson').addEventListener('click', () => $('personFile').click());
 $('personFile').addEventListener('change', (e) => { addPerson(e.target.files); e.target.value = ''; });
 $('prompt').dataset.placeholder = $('prompt').placeholder;
-// the add tile shows what it does: the photo, then that person talking as a drawn character
+// the add tile shows what it does: the photo, then that person talking as a drawn character, in
+// every style in turn (people/cycle.mp4, kitcut scripts/speaker-loops.py --cycle)
 (() => {
   const v = $('addPerson').querySelector('video');
   v.addEventListener('error', () => v.remove());
