@@ -332,7 +332,18 @@ The studio work, in order, behind a switch:
    through the site; a public figure's photo.
 
 Later, if customers ask for the person to look real rather than animated: a neural talking
-head per line on a GPU (Ditto, Apache-2.0, was the best of four measured on the laptop's 4 GB
-card on 2026-09-30, in a bench kept outside the repo), composited where the photo would be; or an API
-(Hedra, Kling Avatar, OmniHuman: ~$0.03-0.12 per second of face). And cloning the founders'
-own voices from a voice note (ElevenLabs), with their consent.
+head per line on a GPU, composited where the photo would be; or an API (Hedra, Kling Avatar,
+OmniHuman: ~$0.03-0.12 per second of face). Measured 2026-09-30 on the laptop's 4 GB card (a
+bench kept outside the repo; one photo, one 4.16 s line):
+
+| model | warm run | peak VRAM | the mouth | licence catch |
+|---|---|---|---|---|
+| Ditto (Ant Group) | 51-61 s | 2.0 GB | best: clear shapes and teeth, background intact; hangs open in pauses | Apache-2.0, but finds the face with InsightFace buffalo_l (non-commercial): swap it before any paid use |
+| JoyVASA | ~65 s | 2.1 GB | weak, lips roll in, startled eyes | MIT; same InsightFace detector; only a Chinese HuBERT released |
+| MuseTalk 1.5 | ~124 s | 3.9 GB | best-timed closures, still head, but erases a beard | MIT; face parser trained on non-commercial data |
+| SadTalker 256 | ~103 s | 2.7 GB | blurry face in a blurred box | Apache-2.0; Basel Face Model (non-commercial) |
+
+Ditto for a 60 s film with one face on screen at a time: ~9-11 min on the laptop; its TensorRT
+path (untested) is the way to go faster. A line must start after ~0.5 s of silence (it animates
+relative to the first frame). And cloning the founders' own voices from a voice note
+(ElevenLabs), with their consent.
