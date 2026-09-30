@@ -408,7 +408,9 @@ rm -rf $HAVE
 (cd "$STAGE" && tar -cf - --exclude=source-studio.json .) | tar -xf -
 find "$HOME_DIR/library" -path '*/films/*' -name "$ID.jpg" -delete  # the library's cached poster
 cd "$REMOTE"
-STUDIO_HOME="$HOME_DIR" .venv/bin/python studio/media.py --film "$ID" --revision </dev/null  # ffmpeg reads stdin: the rest of this script
+# capped like every job beside the live servers (KI-045): a scope runs in the foreground, here
+sudo systemd-run --scope --quiet --uid="$(id -un)" --gid="$(id -gn)" -p MemoryHigh=2G -p MemoryMax=3G \
+  env STUDIO_HOME="$HOME_DIR" nice -n 10 .venv/bin/python studio/media.py --film "$ID" --revision </dev/null  # ffmpeg reads stdin: the rest of this script
 STUDIO_HOME="$HOME_DIR" .venv/bin/python - <<'PY'
 import asyncio, json, os, sys
 sys.path.insert(0, "studio")
