@@ -220,8 +220,9 @@ def draw(spec, base_dir, report=False):
     return im.convert("RGB"), notes
 
 
-def shoot_html(page):
-    """A hand-designed thumbnail: a 1280x720 page, shot by headless Chromium.
+def shoot_html(page, size=(W, H)):
+    """A hand-designed thumbnail: a page of `size` (1280x720 unless a Short's
+    1080x1920 cover), shot by headless Chromium.
 
     The house style above is one grammar drawn by Pillow. A video that should
     look like nothing the channel has shipped before needs a page designed for
@@ -243,7 +244,7 @@ def shoot_html(page):
         base = [
             "--headless",
             "--screenshot=%s" % shot,
-            "--window-size=%d,%d" % (W, H),
+            "--window-size=%d,%d" % size,
             "--force-device-scale-factor=1",
             "--hide-scrollbars",
             "--virtual-time-budget=3000",
@@ -261,10 +262,10 @@ def shoot_html(page):
         else:
             sys.exit("%s produced no screenshot of %s" % (os.path.basename(got[0]), page))
         im = Image.open(shot).convert("RGB")
-    if im.size != (W, H):
+    if im.size != tuple(size):
         sys.exit(
             "the page shot %dx%d, not %dx%d -- give the page a fixed %dx%d body"
-            % (im.size[0], im.size[1], W, H, W, H)
+            % (im.size[0], im.size[1], *size, *size)
         )
     return im, page
 
@@ -273,6 +274,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--spec", help="the house-style spec (JSON)")
     ap.add_argument("--html", help="a hand-designed 1280x720 page instead of a spec")
+    ap.add_argument(
+        "--size", default="1280x720", help="--html page size, WxH; 1080x1920 for a Short's cover"
+    )
     ap.add_argument("--out")
     ap.add_argument("--list", action="store_true", help="print the layout; write nothing")
     args = ap.parse_args()
@@ -282,7 +286,7 @@ def main():
         if args.list:
             print("  --html: the page is the layout; nothing to list")
             return
-        im, spath = shoot_html(args.html)
+        im, spath = shoot_html(args.html, tuple(int(v) for v in args.size.lower().split("x")))
     else:
         spath = _env.resolve(args.spec, base=_env.workspace())
         spec = json.load(open(spath, encoding="utf-8"))
@@ -297,7 +301,7 @@ def main():
         sys.exit(
             "%s is %.1f MB, over YouTube's 2 MB limit; wrote a JPEG beside it" % (out, size / 1e6)
         )
-    print("  %s  %dx%d  %.0f KB" % (os.path.relpath(out, _env.ROOT), W, H, size / 1024))
+    print("  %s  %dx%d  %.0f KB" % (os.path.relpath(out, _env.ROOT), *im.size, size / 1024))
 
 
 if __name__ == "__main__":

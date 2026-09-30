@@ -2845,6 +2845,11 @@ upload. A failure there (an unverified channel) is printed and does not undo
 the upload.
 
 
+**A Short's cover: `--html page.html --size 1080x1920`.** The same shot at
+phone shape, set with `yt-update.py <id> --thumbnail`. On a Short the feed
+may still show a frame of the video; the cover is what the channel page, search
+and shares use.
+
 **A thumbnail designed for one video: `--html`.** The spec draws the house
 grammar; a video meant to look like nothing the channel has shipped needs a
 page of its own. `make-thumbnail.py --html projects/<id>/thumbnail.html` shoots
