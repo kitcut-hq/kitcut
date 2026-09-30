@@ -148,6 +148,33 @@ def secret(k, default=""):
     return (SECRETS.get(k) or default).strip()
 
 
+# a film's own pass to the voice relay (step_env): as secret in what a step prints as a key
+SCRUBBED = (*KNOWN_SECRETS, "ELEVENLABS_GRANT")
+
+
+def scrubber(env):
+    """A function taking every secret value a step was given (a key named in KNOWN_SECRETS, one
+    of the .env's secrets, a film's grant) out of a line it printed: what reaches Claude, the
+    film's events and the logs never carries one, whatever a script or a library prints."""
+    vals = sorted(
+        {
+            v
+            for k, v in (env or {}).items()
+            if isinstance(v, str) and len(v) >= 8 and (k in SCRUBBED or k in SECRETS)
+        },
+        key=len,
+        reverse=True,
+    )
+
+    def scrub(line):
+        for v in vals:
+            if v in line:
+                line = line.replace(v, "[redacted]")
+        return line
+
+    return scrub
+
+
 def step_env(film, kind=None, locks=None, home=None):
     """The environment one pipeline step runs with: the basics, TEMP inside the film, and only
     the keys its kind needs."""
@@ -364,10 +391,11 @@ async def run(argv, cwd, env, timeout, on_line=None, jobs=None):
     if jobs is not None:
         jobs.add(job)
     tail = []
+    scrub = scrubber(env)
 
     async def pump():
         async for raw in proc.stdout:
-            line = raw.decode("utf-8", "replace").rstrip()
+            line = scrub(raw.decode("utf-8", "replace").rstrip())
             if line.strip():
                 tail.append(line)
                 del tail[:-40]

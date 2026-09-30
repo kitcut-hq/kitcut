@@ -166,6 +166,54 @@ async def main():
         os.environ.pop("STUDIO_SCORER")
     expect("TEMP is inside the film", render["TEMP"].startswith(D.dir))
 
+    # a person's own ElevenLabs voice: its voice step gets the relay's pass and none of our voice
+    # keys; the pass is in no record; and whatever a step prints, a secret it was given (the pass
+    # among them) comes back redacted -- to Claude, the film's events and the logs alike
+    grant = "Gq7" * 14 + "x"
+    O = films.Film.create(
+        "an own voice",
+        5,
+        "drawn",
+        narrator={
+            "source": "elevenlabs",
+            "voice": "a1B2c3D4e5F6g7H8i9J0",
+            "model": "eleven_v3",
+            "jobs": 2,
+            "chars": 900,
+            "grant": grant,
+        },
+    )
+    own = procs.step_env(O, "voice")
+    expect(
+        "an own-voice film's voice step gets the relay and its pass, and no voice key of ours",
+        own.get("ELEVENLABS_GRANT") == grant
+        and own.get("ELEVENLABS_FILM") == O.id
+        and not any(
+            k in own for k in ("GEMINI_API_KEY", "ELEVENLABS_API_KEY", "GOOGLE_SERVICE_ACCOUNT_KEY")
+        ),
+    )
+    kept_files = []
+    for root, _, names in os.walk(O.dir):
+        for n in names:
+            with open(os.path.join(root, n), "rb") as fh:
+                if grant.encode() in fh.read():
+                    kept_files.append(os.path.relpath(os.path.join(root, n), O.dir))
+    expect(
+        "the pass is kept in temp/voice.json only (%s)" % kept_files,
+        kept_files == [os.path.join("temp", "voice.json")],
+    )
+    leak = (
+        "import os; print('grant=' + os.environ['ELEVENLABS_GRANT']); "
+        "print('key=' + os.environ.get('OPENROUTER_API_KEY', 'none'))"
+    )
+    code, tail = await procs.run([sys.executable, "-c", leak], O.dir, own, 60)
+    expect(
+        "a step that prints its pass and a key: both redacted in what comes back (%s)" % tail,
+        code == 0
+        and tail[0] == "grant=[redacted]"
+        and (tail[1] == "key=none" or tail[1] == "key=[redacted]"),
+    )
+
     # ---------------------------------------------------------------- the page
     os.environ["SKETCH_RENDER_OFFLINE"] = "1"
     R = import_module("sketch-render")

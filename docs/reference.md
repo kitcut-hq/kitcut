@@ -4271,6 +4271,10 @@ cap. It never sends the key, and the studio never holds it.
   `https://kitcut.ai/api/studio/voice`), `ELEVENLABS_GRANT`, `ELEVENLABS_FILM` and
   `KITCUT_SITE_TOKEN`. No studio ElevenLabs key and no Google keys, so a take cannot fall back to
   being paid by the studio.
+- Whatever a step prints, a secret it was given comes back as `[redacted]` (`procs.scrubber`: every
+  key named in `KNOWN_SECRETS`, the .env's secrets and the film's grant), in what reaches Claude, the
+  film's events and the logs. `test_isolation.py` checks it, and that the grant is in no file but
+  `temp/voice.json`.
 - `sketch-vo.py el_take` sends its normal request to
   `<relay>/v1/text-to-speech/<voice>/with-timestamps` with `Authorization: Bearer <grant>`,
   `X-Studio-Token` and `X-Film` in place of `xi-api-key`. The site's relay checks all three, the
