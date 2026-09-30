@@ -238,16 +238,19 @@ Only links it was given survive, chapters must fit the film, and a draft that pa
 back is refused. Try one by hand with `python studio/ytdraft.py --film <id> --sample-from @handle`
 (`--plan` prints the ask and its price). Details: `docs/reference.md`.
 
-**The thumbnail** (`thumbs.py`, `scripts/_thumb.py`): four options, each a still of the film itself
-with a few words on it, offered in the publish dialog. The same Claude call chooses them: it sees
-a sheet of the film's clean moments with their times (made first, ~12 stills; no Free-plan mark)
-and answers four `{at, words, layout, place}` -- one each of headline, card, panel and the picture
-alone. Once the draft is written, the job makes the options: the settled frame near each moment,
-the words where they hide nothing that matters, drawn by the film itself in its own look (its
-headline type, colours, cards and logo, read off it by `sketch/thumb.js`) in one browser run, and
-checks (legible at 168 px wide, 4.5:1 contrast, clear of YouTube's duration stamp, none of the
-film's own words cut into). An option that fails falls back (a glow of the film's paper, one of
-its cards, the still alone) before anyone sees it. The draft's answer carries them:
+**The thumbnail** (`thumbs.py`, `scripts/_thumb.py`): four options, each a moment of the film itself
+with a few big words on it, offered in the publish dialog. The same Claude call chooses them: it
+sees a sheet of the film's clean moments with their times (made first, ~12 stills; no Free-plan
+mark) and answers four `{at, words, layout, place}` -- headline, card, panel, headline, the first
+the video's main message. Once the draft is written, the job makes the options the way YouTube
+thumbnails are made: the settled frame near each moment with the film's own titles and labels left
+out of it, its subject (the pictures it drew there, else saliency) pushed in on one side, the words
+large on the other, drawn by the film itself in its own look (its title type and outline, colours,
+labels and logo, read off it by `sketch/thumb.js`) in one browser run; options 1 and 3 carry its
+logo. Then checks (legible at 168 px wide, 4.5:1 contrast, clear of YouTube's duration stamp). An
+option that fails falls back (a glow of the film's paper, one of its cards, the frame alone) before
+anyone sees it; options saved under an older design (`_thumb.DESIGN`) are made again. The draft's
+answer carries them:
 
 ```bash
 # ... "thumbs": {"state": "making"} while they are made (~10-15 s), then

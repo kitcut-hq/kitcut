@@ -11,14 +11,20 @@ nobody can read at feed size -- or one that does not look like the film it sells
           film's own words while a card may hide one whole but never cut through it, the film's
           type chosen first and a type that has the glyphs when it has not, a .woff2 film font
           measured through the tooling's .ttf of its family, the film's ink kept where it reads
-          and deepened just enough where it does not, the concepts' rules (four, apart, short,
-          not the title, one layout each; an old "slab" read as a card), the fallback order, and
-          a frame caught mid-crossfade against a settled one
+          and deepened just enough where it does not, the film's outline and the fills inside it
+          (a collage film's cream and lemon edged in indigo), the concepts' rules (four, apart,
+          short, the title's message allowed, the layouts as listed -- a second headline; an old
+          "slab" read as a card, an old "still" given a layout and asked for words), which options
+          carry the logo, the subject read off the film's pictures (not its logo, not a painted
+          scene, not a prop), the push and the side the words take, the film's frame border and a
+          progress bar's labels cropped, the discs and cards that would show empty once the words
+          are left out, the fallback order, and a frame caught mid-crossfade against a settled one
   live    the repo's example film (a crayon film in Caveat) in a throwaway copy, drawn by headless
           Edge/Chrome as the studio draws it: the probe reads its look (hand-drawn, its Caveat,
-          its palette), four options are made from four concepts and every one passes every
-          check in the film's own type -- then a headline forced over the film's own title must
-          fail the "hides the film's words" check. Skipped, and said so, with no browser.
+          its palette), its uncluttered still leaves its title out, four options are made from
+          four concepts and every one passes every check in the film's own type -- then a headline
+          forced over the film's own title must fail the "hides the film's words" check. Skipped,
+          and said so, with no browser.
 
 Invoke as:  python scripts/check-thumbnail.py
             python scripts/check-thumbnail.py --rules-only   (no browser, no OCR)
@@ -217,10 +223,23 @@ def rules():
         {"at": 2, "layout": "headline", "words": "Count *three* stars", "place": "top"},
         {"at": 5, "layout": "card", "words": "Eyes grow heavy"},
         {"at": 8, "layout": "panel", "words": "Olga's trick", "place": "left"},
-        {"at": 11, "layout": "still", "words": ""},
+        {"at": 11, "layout": "headline", "words": "Could *not* sleep", "place": "right"},
     ]
     cs, notes, probs = _thumb.check_concepts(good, 20, "Little Hedgehog Could Not Sleep")
-    check("four good concepts pass", len(cs) == 4 and not probs, probs)
+    check("four good concepts pass, two of them headlines", len(cs) == 4 and not probs, probs)
+    check(
+        "the layouts as the writer gave them",
+        [c["layout"] for c in cs] == ["headline", "card", "panel", "headline"],
+        cs,
+    )
+    old_still = [*good[:3], {"at": 11, "layout": "still", "words": ""}]
+    cs, _, probs = _thumb.check_concepts(old_still, 20)
+    check(
+        "an old draft's still takes the free layout and is asked for words",
+        cs[3]["layout"] == "headline"
+        and any(p["n"] == 4 and "needs words" in p["text"] for p in probs),
+        (cs[3], probs),
+    )
     old = [dict(good[0]), dict(good[1], layout="slab"), *good[2:]]
     cs, _, probs = _thumb.check_concepts(old, 20)
     check("an old draft's slab is a card", cs[1]["layout"] == "card" and not probs, (cs, probs))
@@ -232,8 +251,8 @@ def rules():
     rep = [dict(good[0], words="Hedgehog could not sleep"), *good[1:]]
     _, _, probs = _thumb.check_concepts(rep, 20, "Little Hedgehog Could Not Sleep")
     check(
-        "words that repeat the title are a problem",
-        any(p["n"] == 1 and "repeat" in p["text"] for p in probs),
+        "the title's message in fewer words is allowed (2026-09-30: 'a random still')",
+        not probs,
         probs,
     )
     long = [dict(good[0], words="a b c d e"), *good[1:]]
@@ -253,6 +272,110 @@ def rules():
         _thumb.FALLBACK["headline"] == ["headline+glow", "card", "still"],
     )
     check("a panel falls to a card before the picture alone", _thumb.FALLBACK["panel"][0] == "card")
+    check(
+        "the logo on options 1 and 3; all or none when asked",
+        [_thumb.wants_logo(n, None) for n in (1, 2, 3, 4)] == [True, False, True, False]
+        and _thumb.wants_logo(2, "all")
+        and not _thumb.wants_logo(1, "none"),
+    )
+
+    print("\nthe film's shout")
+    lemon, cream, indigo = "#ffd84a", "#fffaf0", "#1f1b5c"
+    styles = [
+        {"kind": "headline", "font": "Oswald", "wt": "700", "col": lemon, "max": 176, "n": 4,
+         "letters": 36, "upper": 36, "stroke": {"w": 0.117, "col": indigo}},
+        {"kind": "headline", "font": "Oswald", "wt": "700", "col": indigo, "max": 118, "n": 8,
+         "letters": 112, "upper": 112, "stroke": None},
+        {"kind": "headline", "font": "Oswald", "wt": "700", "col": cream, "max": 80, "n": 2,
+         "letters": 44, "upper": 44, "stroke": {"w": 0.15, "col": indigo}},
+        {"kind": "tape", "font": "Oswald", "wt": "600", "col": cream, "max": 76, "n": 28,
+         "letters": 376, "upper": 376, "stroke": None},
+    ]  # fmt: skip
+    col = _thumb.colour
+    o = _thumb.outline_of(
+        styles, col("#f4ecd8"), col("#2b2870"), col("#2a2521"), col("#ffd76a"), col("#f6cd4b")
+    )
+    check(
+        "a collage film's outline: cream words, lemon for the starred one, edged in its indigo",
+        o
+        and o["fill"] == col(cream)
+        and o["accent"] == col(lemon)
+        and o["stroke"]["col"] == col(indigo)
+        and abs(o["stroke"]["w"] - 0.117) < 1e-6,
+        o,
+    )
+    plain_styles = [dict(x, stroke=None) for x in styles]
+    check(
+        "a film that never outlines a title has no outline",
+        _thumb.outline_of(
+            plain_styles,
+            col("#f4ecd8"),
+            col("#2b2870"),
+            col("#2a2521"),
+            col("#ffd76a"),
+            col("#f6cd4b"),
+        )
+        is None,
+    )
+
+    print("\nthe picture under the words")
+    W, H = _thumb.size()
+    boxes = [
+        {"name": "doctor", "box": [1268, 309, 1534, 962]},
+        {"name": "cashier", "box": [1494, 317, 1815, 949]},
+        {"name": "pic_logo", "box": [118, 118, 308, 308]},
+        {"name": "kettle", "box": [900, 100, 960, 170]},
+        {"name": "scene", "box": [-20, -20, W + 20, H + 20]},
+    ]
+    S, how = _thumb.subject_box(frame(), boxes)
+    check(
+        "the subject is the film's pictures: not its logo, a painted scene or a prop",
+        how == "pictures" and tuple(S) == (1268, 309, 1815, 962),
+        (S, how),
+    )
+    flat = Image.new("RGB", (W, H), (46, 185, 165))
+    comp = _thumb.compose(flat, boxes[:3])
+    check(
+        "the words take the free side and the camera pushes the subject in",
+        comp["side"] == "left"
+        and comp["zoom"] > 1.3
+        and comp["subject"][3] - comp["subject"][1] > 0.8 * H,
+        {k: comp[k] for k in ("side", "zoom", "subject")},
+    )
+    check(
+        "a push that leaves the logo out does not cut it in two", comp["logo"] is None, comp["logo"]
+    )
+    framed = flat.copy()
+    ImageDraw.Draw(framed).rectangle([0, 0, W, 44], fill=(43, 40, 112))
+    check(
+        "the film's own frame border is found",
+        any(b[1] == 0 and 36 <= b[3] <= 52 for b in _thumb.frame_border(framed)),
+        _thumb.frame_border(framed),
+    )
+    backs = [
+        {"name": "#burst", "id": "empty", "box": [100, 100, 230, 230]},
+        {"name": "#burst", "id": "behind-heart", "box": [600, 400, 1000, 800]},
+        {"name": "heart", "box": [680, 450, 1010, 765]},
+        {"name": "#card", "id": "card|title", "box": [500, 40, 1400, 200]},
+        {"name": "#words", "box": [950, 115, 952, 117]},
+        {"name": "#card", "id": "card|screen", "box": [100, 500, 500, 1000]},
+        {"name": "#words", "box": [300, 520, 302, 522]},
+    ]
+    screen = flat.copy()
+    d = ImageDraw.Draw(screen)
+    for y in range(560, 960, 30):  # an app screen's rows, left on the clean picture
+        d.line([150, y, 450, y], fill=(20, 20, 20), width=6)
+    hide = _thumb.empty_backings(backs, screen)
+    check(
+        "what would show empty goes: a disc with nothing on it, a title card whose words are out",
+        "empty" in hide and "card|title" in hide,
+        hide,
+    )
+    check(
+        "what still holds something stays: a burst behind a heart, a screen with its rows",
+        "behind-heart" not in hide and "card|screen" not in hide,
+        hide,
+    )
 
     print("\nthe frame")
     still = frame()
@@ -306,8 +429,17 @@ def live():
         {"at": 3.6, "layout": "headline", "words": "Still *waiting*?", "place": None},
         {"at": 6.6, "layout": "card", "words": "Send it on", "place": None},
         {"at": 8.6, "layout": "panel", "words": "A friend can *use* it", "place": None},
-        {"at": 11.0, "layout": "still", "words": ""},
+        {"at": 11.0, "layout": "headline", "words": "Pass it *on*", "place": None},
     ]
+    t0 = 3.6
+    st0 = _thumb.render_stills(film, [t0, _thumb.DECLUTTER + t0])
+    seen = _thumb.text_boxes(_thumb.load_still(st0[t0]), min_h=40)
+    left = _thumb.text_boxes(_thumb.load_still(st0[_thumb.DECLUTTER + t0]), min_h=40)
+    check(
+        "the uncluttered still leaves the film's own title out",
+        seen and len(left) < len(seen),
+        (seen, left),
+    )
     opts = _thumb.make_options(film, concepts, os.path.join(home, "out"), log=print)
     for o in opts:
         ck = o["checks"]
@@ -327,7 +459,7 @@ def live():
         check("option %d: in the film's own Caveat" % o["n"], o["font"] == "Caveat", o["font"])
     check(
         "four layouts asked, four kept",
-        [o["layout"] for o in opts] == ["headline", "card", "panel", "still"],
+        [o["layout"] for o in opts] == ["headline", "card", "panel", "headline"],
         [(o["layout"], o["notes"]) for o in opts],
     )
     # a headline forced over the film's own title must fail

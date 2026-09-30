@@ -758,3 +758,20 @@ the approved greeting joined to each opening's own «Сьогодні — про
 word's stress, several takes of a line containing one, the take picked by comparing the word with
 an approved recording of it -- once that comparison is measured against takes the person labels
 by ear.
+
+### KI-048 · fixed · studio · A collage film's thumbnails, moments sheet and share picture had no cut-outs
+
+**Symptom.** 2026-09-30: the four YouTube thumbnail options for gvenrk (a collage kids' episode,
+clay doctor and cashier on cut paper) were slides with empty starbursts where the characters
+should be -- the channel's owner called them "a random still". The moments sheet the draft's
+Claude call chooses from had the same holes, so it chose frames without seeing their subjects,
+and so did every collage film's share-page picture.
+**Cause.** `_thumb.film_images` kept its own copy of where a painted picture lives and knew only
+`images/<name>.jpg`; a cut-out is `.webp` (it keeps its transparency). The stills' manifest copy
+drops `paint` and lists the pictures itself, so none of the cut-outs reached the page and
+`SK.cutout` drew nothing.
+**Fix.** One rule, `_sketch.painted_images()`, used by the render and the thumbnails alike; the
+stills cache key names how stills are drawn (`_thumb.STILLS`, now v2), so every film's stills are
+made again, and options saved under the old design are remade (`_thumb.DESIGN`).
+**Lesson.** Two copies of one path rule drift; and a check that reads only the finished picture
+(legible, in contrast) passes a picture of nothing. Look at the frames.

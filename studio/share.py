@@ -92,19 +92,19 @@ or came only from the brief, do not state more than the film does.
 - The brief is the request the film was made from, and it is private. Do not quote it, restate \
 it as a request, or say the film was asked for, generated or made with AI.
 
-Then choose two pictures for its link. Each is a still of the film at a moment you pick from the \
-sheet of its moments (the time is printed on every frame), with a few words set on it:
-- "at": the moment, in seconds, from the sheet -- one where what the film is about is on screen \
-and fully drawn. Two different moments.
+Then choose two pictures for its link, made the way YouTube thumbnails are: one moment of the \
+film, its subject pushed in large on one side, and a few big words on the other -- the only \
+words on the picture (the film's own titles and labels are left out of it), set in the film's \
+own title type and colours:
+- "at": the moment, in seconds, from the sheet of its moments (the time is printed on every \
+frame) -- one where the film's subject is on screen, large and fully drawn: a character, an \
+object, a chart. Two different moments.
 - "layout": one each of "headline" (the words large over the picture) and "card" (the words on \
-one of the film's own cards, with its logo when it shows one). Both are drawn in the film's own \
-look -- its headline type, its colours, its cards -- so write the words the way the film writes \
-its own titles.
-- "words": at most 4 words and 32 characters, in the film's language, that make the right person \
-want to watch: they add to the title and never repeat it, and hold to the film like everything \
-above. Star one word to colour it (write it as *word*).
-- "place": where the words go so they hide nothing that matters in that frame: top, bottom, \
-left, right, top-left, top-right or bottom-left.
+the film's own label or card).
+- "words": at most 4 words and 32 characters, in the film's language: the film's main message, \
+the title's question or promise in fewer words, that makes the right person want to watch, held \
+to the film like everything above. Star one word to colour it (write it as *word*).
+- "place": the side the words go on, so they leave the subject clear: left, right, top or bottom.
 Put first the one you would choose yourself.
 
 Answer with one JSON object and nothing else:

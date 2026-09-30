@@ -43,6 +43,12 @@ def main():
     ap.add_argument("--channel", default="Your channel", help="channel name on feed.jpg")
     ap.add_argument("--out", help="where the options go (default <film>/temp/thumbs/options)")
     ap.add_argument("--ocr", action="store_true", help="read the words back at feed widths")
+    ap.add_argument(
+        "--logo",
+        choices=("config", "all", "none"),
+        default="config",
+        help="which options carry the film's logo (config: logo.options)",
+    )
     ap.add_argument("--list", action="store_true", help="print everything; write no options")
     a = ap.parse_args()
 
@@ -77,7 +83,7 @@ def main():
             print("  PROBLEM: %s" % p["text"])
         concepts = _thumb.fill_concepts(concepts, moments, length)
 
-    opts = _thumb.make_options(film, concepts, out)
+    opts = _thumb.make_options(film, concepts, out, logo=a.logo)
     for o in opts:
         ck = dict(o["checks"])
         ck.pop("ink_box", None)

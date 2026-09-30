@@ -92,7 +92,7 @@ THUMBS = [
     {"at": 3.5, "layout": "headline", "words": "*Faster* forms", "place": "top"},
     {"at": 8.6, "layout": "card", "words": "Nothing to change", "place": "left"},
     {"at": 12.6, "layout": "panel", "words": "Right fields, first time", "place": "right"},
-    {"at": 6.0, "layout": "still", "words": ""},
+    {"at": 6.0, "layout": "headline", "words": "Forms come back *sooner*", "place": "left"},
 ]
 
 
@@ -136,9 +136,7 @@ async def main():
     check("## How to fill out PDF forms" in text, "the channel's uploads in the ask")
     none = ytdraft.ask_text(mat, {"id": "x", "title": "New"}, [])
     check("No uploads to learn from" in none, "a channel with no uploads says so")
-    check(
-        '"thumbnails"' in text and "never the bottom right" in text, "the thumbnails are asked for"
-    )
+    check('"thumbnails"' in text and "main message" in text, "the thumbnails are asked for")
     check(mat["sheet"] is None and mat["moments"], "no sheet made here, but the moments", mat)
     moments = ytdraft.ask_text(dict(mat, sheet=b"jpeg", moments_sheet=True), CHANNEL, [])
     check("the film's moments, in order" in moments, "the sheet is the film's moments")
@@ -150,31 +148,34 @@ async def main():
     title = good()["title"]
     cs, _, probs = ytdraft.check_thumbs(good(), mat, title)
     check(len(cs) == 4 and not probs, "four good thumbnails pass", probs)
-    check(cs[0]["place"] == "top" and cs[3]["words"] == "", "with their places; a still, no words")
-    bad_thumbs = [
-        dict(THUMBS[0], words="Acme runs the new engine"),
-        *THUMBS[1:3],
-        dict(THUMBS[3], words="dropped"),
-    ]
+    check(
+        cs[0]["place"] == "top" and [c["layout"] for c in cs][::3] == ["headline", "headline"],
+        "with their places; the first and the fourth headlines",
+        cs,
+    )
+    msg = [dict(THUMBS[0], words="Acme runs new engine"), *THUMBS[1:]]
+    _, _, probs = ytdraft.check_thumbs(good(thumbnails=msg), mat, title)
+    check(not probs, "the title's message on the picture is allowed", probs)
+    bad_thumbs = [dict(THUMBS[0], words="one two three four five"), *THUMBS[1:]]
     cs, notes, probs = ytdraft.check_thumbs(good(thumbnails=bad_thumbs), mat, title)
     check(
-        any("repeat the title" in p["text"] and p["n"] == 1 for p in probs),
-        "words that repeat the title are a problem",
+        any("too long" in p["text"] and p["n"] == 1 for p in probs),
+        "five words are too many",
         probs,
     )
+    old = [*THUMBS[:3], dict(THUMBS[3], layout="still", words="")]
+    cs, notes, probs = ytdraft.check_thumbs(good(thumbnails=old), mat, title)
     check(
-        cs[3]["words"] == "" and any("dropped" in n for n in notes),
-        "a still's words are dropped, and said so",
-        notes,
+        cs[3]["layout"] == "headline"
+        and any(p["n"] == 4 and "needs words" in p["text"] for p in probs),
+        "an old draft's still takes the free layout and is asked for words",
+        (cs, probs),
     )
-    long = [dict(THUMBS[0], words="one two three four five"), *THUMBS[1:]]
-    _, _, probs = ytdraft.check_thumbs(good(thumbnails=long), mat, title)
-    check(any("too long" in p["text"] for p in probs), "five words are too many", probs)
     twice = [dict(t, layout="card") for t in THUMBS]
     cs, notes, _ = ytdraft.check_thumbs(good(thumbnails=twice), mat, title)
     check(
-        sorted(c["layout"] for c in cs) == sorted(["headline", "card", "panel", "still"]),
-        "one of each layout, the repeats given the missing ones",
+        sorted(c["layout"] for c in cs) == sorted(["headline", "card", "panel", "headline"]),
+        "the layouts as listed, the repeats given the missing ones",
         [c["layout"] for c in cs],
     )
     fixed, note = ytdraft.repair(cs[:1], [{"n": 1, "text": "x"}], mat)

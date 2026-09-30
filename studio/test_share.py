@@ -231,7 +231,7 @@ async def main():
     check(any("exactly two" in p["text"] for p in probs), "three are too many", probs)
     rep = [dict(THUMBS[0], words="Acme moves every account"), THUMBS[1]]
     _, _, probs = ytdraft.check_thumbs(good(thumbnails=rep), mat, title, 2, share.LAYOUTS)
-    check(any("repeat the title" in p["text"] for p in probs), "words that repeat the title", probs)
+    check(not probs, "the title's message on the picture is allowed", probs)
     fixed, _ = ytdraft.repair(cs[:1], [{"n": 1, "text": "x"}], mat, n=2)
     check(len(fixed) == 2, "repaired to two, not four", fixed)
 

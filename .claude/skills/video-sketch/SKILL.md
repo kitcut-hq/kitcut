@@ -78,13 +78,17 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    least as good at the same `cq`, but a bigger master on grainy films. The studio renders
    this way; the script's default is still the pipe. It falls back to ffmpeg by itself where the browser cannot encode.
 9. **Publish** with `yt-upload.py --channel <handle>` — unlisted unless told otherwise. For a
-   thumbnail, make four from the film's own stills: `python studio/ytdraft.py --film <folder>
-   --thumbs` (Claude picks the moments and words; ~$0.06) or `python scripts/thumb-options.py
-   --film <folder> --concepts c.json` (your own), then look at `feed.jpg` -- the options at
-   YouTube's feed sizes -- and pass the one you pick to `yt-upload.py --thumbnail`. Every option
-   has already passed the checks (legible at 168 px, contrast, clear of the duration stamp), and
-   is drawn by the film in its own type, colours, cards and logo -- so give the film's titles to
-   `SK.txt` and its logo a name with `logo` in it, and the thumbnail finds them.
+   thumbnail, make four from the film's own frames: `python studio/ytdraft.py --film <folder>
+   --thumbs` (Claude picks the moments and words, the first the video's main message; ~$0.06) or
+   `python scripts/thumb-options.py --film <folder> --concepts c.json [--logo all|none]` (your
+   own), then look at `feed.jpg` -- the options at YouTube's feed sizes -- and pass the one you
+   pick to `yt-upload.py --thumbnail`. They are made the way YouTube thumbnails are: the film's
+   own titles and labels left out of the frame, its subject pushed in on one side, the message
+   large on the other in the film's title type and outline, its logo on options 1 and 3. Every
+   option has passed the checks (legible at 168 px, contrast, clear of the duration stamp). So
+   give the film's titles to `SK.txt` / `SK.headline` (an outline on them carries into the
+   thumbnail), its labels to `SK.tape`, its pictures to `SK.image` / `SK.cutout` (their boxes
+   are the subject), and its logo a name with `logo` in it -- the thumbnail finds them all.
 10. **Report the timings** (`--timings`) with the deliverables.
 
 ## A collage film (mixed media, paper cut-out, "newspaper" motion design)

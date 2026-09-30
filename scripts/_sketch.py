@@ -64,15 +64,26 @@ def load(path):
             with open(rel(m, m["paint"]), encoding="utf-8") as f:
                 m["_paint_file"], m["paint"] = rel(m, m["paint"]), json.load(f)
         m["images"] = dict(m.get("images") or {})
-        for im in m["paint"].get("images", []):
-            kind = ".webp" if im.get("cutout") else ".jpg"  # a cut-out keeps its transparency
-            p = os.path.join("images", safe_name(im.get("name"), "paint image name") + kind)
-            if os.path.exists(rel(m, p)):
-                m["images"].setdefault(im["name"], p)
+        for name, p in painted_images(m["paint"], d).items():
+            m["images"].setdefault(name, p)
     # "engine": "engine" -- a folder holding the film's own engine.js and props.js (Sketch Studio
     # gives every film a copy it may extend); the repo's sketch/ otherwise
     m["_engine"] = rel(m, m["engine"]) if m.get("engine") else os.path.join(_env.ROOT, "sketch")
     return m
+
+
+def painted_images(paint, film_dir):
+    """{name: path relative to film_dir} of the pictures a paint spec (paint.json) has painted
+    so far: a cut-out is images/<name>.webp (it keeps its transparency), a scene images/<name>.jpg.
+    The one rule for where a painting lives -- the thumbnails kept their own copy that knew only
+    .jpg, and every collage film's cut-outs were missing from its thumbnails (2026-09-30)."""
+    out = {}
+    for im in (paint or {}).get("images", []):
+        kind = ".webp" if im.get("cutout") else ".jpg"
+        p = os.path.join("images", safe_name(im.get("name"), "paint image name") + kind)
+        if os.path.exists(os.path.join(film_dir, p)):
+            out[im["name"]] = p
+    return out
 
 
 def rel(m, p):

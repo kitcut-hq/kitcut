@@ -1,13 +1,15 @@
-"""A film's YouTube thumbnail options: four stills of the film itself, each with a few words.
+"""A film's YouTube thumbnail options: four moments of the film itself, each with a few big words.
 
 The draft (ytdraft.py) picks them: Claude, which already writes the title and description from
 the film, is shown the film's moments -- a sheet of clean stills with their times, made here --
-and answers with four {at, words, layout, place}. The options are then made from the film with
-scripts/_thumb.py, drawn by the film itself in its own look (its headline type, colours, cards,
-logo): the frame near each moment that is not mid-transition, the words set where they hide the
-least of it, checked to be legible at YouTube's smallest size, in contrast, and clear of its
-duration stamp and of the film's own words. An option that fails a check falls back (a glow of
-the film's paper, one of its cards, the still alone) before anyone sees it.
+and answers with four {at, words, layout, place}, the first the video's main message. The
+options are then made from the film with scripts/_thumb.py, drawn by the film itself in its own
+look (its title type and outline, colours, labels, logo) the way YouTube thumbnails are made: the
+frame near each moment that is not mid-transition, the film's own words left out of it, its
+subject pushed in on one side and the words large on the other, checked to be legible at
+YouTube's smallest size, in contrast, and clear of its duration stamp. An option that fails a
+check falls back (a glow of the film's paper, one of its cards, the frame alone) before anyone
+sees it. Options saved under an older design (_thumb.DESIGN) are made again.
 
     outputs/youtube/<channel>/thumb-<n>.jpg   the options (served by /files, token or signed)
     youtube/thumbs-<channel>.json             what they are, keyed by the draft they came from
@@ -111,6 +113,8 @@ def saved(film, channel, key=None):
         return None
     if not isinstance(rec, dict) or (key is not None and rec.get("key") != key):
         return None
+    if rec.get("design") != _thumb.DESIGN:  # made under an older design: made again
+        return None
     if not all(os.path.exists(film.path("outputs", o["path"])) for o in rec.get("options") or []):
         return None
     return rec
@@ -127,6 +131,7 @@ def make_now(film, channel, draft, want=4):
     opts = _thumb.make_options(film.dir, concepts, d, log=lambda *_: None)
     rec = {
         "key": draft.get("key"),
+        "design": _thumb.DESIGN,
         "channel": channel,
         "options": [
             {
@@ -135,6 +140,7 @@ def make_now(film, channel, draft, want=4):
                 "layout": o["layout"],
                 "requested": o["requested"],
                 "words": _thumb.plain(o["words"]),
+                "logo": o.get("logo", False),
                 "at": o["at"],
                 "t": o["t"],
                 "checks": {k: v for k, v in o["checks"].items() if k != "ink_box"},

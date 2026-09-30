@@ -2734,26 +2734,30 @@ refuses opaque pages. `yt-upload.py --thumbnail` sets the image after the
 upload. A failure there (an unverified channel) is printed and does not undo
 the upload.
 
-## Thumbnail options: four stills of the film (`thumb-options.py`, `_thumb.py`)
+## Thumbnail options: four moments of the film, made like YouTube's (`thumb-options.py`, `_thumb.py`)
 
 kitcut.ai's "Publish to YouTube" offers four thumbnails, and the person picks one. Each is **a
-still of the film itself** with at most four words on it -- no stock art, no generated imagery.
+moment of the film itself**, made the way YouTube thumbnails are: the film's own titles and labels
+left out of the frame, its subject pushed in large on one side, and at most four big words on the
+other -- the first option the video's main message -- in the film's title type and outline, with
+its logo on options 1 and 3. No stock art, no generated imagery.
 The studio makes them (`studio/thumbs.py`, see `studio/README.md`); the machinery is
 `scripts/_thumb.py`, and this CLI runs it on any finished sketch film:
 
 ```powershell
 python scripts/thumb-options.py --film <film dir> --moments                 # the labelled moments sheet only
 python scripts/thumb-options.py --film <film dir> --concepts c.json --list  # frames, layouts, every check; no JPEGs
-python scripts/thumb-options.py --film <film dir> --concepts c.json --title "..." [--ocr]
+python scripts/thumb-options.py --film <film dir> --concepts c.json --title "..." [--ocr] [--logo all|none]
 python scripts/thumb-options.py --film <film dir> --auto                    # the baseline: frames at 25/50/75%, no words
 python studio/ytdraft.py --film <film dir> --thumbs                         # Claude's own concepts, then the options
 python scripts/check-thumbnail.py                                           # the rules, plus the example film drawn
 python studio/test_thumbs.py                                                # end to end on the example film
 ```
 
-A concept is `{"at": s, "words": "Can't *sleep*?", "layout": "headline|card|panel|still",
-"place": "top|bottom|left|right|top-left|top-right|bottom-left"}` (an older draft's `slab` is read
-as `card`); one word may be starred for the film's accent colour. Output: `thumb-N.jpg`
+A concept is `{"at": s, "words": "Can't *sleep*?", "layout": "headline|card|panel",
+"place": "left|right|top|bottom"}` -- the writer gives headline, card, panel, headline (an older
+draft's `slab` is read as `card`; its `still` takes the free layout and is asked for words; the
+still is now only the last fallback); one word may be starred for the film's accent colour. Output: `thumb-N.jpg`
 (1920x1080, well under YouTube's 2 MB), `sheet.jpg` (side by side) and `feed.jpg` (at YouTube's
 360/246/168-px sizes, dark and light).
 
@@ -2762,19 +2766,30 @@ Instafill film's thumbnail in Instafill's serif, amber and white cards, a crayon
 hand lettering on its paper. So nothing is laid over the picture from outside: the words, cards,
 panels and logo are drawn by the film's own engine, in the film's own type and palette, by
 `sketch/thumb.js`, which runs ahead of the film's code (the manifest's `head` scripts, a
-`sketch-render.py` key for exactly this) and does two jobs:
+`sketch-render.py` key for exactly this) and does three jobs:
 
-- *The probe* wraps `SK.txt`, `SK.card` and `SK.image` while the stills render and notes every
-  text style (font, weight, colour, largest size, outline), card (fill, corners, outline,
-  shadow, area) and picture (a logo) the film draws. With the palette (`SK.C`), the ground and
-  the style (crayon boils, clean does not), `SK.REPORT()` returns it; `player.html` posts it to
-  `/report` after the stills and `sketch-render.py` writes it as `report.json` beside them.
-  `_thumb.film_style()` reads it (cached as `style.json`, merged over every stills run).
+- *The probe* wraps `SK.txt`, `SK.card` and `SK.image` -- and on a collage film `SK.headline`,
+  `SK.tape` and `SK.cutout`, which set its titles, labels and cut-outs -- while the stills
+  render and notes every text style (font, weight, colour, largest size, outline, case), card
+  (fill, corners, outline, shadow, area), label strip (its colour and ink) and picture the film
+  draws. With the palette (`SK.C`), the ground and the style (crayon boils, clean does not),
+  `SK.REPORT()` returns it; `player.html` posts it to `/report` after the stills and
+  `sketch-render.py` writes it as `report.json` beside them. `_thumb.film_style()` reads it
+  (cached as `style.json`, merged over every stills run).
+- *The clean picture*: on an option marked `declutter`, and always on the `4000+t` pass, the film's
+  own words are left out -- `SK.txt` from `declutter.min_words_px` (34) up, every `SK.headline`,
+  `SK.tape`, `SK.ransom`, `SK.stamp` and marker (`SK.mark`, `SK.arrow`) -- by drawing them onto
+  nothing (the calls still run, so what they return and cache is unchanged). Pictures, cards,
+  charts and small print (an app's screen) stay. The `4000+t` pass records where each picture,
+  card, burst and left-out word landed (`boxes.json` beside the stills); an option's `hide` names
+  the bursts and cards that would show empty (a disc that carried a chapter number, a title card
+  whose words are out -- a card only when its inside is flat on the clean picture).
 - *The overlay*: `SK.THUMB.options`, keyed by a still's time, says what to add -- lines of word
-  runs, a card, a panel with a rule, a logo, a glow, a camera slide or push -- already laid out
-  in Python. A still's time picks the pass: `t` the film alone, `1000+t` the thumbnail,
-  `2000+t` its letters white on black, `3000+t` everything it added white on black (grain and
-  vignette off for the two masks). One browser run draws every option's three passes.
+  runs in the film's outline, a card or strips like the film's labels, a panel with a rule, the
+  logo as a round paper badge, a glow, the camera's push and slide -- already laid out in Python.
+  A still's time picks the pass: `t` the film alone, `1000+t` the thumbnail, `2000+t` its letters
+  white on black, `3000+t` everything it added white on black (grain and vignette off for the two
+  masks), `4000+t` the clean picture alone. One browser run draws every option's three passes.
 
 **How an option is made.**
 1. *Stills* come from a copy of the film's manifest without its `tail`: a Free film's "made with
@@ -2785,26 +2800,46 @@ panels and logo are drawn by the film's own engine, in the film's own type and p
 2. *Moments*: just before each narration line ends (what the line is about is drawn by then),
    6-12 of them, a second apart, on one labelled sheet that the draft's Claude call sees.
 3. *Settle*: around each chosen moment (±0.6 s) the frame whose ±0.2 s neighbours differ least,
-   among the ones that are not thin (a scene not drawn in yet, a fade).
-4. *The film's look* (`film_style`): its text styles biggest first (its headline type) with
-   their colours and outlines, then the tooling's type for words its type has no glyphs for or
-   a film with no text of its own; its paper, text, ink and accent; its biggest card (else one of
-   its paper edged in its accent -- a hand-drawn note on crayon); a picture named `*logo*`.
-   A `.woff2` film font is measured through the tooling's `.ttf` of the same family (the
-   example film's Caveat), a variable font at the weight the film draws it.
-5. *Layout*, in Python, with the font files the page draws with: the largest cap height that
-   fits in at most two lines (four on a panel), in the film's ink where it reads with a margin
-   (`ink_margin`) and otherwise the nearest of its colours deepened just enough, the starred
-   word in its accent; placed where it hides the least of the subjects -- inside the writer's
-   `place` first. Layouts: *headline* (words on the picture, touching none of the film's own;
-   on a busy spot, a soft glow of the film's paper goes behind them), *card* (the film's card,
-   its logo in a top band, tilted a touch on crayon), *panel* (the film's paper on one side, a
-   rule of its accent, its logo above the words, the camera slid so the picture's busy part
-   stays in view), *still* (the camera pushed in a little when that keeps the subjects whole).
-6. *Draw* (`paint`): one browser run of the film with the spec, three passes an option;
+   among the ones that are not thin (a scene not drawn in yet, a fade). The same run draws each
+   candidate's clean picture (`4000+t`).
+4. *The film's look* (`film_style`): its titles biggest first (its headline type: `SK.txt`, and
+   `SK.headline` on a collage film; a label's type after them) with their colours, case --
+   a film that titles in capitals gets capitals -- tracking and outlines, then the tooling's
+   type for words its type has no glyphs for or a film with no text of its own; its *outline*
+   (`outline_of`: the edge of its biggest outlined title, the most neutral outlined fill for the
+   words and another for the starred one -- a collage film's cream and lemon Oswald in indigo);
+   its paper, text, ink and accent; its label strip when it labels with strips more than it uses
+   cards, else its biggest card (else one of its paper edged in its accent -- a hand-drawn note on
+   crayon); a picture named `*logo*`, round when it is an opaque square picture. A `.woff2` film
+   font is measured through the tooling's `.ttf` of the same family (the example film's Caveat), a
+   variable font at the weight the film draws it.
+5. *Compose* (`compose`): the subject is the pictures the film drew in the frame (not its logo,
+   not a painted scene filling it, not a speck or a prop under 40% of the biggest), else where the
+   clean picture's saliency holds its middle 80%. Every side for the words (half the frame across,
+   40% down), push (1.0 to 1.5x; 1.15x on a painted scene, 1.25x on a guessed subject) and
+   position is scored: the subject's height on screen, less what of it is under the words or off
+   screen, less every other picture or card cut in two, less the small print and the film's own
+   frame border left in view (a progress bar's labels are cropped), never the logo cut in two; the
+   writer's `place` breaks near-ties. The film draws itself again at the push, so nothing is
+   stretched.
+6. *Layout*, in Python, on the pushed clean picture, with the font files the page draws with: the
+   largest cap height (250 down to 110 px) that fits in at most three lines (four on a panel),
+   each line as wide as its ink (a hand font's swash included); in the film's outline when it has
+   one, else its ink where it reads with a margin (`ink_margin`) and otherwise the nearest of its
+   colours deepened just enough, the starred word in its accent; the film's logo above the words
+   on options 1 and 3 (`logo.options`), unless the frame already shows it. Layouts: *headline*
+   (words on the picture -- first, in each of the three best sides, a place that crosses none of
+   the film's pictures and cards and, without an outline, no edge of what is drawn; then the best
+   side's quietest place; on a busy spot without an outline, a soft glow of the film's paper),
+   *card* (strips like the film's labels, a line to a strip, tilted as it tilts them; else the
+   film's card, tilted a touch on crayon), *panel* (the film's paper on the words' side, a rule of
+   its accent, the picture slid so the subject sits in the middle of what stays in view), *still*
+   (the frame as the film drew it -- the last fallback only).
+7. *Draw* (`paint`): one browser run of the film with the spec, three passes an option;
    `thumb.js` holds each line to the width Python planned, so a page that draws a font wider
    trims it rather than letting it leave its box.
-7. *Checks* on the finished picture through the letters and footprint passes; *fallbacks*
+8. *Checks* on the finished picture through the letters and footprint passes (outlined letters
+   read against their outline); *fallbacks*
    (headline -> headline with its glow -> card -> still; panel -> card -> still; card -> still)
    until every option passes.
 
@@ -2815,9 +2850,11 @@ panels and logo are drawn by the film's own engine, in the film's own type and p
 | cap height at 168 px wide | >= 8 px (>= 92 px at 1080p) | the "up next" sidebar is YouTube's smallest place with a title |
 | contrast, letters vs the ring around them | >= 4.5:1 at the 10th percentile | WCAG 2.2 1.4.3; read on the picture smoothed by 1.5 px, because a crayon film's grain lies over its words too |
 | no letters in the bottom-right 15% x 15%, bottom 3%, 5% margins | 0 px | YouTube's duration stamp and progress bar |
-| words | <= 4 words, 32 characters, <= half of them in the title | glance test: complement the title, never repeat it |
+| words | <= 4 words, 32 characters; the first says the title's message | the channel owner read words that avoided the title as "a random still" (2026-09-30); was "<= half of them in the title" |
 | film's own words | words on the picture touch none; a card, panel or glow hides a line whole (>= 90%) or not at all; <= 40 px otherwise | "On for everyone" set over an "AI MODEL UPDATE" label read as a collision; a half-hidden "Month-e" reads broken, a covered chip does not |
-| layouts | one each of headline, card, panel, still | four options are only a choice if they differ |
+| layouts | headline, card, panel, headline; the still only as a fallback | four options are only a choice if they differ, and a picture with no words is not a thumbnail |
+| the film's own words | left out of the picture under the thumbnail's (34 px and up), with the discs and cards they leave empty | one message: a card saying "Від чого залежить зарплата?" sat over the film's own heading saying the same |
+| cap height | 110-250 px at 1080p | 96-200 read as a caption on a slide |
 
 **Measured** (2026-09-29, 8 studio films -- three crayon, a clean app film, a blueprint, a dark
 wine film, a photographic one and a painted Ukrainian one -- from Claude's own concepts; the
@@ -2881,6 +2918,27 @@ The draft costs ~$0.01 more with the sheet and four concepts. Thumbnails are opt
 forced: the dialog has "Let YouTube pick a frame", and a channel that YouTube will not let use
 custom thumbnails (unverified, KI-037) gets its video published with YouTube's frame and a line
 saying why.
+
+**What the first channel owner's review changed** (2026-09-30, the Ocheretyne channel's
+episode 3, a collage film of clay characters on cut paper): the options "don't look like YouTube
+ones... we need to have the main message or a video title there... there is no logo". Four
+things were wrong, one of them a bug:
+- *The cut-outs were missing* (KI-048): every clay character, heart and scale was an empty paper
+  burst in the stills, the moments sheet and the share picture.
+- *The film's own words stayed*, so each option read as a slide from the film with a sticker on it
+  -- once, a card saying the same as the heading behind it. They are left out now.
+- *The probe never saw a collage film's titles*: they are set with `SK.headline`, so the words
+  came out in the film's handwriting for asides, not its capitals in an indigo outline.
+- *The words were small and avoided the title*: caps of 96-136 px, and a rule against repeating it.
+Measured after, on the same eight films as the first bake-off plus the collage film, from the
+concepts they already had (36 options): all 36 kept the
+layout asked for, one headline with its glow, every one in the film's own type; caps 9.6-19.2 px
+at 168 px wide, median 10.5 (were 8.4-17.5); contrast 5.05-11.0:1, median 6.7; the collage film's
+subject read off its pictures and pushed 1.1-1.5x, the other films' off saliency at 1.1-1.24x;
+13-15 s of options a film on the laptop once its stills exist. What is still weak: on a painted
+film the subject is guessed (KI-036), and a panel can cut it at the frame's edge; a crayon film's
+busy town leaves a headline no clean place, and it takes the quietest; a film that draws its
+titles with its own pen keeps them (KI-038).
 
 ## Share title and image
 

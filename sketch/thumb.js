@@ -1,46 +1,127 @@
 /* sketch/thumb.js -- a YouTube thumbnail drawn by the film itself (scripts/_thumb.py).
 
    Run before the film's code (the manifest's `head`) for thumbnail stills only -- never in a
-   film's own render. Two jobs:
+   film's own render. Three jobs:
 
-   - The probe. Every SK.txt, SK.card and SK.image the film draws is noted: the fonts, weights,
-     sizes and colours of its text, the fill, corners and outline of its cards, the pictures it
-     shows (a logo, a product) and how large. With the palette (SK.C), the ground and the style
-     (crayon or clean), SK.REPORT() returns it after the stills: the film's own design language,
-     read off the film rather than guessed. _thumb.py picks the thumbnail's type and colours from
-     it -- so an editorial film in Source Serif gets a Source Serif headline, not a stock one.
+   - The probe. Every SK.txt, SK.card and SK.image the film draws is noted -- and, on a collage
+     film, every SK.headline, SK.tape and SK.cutout (collage.js sets its titles and labels with
+     those, never with SK.txt): the fonts, weights, sizes, colours, outlines and case of its text,
+     the fill, corners and outline of its cards, the colours of its label strips, the pictures it
+     shows (a logo, a product, a clay character) and how large. With the palette (SK.C), the
+     ground and the style (crayon or clean), SK.REPORT() returns it after the stills: the film's
+     own design language, read off the film rather than guessed. _thumb.py picks the thumbnail's
+     type and colours from it -- so a collage film in Oswald with an indigo outline gets an Oswald
+     headline with that outline, not the handwriting it uses for asides.
+   - The clean picture. A thumbnail carries one message, so the film's own words -- its titles,
+     labels, stamps, annotation arrows -- are left out of the picture under it (`declutter` on an
+     option; always on the 4000 pass). The pictures stay: characters, objects, cards, charts. Small
+     print (under SK.THUMB.minWords px: an app's own screen) stays too, as texture. Where each
+     picture landed on the 4000 pass is recorded (SK.REPORT().boxes): the subjects, exactly, on a
+     film that shows cut-outs, where saliency has to guess on a drawn one.
    - The overlay. SK.THUMB.options, keyed by a still's time ("12.10"), says what to add, already
      laid out by _thumb.py with the same font files: lines of words (runs in the film's ink and
-     its accent), a card in the film's own card style, a panel of its paper with a rule of its
-     accent, its logo, a soft glow of its paper behind words on a busy picture, the camera slid or
-     pushed in. A still's time picks the pass:
+     its accent, in its outline), a card in the film's own card style or a strip like its labels, a
+     panel of its paper with a rule of its accent, its logo as a badge, a soft glow of its paper
+     behind words on a busy picture, the camera slid or pushed in. A still's time picks the pass:
          t          the film alone
          1000 + t   the thumbnail
          2000 + t   its letters, white on black (what the legibility and contrast checks read)
          3000 + t   everything it added, white on black (what may not cover the film's own words)
+         4000 + t   the film with its own words left out, nothing added (what the layout reads)
 
    Every frame stays a pure function of t: nothing here keeps state between stills but the probe's
-   tally, which only describes what was drawn.
+   tally and the boxes, which only describe what was drawn.
 */
 (function () {
   'use strict';
   const T = (SK.THUMB = SK.THUMB || { options: {} });
-  const seen = { txt: {}, card: {}, img: {} };
+  T.options = T.options || {};
+  T.minWords = T.minWords ?? 34; // px: film text this size and up is a word a viewer reads
+  const seen = { txt: {}, card: {}, img: {}, strip: {} };
+  const boxes = {};
   let own = false; // the overlay's own drawing is not the film's
+  let inside = 0; // inside one of the film's word-drawing calls (a ransom's letters are tapes)
+
+  // ------------------------------------------------------------------ the pass and the option
+  const cur = () => (T.mode && T.mode < 4 ? T.options[T.key] : null);
+  const clean = () => !own && (T.mode === 4 || !!(cur() && cur().declutter));
+
+  // Everything drawn on the frame's canvas inside fn is dropped; what fn works out (a width it
+  // returns, the caches it fills) is not. Its own offscreen canvases are other contexts, so a
+  // cached title still gets made -- it just never reaches the frame.
+  const HUSH = ['fillText', 'strokeText', 'drawImage', 'fill', 'stroke', 'fillRect', 'strokeRect', 'putImageData'];
+  let hushed = 0;
+  function hush(fn) {
+    if (hushed) return fn();
+    const c = SK.ctx(), had = HUSH.map((k) => Object.getOwnPropertyDescriptor(c, k));
+    for (const k of HUSH) c[k] = () => {};
+    hushed++;
+    try { return fn(); } finally {
+      hushed--;
+      HUSH.forEach((k, i) => { if (had[i]) Object.defineProperty(c, k, had[i]); else delete c[k]; });
+    }
+  }
+  // where fn's drawImage calls land on the frame, as one box in canvas pixels (the 4000 pass)
+  function boxed(name, fn) {
+    if (T.mode !== 4 || own || hushed) return fn();
+    const c = SK.ctx(), had = Object.getOwnPropertyDescriptor(c, 'drawImage'), d0 = c.drawImage;
+    let b = null;
+    c.drawImage = function (im, ...a) {
+      let x, y, w, h;
+      if (a.length >= 8) [, , , , x, y, w, h] = a;
+      else if (a.length >= 4) [x, y, w, h] = a;
+      else { [x, y] = a; w = im.width; h = im.height; }
+      const m = c.getTransform();
+      for (const [px, py] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
+        const X = m.a * px + m.c * py + m.e, Y = m.b * px + m.d * py + m.f;
+        b = b ? [Math.min(b[0], X), Math.min(b[1], Y), Math.max(b[2], X), Math.max(b[3], Y)] : [X, Y, X, Y];
+      }
+      return d0.apply(c, [im, ...a]);
+    };
+    try { return fn(); } finally {
+      if (had) Object.defineProperty(c, 'drawImage', had); else delete c.drawImage;
+      if (b) (boxes[T.key] = boxes[T.key] || []).push({ name, box: b.map((v) => Math.round(v)) });
+    }
+  }
+
+  // a local box (x0, y0, x1, y1) where the frame's canvas has it now, in canvas pixels
+  function onScreen(x0, y0, x1, y1) {
+    const m = SK.ctx().getTransform();
+    let b = null;
+    for (const [px, py] of [[x0, y0], [x1, y0], [x0, y1], [x1, y1]]) {
+      const X = m.a * px + m.c * py + m.e, Y = m.b * px + m.d * py + m.f;
+      b = b ? [Math.min(b[0], X), Math.min(b[1], Y), Math.max(b[2], X), Math.max(b[3], Y)] : [X, Y, X, Y];
+    }
+    return b.map((v) => Math.round(v));
+  }
+  const note4 = (e) => { (boxes[T.key] = boxes[T.key] || []).push(e); };
+  // the id of a call, by its arguments: the same at the same t on every pass
+  const idOf = (...a) => a.map((v) => (typeof v === 'number' ? Math.round(v * 10) / 10 : String(v ?? ''))).join('|');
 
   // ------------------------------------------------------------------ the probe
+  const LETTER = /\p{L}/u, UPPER = /\p{Lu}/u;
+  function note(kind, s, font, wt, size, col, stroke, ls) {
+    if (own || inside || typeof col !== 'string') return;
+    const k = [kind, font, wt, col, stroke ? stroke.col : ''].join('|');
+    const e = seen.txt[k] || (seen.txt[k] = { kind, font, wt: String(wt), col, max: 0, n: 0, chars: 0, letters: 0, upper: 0, stroke: null, ls: 0 });
+    e.max = Math.max(e.max, size); e.n++; e.chars += s.length;
+    for (const ch of s) if (LETTER.test(ch)) { e.letters++; if (UPPER.test(ch)) e.upper++; }
+    if (stroke) e.stroke = stroke;
+    if (ls) e.ls = Math.max(e.ls, ls / size);
+  }
+  const face = (fam, wt, s) => (typeof SK.face === 'function' ? SK.face(fam, wt, s) : [fam, wt]);
+
   const txt0 = SK.txt, card0 = SK.card, image0 = SK.image;
   SK.txt = function (str, x, y, o = {}) {
     const s = String(str ?? '');
-    if (!own && s.trim()) {
-      const col = o.col ?? SK.C.text ?? SK.C.ink;
-      if (typeof col === 'string') {
-        const font = o.font ?? SK.FONT_HAND, wt = String(o.wt ?? 700), size = o.size ?? 60;
-        const k = font + '|' + wt + '|' + col;
-        const e = seen.txt[k] || (seen.txt[k] = { font, wt, col, max: 0, n: 0, chars: 0, stroke: null });
-        e.max = Math.max(e.max, size); e.n++; e.chars += s.length;
-        if (o.stroke) e.stroke = { w: o.stroke / size, col: o.strokeCol ?? SK.C.ink };
-      }
+    const size = o.size ?? 60;
+    if (s.trim()) {
+      note('txt', s, o.font ?? SK.FONT_HAND, o.wt ?? 700, size, o.col ?? SK.C.text ?? SK.C.ink,
+        o.stroke ? { w: o.stroke / size, col: o.strokeCol ?? SK.C.ink } : null, o.ls);
+    }
+    if (s.trim() && clean() && size >= T.minWords) {
+      if (T.mode === 4 && !own && !hushed) note4({ name: '#words', box: onScreen(x - 1, y - 1, x + 1, y + 1) });
+      return hush(() => txt0.apply(this, arguments));
     }
     return txt0.apply(this, arguments);
   };
@@ -51,12 +132,81 @@
       const e = seen.card[k] || (seen.card[k] = { fill, r, stroke: o.stroke ?? null, strokeW: o.strokeW ?? 2, shadow, n: 0, area: 0 });
       e.n++; e.area += w * h;
     }
+    if (!own && !hushed && w > 60 && h > 30) {
+      const id = idOf(x, y, w, h, o.fill);
+      const opt = cur();
+      // a card that only carried words the clean picture leaves out: an empty slab (_thumb.py)
+      if (opt && opt.hide && opt.hide.includes('card|' + id)) return hush(() => card0.apply(this, arguments));
+      // a card the words over the picture should not cut across (an app's calendar, a letter)
+      if (T.mode === 4 && (o.alpha ?? 1) > 0) note4({ name: '#card', id: 'card|' + id, box: onScreen(x, y, x + w, y + h) });
+    }
     return card0.apply(this, arguments);
   };
+  function sawImage(name, w) {
+    if (own) return;
+    const e = seen.img[name] || (seen.img[name] = { n: 0, w: 0 });
+    e.n++; e.w = Math.max(e.w, w || 0);
+  }
   SK.image = function (name, x, y, w, h, o = {}) {
-    if (!own) { const e = seen.img[name] || (seen.img[name] = { n: 0, w: 0 }); e.n++; e.w = Math.max(e.w, w || 0); }
-    return image0.apply(this, arguments);
+    sawImage(name, w);
+    return boxed(name, () => image0.apply(this, arguments));
   };
+
+  // collage.js (a film's `modules`): loaded before this, so its functions are here to wrap
+  if (typeof SK.headline === 'function') {
+    const head0 = SK.headline;
+    SK.headline = function (text, x, y, o = {}) {
+      const s = String(text ?? ''), size = o.size ?? 90, [fam, wt] = face(o.font ?? 'Abril Fatface', o.wt ?? 400, s);
+      if (s.trim()) note('headline', s.replace(/\n/g, ' '), fam, wt, size, o.col ?? '#1d1a17',
+        o.stroke ? { w: (o.stroke.w ?? 0) / size, col: o.stroke.col ?? '#fff' } : null, o.ls);
+      if (clean() && T.mode === 4 && !own && !hushed && s.trim()) note4({ name: '#words', box: onScreen(x - 1, y - 1, x + 1, y + 1) });
+      return clean() ? hush(() => head0.apply(this, arguments)) : head0.apply(this, arguments);
+    };
+  }
+  if (typeof SK.tape === 'function') {
+    const tape0 = SK.tape;
+    SK.tape = function (text, x, y, o = {}) {
+      const s = String(text ?? ''), size = o.size ?? 36, [fam, wt] = face(o.font ?? 'Oswald', o.wt ?? 600, s);
+      const col = o.col ?? '#f3ce4f', ink = o.ink ?? (SK.inkOn ? SK.inkOn(col) : '#1d1a17');
+      if (s.trim() && !own && !inside && typeof col === 'string' && typeof ink === 'string') {
+        note('tape', s.replace(/\n/g, ' '), fam, wt, size, ink, null, o.ls);
+        const k = col + '|' + ink + '|' + fam + '|' + wt;
+        const e = seen.strip[k] || (seen.strip[k] = { col, ink, font: fam, wt: String(wt), n: 0, chars: 0, max: 0 });
+        e.n++; e.chars += s.length; e.max = Math.max(e.max, size);
+      }
+      return clean() ? hush(() => tape0.apply(this, arguments)) : tape0.apply(this, arguments);
+    };
+  }
+  for (const name of ['ransom', 'stamp', 'arrow', 'mark']) { // words, and what points at them
+    if (typeof SK[name] !== 'function') continue;
+    const f0 = SK[name];
+    SK[name] = function () {
+      inside++;
+      try { return clean() ? hush(() => f0.apply(this, arguments)) : f0.apply(this, arguments); } finally { inside--; }
+    };
+  }
+  // A starburst or a paper disc is a backing: for a clay character (kept) or for a number or a
+  // stamp the clean picture leaves out (then an empty paper circle). The 4000 pass notes each one,
+  // by the arguments it was called with -- the same at the same t on every pass -- and where it
+  // landed; _thumb.py names the ones with no picture on them in the option's `hide`.
+  if (typeof SK.burst === 'function') {
+    const burst0 = SK.burst;
+    SK.burst = function (x, y, r, o = {}) {
+      if (own || hushed) return burst0.apply(this, arguments);
+      const id = idOf(x, y, r, o.seed, o.col), opt = cur();
+      if (opt && opt.hide && opt.hide.includes(id)) return hush(() => burst0.apply(this, arguments));
+      if (T.mode === 4) note4({ name: '#burst', id, box: onScreen(x - r, y - r, x + r, y + r) });
+      return burst0.apply(this, arguments);
+    };
+  }
+  if (typeof SK.cutout === 'function') {
+    const cut0 = SK.cutout;
+    SK.cutout = function (name, x, y, w, o = {}) {
+      sawImage(name, w);
+      return boxed(name, () => cut0.apply(this, arguments));
+    };
+  }
+
   SK.REPORT = () => ({
     C: Object.fromEntries(Object.entries(SK.C).filter(([, v]) => typeof v === 'string')),
     ground: SK.ground ? SK.ground.name : null,
@@ -64,19 +214,21 @@
     hand: SK.FONT_HAND,
     txt: Object.values(seen.txt),
     card: Object.values(seen.card),
+    strip: Object.values(seen.strip),
     img: seen.img,
     images: Object.keys(SK.IMG || {}),
+    boxes,
   });
 
   // ------------------------------------------------------------------ the passes
-  const cur = () => (T.mode ? T.options[T.key] : null);
   const render0 = SK.render;
   SK.render = function (t) {
     const mode = Math.floor(t / 1000), real = t - mode * 1000;
     T.mode = mode; T.key = real.toFixed(2);
+    if (mode === 4) boxes[T.key] = [];
     // the masks are exact white on black: no grain or vignette over them
     const st = SK.style, keep = { grain: st.grain, vignette: st.vignette };
-    if (mode >= 2) { st.grain = 0; st.vignette = 0; }
+    if (mode === 2 || mode === 3) { st.grain = 0; st.vignette = 0; }
     try { return render0.call(this, real); } finally { Object.assign(st, keep); T.mode = 0; }
   };
   const film0 = SK.film;
@@ -111,6 +263,7 @@
       c.save();
       if (L.rot) { c.translate(L.cx, L.cy); c.rotate(L.rot); c.translate(-L.cx, -L.cy); }
       c.font = `${L.wt} ${L.size}px "${L.family}"`;
+      c.letterSpacing = (L.ls || 0) + 'px';
       // held to the width _thumb.py planned with the same font file: a page that draws it wider
       // (its own kerning, a weight it synthesises) is trimmed to fit, so the words stay in their box
       const all = (L.runs || []).map((r) => r.text).join('');
@@ -118,11 +271,13 @@
       if (L.w && drawn > L.w * 1.005) c.font = `${L.wt} ${(L.size * L.w) / drawn}px "${L.family}"`;
       c.textBaseline = 'alphabetic';
       c.textAlign = 'left';
+      if (mode === 1 && L.stroke) { // the outline under every run first, so no run's edge cuts the next
+        let x = L.x;
+        c.lineJoin = 'round'; c.lineWidth = L.stroke.w; c.strokeStyle = L.stroke.col;
+        for (const r of L.runs) { c.strokeText(r.text, x, L.y); x += c.measureText(r.text).width; }
+      }
       let x = L.x;
       for (const r of L.runs) {
-        if (mode === 1 && L.stroke) {
-          c.lineJoin = 'round'; c.lineWidth = L.stroke.w; c.strokeStyle = L.stroke.col; c.strokeText(r.text, x, L.y);
-        }
         c.fillStyle = mode === 1 ? r.col : '#ffffff';
         c.fillText(r.text, x, L.y);
         x += c.measureText(r.text).width;
@@ -140,15 +295,56 @@
     c.fill();
     c.restore();
   }
+  // a strip like the film's own labels (collage.js's tape): cut paper, a slight tilt, a shadow
+  function strip(k) {
+    const c = ctx(), w = k.w, h = k.h;
+    c.save();
+    c.translate(k.x + w / 2, k.y + h / 2);
+    if (k.rot) c.rotate(k.rot);
+    const path = () => {
+      c.beginPath();
+      c.moveTo(-w / 2 + 1, -h / 2); c.lineTo(w / 2 - 2, -h / 2 + 2); c.lineTo(w / 2 - 1, h / 2); c.lineTo(-w / 2 + 2, h / 2 - 1);
+      c.closePath();
+    };
+    c.save(); c.shadowColor = 'rgba(30,20,10,.32)'; c.shadowBlur = h * .08; c.shadowOffsetY = h * .035;
+    path(); c.fillStyle = k.fill; c.fill(); c.restore();
+    if (typeof SK.paperPattern === 'function') { c.save(); path(); c.clip(); c.fillStyle = SK.paperPattern(k.fill, .7); c.fillRect(-w, -h, 2 * w, 2 * h); c.restore(); }
+    c.restore();
+  }
   function card(k, mode) {
     const c = ctx();
     c.save();
-    if (k.rot) { c.translate(k.x + k.w / 2, k.y + k.h / 2); c.rotate(k.rot); c.translate(-(k.x + k.w / 2), -(k.y + k.h / 2)); }
-    if (mode === 3) { SK.rrPath(k.x, k.y, k.w, k.h, k.r); c.fillStyle = '#ffffff'; c.fill(); }
+    if (mode === 3) {
+      if (k.rot) { c.translate(k.x + k.w / 2, k.y + k.h / 2); c.rotate(k.rot); c.translate(-(k.x + k.w / 2), -(k.y + k.h / 2)); }
+      SK.rrPath(k.x, k.y, k.w, k.h, k.r || 0); c.fillStyle = '#ffffff'; c.fill();
+    } else if (k.strip) strip(k);
     else {
+      if (k.rot) { c.translate(k.x + k.w / 2, k.y + k.h / 2); c.rotate(k.rot); c.translate(-(k.x + k.w / 2), -(k.y + k.h / 2)); }
       SK.card(k.x, k.y, k.w, k.h, { r: k.r, fill: k.fill, stroke: k.sketch ? null : k.stroke, strokeW: k.strokeW, shadow: k.shadow ? undefined : false });
       if (k.sketch) SK.sketchRect(k.x, k.y, k.w, k.h, { seed: 7, col: k.stroke || SK.C.ink, w: k.strokeW || 3 });
     }
+    c.restore();
+  }
+  // the logo: a round paper badge when it is a square picture (how a channel shows its face),
+  // else as it is -- a wordmark with its own transparency needs no plate
+  function logo(L, mode) {
+    const c = ctx(), x = L.x, r = L.w / 2, cx = x + r, cy = L.y;
+    if (mode === 3) {
+      c.fillStyle = '#ffffff';
+      if (L.round) { c.beginPath(); c.arc(cx, cy, r + (L.rim || 0), 0, Math.PI * 2); c.fill(); } else c.fillRect(x, L.y - L.h / 2, L.w, L.h);
+      return;
+    }
+    if (!L.round) { SK.image(L.name, x, L.y, L.w, 0, { align: 'left' }); return; }
+    const im = SK.IMG[L.name];
+    if (!im) return;
+    c.save();
+    c.shadowColor = 'rgba(20,10,40,.35)'; c.shadowBlur = r * .18; c.shadowOffsetY = r * .06;
+    c.beginPath(); c.arc(cx, cy, r + (L.rim || 0), 0, Math.PI * 2); c.fillStyle = L.rimCol || '#ffffff'; c.fill();
+    c.restore();
+    c.save();
+    c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.clip();
+    const s = Math.max(L.w / im.width, L.h / im.height); // cover the circle
+    c.drawImage(im, cx - im.width * s / 2, cy - im.height * s / 2, im.width * s, im.height * s);
     c.restore();
   }
   function draw(o, mode) {
@@ -164,10 +360,7 @@
     if (o.glow && mode === 1) glow(o.glow);
     if (o.glow && mode === 3) { SK.rrPath(o.glow.x, o.glow.y, o.glow.w, o.glow.h, o.glow.r); c.fillStyle = '#ffffff'; c.fill(); }
     for (const k of o.cards || []) if (mode !== 2) card(k, mode);
-    if (o.logo && mode !== 2) {
-      if (mode === 3) { c.fillStyle = '#ffffff'; c.fillRect(o.logo.x, o.logo.y - o.logo.h / 2, o.logo.w, o.logo.h); }
-      else SK.image(o.logo.name, o.logo.x, o.logo.y, o.logo.w, 0, { align: 'left' });
-    }
+    if (o.logo && mode !== 2) logo(o.logo, mode);
     lines(o, mode);
     c.restore();
   }

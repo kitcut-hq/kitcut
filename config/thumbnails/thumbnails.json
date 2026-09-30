@@ -1,5 +1,5 @@
 {
-  "_comment": "Thumbnail options from a film's own stills, drawn in the film's own look (scripts/_thumb.py, sketch/thumb.js, scripts/thumb-options.py, studio/thumbs.py). Geometry is in the 1920x1080 design space. Every threshold names where it came from; the ones marked _measured were set by the bake-offs in docs/reference.md 'Thumbnail options'.",
+  "_comment": "Thumbnail options from a film's own frames, drawn in the film's own look (scripts/_thumb.py, sketch/thumb.js, scripts/thumb-options.py, studio/thumbs.py): the film's subject pushed in on one side, its own words left out, the video's message set large in its title type on the other. Geometry is in the 1920x1080 design space. Every threshold names where it came from; the ones marked _measured were set by the bake-offs in docs/reference.md 'Thumbnail options'.",
   "size": [
     1920,
     1080
@@ -35,8 +35,9 @@
   "words": {
     "max_words": 4,
     "max_chars": 32,
-    "title_overlap_max": 0.5,
-    "_source": "Paddy Galloway's glance test: title and thumbnail are one unit and should complement, not repeat. 'Under 4 words' is a practitioner default, not a measured fact."
+    "title_overlap_max": 1.0,
+    "_source": "Paddy Galloway's glance test: title and thumbnail are one unit and should complement, not repeat. 'Under 4 words' is a practitioner default, not a measured fact.",
+    "_title_overlap_max": "Was 0.5 (Paddy Galloway: title and thumbnail should complement, not repeat). The owner of the first channel to publish through it read the result as 'a random still' and asked for the main message or the title on the picture (2026-09-30): the first option now says the title's promise in four words or fewer, and nothing holds the words off the title's."
   },
   "fonts": {
     "_comment": "The words are set in the film's own type -- its text styles as the probe saw it draw them, biggest first. These are for a film that draws no text of its own, and for words its type has no glyphs for (the page loads them too).",
@@ -70,28 +71,35 @@
     ]
   },
   "cap": {
-    "max_px": 200,
-    "min_px": 96,
-    "step_px": 8,
-    "line_gap": 0.3
+    "max_px": 250,
+    "min_px": 110,
+    "step_px": 10,
+    "line_gap": 0.22,
+    "_why": "YouTube's thumbnails set two to four words across half the frame or more; 96-200 px caps read as a caption on a slide (the first real publish, 2026-09-30). 110 px is 9.6 px at 168 px wide, over the 8 px floor with room."
   },
   "headline": {
-    "max_w_frac": 0.62,
-    "max_lines": 2,
+    "max_w_frac": 0.6,
+    "max_lines": 3,
     "quiet_max": 0.045,
     "centre_penalty": 0.15,
     "cover_max": 0.1,
     "_measured": "quiet_max is the mean detail (|dx|+|dy| of the grey frame at 1/8 scale) under a text-sized block above which the words get a scrim. Measured over the moment stills of 8 studio films (2026-09-29): a 320x160 block on an empty ground scores 0.001-0.02, a busy one 0.04-0.13; painted films sit at 0.05-0.09 through most of the frame. cover_max is the share of the frame's subject saliency the words may hide.",
     "pad_frac": 0.06,
     "busy_weight": 6.0,
-    "_busy_weight": "A block's score is the share of the subjects it hides plus busy_weight x the mean detail under it: detail runs 0.001-0.13, subject shares 0-0.3, so at 1 a busy spot barely counted and a headline landed on a UI card's labels (2026-09-29)."
+    "_busy_weight": "A block's score is the share of the subjects it hides plus busy_weight x the mean detail under it: detail runs 0.001-0.13, subject shares 0-0.3, so at 1 a busy spot barely counted and a headline landed on a UI card's labels (2026-09-29).",
+    "max_h_frac": 0.84,
+    "level": 0.06,
+    "_level": "On an even picture every place scores alike and the words fell into a corner, a third of the side empty above them (2026-09-30): a block's distance from the middle of its area, down the frame, costs level x that share of the height -- a tie-break under the subject's cover (0-0.3) and the detail under it.",
+    "edge_detail": 0.04,
+    "edge_share": 0.03,
+    "_edge": "A headline first looks, in each of the three best sides in turn, for a place that crosses none of the film's pictures and -- when the film does not outline its titles -- where at most edge_share of its cells are over edge_detail: the line where a card or a character meets the ground. Measured on a clean app film (2026-09-30): its ground scores 0.002 (median) to 0.015 (80th percentile), what is drawn on it 0.10-0.24; a headline across a calendar card's corner read as a collision. Where no side has such a place, the best side's quietest place."
   },
   "panel": {
     "max_lines": 4,
     "rule_px": 10,
     "w_fracs": [
-      0.4,
-      0.5
+      0.46,
+      0.54
     ],
     "logo_w_frac": 0.55,
     "logo_max_h_frac": 0.16,
@@ -128,9 +136,10 @@
       "headline",
       "card",
       "panel",
-      "still"
+      "headline"
     ],
-    "_min_gap": "The same as the moments sheet's own spacing: four picks from the sheet are four different frames. It was 2 s, which the sheet itself breaks (moments 1 s apart), and the first real draft spent a second call on it (2026-09-29)."
+    "_min_gap": "The same as the moments sheet's own spacing: four picks from the sheet are four different frames. It was 2 s, which the sheet itself breaks (moments 1 s apart), and the first real draft spent a second call on it (2026-09-29).",
+    "_layouts": "The layouts the writer fills, one each and a second headline (the one YouTube's own thumbnails use most). The still -- the picture alone -- is no longer offered: with no words it is 'a random still' (2026-09-30). It stays as the last fallback, when no words can be set legibly."
   },
   "places": {
     "top": [
@@ -189,7 +198,7 @@
   "_contrast_measured": "Same bake-off: contrast of the 24 worded options 4.81-12.4:1, median 9.07.",
   "card": {
     "max_w_frac": 0.62,
-    "max_lines": 2,
+    "max_lines": 3,
     "pad_frac": [
       0.42,
       0.34
@@ -207,7 +216,8 @@
     },
     "_why": "The film's own card (the probe's biggest) when it draws any; else one of its paper edged in its accent (a hand-drawn note on crayon) -- a stock white card looked foreign on a dark wine film (2026-09-29).",
     "logo_h_frac": 0.62,
-    "logo_gap_frac": 0.38
+    "logo_gap_frac": 0.38,
+    "max_h_frac": 0.8
   },
   "glow": {
     "grow_frac": 0.35,
@@ -218,5 +228,56 @@
   },
   "ink_margin": 0.8,
   "contrast_smooth_px": 1.5,
-  "_contrast_smooth_px": "The picture is smoothed (a Gaussian of this many pixels) before the letters' contrast is read: a crayon film's grain lies over its words as over everything, and per pixel it pulled plainly legible text to 4.2-4.5:1 (2026-09-29). Grain is finer than a letter's stroke at the sizes allowed, so this takes the noise out and leaves the ink."
+  "_contrast_smooth_px": "The picture is smoothed (a Gaussian of this many pixels) before the letters' contrast is read: a crayon film's grain lies over its words as over everything, and per pixel it pulled plainly legible text to 4.2-4.5:1 (2026-09-29). Grain is finer than a letter's stroke at the sizes allowed, so this takes the noise out and leaves the ink.",
+  "compose": {
+    "side_frac": 0.5,
+    "band_frac": 0.4,
+    "margin_frac": 0.04,
+    "max_zoom": 1.5,
+    "max_zoom_raster": 1.15,
+    "max_zoom_saliency": 1.25,
+    "backdrop_frac": 0.55,
+    "min_frac": 0.004,
+    "minor": 0.4,
+    "mass": 0.1,
+    "overlap_weight": 1.5,
+    "cut_weight": 2.0,
+    "hint_bonus": 0.08,
+    "split_weight": 0.15,
+    "chrome_weight": 0.3,
+    "border_frac": 0.08,
+    "border_weight": 0.1,
+    "_why": "A YouTube thumbnail is a subject large on one side and a few words on the other. The words take half the frame across (side_frac) or 40% of it down (band_frac); the camera pushes in until the subject fills the rest, up to max_zoom -- the film draws itself again at the push, so a cut-out or a drawn line stays sharp, but a painted scene's pixels would go soft past max_zoom_raster, and a subject only guessed from saliency is pushed less. A picture over backdrop_frac of the frame is the scene, not a subject in it; one under min_frac is a speck; one under `minor` of the biggest is a prop. The side is the one where the subject reads largest, minus overlap_weight x the share of it under the words and cut_weight x the share pushed off screen; the writer's place breaks near-ties. Every other picture the frame cuts in two costs split_weight; the share of the small print left on the clean picture (a progress bar's labels, away from the subject) still in view costs chrome_weight -- a push that crops it wins. The film's own frame -- a flat band round an inset sheet, up to border_frac deep -- costs border_weight x the share of it in view, scored apart from the print (its area swamped the print's and let a progress bar back in).",
+    "alt_sides": 3
+  },
+  "outline": {
+    "min_w": 0.04,
+    "max_w": 0.16,
+    "_why": "A film that edges its titles (a collage film's lemon Oswald in indigo, 0.12 of the size) says how it shouts: the thumbnail's words take the same outline, which reads over any part of the picture. An edge under min_w of the size is a hairline, not an outline; one over max_w fills the counters at thumbnail sizes."
+  },
+  "logo": {
+    "h_frac": 0.16,
+    "max_w_frac": 0.3,
+    "gap_frac": 0.22,
+    "rim_frac": 0.05,
+    "options": [
+      1,
+      3
+    ],
+    "_why": "The film's logo (a picture it shows named *logo*) above the words, as a round paper badge when it is a square picture -- how the channel shows its face -- else as it is, held to max_w_frac of the width. The owner asked to try the logo, not to require it (2026-09-30), so options 1 and 3 carry it and 2 and 4 do not: the person picking sees both. A frame that already shows the film's logo is not given a second one."
+  },
+  "strip": {
+    "pad": [
+      0.34,
+      0.3
+    ],
+    "gap_frac": 0.16,
+    "rot": -0.02,
+    "_why": "A film that labels with strips (collage.js's tape: 'ЗДОРОВ'Я' on red, 'ПОМИЛКА ЛІКАРЯ' on indigo) gets its thumbnail's words on strips like them, a line to a strip, tilted as the film tilts its labels (-0.02 to -0.05 rad)."
+  },
+  "declutter": {
+    "min_words_px": 34,
+    "empty_detail": 0.012,
+    "_why": "The film's own titles, labels, stamps and marker arrows are left out of the picture under the thumbnail's words: a thumbnail carries one message, and the first ones set a card reading 'Від чого залежить зарплата?' over the film's own heading saying the same (2026-09-30). Text under min_words_px (an app's own screen, a progress bar's labels) stays as texture: it is unreadable at feed size and hiding it would empty the screens it sits on. Matches thumb.js minWords. What the words sat on goes with them when it would show empty: a burst or disc with no picture on it, a card with no picture or card on it whose inside is flatter than empty_detail on the clean picture (a ground scores 0.002-0.015; an app screen's rows far more)."
+  }
 }

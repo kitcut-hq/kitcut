@@ -90,22 +90,23 @@ would.
 YouTube's limits: the title at most 100 characters, the description at most 4500, the tags at \
 most 500 characters together.
 
-Then choose four thumbnails for it. Each is a still of the film at a moment you pick from the \
-sheet of its moments (the time is printed on every frame), with a few words set on it:
-- "at": the moment, in seconds, from the sheet -- one where what the film is about is on screen \
-and fully drawn. Four different moments.
-- "layout": one each of "headline" (the words large over the picture), "card" (the words on \
-one of the film's own cards, with its logo when it shows one), "panel" (the picture on one side, \
-the words on a panel of the film's paper beside it) and "still" (the picture alone, no words). \
-All of them are drawn in the film's own look -- its headline type, its colours, its cards -- so \
-write the words the way the film writes its own titles.
-- "words": at most 4 words and 32 characters, in the film's language, that make the right \
-viewer want to watch: they add to the title and never repeat it, and like everything above they \
-hold to the film -- no number or claim it does not show or say. Star one word to colour it \
-(write it as *word*). The "still" has none.
-- "place": where the words go so they hide nothing that matters in that frame: top, bottom, \
-left, right, top-left, top-right or bottom-left (never the bottom right, where YouTube shows the \
-duration). For a "panel", the side the panel goes.
+Then choose four thumbnails for it, made the way YouTube thumbnails are: one moment of the film, \
+its subject pushed in large on one side, and a few big words on the other -- the only words on \
+the picture (the film's own titles and labels are left out of it), set in the film's own title \
+type and colours, with its logo:
+- "at": the moment, in seconds, from the sheet of its moments (the time is printed on every \
+frame) -- one where the film's subject is on screen, large and fully drawn: a character, an \
+object, a chart. Four different moments.
+- "layout": "headline" (the words large over the picture) for the first and the fourth, "card" \
+(the words on the film's own label or card) and "panel" (the picture on one side, the words on a \
+panel of the film's colour on the other) for the second and third.
+- "words": at most 4 words and 32 characters, in the film's language. The first thumbnail says \
+the video's main message -- the title's question or promise, in fewer words; the others each \
+say one of the film's main points. Words a viewer reads at a glance and wants to click on, and \
+like everything above they hold to the film -- no number or claim it does not show or say. \
+Star one word to colour it (write it as *word*).
+- "place": the side the words go on, so they leave the subject clear: left, right, top or \
+bottom.
 Put first the one you would choose yourself.
 
 Answer with one JSON object and nothing else:
