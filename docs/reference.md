@@ -3188,6 +3188,17 @@ public watch pages anonymously, with a 2 s pause per page, because YouTube
 answers 429 after about 130 back-to-back pages. A 429 prints as `429?` rather
 than failing the run.
 
+### Widening an upload: `yt-set-privacy.py`
+
+Uploads go up unlisted; once the owner approves a video, this makes it public (or back). It
+sends the whole status part back as read, with only the privacy changed, drops a scheduled
+`publishAt` when going public, and reads the answer back.
+
+```powershell
+python scripts/yt-set-privacy.py --channel @kitcut-hq --video <id> --privacy public --dry-run
+python scripts/yt-set-privacy.py --channel @kitcut-hq --video <id> --privacy public
+```
+
 ### Can we see the watermark ourselves? No (measured 2026-09-30)
 
 YouTube says it labels undisclosed content from C2PA metadata and Google's
