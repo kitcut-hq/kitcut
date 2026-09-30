@@ -106,12 +106,18 @@ def draw(prompt, ref, out):
         url = "data:image/png;base64," + base64.b64encode(f.read()).decode()
     body["input_references"] = [{"type": "image_url", "image_url": {"url": url}}]
     for attempt in range(4):
-        r = httpx.post(
-            paint.OPENROUTER + "/images",
-            headers={"Authorization": "Bearer " + k, "X-Title": "kitcut"},
-            json=body,
-            timeout=300,
-        )
+        try:
+            r = httpx.post(
+                paint.OPENROUTER + "/images",
+                headers={"Authorization": "Bearer " + k, "X-Title": "kitcut"},
+                json=body,
+                timeout=300,
+            )
+        except httpx.HTTPError as e:  # a dropped or timed-out connection: try again
+            if attempt == 3:
+                raise SystemExit("image model unreachable: %s" % e) from None
+            time.sleep(5 * (attempt + 1))
+            continue
         # busy, or a refusal by the model's safety filter, which is not repeatable: the same
         # edit of the same character was refused once and drawn on the next try
         refused = r.status_code == 400 and "safety" in r.text.lower()

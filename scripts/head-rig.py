@@ -1057,7 +1057,10 @@ def main():
         if look:
             try:
                 rig = build_toon(ms, photo, name, rdir, face, look)
-            except SystemExit as e:  # a refusal or a failure is this head's, not the whole cast's
+            except (
+                SystemExit,
+                Exception,
+            ) as e:  # a refusal or a failure is this head's, not the cast's
                 print("  %-12s %s: NOT BUILT -- %s" % (name, look, e))
                 failed.append(name)
                 continue
