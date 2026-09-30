@@ -4016,6 +4016,32 @@ face measured once from its photo: `check-sketch.py` tests the cuts, the mouth h
 blink against it without MediaPipe. A 13 s six-style test on a phone frame and a painting took
 27 s to render at 30 fps on the laptop; ten review stills ~5 s.
 
+**In the studio** (kitcut.ai's "Add a person"): a film request may carry `people` (up to
+`film.MAX_PEOPLE` = 4 image uploads, each with an optional name) and `character_style` (`auto` or
+one of `config/heads/looks.json` `"studio"` -- the thirteen drawn looks, in the site's order; the
+toy-brick and voxel ones stay for local films). `Film.create` copies each photo to
+`inputs/person<i>.<ext>`, writes it into the manifest's `heads` as `p1..p4` (and `images`, the
+fallback), and adds the `people` capability (`film.CAPS`): the `heads` engine module and
+`studio/people.md` in the brief, so a film without people keeps a byte-identical prompt. `auto`
+is the look's nearest style (`film.PEOPLE_AUTO`: crayon, watercolour, paper cut-out). The
+characters are drawn in the background as the film starts (`agent.draw_people`: `head-rig.py
+--jobs 4`, one person refused is tried once more as a sticker), into `rigs/ready.json`; the
+picture tools wait for it (up to 7 minutes, off the film's clock) and tell Claude, once, who could
+not be drawn -- that person is shown with `SK.image` instead. Claude reads the photos, writes
+`vo.json` with a `cast` voice per person and `who` on their lines (`validate.py` checks both), and
+places them with `SK.head`. Spend is `rigs/spend.jsonl`, counted by `agent.price`. `/api/limits`
+publishes `people` (count, styles, auto, name length); the site holds its list to it. Measured on
+a 20 s film with two people (a phone frame and the 1840 Lovelace painting, crayon): both drawn in
+parallel before Claude needed them, $0.22 of pictures, 38 turns, 15.5 minutes in all.
+
+The site's style tiles are cut from the thirteen-looks film with `speaker-loops.py`: each
+speaker's own line, cropped square and looped, silent, with a poster frame.
+
+```powershell
+python scripts/speaker-loops.py --page <film>.html --video <film>.mp4 --outdir <site>/people `
+    --crop 960,450,720 --size 200 --only crayon,papercut,news --rename news=newspaper --list
+```
+
 ### Sketch Studio: a prompt box that makes a short film (`studio/`)
 
 A prompt-to-film web app on this engine, set up with `pip install -r requirements-studio.txt`:

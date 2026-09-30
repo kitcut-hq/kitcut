@@ -48,6 +48,10 @@ ROOT = _env.ROOT
 
 # checks a script is allowed to skip, each with the reason it may
 EXCEPTIONS = {
+    "speaker-loops.py": {
+        "record": "its loops are a website's assets (kitcut.ai's style tiles), committed in that "
+        "repo; the film it cuts them from is recorded where it was rendered",
+    },
     "stt-compare.py": {
         "record": "a measurement, not a deliverable: its table and test clips go under temp/, "
         "and the numbers that matter are in docs/reference.md",
