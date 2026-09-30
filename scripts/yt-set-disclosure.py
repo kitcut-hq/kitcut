@@ -61,7 +61,8 @@ def shows_label(vid):
     """Whether the public watch page carries the "How this was made" label.
 
     The API cannot say (a label YouTube applied itself is not the flag), so
-    this reads the page anonymously. A private video reads as False."""
+    this reads the page anonymously. A private video reads as False.
+    """
     import time
     import urllib.error
     import urllib.request
