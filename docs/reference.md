@@ -3930,9 +3930,20 @@ line gets its speaker and a 50 Hz mouth track measured from its own audio -- `o`
 band's (250-3500 Hz) loudness on a scale set by the line's own loud parts (a quiet voice opens
 as wide as a loud one), shut where the voice stops and on the m/b/p that are quiet in that band;
 `w`, the share above 1.8 kHz against below 900 Hz (spread lips on "ee" and "s", rounded on "oo"),
-opening faster than it closes, 40 ms ahead of the sound (a mouth that opens with its sound reads
-late). Measured on edge voices: open ~60% of the way mid-speech, 3-4 openings a second, which is
-the syllable rate. `SK.talk(who, t)` reads it; `SK.speaker(t)` says who is talking.
+opening faster than it closes, 80 ms ahead of the sound. Measured on edge voices: open ~60% of
+the way mid-speech, 3-4 openings a second, which is the syllable rate. `SK.talk(who, t)` reads
+it; `SK.speaker(t)` says who is talking.
+
+**Measured against a real mouth** (`mouth-bench.py`: the real lip gap on every frame of a video
+of somebody talking, against the track made from that video's own audio). On two phone takes
+of a man talking to camera (claude-demo, 83 s): the whole signals barely correlate (r 0.0-0.1),
+because a real mouth also opens to breathe before a sentence and holds open between words,
+which no sound shows; over the syllable band (2-8 Hz) r peaks at 0.20-0.23 with the real mouth
+80-140 ms ahead of its sound. The first lead, 40 ms, was late by that much; at 80 ms the frontal
+take is in step and the other within 60 ms. What this says: the mouth opens and shuts on the
+syllables, at the right moments -- it does not shape the vowels, and a photo made to talk this
+way reads as a puppet or a talking painting, not as the person. `--sweep` prices the track's
+other knobs (range, curve, attack, release) on the same footage; none moved r by more than 0.03.
 
 **Drawing** (`SK.head(name, x, y, h, o)`, the module added by itself when a manifest names
 "heads"): `x, y` is the middle of the face (hairline to chin), `h` its height; `SK.headBox`
