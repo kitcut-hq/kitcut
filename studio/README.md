@@ -477,6 +477,62 @@ with `STUDIO_ENV_FILE` naming the studio's `.env` (MONGODB_URI, the media SAS); 
 for `--vm`. The first import (2026-09-30): the Web Summit speaker promo,
 `studio-20260930-114530-nhdy7i`, in project `p-s2alo2aepx`.
 
+## Templates: a finished film others remake with their own content (`templates.py`)
+
+kitcut.ai's templates (the plan: a template is a finished film plus a form; Claude remakes that
+film with the person's content). A template is made from a film whose words, colours, logo and
+people live in a data file rather than in its code (`"data": {"content": "content.json"}`, read as
+`SK.DATA.content`) and whose sound is worked out by its own code (`SK.film({sound})`,
+`sketch-render.py --sound-data`) -- so new content is a data edit with its clicks and pops to
+match.
+
+- **A version** is `STUDIO_HOME/templates/<t-id>/v<N>/`, read-only once made: `template.json`
+  (the form, where each answer goes, the author's brief), the film's code, the author's content
+  as `content.sample.json`, the engine it was drawn with (frozen), the sample's pictures (for the
+  preview and the check only) and `preview/<16x9|1x1>/` stills and sheet. `templates.py make`
+  copies exactly the list `plan()` prints -- the code, the sample content, the engine, the pictures
+  the sample names -- and nothing else of the film (never its author's chat, uploads, voice or
+  project). A version is a draft, then live (`publish`), then retired; a new one is `v<N+1>`.
+- **The form** (`fields`): text, lines, url, colour, daterange, logo, image, select and people
+  (repeatable rows: photo, name, role, company; the named ones are the featured), each with the
+  path in content.json it fills. `validate_fields` refuses anything too long rather than cut it;
+  `build_content` keeps only the sample's labels (`keep`), fills each path, applies defaults and
+  derives what it can (a city code from the city, the short and long dates and the year from a
+  range). The first template's spec is `config/templates/conference-speakers.json`.
+- **A film from a template**: `POST /api/films` with `{"template": {"id", "version"}, "fields",
+  "frame"}` (a draft only from this machine). It gets the template's exact length (26 s is no
+  multiple of 5), look, capabilities (`space`: the 3D module; `portraits`: people cut out of their
+  photos) and frozen engine, the frame asked for, no narration (no vo.json, no voice tool), up to
+  the template's own number of pictures (a line-up of 24 speakers; a plain film keeps 6), and a
+  logo made readable on dark and light grounds (`logo_variants`: a flat background keyed out, a
+  silhouette for the other ground). The person's cast and earlier films are not seeded: a remake
+  keeps to its template.
+- **Before Claude starts** (`agent.template_ready`, outside the Claude slot): the people are cut
+  out (`portrait-cutout.py`, cached by photo and settings in `cache/cutouts/`), the score and cues
+  are written for this content, and the content is drawn at the template's moments into
+  `template/mine/sheet.png`, beside `template/sheet.png` (the template as its author made it).
+  Claude's first message is the template's (`templates.ask`): what stays (scenes, camera, motion,
+  clock, type, colour roles, sound), what changes (the content), the person's form, what was left
+  empty, the author's brief.
+- **Nothing of the sample leaves**: `templates.leftovers` finds any of the sample's own strings
+  (its event, people, places, address) in film.js or content.json -- a word the person's own form
+  holds is theirs -- and after Claude one short turn takes them out, or the film fails.
+- **The health check** (`templates.py check`): every live and draft version drawn again with this
+  release's renderer at its moments, compared with its preview by SSIM (bar 0.99); a release that
+  draws a template differently must not ship.
+- `GET /api/templates` (live ones), `GET /api/templates/<id>[?version=N]` (its form; never the
+  brief or the sample), `GET /api/templates/<id>/<v>/preview/<frame>/sheet.png`.
+
+```powershell
+python studio/templates.py make --folder projects/<id> --id t-<slug> --spec config/templates/<slug>.json --plan
+python studio/templates.py make --folder projects/<id> --id t-<slug> --spec config/templates/<slug>.json
+python studio/templates.py publish t-<slug> 1
+python studio/templates.py check
+python studio/agent.py --template t-<slug> --fields form.json --frame 16:9 --unlisted   # one on this machine
+```
+
+`test_templates.py` (in the release gate) covers the version, the form, the API and a real render.
+
 ## Bake-off: measure a change to the brief before it ships
 
 `bakeoff.py` makes one set of prompts (`bakeoff/<set>.json`, each with the audience it is for)

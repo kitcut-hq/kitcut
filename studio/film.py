@@ -190,6 +190,14 @@ CAPS = {
 # look's recipe: a film made with people gets it on top of its look's (Film.create), so a film
 # without people keeps its look's prompt byte for byte
 CAPS["people"] = {"modules": ("heads",), "direction": ("people",)}
+# a template's (studio/templates.py): what its film needs besides its look's recipe. space: the 3D
+# module (sketch/space.js); portraits: people cut out of the photos in its form before Claude
+# starts (agent.template_ready); template: the film is a remake, its first message the template's
+CAPS["space"] = {"modules": ("space",)}
+CAPS["portraits"] = {}
+CAPS["template"] = {}
+# the frames a film can have ("16:9" unless a template offers another), as the manifest's "frame"
+FRAMES = {"16:9": [1920, 1080], "1:1": [1080, 1080], "9:16": [1080, 1920]}
 MAX_PEOPLE = 4
 PERSON_NAME_MAX = 40  # characters of a person's name the studio keeps
 # what "auto" draws people as, by the film's look: the style nearest the look's own
@@ -294,12 +302,23 @@ def fonts(caps):
 MARK_BOX = (1660, 950, 1920, 1080)
 
 
+def mark_box(film):
+    """MARK_BOX in the film's own frame: the same corner, the same size, from its bottom right."""
+    try:
+        with open(film.manifest, encoding="utf-8") as f:
+            w, h = (json.load(f).get("frame") or [1920, 1080])[:2]
+    except (OSError, ValueError):
+        w, h = 1920, 1080
+    x0, y0, x1, y1 = MARK_BOX
+    return (w - (1920 - x0), h - (1080 - y0), w, h)
+
+
 def mark_note(film):
     """For a film that will carry KitCut's mark: keep that corner clear. Claude never sees the
     mark -- it is drawn at the final render only (agent.brand) -- so it has to be told."""
     if not film.record().get("branding"):
         return ""
-    x0, y0, x1, y1 = MARK_BOX
+    x0, y0, x1, y1 = mark_box(film)
     return (
         '\n\nThe corner is taken: this film carries KitCut\'s small "made with kitcut.ai" mark '
         "in its bottom-right corner (x %d-%d, y %d-%d), drawn over everything at the final render "
@@ -506,8 +525,15 @@ class Film:
 
     # ---------------------------------------------------------------- what Claude may touch
     def editable(self):
-        return (
+        rec = self.record()
+        base = (
             EDITABLE
+            if rec.get("narration") is not False
+            else tuple(n for n in EDITABLE if n != "vo.json")
+        )
+        return (
+            base
+            + (("content.json",) if rec.get("template") else ())
             + (("paint.json",) if paint_kinds(self.caps) else ())
             + (("scenes.json",) if self.mode == "scenes" else ())
         )
@@ -667,9 +693,16 @@ class Film:
         character_style="auto",
         member=None,
         narrator=None,
+        template=None,
+        frame=None,
     ):
         """A new film's folder: the manifest (its length set), the engine copy, an empty
         narration, an empty list of paintings for a painted film, and its record.
+
+        template: a remake of a template (studio/templates.py load()): its look, its exact
+        length, its capabilities and its frozen engine, a manifest made from its own, no
+        narration; templates.seed() then lays in its code and the person's content. frame: one of
+        the template's frames ("16:9", "1:1"...).
 
         attachments: what the visitor attached (uploads.take), each meta with its file as "src",
         copied into inputs/. A picture becomes upload1.jpg... and joins the manifest's images
@@ -690,10 +723,17 @@ class Film:
         "voice", "model", "jobs", "chars", "grant"} -- their own voice, spoken through the
         site's relay; the grant is kept apart (temp/voice.json, own_voice), never in the
         record. None, and Claude picks."""
-        seconds = seconds if seconds in LENGTHS else LENGTHS[0]
+        if template:  # its own length (26 s is no multiple of 5), look and capabilities
+            seconds = int(template["seconds"])
+            look = template.get("look") if template.get("look") in LOOKS else LOOKS[0]
+            people = []
+        seconds = seconds if (template or seconds in LENGTHS) else LENGTHS[0]
         look = look if look in LOOKS else LOOKS[0]
         people = list(people)[:MAX_PEOPLE]
         caps = RECIPES[look] + (("people",) if people else ())
+        if template:
+            caps += tuple(c for c in template.get("caps") or () if c in CAPS and c not in caps)
+            caps += ("template",)
         style = people_style(character_style, look) if people else None
         projects = os.path.join(HOME, "projects")
         os.makedirs(projects, exist_ok=True)
@@ -711,11 +751,21 @@ class Film:
         os.makedirs(film.path("engine"))
         os.makedirs(film.path("cast"))  # the person's cast: library.seed fills it
         os.makedirs(film.path("temp", "tmp"))
+        # a template's film runs on the engine it was drawn with (frozen in its version)
+        src = os.path.join(template["_dir"], "engine") if template else os.path.join(KIT, "sketch")
         for name in ENGINE + tuple(m + ".js" for m in modules(caps)):
             # copyfile, not copy2: a release's files are read-only
-            shutil.copyfile(os.path.join(KIT, "sketch", name), film.path("engine", name))
+            shutil.copyfile(os.path.join(src, name), film.path("engine", name))
         with open(os.path.join(HERE, "template", "sketch.json"), encoding="utf-8") as f:
             m = json.load(f)
+        if template:  # its own look: fonts, player, the mix; no narration, no captions
+            for k in ("fonts", "player", "audio", "render"):
+                if k in template.get("manifest", {}):
+                    m[k] = template["manifest"][k]
+            m.pop("vo", None)
+            m.pop("captions", None)
+            m["data"] = {"content": "content.json"}
+            m["frame"] = FRAMES.get(frame) or FRAMES[template["frames"][0]]
         words = re.sub(r"\s+", " ", prompt).strip()
         m["title"] = (words[:60] + "...") if len(words) > 60 else words
         attached = []
@@ -750,12 +800,14 @@ class Film:
             name = " ".join(str(a.get("person") or "").split())[:40]
             cast_people.append({"id": pid, "name": name, "style": style, "file": rel})
         m["duration"], m["poster_t"] = float(seconds), round(seconds - 0.4, 2)
+        if template and template.get("manifest", {}).get("poster_t") is not None:
+            m["poster_t"] = template["manifest"]["poster_t"]
         m["fps"] = 30 if fps == 30 else 60  # the plan's: Free films 30, paid ones 60
         m["engine"] = "engine"
         m["cast"] = "cast"  # every cast/*.js loads before film.js (sketch-render)
         # a long film is made a scene at a time (studio/scenes.py): scenes/*.js load after film.js
         over = scenes_over_s()
-        mode = mode or ("scenes" if over and seconds > over else "single")
+        mode = mode or ("scenes" if over and seconds > over and not template else "single")
         if mode == "scenes":
             m["scenes"] = "scenes"
             os.makedirs(film.path("scenes"))
@@ -780,7 +832,8 @@ class Film:
         }
         if (narrator or {}).get("source") == "elevenlabs":
             vo = {**_own_pins(narrator), "language": "en"}
-        _write_json(film.path("vo.json"), vo | {"lines": []})
+        if not template:  # a template's film has no narration: the music carries it
+            _write_json(film.path("vo.json"), vo | {"lines": []})
         if (narrator or {}).get("grant"):  # the film's pass to the relay: for the voice step only
             p = film.path("temp", "voice.json")
             with open(
@@ -828,6 +881,20 @@ class Film:
                 "release": RELEASE,
                 "state": "queued",
                 "created": datetime.now().isoformat(timespec="seconds"),
+                # a remake of a template (templates.py): which one, in which frame; no narration
+                **(
+                    {
+                        "template": {
+                            "id": template["id"],
+                            "version": template["version"],
+                            "title": template.get("title"),
+                        },
+                        "frame": frame if frame in FRAMES else template["frames"][0],
+                        "narration": False,
+                    }
+                    if template
+                    else {}
+                ),
             },
         )
         return film

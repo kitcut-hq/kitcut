@@ -485,6 +485,18 @@ class Tools:
                 "automation", "sketch-render.py", ["--automation"], pools=[("browser", 1)]
             )
 
+    async def _sound_data_if_needed(self):
+        """A template's film writes its own score and cues (SK.film({sound})): worked out again
+        from its code and content whenever either changed since, before the mix hears them."""
+        f = self.film
+        if not f.record().get("template"):
+            return
+        if _newer(f.path("sfx.json"), f.path("film.js"), f.path("content.json")) and _newer(
+            f.path("score.json"), f.path("film.js"), f.path("content.json")
+        ):
+            return
+        await self._script("sound", "sketch-render.py", ["--sound-data"], pools=[("browser", 1)])
+
     async def sound(self, levels=False, log=False):
         """The soundtrack, and what Claude needs to judge it without listening: whether the music
         stays under the narration, always, and with levels the balance per 2 s. Both come from
@@ -505,6 +517,7 @@ class Tools:
                 )
             )
         async with self.lock:
+            await self._sound_data_if_needed()
             self.gate()
             await self._automation_if_needed()
             tail = await self._script("sound", "sketch-audio.py", [], pools=[("cpu", 1)], log=log)
@@ -621,8 +634,11 @@ class Tools:
                 {"type": "object", "properties": {"levels": {"type": "boolean"}}},
             )(wrap(lambda a: self.sound(bool(a.get("levels"))))),
         ]
-        if self.film.record().get("prompt", "").strip():  # a typed idea is the title already
+        rec = self.film.record()
+        if rec.get("prompt", "").strip():  # a typed idea is the title already
             tools = [t for t in tools if t.name != "name_film"]
+        if rec.get("narration") is False:  # a template's film: the music carries it
+            tools = [t for t in tools if t.name != "voice"]
         if not paint_kinds(self.film.caps):
             tools = [t for t in tools if t.name != "paint"]
         return create_sdk_mcp_server("studio", tools=tools)

@@ -28,6 +28,7 @@ from film import PAINT_PINNED, VO_PINNED, limits, paint_kinds  # noqa: E402
 
 VOICES = tuple(import_module("sketch-vo").GEMINI_VOICES)
 MAX_JS = 256 * 1024  # film.js: the prompt asks for ~200 lines
+MAX_CONTENT_JSON = 256 * 1024  # a template film's content.json
 MAX_ENGINE_JS = 400 * 1024  # each engine file: engine.js + props.js are ~105 KB together
 MAX_CAST_JS = 64 * 1024  # one cast member (library.MAX_BYTES)
 MAX_JSON = 64 * 1024
@@ -279,9 +280,15 @@ def problems(film, name):
         if os.path.exists(p) and os.path.getsize(p) > MAX_CAST_JS:
             return ["%s is over %d KB, too big to keep" % (name, MAX_CAST_JS // 1024)]
         return []
+    if name == "content.json":  # a template film's words and people (templates.py)
+        p = film.path("content.json")
+        if os.path.exists(p) and os.path.getsize(p) > MAX_CONTENT_JSON:
+            return ["content.json is over %d KB" % (MAX_CONTENT_JSON // 1024)]
     d, out = _load(film, name)
     if d is None:
         return out
+    if name == "content.json":
+        return [] if isinstance(d, dict) else ["content.json must be one JSON object"]
     if name == "vo.json":
         people = [p["id"] for p in film.record().get("people") or []]
         return _vo(d, limits(film.length)["lines"], film.length, people)

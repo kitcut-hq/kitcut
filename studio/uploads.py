@@ -474,10 +474,11 @@ def _remove(d, uid):
                 pass
 
 
-async def take(client, ids):
+async def take(client, ids, max_images=None):
     """The metas of the uploads a film names, in order, once every voice note is written out --
     here, or by the server that took the note in (_written_out). Raises UploadError naming the
-    first that is missing, foreign, failed, silent or still being written out after WAIT_S."""
+    first that is missing, foreign, failed, silent or still being written out after WAIT_S.
+    max_images: a template's own cap on pictures (a line-up of speakers), else MAX_IMAGES."""
     if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids):
         raise UploadError(400, "attachments", "attachments must be a list of upload ids")
     ids = list(dict.fromkeys(ids))
@@ -507,8 +508,9 @@ async def take(client, ids):
                 422, "silent", "A voice note has no words in it; record it again.", uid
             )
         metas.append(meta)
-    if sum(m["kind"] == "image" for m in metas) > MAX_IMAGES:
-        raise UploadError(400, "attachments", "Up to %d pictures a film." % MAX_IMAGES)
+    cap = int(max_images or MAX_IMAGES)
+    if sum(m["kind"] == "image" for m in metas) > cap:
+        raise UploadError(400, "attachments", "Up to %d pictures a film." % cap)
     if sum(m["kind"] == "audio" for m in metas) > MAX_NOTES:
         raise UploadError(400, "attachments", "Up to %d voice notes a film." % MAX_NOTES)
     if sum(m["kind"] == "text" for m in metas) > MAX_DOCS:

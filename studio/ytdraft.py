@@ -161,7 +161,12 @@ def _narration(film):
     if lines:
         return lines
     vo = _read(film.path("vo.json"), True) or {}
-    return [(None, None, str(L.get("text") or "")) for L in vo.get("lines") or []]
+    lines = [(None, None, str(L.get("text") or "")) for L in vo.get("lines") or []]
+    if lines:
+        return lines
+    import templates  # noqa: PLC0415 -- a film with no narration: the words it shows
+
+    return [(None, None, s) for s in templates.onscreen(film)]
 
 
 def _sources(film, events=None):

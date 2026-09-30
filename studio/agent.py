@@ -55,6 +55,7 @@ procs.load_secrets(os.environ.get("STUDIO_ENV_FILE") or os.path.join(films.REPO,
 
 import store  # noqa: E402
 import scenes  # noqa: E402
+import templates  # noqa: E402
 import validate  # noqa: E402
 from film import (  # noqa: E402
     HOME,
@@ -271,7 +272,9 @@ def closing_s(n):
 def ask(film, recent=()):
     """The first message: the film's own facts, then the visitor's prompt, then what recent
     films chose -- here and not in the system prompt, which stays the same for every film of a
-    look (and so stays cached)."""
+    look (and so stays cached). A remake of a template gets the template's own (templates.ask)."""
+    if film.record().get("template"):
+        return templates.ask(film) + mark_note(film)
     n = film.length
     text = (
         "Make the film.\n\nLength: %d seconds (fixed). Narration: about %d words, ending by "
@@ -317,6 +320,91 @@ def people_note(film):
         "where it was given or the prompt says it.",
     ]
     return "\n".join(lines)
+
+
+# ------------------------------------------------------------------ before a template's film
+CUT_S_PER_PHOTO = 60  # portrait-cutout's time a photo, with room (10.5 s on the laptop, ~2x the VM)
+
+
+async def template_ready(film, tools, emit):
+    """Make a template's film ready for Claude (templates.py): its people cut out of their photos
+    (portrait-cutout.py, the cache first), its score and cues written from its own code for this
+    content (--sound-data), and its content drawn at the template's moments into
+    template/mine/sheet.png, beside the template's own sheet. Done once; a film picked up again
+    skips what it has."""
+    todo, spec = await asyncio.to_thread(templates.cut_list, film)
+    if todo:
+        emit({"type": "stage", "name": "people", "text": "Cutting the people out of their photos"})
+        src = film.path("temp", "cut", "in")
+        out = film.path("temp", "cut", "out")
+        shutil.rmtree(film.path("temp", "cut"), ignore_errors=True)
+        os.makedirs(src)
+        for key, photo, _, _ in todo:
+            shutil.copyfile(photo, os.path.join(src, key + os.path.splitext(photo)[1]))
+        argv = [procs.python(), "-X", "utf8", os.path.join(KIT, "scripts", "portrait-cutout.py")]
+        argv += ["--src", src, "--out", out, "--threads", "2"] + templates.cut_args(spec)
+        async with tools.sched["cpu"].hold(1, film.id, tools._on_wait, None, tools.priority):
+            code, tail = await procs.run(
+                argv,
+                film.dir,
+                procs.step_env(film, "cutouts"),
+                60 + CUT_S_PER_PHOTO * len(todo),
+                jobs=tools.jobs,
+            )
+        if code != 0:
+            raise RuntimeError("the people could not be cut out: %s" % " ".join(tail[-3:]))
+        cache = os.path.join(films.HOME, "cache", "cutouts")
+        os.makedirs(cache, exist_ok=True)
+        for key, _, dst, hit in todo:
+            got = os.path.join(out, key + ".webp")
+            if not os.path.exists(got):
+                raise RuntimeError("no cut-out of %s" % key)
+            shutil.copyfile(got, dst)
+            shutil.copyfile(got, hit)
+    emit({"type": "stage", "name": "claude", "text": "Drawing the template with your content"})
+    async with tools.lock:
+        await tools._sound_data_if_needed()
+    t = templates.load(
+        film.record()["template"]["id"], film.record()["template"]["version"], ("live", "draft")
+    )
+    if t and t.get("moments") and not os.path.exists(film.path("template", "mine", "sheet.png")):
+        ts = ",".join("%g" % x for x in t["moments"])
+        async with tools.lock:
+            await tools._script(
+                "stills",
+                "sketch-render.py",
+                ["--stills", ts, "--into", "template/mine", "--sheet"],
+                pools=[("browser", 1)],
+            )
+
+
+LEFTOVERS = (
+    "The film still shows the template's own sample: %s. None of the sample's event, people, "
+    "places or addresses may be in this film -- replace them with the person's content (or leave "
+    "them out), in film.js and content.json, call check, and stop with one sentence."
+)
+
+
+async def no_leftovers(film, emit, meter, tools, auth):
+    """A template's film must show nothing of the template's sample (templates.leftovers): one
+    short turn to take out what is left, then it fails rather than show someone else's event."""
+    left = await asyncio.to_thread(templates.leftovers, film)
+    sid = film.record().get("claude_session")
+    if left and sid:
+        emit(
+            {"type": "stage", "name": "claude", "text": "Claude is taking out the template's words"}
+        )
+        with contextlib.suppress(TimeoutError):
+            await _within(
+                run_claude(
+                    film, emit, meter, tools, auth, prompt=LEFTOVERS % ", ".join(left), resume=sid
+                ),
+                Clock(),
+                {"claude_s": WRAP_UP_S, "wall_s": WRAP_UP_S + 120},
+            )
+        left = await asyncio.to_thread(templates.leftovers, film)
+    if left:
+        raise RuntimeError("the film still shows the template's own words: %s" % ", ".join(left))
 
 
 # ------------------------------------------------------------------ drawing the people
@@ -1440,6 +1528,10 @@ async def make_film(
 
     state = "error"
     try:
+        if not finish_only and not resume and rec.get("template"):
+            s = time.time()
+            await template_ready(film, tools, emit)  # before the slot: no Claude is waiting on it
+            stages["ready"] = time.time() - s
         if not finish_only:
             async with sched["claude"].hold(1, film.id, on_wait, priority=rec.get("priority", 0)):
                 clock.t0, clock.paused = time.time(), 0.0  # the queue was not Claude's time
@@ -1517,6 +1609,8 @@ async def make_film(
                 raise RuntimeError("Claude finished without writing %s" % ", ".join(missing))
             if unvoiced(film):  # its lines are written but were never spoken: not a silent film
                 raise RuntimeError("Claude finished without recording the narration")
+            if film.record().get("template"):
+                await no_leftovers(film, emit, meter, tools, auth)
             film.update(state="finishing", **summary)
             await save(film.id, {"state": "finishing"})
         pin_vo(film)  # whatever Claude left there, the backends and models stay the studio's
@@ -1721,7 +1815,8 @@ async def written(film, tools):
     and files that pass the gate and the syntax check."""
     if any(not os.path.exists(film.path(f)) for f in MADE):
         return False
-    if not os.path.exists(film.path("audio", "vo", "timeline.json")):
+    narrated = film.record().get("narration") is not False  # a template's film is music only
+    if narrated and not os.path.exists(film.path("audio", "vo", "timeline.json")):
         return False
     try:
         tools.gate()
@@ -2048,6 +2143,46 @@ def _print(ev):
     sys.stdout.flush()
 
 
+def template_film(args):
+    """A film remade from a template on this machine (--template, --fields): the form's pictures
+    are files, stood in for uploads, and a draft may be tried."""
+    tid, _, v = args.template.partition(":")
+    t = templates.load(tid, int(v) if v else None, ("live", "draft"))
+    if not t:
+        sys.exit("no template %s" % args.template)
+    with open(args.fields, encoding="utf-8") as f:
+        form = json.load(f)
+    base, metas = os.path.dirname(os.path.abspath(args.fields)), {}
+
+    def local(path):  # a picture's file, as an upload the film takes
+        uid = "up-local%d" % (len(metas) + 1)
+        p = os.path.join(base, path)
+        if not os.path.isfile(p):
+            sys.exit("no such picture: %s" % p)
+        metas[uid] = {"id": uid, "kind": "image", "src": p, "ext": p.rsplit(".", 1)[-1].lower()}
+        return uid
+
+    for fd in t["fields"]:
+        v = form.get(fd["key"])
+        if fd["kind"] in ("image", "logo") and isinstance(v, str) and v:
+            form[fd["key"]] = local(v)
+        elif fd["kind"] == "people" and isinstance(v, list):
+            form[fd["key"]] = [dict(p, photo=local(p["photo"])) for p in v]
+    clean = templates.validate_fields(t, form)
+    content, pics = templates.build_content(t, clean)
+    film = Film.create(
+        "%s: %s" % (t["title"], next((x for x in clean.values() if isinstance(x, str)), "")),
+        client="local",
+        source="cli",
+        template=t,
+        frame=args.frame or t["frames"][0],
+        listed=not args.unlisted,
+    )
+    templates.seed(film, t, content, {k: metas[u] for k, u in pics.items()})
+    film.update(fields=clean)
+    return film
+
+
 def main():
     _env.utf8_stdio()
     ap = argparse.ArgumentParser(
@@ -2063,6 +2198,15 @@ def main():
         help="api: ANTHROPIC_API_KEY (billed per token); login: this machine's Claude Code login",
     )
     ap.add_argument("--smoke", action="store_true", help="a one-turn check, no film")
+    ap.add_argument("--template", help="remake this template (templates.py): t-<slug>[:version]")
+    ap.add_argument(
+        "--fields",
+        help="with --template: the form as JSON; a picture is a file path (relative to the JSON)",
+    )
+    ap.add_argument("--frame", help="with --template: one of its frames (16:9, 1:1...)")
+    ap.add_argument(
+        "--unlisted", action="store_true", help="keep the film out of every gallery (link-only)"
+    )
     ap.add_argument(
         "--check-login",
         action="store_true",
@@ -2099,9 +2243,19 @@ def main():
     if args.smoke:
         ok, _ = asyncio.run(smoke(args.auth))
         sys.exit(0 if ok else 1)
-    if not args.prompt:
-        ap.error("give a prompt, or --smoke")
-    film = Film.create(args.prompt, args.seconds, args.look, client="local", source="cli")
+    if args.template:
+        film = template_film(args)
+    else:
+        if not args.prompt:
+            ap.error("give a prompt, or --smoke")
+        film = Film.create(
+            args.prompt,
+            args.seconds,
+            args.look,
+            client="local",
+            source="cli",
+            listed=not args.unlisted,
+        )
     print("  film    %s" % film.dir)
 
     async def go():

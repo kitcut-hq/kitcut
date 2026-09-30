@@ -129,6 +129,7 @@ import media  # noqa: E402
 import peers  # noqa: E402
 import procs  # noqa: E402
 import store  # noqa: E402
+import templates  # noqa: E402
 import validate  # noqa: E402
 import thumbs  # noqa: E402
 import uploads  # noqa: E402
@@ -1097,6 +1098,40 @@ async def leading():
     return LEADER.is_set() and peers.leads() and MODE == "serving" and not DRAINING
 
 
+def template_of(body, local):
+    """A film asked for from a template: {"template": {"id", "version"}, "fields": {...},
+    "frame": "16:9"}. Returns (template, the form checked, frame, None) or (None, None, None,
+    (error body, status)). A draft is this machine's to try; the rest is live versions only."""
+    want = body.get("template")
+    if not isinstance(want, dict) or not isinstance(want.get("id"), str):
+        return None, None, None, ({"error": "template must be {id, version}"}, 400)
+    status = ("live", "draft") if local else ("live",)
+    t = templates.load(want["id"], want.get("version"), status)
+    if t is None:
+        latest = templates.load(want["id"], None, status)
+        if latest is not None:  # an older version, retired: the form must be filled again
+            return (
+                None,
+                None,
+                None,
+                (
+                    {"error": "template changed", "version": latest["version"]},
+                    409,
+                ),
+            )
+        return None, None, None, ({"error": "no such template"}, 404)
+    if body.get("attachments") or body.get("people") or body.get("project"):
+        return None, None, None, ({"error": "a template's film takes its form, nothing else"}, 400)
+    try:
+        clean = templates.validate_fields(t, body.get("fields") or {})
+    except templates.TemplateError as e:
+        return None, None, None, ({"error": str(e), "field": True}, 400)
+    frame = body.get("frame") or t["frames"][0]
+    if frame not in t["frames"]:
+        return None, None, None, ({"error": "frame is one of %s" % ", ".join(t["frames"])}, 400)
+    return t, clean, frame, None
+
+
 async def create(req):
     if DRAINING or MODE != "serving":
         return web.json_response({"error": RESTARTING}, status=503)
@@ -1105,6 +1140,17 @@ async def create(req):
     except ValueError:
         return web.json_response({"error": 'send JSON: {"prompt": "..."}'}, status=400)
     prompt = str(body.get("prompt", "")).strip()[:PROMPT_MAX]
+    tpl = clean = frame = None
+    if body.get("template") is not None:  # a remake of a template, from its form (templates.py)
+        tpl, clean, frame, err = template_of(body, from_this_machine(req))
+        if err:
+            return web.json_response(err[0], status=err[1])
+        first = next(
+            (v for v in clean.values() if isinstance(v, str) and not v.startswith("up-")), ""
+        )
+        more = (" -- " + prompt) if prompt else ""
+        prompt = ("%s: %s%s" % (tpl["title"], first, more))[:PROMPT_MAX]
+        body = dict(body, seconds=tpl["seconds"], look=tpl.get("look"))
     ids = body.get("attachments") or []
     # people to draw as talking characters: [{"upload": "up-...", "name": "Alex"}] (photos
     # uploaded first, like pictures), and the style they are drawn in ("auto": the look's own)
@@ -1134,7 +1180,7 @@ async def create(req):
         seconds = int(body.get("seconds") or films.LENGTHS[0])
     except (TypeError, ValueError):
         seconds = 0
-    if seconds not in films.LENGTHS:
+    if seconds not in films.LENGTHS and not tpl:  # a template's own length may be any
         return web.json_response(
             {"error": "seconds must be one of %s" % ", ".join(map(str, films.LENGTHS))},
             status=400,
@@ -1200,9 +1246,14 @@ async def create(req):
     try:
         attached = await uploads.take(uploader, ids) if ids else []
         faces = await uploads.take(uploader, [p["upload"] for p in people]) if people else []
+        # a template's pictures: its logo, its people's photos (up to the template's own cap)
+        tids = templates.upload_ids(tpl, clean) if tpl else []
+        shots = await uploads.take(uploader, tids, tpl["limits"]["images"]) if tids else []
     except uploads.UploadError as e:
         return web.json_response(e.body(), status=e.status)
-    for a in attached + faces:
+    if any(a["kind"] != "image" for a in shots):
+        return web.json_response({"error": "a template's pictures must be pictures"}, status=400)
+    for a in attached + faces + shots:
         a["src"] = uploads.file_of(uploader, a)
     for a, p in zip(faces, people, strict=True):
         if a["kind"] != "image":
@@ -1223,7 +1274,9 @@ async def create(req):
             return web.json_response({"error": refused}, status=429)
         # an account that may make two at once can send the same upload twice: the film admitted
         # first takes it (release, below), and this one must not start without it
-        gone = next((a for a in attached + faces if uploads.get(uploader, a["id"]) is None), None)
+        gone = next(
+            (a for a in attached + faces + shots if uploads.get(uploader, a["id"]) is None), None
+        )
         if gone:
             e = uploads.UploadError(
                 409, "attachment", "An attachment is no longer here; add it again.", gone["id"]
@@ -1247,10 +1300,20 @@ async def create(req):
             character_style=style,
             member=member,
             narrator=narrator,
+            template=tpl,
+            frame=frame,
         )
-        uploads.release(uploader, attached + faces)  # the film has its own copies now
+        if tpl:  # its code, the person's content and pictures (templates.seed)
+            content, pics = templates.build_content(tpl, clean)
+            by_id = {a["id"]: a for a in shots}
+            await asyncio.to_thread(
+                templates.seed, f, tpl, content, {k: by_id[u] for k, u in pics.items()}
+            )
+            f.update(fields=clean)
+        uploads.release(uploader, attached + faces + shots)  # the film has its own copies now
         try:  # the person's cast and earlier films (library.py); a film goes ahead without
-            await asyncio.to_thread(library.seed, f)
+            if not tpl:  # a remake keeps to its template, not to the person's other films
+                await asyncio.to_thread(library.seed, f)
         except Exception as e:  # noqa: BLE001
             print("film %s: no library: %s" % (f.id, e), file=sys.stderr, flush=True)
         await agent.save(f.id, agent.first_record(f, source, client))
@@ -1268,9 +1331,55 @@ async def create(req):
             "attachments": [a["kind"] for a in attached],
             "people": len(faces),
             "listed": listed,
+            **({"template": {"id": tpl["id"], "version": tpl["version"]}} if tpl else {}),
         },
         status=202,
     )
+
+
+# ------------------------------------------------------------------ templates (templates.py)
+PREVIEW_NAME = re.compile(r"sheet\.png|\d{3}\.\d{2}\.png")
+
+
+def template_view(req, t):
+    """A template as anyone may see it, with the addresses of its preview sheets."""
+    out = templates.public(t)
+    out["preview"] = {
+        fr: "%s/api/templates/%s/%d/preview/%s/sheet.png"
+        % (base_url(req), t["id"], t["version"], templates.fdir(fr))
+        for fr in t["frames"]
+    }
+    return out
+
+
+async def template_list(req):
+    """Every live template, newest version of each."""
+    return web.json_response({"templates": [template_view(req, t) for t in templates.live()]})
+
+
+async def template_get(req):
+    """One template's form: the latest live version, or ?version=N (a draft: this machine's)."""
+    v = req.query.get("version")
+    status = ("live", "draft") if from_this_machine(req) else ("live",)
+    t = templates.load(req.match_info["id"], int(v) if v and v.isdigit() else None, status)
+    if t is None:
+        return web.json_response({"error": "no such template"}, status=404)
+    return web.json_response(template_view(req, t))
+
+
+async def template_preview(req):
+    """A version's preview still or sheet (preview/<frame>/<name>.png): public once it is live."""
+    status = ("live", "draft") if from_this_machine(req) else ("live",)
+    m = req.match_info
+    t = templates.load(m["id"], int(m["v"]) if m["v"].isdigit() else -1, status)
+    if t is None or m["frame"] not in {templates.fdir(f) for f in t["frames"]}:
+        return web.json_response({"error": "not found"}, status=404)
+    if not PREVIEW_NAME.fullmatch(m["name"]):
+        return web.json_response({"error": "not found"}, status=404)
+    p = os.path.join(t["_dir"], "preview", m["frame"], m["name"])
+    if not os.path.isfile(p):
+        return web.json_response({"error": "not found"}, status=404)
+    return web.FileResponse(p, headers={"Cache-Control": "public, max-age=86400"})
 
 
 async def upload(req):
@@ -1983,6 +2092,9 @@ def make_app(token):
             web.get("/api/health", health),
             web.get("/api/limits", limits_route),
             web.get("/api/films", list_films),
+            web.get("/api/templates", template_list),
+            web.get("/api/templates/{id}", template_get),
+            web.get("/api/templates/{id}/{v}/preview/{frame}/{name}", template_preview),
             web.get("/api/costs", costs),
             web.post("/api/films", create),
             web.post("/api/uploads", upload),
