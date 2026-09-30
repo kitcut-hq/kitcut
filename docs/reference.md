@@ -3075,6 +3075,42 @@ from a render's `.youtube.json` sidecar can be pasted straight in. After
 deleting, drop the deliverable's entry from `projects/<id>/project.json` and
 its `.youtube.json` sidecar yourself — no script records a deletion.
 
+## The "Made with AI" label
+
+A watch page can show "How this was made / Made with AI — Sounds or visuals
+were altered or fully generated". Two different things put it there, and only
+one of them is ours to change:
+
+- **The creator's disclosure**: Studio's "Altered content" box, which the Data API calls
+  `status.containsSyntheticMedia`. No script here sets it on upload.
+- **YouTube's own labelling**, from C2PA content credentials in the file or its
+  own detection. The API cannot see this label and cannot clear it.
+
+```powershell
+python scripts/yt-set-disclosure.py --channel @kitcut-hq --list --labels   # which pages carry it
+python scripts/yt-set-disclosure.py --channel @kitcut-hq --set no --dry-run
+python scripts/yt-set-disclosure.py --channel @kitcut-hq --set no --video <id>
+```
+
+Measured 2026-09-30: every upload on both channels read as not-"yes". Two
+@kitcut-hq videos carried the label anyway (`watMf06668M`, `V25n5_k7v_c`, both
+studio films with an AI voice), and `watMf06668M` kept it after an explicit
+`--set no`. So on our footage the label comes from YouTube, not from the flag,
+and flipping the flag channel-wide would spend about 13,000 quota units to
+change nothing.
+
+Two traps. The API returns the flag **only when it is "yes"**, so "no" and
+never-set read back identically (`-`). And `videos.update` replaces the whole
+status part, so the script sends back privacy, `publishAt`, licence, embeddable,
+stats visibility and made-for-kids exactly as it read them. `--labels` reads the
+public watch pages anonymously, with a 2 s pause per page, because YouTube
+answers 429 after about 130 back-to-back pages. A 429 prints as `429?` rather
+than failing the run.
+
+Policy: YouTube requires "yes" for realistic content that could mislead, such as
+a real person's cloned voice or a photo of a real person made to speak.
+Animation with a generic narrator does not need it.
+
 ## Sketch films: an explainer written as code
 
 A sketch film is an animated explainer with no footage at all: the picture is JavaScript,
@@ -4329,6 +4365,7 @@ absolute path written into a script, a skill or these docs.
 | `scripts/import-iphone.ps1` | pull footage off a phone over MTP, verified by byte count |
 | `scripts/yt-upload.py` | upload a render to YouTube, channel-guarded and verified |
 | `scripts/yt-delete.py` | delete videos from YouTube, channel-guarded, dry-run by default |
+| `scripts/yt-set-disclosure.py` | read or set the "altered or synthetic content" flag; find which watch pages show "Made with AI" |
 | `scripts/yt-fetch-transcripts.py` | pull audio + word transcripts for published channel videos |
 | `scripts/yt-audit-chapters.py` | verdict per channel video: has chapters, needs them, or too short |
 | `scripts/verify-chapters.py` | check a chapter list against the transcript before it goes live |
