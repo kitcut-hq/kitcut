@@ -33,6 +33,10 @@ A project on the site (a series, a channel) has a library of its own, inside its
         pictures\\<name>.png|jpg|webp           what the person put in the project: a logo,
         pictures\\<name>.thumb.png              character art... every episode gets them as
                                                inputs/pic_<name>.*, SK.image('pic_<name>')
+        voice\\<key>.wav|mp3                    approved voice lines: recordings of narration
+                                               lines its person approved by ear; every episode
+                                               gets them in audio/vo/approved/, and a line with
+                                               the same words and voice plays one (sketch-vo.py)
 
 An episode seeds from and keeps into its project's library, never the person's own; a film outside
 projects, the other way round. A library is named (client, project), project None for the
@@ -48,8 +52,16 @@ import threading
 import contextlib
 from datetime import datetime
 
+import sys
+import subprocess
+
 import locks
-from film import CAST_USE, HOME, PROJECT_ID, Film, _write_json
+from film import CAST_USE, HOME, PROJECT_ID, VO_PINNED, Film, _write_json
+
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+)
+import _sketch  # noqa: E402
 
 ROOT = os.path.join(HOME, "library")
 NAME = re.compile(r"^[a-z][a-z0-9_]{0,30}$")
@@ -61,6 +73,8 @@ MAX_BYTES = 64 * 1024  # one member's code
 FILES = ("film.js", "vo.json", "score.json", "sfx.json", "paint.json")
 PICTURES = 6  # a project's pictures: every review render carries them all
 PICTURE_EXT = ("png", "jpg", "webp")
+VOICE_LINES = 12  # a project's approved voice lines: every episode carries them all
+VOICE_KEY = re.compile(r"^[0-9a-f]{12}$")
 _LOCKS = {}  # a library's folder -> the lock its index is changed under
 _LOCKS_LOCK = threading.Lock()
 
@@ -135,6 +149,7 @@ def load(lib):
         idx = {}
     idx.setdefault("cast", {})
     idx.setdefault("pictures", {})
+    idx.setdefault("voice", {})
     if "films" not in idx:
         idx["films"] = []
         for f in [] if project else Film.all():
@@ -291,6 +306,7 @@ def seed(film):
     got = {"cast": cast, "films": memory}
     if lib[1]:
         got["pictures"] = _seed_pictures(film, lib, idx)
+        got["voice"] = _seed_voice(film, lib, idx)
     film.update(library=got)
     return got
 
@@ -323,6 +339,7 @@ def note(film):
     project = rec.get("project") or {}
     cast, memory = got.get("cast") or [], got.get("films") or []
     pics = got.get("pictures") or []
+    voice = got.get("voice") or []
     if not cast and not memory and not project:
         return ""
     out = []
@@ -336,6 +353,21 @@ def note(film):
             "The project's pictures (Read one to see it; on screen: SK.image('<name>', x, y, w)):",
         ]
         out += ["- %s (%sx%s): %s" % (p["name"], p.get("w"), p.get("h"), p["file"]) for p in pics]
+    if voice:
+        out += [
+            "" if out else None,
+            "The project's approved voice lines: recordings its person listened to and approved. "
+            "A vo.json line with exactly these words, in the same voice and model, plays that "
+            "recording and is never recorded again: the series' greeting and sign-off sound the "
+            "same in every episode, and a name is said the way they approved it. Use each word "
+            "for word, as a line of its own, where it fits (what follows it goes in the next "
+            "line):",
+        ]
+        out += [
+            '- "%s" (%s, %s, %.1f s)'
+            % (v["text"], v.get("voice"), v.get("model"), v.get("dur") or 0)
+            for v in voice
+        ]
     if cast:
         out += [
             "" if out else None,
@@ -624,6 +656,10 @@ def listing(client, project=None):
             {"name": n} | {k: e.get(k) for k in ("w", "h", "added")}
             for n, e in sorted(idx["pictures"].items())
         ]
+        out["voice"] = [
+            {"key": k} | e
+            for k, e in sorted(idx["voice"].items(), key=lambda x: x[1].get("added") or "")
+        ]
     return out
 
 
@@ -733,3 +769,193 @@ def picture_thumb(client, project, name):
         return None
     p = os.path.join(dir_of(lib), "pictures", name + ".thumb.png")
     return p if name in load(lib)["pictures"] and os.path.exists(p) else None
+
+
+# ---------------------------------------------------------------- a project's voice lines
+# Recordings of narration lines its person approved by ear (docs/studio-voice-lines.md): a series'
+# greeting and sign-off, a name the voice says right only now and then. Filed under
+# _sketch.voice_line_key (the words, the TTS, the voice, the model); every episode gets them
+# (audio/vo/approved/), and sketch-vo.py plays one for any line with the same key instead of
+# recording it again. Why: a TTS picks a word's stress afresh on every take, and the check after
+# recording (Whisper) turns speech into text, which is the same whichever syllable is stressed --
+# a mis-stressed name scores 100 % and ships (KI-047).
+class VoiceError(PictureError):
+    """Why a voice line was not taken: a status for the answer, and words for a person."""
+
+
+def _voice_dir(lib):
+    return os.path.join(dir_of(lib), "voice")
+
+
+def _mp3(src, out):
+    """The same recording as a small MP3 to listen to (the site plays it)."""
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-i", src, "-ac", "1", "-b:a", "96k", out],
+        check=True,
+        capture_output=True,
+    )
+
+
+def add_voice(client, project, text, src, vo, film=None, line=None):
+    """Put a recording of a narration line into a project as an approved voice line: text is
+    what it says, src any audio file of just that line, vo the voice it is in ({tts, voice,
+    model, language}). The same words in the same voice again replace it. Returns its entry."""
+    lib = owner(client, project)
+    if not lib or not project:
+        raise VoiceError(404, "No such project.")
+    words = " ".join(re.sub(r"\[[^\]]*\]", "", text or "").split())
+    if not words or len(words) > 300:
+        raise VoiceError(400, "A voice line is one line of narration, at most 300 characters.")
+    try:
+        x = _sketch.decode(src)
+    except (OSError, subprocess.CalledProcessError) as e:
+        raise VoiceError(400, "That recording could not be read.") from e
+    dur = len(x) / _sketch.SR
+    if not 0.3 <= dur <= 30:
+        raise VoiceError(400, "A voice line is 0.3-30 seconds long.")
+    key = _sketch.voice_line_key(words, vo)
+    tts = vo.get("tts") or "gemini"
+    with _lock(lib):
+        idx = load(lib)
+        if key not in idx["voice"] and len(idx["voice"]) >= VOICE_LINES:
+            raise VoiceError(409, "A project holds up to %d voice lines." % VOICE_LINES)
+        d = _voice_dir(lib)
+        os.makedirs(d, exist_ok=True)
+        _sketch.write_wav(os.path.join(d, key + ".wav"), x)
+        _mp3(os.path.join(d, key + ".wav"), os.path.join(d, key + ".mp3"))
+        idx["voice"][key] = {
+            "text": words,
+            "tts": tts,
+            "voice": vo.get("voice") or "",
+            "model": vo.get("model") or _sketch.TTS_MODEL.get(tts, ""),
+            "language": (vo.get("language") or "en").lower(),
+            "dur": round(dur, 2),
+            "added": datetime.now().isoformat(timespec="seconds"),
+            "film": film,
+            "line": line,
+        }
+        _save(lib, idx)
+        return {"key": key} | idx["voice"][key]
+
+
+def _vo_of(film):
+    """The voice a film's narration is in: its vo.json, with the studio's pinned TTS."""
+    try:
+        with open(film.path("vo.json"), encoding="utf-8") as f:
+            vo = json.load(f)
+    except (OSError, ValueError):
+        vo = {}
+    return {k: vo.get(k) for k in ("voice", "model", "language")} | {
+        "tts": vo.get("tts") or VO_PINNED["tts"]
+    }
+
+
+def _timeline(film):
+    try:
+        with open(film.path("audio", "vo", "timeline.json"), encoding="utf-8") as f:
+            return json.load(f).get("lines", [])
+    except (OSError, ValueError):
+        return []
+
+
+def film_lines(film):
+    """A finished film's narration as its person may go through it: [{i, text, start, dur, key,
+    approved, played_approved}]. approved: the line is one of its project's voice lines now;
+    played_approved: the film played it from one."""
+    lib = lib_of(film.record())
+    have = load(lib)["voice"] if lib and lib[1] else {}
+    vo = _vo_of(film)
+    out = []
+    for L in _timeline(film):
+        key = _sketch.voice_line_key(L["text"], vo)
+        out.append(
+            {
+                "i": L["i"],
+                "text": L["text"],
+                "start": L["start"],
+                "dur": L.get("dur"),
+                "key": key,
+                "approved": key in have,
+                "played_approved": bool(L.get("approved")),
+            }
+        )
+    return out
+
+
+def _line_file(film, i):
+    L = next((x for x in _timeline(film) if x["i"] == i), None)
+    p = L and os.path.join(film.dir, L["file"])
+    return (L, p) if p and os.path.exists(p) else (None, None)
+
+
+def film_line_audio(film, i):
+    """Line i of a film, as an MP3 to listen to (made once, in the film's temp/lines/; again
+    when the line was re-recorded). None when there is no such line."""
+    L, src = _line_file(film, i)
+    if L is None:
+        return None
+    out = film.path("temp", "lines", "L%02d.mp3" % i)
+    if not os.path.exists(out) or os.path.getmtime(out) < os.path.getmtime(src):
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        _mp3(src, out)
+    return out
+
+
+def add_voice_from_film(client, project, film_id, i):
+    """Approve line i of one of the project's finished episodes, as it sounds in the film."""
+    f = Film.open(str(film_id or ""))
+    rec = f.record() if f else {}
+    if not f or rec.get("client") != client or (rec.get("project") or {}).get("id") != project:
+        raise VoiceError(404, "That film is not an episode of this project.")
+    if f.state != "done":
+        raise VoiceError(409, "Only a finished episode's lines can be approved.")
+    L, src = _line_file(f, i) if isinstance(i, int) and not isinstance(i, bool) else (None, None)
+    if L is None:
+        raise VoiceError(404, "That film has no such line.")
+    return add_voice(client, project, L["text"], src, _vo_of(f), film=f.id, line=i)
+
+
+def delete_voice(client, project, key):
+    """Take a voice line out of a project, files and all. False when there is no such line."""
+    lib = owner(client, project)
+    if not lib or not project or not VOICE_KEY.match(key or ""):
+        return False
+    with _lock(lib):
+        idx = load(lib)
+        if key not in idx["voice"]:
+            return False
+        del idx["voice"][key]
+        for ext in (".wav", ".mp3"):
+            try:
+                os.remove(os.path.join(_voice_dir(lib), key + ext))
+            except OSError:
+                pass
+        _save(lib, idx)
+    return True
+
+
+def voice_audio(client, project, key):
+    """The path of a voice line's MP3, or None."""
+    lib = owner(client, project)
+    if not lib or not project or not VOICE_KEY.match(key or ""):
+        return None
+    p = os.path.join(_voice_dir(lib), key + ".mp3")
+    return p if key in load(lib)["voice"] and os.path.exists(p) else None
+
+
+def _seed_voice(film, lib, idx):
+    """A project's voice lines into the film's audio/vo/approved/ (for sketch-vo.py), with an
+    index of what each says and in which voice. [{key, text, voice, model, dur}]"""
+    out, index = [], {}
+    d = film.path("audio", "vo", _sketch.APPROVED)
+    for key, e in sorted(idx["voice"].items(), key=lambda x: x[1].get("added") or ""):
+        src = os.path.join(_voice_dir(lib), key + ".wav")
+        if not os.path.exists(src):
+            continue
+        os.makedirs(d, exist_ok=True)
+        shutil.copyfile(src, os.path.join(d, key + ".wav"))
+        index[key] = {k: e.get(k) for k in ("text", "tts", "voice", "model", "language", "dur")}
+        out.append({"key": key} | {k: e.get(k) for k in ("text", "voice", "model", "dur")})
+    if index:
+        _write_json(os.path.join(d, "index.json"), index)
+    return out

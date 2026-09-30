@@ -292,6 +292,69 @@ def main():
     finally:
         vo_mod.whisper_score = real
         shutil.rmtree(vdir, ignore_errors=True)
+
+    # ---- approved voice lines: a project's recording plays for the same words in the same voice
+    K = _sketch.voice_line_key
+    vo = {"tts": "gemini", "voice": "Sadachbia", "model": "gemini-3.1-flash-tts-preview"}
+    greet = "Привіт! Це Очеретинська школа економіки."
+    check(
+        "voice line key: tags, spacing and quote/dash styles do not matter",
+        K(greet, vo)
+        == K("[warmly]  Привіт!   Це Очеретинська школа економіки. ", vo)
+        == K(greet, {**vo, "style": "a brand new direction"})
+        and K("It’s «here» – now", vo) == K('It\'s "here" — now', vo),
+    )
+    check(
+        "voice line key: other words, voice or model are another recording",
+        len(
+            {
+                K(greet, vo),
+                K(greet + "!", vo),
+                K(greet, {**vo, "voice": "Kore"}),
+                K(greet, {**vo, "model": None}),
+                K(greet, vo, tts="edge"),
+            }
+        )
+        == 5
+        and K(greet, {"voice": "Kore"})
+        == K(greet, {"voice": "Kore", "tts": "gemini"})
+        == K(greet, {"voice": "Kore", "model": _sketch.TTS_MODEL["gemini"]}),
+    )
+    vdir = tempfile.mkdtemp(prefix="check-sketch-vo-")
+    try:
+        ad = os.path.join(vdir, _sketch.APPROVED)
+        os.makedirs(ad)
+        key = K(greet, vo)
+        _sketch.write_wav(os.path.join(ad, key + ".wav"), voiced(200, 1.0))
+        with open(os.path.join(ad, "index.json"), "w", encoding="utf-8") as f:
+            json.dump({key: {"text": greet}, "0123456789ab": {"text": "no file"}}, f)
+        got = _sketch.approved_lines(vdir)
+        check(
+            "approved lines: read from audio/vo/approved/, only those with a recording",
+            list(got) == [key] and got[key]["file"].endswith(key + ".wav"),
+            str(got),
+        )
+        check("approved lines: none given, none", _sketch.approved_lines(ad) == {})
+        base = os.path.join(vdir, "L00_T0_fp")
+        with open(base + ".score.json", "w", encoding="utf-8") as f:
+            f.write("{}")
+        first = vo_mod.use_approved(base, got[key], key)
+        with open(base + ".json", encoding="utf-8") as f:
+            meta = json.load(f)
+        same = open(base + ".wav", "rb").read() == open(got[key]["file"], "rb").read()
+        check(
+            "approved take: copied in as the line's take, its old score dropped",
+            first and same and meta["approved"] == key and not os.path.exists(base + ".score.json"),
+        )
+        check("approved take: not copied again", not vo_mod.use_approved(base, got[key], key))
+        _sketch.write_wav(got[key]["file"], voiced(120, 1.2))  # approved anew in the project
+        check(
+            "approved take: copied again when the project's recording changed",
+            vo_mod.use_approved(base, got[key], key)
+            and open(base + ".wav", "rb").read() == open(got[key]["file"], "rb").read(),
+        )
+    finally:
+        shutil.rmtree(vdir, ignore_errors=True)
     lv = vo_mod.level_to(voiced(115) * 0.01, vo_mod.BACKUP_LEVEL_DB)
     f = lv[: len(lv) // 960 * 960].reshape(-1, 960)
     got = 20 * np.log10(np.sqrt((np.sqrt((f**2).mean(axis=1)) ** 2).mean()))

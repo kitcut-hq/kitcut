@@ -8,6 +8,7 @@ formats the three scripts hand each other: float WAV, the VO timeline, and capti
 Not an entry script: imported by the sketch-*.py scripts after `_env`.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -259,6 +260,42 @@ def language(m):
 def iso639_2(m):
     """The same, as the three-letter tag an MP4 subtitle track carries."""
     return LANG3.get(language(m), "und")
+
+
+# ------------------------------------------------------------------ approved voice lines
+# the model each TTS backend uses when vo.json names none (sketch-vo.py's defaults)
+TTS_MODEL = {"gemini": "gemini-3.8-flash-tts", "elevenlabs": "eleven_v3", "edge": ""}
+APPROVED = "approved"  # audio/vo/approved/: the approved voice lines a film was given
+
+
+def voice_line_key(text, vo, tts=None):
+    """The name of a recording of this line in this voice: what an approved voice line is filed
+    under (a project's library) and looked up by (sketch-vo.py). The spoken words -- [tags] out,
+    spacing, quotes and dashes evened -- the backend, the voice and the model. The voice's
+    "style" is left out on purpose: a series' approved greeting stays the greeting when an
+    episode's direction drifts, which is the point of approving it."""
+    words = re.sub(r"\s+", " ", re.sub(r"\[[^\]]*\]", "", text or "")).strip()
+    words = words.translate(str.maketrans({"’": "'", "ʼ": "'", "–": "—", "«": '"', "»": '"'}))
+    tts = tts or vo.get("tts") or "gemini"
+    model = vo.get("model") or TTS_MODEL.get(tts, "")
+    key = json.dumps([words, tts, vo.get("voice") or "", model], ensure_ascii=False)
+    return hashlib.sha1(key.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
+
+
+def approved_lines(vdir):
+    """The approved voice lines a film was given (library.seed): {key: {text, file, sha, ...}},
+    file absolute. {} when it has none."""
+    d = os.path.join(vdir, APPROVED)
+    try:
+        with open(os.path.join(d, "index.json"), encoding="utf-8") as f:
+            idx = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return {
+        k: dict(e, file=os.path.join(d, k + ".wav"))
+        for k, e in idx.items()
+        if os.path.exists(os.path.join(d, k + ".wav"))
+    }
 
 
 def write_captions(timeline, base, max_words=9):

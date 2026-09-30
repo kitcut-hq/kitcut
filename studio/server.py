@@ -34,11 +34,19 @@ its plan allows: X-At-Once, up to STUDIO_AT_ONCE_MAX, default 2) and STUDIO_PER_
                                  "project": {id, name, brief, from_account_cast}: an episode of
                                  the site's project, with the project's library (library.py)
     GET  /api/library            the asker's cast and films; ?project=<id>: that project's, and
-                                 its pictures. Also GET /api/library/{name}/thumb.png, DELETE
-                                 /api/library/{name} (a cast member), each with ?project=
+                                 its pictures and voice lines. Also GET /api/library/{name}/
+                                 thumb.png, DELETE /api/library/{name} (a cast member), each
+                                 with ?project=
     POST /api/library/pictures   {"project", "upload", "name"}: an upload becomes a picture every
                                  episode of the project gets; GET .../pictures/{name}/thumb.png
                                  and DELETE .../pictures/{name}, with ?project=
+    POST /api/library/voice      {"project", "film", "line"}: approve line i of one of the
+                                 asker's finished episodes as the project's voice line: the
+                                 next episodes play that recording for the same words and voice
+                                 (docs/studio-voice-lines.md); GET .../voice/{key}.mp3 and
+                                 DELETE .../voice/{key}, with ?project=
+    GET  /api/films/{id}/lines   the asker's finished film's narration lines, each with its key
+                                 and whether its project has it approved; .../lines/{i}.mp3
     GET  /api/films/{id}         ?since=N  ->  {"status": queued|running|done|error|cancelled,
                                  "stage", "wait", "events": [...from N], "next", "video_url",
                                  "listed", ...}; a film copied online (media.py) has its lasting
@@ -875,6 +883,7 @@ def limits_doc():
             "earlier_films_remembered": library.MEMORY,
             "versions_kept": library.KEEP,
             "project_pictures": library.PICTURES,
+            "project_voice_lines": library.VOICE_LINES,
         },
         "by_length": {
             str(n): {
@@ -1347,6 +1356,86 @@ async def picture_thumb(req):
     return web.FileResponse(p, headers={"Cache-Control": "private, no-cache"})
 
 
+async def voice_add(req):
+    """Approve a line of one of the asker's finished episodes as a voice line of its project:
+    {"project": id, "film": id, "line": i}. The next episodes play that recording for the same
+    words in the same voice (library.py, docs/studio-voice-lines.md)."""
+    try:
+        body = await req.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return web.json_response({"error": 'send {"project", "film", "line"}'}, status=400)
+    project = str(body.get("project") or "")
+    if not films.PROJECT_ID.match(project):
+        return web.json_response({"error": "No such project."}, status=404)
+    try:
+        entry = await asyncio.to_thread(
+            library.add_voice_from_film,
+            client_of(req),
+            project,
+            body.get("film"),
+            body.get("line"),
+        )
+    except library.VoiceError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    return web.json_response(entry, status=201)
+
+
+async def voice_delete(req):
+    """Take a voice line out of the asker's project: ?project=<id>."""
+    key, project = req.match_info["key"], project_of(req)
+    if not project or not await asyncio.to_thread(
+        library.delete_voice, client_of(req), project, key
+    ):
+        return web.json_response({"error": "no such voice line"}, status=404)
+    return web.json_response({"key": key, "deleted": True})
+
+
+async def voice_audio(req):
+    """A voice line to listen to, as MP3: ?project=<id>. The asker's own."""
+    project = project_of(req)
+    p = project and library.voice_audio(client_of(req), project, req.match_info["key"])
+    if not p:
+        raise web.HTTPNotFound()
+    return web.FileResponse(
+        p, headers={"Cache-Control": "private, no-cache", "Content-Type": "audio/mpeg"}
+    )
+
+
+def own_film(req):
+    """The film of this route, when the asker made it (or this machine asks); else 404, so a
+    stranger learns nothing about a film's narration."""
+    f = film_of(req.match_info["id"])
+    if not (from_this_machine(req) or f.record().get("client") == client_of(req)):
+        raise web.HTTPNotFound()
+    return f
+
+
+async def film_lines(req):
+    """A finished film's narration lines, for its person to listen to and approve: {"lines":
+    [{i, text, start, dur, key, approved, played_approved}], "project"}."""
+    f = own_film(req)
+    rec = f.record()
+    lines = await asyncio.to_thread(library.film_lines, f) if f.state == "done" else []
+    return web.json_response({"lines": lines, "project": (rec.get("project") or {}).get("id")})
+
+
+async def film_line_audio(req):
+    """One line of the asker's finished film, as MP3."""
+    f = own_film(req)
+    try:
+        i = int(req.match_info["i"])
+    except ValueError:
+        raise web.HTTPNotFound() from None
+    p = await asyncio.to_thread(library.film_line_audio, f, i) if f.state == "done" else None
+    if not p:
+        raise web.HTTPNotFound()
+    return web.FileResponse(
+        p, headers={"Cache-Control": "private, no-cache", "Content-Type": "audio/mpeg"}
+    )
+
+
 async def hide(req):
     """Take a film out of the gallery, or put it back: {"hidden": true|false}. Its page and its
     link keep working. Only from this machine (the operator's call, not a visitor's)."""
@@ -1652,9 +1741,14 @@ def make_app(token):
             web.post("/api/library/pictures", picture_add),
             web.get("/api/library/pictures/{name}/thumb.png", picture_thumb),
             web.delete("/api/library/pictures/{name}", picture_delete),
+            web.post("/api/library/voice", voice_add),
+            web.get("/api/library/voice/{key}.mp3", voice_audio),
+            web.delete("/api/library/voice/{key}", voice_delete),
             web.get("/api/library/{name}/thumb.png", library_thumb),
             web.delete("/api/library/{name}", library_delete),
             web.get("/api/films/{id}", status),
+            web.get("/api/films/{id}/lines", film_lines),
+            web.get("/api/films/{id}/lines/{i}.mp3", film_line_audio),
             web.post("/api/films/{id}/cancel", cancel),
             web.post("/api/films/{id}/listed", set_listed),
             web.post("/api/films/{id}/youtube", youtube_send),

@@ -650,7 +650,7 @@ Collage paints too (its recipe carries `cutouts`), so the director's two writes 
 `test_scenes.py` checks every look.
 **Evidence.** `blocked` events at 395.1 and 1991.6 in i4d52n's events.jsonl.
 
-### KI-043 · open · studio · A non-English narration's word timing starves behind renders on the 4-vCPU VM
+### KI-043 · fixed · studio · A non-English narration's word timing starves behind renders on the 4-vCPU VM
 
 **Symptom.** c6ckpu (90 s, Spanish, drawn, 2026-09-29) spent 17.6 of its 38 Claude minutes in
 one `voice` call, then stalled 13 minutes thinking before its first line of film.js and ran out
@@ -674,8 +674,14 @@ a 90 s narration in ~2 minutes; contention cost 15 more.
 `cpu.weight` on the final render's and web copy's step cgroups (nice works only inside one
 server's cgroup, and this incident's load came from other units); count other servers' and
 resume units' renders in the browser pool; turbo as the multilingual default (measured above:
-modest speed, no loss). Until then: do not `resume --finish` or ship while a non-English film is
-recording its voice.
+modest speed, no loss).
+**Fixed (2b364f6, 2026-09-29).** The studio's takes are scored off the machine, by Whisper
+large-v3 on Groq through OpenRouter (`studio/procs.py` SCORER), 8 at once, and a take's score is
+remembered (`<take>.score.json`). The Ukrainian freelancers episode (pzk2ay) scored its
+narration in 667 s and 607 s; the blogger episode (gkyv6q, same series, same length class, the
+next morning) in 3.0 s and 2.5 s. Held to a local large-v3 on the same Ukrainian takes: no bad
+take missed, word starts 0.08 s apart (docs/studio-speed.md). Renders still do not yield to
+other steps; that part of the options above stands for whatever runs on the CPU next.
 **Evidence.** `/srv/kitcut/studio/projects/studio-20260929-130142-c6ckpu/temp/pipeline/runs/`,
 `ops.sh claude-log studio-20260929-130142-c6ckpu`.
 
@@ -725,3 +731,30 @@ ourselves?"). Only Google's detectors can confirm it: the Gemini app, or the Syn
 portal behind its waitlist.
 **Evidence.** `yt-set-disclosure.py --list --labels` on both channels, 2026-09-30; the Gemini vs
 ElevenLabs vs edge-tts probe in the same reference section.
+
+### KI-047 · mitigated · studio · The narrator mis-stresses a name, and no check can hear it
+
+**Symptom.** The Ocheretyne Economics School series (p-mii4mannfx, Ukrainian, Gemini
+Sadachbia): «Очеретинська» must be stressed on its third syllable (ОчерЕтинська). The openings of
+the freelancers, blogger and cashback episodes said ОчеретИнська; their closings, the same word,
+were mostly right. The person heard it; nothing in the pipeline did.
+**Cause.** The TTS picks a word's stress afresh on every take -- a rare name has no entry to look
+up, so it guesses by analogy (-инська like «українська»). The check after recording (Whisper)
+turns speech into text, and both stresses are the same text: a mis-stressed take scores 1.00.
+**Measured (2026-09-30, 12 takes of one line, two LLM judges x 3 votes).** Plain text right in
+about half the takes. A stress mark (Очере́тинська) 2/6 on every take -- worse; a capital vowel
+3-5/6; a spoken instruction in the style 0-2/6 -- worse. Gemini-TTS documents no phoneme input;
+Chirp 3 HD's custom pronunciations exclude uk-UA. The LLM judges (Gemini 3.5 Flash, 3.1 Pro)
+read the film's own right and wrong lines right at temperature 0, but gave the same greeting 6/6
+alone and 3/6 inside a joined line: a hint, not a gate.
+**Mitigation.** A project's approved voice lines (docs/studio-voice-lines.md): a recording the
+person approved plays for the same words in the same voice in every later episode, never
+re-recorded. The series' greeting and sign-off are approved (`studio/voicelines.py`), so its
+openings and closings are right from now on. The three episodes above were repaired by hand:
+the approved greeting joined to each opening's own «Сьогодні — про ...» in the sentence pause
+(cut at the RMS dip: Whisper's word boundary once fell inside «ки»), re-rendered with
+`ops.sh resume --finish --patched`.
+**Open.** The name elsewhere in a narration is not protected. Next: a watch-word list with each
+word's stress, several takes of a line containing one, the take picked by comparing the word with
+an approved recording of it -- once that comparison is measured against takes the person labels
+by ear.

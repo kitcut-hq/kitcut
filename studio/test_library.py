@@ -75,6 +75,25 @@ def render(manifest, times, into):
     )
 
 
+def narrate(film, texts, vo):
+    """A narration as sketch-vo.py leaves one: vo.json, a take per line, timeline.json."""
+    import numpy as np
+
+    sys.path.insert(0, os.path.join(KIT, "scripts"))
+    import _sketch
+
+    write(film, "vo.json", json.dumps(dict(vo, lines=[{"text": t} for t in texts])))
+    lines, t = [], 0.5
+    for i, text in enumerate(texts):
+        rel = "audio/vo/L%02d_T0_x_line.wav" % i
+        y = 0.2 * np.sin(np.arange(int(1.5 * _sketch.SR)) * 2 * np.pi * (180 + 40 * i) / _sketch.SR)
+        os.makedirs(film.path("audio", "vo"), exist_ok=True)
+        _sketch.write_wav(film.path(*rel.split("/")), y)
+        lines.append({"i": i, "text": text, "file": rel, "dur": 1.5, "start": t, "end": t + 1.5})
+        t += 1.85
+    write(film, "audio/vo/timeline.json", json.dumps({"duration": 5, "lines": lines}))
+
+
 def finish(film, names=None):
     """What agent.keep_cast does after a film, with the sheet rendered here."""
     items = library.changes(film)
@@ -374,6 +393,60 @@ def projects(check):
         "and not in the person's own",
     )
 
+    # ------------------------------------------------ voice lines, approved from an episode
+    GREET, TODAY = "Привіт! Це Очеретинська школа економіки.", "Сьогодні — про кешбек."
+    VO = {"voice": "Sadachbia", "model": "gemini-3.1-flash-tts-preview", "language": "uk"}
+    narrate(E1, [GREET, TODAY], VO)
+    lines = library.film_lines(E1)
+    check(
+        [x["text"] for x in lines] == [GREET, TODAY] and not any(x["approved"] for x in lines),
+        "a finished episode's lines, none approved yet",
+    )
+    mp3 = library.film_line_audio(E1, 0)
+    check(mp3 and os.path.getsize(mp3) > 1000, "each line to listen to, as MP3")
+    check(library.film_line_audio(E1, 9) is None, "and not one it does not have")
+    v = library.add_voice_from_film("u:alice", P1, E1.id, 0)
+    check(
+        v["text"] == GREET
+        and (v["tts"], v["voice"], v["model"], v["language"])
+        == ("gemini", "Sadachbia", "gemini-3.1-flash-tts-preview", "uk")
+        and (v["film"], v["line"]) == (E1.id, 0)
+        and abs(v["dur"] - 1.5) < 0.01,
+        "a line approved from the episode, in its voice (%s)" % v,
+    )
+    lines = library.film_lines(E1)
+    check(lines[0]["approved"] and not lines[1]["approved"], "and it shows as approved")
+    check(
+        library.voice_audio("u:alice", P1, v["key"])
+        and library.voice_audio("u:bob", P1, v["key"]) is None
+        and library.voice_audio("u:alice", P2, v["key"]) is None,
+        "its recording plays for its person, in its project only",
+    )
+    check(
+        [x["key"] for x in library.listing("u:alice", P1)["voice"]] == [v["key"]]
+        and "voice" not in library.listing("u:alice"),
+        "a project's listing has its voice lines",
+    )
+    for who, proj, fid, i, status, why in (
+        ("u:bob", P1, E1.id, 0, 404, "someone else's film"),
+        ("u:alice", P2, E1.id, 0, 404, "an episode of another project"),
+        ("u:alice", P1, E1.id, 5, 404, "a line it does not have"),
+        ("u:alice", P1, E1.id, True, 404, "a line that is not a number"),
+        ("u:alice", P1, "studio-nope", 0, 404, "a film that is not there"),
+    ):
+        try:
+            library.add_voice_from_film(who, proj, fid, i)
+            check(False, "refused: %s" % why)
+        except library.VoiceError as err:
+            check(err.status == status, "refused: %s" % why)
+    unfinished = episode("still being made")
+    narrate(unfinished, [GREET], VO)
+    try:
+        library.add_voice_from_film("u:alice", P1, unfinished.id, 0)
+        check(False, "refused: a film still being made")
+    except library.VoiceError as err:
+        check(err.status == 409, "refused: a film still being made")
+
     # ------------------------------------------------ the next episode
     E2 = episode("Olga and the first snow")
     got = library.seed(E2)
@@ -385,6 +458,20 @@ def projects(check):
     check(
         "Its earlier episodes" in note and "belongs with the others" in note,
         "and hears it is one of a series",
+    )
+    approved = E2.path("audio", "vo", "approved")
+    with open(os.path.join(approved, "index.json"), encoding="utf-8") as f:
+        given = json.load(f)
+    check(
+        list(given) == [v["key"]]
+        and given[v["key"]]["text"] == GREET
+        and os.path.exists(os.path.join(approved, v["key"] + ".wav"))
+        and [x["key"] for x in got["voice"]] == [v["key"]],
+        "the next episode gets the approved voice line in audio/vo/approved/",
+    )
+    check(
+        "approved voice lines" in note and '"%s" (Sadachbia' % GREET in note,
+        "and is told to say it word for word",
     )
     write(
         E2, "cast/badge.js", "SK.cast.badge = { draw(x, y) { SK.image('pic_logo', x, y, 90); } };\n"
@@ -412,13 +499,30 @@ def projects(check):
     B = episode("bob names alice's project", client="u:bob")
     got = library.seed(B)
     check(
-        got["cast"] == [] and got["pictures"] == [] and got["films"] == [],
+        got["cast"] == [] and got["pictures"] == [] and got["films"] == [] and got["voice"] == [],
         "the same id from someone else is their own, empty",
     )
     check(
         library.delete("u:alice", "owl", P1) and not library.delete("u:alice", "owl"),
         "a member leaves the project it is in, not the person's own",
     )
+    check(
+        not library.delete_voice("u:bob", P1, v["key"])
+        and library.delete_voice("u:alice", P1, v["key"])
+        and library.voice_audio("u:alice", P1, v["key"]) is None
+        and library.listing("u:alice", P1)["voice"] == []
+        and not library.delete_voice("u:alice", P1, v["key"]),
+        "a voice line taken out of its project, by its person only",
+    )
+    src = E1.path("audio", "vo", "L01_T0_x_line.wav")
+    for i in range(library.VOICE_LINES):
+        library.add_voice("u:alice", P2, "Line %d." % i, src, VO)
+    library.add_voice("u:alice", P2, "Line 0.", src, VO)  # the same words again replace it
+    try:
+        library.add_voice("u:alice", P2, "One line too many.", src, VO)
+        check(False, "at most %d voice lines" % library.VOICE_LINES)
+    except library.VoiceError as err:
+        check(err.status == 409, "at most %d voice lines" % library.VOICE_LINES)
     # someone whose films came before libraries: their episodes are not their own films
     dave = Film.create("dave's film", 5, "drawn", client="u:dave")
     dave.update(state="done")

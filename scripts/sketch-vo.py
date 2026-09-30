@@ -710,6 +710,30 @@ def whisper_score(path, text, hotwords, lang="en", model=None, words=False):
     return acc, heard.strip(), ws
 
 
+def use_approved(base, entry, key):
+    """An approved voice line in as a line's only take: base.wav, then base.json {"approved":
+    key, "sha"} (last, so the take is only ever cached whole). Copied again only when the
+    approved recording changed (approved anew in the project). Returns True when it copied."""
+    with open(entry["file"], "rb") as f:
+        data = f.read()
+    sha = hashlib.sha1(data, usedforsecurity=False).hexdigest()[:16]
+    try:
+        with open(base + ".json", encoding="utf-8") as f:
+            had = json.load(f)
+    except (OSError, ValueError):
+        had = {}
+    if had.get("approved") == key and had.get("sha") == sha and os.path.exists(base + ".wav"):
+        return False
+    for ext in (".mp3", ".json", ".score.json"):
+        if os.path.exists(base + ext):
+            os.remove(base + ext)
+    with open(base + ".wav", "wb") as f:
+        f.write(data)
+    with open(base + ".json", "w", encoding="utf-8") as f:
+        json.dump({"approved": key, "sha": sha, "text": entry.get("text", "")}, f)
+    return True
+
+
 def cached_score(base, path, text, hotwords, lang="en", model=None, words=False):
     """whisper_score, remembered beside the take (base.score.json) under a key of everything the
     answer depends on: the audio's bytes, the script line, the hotwords, the language and the
@@ -831,10 +855,20 @@ def main():
         results, fresh = {}, set()  # fresh: takes rendered (and paid for) in this run
         with st("synth"):
             todo = []  # (line, take, base): the takes not in the cache
+            # the project's approved voice lines (library.seed): a line with the same words, voice
+            # and model plays the recording its person approved by ear, never a new one
+            approved, given = _sketch.approved_lines(vdir), {}
             for i, ln in enumerate(lines):
                 if i not in only:
                     continue
                 fp = fingerprint(ln, {**vo, "tts": tts})
+                key = _sketch.voice_line_key(ln["text"], vo, tts)
+                if key in approved:
+                    given[i] = key
+                    use_approved(os.path.join(vdir, "L%02d_T0_%s" % (i, fp)), approved[key], key)
+                    print("  line %d: the approved recording %s" % (i, key), flush=True)
+                    results[i] = fp
+                    continue
                 for k in range(takes):
                     base = os.path.join(vdir, "L%02d_T%d_%s" % (i, k, fp))
                     if args.retake and os.path.exists(base + ".json"):
@@ -912,7 +946,7 @@ def main():
         cand = {}
         with st("trim"):
             for i, fp in results.items():
-                for k in range(takes):
+                for k in range(1 if i in given else takes):
                     base = os.path.join(vdir, "L%02d_T%d_%s" % (i, k, fp))
                     with open(base + ".json", encoding="utf-8") as f:
                         align = json.load(f)
@@ -920,7 +954,9 @@ def main():
                     x = _sketch.decode(src)
                     if "words" in align:  # edge: already a clean line, times in seconds
                         y, lead, ok, words = x, 0.0, True, align["words"]
-                    elif "gemini" in align:  # a clean line; the words come from Whisper below
+                    elif "gemini" in align or "approved" in align:
+                        # a clean line (an approved one was once a take like this); the words
+                        # come from Whisper below
                         y, lead = trim_silence(x)
                         ok, words = True, None
                     else:
@@ -940,6 +976,7 @@ def main():
                             "backup": (align.get("gemini") or {}).get("voice")
                             if (align.get("gemini") or {}).get("backup")
                             else None,
+                            "approved": align.get("approved"),
                         }
                     )
         with st("score"):
@@ -971,10 +1008,9 @@ def main():
                     # accuracy first, then a clean cut, then the take nearest the median length
                     c["rank"] = (round(c["acc"], 2), c["clean"], -abs(c["dur"] - med))
                 pick = lines[i].get("pick")
-                best = (
-                    next((c for c in cs if c["take"] == pick), None)
-                    if pick is not None
-                    else max(cs, key=lambda c: c["rank"])
+                # a pick that names no take (an approved line has only its one) is no pick
+                best = next((c for c in cs if c["take"] == pick), None) or max(
+                    cs, key=lambda c: c["rank"]
                 )
                 for c in cs:
                     print(
@@ -1005,6 +1041,8 @@ def main():
                         "file": os.path.relpath(b["file"], m["_dir"]).replace("\\", "/"),
                         "dur": round(b["dur"], 3),
                     }
+                    if b.get("approved"):  # the project's approved recording, as it was approved
+                        L["approved"] = b["approved"]
                     if b.get("backup"):  # Gemini refused it: the backup voice read it
                         L["backup_voice"] = b["backup"]
                     spent = [c["tts"] for c in cand.get(i, []) if c.get("tts")]

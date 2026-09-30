@@ -426,8 +426,18 @@ film it vouches is the person's. That film is an episode:
   /api/library/pictures`. Every episode gets them as `inputs\pic_<name>.*`, in the manifest as
   `pic_<name>`; the ones neither film.js nor the cast draws leave before the final render, like
   unused attachments.
+- **Voice lines.** Recordings of narration lines the person approved by ear, up to twelve
+  (`voice\<key>.wav|mp3`), filed under `_sketch.voice_line_key` (the words, the TTS, the voice,
+  the model; not the style). Approved from a finished episode's own lines (`POST
+  /api/library/voice {project, film, line}`, the site's Voice tab; `studio/voicelines.py` on the
+  VM for a recording no episode has as a whole line). Every episode gets them in
+  `audio\vo\approved\`, and sketch-vo.py plays one for any line with the same key instead of
+  recording it (never retaken; the voice tool refuses). What for: a series' greeting and sign-off,
+  and a name the voice stresses wrongly now and then -- no check hears stress (KI-047).
+  `docs/studio-voice-lines.md` has the design.
 - **What Claude hears.** The first message names the project and gives its brief (the person's
-  words), then the pictures, the cast and the earlier episodes. The first episode hears that its
+  words), then the pictures, the approved voice lines (to use word for word, each a line of its
+  own), the cast and the earlier episodes. The first episode hears that its
   choices are what the next ones keep.
 - **Records.** `studio.json` keeps the project as it was asked for. `studio_runs` gets only
   `project_id` (and every run now has `title`, `name_film`'s when nothing was typed): the site

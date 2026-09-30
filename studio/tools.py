@@ -73,6 +73,16 @@ def _tts_spent(film):
 WORDS_UP_TO = 24
 
 
+def approved_line(film, i):
+    """Whether line i of the film's last recording played an approved voice line."""
+    try:
+        with open(film.path("audio", "vo", "timeline.json"), encoding="utf-8") as f:
+            lines = json.load(f).get("lines", [])
+        return any(L["i"] == int(i) and L.get("approved") for L in lines)
+    except (OSError, ValueError, TypeError):
+        return False
+
+
 def timeline_text(film, retake=None):
     """The narration's timing as Claude needs it for cues: each line's span, and its words (all of
     them for a short narration; for a long one only the line just re-recorded)."""
@@ -110,6 +120,8 @@ def timeline_text(film, retake=None):
                 "  (Gemini would not read this line; the backup voice %s read it, so it sounds a"
                 " little different. Keep it, or reword it and record it again.)" % L["backup_voice"]
             )
+        if L.get("approved"):
+            out.append("  (the project's approved recording of these words: never recorded again)")
     return "\n".join(out) or "(no lines)"
 
 
@@ -216,6 +228,12 @@ class Tools:
         if _tts_spent(self.film) >= limits(self.film.length)["tts_usd"]:
             raise ToolError("The narration's budget is spent: keep the recording you have.")
         args = ["--jobs", str(VOICE_JOBS)]
+        if retake_line is not None and approved_line(self.film, retake_line):
+            raise ToolError(
+                "Line %d plays the project's approved recording of those words, which its person"
+                " chose by ear: it is not recorded again. To say something else there, change"
+                " the line's words in vo.json and record." % int(retake_line)
+            )
         if retake_line is not None:
             args += ["--only", str(int(retake_line)), "--retake"]
         async with self.lock:
