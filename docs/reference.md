@@ -3187,10 +3187,13 @@ audio, the line, the hotwords, the language and the scorer), so a re-recording s
 what changed. `SKETCH_SCORER` (the machine) or `vo.whisper` (the film) picks who listens:
 a local faster-whisper model, or `openrouter:<model>` -- a transcription model OpenRouter
 serves, scored `--jobs` at a time, needing `OPENROUTER_API_KEY`, and falling back to local
-Whisper for a take the service fails. `openrouter:microsoft/mai-transcribe-2` takes the
-hotwords as a phrase list; the other OpenRouter models ignore them. Compare scorers on a
-finished film with `scripts/vo-scorer-bench.py` (`--plan` prices them); the numbers are in
-`docs/studio-speed.md`.
+Whisper for a take the service fails. The studio uses `openrouter:openai/whisper-large-v3`
+(Groq). OpenRouter drops a transcription prompt, so the hotwords reach only Azure's
+`microsoft/mai-transcribe-2`, as a phrase list. Compare scorers on a finished film with
+`scripts/vo-scorer-bench.py --reference large-v3`: agreeing with the film's own scorer proves
+nothing, so hold them to a stronger one. `--plan` prices them, and a model that gives no word
+times is reported as unmeasurable, not quietly scored locally. The numbers, and why the first
+pick (MAI) was wrong, are in `docs/studio-speed.md`.
 
 **A film in another language** sets `vo.language` (ISO 639-1) and a `tail` in that language
 (`"Добре."` for Ukrainian -- an English tail flips the voice's accent on the line's last

@@ -146,21 +146,42 @@ Two fixes, both in `scripts/sketch-vo.py`:
   the hotwords, the language and the scorer). Four of the film's recordings re-scored all 78
   lines for 180-225 s when only a few had changed; now they score only those.
 - **The studio scores on a service** (`SKETCH_SCORER`, set by `studio/procs.py` `SCORER`;
-  `STUDIO_SCORER=local` puts Whisper back). The kitcut OpenRouter account allows only the meta,
-  azure, openai and typesafe providers, which leaves few candidates. Measured with
-  `scripts/vo-scorer-bench.py` against the film's own timeline (small.en's words):
+  `STUDIO_SCORER=local` puts Whisper back): **Whisper large-v3 on Groq, through OpenRouter.**
+  A failed call scores that take locally, so the service being down costs time, not the film.
 
-| scorer | 78 lines | accuracy mean / lines < 0.9 | word starts vs small.en | first word vs the sound | cost |
+How it was chosen, with `scripts/vo-scorer-bench.py`. Agreeing with small.en proves nothing
+about quality, so every candidate is held to a **referee**: Whisper large-v3, run locally on the
+same takes. Two things decide quality. *Missed* counts takes the referee calls bad (accuracy
+under 0.9) that the candidate passes, which means a garbled line ships. *|dt|* measures word
+starts against the referee's, which is where the cues land. *Onset* is the first word minus
+where the sound actually begins, the one timing the audio vouches for itself.
+
+The bike film, English, 78 lines, referee large-v3 (20 bad takes):
+
+| scorer | wall | missed | extra | \|dt\| median / p95 / >0.2 s | onset |
 |---|---|---|---|---|---|
-| Whisper small.en, VM CPU (the film) | 265 s | 0.935 / 24 | -- | -0.08 s early | $0 |
-| **microsoft/mai-transcribe-2** | **9.7 s** | 0.945 / 21 | +0.14 s (p95 0.32) | +0.11 s late | $0.012 |
-| openai/whisper-1 | 18.7 s | 0.946 / 19 | +0.08 s (p95 0.26) | -0.08 s early | $0.045 |
-| meta/muse-voice-transcribe-1.0 | -- | text only: no word times | | | |
-| openai/gpt-transcribe | -- | text only: no word times | | | |
+| small.en on the VM (what the film had) | 265 s | 1 | 5 | 0.10 / 0.36 / 17 % | -0.08 |
+| **openai/whisper-large-v3 (Groq)** | **17 s** | **1** | **2** | 0.12 / 0.38 / 22 % | 0.00 |
+| openai/whisper-large-v3-turbo (Groq) | 16 s | 2 | 4 | 0.08 / 0.28 / 10 % | -0.01 |
+| microsoft/mai-transcribe-2 | 22 s | 3 | 4 | 0.26 / 0.50 / 72 % | +0.11 |
+| x-ai/grok-stt-1.0 | 14 s | 3 | 3 | 0.21 / 0.44 / 57 % | +0.05 |
+| openai/whisper-1 | 27 s | 3 | 2 | 0.20 / 0.48 / 52 % | -0.08 |
+| google/gemini-3.5-transcribe | 33 s | 3 | 5 | 0.18 / 0.38 / 39 % | +0.04 |
+| assemblyai/universal-3-5-pro | 14 s | 6 | 5 | 0.23 / 0.47 / 60 % | +0.05 |
+| mistralai/voxtral-mini-transcribe | 19 s | 0 | 5 | 0.20 / 0.40 / 48 % | +0.04 |
+| deepgram/nova-3 | 15 s | 17 | 3 | 0.20 / 0.39 / 52 % | -0.05 |
 
-  MAI-Transcribe 2 is the studio's: 27x faster, as accurate, and the only one that takes the
-  hotwords (Azure's phrase list; OpenRouter drops a prompt) -- with them, "Next up, Shrek"
-  became "Trek". Its words land ~0.1 s after the sound begins where Whisper's land ~0.1 s
-  before; a cue a tenth late reads as on the word. Whisper-large-v3 on Groq, Deepgram, Qwen
-  and Grok would need those providers allowed in OpenRouter's privacy settings. A failed call
-  scores that take locally, so the service being down costs time, not the film.
+The freelancers film, Ukrainian, 30 lines, referee large-v3, which is also what the film was
+made with (4 bad takes): whisper-large-v3 missed 0, extra 0, |dt| 0.08 s; turbo 0 / 1 / 0.08 s;
+MAI-Transcribe 2 1 / 5 / 0.24 s.
+
+**MAI-Transcribe 2 was live for a few hours first (34c96b9) and was the wrong pick.** Measured
+against small.en it looked as good. Against the referee, its word starts run a quarter-second
+late, and it passes more bad takes. Groq's large-v3 is the only service that matches the old
+local setup on both counts, in about 1/15 of the time, at $0.003 an 8-minute film.
+
+Not measurable here: meta/muse-voice-transcribe-1.0, openai/gpt-transcribe, google/chirp-3 and
+voxtral-small give text but no word times (`verbose_json` refused). The kitcut OpenRouter account
+allows only listed providers (settings/privacy); DeepInfra (Qwen3-ASR, Parakeet) is not on it.
+OpenRouter drops a transcription prompt, so the films' hotwords no longer bias the scorer; only
+Azure's MAI takes them, as a phrase list.

@@ -21,7 +21,6 @@ starts sit from the film's (median and 95th percentile). --plan prices it and sp
 """
 
 import argparse
-import difflib
 import json
 import os
 import sys
@@ -37,6 +36,7 @@ import numpy as np  # noqa: E402
 import _sketch  # noqa: E402
 
 vo_mod = import_module("sketch-vo")
+vo_mod.FALLBACK = False  # a service that fails must not be scored as the local model in disguise
 
 
 def onset(path, floor_db=-35.0):
@@ -76,7 +76,11 @@ def main():
     ap.add_argument("--scorer", action="append", required=True, help="repeatable")
     ap.add_argument("--jobs", type=int, default=8, help="takes scored at once by a service")
     ap.add_argument("--lines", type=int, help="only the first N lines")
-    ap.add_argument("--flag", type=float, default=0.1, help="accuracy change worth listing")
+    ap.add_argument(
+        "--reference", help="the referee every scorer is compared with (default: the film's)"
+    )
+    ap.add_argument("--bad", type=float, default=0.9, help="accuracy under which a take is bad")
+    ap.add_argument("-v", "--verbose", action="store_true", help="list each disagreement")
     ap.add_argument("--plan", action="store_true", help="price each scorer and stop")
     ap.add_argument("--out", help="write every hearing here as JSON")
     args = ap.parse_args()
@@ -100,79 +104,100 @@ def main():
         return
 
     report = {}
-    for s in args.scorer:
+    for s in [args.reference] + args.scorer if args.reference else args.scorer:
+        if s in report:
+            continue
         os.environ["SKETCH_SCORER"] = s
 
-        def one(L):
+        def one(L, s=s):
             path = os.path.join(m["_dir"], L["file"])
             t0 = time.time()
             acc, heard, ws = vo_mod.whisper_score(path, L["text"], hot, lang, s, words=True)
-            return acc, heard, ws, time.time() - t0
+            words = [w["s"] for w in vo_mod.align_words(L["text"], ws)]
+            return {"i": L["i"], "acc": acc, "heard": heard, "starts": words, "s": time.time() - t0}
 
         t0 = time.time()
         n = args.jobs if vo_mod.remote(s) else 1
-        with ThreadPoolExecutor(max_workers=n) as pool:
-            got = list(pool.map(one, lines))
-        wall = time.time() - t0
-        moved, starts, rows, lead, lead_film = [], [], [], [], []
-        for L, (acc, heard, ws, took) in zip(lines, got):
-            words = vo_mod.align_words(L["text"], ws)
-            ref = [w["s"] - L["start"] for w in L["words"]]
-            mine = [w["s"] for w in words]
-            if len(ref) == len(mine):
-                starts += [b - a for a, b in zip(ref, mine)]
-            # the ground truth both can be held to: where the take's sound actually begins
-            on = onset(os.path.join(m["_dir"], L["file"]))
-            if mine and ref:
-                lead.append(mine[0] - on)
-                lead_film.append(ref[0] - on)
-            if abs(acc - L["acc"]) > args.flag:
-                moved.append((L["i"], L["acc"], acc, heard))
-            rows.append({"i": L["i"], "acc": acc, "was": L["acc"], "heard": heard, "s": took})
-        report[s] = rows
-        sd = np.array(starts) if starts else np.zeros(1)
-        d = np.abs(sd)
-        low_was = sum(1 for L in lines if L["acc"] < 0.9)
-        low_now = sum(1 for r in rows if r["acc"] < 0.9)
-        print("\n== %s" % s)
+        try:
+            with ThreadPoolExecutor(max_workers=n) as pool:
+                rows = list(pool.map(one, lines))
+        except RuntimeError as e:  # e.g. a model that gives no word times, or a refused provider
+            print("  %s cannot be measured: %s" % (s, str(e)[:160]))
+            continue
+        report[s] = {"wall": time.time() - t0, "rows": rows, "n": n}
+    # the film itself: what the scorer it was made with heard
+    report["film"] = {
+        "wall": None,
+        "n": 1,
+        "rows": [
+            {
+                "i": L["i"],
+                "acc": L["acc"],
+                "heard": "",
+                "starts": [w["s"] - L["start"] for w in L["words"]],
+                "s": 0,
+            }
+            for L in lines
+        ],
+    }
+    ref_name = args.reference or "film"
+    ref = {r["i"]: r for r in report[ref_name]["rows"]}
+    bad_ref = {i for i, r in ref.items() if r["acc"] < args.bad}
+    onsets = {L["i"]: onset(os.path.join(m["_dir"], L["file"])) for L in lines}
+    print(
+        "\nreferee: %s -- %d of %d takes under %.2f"
+        % (ref_name, len(bad_ref), len(lines), args.bad)
+    )
+    print(
+        "  %-46s %7s %6s %6s %6s %8s %8s %8s %7s"
+        % ("scorer", "wall s", "acc", "missed", "extra", "|dt| med", "p95", ">0.2s", "onset")
+    )
+    for s, rep in report.items():
+        rows = rep["rows"]
+        d, lead = [], []
+        for r in rows:
+            a = ref[r["i"]]["starts"]
+            if len(a) == len(r["starts"]):
+                d += [abs(x - y) for x, y in zip(a, r["starts"])]
+            if r["starts"]:
+                lead.append(r["starts"][0] - onsets[r["i"]])
+        d = np.array(d or [0.0])
+        bad = {r["i"] for r in rows if r["acc"] < args.bad}
         print(
-            "  wall %.1f s (%d at once), per take median %.2f s"
-            % (wall, n, float(np.median([r["s"] for r in rows])))
-        )
-        print(
-            "  accuracy: mean %.3f (film %.3f); under 0.9: %d lines (film %d)"
+            "  %-46s %7s %6.3f %6d %6d %8.3f %8.3f %7.1f%% %+7.3f"
             % (
+                s[:46],
+                "%.1f" % rep["wall"] if rep["wall"] is not None else "--",
                 np.mean([r["acc"] for r in rows]),
-                np.mean([L["acc"] for L in lines]),
-                low_now,
-                low_was,
-            )
-        )
-        print(
-            "  word starts vs the film: median %.3f s, p95 %.3f s, max %.3f s (%d words)"
-            % (np.median(d), np.percentile(d, 95), d.max(), len(starts))
-        )
-        print("  its words run %+.3f s from the film's (median, signed)" % np.median(sd))
-        print(
-            "  first word vs the sound's onset: this %+.3f s, the film's %+.3f s (median; "
-            "|x| p90 %.3f vs %.3f)"
-            % (
+                len(bad_ref - bad),
+                len(bad - bad_ref),
+                np.median(d),
+                np.percentile(d, 95),
+                100 * (d > 0.2).mean(),
                 np.median(lead),
-                np.median(lead_film),
-                np.percentile(np.abs(lead), 90),
-                np.percentile(np.abs(lead_film), 90),
             )
         )
-        for i, was, acc, heard in moved:
-            ref = next(L for L in lines if L["i"] == i)
-            print("  L%02d  %.2f -> %.2f  script: %s" % (i, was, acc, ref["text"][:90]))
-            print("             heard: %s" % heard[:90])
-            diff = [
-                t
-                for t in difflib.ndiff(vo_mod.words_of(ref["text"]), vo_mod.words_of(heard))
-                if t[0] in "+-"
-            ]
-            print("             diff:  %s" % " ".join(diff)[:120])
+        if args.verbose and s != ref_name:
+            for r in rows:
+                if (r["i"] in bad_ref) != (r["i"] in bad):
+                    L = next(x for x in lines if x["i"] == r["i"])
+                    print(
+                        "      L%02d %s  %.2f (ref %.2f)  script: %s\n            heard: %s"
+                        % (
+                            r["i"],
+                            "MISSED" if r["i"] in bad_ref else "extra ",
+                            r["acc"],
+                            ref[r["i"]]["acc"],
+                            L["text"][:80],
+                            r["heard"][:80],
+                        )
+                    )
+    print(
+        "\n  missed: takes the referee calls bad that this one passes (a bad line ships);"
+        "\n  extra: takes it calls bad that the referee passes (a needless re-recording);"
+        "\n  |dt|: word starts against the referee's; onset: first word minus where the sound"
+        "\n  begins (median). film: what the film was made with (its timeline.json)."
+    )
     if args.out:
         with open(args.out, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=1)

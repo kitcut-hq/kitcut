@@ -20,7 +20,7 @@ A film in another language sets "language" (ISO 639-1, e.g. "uk") and a TAIL in 
 Scoring then runs a multilingual Whisper ("whisper", default large-v3 on the GPU).
 
 Who scores: SKETCH_SCORER (the machine) or "whisper" (the film) -- a local faster-whisper model,
-or "openrouter:<model>", a transcription service (e.g. openrouter:microsoft/mai-transcribe-2,
+or "openrouter:<model>", a transcription service (the studio: openrouter:openai/whisper-large-v3,
 OPENROUTER_API_KEY), several takes at once. Each take's score is remembered beside it
 (<take>.score.json), so a re-recording scores only the takes that changed.
 
@@ -591,6 +591,7 @@ def _whisper(lang, name):
 
 
 OPENROUTER_STT = "https://openrouter.ai/api/v1/audio/transcriptions"
+FALLBACK = True  # a take the service fails is scored locally; a benchmark turns this off
 
 
 def scorer(model=None):
@@ -689,6 +690,8 @@ def whisper_score(path, text, hotwords, lang="en", model=None, words=False):
             acc = difflib.SequenceMatcher(None, words_of(text), words_of(heard)).ratio()
             return (acc, heard.strip(), ws) if words else (acc, heard.strip())
         except (RuntimeError, ValueError, KeyError) as e:  # the service is down: slower, same job
+            if not FALLBACK:
+                raise
             print("  %s failed (%s); scoring this take here" % (model, str(e)[:120]))
             model = None
     segs, _ = _whisper(lang, model).transcribe(

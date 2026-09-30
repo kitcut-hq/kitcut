@@ -58,12 +58,14 @@ NEEDS = {
         "GOOGLE_CLOUD_LOCATION",
     ),
 }
-# who listens to the narration's takes (sketch-vo.py's SKETCH_SCORER): Microsoft's MAI-Transcribe 2
-# through OpenRouter scored an 8-minute film's 78 lines in 10 s, where Whisper small.en took 265 s
-# on the VM's 4 CPUs -- same accuracy, word starts within 0.14 s, $0.012 a film, and it takes the
-# film's hotwords (scripts/vo-scorer-bench.py, docs/studio-speed.md). STUDIO_SCORER=local puts
-# Whisper back (a machine with a GPU); a failed call scores that take locally either way.
-SCORER = "openrouter:microsoft/mai-transcribe-2"
+# who listens to the narration's takes (sketch-vo.py's SKETCH_SCORER): Whisper large-v3 on Groq,
+# through OpenRouter. Held to a local large-v3 referee it caught the most bad takes of every
+# service (English: missed 1 of 20; Ukrainian: 0 of 4, no false alarm) with word starts 0.08-0.12 s
+# from the referee's, as close as the VM's own small.en -- in 9-17 s a film where small.en took
+# 265 s, for $0.003. MAI-Transcribe 2, the faster-looking first pick, was 0.24-0.26 s off
+# (scripts/vo-scorer-bench.py, docs/studio-speed.md). STUDIO_SCORER=local puts Whisper back on the
+# machine (one with a GPU); a failed call scores that take locally either way.
+SCORER = "openrouter:openai/whisper-large-v3"
 # what a Windows (or other) process needs to start at all, and nothing else of ours
 BASICS = (
     "SystemRoot",
