@@ -179,6 +179,18 @@ async def main():
         n = await media.delete(f.id)
         check(n == 5 and not BLOBS, "delete removes them all", (n, list(BLOBS)))
         check(await media.delete(f.id) == 0, "deleting again finds nothing, and says so")
+
+        # a film rendered again after a hand patch (resume.py --patched): new names, since the
+        # old ones are cached as immutable; delete takes every revision
+        await media.publish(f)
+        f.update(media_rev=1)
+        urls = await media.publish(f)
+        check(
+            urls.get("video") == base + "r1/film.mp4", "a patched film's copy has new names", urls
+        )
+        check("%s/r1/film_web.mp4" % f.id in BLOBS, "the web copy too", list(BLOBS))
+        n = await media.delete(f.id)
+        check(n == 10 and not BLOBS, "delete removes both revisions", (n, list(BLOBS)))
     finally:
         await srv.close()
     print("%d failed" % len(bad))

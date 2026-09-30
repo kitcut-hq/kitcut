@@ -84,6 +84,15 @@ def url_of(fid, name):
     return "%s/%s/%s" % (base(), fid, name)
 
 
+def blob_of(film, name):
+    """Where a film's file goes online: <id>/<name>, or <id>/r<n>/<name> once the film has been
+    rendered again after a hand patch (resume.py --patched sets media_rev). Its files are served
+    as immutable for a year (CACHE), so a changed film must have new names, or everyone who
+    watched it keeps the old one."""
+    rev = film.record().get("media_rev")
+    return "r%d/%s" % (rev, name) if rev else name
+
+
 # ------------------------------------------------------------------ the link-preview card
 def _frame(mp4, t):
     """One frame of the film at t seconds, as a PIL image (None if ffmpeg cannot)."""
@@ -354,8 +363,8 @@ async def publish(film, timeout=3600):
             for key, name, ctype in FILES:
                 p = os.path.join(out, name)
                 if os.path.isfile(p):
-                    await _put(s, "%s/%s" % (film.id, name), p, ctype)
-                    urls[key] = url_of(film.id, name)
+                    await _put(s, "%s/%s" % (film.id, blob_of(film, name)), p, ctype)
+                    urls[key] = url_of(film.id, blob_of(film, name))
     except Exception as e:  # noqa: BLE001 -- the film is made; the copy is a bonus
         print("film %s: not copied online: %s" % (film.id, e), file=sys.stderr, flush=True)
         return urls if "video" in urls else {}
@@ -370,8 +379,8 @@ async def publish_web(film, timeout=3600):
     if not p:
         raise MediaError("no film.mp4")
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
-        await _put(s, "%s/film_web.mp4" % film.id, p, "video/mp4")
-    return {"web": url_of(film.id, "film_web.mp4")}
+        await _put(s, "%s/%s" % (film.id, blob_of(film, "film_web.mp4")), p, "video/mp4")
+    return {"web": url_of(film.id, blob_of(film, "film_web.mp4"))}
 
 
 async def delete(fid, timeout=60):
@@ -380,9 +389,16 @@ async def delete(fid, timeout=60):
         return 0
     import aiohttp
 
+    import film as films
+
+    f = films.Film.open(fid)
+    rev = (f.record().get("media_rev") or 0) if f else 0
+    # every revision's copy too (blob_of): a patched film left its earlier files online
+    names = [n for _, n, _ in FILES]
+    names += ["r%d/%s" % (r, n) for r in range(1, rev + 1) for n in names]
     gone = 0
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
-        for name in [n for _, n, _ in FILES] + share_blobs(fid):
+        for name in names + share_blobs(fid):
             url = "%s/%s?%s" % (base(), quote("%s/%s" % (fid, name)), sas())
             async with s.delete(url, headers={"x-ms-version": VERSION}) as r:
                 if r.status in (200, 202):

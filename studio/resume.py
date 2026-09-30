@@ -6,6 +6,10 @@ the soundtrack and the video as usual, into the same film (its page and link sta
     python studio/resume.py <film-id>             pick it up (make_film resume=True)
     python studio/resume.py <film-id> --minutes N  with N minutes of Claude's working time
     python studio/resume.py <film-id> --finish    Claude's part is whole: mix and render only
+    python studio/resume.py <film-id> --finish --patched
+                                                  a FINISHED film whose files were changed by hand
+                                                  (film.js, a re-voiced line): mixed, rendered and
+                                                  put online again under new names, same page
 
 For a film the studio stopped under it -- a restart while Claude was still working records it
 cancelled (before 2026-09-29) or interrupted -- not for one its person stopped. The Claude session
@@ -75,9 +79,16 @@ def plan(film, minutes=None):
     }
 
 
-def refuse(film, finish):
+def refuse(film, finish, patched=False):
     """Why this film may not be picked up here, or None."""
-    if film.state not in STOPPED:
+    if patched:
+        if not finish:
+            return (
+                "--patched goes with --finish: a patched film is mixed and rendered, not re-asked"
+            )
+        if film.state != "done":
+            return "%s is %s; --patched is for a finished film" % (film.id, film.state)
+    elif film.state not in STOPPED:
         return "%s is %s, not stopped (only %s films are picked up)" % (
             film.id,
             film.state,
@@ -127,6 +138,11 @@ def main():
         "--finish", action="store_true", help="no Claude: its part is whole, mix and render only"
     )
     ap.add_argument(
+        "--patched",
+        action="store_true",
+        help="with --finish: a finished film changed by hand, rendered and put online again",
+    )
+    ap.add_argument(
         "--minutes",
         type=int,
         help="Claude's working time (default: what the film's limit has left, at least 5)",
@@ -137,13 +153,25 @@ def main():
         sys.exit("no film %s in %s" % (args.film, agent.HOME))
     p = plan(film, args.minutes)
     print(json.dumps(p, indent=2))
-    why = refuse(film, args.finish)
+    why = refuse(film, args.finish, args.patched)
     if why:
         sys.exit("not picking it up: " + why)
     if args.plan:
         return
     emit = logger(film)
     agent.procs.cgroup_root()  # the steps' cgroups, before Claude Code is started (server.main)
+    if args.patched:
+        # its files online are immutable under their names (media.blob_of): the next revision
+        # gets new ones; the link-preview card is made again from the new poster
+        rev = (film.record().get("media_rev") or 0) + 1
+        card = film.path("outputs", "card.jpg")
+        if os.path.exists(card):
+            os.makedirs(film.path("temp"), exist_ok=True)
+            os.replace(card, film.path("temp", "card-before-r%d.jpg" % rev))
+        film.update(media_rev=rev)
+        emit(
+            {"type": "stage", "name": "patch", "text": "Changed by hand: mixed and rendered again"}
+        )
     if args.finish:
         film.update(state="finishing", ok=None, error=None, finished=None)
     elif film.mode == "scenes":
