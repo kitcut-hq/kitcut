@@ -549,6 +549,9 @@ def build(ms, photo_path, name, out_dir, face_index=0):
     ell = (uu / 1.02) ** 2 + ((vv + 0.12) / 0.98) ** 2
     prior = np.clip((1.18 - ell) / 0.18, 0, 1)
     prior = np.maximum(prior, ((vv > 0.25) & (vv < 1.25) & (np.abs(uu) < 1.0)).astype(np.float32))
+    # "other" (a hat, a wig's curls, a headband) is kept anywhere inside the prior: tried only
+    # next to hair and face, it took an engraved wig's curls off to drop a patch of backdrop
+    # from one painting -- the worse trade
     prob = (cls[HAIR] + cls[OTHER] * 0.9) * prior + cls[FACE]
     prob = np.maximum(prob, face_poly)
     # nothing below the jaw line: the outline from one jaw angle round the chin to the other,

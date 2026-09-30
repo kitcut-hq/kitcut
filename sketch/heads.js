@@ -301,35 +301,64 @@
   const LIP_IU = [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308], LIP_IL = [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308];
 
   /* ------------------------------------------------------------ the bobble-head's body */
-  function body(R, o, fh, sway, talking, t) {
-    // drawn at the neck (0, 0), below the chin, in the film's own pen
+  /** how much `who` has been talking over the last half second, 0..1: a gesture that follows
+   *  it eases in and out instead of jumping when a line starts */
+  function talkiness(who, t) {
+    let s = 0;
+    for (let i = 0; i < 6; i++) s += SK.talk(who, t - i * .09).on ? 1 : 0;
+    return E.sine(s / 6);
+  }
+  /** a bobble-head doll's body, drawn at the neck (0, 0) under the chin in the film's own pen:
+   *  a short neck the head springs on, a small body, and the doll's stand with a name plate */
+  function body(R, o, fh, sway, talk, t) {
     const C = SK.C, b = o.body || {};
-    const shirt = b.shirt || C.shirtA, trousers = b.trousers || '#5b6477', skin = b.skin || R.col.skin;
-    const w = fh * .62, hg = fh * .78;
-    for (const s of [-1, 1]) {
-      const leg = SK.S.path([['M', s * w * .06, hg * .96], ['L', s * w * .1, hg * 1.42], ['L', s * w * .36, hg * 1.42], ['L', s * w * .42, hg * .96]]);
-      SK.wash(leg, trousers, { seed: 60 + s, dx: 0, dy: 0 }); SK.ink(leg, { w: 4, seed: 62 + s });
-      const shoe = SK.S.ellC(s * w * .27, hg * 1.46, w * .21, hg * .06);
-      SK.wash(shoe, C.ink, { seed: 64 + s, dx: 0, dy: 0, tex: false }); SK.ink(shoe, { w: 3, seed: 66 + s });
+    const shirt = b.shirt || C.shirtA, trousers = b.trousers || '#4d5566', skin = b.skin || R.col.skin;
+    const shoes = b.shoes || '#2a2521', w = fh * .64, hg = fh * .7, legH = fh * .42, baseY = hg + legH;
+    if (b.base !== false) {
+      // the stand: a disc on a short drum, the plate on its front
+      const bw = w * .82, bh = fh * .17, top = fh * .05, col = b.base || '#3a3431';
+      SK.card(-bw, baseY, bw * 2, bh, { r: bh * .45, fill: col, shadow: { blur: fh * .06, y: fh * .03, col: 'rgba(20,14,10,.3)' } });
+      SK.wash(SK.S.ellC(0, baseY, bw, top), SK.mix(col, '#ffffff', .18), { seed: 58, dx: 0, dy: 0, tex: false });
+      SK.ink(SK.S.ell(0, baseY, bw, top), { w: 3, seed: 59, dbl: false, alpha: .6 });
+      if (b.name) {
+        const pw = bw * 1.25, ph = bh * .62;
+        SK.card(-pw / 2, baseY + bh * .26, pw, ph, { r: ph * .2, fill: b.plate || '#d6bf84', shadow: false });
+        SK.txt(String(b.name).toUpperCase(), 0, baseY + bh * .26 + ph * .54, { size: ph * .78, wt: 700, col: '#3a2c18', ls: ph * .08, mode: 'type', wob: 0 });
+      }
     }
-    const lift = talking ? .22 + .18 * Math.sin(t * 5.3) : 0, pose = b.arms || 'rest';
     for (const s of [-1, 1]) {
-      const sh = [s * w * .48, hg * .14];
+      const leg = SK.S.rrect(s * w * .04 - (s < 0 ? w * .3 : 0), hg * .9, w * .3, legH * 1.02, w * .08);
+      SK.wash(leg, trousers, { seed: 60 + s, dx: 0, dy: 0 }); SK.ink(leg, { w: 3.5, seed: 62 + s });
+      const shoe = SK.S.ellC(s * w * .2, baseY - fh * .01, w * .22, fh * .045);
+      SK.wash(shoe, shoes, { seed: 64 + s, dx: 0, dy: 0, tex: false }); SK.ink(shoe, { w: 3, seed: 66 + s });
+    }
+    const pose = b.arms || 'rest';
+    // an arm: hanging at the side, or (the right one) up in front of the chest while talking
+    const arm = (s) => {
+      const sh = [s * w * .47, hg * .16];
       let hand;
-      if (pose === 'wave' && s > 0) hand = [w * 1.0, -hg * .18 + Math.sin(t * 9) * hg * .07];
-      else if (pose === 'point' && s > 0) hand = [w * 1.1, hg * .16];
-      else hand = [s * w * (.74 + lift * .25), hg * (.8 - lift * .35)];
-      const arm = SK.S.path([['M', sh[0], sh[1]], ['Q', sh[0] + s * w * .2, (sh[1] + hand[1]) / 2, hand[0], hand[1]]]);
-      SK.ink(arm, { w: fh * .06, col: shirt, seed: 70 + s, taper: false, dbl: false, jit: .5 });
-      SK.ink(arm, { w: 3.5, seed: 72 + s, alpha: .5 });
-      SK.wash(SK.S.ellC(hand[0], hand[1], fh * .042, fh * .046), skin, { seed: 74 + s, dx: 0, dy: 0, tex: false });
-      SK.ink(SK.S.ell(hand[0], hand[1], fh * .042, fh * .046), { w: 3, seed: 76 + s, dbl: false });
-    }
-    const torso = SK.S.path([['M', -w * .3, 0], ['Q', -w * .6, hg * .08, -w * .55, hg * .62], ['L', -w * .5, hg], ['L', w * .5, hg], ['L', w * .55, hg * .62], ['Q', w * .6, hg * .08, w * .3, 0], ['Q', 0, hg * .09, -w * .3, 0]]);
+      if (pose === 'wave' && s > 0) hand = [w * .95, -hg * .2 + Math.sin(t * 9) * hg * .07];
+      else if (pose === 'point' && s > 0) hand = [w * 1.1, hg * .12];
+      else if (s > 0) hand = [w * lerp(.6, .3, talk), hg * lerp(.76, .42, talk) + Math.sin(t * 4.6) * hg * .05 * talk];
+      else hand = [-w * .6, hg * .76];
+      const elbow = [sh[0] + s * w * (.22 + .12 * talk), (sh[1] + hand[1]) / 2 + hg * (.06 + .14 * talk)];
+      const path = SK.S.path([['M', sh[0], sh[1]], ['Q', elbow[0], elbow[1], hand[0], hand[1]]]);
+      SK.ink(path, { w: fh * .075, col: shirt, seed: 70 + s, taper: false, dbl: false, jit: .5 });
+      SK.ink(path, { w: 3, seed: 72 + s, alpha: .45 });
+      SK.wash(SK.S.ellC(hand[0], hand[1], fh * .045, fh * .048), skin, { seed: 74 + s, dx: 0, dy: 0, tex: false });
+      SK.ink(SK.S.ell(hand[0], hand[1], fh * .045, fh * .048), { w: 3, seed: 76 + s, dbl: false });
+    };
+    const front = talk > .05 || pose !== 'rest'; // a gesture comes in front of the body
+    arm(-1);
+    if (!front) arm(1);
+    // the torso: round shoulders, a collar the neck comes out of
+    const torso = SK.S.path([['M', -w * .2, 0], ['Q', -w * .52, 0, -w * .52, hg * .24], ['L', -w * .48, hg * .92], ['Q', -w * .47, hg, -w * .38, hg], ['L', w * .38, hg], ['Q', w * .47, hg, w * .48, hg * .92], ['L', w * .52, hg * .24], ['Q', w * .52, 0, w * .2, 0], ['Z']]);
     SK.wash(torso, shirt, { seed: 80 }); SK.ink(torso, { w: 4.5, seed: 81 });
-    const nx = sway * fh * .12;
-    const neck = SK.S.path([['M', -w * .11, hg * .03], ['L', -w * .1 + nx, -fh * .1], ['L', w * .1 + nx, -fh * .1], ['L', w * .11, hg * .03]]);
-    SK.wash(neck, skin, { seed: 82, dx: 0, dy: 0, tex: false }); SK.ink(neck, { w: 3.5, seed: 83, alpha: .7 });
+    const nx = sway * fh * .1;
+    const neck = SK.S.path([['M', -w * .12, hg * .06], ['L', -w * .11 + nx, -fh * .08], ['L', w * .11 + nx, -fh * .08], ['L', w * .12, hg * .06]]);
+    SK.wash(neck, skin, { seed: 82, dx: 0, dy: 0, tex: false }); SK.ink(neck, { w: 3, seed: 83, alpha: .6 });
+    SK.ink(SK.S.arc(0, 0, w * .16, .15, Math.PI - .15, w * .07), { w: 3.5, seed: 84, alpha: .8 }); // the collar
+    if (front) arm(1);
   }
 
   /* ------------------------------------------------------------ SK.head */
@@ -369,10 +398,12 @@
     ctx.save(); ctx.globalAlpha *= alpha;
     ctx.translate(nudge[0], nudge[1]);
     if (style === 'bobble') {
-      const neckY = y + h * .5;
-      const sway = nd.a * 6 + Math.sin(t * 1.7 + name.length) * .018 + (tk.on ? Math.sin(t * 6.2) * .02 : 0);
-      SK.at(x, neckY + h * .02, 0, 1, () => body(R, o, h, sway, tk.on, t));
+      // the head springs on its neck: a wobble on each of its speaker's words, an idle drift
+      const neckY = y + h * .5, tl = talkiness(who, t);
+      const sway = nd.a * 7 + Math.sin(t * 1.7 + name.length) * .02 + Math.sin(t * 6.1) * .018 * tl;
+      SK.at(x, neckY + h * .02, 0, 1, () => body(R, o, h, sway, tl, t));
       ctx.translate(x, neckY); ctx.rotate(sway + (o.tilt || 0) + nudge[2]); ctx.translate(-x, -neckY);
+      ctx.translate(0, nd.y * h * 2.5);
     } else if (nodK || o.tilt || nudge[2]) {
       ctx.translate(x, y + h * .45); ctx.rotate(nd.a * 1.4 * nodK + (o.tilt || 0) + nudge[2]); ctx.translate(-x, -(y + h * .45));
       ctx.translate(0, nd.y * h * nodK);
