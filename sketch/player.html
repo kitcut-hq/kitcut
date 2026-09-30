@@ -86,6 +86,8 @@ __SCENES__
   //   ?export=1&fps&from&to  draw every frame and POST its raw RGBA to /frame, then /done  (sketch-render.py)
   //   ?encode=<json>&fps&from&to  draw every frame into the browser's own H.264 encoder and POST
   //                         the stream to /h264 in batches, then /done  (sketch-render.py --encode browser)
+  //   &cover=<t>            with export/encode: the first frame draws t instead (sketch-render.py:
+  //                         the film's cover, what X and a phone show before play)
   //   ?stills=1.5,9,23.8    POST a PNG per time to /still, then /done
   //   ?automation=1         POST SK.automation() JSON to /automation, then /done
   const Q = new URLSearchParams(location.search);
@@ -96,6 +98,8 @@ __SCENES__
   const bar = document.getElementById('bar');
   const cv = document.getElementById('c');
   const DUR = SK._film.duration, POSTER_T = __POSTER_T__;
+  const COVER = Q.has('cover') ? +Q.get('cover') : null;
+  const at = (from, i, fps) => (i === 0 && COVER !== null ? COVER : from + i / fps);
   let ready = false, playing = false, clockBase = 0, clockAt = 0;
   // retried: one reset connection must not end a ten-minute render (the server ignores a repeat)
   const report = async (path, body) => {
@@ -125,7 +129,7 @@ __SCENES__
           // raw RGBA, not PNG: toBlob() fills Chromium's blob store faster than GC frees it
           // ("Failed to fetch" after ~100 frames), and skipping the PNG round trip is faster too
           const cx2 = cv.getContext('2d');
-          for (let i = 0; i < n; i++) { SK.render(from + i / fps); await report('frame?i=' + i, cx2.getImageData(0, 0, cv.width, cv.height).data); }
+          for (let i = 0; i < n; i++) { SK.render(at(from, i, fps)); await report('frame?i=' + i, cx2.getImageData(0, 0, cv.width, cv.height).data); }
         }
         if (Q.has('encode')) {
           // the canvas goes to the encoder where it already is: no 8 MB readback and POST per
@@ -148,9 +152,11 @@ __SCENES__
           const us = 1e6 / fps;
           for (let i = 0; i < n; i++) {
             if (failed) throw failed;
-            SK.render(from + i / fps);
+            SK.render(at(from, i, fps));
             const f = new VideoFrame(cv, { timestamp: Math.round(i * us), duration: Math.round(us) });
-            enc.encode(f, E.config.bitrateMode === 'quantizer' ? { keyFrame: i % E.gop === 0, avc: { quantizer: E.quantizer } } : { keyFrame: i % E.gop === 0 });
+            // the frame after a cover is a cut, so it starts a picture of its own
+            const key = i % E.gop === 0 || (i === 1 && COVER !== null);
+            enc.encode(f, E.config.bitrateMode === 'quantizer' ? { keyFrame: key, avc: { quantizer: E.quantizer } } : { keyFrame: key });
             f.close();
             while (enc.encodeQueueSize > 4 && !failed) await new Promise(r => setTimeout(r, 1));
             if (out.length >= fps) await send();

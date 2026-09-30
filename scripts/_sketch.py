@@ -186,6 +186,27 @@ def total(m):
     return float(m["duration"]) + float((m.get("tail") or {}).get("secs", 0))
 
 
+# the video's first frame: X, iMessage and a phone's <video> before play all show frame 0, and a
+# film that opens on bare paper shows as an empty rectangle there (2026-09-30)
+COVER_AT = (0.5, 0.65, 0.8, 0.92)  # the stand-ins, as fractions of the film (the tail excluded)
+COVER_LIVELIER = 1.4  # a stand-in beats the poster only with this much more contrast
+
+
+def cover_candidates(m):
+    """The times a cover may come from: the poster first (the film's end, its payoff), then a few
+    later moments that stand in when the film ends on paper -- the rule studio/media.py's
+    link-preview card uses, so the card and the first frame agree."""
+    d = float(m["duration"])
+    return [float(m.get("poster_t", d - 1))] + [round(d * k, 3) for k in COVER_AT]
+
+
+def pick_cover(scored):
+    """[(t, contrast)] with the poster first -> the time to draw as the video's first frame."""
+    best = scored[0]
+    alt = max(scored[1:], key=lambda s: s[1], default=None)
+    return alt[0] if alt and alt[1] > COVER_LIVELIER * best[1] else best[0]
+
+
 def write_wav(path, x, sr=SR):
     """float32 WAV (IEEE float, format tag 3). x: (n,) or (channels, n)."""
     x = np.atleast_2d(np.asarray(x, dtype=np.float32))

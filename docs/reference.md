@@ -3348,6 +3348,18 @@ and POSTs its raw pixels to a local server here, which pipes them into ffmpeg wi
 `_encode.video_args`. The mux uses `-t`, never `-shortest` (see the gotchas), asserts the
 duration, and adds a soft subtitle track and the poster.
 
+**The first frame is the film's cover.** X, iMessage and a phone's `<video>` before play all
+show frame 0 of the file, and a film that opens on bare paper -- most do, the picture is drawn
+in -- showed there as an empty rectangle (the Collage launch film on X, 2026-09-30). So frame 0
+draws the poster instead (`poster_t`, the payoff), or, when the film ends on paper, the
+livelier of a few later moments (0.5/0.65/0.8/0.92 of the film, the tail excluded): the same
+rule, and the same 1.4x contrast margin, as the studio's link-preview card (`studio/media.py`),
+so the card and the first frame agree. It is one frame -- 17 ms at 60 fps, unseen in play --
+and replaces rather than inserts, so duration and sound are untouched; the frame after it is
+encoded as a keyframe, because it is a cut. The choice costs one browser and five stills (~7 s)
+and is printed with each candidate's contrast. Manifest `cover`: a number is that film time,
+`false` keeps the film's own opening; `--from` other than 0 has no cover.
+
 The frames are drawn in chunks (`--chunk`, 8 s of film each), each in a fresh browser: measured
 on the 63.5 s air-raid film, a single session fell from 13.8 to 1.5 frames a second and then
 stopped answering at frame ~2,700 of 3,810. `--jobs` browsers draw chunks at once (default a
@@ -3460,6 +3472,18 @@ loop: 18 stills in 8.6 s. The video is rendered by opening the page in headless 
 and POSTs its raw pixels to a local server here, which pipes them into ffmpeg with
 `_encode.video_args`. The mux uses `-t`, never `-shortest` (see the gotchas), asserts the
 duration, and adds a soft subtitle track and the poster.
+
+**The first frame is the film's cover.** X, iMessage and a phone's `<video>` before play all
+show frame 0 of the file, and a film that opens on bare paper -- most do, the picture is drawn
+in -- showed there as an empty rectangle (the Collage launch film on X, 2026-09-30). So frame 0
+draws the poster instead (`poster_t`, the payoff), or, when the film ends on paper, the
+livelier of a few later moments (0.5/0.65/0.8/0.92 of the film, the tail excluded): the same
+rule, and the same 1.4x contrast margin, as the studio's link-preview card (`studio/media.py`),
+so the card and the first frame agree. It is one frame -- 17 ms at 60 fps, unseen in play --
+and replaces rather than inserts, so duration and sound are untouched; the frame after it is
+encoded as a keyframe, because it is a cut. The choice costs one browser and five stills (~7 s)
+and is printed with each candidate's contrast. Manifest `cover`: a number is that film time,
+`false` keeps the film's own opening; `--from` other than 0 has no cover.
 
 The frames are drawn in chunks (`--chunk`, 8 s of film each), each in a fresh browser: measured
 on the 63.5 s air-raid film, a single session fell from 13.8 to 1.5 frames a second and then

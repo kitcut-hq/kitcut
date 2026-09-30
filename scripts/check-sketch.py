@@ -339,6 +339,17 @@ def main():
         str(cues),
     )
 
+    # ---- the cover (sketch-render.py): the video's first frame, what X shows before play
+    m = {"duration": 60, "poster_t": 59.6}
+    ts = _sketch.cover_candidates(m)
+    check("cover: the poster is the first candidate", ts[0] == 59.6 and all(t < 60 for t in ts))
+    check("cover: the poster wins a close call", _sketch.pick_cover([(59.6, 40), (30, 50)]) == 59.6)
+    check(
+        "cover: a film ending on paper gives way to a livelier moment",
+        _sketch.pick_cover([(59.6, 6), (30, 40), (39, 55), (48, 20)]) == 39,
+    )
+    check("cover: no stand-ins, the poster", _sketch.pick_cover([(59.6, 0)]) == 59.6)
+
     # ---- cut-outs (sketch-paint.py): a collage's pictures, made without a single paid call
     import io
 
