@@ -20,7 +20,9 @@ Outputs (projects/<id>/outputs/):
     (the video's first frame is the film's cover -- see `cover` below)
     review/<t>.png, review/sheet.png    (--stills / --sheet)
 
-Manifest keys: title, description, slug, duration, fps, film ("film.js"), fonts
+Manifest keys: title, description, slug, duration, fps, frame ([w, h]; 1920x1080 unless set: a
+square film is [1080, 1080], a vertical one [1080, 1920] -- the engine's SK.W/SK.H),
+film ("film.js"), fonts
 ([{"file", "family", "weight", "load"}]), images ({"logo": "assets/logo.png"} -> SK.IMG.logo),
 player ({accent, paper, ink, hint, hint_font}), poster_t,
 cover (the video's first frame -- X, iMessage and a phone's player show it before play, and a film
@@ -29,6 +31,7 @@ livelier later moment when the film ends on paper, as frame 0 -- 1/fps of a seco
 play; a number is that film time; false keeps the film's own opening),
 render ({cq, preset, audio_bitrate, encoder, encode}: encode "browser" has the page encode its own
 frames, see --encode),
+web ({cq, preset, maxrate, bufsize, audio_bitrate}: the copy --web makes, over WEB below),
 tail ({secs, scripts, images, audio}: a closing after the film -- `secs` more of picture, drawn by
 `scripts` run after film.js, which lengthen SK._film; its sound is sketch-audio's),
 head ({scripts}: run just before film.js, in its scope -- sketch/thumb.js, a thumbnail's probe and
@@ -46,6 +49,7 @@ Invoke as:
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json            (full render)
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --draft    (30 fps, faster)
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --encode browser --jobs 6
+    python scripts/sketch-render.py --manifest projects/<id>/sketch.json --web   (+ copy to post)
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --timings
 """
 
@@ -77,7 +81,6 @@ import _project  # noqa: E402
 import _sketch  # noqa: E402
 
 SKETCH = os.path.join(_env.ROOT, "sketch")
-FRAME_BYTES = 1920 * 1080 * 4  # the page exports raw RGBA frames
 # the pipe's RGBA -> YUV is BT.709 and says so, as the browser encoder's is (_encode.webcodecs):
 # ffmpeg's default is BT.601, untagged, which a browser guessing BT.709 for HD shows 5.6 levels
 # too dark in green (docs/studio-speed.md). A CPU-only machine renders through the pipe.
@@ -238,6 +241,8 @@ def bundle(m, audio=True):
         "__HINT__": html.escape(pl["hint"]),
         "__HINT_FONT__": pl["hint_font"],
         "__POSTER_T__": str(m.get("poster_t", m["duration"] - 1)),
+        "__FW__": str(_sketch.frame(m)[0]),
+        "__FH__": str(_sketch.frame(m)[1]),
         # the film's own engine folder when its manifest names one (Sketch Studio's per-film copy)
         "__ENGINE__": read_text(os.path.join(m["_engine"], "engine.js")),
         "__PROPS__": read_text(os.path.join(m["_engine"], "props.js")),
@@ -289,8 +294,9 @@ class Session:
     The page lives under a random prefix (/<key>/film.html) and posts to paths relative to it; a
     request without the key is refused, so nothing else on the machine can feed this render."""
 
-    def __init__(self, page, on_frame=None, on_still=None, on_h264=None):
+    def __init__(self, page, on_frame=None, on_still=None, on_h264=None, size=(1920, 1080)):
         self.page = page.encode("utf-8")
+        self.size = size
         self.on_frame, self.on_still, self.on_h264 = on_frame, on_still, on_h264
         self.done = threading.Event()
         self.error, self.automation, self.frames, self.last = None, None, 0, time.time()
@@ -385,7 +391,7 @@ class Session:
             "--mute-audio",
             "--hide-scrollbars",
             "--user-data-dir=" + prof,
-            "--window-size=1920,1080",
+            "--window-size=%d,%d" % self.size,
         ]
         if os.environ.get("SKETCH_RENDER_OFFLINE") == "1":
             # no network at all: every request that is not to this page's own loopback server
@@ -489,7 +495,20 @@ def packets(path):
     return int(r.stdout.strip() or 0) if r.returncode == 0 else 0
 
 
-def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="pipe", cover=None):
+def render_frames(
+    page,
+    cfg,
+    fps,
+    t0,
+    n_frames,
+    chunk,
+    jobs,
+    temp,
+    silent,
+    how="pipe",
+    cover=None,
+    size=(1920, 1080),
+):
     """Draw frames [0, n_frames) into `silent`. The film is cut into chunks of `chunk` seconds;
     `jobs` browsers draw chunks at once, each into its own encoder and segment file, and the
     segments are joined by stream copy. One browser is serial -- draw, read back, POST 8 MB,
@@ -507,6 +526,8 @@ def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="
     A fresh browser per chunk: measured on a 63.5 s film, one session fell from 13.8 to 1.5 fps
     and then stopped answering at frame ~2700. A chunk that fails is redrawn from its start
     (frames are a pure function of t, so the redraw is identical), up to three times."""
+    fw, fh = size
+    frame_bytes = fw * fh * 4  # the page exports raw RGBA frames
     per = max(1, int(round(chunk * fps)))
     # a film shorter than jobs x chunk (a 5 s Sketch Studio film is one chunk) is split evenly
     # across the browsers instead, down to 1 s each -- below that a browser's start-up dominates
@@ -554,10 +575,10 @@ def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="
                 k, got[0] = n - got[0], n
                 progress(k)
 
-            err = Session(page, on_h264=stream).run(
+            err = Session(page, on_h264=stream, size=size).run(
                 "encode=%s&fps=%d&from=%r&to=%r"
                 % (
-                    urllib.parse.quote(json.dumps(_encode.webcodecs(cfg, fps))),
+                    urllib.parse.quote(json.dumps(_encode.webcodecs(cfg, fps, fw, fh))),
                     fps,
                     t0 + a / fps,
                     t0 + b / fps,
@@ -570,7 +591,7 @@ def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="
         if not err:
             r = subprocess.run(
                 ["ffmpeg", "-v", "error", "-y", "-r", str(fps), "-f", "h264", "-i", h264]
-                + ["-c", "copy", "-bsf:v", _encode.webcodecs(cfg, fps)["bsf"], seg],
+                + ["-c", "copy", "-bsf:v", _encode.webcodecs(cfg, fps, fw, fh)["bsf"], seg],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -595,7 +616,7 @@ def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="
                     mode[0] = "pipe"
         ff = subprocess.Popen(
             ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgba"]
-            + ["-s", "1920x1080", "-framerate", str(fps), "-i", "-"]
+            + ["-s", "%dx%d" % size, "-framerate", str(fps), "-i", "-"]
             + PIPE_COLOUR
             + _encode.video_args(cfg)
             + [seg],
@@ -608,16 +629,16 @@ def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="
                 return  # a retried POST whose first attempt already landed
             if i != got[0]:
                 raise RuntimeError("frame %d arrived, expected %d" % (a + i, a + got[0]))
-            if len(body) != FRAME_BYTES:
+            if len(body) != frame_bytes:
                 raise RuntimeError(
-                    "frame %d is %d bytes, expected %d (1920x1080 RGBA)"
-                    % (a + i, len(body), FRAME_BYTES)
+                    "frame %d is %d bytes, expected %d (%dx%d RGBA)"
+                    % (a + i, len(body), frame_bytes, fw, fh)
                 )
             ff.stdin.write(body)
             got[0] += 1
             progress(1)
 
-        err = Session(page, on_frame=frame).run(
+        err = Session(page, on_frame=frame, size=size).run(
             "export=1&fps=%d&from=%r&to=%r" % (fps, t0 + a / fps, t0 + b / fps) + cover_q(a),
             fatal=False,
         )
@@ -717,7 +738,7 @@ def choose_cover(m, page):
 
     times = _sketch.cover_candidates(m)
     try:
-        err = Session(page, on_still=save).run(
+        err = Session(page, on_still=save, size=_sketch.frame(m)).run(
             "stills=" + ",".join("%r" % t for t in times), fatal=False
         )
     except Exception as e:  # noqa: BLE001 -- the cover is a nicety; the film must still render
@@ -734,10 +755,35 @@ def choose_cover(m, page):
     return t
 
 
-def contact_sheet(paths, out, cols=4):
+# The copy to post (--web): the master re-encoded under a cap.
+# A browser-encoded master runs ~31 Mbps
+# (26 s of 1080x1080 at 60 fps: 102 MB); X takes up to 512 MB but re-encodes anything over ~25 Mbps,
+# and the motion-design promo this was made for shipped at 8.8 Mbps -- so 8 Mbps, a visually clean
+# ceiling for flat graphics, and small enough to send in a chat.
+WEB = {"cq": 23, "preset": "p5", "maxrate": "8M", "bufsize": "16M", "audio_bitrate": "192k"}
+
+
+def web_copy(m, src, dst):
+    """dst: src re-encoded to post (WEB, under the manifest's "web" block), subtitles kept."""
+    cfg = _encode.resolve(
+        {**WEB, **{k: v for k, v in (m.get("web") or {}).items() if k[:1] != "_"}}
+    )
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error"]
+        + _encode.decode_args()
+        + ["-i", src, "-map", "0:v:0", "-map", "0:a?", "-map", "0:s?"]
+        + _encode.video_args(cfg)
+        + _encode.audio_args(cfg)
+        + ["-c:s", "copy", "-movflags", "+faststart", dst],
+        check=True,
+    )
+    return cfg
+
+
+def contact_sheet(paths, out, cols=4, size=(1920, 1080)):
     from PIL import Image, ImageDraw
 
-    w, h = 1920 // cols, 1080 // cols
+    w, h = size[0] // cols, size[1] // cols
     rows = (len(paths) + cols - 1) // cols
     S = Image.new("RGB", (cols * w, rows * h), "white")
     d = ImageDraw.Draw(S)
@@ -794,6 +840,11 @@ def main():
         help="where frames are encoded (default render.encode, else pipe): pipe sends raw pixels "
         "to ffmpeg; browser encodes in the page with its hardware H.264 encoder, ~3x faster",
     )
+    ap.add_argument(
+        "--web",
+        action="store_true",
+        help="also write <slug>_web.mp4: the master under an 8 Mbps cap, to post (manifest: web)",
+    )
     ap.add_argument("--from", dest="t0", type=float, default=0.0)
     ap.add_argument("--to", dest="t1", type=float)
     ap.add_argument(
@@ -816,6 +867,10 @@ def main():
         return
 
     fps = args.fps or (30 if args.draft else int(m.get("fps", 60)))
+    try:
+        size = _sketch.frame(m)
+    except ValueError as e:
+        sys.exit(str(e))
     t1 = args.t1 if args.t1 is not None else _sketch.total(m)
     cfg = _encode.resolve(
         {
@@ -834,7 +889,10 @@ def main():
     how = args.encode or m.get("render", {}).get("encode", "pipe")
     if how not in ("pipe", "browser"):
         sys.exit("render.encode is %r: pipe or browser" % how)
-    print("%s  %.1fs  %d fps  %d frames" % (m["_id"], t1 - args.t0, fps, n_frames))
+    print(
+        "%s  %.1fs  %d fps  %d frames  %dx%d"
+        % (m["_id"], t1 - args.t0, fps, n_frames, size[0], size[1])
+    )
     print("  jobs:    %d browsers at once, %.0f s of film each" % (jobs, args.chunk))
     print(
         "  film:    %s%s"
@@ -849,7 +907,7 @@ def main():
         )
     )
     if how == "browser":
-        w = _encode.webcodecs(cfg, fps)
+        w = _encode.webcodecs(cfg, fps, *size)
         print(
             "  encoder: the browser's %s, %s, QP %d (from cq %s), keyframe every %d"
             % (
@@ -892,6 +950,7 @@ def main():
             "mux",
             "poster",
         ]
+        names += ["web"] if args.web else []
     with _sketch.Stages(m, "sketch-render", names, argv=sys.argv[1:]) as st:
         with st("bundle"):
             page = bundle(m)
@@ -922,20 +981,23 @@ def main():
                         f.write(body)
                     got.append(p)
 
-                sess = Session(light, on_still=save)
+                sess = Session(light, on_still=save, size=size)
                 sess.run("stills=" + args.stills)
                 if sess.report is not None:  # the page's SK.REPORT(), beside the stills
                     with open(os.path.join(rdir, "report.json"), "w", encoding="utf-8") as f:
                         json.dump(sess.report, f, ensure_ascii=False)
                 if args.sheet:
                     contact_sheet(
-                        got, os.path.join(rdir, "sheet.png"), cols=2 if len(got) <= 4 else 4
+                        got,
+                        os.path.join(rdir, "sheet.png"),
+                        cols=2 if len(got) <= 4 else 4,
+                        size=size,
                     )
                 print("  %d stills -> %s" % (len(got), os.path.relpath(rdir, _env.ROOT)))
 
         if args.automation:
             with st("automation"):
-                s = Session(light)
+                s = Session(light, size=size)
                 s.run("automation=1")
                 p = os.path.join(m["_temp"], "automation.json")
                 with open(p, "w", encoding="utf-8") as f:
@@ -966,6 +1028,7 @@ def main():
                 silent,
                 how,
                 cover,
+                size,
             )
 
         out = os.path.join(m["_outputs"], slug + ("_draft" if args.draft else "") + ".mp4")
@@ -1037,6 +1100,19 @@ def main():
                 ],
                 check=True,
             )
+        web = None
+        if args.web:
+            web = os.path.join(m["_outputs"], slug + ("_draft" if args.draft else "") + "_web.mp4")
+            with st("web"):
+                wcfg = web_copy(m, out, web)
+                print(
+                    "  %s  %.1f MB  (%s)"
+                    % (
+                        os.path.relpath(web, _env.ROOT),
+                        os.path.getsize(web) / 1e6,
+                        _encode.describe(wcfg),
+                    )
+                )
 
     _project.record(
         m["_id"],
@@ -1051,7 +1127,12 @@ def main():
         argv=sys.argv[1:],
         kind="video",
         manifest=m["_path"],
-        sidecars={"html": out_html, "poster": poster, "srt": srt if os.path.exists(srt) else None},
+        sidecars={
+            "html": out_html,
+            "poster": poster,
+            "srt": srt if os.path.exists(srt) else None,
+            "web": web,
+        },
     )
 
 

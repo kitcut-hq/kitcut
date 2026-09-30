@@ -3241,6 +3241,7 @@ voice is edge-tts.
 |---|---|
 | `sketch/engine.js` | the renderer: strokes that boil, cel fills, write-on text, camera, flight paths, paper, grain; `SK.setStyle('crayon' \| 'clean')`; the ground, `SK.setGround(name)` (paper, white, kraft, sky, mint, butter, blush, night, chalkboard, blueprint: the paper, its grain and the text colours that read on it, `C.text` `C.textSoft` `C.accent` `C.accentText`), or `ground: (t) => name` in `SK.film`; backdrops that cover whatever the camera shows: `SK.sky`, `SK.band` (ground, hills, waves, grass; returns `edge(x)`), `SK.stars` |
 | `sketch/collage.js` | the collage pieces, a module a film opts into (`"modules": ["collage"]`, loaded after the props): cut-out pictures, torn sheets, tape labels, headlines, stamps, bursts, halftone dots, ransom letters, marker lines, masking tape, a newspaper backdrop, groups, and the in/out motion they share; `SK.setStyle('collage')` (see "Collage films") |
+| `sketch/space.js` | a little 3D, a module a film opts into (`"modules": ["space"]`): a perspective camera (`SK.view3`), faces drawn with the ordinary 2D engine and laid onto 3D quads (`SK.face3`), boxes (`SK.box3`), lit flat polygons (`SK.poly3`) and blurred or smeared layers (`SK.fx`) (see "Motion-design films") |
 | `sketch/props.js` | the cast: ticket character, seated person with poses, a standing/walking/sitting kid (`P.kid`, also the grown-up at s ~1.4), paper plane, laptop, table, lightbulb, rocket, padlock, coin, stamp, browser window, thought bubble, confetti, architectural houses, phone, window (cracks), street siren, delta-wing drone, missile, stopwatch, debris; scenery: tree (round, pine, bare), bush, cloud, sun, moon (full, crescent), mountain, building |
 | `config/sketch/grounds/` | every ground and three places built from the backdrops, one a second: render its stills after changing any of them |
 | `sketch/player.html` | the page: player UI, and the export modes the renderer drives |
@@ -3728,6 +3729,86 @@ a brand explainer), wall clock:
 
 The first film, which produced these tools, took most of a day; the saving is the engine,
 the cast, the voice/audio/render pipeline and the traps already paid for.
+
+### Motion-design films: a square frame, 3D pieces, cut-out people, music only
+
+The first film made this way is a 26 s speaker promo for Web Summit 2026 (`projects/websummit-speakers/`,
+local): the structure of a motion designer's After Effects promo for another conference -- logo on
+a moving pattern, the date as 3D type, a creature carrying a ticket, a speaker carousel with a
+name block that turns, the ticket, a poster -- rebuilt in the conference's own look. Five pieces
+it needed that the engine did not have; each is general.
+
+**A frame of any shape.** The manifest's `"frame": [1080, 1080]` (or `[1080, 1920]` for a
+vertical film) sets the canvas, `SK.W`/`SK.H`, the player's aspect, the renderer's window, the
+raw-frame size and the browser encoder's size; 1920x1080 without it. `_sketch.frame(m)` refuses
+an odd, tiny (< 320) or huge (> 3840) side. Everything drawn in `SK.W`/`SK.H` terms follows; a
+film written for 16:9 in literal pixels does not.
+
+**`sketch/space.js`: 3D for motion design.** Canvas 2D has only affine transforms, so a face in
+perspective is drawn into an offscreen canvas (`SK.drawInto` points every engine primitive at it)
+and laid onto its projected quad as a grid of cells, each with its own affine map. The camera
+(`SK.view3({x, y, z, yaw, pitch, roll, d, zoom, sx, sy})`) looks along +z at a target that lands
+at (`sx`, `sy`) -- the frame's middle unless set -- where a face at the target's depth is drawn at
+scale 1, so a 3D piece lines up with 2D drawing around it. `sx`/`sy` are what let a name block sit
+low in the frame while the camera looks at it level: moving the target instead looks down on it
+and shows a top face as deep as the block.
+
+- **Cells overlap; they are not clipped.** The first version clipped each cell's two triangles
+  (grown 0.6, then 1.1 px from their centroids) and left a hatch of faint ground-coloured lines
+  along every diagonal of a cream name block and boarding pass: growing a thin triangle about its
+  centroid barely moves its long edges. Now each cell draws its whole source rectangle, 1.5 px
+  over its edges, with the mean of its two triangles' affine maps, unclipped: neighbours cover
+  each other's anti-aliased edges, and the mean splits the perspective error between the corners.
+  A see-through face (`alpha` < 1) is laid down whole on its own layer and faded as one, or the
+  overlaps would show.
+- **A box that turns to the next name** (`SK.box3`, the carousel's name block) is square in plan,
+  so a quarter turn brings a face of the same width to the front. At rest the side face is seen at
+  ~30 degrees, compressed to half its width, so its type is drawn 1.55x wide (`SIDE_STRETCH` in
+  the film) and reads as normal; the face that is about to come round shows its old words fading
+  out, is blank edge-on, and wipes its new name on as it arrives.
+- Lighting is Lambert against `o.light` over `o.ambient`, as a dark wash over the face.
+  `SK.fx(fn, {blur, smear, angle, dx, dy, alpha})` draws `fn` on its own layer and lays it down
+  blurred (canvas `filter`) or smeared along a direction (copies averaged): a whip pan between two
+  scenes is two smeared layers sliding past each other.
+
+**People cut out of their photos: `scripts/portrait-cutout.py`.** A conference's headshots come
+in every crop and background. It mattes each person off with a local BiRefNet ONNX model (nothing
+leaves the machine), and with `--frame` puts every face at the same place and size: YuNet finds
+the eyes, `--face 0.30` of the side is the face's width, `--eyes 0.42` the eye line. The
+photographer's crop across the body is faded out, and a photo cut so tight that the fade would
+land above `--floor 0.85` is scaled up until it does not (4 of 19 speakers, x1.07-1.23). `--tone
+mono` makes the person black and white (the colour stays in the film's own circles), `duo:#a,#b`
+a duotone. Measured on 4 headshots cut to 800 px and laid on magenta and teal: `birefnet-lite`
+(224 MB, 10.5 s a photo on this laptop's CPU) and `birefnet-portrait` (973 MB, 18.9 s) could not be
+told apart at the hair, so lite is the default. `--plan` prices a run; a missing model prints its
+download command. The cut-outs join the manifest's `images` and are drawn inside a clip.
+
+```powershell
+python scripts/portrait-cutout.py --src projects/<id>/sources/speakers --out projects/<id>/images/speakers --frame --tone mono --plan
+python scripts/portrait-cutout.py --src projects/<id>/sources/speakers --out projects/<id>/images/speakers --frame --tone mono
+```
+
+**A film with no narration.** Leave out `vo`: sketch-audio mixes the score and the effects and
+masters them, and nothing is ducked. Its cues then come from film.js's own clock rather than a
+voice timeline: the project's `sfx.py` copies the film's timing constants by name, and where the
+film uses its seeded random (how many times each split-flap letter flips) it ports `SK.rnd` --
+mulberry32, checked bit for bit against the browser -- so every click lands on its flap's frame.
+The score was checked against the reference promo's own soundtrack with a band-by-band spectrum
+(each band relative to its own total): the first mix sat 7-20 dB brighter above 1.6 kHz and thin
+below 630 Hz. The synthesised snare, clap and hats are band-passed noise and carried the top end,
+so the project's `KIT_GAINS` hold them at .16-.45; and the General MIDI basses carry almost
+nothing under 60 Hz, which is where a produced track keeps its weight, so the score engine gained
+one instrument that is not a sample: `sub_bass`, a sine with a trace of its 2nd and 3rd harmonics
+(`_sketchaudio.SYNTHS`; check-sketch asserts it sounds at its note and needs no download). The
+effects were set by their level over the music at their moment: impacts +1 to +4 dB, the whip
++6.5, a turn's swoosh and thunk 4-7 dB under.
+
+**A copy to post: `sketch-render.py --web`.** The browser-encoded master of a 1080x1080 60 fps
+film runs ~31 Mbps (26 s: 110 MB). `--web` writes `<slug>_web.mp4` beside it through `_encode`,
+capped at 8 Mbps (`WEB`; a manifest `web` block overrides): 25.6 MB, VMAF 98.3 against the master.
+
+Rendering is quick: 1,560 frames of the square promo in 16 s at 60 fps (4 browsers, encoded in
+the browser), stills at ~3 a second.
 
 ### Collage films: cut-outs and mixed media (`sketch/collage.js`)
 

@@ -20,7 +20,7 @@ __FONTFACES__
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; }
 body { display: flex; align-items: center; justify-content: center; overflow: hidden; padding-inline: 16px; padding-block: 16px; }
 body.render { padding: 0; }
-#stage { position: relative; width: min(100%, calc((100vh - 32px) * 16 / 9)); max-width: 100%; aspect-ratio: 16 / 9; }
+#stage { position: relative; width: min(100%, calc((100vh - 32px) * __FW__ / __FH__)); max-width: 100%; aspect-ratio: __FW__ / __FH__; }
 body.render #stage { width: 100vw; }
 canvas { width: 100%; height: 100%; display: block; background: var(--paper); border-radius: 10px; box-shadow: 0 18px 60px rgba(0,0,0,.35); cursor: pointer; }
 body.render canvas { border-radius: 0; box-shadow: none; }
@@ -42,7 +42,7 @@ body.render canvas { border-radius: 0; box-shadow: none; }
 </head>
 <body>
 <div id="stage">
-  <canvas id="c" width="1920" height="1080" aria-label="__TITLE__"></canvas>
+  <canvas id="c" width="__FW__" height="__FH__" aria-label="__TITLE__"></canvas>
   <div id="overlay" role="button" tabindex="0" aria-label="Play">
     <div id="playbtn"><svg viewBox="0 0 24 24"><path d="M5 3.5 L20 12 L5 20.5 Z" fill="#fff" stroke="__INK__" stroke-width="2" stroke-linejoin="round"/></svg></div>
     <div id="hint">__HINT__</div>
@@ -62,6 +62,9 @@ window.__early = function (e) {
   fetch('error', { method: 'POST', body: window.__earlyErr });
 };
 window.addEventListener('error', window.__early);
+</script>
+<script>
+window.SK = { FRAME: [__FW__, __FH__] };
 </script>
 <script>
 __ENGINE__

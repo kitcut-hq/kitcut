@@ -668,7 +668,10 @@ live and the renderer exports any frame on its own), and **cues hang off words**
 moves its visuals with it. Three looks share one engine: `SK.setStyle('crayon')` (boiling
 hand-drawn lines), `'clean'` (editorial line art, cards, flat fills) and `'collage'` (mixed
 media: pictures cut out of paper by `sketch-paint.py` `"cutout": true`, animated with torn
-sheets, tape labels, stamps and type from `sketch/collage.js`, nudged on twos like stop motion). Each script times
+sheets, tape labels, stamps and type from `sketch/collage.js`, nudged on twos like stop motion). A social promo
+with real people in it -- square (`"frame": [1080, 1080]`), 3D pieces (`"modules": ["space"]`: perspective
+faces, boxes, whips), speakers cut out of their photos (`scripts/portrait-cutout.py`, local BiRefNet), music
+only -- is `projects/websummit-speakers/` and docs/reference.md "Motion-design films". Each script times
 its stages into the run log; `--timings` answers "how long does a film take". After touching
 any of it, run `python scripts/check-sketch.py` — the notation, every sound generator, the
 ducker, the tail-word cut and the bundler; no API, no browser, seconds.

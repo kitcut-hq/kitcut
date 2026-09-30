@@ -1,6 +1,6 @@
 ---
 name: video-sketch
-description: Make an animated explainer film with no footage — a hand-drawn/whimsical, a clean editorial, or a mixed-media paper-collage animation (cut-out pictures from an image model animated with type, tape labels, rubber stamps and torn paper, the "newspaper cutout" motion-design look) written as JavaScript, with an AI voice-over, an original score on sampled instruments and synthesised sound effects, rendered to MP4 and to a self-contained HTML player. It also makes real people talk from their photos -- bobble-heads, puppet cut-outs, a newspaper photo or a painting where only the mouth moves -- each with their own voice. Use when asked for an animation, an animated explainer or promo, a motion-graphics or motion-design video, a "whimsical hand-drawn" video, a collage / mixed-media / cut-out / scrapbook / newspaper-style video, a product or feature explainer, a 30-60 second ad, talking heads or bobble-heads made from photos, or anything that should be illustrated rather than filmed.
+description: Make an animated explainer film with no footage — a hand-drawn/whimsical, a clean editorial, or a mixed-media paper-collage animation (cut-out pictures from an image model animated with type, tape labels, rubber stamps and torn paper, the "newspaper cutout" motion-design look) written as JavaScript, with an AI voice-over, an original score on sampled instruments and synthesised sound effects, rendered to MP4 and to a self-contained HTML player. It also makes real people talk from their photos -- bobble-heads, puppet cut-outs, a newspaper photo or a painting where only the mouth moves -- each with their own voice. Use when asked for an animation, an animated explainer or promo, a motion-graphics or motion-design video, a "whimsical hand-drawn" video, a collage / mixed-media / cut-out / scrapbook / newspaper-style video, a product or feature explainer, a 30-60 second ad, talking heads or bobble-heads made from photos, or anything that should be illustrated rather than filmed. Also for a square or vertical social promo in 3D motion-design style with real people in it -- a conference speaker announcement, a line-up, an event teaser with a speaker carousel, a ticket and a poster, music only, no narration.
 ---
 
 # A sketch film: an explainer written as code
@@ -158,8 +158,47 @@ Whose face it is, and whether they agreed to be animated saying these words, is 
 call: ask before putting words in a real person's mouth unless the user is that person or
 has said so.
 
+## A motion-design promo (square, 3D pieces, real people, music only)
+
+The worked example is `projects/websummit-speakers/` (local; docs/reference.md "Motion-design
+films"): a 26 s 1080x1080 speaker promo for a conference, rebuilt from another designer's After
+Effects piece in the conference's own look. What it takes:
+
+1. **Measure the reference, then leave it.** Download it (X: `api.fxtwitter.com/<user>/status/<id>`
+   gives the MP4 URLs; `/2/conversation/<id>` the replies, where authors post their prompts), tile
+   its frames at 2-4 fps, and write down its beats and their timings. Keep the beats; take nothing
+   of its artwork, colours, type or people. Find an idea of your own for the same beats (Lisbon ->
+   a trip: tiles, a departures board, a paper plane, a boarding pass).
+2. **The event's own facts and look.** Speakers, titles, dates, venue, tagline and button copy from
+   the event's pages (quote them in `_sources`), its logo file, its colours measured off the logo,
+   and its typeface -- or the nearest open one when it is licensed (`fonts/SOURCES.md`).
+3. **People**: `scripts/portrait-cutout.py --frame --tone mono` (local BiRefNet; `--plan` first),
+   then `"images": {"sp-<id>": "images/speakers/<id>.webp"}`, drawn inside a circle clip.
+4. **The frame**: `"frame": [1080, 1080]`; lay everything out in `SK.W`/`SK.H` and put the 2D
+   camera on the frame's middle so world units are pixels.
+5. **3D**: `"modules": ["space"]`. `SK.view3` then `SK.face3`/`SK.box3`/`SK.poly3`; give a low
+   piece its own view with `sx`/`sy` so the camera looks at it level; `SK.fx` for blur and whips.
+6. **Sound without a voice**: leave out `vo`; write `score.py` (a chord chart; hits on the beats the
+   picture lands on) and `sfx.py` (every visual event, times copied from film.js by name). Compare
+   the mix's band balance with the reference's soundtrack; keep the noise drums (snare, clap,
+   hats) well back and put `sub_bass` under the bass.
+7. **Render** `--encode browser --web`: the master and a ~8 Mbps copy to post.
+
+Check the whip, the turns and every transition frame by frame from a `--draft` render
+(`ffmpeg ... -vf "fps=30,scale=216:216,tile=6x5"`), not only from stills: an empty frame between two
+scenes only shows in motion.
+
 ## Traps already paid for
 
+- **A 3D face drawn as clipped triangles shows its seams** -- a hatch of hairlines on every flat
+  colour. space.js draws overlapping unclipped cells instead; keep it that way.
+- **A face seen at a slant squashes its type**: a name block's side at ~30 degrees halves its
+  width. Draw that face's words wide (`c.scale(1.55, 1)`) so they read as normal.
+- **Magenta on magenta**: a mascot in the brand colour disappears on a ground of the same colour --
+  the first paper plane did. Paper is paper-coloured.
+- **An effect level set by RMS alone lies**: set each cue by its level over the music at its moment
+  (the stems: `sketch-audio.py --stems`), impacts at or above the music, secondary cues a few dB
+  under.
 - **Never open on a blank page.** A fade in from paper, or a draw-on that starts at zero,
   reads as empty frames at the head of the film. The engine no longer fades in by default;
   start the first draw-ons around 20% (`clamp(.2 + .8 * E.out(...))`) so frame 0 already

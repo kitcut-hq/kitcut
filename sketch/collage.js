@@ -140,7 +140,7 @@
   SK.place = place;
   /** everything fn draws enters, leaves and moves together: a sheet and what is pinned to it.
    *  o: x, y (the group's origin, default 0, 0), rot, s, in, out, alpha, nudge (default 0), w, h */
-  SK.layer = function (o, fn) { return place({ nudge: 0, ...o }, o.w ?? 1920, o.h ?? 1080, fn); };
+  SK.layer = function (o, fn) { return place({ nudge: 0, ...o }, o.w ?? SK.W, o.h ?? SK.H, fn); };
 
   /* ------------------------------------------------------------ caches: pixels derived from arguments */
   // least recently used first out, past ~480 MB of pixels: a long film played in one page (the
@@ -550,7 +550,7 @@
     let p = o.p ?? (I ? E.inOut(clamp((tq - I.t) / d)) : 1);
     if (p <= 0) return;
     const col = o.col ?? '#c8322d', w = o.w ?? 6, seed = o.seed ?? hash(pts.length + ':' + pts[0].join());
-    place({ nudge: 1, seed, ...o, in: undefined, x: 0, y: 0 }, 1920, 1080, () => {
+    place({ nudge: 1, seed, ...o, in: undefined, x: 0, y: 0 }, SK.W, SK.H, () => {
       SK.ink(pts, { w, col, p, seed, jit: o.jit ?? .7, taper: true, dbl: false });
       const hd = o.head ?? 0;
       if (hd > 0) {

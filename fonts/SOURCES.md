@@ -19,11 +19,12 @@ All are SIL Open Font License 1.1 (text in OFL.txt), from Google Fonts.
 | CourierPrime-Regular.ttf, CourierPrime-Bold.ttf | Courier Prime | collage films: typewriter notes (Latin only) |
 | Anton-Regular.ttf | Anton | thumbnails; collage films: condensed labels (Latin only) |
 | IBMPlexMono-Regular.ttf, IBMPlexMono-Bold.ttf | IBM Plex Mono | collage films: a typewriter line in Cyrillic, where Courier Prime has no letters (Latin and Cyrillic) |
+| SofiaSansCondensed-VF.ttf, SofiaSans-VF.ttf (variable 1-1000) | Sofia Sans Condensed, Sofia Sans | motion-design films: a heavy condensed grotesk, the open stand-in for Korolev (Web Summit's Adobe face) (Latin, Cyrillic) |
 
 The collage fonts are the complete `.ttf` files from github.com/google/fonts (`ofl/<family>/`),
 fetched 2026-09-28; the variable ones are renamed from `<Family>[wght].ttf` to `<Family>-VF.ttf`.
 An italic face of a family goes in a manifest with `"style": "italic"`. IBM Plex Mono came
-from the same place on 2026-09-29.
+from the same place on 2026-09-29, Sofia Sans and Sofia Sans Condensed on 2026-09-30.
 
 **Cyrillic in collage films.** Measured with fontTools over the Ukrainian alphabet (66 letters
 and the apostrophe): Abril Fatface, Anton, Courier Prime and UnifrakturMaguntia have none of

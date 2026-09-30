@@ -334,6 +334,15 @@ def main():
         "score: drums need no samples",
         ("drum", "kick") not in A.needed_samples(ev) and "drum" in kinds,
     )
+    sub = A.score_events({"events": [{"inst": "sub_bass", "notes": "0 F1 1"}]})
+    check("score: sub_bass is made here, no sample", not A.needed_samples(sub))
+    y = A.sample("sub_bass", A.M("F1"))
+    spec = np.abs(np.fft.rfft(y[: A.SR]))
+    check(
+        "score: sub_bass sounds at its note (F1, 43.65 Hz)",
+        abs(np.argmax(spec) - 43.65) < 1.0 and np.isfinite(y).all(),
+        "%.1f Hz" % np.argmax(spec),
+    )
     try:
         A.score_events({"events": [{"type": "nope"}]})
         check("score: unknown type refused", False)
@@ -907,6 +916,25 @@ def main():
             "bundle: an italic face is declared and loaded as italic",
             "font-style: italic" in page2 and 'italic 400 60px \\"Old Standard TT\\"' in page2,
         )
+        check(
+            "bundle: a film with no frame is 1920x1080",
+            'width="1920" height="1080"' in page and "FRAME: [1920, 1080]" in page,
+        )
+        sq = render.bundle(dict(m, frame=[1080, 1080]), audio=False)
+        check(
+            "bundle: a square frame sizes the canvas, the stage and SK.W/SK.H",
+            'width="1080" height="1080"' in sq
+            and "aspect-ratio: 1080 / 1080" in sq
+            and sq.index("FRAME: [1080, 1080]") < sq.index("const W = (SK.W"),
+        )
+        bad = []
+        for fr in ([1080], [1081, 1080], [100, 100], ["1080", 1080], [8000, 1080]):
+            try:
+                _sketch.frame({"frame": fr})
+                bad.append(fr)
+            except ValueError:
+                pass
+        check("frame: odd, tiny, huge or malformed sizes are refused", not bad, str(bad))
         art = render.artifact_flavour(page)
         check(
             "artifact: no html/head/body wrapper",

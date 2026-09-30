@@ -18,7 +18,9 @@
 (function () {
   'use strict';
   const SK = (window.SK = window.SK || {});
-  const W = (SK.W = 1920), H = (SK.H = 1080);
+  // the frame: 1920x1080 unless the manifest's "frame" set SK.FRAME before this ran (a square or
+  // vertical film); every size below is in these units, so a film lays itself out on SK.W x SK.H
+  const W = (SK.W = (SK.FRAME || [1920, 1080])[0]), H = (SK.H = (SK.FRAME || [1920, 1080])[1]);
   let ctx = null;
   SK.BOIL_FPS = 8;
   SK.T = 0; SK.BOIL = 0;
@@ -504,6 +506,9 @@
     try { fn(); } finally { ctx.restore(); }
   };
   SK.ctx = () => ctx;
+  /** run fn with every primitive drawing into another 2D context (an offscreen canvas: one face of
+   *  a 3D box, a layer to blur); SK.ctx() answers that context until fn returns */
+  SK.drawInto = function (c2, fn) { const prev = ctx; ctx = c2; try { fn(); } finally { ctx = prev; } };
   /* ------------------------------------------------------------ the voice-over clock (sketch-vo's timeline, injected by the bundler)
      Cue visuals to words, not to hand-copied seconds, so a re-recorded line moves its visuals with it. */
   SK.VO = SK.VO || { lines: [] };

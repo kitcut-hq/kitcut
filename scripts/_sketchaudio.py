@@ -5,7 +5,10 @@ Everything is data-driven: the score is `score.json`, the sound cues `sfx.json`,
 in `sketch.json`. Nothing here knows a particular film.
 
 Instruments are FluidR3 GM (MIT) notes rendered by gleitz/midi-js-soundfonts, fetched on demand
-into `models/soundfonts/FluidR3_GM/<instrument>/<note>.mp3` (gitignored, shared by every project).
+into `models/soundfonts/FluidR3_GM/<instrument>/<note>.mp3` (gitignored, shared by every project),
+plus the few made here (SYNTHS): "sub_bass", a sine an octave's worth of body under a bass line --
+the GM basses carry almost nothing below 60 Hz, where a produced track keeps most of its weight
+(measured on a motion-design promo, 2026-09-30: the reference sat 17-20 dB above ours at 20-40 Hz).
 
 Score notation -- an event list, each one of:
   {"inst": "celesta", "vel": .4, "notes": "1 E6 .5; 1.5 F6 .5; 2 C4+E4+G4 1 .3"}
@@ -78,6 +81,25 @@ SCALES = {
     "penta": (0, 2, 4, 7, 9),
 }
 
+
+# instruments synthesised here rather than sampled: name -> f(midi) -> a 4 s note (render_score
+# cuts it to its length and releases it like any other)
+def synth_sub(m, sec=4.0):
+    """A sub bass: a sine with a trace of its second and third harmonics, so a phone speaker that
+    cannot play the fundamental still hears the note; a 5 ms attack, so it never clicks."""
+    t = np.arange(int(sec * SR)) / SR
+    f = 440.0 * 2 ** ((m - 69) / 12)
+    x = (
+        np.sin(2 * np.pi * f * t)
+        + 0.12 * np.sin(4 * np.pi * f * t)
+        + 0.05 * np.sin(6 * np.pi * f * t)
+    )
+    x[: int(0.005 * SR)] *= np.linspace(0, 1, int(0.005 * SR))
+    return x
+
+
+SYNTHS = {"sub_bass": synth_sub}
+
 # gain, pan, reverb send, release (s). Anything not listed gets DEFAULT_INS.
 DEFAULT_INS = dict(g=0.25, pan=0.0, send=0.3, rel=0.5)
 INSTRUMENTS = {
@@ -104,6 +126,7 @@ INSTRUMENTS = {
     "xylophone": dict(g=0.22, pan=0.20, send=0.20, rel=0.4),
     "woodblock": dict(g=0.30, pan=0.10, send=0.15, rel=0.2),
     "tinkle_bell": dict(g=0.18, pan=0.30, send=0.40, rel=1.0),
+    "sub_bass": dict(g=0.30, pan=0.0, send=0.0, rel=0.06),
 }
 
 
@@ -178,13 +201,16 @@ def check_score(score):
 # ------------------------------------------------------------------ samples
 def sample_path(inst, m):
     if inst not in GM:
-        raise ValueError("unknown instrument %r: use a General MIDI name such as celesta" % inst)
+        raise ValueError(
+            "unknown instrument %r: use a General MIDI name such as celesta, or one of %s"
+            % (inst, ", ".join(sorted(SYNTHS)))
+        )
     return _env.resolve(os.path.join(SOUNDFONT, inst, mname(m) + ".mp3"))
 
 
 def needed_samples(events):
-    """{(inst, midi)} the score will play (drums are synthesised and need none)."""
-    return {(e[0], e[1]) for e in events if e[0] != "drum"}
+    """{(inst, midi)} the score will play (drums and SYNTHS are made here and need none)."""
+    return {(e[0], e[1]) for e in events if e[0] != "drum" and e[0] not in SYNTHS}
 
 
 def fetch_samples(pairs, log=print):
@@ -215,6 +241,9 @@ def fetch_samples(pairs, log=print):
 
 @functools.lru_cache(None)
 def sample(inst, m):
+    if inst in SYNTHS:
+        x = SYNTHS[inst](m)
+        return x / (np.sqrt(np.mean(x[: int(0.3 * SR)] ** 2)) + 1e-9) * 0.1
     p, shift = sample_path(inst, m), 0
     if not os.path.exists(p):
         for d in (1, -1, 2, -2, 3, -3):

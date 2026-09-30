@@ -86,6 +86,20 @@ def painted_images(paint, film_dir):
     return out
 
 
+def frame(m):
+    """The film's frame, (width, height): the manifest's "frame" ([1080, 1080] for a square film,
+    [1080, 1920] for a vertical one), 1920x1080 without one. Even sides (H.264 4:2:0 halves them),
+    from 320 to 3840, so a typo cannot ask a browser for a canvas it will not draw."""
+    fr = m.get("frame") or [1920, 1080]
+    if (
+        not isinstance(fr, (list, tuple))
+        or len(fr) != 2
+        or not all(isinstance(v, int) and 320 <= v <= 3840 and v % 2 == 0 for v in fr)
+    ):
+        raise ValueError("frame %r: [width, height], even whole pixels from 320 to 3840" % (fr,))
+    return int(fr[0]), int(fr[1])
+
+
 def rel(m, p):
     """A manifest-relative path, resolved."""
     return p if os.path.isabs(p) else os.path.join(m["_dir"], p)
