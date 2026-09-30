@@ -517,6 +517,8 @@ a.google { width: 100%; margin-top: 14px; }
   document.cookie = `kc_dev=${id}; Path=/; Max-Age=63072000; SameSite=Lax` + (location.protocol === 'https:' ? '; Secure' : '');
 } catch (e) { /* never worth breaking the page for */ } })();
 </script>
+<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+<script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body data-here="make">
 <header class="bar">
@@ -1011,6 +1013,11 @@ async function follow(since = 0, misses = 0) {
     if (s.status === 'error' && !s.events.length && since === 0) { line('error', s.error || 'This film failed.'); $('status').textContent = 'Failed.'; }
     if (s.status === 'lost') { screen('<div class="idle">This film was interrupted.</div>'); $('status').textContent = 'The studio restarted before this film finished.'; }
     if (s.status === 'cancelled') { if (since === 0 && !s.events.length) line('error', 'This film was stopped.'); $('status').textContent = 'Stopped.'; }
+    // ended with no video: said in place of "Loading the film...", with the way to make it again
+    // (its idea, look and length are already in the box above)
+    if (s.status === 'error' || s.status === 'cancelled') {
+      screen(`<div class="idle">${s.status === 'error' ? "This film didn't finish." : 'This film was stopped.'}<br>Its idea is in the box above: press Make the film to try again.</div>`);
+    }
     if (['done', 'error', 'lost', 'cancelled'].includes(s.status)) { if (mine.has(id)) refreshCredits(); return finish(); }
     if (live) fresh(true);
     later(document.hidden ? 10000 : 1500, s.next, 0);
