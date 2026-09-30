@@ -50,6 +50,9 @@ MODELS = {
 }
 RELEASE = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/"
 FACE_MODEL = "models/face/face_detection_yunet_2023mar.onnx"
+# a photo is shrunk to this side first: the cut-out is 800 px, and a conference's 9552 x 6368 original
+# asked YuNet for 974 MB and failed the film it was in (the Slush bake-off, 2026-09-30)
+MAX_SIDE = 2400
 EXTS = (".jpg", ".jpeg", ".png", ".webp")
 
 
@@ -250,7 +253,11 @@ def main():
     done, t0 = [], time.time()
     for f in files:
         name = os.path.splitext(os.path.basename(f))[0]
-        rgb = np.asarray(Image.open(f).convert("RGB"))
+        im = Image.open(f).convert("RGB")
+        im.thumbnail(
+            (MAX_SIDE, MAX_SIDE), Image.LANCZOS
+        )  # a 61 MP original ran YuNet out of memory
+        rgb = np.asarray(im)
         t = time.time()
         a = matter.alpha(rgb)
         rgba = np.dstack([tone(rgb, args.tone), (a * 255).astype(np.uint8)])
