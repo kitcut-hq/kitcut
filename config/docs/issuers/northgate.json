@@ -1,0 +1,17 @@
+{
+  "_comment": "The applicant's own letterhead -- a cabinet shop, warm and plain.",
+  "name": "Northgate Millwork, LLC",
+  "tagline": "Custom cabinetry and architectural millwork since 2012",
+  "address": "4180 Larkhill Rd, Columbus, OH 43228",
+  "phone": "(614) 555-0143",
+  "web": "northgatemillwork.com",
+  "mark": "NM",
+  "ink": "#2b2119",
+  "muted": "#7a6a5c",
+  "paper": "#ffffff",
+  "accent": "#9a5b23",
+  "rule": "#d8cec3",
+  "band": "#f6f1ea",
+  "font_head": "'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+  "font_body": "'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+}

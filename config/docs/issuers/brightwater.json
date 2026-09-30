@@ -1,0 +1,17 @@
+{
+  "_comment": "Invented retail agency. Modern, teal, sans -- an agency worksheet.",
+  "name": "Brightwater Insurance Group",
+  "tagline": "Commercial Lines  ·  Ohio Licence 1187420",
+  "address": "200 Marconi Blvd, Suite 410, Columbus, OH 43215",
+  "phone": "(614) 555-0177",
+  "web": "brightwaterins.com",
+  "mark": "BW",
+  "ink": "#15303a",
+  "muted": "#5d7681",
+  "paper": "#ffffff",
+  "accent": "#0f7d8c",
+  "rule": "#cbd9dd",
+  "band": "#ecf4f5",
+  "font_head": "'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+  "font_body": "'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+}

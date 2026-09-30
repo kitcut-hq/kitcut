@@ -28,6 +28,7 @@ Spec (projects/<id>/thumbnail.json):
              the file is checked against it
 
 Invoke as:  python scripts/make-thumbnail.py --spec projects/<id>/thumbnail.json
+            python scripts/make-thumbnail.py --html projects/<id>/thumbnail.html
 """
 
 import sys
@@ -219,17 +220,75 @@ def draw(spec, base_dir, report=False):
     return im.convert("RGB"), notes
 
 
+def shoot_html(page):
+    """A hand-designed thumbnail: a 1280x720 page, shot by headless Chromium.
+
+    The house style above is one grammar drawn by Pillow. A video that should
+    look like nothing the channel has shipped before needs a page designed for
+    it -- real type, layered images, shadows -- so the page is the spec and the
+    browser draws it. Opaque on purpose, which is why html-to-image.py (built
+    for transparent overlays, and refusing an opaque shot) is not used.
+    """
+    import importlib
+    import subprocess
+    import tempfile
+
+    h2i = importlib.import_module("html-to-image")
+    got = h2i.find_browsers()
+    if not got:
+        sys.exit("no Chromium found -- install Microsoft Edge or Google Chrome")
+    page = _env.resolve(page, base=_env.workspace())
+    with tempfile.TemporaryDirectory(prefix="thumb-") as tmp:
+        shot = os.path.join(tmp, "shot.png")
+        base = [
+            "--headless",
+            "--screenshot=%s" % shot,
+            "--window-size=%d,%d" % (W, H),
+            "--force-device-scale-factor=1",
+            "--hide-scrollbars",
+            "--virtual-time-budget=3000",
+            "--disable-gpu",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-extensions",
+            "--user-data-dir=%s" % os.path.join(tmp, "profile"),
+            h2i.file_url(page),
+        ]
+        for flags in (base, ["--headless=new"] + base[1:]):
+            subprocess.run([got[0]] + flags, env=_env.ENV, capture_output=True, timeout=90)
+            if os.path.exists(shot) and os.path.getsize(shot) > 0:
+                break
+        else:
+            sys.exit("%s produced no screenshot of %s" % (os.path.basename(got[0]), page))
+        im = Image.open(shot).convert("RGB")
+    if im.size != (W, H):
+        sys.exit(
+            "the page shot %dx%d, not %dx%d -- give the page a fixed %dx%d body"
+            % (im.size[0], im.size[1], W, H, W, H)
+        )
+    return im, page
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--spec", required=True)
+    ap.add_argument("--spec", help="the house-style spec (JSON)")
+    ap.add_argument("--html", help="a hand-designed 1280x720 page instead of a spec")
     ap.add_argument("--out")
     ap.add_argument("--list", action="store_true", help="print the layout; write nothing")
     args = ap.parse_args()
-    spath = _env.resolve(args.spec, base=_env.workspace())
-    spec = json.load(open(spath, encoding="utf-8"))
-    im, notes = draw(spec, _env.workspace(), report=True)
-    if args.list:
-        return
+    if bool(args.spec) == bool(args.html):
+        sys.exit("give exactly one of --spec or --html")
+    if args.html:
+        if args.list:
+            print("  --html: the page is the layout; nothing to list")
+            return
+        im, spath = shoot_html(args.html)
+    else:
+        spath = _env.resolve(args.spec, base=_env.workspace())
+        spec = json.load(open(spath, encoding="utf-8"))
+        im, _notes = draw(spec, _env.workspace(), report=True)
+        if args.list:
+            return
     out = args.out or os.path.splitext(spath)[0] + ".png"
     im.save(out, optimize=True)
     size = os.path.getsize(out)

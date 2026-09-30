@@ -276,6 +276,21 @@ class Checklist:
                 lg.putalpha(a)
                 lay.paste(lg, (int(self.left), int(self.cta_y + (1 - u) * 16 * k)))
                 im.alpha_composite(lay)
+                if st["cta_logo"].get("with_text") and self.spec.get("cta"):
+                    # The mark AND the address, on one row. A logo alone was
+                    # right for a film that ends on the brand; a film meant to
+                    # convert ends on where to go, so the URL rides beside it.
+                    th = self.f_cta.getbbox("Hg")[3]
+                    gap = st["cta_logo"].get("text_gap", 28) * k
+                    ty = self.cta_y + (1 - u) * 16 * k + (logo.height - th) / 2.0
+                    self._text(
+                        im,
+                        (self.left + logo.width + gap, ty),
+                        self.spec["cta"],
+                        self.f_cta,
+                        st["cta"]["colour"],
+                        u,
+                    )
             elif u > 0:
                 self._text(
                     im,

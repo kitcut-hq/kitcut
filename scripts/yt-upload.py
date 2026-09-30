@@ -112,6 +112,17 @@ def main():
         sys.exit("description is %d chars; YouTube's limit is 5000" % len(desc))
     if len(args.title) > 100:
         sys.exit("title is %d chars; YouTube's limit is 100" % len(args.title))
+    # YouTube rejects '<' and '>' anywhere in a title or description with a
+    # bare "invalidDescription" -- and only once the upload is under way. An
+    # arrow written "->" in acord-commercial's document map was enough.
+    for field, text in (("title", args.title), ("description", desc)):
+        bad = [i for i, ch in enumerate(text) if ch in "<>"]
+        if bad:
+            line = text.count("\n", 0, bad[0]) + 1
+            sys.exit(
+                "%s contains '<' or '>' (first on line %d) -- YouTube refuses both; "
+                "use an arrow character or words" % (field, line)
+            )
 
     body = {
         "snippet": {
@@ -159,6 +170,12 @@ def main():
         try:
             status, resp = req.next_chunk()
         except Exception as e:  # noqa: BLE001
+            code = getattr(getattr(e, "resp", None), "status", None)
+            if code is not None and 400 <= int(code) < 500:
+                # A 4xx is YouTube refusing the request, not the network
+                # dropping a chunk: the same bytes will be refused again, so
+                # retrying only spends a minute before the same failure.
+                sys.exit("YouTube refused the upload (%s): %s" % (code, e))
             tries += 1
             if tries > 5:
                 raise

@@ -1517,6 +1517,71 @@ On bpo-realtor every difference was number formatting, apart from one
   wider than its frame. `window-vertical.json` is the faster variant for shorts.
 - The caption preset for this layout is `vertical-band-dark.json`.
 
+### Callouts: the value, lit while it is named
+
+A proof shot on a dense form -- an ACORD page, a comp grid -- only proves
+anything if the viewer can find the number the voice is naming. `callouts`
+in the edit manifest put a box on the field, a label pill beside it saying
+where the value came from, and one ring that flashes as it appears:
+
+```json
+"callouts": [
+  {"src": "take3", "from": 29.9, "to": 30.35, "rect": [688, 382, 230, 28],
+   "label": "From the sales summary", "side": "right"},
+  {"src": "take3", "from": 41.3, "to": 43.5, "rect": [1255, 390, 116, 30], "kind": "panel",
+   "rows": [["$2,640,000", "91341"], ["$1,510,000", "91340"]], "total": "$4,150,000"},
+  {"src": "take3", "from": 37.0, "to": 43.5, "rect": [176, 94, 230, 32], "kind": "patch", "color": "#3c3c3c"}
+]
+```
+
+**Authored against the source, like a zoom.** `from`/`to` are seconds of the
+take and `rect` is pixels of the take, read off a gridded frame of it. Both are
+mapped through the EDL (first contiguous film span showing that source stretch)
+and through the fit-and-pad every segment gets, so a callout stays on its field
+whatever the cut does around it -- a hold, a speed change, a trim. A callout
+over a cropped segment or an accent zoom is refused: either would move the
+field out from under it.
+
+**Kinds.** `box` (default): the box, an optional `label` on `side`
+right/left/above/below, and a pulse ring (`"pulse": false` to skip). `panel`:
+a sum beside the rect -- rows of (value, note), a rule, `= total`. `patch`: a
+flat fill for exactly the source window given -- a file name in a viewer
+toolbar. Patches exist because `paint` is per SOURCE and tracks the chrome
+through a recorder zoom: on a take that alternates an editor tab and a viewer
+tab, the same pixels are a toolbar in one and page navigation in the other, and
+on a window capture whose tab strip is full of titles, paint's "is this rect
+still mostly its own colour" test reads the titles as movement and would
+ORB-track a window that never moved.
+
+**Time them to the word, and measure it.** A box that appears 1.5 s before its
+number is spoken reads as a different number. Place the voice lines on the
+clicks first, render the voice, then read each spoken number's start out of the
+voice's `.words.json` and set each callout ~0.3 s ahead of it. On
+acord-commercial draft 2 five of sixteen needed moving (1.5-2.5 s early).
+
+**Hold the frame instead of hurrying the voice.** A click on a static page
+is followed by half a second that looks identical to the next second -- a
+segment of it at `speed` 0.13 is a 3.5 s hold, long enough to say "two
+million, six hundred forty thousand" over it. End the hold before anything
+the page does next: ACORD's own field tooltip appears ~0.6 s after hover and
+covers the row below for ~2 s, so the hold ends at 0.45 s and the cut resumes
+after the tooltip has gone.
+
+**Check the rects before the render: `--callout-sheet`.** It draws every box
+and patch rect in red on the source frame it is authored against, one tile
+each, into `temp/edl/callout-sheet.png` -- one decoded frame per callout, no
+encode. Read rects off gridded crops by the grid's LABELS, never by pixel
+position in the crop: a crop's pixel is not a source pixel, and on
+acord-commercial draft 2 six rects read that way landed 100-400 px beside
+their numbers, which a 13-minute render then showed.
+
+The look is `config/overlays/callout.json` (`callout_style` overrides it).
+`--list` prints every callout's source window and the film span it lands on.
+`--frame` does not draw them (it predates overlays): check timing on the render.
+A film with dozens of overlays renders slowly -- acord-commercial's 45 ran at
+0.23x realtime -- so settle rects with the sheet and timing with `--list`
+before spending the encode.
+
 ## Tightening one recording that is already composited
 
 `screencast-cut.py` needs two tapes. Most screen recorders hand you one — screen,
@@ -2524,7 +2589,13 @@ python scripts/checklist-card.py --spec ... --style ... --sheet        # a strip
 The words are the spec (`headline`, `items`, `cta`). The look and the timing
 are the style: `window` is a white window on the recorder's lavender, `plain`
 is type straight on the backdrop, and `chips` has dark lines in the counter
-card's colour. Put it in a film as an `edl-cut.py` entry,
+card's colour. `window-slate` is `window` on Instafill's own palette -- the
+#F0F4F8 Cursorful backdrop, ticks in #0D6EFD -- for films recorded on that
+backdrop. A spec `logo` replaces the typed `cta` by default; a style whose
+`cta_logo` sets `"with_text": true` draws both on one row, logo then address.
+A film meant to convert should end on where to go, not on the mark alone
+(acord-commercial: "Try it free at instafill.ai" beside the logo). Put it in a
+film as an `edl-cut.py` entry,
 `{"card": <spec>, "style": <style>}`. It is rendered once and cached, then
 plays as a source. Draw shapes on their own layer: `ImageDraw` on an RGBA
 image **replaces** pixels rather than blending, and a "clear" fill wrote an
@@ -2734,6 +2805,152 @@ refuses opaque pages. `yt-upload.py --thumbnail` sets the image after the
 upload. A failure there (an unverified channel) is printed and does not undo
 the upload.
 
+
+**A thumbnail designed for one video: `--html`.** The spec draws the house
+grammar; a video meant to look like nothing the channel has shipped needs a
+page of its own. `make-thumbnail.py --html projects/<id>/thumbnail.html` shoots
+a fixed 1280x720 page with headless Chromium (opaque, which html-to-image.py
+refuses) and applies the same 2 MB check. Fonts come from `fonts/` by relative
+`@font-face`, images from the project. acord-commercial's is built from the
+film's own parts -- Instafill blue, the three real filled ACORD first pages,
+the Agent's one-sentence prompt -- and was checked at 320x180, the size it is
+chosen at in a feed.
+
+## The paperwork a form gets filled from: `make-doc.py`
+
+Every "how to fill out form X" video needs two things: the blank form, and the
+documents a real person would already be holding when they sit down to fill it.
+The blank form is obtained. The documents have to be **invented**, because real
+ones carry a real client's name, account numbers and business.
+
+Inventing them by hand is what the BPO project did, and it left nothing behind
+for the next form. So a document is described the same way a card is:
+
+* a **shape** -- a template under `config/docs/templates/`,
+* a **look** -- an issuer under `config/docs/issuers/`,
+* and **words** -- a spec under `projects/<id>/docs/`.
+
+```powershell
+python scripts/make-doc.py --list                      # templates and issuers
+python scripts/make-doc.py --project <id> --list       # what each spec writes
+python scripts/make-doc.py --project <id> --all --pdf
+```
+
+**The issuer is the point, not decoration.** A carrier's declarations page, a
+state certificate of good standing and the applicant's own sales summary must
+not read as three documents typed by the same office -- a demo whose seven
+uploads share one letterhead reads as staged, and the one claim the video is
+making is that these are papers the viewer already has. So the issuer carries
+the name, the address, the monogram, the palette and the type family, and one
+template serves all of them: `letterhead-report` is an issuer's letterhead, a
+title, a block of identifying metadata, then sections that are each a table, a
+set of labelled values, or prose.
+
+**The browser prints it, not a drawing library.** These have to look like
+documents -- rules, shaded table headers, small caps, two-column blocks -- all
+of which CSS already does. `--no-pdf-header-footer` matters: Chromium's own
+header prints the `file://` URL and today's date across every page, which is
+the single detail that gives a synthetic document away.
+
+**The output is checked, not assumed.** A file that does not start `%PDF-`, or
+that has no pages, fails with the reason rather than reaching a recording
+session as a blank browser tab. The page count is printed, because a document
+that silently grew a third page changes what the shot list can hold.
+
+**A section carries exactly one of `kv`, `table` or `text`**, plus an optional
+`note`; `break` starts it on a new page. The presence flags the template needs
+(`has_meta`, `has_kv`, `has_signature`) are computed by the script, never
+written in a spec -- the tiny mustache cannot wrap a repeated section in a
+conditional of the same name, because its section regex backreferences the key,
+and a spec that carried the flag by hand would eventually disagree with itself.
+
+**Keep one file the source of truth for the numbers.** In
+`projects/acord-commercial/` that is `case.md`: every figure in the seven source
+documents traces to it, which is what lets the video put a number from a source
+document beside the same number in the filled form and have it actually match.
+That shot -- not the fill itself -- is what separates "it filled something in"
+from "it filled in the right thing".
+
+## A KitCut film as an insert: `kitcut-clean.py`
+
+A film exported from kitcut.ai carries KitCut advertising that must never
+reach one of our videos: a "made with kitcut.ai" mark burned into the
+bottom-right corner of every frame, and a closing card (a cocktail glass,
+"Make your own film", "kitcut.ai") over the last ~2-3 seconds. Its soundtrack
+is also unwanted -- our voice-over and music run across the insert.
+
+```powershell
+python scripts/kitcut-clean.py --job <export.mp4> <clean.mp4> [--job ...] --list
+python scripts/kitcut-clean.py --job <export.mp4> <clean.mp4> --project <id>
+python scripts/kitcut-clean.py --job <export.mp4> <clean.mp4> --clone 320 --force --project <id>
+```
+
+**Nothing is hardcoded; each file is measured.** The mark is the ink that is
+there on the first frames AND on at least 97 % of frames before the card.
+"Static in the corner" alone is not enough: on `acord-commercial` K3 a form
+icon stands beside the mark for most of the film, and a median took it into the
+box (215x172 px instead of 132x60). A box bigger than 12 % x 9 % of the frame
+is refused as "something static merged into it".
+
+**The card is found twice and the earlier wins:** the first frame with its
+lime glass, and the moment the mark vanishes. The mark goes ~0.7 s before the
+glass shows (30.0 -> 30.75 s, 15.0 -> 15.7 s measured) because the card slides
+in over the whole frame -- counting those mark-less frames as "before the card"
+is how K4's mark once fell under the 97 % bar and went undetected. The film is
+cut 0.25 s before the card.
+
+**Removal is `delogo` by default** -- the box rebuilt from its own border on
+every frame, which on KitCut's flat paper is the paper. That is only honest
+where nothing else is under the mark. The mark itself hides what is under it,
+so what CAN be seen is measured: how close the drawing ever comes to the box,
+and when. Drawing within 4 px of the box is reported with its times and refused
+without `--force`.
+
+**`--clone DY` is for drawing that runs under the mark.** On K3 the bottom form
+icon's corner is under the mark, and during an arrow's arrival its outline
+pulses blue -- `delogo` smeared that corner into a streak. But KitCut repeats
+elements in grids: the three form icons are pixel copies 320 px apart (mean
+difference 0.05/255). `--clone 320` pastes the corner the middle form shows.
+When the bottom form pulses and the middle one does not, the twin is taken from
+the frame where the middle form was at the same point of its own identical
+pulse, matched on the 40 guide rows just above the box, which both show.
+
+The match counts **strongly differing pixels** (any channel off by > 30), not
+an average. The pulse is a 2-px line -- exactly 80 px of the 5,520-px guide
+band, differing by ~85, where a calm frame differs by 0. A mean (0.94) and a
+98th percentile (10) both called that a match and pasted a grey corner under a
+blue outline. With the count, 47 of K3's 892 frames take their corner from
+another frame, every one at 0 differing px. A clone whose best twin still
+differs by more than 20 px is refused, with the times.
+
+**Checked, not assumed:** the written file is sampled again, the box must hold
+none of the mark's near-black outline (< 120; KitCut drawing never goes that
+dark, a cloned border is not mistaken for the mark), and the duration must be
+the cut.
+
+**`--keep-main` is for props that ride the camera.** A KitCut scene may dress
+its subject with small things -- a coffee cup, a pencil, a sticker -- that move
+with the same push-in, so no fixed patch holds them. They are separate islands
+on the paper, though: every frame keeps the largest mass (the subject, parts
+dilated together) and paints any other island that lies wholly OUTSIDE that
+mass's convex hull with the background colour. The hull rule matters: the
+subject's own details are islands too, and the first version erased the
+coloured title bars printed on the forms (168 "objects" a frame instead of 5).
+The corner mark is an island, so it goes with the props. Where a prop or the
+mark TOUCHES the subject it merges into it and survives -- on `film_web11` the
+first 0.7 s, where the folder slides in over the mark and past the sticker --
+so start the EDL after that.
+
+**The card is found as lime APPEARING**, over the level of the film's first
+second: a scene can carry its own green (that same sticker is the glass's exact
+lime and sat in the right half from frame 0, which read as "card from 0.00s").
+When neither signal can see the card -- a glass smaller than the sticker, a
+mark hidden under the subject on frame 0 -- `--cut S` sets the end by hand; the
+detected card still wins if it comes earlier.
+
+The cleaner way is not to have the mark at all: KitCut's owner can turn it off
+for an account.
+
 ## Chapter markers on a published video
 
 Turn a transcript into YouTube chapters, then write them into the video's own
@@ -2832,6 +3049,27 @@ Quota note: `videos.update` costs 50 units of the default 10,000/day, while the
 
 Two ids on this channel begin with `-`, which argparse reads as a flag. Pass
 those as `--video=-qKcpLSk0iU`.
+
+## Changing an uploaded video: `yt-update.py`
+
+Thumbnail, description, title or privacy of a video already on the channel --
+the same guard rails as the upload: the token must point at `--channel`, '<'
+and '>' are refused before anything is sent, and every changed field is read
+back. A snippet update REPLACES the snippet, so fields not being changed (tags,
+category) are read from the live video and sent back as they were.
+
+```powershell
+python scripts/yt-update.py <id|url> --channel @instafill_ai --thumbnail t.png --dry-run
+python scripts/yt-update.py <id|url> --channel @instafill_ai --privacy public --project <id>
+```
+
+**Read the live video before you write to it.** People edit titles and
+descriptions in Studio after an upload: on acord-commercial the owner had
+dropped the UTM links and three form links and added a tagline within the
+hour, and sending the repo's description file would have erased all of it.
+`--dry-run` prints the live length against the new one -- a difference you did
+not make is someone else's edit. Pull the live text, apply only your change to
+it, and save that back into the project so the repo matches the channel.
 
 ## Deleting an upload
 

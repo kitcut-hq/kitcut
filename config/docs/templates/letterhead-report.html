@@ -1,0 +1,167 @@
+<!doctype html>
+<!--
+  letterhead-report -- a business document on somebody's letterhead.
+
+  Deliberately general: a declarations page, a loss run, a statement of values,
+  an inspection report and a state certificate are all the same object -- an
+  issuer's letterhead, a title, a block of identifying metadata, then sections
+  that are each a table, a set of labelled values, or prose. What makes them
+  look like papers from five different offices is the ISSUER, not the shape.
+
+  A section carries exactly one of `kv`, `table`, `text`; `note` may accompany
+  any of them. `break` starts it on a new page.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<!-- Chromium writes <title> into the PDF /Title, and a PDF viewer shows that
+     title in its toolbar and tab. Without one it falls back to the HTML file
+     name -- "northgate_dec.html" -- which, on screen in a recording, gives the
+     document away as generated. -->
+<title>{{doc_title}}</title>
+<style>
+  @page { size: Letter; margin: 0.55in 0.6in; }
+
+  :root {
+    --ink:    {{issuer.ink}};
+    --muted:  {{issuer.muted}};
+    --accent: {{issuer.accent}};
+    --rule:   {{issuer.rule}};
+    --band:   {{issuer.band}};
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: {{{issuer.font_body}}};
+    color: var(--ink);
+    background: {{issuer.paper}};
+    font-size: 9.6pt;
+    line-height: 1.38;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ---- letterhead ---------------------------------------------------- */
+  .head { display: flex; align-items: flex-start; gap: 12px;
+          border-bottom: 2.5px solid var(--accent); padding-bottom: 8px; }
+  .mark { width: 34px; height: 34px; flex: 0 0 34px; background: var(--accent);
+          color: #fff; font-family: {{{issuer.font_head}}}; font-weight: 700;
+          font-size: 13pt; letter-spacing: .5px;
+          display: flex; align-items: center; justify-content: center; }
+  .who { flex: 1 1 auto; }
+  .who .name { font-family: {{{issuer.font_head}}}; font-size: 13.5pt;
+               font-weight: 700; letter-spacing: .2px; line-height: 1.1; }
+  .who .tag { color: var(--muted); font-size: 8pt; margin-top: 2px; }
+  .where { text-align: right; color: var(--muted); font-size: 7.8pt;
+           line-height: 1.45; flex: 0 0 auto; padding-top: 2px; }
+
+  /* ---- title --------------------------------------------------------- */
+  .title { margin: 14px 0 2px; font-family: {{{issuer.font_head}}};
+           font-size: 12.5pt; font-weight: 700; letter-spacing: .6px;
+           text-transform: uppercase; }
+  .subtitle { color: var(--muted); font-size: 9pt; margin-bottom: 10px; }
+
+  /* ---- identifying metadata ------------------------------------------ */
+  .meta { display: flex; flex-wrap: wrap; gap: 0;
+          border: 1px solid var(--rule); background: var(--band);
+          margin-bottom: 14px; }
+  .meta .cell { flex: 1 1 33%; min-width: 33%; padding: 5px 9px;
+                border-right: 1px solid var(--rule);
+                border-bottom: 1px solid var(--rule); }
+  .meta .cell .k { font-size: 6.8pt; letter-spacing: .7px; color: var(--muted);
+                   text-transform: uppercase; }
+  .meta .cell .v { font-size: 9.6pt; font-weight: 600; margin-top: 1px; }
+
+  /* ---- sections ------------------------------------------------------ */
+  .sec { margin: 0 0 13px; break-inside: avoid; }
+  .sec.break { break-before: page; }
+  .sec > h2 { font-family: {{{issuer.font_head}}}; font-size: 8.6pt;
+              font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase;
+              color: var(--accent); margin: 0 0 5px;
+              border-bottom: 1px solid var(--rule); padding-bottom: 3px; }
+
+  .kv { display: flex; flex-wrap: wrap; }
+  .kv .row { flex: 1 1 50%; min-width: 50%; display: flex; gap: 8px;
+             padding: 2.4px 0; align-items: baseline; }
+  .kv.one .row { flex: 1 1 100%; min-width: 100%; }
+  .kv .row .k { flex: 0 0 43%; color: var(--muted); font-size: 8.4pt; }
+  .kv .row .v { flex: 1 1 auto; font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { background: var(--band); text-align: left; font-size: 7.2pt;
+       letter-spacing: .6px; text-transform: uppercase; color: var(--muted);
+       font-weight: 700; padding: 4px 6px; border: 1px solid var(--rule); }
+  td { padding: 4px 6px; border: 1px solid var(--rule); vertical-align: top; }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.total td { font-weight: 700; background: var(--band); }
+
+  p { margin: 0 0 6px; }
+  .note { color: var(--muted); font-size: 8.2pt; margin-top: 5px;
+          border-left: 2px solid var(--rule); padding-left: 7px; }
+
+  .foot { margin-top: 18px; padding-top: 6px; border-top: 1px solid var(--rule);
+          color: var(--muted); font-size: 7.2pt; line-height: 1.45; }
+  .sig { margin-top: 16px; display: flex; gap: 34px; break-inside: avoid; }
+  .sig .line { flex: 1 1 50%; }
+  .sig .rule { border-bottom: 1px solid var(--ink); height: 26px; }
+  .sig .lbl { font-size: 7.4pt; color: var(--muted); margin-top: 3px; }
+</style>
+</head>
+<body>
+
+  <div class="head">
+    <div class="mark">{{issuer.mark}}</div>
+    <div class="who">
+      <div class="name">{{issuer.name}}</div>
+      <div class="tag">{{issuer.tagline}}</div>
+    </div>
+    <div class="where">
+      {{issuer.address}}<br>
+      {{issuer.phone}} &nbsp;&middot;&nbsp; {{issuer.web}}
+    </div>
+  </div>
+
+  <div class="title">{{doc_title}}</div>
+  {{#doc_subtitle}}<div class="subtitle">{{doc_subtitle}}</div>{{/doc_subtitle}}
+
+  {{#has_meta}}
+  <div class="meta">
+    {{#meta}}<div class="cell"><div class="k">{{k}}</div><div class="v">{{v}}</div></div>{{/meta}}
+  </div>
+  {{/has_meta}}
+
+  {{#sections}}
+  <div class="sec {{#break}}break{{/break}}">
+    <h2>{{heading}}</h2>
+
+    {{#has_kv}}
+    <div class="kv {{#kv_wide}}one{{/kv_wide}}">
+      {{#kv}}<div class="row"><div class="k">{{k}}</div><div class="v">{{v}}</div></div>{{/kv}}
+    </div>
+    {{/has_kv}}
+
+    {{#table}}
+    <table>
+      <thead><tr>{{#cols}}<th class="{{#num}}num{{/num}}">{{h}}</th>{{/cols}}</tr></thead>
+      <tbody>
+        {{#rows}}<tr class="{{#total}}total{{/total}}">{{#cells}}<td class="{{#num}}num{{/num}}">{{v}}</td>{{/cells}}</tr>{{/rows}}
+      </tbody>
+    </table>
+    {{/table}}
+
+    {{#text}}<p>{{.}}</p>{{/text}}
+    {{#note}}<div class="note">{{note}}</div>{{/note}}
+  </div>
+  {{/sections}}
+
+  {{#has_signature}}
+  <div class="sig">
+    {{#signature}}<div class="line"><div class="rule"></div><div class="lbl">{{.}}</div></div>{{/signature}}
+  </div>
+  {{/has_signature}}
+
+  {{#footer}}<div class="foot">{{footer}}</div>{{/footer}}
+
+</body>
+</html>
