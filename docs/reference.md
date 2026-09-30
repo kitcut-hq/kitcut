@@ -1528,7 +1528,7 @@ On bpo-realtor every difference was number formatting, apart from one
 - The caption preset for this layout is `vertical-band-dark.json`.
 - **A phone take goes in a phone.** A tight 9:16 crop of a 1080x2400 phone
   recording has to cut the app's own input box off, and it reads as "cut and
-  unclear" (Eugene, `acord-commercial` S1). A source-level `screen` instead
+  unclear" (review of `acord-commercial` S1). A source-level `screen` instead
   fits every crop of that source into a rounded screen with a bezel:
 
   ```json
