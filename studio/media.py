@@ -8,9 +8,17 @@ the assistants' film player) names one media host instead of a tunnel whose name
     python studio/media.py --delete <id>    remove a film's copy
     python studio/media.py --web-backfill [--first <id>]   make and copy the web copy of every
                                             film online without one
+    python studio/media.py --download-backfill [--dry-run]  mark the master of every film online
+                                            as a download (below)
 
 Every film gets a web copy (make_web, WEB below): the master re-encoded at 5 Mbps, which is what
-every page plays; the master stays for downloads and YouTube.
+every page plays; the master stays for downloads and YouTube. The master is stored with
+Content-Disposition: attachment (download_name), so the site's Download link saves it rather than
+opening a player: the blob is on another origin, where a link's own `download` is ignored, and
+public read cannot ask for a disposition per request (that needs a SAS). A <video> ignores the
+header, so a film with no web copy still plays from its master. --download-backfill sets it on
+films copied before (Set Blob Properties, which clears what it is not sent, so it sends the type
+and the cache again).
 
 Where: STUDIO_MEDIA_BASE, the container's URL (https://kitcutst.blob.core.windows.net/films,
 anonymous read of blobs), and STUDIO_MEDIA_SAS, a container SAS allowing create, write and delete
@@ -324,7 +332,21 @@ def make_web(film):
 
 
 # ------------------------------------------------------------------ copying
-async def _put(session, blob, path, ctype):
+def download_name(film):
+    """The master's Content-Disposition: the film's title as the file's name (an ASCII one for
+    old browsers, the whole title as filename*), "kitcut-film.mp4" when it has none."""
+    rec = film.record()
+    title = str(rec.get("title") or rec.get("prompt") or "").strip()
+    words = re.sub(r"[^\w]+", "-", title, flags=re.UNICODE).strip("-_")[:60].strip("-_").lower()
+    ascii_ = re.sub(r"[^a-z0-9]+", "-", words.encode("ascii", "ignore").decode()).strip("-")
+    ascii_ = ascii_ or "kitcut-film"
+    out = 'attachment; filename="%s.mp4"' % ascii_
+    if words and words != ascii_:
+        out += "; filename*=UTF-8''%s.mp4" % quote(words, safe="")
+    return out
+
+
+async def _put(session, blob, path, ctype, disposition=None):
     url = "%s/%s?%s" % (base(), quote(blob), sas())
     headers = {
         "x-ms-blob-type": "BlockBlob",
@@ -334,6 +356,8 @@ async def _put(session, blob, path, ctype):
         "Content-Type": ctype,
         "Content-Length": str(os.path.getsize(path)),
     }
+    if disposition:
+        headers["x-ms-blob-content-disposition"] = disposition
     with open(path, "rb") as f:
         async with session.put(url, data=f, headers=headers) as r:
             if r.status not in (200, 201):
@@ -363,7 +387,8 @@ async def publish(film, timeout=3600):
             for key, name, ctype in FILES:
                 p = os.path.join(out, name)
                 if os.path.isfile(p):
-                    await _put(s, "%s/%s" % (film.id, blob_of(film, name)), p, ctype)
+                    how = download_name(film) if key == "video" else None
+                    await _put(s, "%s/%s" % (film.id, blob_of(film, name)), p, ctype, how)
                     urls[key] = url_of(film.id, blob_of(film, name))
     except Exception as e:  # noqa: BLE001 -- the film is made; the copy is a bonus
         print("film %s: not copied online: %s" % (film.id, e), file=sys.stderr, flush=True)
@@ -381,6 +406,26 @@ async def publish_web(film, timeout=3600):
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
         await _put(s, "%s/%s" % (film.id, blob_of(film, "film_web.mp4")), p, "video/mp4")
     return {"web": url_of(film.id, blob_of(film, "film_web.mp4"))}
+
+
+async def mark_download(session, film):
+    """Set the master's Content-Disposition on a film already online (Set Blob Properties).
+    The blob is named by the record's media URL, so a patched film's revision is the one marked."""
+    video = str((film.record().get("media") or {}).get("video") or "")
+    if not video.startswith(base() + "/"):
+        raise MediaError("its copy is not in %s" % base())
+    blob = video[len(base()) + 1 :]
+    url = "%s/%s?comp=properties&%s" % (base(), blob, sas())
+    headers = {
+        "x-ms-version": VERSION,
+        "x-ms-blob-content-type": "video/mp4",
+        "x-ms-blob-cache-control": CACHE,
+        "x-ms-blob-content-disposition": download_name(film),
+        "Content-Length": "0",
+    }
+    async with session.put(url, headers=headers) as r:
+        if r.status != 200:
+            raise MediaError("%s: %d %s" % (blob, r.status, (await r.text())[:200]))
 
 
 async def delete(fid, timeout=60):
@@ -461,6 +506,25 @@ async def _main(args):
             size = os.path.getsize(f.path("outputs", "film_web.mp4")) / 1e6
             print("  %s: ok, %.1f MB" % (f.id, size), flush=True)
         return
+    if args.download_backfill:
+        import aiohttp
+
+        todo = [f for f in Film.all() if (f.record().get("media") or {}).get("video")]
+        print("%d films online" % len(todo), flush=True)
+        if args.dry_run:
+            for f in todo[:5]:
+                print("  %s: %s" % (f.id, download_name(f)))
+            return
+        bad = 0
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60)) as s:
+            for f in todo:
+                try:
+                    await mark_download(s, f)
+                except Exception as e:  # noqa: BLE001 -- say which, and carry on
+                    bad += 1
+                    print("  %s: NOT marked: %s" % (f.id, e), flush=True)
+        print("%d marked, %d not" % (len(todo) - bad, bad))
+        return
     todo = [f for f in Film.all() if f.record().get("ok") and not f.record().get("media")]
     print("%d finished films have no copy online" % len(todo))
     for f in reversed(todo):  # oldest first
@@ -484,7 +548,15 @@ def main():
         action="store_true",
         help="make and copy the web copy of every film online without one",
     )
+    g.add_argument(
+        "--download-backfill",
+        action="store_true",
+        help="mark the master of every film online as a download (Content-Disposition)",
+    )
     ap.add_argument("--first", help="with --web-backfill: this film before the others")
+    ap.add_argument(
+        "--dry-run", action="store_true", help="with --download-backfill: count, and show five"
+    )
     asyncio.run(_main(ap.parse_args()))
 
 

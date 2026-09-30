@@ -15,16 +15,16 @@
 <meta property="og:title" content="Claude video from one prompt | KitCut">
 <meta property="og:description" content="Make a Claude video from one prompt. Opus 5.5 writes, animates, narrates and scores your idea in minutes: motion graphics, explainers, launch videos. 30 s free.">
 <meta property="og:url" content="https://kitcut.ai/">
-<meta property="og:image" content="https://kitcut.ai/og.jpg">
+<meta property="og:image" content="https://kitcut.ai/og-home-3.jpg">
 <meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="628">
-<meta property="og:image:alt" content="Frames from four films made in KitCut: a honey jar, a young dragon, a lighthouse cat and a raindrop">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The KitCut home page headline, Type an idea. Get a Claude video., over one frame from a film in each look: a hand-drawn blueprint of a lever lifting a car, a painted volcano erupting, and a collage newspaper front page on ice cream">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Claude video from one prompt | KitCut">
 <meta name="twitter:description" content="Make a Claude video from one prompt. Opus 5.5 writes, animates, narrates and scores your idea in minutes: motion graphics, explainers, launch videos. 30 s free.">
-<meta name="twitter:image" content="https://kitcut.ai/og.jpg">
-<meta name="twitter:image:alt" content="Frames from four films made in KitCut: a honey jar, a young dragon, a lighthouse cat and a raindrop">
+<meta name="twitter:image" content="https://kitcut.ai/og-home-3.jpg">
+<meta name="twitter:image:alt" content="The KitCut home page headline, Type an idea. Get a Claude video., over one frame from a film in each look: a hand-drawn blueprint of a lever lifting a car, a painted volcano erupting, and a collage newspaper front page on ice cream">
 <link rel="canonical" href="https://kitcut.ai/">
 <script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kitcut.ai/#website", "url": "https://kitcut.ai/", "name": "KitCut", "description": "Claude video maker"}, {"@type": "Organization", "@id": "https://kitcut.ai/#org", "name": "KitCut", "url": "https://kitcut.ai/", "logo": "https://kitcut.ai/logo-256.png", "sameAs": ["https://github.com/kitcut-hq/kitcut"]}, {"@type": "WebApplication", "name": "KitCut: Claude video maker", "url": "https://kitcut.ai/", "applicationCategory": "MultimediaApplication", "operatingSystem": "Any (web browser)", "description": "Make a Claude video from one prompt. Opus 5.5 writes, animates, narrates and scores your idea in minutes: motion graphics, explainers, launch videos. 30 s free.", "publisher": {"@id": "https://kitcut.ai/#org"}, "offers": {"@type": "AggregateOffer", "priceCurrency": "USD", "lowPrice": "0", "highPrice": "849", "offerCount": "13"}}, {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Can Claude make videos?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Claude has no video model: it writes code that draws every frame, the way the Opus 5.5 animations people share on X are made. KitCut has Claude Opus 5.5 write the script, animate every scene, write a narration and compose the music, then renders it all into a finished Claude video."}}, {"@type": "Question", "name": "How do I make a Claude video?", "acceptedAnswer": {"@type": "Answer", "text": "Type one sentence about your idea, pick a length and a look (hand-drawn, painted or collage), and press Make the film. Claude plans it, draws it, looks at stills of its own work and fixes what it doesn't like. The finished video is ready in a few minutes."}}, {"@type": "Question", "name": "Which Claude model makes the videos?", "acceptedAnswer": {"@type": "Answer", "text": "Claude Opus 5.5 directs every video. It writes the script and the code that draws each frame, and reviews the result before it is rendered. For the painted look an image model paints the scenes and Claude animates them; for the collage look one paints pictures cut out of paper and Claude builds pages round them; a voice model reads Claude's narration."}}, {"@type": "Question", "name": "Is it free?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, to start: every account gets 30 seconds of film a month, with no card needed. Paid plans give you more minutes, and Pro makes films up to 8 minutes long."}}, {"@type": "Question", "name": "How long can a Claude video be?", "acceptedAnswer": {"@type": "Answer", "text": "Up to 1 minute on Free and Standard, and 8 minutes on Pro. A month's free credits make one 30-second film."}}, {"@type": "Question", "name": "What can I make with it?", "acceptedAnswer": {"@type": "Answer", "text": "Motion graphics, explainer videos, launch videos, tiny stories, music videos, showreels and lessons, in any language you type in. Every film gets its own page to share."}}]}]}</script>
 <!-- /meta -->
@@ -412,6 +412,7 @@ a.google { width: 100%; margin-top: 14px; }
 .credit.short { color: var(--bad); }
 /* publishing to YouTube: a button under a finished film of your own, and the dialog it opens */
 .ytmark { width: 20px; height: 14px; flex: none; display: block; }
+.dlmark { width: 15px; height: 15px; flex: none; display: block; }
 /* a finished film's share bar: its page's link, copied or sent in one click (lib/sharepage.js is the page) */
 .sharebar { display: grid; gap: 8px; margin: 0 14px 12px; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); border: 1px solid var(--accent); }
 .sharebar .sb { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 14px; }
@@ -521,6 +522,8 @@ a.google { width: 100%; margin-top: 14px; }
   document.cookie = `kc_dev=${id}; Path=/; Max-Age=63072000; SameSite=Lax` + (location.protocol === 'https:' ? '; Secure' : '');
 } catch (e) { /* never worth breaking the page for */ } })();
 </script>
+<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+<script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body data-here="make">
 <header class="bar">
@@ -591,7 +594,7 @@ a.google { width: 100%; margin-top: 14px; }
   <section class="work">
     <div class="stage">
       <div class="screen" id="screen"><div class="idle">Your film appears here.</div></div>
-      <div class="caption"><span id="status">Ready.</span><span class="right"><button class="btn sm yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><button class="btn sm" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span class="fresh" id="views" hidden></span><span id="clock"></span></span></div>
+      <div class="caption"><span id="status">Ready.</span><span class="right"><a class="btn sm" id="dlBtn" href="#" download target="_blank" rel="noopener" hidden title="Download the full-quality MP4"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg> Download</a><button class="btn sm yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><button class="btn sm" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span class="fresh" id="views" hidden></span><span id="clock"></span></span></div>
       <div class="sharebar" id="sharebar" hidden>
         <div class="sb">
           <div class="sb-l"><b id="sbSay">Share this film</b><a id="sbLink" href="#" target="_blank" rel="noopener"></a></div>
@@ -1251,8 +1254,12 @@ const NETS = {
   linkedin: (u) => `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(u)}`,
   whatsapp: (u, t) => `https://wa.me/?text=${encodeURIComponent(`${t} ${u}`)}`,
 };
-let shareAt = '';
+let shareAt = '', dlAt = '';
 function showShare(id, s) {
+  // the full-quality file, for whoever made the film: its copy online is served as an attachment
+  // (kitcut studio/media.py), so the link saves it instead of opening a player
+  dlAt = s.download_url || '';
+  $('dlBtn').download = `${(s.title || s.prompt || 'kitcut-film').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 60).toLowerCase() || 'kitcut-film'}.mp4`;
   const url = s.share_url || `${location.origin}/film/${id}`;
   const title = (s.share && s.share.title) || s.title || s.prompt || 'A film made with KitCut';
   shareAt = url;
@@ -1267,6 +1274,7 @@ async function shareWho(id) {
     const r = await fetch(`/api/account/film?id=${encodeURIComponent(id)}`, { headers: { Accept: 'application/json' } });
     if (!r.ok || id !== currentId) return;
     const { mine, profile: p } = await r.json();
+    if (mine && dlAt) { $('dlBtn').href = dlAt; $('dlBtn').hidden = false; }
     if (!mine || !p) return;
     $('sbSay').textContent = "Your film's page is ready to share";
     const face = p.photo ? `<img src="${esc(p.photo)}" alt="" referrerpolicy="no-referrer">` : `<span class="face" style="background:${esc(p.tint)}">${esc(p.letter)}</span>`;
@@ -1336,7 +1344,7 @@ const YT_BACK = (() => {
 })();
 function ytReset() {
   clearTimeout(ytPoll); ytPoll = null; ytPost = null; ytDoneId = null; ytFilm = null;
-  $('ytOpen').hidden = true; $('ytPosts').hidden = true; $('sharebar').hidden = true; $('sbWho').hidden = true;
+  $('ytOpen').hidden = true; $('ytPosts').hidden = true; $('sharebar').hidden = true; $('sbWho').hidden = true; $('dlBtn').hidden = true;
   if ($('yt').open) $('yt').close();
 }
 async function ytLoad() {

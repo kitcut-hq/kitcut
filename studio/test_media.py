@@ -32,6 +32,13 @@ REFUSE = set()
 
 async def put(req):
     name = req.match_info["name"]
+    if req.query_string == "comp=properties&" + SAS:  # Set Blob Properties: all x-ms-blob-* anew
+        if name not in BLOBS:
+            return web.Response(status=404, text="BlobNotFound")
+        h = {k: v for k, v in BLOBS[name][0].items() if not k.lower().startswith("x-ms-blob-")}
+        h |= {k: v for k, v in req.headers.items() if k.lower().startswith("x-ms-blob-")}
+        BLOBS[name] = (h, BLOBS[name][1])
+        return web.Response(status=200)
     if req.query_string != SAS:
         return web.Response(status=403, text="AuthenticationFailed")
     if name.split("/")[-1] in REFUSE:
@@ -134,6 +141,41 @@ async def main():
             and "immutable" in h.get("x-ms-blob-cache-control", ""),
             "as a block blob, with its type and a lasting cache",
             h,
+        )
+        check(
+            h.get("x-ms-blob-content-disposition")
+            == 'attachment; filename="a-film-for-the-copy.mp4"'
+            and "x-ms-blob-content-disposition"
+            not in BLOBS.get("%s/film_web.mp4" % f.id, ({}, b""))[0],
+            "the master is a download, named after the film; the web copy plays",
+            h.get("x-ms-blob-content-disposition"),
+        )
+        f.update(title="Кіт і Café")
+        check(
+            media.download_name(f)
+            == "attachment; filename=\"caf.mp4\"; filename*=UTF-8''%s.mp4"
+            % media.quote("кіт-і-café", safe=""),
+            "a title in any language: an ASCII name, and the whole one as filename*",
+            media.download_name(f),
+        )
+        f.update(title=None)
+        # a film copied before: its master is marked, and keeps its type and cache
+        f.update(media=urls)
+        BLOBS["%s/film.mp4" % f.id] = (
+            {"x-ms-blob-content-type": "video/mp4", "x-ms-blob-cache-control": media.CACHE},
+            body,
+        )
+        import aiohttp
+
+        async with aiohttp.ClientSession() as s:
+            await media.mark_download(s, f)
+        mh = BLOBS["%s/film.mp4" % f.id][0]
+        check(
+            mh.get("x-ms-blob-content-disposition", "").startswith("attachment;")
+            and mh.get("x-ms-blob-content-type") == "video/mp4"
+            and mh.get("x-ms-blob-cache-control") == media.CACHE,
+            "--download-backfill marks an old copy, keeping its type and cache",
+            mh,
         )
         ch, card = BLOBS.get("%s/card.jpg" % f.id, ({}, b""))
         check(

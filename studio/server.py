@@ -1489,7 +1489,7 @@ def film_urls(req, jid, rec):
     web = f is not None and os.path.isfile(f.path("outputs", "film_web.mp4"))
     return {
         "video_url": signed(req, jid, "film_web.mp4" if web else "film.mp4"),
-        "download_url": signed(req, jid, "film.mp4"),
+        "download_url": signed(req, jid, "film.mp4") + "&dl=1",
         "poster_url": signed(req, jid, "film_poster.png"),
     }
 
@@ -1679,7 +1679,11 @@ async def files(req):
             await asyncio.to_thread(media.make_card, d, f.record().get("length") or f.length)
     if not os.path.isfile(p):
         raise web.HTTPNotFound()
-    return web.FileResponse(p, headers={"Cache-Control": "no-cache"})
+    headers = {"Cache-Control": "no-cache"}
+    if req.query.get("dl") == "1":  # the download_url: saved, not played (as media.py's copy)
+        f = film_of(req.match_info["id"])
+        headers["Content-Disposition"] = media.download_name(f)
+    return web.FileResponse(p, headers=headers)
 
 
 async def costs(req):

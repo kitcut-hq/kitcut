@@ -532,6 +532,15 @@ async def main():
         r = await c.get(path)
         check(r.status == 200 and len(await r.read()) > 100_000, "the signed URL plays")
         check((await c.get(path.replace("&sig=", "&sig=0"))).status == 401, "a tampered one not")
+        dl = results[0].get("download_url", "")
+        r = await c.get(dl[dl.index("/files/") :])
+        await r.read()
+        check(
+            r.status == 200
+            and r.headers.get("Content-Disposition", "").startswith("attachment;")
+            and "Content-Disposition" not in (await c.get(path)).headers,
+            "the download URL saves the film; the video URL plays it",
+        )
         r = await c.get("/files/%s/card.jpg" % ids[0], headers=auth)
         body = await r.read()
         check(
