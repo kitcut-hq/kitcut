@@ -591,7 +591,7 @@ a.google { width: 100%; margin-top: 14px; }
   <section class="work">
     <div class="stage">
       <div class="screen" id="screen"><div class="idle">Your film appears here.</div></div>
-      <div class="caption"><span id="status">Ready.</span><span class="right"><button class="btn sm yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><button class="btn sm" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span id="clock"></span></span></div>
+      <div class="caption"><span id="status">Ready.</span><span class="right"><button class="btn sm yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><button class="btn sm" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span class="fresh" id="views" hidden></span><span id="clock"></span></span></div>
       <div class="sharebar" id="sharebar" hidden>
         <div class="sb">
           <div class="sb-l"><b id="sbSay">Share this film</b><a id="sbLink" href="#" target="_blank" rel="noopener"></a></div>
@@ -941,7 +941,7 @@ function startClock(elapsed) { t0 = Date.now() - (elapsed || 0) * 1000; clearInt
 function finish() { clearInterval(timer); timer = null; clearTimeout(poll); poll = null; pending = null; unfresh(); $('go').disabled = !studioUp; $('stop').hidden = true; }
 function reset() {
   finish(); ytReset(); t0 = 0; lastCost = null; lastLog = null; showedDone = false;
-  $('stats').hidden = true; $('log').innerHTML = ''; $('clock').textContent = '';
+  $('stats').hidden = true; $('log').innerHTML = ''; $('clock').textContent = ''; $('views').hidden = true;
 }
 function home() {
   reset(); currentId = null; drawSide();
@@ -962,6 +962,29 @@ window.addEventListener('popstate', () => {
   const m = location.pathname.match(FILM_PATH);
   if (m) openFilm(m[1], false); else home();
 });
+
+// A finished film opened here is a view (the site's lib/views.js): counted once per browser and
+// film every half hour (kcSeen keeps when), and the number shown under it. Where there is no
+// /api/views (the studio's own machine) nothing shows.
+const VIEW_AGAIN = 30 * 60 * 1000;
+async function countView(id) {
+  let seen = {};
+  try { seen = JSON.parse(localStorage.getItem('kcSeen') || '{}') || {}; } catch (e) { /* private window */ }
+  const again = Date.now() - (seen[id] || 0) < VIEW_AGAIN;
+  try {
+    const r = await fetch(`/api/views/${encodeURIComponent(id)}`, { method: again ? 'GET' : 'POST', keepalive: true });
+    if (!r.ok) return;
+    const { views } = await r.json();
+    if (!again) {
+      seen[id] = Date.now();
+      for (const k of Object.keys(seen)) if (Date.now() - seen[k] > 86400000) delete seen[k];
+      try { localStorage.setItem('kcSeen', JSON.stringify(seen)); } catch (e) { /* private window */ }
+    }
+    if (id !== currentId || !Number.isFinite(views)) return;
+    $('views').textContent = `${views.toLocaleString()} view${views === 1 ? '' : 's'}`;
+    $('views').hidden = false;
+  } catch (e) { /* the number is a nicety */ }
+}
 
 // How fresh the film on screen is, while it is being made: when the studio last answered ("Updated
 // 12:41:07"), or "Reconnecting..." while it does not, so nobody has to reload to be sure.
@@ -1017,6 +1040,7 @@ async function follow(since = 0, misses = 0) {
     if (s.status === 'done') {
       if (s.video_url) play(s.video_url, s.poster_url);
       showShare(id, s);
+      countView(id);
       ytDoneId = id; ytLoad();
       if (!showedDone && s.seconds != null) {  // a film from before the log was kept: its summary stands in
         stats(s); $('status').textContent = `Done in ${mmss(s.seconds)}.`;
