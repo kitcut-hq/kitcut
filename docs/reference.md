@@ -3869,6 +3869,102 @@ Traps, each found on the example:
 - **Gemini narration ran 24% longer than `--plan`'s 2.6 words a second** (140 words: 72 s, not
   58 s); a "brisk" style note barely moved it. Budget ~1.9 words a second.
 
+### Talking heads: photos that speak (`sketch/heads.js`, `head-rig.py`)
+
+A photo of a person becomes a character who talks in the film: the head cut out of the photo
+and stuck on a drawn body (a bobble-head), a cut-out whose chin drops like a puppet's, a
+ventriloquist's dummy, a head whose top lifts off like a lid (South Park's Canadians), or the
+whole photo -- a newspaper picture, a painting in a frame -- where only the mouth moves (the
+Clutch Cargo / Painty the Pirate trick). Several speakers in one film each get their own voice,
+and each mouth moves only on its own lines. No video model is involved: the photo is measured
+once on the CPU, and the engine animates it as a pure function of t like everything else.
+
+```powershell
+python scripts/head-rig.py --fetch-models                                   # once per machine
+python scripts/head-rig.py --manifest projects/<id>/sketch.json --list     # which rigs would be built
+python scripts/head-rig.py --manifest projects/<id>/sketch.json --sheet    # build + a proof sheet each
+python scripts/sketch-vo.py --manifest projects/<id>/sketch.json           # "cast" + "who": one voice each
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 1,3 --sheet
+```
+
+**The rig** (`head-rig.py`, a folder per photo under `rigs/<name>/`, rebuilt only when the
+photo or `RIG_VERSION` changes): OpenCV's YuNet finds the face -- small ones in big frames too,
+which MediaPipe's own detector missed on a 1905 glass plate -- then a square crop 3.1 faces wide
+goes through MediaPipe's face landmarker (478 points) and its multiclass selfie segmenter (hair,
+face skin, body skin, clothes, other, background). The head is hair + face skin + things worn,
+kept only where it touches the face, only inside a head-shaped ellipse (a grey studio wall and a
+painted backdrop were both called hair and joined the head until then), cut at the jaw line
+(carried outwards and *down* past the jaw angles: level, it took the ears off), holes filled and
+the edge snapped to the photo's own edges by a guided filter. `rig.json` holds, in the photo's
+pixels: the face outline, the lips (inner and outer, upper and lower), lids, brows, irises, the
+face's own axes (`right`, `down`: the face may be tilted), the jaw piece each rigid mouth moves,
+the flap's cut (from the mouth corners out to the silhouette's edge, measured on the mask), and a
+mesh: the 468 face points plus a still ring round the face, Delaunay-triangulated, with the
+inner mouth left as a hole, and per point how far it follows the jaw (`wj`), the upper lip's
+lift (`wu`), the lips spreading (`wc`) and a blink (`b`). ~1-2 s a photo on the laptop CPU.
+
+Runtime: MediaPipe 1.0.1's wheel asks for `opencv-contrib-python`, which would fight the venv's
+`opencv-python` over the one `cv2` (and `setup-python.ps1`'s pip-check repair would install it),
+so `--fetch-models` installs it `--no-deps` into `models/heads/py/`, beside its two models
+(`face_landmarker.task`, `selfie_multiclass_256x256.tflite`, both Apache-2.0), and only
+head-rig.py puts that folder on `sys.path`. Its vision package imports matplotlib for drawing
+helpers never called here; a missing matplotlib is stood in for.
+
+**The voices.** `vo.cast` names each speaker's voice, laid over the film's own, and each line
+says who speaks it (`sketch-vo.py`):
+
+```json
+"vo": {"tts": "gemini", "voice": "Kore",
+       "cast": {"alex": {"voice": "Puck"}, "ada": {"voice": "Kore", "style": "dry, amused"}},
+       "lines": [{"who": "alex", "text": "..."}, {"who": "ada", "text": "..."}, {"text": "narrator"}]}
+```
+
+Every cast voice is checked before anything is spent; a speaker's voice is part of its lines'
+cache key (the narrator's lines keep theirs, so an existing film re-renders nothing); a Gemini
+refusal in a film with a cast takes the backup voice by the speaker's label (the film's takes
+are several people's, so their measured pitch means nothing). The timeline keeps each line's
+`who`.
+
+**The mouth** (`scripts/_heads.py`, at bundle time, cached by the line's audio): every voice-over
+line gets its speaker and a 50 Hz mouth track measured from its own audio -- `o`, the speech
+band's (250-3500 Hz) loudness on a scale set by the line's own loud parts (a quiet voice opens
+as wide as a loud one), shut where the voice stops and on the m/b/p that are quiet in that band;
+`w`, the share above 1.8 kHz against below 900 Hz (spread lips on "ee" and "s", rounded on "oo"),
+opening faster than it closes, 40 ms ahead of the sound (a mouth that opens with its sound reads
+late). Measured on edge voices: open ~60% of the way mid-speech, 3-4 openings a second, which is
+the syllable rate. `SK.talk(who, t)` reads it; `SK.speaker(t)` says who is talking.
+
+**Drawing** (`SK.head(name, x, y, h, o)`, the module added by itself when a manifest names
+"heads"): `x, y` is the middle of the face (hairline to chin), `h` its height; `SK.headBox`
+gives the whole head's box (hair included) to lay heads out with. `style`: `cutout` (with a
+paper edge and a shadow), `photo` (`crop` in face heights), `bobble` (a body drawn in the film's
+own pen under the chin, the head on a spring: it nods on each of its speaker's words). `mouth`:
+`warp` (the photo's own lips part and its jaw drops through the mesh; the dark of the mouth,
+teeth lit like the face and a tongue drawn under it), `chin` (a puppet's chin drops between the
+mouth corners), `dummy` (the same with the slits drawn), `muppet` (the whole lower face drops),
+`flap` (the top of the head lifts off), `none`. `tone`: `color`, `mono`, `sepia`, `news`
+(halftone dots on a 45-degree screen sized to the face). Eyes blink on a clock seeded by the
+rig's name; a collage film's mouths move on its 12 fps clock and nudge with its pieces.
+
+Traps, each found on the test footage:
+- **A mesh triangle bridging the lips** smears lip across the open mouth and hides the teeth
+  (seen on a 3/4 painted face): every lip ring counts, not just the inner one -- no triangle may
+  join a point that stays with the skull to one that goes with the jaw between the corners.
+- **A rigid jaw cut into two complementary pieces leaves a seam** (both pieces' anti-aliased
+  edges let the background through): draw the whole picture, the dark over the gap, then the
+  jaw piece on top.
+- **Nearly shut, a rigid jaw is a red scar**: below 14% open it stays shut.
+- **Levels from the whole picture print a backlit face black** in `news` and `mono`: they are
+  taken from the face's own box.
+- **A white teeth band glows in a dim photo**: teeth take the face's skin colour, lightened.
+
+**The example**, `config/sketch/heads-example/`: "The Brothers Speak", 9.5 s, a 1903 front page
+(collage) whose two public-domain photos of Wilbur and Orville Wright talk in halftone, one
+voice each (edge, free), a stamp on "seconds" from `sfx.py`. `wilbur.landmarks.json` is the
+face measured once from its photo: `check-sketch.py` tests the cuts, the mouth hole and the
+blink against it without MediaPipe. A 13 s six-style test on a phone frame and a painting took
+27 s to render at 30 fps on the laptop; ten review stills ~5 s.
+
 ### Sketch Studio: a prompt box that makes a short film (`studio/`)
 
 A prompt-to-film web app on this engine, set up with `pip install -r requirements-studio.txt`:

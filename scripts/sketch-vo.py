@@ -32,6 +32,11 @@ Creator tier (192k is a 403).
 Voice names resolve through config/elevenlabs-voices.json (dub-tts.py's registry, which refuses
 unverified ids before anything is spent). "tts": "edge" is the free draft backend.
 
+Several people speaking (talking heads, sketch/heads.js): "cast" names each speaker's voice,
+laid over the film's own ({"alex": {"voice": "Puck"}, "sam": {"voice": "Kore", "style": ...}}),
+and a line says who speaks it ("who": "alex"). The timeline keeps each line's "who", which is
+what sketch-render uses to move that speaker's mouth; a line without one is the narrator.
+
 "tts": "gemini" is Google's Gemini text-to-speech. "model" (default gemini-3.8-flash-tts),
 "voice" (a Gemini voice: Kore, Leda, Puck, Aoede, ...), and "style" (how to say it, e.g. "warm
 and gentle, like a kind teacher talking to young children"). It needs no tail word and gives no
@@ -89,6 +94,17 @@ def words_of(text):
     """Comparable words of any script (an a-z class leaves nothing of a Cyrillic line)."""
     t = spoken(text).lower().replace("-", " ").replace("’", "").replace("'", "")
     return re.sub(r"[^\w$ ]", " ", t).split()
+
+
+def line_vo(vo, ln):
+    """The voice settings one line is read with: the film's, with its speaker's laid over them.
+    A film where several people speak (talking heads) names them in "cast", {who: {"voice",
+    "style", "settings"}}, and each line says who speaks it ("who"); a line without "who" is
+    the narrator, read with the film's own voice."""
+    who = ln.get("who")
+    if not who:
+        return vo
+    return {**vo, **(vo.get("cast") or {}).get(who, {})}
 
 
 def fingerprint(line, vo):
@@ -383,7 +399,10 @@ def pitch_hz(x, sr=SR):
 
 
 def backup_kind(vo, vdir):
-    """ "low" or "high": the film's own Gemini takes, measured, else the voice's label."""
+    """ "low" or "high": the film's own Gemini takes, measured, else the voice's label. A film
+    with a cast goes by the speaker's voice's label: its takes are several people's."""
+    if vo.get("cast"):
+        return "high" if vo.get("voice") in GEMINI_FEMALE else "low"
     got = []
     for js in sorted(glob.glob(os.path.join(vdir, "L*_T*_*.json")))[:8]:
         with open(js, encoding="utf-8") as f:
@@ -805,6 +824,23 @@ def main():
         voice = vo.get("voice") or dub.default_voice(tts)
         # refuses unknown / unverified voices before any spend
         voice_id = dub.resolve_voice(voice, tts)
+    # several speakers: every line's "who" must be in the cast, and every cast voice must be a
+    # voice this backend has -- all checked before anything is spent
+    cast = vo.get("cast") or {}
+    ids = {voice: voice_id}  # voice name -> the id the backend takes
+    for i, ln in enumerate(lines):
+        if ln.get("who") and ln["who"] not in cast:
+            sys.exit(
+                "line %d: who %r is not in vo.cast (%s)" % (i, ln["who"], ", ".join(cast) or "none")
+            )
+    for who, spec in cast.items():
+        v = spec.get("voice") or voice
+        if tts == "gemini" and v not in GEMINI_VOICES:
+            sys.exit(
+                "cast %r: gemini voice %r is not one of: %s" % (who, v, ", ".join(GEMINI_VOICES))
+            )
+        if tts != "gemini" and v not in ids:
+            ids[v] = dub.resolve_voice(v, tts)
 
     # plan
     chars = sum(len(ln["text"]) + len(tail) + 2 for i, ln in enumerate(lines) if i in only)
@@ -834,7 +870,12 @@ def main():
     for i, ln in enumerate(lines):
         est = len(words_of(ln["text"])) / WPS
         st = ln.get("start", t)
-        print("  %2d  %5.2fs +%4.1fs  %s" % (i, st, est, spoken(ln["text"])[:90]))
+        who = (
+            ("%s (%s): " % (ln["who"], line_vo(vo, ln).get("voice") or voice))
+            if ln.get("who")
+            else ""
+        )
+        print("  %2d  %5.2fs +%4.1fs  %s%s" % (i, st, est, who, spoken(ln["text"])[:90]))
         t = st + est + vo.get("gap", 0.35)
     print("  estimated end %.1fs of %.1fs" % (t - vo.get("gap", 0.35), m["duration"]))
     if tts == "elevenlabs":
@@ -861,8 +902,9 @@ def main():
             for i, ln in enumerate(lines):
                 if i not in only:
                     continue
-                fp = fingerprint(ln, {**vo, "tts": tts})
-                key = _sketch.voice_line_key(ln["text"], vo, tts)
+                lvo = line_vo(vo, ln)  # the speaker's voice, when the line names one
+                fp = fingerprint(ln, {**lvo, "tts": tts})
+                key = _sketch.voice_line_key(ln["text"], lvo, tts)
                 if key in approved:
                     given[i] = key
                     use_approved(os.path.join(vdir, "L%02d_T0_%s" % (i, fp)), approved[key], key)
@@ -884,21 +926,25 @@ def main():
                 The .json goes last, so a take is only ever cached whole."""
                 i, k, base = job
                 ln = lines[i]
+                lvo = line_vo(vo, ln)  # the speaker's voice, when the line names one
+                lvoice = lvo.get("voice") or voice
                 note = "  line %d take %d" % (i, k)
                 if tts == "elevenlabs":
-                    mp3, align = el_take(ln["text"] + ("\n\n" + tail if tail else ""), voice_id, vo)
+                    mp3, align = el_take(
+                        ln["text"] + ("\n\n" + tail if tail else ""), ids[lvoice], lvo
+                    )
                     with open(base + ".mp3", "wb") as f:
                         f.write(mp3)
                 elif tts == "gemini":
                     try:
-                        audio, meta = gemini_take(ln["text"], vo)
+                        audio, meta = gemini_take(ln["text"], lvo)
                     except Refused as e:
                         if not vo.get("backup"):
                             sys.exit(
                                 "Gemini TTS refused the line %r (%s): rephrase it"
                                 % (spoken(ln["text"]), e)
                             )
-                        audio, meta = backup_take(ln["text"], vo, vdir)
+                        audio, meta = backup_take(ln["text"], lvo, vdir)
                         meta["refused"] = str(e)[:200]
                     _sketch.write_wav(base + ".wav", audio)
                     align = {"gemini": meta}  # no timings: Whisper supplies the words
@@ -920,7 +966,7 @@ def main():
                             meta["cost_usd"],
                         )
                 else:
-                    audio, marks = edge_take(ln["text"], voice, dub)
+                    audio, marks = edge_take(ln["text"], lvoice, dub)
                     _sketch.write_wav(base + ".wav", audio)
                     align = {"words": [{"text": w, "s": a, "e": b} for w, a, b in marks]}
                 with open(base + ".json", "w", encoding="utf-8") as f:
@@ -1072,6 +1118,9 @@ def main():
                         % (i, start, i - 1, t)
                     )
                     start = t
+                L.pop("who", None)  # the script decides who speaks, not an older timeline
+                if ln.get("who"):
+                    L["who"] = ln["who"]
                 L["start"], L["end"] = round(start, 3), round(start + L["dur"], 3)
                 L["words"] = [
                     {
@@ -1089,6 +1138,8 @@ def main():
                     % (t - vo.get("gap", 0.35), m["duration"])
                 )
             timeline = {"duration": m["duration"], "voice": voice, "tts": tts, "lines": placed}
+            if cast:
+                timeline["cast"] = {w: s.get("voice") or voice for w, s in cast.items()}
             if tts == "gemini":
                 timeline["model"] = vo.get("model") or "gemini-3.8-flash-tts"
                 # spent in THIS run: cached takes cost nothing again

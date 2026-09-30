@@ -1,0 +1,57 @@
+{
+  "title": "The Brothers Speak",
+  "description": "A 9-second example of talking heads (sketch/heads.js): two public-domain photographs of Wilbur and Orville Wright on a 1903 front page, each mouth moving on its own voice. Copy it into projects/<id>/, put your own photos in \"heads\", then head-rig, sketch-vo (free on edge), sketch-audio, sketch-render.",
+  "slug": "brothers-speak",
+  "duration": 9.5,
+  "fps": 24,
+  "film": "film.js",
+  "modules": ["collage"],
+  "poster_t": 3.4,
+  "_sources": {
+    "wilbur.jpg": "Wilbur Wright, 1905. Library of Congress, public domain (commons.wikimedia.org/wiki/File:Wilbur_Wright_1905.jpg), cropped and scaled to 900 px.",
+    "orville.jpg": "Orville Wright, 1905. Library of Congress, public domain (commons.wikimedia.org/wiki/File:Orville_Wright_1905.jpg), cropped and scaled to 900 px.",
+    "facts": "The first powered flight: 17 December 1903 at Kill Devil Hills near Kitty Hawk, North Carolina; Orville flew, 12 seconds (Smithsonian National Air and Space Museum). The newspaper is invented."
+  },
+  "heads": {
+    "wilbur": {"photo": "sources/wilbur.jpg"},
+    "orville": {"photo": "sources/orville.jpg"}
+  },
+  "fonts": [
+    {"file": "fonts/UnifrakturMaguntia-Book.ttf", "family": "UnifrakturMaguntia", "weight": "400"},
+    {"file": "fonts/OldStandard-Regular.ttf", "family": "Old Standard TT", "weight": "400"},
+    {"file": "fonts/OldStandard-Bold.ttf", "family": "Old Standard TT", "weight": "700"},
+    {"file": "fonts/OldStandard-Italic.ttf", "family": "Old Standard TT", "weight": "400", "style": "italic"},
+    {"file": "fonts/PlayfairDisplay-VF.ttf", "family": "Playfair Display", "weight": "400 900", "load": "700 900"},
+    {"file": "fonts/AbrilFatface-Regular.ttf", "family": "Abril Fatface", "weight": "400"},
+    {"file": "fonts/Caveat.woff2", "family": "Caveat", "weight": "400 700", "load": "700"}
+  ],
+  "player": {
+    "accent": "#b3372c",
+    "paper": "#e8dfca",
+    "ink": "#1d1a17",
+    "hint": "the brothers speak · sound on",
+    "hint_font": "'Old Standard TT', serif"
+  },
+  "vo": {
+    "tts": "edge",
+    "voice": "andrew",
+    "cast": {
+      "wilbur": {"voice": "en-US-ChristopherNeural"},
+      "orville": {"voice": "en-US-EricNeural"}
+    },
+    "lead": 0.6,
+    "gap": 0.45,
+    "lines": [
+      {"who": "wilbur", "text": "We are Wilbur and Orville Wright."},
+      {"who": "orville", "text": "This morning, we flew."},
+      {"who": "wilbur", "text": "Twelve seconds. It felt a good deal longer."}
+    ]
+  },
+  "audio": {
+    "score": "score.json",
+    "sfx": "sfx.json",
+    "mix": {"music_db": 6.0, "sfx_db": 3.0, "fade_out": 0.5}
+  },
+  "captions": {"max_words": 8},
+  "render": {"cq": 18, "preset": "p5", "audio_bitrate": "192k"}
+}

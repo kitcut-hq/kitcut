@@ -1,0 +1,8 @@
+{
+  "bpm": 96,
+  "events": [
+    {"inst": "acoustic_grand_piano", "vel": 0.3, "notes": "0 C4+E4+G4 2; 2 A3+C4+E4 2; 4 F3+A3+C4 2; 6 G3+B3+D4 2; 8 C4+E4+G4 2; 10 A3+C4+E4 2; 12 F3+A3+C4 2; 14 C4+E4+G4 2"},
+    {"inst": "pizzicato_strings", "vel": 0.4, "notes": "0 C3 .5; 1 G3 .5; 2 A2 .5; 3 E3 .5; 4 F2 .5; 5 C3 .5; 6 G2 .5; 7 D3 .5; 8 C3 .5; 9 G3 .5; 10 A2 .5; 11 E3 .5; 12 F2 .5; 13 C3 .5; 14 C3 1"},
+    {"inst": "glockenspiel", "vel": 0.26, "notes": "9.6 G6 .5; 10 C7 1"}
+  ]
+}

@@ -686,6 +686,13 @@ options" has the bake-off. After touching any of it, run `python scripts/check-t
 (the rules, then the example film drawn; ~40 s) and `python studio/test_thumbs.py` (end to end,
 ~35 s).
 
+**Talking heads** are real people from their photos, speaking in any of the looks: a manifest's
+`"heads"` names the photos, `head-rig.py` measures each once on the CPU (MediaPipe landmarks and
+segmentation, kept in `models/heads/`), `vo.cast` + a line's `who` give each speaker a voice, and
+`sketch/heads.js` draws them -- bobble-heads, puppet cut-outs, or a newspaper photo or painting
+where only the mouth moves -- each mouth moved by its own lines' audio. Start from
+`config/sketch/heads-example/` (a 1903 front page that talks; free on edge-tts).
+
 ## Projects: the memory that outlives the session
 
 Each video is a folder, `projects/<id>/`: its manifests and two committed
@@ -758,6 +765,7 @@ which cannot encode the glyphs at all.
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
 | `sketch/` | the sketch-film engine (`engine.js`), cast (`props.js`), collage pieces (`collage.js`) and player page (`player.html`); `scripts/_sketch.py` and `_sketchaudio.py` are the Python half, `check-sketch.py` their test |
 | `config/sketch/example/` | a 12 s sketch film to copy into a new project: manifest, `film.js`, score, cues |
+| `config/sketch/heads-example/` | a 9.5 s talking-heads film: two public-domain photos on a 1903 front page, one voice each; `scripts/head-rig.py` makes the rigs, `sketch/heads.js` draws them |
 | `scripts/resolve-export.py` | the cut as an OTIO/EDL/FCP7 XML timeline plus an SRT, for DaVinci Resolve (free edition); `check-resolve.py` is its test, `docs/davinci-resolve.md` the research behind it |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
 | `scripts/screencast-pipeline.py` | the silent-screencast job as one cached, checkpointed command; the stage scripts it drives are listed under pipeline 7 |
