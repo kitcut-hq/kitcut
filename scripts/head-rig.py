@@ -45,7 +45,9 @@ import time
 import types
 import hashlib
 import argparse
+import threading
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -256,6 +258,8 @@ class Measurer:
     def image(self, rgb):
         return self.mp.Image(image_format=self.mp.ImageFormat.SRGB, data=np.ascontiguousarray(rgb))
 
+    _lock = threading.Lock()  # MediaPipe's tasks are one at a time; --jobs draws in parallel
+
     def faces(self, rgb):
         """YuNet boxes [(x, y, w, h, score)], biggest first, in rgb's pixels."""
         h, w = rgb.shape[:2]
@@ -264,13 +268,15 @@ class Measurer:
         det = cv2.FaceDetectorYN_create(
             _env.resolve(YUNET), "", (small.shape[1], small.shape[0]), 0.6
         )
-        _, found = det.detect(cv2.cvtColor(small, cv2.COLOR_RGB2BGR))
+        with self._lock:
+            _, found = det.detect(cv2.cvtColor(small, cv2.COLOR_RGB2BGR))
         boxes = [] if found is None else [tuple(f[:4] / k) + (float(f[14]),) for f in found]
         return sorted(boxes, key=lambda b: -b[2] * b[3])
 
     def landmarks(self, rgb):
         """478 points in rgb's pixels and the blendshape scores, or (None, None)."""
-        r = self.lm.detect(self.image(rgb))
+        with self._lock:
+            r = self.lm.detect(self.image(rgb))
         if not r.face_landmarks:
             return None, None
         h, w = rgb.shape[:2]
@@ -280,7 +286,8 @@ class Measurer:
 
     def classes(self, rgb):
         """(6, h, w) float32 class confidences."""
-        r = self.seg.segment(self.image(rgb))
+        with self._lock:
+            r = self.seg.segment(self.image(rgb))
         return np.stack([m.numpy_view().astype(np.float32).squeeze() for m in r.confidence_masks])
 
 
@@ -1001,6 +1008,11 @@ def build_toon(ms, photo_path, name, out_dir, face_index, look):
         json.dump(rig, f, separators=(",", ":"))
     rig["_secs"] = round(time.time() - t0, 2)
     rig["_usd"] = round(spent, 3)
+    if spent:  # what drawing it cost, beside the rigs (the studio adds it to the film's cost)
+        with open(
+            os.path.join(os.path.dirname(out_dir), "spend.jsonl"), "a", encoding="utf-8"
+        ) as f:
+            f.write(json.dumps({"head": name, "look": look, "cost_usd": round(spent, 6)}) + "\n")
     return rig
 
 
@@ -1020,6 +1032,7 @@ def main():
     ap.add_argument(
         "--look", help="with --photo: redraw the person in a look (config/heads/looks.json)"
     )
+    ap.add_argument("--jobs", type=int, default=3, help="drawn characters made at once (3)")
     a = ap.parse_args()
     if a.fetch_models:
         fetch_models()
@@ -1053,17 +1066,20 @@ def main():
         return
     ms = Measurer()
     failed = []
-    for name, photo, rdir, face, look in todo:
-        if look:
-            try:
-                rig = build_toon(ms, photo, name, rdir, face, look)
-            except (
-                SystemExit,
-                Exception,
-            ) as e:  # a refusal or a failure is this head's, not the cast's
-                print("  %-12s %s: NOT BUILT -- %s" % (name, look, e))
+    say = threading.Lock()
+
+    def toon(job):
+        """One drawn character: the image model's calls are what take the time, so several run
+        at once (--jobs); the measuring is serialised in Measurer."""
+        name, photo, rdir, face, look = job
+        try:
+            rig = build_toon(ms, photo, name, rdir, face, look)
+        except (SystemExit, Exception) as e:  # a refusal or a failure is this head's alone
+            with say:
+                print("  %-12s %s: NOT BUILT -- %s" % (name, look, e), flush=True)
                 failed.append(name)
-                continue
+            return
+        with say:
             print(
                 "  %-12s %s: %s, face %d px, %.1fs, $%.3f"
                 % (
@@ -1073,11 +1089,16 @@ def main():
                     rig["face"]["h"],
                     rig["_secs"],
                     rig["_usd"],
-                )
+                ),
+                flush=True,
             )
             for w in rig["warnings"]:
                 print("    WARNING %s" % w)
-            continue
+
+    toons = [j for j in todo if j[4]]
+    with ThreadPoolExecutor(max(1, min(a.jobs, len(toons) or 1))) as ex:
+        list(ex.map(toon, toons))
+    for name, photo, rdir, face, look in (j for j in todo if not j[4]):
         rig = build(ms, photo, name, rdir, face)
         f = rig["face"]
         print(

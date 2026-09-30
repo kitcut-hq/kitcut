@@ -97,7 +97,7 @@ narration's language.
 
 {LOOK_RULES}
 
-# Rules the engine depends on
+{PEOPLE}# Rules the engine depends on
 
 - Every frame is a pure function of `t`. No state kept between frames, no `Math.random`
   (use `SK.rnd(seed)`), no timers, no DOM, no network (the renderer is offline).

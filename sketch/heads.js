@@ -414,7 +414,7 @@
     }
     ctx.translate(x, y); if (o.flip) ctx.scale(-1, 1); ctx.scale(k, k); ctx.translate(-mid[0], -mid[1]);
     // the picture: the photo, or the head cut out of it with its paper edge
-    const edge = cut ? Math.round(o.edge ?? F.h * .03) : 0;
+    const edge = cut ? Math.round(o.edge ?? (toon ? 0 : F.h * .03)) : 0; // a drawn character has its own
     let tex, texO, texS;
     // the face's box, for a tone's levels: in the photo's pixels, and in the head's
     let fx0 = 1e9, fy0 = 1e9, fx1 = -1e9, fy1 = -1e9;

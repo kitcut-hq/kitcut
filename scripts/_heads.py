@@ -21,6 +21,7 @@ Not an entry script: imported by sketch-render.py after `_env`.
 """
 
 import os
+import sys
 import json
 import hashlib
 
@@ -55,15 +56,19 @@ def specs(m):
 
 
 def rigs(m):
-    """{name: (rig dict, head.png path, photo.jpg path)}; exits naming a rig not built yet."""
+    """{name: (rig dict, head.png path, photo.jpg path)} for every head whose rig is built. One
+    that is not (never built, or a person the image model refused in the studio) is left out
+    with a warning: the film goes on, and SK.head names it if the film draws it."""
     out = {}
     for name, _photo, rdir in specs(m):
         p = os.path.join(rdir, "rig.json")
         if not os.path.exists(p):
-            raise SystemExit(
-                "head %r has no rig: python scripts/head-rig.py --manifest %s"
-                % (name, os.path.relpath(m["_path"]))
+            print(
+                "  WARNING head %r has no rig (python scripts/head-rig.py --manifest %s)"
+                % (name, os.path.relpath(m["_path"])),
+                file=sys.stderr,
             )
+            continue
         with open(p, encoding="utf-8") as f:
             rig = json.load(f)
         out[name] = (

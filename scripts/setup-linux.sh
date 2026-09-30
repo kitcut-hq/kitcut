@@ -113,6 +113,11 @@ if [ "$STUDIO" = 1 ]; then
   # the studio's steps import these inside functions: prove them now, not on a customer's film
   run .venv/bin/python -c "from google import genai; import claude_agent_sdk, pymongo, aiohttp; print('  studio imports ok')"
 
+  # people drawn as talking characters (studio "people"): MediaPipe's face models and its
+  # runtime, installed --no-deps beside them (head-rig.py says why); models/ is shared by releases
+  step "6a. Face models for people -> models/heads"
+  run .venv/bin/python scripts/head-rig.py --fetch-models
+
   step "6b. Claude Code (films on the machine's own login)"
   if [ -x "$HOME/.local/bin/claude" ]; then
     echo "  present: $("$HOME/.local/bin/claude" --version)"

@@ -185,6 +185,29 @@ CAPS = {
         "direction": ("faces", "newsprint"),
     },
 }
+# people: photos of real people the person added, each drawn by an image model as a character in a
+# chosen style that talks (scripts/head-rig.py "look" rigs, sketch/heads.js). Not part of any
+# look's recipe: a film made with people gets it on top of its look's (Film.create), so a film
+# without people keeps its look's prompt byte for byte
+CAPS["people"] = {"modules": ("heads",), "direction": ("people",)}
+MAX_PEOPLE = 4
+PERSON_NAME_MAX = 40  # characters of a person's name the studio keeps
+# what "auto" draws people as, by the film's look: the style nearest the look's own
+PEOPLE_AUTO = {"drawn": "crayon", "painted": "watercolour", "collage": "papercut"}
+
+
+def people_styles():
+    """The styles a person can be drawn in (config/heads/looks.json "studio"), in the site's
+    order: the drawn ones, never the toy-brick or voxel look."""
+    with open(os.path.join(KIT, "config", "heads", "looks.json"), encoding="utf-8") as f:
+        return tuple(json.load(f)["studio"])
+
+
+def people_style(style, look):
+    """The style a film's people are drawn in: the one asked for, else the look's own."""
+    return style if style in people_styles() else PEOPLE_AUTO.get(look, "crayon")
+
+
 RECIPES = {
     "drawn": ("grounds",),
     "painted": ("paintings",),
@@ -568,6 +591,10 @@ class Film:
             d["faces"] = [f for f, n in named.most_common(3) if n]
         if "newsprint" in fields:
             d["newsprint"] = "SK.newsprint(" in js
+        if "people" in fields:  # how many people it was given, and the style they were drawn in
+            rec = self.record()
+            d["people"] = len(rec.get("people") or [])
+            d["character_style"] = rec.get("character_style")
         cast = sorted({a or b for a, b in CAST_USE.findall(js)})
         if cast:
             d["cast"] = cast
@@ -591,6 +618,8 @@ class Film:
         app=None,
         fps=60,
         mode=None,
+        people=(),
+        character_style="auto",
     ):
         """A new film's folder: the manifest (its length set), the engine copy, an empty
         narration, an empty list of paintings for a painted film, and its record.
@@ -602,10 +631,17 @@ class Film:
         with the name it came with.
 
         project: the site's project the film is an episode of, {id, name, brief,
-        from_account_cast}, checked by the caller; its library is the project's (library.py)."""
+        from_account_cast}, checked by the caller; its library is the project's (library.py).
+
+        people: photos of people to draw as talking characters (uploads.take metas with "src"
+        and an optional "person" name), copied to inputs/person1.jpg...; each becomes a head
+        p1... in the manifest, drawn in character_style (or the look's own for "auto") by the
+        rigs step agent.draw_people starts, and the film gets the "people" capability."""
         seconds = seconds if seconds in LENGTHS else LENGTHS[0]
         look = look if look in LOOKS else LOOKS[0]
-        caps = RECIPES[look]
+        people = list(people)[:MAX_PEOPLE]
+        caps = RECIPES[look] + (("people",) if people else ())
+        style = people_style(character_style, look) if people else None
         projects = os.path.join(HOME, "projects")
         os.makedirs(projects, exist_ok=True)
         for _ in range(50):
@@ -650,6 +686,16 @@ class Film:
                     item.update(secs=a.get("secs"), transcript=a.get("transcript") or "")
                     item.update(lang=a.get("lang"))
                 attached.append(item)
+        cast_people = []
+        for i, a in enumerate(people, 1):
+            os.makedirs(film.path("inputs"), exist_ok=True)
+            rel = "inputs/person%d.%s" % (i, a["ext"])
+            shutil.copyfile(a["src"], film.path("inputs", "person%d.%s" % (i, a["ext"])))
+            pid = "p%d" % i
+            m.setdefault("heads", {})[pid] = {"photo": rel, "look": style, "rig": "rigs/" + pid}
+            m.setdefault("images", {})[pid] = rel  # SK.image(pid): the photo, if it cannot be drawn
+            name = " ".join(str(a.get("person") or "").split())[:40]
+            cast_people.append({"id": pid, "name": name, "style": style, "file": rel})
         m["duration"], m["poster_t"] = float(seconds), round(seconds - 0.4, 2)
         m["fps"] = 30 if fps == 30 else 60  # the plan's: Free films 30, paid ones 60
         m["engine"] = "engine"
@@ -692,6 +738,8 @@ class Film:
                 # pictures, voice notes and documents the visitor attached (inputs/): never
                 # shown publicly
                 "attachments": attached,
+                # people drawn as talking characters (agent.draw_people fills in their state)
+                **({"people": cast_people, "character_style": style} if cast_people else {}),
                 # the project it is an episode of (never shown publicly: the brief is theirs)
                 **({"project": project} if project else {}),
                 # false: link-only -- out of the gallery and the sitemap, watchable by its link

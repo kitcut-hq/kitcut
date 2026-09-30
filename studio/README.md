@@ -182,6 +182,15 @@ with the instruction to look at each and say what it took it to be; a film nobod
 gets its title from Claude (`name_film`). Pictures film.js never draws leave the manifest before
 the final render, so they never reach the film's files.
 
+**People** (`film.CAPS["people"]`). `"people": [{"upload": id, "name": "Alex"}]` (up to
+`film.MAX_PEOPLE`, image uploads, one photo per person) and `"character_style"` (`"auto"` or a
+style in `config/heads/looks.json` `"studio"`) put real people in the film as drawn characters
+who talk. Their photos land in `inputs/person<i>`, the manifest's `heads` as `p1...`, and the
+film gets the `people` capability (the `heads` engine module, `people.md` in the brief); drawing
+them (`head-rig.py`, about $0.11 a person, `rigs/spend.jsonl`) starts with the film and the
+picture tools wait for `rigs/ready.json`. The site asks the person to confirm permission before it
+sends them. See "Talking heads" in `docs/reference.md`.
+
 `GET /api/uploads` lists the asker's uploads no film has taken yet, newest first, each with
 `expires_in` seconds (the assistants' `list_uploads`).
 

@@ -51,6 +51,7 @@ NEEDS = {
         "ELEVENLABS_API_KEY",  # the backup voice, for a line Gemini refuses
         "OPENROUTER_API_KEY",  # the scorer that listens to the takes (SCORER)
     ),
+    "people": ("OPENROUTER_API_KEY",),  # the image model that draws them (head-rig.py)
     "paint": (
         "OPENROUTER_API_KEY",
         "GOOGLE_SERVICE_ACCOUNT_KEY",

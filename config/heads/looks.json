@@ -4,6 +4,8 @@
   "quality": "medium",
   "likeness": "Make it clearly this particular person from the reference photo: keep their face shape, hairstyle and hair colour, facial hair, skin tone, eyebrows, glasses if they wear them, and the clothes they wear. ",
   "front": "Front view, looking straight at the viewer, head and shoulders, the mouth closed in a relaxed neutral expression, the eyes open. A single subject on a plain transparent background, no text, no logos, no watermark.",
+  "_studio": "The looks a kitcut.ai film offers a person, in the site's order (studio/film.py people_styles, the site's lib/people.js): drawn things only -- the toy-brick and voxel ones stay for local films, and caricature and clay were never as good.",
+  "studio": ["crayon", "papercut", "newspaper", "woodcut", "watercolour", "popart", "courtroom", "chalk", "sticker", "felt", "knit", "peg", "sock"],
   "looks": {
     "brick": "Turn the person in the reference photo into a plastic toy brick minifigure: the classic cylindrical toy head with a simple printed face (dot eyes, printed eyebrows, printed stubble or beard if they have one), their hair as a moulded plastic hair piece, their clothes printed on the minifigure torso, glossy plastic, studio product photo. ",
     "blocky": "Turn the person in the reference photo into a blocky voxel game character: a perfectly cubic head and body made of big square pixels, a flat pixel-art face in their skin tone with pixel eyes, pixel hair and pixel beard matching theirs, their clothes as pixel textures. ",

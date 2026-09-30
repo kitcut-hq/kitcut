@@ -40,6 +40,7 @@ LOCKS = os.path.join(REPO, "temp", "locks")
 # seconds a step may run; the voice, the mix and the render get longer for a longer film
 TIMEOUT = {"check": 30, "stills": 120, "paint": 300, "automation": 180}
 MAX_STILLS = 12
+PEOPLE_WAIT_S = 420  # the longest a picture tool waits for the people to be drawn (agent.py)
 # narration takes recorded at once (sketch-vo.py --jobs): an 8-minute film's 70 Gemini lines took
 # 341 s one at a time and 52 s eight at a time, same accuracy and cost (docs/studio-speed.md)
 VOICE_JOBS = 8
@@ -185,6 +186,7 @@ class Tools:
         # at, the files it may write, and its Claude session
         self.pass_name, self.span, self.allow, self.session = None, None, None, None
         self.priority = film.record().get("priority", 0)
+        self.people_told = False  # whether Claude has been told how the people were drawn
 
     # ---------------------------------------------------------------- plumbing
     def _on_wait(self, pool, ahead):
@@ -220,6 +222,42 @@ class Tools:
         if code != 0:
             raise ToolError("\n".join(tail[-25:]) or "%s failed (exit %d)" % (script, code))
         return tail
+
+    async def people_ready(self):
+        """Wait for the film's people to be drawn (agent.draw_people writes rigs/ready.json); the
+        wait is the machine's, not Claude's. Returns, once, a note on anyone who could not be
+        drawn or was drawn in another style."""
+        people = self.film.record().get("people") or []
+        ready = self.film.path("rigs", "ready.json")
+        if not people:
+            return ""
+        if not os.path.exists(ready):
+            self.emit({"type": "log", "text": "Drawing the people..."})
+            t0 = asyncio.get_running_loop().time()
+            while (
+                not os.path.exists(ready) and asyncio.get_running_loop().time() - t0 < PEOPLE_WAIT_S
+            ):
+                await asyncio.sleep(1)
+            if self.clock is not None:
+                self.clock.paused += asyncio.get_running_loop().time() - t0
+        if self.people_told or not os.path.exists(ready):
+            return ""
+        self.people_told = True
+        with open(ready, encoding="utf-8") as f:
+            got = json.load(f)
+        notes = []
+        for p in people:
+            r = got.get(p["id"]) or {"state": "failed", "why": "not drawn"}
+            if r["state"] != "ready":
+                notes.append(
+                    "%s could not be drawn (%s): show their photo instead with SK.image('%s', x, y, w)"
+                    % (p["id"], r.get("why"), p["id"])
+                )
+            elif r.get("style") and r["style"] != p["style"]:
+                notes.append(
+                    "%s was drawn as a %s (the %s was refused)" % (p["id"], r["style"], p["style"])
+                )
+        return ("\n\nThe people: " + "; ".join(notes) + ".") if notes else ""
 
     def kill(self):
         for job in list(self.jobs):
@@ -330,6 +368,7 @@ class Tools:
         if not ts or len(ts) > MAX_STILLS or any(t < lo or t > hi for t in ts):
             raise ToolError("give 1-%d times between %g and %g seconds" % (MAX_STILLS, lo, hi))
         args = ["--stills", ",".join("%g" % t for t in ts)] + (["--sheet"] if sheet else [])
+        told = await self.people_ready()
         async with self.lock:
             self.gate()
             await self._script("stills", "sketch-render.py", args, pools=[("browser", 1)])
@@ -338,7 +377,7 @@ class Tools:
             self.sheet_v += 1
             self.emit({"type": "image", "path": "review/sheet.png", "v": self.sheet_v})
             what = "outputs/review/sheet.png"
-        return "Rendered %d stills. Read %s to look at them." % (len(ts), what)
+        return "Rendered %d stills. Read %s to look at them." % (len(ts), what) + told
 
     async def name_film(self, title):
         """The film's title, when the visitor typed nothing (voice notes or pictures only): the
@@ -361,6 +400,7 @@ class Tools:
             ts = [t for t in ts if self.span[0] <= t <= self.span[1]]
         shutil.rmtree(self.film.path("temp", "motion"), ignore_errors=True)
         args = ["--stills", ",".join("%g" % t for t in ts), "--into", "temp/motion"]
+        told = await self.people_ready()
         async with self.lock:
             self.gate()
             await self._script(
@@ -378,7 +418,7 @@ class Tools:
         if sheet:
             self.sheet_v += 1
             self.emit({"type": "image", "path": "review/motion.png", "v": self.sheet_v})
-        return text
+        return text + told
 
     async def _automation_if_needed(self):
         """The air cues follow the picture's motion, traced by a render pass."""
@@ -420,6 +460,7 @@ class Tools:
 
     async def render(self):
         """The final video (the studio's step, not Claude's): RENDER_JOBS browsers at once."""
+        await self.people_ready()
         async with self.lock:
             self.gate()
             await self._script(

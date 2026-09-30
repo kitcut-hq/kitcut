@@ -32,8 +32,9 @@ MAX_ENGINE_JS = 400 * 1024  # each engine file: engine.js + props.js are ~105 KB
 MAX_CAST_JS = 64 * 1024  # one cast member (library.MAX_BYTES)
 MAX_JSON = 64 * 1024
 MAX_SCENE_JS = 64 * 1024  # one scene of a film made in scenes: 12-75 s, not a whole film
-VO_KEYS = set(VO_PINNED) | {"model", "voice", "style", "language", "lines"}
-VO_LINE_KEYS = {"text", "start"}
+VO_KEYS = set(VO_PINNED) | {"model", "voice", "style", "language", "lines", "cast"}
+# "who": the person (film.CAPS "people") who speaks a line; "cast" gives each their voice
+VO_LINE_KEYS = {"text", "start", "who"}
 MAX_LINE_CHARS = 300  # and at most film.limits()["lines"] lines
 PAINT_KEYS = set(PAINT_PINNED) | {"style", "images", "cutouts"}
 # a cut-out (film.CAPS "cutouts") is painted on a canvas of its own shape
@@ -61,7 +62,8 @@ def _num(x, lo, hi):
     return isinstance(x, (int, float)) and not isinstance(x, bool) and lo <= x <= hi
 
 
-def _vo(d, max_lines, length=60):
+def _vo(d, max_lines, length=60, people=()):
+    """people: the ids of the film's people (p1...), who may speak lines of their own."""
     out = []
     if not isinstance(d, dict):
         return ["vo.json must be an object"]
@@ -74,6 +76,28 @@ def _vo(d, max_lines, length=60):
         out.append('vo.json: language is an ISO 639-1 code such as "en" or "uk"')
     if not isinstance(d.get("style", ""), str) or len(d.get("style", "")) > 300:
         out.append("vo.json: style is one line of text (at most 300 characters)")
+    cast = d.get("cast", {})
+    if not isinstance(cast, dict):
+        out.append('vo.json: cast is {"p1": {"voice": "..."}, ...}')
+        cast = {}
+    for who, spec in cast.items():
+        if who not in people:
+            out.append(
+                "vo.json: cast %s is not one of this film's people (%s)"
+                % (who, ", ".join(people) or "it has none")
+            )
+        elif (
+            not isinstance(spec, dict)
+            or spec.get("voice") not in VOICES
+            or set(spec)
+            - {
+                "voice",
+                "style",
+            }
+        ):
+            out.append('vo.json: cast %s is {"voice": one of the voices, "style": "..."}' % who)
+        elif not isinstance(spec.get("style", ""), str) or len(spec.get("style", "")) > 300:
+            out.append("vo.json: cast %s style is one line of text" % who)
     lines = d.get("lines", [])
     if not isinstance(lines, list) or len(lines) > max_lines:
         out.append("vo.json: lines is a list of at most %d" % max_lines)
@@ -89,7 +113,12 @@ def _vo(d, max_lines, length=60):
         if len(ln["text"]) > MAX_LINE_CHARS:
             out.append("vo.json: line %d is over %d characters" % (i, MAX_LINE_CHARS))
         if set(ln) - VO_LINE_KEYS:
-            out.append("vo.json: line %d may only have text (and start)" % i)
+            out.append("vo.json: line %d may only have text (and start, who)" % i)
+        if "who" in ln and (ln["who"] not in people or ln["who"] not in cast):
+            out.append(
+                "vo.json: line %d who %r must be one of this film's people with a voice in cast"
+                % (i, ln["who"])
+            )
         if "start" in ln and not _num(ln["start"], 0, length):
             out.append("vo.json: line %d start is seconds, 0-%d" % (i, length))
     return out
@@ -241,7 +270,8 @@ def problems(film, name):
     if d is None:
         return out
     if name == "vo.json":
-        return _vo(d, limits(film.length)["lines"], film.length)
+        people = [p["id"] for p in film.record().get("people") or []]
+        return _vo(d, limits(film.length)["lines"], film.length, people)
     if name == "paint.json":
         return _paint(d, film.length, film.caps)
     if name == "score.json":

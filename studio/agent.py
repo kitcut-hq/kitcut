@@ -231,6 +231,9 @@ def system_prompt(look, caps=None):
         "FX": fx,
         "INSTRUMENTS": ", ".join(inst) or "(none yet)",
     }
+    # the people (film.CAPS "people"): only a film given people carries the section, so every
+    # other film's prompt stays byte for byte what it was
+    fill["PEOPLE"] = _read("studio", "people.md") if "people" in (caps or ()) else ""
     # a capability's own references, read only for the looks made of it (film.CAPS "fills")
     fill.update({k: _reference(*parts) for k, parts in fills(caps or RECIPES[look]).items()})
     # the look's own sections (studio/looks/<look>.md, "## NAME" headed) go in first, since
@@ -284,11 +287,93 @@ def ask(film, recent=()):
     )
     if n > LONG_S and film.mode != "scenes":  # a scenes film is written in passes anyway
         text += LONG_FILM
-    text += attached_note(film) + mark_note(film)
+    text += attached_note(film) + people_note(film) + mark_note(film)
     mine = library.note(film)  # the project, or the person's own cast and earlier films
     project = bool(film.record().get("project"))
     note = recent_note(film.look, recent, series=bool(mine), project=project)
     return text + "".join("\n\n" + x for x in (mine, note) if x)
+
+
+def people_note(film):
+    """The people the person added (film.CAPS "people"): who they are, the style they are being
+    drawn in, and how to make them speak. They are drawn while Claude plans (draw_people)."""
+    people = film.record().get("people") or []
+    if not people:
+        return ""
+    lines = ["", "", 'People in this film (see "The people"), being drawn now:']
+    for p in people:
+        who = ' "%s"' % p["name"] if p.get("name") else ""
+        lines.append(
+            "- %s%s: a %s character from their photo (Read %s to see them). On screen: "
+            'SK.head(\'%s\', x, y, h); their lines in vo.json: {"who": "%s", "text": ...} '
+            "with a voice for them in cast."
+            % (p["id"], who, p["style"], p["file"], p["id"], p["id"])
+        )
+    lines += [
+        "",
+        "They were added so they can be in the film and speak: give each of them lines of their "
+        "own, in the words they would use, unless the prompt says otherwise. Use a name only "
+        "where it was given or the prompt says it.",
+    ]
+    return "\n".join(lines)
+
+
+# ------------------------------------------------------------------ drawing the people
+PEOPLE_S = 360  # how long drawing a film's people may take, the retry included
+_PEOPLE = {}  # film id -> its drawing task (kept, so the task is not collected mid-way)
+
+
+def draw_people_soon(film):
+    """Start drawing the film's people in the background (Claude plans meanwhile)."""
+    _PEOPLE[film.id] = asyncio.get_running_loop().create_task(draw_people(film))
+
+
+async def draw_people(film):
+    """Draw each person (scripts/head-rig.py: an image model redraws the photo in the film's
+    style, with its mouth shapes and blink), then write rigs/ready.json: {id: {state, style,
+    why}}. A person the model refuses is tried once more as a sticker, the style most photos
+    pass in. The picture tools wait for ready.json (tools.Tools.people_ready)."""
+    people = film.record().get("people") or []
+    os.makedirs(film.path("rigs"), exist_ok=True)
+    result, why = {}, {}
+    try:
+        for attempt in range(2):
+            argv = [procs.python(), "-X", "utf8", os.path.join(KIT, "scripts", "head-rig.py")]
+            argv += ["--manifest", film.manifest, "--jobs", str(films.MAX_PEOPLE)]
+            try:
+                _, tail = await procs.run(argv, film.dir, procs.step_env(film, "people"), PEOPLE_S)
+            except procs.StepTimeout:
+                tail = ["timed out"]
+            for ln in tail:  # "  p2           felt: NOT BUILT -- the image model refused ..."
+                m = re.match(r"\s*(p\d)\s+\S+: NOT BUILT -- (.*)", ln)
+                if m:
+                    why[m.group(1)] = m.group(2).strip()
+            missing = [
+                p for p in people if not os.path.exists(film.path("rigs", p["id"], "rig.json"))
+            ]
+            if not missing or attempt:
+                break
+            with open(film.manifest, encoding="utf-8") as f:  # once more, as stickers
+                m_ = json.load(f)
+            for p in missing:
+                m_["heads"][p["id"]]["look"] = "sticker"
+            with open(film.manifest, "w", encoding="utf-8") as f:
+                json.dump(m_, f, indent=2)
+    except Exception as e:  # noqa: BLE001 -- a film goes on without its people rather than fail
+        print("film %s: people not drawn: %s" % (film.id, e), file=sys.stderr, flush=True)
+    with open(film.manifest, encoding="utf-8") as f:
+        heads = json.load(f).get("heads") or {}
+    for p in people:
+        ok = os.path.exists(film.path("rigs", p["id"], "rig.json"))
+        result[p["id"]] = {
+            "state": "ready" if ok else "failed",
+            "style": (heads.get(p["id"]) or {}).get("look"),
+            **({} if ok else {"why": why.get(p["id"]) or "not drawn"}),
+        }
+    with open(film.path("rigs", "ready.json"), "w", encoding="utf-8") as f:
+        json.dump(result, f, indent=1)
+    _PEOPLE.pop(film.id, None)
+    return result
 
 
 def attached_note(film):
@@ -1001,7 +1086,11 @@ async def make_film(
         tts_rows = _spend(film, "audio", "vo", "spend.jsonl")
         img_rows = _spend(film, "images", "spend.jsonl")
         tts = round(sum(r["cost_usd"] for r in tts_rows), 6)
-        img = round(sum(r.get("cost_usd") or 0 for r in img_rows), 6)
+        # the people's drawings (draw_people) are pictures too, kept apart so they never count
+        # against the film's paintings
+        img = round(
+            sum(r.get("cost_usd") or 0 for r in img_rows + _spend(film, "rigs", "spend.jsonl")), 6
+        )
         if film.mode == "scenes":  # every pass's own cost (scenes.py), and the one under way
             claude = metered = round(scenes.spent(film) + meter.usd() - pass_base[0], 4)
         elif carry:  # plus what Claude's earlier attempt spent
@@ -1663,6 +1752,12 @@ def first_record(film, source, client):
         "branding": bool(rec.get("branding")),
         "listed": rec.get("listed") is not False,  # false: link-only (no gallery, no sitemap)
         **({"app": rec["app"]} if rec.get("app") else {}),
+        # people drawn as talking characters: how many and the style (never their photos)
+        **(
+            {"people": len(rec["people"]), "character_style": rec.get("character_style")}
+            if rec.get("people")
+            else {}
+        ),
         # what came with the idea: kinds and sizes only (the words and pictures stay here)
         "attachments": [
             {k: a.get(k) for k in ("kind", "secs", "w", "h", "chars") if a.get(k) is not None}

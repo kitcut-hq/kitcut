@@ -22,7 +22,8 @@ forwards as X-Client-Ip "u:<id>", else the IP -- may have one film in the making
 its plan allows: X-At-Once, up to STUDIO_AT_ONCE_MAX, default 2) and STUDIO_PER_CLIENT_DAILY
 (default 5) a day.
 
-    POST /api/films              {"prompt", "seconds", "look", "attachments", "listed"}  ->  202
+    POST /api/films              {"prompt", "seconds", "look", "attachments", "listed",
+                                  "people": [{"upload", "name"}], "character_style"}  ->  202
                                  {"id", "status", "position"}. X-Priority: 1 (from the site, for
                                  a plan with priority): the film goes ahead of the others in every
                                  queue. X-At-Once: N (from the site, for a plan that allows it):
@@ -855,6 +856,13 @@ def limits_doc():
         "lengths": {"min": films.LENGTHS[0], "max": films.LENGTHS[-1], "step": 5},
         "looks": list(films.LOOKS),
         "prompt": {"max_chars": PROMPT_MAX, "min_chars": 3},
+        # people drawn as talking characters (film.CAPS "people"): how many, and in what styles
+        "people": {
+            "per_film": films.MAX_PEOPLE,
+            "styles": ["auto", *films.people_styles()],
+            "auto": dict(films.PEOPLE_AUTO),
+            "name_max_chars": films.PERSON_NAME_MAX,
+        },
         "films": {
             "at_once_per_account": 1,
             "at_once_per_account_max": AT_ONCE_MAX,  # what a plan may allow (X-At-Once)
@@ -979,7 +987,29 @@ async def create(req):
         return web.json_response({"error": 'send JSON: {"prompt": "..."}'}, status=400)
     prompt = str(body.get("prompt", "")).strip()[:PROMPT_MAX]
     ids = body.get("attachments") or []
-    if len(prompt) < 3 and not ids:
+    # people to draw as talking characters: [{"upload": "up-...", "name": "Alex"}] (photos
+    # uploaded first, like pictures), and the style they are drawn in ("auto": the look's own)
+    people = body.get("people") or []
+    if (
+        not isinstance(people, list)
+        or len(people) > films.MAX_PEOPLE
+        or not all(isinstance(p, dict) and isinstance(p.get("upload"), str) for p in people)
+        or len({p["upload"] for p in people}) != len(people)
+    ):
+        return web.json_response(
+            {"error": 'people must be at most %d of {"upload", "name"}' % films.MAX_PEOPLE},
+            status=400,
+        )
+    style = body.get("character_style") or "auto"
+    if style != "auto" and style not in films.people_styles():
+        return web.json_response(
+            {
+                "error": "character_style must be auto or one of %s"
+                % ", ".join(films.people_styles())
+            },
+            status=400,
+        )
+    if len(prompt) < 3 and not ids and not people:
         return web.json_response({"error": "write a prompt"}, status=400)
     try:
         seconds = int(body.get("seconds") or films.LENGTHS[0])
@@ -1040,10 +1070,17 @@ async def create(req):
     # note written out -- which may take a moment, so before the lock
     try:
         attached = await uploads.take(client, ids) if ids else []
+        faces = await uploads.take(client, [p["upload"] for p in people]) if people else []
     except uploads.UploadError as e:
         return web.json_response(e.body(), status=e.status)
-    for a in attached:
+    for a in attached + faces:
         a["src"] = uploads.file_of(client, a)
+    for a, p in zip(faces, people, strict=True):
+        if a["kind"] != "image":
+            return web.json_response(
+                {"error": "a person must be a photo", "id": a["id"]}, status=400
+            )
+        a["person"] = " ".join(str(p.get("name") or "").split())[: films.PERSON_NAME_MAX]
     # the check and the taking happen under one lock: two requests at the same moment cannot
     # both slip under a limit that has room for one
     async with ADMIT:
@@ -1057,7 +1094,7 @@ async def create(req):
             return web.json_response({"error": refused}, status=429)
         # an account that may make two at once can send the same upload twice: the film admitted
         # first takes it (release, below), and this one must not start without it
-        gone = next((a for a in attached if uploads.get(client, a["id"]) is None), None)
+        gone = next((a for a in attached + faces if uploads.get(client, a["id"]) is None), None)
         if gone:
             e = uploads.UploadError(
                 409, "attachment", "An attachment is no longer here; add it again.", gone["id"]
@@ -1077,13 +1114,17 @@ async def create(req):
             listed=listed,
             app=app,
             fps=fps,
+            people=faces,
+            character_style=style,
         )
-        uploads.release(client, attached)  # the film has its own copies now
+        uploads.release(client, attached + faces)  # the film has its own copies now
         try:  # the person's cast and earlier films (library.py); a film goes ahead without
             await asyncio.to_thread(library.seed, f)
         except Exception as e:  # noqa: BLE001
             print("film %s: no library: %s" % (f.id, e), file=sys.stderr, flush=True)
         await agent.save(f.id, agent.first_record(f, source, client))
+        if faces:  # the people are drawn while Claude plans; its picture tools wait for them
+            agent.draw_people_soon(f)
         start(f)
     await asyncio.sleep(0)  # let it take a free slot now, so the answer says whether it waits
     ahead = SCHED["claude"].ahead(f.id)
@@ -1094,6 +1135,7 @@ async def create(req):
             "position": (ahead + 1) if ahead is not None else 0,
             "status_url": "%s/api/films/%s" % (base_url(req), f.id),
             "attachments": [a["kind"] for a in attached],
+            "people": len(faces),
             "listed": listed,
         },
         status=202,
