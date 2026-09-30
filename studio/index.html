@@ -389,6 +389,12 @@ div.stage { background: var(--panel); border: 1px solid var(--line); border-radi
 .screen { aspect-ratio: 16 / 9; max-width: 100%; display: grid; place-items: center; background: var(--sunk); position: relative; }
 .screen video, .screen img { width: 100%; height: 100%; object-fit: contain; display: block; background: var(--sunk); }
 .screen .idle { font: 500 16px/1.4 Inter, system-ui, sans-serif; color: var(--ink-3); text-align: center; padding: 20px; }
+/* a film paused for its narrator's voice: why, the fix, Continue */
+.screen .idle.paused { max-width: 460px; display: grid; gap: 10px; justify-items: center; color: var(--ink-2); }
+.screen .idle.paused b { color: var(--ink); font-size: 18px; }
+.screen .idle.paused p { margin: 0; }
+.screen .idle.paused .faint { font-size: 13.5px; }
+.screen .idle.paused .acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .screen .idle a { font-weight: 600; line-height: 2.4; color: var(--accent-2); }
 .caption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 10px; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-2); }
 .caption b { color: var(--ink); font-weight: 600; }
@@ -1151,6 +1157,15 @@ async function follow(since = 0, misses = 0) {
     if (s.status === 'error' && !s.events.length && since === 0) { line('error', s.error || 'This film failed.'); $('status').textContent = 'Failed.'; }
     if (s.status === 'lost') { screen('<div class="idle">This film was interrupted.</div>'); $('status').textContent = 'The studio restarted before this film finished.'; }
     if (s.status === 'cancelled') { if (since === 0 && !s.events.length) line('error', 'This film was stopped.'); $('status').textContent = 'Stopped.'; }
+    // paused for its person's own voice (their ElevenLabs account stopped speaking): why, the fix,
+    // and Continue. Looked at now and then, in case it is continued from another tab
+    if (s.status === 'waiting') {
+      $('status').textContent = "Paused: waiting for the narrator's voice.";
+      $('stop').hidden = !mine.has(id); $('stop').disabled = false;
+      paused(id, s.waiting || {}, s.next);
+      later(document.hidden ? 60000 : 20000, s.next, 0);
+      return;
+    }
     // ended with no video: said in place of "Loading the film...", with the way to make it again
     // (its idea, look and length are already in the box above)
     if (s.status === 'error' || s.status === 'cancelled') {
@@ -1164,6 +1179,35 @@ async function follow(since = 0, misses = 0) {
     fresh(false);
     later(Math.min(30000, 3000 * 2 ** Math.min(misses, 4)), since, misses + 1);
   }
+}
+
+// A film that waits for its person's own voice: said in the player's place, with the fix and
+// Continue for its person (the studio's continue_film, through lib/films.js continueFilm)
+function paused(id, w, next = 0) {
+  if (!mine.has(id)) {
+    screen('<div class="idle">This film is paused while its maker puts the narrator&#39;s voice right.</div>');
+    return;
+  }
+  if ($('continueBtn')) return; // drawn already: keep what the person is doing with it
+  screen(`<div class="idle paused"><b>Paused: waiting for the narrator&#39;s voice</b><p>${esc(w.text || "The narrator's voice could not be recorded.")}</p>
+    <p class="faint">Put it right, then press Continue. Everything made so far is kept, and so are its credits; the film waits up to 7 days.</p>
+    <div class="acts">${w.fix ? `<a class="btn" href="${esc(w.fix)}">Fix ElevenLabs</a>` : ''}<button class="btn primary" type="button" id="continueBtn">Continue</button></div>
+    <p class="say bad" id="continueSay" hidden></p></div>`);
+  $('continueBtn').onclick = async () => {
+    const b = $('continueBtn'), say = $('continueSay');
+    b.disabled = true; b.textContent = 'Checking the voice...';
+    const r = await api(`/api/films/${encodeURIComponent(id)}/continue`, { method: 'POST' });
+    const body = await r.json().catch(() => ({}));
+    if (r.ok) {
+      screen('<div class="idle">Claude is picking the film up where it stopped...</div>');
+      $('status').textContent = 'Continued.';
+      later(1000, next, 0);
+      return;
+    }
+    b.disabled = false; b.textContent = 'Continue';
+    say.hidden = false;
+    say.innerHTML = `${esc(body.error || 'That did not work. Please try again.')}${body.fix ? ` <a href="${esc(body.fix.href)}">${esc(body.fix.text)}</a>` : ''}`;
+  };
 }
 
 // ---- the sign-up wall, on the public site only. /api/me exists where the site has accounts
