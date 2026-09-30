@@ -64,6 +64,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
 import _encode  # noqa: E402
+import _heads  # noqa: E402
 import _project  # noqa: E402
 import _sketch  # noqa: E402
 
@@ -113,6 +114,8 @@ def vo_timeline(m):
         return {"lines": []}
     with open(p, encoding="utf-8") as f:
         tl = json.load(f)
+    if m.get("heads"):  # talking heads: each line's speaker and the mouth its audio moves
+        return {"lines": _heads.voice_lines(m, tl)}
     return {
         "lines": [{"start": L["start"], "end": L["end"], "words": L["words"]} for L in tl["lines"]]
     }
@@ -141,7 +144,10 @@ def module_scripts(m):
     engine folder when it has one (Sketch Studio's per-film copy may extend it), and names
     the one it ran from in an error: engine/<name>.js is the film's copy."""
     out = []
-    for name in m.get("modules") or []:
+    names = list(m.get("modules") or [])
+    if m.get("heads") and "heads" not in names:  # rigs need the module that draws them
+        names.append("heads")
+    for name in names:
         _sketch.safe_name(name, "module")
         for d in (m["_engine"], SKETCH):
             p = os.path.join(d, name + ".js")
@@ -151,6 +157,9 @@ def module_scripts(m):
             sys.exit("module %r: no sketch/%s.js" % (name, name))
         where = "sketch" if os.path.samefile(d, SKETCH) else "engine"
         out.append("<script>\n%s\n//# sourceURL=%s/%s.js\n</script>" % (read_text(p), where, name))
+    rigs = _heads.rigs_script(m)  # the talking heads' rigs; nothing for a film without
+    if rigs:
+        out.append(rigs)
     return "\n".join(out)
 
 
@@ -207,7 +216,11 @@ def bundle(m, audio=True):
         "__IMAGES__": json.dumps(
             {
                 k: "data:%s;base64,%s" % (mime(v), b64(_sketch.rel(m, v)))
-                for k, v in {**m.get("images", {}), **tail.get("images", {})}.items()
+                for k, v in {
+                    **m.get("images", {}),
+                    **tail.get("images", {}),
+                    **(_heads.images(m) if m.get("heads") else {}),
+                }.items()
             }
         ),
     }

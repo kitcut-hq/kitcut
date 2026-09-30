@@ -1,6 +1,6 @@
 ---
 name: video-sketch
-description: Make an animated explainer film with no footage — a hand-drawn/whimsical, a clean editorial, or a mixed-media paper-collage animation (cut-out pictures from an image model animated with type, tape labels, rubber stamps and torn paper, the "newspaper cutout" motion-design look) written as JavaScript, with an AI voice-over, an original score on sampled instruments and synthesised sound effects, rendered to MP4 and to a self-contained HTML player. Use when asked for an animation, an animated explainer or promo, a motion-graphics or motion-design video, a "whimsical hand-drawn" video, a collage / mixed-media / cut-out / scrapbook / newspaper-style video, a product or feature explainer, a 30-60 second ad, or anything that should be illustrated rather than filmed.
+description: Make an animated explainer film with no footage — a hand-drawn/whimsical, a clean editorial, or a mixed-media paper-collage animation (cut-out pictures from an image model animated with type, tape labels, rubber stamps and torn paper, the "newspaper cutout" motion-design look) written as JavaScript, with an AI voice-over, an original score on sampled instruments and synthesised sound effects, rendered to MP4 and to a self-contained HTML player. It also makes real people talk from their photos -- bobble-heads, puppet cut-outs, a newspaper photo or a painting where only the mouth moves -- each with their own voice. Use when asked for an animation, an animated explainer or promo, a motion-graphics or motion-design video, a "whimsical hand-drawn" video, a collage / mixed-media / cut-out / scrapbook / newspaper-style video, a product or feature explainer, a 30-60 second ad, talking heads or bobble-heads made from photos, or anything that should be illustrated rather than filmed.
 ---
 
 # A sketch film: an explainer written as code
@@ -114,6 +114,30 @@ an engine module the manifest opts into with `"modules": ["collage"]`:
 7. Cue the sound from the timeline with `sfx.py` beside the manifest (a whoosh and a paper
    landing per sheet, a thunk per stamp, a pop per pop, keys for typing, a scribble per marker
    line) and write the score from a chord chart with `score.py`; see `config/sketch/collage-example/`.
+
+## Talking heads: people from their photos
+
+When the film should show real people speaking -- founders, a team, a customer, a historical
+figure -- and you have their photos, make them talk instead of drawing stand-ins
+(`docs/reference.md`, "Talking heads"). Start from `config/sketch/heads-example/`.
+
+1. Put each photo in `sources/` and name it in the manifest: `"heads": {"alex": {"photo":
+   "sources/alex.jpg"}}`. `head-rig.py --manifest ... --sheet` builds the rigs; look at each
+   `rigs/<name>/sheet.png` (the cut-out on a check board, the jaw pieces, the mesh) before using
+   one. A photo with the top of the head cropped off makes a flat-topped cut-out: use it as a
+   `photo`, not a `cutout` or `bobble`.
+2. Give each speaker a voice in `vo.cast` and each line its `who`; a line without one is the
+   narrator. Pick voices that are told apart at once (one low, one high).
+3. In film.js, `SK.head(name, x, y, h, {style, mouth, tone})`: `photo` + `warp` for "only the
+   mouth moves" (a newspaper photo with `tone: 'news'`, a portrait in a frame); `cutout` or
+   `bobble` + `chin`/`dummy`/`flap` for the puppet looks. Lay heads out with `SK.headBox`; a
+   head's mouth moves only on its own lines (`who`), so two heads can share a frame.
+4. Review stills at mid-word moments of each speaker, and zoom on a mouth: the teeth, the jaw
+   piece's edges, the halftone. Check frame 0 as always.
+
+Whose face it is, and whether they agreed to be animated saying these words, is the user's
+call: ask before putting words in a real person's mouth unless the user is that person or
+has said so.
 
 ## Traps already paid for
 

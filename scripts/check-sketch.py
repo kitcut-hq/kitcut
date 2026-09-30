@@ -74,6 +74,160 @@ def cyrillic():
     )
 
 
+def heads():
+    """Talking heads: the rig geometry (head-rig.py) on a face measured once from a
+    public-domain photo, the mouth measured from a voice, who speaks which line, and the page a
+    film with heads bundles. No MediaPipe, no browser."""
+    rig = import_module("head-rig")
+    hd = import_module("_heads")
+    vo_mod = import_module("sketch-vo")
+    ex = os.path.join(_env.ROOT, "config", "sketch", "heads-example")
+    with open(os.path.join(ex, "wilbur.landmarks.json"), encoding="utf-8") as f:
+        P = np.array(json.load(f)["p"], np.float64)
+    fr = rig.frame(P)
+    o, right, down, W, H = fr
+    check(
+        "heads: the face's axes are square and point to the chin",
+        abs(np.dot(right, down)) < 1e-9 and np.dot(P[rig.CHIN] - o, down) > 0 and W > 0 and H > 0,
+    )
+    cuts = rig.cuts(P, fr)
+    below = lambda poly: min((np.asarray(poly) - o) @ down) > -H * 0.03  # noqa: E731
+    check(
+        "heads: the jaw pieces lie under the mouth",
+        below(cuts["chin"]["poly"]) and below(cuts["dummy"]["poly"]),
+    )
+    sl = cuts["dummy"]["slits"]
+    check(
+        "heads: the dummy's slits run down from the mouth corners",
+        all(np.dot(s[1] - s[0], down) > H * 0.08 for s in sl),
+    )
+    m = rig.mesh(P, fr, 8.0)
+    up_ring = set(rig.LIP_IU[1:-1]) | set(rig.LIP_OU[1:-1])
+    lo_ring = set(rig.LIP_IL[1:-1]) | set(rig.LIP_OL[1:-1])
+    u = (m["p"] - o) @ right / (W / 2)
+    um = np.linalg.norm(P[291] - P[61]) / W
+    bridges = [t for t in m["t"] if set(t) & up_ring and set(t) & lo_ring and abs(u[t].mean()) < um]
+    # the lips once smeared across an open mouth: a triangle from the upper lip to the lower
+    # lip's middle ring survived, stretched over the dark and hid the teeth
+    check("heads: no triangle bridges the mouth", not bridges, "%d bridging" % len(bridges))
+    check(
+        "heads: the jaw carries the lower lip, not the eyes",
+        min(m["wj"][i] for i in rig.LIP_IL[3:-3]) > 0.5
+        and max(m["wj"][i] for i in rig.EYE_L_UP + rig.EYE_R_UP + rig.BROW_L) == 0,
+    )
+    lids = [m["b"][i] for i in rig.EYE_L_UP[2:-2] + rig.EYE_R_UP[2:-2]]
+    check(
+        "heads: a blink brings the upper lids down",
+        all(np.dot(b, down) > 1.0 for b in lids),
+        str(np.round(lids, 1).tolist()),
+    )
+    # the mouth, from a voice: silence shut, syllables open and shut, the mouth a hair early
+    sr = hd.SR
+    t = np.arange(int(2.0 * sr)) / sr
+    buzz = sum(np.sin(2 * np.pi * 140 * k * t) / k for k in (1, 2, 3, 4, 5, 6))
+    syll = (np.sin(2 * np.pi * 4 * (t - 0.5)) > 0) & (t > 0.5) & (t < 1.5)  # 4 a second
+    tr = hd.mouth_track(0.2 * buzz * syll, sr)
+    o_ = np.array(tr["o"]) / 100
+    fps = tr["fps"]
+    check("heads: the track spans the line", len(o_) == int(np.ceil(len(t) / (sr // fps))))
+    check(
+        "heads: shut in the silence, wide on the syllables",
+        o_[: int(0.4 * fps)].max() < 0.05 and o_[int(0.7 * fps) : int(1.3 * fps)].max() > 0.8,
+        "%.2f / %.2f" % (o_[: int(0.4 * fps)].max(), o_[int(0.7 * fps) : int(1.3 * fps)].max()),
+    )
+    peaks = int(((o_[1:-1] > o_[:-2]) & (o_[1:-1] >= o_[2:]) & (o_[1:-1] > 0.5)).sum())
+    check("heads: one opening a syllable", peaks == 4, "%d openings" % peaks)
+    first = np.argmax(o_ > 0.3) / fps
+    check("heads: the mouth leads its sound", 0.4 <= first <= 0.5, "%.2fs" % first)
+    # who speaks: the timeline's word, else the script's, else the only head
+    tl = {
+        "lines": [
+            {"i": 0, "start": 0, "end": 1, "words": [], "who": "a"},
+            {"i": 1, "start": 1, "end": 2, "words": []},
+        ]
+    }
+    mm = {"heads": {"a": "x.png", "b": "y.png"}, "vo": {"lines": [{}, {"who": "b"}]}, "_dir": ex}
+    who = [L["who"] for L in hd.voice_lines(mm, tl)]
+    one = hd.voice_lines({"heads": {"solo": "x.png"}, "vo": {"lines": [{}, {}]}, "_dir": ex}, tl)
+    check(
+        "heads: every line knows its speaker",
+        who == ["a", "b"] and [L["who"] for L in one] == ["a", "solo"],
+        str(who),
+    )
+    vo = {"voice": "Kore", "cast": {"a": {"voice": "Puck"}}}
+    check(
+        "heads: a speaker's voice is laid over the film's",
+        vo_mod.line_vo(vo, {"who": "a"})["voice"] == "Puck"
+        and vo_mod.line_vo(vo, {})["voice"] == "Kore",
+    )
+    ln = {"text": "Hello."}
+    check(
+        "heads: a line read in another voice is a new take, the narrator's cache stands",
+        vo_mod.fingerprint(ln, vo_mod.line_vo(vo, {**ln, "who": "a"}))
+        != vo_mod.fingerprint(ln, vo_mod.line_vo(vo, ln))
+        and vo_mod.fingerprint(ln, vo_mod.line_vo(vo, ln)) == vo_mod.fingerprint(ln, vo),
+    )
+    # the page: the module, the rigs and their pictures, and the voice lines with mouths
+    tmp = tempfile.mkdtemp(prefix="check-sketch-heads-")
+    try:
+        d = os.path.join(tmp, "heads")
+        shutil.copytree(ex, d)
+        from PIL import Image
+
+        for name in ("wilbur", "orville"):
+            rd = os.path.join(d, "rigs", name)
+            os.makedirs(rd)
+            Image.new("RGBA", (8, 8), (200, 180, 160, 255)).save(os.path.join(rd, "head.png"))
+            Image.new("RGB", (8, 8), (90, 80, 70)).save(os.path.join(rd, "photo.jpg"))
+            with open(os.path.join(rd, "rig.json"), "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "v": rig.RIG_VERSION,
+                        "name": name,
+                        "head": {"file": "head.png"},
+                        "photo": {"file": "photo.jpg"},
+                    },
+                    f,
+                )
+        os.makedirs(os.path.join(d, "audio", "vo"))
+        _sketch.write_wav(os.path.join(d, "audio", "vo", "l0.wav"), 0.2 * buzz * syll)
+        with open(os.path.join(d, "audio", "vo", "timeline.json"), "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "lines": [
+                        {
+                            "i": 0,
+                            "start": 0.6,
+                            "end": 2.6,
+                            "who": "wilbur",
+                            "file": "audio/vo/l0.wav",
+                            "words": [],
+                        }
+                    ]
+                },
+                f,
+            )
+        m = _sketch.load(os.path.join(d, "sketch.json"))
+        render = import_module("sketch-render")
+        page = render.bundle(m, audio=False)
+        check(
+            "heads: the page carries the module, the rigs and their pictures",
+            "sourceURL=sketch/heads.js" in page
+            and "SK.RIGS = {" in page
+            and '"rig:orville:photo": "data:image/jpeg;base64,' in page,
+        )
+        vo_js = json.loads(page.split("<script>\nSK.VO = ")[1].split(";\n</script>")[0])
+        L0 = vo_js["lines"][0]
+        check(
+            "heads: a voice line carries its speaker and its mouth",
+            L0["who"] == "wilbur" and L0["mouth"]["fps"] == hd.FPS and max(L0["mouth"]["o"]) > 80,
+        )
+        plain = render.bundle(dict(m, heads={}), audio=False)
+        check("heads: a film without heads carries none of it", "SK.RIGS" not in plain)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     argparse.ArgumentParser(description=__doc__.split("\n")[0]).parse_args()
     # ---- notes and the score notation
@@ -376,6 +530,7 @@ def main():
     )
 
     cyrillic()
+    heads()
 
     # ---- the bundler, against the committed example
     ex = os.path.join(_env.ROOT, "config", "sketch", "example")
