@@ -5,8 +5,8 @@ description: Operate the production Sketch Studio (kitcut.ai's film maker) on it
 
 # The studio VM
 
-kitcut.ai's studio runs on **kitcut-studio-1** (Azure, `kitcut-PROD`, D8ads_v5, Ubuntu) since
-2026-09-28 -- not on the laptop. It has no public IP: the laptop reaches it over the WireGuard VPN
+kitcut.ai's studio runs on **kitcut-studio-1** (Azure, `kitcut-PROD`, D4ads_v5 -- 4 vCPU, 16 GB,
+down from D8ads_v5 the same evening -- Ubuntu) since 2026-09-28 -- not on the laptop. It has no public IP: the laptop reaches it over the WireGuard VPN
 (10.0.13.4). Nobody logs in by hand; everything below runs from the laptop's checkout.
 `studio/deploy/README.md` is the runbook and holds the measurements.
 
@@ -26,6 +26,8 @@ bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]  # finish a film 
 bash studio/deploy/ops.sh resume <film-id> --finish --patched  # a DONE film changed by hand: re-mix, re-render, new URLs
 bash studio/deploy/ops.sh pull <film-id> [dest] [--all]
 bash studio/deploy/ops.sh hide|show <film-id>       # public gallery
+bash studio/deploy/ops.sh replace <film-id> <folder>   # a remade film takes its place: same id
+                                                    # and page, old one to backups/, new URLs
 bash studio/deploy/ops.sh forward [8765]            # the VM's studio on this laptop's 127.0.0.1:8765
 bash studio/deploy/ops.sh snapshot [--keep 7]       # data disk: films, checkout, .env, models
 bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
@@ -92,6 +94,15 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
   ship or a `resume --finish` during another film's narration starves its word timing (KI-043: a
   Spanish film lost 17 of its 38 minutes). Do them when no non-English film is recording its voice.
 
+## Replacing a film
+
+When a person's film should be remade (a studio fix made it better), make the new one with
+`studio/bakeoff.py` on the laptop (its `--only`, one prompt), review it, then
+`ops.sh replace <id> <bakeoff home>/<set>/<arm>/<prompt>/projects/<film>`. The page replays
+the film's log, so the log, review images and source files go with the video; the record keeps
+its person, project, prompt and cost. Check a figure the new film states against the page text
+it read (`web/<name>.txt`) before replacing: the person's name is on it.
+
 ## When something is wrong
 
 1. `ops.sh status` -- is the studio answering, is studio.kitcut.ai the same release, any errors?
@@ -115,3 +126,13 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
    add it to the requirements too.
 5. The machine itself: `vm.sh` (resize, stop/start); rebuild with `provision.sh` (idempotent,
    reattaches the data disk).
+
+## Resizing
+
+`vm.sh resize <name> <size>` deallocates, resizes and starts (about 3 minutes). Stop the studio
+first so nothing is cut off and the site shows it offline: `vm.sh ssh <name> 'bash
+/srv/kitcut/repo/studio/serve.sh stop'` (it drains). The units start with the machine. Then set
+the pools for the new size in the VM's `.env` (`STUDIO_RENDER_JOBS`, `STUDIO_BROWSERS`: the core
+count; `STUDIO_MACHINE_SLOWDOWN`), `serve.sh restart`, and make one `ops.sh film ... --unlisted`
+to measure it: compare frames per second (length x fps / `stages.render`), not seconds, because
+Free films render at 30 fps. The numbers per size are in `studio/deploy/README.md`.

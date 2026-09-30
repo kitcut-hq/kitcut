@@ -372,13 +372,14 @@ def _doc_text(path):
         return None
 
 
-PICTURE = r"upload\d+|pic_[a-z0-9_]+"  # the visitor's pictures, and their project's
+# the visitor's pictures, their project's, and what Claude took from the web (web-grab.py)
+PICTURE = r"upload\d+|pic_[a-z0-9_]+|web_[a-z0-9_]+"
 
 
 def drop_unused_uploads(film):
-    """The person's pictures (attached, or their project's) that neither film.js nor the cast
-    draws leave the manifest before the final render, so they are never bundled into the film's
-    files. Returns the names dropped."""
+    """The pictures (the person's, attached or their project's, and those Claude took from the
+    web) that neither film.js nor the cast draws leave the manifest before the final render, so
+    they are never bundled into the film's files. Returns the names dropped."""
     with open(film.manifest, encoding="utf-8") as f:
         m = json.load(f)
     images = m.get("images") or {}
@@ -480,7 +481,17 @@ def _describe(name, inp, film):
         if p.endswith("motion.png"):
             return "looking at the cuts"
         return "looking at the review sheet" if p.endswith("sheet.png") else "read %s" % p
+    if name == "WebSearch":
+        return "searching the web: %s" % str(inp.get("query", ""))[:120]
+    if name == "WebFetch":
+        return "reading %s" % str(inp.get("url", ""))[:160]
     tool = name.removeprefix("mcp__studio__")
+    if tool == "picture":
+        return "saving a picture from %s" % str(inp.get("url", ""))[:160]
+    if tool == "page":
+        return "photographing the page %s" % str(inp.get("url", ""))[:160]
+    if tool == "font":
+        return "adding the font %s" % str(inp.get("family", ""))[:60]
     if tool == "check":
         return "checking film.js for syntax errors"
     if tool == "stills":
@@ -502,6 +513,23 @@ def _describe(name, inp, film):
     return name
 
 
+REFUSED = re.compile(
+    r"HTTP (?:401|403|429|451)\b|\bForbidden\b|access denied|bot protection", re.IGNORECASE
+)
+
+
+def refused_note(response):
+    """What to tell Claude after WebFetch was turned away by the site (not by the guard), or ""."""
+    text = response if isinstance(response, str) else json.dumps(response, ensure_ascii=False)
+    if not REFUSED.search(text or ""):
+        return ""
+    return (
+        "That site turned WebFetch away. The studio's page tool opens it in a real browser, "
+        "which most such sites let in; the page's words then land in web/<name>.txt to Read. "
+        "A page you have not read is not a source."
+    )
+
+
 def _result_text(block):
     c = block.content
     if isinstance(c, list):
@@ -520,6 +548,10 @@ PRICES = {
 STORE = store.MongoStore(uri=procs.secret("MONGODB_URI"), outbox=os.path.join(HOME, "outbox.jsonl"))
 
 
+# a web search is billed per request, whatever the model: $10 per 1,000
+WEB_SEARCH_USD = 0.01
+
+
 def _price(model, t):
     p = PRICES.get(model, PRICES[MODEL])
     return (
@@ -528,7 +560,7 @@ def _price(model, t):
         + t["cache_read"] * p["read"]
         + t["cache_write_5m"] * p["w5m"]
         + t["cache_write_1h"] * p["w1h"]
-    ) / 1e6
+    ) / 1e6 + t.get("web_search", 0) * WEB_SEARCH_USD
 
 
 def _tokens(u):
@@ -539,6 +571,7 @@ def _tokens(u):
         "cache_read": u.get("cache_read_input_tokens") or 0,
         "cache_write_5m": (u.get("cache_creation_input_tokens") or 0) - w1h,
         "cache_write_1h": w1h,
+        "web_search": (u.get("server_tool_use") or {}).get("web_search_requests") or 0,
     }
 
 
@@ -589,7 +622,9 @@ class Meter:
         return False
 
     def tokens(self):
-        t = dict.fromkeys(("input", "output", "cache_read", "cache_write_5m", "cache_write_1h"), 0)
+        t = dict.fromkeys(
+            ("input", "output", "cache_read", "cache_write_5m", "cache_write_1h", "web_search"), 0
+        )
         for m in self.msgs.values():
             for k, v in _tokens(m["usage"]).items():
                 t[k] += v
@@ -720,6 +755,16 @@ async def run_claude(
             }
         return {}
 
+    async def post_fetch(inp, tool_use_id, ctx):
+        # a site that refuses WebFetch (openai.com answers 403) mostly lets a browser in: the
+        # researched films gave up there and cited the page anyway
+        note = refused_note(inp.get("tool_response"))
+        if note:
+            return {
+                "hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": note}
+            }
+        return {}
+
     # by file: with the engine and the cast inlined it is ~80 KB, more than twice the length
     # Windows allows a command line (the spawn then fails as "Claude Code not found")
     sp = film.path("temp", "system-prompt.md")
@@ -737,13 +782,18 @@ async def run_claude(
         effort=effort or EFFORT,  # a pass of a film made in scenes thinks less (scenes.EFFORT)
         cwd=film.dir,
         system_prompt={"type": "file", "path": sp},
-        tools=["Read", "Write", "Edit"],
+        # the web: facts, and the real logos, pages and fonts of what a film is about (the
+        # studio's picture, page and font tools); guard.py keeps WebFetch on the public internet
+        tools=["Read", "Write", "Edit", "WebSearch", "WebFetch"],
         mcp_servers={"studio": tools.server()},
         strict_mcp_config=True,
         setting_sources=[],
         hooks={
             "PreToolUse": [HookMatcher(matcher=None, hooks=[pre_tool])],
-            "PostToolUse": [HookMatcher(matcher="Write|Edit", hooks=[post_tool])],
+            "PostToolUse": [
+                HookMatcher(matcher="Write|Edit", hooks=[post_tool]),
+                HookMatcher(matcher="WebFetch", hooks=[post_fetch]),
+            ],
         },
         can_use_tool=can_use,
         max_turns=limits(film.length)["turns"],

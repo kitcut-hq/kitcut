@@ -191,6 +191,19 @@ async def main():
         check("%s/r1/film_web.mp4" % f.id in BLOBS, "the web copy too", list(BLOBS))
         n = await media.delete(f.id)
         check(n == 10 and not BLOBS, "delete removes both revisions", (n, list(BLOBS)))
+
+        # a film whose picture was replaced (ops.sh replace: media.py --revision bumps media_rev):
+        # every file under new URLs, and a delete given its record's URLs finds them there
+        await media.publish(f)
+        f.update(media_rev=2)
+        urls = await media.publish(f)
+        check(
+            all("/%s/r2/" % f.id in u for u in urls.values()) and len(urls) == 5,
+            "a revision: every file under <id>/r2/",
+            urls,
+        )
+        n = await media.delete(f.id, urls=urls.values())
+        check(n == 10 and not BLOBS, "delete with the record's URLs removes both", (n, list(BLOBS)))
     finally:
         await srv.close()
     print("%d failed" % len(bad))

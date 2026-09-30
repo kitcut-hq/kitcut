@@ -6,13 +6,13 @@ laptop, through the scripts in this folder.
 
 | | |
 |---|---|
-| VM | `kitcut-studio-1`, Standard_D8ads_v5 (8 vCPU AMD EPYC, 32 GB), Ubuntu 24.04 |
+| VM | `kitcut-studio-1`, Standard_D4ads_v5 (4 vCPU AMD EPYC, 16 GB) since 2026-09-28 16:05 (D8ads_v5 before), Ubuntu 24.04 |
 | where | resource group `kitcut-PROD`, southcentralus -- beside the films' blob account `kitcutst` |
 | disks | 128 GB OS + 512 GB data at `/srv/kitcut`, both Standard HDD (disk speed is not the bottleneck) |
 | code | `/srv/kitcut/repo`, pushed from the laptop (`push.sh`); the VM holds no GitHub credentials |
 | films | `/srv/kitcut/studio` (`STUDIO_HOME`) |
-| reach | SSH from the laptop's IP only; the studio leaves through the Cloudflare named tunnel (outbound), `studio.kitcut.ai` |
-| cost | ~$361/month for the VM + ~$22 the data disk (list prices, 2026-09-28) |
+| reach | SSH from the VPN only (no public IP); the studio leaves through the Cloudflare named tunnel (outbound), `studio.kitcut.ai`; `vm.sh network` also denies outbound to the VNet (`no-network-outbound`: films fetch from the web) |
+| cost | ~$180/month for the VM on D4ads_v5 ($361 on D8) + ~$22 the data disk (list prices, 2026-09-28) |
 
 ```bash
 bash studio/deploy/ops.sh status          # health, the servers and their films, disks, errors
@@ -233,12 +233,26 @@ so the VM sets `STUDIO_WEB_PRESET=p2`: ~2.7 min for an 8-minute film.
 | motion-check stills, one browser | ~0.4 s a still | **0.22 s** | 0.29 s |
 
 The 8 vCPU AMD machine beats the 16 vCPU Intel one on every step but the widest render, at 60 %
-of its price, so it is the one in production. `vm.sh resize` moves it to a bigger size in minutes
-if the queue says so.
+of its price, so it went into production.
+
+**Then it went down to 4 vCPU (D4ads_v5, $180 a month against $361).** On its first day the D8
+averaged under 10 % CPU, peaked at 80-85 % only while rendering, and used 1 GB of its 32. Measured
+after the resize, 2026-09-28, a 30 s line-art film at 60 fps:
+
+| | D8ads_v5 | D4ads_v5 |
+|---|---|---|
+| render | 32.7 frames/s (a 30 fps film, 6 browsers) | **17.7 frames/s** (4 browsers): 1.85x slower |
+| web copy, 30 s of film | 10-11 s | 24 s |
+| peak memory, whole machine | | 2.9 GB of 16 |
+
+Claude's writing is most of a film's time (17 of this film's 19 minutes), so a film is about 10 %
+slower end to end; the render of an 8-minute Pro film goes from ~14 to ~27 minutes. The settings
+for 4 vCPU are in `machine.env`. `vm.sh resize kitcut-studio-1 Standard_D8ads_v5` goes back in
+five minutes (drain first: `serve.sh stop`), with the D8 values beside them.
 
 All of the above sit in `machine.env`, each with its number: `STUDIO_RENDER_ENCODE=browser`,
-`VIDEDIT_WEBCODECS=software`, `VIDEDIT_WEBCODECS_BITRATE=12M`, `STUDIO_RENDER_JOBS=6`,
-`STUDIO_BROWSERS=6`, `STUDIO_WEB_PRESET=p2`, `STUDIO_MACHINE_SLOWDOWN=2`.
+`VIDEDIT_WEBCODECS=software`, `VIDEDIT_WEBCODECS_BITRATE=12M`, `STUDIO_RENDER_JOBS=4`,
+`STUDIO_BROWSERS=4`, `STUDIO_WEB_PRESET=p2`, `STUDIO_MACHINE_SLOWDOWN=3` (on D8: 6, 6 and 2).
 
 **Process containment is a cgroup.** On Windows each step is a Job Object. Here each server's
 unit (`kitcut-studio@<instance>`) is `Delegate=yes`, and `procs.Job` gives every step a cgroup v2

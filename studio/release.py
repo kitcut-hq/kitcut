@@ -51,6 +51,7 @@ TESTS = (
     "test_bluegreen.py",  # an old server handing over to a new one, end to end
     "test_memory.py",  # the still cache stays capped; every job beside the server is (KI-045)
     "test_scenes.py",  # a film made in scenes: SK.scene on real stills, the passes, carrying on
+    "test_web.py",  # the studio's web tools: public URLs only, pictures, pages, fonts (stubbed)
 )
 
 

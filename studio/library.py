@@ -497,7 +497,13 @@ def sheet(film, names):
         "fps": 60,
         "duration": float(len(names) + 1),
         "film": "film.js",
-        "fonts": m.get("fonts", []),
+        # a film's own fonts (web/fonts/, web-grab.py) are beside its manifest, not this one
+        "fonts": [
+            f | {"file": film.path(*f["file"].split("/"))}
+            if os.path.exists(film.path(*f["file"].split("/")))
+            else f
+            for f in m.get("fonts", [])
+        ],
         "cast": film.path("cast"),
         # a member may draw with its film's modules (a collage film's pieces)
         **({"modules": m["modules"]} if m.get("modules") else {}),

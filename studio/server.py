@@ -1606,7 +1606,9 @@ async def status(req):
         if said["cost"] is not None:
             out["cost_usd"] = said["cost"]  # so far
         r = {k: r.get(k) for k in ("prompt", "title", "look", "length", "listed")}
-    elif J is None:  # over, or made before this server started: what is on disk is all there is
+    # over, made before this server started, or since replaced by a remade film (ops.sh
+    # replace): what is on disk is all there is
+    elif J is None or (J["status"] == "done" and r.get("replaced")):
         st = {
             "done": "done",
             "cancelled": "cancelled",
