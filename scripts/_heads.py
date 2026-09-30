@@ -92,11 +92,16 @@ def images(m):
 
 
 def _cache_path(m, path):
+    """The cached track for a line: keyed by the audio AND by how tracks are made, so a change
+    to TRACK is not served the tracks the old settings made (the lead moved 40 -> 80 ms and the
+    cache, keyed by the audio alone, kept playing the old ones)."""
+    h = hashlib.sha1(usedforsecurity=False)
     with open(path, "rb") as f:
-        h = hashlib.sha1(f.read(), usedforsecurity=False).hexdigest()[:12]
+        h.update(f.read())
+    h.update(json.dumps([TRACK, FPS, SR], sort_keys=True).encode())
     d = os.path.join(m["_temp"], "mouth")
     os.makedirs(d, exist_ok=True)
-    return os.path.join(d, "%s_%d.json" % (h, FPS))
+    return os.path.join(d, "%s.json" % h.hexdigest()[:16])
 
 
 def mouth_track(x, sr=SR, fps=FPS, **knobs):
