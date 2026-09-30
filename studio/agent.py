@@ -2147,16 +2147,19 @@ def _print(ev):
     sys.stdout.flush()
 
 
-def template_film(args):
-    """A film remade from a template on this machine (--template, --fields): the form's pictures
-    are files, stood in for uploads, and a draft may be tried."""
-    tid, _, v = args.template.partition(":")
+def template_film(
+    template, fields, frame=None, listed=True, client="local", source="cli", auth="login"
+):
+    """A film remade from a template on this machine: template "t-<slug>[:version]" (a draft
+    may be tried), fields the form's JSON file, whose pictures are file paths relative to it and
+    stand in for uploads. Returns the film, seeded and ready for make_film."""
+    tid, _, v = template.partition(":")
     t = templates.load(tid, int(v) if v else None, ("live", "draft"))
     if not t:
-        sys.exit("no template %s" % args.template)
-    with open(args.fields, encoding="utf-8") as f:
+        sys.exit("no template %s" % template)
+    with open(fields, encoding="utf-8") as f:
         form = json.load(f)
-    base, metas = os.path.dirname(os.path.abspath(args.fields)), {}
+    base, metas = os.path.dirname(os.path.abspath(fields)), {}
 
     def local(path):  # a picture's file, as an upload the film takes
         uid = "up-local%d" % (len(metas) + 1)
@@ -2176,11 +2179,12 @@ def template_film(args):
     content, pics = templates.build_content(t, clean)
     film = Film.create(
         "%s: %s" % (t["title"], next((x for x in clean.values() if isinstance(x, str)), "")),
-        client="local",
-        source="cli",
+        client=client,
+        source=source,
+        auth=auth,
         template=t,
-        frame=args.frame or t["frames"][0],
-        listed=not args.unlisted,
+        frame=frame or t["frames"][0],
+        listed=listed,
     )
     templates.seed(film, t, content, {k: metas[u] for k, u in pics.items()})
     film.update(fields=clean)
@@ -2248,7 +2252,9 @@ def main():
         ok, _ = asyncio.run(smoke(args.auth))
         sys.exit(0 if ok else 1)
     if args.template:
-        film = template_film(args)
+        film = template_film(
+            args.template, args.fields, args.frame, not args.unlisted, auth=args.auth
+        )
     else:
         if not args.prompt:
             ap.error("give a prompt, or --smoke")

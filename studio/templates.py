@@ -59,7 +59,9 @@ class TemplateError(ValueError):
 
 # ------------------------------------------------------------------ where they are
 def root():
-    return os.path.join(HOME, "templates")
+    """Where the templates live: STUDIO_HOME/templates, or STUDIO_TEMPLATES (a bake-off's films
+    each have a home of their own, and are all made from one folder of templates)."""
+    return os.environ.get("STUDIO_TEMPLATES") or os.path.join(HOME, "templates")
 
 
 def vdir(tid, v):

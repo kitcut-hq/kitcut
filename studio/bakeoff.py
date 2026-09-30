@@ -32,6 +32,15 @@ time; and prints the tallies: per arm, the means, and how many films' look fits 
 or 5 of 5). Calibrated on the Dell documentary this was built for: its googly-eyed first minutes
 read childish 0.40, fits 3 -- a mild grader, so compare the arms, never one number to a bar.
 
+Templates (studio/templates.py): a set whose prompts carry a "form" (the template's form as JSON,
+its pictures as files beside it) and a "template" compares two ways of making the same film from
+one tree: --mode template remakes the template with the form (agent.template_film), --mode prompt
+makes a plain film of the same length from a prompt written out of the form, with the logo and the
+featured speakers' photos attached (the six a plain film may take). --templates names the folder
+of templates the films are made from (STUDIO_TEMPLATES). A set with "grade_extra": ["fidelity"]
+also has each template film read beside its template's preview at the template's moments: does
+it keep the template's scenes, layouts and finish (1-5)?
+
 Results: <results>\\<set>\\<arm>\\<prompt id>\\ -- the film's home, result.json, grade\\
     <results> is STUDIO_BAKEOFF, else kitcut-studio-bakeoff beside the main checkout.
 
@@ -83,6 +92,19 @@ GRADE_EXTRA = {
     "columns of small print, a front page>, ",
     "legible": '"legible": <1-5: how easily its words can be read at a glance>, ',
 }
+
+
+FIDELITY_ASK = (
+    "Each row of this image holds two pairs of frames from two short motion-design films, taken "
+    "at the same moments: in each pair the LEFT frame is from the original (a template) and the "
+    "RIGHT frame from a remake of it made for other content -- another event, other people, logo "
+    "and colours. Ignore that the content differs; that is the point of the remake. Answer with "
+    "one JSON object and nothing else:\n"
+    '{"fidelity": <1-5: how closely the remake keeps the original\'s scenes and their order, its '
+    "layouts, its motion-design devices and its finish>, "
+    '"craft": "worse" | "same" | "better" (the remake\'s finish against the original\'s), '
+    '"why": "one sentence"}'
+)
 
 
 def grade_ask(s):
@@ -168,6 +190,8 @@ def worker(spec_path):
         STUDIO_REPO=spec["repo"],
         STUDIO_ENV_FILE=os.path.join(spec["repo"], ".env"),
     )
+    if spec.get("templates"):  # the templates the films are made from (templates.root)
+        os.environ["STUDIO_TEMPLATES"] = spec["templates"]
     sys.path.insert(0, os.path.join(tree, "studio"))
     import asyncio
 
@@ -183,15 +207,27 @@ def worker(spec_path):
         lambda film, n=8: []
     )  # no note: the films of a set must not steer each other
     media.enabled = lambda: False  # a bake-off film stays on this machine
-    film = films.Film.create(
-        spec["prompt"],
-        spec["seconds"],
-        spec["look"],
-        client="bakeoff",
-        source="bakeoff",
-        auth=spec["auth"],
-        listed=False,
-    )
+    if spec.get("mode") == "template":  # a remake of the template, from its form
+        film = agent.template_film(
+            spec["template"],
+            spec["form"],
+            spec.get("frame"),
+            listed=False,
+            client="bakeoff",
+            source="bakeoff",
+            auth=spec["auth"],
+        )
+    else:
+        film = films.Film.create(
+            spec["prompt"],
+            spec["seconds"],
+            spec["look"],
+            client="bakeoff",
+            source="bakeoff",
+            auth=spec["auth"],
+            listed=False,
+            **({"attachments": pictures(spec["attach"])} if spec.get("attach") else {}),
+        )
     print("film %s" % film.dir, flush=True)
     events = os.path.join(spec["home"], "events.log")
 
@@ -221,6 +257,8 @@ def worker(spec_path):
         {
             "prompt_id": spec["id"],
             "arm": spec["arm"],
+            "mode": spec.get("mode", "prompt"),
+            "length": film.length,
             "tree": tree,
             "commit": spec["commit"],
             "dirty": spec["dirty"],
@@ -238,6 +276,45 @@ def worker(spec_path):
         },
     )
     return 0 if rec.get("ok") else 1
+
+
+def pictures(paths):
+    """Picture files as the uploads a plain film takes (uploads.take's metas)."""
+    from PIL import Image
+
+    out = []
+    for p in paths:
+        with Image.open(p) as im:
+            w, h = im.size
+        out.append({"kind": "image", "src": p, "ext": p.rsplit(".", 1)[-1].lower(), "w": w, "h": h})
+    return out
+
+
+def form_prompt(form_path, seconds):
+    """A template's form written out as a plain prompt, and the pictures a plain film can take
+    with it (the logo, then the featured speakers' photos: six at most) -- the same content,
+    asked for the way anyone would without the template."""
+    form = read_json(form_path)
+    base = os.path.dirname(os.path.abspath(form_path))
+    d = form.get("dates") or {}
+    people = form.get("speakers") or []
+    featured = [x for x in people if x.get("name")][:5]
+    lines = [
+        "A %d-second speaker promo video for %s, %s to %s, at %s in %s."
+        % (seconds, form["event_name"], d.get("from"), d.get("to"), form["venue"], form["city"]),
+        "Tagline: %s." % " ".join(form.get("tagline") or []),
+        "Featured speakers: %s."
+        % "; ".join(
+            "%s (%s, %s)" % (x["name"], x.get("role", ""), x.get("org", "")) for x in featured
+        ),
+        "%d more speakers in the line-up." % max(0, len(people) - len(featured)),
+        "Website: %s. Button: %s." % (form["url"], form.get("cta") or "Book tickets"),
+        "Brand colours: %s, %s, %s." % (form["ground"], form["accent"], form["second"]),
+        "Music only, no narration. Attached: the event's logo, then the featured speakers' photos"
+        " in the order above.",
+    ]
+    files = [os.path.join(base, form["logo"])] + [os.path.join(base, x["photo"]) for x in featured]
+    return " ".join(lines), files[:6]
 
 
 # ------------------------------------------------------------------ an arm
@@ -284,13 +361,21 @@ def run_arm(args, s, root, repo):
             "tree": tree,
             "repo": repo,
             "home": home,
-            "prompt": p["prompt"],
+            "prompt": p.get("prompt", ""),
             "seconds": p.get("seconds") or s["seconds"],
             "look": args.look or p.get("look", "drawn"),
             "auth": args.auth,
             "commit": commit,
             "dirty": dirty,
+            "mode": args.mode,
+            **({"templates": os.path.abspath(args.templates)} if args.templates else {}),
         }
+        if p.get("form"):  # a template's form: the remake, or the same content as a prompt
+            form = p["form"] if os.path.isabs(p["form"]) else os.path.join(tree, p["form"])
+            if args.mode == "template":
+                spec.update(template=p["template"], form=form, frame=p.get("frame"))
+            else:
+                spec["prompt"], spec["attach"] = form_prompt(form, spec["seconds"])
         write_json(os.path.join(home, "spec.json"), spec)
         todo.append(spec)
     if not todo:
@@ -417,6 +502,51 @@ def frames_sheet(film_dir, seconds, out):
     sheet.save(out)
 
 
+def pairs_sheet(film_dir, p, args, out):
+    """The template's preview stills beside the remake's frames at the same moments: eight pairs,
+    two to a row. False when the template's preview cannot be found."""
+    from PIL import Image
+
+    rec = read_json(os.path.join(film_dir, "studio.json"), {})
+    t = rec.get("template") or {}
+    root = os.environ.get("STUDIO_TEMPLATES") or (
+        args.templates and os.path.abspath(args.templates)
+    )
+    fr = (rec.get("frame") or "16:9").replace(":", "x")
+    prev = os.path.join(root or "", t.get("id", ""), "v%s" % t.get("version"), "preview", fr)
+    tj = read_json(os.path.join(os.path.dirname(os.path.dirname(prev)), "template.json"), {})
+    moments = tj.get("moments") or []
+    if not os.path.isdir(prev) or not moments:
+        print("  no template preview at %s: no fidelity read" % prev)
+        return False
+    step = max(1, len(moments) // 8)
+    moments = moments[::step][:8]
+    mp4 = os.path.join(film_dir, "outputs", "film.mp4")
+    tmp = os.path.join(os.path.dirname(out), "pairs")
+    os.makedirs(tmp, exist_ok=True)
+    tiles = []
+    for m in moments:
+        png = os.path.join(tmp, "%06.2f.png" % m)
+        subprocess.run(
+            ["ffmpeg", "-v", "error", "-y", "-ss", "%.3f" % m, "-i", mp4, "-frames:v", "1"]
+            + ["-vf", "scale=480:-2", png],
+            check=True,
+        )
+        left = Image.open(os.path.join(prev, "%06.2f.png" % m)).convert("RGB")
+        right = Image.open(png).convert("RGB")
+        left = left.resize((480, round(480 * left.height / left.width)))
+        right = right.resize(left.size)
+        tiles.append((left, right))
+    w, h = tiles[0][0].size
+    sheet = Image.new("RGB", (w * 4 + 24, h * ((len(tiles) + 1) // 2)), "white")
+    for i, (a, b) in enumerate(tiles):
+        x, y = (i % 2) * (w * 2 + 24), (i // 2) * h
+        sheet.paste(a, (x, y))
+        sheet.paste(b, (x + w, y))
+    sheet.save(out)
+    return True
+
+
 async def ask_blind(png, question):
     """Claude's read of the sheet, shown nothing but the frames."""
     import agent
@@ -493,8 +623,12 @@ def grade(args, s, root):
     print("grading %d film(s) blind" % len(todo))
     for a, p, r, d in todo:
         sheet = os.path.join(d, "sheet.png")
-        frames_sheet(r["film"], p.get("seconds") or s["seconds"], sheet)
+        frames_sheet(r["film"], r.get("length") or p.get("seconds") or s["seconds"], sheet)
         g = asyncio.run(ask_blind(sheet, grade_ask(s)))
+        if "fidelity" in s.get("grade_extra", []) and r.get("mode") == "template":
+            pairs = os.path.join(d, "pairs.png")
+            if pairs_sheet(r["film"], p, args, pairs):
+                g["fidelity"] = asyncio.run(ask_blind(pairs, FIDELITY_ASK))
         write_json(os.path.join(d, "grade.json"), g)
         print(
             "%-8s %-16s childish %.2f  fits %s  professional %s  (%s)"
@@ -734,6 +868,13 @@ def main():
     ap.add_argument("--jobs", type=int, default=3, help="films made at once (default 3)")
     ap.add_argument("--auth", default="login", choices=("login", "api"))
     ap.add_argument("--redo", action="store_true", help="make or grade again what is done")
+    ap.add_argument(
+        "--mode",
+        default="prompt",
+        choices=("prompt", "template"),
+        help="for a set with template forms: remake the template, or the same content as a prompt",
+    )
+    ap.add_argument("--templates", help="the templates folder the films are made from")
     args = ap.parse_args()
     s = load_set(args.set)
     repo = main_checkout()
