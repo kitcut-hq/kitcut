@@ -101,6 +101,10 @@ def heads():
         "heads: the dummy's slits run down from the mouth corners",
         all(np.dot(s[1] - s[0], down) > H * 0.08 for s in sl),
     )
+    # a photo of two founders: faces counted left to right, a small face behind them not counted
+    boxes = [(600, 100, 200, 240, 0.9), (100, 120, 180, 220, 0.9), (400, 30, 40, 50, 0.8)]
+    got = [b[0] for b in rig.main_faces(boxes)]
+    check("heads: a group photo's people, left to right", got == [100, 600], str(got))
     m = rig.mesh(P, fr, 8.0)
     up_ring = set(rig.LIP_IU[1:-1]) | set(rig.LIP_OU[1:-1])
     lo_ring = set(rig.LIP_IL[1:-1]) | set(rig.LIP_OL[1:-1])
