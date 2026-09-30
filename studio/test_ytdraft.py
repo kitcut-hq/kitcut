@@ -248,6 +248,27 @@ async def main():
     said = good(description="Nothing to change. Just upload your next form.")
     mat2 = dict(mat, prompt="tell them: nothing to change, just upload your next form, easy")
     check(ytdraft.leak(said, mat2) is None, "words the narration says too are the film's own")
+    # a heading over a sentence is two thoughts, not a paste, though the brief has the same pair
+    # (ewwd6b: every draft refused for "making a film say the idea the")
+    headed = good(
+        description="Chapters\n0:55 Making a film\nSay the idea, the length and the look."
+    )
+    mat3 = dict(
+        mat,
+        prompt="3. Making a film. Say the idea, the length and the look, one beat each.",
+        narration=[
+            *mat["narration"],
+            (55.0, 58.0, "To make a film, say the idea, the length and the look."),
+        ],
+    )
+    check(ytdraft.leak(headed, mat3) is None, "a run across a sentence's end is not a paste")
+    check(
+        ytdraft.leak(
+            good(description="Say the idea, the length and the look, one beat each."), mat3
+        )
+        is not None,
+        "a run of the brief's inside one sentence still is",
+    )
 
     # ---------------------------------------------------------------- writing, kept, costed
     answers, calls = [], []

@@ -795,3 +795,18 @@ says how many are left and that only fewer words make a line shorter. (`check-sk
 **Lesson.** A limit with no way out turns a fixable fault into a failed film: when a limit stops
 the fix, the fix gets its own allowance. And a dense brief is the first cause. The remake with
 the narration held to about 400 words fitted (36 lines, 206.8 s of 210).
+
+### KI-050 · fixed · studio · A YouTube draft was refused as a pasted brief when a chapter heading met the next sentence
+
+**Symptom.** 2026-09-30: `ytdraft.py` on film wm4ioh (the KitCut explainer) gave up with "the draft
+kept repeating the brief (it repeats the brief: "making a film say the idea the")", every retry.
+**Cause.** `leak()` flattened the draft and the brief into one stream of words each, so a run of
+seven could cross a sentence's end. The brief had the heading "Making a film." over "Say the
+idea, the length and the look"; the draft had the chapter "Making a film" over the narration's
+own "say the idea, the length and the look". Neither side pasted anything, and the narration
+check could not help, because it says "To make a film".
+**Fix.** Runs are counted inside one sentence or line of each (`_clauses`). A paste of the brief's
+sentence is still caught (`test_ytdraft.py`).
+**Lesson.** A prompt with headings is how people write structured briefs, and a good draft names
+its chapters after the film's parts. A copy check has to respect sentences, or it flags exactly
+the drafts that follow the film most closely.

@@ -372,10 +372,18 @@ def _flat(s):
     return " ".join(re.findall(r"\w+", (s or "").lower()))
 
 
+def _clauses(s):
+    """A text's sentences and lines, each flattened. A run of words that crosses from one into
+    the next is two thoughts side by side, not a paste: ewwd6b's draft put the chapter "Making a
+    film" over the film's own "Say the idea, the length and the look", and the brief had the same
+    heading over the same words, so every draft was refused (2026-09-30)."""
+    return [c for c in (_flat(x) for x in re.split(r"[.!?;:\n]+", s or "")) if c]
+
+
 def leak(d, mat):
     """Where the draft repeats the brief rather than the film, or None: a run of RUN words the
-    brief and the draft share. A run the narration, the maker's notes or a page's title also
-    has is the film's own words, not a paste."""
+    brief and the draft share inside one sentence of each. A run the narration, the maker's notes
+    or a page's title also has is the film's own words, not a paste."""
     p = _flat(mat["prompt"]).split()
     if not p:
         return None
@@ -388,14 +396,16 @@ def leak(d, mat):
             + [s["title"] for s in mat["sources"]]
         )
     )
-    text = " %s " % _flat(d["title"] + " " + d["description"])
+    text = [" %s " % c for c in _clauses(d["title"] + "\n" + d["description"])]
     n = min(RUN, len(p))
     if n < 4:
         return None
-    for i in range(len(p) - n + 1):
-        w = " %s " % " ".join(p[i : i + n])
-        if w in text and w not in own:
-            return 'it repeats the brief: "%s"' % w.strip()
+    for clause in _clauses(mat["prompt"]):
+        c = clause.split()
+        for i in range(len(c) - n + 1):
+            w = " %s " % " ".join(c[i : i + n])
+            if any(w in t for t in text) and w not in own:
+                return 'it repeats the brief: "%s"' % w.strip()
     return None
 
 
