@@ -156,7 +156,7 @@ def channel_token(handle):
     return os.path.join(OAUTH_DIR, "token-%s.json" % safe)
 
 
-def credentials(handle=None, reauth=False, open_browser=True):
+def credentials(handle=None, reauth=False, open_browser=True, prompt="consent"):
     """A usable credential, preferring .env over the cached token file.
 
     .env is where this repo already keeps secrets, and a refresh token there
@@ -207,8 +207,12 @@ def credentials(handle=None, reauth=False, open_browser=True):
         # default browser carries a signed-in session Google reuses silently,
         # picking the login's own channel and never showing the channel
         # chooser. Pasting the URL into a private window forces the choice.
+        # `prompt` may add "select_account" in front of "consent": that is what
+        # kitcut.ai's own handshake sends, and it is how the brand channel
+        # @ocheretyne_economics_school was reached there -- the account chooser
+        # is shown even to a browser that is already signed in.
         creds = flow.run_local_server(
-            port=0, access_type="offline", prompt="consent", open_browser=open_browser
+            port=0, access_type="offline", prompt=prompt, open_browser=open_browser
         )
     os.makedirs(OAUTH_DIR, exist_ok=True)
     with open(token_path, "w", encoding="utf-8") as f:

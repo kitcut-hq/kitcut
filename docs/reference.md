@@ -2950,6 +2950,29 @@ keeps its URL and a different one gets a new URL. A remake leaves the older copi
 because a preview already posted may still point at them. `media.py --delete <id>` removes the
 pair the record names (and any unversioned `share.jpg`/`thumb.jpg`).
 
+## A channel's banner
+
+```powershell
+python scripts/yt-set-banner.py projects/<id>/branding/banner-2560x1440.jpg --channel @handle --dry-run
+python scripts/yt-set-banner.py projects/<id>/branding/banner-2560x1440.jpg --channel @handle
+python scripts/yt-set-banner.py <image> --channel @handle --reauth    # a channel this machine has no grant for
+```
+
+Two calls: `channelBanners.insert` uploads the image and returns a URL, then
+`channels.update(part=brandingSettings)` sets `brandingSettings.image.bannerExternalUrl`.
+**The update replaces the whole part**, so the channel's `brandingSettings.channel` block
+(description, keywords, country, language, trailer) is read first and sent back as fetched --
+leave it out and the description and keywords are wiped. After the write the channel is
+re-read: the new URL and the unchanged channel fields are both asserted.
+
+The image is checked before any consent is spent: JPEG/PNG, 16:9, at least 2048x1152, under
+6 MB. Only the middle 1235x338 shows on every device. It needs `youtube.force-ssl` -- the grant
+`yt-connect.py` files -- and **not** kitcut.ai's grant, which is `youtube.upload` +
+`youtube.readonly` and can upload a banner image but not set it. A first `--reauth` sends
+`prompt=select_account consent`, which is what the site's own handshake uses to reach a brand
+channel from a signed-in browser. The avatar cannot be set through the API at all; it is
+uploaded by hand in Studio -> Customization -> Branding.
+
 ## Chapter markers on a published video
 
 Turn a transcript into YouTube chapters, then write them into the video's own
@@ -4337,6 +4360,7 @@ absolute path written into a script, a skill or these docs.
 | `scripts/transcript-outline.py` | skim a transcript; find the time of a phrase |
 | `scripts/_ytchapters.py` | chapter-marker rules, and what YouTube really enforces |
 | `scripts/yt-set-chapters.py` | write chapter markers into a video's description |
+| `scripts/yt-set-banner.py` | set a channel's banner (header image), keeping its branding fields |
 | `scripts/yt-audit-chapters.py` | which videos on a channel actually show chapters |
 | `scripts/cut-clips.py` | manifest → standalone clips cut out of a long video |
 | `scripts/_overlay.py` | drawing and filter helpers shared by the burned-in graphics |
