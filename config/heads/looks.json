@@ -9,7 +9,19 @@
     "blocky": "Turn the person in the reference photo into a blocky voxel game character: a perfectly cubic head and body made of big square pixels, a flat pixel-art face in their skin tone with pixel eyes, pixel hair and pixel beard matching theirs, their clothes as pixel textures. ",
     "newspaper": "Redraw the person in the reference photo as a newspaper stipple-and-hatch portrait (a 'hedcut'): black ink dots and fine lines on white, like the portraits printed in business newspapers. ",
     "caricature": "Draw the person in the reference photo as a friendly caricature for a bobble-head doll: a big head on a small body, gently exaggerated features, clean colourful illustration. ",
-    "clay": "Turn the person in the reference photo into a chunky handmade plasticine puppet for a stop-motion film: simplified rounded features, a slightly oversized head, visible thumbprints and seams in the clay, obviously a puppet, never lifelike. "
+    "clay": "Turn the person in the reference photo into a chunky handmade plasticine puppet for a stop-motion film: simplified rounded features, a slightly oversized head, visible thumbprints and seams in the clay, obviously a puppet, never lifelike. ",
+    "crayon": "Redraw the person in the reference photo as a hand-drawn crayon illustration: wobbly dark ink outlines, flat crayon fills with visible waxy texture, simple friendly shapes, like a children's picture book, on no background. ",
+    "papercut": "Recreate the person in the reference photo as a layered paper cut-out collage: flat shapes cut from coloured construction paper with visible scissor edges, paper grain and small shadows between the layers. ",
+    "woodcut": "Redraw the person in the reference photo as a bold woodcut print: black carved lines and gouges on off-white paper with one muted red accent, the rough texture of a relief print. ",
+    "watercolour": "Paint the person in the reference photo as a loose watercolour portrait: soft washes that bleed at the edges, a few light pencil lines, paper texture showing through. ",
+    "popart": "Redraw the person in the reference photo as a pop-art print: thick black outlines, flat bold primary colours and Ben-Day halftone dots in the shading, like a 1960s screen print. ",
+    "courtroom": "Draw the person in the reference photo as a courtroom sketch: quick expressive coloured-pencil and pastel strokes on cream paper, loose hatching, unfinished edges. ",
+    "chalk": "Draw the person in the reference photo in coloured chalk on a small square of dark green chalkboard: dusty chalk strokes, smudges, the board filling the square behind them. ",
+    "sticker": "Turn the person in the reference photo into a round-headed flat vector avatar sticker: a big circular head, simple flat features, their hairstyle, facial hair and clothes simplified into clean flat colour shapes, a thick white sticker outline. ",
+    "felt": "Turn the person in the reference photo into a felt hand puppet: fuzzy fleece and felt fabric, a wide puppet mouth, button-like eyes, yarn or fleece hair in their hairstyle and colour, their clothes sewn in felt. ",
+    "knit": "Turn the person in the reference photo into a knitted wool doll: visible knit stitches, yarn hair in their hairstyle and colour, embroidered eyes and features, their clothes knitted. ",
+    "peg": "Turn the person in the reference photo into a painted wooden peg doll: a smooth turned-wood head and body, simple hand-painted face, painted hair and clothes, visible wood grain, a classic toy-shop wooden figure. ",
+    "sock": "Turn the person in the reference photo into a sock puppet: a knitted sock in their skin tone with a big hinged mouth, button eyes, yarn hair and beard matching theirs, a little felt collar in the colour of their clothes. "
   },
   "variants": {
     "small": "the mouth slightly open, as if in the middle of saying 'eh', the teeth just showing",
