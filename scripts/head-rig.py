@@ -165,6 +165,7 @@ def runtime_dir():
 
 
 def fetch_runtime():
+    import shutil
     import subprocess
 
     if os.path.isdir(os.path.join(runtime_dir(), "mediapipe")):
@@ -182,8 +183,13 @@ def fetch_runtime():
         runtime_dir(),
     ]
     if subprocess.run([sys.executable, "-m", "pip", "--version"], capture_output=True).returncode:
+        # a uv venv has no pip; uv is often only in ~/.local/bin, which a non-login shell (an ssh
+        # command, a service) does not put on PATH -- the studio VM's case
+        uv = shutil.which("uv") or os.path.expanduser("~/.local/bin/uv")
+        if not os.path.exists(uv) and not shutil.which(uv):
+            sys.exit("no pip in %s and no uv to install with: install uv, or pip" % sys.executable)
         cmd = [
-            "uv",
+            uv,
             "pip",
             "install",
             "--quiet",
