@@ -1435,6 +1435,16 @@ the widest figure. Without that, the clock shifts sideways every second. A
 `▶▶ 10×` chip shows while the footage is sped up, so the viewer knows why the
 digits are racing. Style is `config/overlays/elapsed-counter.json`.
 
+`paint` and `blur` rects are **fractions of the source frame** (0-1), unlike
+`crop` and `callouts`, which are pixels. A pixel rect used to be scaled by the
+frame size, land far off-screen and draw nothing, silently; it is refused now.
+A phone recorder's floating timer bubble sits over the content, so painting it
+hides whatever is under it (on `acord-commercial` S1 it ate an input border
+and letters). Crop it out instead if it hugs an edge. The at-rest test below
+only looks at a rect inside its own `when`: a rect painted over the app's clock
+during the wait used to be "lost" on the keyboard frames before it, where it
+was never drawn, and the render refused.
+
 `paint` fills a source rect with a flat colour. Use it for browser chrome: tab
 titles and a `C:/Users/<name>/...` path, painted over in the chrome's own
 sampled colours so the Cursorful window keeps its shape. A crop would lose that
@@ -1516,6 +1526,21 @@ On bpo-realtor every difference was number formatting, apart from one
 - `checklist-card.py` scales by `min(H/1080, W/1200)` so a vertical card is not
   wider than its frame. `window-vertical.json` is the faster variant for shorts.
 - The caption preset for this layout is `vertical-band-dark.json`.
+- **A phone take goes in a phone.** A tight 9:16 crop of a 1080x2400 phone
+  recording has to cut the app's own input box off, and it reads as "cut and
+  unclear" (Eugene, `acord-commercial` S1). A source-level `screen` instead
+  fits every crop of that source into a rounded screen with a bezel:
+
+  ```json
+  "phone": {"path": "...", "screen": {"box": [106, 80, 868, 1760], "radius": 56,
+            "bezel": 16, "bezel_color": "#14171c", "bg": "#e8f0fe"}}
+  ```
+
+  `box` is canvas pixels and must have the crops' shape (checked). The frame is
+  a full-canvas PNG (`temp/edl/screen-<src>.png`) laid on after the zoom, and
+  **a zoom on a `screen` source runs inside the box**: its rect is a fraction
+  of the screen, not the canvas. Zooming the whole canvas first put the left
+  edge of every zoomed shot under the bezel.
 
 ### Callouts: the value, lit while it is named
 

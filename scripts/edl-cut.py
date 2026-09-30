@@ -524,8 +524,12 @@ def moved_runs(src, segs):
         H, W = fr.shape[1:3]
         moved = []
         for i, f in enumerate(fr):
+            t = s["from"] + i / 10.0
             worst = 1.0
             for p in paint:
+                # a rect switched off by its `when` covers nothing to test here
+                if p.get("when") and not parse_t(p["when"][0]) <= t <= parse_t(p["when"][1]):
+                    continue
                 x, y, rw, rh = rect_px(p["rect"], W, H)
                 c = np.array(_overlay.hex_rgba(p["color"])[:3])
                 reg = f[y : y + rh, x : x + rw]
@@ -1093,6 +1097,9 @@ def zoom_expr(zooms, f0, fps, canvas):
 
 def rect_px(r, w, h):
     x, y, rw, rh = r
+    if not all(0 <= v <= 1 for v in r):
+        # a pixel rect scaled by the frame lands off-screen and draws nothing
+        sys.exit(f"paint/blur rect {r}: give it as fractions of the frame (0-1), not pixels")
     return (
         int(round(x * w)),
         int(round(y * h)),
@@ -1183,6 +1190,32 @@ def treat(src, t0, length, lab_in, tag, follows, inputs):
     return parts, cur
 
 
+def screen_mask(spec, canvas, path):
+    """A full-canvas RGBA device frame: background outside, a bezel ring, and
+    a transparent rounded screen. It goes on AFTER the zoom, so a zoom stays
+    inside the phone instead of spilling over the background.
+    """
+    k = 4  # supersampled, so the corners are not stair-stepped
+    cw, ch = canvas
+    x, y, w, h = spec["box"]
+    r, b = int(spec.get("radius", 60)), int(spec.get("bezel", 18))
+    im = Image.new("RGBA", (cw * k, ch * k), _overlay.hex_rgba(spec.get("bg", "#e8f0fe")))
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle(
+        [(x - b) * k, (y - b) * k, (x + w + b) * k, (y + h + b) * k],
+        radius=(r + b) * k,
+        fill=_overlay.hex_rgba(spec.get("bezel_color", "#111111")),
+    )
+    # the hole sits 2 px inside the box: the scaled picture can round a pixel short
+    d.rounded_rectangle(
+        [(x + 2) * k, (y + 2) * k, (x + w - 2) * k, (y + h - 2) * k],
+        radius=r * k,
+        fill=(0, 0, 0, 0),
+    )
+    im.resize((cw, ch), Image.LANCZOS).save(path)
+    return path
+
+
 def fit(cw, ch, bg):
     return (
         "scale=%d:%d:force_original_aspect_ratio=decrease:flags=lanczos,"
@@ -1227,20 +1260,40 @@ def build(
             if s.get("crop")
             else ""
         )
+        scr = src.get("screen")
+        # a `screen` source is fitted to its box and zoomed THERE, before it is
+        # padded onto the canvas: its zoom rects are fractions of the screen,
+        # and a zoom can never push the picture under the bezel
+        area = (scr["box"][2], scr["box"][3]) if scr else canvas
         chain = "%ssetpts=%s,fps=%g,%s,trim=end_frame=%d,setpts=PTS-STARTPTS" % (
             crop,
             pts,
             fps,
-            fit(cw, ch, src.get("bg", "#000000")),
+            "scale=%d:%d:flags=lanczos,setsar=1" % area
+            if scr
+            else fit(cw, ch, src.get("bg", "#000000")),
             s["n"],
         )
         a, b = s["f0"] / fps, (s["f0"] + s["n"]) / fps
         mine = [z for z in zooms if z["b"] > a and z["a"] < b]
         if mine:
-            zp, U = zoom_expr(mine, s["f0"], fps, canvas)
+            zp, U = zoom_expr(mine, s["f0"], fps, area)
             # zoompan crops on whole input pixels; at 2x the step is half a
             # film pixel, which is what keeps a slow push from shimmering
-            chain += ",scale=%d:%d:flags=lanczos,%s" % (cw * U, ch * U, zp)
+            chain += ",scale=%d:%d:flags=lanczos,%s" % (area[0] * U, area[1] * U, zp)
+        if scr:
+            chain += ",pad=%d:%d:%d:%d:color=0x%s" % (
+                cw,
+                ch,
+                scr["box"][0],
+                scr["box"][1],
+                scr.get("bg", "#e8f0fe").lstrip("#"),
+            )
+            # shortest=1: a looped PNG never ends, and the overlay would wait on it
+            mi = inputs.add("-loop", "1", "-framerate", "%g" % fps, "-i", src["screen_mask"])
+            parts.append("[%s]%s[p%d]" % (cur, chain, k))
+            parts.append("[p%d][%d:v]overlay=0:0:shortest=1,format=yuv420p[v%d]" % (k, mi, k))
+            continue
         parts.append("[%s]%s,format=yuv420p[v%d]" % (cur, chain, k))
     parts.append(
         "".join("[v%d]" % k for k in range(len(segs))) + "concat=n=%d:v=1:a=0[film]" % len(segs)
@@ -1573,6 +1626,18 @@ def main():
     zooms = zoom_plan(m.get("zooms") or [], segs, fps)
     tmpdir = os.path.join(_project.projects_dir(), mid, "temp", "edl")
     os.makedirs(tmpdir, exist_ok=True)
+    for key, src in srcs.items():
+        if src.get("screen"):
+            bw, bh = src["screen"]["box"][2:]
+            for s in segs:
+                w, h = (s.get("crop") or [0, 0, src["w"], src["h"]])[2:]
+                if s["src"] is src and abs(w / h - bw / bh) > 0.01 * bw / bh:
+                    sys.exit(
+                        "%s: crop %dx%d is not the screen box's shape %dx%d" % (key, w, h, bw, bh)
+                    )
+            src["screen_mask"] = screen_mask(
+                src["screen"], canvas, os.path.join(tmpdir, "screen-%s.png" % key)
+            )
 
     call_specs, call_report = callout_plan(
         m.get("callouts") or [], srcs, segs, fps, canvas, zooms, tmpdir, m.get("callout_style")
