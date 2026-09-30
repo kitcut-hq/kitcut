@@ -70,7 +70,9 @@ def _vo(d, max_lines, length=60, people=()):
     extra = sorted(set(d) - VO_KEYS)
     if extra:
         out.append("vo.json: %s not yours to set (the studio removes them)" % ", ".join(extra))
-    if d.get("voice") not in VOICES:
+    if d.get("tts") == "elevenlabs":
+        pass  # the person's own voice, pinned by the studio (film.vo_pins): not Claude's
+    elif d.get("voice") not in VOICES:
         out.append("vo.json: voice must be one of %s" % ", ".join(VOICES))
     if not isinstance(d.get("language", "en"), str) or not LANG.match(d.get("language", "en")):
         out.append('vo.json: language is an ISO 639-1 code such as "en" or "uk"')
@@ -79,6 +81,15 @@ def _vo(d, max_lines, length=60, people=()):
     cast = d.get("cast", {})
     if not isinstance(cast, dict):
         out.append('vo.json: cast is {"p1": {"voice": "..."}, ...}')
+        cast = {}
+    # a person's own ElevenLabs voice is theirs: never put in someone else's mouth, and its film's
+    # grant speaks in that one voice -- so its people are seen, not heard
+    own = d.get("tts") == "elevenlabs"
+    if own and (cast or any(isinstance(ln, dict) and "who" in ln for ln in d.get("lines") or [])):
+        out.append(
+            "vo.json: this film is narrated in the person's own voice, which speaks for nobody "
+            "else: remove cast and every line's who (the people are seen, not heard)"
+        )
         cast = {}
     for who, spec in cast.items():
         if who not in people:
@@ -114,7 +125,7 @@ def _vo(d, max_lines, length=60, people=()):
             out.append("vo.json: line %d is over %d characters" % (i, MAX_LINE_CHARS))
         if set(ln) - VO_LINE_KEYS:
             out.append("vo.json: line %d may only have text (and start, who)" % i)
-        if "who" in ln and (ln["who"] not in people or ln["who"] not in cast):
+        if "who" in ln and not own and (ln["who"] not in people or ln["who"] not in cast):
             out.append(
                 "vo.json: line %d who %r must be one of this film's people with a voice in cast"
                 % (i, ln["who"])

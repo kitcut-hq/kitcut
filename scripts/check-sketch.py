@@ -519,6 +519,137 @@ def main():
     finally:
         shutil.rmtree(vdir, ignore_errors=True)
 
+    # ---- a person's own ElevenLabs voice, through kitcut.ai's relay: the film's grant goes up,
+    # never a key; a refusal of the person's account is a reason the studio pauses on, and
+    # ElevenLabs' own words are never repeated
+    import io
+    import base64
+    import contextlib
+
+    import httpx
+
+    class Answer:
+        def __init__(self, code, body):
+            self.status_code, self._body = code, body
+
+        def json(self):
+            return self._body
+
+    sent = []
+
+    def answers(a):
+        def post(url, params=None, headers=None, json=None, timeout=None):  # noqa: ARG001
+            sent.append((url, dict(headers or {}), json))
+            return a
+
+        return post
+
+    relay = "https://kitcut.example/api/studio/voice"
+    keep = {
+        k: os.environ.get(k)
+        for k in (
+            "ELEVENLABS_RELAY",
+            "ELEVENLABS_GRANT",
+            "KITCUT_SITE_TOKEN",
+            "ELEVENLABS_FILM",
+            "ELEVENLABS_API_KEY",
+        )
+    }
+    real_post, real_wait = httpx.post, vo_mod.busy_wait
+    words = "secret words the person typed"
+    try:
+        os.environ.update(
+            ELEVENLABS_RELAY=relay,
+            ELEVENLABS_GRANT="g" * 43,
+            KITCUT_SITE_TOKEN="t" * 40,
+            ELEVENLABS_FILM="studio-x",
+        )
+        os.environ.pop("ELEVENLABS_API_KEY", None)
+        vo_mod.busy_wait = lambda attempt: 0  # noqa: ARG005
+        httpx.post = answers(
+            Answer(200, {"audio_base64": base64.b64encode(b"ID3").decode(), "alignment": {}})
+        )
+        mp3, _ = vo_mod.el_take(
+            "Hello.", "MayaBrandV0icePVC01", {"model": "eleven_multilingual_v2"}
+        )
+        url, headers, body = sent[-1]
+        check(
+            "own voice: through the relay with the grant and the film, never a key",
+            url == relay + "/v1/text-to-speech/MayaBrandV0icePVC01/with-timestamps"
+            and headers["Authorization"] == "Bearer " + "g" * 43
+            and headers["X-Film"] == "studio-x"
+            and "xi-api-key" not in headers
+            and body["model_id"] == "eleven_multilingual_v2"
+            and mp3 == b"ID3",
+        )
+        for status, said, want in (
+            (401, "quota_exceeded", "el_quota"),
+            (400, "invalid_api_key", "el_key_invalid"),
+            (401, "missing_permissions", "el_key_permissions"),
+            (404, "voice_not_found", "el_voice_missing"),
+            (403, "connection_removed", "voice_disconnected"),
+            (403, "grant_expired", "voice_disconnected"),
+            (402, "", "el_quota"),
+            (503, "", "voice_unreachable"),
+        ):
+            httpx.post = answers(Answer(status, {"detail": {"status": said, "message": words}}))
+            try:
+                vo_mod.el_take("Hello.", "MayaBrandV0icePVC01", {})
+                got = None
+            except vo_mod.VoiceBlocked as e:
+                got = e.reason
+            check(
+                "own voice: %s is %s (the film waits)" % (said or status, want),
+                got == want,
+                str(got),
+            )
+        httpx.post = answers(Answer(422, {"detail": {"status": "odd", "message": words}}))
+        try:
+            vo_mod.el_take("Hello.", "MayaBrandV0icePVC01", {})
+            said = ""
+        except SystemExit as e:
+            said = str(e.code)
+        check(
+            "own voice: any other refusal ends the step without ElevenLabs' words",
+            said and words not in said,
+            said,
+        )
+    finally:
+        httpx.post, vo_mod.busy_wait = real_post, real_wait
+        for k, v in keep.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    spent = tempfile.mkdtemp(prefix="check-sketch-vo-")
+    try:
+        vo_mod.user_spend(spent, {"model": "eleven_multilingual_v2"}, 42)
+        with open(os.path.join(spent, "spend.jsonl"), encoding="utf-8") as f:
+            row = json.loads(f.readline())
+        check(
+            "own voice: each take's characters are kept as the person's, not KitCut's cost",
+            row["payer"] == "user" and row["chars"] == 42 and row["cost_usd"] == 0,
+        )
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            try:
+                vo_mod.blocked(vo_mod.VoiceBlocked("el_quota", 401, "quota_exceeded"))
+                code = None
+            except SystemExit as e:
+                code = e.code
+        check(
+            "own voice: a blocked account is one VOICE-BLOCKED line and the pause exit",
+            code == vo_mod.PARK_EXIT == 75
+            and out.getvalue().startswith('VOICE-BLOCKED {"reason": "el_quota"'),
+            out.getvalue(),
+        )
+    finally:
+        shutil.rmtree(spent, ignore_errors=True)
+    check(
+        "the tail word: English keeps the one its cached takes were made with",
+        vo_mod.TAILS["en"] == "Alright.",
+    )
+
     # ---- approved voice lines: a project's recording plays for the same words in the same voice
     K = _sketch.voice_line_key
     vo = {"tts": "gemini", "voice": "Sadachbia", "model": "gemini-3.1-flash-tts-preview"}

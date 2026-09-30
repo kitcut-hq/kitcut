@@ -74,6 +74,7 @@ from film import (  # noqa: E402
 )
 from guard import _path, guard, pin_after, pin_paint, pin_vo  # noqa: E402
 from sched import Clock, Sched, waiting_text  # noqa: E402
+import tools as tools_mod  # noqa: E402
 from tools import ToolError, Tools  # noqa: E402
 
 from claude_agent_sdk import (  # noqa: E402
@@ -287,7 +288,7 @@ def ask(film, recent=()):
     )
     if n > LONG_S and film.mode != "scenes":  # a scenes film is written in passes anyway
         text += LONG_FILM
-    text += attached_note(film) + people_note(film) + mark_note(film)
+    text += attached_note(film) + people_note(film) + mark_note(film) + voice_note(film)
     mine = library.note(film)  # the project, or the person's own cast and earlier films
     project = bool(film.record().get("project"))
     note = recent_note(film.look, recent, series=bool(mine), project=project)
@@ -374,6 +375,42 @@ async def draw_people(film):
         json.dump(result, f, indent=1)
     _PEOPLE.pop(film.id, None)
     return result
+
+
+def voice_note(film):
+    """The narrator the person picked for this film (the site's voice setting, studio.json
+    "narrator"), in the first message: the voice is fixed, how it is read is still Claude's."""
+    n = film.record().get("narrator") or {}
+    if n.get("source") == "elevenlabs":
+        return (
+            "\n\nThe narrator is the person's own voice (their ElevenLabs account), set by the "
+            "studio: leave `tts`, `voice` and `model` in vo.json as they are, and write only the "
+            "`language` and the `lines` -- no `style`, no [tags]. Every recording is paid from "
+            "their own characters: record once the words are final, and record again only a line "
+            "that came out wrong. If the voice tool says the account cannot speak, stop."
+            + (
+                " The people in the film are seen, not heard: that voice is the person's own, and "
+                "it is never put in someone else's mouth -- every line is the narrator's (no "
+                "`who`, no `cast`)."
+                if film.record().get("people")
+                else ""
+            )
+        )
+    if n.get("source") == "kitcut" and n.get("voice"):
+        return (
+            "\n\nThe narrator's voice is the person's choice: %s. Keep `voice` as it is in "
+            "vo.json (the studio puts it back); choose the `style` -- how it is read -- and the "
+            "`language` as you would." % n["voice"]
+        )
+    return ""
+
+
+def waiting_words(info):
+    """Why a film waits for its person's voice, in one sentence (the film page adds what to do)."""
+    said = tools_mod.BLOCKED_WORDS.get(
+        info.get("reason"), "the narrator's voice could not be recorded"
+    )
+    return said[:1].upper() + said[1:] + "."
 
 
 def attached_note(film):
@@ -530,7 +567,8 @@ def recent_note(look, dirs, series=False, project=False):
             "a newspaper page under the film",
             "%d of the last %d" % (news, len(same)) if "newsprint" in mine and news else "",
         ),
-        ("voices", tally(d.get("voice") for d in dirs)),
+        # a voice the person picked is theirs, not a choice for other films to weigh
+        ("voices", tally(d.get("voice") for d in dirs if not d.get("voice_pinned"))),
         ("voice directions", firsts((d.get("voice_style") for d in dirs), 8)),
         ("instruments", tally((i for d in dirs for i in d.get("instruments") or []), 6)),
         ("tempos", tally(d.get("bpm") for d in dirs)),
@@ -908,6 +946,8 @@ async def run_claude(
                         text = _result_text(b)
                         if b.is_error and "hook error" not in text:  # denials were reported
                             emit({"type": "fail", "text": text.strip()[-400:]})
+                    if getattr(tools, "parked", None):  # the voice paused the film
+                        raise Parked(tools.parked)
                 elif isinstance(msg, ResultMessage):
                     result = msg
                     if msg.is_error and msg.api_error_status == 401:
@@ -952,6 +992,16 @@ OVER_LIMIT = (
 
 class Stalled(Exception):
     pass
+
+
+class Parked(Exception):  # noqa: N818 -- a pause, not an error
+    """The film waits for its person: their own ElevenLabs account would not speak (tools.voice
+    set tools.parked). Raised once Claude has the tool's answer, so its session ends whole and
+    Continue picks it up there (server.continue_film)."""
+
+    def __init__(self, info):
+        super().__init__(info.get("reason"))
+        self.info = info
 
 
 class Pulse:
@@ -1016,6 +1066,7 @@ async def make_film(
     control=None,
     resume=False,
     resume_minutes=None,
+    resume_prompt=None,
 ):
     """The whole film, from its Claude slot to the video. Every step is reported through
     emit(dict); returns the final summary. Whatever happens, the run's cost goes to
@@ -1083,7 +1134,14 @@ async def make_film(
         sdk = res.total_cost_usd if res is not None and not resume else None
         claude = round(sdk, 4) if sdk is not None else metered
         tokens = meter.tokens()
-        tts_rows = _spend(film, "audio", "vo", "spend.jsonl")
+        rows = _spend(film, "audio", "vo", "spend.jsonl")
+        # a person's own ElevenLabs voice spends their characters, not KitCut's money: counted
+        # apart (user_tts_chars), and never in cost_usd or the day's budget
+        tts_rows = [r for r in rows if r.get("payer") != "user"]
+        own_rows = [r for r in rows if r.get("payer") == "user"]
+        if own_rows:
+            summary["user_tts_chars"] = sum(r.get("chars") or 0 for r in own_rows)
+            summary["user_tts_model"] = own_rows[-1].get("model")
         img_rows = _spend(film, "images", "spend.jsonl")
         tts = round(sum(r["cost_usd"] for r in tts_rows), 6)
         # the people's drawings (draw_people) are pictures too, kept apart so they never count
@@ -1160,7 +1218,7 @@ async def make_film(
         lim = lim | {"claude_s": work, "wall_s": work + 20 * 60}
         spent = carry.get("claude_cost_usd") or 0
         talk = {
-            "prompt": RESUME % round(work / 60),
+            "prompt": (resume_prompt or RESUME) % round(work / 60),
             "resume": rec["claude_session"],
             "budget_usd": max(1.0, lim["budget_usd"] - spent),
         }
@@ -1534,6 +1592,13 @@ async def make_film(
         summary.update(ok=False, error="cancelled", seconds=took())
         emit({"type": "error", "text": "The film was cancelled."})
         raise
+    except Parked as p:
+        # the person's own voice would not speak: the film waits for them, its credits held,
+        # its slot free; Continue picks its session up where it stopped
+        state = "waiting"
+        tools.parked = None
+        summary.update(waiting=p.info, seconds=took())
+        emit({"type": "waiting", "reason": p.info.get("reason"), "text": waiting_words(p.info)})
     except Exception as e:  # noqa: BLE001 -- every failure goes to the page, not just the console
         text = str(e) or type(e).__name__
         if isinstance(e, TimeoutError):
@@ -1542,7 +1607,25 @@ async def make_film(
         emit({"type": "error", "text": text})
     finally:
         tools.kill()  # nothing of this film's keeps running
-        if state not in (
+        if state == "waiting":  # nobody's until its person continues it (server.continue_film)
+            price()
+            keep = {
+                k: summary[k]
+                for k in (
+                    "cost_usd",
+                    "claude_cost_usd",
+                    "tts_cost_usd",
+                    "user_tts_chars",
+                    "seconds",
+                )
+                if k in summary
+            }
+            film.update(state="waiting", waiting=summary["waiting"], server=None, **keep)
+            # not final: kitcut.ai keeps the film's credits held while it waits (its lib/credits.js)
+            await asyncio.shield(
+                save(film.id, {"state": "waiting", "waiting": summary["waiting"], **keep})
+            )
+        elif state not in (
             "queued",
             "finishing",
             "claude",
@@ -1639,6 +1722,15 @@ WRAP_UP = (
     "Time is up. Do not review or render stills again. Write whatever is still missing of "
     "film.js, score.json and sfx.json now -- keep them simple -- call check if you changed "
     "film.js, and stop with one sentence."
+)
+
+
+# the turn that picks up a film that waited for its person to fix their own voice
+RESUME_VOICE = (
+    "The person has put their ElevenLabs account right. This is the same session, and everything "
+    "you made is on disk as it was: record the narration with the voice tool again (the lines "
+    "already recorded are kept, and cost nothing), then carry on from where you were. You have "
+    "about %d minutes left."
 )
 
 
@@ -1739,6 +1831,7 @@ def first_record(film, source, client):
         "kind": "film",
         "source": source,
         "client": client,
+        **({"member": rec["member"]} if rec.get("member") else {}),
         "host": store.HOST,
         "prompt": rec.get("prompt"),
         "model": MODEL,

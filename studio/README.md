@@ -113,8 +113,15 @@ The public site is https://kitcut.ai (create.kitcut.ai redirects there), from
   one-time link by email, sent through SendGrid from `hello@kitcut.ai`).
   - The site owns the accounts (MongoDB `kitcut.users`); this server knows nothing of them.
   - It forwards the page's calls with the token added server-side, plus `X-Client-Ip`.
-  - For a film request, `X-Client-Ip` is `u:<userId>`, the signed-in account, so the
-    per-client limits below are per account and `studio_runs.client` records whose film it was.
+  - For a film request, `X-Client-Ip` is the workspace the film belongs to: `o:<workspace id>`
+    (a person's personal workspace has the person's id, and was sent as `u:<userId>` before
+    workspaces; `clients.py` treats the two as one owner). The per-client limits below are per
+    workspace, and `studio_runs.client` records whose film it was.
+  - `X-Member: u:<userId>` says who asked. The film's record and `studio_runs` keep it as
+    `member`, and uploads are that person's own (`server.uploader_of`).
+  - A film request's `voice` is the narrator the person picked, `{source: "kitcut", voice}`.
+    The voice is pinned in `vo.json` (`Film.vo_pins`), and Claude still directs how it is read
+    (`docs/reference.md`, "Workspaces, and the narrator a person picks").
   - For other calls it is the visitor's IP.
   - The sign-up wall and the credits live in the site's `api/studio.js` and `lib/credits.js`,
     not here. The site holds a film's seconds before forwarding it, and settles them from this
@@ -175,7 +182,7 @@ may last 3 minutes. A voice note is written out in the background -- Gemini 3.1 
 Vertex, then Whisper large-v3-turbo on the CPU if that fails (`STUDIO_STT` overrides; measured by
 `scripts/stt-compare.py`) -- and `GET /api/uploads/<id>` returns its words; a note with no speech
 comes back empty without asking any engine, because every model tried invented words for
-silence. Only the uploader's client (`X-Client-Ip`) can see or use an upload; what no film takes is
+silence. Only the person who uploaded it (`X-Member`, else `X-Client-Ip`) can see or use an upload; what no film takes is
 deleted after a day. A film copies its attachments into `inputs/` (Claude reads them, never
 writes), pictures join the manifest's `images` as `upload1...`, and the first message lists them
 with the instruction to look at each and say what it took it to be; a film nobody typed a word for
@@ -406,8 +413,9 @@ instead (`film.mark_note`, in the first message, and in each scene's and the edi
 made in scenes): the corner `film.MARK_BOX` (x 1660-1920, y 950-1080) is taken, nothing to be
 read goes there. Before that, i4d52n ran its race timer under the mark.
 
-**A series: the person's cast and memory** (`library.py`). A signed-in person (the site's
-`u:<id>` client) has a library that outlives their films, next to `projects\`, never in git:
+**A series: the person's cast and memory** (`library.py`). A signed-in person's workspace (the
+site's `o:<id>` client; `u:<id>` before workspaces, the same owner) has a library that outlives
+its films, next to `projects\`, never in git:
 - **What is kept.** Their cast is characters, places or things as small modules
   (`SK.cast.<name> = {about, draw(x, y, o)}`), plus the films they made.
 - **What a new film gets.** Before Claude starts, a new film gets:

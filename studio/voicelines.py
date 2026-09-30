@@ -19,6 +19,7 @@ import json
 import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import clients  # noqa: E402
 import library  # noqa: E402
 from film import Film  # noqa: E402
 
@@ -55,7 +56,7 @@ def main():
             if not (args.file and args.text and args.like):
                 sys.exit("add needs --film and --line, or --file, --text and --like")
             like = Film.open(args.like)
-            if like is None or like.record().get("client") != args.client:
+            if like is None or not clients.same(like.record().get("client"), args.client):
                 sys.exit("--like must be one of %s's films" % args.client)
             e = library.add_voice(
                 args.client, args.project, args.text, args.file, library._vo_of(like)

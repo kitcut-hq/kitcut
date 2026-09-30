@@ -17,8 +17,9 @@ Films run side by side (STUDIO_PARALLEL Claude sessions, default 3), each in its
 STUDIO_HOME with its own Claude session, and share the machine through the scheduler (sched.py);
 the rest wait their turn, up to STUDIO_MAX_QUEUE (default 5) of them. Anyone can reach this
 through the public site, so the day's spend is capped (STUDIO_DAILY_USD, default 100, counting
-a reserve for every film still being made, by its length), and each client -- the account the site
-forwards as X-Client-Ip "u:<id>", else the IP -- may have one film in the making (more when
+a reserve for every film still being made, by its length), and each client -- the workspace the
+site forwards as X-Client-Ip "o:<id>" ("u:<id>" before workspaces: the same one, clients.py),
+else the IP -- may have one film in the making (more when
 its plan allows: X-At-Once, up to STUDIO_AT_ONCE_MAX, default 2) and STUDIO_PER_CLIENT_DAILY
 (default 5) a day.
 
@@ -103,6 +104,7 @@ picked up again: studio/resume.py.
 """
 
 import os
+import re
 import sys
 import hmac
 import json
@@ -118,13 +120,15 @@ from collections import OrderedDict
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import agent  # noqa: E402 -- imports _env first, which re-execs into .venv; then the secrets
+import agent  # noqa: E402
+import clients  # noqa: E402 -- imports _env first, which re-execs into .venv; then the secrets
 import film as films  # noqa: E402
 import library  # noqa: E402
 import media  # noqa: E402
 import peers  # noqa: E402
 import procs  # noqa: E402
 import store  # noqa: E402
+import validate  # noqa: E402
 import thumbs  # noqa: E402
 import uploads  # noqa: E402
 import youtube  # noqa: E402
@@ -148,6 +152,16 @@ PROMPT_MAX = 12000  # characters of a prompt: a long pasted brief with its narra
 # film.limits)
 DAILY_USD = float(os.environ.get("STUDIO_DAILY_USD") or 100)
 PER_CLIENT_DAILY = int(os.environ.get("STUDIO_PER_CLIENT_DAILY") or 5)
+# where a film's narrator may come from (narrator_of): KitCut's own voices, pinned or chosen by
+# Claude; and, once STUDIO_OWN_VOICE=1, a person's own ElevenLabs voice through the site's relay
+OWN_VOICE = os.environ.get("STUDIO_OWN_VOICE", "").strip() == "1"
+VOICE_SOURCES = ("kitcut", "elevenlabs") if OWN_VOICE else ("kitcut",)
+EL_MODELS = ("eleven_multilingual_v2", "eleven_v3", "eleven_turbo_v2_5", "eleven_flash_v2_5")
+EL_JOBS_MAX = int(os.environ.get("STUDIO_EL_JOBS_MAX") or 4)  # one account's lines at once
+EL_VOICE = re.compile(r"^[A-Za-z0-9]{16,32}$")
+EL_GRANT = re.compile(r"^[A-Za-z0-9_-]{32,128}$")
+# how long a film waits for its person to fix their voice before it is put down (and refunded)
+WAITING_DAYS = float(os.environ.get("STUDIO_WAITING_DAYS") or 7)
 # films in the making per account: one, or what its plan allows (the site's X-At-Once; Pro: 2),
 # never more than this
 AT_ONCE_MAX = int(os.environ.get("STUDIO_AT_ONCE_MAX") or 2)
@@ -215,13 +229,55 @@ def token_of(req):
 
 
 def client_of(req):
-    """Who asks: the account (or IP) the public site forwards (trusted: the request carries the
-    token), else the IP Cloudflare saw, else this machine."""
+    """Who asks: the workspace (or the person, or the IP) the public site forwards (trusted: the
+    request carries the token), else the IP Cloudflare saw, else this machine. A workspace and
+    its person's old name are one owner: compare with clients.same, never ==."""
     return (
         req.headers.get("X-Client-Ip", "")[:64]
         or req.headers.get("Cf-Connecting-Ip")
         or ("local" if from_this_machine(req) else req.remote)
     )
+
+
+def narrator_of(v):
+    """A film request's `voice`, checked: (narrator or None, error or None). The sources this
+    studio knows are in limits_doc()["voice"], so the site offers no other."""
+    if v is None:
+        return None, None
+    if not isinstance(v, dict) or v.get("source") not in VOICE_SOURCES:
+        return None, "voice: the source must be one of %s" % ", ".join(VOICE_SOURCES)
+    if v["source"] == "elevenlabs":
+        if not (
+            EL_VOICE.match(str(v.get("voice") or ""))
+            and v.get("model") in EL_MODELS
+            and EL_GRANT.match(str(v.get("grant") or ""))
+        ):
+            return None, "voice: an ElevenLabs voice needs its voice id, a model and its grant"
+        try:
+            jobs = max(1, min(int(v.get("jobs") or 2), EL_JOBS_MAX))
+            chars = max(0, int(v.get("chars") or 0))
+        except (TypeError, ValueError):
+            return None, "voice: jobs and chars are numbers"
+        return {
+            "source": "elevenlabs",
+            "voice": v["voice"],
+            "model": v["model"],
+            "jobs": jobs,
+            "chars": chars,
+            "grant": v["grant"],
+        }, None
+    if v.get("voice") is None:
+        return None, None  # KitCut chooses
+    if v["voice"] not in validate.VOICES:
+        return None, "voice: not one of KitCut's voices"
+    return {"source": "kitcut", "voice": v["voice"]}, None
+
+
+def uploader_of(req):
+    """Whose uploads a request sees: the person who asked (X-Member), else the client -- so the
+    members of one workspace never see each other's voice notes, and an upload made before the
+    site sent workspaces is still its person's after."""
+    return clients.member_of(req.headers) or client_of(req)
 
 
 # A file URL the API hands out carries its own short-lived signature instead of the token, so a
@@ -433,7 +489,7 @@ def waiting_for_slot(jid, J):
 
 
 # ------------------------------------------------------------------ running a film
-def start(film, finish_only=False):
+def start(film, finish_only=False, resume=None):
     """Make the film in the background; its events go to memory and its events.jsonl. The film's
     record names this server as its maker from now on (peers.owner_alive)."""
     peers.hold_own()
@@ -481,11 +537,21 @@ def start(film, finish_only=False):
         try:
             # done/error only once make_film returns: by then studio.json and
             # kitcut.studio_runs hold the final cost
+            # a film that waited for its person's voice (continue_film) picks its session up
+            again = {}
+            if resume == "voice" and film.mode != "scenes":
+                again = {"resume": True, "resume_prompt": agent.RESUME_VOICE}
             r = await agent.make_film(
-                film, emit, SCHED, auth=J["auth"], finish_only=finish_only, control=J["control"]
+                film,
+                emit,
+                SCHED,
+                auth=J["auth"],
+                finish_only=finish_only,
+                control=J["control"],
+                **again,
             )
             ok = r.get("ok")
-            J["status"] = "done" if ok else "error"
+            J["status"] = "waiting" if r.get("waiting") else "done" if ok else "error"
             if ok:  # its moments sheet now, so a YouTube draft does not wait for it
                 thumbs.premake(film)
                 share.premake(film)  # its share page's title and picture (never raises)
@@ -560,7 +626,8 @@ async def adopt(app=None):
                 await put_down(f, "cancelled", "cancelled", "The film was cancelled.")
                 peers.drop_cancel(f.id)
             elif st == "queued":
-                start(f)
+                # Continued from waiting, and not started before this server went: it picks up
+                start(f, resume=(rec.get("resume") or {}).get("why"))
             elif st == "finishing":
                 start(f, finish_only=True)
             elif st == "claude" and f.mode == "scenes" and rec.get("carried_on", 0) < 3:
@@ -579,6 +646,29 @@ async def adopt(app=None):
                 why = "the studio restarted while Claude was working on it"
                 await put_down(f, "interrupted", why, agent.INTERRUPTED)
 
+    # the films that waited too long for their person's voice: put down, their credits back
+    for f in await asyncio.to_thread(overdue):
+        await put_down(
+            f,
+            "error",
+            "waited %g days for its narrator's voice" % WAITING_DAYS,
+            "This film waited %g days for its narrator's voice and was stopped. Its credits are "
+            "back; make it again once the voice works." % WAITING_DAYS,
+        )
+
+
+def overdue():
+    """The films waiting for their person's voice (state waiting) for more than WAITING_DAYS."""
+    out, now = [], datetime.now()
+    for f in Film.all():
+        if f.legacy or f.state != "waiting":
+            continue
+        since = (f.record().get("waiting") or {}).get("since")
+        with contextlib.suppress(TypeError, ValueError):
+            if (now - datetime.fromisoformat(since)).total_seconds() > WAITING_DAYS * 86400:
+                out.append(f)
+    return out
+
 
 recover = adopt  # its name before several servers
 
@@ -591,8 +681,10 @@ async def put_down(f, state, why, said):
         state=state, ok=False, error=why, finished=datetime.now().isoformat(timespec="seconds")
     )
     last_word(f, {"type": "error", "text": said})
+    # the site settles on its own names (sketch-studio lib/credits.js): an error is "failed"
+    settled = {"error": "failed"}.get(state, state)
     await agent.save(
-        f.id, {"state": state, "ok": False, "error": why, "finished_at": store.now()}, final=True
+        f.id, {"state": settled, "ok": False, "error": why, "finished_at": store.now()}, final=True
     )
 
 
@@ -886,6 +978,17 @@ def limits_doc():
             "unused_kept_hours": uploads.KEEP_S // 3600,
             "per_account_per_day": {"files": uploads.DAY_FILES, "bytes": uploads.DAY_BYTES},
         },
+        # what a narrator can be (the site's voice setting): the sources, and KitCut's voices
+        "voice": {
+            "sources": list(VOICE_SOURCES),
+            "kitcut_voices": list(validate.VOICES),
+            "elevenlabs": {
+                "models": list(EL_MODELS),
+                "jobs_max": EL_JOBS_MAX,
+                "chars_per_second": 16,  # one full recording; the site adds its margin
+                "waiting_days": WAITING_DAYS,
+            },
+        },
         "library": {
             "characters_per_new_film": library.SEEDED,
             "earlier_films_remembered": library.MEMORY,
@@ -949,7 +1052,7 @@ async def over_limit(client, seconds, auth="api", at_once=1, others=None):
         return "Today's budget ($%.0f) is used up. Please try again tomorrow." % DAILY_USD
     if client == "local":
         return None
-    making = sum(1 for j in making_all if j.get("client") == client)
+    making = sum(1 for j in making_all if clients.same(j.get("client"), client))
     if making >= at_once:
         if making == 1:
             return "You already have a film in the making; wait for it to finish (or cancel it)."
@@ -957,7 +1060,7 @@ async def over_limit(client, seconds, auth="api", at_once=1, others=None):
             "You already have %d films in the making; wait for one to finish (or cancel it)."
             % making
         )
-    mine = sum(1 for r in rows if r.get("client") == client and r.get("kind") == "film")
+    mine = sum(1 for r in rows if clients.same(r.get("client"), client) and r.get("kind") == "film")
     if mine >= PER_CLIENT_DAILY:
         return "That is %d films today, the limit for now. Please try again tomorrow." % mine
     return None
@@ -1037,7 +1140,17 @@ async def create(req):
             "brief": str(project.get("brief") or "").strip()[: films.BRIEF_MAX],
             "from_account_cast": project.get("from_account_cast") is True,
         }
+    # the narrator the person picked (the site's voice setting, kitcut.ai lib/narrator.js):
+    # {"source": "kitcut", "voice": <a Gemini voice>} pins that voice (film.vo_pins); none, or
+    # no voice in it, and Claude picks as ever
+    narrator, err = narrator_of(body.get("voice"))
+    if err:
+        return web.json_response({"error": err}, status=400)
     client = client_of(req)
+    # who asked (a member of the client's workspace), and whose uploads it may attach: a person's
+    # own, so a team's members never see each other's voice notes (clients.py)
+    member = clients.member_of(req.headers)
+    uploader = member or client
     # a plan whose films go first (the site sends it, trusted like X-Client-Ip)
     priority = 1 if req.headers.get("X-Priority", "").strip() == "1" else 0
     # a plan that lets an account make more than one film at a time (Pro: 2)
@@ -1069,12 +1182,12 @@ async def create(req):
     # pictures and voice notes uploaded first (uploads.py): this client's own, and every voice
     # note written out -- which may take a moment, so before the lock
     try:
-        attached = await uploads.take(client, ids) if ids else []
-        faces = await uploads.take(client, [p["upload"] for p in people]) if people else []
+        attached = await uploads.take(uploader, ids) if ids else []
+        faces = await uploads.take(uploader, [p["upload"] for p in people]) if people else []
     except uploads.UploadError as e:
         return web.json_response(e.body(), status=e.status)
     for a in attached + faces:
-        a["src"] = uploads.file_of(client, a)
+        a["src"] = uploads.file_of(uploader, a)
     for a, p in zip(faces, people, strict=True):
         if a["kind"] != "image":
             return web.json_response(
@@ -1094,7 +1207,7 @@ async def create(req):
             return web.json_response({"error": refused}, status=429)
         # an account that may make two at once can send the same upload twice: the film admitted
         # first takes it (release, below), and this one must not start without it
-        gone = next((a for a in attached + faces if uploads.get(client, a["id"]) is None), None)
+        gone = next((a for a in attached + faces if uploads.get(uploader, a["id"]) is None), None)
         if gone:
             e = uploads.UploadError(
                 409, "attachment", "An attachment is no longer here; add it again.", gone["id"]
@@ -1116,8 +1229,10 @@ async def create(req):
             fps=fps,
             people=faces,
             character_style=style,
+            member=member,
+            narrator=narrator,
         )
-        uploads.release(client, attached + faces)  # the film has its own copies now
+        uploads.release(uploader, attached + faces)  # the film has its own copies now
         try:  # the person's cast and earlier films (library.py); a film goes ahead without
             await asyncio.to_thread(library.seed, f)
         except Exception as e:  # noqa: BLE001
@@ -1148,7 +1263,7 @@ async def upload(req):
     if DRAINING or MODE == "stopping":
         return web.json_response({"error": RESTARTING}, status=503)
     try:
-        meta = await uploads.receive(req, client_of(req))
+        meta = await uploads.receive(req, uploader_of(req))
     except uploads.UploadError as e:
         return web.json_response(e.body(), status=e.status)
     return web.json_response(uploads.public(meta), status=201)
@@ -1156,7 +1271,7 @@ async def upload(req):
 
 async def upload_status(req):
     """An upload as it is now -- a voice note's words, once written out. Its uploader's only."""
-    meta = uploads.get(client_of(req), req.match_info["id"])
+    meta = uploads.get(uploader_of(req), req.match_info["id"])
     if meta is None:
         return web.json_response({"error": "not found"}, status=404)
     return web.json_response(uploads.public(meta))
@@ -1165,7 +1280,7 @@ async def upload_status(req):
 async def upload_list(req):
     """The asker's uploads no film has taken yet, newest first (each gone after a day)."""
     prune()
-    return web.json_response({"uploads": uploads.listing(client_of(req))})
+    return web.json_response({"uploads": uploads.listing(uploader_of(req))})
 
 
 async def youtube_send(req):
@@ -1179,7 +1294,7 @@ async def youtube_send(req):
     f = film_of(req.match_info["id"])
     rec = f.record()
     client = client_of(req)
-    if not (from_this_machine(req) or rec.get("client") == client):
+    if not (from_this_machine(req) or clients.same(rec.get("client"), client)):
         return web.json_response({"error": "only whoever made a film can publish it"}, status=403)
     if not rec.get("ok"):
         return web.json_response({"error": "This film is not finished."}, status=409)
@@ -1204,12 +1319,12 @@ async def youtube_sent(req):
     key = req.match_info["key"]
     job = youtube.get(key, f)
     if job is None and peer_has("sends", key):
-        if not (from_this_machine(req) or f.record().get("client") == client_of(req)):
+        if not (from_this_machine(req) or clients.same(f.record().get("client"), client_of(req))):
             return web.json_response({"error": "no such send"}, status=404)
         return web.json_response({"key": key, "film": f.id, "state": "sending"})
     if job is None or job["film"] != f.id:
         return web.json_response({"error": "no such send"}, status=404)
-    if not (from_this_machine(req) or job["client"] == client_of(req)):
+    if not (from_this_machine(req) or clients.same(job["client"], client_of(req))):
         return web.json_response({"error": "no such send"}, status=404)
     return web.json_response(youtube.public(job))
 
@@ -1226,7 +1341,7 @@ async def youtube_draft(req):
     f = film_of(req.match_info["id"])
     rec = f.record()
     client = client_of(req)
-    if not (from_this_machine(req) or rec.get("client") == client):
+    if not (from_this_machine(req) or clients.same(rec.get("client"), client)):
         return web.json_response({"error": "only whoever made a film can publish it"}, status=403)
     if not rec.get("ok"):
         return web.json_response({"error": "This film is not finished."}, status=409)
@@ -1254,11 +1369,11 @@ async def youtube_drafted(req):
     channel = req.match_info["channel"]
     job = ytdraft.get(f.id, channel)
     if job is not None:
-        if not (from_this_machine(req) or job["client"] == client_of(req)):
+        if not (from_this_machine(req) or clients.same(job["client"], client_of(req))):
             return web.json_response({"error": "no such draft"}, status=404)
         return web.json_response(ytdraft.public(job))
     # another server's, or written before this server started: its heartbeat, or the disk
-    if not (from_this_machine(req) or f.record().get("client") == client_of(req)):
+    if not (from_this_machine(req) or clients.same(f.record().get("client"), client_of(req))):
         return web.json_response({"error": "no such draft"}, status=404)
     if peer_has("drafts", [f.id, channel]):
         return web.json_response({"film": f.id, "channel": channel, "state": "writing"})
@@ -1282,19 +1397,82 @@ async def cancel(req):
     f = film_of(req.match_info["id"])
     J = JOBS.get(f.id)
     if J is not None and J["status"] in ("queued", "running") and not J.get("ended"):
-        if not (from_this_machine(req) or J["client"] == client_of(req)):
+        if not (from_this_machine(req) or clients.same(J["client"], client_of(req))):
             return web.json_response(
                 {"error": "only whoever asked for a film can stop it"}, status=403
             )
         J["task"].cancel()
         return web.json_response({"id": f.id, "status": "cancelling"}, status=202)
     rec = f.record()
+    if rec.get("state") == "waiting":  # nobody is making it: stopping it is putting it down
+        if not (from_this_machine(req) or clients.same(rec.get("client"), client_of(req))):
+            return web.json_response(
+                {"error": "only whoever asked for a film can stop it"}, status=403
+            )
+        await put_down(f, "cancelled", "cancelled", "The film was cancelled.")
+        return web.json_response({"id": f.id, "status": "cancelled"}, status=202)
     if rec.get("state") not in films.ACTIVE or rec.get("server") == peers.SERVER_ID:
         return web.json_response({"error": "that film is not being made"}, status=409)
-    if not (from_this_machine(req) or rec.get("client") == client_of(req)):
+    if not (from_this_machine(req) or clients.same(rec.get("client"), client_of(req))):
         return web.json_response({"error": "only whoever asked for a film can stop it"}, status=403)
     peers.request_cancel(f.id, by=client_of(req))
     return web.json_response({"id": f.id, "status": "cancelling"}, status=202)
+
+
+async def continue_film(req):
+    """Its person's Continue, for a film that waited for their own voice (state waiting, after
+    tools.voice paused it): it goes back in the queue and picks its Claude session up where it
+    stopped (agent.RESUME_VOICE; a film made in scenes carries on from its pass). The site checks
+    the voice works first, and may send a new one ({voice}: the narrator, with a new grant)."""
+    f = film_of(req.match_info["id"])
+    rec = f.record()
+    if not (from_this_machine(req) or clients.same(rec.get("client"), client_of(req))):
+        return web.json_response(
+            {"error": "only whoever asked for a film can continue it"}, status=403
+        )
+    if rec.get("state") != "waiting":
+        J = JOBS.get(f.id)
+        if rec.get("state") in films.ACTIVE:  # continued already: where it is now
+            return web.json_response(
+                {"id": f.id, "status": (J or {}).get("status") or "queued"}, status=202
+            )
+        return web.json_response({"error": "that film is not waiting"}, status=409)
+    body = {}
+    with contextlib.suppress(ValueError):
+        body = await req.json() if req.can_read_body else {}
+    narrator, err = narrator_of(body.get("voice")) if isinstance(body, dict) else (None, None)
+    if err:
+        return web.json_response({"error": err}, status=400)
+    if not await leading():
+        return web.json_response({"error": RESTARTING}, status=503)
+    async with ADMIT:
+        if not peers.leads() or MODE != "serving" or DRAINING:
+            return web.json_response({"error": RESTARTING}, status=503)
+        others = peers.peers()
+        refused = await over_limit(
+            client_of(req), f.length, rec.get("auth", "api"), at_once_of(req), others
+        )
+        if refused:
+            return web.json_response({"error": refused}, status=429)
+        if narrator and narrator.get("source") == "elevenlabs":  # a new voice, or a new grant
+            p = f.path("temp", "voice.json")
+            with open(
+                os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8"
+            ) as vf:
+                json.dump({"grant": narrator["grant"]}, vf)
+            f.update(narrator={k: v for k, v in narrator.items() if k != "grant"})
+        f.update(state="queued", waiting=None, resume={"why": "voice"}, server=None)
+        last_word(
+            f,
+            {
+                "type": "stage",
+                "name": "queue",
+                "text": "Continued: the narrator's voice works again",
+            },
+        )
+        await agent.save(f.id, {"state": "queued", "waiting": None})
+        start(f, resume="voice")
+    return web.json_response({"id": f.id, "status": "queued"}, status=202)
 
 
 async def drain(req):
@@ -1449,7 +1627,7 @@ def own_film(req):
     """The film of this route, when the asker made it (or this machine asks); else 404, so a
     stranger learns nothing about a film's narration."""
     f = film_of(req.match_info["id"])
-    if not (from_this_machine(req) or f.record().get("client") == client_of(req)):
+    if not (from_this_machine(req) or clients.same(f.record().get("client"), client_of(req))):
         raise web.HTTPNotFound()
     return f
 
@@ -1499,7 +1677,7 @@ async def set_listed(req):
     operator hid stays out of the gallery whatever its maker asks."""
     f = film_of(req.match_info["id"])
     rec = f.record()
-    if not (from_this_machine(req) or rec.get("client") == client_of(req)):
+    if not (from_this_machine(req) or clients.same(rec.get("client"), client_of(req))):
         return web.json_response({"error": "only whoever made a film can change that"}, status=403)
     try:
         listed = (await req.json()).get("listed")
@@ -1654,6 +1832,7 @@ async def status(req):
             "cancelled": "cancelled",
             "error": "error",
             "interrupted": "error",
+            "waiting": "waiting",  # paused for its person's voice: Continue picks it up
         }.get(st, "lost")
         events, n, _ = read_log(f, since)
         out = {
@@ -1680,6 +1859,13 @@ async def status(req):
             out["cost_usd"] = J["cost_usd"]  # so far; the final figure replaces it below
         if J["status"] not in ("done", "error", "cancelled"):
             r = {k: r.get(k) for k in ("prompt", "title", "look", "length", "listed")}
+    if out["status"] == "waiting":  # paused for its person's voice: why and since when, in words
+        w = f.record().get("waiting") or {}
+        out["waiting"] = {
+            "reason": w.get("reason"),
+            "since": w.get("since"),
+            "text": agent.waiting_words(w),
+        }
     if out["status"] == "done":
         out.update(film_urls(req, jid, r))
     out["listed"] = r.get("listed") is not False  # a film from before the switch was listed
@@ -1796,6 +1982,7 @@ def make_app(token):
             web.get("/api/films/{id}/lines", film_lines),
             web.get("/api/films/{id}/lines/{i}.mp3", film_line_audio),
             web.post("/api/films/{id}/cancel", cancel),
+            web.post("/api/films/{id}/continue", continue_film),
             web.post("/api/films/{id}/listed", set_listed),
             web.post("/api/films/{id}/youtube", youtube_send),
             web.post("/api/films/{id}/youtube/draft", youtube_draft),

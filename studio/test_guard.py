@@ -255,6 +255,32 @@ def main():
         expect("vo.json pinned", (vo["tts"], vo["takes"], "whisper" in vo), ("gemini", 1, False))
         expect("and Claude is told", "restored" in note and "whisper" in note, True)
 
+        # a narrator the person picked (the site's voice setting): its voice is pinned too, the
+        # rest of the voice is still Claude's, Claude is told in the first message, and other films
+        # do not count it as a choice
+        P = films.Film.create(
+            "a pinned voice", 5, "drawn", narrator={"source": "kitcut", "voice": "Puck"}
+        )
+        with open(P.path("vo.json"), encoding="utf-8") as f:
+            expect("a picked narrator starts in vo.json", json.load(f)["voice"], "Puck")
+        with open(P.path("vo.json"), "w", encoding="utf-8") as f:
+            json.dump({"voice": "Kore", "style": "hushed, slow", "language": "uk", "lines": []}, f)
+        note = pin_after("vo.json", P)
+        with open(P.path("vo.json"), encoding="utf-8") as f:
+            vo = json.load(f)
+        expect(
+            "a picked voice comes back, the style and language stay Claude's",
+            (vo["voice"], vo["style"], vo["language"]),
+            ("Puck", "hushed, slow", "uk"),
+        )
+        expect("and Claude is told it was put back", "voice='Puck'" in note, True)
+        expect("the first message names it", "person's choice: Puck" in agent.voice_note(P), True)
+        expect("a film without one says nothing", agent.voice_note(A), "")
+        d = P.direction()
+        expect("its direction marks the voice as picked", d.get("voice_pinned"), True)
+        tally = agent.recent_note("drawn", [d, {"look": "drawn", "voice": "Kore"}])
+        expect("other films' notes count Claude's choices only", "Puck" in tally, False)
+
         # both looks' instructions build, every placeholder of ours filled, and none of them
         # depends on the film (so films share Claude's prompt cache)
         ours = set(re.findall(r"\{([A-Z_]+)\}", agent._read("studio", "prompt.md")))
@@ -270,7 +296,7 @@ def main():
                 False,
             )
         expect("the length is in the first message", "Length: 10 seconds" in agent.ask(B), True)
-        n = len(cases) + 32
+        n = len(cases) + 41
     finally:
         shutil.rmtree(HOME, ignore_errors=True)
     print("%d cases, %d failed" % (n, len(bad)))

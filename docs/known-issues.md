@@ -815,3 +815,42 @@ your": the brief's hook, which the film says with one word more ("without ever l
 writes on screen ("A whole film, without leaving your chat."). Only the narration, the maker's
 notes and the sources count as the film's own words; its on-screen words do not. A brief that
 scripts the film's lines can still leave the person to write the draft themselves.
+
+### KI-051 · mitigated · studio · A person's own voice can stop speaking half-way through a film
+
+**Symptom.** A film narrated in a person's own ElevenLabs voice depends on their account for as
+long as it is being made: it can run out of characters, have its key deleted or a permission
+removed, or lose the voice, after the film has started. Before, any refusal from ElevenLabs ended
+the step with ElevenLabs' own words, and Claude could only fail the film.
+**Cause.** Nothing about another company's account can be settled before the film starts: the
+site's check (it can still speak, the voice is there, characters enough when the key may say)
+lowers the odds, not to zero -- and a credit limit on the key itself is invisible to it.
+**Mitigation.** The film pauses instead of failing: `sketch-vo.py` says why in one
+`VOICE-BLOCKED` line and exits 75, `tools.voice` tells Claude to stop and `agent.Parked` ends the
+session whole, the film is `waiting` (not final: the site keeps its credits held), and Continue
+picks the session up (`server.continue_film`, `agent.RESUME_VOICE`). The takes already made are
+kept and not paid for again. A film waits up to `STUDIO_WAITING_DAYS` (7), then it is put down and
+refunded.
+**Lesson.** Where a film leans on a person's own account, a failure there is theirs to fix, not
+the film's to die of: pause, say what to fix, keep what was made.
+
+### KI-052 · open · studio · Professional voice clones are not measured on eleven_v3
+
+**Symptom.** The site sends a professional clone in `eleven_multilingual_v2` and every other
+ElevenLabs voice in `eleven_v3` where ElevenLabs lists the voice for it (`lib/narrator.js
+pickModel`). Whether v3 reads a professional clone as well, as like the person, and as cleanly at
+the end of a line, is not known here.
+**Cause.** The team's own ElevenLabs plan is below the tier that makes professional clones, so
+none could be measured. Instant clones, designed and library voices can be.
+**Next.** `scripts/vo-model-bench.py` (planned: accuracy by the production scorer, clipping,
+speaker similarity to a reference recording, a blind listening page) on a professional clone,
+before the default changes.
+
+### KI-053 · open · studio · A release before waiting films existed reads one as lost
+
+**Symptom.** A server of a release from before 2026-09-30 does not know the state `waiting`: its
+status route calls such a film `lost`, and it would not continue it.
+**Cause.** A new state name in `studio.json`, read by every release that shares the home.
+**Rule.** Never roll back past the release that brought `waiting` while any film is waiting
+(`ops.sh` status lists them). A continued film pays one uncached re-read of its Claude context,
+about $0.5-1 on a long film: the cost of pausing, instead of failing and making it again.

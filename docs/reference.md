@@ -4208,6 +4208,100 @@ prompt pasted in. Each side brings what only it has:
   chapter rules, the prompt check, the cache, the cost, and the API (owner only, finished only,
   202 then the draft).
 
+#### Workspaces, and the narrator a person picks: `studio/clients.py`, `voice-samples.py`
+
+kitcut.ai makes every film, upload and library a **workspace's** (the site's `lib/orgs.js`): a
+person's personal one, or an organisation of several people. The site sends
+`X-Client-Ip: o:<workspace id>` (whose film, whose credits, whose library) and
+`X-Member: u:<person id>` (who asked).
+
+- **One owner, two names.** A person's personal workspace has the person's own id, and before
+  workspaces the site sent the person as `u:<id>`. `clients.canon` makes `u:<id>` and `o:<id>` one
+  owner, and every ownership check, library and limit compares with `clients.same`, never `==`. So
+  a film made before the switch is still its owner's after it, with no record rewritten.
+- **Libraries move themselves.** `library.dir_of` names a library's folder after the workspace.
+  The first time a personal workspace's library is used, its old folder (named after `u:<id>`) is
+  renamed to it: one rename on one disk, and two servers racing both end with it in place. Where it
+  cannot move yet (a file open in it, on Windows), the old folder is used as it is.
+- **Uploads are the person's**, keyed by `X-Member` (`server.uploader_of`). The members of one
+  workspace never see each other's voice notes, and an upload made before the switch is still
+  there after it.
+- **Who asked is recorded.** The film's record (`studio.json`) and its run record (`studio_runs`)
+  carry `member`.
+
+**The narrator a person picks.** A film request may carry
+`voice: {"source": "kitcut", "voice": "<a Gemini voice>"}`: the site's narrator setting, the
+project's or else the workspace's (the site's `lib/narrator.js`).
+- `server.narrator_of` checks the request. `studio.json` keeps it as `narrator`.
+- `Film.vo_pins()` is what `vo.json` must hold: the studio's backend, model and takes, plus that
+  voice. `guard.pin_vo` puts it back after every edit and tells Claude it did.
+- Claude still chooses the voice direction (`style`) and the `language`. It learns the voice is
+  fixed from `agent.voice_note`, in the first message. The system prompt and the voice tool's
+  description stay the same for every film, so the prompt cache survives.
+- The film's `direction` marks the voice `voice_pinned`, and the recent-films note leaves a picked
+  voice out of the voices it counts: it was a person's pick, not a choice for other films to weigh.
+- `GET /api/limits` lists the sources this studio knows (`voice.sources`) and KitCut's voices
+  (`voice.kitcut_voices`); the site offers no other. No `voice`, or one with no voice in it: Claude
+  picks, as before.
+- Tests: `test_guard.py` (the pin, the note, the tally), `test_library.py` (the workspace cases).
+
+**Samples for the picker.**
+- `python scripts/voice-samples.py [--model M] [--lang en] [--plan]` records one sentence (from
+  `config/sketch/voice-samples.json`) in each of the 30 voices. It uses the narration's own path,
+  `sketch-vo.py gemini_take`, with no direction, and levels each clip to the narration's level, so
+  the voices compare fairly.
+- It writes `projects/voice-samples/outputs/<model>/<lang>/` (the clips, `index.json` and an
+  `index.html` to listen through). The site commits the English clips as `voices/<Voice>.mp3`.
+- Measured 2026-09-30: 30 clips of 6–7 s on `gemini-3.1-flash-tts-preview` (Vertex) cost $0.15.
+  All 30 read the sentence word for word (checked with Whisper large-v3 through OpenRouter).
+- `gemini-3.8-flash-tts` goes through the Gemini API. This laptop's Google project does not have
+  it switched on; the studio VM does, through `GEMINI_API_KEY`. Record the production-model clips
+  there.
+
+**A person's own ElevenLabs voice** (`STUDIO_OWN_VOICE=1`). The request's `voice` is
+`{"source": "elevenlabs", "voice": <id>, "model": <model>, "jobs": n, "chars": n, "grant": <grant>}`.
+The site checked the key, the voice and the characters left before it held any credits, and
+minted the **grant**: one film's permission to speak, in that voice and model, up to a character
+cap. It never sends the key, and the studio never holds it.
+- `narrator_of` checks the shape; `jobs` is clamped to `STUDIO_EL_JOBS_MAX` (4), the lines one
+  account records at once. `studio.json` keeps the narrator **without** the grant, which is written
+  to `temp/voice.json` (mode 0600) and nowhere else: not in `vo.json`, events, logs or argv.
+- `procs.step_env("voice")` for such a film holds `OPENROUTER_API_KEY` (the scorer) and the relay's
+  four variables, `ELEVENLABS_RELAY` (`STUDIO_VOICE_RELAY`, default
+  `https://kitcut.ai/api/studio/voice`), `ELEVENLABS_GRANT`, `ELEVENLABS_FILM` and
+  `KITCUT_SITE_TOKEN`. No studio ElevenLabs key and no Google keys, so a take cannot fall back to
+  being paid by the studio.
+- `sketch-vo.py el_take` sends its normal request to
+  `<relay>/v1/text-to-speech/<voice>/with-timestamps` with `Authorization: Bearer <grant>`,
+  `X-Studio-Token` and `X-Film` in place of `xi-api-key`. The site's relay checks all three, the
+  voice, the model and the cap, then forwards with the workspace's current key and returns
+  ElevenLabs' answer as it came. A dropped connection counts as busy, and is retried.
+- **Who pays is written per take.** Each take in the person's voice appends a `payer: "user"` row
+  to `audio/vo/spend.jsonl` as it is made. `agent.price` counts those as `user_tts_chars`, out of
+  `tts_cost_usd`, `cost_usd` and the studio's daily budget: the characters are the person's.
+- Models: the site picks `eleven_multilingual_v2` for a professional clone and `eleven_v3` for any
+  other voice that lists it (KI-052). The tail word that keeps a line's last syllable follows the
+  language (`TAILS`).
+
+**When the voice stops speaking, the film waits.** ElevenLabs' refusal is classified by its
+`detail.status` (`BLOCKED_BY`), never echoed: an invalid key, a missing permission, no characters
+left, a voice gone, a plan that cannot use it, a blocked account.
+1. `sketch-vo.py` prints one `VOICE-BLOCKED {"reason": ..., "status": ...}` line and exits 75
+   (`PARK_EXIT`). The takes already made stay cached.
+2. `tools.voice` sees it (`voice_blocked`), sets `self.parked`, and answers Claude with a
+   `ToolError` that says to stop. `agent.run_claude` raises `Parked` right after that tool result,
+   so the session ends whole and can be resumed.
+3. `make_film` saves the film `waiting`, with `waiting: {reason, since, text}`. It is not final:
+   the slot is free, and the site keeps the film's credits held (its `PARK_MS`, 8 days).
+4. The site's **Continue** (`POST /api/films/<id>/continue`, whoever asked for the film) checks
+   the voice works, may send a new narrator and grant, and the film goes back in the queue.
+   `adopt` starts it with `RESUME_VOICE`: the same Claude session, told to record again (the
+   cached takes cost nothing) and carry on. It pays one uncached re-read of the session (KI-053).
+5. A film that waits more than `STUDIO_WAITING_DAYS` (7) is put down as failed, and its credits
+   come back. Stop works on a waiting film at once.
+- Tests: `check-sketch.py` (the relay's headers, the classification with no body leaked, exit 75,
+  the per-take rows), `test_server.py` (`paused()`: waiting, not final, Continue, cancel, expiry).
+
 ## Projects: one folder and two files per video
 
 Everything about one video lives in `projects/<id>/`: the manifests that drive

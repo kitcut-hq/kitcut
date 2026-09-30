@@ -23,8 +23,10 @@ and note() tells Claude what is there, in the first message. Whether to bring an
 Claude's call. After a film finishes, keep() takes in what it made: a member that is new, or
 changed since the film got it, becomes a new version; a failed or cancelled film keeps nothing.
 
-Only signed-in people have a library (the site's `u:<id>` clients): a visitor known only by an
-address could share one with a stranger.
+Only signed-in people have a library -- a workspace's, in fact (the site's `o:<id>` clients; a
+person's personal workspace was `u:<id>` before workspaces, and clients.py treats the two as one):
+a visitor known only by an address could share one with a stranger. The folder is named after the
+workspace (dir_of), and a personal one's old folder is moved to it the first time it is used.
 
 A project on the site (a series, a channel) has a library of its own, inside its person's:
 
@@ -55,6 +57,7 @@ from datetime import datetime
 import sys
 import subprocess
 
+import clients
 import locks
 from film import CAST_USE, HOME, PROJECT_ID, VO_PINNED, Film, _write_json
 
@@ -80,13 +83,14 @@ _LOCKS_LOCK = threading.Lock()
 
 
 def owner(client, project=None):
-    """Which library a film or a request uses: (client, project) for a signed-in person, project
-    None for their own; None for anyone else, or a project id that is not one."""
-    if not (isinstance(client, str) and client.startswith("u:")):
+    """Which library a film or a request uses: (workspace, project) for a signed-in person or a
+    workspace -- one owner either way (clients.py: "u:<id>" is the personal workspace "o:<id>") --
+    project None for its own; None for anyone else, or a project id that is not one."""
+    if not clients.signed_in(client):
         return None
     if project is not None and not (isinstance(project, str) and PROJECT_ID.match(project)):
         return None
-    return (client, project)
+    return (clients.canon(client), project)
 
 
 def lib_of(rec):
@@ -98,10 +102,33 @@ def _lib(lib):
     return (lib, None) if isinstance(lib, str) else lib
 
 
+def _name(client):
+    return hashlib.sha256(client.encode()).hexdigest()[:20]
+
+
 def dir_of(lib):
     client, project = _lib(lib)
-    d = os.path.join(ROOT, hashlib.sha256(client.encode()).hexdigest()[:20])
+    client = clients.canon(client)
+    d = os.path.join(ROOT, _name(client))
+    if not os.path.isdir(d):
+        d = _adopt(client, d)
     return os.path.join(d, project) if project else d
+
+
+def _adopt(client, d):
+    """A personal workspace's library from before workspaces, kept under the person's name
+    ("u:<id>"): moved to the workspace's, once. A rename on one disk: two servers racing both end
+    with it in place. Where it cannot move yet (a file open in it, on Windows), the old folder is
+    used as it is this time, so nothing is split between two."""
+    old = clients.legacy(client)
+    src = old and os.path.join(ROOT, _name(old))
+    if not (src and os.path.isdir(src)):
+        return d
+    try:
+        os.rename(src, d)
+    except OSError:
+        return d if os.path.isdir(d) else src
+    return d
 
 
 @contextlib.contextmanager
@@ -154,7 +181,11 @@ def load(lib):
         idx["films"] = []
         for f in [] if project else Film.all():
             rec = f.record()
-            if rec.get("client") == client and not rec.get("project") and f.state == "done":
+            if (
+                clients.same(rec.get("client"), client)
+                and not rec.get("project")
+                and f.state == "done"
+            ):
                 idx["films"].append(f.id)
         idx["films"] = idx["films"][:LISTED]
     return idx
@@ -905,7 +936,11 @@ def add_voice_from_film(client, project, film_id, i):
     """Approve line i of one of the project's finished episodes, as it sounds in the film."""
     f = Film.open(str(film_id or ""))
     rec = f.record() if f else {}
-    if not f or rec.get("client") != client or (rec.get("project") or {}).get("id") != project:
+    if (
+        not f
+        or not clients.same(rec.get("client"), client)
+        or (rec.get("project") or {}).get("id") != project
+    ):
         raise VoiceError(404, "That film is not an episode of this project.")
     if f.state != "done":
         raise VoiceError(409, "Only a finished episode's lines can be approved.")

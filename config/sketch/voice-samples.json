@@ -1,0 +1,7 @@
+{
+  "_about": "What each of KitCut's narrator voices says in the site's voice picker (scripts/voice-samples.py). One sentence a narrator would really say, 6 to 8 seconds, no direction: the picker is for hearing the voice itself. Keyed by language; the site plays the one in the film's language when it has it, else English.",
+  "text": {
+    "en": "Every film starts with a single idea. This is how it sounds when I tell your story.",
+    "uk": "Кожен фільм починається з однієї ідеї. Ось як звучить ваша історія моїм голосом."
+  }
+}

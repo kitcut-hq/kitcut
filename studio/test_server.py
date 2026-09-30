@@ -85,6 +85,30 @@ async def fake_claude(
             emit({"type": "cost", "usd": round(meter.usd(), 4)})
         return
     prompt = film.record().get("prompt", "")
+    if "voice pauses" in prompt:
+        # a person's own ElevenLabs account runs out of characters half-way through the
+        # narration: two takes were made (their characters, not KitCut's cost), then the voice
+        # tool paused the film (tools.voice sets tools.parked; run_claude raises Parked)
+        film.update(claude_session="fake-session")
+        os.makedirs(film.path("audio", "vo"), exist_ok=True)
+        with open(film.path("audio", "vo", "spend.jsonl"), "w", encoding="utf-8") as f:
+            for _ in range(2):
+                row = {
+                    "payer": "user",
+                    "provider": "elevenlabs",
+                    "model": "eleven_multilingual_v2",
+                    "chars": 60,
+                }
+                f.write(json.dumps(row | {"cost_usd": 0, "input": 0, "output": 0}) + "\n")
+        meter.add("msg_voice_" + film.id, USAGE)
+        emit({"type": "cost", "usd": round(meter.usd(), 4)})
+        tools.parked = {
+            "reason": "el_quota",
+            "status": 401,
+            "detail": "quota_exceeded",
+            "since": "2026-09-30T12:00:00",
+        }
+        raise agent.Parked(tools.parked)
     if "login gone" in prompt and auth == "login":  # what run_claude raises for a lost login
         raise agent.SignInError(NOT_LOGGED_IN)
     if "nothing written" in prompt:
@@ -157,6 +181,56 @@ async def wait_for(c, auth, jid, states=("done", "error", "cancelled"), limit=60
     return st
 
 
+async def paused(c, auth, mem, check):
+    """A film whose person's own ElevenLabs voice stops speaking waits for them (state waiting):
+    not final, so the site keeps its credits held; its slot free; its characters theirs, not
+    KitCut's cost. Continue picks its session up; a stranger cannot; Stop puts it down."""
+    me = auth | {"X-Client-Ip": "o:voiced", "X-Member": "u:voiced"}
+    r = await c.post(
+        "/api/films", json={"prompt": "the voice pauses half-way", "seconds": 10}, headers=me
+    )
+    fid = (await r.json())["id"]
+    st = await wait_for(c, auth, fid, states=("waiting", "done", "error"), limit=120)
+    check(st["status"] == "waiting", "a film whose own voice stops speaking waits")
+    f = films.Film.open(fid)
+    rec, doc = f.record(), mem.docs.get(fid, {})
+    check(
+        rec.get("state") == "waiting" and doc.get("state") == "waiting" and fid not in mem.finals,
+        "its record says waiting, and not as a final state (the site keeps its credits held)",
+    )
+    check((rec.get("waiting") or {}).get("reason") == "el_quota", "and why")
+    check(
+        rec.get("user_tts_chars") == 120 and rec.get("tts_cost_usd") == 0,
+        "its person's characters are counted apart, not as KitCut's cost",
+    )
+    h = await (await c.get("/api/health", headers=auth)).json()
+    check(h["running"] == 0, "a waiting film holds no slot")
+    stranger = auth | {"X-Client-Ip": "o:stranger", "Cf-Ray": "t"}  # through the tunnel
+    r = await c.post("/api/films/%s/continue" % fid, headers=stranger)
+    check(r.status == 403, "only its person continues it")
+    r = await c.post("/api/films/%s/continue" % fid, headers=me)
+    check(r.status == 202, "Continue puts it back in the queue")
+    st = await wait_for(c, auth, fid, limit=300)
+    check(
+        st["status"] == "done"
+        and films.Film.open(fid).record().get("resume", {}).get("why") == "voice",
+        "and it is made from where it stopped",
+    )
+    r = await c.post("/api/films/%s/continue" % fid, headers=me)
+    check(r.status == 409, "a film that is not waiting is not continued")
+    # one that waits, stopped by its person: put down, its credits given back
+    r = await c.post(
+        "/api/films", json={"prompt": "the voice pauses, then stop", "seconds": 10}, headers=me
+    )
+    fid2 = (await r.json())["id"]
+    await wait_for(c, auth, fid2, states=("waiting", "done", "error"), limit=120)
+    r = await c.post("/api/films/%s/cancel" % fid2, headers=me)
+    check(
+        r.status == 202 and mem.docs.get(fid2, {}).get("state") == "cancelled",
+        "Stop on a waiting film puts it down as cancelled",
+    )
+
+
 async def projects(c, auth, mem, check):
     """A project's episodes: its pictures and cast, apart from the person's own; one film in the
     making per person across projects; nothing of the project in what anyone may see."""
@@ -194,9 +268,25 @@ async def projects(c, auth, mem, check):
     r = await c.post("/api/films", json={"prompt": "x", "project": {"id": "nope"}}, headers=me)
     check(r.status == 400, "a film's project must be one")
     r = await c.post(
+        "/api/films", json={"prompt": "x", "voice": {"source": "elsewhere"}}, headers=me
+    )
+    check(r.status == 400, "a narrator comes from a source this studio knows")
+    r = await c.post(
         "/api/films",
-        json={"prompt": "episode one, with a cast", "project": project},
+        json={"prompt": "x", "voice": {"source": "kitcut", "voice": "Nobody"}},
         headers=me,
+    )
+    check(r.status == 400, "and is one of KitCut's voices")
+    # the site asks as the workspace ("o:proj", the personal one: the same owner as "u:proj"),
+    # says who asked, and sends the narrator the project set
+    r = await c.post(
+        "/api/films",
+        json={
+            "prompt": "episode one, with a cast",
+            "project": project,
+            "voice": {"source": "kitcut", "voice": "Puck"},
+        },
+        headers=auth | {"X-Client-Ip": "o:proj", "X-Member": "u:proj"},
     )
     ep = (await r.json())["id"]
     f = films.Film.open(ep)
@@ -204,7 +294,24 @@ async def projects(c, auth, mem, check):
         f.record()["project"]["brief"] == "Short, funny, for kids."
         and mem.docs[ep].get("project_id") == P
         and os.path.exists(f.path("inputs", "pic_logo.png")),
-        "an episode knows its project, and has its pictures",
+        "an episode knows its project, and has its pictures (asked for as the workspace)",
+    )
+    check(
+        f.record().get("member") == "u:proj" and mem.docs[ep].get("member") == "u:proj",
+        "the film and its run record who asked",
+    )
+    with open(f.path("vo.json"), encoding="utf-8") as vf:
+        check(
+            f.record().get("narrator") == {"source": "kitcut", "voice": "Puck"}
+            and json.load(vf)["voice"] == "Puck",
+            "the narrator the project set is the film's voice",
+        )
+    r = await c.get("/api/films/%s" % ep, headers=me)
+    check(r.status == 200, "and the person's old name still owns it")
+    lim = await (await c.get("/api/limits", headers=auth)).json()
+    check(
+        lim["voice"]["sources"] == ["kitcut"] and "Kore" in lim["voice"]["kitcut_voices"],
+        "the limits say what a narrator can be",
     )
     r = await c.post(
         "/api/films",
@@ -877,6 +984,7 @@ async def main():
         check(r.status == 200 and mine["cast"] == [], "and then it is gone")
 
         await projects(c, auth, mem, check)
+        await paused(c, auth, mem, check)
 
         # ------------------------------------------------ the leader adopts what a dead server left
         check(
@@ -915,7 +1023,8 @@ async def main():
         check(st_q.get("status") == "done", "a queued film is made after a restart")
         check(
             st_f.get("status") == "done" and fin.id not in CALLED[before:],
-            "a film left mid-render is finished, without Claude",
+            "a film left mid-render is finished, without Claude (%s%s)"
+            % (st_f.get("status"), ": " + str(st_f.get("error")) if st_f.get("error") else ""),
         )
         check(abs(st_f.get("claude_cost_usd", 0) - 0.5) < 1e-9, "keeping Claude's earlier cost")
         check(

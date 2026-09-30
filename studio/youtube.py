@@ -29,6 +29,8 @@ import asyncio
 
 import aiohttp
 
+import clients
+
 # the only place a film may be sent: YouTube's own resumable upload endpoint
 HOSTS = ("https://www.googleapis.com/upload/youtube/v3/videos?",)
 KEY = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
@@ -108,7 +110,7 @@ def start(film, client, to, key):
         raise SendError(409, "This film has no video to send.")
     job = SENDS.get(key) or saved(film, key)
     if job is not None:
-        if job["film"] != film.id or job["client"] != client:
+        if job["film"] != film.id or not clients.same(job["client"], client):
             raise SendError(409, "that key belongs to another send")
         if job["state"] != "failed":
             return job  # sending or done: the same answer as the first time

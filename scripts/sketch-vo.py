@@ -67,6 +67,7 @@ import hashlib
 import difflib
 import atexit
 import argparse
+import threading
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from importlib import import_module
@@ -125,31 +126,103 @@ def fingerprint(line, vo):
 
 # ------------------------------------------------------------------ synthesis
 def el_take(text, voice_id, vo):
+    """One take from ElevenLabs with its character timings: (mp3 bytes, alignment). A person's own
+    voice (ELEVENLABS_RELAY set, studio/tools.py) goes through kitcut.ai's relay with the film's
+    grant and never a key (the site's lib/connections/relay.js speaks with the workspace's key);
+    the studio's own voice (the backup) goes straight to ElevenLabs with its key. A refusal that
+    is the person's account raises VoiceBlocked, and ElevenLabs' answer is never echoed."""
     import httpx
 
-    key = os.environ.get("ELEVENLABS_API_KEY")
-    if not key:
-        sys.exit("ELEVENLABS_API_KEY is not set (put it in .env)")
+    relay = os.environ.get("ELEVENLABS_RELAY", "").rstrip("/")
+    if relay:
+        url = relay + "/v1/text-to-speech/%s/with-timestamps" % voice_id
+        headers = {
+            "Authorization": "Bearer " + os.environ.get("ELEVENLABS_GRANT", ""),
+            "X-Studio-Token": os.environ.get("KITCUT_SITE_TOKEN", ""),
+            "X-Film": os.environ.get("ELEVENLABS_FILM", ""),
+        }
+    else:
+        key = os.environ.get("ELEVENLABS_API_KEY")
+        if not key:
+            sys.exit("ELEVENLABS_API_KEY is not set (put it in .env)")
+        url, headers = EL_URL % voice_id, {"xi-api-key": key}
+    body = {
+        "text": text,
+        "model_id": vo.get("model", "eleven_v3"),
+        "voice_settings": vo.get("settings", {"stability": 0.5, "similarity_boost": 0.8}),
+    }
+    r = None
     for attempt in range(BUSY_TRIES):
-        r = httpx.post(
-            EL_URL % voice_id,
-            params={"output_format": vo.get("format", "mp3_44100_128")},
-            headers={"xi-api-key": key},
-            json={
-                "text": text,
-                "model_id": vo.get("model", "eleven_v3"),
-                "voice_settings": vo.get("settings", {"stability": 0.5, "similarity_boost": 0.8}),
-            },
-            timeout=300,
-        )
+        try:
+            r = httpx.post(
+                url,
+                params={"output_format": vo.get("format", "mp3_44100_128")},
+                headers=headers,
+                json=body,
+                timeout=300,
+            )
+        except httpx.TransportError:
+            r = None  # no answer at all: like a busy one, worth asking again
         # 429 is also ElevenLabs' answer to more requests at once than the plan allows
-        if r.status_code not in BUSY or attempt == BUSY_TRIES - 1:
+        if r is not None and (r.status_code not in BUSY or attempt == BUSY_TRIES - 1):
             break
-        time.sleep(busy_wait(attempt))
+        if attempt < BUSY_TRIES - 1:
+            time.sleep(busy_wait(attempt))
+    if r is None or r.status_code in BUSY:
+        code = r.status_code if r is not None else 0
+        if relay:
+            raise VoiceBlocked("voice_unreachable", code)
+        sys.exit("elevenlabs did not answer (%s)" % (code or "no connection"))
     if r.status_code != 200:
-        sys.exit("elevenlabs %s: %s" % (r.status_code, r.text[:300]))
+        try:
+            d = (r.json() or {}).get("detail") or {}
+        except ValueError:
+            d = {}
+        said = str(d.get("status") or d.get("code") or "") if isinstance(d, dict) else ""
+        if relay:
+            reason = BLOCKED_BY.get(said) or {401: "el_key_invalid", 402: "el_quota"}.get(
+                r.status_code
+            )
+            if reason:
+                raise VoiceBlocked(reason, r.status_code, said)
+            if said == "film_char_cap":
+                sys.exit(
+                    "this film's narration has used the characters it may spend in the person's "
+                    "ElevenLabs account: record fewer lines again"
+                )
+        sys.exit(
+            "elevenlabs refused the line (%s%s)" % (r.status_code, ", " + said if said else "")
+        )
     j = r.json()
     return base64.b64decode(j["audio_base64"]), j.get("alignment") or {}
+
+
+_SPENT = threading.Lock()
+
+
+def user_spend(vdir, vo, chars):
+    """A take recorded in the person's own ElevenLabs account: its characters, kept the moment
+    it is made (audio/vo/spend.jsonl, payer "user"), so a film that stops half-way still says what
+    it spent. It is the person's, not KitCut's: cost_usd 0 (studio/agent.py price)."""
+    row = {
+        "payer": "user",
+        "provider": "elevenlabs",
+        "model": vo.get("model", "eleven_v3"),
+        "chars": chars,
+        "cost_usd": 0,
+        "input": 0,
+        "output": 0,
+    }
+    with _SPENT, open(os.path.join(vdir, "spend.jsonl"), "a", encoding="utf-8") as f:
+        f.write(json.dumps(row) + "\n")
+
+
+def blocked(e):
+    """The person's account will not speak: one line the studio reads (tools.voice), and the exit
+    that tells it to pause the film until the person fixes it. Takes already made stay cached."""
+    said = {"reason": e.reason, "status": e.status, "detail": e.detail}
+    print("VOICE-BLOCKED " + json.dumps(said), flush=True)
+    sys.exit(PARK_EXIT)
 
 
 def edge_take(text, voice, dub):
@@ -216,6 +289,46 @@ def busy_wait(attempt):
 
 class Refused(Exception):
     """Gemini TTS will not read this line (its content filter), however often it is asked."""
+
+
+class VoiceBlocked(Exception):
+    """The person's own ElevenLabs account will not speak now -- its key, its characters, its
+    permissions, the voice, or the connection itself -- however often it is asked. The studio
+    pauses the film until the person fixes it (blocked(): exit PARK_EXIT)."""
+
+    def __init__(self, reason, status=None, detail=None):
+        super().__init__(reason)
+        self.reason, self.status, self.detail = reason, status, detail
+
+
+# what a refusal of the person's own account means for the film: the relay hands ElevenLabs'
+# answer on as it came, and adds its own (kitcut.ai lib/connections/relay.js)
+BLOCKED_BY = {
+    "invalid_api_key": "el_key_invalid",
+    "missing_permissions": "el_key_permissions",
+    "quota_exceeded": "el_quota",
+    "voice_not_found": "el_voice_missing",
+    "detected_unusual_activity": "el_account_blocked",
+    "paid_plan_required": "el_plan",
+    "payment_required": "el_plan",
+    "connection_removed": "voice_disconnected",
+    "grant_expired": "voice_disconnected",
+    "grant_mismatch": "voice_disconnected",
+}
+PARK_EXIT = 75  # EX_TEMPFAIL: the studio parks the film (studio/tools.py voice)
+# the word said after every ElevenLabs line and cut off again (cut_at_tail): the line's own last
+# word then ends as a word, not a trailing breath. In the film's language; English films keep
+# the "Alright." their cached takes were recorded with
+TAILS = {
+    "en": "Alright.",
+    "uk": "Добре.",
+    "de": "Also.",
+    "es": "Bueno.",
+    "fr": "Voilà.",
+    "it": "Allora.",
+    "pl": "Dobrze.",
+    "pt": "Pronto.",
+}
 
 
 def refused(why):
@@ -808,7 +921,8 @@ def main():
         vo["tts"] = args.tts
     tts = vo.get("tts", "elevenlabs")
     takes = args.takes or vo.get("takes", 3 if tts == "elevenlabs" else 1)
-    tail = vo.get("tail", "Alright.") if tts == "elevenlabs" else ""
+    lang = str(vo.get("language") or "en")[:2]
+    tail = vo.get("tail", TAILS.get(lang, "OK.")) if tts == "elevenlabs" else ""
     jobs = args.jobs or int(vo.get("jobs", 1))
     lines = vo["lines"]
     only = {int(x) for x in args.only.split(",")} if args.only else set(range(len(lines)))
@@ -930,11 +1044,12 @@ def main():
                 lvoice = lvo.get("voice") or voice
                 note = "  line %d take %d" % (i, k)
                 if tts == "elevenlabs":
-                    mp3, align = el_take(
-                        ln["text"] + ("\n\n" + tail if tail else ""), ids[lvoice], lvo
-                    )
+                    sent = ln["text"] + ("\n\n" + tail if tail else "")
+                    mp3, align = el_take(sent, ids[lvoice], lvo)
                     with open(base + ".mp3", "wb") as f:
                         f.write(mp3)
+                    if os.environ.get("ELEVENLABS_RELAY"):  # the person's own characters
+                        user_spend(vdir, lvo, len(sent))
                 elif tts == "gemini":
                     try:
                         audio, meta = gemini_take(ln["text"], lvo)
@@ -985,9 +1100,11 @@ def main():
                 try:
                     for f in as_completed(futs):
                         print(f.result(), flush=True)
-                except BaseException:
+                except BaseException as e:
                     for g in futs:
                         g.cancel()
+                    if isinstance(e, VoiceBlocked):
+                        blocked(e)
                     raise
         cand = {}
         with st("trim"):

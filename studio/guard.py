@@ -22,7 +22,7 @@ import re
 import json
 
 import validate
-from film import VO_PINNED, paint_pins, tts_model
+from film import paint_pins
 
 STUDIO_TOOLS = "mcp__studio__"
 
@@ -104,8 +104,9 @@ def _pin(film, name, want, keep=None):
 
 def pin_vo(film):
     """vo.json: the voice backend, model and takes are the studio's, and so is everything that
-    is not the narration (a Whisper model, hotwords...)."""
-    return _pin(film, "vo.json", {**VO_PINNED, "model": tts_model()}, keep=validate.VO_KEYS)
+    is not the narration (a Whisper model, hotwords...) -- and the voice, when the person picked
+    it (Film.vo_pins)."""
+    return _pin(film, "vo.json", film.vo_pins(), keep=validate.VO_KEYS)
 
 
 def pin_paint(film):

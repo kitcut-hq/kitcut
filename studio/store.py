@@ -19,8 +19,10 @@ One document per run, snake_case, real UTC datetimes (the kitcut-web conventions
     cost_usd            the Claude API cost: the SDK's own total, or the meter's if the run
                         never reached its end
     cost_metered_usd    the same, priced here from the token counts (a cross-check)
-    client              who asked: "u:<account>" through the public site (X-Client-Ip), else
+    client              whose film: "o:<workspace>" through the public site (X-Client-Ip;
+                        "u:<account>" before workspaces, the same owner: clients.py), else
                         the visitor's IP as Cloudflare saw it, or "local"
+    member              who asked: "u:<account>", a member of that workspace (X-Member)
     tokens              {input, output, cache_read, cache_write_5m, cache_write_1h}
     calls               one entry per Claude API response: {message_id, at, model, tokens...,
                         cost_usd}
@@ -198,10 +200,13 @@ class MemoryStore:
 
     def __init__(self):
         self.docs = {}
+        self.finals = set()  # the runs whose final record was written
 
     def save(self, run_id, fields, final=False):
         d = self.docs.setdefault(run_id, {"_id": run_id, "created_at": now()})
         d.update(fields, updated_at=now())
+        if final:
+            self.finals.add(run_id)
         return True
 
     def get(self, run_id):

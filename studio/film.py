@@ -221,7 +221,9 @@ TTS_MODEL = "gemini-3.8-flash-tts"
 # voice, a low or a high one to go with the film's own narration (scripts/sketch-vo.py)
 VO_BACKUP = {"tts": "elevenlabs", "model": "eleven_v3", "voices": {"low": "brian", "high": "sarah"}}
 VO_PINNED = {"tts": "gemini", "takes": 1, "lead": 0.5, "gap": 0.35, "backup": VO_BACKUP}
-STATES = ("queued", "claude", "finishing", "done", "error", "cancelled", "interrupted")
+# waiting: paused for its person (their own ElevenLabs account would not speak: tools.voice);
+# nobody is making it, and Continue (server.continue_film) picks it up again
+STATES = ("queued", "claude", "finishing", "done", "error", "cancelled", "interrupted", "waiting")
 ACTIVE = ("queued", "claude", "finishing")
 ID = re.compile(r"^studio-\d{8}-\d{6}(-[a-z2-7]{6})?$")
 # a project on the site (a series, a channel): its id, and how long its brief may be
@@ -319,6 +321,21 @@ def image_keys(caps):
 def fills(caps):
     """The system prompt's placeholders these capabilities fill: {NAME: path parts}."""
     return {k: v for c in caps for k, v in CAPS[c].get("fills", {}).items()}
+
+
+def _own_pins(n):
+    """vo.json for a person's own ElevenLabs narrator: their voice in the model the site chose,
+    one take a line (their characters), recorded as many at once as their plan allows. No
+    backup voice: a line it refuses pauses the film instead (tools.voice)."""
+    return {
+        "tts": "elevenlabs",
+        "model": n.get("model") or "eleven_multilingual_v2",
+        "voice": n["voice"],
+        "takes": 1,
+        "jobs": int(n.get("jobs") or 2),
+        "lead": VO_PINNED["lead"],
+        "gap": VO_PINNED["gap"],
+    }
 
 
 def direction_fields(caps):
@@ -546,6 +563,29 @@ class Film:
                 f.writelines(out)
         return n
 
+    def vo_pins(self):
+        """What vo.json must hold (guard.pin_vo puts it back after every edit): the studio's
+        backend, model and takes -- and, when the person picked the narrator (studio.json
+        "narrator"), that voice too. Claude still chooses how it is read."""
+        n = self.record().get("narrator") or {}
+        if n.get("source") == "elevenlabs":
+            return _own_pins(n)
+        pins = {**VO_PINNED, "model": tts_model()}
+        if n.get("source") == "kitcut" and n.get("voice"):
+            pins["voice"] = n["voice"]
+        return pins
+
+    def own_voice(self):
+        """The person's own ElevenLabs narrator's pass to the site's relay ({"grant"}), for the
+        voice step (procs.step_env); None for a film whose voice is KitCut's."""
+        if (self.record().get("narrator") or {}).get("source") != "elevenlabs":
+            return None
+        try:
+            with open(self.path("temp", "voice.json"), encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return None
+
     # ---------------------------------------------------------------- what the film chose
     def direction(self):
         """The choices the film made -- its ground and style, voice, music, painting style --
@@ -574,6 +614,11 @@ class Film:
         vo = load("vo.json") or {}
         if isinstance(vo, dict):
             d["voice"], d["voice_style"] = vo.get("voice"), (vo.get("style") or "")[:120]
+        n = self.record().get("narrator") or {}
+        if n.get("voice"):
+            d["voice_pinned"] = True  # the person's pick, not a choice other films should count
+        if n.get("source") == "elevenlabs":
+            d["voice"] = "own"  # a person's own voice: its id and name stay theirs
         score = load("score.json") or {}
         if isinstance(score, dict):
             ev = score.get("events") if isinstance(score.get("events"), list) else []
@@ -620,6 +665,8 @@ class Film:
         mode=None,
         people=(),
         character_style="auto",
+        member=None,
+        narrator=None,
     ):
         """A new film's folder: the manifest (its length set), the engine copy, an empty
         narration, an empty list of paintings for a painted film, and its record.
@@ -636,7 +683,13 @@ class Film:
         people: photos of people to draw as talking characters (uploads.take metas with "src"
         and an optional "person" name), copied to inputs/person1.jpg...; each becomes a head
         p1... in the manifest, drawn in character_style (or the look's own for "auto") by the
-        rigs step agent.draw_people starts, and the film gets the "people" capability."""
+        rigs step agent.draw_people starts, and the film gets the "people" capability.
+
+        narrator: the voice the person picked for it (the site's voice setting, checked by the
+        caller): {"source": "kitcut", "voice": <a Gemini voice>}, or {"source": "elevenlabs",
+        "voice", "model", "jobs", "chars", "grant"} -- their own voice, spoken through the
+        site's relay; the grant is kept apart (temp/voice.json, own_voice), never in the
+        record. None, and Claude picks."""
         seconds = seconds if seconds in LENGTHS else LENGTHS[0]
         look = look if look in LOOKS else LOOKS[0]
         people = list(people)[:MAX_PEOPLE]
@@ -715,8 +768,25 @@ class Film:
         if fonts(caps):
             m["fonts"] = list(m.get("fonts") or []) + fonts(caps)
         _write_json(film.manifest, m)
-        vo = {**VO_PINNED, "model": tts_model(), "voice": "Kore", "style": "", "language": "en"}
+        picked = (
+            (narrator or {}).get("voice") if (narrator or {}).get("source") == "kitcut" else None
+        )
+        vo = {
+            **VO_PINNED,
+            "model": tts_model(),
+            "voice": picked or "Kore",
+            "style": "",
+            "language": "en",
+        }
+        if (narrator or {}).get("source") == "elevenlabs":
+            vo = {**_own_pins(narrator), "language": "en"}
         _write_json(film.path("vo.json"), vo | {"lines": []})
+        if (narrator or {}).get("grant"):  # the film's pass to the relay: for the voice step only
+            p = film.path("temp", "voice.json")
+            with open(
+                os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8"
+            ) as f:
+                json.dump({"grant": narrator["grant"]}, f)
         _write_json(
             film.path("studio.json"),
             {
@@ -726,6 +796,15 @@ class Film:
                 "caps": list(caps),  # what its look was made of when it was made (CAPS)
                 "length": seconds,  # the film's; "seconds" is later how long making it took
                 "client": client,
+                # who asked: a member of the client's workspace (clients.py; the site's X-Member)
+                **({"member": member} if member else {}),
+                # the narrator the person picked (vo_pins): not Claude's to change; never the
+                # grant of an ElevenLabs one (own_voice)
+                **(
+                    {"narrator": {k: v for k, v in narrator.items() if k != "grant"}}
+                    if narrator
+                    else {}
+                ),
                 "source": source,
                 # 1: a plan whose films go ahead of the others in every queue (sched.py)
                 "priority": 1 if priority else 0,

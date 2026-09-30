@@ -170,6 +170,13 @@ has said so.
 - `-shortest` with a subtitle track shortens the film to the last caption. `sketch-render.py`
   muxes with `-t`; do the same in any hand-run mux.
 - `eleven_v3` clips final syllables: always go through `sketch-vo.py` (tail word + cut).
+- **A studio film may have its narrator chosen for it** (kitcut.ai's voice picker): `vo.json`'s
+  voice is then pinned (`Film.vo_pins()`, put back by `guard.pin_vo` after every edit), and only
+  `style` and `language` are Claude's. In a person's own ElevenLabs voice, every line goes through
+  the site's relay (`ELEVENLABS_RELAY` + the film's grant), is paid from their characters, and a
+  refusal from their account ends `sketch-vo.py` with `VOICE-BLOCKED` and exit 75: the film waits
+  for them rather than failing (`docs/reference.md`, "Workspaces, and the narrator a person
+  picks"). By hand, with no relay set, `sketch-vo.py` works as before.
 - The props draw at a fixed design size and scale uniformly (`P.house` at `w` = 104 is a
   thumbnail of the same house); if a new prop has hard-coded sizes inside, give it the same
   scale treatment before using it small.

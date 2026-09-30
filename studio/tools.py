@@ -23,6 +23,7 @@ import json
 import shutil
 import asyncio
 import contextlib
+from datetime import datetime
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
@@ -132,6 +133,43 @@ def fit_advice(film, done):
         " retakes included); retaking a line makes it shorter only when it has fewer words."
         % (left, "" if left == 1 else "s")
     )
+
+
+# what a person's own voice blocked on means, for Claude and for the page (sketch-vo.py BLOCKED_BY)
+BLOCKED_WORDS = {
+    "el_key_invalid": "ElevenLabs no longer accepts the account's key",
+    "el_key_permissions": "the account's key is missing a permission",
+    "el_quota": "the ElevenLabs account is out of characters",
+    "el_voice_missing": "the voice is no longer in the ElevenLabs account",
+    "el_plan": "the ElevenLabs plan does not allow it",
+    "el_account_blocked": "ElevenLabs has paused the account",
+    "voice_disconnected": "the ElevenLabs account was disconnected",
+    "voice_unreachable": "ElevenLabs is not answering",
+}
+PARKED = (
+    "The narration cannot be recorded now: %s. That is the person's own ElevenLabs account, "
+    "and only they can put it right. The studio pauses the film here, with everything you have "
+    "made kept, and picks it up when they have: end your turn now, and write nothing else."
+)
+
+
+def voice_blocked(text):
+    """The VOICE-BLOCKED line sketch-vo.py printed before it stopped, as {reason, status, detail,
+    since}; None when the step failed for another reason."""
+    for line in reversed(text.splitlines()):
+        if line.startswith("VOICE-BLOCKED "):
+            try:
+                d = json.loads(line[len("VOICE-BLOCKED ") :])
+            except ValueError:
+                return None
+            reason = str(d.get("reason") or "voice_unreachable")[:40]
+            return {
+                "reason": reason,
+                "status": d.get("status"),
+                "detail": str(d.get("detail") or "")[:60],
+                "since": datetime.now().isoformat(timespec="seconds"),
+            }
+    return None
 
 
 def timeline_text(film, retake=None):
@@ -313,7 +351,10 @@ class Tools:
             raise ToolError(refused)
         if _tts_spent(self.film) >= limits(self.film.length)["tts_usd"]:
             raise ToolError("The narration's budget is spent: keep the recording you have.")
-        args = ["--jobs", str(VOICE_JOBS)]
+        # a person's own ElevenLabs voice records as many lines at once as their plan allows
+        narrator = self.film.record().get("narrator") or {}
+        own = narrator.get("source") == "elevenlabs"
+        args = ["--jobs", str(int(narrator.get("jobs") or 2) if own else VOICE_JOBS)]
         if retake_line is not None and approved_line(self.film, retake_line):
             raise ToolError(
                 "Line %d plays the project's approved recording of those words, which its person"
@@ -324,7 +365,18 @@ class Tools:
             args += ["--only", str(int(retake_line)), "--retake"]
         async with self.lock:
             self.gate()
-            await self._script("voice", "sketch-vo.py", args, pools=[("cpu", 1)])
+            try:
+                await self._script("voice", "sketch-vo.py", args, pools=[("cpu", 1)])
+            except ToolError as e:
+                # the person's own account would not speak (sketch-vo.py blocked): the film
+                # pauses for them (agent.Parked) instead of failing, its takes kept
+                stop = voice_blocked(str(e)) if own else None
+                if not stop:
+                    raise
+                self.parked = stop
+                raise ToolError(
+                    PARKED % BLOCKED_WORDS.get(stop["reason"], stop["reason"])
+                ) from None
             # only recordings that worked count: a TTS that gave no audio cost nothing (and the
             # narration's budget above caps what a film may spend on its voice either way)
             self.voice_runs += 1

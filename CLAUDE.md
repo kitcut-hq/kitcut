@@ -764,6 +764,7 @@ which cannot encode the glyphs at all.
 | `scripts/checklist-card.py` | an animated checklist end screen (ticks drawn one by one), words in the project, look in `config/cards/checklist/`; `edl-cut.py` plays it as an EDL entry |
 | `scripts/make-thumbnail.py` | a 1280x720 YouTube thumbnail in the channel's house style from a spec; `yt-upload.py --thumbnail` sets it |
 | `scripts/thumb-options.py` | four YouTube thumbnail options for a sketch film, each a still of the film with a few words in the film's own look, checked; `_thumb.py` is the machinery and `sketch/thumb.js` the film-side probe and overlay (kitcut.ai's publish dialog uses it via `studio/thumbs.py`), `check-thumbnail.py` its test |
+| `scripts/voice-samples.py` | one sentence in each of KitCut's 30 narrator voices, levelled alike, for kitcut.ai's voice picker (`config/sketch/voice-samples.json`; `--plan` prices it). The narrator a person picks, and their own ElevenLabs voice through the site's relay: `docs/reference.md`, "Workspaces, and the narrator a person picks" |
 | `scripts/edl-cut.py` | a film from hand-chosen ranges of a few silent takes, with an elapsed counter driven by SOURCE time so it stays true over a sped-up wait |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
 | `sketch/` | the sketch-film engine (`engine.js`), cast (`props.js`), collage pieces (`collage.js`) and player page (`player.html`); `scripts/_sketch.py` and `_sketchaudio.py` are the Python half, `check-sketch.py` their test |

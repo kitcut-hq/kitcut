@@ -285,6 +285,7 @@ def main():
         check(len(got["films"]) == 1 and got["cast"] == [], "and are remembered")
 
         projects(check)
+        workspaces(check)
     finally:
         shutil.rmtree(HOME, ignore_errors=True)
     print("%d failed" % len(bad))
@@ -532,6 +533,50 @@ def projects(check):
         library.load("u:dave")["films"] == [dave.id], "a person's earlier films leave out episodes"
     )
     check(library.load(("u:dave", P1))["films"] == [], "and a project starts from nothing")
+
+
+def workspaces(check):
+    """The site's workspaces (clients.py): "u:<id>" -- a person, as the site said before
+    workspaces -- and "o:<id>" -- their personal workspace -- are one owner, and a library kept
+    under the old name moves to the new one the first time it is used."""
+    import clients  # noqa: PLC0415
+
+    check(
+        clients.same("u:66f1a2b3", "o:66f1a2b3"), "a person and their personal workspace: one owner"
+    )
+    check(not clients.same("o:66f1a2b3", "o:77aa"), "two workspaces: two")
+    check(not clients.same(None, None) and not clients.same("", ""), "nobody is nobody's")
+    check(clients.canon("203.0.113.9") == "203.0.113.9", "an address stays an address")
+    check(library.owner("o:acme01") == ("o:acme01", None), "an organisation has a library")
+    check(library.owner("u:erin") == ("o:erin", None), "a person's library is their workspace's")
+    check(library.owner("203.0.113.9") is None, "an address has none")
+    check(
+        clients.member_of({"X-Member": "u:erin"}) == "u:erin"
+        and clients.member_of({"X-Member": "o:acme01"}) is None
+        and clients.member_of({}) is None,
+        "a member is a person, or nobody",
+    )
+    # erin's library from before workspaces, kept under "u:erin": the workspace finds it
+    old = os.path.join(library.ROOT, library._name("u:erin"))
+    os.makedirs(os.path.join(old, P1), exist_ok=True)
+    with open(os.path.join(old, "index.json"), "w", encoding="utf-8") as f:
+        json.dump({"cast": {}, "films": ["studio-erin-old"], "pictures": {}, "voice": {}}, f)
+    d = library.dir_of("o:erin")
+    check(
+        d == os.path.join(library.ROOT, library._name("o:erin")) and not os.path.isdir(old),
+        "the old library moved to the workspace's name",
+    )
+    check(library.load("o:erin")["films"] == ["studio-erin-old"], "with everything in it")
+    check(
+        library.load("u:erin")["films"] == ["studio-erin-old"]
+        and os.path.isdir(os.path.join(d, P1)),
+        "and asked for by the person's old name, it is the same library, projects and all",
+    )
+    # a film the site asked for as the person is still theirs when it asks as the workspace
+    F = Film.create("erin's film", 5, "drawn", client="u:erin", member="u:erin")
+    F.update(state="done")
+    check(F.record().get("member") == "u:erin", "the film knows who asked")
+    check(clients.same(F.record()["client"], "o:erin"), "and its owner, by either name")
 
 
 if __name__ == "__main__":

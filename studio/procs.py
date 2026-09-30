@@ -40,7 +40,12 @@ KNOWN_SECRETS = (
     "GEMINI_API_KEY",
     "OPENROUTER_API_KEY",
     "ELEVENLABS_API_KEY",
+    # the studio's own key to kitcut.ai's voice relay: a person's own ElevenLabs voice is
+    # spoken there, with the workspace's key, which never comes here (tools.voice)
+    "KITCUT_SITE_TOKEN",
 )
+# where a person's own voice is spoken: kitcut.ai's relay (its lib/connections/relay.js)
+RELAY = (os.environ.get("STUDIO_VOICE_RELAY") or "https://kitcut.ai/api/studio/voice").rstrip("/")
 # what each kind of step needs, beyond the basics
 NEEDS = {
     "voice": (
@@ -168,9 +173,21 @@ def step_env(film, kind=None, locks=None, home=None):
             env["SKETCH_SCORER"] = scorer
     if locks:
         env["KITCUT_LOCKS_DIR"] = locks
-    for k in NEEDS.get(kind, ()):
+    # a person's own ElevenLabs voice (film.own_voice): the relay, the film's grant and the
+    # studio's token to the relay -- and none of the studio's own voice keys, so nothing of
+    # this film's narration can be spoken on KitCut's account by mistake
+    own = film.own_voice() if kind == "voice" else None
+    needs = ("OPENROUTER_API_KEY",) if own else NEEDS.get(kind, ())
+    for k in needs:
         if SECRETS.get(k):
             env[k] = SECRETS[k]
+    if own:
+        env.update(
+            ELEVENLABS_RELAY=RELAY,
+            ELEVENLABS_GRANT=own["grant"],
+            ELEVENLABS_FILM=film.id,
+            KITCUT_SITE_TOKEN=SECRETS.get("KITCUT_SITE_TOKEN", ""),
+        )
     return env
 
 

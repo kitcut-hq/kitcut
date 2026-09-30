@@ -92,6 +92,15 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
 - **The 4 vCPUs are shared by every unit** -- each server and each `resume` has its own pools, so a
   ship or a `resume --finish` during another film's narration starves its word timing (KI-043: a
   Spanish film lost 17 of its 38 minutes). Do them when no non-English film is recording its voice.
+- **A film can wait for its person (state `waiting`).** A film narrated in someone's own
+  ElevenLabs voice pauses when their account stops speaking (out of characters, key or permission
+  gone, voice removed): `ops.sh status` lists it, its credits stay held, and the person presses
+  Continue once it is fixed -- do not resume it by hand, and do not put it down: after
+  `STUDIO_WAITING_DAYS` (7) the studio does, and refunds it. **Never roll back past the release
+  that brought `waiting` while any film waits** (KI-053). Turning it on is three settings:
+  `STUDIO_OWN_VOICE=1` (and `STUDIO_VOICE_RELAY` for a site other than kitcut.ai) in
+  `machine.env`, and `KITCUT_SITE_TOKEN` in `.env`, the same value as the site's. The person's key
+  never reaches the VM: every line goes through the site's relay with that film's grant.
 
 ## When something is wrong
 
