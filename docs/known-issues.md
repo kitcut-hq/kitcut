@@ -810,3 +810,8 @@ sentence is still caught (`test_ytdraft.py`).
 **Lesson.** A prompt with headings is how people write structured briefs, and a good draft names
 its chapters after the film's parts. A copy check has to respect sentences, or it flags exactly
 the drafts that follow the film most closely.
+**Still open.** After the fix, wm4ioh's draft was refused for "make a whole film without leaving
+your": the brief's hook, which the film says with one word more ("without ever leaving") and
+writes on screen ("A whole film, without leaving your chat."). Only the narration, the maker's
+notes and the sources count as the film's own words; its on-screen words do not. A brief that
+scripts the film's lines can still leave the person to write the draft themselves.
