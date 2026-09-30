@@ -508,8 +508,9 @@ def ask(film):
         )
     if lang != "en":
         parts.append(
-            "The film is in %s: translate content.json's copy (the labels) into it, and keep "
-            "names as given." % lang
+            "The film is in %s (the language's code): translate content.json's copy (the labels) "
+            "into it, keep names as given, and make sure every face the film draws that language "
+            "in has its letters (a face without them falls back to the browser's own)." % lang
         )
     if t.get("brief"):
         parts.append("The template's author on what makes it work:\n" + t["brief"].strip())

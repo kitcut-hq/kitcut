@@ -1309,7 +1309,10 @@ async def create(req):
             await asyncio.to_thread(
                 templates.seed, f, tpl, content, {k: by_id[u] for k, u in pics.items()}
             )
-            f.update(fields=clean)
+            lang = str(body.get("language") or "")
+            f.update(
+                fields=clean, **({"language": lang} if re.fullmatch(r"[a-z]{2}", lang) else {})
+            )
         uploads.release(uploader, attached + faces + shots)  # the film has its own copies now
         try:  # the person's cast and earlier films (library.py); a film goes ahead without
             if not tpl:  # a remake keeps to its template, not to the person's other films

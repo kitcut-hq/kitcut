@@ -216,6 +216,7 @@ def worker(spec_path):
             client="bakeoff",
             source="bakeoff",
             auth=spec["auth"],
+            language=spec.get("language"),
         )
     else:
         film = films.Film.create(
@@ -290,7 +291,7 @@ def pictures(paths):
     return out
 
 
-def form_prompt(form_path, seconds):
+def form_prompt(form_path, seconds, language=None):
     """A template's form written out as a plain prompt, and the pictures a plain film can take
     with it (the logo, then the featured speakers' photos: six at most) -- the same content,
     asked for the way anyone would without the template."""
@@ -313,6 +314,8 @@ def form_prompt(form_path, seconds):
         "Music only, no narration. Attached: the event's logo, then the featured speakers' photos"
         " in the order above.",
     ]
+    if language and language != "en":
+        lines.append("Every word on screen in the event's own language (%s)." % language)
     files = [os.path.join(base, form["logo"])] + [os.path.join(base, x["photo"]) for x in featured]
     return " ".join(lines), files[:6]
 
@@ -374,8 +377,11 @@ def run_arm(args, s, root, repo):
             form = p["form"] if os.path.isabs(p["form"]) else os.path.join(tree, p["form"])
             if args.mode == "template":
                 spec.update(template=p["template"], form=form, frame=p.get("frame"))
+                spec["language"] = p.get("language")
             else:
-                spec["prompt"], spec["attach"] = form_prompt(form, spec["seconds"])
+                spec["prompt"], spec["attach"] = form_prompt(
+                    form, spec["seconds"], p.get("language")
+                )
         write_json(os.path.join(home, "spec.json"), spec)
         todo.append(spec)
     if not todo:

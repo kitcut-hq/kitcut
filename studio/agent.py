@@ -2148,7 +2148,14 @@ def _print(ev):
 
 
 def template_film(
-    template, fields, frame=None, listed=True, client="local", source="cli", auth="login"
+    template,
+    fields,
+    frame=None,
+    listed=True,
+    client="local",
+    source="cli",
+    auth="login",
+    language=None,
 ):
     """A film remade from a template on this machine: template "t-<slug>[:version]" (a draft
     may be tried), fields the form's JSON file, whose pictures are file paths relative to it and
@@ -2187,7 +2194,7 @@ def template_film(
         listed=listed,
     )
     templates.seed(film, t, content, {k: metas[u] for k, u in pics.items()})
-    film.update(fields=clean)
+    film.update(fields=clean, **({"language": language} if language else {}))
     return film
 
 
@@ -2212,6 +2219,7 @@ def main():
         help="with --template: the form as JSON; a picture is a file path (relative to the JSON)",
     )
     ap.add_argument("--frame", help="with --template: one of its frames (16:9, 1:1...)")
+    ap.add_argument("--language", help="with --template: the film's language (uk, de...), else en")
     ap.add_argument(
         "--unlisted", action="store_true", help="keep the film out of every gallery (link-only)"
     )
@@ -2253,7 +2261,12 @@ def main():
         sys.exit(0 if ok else 1)
     if args.template:
         film = template_film(
-            args.template, args.fields, args.frame, not args.unlisted, auth=args.auth
+            args.template,
+            args.fields,
+            args.frame,
+            not args.unlisted,
+            auth=args.auth,
+            language=args.language,
         )
     else:
         if not args.prompt:

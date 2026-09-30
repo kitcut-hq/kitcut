@@ -1,0 +1,29 @@
+{
+ "about": "Does a template make a better film for less than the same content asked for as a prompt? Three real upcoming conferences (none Russia-linked; see each form's sources.md) fill the conference-speaker template's form: a big English one with 24 speakers, a small one whose site serves only 128 px photos, and a Ukrainian one. Arm 'template' remakes the template from the form (--mode template); arm 'prompt' is the same content written out as a 30 s prompt with the logo and the five featured photos attached (--mode prompt). The forms and pictures are local (temp/bakeoff/, third-party content). Bars (plan, 2026-09-30): every template film inside the time limit, fidelity >= 4, no sample left over, at least a point more professional than the prompt arm at half its Claude cost or less.",
+ "seconds": 30,
+ "grade_extra": ["fidelity"],
+ "prompts": [
+  {
+   "id": "slush",
+   "audience": "founders and investors who follow Slush",
+   "prompt": "Slush 2026 (Helsinki, 18-19 Nov 2026): a speaker promo from the conference template's form -- 24 speakers, five featured.",
+   "template": "t-conference-speakers",
+   "form": "temp/bakeoff/slush-2026/form.json"
+  },
+  {
+   "id": "pgconf",
+   "audience": "PostgreSQL developers in Poland and Europe",
+   "prompt": "PGConf.PL 2026 (Gdansk, 24 Nov 2026): a speaker promo from the conference template's form -- 9 speakers with 128 px photos.",
+   "template": "t-conference-speakers",
+   "form": "temp/bakeoff/pgconf-pl-2026/form.json"
+  },
+  {
+   "id": "mate",
+   "audience": "Ukrainian product and tech people",
+   "prompt": "Mate Conf 2026 (Kyiv, 14 Nov 2026): a speaker promo from the conference template's form, in Ukrainian -- 23 speakers.",
+   "template": "t-conference-speakers",
+   "form": "temp/bakeoff/mate-conf-2026/form.json",
+   "language": "uk"
+  }
+ ]
+}
