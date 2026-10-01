@@ -23,7 +23,7 @@ One document per run, snake_case, real UTC datetimes (the kitcut-web conventions
                         "u:<account>" before workspaces, the same owner: clients.py), else
                         the visitor's IP as Cloudflare saw it, or "local"
     member              who asked: "u:<account>", a member of that workspace (X-Member)
-    tokens              {input, output, cache_read, cache_write_5m, cache_write_1h}
+    tokens              {input, output, cache_read, cache_write_5m, cache_write_1h, web_search}
     calls               one entry per Claude API response: {message_id, at, model, tokens...,
                         cost_usd}
     created_at, updated_at, finished_at

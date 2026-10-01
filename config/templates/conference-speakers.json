@@ -1,38 +1,236 @@
 {
- "_about": "The spec of kitcut.ai's first template (studio/templates.py make --spec): the form a person fills in, where each answer goes in the film's content.json, and its author's notes to Claude. Its film is projects/websummit-speakers (local: the code is ours, the sample's logo and photos are Web Summit's and its speakers').",
+ "_about": "The spec of kitcut.ai's first template (studio/templates.py make --spec): the form a person fills in, where each answer goes in the film's content.json, and its author's notes to Claude. Its film is projects/websummit-speakers (local: the code is ours, the sample's logo and photos are Web Summit's and its speakers'). v4 (2026-09-30): the website is the form -- every other field is optional when it is given (\"research\": Claude reads the site and fills them).",
  "title": "Conference speaker promo",
  "description": "A 26-second promo for a conference or summit, told as a trip: your logo, a split-flap departures board with the city, dates and venue, a paper plane, your featured speakers on a turning carousel, a boarding pass and the poster. Music only, no narration.",
  "author": "KitCut",
  "source_film": "studio-20260930-114530-nhdy7i",
  "look": "drawn",
- "frames": ["16:9", "1:1"],
- "caps": ["space", "portraits"],
- "portraits": {"frame": true, "tone": "mono", "px": 800},
- "limits": {"images": 32},
- "moments": [0.3, 1.2, 2.5, 3.6, 5.2, 7.6, 9.2, 12.2, 14.0, 16.6, 18.2, 21.5, 24.0],
- "keep": ["_about", "copy"],
- "derive": {"event.city_code": {"from": "event.city", "first": 3, "upper": true}},
+ "frames": [
+  "16:9",
+  "1:1"
+ ],
+ "caps": [
+  "space",
+  "portraits"
+ ],
+ "portraits": {
+  "frame": true,
+  "tone": "mono",
+  "px": 800
+ },
+ "limits": {
+  "images": 32
+ },
+ "moments": [
+  0.3,
+  1.2,
+  2.5,
+  3.6,
+  5.2,
+  7.6,
+  9.2,
+  12.2,
+  14.0,
+  16.6,
+  18.2,
+  21.5,
+  24.0
+ ],
+ "keep": [
+  "_about",
+  "copy"
+ ],
+ "derive": {
+  "event.city_code": {
+   "from": "event.city",
+   "first": 3,
+   "upper": true
+  }
+ },
  "fields": [
-  {"key": "event_name", "kind": "text", "label": "Event name", "path": "event.name", "required": true, "upper": true, "max": 24, "example": "WEB SUMMIT"},
-  {"key": "dates", "kind": "daterange", "label": "Dates", "required": true, "paths": {"short": "event.dates", "long": "event.dates_long", "year": "event.year"}, "example": {"from": "2026-11-09", "to": "2026-11-12"}},
-  {"key": "city", "kind": "text", "label": "City", "path": "event.city", "required": true, "upper": true, "max": 10, "help": "It flips onto a 10-cell departures board.", "example": "LISBON"},
-  {"key": "city_code", "kind": "text", "label": "City code", "path": "event.city_code", "upper": true, "max": 3, "min_len": 3, "help": "Three letters, like an airport code. The city's first three letters when left empty.", "example": "LIS"},
-  {"key": "venue", "kind": "text", "label": "Venue", "path": "event.venue", "required": true, "upper": true, "max": 40, "example": "MEO ARENA"},
-  {"key": "venue_short", "kind": "text", "label": "Venue, short", "path": "event.venue_short", "upper": true, "max": 10, "help": "For the departures board, when the venue is longer than 10 letters.", "example": "MEO ARENA"},
-  {"key": "tagline", "kind": "lines", "label": "Tagline", "path": "event.tagline", "required": true, "upper": true, "lines": 3, "max": 22, "help": "Up to three short lines; the last word is drawn in your accent colour.", "example": ["THE BEST TECH", "CONFERENCE ON", "THE PLANET"]},
-  {"key": "cta", "kind": "text", "label": "Button", "path": "event.cta", "upper": true, "max": 16, "default": "BOOK TICKETS", "example": "BOOK TICKETS"},
-  {"key": "url", "kind": "url", "label": "Website", "path": "event.url", "required": true, "max": 40, "example": "websummit.com"},
-  {"key": "logo", "kind": "logo", "label": "Logo", "path": "logo", "required": true, "help": "PNG with a transparent background works best."},
-  {"key": "ground", "kind": "colour", "label": "Background colour (dark)", "path": "palette.ground", "required": true, "example": "#0C1439"},
-  {"key": "accent", "kind": "colour", "label": "Accent colour", "path": "palette.accent", "required": true, "example": "#DF0E7B"},
-  {"key": "second", "kind": "colour", "label": "Second colour", "path": "palette.second", "required": true, "example": "#00ACA8"},
-  {"key": "speakers", "kind": "people", "label": "Speakers", "path": "speakers", "required": true, "min": 3, "max": 24, "featured": {"min": 1, "max": 5},
+  {
+   "key": "url",
+   "kind": "url",
+   "label": "Your event's website",
+   "path": "event.url",
+   "required": true,
+   "max": 40,
+   "example": "websummit.com",
+   "source": true,
+   "help": "Claude reads it and fills in everything else: the name, dates, venue, speakers and their photos, the logo and colours."
+  },
+  {
+   "key": "event_name",
+   "kind": "text",
+   "label": "Event name",
+   "path": "event.name",
+   "required": true,
+   "upper": true,
+   "max": 24,
+   "example": "WEB SUMMIT",
+   "research": true
+  },
+  {
+   "key": "dates",
+   "kind": "daterange",
+   "label": "Dates",
+   "required": true,
+   "paths": {
+    "short": "event.dates",
+    "long": "event.dates_long",
+    "year": "event.year"
+   },
+   "example": {
+    "from": "2026-11-09",
+    "to": "2026-11-12"
+   },
+   "research": true
+  },
+  {
+   "key": "city",
+   "kind": "text",
+   "label": "City",
+   "path": "event.city",
+   "required": true,
+   "upper": true,
+   "max": 10,
+   "help": "It flips onto a 10-cell departures board.",
+   "example": "LISBON",
+   "research": true
+  },
+  {
+   "key": "city_code",
+   "kind": "text",
+   "label": "City code",
+   "path": "event.city_code",
+   "upper": true,
+   "max": 3,
+   "min_len": 3,
+   "help": "Three letters, like an airport code. The city's first three letters when left empty.",
+   "example": "LIS",
+   "research": true
+  },
+  {
+   "key": "venue",
+   "kind": "text",
+   "label": "Venue",
+   "path": "event.venue",
+   "required": true,
+   "upper": true,
+   "max": 40,
+   "example": "MEO ARENA",
+   "research": true
+  },
+  {
+   "key": "venue_short",
+   "kind": "text",
+   "label": "Venue, short",
+   "path": "event.venue_short",
+   "upper": true,
+   "max": 10,
+   "help": "For the departures board, when the venue is longer than 10 letters.",
+   "example": "MEO ARENA",
+   "research": true
+  },
+  {
+   "key": "tagline",
+   "kind": "lines",
+   "label": "Tagline",
+   "path": "event.tagline",
+   "required": true,
+   "upper": true,
+   "lines": 3,
+   "max": 22,
+   "help": "Up to three short lines; the last word is drawn in your accent colour.",
+   "example": [
+    "THE BEST TECH",
+    "CONFERENCE ON",
+    "THE PLANET"
+   ],
+   "research": true
+  },
+  {
+   "key": "cta",
+   "kind": "text",
+   "label": "Button",
+   "path": "event.cta",
+   "upper": true,
+   "max": 16,
+   "default": "BOOK TICKETS",
+   "example": "BOOK TICKETS",
+   "research": true
+  },
+  {
+   "key": "logo",
+   "kind": "logo",
+   "label": "Logo",
+   "path": "logo",
+   "required": true,
+   "help": "PNG with a transparent background works best.",
+   "research": true
+  },
+  {
+   "key": "ground",
+   "kind": "colour",
+   "label": "Background colour (dark)",
+   "path": "palette.ground",
+   "required": true,
+   "example": "#0C1439",
+   "research": true
+  },
+  {
+   "key": "accent",
+   "kind": "colour",
+   "label": "Accent colour",
+   "path": "palette.accent",
+   "required": true,
+   "example": "#DF0E7B",
+   "research": true
+  },
+  {
+   "key": "second",
+   "kind": "colour",
+   "label": "Second colour",
+   "path": "palette.second",
+   "required": true,
+   "example": "#00ACA8",
+   "research": true
+  },
+  {
+   "key": "speakers",
+   "kind": "people",
+   "label": "Speakers",
+   "path": "speakers",
+   "required": true,
+   "min": 3,
+   "max": 24,
+   "featured": {
+    "min": 1,
+    "max": 5
+   },
    "help": "The first five with a name are featured: they come to the front of the carousel and onto the poster. Everyone else fills the ring with their photo.",
    "item": [
-    {"key": "name", "label": "Name", "max": 32, "upper": true},
-    {"key": "role", "label": "Role", "max": 40, "upper": true},
-    {"key": "org", "label": "Company", "max": 32, "upper": true}
-   ]}
+    {
+     "key": "name",
+     "label": "Name",
+     "max": 32,
+     "upper": true
+    },
+    {
+     "key": "role",
+     "label": "Role",
+     "max": 40,
+     "upper": true
+    },
+    {
+     "key": "org",
+     "label": "Company",
+     "max": 32,
+     "upper": true
+    }
+   ],
+   "research": true
+  }
  ],
  "brief": "A 26-second speaker promo with no narration, told as a trip to the event, every beat on a hit of the music: the logo on its card over turning tiles, the dive into the accent colour, the split-flap departures board (city, dates, venue), the paper plane, the carousel that turns to each featured speaker while the name block turns with it, the boarding pass with its stamp, and the poster. People are black-and-white cut-outs on the brand's own colours.\n\nThe board has 10 cells a row: a city, dates or venue longer than that is shortened to fit (event.venue_short), never cut off. Names on the name block are fitted to it; a very long one may take a smaller size or two lines. A logo whose symbol can be drawn in code (content.logo.mark: its two shapes as polygons on one baseline and the point to dive into; content.logo.letters: the column spans of its letters) rises and dives as in the original; without them the whole logo wipes on and the film dives into a disc of the accent. Measure and add them only when the logo has a clear symbol and there is time; the fallback is fine.\n\nThe poster's last tagline word is in the accent colour. Keep the clock: the carousel always makes five stops, whatever the number of featured speakers."
 }

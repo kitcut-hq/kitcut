@@ -392,6 +392,22 @@ docs/studio-scenes-plan.md.
    (`recent_films`, counts only, never their prompts; never the audience), and Claude chooses
    freshly unless the prompt calls for a repeat. What each film chose is kept as `direction` in
    its record and in Mongo.
+   **The real thing, from the web.** A film about something that exists -- a company, a product,
+   a person, an event -- is watched by people who know it, so Claude looks it up first
+   (WebSearch, WebFetch) and shows it as it is. Three studio tools, all `scripts/web-grab.py`,
+   bring it in beside the manifest: `picture` (a logo or photo by its URL -- SVG and ICO too --
+   as `web/<name>.png|jpg`, drawn with `SK.image('web_<name>', ...)`), `page` (a browser's
+   photograph of a web page, as `web/<name>.jpg`), and `font` (a Google Fonts family, whole
+   files, as `web/fonts/*.ttf` in the manifest's fonts). Up to 12 pictures and 3 families a
+   film (`tools.MAX_WEB_*`); unused pictures leave before the final render; where each came from
+   is in `web/sources.json`. Until 2026-09-28 the studio had no web at all (the sandbox was made
+   while it ran on the laptop): a customer's Instafill.ai announcement
+   (studio-20260928-135513-pizula) got an invented logo, an invented UI in a comic font and no
+   facts, and said so. **Only the public internet is reached**: `scripts/_web.py` checks every
+   connection and redirect as it is made (no private, loopback, link-local -- the cloud's
+   metadata service -- shared or Azure host address), guard.py holds WebFetch to the same rule,
+   and the VM's network rule denies outbound to the VNet (`deploy/vm.sh network`). A search is
+   priced at $0.01 (`WEB_SEARCH_USD`, `tokens.web_search`).
 3. Claude writes the narration and records it (`voice`), writes `film.js` (for a painted film,
    the paintings first), renders review stills and looks at the sheet, runs `motion` -- the film a few
    times a second, reporting its cuts and any stretch where nothing moves for 4 s

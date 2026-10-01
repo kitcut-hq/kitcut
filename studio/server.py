@@ -1309,6 +1309,9 @@ async def create(req):
             await asyncio.to_thread(
                 templates.seed, f, tpl, content, {k: by_id[u] for k, u in pics.items()}
             )
+            research = templates.research_needed(tpl, clean)
+            if research:
+                f.update(research=research)
             lang = str(body.get("language") or "")
             f.update(
                 fields=clean, **({"language": lang} if re.fullmatch(r"[a-z]{2}", lang) else {})
@@ -1956,7 +1959,9 @@ async def status(req):
         if said["cost"] is not None:
             out["cost_usd"] = said["cost"]  # so far
         r = {k: r.get(k) for k in ("prompt", "title", "look", "length", "listed")}
-    elif J is None:  # over, or made before this server started: what is on disk is all there is
+    # over, made before this server started, or since replaced by a remade film (ops.sh
+    # replace): what is on disk is all there is
+    elif J is None or (J["status"] == "done" and r.get("replaced")):
         st = {
             "done": "done",
             "cancelled": "cancelled",

@@ -4,6 +4,10 @@ copied to Azure blob storage, so a film still plays when this laptop is off, and
 the assistants' film player) names one media host instead of a tunnel whose name changes.
 
     python studio/media.py --film <id>      copy one film (again)
+    python studio/media.py --film <id> --revision   the same under new URLs (<id>/r<n>/, the
+                                            record's media_rev + 1: blob_of): for a film whose
+                                            picture was replaced -- its old files are cached for
+                                            a year under their old URLs
     python studio/media.py --backfill       every finished film that has no copy yet
     python studio/media.py --delete <id>    remove a film's copy
     python studio/media.py --web-backfill [--first <id>]   make and copy the web copy of every
@@ -367,7 +371,8 @@ async def _put(session, blob, path, ctype, disposition=None):
 async def publish(film, timeout=3600):
     """Make the web copy, then copy the finished film's files; answers {"web", "video", "poster",
     "card", "subtitles"} (the ones there are), or {} when copying is off or the master could not
-    be copied. A web copy that failed leaves the master to play."""
+    be copied. A web copy that failed leaves the master to play. A film whose picture changed
+    gets new URLs by its record's media_rev (blob_of): CACHE keeps the old ones for a year."""
     if not enabled():
         return {}
     import aiohttp
@@ -428,8 +433,9 @@ async def mark_download(session, film):
             raise MediaError("%s: %d %s" % (blob, r.status, (await r.text())[:200]))
 
 
-async def delete(fid, timeout=60):
-    """Remove a film's copy. Returns how many files went."""
+async def delete(fid, timeout=60, urls=()):
+    """Remove a film's copy -- its files, and those at `urls` (its record's media: a revision's
+    live in a folder of their own). Returns how many files went."""
     if not enabled():
         return 0
     import aiohttp
@@ -438,18 +444,25 @@ async def delete(fid, timeout=60):
 
     f = films.Film.open(fid)
     rev = (f.record().get("media_rev") or 0) if f else 0
-    # every revision's copy too (blob_of): a patched film left its earlier files online
+    # every revision's copy too (blob_of): a patched or replaced film left its earlier files
+    # online; and whatever the record's URLs name that is not among those
     names = [n for _, n, _ in FILES]
     names += ["r%d/%s" % (r, n) for r in range(1, rev + 1) for n in names]
+    blobs = ["%s/%s" % (fid, name) for name in names + share_blobs(fid)]
+    blobs += [
+        u[len(base()) + 1 :]
+        for u in urls
+        if u and u.startswith(base() + "/%s/" % fid) and u[len(base()) + 1 :] not in blobs
+    ]
     gone = 0
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
-        for name in names + share_blobs(fid):
-            url = "%s/%s?%s" % (base(), quote("%s/%s" % (fid, name)), sas())
+        for blob in blobs:
+            url = "%s/%s?%s" % (base(), quote(blob), sas())
             async with s.delete(url, headers={"x-ms-version": VERSION}) as r:
                 if r.status in (200, 202):
                     gone += 1
                 elif r.status != 404:
-                    raise MediaError("%s/%s: %d %s" % (fid, name, r.status, (await r.text())[:200]))
+                    raise MediaError("%s: %d %s" % (blob, r.status, (await r.text())[:200]))
     return gone
 
 
@@ -471,8 +484,8 @@ async def _main(args):
     if not enabled():
         sys.exit("STUDIO_MEDIA_BASE and STUDIO_MEDIA_SAS must both be set (the studio's .env)")
     if args.delete:
-        n = await delete(args.delete)
         f = Film.open(args.delete)
+        n = await delete(args.delete, urls=((f.record().get("media") or {}) if f else {}).values())
         if f is not None:
             f.update(media=None)
             await agent.save(f.id, {"media": None})
@@ -482,6 +495,8 @@ async def _main(args):
         f = Film.open(args.film)
         if f is None or not f.record().get("ok"):
             sys.exit("%s: no such finished film" % args.film)
+        if args.revision:  # new names for every file (blob_of); delete still finds the old ones
+            f.update(media_rev=(f.record().get("media_rev") or 0) + 1)
         print(args.film, await _publish_and_record(f) or "NOT copied")
         return
     if args.web_backfill:
@@ -556,6 +571,11 @@ def main():
     ap.add_argument("--first", help="with --web-backfill: this film before the others")
     ap.add_argument(
         "--dry-run", action="store_true", help="with --download-backfill: count, and show five"
+    )
+    ap.add_argument(
+        "--revision",
+        action="store_true",
+        help="with --film: under new URLs (<id>/r<n>/), for a film whose picture changed",
     )
     asyncio.run(_main(ap.parse_args()))
 

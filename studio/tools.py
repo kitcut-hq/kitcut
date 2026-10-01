@@ -39,9 +39,16 @@ SCRIPTS = os.path.join(KIT, "scripts")
 # same card as a developer's (scripts/_gpulock.py)
 LOCKS = os.path.join(REPO, "temp", "locks")
 # seconds a step may run; the voice, the mix and the render get longer for a longer film
-TIMEOUT = {"check": 30, "stills": 120, "paint": 300, "automation": 180}
+TIMEOUT = {"check": 30, "stills": 120, "paint": 300, "automation": 180, "web": 150}
 MAX_STILLS = 12
 PEOPLE_WAIT_S = 420  # the longest a picture tool waits for the people to be drawn (agent.py)
+# what one film may bring in from the web (web-grab.py): pictures and page photographs together,
+# and font families -- each is inlined into the film's page, which a phone downloads whole
+MAX_WEB_PICTURES, MAX_WEB_FONTS = 12, 3
+# portrait-cutout's time a photo, with room: 10.5 s on the laptop with every core, 54 s with two
+# threads (the first template film: 7 photos took 6 minutes before Claude could start)
+CUT_S_PER_PHOTO = 90
+CUT_THREADS = max(2, (os.cpu_count() or 4) // 2)  # half the machine: other films' steps run too
 # narration takes recorded at once (sketch-vo.py --jobs): an 8-minute film's 70 Gemini lines took
 # 341 s one at a time and 52 s eight at a time, same accuracy and cost (docs/studio-speed.md)
 VOICE_JOBS = 8
@@ -431,6 +438,158 @@ class Tools:
             what = "outputs/review/sheet.png"
         return "Rendered %d stills. Read %s to look at them." % (len(ts), what) + told
 
+    # ---------------------------------------------------------------- from the web
+    def _manifest(self):
+        with open(self.film.manifest, encoding="utf-8") as f:
+            return json.load(f)
+
+    def web_limit(self):
+        """Pictures from the web one film may bring in: a template's own number (a conference's
+        line-up of speakers), else MAX_WEB_PICTURES."""
+        t = self.film.record().get("template")
+        if not t:
+            return MAX_WEB_PICTURES
+        import templates  # noqa: PLC0415
+
+        got = templates.load(t["id"], t["version"], ("live", "draft", "retired")) or {}
+        return max(MAX_WEB_PICTURES, int((got.get("limits") or {}).get("images") or 0))
+
+    async def picture(self, url, name, width=None):
+        """A picture from the web (a logo, a product photo) into web/, as SK.image('web_<name>')."""
+        have = [k for k in self._manifest().get("images") or {} if k.startswith("web_")]
+        if len(have) >= self.web_limit() and "web_%s" % name not in have:
+            raise ToolError(
+                "That is %d pictures from the web, the limit for one film: reuse or replace one "
+                "(the same name again replaces it)." % self.web_limit()
+            )
+        args = ["--picture", str(url or ""), "--name", str(name or "")]
+        if width:
+            args += ["--width", str(int(width))]
+        async with self.lock:
+            tail = await self._script("web", "web-grab.py", args, pools=[("browser", 1)])
+        return tail[-1] if tail else "saved"
+
+    async def page(self, url, name, width=None, height=None):
+        """A photograph of a web page into web/, as SK.image('web_<name>')."""
+        have = [k for k in self._manifest().get("images") or {} if k.startswith("web_")]
+        if len(have) >= self.web_limit() and "web_%s" % name not in have:
+            raise ToolError(
+                "That is %d pictures from the web, the limit for one film: reuse or replace one "
+                "(the same name again replaces it)." % self.web_limit()
+            )
+        args = ["--page", str(url or ""), "--name", str(name or "")]
+        if width or height:
+            args += ["--size", "%dx%d" % (int(width or 1920), int(height or 1080))]
+        async with self.lock:
+            tail = await self._script("web", "web-grab.py", args, pools=[("browser", 1)])
+        # the photograph's line and what the page is made of, below it
+        first = max((i for i, ln in enumerate(tail) if ln.startswith("web/")), default=0)
+        return "\n".join(tail[first:]) or "saved"
+
+    async def font(self, family, weights=None):
+        """A Google Fonts family into web/fonts/ and the manifest's fonts."""
+        mine = {f.get("family") for f in self._manifest().get("fonts") or [] if "web/" in f["file"]}
+        if len(mine) >= MAX_WEB_FONTS and family not in mine:
+            raise ToolError(
+                "That is %d font families from the web, the limit for one film." % MAX_WEB_FONTS
+            )
+        args = ["--font", str(family or "")]
+        if weights:
+            try:
+                args += ["--weights", ",".join(str(int(w)) for w in weights)]
+            except (TypeError, ValueError):
+                raise ToolError("weights is a list of numbers, e.g. [400, 700]") from None
+        async with self.lock:
+            tail = await self._script("web", "web-grab.py", args)
+        return tail[-1] if tail else "saved"
+
+    async def cut_people(self):
+        """Cut every person of a template film still waiting out of their photo (templates.cut_list:
+        the cache first), on half the machine's cores, then keep each in the cache."""
+        import templates  # noqa: PLC0415
+
+        f = self.film
+        todo, spec = await asyncio.to_thread(templates.cut_list, f)
+        if not todo:
+            return 0
+        self.emit(
+            {"type": "stage", "name": "people", "text": "Cutting the people out of their photos"}
+        )
+        src, out = f.path("temp", "cut", "in"), f.path("temp", "cut", "out")
+        shutil.rmtree(f.path("temp", "cut"), ignore_errors=True)
+        os.makedirs(src)
+        for key, photo, _, _ in todo:
+            shutil.copyfile(photo, os.path.join(src, key + os.path.splitext(photo)[1]))
+        argv = [procs.python(), "-X", "utf8", os.path.join(SCRIPTS, "portrait-cutout.py")]
+        argv += ["--src", src, "--out", out, "--threads", str(CUT_THREADS)]
+        argv += templates.cut_args(spec)
+        async with self.sched["cpu"].hold(1, f.id, self._on_wait, self.clock, self.priority):
+            code, tail = await procs.run(
+                argv,
+                f.dir,
+                procs.step_env(f, "cutouts"),
+                60 + CUT_S_PER_PHOTO * len(todo),
+                jobs=self.jobs,
+            )
+        if code != 0:
+            raise ToolError("the people could not be cut out: %s" % " ".join(tail[-3:]))
+        cache = os.path.join(HOME, "cache", "cutouts")
+        os.makedirs(cache, exist_ok=True)
+        for key, _, dst, hit in todo:
+            got = os.path.join(out, key + ".webp")
+            if not os.path.exists(got):
+                raise ToolError("no cut-out of %s: is there a face in its photo?" % key)
+            shutil.copyfile(got, dst)
+            shutil.copyfile(got, hit)
+        return len(todo)
+
+    async def template_pictures(self, logo=None, people=()):
+        """A template film whose form was its website: the logo and the speakers' photos Claude
+        brought in with the picture tool become the film's own -- the logo on dark and light
+        grounds (templates.logo_variants), each person cut out of their photo as sp-1, sp-2...
+        in the order given. Answers with the keys for content.json."""
+        import templates  # noqa: PLC0415
+
+        f = self.film
+        if not f.record().get("template"):
+            raise ToolError("Only a film made from a template has template pictures.")
+        m = self._manifest()
+        images = m.setdefault("images", {})
+
+        def web(name):
+            key = name if str(name).startswith("web_") else "web_%s" % name
+            rel = images.get(key)
+            if not rel or not os.path.exists(f.path(*rel.split("/"))):
+                raise ToolError("No picture %r: bring it in with the picture tool first." % name)
+            return f.path(*rel.split("/"))
+
+        said = []
+        if logo:
+            p1, p2 = await asyncio.to_thread(templates.logo_variants, web(logo), f.path("images"))
+            images["logo"] = os.path.relpath(p1, f.dir).replace("\\", "/")
+            images["logo-light"] = os.path.relpath(p2, f.dir).replace("\\", "/")
+            said.append('the logo: {"image": "logo", "light": "logo-light"}')
+        rows = list(f.record().get("people_cutouts") or [])
+        start = len(rows)
+        os.makedirs(f.path("inputs", "people"), exist_ok=True)
+        for i, name in enumerate(people or (), start + 1):
+            src = web(name)
+            key = "sp-%d" % i
+            rel = "inputs/people/%s%s" % (key, os.path.splitext(src)[1])
+            shutil.copyfile(src, f.path(*rel.split("/")))
+            images[key] = "images/people/%s.webp" % key
+            rows.append({"key": key, "photo": rel})
+        _write_json(f.manifest, m)
+        f.update(people_cutouts=rows)
+        if people:
+            async with self.lock:
+                await self.cut_people()
+            said.append(
+                "the people, in the order given: %s"
+                % ", ".join("%s = %s" % (n, "sp-%d" % i) for i, n in enumerate(people, start + 1))
+            )
+        return "Ready. In content.json use " + "; ".join(said) + "."
+
     async def name_film(self, title):
         """The film's title, when the visitor typed nothing (voice notes or pictures only): the
         record's title (the page and the film's own page show it) and the manifest's."""
@@ -598,6 +757,61 @@ class Tools:
                 },
             )(wrap(lambda a: self.paint(a.get("retake")))),
             tool(
+                "picture",
+                "Save a picture from the web (a logo, a product, a person, a place: its own URL, "
+                "PNG/JPEG/WebP/GIF/ICO/SVG) into web/<name>.png|jpg, shown in film.js with "
+                "SK.image('web_<name>', x, y, w). width: the px an SVG is drawn at (1600).",
+                {
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string"},
+                        "name": {"type": "string", "description": "lowercase, e.g. logo"},
+                        "width": {"type": "integer"},
+                    },
+                    "required": ["url", "name"],
+                },
+            )(wrap(lambda a: self.picture(a.get("url"), a.get("name"), a.get("width")))),
+            tool(
+                "page",
+                "Open a web page in a real browser (it also reads pages WebFetch is refused) and "
+                "photograph it (width x height px, 1920x1080 unless given; a taller one takes "
+                "more of the page) into web/<name>.jpg, shown with SK.image('web_<name>', x, y, "
+                "w). Reports what the page is made of, measured in it: the fonts that set its "
+                "headings, text and buttons, the web fonts it loaded, its text and painted "
+                "colours, its logo and icon files; a logo it draws inline is saved as "
+                "web/<name>_logo1.png. Its words go to web/<name>.txt.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string"},
+                        "name": {"type": "string", "description": "lowercase, e.g. site"},
+                        "width": {"type": "integer"},
+                        "height": {"type": "integer"},
+                    },
+                    "required": ["url", "name"],
+                },
+            )(
+                wrap(
+                    lambda a: self.page(
+                        a.get("url"), a.get("name"), a.get("width"), a.get("height")
+                    )
+                )
+            ),
+            tool(
+                "font",
+                "Add a Google Fonts family to the film (whole fonts, every script they cover), "
+                "for SK.text(..., {font: '<family>', wt: <weight>}). weights: [400, 700] unless "
+                "given.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "family": {"type": "string", "description": "e.g. Inter"},
+                        "weights": {"type": "array", "items": {"type": "integer"}},
+                    },
+                    "required": ["family"],
+                },
+            )(wrap(lambda a: self.font(a.get("family"), a.get("weights")))),
+            tool(
                 "stills",
                 "Render review frames of the film at these times (seconds) into "
                 "outputs/review/, tiled into outputs/review/sheet.png when sheet is true.",
@@ -617,6 +831,22 @@ class Tools:
                 "(outputs/review/motion.png).",
                 {"type": "object", "properties": {}},
             )(wrap(lambda a: self.motion())),
+            tool(
+                "template_pictures",
+                "A film made from a template, whose form was the event's website: after bringing the "
+                "logo and the speakers' photos in with the picture tool, make them the film's own -- "
+                "logo: the logo picture's name; people: the photos' names, in the order the speakers "
+                "should take (the first five are the featured). Cuts each person out of their photo "
+                "and makes the logo readable on dark and light grounds; answers with the image keys "
+                "for content.json.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "logo": {"type": "string"},
+                        "people": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
+            )(wrap(lambda a: self.template_pictures(a.get("logo"), a.get("people") or []))),
             tool(
                 "name_film",
                 "Name the film (only when the person typed nothing): a short title, a few words.",
@@ -639,6 +869,8 @@ class Tools:
             tools = [t for t in tools if t.name != "name_film"]
         if rec.get("narration") is False:  # a template's film: the music carries it
             tools = [t for t in tools if t.name != "voice"]
+        if not rec.get("template"):  # its pictures from the website: a template film's only
+            tools = [t for t in tools if t.name != "template_pictures"]
         if not paint_kinds(self.film.caps):
             tools = [t for t in tools if t.name != "paint"]
         return create_sdk_mcp_server("studio", tools=tools)

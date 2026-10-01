@@ -72,6 +72,12 @@ network() {
       --priority 4000 --access Deny --protocol '*' --direction Inbound \
       --source-address-prefixes VirtualNetwork --destination-port-ranges '*' --output none
   fi
+  # and nothing out to it either: a film may fetch from the web (web-grab.py, WebFetch), a
+  # stranger's prompt chooses what, and the other machines on this network are not theirs to
+  # reach. The rules are stateful, so the replies to SSH from the VPN still get out.
+  if ! az network nsg rule show -g "$RG" --nsg-name "$NSG" -n no-network-outbound >/dev/null 2>&1; then
+    run az network nsg rule create -g "$RG" --nsg-name "$NSG" -n no-network-outbound       --priority 4000 --access Deny --protocol '*' --direction Outbound       --destination-address-prefixes VirtualNetwork --destination-port-ranges '*' --output none
+  fi
   if ! subnet_id >/dev/null 2>&1; then
     # through the REST API: `subnet create --default-outbound-access` needs a newer az than 2.49,
     # and a subnet made today is private (no way out) unless it says otherwise

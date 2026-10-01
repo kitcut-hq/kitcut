@@ -34,6 +34,7 @@ import templates  # noqa: E402
 import uploads  # noqa: E402
 import film as films  # noqa: E402
 from film import Film  # noqa: E402
+from tools import ToolError, Tools  # noqa: E402
 
 from aiohttp.test_utils import TestClient, TestServer  # noqa: E402
 from PIL import Image  # noqa: E402
@@ -538,6 +539,97 @@ async def main():
         except uploads.UploadError:
             took = False
         check(took, "a template's own cap lets it take more")
+
+    # ---- the website is the form: everything else the film finds for itself
+    web_spec = json.loads(json.dumps(SPEC))
+    web_spec["limits"] = {"images": 32}  # a line-up's photos and a logo
+    for f in web_spec["fields"]:
+        if f["key"] == "url":
+            f["source"] = True
+        else:
+            f["research"] = True
+    templates.make(src, "t-web-promo", web_spec)
+    templates.set_status("t-web-promo", 1, "live")
+    tw = templates.load("t-web-promo")
+    only = templates.validate_fields(tw, {"url": "https://nordic.example"})
+    check(only == {"url": "https://nordic.example"}, "the website alone is a whole form", only)
+    left = [x["key"] for x in templates.research_needed(tw, only)]
+    check(
+        left[:3] == ["name", "city", "dates"] and "people" in left,
+        "what the film must find on the site is named",
+        left,
+    )
+    check(
+        templates.research_needed(t, clean) == [],
+        "a template with no website field asks nothing of the web",
+    )
+    try:
+        templates.validate_fields(tw, {"name": "Nordic"})
+        need = False
+    except templates.TemplateError as e:
+        need = "required" in str(e)
+    check(need, "without the website, the form is required as before")
+    some = templates.validate_fields(
+        tw, {"url": "nordic.example", "people": [{"photo": "up-a1", "name": "Aino"}]}
+    )
+    check(len(some["people"]) == 1, "a website and one featured speaker: the film finds the rest")
+    c0, _ = templates.build_content(tw, only)
+    check(
+        not templates.complete(tw, c0),
+        "a website-only film has nothing to draw until Claude reads it",
+    )
+    c1, _ = templates.build_content(t, clean)
+    check(templates.complete(t, c1), "a filled form's content is complete")
+    async with TestClient(TestServer(server.make_app(TOKEN))) as c:
+        me = {"Authorization": "Bearer " + TOKEN, "X-Client-Ip": "u:alice"}
+        r = await c.post(
+            "/api/films",
+            json={"template": {"id": "t-web-promo"}, "fields": {"url": "nordic.example"}},
+            headers=me,
+        )
+        j = await r.json()
+        fw = Film.open(j.get("id"))
+        rec = fw.record() if fw else {}
+        check(
+            r.status == 202 and [x["key"] for x in rec.get("research") or []][:1] == ["name"],
+            "a film from the website alone: its record says what to find",
+            j,
+        )
+        ask = agent.ask(fw)
+        check(
+            "Research first" in ask and "nordic.example" in ask and "template_pictures" in ask,
+            "its first message sends Claude to the website first",
+            ask[:300],
+        )
+        tl = Tools(fw, server.SCHED, lambda ev: None)
+        check(
+            tl.web_limit() == 32,
+            "a template film may bring in its own number of pictures",
+            tl.web_limit(),
+        )
+        # a logo Claude brought in from the site becomes the film's, on dark and light
+        os.makedirs(fw.path("web"), exist_ok=True)
+        with open(fw.path("web", "logo.png"), "wb") as fh:
+            fh.write(png(500, 160, bg=(255, 255, 255, 255)))
+        with open(fw.manifest, encoding="utf-8") as fh:
+            mm = json.load(fh)
+        mm.setdefault("images", {})["web_logo"] = "web/logo.png"
+        with open(fw.manifest, "w", encoding="utf-8") as fh:
+            json.dump(mm, fh)
+        said = await tl.template_pictures("logo", [])
+        with open(fw.manifest, encoding="utf-8") as fh:
+            mm = json.load(fh)
+        check(
+            "logo-light" in said and mm["images"].get("logo") == "images/logo.png",
+            "template_pictures makes the website's logo the film's own",
+            said,
+        )
+        try:
+            await tl.template_pictures("nope", [])
+            refused = False
+        except ToolError as e:
+            refused = "picture tool" in str(e)
+        check(refused, "a picture it never brought in is refused, with what to do")
 
     # ---- the health check: a live version drawn again by this release
     t2 = templates.load("t-test-promo", 2)

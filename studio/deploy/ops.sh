@@ -41,6 +41,8 @@
 #   bash studio/deploy/ops.sh watch <film-id>...      follow films to the end (one line per change)
 #   bash studio/deploy/ops.sh pull <film-id> [dest] [--all]   its outputs (or the whole folder) here
 #   bash studio/deploy/ops.sh hide|show <film-id>     out of / back into the public gallery
+#   bash studio/deploy/ops.sh replace <film-id> <folder>   a remade film takes its place (same id
+#                                                     and page; the old one to backups/)
 #   bash studio/deploy/ops.sh forward [port]          the VM's studio on this laptop's 127.0.0.1:port
 #                                                     (default 8765), as if it ran here
 #   bash studio/deploy/ops.sh snapshot [--keep N]     an incremental snapshot of the data disk
@@ -485,6 +487,59 @@ print(json.dumps(body, ensure_ascii=False))
     esac
     ;;
 
+  replace)
+    # a remade film (a folder here: a bakeoff film's projects/<id>/, or one `pull --all` brought)
+    # takes the place of a film on the VM, under the same id and page: its picture, sound, source
+    # files, review images and the log the page replays. The record keeps its person, project,
+    # prompt and what it cost; its closing note and direction become the new film's. The old
+    # folder goes to backups/; the files go online under new URLs (media.py --revision: the old
+    # ones are cached for a year).
+    id="${1:?replace <film-id> <folder of the remade film>}"; src="${2:?replace <film-id> <folder>}"
+    [ -f "$src/outputs/film.mp4" ] && [ -f "$src/sketch.json" ] || die "$src has no outputs/film.mp4 and sketch.json"
+    ev="$src/events.jsonl"; [ -f "$ev" ] || ev="$(dirname "$(dirname "$src")")/events.log"  # a bakeoff film's
+    [ -f "$ev" ] || die "no events.jsonl for $src"
+    on "test -f $HOME_DIR/projects/$id/studio.json" || die "no film $id on $VM"
+    stamp=$(date +%Y%m%d-%H%M%S); stage="$HOME_DIR/tmp/replace-$id-$stamp"
+    have=$(cd "$src" && for p in film.js vo.json score.json sfx.json sketch.json audio engine web outputs; do [ -e "$p" ] && printf '%s ' "$p"; done)
+    echo "replace $id on $VM with $src: $have+ its events"
+    echo "  the old one is kept in $HOME_DIR/backups/$id-$stamp.tar.gz"
+    [ "$DRY" = 1 ] && { echo "  would copy, swap, republish under new URLs and update the record"; exit 0; }
+    on "mkdir -p $stage $HOME_DIR/backups && tar -czf $HOME_DIR/backups/$id-$stamp.tar.gz -C $HOME_DIR/projects/$id --exclude=./temp ."
+    (cd "$src" && tar -cf - --exclude=outputs/artifact --exclude=outputs/film_web.mp4 --exclude=outputs/card.jpg $have) | on "tar -xf - -C $stage"
+    on "cat > $stage/events.jsonl" < "$ev"
+    if [ -f "$src/studio.json" ]; then on "cat > $stage/source-studio.json" < "$src/studio.json"; fi
+    on "ID=$id STAGE=$stage HAVE='$have' FROM='$(basename "$src")' STAMP=$stamp HOME_DIR=$HOME_DIR REMOTE=$REMOTE bash -s" <<'EOF'
+set -e
+cd "$HOME_DIR/projects/$ID"
+rm -rf $HAVE
+(cd "$STAGE" && tar -cf - --exclude=source-studio.json .) | tar -xf -
+find "$HOME_DIR/library" -path '*/films/*' -name "$ID.jpg" -delete  # the library's cached poster
+cd "$REMOTE"
+# capped like every job beside the live servers (KI-045): a scope runs in the foreground, here
+sudo systemd-run --scope --quiet --uid="$(id -un)" --gid="$(id -gn)" -p MemoryHigh=2G -p MemoryMax=3G \
+  env STUDIO_HOME="$HOME_DIR" nice -n 10 .venv/bin/python studio/media.py --film "$ID" --revision </dev/null  # ffmpeg reads stdin: the rest of this script
+STUDIO_HOME="$HOME_DIR" .venv/bin/python - <<'PY'
+import asyncio, json, os, sys
+sys.path.insert(0, "studio")
+import agent
+from film import Film
+f = Film.open(os.environ["ID"])
+src = os.path.join(os.environ["STAGE"], "source-studio.json")
+new = json.load(open(src, encoding="utf-8")) if os.path.exists(src) else {}
+fields = {k: new[k] for k in ("claude_said", "direction") if new.get(k)}
+fields["replaced"] = {
+    "from": os.environ["FROM"],
+    "at": os.environ["STAMP"],
+    "backup": "backups/%s-%s.tar.gz" % (f.id, os.environ["STAMP"]),
+}
+f.update(**fields)
+asyncio.run(agent.save(f.id, fields))
+print("record: " + ", ".join(sorted(fields)))
+PY
+rm -rf "$STAGE"
+EOF
+    ;;
+
   hide|show)
     id="${1:?$cmd <film-id>}"; flag=$([ "$cmd" = hide ] && echo true || echo false)
     change_on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/admin/films/$id/hidden -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' -d '{\"hidden\": $flag}'; echo"
@@ -513,5 +568,5 @@ print(json.dumps(body, ensure_ascii=False))
     az_ snapshot list -g "$RG" --query "sort_by([?tags.app=='kitcut-studio-snapshot'], &timeCreated)[].{name:name, created:timeCreated, gb:diskSizeGb}" -o table
     ;;
 
-  *) sed -n 2,38p "$0"; exit 2 ;;
+  *) sed -n 2,42p "$0"; exit 2 ;;
 esac

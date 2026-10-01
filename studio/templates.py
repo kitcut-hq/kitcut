@@ -177,11 +177,15 @@ def validate_fields(t, values):
     if not isinstance(values, dict):
         raise TemplateError("fields must be an object")
     out = {}
+    # a field the film can find for itself ("research": the event's own website, "source") need
+    # not be given when the source is: Claude reads it and fills the rest
+    has_source = any(values.get(f["key"]) for f in t["fields"] if f.get("source"))
     for f in t["fields"]:
         k, kind, v = f["key"], f["kind"], values.get(f["key"])
         empty = v is None or v == "" or v == [] or v == {}
+        found = f.get("research") and has_source
         if empty:
-            if f.get("required"):
+            if f.get("required") and not found:
                 raise TemplateError("%s is required" % f["label"])
             continue
         if kind in ("text", "url", "select"):
@@ -222,6 +226,8 @@ def validate_fields(t, values):
             if not isinstance(v, list):
                 raise TemplateError("%s: a list of people" % f["label"])
             mx, mn = min(int(f.get("max") or MAX_PEOPLE), MAX_PEOPLE), int(f.get("min") or 1)
+            if found:  # the film finds the rest of the line-up on the website
+                mn = 1
             if not mn <= len(v) <= mx:
                 raise TemplateError("%s: %d to %d people" % (f["label"], mn, mx))
             rows, photos = [], set()
@@ -237,7 +243,7 @@ def validate_fields(t, values):
                         row[item["key"]] = _text(p[item["key"]], item)
                 rows.append(row)
             named = sum(1 for r in rows if r.get("name"))
-            need = int((f.get("featured") or {}).get("min") or 0)
+            need = 0 if found else int((f.get("featured") or {}).get("min") or 0)
             if named < need:
                 raise TemplateError(
                     "%s: give at least %d of them a name (the featured)" % (f["label"], need)
@@ -246,6 +252,31 @@ def validate_fields(t, values):
         else:
             raise TemplateError("%s: a field of an unknown kind" % f["label"])
     return out
+
+
+def research_needed(t, clean):
+    """The fields the film must find on the website itself (the form left them empty, and they
+    can be researched): [{key, label, path}]. [] when the form gave everything it needs."""
+    if not any(clean.get(f["key"]) for f in t["fields"] if f.get("source")):
+        return []
+    return [
+        {"key": f["key"], "label": f["label"], "path": f.get("path") or f.get("paths")}
+        for f in t["fields"]
+        if f.get("research") and f["key"] not in clean
+    ]
+
+
+def complete(t, content):
+    """Whether a template film's content.json has what its code needs to draw at all: a value at
+    the path of every field the template requires. A film whose form was the website alone has
+    none of it until Claude has read the site."""
+    for f in t.get("fields") or ():
+        if not f.get("required"):
+            continue
+        paths = [f["path"]] if f.get("path") else list((f.get("paths") or {}).values())
+        if any(_get(content or {}, p) in (None, "", [], {}) for p in paths):
+            return False
+    return True
 
 
 def upload_ids(t, clean):
@@ -475,6 +506,14 @@ def ask(film):
     }
     empty = [f["label"] for f in t.get("fields") or () if f["key"] not in given]
     lang = rec.get("language") or "en"
+    # the new content drawn before Claude starts (agent.template_ready) -- not when the website was
+    # the whole form: there is nothing to draw until Claude has read it
+    mine = (
+        "; template/mine/sheet.png shows it with the new content at the same moments. Read both "
+        "first."
+        if os.path.exists(film.path("template", "mine", "sheet.png"))
+        else ". Read it first."
+    )
     parts = [
         'Make the film: a remake of the template "%s" with this person\'s own content.'
         % t.get("title", tr.get("id")),
@@ -483,9 +522,8 @@ def ask(film):
         "counted)." % (n, limits(n)["claude_s"] // 60),
         "The template is a finished film. Its code is already your film.js, and its words, "
         "colours, logo and people are in content.json (SK.DATA.content), built from the person's "
-        "form -- both are yours to edit. The film already runs with the new content: "
-        "template/mine/sheet.png shows it at the template's own moments, and template/sheet.png "
-        "shows the template as its author made it. Read both first.",
+        "form -- both are yours to edit. template/sheet.png shows the template as its author made "
+        "it" + mine,
         "What stays: the scenes and their order, the camera, the motion and the clock (every time "
         "in film.js), the type, the colour roles and the sound. The sound is written by the film "
         "itself (SK.film({sound}): score() and sfx() work it out from the clock and the content); "
@@ -501,7 +539,28 @@ def ask(film):
         "Every word on screen comes from content.json or the person's form; invent no facts.",
         "The person's form:\n" + json.dumps(shown, ensure_ascii=False, indent=1),
     ]
-    if empty:
+    research = rec.get("research") or []
+    if research:
+        source = [given.get(f["key"]) for f in t.get("fields") or () if f.get("source")]
+        site = next((v for v in source if v), "")
+        parts.insert(
+            2,
+            "Research first. The person gave the event's website, %s, and left the rest to you: %s. "
+            "Read the site (WebFetch, or the page tool when a site turns WebFetch away): its home "
+            "page, its speakers page and wherever its dates, venue and tickets are. Fill content.json "
+            "with what it says -- template/content.sample.json shows every key and its shape, and "
+            "the form's limits hold (a city, the dates and a short venue each fit a 10-cell "
+            "departures board; up to 3 tagline lines of up to 22 letters; up to 24 speakers, the "
+            "first five with a name, role and company being the featured, the most prominent ones). "
+            "Take the colours from the site and its logo (ground: the dark one the type sits on). "
+            "Bring the logo and the speakers' photos in with the picture tool, then call "
+            "template_pictures once, with the logo's name and the photos' names in order: it cuts "
+            "the people out and makes the logo readable on dark and light grounds, and answers "
+            "with the image keys to put in content.json. Use only what the site says; where it "
+            "does not say something, leave that out rather than invent it, and say so at the end. "
+            "Then remake the film as follows." % (site, ", ".join(x["label"] for x in research)),
+        )
+    elif empty:
         parts.append(
             "Left empty: %s. The film works these out or leaves them out (content.json shows "
             "what it has); do not invent them." % ", ".join(empty)
