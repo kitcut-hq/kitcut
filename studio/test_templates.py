@@ -196,8 +196,11 @@ async def main():
     t = templates.load("t-test-promo", 1, ("draft",))
     pub = templates.public(t)
     check(
-        pub.get("example") == SPEC["example"] and "fields" not in pub and "brief" not in pub,
-        "a template shows an example of what to ask -- no form, no brief",
+        pub.get("example") == SPEC["example"]
+        and pub.get("limits") == {"images": 9}
+        and "fields" not in pub
+        and "brief" not in pub,
+        "a template shows an example of what to ask and its picture cap -- no form, no brief",
         sorted(pub),
     )
 

@@ -119,6 +119,7 @@ def public(t):
             "narration",
             "example",
             "moments",
+            "limits",  # how many pictures a film from it may take: the site's prompt box says so
         )
     }
 
@@ -610,7 +611,9 @@ def main():
     mk.add_argument("--folder", help="the film's folder (a project's, or STUDIO_HOME's)")
     mk.add_argument("--film", help="a studio film id (its folder under STUDIO_HOME/projects)")
     mk.add_argument("--id", required=True)
-    mk.add_argument("--spec", required=True, help="the template's spec: title, example, brief, keep...")
+    mk.add_argument(
+        "--spec", required=True, help="the template's spec: title, example, brief, keep..."
+    )
     mk.add_argument("--plan", action="store_true", help="list what would be copied; copy nothing")
     ck = sub.add_parser("check", help="re-draw the samples with this release; compare")
     ck.add_argument("--id")
