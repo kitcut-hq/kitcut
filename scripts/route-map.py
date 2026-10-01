@@ -422,6 +422,8 @@ def sample(pts, mosaic, step_m, smooth_m, source, decks=None):
             if on.any() and not on.all():
                 idx = np.arange(len(ele))
                 ele[on] = np.interp(idx[on], idx[~on], ele[~on])
+        # a road is not under the sea: the seabed at a bridge's foot read -16 ft on the Golden Gate
+        ele = np.maximum(ele, 0.0)
     ele = _gauss(ele, smooth_m / step_m)
     t0 = out[0][4]
     return [
