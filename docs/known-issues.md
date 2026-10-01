@@ -854,3 +854,20 @@ status route calls such a film `lost`, and it would not continue it.
 **Rule.** Never roll back past the release that brought `waiting` while any film is waiting
 (`ops.sh` status lists them). A continued film pays one uncached re-read of its Claude context,
 about $0.5-1 on a long film: the cost of pausing, instead of failing and making it again.
+
+### KI-054 · fixed · studio · A transcription model chosen on its word accuracy put the narration's word times a quarter-second late
+
+**Symptom.** For a few hours on 2026-09-29 the studio scored narration takes with
+`microsoft/mai-transcribe-2` (`34c96b9`). Its word starts ran 0.24-0.26 s late (worst 0.50 s), and
+it let 3 of 20 garbled English takes through where Groq's Whisper large-v3 let 1 through.
+**Cause.** It was compared against the VM's own small.en, and against that it looked equal. Its
+published claims, like every STT leaderboard, are word error rate. Nobody publishes word timing,
+and timing is what a caption, a cue hung off a word and a take's tail cut depend on.
+**Fix.** `2b364f6`: Whisper large-v3 on Groq through OpenRouter (`studio/procs.py` `SCORER`),
+0.08-0.12 s from a local large-v3 referee, 9-17 s a film, $0.003. The bench table is in
+`docs/studio-speed.md`.
+**Lesson.** Pick a transcriber with `scripts/vo-scorer-bench.py --reference` (a local large-v3
+referee), never against the model it replaces, and never on a WER headline. Re-asked on
+2026-10-01 when Microsoft announced MAI-Transcribe-2-Streaming ("most accurate real time
+transcription", 2.5 % WER, $0.54/h): still no. Nothing in KitCut transcribes live, and the claim
+is about words, not timing. Bench the streaming model only once OpenRouter serves it.
