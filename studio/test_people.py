@@ -52,7 +52,7 @@ async def main():
     bad = []
 
     def check(ok, what, detail=""):
-        print("%s  %s%s" % ("ok  " if ok else "FAIL", what, "" if ok else "  -- %s" % detail))
+        print("%s  %s%s" % ("ok  " if ok else "FAIL", what, "" if ok else "  -- %s" % (detail,)))
         if not ok:
             bad.append(what)
 
@@ -104,7 +104,7 @@ async def main():
         )
         check(
             "people" in f.caps
-            and m.get("modules") == ["heads"]
+            and m.get("modules") == ["kit", "heads"]
             and os.path.exists(f.path("engine", "heads.js"))
             and "heads.js" in f.engine_files(),
             "the people capability brings sketch/heads.js into the film's engine",
@@ -132,7 +132,7 @@ async def main():
             m2 = json.load(fh)
         check(
             m2["heads"]["p1"]["look"] == films.PEOPLE_AUTO["collage"] == "papercut"
-            and m2.get("modules") == ["collage", "heads"],
+            and m2.get("modules") == ["kit", "collage", "heads"],
             "auto draws them in the look's own style",
             m2.get("heads"),
         )
