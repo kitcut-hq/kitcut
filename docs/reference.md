@@ -3448,6 +3448,11 @@ in front of every prompt and a no-lettering, no-border suffix behind it. Each be
 `SK.image(name, x, y, w)`. Paintings are cached by a fingerprint of backend, model, style,
 prompt and reference; `max_images` caps a film's total (Sketch Studio sets 8).
 
+Pictures a person gave the film (`inputs/upload1.png`, `inputs/pic_logo.png`, …) join `images`
+the same way, by file name, whatever the manifest lists: a film whose manifest named only
+`upload1` drew its Codex, Scratch and Roblox logos as blank white cards (2026-10-01). A name
+the manifest maps itself keeps its own path.
+
 Backends:
 - **`openrouter`**: any model OpenRouter's Image API serves (`"model": "<vendor>/<model>"`).
   Each model is sent only what its entry in the public catalogue

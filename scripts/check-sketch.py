@@ -274,6 +274,30 @@ def heads():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def inputs_join():
+    """Every picture in inputs/ is drawable by its name, even when the manifest lists only some:
+    a film listed upload1 alone and drew three real logos as blank cards (2026-10-01)."""
+    tmp = tempfile.mkdtemp(prefix="sketch-inputs-")
+    try:
+        os.makedirs(os.path.join(tmp, "inputs"))
+        for f in ("upload1.png", "upload2.png", "pic_logo.png", "doc1.md"):
+            open(os.path.join(tmp, "inputs", f), "wb").close()
+        with open(os.path.join(tmp, "sketch.json"), "w", encoding="utf-8") as f:
+            json.dump({"images": {"upload1": "inputs/upload1.png", "hero": "art/hero.png"}}, f)
+        im = _sketch.load(os.path.join(tmp, "sketch.json"))["images"]
+        check(
+            "inputs: every given picture joins images, a listed one is kept, a document is not",
+            im.get("upload2") == "inputs/upload2.png"
+            and im.get("pic_logo") == "inputs/pic_logo.png"
+            and im.get("upload1") == "inputs/upload1.png"
+            and im.get("hero") == "art/hero.png"
+            and "doc1" not in im,
+            str(im),
+        )
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     argparse.ArgumentParser(description=__doc__.split("\n")[0]).parse_args()
     # ---- notes and the score notation
@@ -855,6 +879,7 @@ def main():
 
     cyrillic()
     heads()
+    inputs_join()
 
     # ---- the bundler, against the committed example
     ex = os.path.join(_env.ROOT, "config", "sketch", "example")

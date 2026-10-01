@@ -66,6 +66,16 @@ def load(path):
         m["images"] = dict(m.get("images") or {})
         for name, p in painted_images(m["paint"], d).items():
             m["images"].setdefault(name, p)
+    # the pictures a person gave the film (inputs/upload1.png, inputs/pic_logo.png, ...) join
+    # "images" too, by file name: a manifest that listed only upload1 drew Codex, Scratch and
+    # Roblox as blank white cards in a published film (2026-10-01)
+    inputs = os.path.join(d, "inputs")
+    if os.path.isdir(inputs):
+        m["images"] = dict(m.get("images") or {})
+        for f in sorted(os.listdir(inputs)):
+            stem, ext = os.path.splitext(f)
+            if ext.lower() in (".png", ".jpg", ".jpeg", ".webp"):
+                m["images"].setdefault(stem, "inputs/" + f)
     # "engine": "engine" -- a folder holding the film's own engine.js and props.js (Sketch Studio
     # gives every film a copy it may extend); the repo's sketch/ otherwise
     m["_engine"] = rel(m, m["engine"]) if m.get("engine") else os.path.join(_env.ROOT, "sketch")
