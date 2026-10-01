@@ -1,0 +1,17 @@
+{
+  "_comment": "Invented carrier. Formal, navy and crimson, serif -- a policy document.",
+  "name": "Cardinal State Insurance Company",
+  "tagline": "A member of the Cardinal State Group  ·  NAIC 41998",
+  "address": "1900 Kenilworth Plaza, Suite 700, Indianapolis, IN 46204",
+  "phone": "(317) 555-0100",
+  "web": "cardinalstateins.com",
+  "mark": "CS",
+  "ink": "#16213c",
+  "muted": "#5b6a86",
+  "paper": "#ffffff",
+  "accent": "#a4123f",
+  "rule": "#c3cbd9",
+  "band": "#eef1f6",
+  "font_head": "Georgia, 'Times New Roman', serif",
+  "font_body": "Georgia, 'Times New Roman', serif"
+}

@@ -400,6 +400,8 @@ grant picks one silently, so it asserts which channel the token really points at
 before a byte leaves. Uploads are resumable, are re-read afterwards to confirm
 the title and privacy came back as asked, and write a `.youtube.json` sidecar
 beside the render. Privacy defaults to `unlisted` — the end you can widen later.
+`--publish-at <ISO time>` schedules a release instead: it uploads private and
+YouTube makes it public then; the read-back asserts the schedule.
 Both scripts share the one `youtube.force-ssl` grant, so there is no second
 consent to give.
 
@@ -752,6 +754,8 @@ which cannot encode the glyphs at all.
 | `scripts/zoom-import.py` | Zoom local recordings -> a project; `--join` puts a talk recorded in parts on one clock |
 | `scripts/check-zoom.py` | the Zoom/emphasis self-test: folder rules, part ordering, phrase matching |
 | `scripts/checklist-card.py` | an animated checklist end screen (ticks drawn one by one), words in the project, look in `config/cards/checklist/`; `edl-cut.py` plays it as an EDL entry |
+| `scripts/kitcut-clean.py` | a kitcut.ai export made usable as an insert: closing promo card cut, corner mark removed (`delogo`, or `--clone DY` from an identical twin where the drawing runs under it), soundtrack dropped; every box measured per file, checked after |
+| `scripts/make-doc.py` | the synthetic paperwork a form gets filled FROM: a template (`config/docs/templates/`), an issuer's letterhead (`config/docs/issuers/`) and a spec under `projects/<id>/docs/` -> a printable PDF |
 | `scripts/make-thumbnail.py` | a 1280x720 YouTube thumbnail in the channel's house style from a spec; `yt-upload.py --thumbnail` sets it |
 | `scripts/thumb-options.py` | four YouTube thumbnail options for a sketch film, each a still of the film with a few words in the film's own look, checked; `_thumb.py` is the machinery and `sketch/thumb.js` the film-side probe and overlay (kitcut.ai's publish dialog uses it via `studio/thumbs.py`), `check-thumbnail.py` its test |
 | `scripts/edl-cut.py` | a film from hand-chosen ranges of a few silent takes, with an elapsed counter driven by SOURCE time so it stays true over a sped-up wait |
