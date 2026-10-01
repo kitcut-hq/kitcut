@@ -25,6 +25,8 @@ bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--look collage] [--unlis
 bash studio/deploy/ops.sh watch <film-id>...        # one or several, a line per change
 bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]  # finish a film the studio stopped
 bash studio/deploy/ops.sh resume <film-id> --finish --patched  # a DONE film changed by hand: re-mix, re-render, new URLs
+bash studio/deploy/ops.sh drafts [--days 7]          # YouTube drafts: seconds to the words, picks,
+                                                    # pictures, and cost -- "why is publishing slow"
 bash studio/deploy/ops.sh pull <film-id> [dest] [--all]
 bash studio/deploy/ops.sh hide|show <film-id>       # public gallery
 bash studio/deploy/ops.sh replace <film-id> <folder>   # a remade film takes its place: same id

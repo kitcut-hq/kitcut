@@ -17,6 +17,9 @@
 #                                                     on the VM, for the running films to finish
 #   bash studio/deploy/ops.sh claude-log <film-id> [--all] [--grep T]   what Claude did, its API
 #                                                     errors and waits, Claude Code's debug log
+#   bash studio/deploy/ops.sh drafts [--days N] [--json]   the YouTube drafts written lately: seconds
+#                                                     to the words, to the thumbnail picks, to the
+#                                                     pictures, cost (studio/draft_times.py). Reads only
 #   bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]   pick up a film the studio
 #                                                     stopped half-way (studio/resume.py), in the
 #                                                     same film; --plan spends nothing
@@ -276,6 +279,12 @@ EOF
     [[ "$id" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $id"
     args=""; for a in "$@"; do args="$args $(printf '%q' "$a")"; done  # quoted for the VM's shell
     on "cd $REMOTE && STUDIO_HOME=$HOME_DIR $REMOTE/.venv/bin/python -X utf8 studio/claude_log.py $id$args"
+    ;;
+
+  drafts)
+    # where YouTube drafts spend their time, from their own records (studio/draft_times.py). Reads only
+    args=""; for a in "$@"; do args="$args $(printf '%q' "$a")"; done
+    on "cd $REMOTE && STUDIO_HOME=$HOME_DIR $REMOTE/.venv/bin/python -X utf8 studio/draft_times.py$args"
     ;;
 
   resume)
