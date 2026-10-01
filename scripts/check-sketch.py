@@ -875,6 +875,7 @@ def main():
                 "__FONTFACES__",
                 "__VO__",
                 "__IMAGES__",
+                "__PREVIEW__",
             )
             if k in page
         ]
@@ -926,6 +927,56 @@ def main():
             'width="1080" height="1080"' in sq
             and "aspect-ratio: 1080 / 1080" in sq
             and sq.index("FRAME: [1080, 1080]") < sq.index("const W = (SK.W"),
+        )
+        # the preview Sketch Studio shows while a film is made: the narration as its only sound,
+        # laid on the film clock, and the words under the picture
+        vdir = os.path.join(tmp, "example", "audio", "vo")
+        os.makedirs(vdir)
+        line = os.path.join(vdir, "L00.wav")
+        _sketch.write_wav(
+            line, 0.2 * np.sin(np.arange(int(1.5 * _sketch.SR)) / _sketch.SR * 2 * np.pi * 220)
+        )
+        said = [
+            {"text": w, "s": 1.0 + k * 0.4, "e": 1.3 + k * 0.4}
+            for k, w in enumerate(["Pass", "it", "on"])
+        ]
+        with open(os.path.join(vdir, "timeline.json"), "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "lines": [
+                        {
+                            "i": 0,
+                            "text": "Pass it on.",
+                            "file": "audio/vo/L00.wav",
+                            "start": 1.0,
+                            "end": 2.5,
+                            "words": said,
+                        }
+                    ]
+                },
+                f,
+            )
+        pv = render.write_preview(m)
+        with open(pv, encoding="utf-8") as f:
+            ppage = f.read()
+        mp3 = os.path.join(m["_temp"], "preview", "voice.mp3")
+        check(
+            "preview: the film's page with its captions, and the narration as long as the film",
+            pv.endswith(os.path.join("outputs", "review", "preview.html"))
+            and 'id="pv-cap"' in ppage
+            and '"text": "Pass it on."' in ppage
+            and "data:audio/mpeg;base64," in ppage
+            and "__PREVIEW" not in ppage
+            and abs(len(_sketch.decode(mp3)) / _sketch.SR - m["duration"]) < 0.2,
+        )
+        check("preview: a film's own page never carries the captions", 'id="pv-cap"' not in page)
+        with open(render.write_preview(m, narration_only=True), encoding="utf-8") as f:
+            bare = f.read()
+        check(
+            "preview: before the picture, the narration over the bare ground and a note why",
+            "SK.film({ duration: 12.0 });" in bare
+            and "An invite, unused." not in bare
+            and render.PREVIEW_NOTE in bare,
         )
         bad = []
         for fr in ([1080], [1081, 1080], [100, 100], ["1080", 1080], [8000, 1080]):

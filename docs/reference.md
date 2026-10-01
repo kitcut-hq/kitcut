@@ -3861,6 +3861,28 @@ capped at 8 Mbps (`WEB`; a manifest `web` block overrides): 25.6 MB, VMAF 98.3 a
 Rendering is quick: 1,560 frames of the square promo in 16 s at 60 fps (4 browsers, encoded in
 the browser), stills at ~3 a second.
 
+**A preview to watch while the film is made: `sketch-render.py --preview`.** The film is a program,
+so it can play in a browser long before it is a video. `--preview` writes
+`outputs/review/preview.html`: the player as the film stands, with its **narration as the only
+sound** (`preview_voice`: each line laid at its place on the film clock, an MP3 as long as the film,
+because the player's clock is its audio) and the words written under the picture as they are said,
+the one being spoken in the accent colour (`sketch/preview.html`, filled into `player.html`'s last
+placeholder; a film's own page never carries it). With `--stills` it is written only after the
+stills have drawn, so a preview never shows code that has not run; `--preview narration` is the
+narration over the bare ground, before there is a picture to trust. ~1 s, the voice track cached
+on the timeline. The page that frames it may pass `?bg=&ink=&accent=` (hex) to sit on its colours.
+
+Why it is worth having, measured on the studio's last 74 finished films (2026-09-28..30): the first
+picture that draws arrives at ~63% of the wait (a 30 s film: 10.7 of 17.1 minutes), the recorded
+narration at ~2.3 minutes, while mixing, rendering and uploading are only 5-8% of the wait for
+films up to 45 s. So the preview does not make a film faster; it shows the real film 6 (30 s) to 27
+(over 2 min) minutes sooner, while Claude still has ~40% of its work -- and its cost -- ahead.
+
+```powershell
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 2,9 --sheet --preview
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --preview narration
+```
+
 ### Collage films: cut-outs and mixed media (`sketch/collage.js`)
 
 A collage film animates pictures cut out of paper rather than whole painted scenes: each
@@ -4198,6 +4220,12 @@ A prompt-to-film web app on this engine, set up with `pip install -r requirement
   (`studio/release.py`), so edits in the working tree never reach a film being made.
 - `python studio/agent.py "<idea>"` does the same from the command line, `--smoke` checks the
   key, and `--auth login` runs on this machine's Claude Code login instead.
+- **The live preview** (a film sent with `X-Preview: 1`, which the site sends with every film
+  that has its player for it; films without it are made as before): once the narration is recorded, and again with
+  every review sheet, the film's `sketch-render.py --preview` page is written and announced as a
+  `"preview"` event (`kind`: `narration` or `film`) with a signed URL, which the site plays in place
+  of the still sheet. Every `.html` the studio serves carries `Content-Security-Policy: sandbox
+  allow-scripts`, so the film's code (Claude's) never runs as the studio's origin, framed or not.
 
 `studio/README.md` has the sandbox, the scheduler, the permission model (tested by
 `studio/test_guard.py`, `test_isolation.py`, `test_sched.py`, `test_server.py`), the API and the

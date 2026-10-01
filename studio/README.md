@@ -404,6 +404,17 @@ docs/studio-scenes-plan.md.
 4. The studio then mixes the soundtrack and renders the video (three browsers at once), and the
    MP4 lands in the film's `outputs\film.mp4`.
 
+**The live preview** (`tools.PREVIEW`, for a film sent with `X-Preview: 1`): while Claude works,
+the film's page shows the film itself instead of a sheet of stills. After the narration is
+recorded, `sketch-render.py --preview narration` writes `outputs\review\preview.html` -- the
+narration over the bare ground, with its words under it -- in the background, so Claude's turn does
+not wait; after every review sheet (`stills`, which then passes `--preview`) it is the picture as it
+stands. Each is a `"preview"` event (`kind`: `narration`/`film`), signed like a sheet. It is never
+part of the film: no music yet (written last), a failure only logged. The site sends the header with
+every film once its making page plays the preview (sketch-studio `live-preview`, a POC until it
+merges); a film without it is made as before. Why, in numbers: docs/reference.md ("A preview to
+watch while the film is made").
+
 **Free-plan films** (the site sends `X-Branding: 1`; `branding` on the record) carry a small
 "made with kitcut.ai" in the corner and end with a 3-second closing: the last frame as a tilted
 snapshot beside the logo and kitcut.ai, with a chime and "Make yours at KitCut AI" (one recording,

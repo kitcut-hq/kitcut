@@ -10,6 +10,7 @@ description: Make an animated explainer film with no footage — a hand-drawn/wh
 python scripts/sketch-vo.py     --manifest projects/<id>/sketch.json --plan
 python scripts/sketch-vo.py     --manifest projects/<id>/sketch.json
 python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 2,9,17,31 --sheet
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --preview   # play it, narration + captions, before any music or render
 python scripts/sketch-audio.py  --manifest projects/<id>/sketch.json --levels
 python scripts/sketch-render.py --manifest projects/<id>/sketch.json
 python scripts/sketch-render.py --manifest projects/<id>/sketch.json --timings

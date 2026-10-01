@@ -561,11 +561,12 @@ async def main():
         ids = []
         # film 0 is a priority plan's, and asks for the key from this machine (which otherwise
         # uses its login); film 1 is a Free plan's (branded), through the tunnel: on the login,
-        # as server.site_auth() says by default; film 2 asks for the login from this machine
+        # as server.site_auth() says by default; film 2 asks for the login from this machine, and
+        # for the preview (the site's X-Preview)
         extra = [
             ({"X-Priority": "1"}, {"auth": "api"}),
             ({"Cf-Ray": "test", "X-Branding": "1", "X-Fps": "30"}, {"auth": "login"}),
-            ({}, {"auth": "login"}),
+            ({"X-Preview": "1"}, {"auth": "login"}),
         ]
         site_was = os.environ.pop("STUDIO_SITE_AUTH", None)
         for i in range(3):
@@ -599,6 +600,17 @@ async def main():
             check(
                 sheets and all("/files/%s/" % j in e["url"] and "sig=" in e["url"] for e in sheets),
                 "its review sheet is its own, signed",
+            )
+            previews = [e for e in st["all_events"] if e["type"] == "preview"]
+            check(
+                bool(previews) == (i == 2)
+                and bool(f.record().get("preview")) == (i == 2)
+                and all(
+                    "/files/%s/review/preview.html" % j in e["url"] and "sig=" in e["url"]
+                    for e in previews
+                ),
+                "a film asked for with X-Preview gets its preview, signed; the others none (%d)"
+                % len(previews),
             )
             want = TTS_USD if i else EXPECT_USD  # on the login, Claude is not billed
             check(
@@ -665,6 +677,16 @@ async def main():
         waits = [e for st in results for e in st["all_events"] if e["type"] == "wait"]
         check(bool(waits), "films queued for the renderer (%d waits)" % len(waits))
 
+        pv = [e for e in results[2]["all_events"] if e["type"] == "preview"][-1]["url"]
+        r = await c.get(pv[pv.index("/files/") :])
+        page = await r.text()
+        check(
+            r.status == 200
+            and r.headers.get("Content-Security-Policy") == "sandbox allow-scripts"
+            and 'id="pv-cap"' in page
+            and "__PREVIEW" not in page,
+            "the preview is the player with its captions, and runs only in a sandbox of its own",
+        )
         video = results[0].get("video_url", "")
         path = video[video.index("/files/") :]
         r = await c.get(path)
