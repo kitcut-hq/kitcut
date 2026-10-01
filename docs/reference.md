@@ -3605,6 +3605,29 @@ whimsical 40 s crayon film, and a 60 s clean real-estate film for a brand.
 
 ### The voice: `sketch-vo.py`
 
+**One voice, said right (2026-10-01, the Leo series).** Three things now keep a narration in its
+own voice:
+
+- *A refused line is read again in the same voice without the direction* (`gemini_plain`), twice,
+  before the backup voice reads it. Gemini's prompt filter refused "Like a team!" and "I'm a big
+  boy!" with the film's style and read them every time without it; 14 lines of 6 episodes had gone
+  to the backup voice, another person mid-film.
+- *A broken take's last retry goes without the direction* (`stretched`): a voice that reads its
+  direction aloud does it on every try with it.
+- *`say` in vo.json* (`{"varenyky": "va-REN-ih-kee"}`) is what the voice is given; the captions,
+  the scoring and the word times keep the script's spelling (`said`). Spell a word the way an
+  English reader would say it: "varenyky" as written made Gemini change voice on that one word.
+
+A direction that gives a character a voice of its own ("Leo's lines: higher, brighter") makes one
+narrator sound like two; a series that wants one voice says so in its brief.
+
+**Re-voicing a finished film.** `python scripts/vo-retime.py --manifest <sketch.json> --before <old
+timeline.json> --write` moves every sfx.json cue with the words around it after the narration was
+recorded again (the picture follows the words by itself; sound cues are in seconds). Re-voicing the
+eight Leo episodes moved words by up to 5 s. Then `ops.sh resume <id> --finish --patched` mixes and
+renders it again on the same page.
+
+
 Per line: N takes (cached by a fingerprint of text + voice + model + settings, so an edit
 re-renders only that line), each cut at the silence before a throwaway tail word, scored by
 Whisper against the script, the best one picked (accuracy, then a clean cut, then the take

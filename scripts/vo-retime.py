@@ -29,6 +29,7 @@ import shutil
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _env  # noqa: E402, F401 -- re-execs into .venv; before any 3rd-party import
 
 
 def norm(s):
