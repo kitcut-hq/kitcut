@@ -571,8 +571,8 @@ html[data-view=film] .work.done .screen { width: min(100%, max(calc((100svh - 23
 .screen .idle .btn { margin-top: 14px; }
 #yt { width: min(480px, calc(100% - 32px)); }
 #yt label.field { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
-#yt input[type=text], #yt textarea { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font: 14px/1.45 Inter, system-ui, sans-serif; resize: vertical; min-height: 0; }
-#yt input[type=text]:focus, #yt textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
+#yt input[type=text], #yt input[type=datetime-local], #yt textarea { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font: 14px/1.45 Inter, system-ui, sans-serif; resize: vertical; min-height: 0; color-scheme: inherit; }
+#yt input[type=text]:focus, #yt input[type=datetime-local]:focus, #yt textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
 /* while the words are being written: grey lines where they will go, gone the moment you type */
 #yt .box { position: relative; display: block; }
 #yt .skel { display: none; position: absolute; inset: 0; padding: 15px 13px; gap: 10px; align-content: start; pointer-events: none; }
@@ -834,7 +834,9 @@ if (/^\/film\/studio-/.test(location.pathname)) document.documentElement.dataset
       <label><input type="radio" name="ytWho" value="public"><span>Public</span></label>
       <label><input type="radio" name="ytWho" value="unlisted"><span>Unlisted</span></label>
       <label><input type="radio" name="ytWho" value="private"><span>Private</span></label>
+      <label><input type="radio" name="ytWho" value="scheduled"><span>Scheduled</span></label>
     </fieldset>
+    <label class="field" id="ytWhenRow" hidden>Goes public on<span class="box"><input type="datetime-local" id="ytWhen"></span></label>
     <p class="note" id="ytWhoNote"></p>
     <label class="check"><input type="checkbox" id="ytKids"> Made for kids</label>
     <button class="btn primary go" type="submit" id="ytGo">Publish</button>
@@ -1606,7 +1608,27 @@ const WHO = {
   public: { label: 'Public', note: 'Anyone can find it and watch it.' },
   unlisted: { label: 'Unlisted', note: 'Only people you send the link to can watch it.' },
   private: { label: 'Private', note: 'Only you can watch it.' },
+  scheduled: { label: 'Scheduled', note: 'Private until then, and YouTube makes it public at that time.' },
 };
+// a scheduled publish: shown and typed in the person's own time zone, sent as UTC
+const ytZone = (() => {
+  try {
+    const long = new Intl.DateTimeFormat([], { timeZoneName: 'long' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName');
+    return (long && long.value) || Intl.DateTimeFormat().resolvedOptions().timeZone.replace(/_/g, ' ');
+  } catch (e) { return ''; }
+})();
+const pad2 = (n) => String(n).padStart(2, '0');
+const toLocalInput = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+const whenText = (iso) => new Date(iso).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+// the time offered: a day after the last one scheduled from this browser (a series, one a day), else
+// tomorrow at 9:00
+function ytWhenDefault() {
+  const last = new Date(ls.get('ytWhenLast') || 0), next = new Date(+last + 864e5);
+  if (+last && next - Date.now() > 20 * 60e3) return next;
+  const d = new Date(Date.now() + 864e5);
+  d.setHours(9, 0, 0, 0);
+  return d;
+}
 // back from Google's chooser: /film/<id>?youtube=<how it went>&channel=<the one connected>
 const YT_SAID = {
   again: "That channel was already connected. To add a different one, pick it on Google's screen: a business or brand channel is listed under its own name.",
@@ -1657,7 +1679,8 @@ function ytList() {
   $('ytPosts').hidden = !list.length;
   $('ytPosts').innerHTML = !list.length ? '' : '<span>On YouTube:</span>' + list.map((p) => {
     const face = (p.channel.thumb ? `<img src="${esc(p.channel.thumb)}" alt="" referrerpolicy="no-referrer">` : '') + esc(p.channel.title);
-    const st = p.status || { label: WHO[p.held ? 'private' : p.privacy].label, detail: '' };
+    let st = p.status || { label: WHO[p.held ? 'private' : p.privacy].label, detail: '' };
+    if (st.key === 'scheduled' && p.publish_at) st = { ...st, label: `Scheduled for ${whenText(p.publish_at)}`, detail: 'Private until then, when YouTube makes it public.' };
     const seen = p.views != null ? ` · ${p.views.toLocaleString()} view${p.views === 1 ? '' : 's'} there` : '';
     return p.url
       ? `<a href="${esc(p.url)}" target="_blank" rel="noopener" title="${esc([p.title, st.detail].filter(Boolean).join('. '))}">${face} · ${esc(st.label)}${seen}</a>`
@@ -1891,7 +1914,14 @@ function ytForm(pick) {
 }
 function ytWhoNote() {
   const w = document.querySelector('input[name=ytWho]:checked');
-  $('ytWhoNote').textContent = w ? WHO[w.value].note : '';
+  const later = !!w && w.value === 'scheduled';
+  $('ytWhenRow').hidden = !later;
+  if (later) {
+    const now = new Date(Date.now() + 15 * 60e3);
+    $('ytWhen').min = toLocalInput(now);
+    if (!$('ytWhen').value || new Date($('ytWhen').value) < now) $('ytWhen').value = toLocalInput(ytWhenDefault());
+  }
+  $('ytWhoNote').textContent = w ? WHO[w.value].note + (later && ytZone ? ` The time is in ${ytZone}.` : '') : '';
 }
 for (const r of document.querySelectorAll('input[name=ytWho]')) r.onchange = ytWhoNote;
 // publishing to a channel that has it already makes a second copy: say so before, not after
@@ -1910,13 +1940,21 @@ $('ytForm').addEventListener('submit', async (e) => {
   const chan = document.querySelector('input[name=ytChan]:checked'), who = document.querySelector('input[name=ytWho]:checked');
   if (!chan) return ytErr('Pick a channel to publish to.');
   if (!$('ytName').value.trim()) return ytErr('Give the video a title.');
+  let publishAt = null;
+  if (who.value === 'scheduled') {
+    const at = new Date($('ytWhen').value);
+    if (!$('ytWhen').value || Number.isNaN(+at)) return ytErr('Pick the day and time it goes public.');
+    if (at - Date.now() < 15 * 60e3) return ytErr('Pick a time at least 15 minutes from now.');
+    publishAt = at.toISOString();
+  }
   ytErr(''); $('ytGo').disabled = true;
   try {
     const r = await fetch('/api/youtube/publish', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         film: ytFilm.id, channel: chan.value, title: $('ytName').value, description: $('ytDesc').value, tags: $('ytTags').value,
-        language: (ytDrafts[ytBase] || {}).language, category: (ytDrafts[ytBase] || {}).category, privacy: who.value, kids: $('ytKids').checked,
+        language: (ytDrafts[ytBase] || {}).language, category: (ytDrafts[ytBase] || {}).category, kids: $('ytKids').checked,
+        ...(publishAt ? { privacy: 'private', publish_at: publishAt } : { privacy: who.value }),
         // the thumbnail picked, and the channel whose draft made it (when it was another's)
         thumb: ytThumbChosen(ytBase), ...(ytBase && ytBase !== chan.value ? { thumb_from: ytBase } : {}),
       }),
@@ -1927,6 +1965,7 @@ $('ytForm').addEventListener('submit', async (e) => {
       throw new Error(b.error || `HTTP ${r.status}`);
     }
     ls.set('ytChannel', chan.value); ls.set('ytWho', who.value);
+    if (publishAt) ls.set('ytWhenLast', publishAt);
     // it goes up in the background: the dialog closes, a note at the foot of the screen follows it
     // (the studio finishes it even if the page is closed), and the film's YouTube line shows it
     $('yt').close();
@@ -1954,7 +1993,9 @@ function ytNote(p) {
   } else if (p.state === 'failed') {
     el.innerHTML = `<span>Publishing to ${chan} didn't go through. <button class="again" type="button">Try again</button></span>${x}`;
   } else {
-    el.innerHTML = `<span>&#10003; Published to ${chan}${p.held ? ' (private while Google reviews KitCut)' : ''}. <a href="${esc(p.url)}" target="_blank" rel="noopener">Watch on YouTube</a></span>${x}`;
+    el.innerHTML = p.publish_at
+      ? `<span>&#10003; On ${chan}, private until ${esc(whenText(p.publish_at))}, when it goes public. <a href="${esc(p.url)}" target="_blank" rel="noopener">Open on YouTube</a></span>${x}`
+      : `<span>&#10003; Published to ${chan}${p.held ? ' (private while Google reviews KitCut)' : ''}. <a href="${esc(p.url)}" target="_blank" rel="noopener">Watch on YouTube</a></span>${x}`;
     ytNoteT = setTimeout(() => { el.hidden = true; }, 15000);
   }
   el.hidden = false;
@@ -1992,9 +2033,11 @@ function ytTrack(p) {
     }, 1500);
     return;
   }
-  $('ytSendText').innerHTML = `<span class="okmark">&#10003;</span> Published to <b>${esc(p.channel.title)}</b>`;
+  $('ytSendText').innerHTML = `<span class="okmark">&#10003;</span> ${p.publish_at ? 'Scheduled on' : 'Published to'} <b>${esc(p.channel.title)}</b>`;
   $('ytWatch').href = p.url;
-  $('ytDoneNote').textContent = (p.held
+  $('ytDoneNote').textContent = (p.publish_at
+    ? `It is private on YouTube until ${whenText(p.publish_at)}, when YouTube makes it public.`
+    : p.held
     ? "YouTube is keeping it private for now, while Google reviews KitCut's access to YouTube."
     : p.state === 'live' ? `It is on YouTube now, as ${WHO[p.privacy].label.toLowerCase()}.`
       : 'YouTube takes a few minutes to get a new video ready. Until then it may say "processing".')
