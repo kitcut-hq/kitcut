@@ -1,0 +1,206 @@
+{
+ "_comment": "A terrain map made of stacked paper: one sheet per elevation band, each casting a soft shadow down-right, streets printed on top. Read by scripts/route-map.py. Sizes are pixels at zoom 16 and scale with the map's zoom. No orange anywhere: the route a film draws on it is Strava orange (#FC5200) and must be the only warm line.",
+ "terrain": {
+  "zoom": 15,
+  "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+  "smooth_px": 1.2
+ },
+ "land": {
+  "step_m": 50,
+  "colors": [
+   "#EFE9DA",
+   "#E8E5D2",
+   "#E0E1C9",
+   "#D5DBBE",
+   "#C9D3B2",
+   "#BCCAA6",
+   "#AFC09B",
+   "#A2B691",
+   "#95AB88",
+   "#89A07F",
+   "#7E9677",
+   "#748C70",
+   "#6B8369",
+   "#637A63"
+  ]
+ },
+ "ocean": {
+  "_comment": "shelves of paper stepping out from the coastline (OSM), nearest first; the terrain tiles' bathymetry is not used",
+  "bands_m": [
+   90,
+   260,
+   600,
+   1200,
+   2200
+  ],
+  "colors": [
+   "#B9D6E2",
+   "#ABCDDB",
+   "#9EC4D4",
+   "#92BBCD",
+   "#88B3C6",
+   "#7FABBF"
+  ],
+  "shadow": 0.6,
+  "shore": "#7FA6BA",
+  "shore_px": 1.6
+ },
+ "shadow": {
+  "dx": 3.0,
+  "dy": 4.0,
+  "blur": 3.2,
+  "strength": 0.3
+ },
+ "rim": {
+  "px": 1.2,
+  "strength": 0.22
+ },
+ "hillshade": {
+  "azimuth": 315,
+  "altitude": 42,
+  "strength": 0.14
+ },
+ "grain": {
+  "fine": 0.03,
+  "coarse": 0.022,
+  "coarse_px": 60,
+  "seed": 7
+ },
+ "parks": {
+  "color": "#D3E2BC",
+  "alpha": 0.55
+ },
+ "pier": {
+  "color": "#E9DCC2",
+  "edge": "#9C8B6E",
+  "px": 7
+ },
+ "roads": {
+  "_comment": "drawn in this order, casings first; w and case_w in px at zoom 16; min_w keeps a small map's streets visible; name_like: only ways whose name matches (OSM tags the paved foot of a fire road as a service road, and every driveway is one too)",
+  "order": [
+   "path",
+   "track",
+   "fireroad",
+   "cycleway",
+   "residential",
+   "tertiary",
+   "secondary",
+   "primary",
+   "trunk",
+   "motorway"
+  ],
+  "classes": {
+   "motorway": {
+    "highway": [
+     "motorway",
+     "motorway_link"
+    ],
+    "w": 8.0,
+    "fill": "#F6E9C8",
+    "case": "#C9B993",
+    "case_w": 1.4
+   },
+   "trunk": {
+    "highway": [
+     "trunk",
+     "trunk_link"
+    ],
+    "w": 6.5,
+    "fill": "#FFFCF2",
+    "case": "#C8BFAC",
+    "case_w": 1.2
+   },
+   "primary": {
+    "highway": [
+     "primary",
+     "primary_link"
+    ],
+    "w": 6.0,
+    "fill": "#FFFCF2",
+    "case": "#C8BFAC",
+    "case_w": 1.2
+   },
+   "secondary": {
+    "highway": [
+     "secondary",
+     "secondary_link"
+    ],
+    "w": 5.0,
+    "fill": "#FFFCF2",
+    "case": "#CEC6B4",
+    "case_w": 1.0
+   },
+   "tertiary": {
+    "highway": [
+     "tertiary",
+     "tertiary_link"
+    ],
+    "w": 4.0,
+    "fill": "#FFFCF2",
+    "case": "#D3CCBB",
+    "case_w": 0.9
+   },
+   "residential": {
+    "highway": [
+     "residential",
+     "unclassified",
+     "living_street"
+    ],
+    "w": 2.6,
+    "fill": "#FBF8EE",
+    "case": "#D9D2C2",
+    "case_w": 0.7
+   },
+   "cycleway": {
+    "highway": [
+     "cycleway"
+    ],
+    "w": 1.6,
+    "fill": "#8E9C8A",
+    "dash": [
+     7,
+     5
+    ]
+   },
+   "track": {
+    "highway": [
+     "track"
+    ],
+    "w": 1.9,
+    "fill": "#8A7A62",
+    "dash": [
+     9,
+     5
+    ]
+   },
+   "path": {
+    "highway": [
+     "path",
+     "bridleway"
+    ],
+    "w": 1.3,
+    "fill": "#958670",
+    "dash": [
+     4,
+     4
+    ]
+   },
+   "fireroad": {
+    "highway": [
+     "service",
+     "unclassified"
+    ],
+    "name_like": "(?i)fire (road|rd)|truck trail",
+    "w": 2.2,
+    "fill": "#8A7A62",
+    "dash": [
+     9,
+     5
+    ]
+   }
+  },
+  "min_w": 0.8
+ },
+ "jpeg_quality": 88,
+ "max_bytes": 7800000
+}

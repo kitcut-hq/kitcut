@@ -209,6 +209,22 @@ Check the whip, the turns and every transition frame by frame from a `--draft` r
 (`ffmpeg ... -vf "fps=30,scale=216:216,tile=6x5"`), not only from stills: an empty frame between two
 scenes only shows in motion.
 
+## A ride or a route on a real map (a cycling-app replay)
+
+The studio's Claude cannot fetch a map or a route, so make both here and attach them:
+
+1. Get the route as data, best a GPX of a real ride (it carries elevation and a clock); else OSM
+   way ids in order, or a bike-router leg. Trim a GPX to where the event really starts and ends
+   (`from_near`/`to_near` + `start_at`/`end_at` pins): a recording usually starts at someone's door.
+2. Write `projects/<id>/route-map.json` (ONE map at a fractional zoom under 40 MP -- two maps of
+   different zooms showed a seam in the film; `uploads` naming which `uploadN` it will be, `marks` for the gates and summits, `places` to label), price it with
+   `--list` (keep rows under ~12k characters: the film copies them), render, and **look at
+   `preview.jpg`** -- the line must sit on the roads and the sea must be sea.
+3. Attach the map first (so it is `upload1`), logos and a QR after, then `route.md`
+   and a facts sheet; the prompt says to copy the rows and never redraw the line, to keep the camera inside the map
+   while it follows the dot, to keep the map, line, dot and numbers crisp (no collage nudge), to drive the dot by the ride's own clock, and to
+   credit OSM. `docs/reference.md` "A real map and a real route" has the details.
+
 ## Harvest: turn what films keep re-inventing into kit pieces
 
 Every few days of studio films, read them back -- this is how `sketch/kit.js` was found, and the

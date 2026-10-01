@@ -1,0 +1,140 @@
+{
+  "id": "example",
+  "title": "Santa Monica Pier to Dirt Mulholland",
+  "style": "config/maps/paper-relief.json",
+  "out": "projects/example/outputs/map",
+  "units": "imperial",
+  "maps": [
+    {
+      "name": "map",
+      "zoom": 15.85,
+      "bbox": [
+        -118.56,
+        33.995,
+        -118.455,
+        34.14
+      ]
+    }
+  ],
+  "base": "map",
+  "uploads": {
+    "map": "upload1"
+  },
+  "legs": [
+    {
+      "name": "approach",
+      "title": "Santa Monica Pier to the Sullivan Fire Road gate",
+      "route": {
+        "router": "bike",
+        "points": [
+          [
+            -118.4956,
+            34.0103
+          ],
+          [
+            -118.5054658,
+            34.061037
+          ]
+        ]
+      },
+      "elevation": "terrain",
+      "tolerance_px": 4.0,
+      "max_gap_m": 400,
+      "decimals": 4
+    },
+    {
+      "name": "climb",
+      "title": "Sullivan Fire Road, Casale Rd gate to Dirt Mulholland",
+      "route": {
+        "osm_ways": [
+          13290126,
+          452116720,
+          632613339,
+          361607073
+        ],
+        "start": [
+          -118.5054658,
+          34.061037
+        ]
+      },
+      "elevation": "terrain",
+      "tolerance_px": 4.0,
+      "max_gap_m": 400,
+      "decimals": 4
+    }
+  ],
+  "places": [
+    {
+      "name": "Santa Monica Pier",
+      "at": [
+        -118.4956,
+        34.0103
+      ],
+      "note": "start and finish"
+    },
+    {
+      "name": "Sullivan Fire Road gate, Casale Rd",
+      "at": [
+        -118.5054658,
+        34.061037
+      ],
+      "note": "where the dirt climb starts"
+    },
+    {
+      "name": "Dirt Mulholland",
+      "at": [
+        -118.5264709,
+        34.1286249
+      ],
+      "note": "the top of Sullivan Fire Road"
+    },
+    {
+      "name": "San Vicente Mountain",
+      "at": [
+        -118.513014,
+        34.1286975
+      ],
+      "note": "1,962 ft, the old Nike missile site on Mulholland"
+    },
+    {
+      "name": "Pacific Ocean",
+      "at": [
+        -118.54,
+        34.012
+      ]
+    },
+    {
+      "name": "Santa Monica",
+      "at": [
+        -118.484,
+        34.023
+      ]
+    },
+    {
+      "name": "Pacific Palisades",
+      "at": [
+        -118.5265,
+        34.048
+      ]
+    },
+    {
+      "name": "Brentwood",
+      "at": [
+        -118.4741,
+        34.0521
+      ]
+    },
+    {
+      "name": "Santa Monica Mountains",
+      "at": [
+        -118.545,
+        34.105
+      ]
+    }
+  ],
+  "sea_at": [
+    -118.545,
+    34.0
+  ],
+  "_comment": "Copy to projects/<id>/route-map.json. This one needs no private file: the approach is routed, the climb is OSM's own ways. With a GPX of a real ride, use a gpx leg instead (see docs/reference.md, 'A real map and a real route')."
+}

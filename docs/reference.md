@@ -3963,6 +3963,53 @@ resolved to 10.x (DNS rebinding) is refused when it connects, not when it was ch
 `file:` never reach it (the opener has only http and https). `studio/test_web.py` covers it
 offline, including a "public" server redirecting to 127.0.0.1.
 
+### A real map and a real route: `route-map.py`
+
+A film that replays a ride the way a cycling app does -- a dot running along the road, the line
+growing behind it, distance and climb counting up -- needs a map of the real place and the route
+as numbers that land exactly on it. The studio's Claude can fetch neither, so `route-map.py`
+makes both from a manifest, and the film is given them as attachments (two pictures and a
+document).
+
+```powershell
+python scripts/route-map.py --manifest projects/<id>/route-map.json --list      # sizes, tiles, each leg's length/climb/rows; renders nothing
+python scripts/route-map.py --manifest projects/<id>/route-map.json --preview   # quarter size, to judge the look
+python scripts/route-map.py --manifest projects/<id>/route-map.json             # <out>/overview.jpg, detail.jpg, route.md, route.json, preview.jpg
+```
+
+- **The map** is paper relief: one sheet per `land.step_m` of real elevation (AWS Terrain Tiles,
+  terrarium, z15, cached under `temp/terrain/`), each casting a soft shadow, with OSM's streets,
+  fire roads, trails, parks and piers printed on top. Style is `config/maps/paper-relief.json`;
+  sizes are pixels at zoom 16. No labels (the film labels places in its own look) and **no
+  orange anywhere**: the route a film draws is the only warm line.
+- **The sea comes from the OSM coastline, never from the terrain tiles.** Their bathymetry put
+  land-coloured islands across Santa Monica Bay. The coastline (land on its left) is closed round
+  a rectangle far outside the frame on whichever side holds `sea_at`, and the sea is drawn as
+  paper shelves stepping out from the shore (`ocean.bands_m`).
+- **One map, at a fractional zoom, is the default.** `zoom` may be fractional: 15.85 covers Pier
+  to Mulholland at 2.2 m a pixel in 32 MP, under the studio's 40 MP / 8 MB picture limit (`--list`
+  flags one over). Two maps -- an overview and a sharper detail strip -- line up pixel for pixel
+  (both Web Mercator; `route.md` gives the detail's rectangle), but the first film made from them
+  (fmmnq4) showed **a seam**: the detail's grain and sharpness differ from the overview magnified
+  2x, so a faint rectangle travelled with the camera, and the overview's edge came into frame on
+  the coast. Use two only when one would pass 40 MP.
+- **Legs** come from a GPX (`gpx`, trimmed to `from_near`/`to_near` by the first and last pass
+  within `near_m`, with `start_at`/`end_at` pins), OSM way ids in order (`osm_ways`), a bike router
+  (`router: "bike"`, routing.openstreetmap.de) or plain `points`. A GPX keeps its own elevation
+  (`"elevation": "track"`, smoothed over `smooth_m`) and its clock, so the dot can move by the
+  ride's own time -- slow on the climb, fast down. `marks` report the rows where the leg passes a
+  place (a gate passed going up and coming down gives two).
+- **Rows** are `[u, v, elevation, distance, seconds]`, u and v fractions of the base map.
+  Douglas-Peucker on the sharpest map (`tolerance_px`) plus `max_gap_m` keeps the shape and the
+  clock with few rows: a 23.5-mile ride is 388 rows, 11.8k characters, at 4 px / 400 m / 4
+  decimals. The film copies them into film.js, so every character is output it writes.
+- Overpass answers a busy server with HTML, not JSON; the fetch retries on the next mirror. OSM
+  tags the paved foot of a fire road `highway=service` like every driveway, so the `fireroad`
+  class takes service roads only when their name matches `name_like`.
+
+Worked example: `projects/pedal-network-ride/` (local), the LA Tech Week ride from Santa Monica
+Pier up Sullivan Fire Road, made on kitcut.ai from these attachments with `npm run film -- make`.
+
 ### How long a film takes
 
 Machine time for the 60 s film, from its run logs (`--timings` prints them):
