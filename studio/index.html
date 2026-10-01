@@ -518,6 +518,15 @@ a.google { width: 100%; margin-top: 14px; }
 .posts a { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); text-decoration: none; border: 1px solid var(--line-2); border-radius: 999px; padding: 3px 10px 3px 4px; }
 .posts a:hover { background: var(--hover); }
 .posts img, .chan img { width: 22px; height: 22px; border-radius: 50%; display: block; }
+/* a publish going on in the background: a note at the foot of the screen, then the link */
+.yttoast { position: fixed; z-index: 60; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: max-content; max-width: calc(100% - 24px);
+  display: flex; align-items: center; gap: 12px; padding: 10px 8px 10px 16px; border-radius: 12px; background: var(--ink); color: var(--bg); box-shadow: var(--dialog); font-size: 14px; line-height: 1.4; }
+.yttoast a { color: inherit; font-weight: 650; text-underline-offset: 3px; white-space: nowrap; }
+.yttoast button.again { background: none; border: 0; padding: 0; color: inherit; font: inherit; font-weight: 650; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.yttoast .x { flex: none; width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: inherit; opacity: .7; font-size: 20px; line-height: 1; cursor: pointer; }
+.yttoast .x:hover { opacity: 1; background: rgba(127, 127, 127, .25); }
+.yttoast .bar { flex: none; width: 64px; height: 5px; border-radius: 3px; background: rgba(127, 127, 127, .4); overflow: hidden; }
+.yttoast .bar i { display: block; height: 100%; background: var(--accent); transition: width .6s ease; }
 /* the film's prompt, one line under the film: opened in full by a click, copied, or made again */
 .idea { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; border-top: 1px solid var(--line); font-size: 13.5px; }
 .idea .k { flex: none; color: var(--ink-3); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
@@ -795,6 +804,7 @@ if (/^\/film\/studio-/.test(location.pathname)) document.documentElement.dataset
 </div>
 
 <dialog id="peek" aria-label="Picture"><img alt=""></dialog>
+<div class="yttoast" id="ytToast" role="status" aria-live="polite" hidden></div>
 <dialog id="yt" aria-labelledby="ytTitle">
   <form method="dialog"><button class="btn quiet icon close" aria-label="Close">&times;</button></form>
   <h2 id="ytTitle">Publish to YouTube</h2>
@@ -1615,6 +1625,7 @@ const YT_BACK = (() => {
 })();
 function ytReset() {
   clearTimeout(ytPoll); ytPoll = null; ytPost = null; ytDoneId = null; ytFilm = null;
+  if ($('ytToast')) $('ytToast').hidden = true;
   $('ytOpen').hidden = true; $('ytPosts').hidden = true; $('sharebar').hidden = true; $('sbWho').hidden = true; $('dlBtn').hidden = true;
   if ($('yt').open) $('yt').close();
 }
@@ -1916,6 +1927,9 @@ $('ytForm').addEventListener('submit', async (e) => {
       throw new Error(b.error || `HTTP ${r.status}`);
     }
     ls.set('ytChannel', chan.value); ls.set('ytWho', who.value);
+    // it goes up in the background: the dialog closes, a note at the foot of the screen follows it
+    // (the studio finishes it even if the page is closed), and the film's YouTube line shows it
+    $('yt').close();
     ytTrack(b.post);
   } catch (err) { ytErr(String(err.message || err)); }
   $('ytGo').disabled = false;
@@ -1925,12 +1939,38 @@ function ytThumbChosen(channel) {
   const t = (ytDrafts[channel] || {}).thumbs || {}, p = ytThumbPick[channel];
   return t.state === 'done' && p && p.v === t.v && p.n !== 'none' ? p.n : null;
 }
+// The note at the foot of the screen while a publish goes on in the background (the dialog is
+// closed, or the page was opened again mid-way): its progress, then the link, or what went wrong
+// with Try again. A finished one stays a while; × closes it.
+let ytNoteT = null, ytNoteDone = new Set();
+function ytNote(p) {
+  const el = $('ytToast');
+  clearTimeout(ytNoteT);
+  if ($('yt').open || ytNoteDone.has(p.id)) { el.hidden = true; return; }
+  const chan = `<b>${esc(p.channel.title)}</b>`;
+  const x = '<button class="x" type="button" aria-label="Close">&times;</button>';
+  if (p.state === 'sending') {
+    el.innerHTML = `<span>Publishing to ${chan} in the background${p.pct ? ` (${p.pct}%)` : ''}. You can keep going, or leave: it finishes on its own.</span><span class="bar"><i style="width:${p.pct || 4}%"></i></span>${x}`;
+  } else if (p.state === 'failed') {
+    el.innerHTML = `<span>Publishing to ${chan} didn't go through. <button class="again" type="button">Try again</button></span>${x}`;
+  } else {
+    el.innerHTML = `<span>&#10003; Published to ${chan}${p.held ? ' (private while Google reviews KitCut)' : ''}. <a href="${esc(p.url)}" target="_blank" rel="noopener">Watch on YouTube</a></span>${x}`;
+    ytNoteT = setTimeout(() => { el.hidden = true; }, 15000);
+  }
+  el.hidden = false;
+  el.querySelector('.x').onclick = () => { el.hidden = true; ytNoteDone.add(p.id); };
+  const again = el.querySelector('.again');
+  if (again) again.onclick = () => { el.hidden = true; ytShow(p.error || null, p.channel.id); };
+}
+$('yt').addEventListener('close', () => { if (ytPost && ytFilm && ytPost.film === ytFilm.id && ytPost.state === 'sending') ytNote(ytPost); });
+
 // follow one publish: the bar while the studio sends the file, then the link
 function ytTrack(p) {
   if (!ytFilm || ytFilm.id !== p.film) return;
   ytPost = p;
   ytFilm.posts = [...ytFilm.posts.filter((x) => x.id !== p.id), p];
   ytList();
+  ytNote(p);
   clearTimeout(ytPoll);
   if (p.state === 'failed') {
     $('ytSend').hidden = true; $('ytForm').hidden = false; ytForm(p.channel.id);
