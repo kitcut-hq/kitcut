@@ -280,7 +280,9 @@ def system_prompt(look, caps=None):
     # own pills, phones, glows, arrows and confetti, and every one the old `w` cue wrapper
     kit = "KIT" in fill
     fill["CUE_RULE"] = CUE_RULE_KIT if kit else CUE_RULE
-    fill["CUE_SHORT"] = "`const T = SK.cues({...})` at the top" if kit else "`SK.w(line, 'word', fallbackSeconds)`"
+    fill["CUE_SHORT"] = (
+        "`const T = SK.cues({...})` at the top" if kit else "`SK.w(line, 'word', fallbackSeconds)`"
+    )
     fill["KIT_STEP"] = KIT_STEP if kit else ""
     # the look's own sections (studio/looks/<look>.md, "## NAME" headed) go in first, since
     # they carry placeholders of their own
@@ -715,6 +717,8 @@ def _describe(name, inp, film):
         return "rendering the soundtrack"
     if tool == "motion":
         return "checking the cuts and the motion"
+    if tool == "route":
+        return "drawing the route on a real map"
     if tool == "voice":
         if inp.get("retake_line") is not None:
             return "recording line %s again" % inp["retake_line"]

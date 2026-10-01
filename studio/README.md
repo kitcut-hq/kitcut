@@ -542,6 +542,18 @@ content is a data edit with its clicks and pops to match.
   content.json -- a word the person asked for is theirs, and asking for the sample's own event
   (`identity`, e.g. its name in their words) turns the check off -- and after Claude one short turn
   takes them out, or the film fails.
+- **Data beside the content, and assets.** A film may keep more than its content in `"data"`:
+  `{"content": ..., "route": "route.json"}` -- each extra file is a sample of its own
+  (`<key>.sample.json`), seeded as the film's own (`route.json`) and searched for the sample's
+  pictures like the content, so the sample's map is a leftover until a route of the person's own
+  replaces it. A spec's `assets` are the template's own generic pictures (a ride's bike, jersey,
+  gels): copied to `assets/`, seeded as `template/assets/`, kept by every film, never a leftover.
+- **Routes** (`ride-replay`, `caps: ["routes"]`): the route tool draws the film's real route on a
+  real map -- from a GPX the person attached, or places it routes along real roads and trails --
+  with `scripts/route-map.py --film` (docs/reference.md, "A real map and a real route"): the map as
+  `images/route_map.jpg`, the route as `route.json` (SK.DATA.route). Its tiles and answers are
+  cached in `STUDIO_HOME/cache/`. `template_pictures(qr=...)` makes a QR code of a link with
+  OpenCV's own encoder and reads it back before keeping it.
 - **The health check** (`templates.py check`): every live and draft version drawn again with this
   release's renderer at its moments, compared with its preview by SSIM (bar 0.99); a release that
   draws a template differently must not ship.

@@ -125,6 +125,28 @@ def public(t):
 
 
 # ------------------------------------------------------------------ a logo on dark and on light
+def qr_picture(url, out_path, px=960):
+    """A QR code of url as a black-on-white PNG about px wide, with its quiet zone, made with
+    OpenCV's own encoder (no other library) at correction level Q, and read back before it is kept:
+    a code that does not scan is refused, never drawn."""
+    import cv2  # noqa: PLC0415 -- only a template film's pictures need it
+
+    url = str(url or "").strip()
+    if not 4 <= len(url) <= 600:
+        raise TemplateError("a QR code holds a link of 4 to 600 characters")
+    p = cv2.QRCodeEncoder_Params()
+    p.correction_level = cv2.QRCODE_ENCODER_CORRECT_LEVEL_Q
+    code = cv2.QRCodeEncoder.create(p).encode(url)
+    k = max(1, px // code.shape[1])
+    big = cv2.resize(code, (code.shape[1] * k, code.shape[0] * k), interpolation=cv2.INTER_NEAREST)
+    back = cv2.QRCodeDetector().detectAndDecode(cv2.cvtColor(big, cv2.COLOR_GRAY2BGR))[0]
+    if back != url:
+        raise TemplateError("the QR code of %r did not read back" % url)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    cv2.imwrite(out_path, big)
+    return out_path
+
+
 def logo_variants(src, out_dir):
     """The logo as two transparent PNGs: logo.png for a light ground (the opening's card) and
     logo-light.png for a dark one (the pass, the poster). A picture with no transparency has its
@@ -186,13 +208,23 @@ def seed(film, t):
     sheet = os.path.join(d, "preview", fdir(have), "sheet.png")
     if os.path.exists(sheet):
         shutil.copyfile(sheet, os.path.join(ref, "sheet.png"))
-    # the sample's own pictures, for the film to draw until the person's replace them
-    for name in (
-        os.listdir(os.path.join(d, "sample")) if os.path.isdir(os.path.join(d, "sample")) else []
-    ):
-        os.makedirs(film.path("template", "sample"), exist_ok=True)
-        shutil.copyfile(os.path.join(d, "sample", name), film.path("template", "sample", name))
-        m.setdefault("images", {}).setdefault(os.path.splitext(name)[0], "template/sample/" + name)
+    # the data beside the content (a route): the sample's, the film's own to replace
+    for key in t.get("data") or ():
+        src = os.path.join(d, "%s.sample.json" % key)
+        shutil.copyfile(src, film.path("%s.json" % key))
+        shutil.copyfile(src, os.path.join(ref, "%s.sample.json" % key))
+        m.setdefault("data", {})[key] = "%s.json" % key
+    # the sample's own pictures, for the film to draw until the person's replace them; the
+    # template's assets (generic pictures every film may keep), in template/assets/
+    for sub in ("sample", "assets"):
+        for name in (
+            sorted(os.listdir(os.path.join(d, sub))) if os.path.isdir(os.path.join(d, sub)) else []
+        ):
+            os.makedirs(film.path("template", sub), exist_ok=True)
+            shutil.copyfile(os.path.join(d, sub, name), film.path("template", sub, name))
+            m.setdefault("images", {}).setdefault(
+                os.path.splitext(name)[0], "template/%s/%s" % (sub, name)
+            )
     _write_json(film.manifest, m)
 
 
@@ -349,6 +381,10 @@ def leftovers(film):
         except OSError:
             pass
     mine = json.dumps(mine, ensure_ascii=False)
+    # the data beside the content (a route) names pictures too: the sample's map is a leftover
+    # until a route of the person's own replaces it
+    for key in t.get("data") or ():
+        mine += "\n" + json.dumps(_read(film.path("%s.json" % key), {}), ensure_ascii=False)
     low = (text + "\n" + mine).lower()
     # a word the person asked for is theirs, even when the sample has it (the same city)
     left = sorted(w for w in words if w.lower() in low and w.lower() not in asked)
@@ -357,10 +393,15 @@ def leftovers(film):
     # template_pictures) is the person's picture
     pics = (t.get("manifest") or {}).get("images") or {}
     have = (_read(film.manifest, {}) or {}).get("images") or {}
+    kept = set(
+        t.get("assets") or ()
+    )  # the template's own generic pictures: every film may keep them
     return left + sorted(
         "the picture %s" % k
         for k in pics
-        if '"%s"' % k in mine and str(have.get(k, "template/")).startswith("template/")
+        if k not in kept
+        and '"%s"' % k in mine
+        and str(have.get(k, "template/")).startswith("template/")
     )
 
 
@@ -382,6 +423,13 @@ def _readonly(d):
             os.chmod(p, os.stat(p).st_mode & ~(stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
 
 
+def extra_data(m):
+    """The data files of a template film besides its content ("data": {"route": "route.json"}),
+    in a stable order: each has a sample, is seeded as the film's own, and is checked for leftovers
+    like the content."""
+    return sorted(k for k in (m.get("data") or {}) if k != "content")
+
+
 def plan(folder, spec):
     """What make() would copy from a finished film or a project folder: [(from, to)]. Only the
     film's code, its sample content, the engine it ran on, and the pictures that content names."""
@@ -400,12 +448,25 @@ def plan(folder, spec):
             (src if src and os.path.exists(src) else os.path.join(KIT, "sketch", n), "engine/" + n)
         )
     sample = _read(os.path.join(folder, content_rel), {})
-    # the pictures the sample names: any of its strings that is one of the manifest's images
-    named = {x for x in _strings(sample) if x in (m.get("images") or {})}
+    # data beside the content (a route a tool writes: SK.DATA.route), a sample of its own each
+    for key in extra_data(m):
+        rel = m["data"][key]
+        out.append((os.path.join(folder, rel), "%s.sample.json" % key))
+        sample = {"content": sample, key: _read(os.path.join(folder, rel), {})}
+    images = m.get("images") or {}
+    assets = set(spec.get("assets") or ())
+    if assets - set(images):
+        raise TemplateError("assets the film has no picture for: %s" % sorted(assets - set(images)))
+    # the pictures the sample names: any of its strings that is one of the manifest's images; the
+    # template's own pictures (assets: generic, kept by every film) go apart
+    named = {x for x in _strings(sample) if x in images} - assets
     for key in sorted(named):
-        rel = m["images"][key]
+        rel = images[key]
         ext = os.path.splitext(rel)[1]
         out.append((os.path.join(folder, rel), "sample/%s%s" % (key, ext)))
+    for key in sorted(assets):
+        rel = images[key]
+        out.append((os.path.join(folder, rel), "assets/%s%s" % (key, os.path.splitext(rel)[1])))
     for src, _ in out:
         if not os.path.isfile(src):
             raise TemplateError("missing: %s" % src)
@@ -431,14 +492,11 @@ def make(folder, tid, spec, owner="kitcut"):
         dst = os.path.join(d, *rel.split("/"))
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         shutil.copyfile(src, dst)
-    sample_images = (
-        {
-            os.path.splitext(n)[0]: "sample/" + n
-            for n in sorted(os.listdir(os.path.join(d, "sample")))
-        }
-        if os.path.isdir(os.path.join(d, "sample"))
-        else {}
-    )
+    sample_images = {}
+    for sub in ("sample", "assets"):
+        if os.path.isdir(os.path.join(d, sub)):
+            for n in sorted(os.listdir(os.path.join(d, sub))):
+                sample_images[os.path.splitext(n)[0]] = "%s/%s" % (sub, n)
     keep_keys = ("fonts", "player", "audio", "render", "poster_t", "fps", "modules")
     man = {k: m[k] for k in keep_keys if k in m}
     man.update(
@@ -447,7 +505,7 @@ def make(folder, tid, spec, owner="kitcut"):
         duration=float(m["duration"]),
         film="film.js",
         engine="engine",
-        data={"content": "content.sample.json"},
+        data={"content": "content.sample.json"} | {k: "%s.sample.json" % k for k in extra_data(m)},
         images=sample_images,
     )
     _write_json(os.path.join(d, "sketch.json"), man)
@@ -474,6 +532,8 @@ def make(folder, tid, spec, owner="kitcut"):
         "generic": spec.get("generic") or [],
         "identity": spec.get("identity") or [],
         "brief": spec.get("brief", ""),
+        "assets": sorted(spec.get("assets") or []),
+        "data": extra_data(m),
         "manifest": man,
     }
     _write_json(os.path.join(d, "template.json"), t)

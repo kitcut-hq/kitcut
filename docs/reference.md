@@ -4010,6 +4010,31 @@ python scripts/route-map.py --manifest projects/<id>/route-map.json             
 Worked example: `projects/pedal-network-ride/` (local), the LA Tech Week ride from Santa Monica
 Pier up Sullivan Fire Road, made on kitcut.ai from these attachments with `npm run film -- make`.
 
+**`--film`: one route for one film, framed by itself** -- what the studio's route tool runs (the
+ride-replay template; studio/README.md, "Templates"):
+
+```powershell
+python scripts/route-map.py --film spec.json --out-image images/route_map.jpg --out-data route.json [--cache <dir>]
+```
+
+The spec is `{"gpx": <path>, "start_at", "finish_at"}` (a recording cut to where the event starts
+and ends) or `{"points": [<name or [lat, lon]>, ...], "mode": "bike"|"foot"}` (routed along real
+roads and trails by routing.openstreetmap.de), plus `places` to locate and `units`. The map frames
+itself: the route plus a quarter of its size (at least 2 km) on every side, at the sharpest zoom
+under 32 MP; the terrain is fetched one zoom above the map's at most (a long route's z15 mosaic
+passed OpenCV's 32767-pixel limit). The sea is found by itself (the deepest point the terrain
+knows, when it is under sea level, closes the OSM coastline). A route with no clock of its own gets
+one -- 20 km/h on a bike, 8 on foot, 9 % slower for every 1 % of grade, a quarter faster down -- so
+a replay still dwells on the climbs. `route.json` is `{image, w, h, m_per_px, bounds, units, timed,
+loop, rows, marks: {start, climb, top, finish}, places, stats}`; the top is the highest point and
+the climb starts at the last point within a tenth of its height of the low before it.
+
+**Place names go through Nominatim, and it is strict.** "Golden Gate Bridge Welcome Center" is not
+on OSM (the tool says to give `[lat, lon]`); "Rynok Square, Lviv" first answered the Rynok Square of
+Stryi, 60 km away. So: up to five answers in English, the one whose address names the query's last
+part wins, the nearest to the place before it next; a place more than 150 km from the one before,
+or a route spanning more than 400 km, is refused with the reason.
+
 ### How long a film takes
 
 Machine time for the 60 s film, from its run logs (`--timings` prints them):

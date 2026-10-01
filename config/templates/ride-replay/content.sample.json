@@ -1,0 +1,158 @@
+{
+ "_about": "Pedal & Network: Tech Cyclists (LA Tech Week, hosted by Instafill.ai), Sunday 18 October 2026, 8 AM, Santa Monica Pier -> Sullivan Fire Road -> Dirt Mulholland -> Pier. The route is a recorded ride (route.json).",
+ "lang": "en-US",
+ "palette": {
+  "paper": "#e6d7b8",
+  "ink": "#1b2430",
+  "cream": "#f7f1e3",
+  "sky": "#bfe0ef",
+  "sea": "#2f74a8",
+  "sand": "#ead8b4",
+  "sage": "#c3d0ac",
+  "sun": "#f6c445",
+  "route": "#FC5200",
+  "go": "#2e9b57",
+  "soft": "#6b7380",
+  "red": "#b8322a",
+  "blue": "#1f4e8c",
+  "table": "#d9cba9"
+ },
+ "event": {
+  "name": "PEDAL & NETWORK",
+  "day": "SUNDAY",
+  "time": "8:00 AM",
+  "where": "SANTA MONICA PIER",
+  "again": "WE'RE DOING THIS AGAIN!",
+  "date_line": "SUN OCT 18 · 8:00 AM",
+  "tag": "#LATechWeek",
+  "badge": "badge"
+ },
+ "host": {
+  "label": "HOSTED BY",
+  "logo": "host",
+  "name": "instafill.ai"
+ },
+ "who": {
+  "lead": "A GRAVEL RIDE FOR",
+  "words": [
+   "FOUNDERS.",
+   "BUILDERS.",
+   "VCs."
+  ]
+ },
+ "pictures": {
+  "hero": "pier",
+  "decor": "palm",
+  "vista": "vista",
+  "riders": "riders"
+ },
+ "map": {
+  "pin": "START / FINISH",
+  "labels": [
+   {
+    "text": "SANTA MONICA PIER",
+    "mark": "start",
+    "dx": -230,
+    "dy": 75,
+    "when": "start"
+   },
+   {
+    "text": "PACIFIC OCEAN",
+    "lat": 34.0,
+    "lon": -118.535,
+    "when": "start",
+    "style": "water"
+   },
+   {
+    "text": "SULLIVAN FIRE ROAD",
+    "row": 92,
+    "dx": 280,
+    "dy": 10,
+    "when": "climb",
+    "style": "sun",
+    "rot": -0.06
+   },
+   {
+    "text": "DIRT MULHOLLAND",
+    "lat": 34.1286249,
+    "lon": -118.5264709,
+    "dx": -250,
+    "dy": 70,
+    "when": "top",
+    "style": "sun"
+   }
+  ],
+  "stamp": "DIRT MULHOLLAND · 1,951 FT",
+  "stamp_at": {
+   "mark": "top"
+  },
+  "panel": {
+   "title": "RIDE REPLAY",
+   "distance": "DISTANCE",
+   "elevation": "ELEVATION",
+   "climb": "CLIMB",
+   "profile": "ELEVATION PROFILE",
+   "ready": "READY",
+   "finished": "FINISHED"
+  },
+  "credit": "Map data © OpenStreetMap contributors"
+ },
+ "finish": [
+  "23.5 MI",
+  "2,590 FT",
+  "ABOUT 2.5 HOURS"
+ ],
+ "kit": {
+  "title": "WEAR & BRING",
+  "stamp": {
+   "top": "CASUAL PACE",
+   "text": "ZONE 2",
+   "bottom": "GRAVEL RIDE"
+  },
+  "main": {
+   "image": "bike",
+   "label": "GRAVEL OR XC MTB"
+  },
+  "items": [
+   {
+    "image": "jersey",
+    "label": "JERSEY"
+   },
+   {
+    "image": "bibs",
+    "label": "BIBS"
+   },
+   {
+    "image": "gels",
+    "label": "GELS"
+   },
+   {
+    "image": "bar",
+    "label": "BARS"
+   },
+   {
+    "image": "bottles",
+    "label": "BOTTLES"
+   }
+  ]
+ },
+ "cta": {
+  "title": "Apply on Partiful",
+  "url": "go.partiful.com/axlnPEol",
+  "note": "Scan to open the event page",
+  "qr": "qr"
+ },
+ "lines": [
+  "Sunday morning at eight. Santa Monica Pier.",
+  "Pedal and Network is back.",
+  "A gravel ride for founders, builders and VCs.",
+  "Up the coast, then up Sullivan Fire Road.",
+  "Leave the pitch deck at home.",
+  "Zone two, so you can still talk shop on the climb.",
+  "Dirt Mulholland. Take in the view.",
+  "Then all downhill to the Pier.",
+  "Twenty-three and a half miles. About two and a half hours.",
+  "Jersey and bibs. Gels, bars, bottles.",
+  "Apply on Partiful. See you at the Pier."
+ ]
+}

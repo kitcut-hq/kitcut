@@ -196,6 +196,9 @@ CAPS["people"] = {"modules": ("heads",), "direction": ("people",)}
 CAPS["space"] = {"modules": ("space",)}
 CAPS["portraits"] = {}
 CAPS["template"] = {}
+# routes: a real map and a route on it (the route tool: scripts/route-map.py --film), for a film
+# that replays a ride, a run or a hike on its real roads
+CAPS["routes"] = {}
 # the frames a film can have ("16:9" unless a template offers another), as the manifest's "frame"
 FRAMES = {"16:9": [1920, 1080], "1:1": [1080, 1080], "9:16": [1080, 1920]}
 MAX_PEOPLE = 4

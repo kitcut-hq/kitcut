@@ -41,7 +41,9 @@ SCRIPTS = os.path.join(KIT, "scripts")
 # same card as a developer's (scripts/_gpulock.py)
 LOCKS = os.path.join(REPO, "temp", "locks")
 # seconds a step may run; the voice, the mix and the render get longer for a longer film
-TIMEOUT = {"check": 30, "stills": 120, "paint": 300, "automation": 180, "web": 150}
+# route: tiles, OSM's answer (a busy Overpass is retried for minutes) and a ~30 MP map drawn on a
+# core -- 90 s on the laptop with a warm cache
+TIMEOUT = {"check": 30, "stills": 120, "paint": 300, "automation": 180, "web": 150, "route": 900}
 MAX_STILLS = 12
 PEOPLE_WAIT_S = 420  # the longest a picture tool waits for the people to be drawn (agent.py)
 # what one film may bring in from the web (web-grab.py): pictures and page photographs together,
@@ -586,11 +588,12 @@ class Tools:
             shutil.copyfile(got, hit)
         return len(todo)
 
-    async def template_pictures(self, logo=None, people=()):
+    async def template_pictures(self, logo=None, people=(), qr=None):
         """A template film's pictures -- the person's (upload1...) or ones Claude brought in with
         the picture tool (web_...) -- become the film's own: the logo on dark and light grounds
         (templates.logo_variants), each person cut out of their photo as sp-1, sp-2... in the
-        order given. Answers with the keys for content.json."""
+        order given, and a QR code of a link (templates.qr_picture). Answers with the keys for
+        content.json."""
         import templates  # noqa: PLC0415
 
         f = self.film
@@ -614,6 +617,13 @@ class Tools:
             )
 
         said = []
+        if qr:
+            try:
+                await asyncio.to_thread(templates.qr_picture, qr, f.path("images", "qr.png"))
+            except templates.TemplateError as e:
+                raise ToolError(str(e)) from None
+            images["qr"] = "images/qr.png"
+            said.append('the QR code of %s: "qr"' % qr)
         if logo:
             p1, p2 = await asyncio.to_thread(templates.logo_variants, web(logo), f.path("images"))
             images["logo"] = os.path.relpath(p1, f.dir).replace("\\", "/")
@@ -639,6 +649,102 @@ class Tools:
                 % ", ".join("%s = %s" % (n, "sp-%d" % i) for i, n in enumerate(people, start + 1))
             )
         return "Ready. In content.json use " + "; ".join(said) + "."
+
+    async def route(
+        self,
+        gpx=None,
+        points=None,
+        mode=None,
+        start_at=None,
+        finish_at=None,
+        places=None,
+        units=None,
+    ):
+        """A film's real route on its real map (scripts/route-map.py --film): the map picture as
+        images/route_map.jpg (SK.image key route_map) and the route as route.json, SK.DATA.route
+        -- rows of [u, v, elevation, distance, seconds], its marks, places and numbers. From a GPX
+        the person attached (a document), or places routed along real roads and trails."""
+        f = self.film
+        spec = {"mode": mode or "bike", "image": "route_map"}
+        if gpx:
+            docs = [a for a in f.record().get("attachments") or [] if a.get("kind") == "text"]
+            want = str(gpx).strip().lower()
+            hit = next(
+                (
+                    a
+                    for i, a in enumerate(docs, 1)
+                    if want
+                    in {
+                        str(a.get("name") or "").lower(),
+                        a["file"].lower(),
+                        os.path.basename(a["file"]).lower(),
+                        "document %d" % i,
+                        "doc%d" % i,
+                    }
+                ),
+                None,
+            )
+            if hit is None:
+                raise ToolError(
+                    "No document %r: name one the person attached (its name, or 'Document 1')."
+                    % gpx
+                )
+            spec["gpx"] = f.path(*hit["file"].split("/"))
+        elif points:
+            spec["points"] = list(points)
+        else:
+            raise ToolError(
+                "Give the route: gpx (an attached document) or points (two places at least)."
+            )
+        for k, v in (("start_at", start_at), ("finish_at", finish_at), ("units", units)):
+            if v:
+                spec[k] = v
+        if places:
+            spec["places"] = list(places)
+        os.makedirs(f.path("temp"), exist_ok=True)
+        _write_json(f.path("temp", "route-spec.json"), spec)
+        args = ["--film", f.path("temp", "route-spec.json")]
+        args += [
+            "--out-image",
+            f.path("images", "route_map.jpg"),
+            "--out-data",
+            f.path("route.json"),
+        ]
+        args += ["--cache", os.path.join(HOME, "cache")]
+        async with self.lock:
+            tail = await self._script("route", "route-map.py", args, pools=[("cpu", 1)])
+        got = json.loads(tail[-1])
+        m = self._manifest()
+        m.setdefault("images", {})["route_map"] = "images/route_map.jpg"
+        m.setdefault("data", {})["route"] = "route.json"
+        _write_json(f.manifest, m)
+        st, u = got["stats"], got["units"]
+        placed = "; ".join(
+            "%s at u %.4f v %.4f" % (p["name"], p["u"], p["v"]) for p in got["places"]
+        )
+        return (
+            "The route is drawn: %s, %d rows in route.json (SK.DATA.route; its map is "
+            "SK.image('route_map')). %s %s, climbs %s %s, highest %s %s; the main climb %s %s "
+            "for %s %s; %s, %s clock. Marks (row numbers): %s. Placed: %s."
+            % (
+                got["map"],
+                got["rows"],
+                st["distance"],
+                u["dist"],
+                st["gain"],
+                u["ele"],
+                st["top"],
+                u["ele"],
+                st["climb_gain"],
+                u["ele"],
+                st["climb_distance"],
+                u["dist"],
+                "a loop" if got["loop"] else "point to point",
+                "the ride's own" if got["timed"] else "an estimated",
+                ", ".join("%s %d" % kv for kv in got["marks"].items()),
+                placed or "nothing named",
+            )
+        )
 
     async def name_film(self, title):
         """The film's title, when the visitor typed nothing (voice notes or pictures only): the
@@ -886,17 +992,60 @@ class Tools:
                 "A film made from a template: make a logo and people's photos the film's own -- the "
                 "person's (upload1...) or ones brought in with the picture tool (web_...). logo: the "
                 "logo picture's name; people: the photos' names, in the order the people should take "
-                "(the first are the featured). Cuts each person out of their photo and makes the "
-                "logo readable on dark and light grounds; answers with the image keys for "
-                "content.json.",
+                "(the first are the featured); qr: a link to make a QR code of (it is read back "
+                "before it is kept). Cuts each person out of their photo and makes the logo "
+                "readable on dark and light grounds; answers with the image keys for content.json.",
                 {
                     "type": "object",
                     "properties": {
                         "logo": {"type": "string"},
                         "people": {"type": "array", "items": {"type": "string"}},
+                        "qr": {"type": "string", "description": "a link, e.g. https://..."},
                     },
                 },
-            )(wrap(lambda a: self.template_pictures(a.get("logo"), a.get("people") or []))),
+            )(
+                wrap(
+                    lambda a: self.template_pictures(
+                        a.get("logo"), a.get("people") or [], a.get("qr")
+                    )
+                )
+            ),
+            tool(
+                "route",
+                "Draw the film's real route on a real map (OpenStreetMap streets and trails over real "
+                "terrain, made of paper sheets): images/route_map.jpg (SK.image key route_map) and "
+                "route.json (SK.DATA.route: rows [u, v, elevation, distance, seconds] -- u, v "
+                "fractions of the map -- marks start/climb/top/finish, places, stats). gpx: the name "
+                "of a GPX document the person attached. Or points: the route's places in order, each "
+                "a place name or [lat, lon], routed by mode along real roads and trails (a loop ends "
+                "where it starts). start_at / finish_at: cut a recording to where the event starts "
+                "and ends. places: names or [lat, lon] to locate for labels. units: imperial or "
+                "metric. Takes one to three minutes.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "gpx": {"type": "string"},
+                        "points": {"type": "array", "items": {}},
+                        "mode": {"type": "string", "enum": ["bike", "foot"]},
+                        "start_at": {},
+                        "finish_at": {},
+                        "places": {"type": "array", "items": {}},
+                        "units": {"type": "string", "enum": ["imperial", "metric"]},
+                    },
+                },
+            )(
+                wrap(
+                    lambda a: self.route(
+                        a.get("gpx"),
+                        a.get("points"),
+                        a.get("mode"),
+                        a.get("start_at"),
+                        a.get("finish_at"),
+                        a.get("places"),
+                        a.get("units"),
+                    )
+                )
+            ),
             tool(
                 "name_film",
                 "Name the film (only when the person typed nothing): a short title, a few words.",
@@ -923,6 +1072,8 @@ class Tools:
             tools = [t for t in tools if t.name != "template_pictures"]
         if not paint_kinds(self.film.caps):
             tools = [t for t in tools if t.name != "paint"]
+        if "routes" not in self.film.caps:  # a film that replays a route on its map: a template's
+            tools = [t for t in tools if t.name != "route"]
         return create_sdk_mcp_server("studio", tools=tools)
 
 

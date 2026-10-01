@@ -133,6 +133,52 @@ def fixture():
     return d
 
 
+def route_fixture():
+    """A finished route film: content, a route.json beside it naming its map, and a bike every
+    film may keep."""
+    d = os.path.join(HOME, "src-ride")
+    os.makedirs(os.path.join(d, "images"))
+    with open(os.path.join(d, "film.js"), "w", encoding="utf-8") as f:
+        f.write(FILM_JS.replace("D.speakers[0].image", "'bike'"))
+    with open(os.path.join(d, "content.json"), "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "event": {"name": "SAMPLE RIDE"},
+                "kit": {"image": "bike"},
+                "palette": {"ground": "#102030"},
+            },
+            f,
+        )
+    with open(os.path.join(d, "route.json"), "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "image": "route_map",
+                "w": 100,
+                "h": 200,
+                "rows": [[0.1, 0.2, 5, 0, 0], [0.5, 0.6, 50, 1.2, 300]],
+            },
+            f,
+        )
+    with open(os.path.join(d, "images", "bike.png"), "wb") as f:
+        f.write(png(300, 200))
+    with open(os.path.join(d, "images", "route_map.jpg"), "wb") as f:
+        f.write(jpg(100, 200))
+    with open(os.path.join(d, "sketch.json"), "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "title": "Sample ride",
+                "duration": 5.0,
+                "fps": 30,
+                "film": "film.js",
+                "data": {"content": "content.json", "route": "route.json"},
+                "images": {"bike": "images/bike.png", "route_map": "images/route_map.jpg"},
+                "audio": {"score": "score.json", "sfx": "sfx.json", "mix": {"music_db": 0}},
+            },
+            f,
+        )
+    return d
+
+
 async def main():
     agent.STORE = store.MemoryStore()
     server.start = lambda f, finish_only=False: None  # the film itself is test_server.py's job
@@ -494,6 +540,81 @@ async def main():
         except uploads.UploadError:
             took = False
         check(took, "a template's own cap lets it take more")
+
+        # ---- a route template: data beside the content (route.json), and assets every film keeps
+        src2 = route_fixture()
+        spec2 = dict(SPEC, title="Test ride", caps=["routes"], frames=["16:9"], assets=["bike"])
+        got2 = sorted(rel for _, rel in templates.plan(src2, spec2))
+        check(
+            "route.sample.json" in got2
+            and "sample/route_map.jpg" in got2
+            and "assets/bike.png" in got2
+            and "sample/bike.png" not in got2,
+            "a version takes the route as a sample of its own, its map, and the assets apart",
+            got2,
+        )
+        templates.make(src2, "t-test-ride", spec2)
+        templates.set_status("t-test-ride", 1, "live")
+        t3 = templates.load("t-test-ride")
+        check(
+            t3.get("data") == ["route"]
+            and t3.get("assets") == ["bike"]
+            and t3["manifest"]["data"]
+            == {"content": "content.sample.json", "route": "route.sample.json"},
+            "the version knows its data and its assets",
+            (t3.get("data"), t3.get("assets"), t3["manifest"].get("data")),
+        )
+        r = await c.post(
+            "/api/films",
+            json={"template": {"id": "t-test-ride"}, "prompt": "A Saturday ride in Lviv"},
+            headers=local,
+        )
+        f4 = Film.open((await r.json()).get("id"))
+        with open(f4.manifest, encoding="utf-8") as fh:
+            m4 = json.load(fh)
+        check(
+            m4["data"] == {"content": "content.json", "route": "route.json"}
+            and os.path.exists(f4.path("route.json"))
+            and m4["images"].get("bike") == "template/assets/bike.png"
+            and os.path.exists(f4.path("template", "assets", "bike.png"))
+            and m4["images"].get("route_map") == "template/sample/route_map.jpg",
+            "a film from it gets the route, the sample's map and the assets",
+            (m4.get("data"), m4.get("images")),
+        )
+        check("routes" in f4.caps, "and the routes capability: the route tool", f4.caps)
+        left4 = templates.leftovers(f4)
+        check(
+            "the picture route_map" in left4 and "the picture bike" not in left4,
+            "the sample's map is a leftover until a route of their own; an asset never is",
+            left4,
+        )
+        with open(f4.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump({"event": {"name": "LVIV RIDE"}, "kit": {"image": "bike"}}, fh)
+        m4["images"]["route_map"] = "images/route_map.jpg"
+        with open(f4.manifest, "w", encoding="utf-8") as fh:
+            json.dump(m4, fh)
+        check(
+            templates.leftovers(f4) == [],
+            "a route of their own, the asset kept: nothing left over",
+            templates.leftovers(f4),
+        )
+        tl4 = Tools(f4, server.SCHED, lambda ev: None)
+        said = await tl4.template_pictures(None, [], "https://example.com/ride?x=1")
+        import cv2  # noqa: PLC0415
+
+        qr = cv2.imread(f4.path("images", "qr.png"))
+        check(
+            '"qr"' in said
+            and cv2.QRCodeDetector().detectAndDecode(qr)[0] == "https://example.com/ride?x=1",
+            "a QR code of their link, read back",
+            said,
+        )
+        try:
+            await tl4.template_pictures(None, [], "x")
+            refused = False
+        except ToolError:
+            refused = True
+        check(refused, "a QR code of nothing is refused")
 
     # ---- the health check: a live version drawn again by this release
     t2 = templates.load("t-test-promo", 2)

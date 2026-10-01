@@ -44,6 +44,7 @@ import time
 import hashlib
 import re
 import argparse
+import threading
 import urllib.parse
 import urllib.request
 import concurrent.futures as cf
@@ -64,7 +65,20 @@ OVERPASS = (
     "https://overpass.kumi.systems/api/interpreter",
 )
 BIKE_ROUTER = "https://routing.openstreetmap.de/routed-bike/route/v1/driving/%s?overview=full&geometries=geojson"
+# a route between places: by bike or on foot (routing.openstreetmap.de's OSRM profiles)
+ROUTERS = {
+    "bike": BIKE_ROUTER,
+    "foot": "https://routing.openstreetmap.de/routed-foot/route/v1/driving/%s?overview=full&geometries=geojson",
+}
+GEOCODER = "https://nominatim.openstreetmap.org/search?%s"
+# a route with no clock of its own is given one: this pace on the flat, slower uphill (each 1 % of
+# grade costs SLOW_PER_PCT of the pace), a little faster down -- a replay then dwells on the climbs
+PACE_KMH = {"bike": 20.0, "foot": 8.0}
+SLOW_PER_PCT, DOWNHILL = 0.09, 1.25
 EARTH_M = 6371008.8
+NODATA = (
+    -1000.0
+)  # metres: the terrain set's "no data" is -32768; nothing on land or sea is this low
 M_PER_FT, M_PER_MI = 0.3048, 1609.344
 
 
@@ -170,7 +184,10 @@ def overpass(query, cache_dir):
 def terrain(style, frames, cache):
     """The elevation mosaic (metres) covering every frame, at the style's
     terrain zoom, with its origin in that zoom's pixels."""
-    tz, url = style["terrain"]["zoom"], style["terrain"]["url"]
+    # never finer than one zoom above the sharpest map: a long route's map is far out, and its
+    # mosaic at z15 passed OpenCV's 32767-pixel limit
+    tz = min(style["terrain"]["zoom"], max(math.ceil(f.z) + 1 for f in frames))
+    url = style["terrain"]["url"]
     xs, ys = [], []
     for f in frames:
         k = 2.0 ** (tz - f.z)
@@ -180,22 +197,52 @@ def terrain(style, frames, cache):
     ty0, ty1 = int(min(ys) // 256) - 1, int(max(ys) // 256) + 1
     jobs = [(x, y) for y in range(ty0, ty1 + 1) for x in range(tx0, tx1 + 1)]
 
-    def one(xy):
-        x, y = xy
-        p = os.path.join(cache, str(tz), str(x), "%d.png" % y)
+    def tile(z, x, y):
+        p = os.path.join(cache, str(z), str(x), "%d.png" % y)
         if not os.path.exists(p):
             os.makedirs(os.path.dirname(p), exist_ok=True)
-            body = _get(url.format(z=tz, x=x, y=y), timeout=60)
-            with open(p + ".part", "wb") as f:
+            body = _get(url.format(z=z, x=x, y=y), timeout=60)
+            part = "%s.%d.part" % (p, threading.get_ident())  # siblings share a parent tile
+            with open(part, "wb") as f:
                 f.write(body)
-            os.replace(p + ".part", p)
+            try:
+                os.replace(part, p)
+            except OSError:  # another thread put it there first (Windows will not replace it)
+                if not os.path.exists(p):
+                    raise
+                os.remove(part)
         a = np.asarray(Image.open(p).convert("RGB"), dtype=np.float32)
-        return xy, a[..., 0] * 256 + a[..., 1] + a[..., 2] / 256 - 32768
+        return a[..., 0] * 256 + a[..., 1] + a[..., 2] / 256 - 32768
+
+    def one(xy):
+        """A tile's elevation. Where the set has no data at this zoom it sends a flat black tile
+        (-32768 m: around Lviv at z15, a whole row of them), so the tile is taken from the zoom
+        above, up to three levels out, enlarged; the odd hole left is filled later."""
+        x, y = xy
+        e = tile(tz, x, y)
+        k = 1
+        while (e < NODATA).mean() > 0.5 and k <= 3:
+            px, py, n = x >> k, y >> k, 256 >> k
+            parent = tile(tz - k, px, py)
+            ox, oy = (x - (px << k)) * n, (y - (py << k)) * n
+            up = cv2.resize(
+                parent[oy : oy + n, ox : ox + n], (256, 256), interpolation=cv2.INTER_CUBIC
+            )
+            e = np.where(e < NODATA, up, e)
+            k += 1
+        return xy, e
 
     mos = np.zeros(((ty1 - ty0 + 1) * 256, (tx1 - tx0 + 1) * 256), np.float32)
     with cf.ThreadPoolExecutor(12) as ex:
         for (x, y), e in ex.map(one, jobs):
             mos[(y - ty0) * 256 : (y - ty0 + 1) * 256, (x - tx0) * 256 : (x - tx0 + 1) * 256] = e
+    holes = mos < NODATA
+    if holes.any():  # what no zoom had: the nearest elevation that is real
+        from scipy import ndimage  # noqa: PLC0415 -- only a set with holes needs it
+
+        idx = ndimage.distance_transform_edt(holes, return_distances=False, return_indices=True)
+        mos = mos[tuple(idx)]
+        print("terrain   %.2f%% had no data: filled from the nearest" % (100 * holes.mean()))
     return mos, tx0 * 256, ty0 * 256, tz
 
 
@@ -327,11 +374,32 @@ def _gauss(a, sig):
     return np.convolve(np.pad(a, len(k) // 2, mode="edge"), w, mode="valid")
 
 
-def sample(pts, mosaic, step_m, smooth_m, source):
+def on_ways(pts, ways, within_m=12.0):
+    """Which of pts (lon, lat, ...) lie on any of ways (lists of (lon, lat)): within within_m of
+    one of their segments."""
+    lat0 = math.radians(sum(p[1] for p in pts) / len(pts))
+    kx, ky = EARTH_M * math.cos(lat0) * math.pi / 180, EARTH_M * math.pi / 180
+    P = np.array([[p[0] * kx, p[1] * ky] for p in pts])
+    hit = np.zeros(len(P), bool)
+    for w in ways:
+        W = np.array([[q[0] * kx, q[1] * ky] for q in w])
+        for a, b in zip(W, W[1:]):
+            ab = b - a
+            L2 = float(ab @ ab) or 1e-9
+            t = np.clip(((P - a) @ ab) / L2, 0, 1)
+            d = np.hypot(*(P - (a + t[:, None] * ab)).T)
+            hit |= d < within_m
+    return hit
+
+
+def sample(pts, mosaic, step_m, smooth_m, source, decks=None):
     """The line every step_m metres: (lon, lat, metres along, elevation, seconds).
     Elevation is the track's own (source "track", when it has one) or the
-    terrain's, smoothed along the line so noise is not counted as climb;
-    seconds are the track's clock from its first point, or None."""
+    terrain's, smoothed along the line so noise is not counted as climb --
+    drawn level across decks (bridges and tunnels), where the terrain is the
+    water below or the hill above: the Golden Gate counted 900 ft of climb
+    that no rider makes. Seconds are the track's clock from its first point,
+    or None."""
     out = [(pts[0][0], pts[0][1], 0.0, pts[0][2], pts[0][3])]
     run = 0.0
     for a, b in zip(pts, pts[1:]):
@@ -349,6 +417,11 @@ def sample(pts, mosaic, step_m, smooth_m, source):
         ele = np.array([p[3] for p in out], np.float64)
     else:
         ele = np.array([elevation_at(mosaic, p[0], p[1]) for p in out], np.float64)
+        if decks:  # the terrain under a bridge is the water, over a tunnel the hill: draw it level
+            on = on_ways(out, decks)
+            if on.any() and not on.all():
+                idx = np.arange(len(ele))
+                ele[on] = np.interp(idx[on], idx[~on], ele[~on])
     ele = _gauss(ele, smooth_m / step_m)
     t0 = out[0][4]
     return [
@@ -601,7 +674,20 @@ def relief(f, mosaic, style, sea):
         img = sheet(img, a, col, ocean.get("shadow", 0.6))
     del off
 
-    levels = [land["step_m"] * i for i in range(len(land["colors"]))]
+    # the sheets follow this map's own heights: a whole map at 250-400 m (Lviv) was one sage colour
+    # at 50 m a sheet; its lowest land is the first sheet and its highest the last, at a round step
+    # (a coastal map from 0 to 650 m keeps the style's 50 m)
+    on_land = E[land_m > 0.5]
+    lo, hi = (
+        (float(np.percentile(on_land, 1)), float(np.percentile(on_land, 99.5)))
+        if on_land.size
+        else (0.0, 1.0)
+    )
+    raw = max((hi - max(lo, 0.0)) / (len(land["colors"]) - 1), 1.0)
+    step = min((k for k in (2, 5, 10, 20, 25, 50, 100, 200, 250, 500) if k >= raw), default=500)
+    step = min(step, land["step_m"]) if lo < land["step_m"] else step
+    base = max(0.0, math.floor(lo / step) * step)
+    levels = [0.0] + [base + step * i for i in range(1, len(land["colors"]))]
     for i, lvl in enumerate(levels):
         if i and E.max() < lvl:
             break
@@ -882,6 +968,292 @@ def draw_preview(bgr, f, legs, places, path, scale):
     cv2.imwrite(path, small, [cv2.IMWRITE_JPEG_QUALITY, 85])
 
 
+# ---------------------------------------------------------------------- film
+
+
+def geocode(q, cache_dir, near=None):
+    """A place name to (lon, lat) through OSM's Nominatim (one request a second, cached), biased
+    to within ~60 km of `near` when given. [lat, lon] pairs pass straight through."""
+    if isinstance(q, (list, tuple)) and len(q) == 2:
+        return float(q[1]), float(q[0])
+    q = str(q).strip()
+
+    def ask(text):
+        params = {
+            "q": text,
+            "format": "json",
+            "limit": 5,
+            "accept-language": "en",
+            "addressdetails": 1,
+        }
+        if near:  # a bias, not a fence: the place a route goes to next is usually close
+            d = 0.25
+            params["viewbox"] = "%.4f,%.4f,%.4f,%.4f" % (
+                near[0] - d,
+                near[1] + d,
+                near[0] + d,
+                near[1] - d,
+            )
+        key = hashlib.sha1(json.dumps(params, sort_keys=True).encode()).hexdigest()[:12]
+
+        def fetch():
+            time.sleep(1.1)  # Nominatim's usage policy: at most one request a second
+            return json.loads(
+                _get(GEOCODER % urllib.parse.urlencode(params), timeout=30).decode("utf-8")
+            )
+
+        return cached_json(os.path.join(cache_dir, "geo-%s.json" % key), fetch)
+
+    # "Rynok Square, Lviv" first answered the Rynok Square of Stryi, 60 km away -- whose address
+    # says "Lviv Oblast". Of the answers, those whose town (city, town, village...) is the query's
+    # last part win, then those whose address names it at all, then the nearest one
+    parts = [p.strip() for p in q.split(",") if p.strip()]
+    tries = [q] + ([parts[0] + " " + parts[-1], parts[0]] if len(parts) > 1 else [])
+    town = parts[-1].lower() if len(parts) > 1 else ""
+    keys = ("city", "town", "village", "municipality", "suburb", "city_district", "hamlet")
+    for text in tries:
+        got = ask(text)
+        if not got:
+            continue
+        in_town = [
+            g
+            for g in got
+            if town and town in {str((g.get("address") or {}).get(k, "")).lower() for k in keys}
+        ]
+        named = (
+            in_town or [g for g in got if town and town in g.get("display_name", "").lower()] or got
+        )
+        if near:
+            named.sort(key=lambda g: metres(near, (float(g["lon"]), float(g["lat"]))))
+        best = (float(named[0]["lon"]), float(named[0]["lat"]))
+        if near and metres(near, best) > 150_000:
+            sys.exit(
+                "%r is %d km from the place before it: give it as [lat, lon]"
+                % (q, metres(near, best) / 1000)
+            )
+        return best
+    sys.exit("no place called %r on OpenStreetMap: give it as [lat, lon]" % q)
+
+
+def routed(points, mode, cache_dir):
+    """A route along real roads and trails through points [(lon, lat)...], by bike or on foot."""
+    coords = ";".join("%.6f,%.6f" % p for p in points)
+    key = hashlib.sha1((mode + coords).encode()).hexdigest()[:12]
+    doc = cached_json(
+        os.path.join(cache_dir, "%s-%s.json" % (mode, key)),
+        lambda: json.loads(_get(ROUTERS[mode] % coords, timeout=90).decode("utf-8")),
+    )
+    if doc.get("code") != "Ok":
+        sys.exit(
+            "the %s router found no route through those places: %s" % (mode, doc.get("message"))
+        )
+    return [(c[0], c[1], None, None) for c in doc["routes"][0]["geometry"]["coordinates"]]
+
+
+def auto_frame(pts, name, margin_frac, margin_min_m, max_mp, max_zoom):
+    """One map around the whole route: its extent plus a margin on every side (room for a camera
+    that follows the dot to stay inside the map), at the sharpest zoom that stays under max_mp."""
+    lons, lats = [p[0] for p in pts], [p[1] for p in pts]
+    w, e, s, n = min(lons), max(lons), min(lats), max(lats)
+    mid = (s + n) / 2
+    span_m = max(metres((w, mid), (e, mid)), metres((w, s), (w, n)), 1.0)
+    pad = max(margin_frac * span_m, margin_min_m)
+    dlat = pad / 111_320.0
+    dlon = pad / (111_320.0 * math.cos(math.radians(mid)))
+    bbox = [w - dlon, s - dlat, e + dlon, n + dlat]
+    probe = Frame(name, 16, bbox)
+    z = min(max_zoom, 16 + 0.5 * math.log2(max_mp * 1e6 / (probe.W * probe.H)))
+    return Frame(name, round(z, 3), bbox), bbox
+
+
+def synth_clock(s, mode):
+    """Seconds for a route with no clock: PACE_KMH on the flat, slower up, faster down."""
+    v0 = PACE_KMH[mode] / 3.6
+    out, t = [0.0], 0.0
+    for a, b in zip(s, s[1:]):
+        d = b[2] - a[2]
+        g = (b[3] - a[3]) / d * 100 if d > 0 else 0.0
+        v = v0 / (1 + SLOW_PER_PCT * g) if g > 0 else min(v0 * DOWNHILL, v0 * (1 - 0.03 * g))
+        t += d / max(v, 0.5)
+        out.append(t)
+    return [(p[0], p[1], p[2], p[3], c) for p, c in zip(s, out)]
+
+
+def climb_marks(s):
+    """The top (the highest point) and where the climb to it starts: the last point before the top
+    within a tenth of the climb's height of the lowest point before it."""
+    ele = np.array([p[3] for p in s])
+    top = int(np.argmax(ele))
+    if top == 0:
+        return 0, 0
+    low = float(ele[: top + 1].min())
+    within = np.flatnonzero(ele[: top + 1] <= low + 0.1 * (ele[top] - low))
+    return int(within[-1]), top
+
+
+def film(spec, style, out_img, out_data, tile_cache, cache_dir):
+    """A film's route: the map picture (out_img) and its data (out_data, SK.DATA.route), from a
+    GPX or places routed along real roads and trails. Returns a short summary for the caller."""
+    mode = spec.get("mode") or "bike"
+    if mode not in ROUTERS:
+        sys.exit("mode is %s" % " or ".join(ROUTERS))
+    near = None
+    if spec.get("gpx"):
+        pts = read_gpx(spec["gpx"])
+        near = pts[0][:2]
+        for key, first in (("start_at", True), ("finish_at", False)):
+            if spec.get(key):
+                at = geocode(spec[key], cache_dir, near)
+                got = passes(pts, at, spec.get("near_m", 400))
+                if not got:
+                    sys.exit(
+                        "the track never comes within %d m of %s"
+                        % (spec.get("near_m", 400), spec[key])
+                    )
+                pts = pts[got[0] :] if first else pts[: got[-1] + 1]
+                pin = (at[0], at[1], pts[0 if first else -1][2], pts[0 if first else -1][3])
+                pts = [pin] + pts if first else pts + [pin]
+    elif spec.get("points"):
+        places = []
+        for q in spec["points"]:
+            places.append(geocode(q, cache_dir, places[-1] if places else None))
+        if len(places) < 2:
+            sys.exit("a route needs two places at least")
+        pts = routed(places, mode, cache_dir)
+        near = places[0]
+    else:
+        sys.exit("give the route: gpx, or points (two places at least)")
+    if len(pts) < 2:
+        sys.exit("the route has fewer than two points")
+    span = max(
+        metres((min(p[0] for p in pts), pts[0][1]), (max(p[0] for p in pts), pts[0][1])),
+        metres((pts[0][0], min(p[1] for p in pts)), (pts[0][0], max(p[1] for p in pts))),
+    )
+    if span > 400_000:
+        sys.exit("the route spans %d km: is every place where it should be?" % (span / 1000))
+
+    f, bbox = auto_frame(
+        pts,
+        spec.get("image") or "route_map",
+        spec.get("margin", 0.25),
+        spec.get("margin_min_m", 2000),
+        spec.get("max_mp", 32),
+        spec.get("max_zoom", 16.0),
+    )
+    mosaic = terrain(style, [f], tile_cache)
+    w, s_, e, n = f.bounds
+    bb = "%.5f,%.5f,%.5f,%.5f" % (s_, w, n, e)
+    hw = "|".join(h for c in style["roads"]["classes"].values() for h in c["highway"])
+    q = (
+        '[out:json][timeout:180];(way["highway"~"^(%s)$"](%s);way["leisure"="park"](%s);'
+        'way["man_made"="pier"](%s);way["natural"="coastline"](%s););out geom tags;'
+        % (hw, bb, bb, bb, bb)
+    )
+    osm = overpass(q, cache_dir)["elements"]
+    decks = [
+        [(g["lon"], g["lat"]) for g in el["geometry"]]
+        for el in osm
+        if "geometry" in el
+        and el.get("tags", {}).get("highway")
+        and (
+            el["tags"].get("bridge") not in (None, "no")
+            or el["tags"].get("tunnel") not in (None, "no")
+        )
+    ]
+    s = sample(pts, mosaic, 10, 40, "track" if spec.get("gpx") else "terrain", decks)
+    timed = s[-1][4] is not None and s[-1][4] > 0
+    if not timed:
+        s = synth_clock(s, mode)
+    st = leg_stats(s)
+    climb, top = climb_marks(s)
+    units = spec.get("units") or "metric"
+    idx = keep(
+        s, f, spec.get("tolerance_px", 3.0), spec.get("max_gap_m", 300), [0, climb, top, len(s) - 1]
+    )
+    rows_ = rows(s, f, idx, units, 4)
+    pos = {i: k for k, i in enumerate(idx)}
+
+    # the map: sea from the coastline (the deepest point the terrain knows, when it is below sea level)
+    mos = mosaic[0]
+    sea_at = None
+    if float(mos.min()) < -5:
+        iy, ix = np.unravel_index(int(np.argmin(mos)), mos.shape)
+        sea_at = [lon_of(mosaic[1] + ix, mosaic[3]), lat_of(mosaic[2] + iy, mosaic[3])]
+    coast = coast_chain(osm)
+    img = relief(
+        f,
+        mosaic,
+        style,
+        sea_mask(f, coast, sea_at) if (coast and sea_at) else np.zeros((f.H, f.W), np.float32),
+    )
+    bgr = np.ascontiguousarray((img[..., ::-1] * 255).round().astype(np.uint8))
+    del img
+    print_osm(bgr, f, osm, style)
+    os.makedirs(os.path.dirname(os.path.abspath(out_img)), exist_ok=True)
+    save_jpeg(bgr, out_img, style)
+    del bgr
+
+    # places to label: the route's own, and any named ones that fall on the map
+    named = []
+    for q_ in spec.get("places") or []:
+        lon, lat = geocode(q_, cache_dir, near)
+        u, v = f.uv(lon, lat)
+        if 0 <= u <= 1 and 0 <= v <= 1:
+            named.append(
+                {
+                    "name": q_ if isinstance(q_, str) else "%.4f, %.4f" % tuple(q_),
+                    "u": round(u, 4),
+                    "v": round(v, 4),
+                }
+            )
+        else:
+            print("  %s is off the map: left out" % (q_,))
+    to_e = (lambda x: x / M_PER_FT) if units == "imperial" else (lambda x: x)
+    to_d = (lambda x: x / M_PER_MI) if units == "imperial" else (lambda x: x / 1000)
+    loop = metres(pts[0], pts[-1]) < 300
+    data = {
+        "_about": "The route on its map (scripts/route-map.py --film): rows are [u, v, elevation, "
+        "distance from the start, seconds on the route's clock], u and v fractions of the map picture. "
+        "Map data (c) OpenStreetMap contributors.",
+        "image": spec.get("image") or "route_map",
+        "w": f.W,
+        "h": f.H,
+        "m_per_px": round(f.m_per_px, 3),
+        # west, south, east, north: a film places any [lat, lon] on the map with Web Mercator
+        "bounds": [round(x, 6) for x in f.bounds],
+        "units": {
+            "dist": "mi" if units == "imperial" else "km",
+            "ele": "ft" if units == "imperial" else "m",
+        },
+        "timed": timed,
+        "loop": loop,
+        "rows": rows_,
+        "marks": {"start": 0, "climb": pos[climb], "top": pos[top], "finish": len(rows_) - 1},
+        "places": named,
+        "stats": {
+            "distance": round(to_d(st["length_m"]), 1),
+            "gain": int(round(to_e(st["gain_m"]), -1)),
+            "top": int(round(to_e(st["max_m"]))),
+            "climb_gain": int(round(to_e(s[top][3] - s[climb][3]))),
+            "climb_distance": round(to_d(s[top][2] - s[climb][2]), 1),
+            "seconds": int(round(s[-1][4])),
+        },
+    }
+    with open(out_data, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(data, fh, separators=(",", ":"))
+    return {
+        "map": "%s, %d x %d px, %.1f m a pixel" % (os.path.basename(out_img), f.W, f.H, f.m_per_px),
+        "rows": len(rows_),
+        "stats": data["stats"],
+        "units": data["units"],
+        "loop": loop,
+        "timed": timed,
+        "marks": data["marks"],
+        "places": named,
+        "bbox": [round(x, 5) for x in bbox],
+    }
+
+
 # ---------------------------------------------------------------------- main
 
 
@@ -941,16 +1313,41 @@ def build_legs(m, frames, base, mosaic, cache_dir, units):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--manifest", required=True)
+    ap.add_argument("--manifest", help="a project's route-map.json")
     ap.add_argument(
         "--list", action="store_true", help="price it: sizes, tiles, legs; render nothing"
     )
     ap.add_argument(
         "--preview", action="store_true", help="render at a quarter size, to check the look"
     )
+    ap.add_argument("--film", metavar="SPEC", help="a film's route (the studio's route tool)")
+    ap.add_argument("--out-image", help="--film: where the map picture goes")
+    ap.add_argument("--out-data", help="--film: where its data goes (SK.DATA.route)")
+    ap.add_argument("--style", default="config/maps/paper-relief.json")
+    ap.add_argument("--cache", help="where tiles and answers are kept (default: temp/)")
     _env.add_workspace_arg(ap)
     a = ap.parse_args()
     _env.set_workspace(a.workspace)
+    if a.film:
+        with open(a.film, encoding="utf-8") as f:
+            spec = json.load(f)
+        with open(_env.resolve(a.style), encoding="utf-8") as f:
+            style = json.load(f)
+        cache = a.cache or os.path.join(_env.workspace(), "temp")
+        t0 = time.time()
+        out = film(
+            spec,
+            style,
+            a.out_image,
+            a.out_data,
+            os.path.join(cache, "terrain", "terrarium"),
+            os.path.join(cache, "route-map"),
+        )
+        print("route-map --film ran in %.0f s" % (time.time() - t0))
+        print(json.dumps(out))
+        return
+    if not a.manifest:
+        ap.error("--manifest or --film")
 
     mpath = _env.resolve(a.manifest, _env.workspace())
     if not os.path.exists(mpath):  # a committed example lives with the tooling
