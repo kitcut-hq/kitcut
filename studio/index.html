@@ -334,6 +334,10 @@ dialog .dfoot { display: flex; justify-content: flex-end; gap: 8px; padding: 14p
 /* someone arrived through a friend's invite link (lib/referrals.js) */
 .hero .invited { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 14px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--accent-soft); font-size: 14px; max-width: none; color: var(--ink); }
 .hero .invited b { font-weight: 650; }
+/* a film made from a template: one line under its title naming it (the site's templates) */
+.hero .fromtpl { margin: 2px 0 0; color: var(--ink-3); font-size: 13.5px; }
+.hero .fromtpl a { color: var(--ink-2); font-weight: 600; text-underline-offset: 3px; text-decoration-color: var(--line-2); }
+.hero .fromtpl a:hover { color: var(--accent-2); }
 #form, #emailForm, #ytForm { display: grid; gap: 10px; margin: 0; }
 #tokenForm { margin: 0; }
 #token { flex: 1 1 280px; min-width: 0; width: auto; }
@@ -1111,8 +1115,17 @@ function filmHead(s) {
   const h1 = document.querySelector('.hero h1');
   h1.textContent = clip(name, 140); h1.title = clip(name, 400);
   document.title = `${clip(name, 58)} · Claude video | KitCut`;
+  fromTemplate(s.template);
   $('ideaText').textContent = FILM.prompt;
   $('idea').hidden = !FILM.prompt;
+}
+// made from a template: "Made from the <title> template · by <author>", linking to its page when it
+// has one (the site sends {title, path, author} while templates are open to whoever is looking)
+function fromTemplate(t) {
+  let p = document.querySelector('.hero .fromtpl');
+  if (!t || !t.title) { if (p) p.remove(); return; }
+  if (!p) { p = document.createElement('p'); p.className = 'fromtpl'; document.querySelector('.hero > p').after(p); }
+  p.innerHTML = 'Made from the ' + (t.path ? `<a href="${esc(t.path)}">${esc(t.title)}</a>` : esc(t.title)) + ' template · by ' + esc(t.author || 'KitCut');
 }
 function againLabel() { return OWN === currentId || mine.has(currentId) ? 'Make it again' : 'Make one like it'; }
 function sayForm(html) { $('goSay').innerHTML = html || ''; $('goSay').hidden = !html; }
@@ -1153,6 +1166,7 @@ $('againClose').addEventListener('click', closeForm);
 function home() {
   reset(); currentId = null; drawSide(); view(false); closeForm();
   if (HOME) { document.querySelector('.hero h1').textContent = HOME.h1; document.querySelector('.hero h1').title = ''; document.title = HOME.title; }
+  fromTemplate(null);
   screen('<div class="idle">Your film appears here.</div>');
   $('status').textContent = studioUp ? 'Ready.' : 'The studio is offline right now.';
 }
