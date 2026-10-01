@@ -136,7 +136,11 @@ async def main():
     check("## How to fill out PDF forms" in text, "the channel's uploads in the ask")
     none = ytdraft.ask_text(mat, {"id": "x", "title": "New"}, [])
     check("No uploads to learn from" in none, "a channel with no uploads says so")
-    check('"thumbnails"' in text and "main message" in text, "the thumbnails are asked for")
+    check('"thumbnails"' not in text, "the words are asked for alone")
+    picks = ytdraft.ask_text(mat, CHANNEL, ytdraft.sample(RECENT), "thumbs", "Acme | New engine")
+    check('"thumbnails"' in picks and "main message" in picks, "the thumbnails are asked apart")
+    check("## How to fill out PDF forms" not in picks, "without the channel's uploads")
+    check('its title, "Acme | New engine"' in picks, "and with the title, once it is known")
     check(mat["sheet"] is None and mat["moments"], "no sheet made here, but the moments", mat)
     moments = ytdraft.ask_text(dict(mat, sheet=b"jpeg", moments_sheet=True), CHANNEL, [])
     check("the film's moments, in order" in moments, "the sheet is the film's moments")
@@ -271,10 +275,18 @@ async def main():
     )
 
     # ---------------------------------------------------------------- writing, kept, costed
-    answers, calls = [], []
+    answers, calls, picked, tcalls, order = [], [], [], [], []
 
-    async def fake_call(mat, channel, recent, auth, film, model, effort, note=None):
+    async def fake_call(
+        mat, channel, recent, auth, film, model, effort, note=None, part="words", title=None
+    ):
+        if part == "thumbs":  # the picks: a moment slower than the words, as they are
+            tcalls.append(note)
+            await asyncio.sleep(0.05)
+            order.append("picks")
+            return (picked.pop(0) if picked else {"thumbnails": THUMBS}), 0.05
         calls.append(note)
+        order.append("words")
         return answers.pop(0), 0.05
 
     sheets, made = [], []
@@ -305,15 +317,21 @@ async def main():
     try:
         answers[:] = [good(title=PROMPT), good()]
         before = f.record().get("cost_usd") or 0
-        d = await ytdraft.write(f, CHANNEL, recent, "api")
+        d = await ytdraft.write(f, CHANNEL, recent, "api", on_words=lambda w: order.append("shown"))
         check(d["title"] == good()["title"] and len(calls) == 2, "a pasted brief is asked again")
         check(calls[1] and "repeated the brief" in calls[1], "and told why", calls)
+        check(len(tcalls) == 1, "the thumbnails asked once, at the same time", tcalls)
+        check(
+            order.index("shown") < order.index("picks"),
+            "the words are out before the thumbnails are picked",
+            order,
+        )
         rec = f.record()
         check(
             rec["youtube_drafts"] == 1
-            and abs(rec["youtube_draft_cost_usd"] - 0.1) < 1e-6
-            and abs(rec["cost_usd"] - before - 0.1) < 1e-6,
-            "both calls are paid for on the record",
+            and abs(rec["youtube_draft_cost_usd"] - 0.15) < 1e-6
+            and abs(rec["cost_usd"] - before - 0.15) < 1e-6,
+            "all three calls are paid for on the record",
             rec,
         )
         check(
@@ -335,16 +353,18 @@ async def main():
         answers[:] = [good(title="Rewritten")]
         d2 = await ytdraft.write(f, CHANNEL, recent, "api")
         check(d2["title"] == "Rewritten", "a changed film is written again")
-        answers[:] = [good(thumbnails=bad_thumbs, title="Once more"), good(title="Once more")]
-        n = len(calls)
+        answers[:] = [good(title="Once more")]
+        picked[:] = [{"thumbnails": bad_thumbs}, {"thumbnails": THUMBS}]
+        n = len(tcalls)
         d3 = await ytdraft.write(f, dict(CHANNEL, id="UCthird"), recent, "api")
         check(
-            len(calls) == n + 2 and "thumbnails broke the rules" in (calls[-1] or ""),
+            len(tcalls) == n + 2 and "thumbnails broke the rules" in (tcalls[-1] or ""),
             "thumbnails that break the rules are asked again, and told why",
-            calls[-1],
+            tcalls[-1],
         )
         check(d3["thumbnails"][0]["words"] == "*Faster* forms", "and the second answer is kept")
-        answers[:] = [good(thumbnails=bad_thumbs, title="Twice")] * 2
+        answers[:] = [good(title="Twice")]
+        picked[:] = [{"thumbnails": bad_thumbs}] * 2
         d4 = await ytdraft.write(f, dict(CHANNEL, id="UCfourth"), recent, "api")
         check(
             d4["thumbnails"][0]["layout"] == "still" and any("put right" in x for x in d4["notes"]),
@@ -359,7 +379,7 @@ async def main():
             check("repeating the brief" in str(e), "twice the brief is given up", e)
         rec = f.record()
         check(
-            rec["youtube_drafts"] == 5 and abs(rec["cost_usd"] - before - 0.35) < 1e-6,
+            rec["youtube_drafts"] == 5 and abs(rec["cost_usd"] - before - 0.55) < 1e-6,
             "a draft on the login is counted, but not in cost_usd",
             rec,
         )

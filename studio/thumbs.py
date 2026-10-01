@@ -68,6 +68,16 @@ def sheet_now(film):
         return f.read()
 
 
+def sheet_made(film):
+    """The moments sheet's bytes when it is made already, else None: never a render (the draft's
+    words read it, and never wait for the render queue)."""
+    try:
+        with open(sheet_path(film), "rb") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
 _SHEETS = {}  # film id -> asyncio.Lock: one film's sheet is made once, however many ask at once
 
 
