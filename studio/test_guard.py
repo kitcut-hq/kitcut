@@ -297,6 +297,21 @@ def main():
             vo = json.load(f)
         expect("an own voice's pins are put in", (vo["tts"], vo["jobs"]), ("elevenlabs", 3))
         expect("and none of them is refused", "not yours" in note, False)
+        # a film whose lines were never spoken is not finished silent, and a resume says so
+        # (2026-09-30: told "the narration is recorded", Claude left 52k5en without a voice)
+        with open(E.path("vo.json"), "w", encoding="utf-8") as f:
+            json.dump({"lines": [{"text": "Leo is turning four!", "start": 1.0}]}, f)
+        expect("lines, no recording: unvoiced", agent.unvoiced(E), True)
+        os.makedirs(E.path("audio", "vo"), exist_ok=True)
+        with open(E.path("audio", "vo", "timeline.json"), "w", encoding="utf-8") as f:
+            json.dump({"lines": []}, f)
+        expect("recorded: voiced", agent.unvoiced(E), False)
+        expect("no lines: nothing to record", agent.unvoiced(A), False)
+        expect(
+            "the unvoiced resume asks for the voice",
+            "voice tool first" in agent.RESUME_UNVOICED,
+            True,
+        )
         expect(
             "own-voice pins are all keys vo.json may hold",
             set(E.vo_pins()) - validate.VO_KEYS,

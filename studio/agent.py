@@ -1218,7 +1218,8 @@ async def make_film(
         lim = lim | {"claude_s": work, "wall_s": work + 20 * 60}
         spent = carry.get("claude_cost_usd") or 0
         talk = {
-            "prompt": (resume_prompt or RESUME) % round(work / 60),
+            "prompt": (resume_prompt or (RESUME_UNVOICED if unvoiced(film) else RESUME))
+            % round(work / 60),
             "resume": rec["claude_session"],
             "budget_usd": max(1.0, lim["budget_usd"] - spent),
         }
@@ -1514,6 +1515,8 @@ async def make_film(
             missing = [f for f in MADE if not os.path.exists(film.path(f))]
             if missing:
                 raise RuntimeError("Claude finished without writing %s" % ", ".join(missing))
+            if unvoiced(film):  # its lines are written but were never spoken: not a silent film
+                raise RuntimeError("Claude finished without recording the narration")
             film.update(state="finishing", **summary)
             await save(film.id, {"state": "finishing"})
         pin_vo(film)  # whatever Claude left there, the backends and models stay the studio's
@@ -1702,6 +1705,17 @@ def _newer(a, *bs):
     return all(not os.path.exists(b) or os.path.getmtime(b) <= t for b in bs)
 
 
+def unvoiced(film):
+    """Whether vo.json has lines that were never recorded (no audio/vo/timeline.json)."""
+    if os.path.exists(film.path("audio", "vo", "timeline.json")):
+        return False
+    try:
+        with open(film.path("vo.json"), encoding="utf-8") as f:
+            return bool(json.load(f).get("lines"))
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
 async def written(film, tools):
     """Whether the film Claude wrote is whole: every file it must make, a recorded narration,
     and files that pass the gate and the syntax check."""
@@ -1741,6 +1755,16 @@ INTERRUPTED = "The studio restarted before this film was finished."
 # right for a film missing only its music; an 8-minute film stopped before its picture was
 # written -- llwtme, 2026-09-28 -- needs most of its limit.)
 RESUME_MIN_S = 5 * 60
+# the same, for a film stopped before its narration was recorded (2026-09-30, 52k5en: told "the
+# narration is recorded", Claude did not record it and the film went out silent)
+RESUME_UNVOICED = (
+    "The studio stopped while you were making this film; this is the same session, picking up "
+    "where it stopped. Everything you wrote is on disk as you left it, but the narration is NOT "
+    "recorded yet: record it with the voice tool first, then look once at where the film stands "
+    "(one set of review stills), hang the cues on the real word times, fix only what is clearly "
+    "wrong, write whatever is still missing of film.js, score.json and sfx.json, call check, and "
+    "stop with one sentence. You have about %d minutes."
+)
 RESUME = (
     "The studio restarted while you were making this film; this is the same session, picking up "
     "where it stopped. Everything you wrote is on disk as you left it and the narration is "
