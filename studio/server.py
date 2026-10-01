@@ -1999,6 +1999,10 @@ async def status(req):
     if out["status"] == "done":
         out.update(film_urls(req, jid, r))
     out["listed"] = r.get("listed") is not False  # a film from before the switch was listed
+    made_from = f.record().get("template")  # a remake of a template: its "Made from" line
+    if made_from:
+        out["template"] = {k: made_from.get(k) for k in ("id", "version", "title")}
+        out["frame"] = f.record().get("frame")
     keys = (
         "prompt",
         "title",

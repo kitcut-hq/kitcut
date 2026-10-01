@@ -412,7 +412,7 @@ EOF
         dest="$HOME_DIR/templates/$id/$v"
         on "test ! -e $dest" || die "$id $v is on the VM already: a version never changes (make v$((${v#v} + 1)))"
         if [ "$DRY" = 1 ]; then echo "  would copy $dir to $VM:$dest as a draft"; exit 0; fi
-        tar -C "$dir" -cf - . | on "mkdir -p $dest && tar -xf - -C $dest && find $dest -type f -exec chmod a-w {} + && cd $REMOTE && $envs $py draft $id ${v#v} >/dev/null && echo pushed $id $v, a draft"
+        tar -C "$dir" -cf - . | on "mkdir -p $dest && tar -xf - -C $dest && find $dest -type f -exec chmod a-w {} + && cd $REMOTE && $envs $py draft $id ${v#v} >/dev/null && $envs nice -n 10 $py preview $id ${v#v} && echo pushed $id $v, a draft, its preview drawn here (the release check compares against it)"
         ;;
       publish|retire|draft)
         [[ "${1:-}" =~ ^t-[a-z0-9-]+$ && "${2:-}" =~ ^[0-9]+$ ]] || die "$use"

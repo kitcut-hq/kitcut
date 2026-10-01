@@ -836,6 +836,9 @@ def main():
         p = sub.add_parser(name)
         p.add_argument("id")
         p.add_argument("version", type=int)
+    pv = sub.add_parser("preview", help="draw a draft's preview again with this machine's renderer")
+    pv.add_argument("id")
+    pv.add_argument("version", type=int)
     sub.add_parser("list")
     a = ap.parse_args()
     if a.cmd == "make":
@@ -859,6 +862,9 @@ def main():
         if bad:
             sys.exit("templates drawn differently by this release: %s" % bad)
         print("  every template draws as it did")
+    elif a.cmd == "preview":  # a version copied in from another machine is drawn here first
+        preview(a.id, a.version)
+        print("  preview: %s" % os.path.join(vdir(a.id, a.version), "preview"))
     elif a.cmd in ("publish", "retire", "draft"):
         status = {"publish": "live", "retire": "retired", "draft": "draft"}[a.cmd]
         print(json.dumps(set_status(a.id, a.version, status), indent=1))

@@ -389,6 +389,19 @@ async def main():
         rec = f.record()
         with open(f.manifest, encoding="utf-8") as fh:
             m = json.load(fh)
+        first = agent.first_record(f, "web", "u:alice")
+        check(
+            first.get("template") == {"id": "t-test-promo", "version": 1, "title": "Test promo"},
+            "the run's record names the template, for the site's count",
+            first.get("template"),
+        )
+        r2 = await c.get("/api/films/%s" % f.id, headers=out)
+        st = await r2.json()
+        check(
+            st.get("template", {}).get("id") == "t-test-promo" and st.get("frame") == "1:1",
+            "the film's status says what it was made from",
+            st.get("template"),
+        )
         check(
             rec.get("length") == 5 and m["duration"] == 5.0,
             "its length is the template's",

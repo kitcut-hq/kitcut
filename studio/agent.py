@@ -1759,6 +1759,10 @@ async def make_film(
                 "cast": summary.get("cast"),  # what the person's library took in (library.py)
                 # again here: the first record is not retried if the database was away
                 "project_id": (film.record().get("project") or {}).get("id"),
+                # again here, like project_id: a template's films are counted by it
+                **(
+                    {"template": film.record()["template"]} if film.record().get("template") else {}
+                ),
                 "title": film.record().get("title"),  # name_film's, when nothing was typed
                 "media": summary.get("media"),  # its lasting copy online (media.py)
                 "overtime": summary.get("overtime", False),
@@ -1985,6 +1989,8 @@ def first_record(film, source, client):
         else None,
         # the site's project it is an episode of: the id only (the name and brief are the site's)
         "project_id": (rec.get("project") or {}).get("id"),
+        # the template it was remade from (templates.py): kitcut.ai counts a template's films by it
+        **({"template": rec["template"], "frame": rec.get("frame")} if rec.get("template") else {}),
         "state": "queued",
         "cost_usd": 0.0,
     }
