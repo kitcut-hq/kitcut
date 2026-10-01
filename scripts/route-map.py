@@ -971,7 +971,7 @@ def main():
     for f in full:
         mb = f.W * f.H / 1e6
         print(
-            "%-9s z%-2d %5d x %-5d %5.1f MP  %.1f m/px%s"
+            "%-9s z%-5g %5d x %-5d %5.1f MP  %.1f m/px%s"
             % (
                 f.name,
                 f.z,

@@ -3963,11 +3963,13 @@ python scripts/route-map.py --manifest projects/<id>/route-map.json             
   land-coloured islands across Santa Monica Bay. The coastline (land on its left) is closed round
   a rectangle far outside the frame on whichever side holds `sea_at`, and the sea is drawn as
   paper shelves stepping out from the shore (`ocean.bands_m`).
-- **Two maps, one coordinate system.** `maps` lists an overview and a sharper detail of the
-  strip the camera flies close to; both are Web Mercator, so the detail drawn over its rectangle
-  of the overview lines up pixel for pixel, and `route.md` says where that rectangle is. One map
-  covering both at z16 would be 35 MP; the pair is 9 + 18. The studio refuses a picture over 40 MP
-  or 8 MB, and `--list` flags one.
+- **One map, at a fractional zoom, is the default.** `zoom` may be fractional: 15.85 covers Pier
+  to Mulholland at 2.2 m a pixel in 32 MP, under the studio's 40 MP / 8 MB picture limit (`--list`
+  flags one over). Two maps -- an overview and a sharper detail strip -- line up pixel for pixel
+  (both Web Mercator; `route.md` gives the detail's rectangle), but the first film made from them
+  (fmmnq4) showed **a seam**: the detail's grain and sharpness differ from the overview magnified
+  2x, so a faint rectangle travelled with the camera, and the overview's edge came into frame on
+  the coast. Use two only when one would pass 40 MP.
 - **Legs** come from a GPX (`gpx`, trimmed to `from_near`/`to_near` by the first and last pass
   within `near_m`, with `start_at`/`end_at` pins), OSM way ids in order (`osm_ways`), a bike router
   (`router: "bike"`, routing.openstreetmap.de) or plain `points`. A GPX keeps its own elevation

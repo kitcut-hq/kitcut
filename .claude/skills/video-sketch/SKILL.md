@@ -216,13 +216,13 @@ The studio's Claude cannot fetch a map or a route, so make both here and attach 
 1. Get the route as data, best a GPX of a real ride (it carries elevation and a clock); else OSM
    way ids in order, or a bike-router leg. Trim a GPX to where the event really starts and ends
    (`from_near`/`to_near` + `start_at`/`end_at` pins): a recording usually starts at someone's door.
-2. Write `projects/<id>/route-map.json` (overview + a sharper detail strip, `uploads` naming which
-   `uploadN` each map will be, `marks` for the gates and summits, `places` to label), price it with
+2. Write `projects/<id>/route-map.json` (ONE map at a fractional zoom under 40 MP -- two maps of
+   different zooms showed a seam in the film; `uploads` naming which `uploadN` it will be, `marks` for the gates and summits, `places` to label), price it with
    `--list` (keep rows under ~12k characters: the film copies them), render, and **look at
    `preview.jpg`** -- the line must sit on the roads and the sea must be sea.
-3. Attach the maps first (so they are `upload1`, `upload2`), logos and a QR after, then `route.md`
-   and a facts sheet; the prompt says to copy the rows and never redraw the line, to keep the map,
-   line, dot and numbers crisp (no collage nudge), to drive the dot by the ride's own clock, and to
+3. Attach the map first (so it is `upload1`), logos and a QR after, then `route.md`
+   and a facts sheet; the prompt says to copy the rows and never redraw the line, to keep the camera inside the map
+   while it follows the dot, to keep the map, line, dot and numbers crisp (no collage nudge), to drive the dot by the ride's own clock, and to
    credit OSM. `docs/reference.md` "A real map and a real route" has the details.
 
 ## Harvest: turn what films keep re-inventing into kit pieces

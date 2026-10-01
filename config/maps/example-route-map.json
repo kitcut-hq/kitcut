@@ -6,30 +6,19 @@
   "units": "imperial",
   "maps": [
     {
-      "name": "overview",
-      "zoom": 15,
+      "name": "map",
+      "zoom": 15.85,
       "bbox": [
         -118.56,
-        33.998,
-        -118.462,
+        33.995,
+        -118.455,
         34.14
-      ]
-    },
-    {
-      "name": "detail",
-      "zoom": 16,
-      "bbox": [
-        -118.538,
-        34.0,
-        -118.488,
-        34.137
       ]
     }
   ],
-  "base": "overview",
+  "base": "map",
   "uploads": {
-    "overview": "upload1",
-    "detail": "upload2"
+    "map": "upload1"
   },
   "legs": [
     {
