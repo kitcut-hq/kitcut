@@ -192,7 +192,7 @@ def report(sample):
     check(
         "by hour" in text and "film 3mx2e4" in text, "the hourly table names the film", text[:400]
     )
-    check("lowest moments of memory" in text, "the memory low points")
+    check("lowest moments" in text, "the memory low points")
     check("by film, from the steps log" in text and "abcdef" in text, "the per-film bill")
     check("by step:" in text, "the per-step bill")
     out = io.StringIO()

@@ -408,9 +408,7 @@ def report(args):
         return
 
     if rows and not args.film:
-        print(
-            "\nby hour: CPU %% of the machine, the lowest memory available, the CPU pressure, and"
-        )
+        print("\nby hour: CPU % of the machine, the lowest memory available, the CPU pressure, and")
         print(
             "who used the most CPU (core-minutes) and held the most memory at the low point"
             " (anonymous memory: what the kernel cannot take back)"
@@ -442,8 +440,8 @@ def report(args):
                 )
             )
         print(
-            '\nthe %d lowest moments of memory (ops.sh usage --at "<time>" for one in full):'
-            % min(5, len(rows))
+            "\nmemory's lowest moments, at most one per ten minutes"
+            ' (ops.sh usage --at "<time>" for one in full):'
         )
         seen = []
         for r in sorted(rows, key=lambda r: r["avail_mb"]):
