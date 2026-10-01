@@ -230,3 +230,37 @@ a default camera breath on holds (`SK.breath` exists; the motion check's 4 s rul
 drift in 10-14 of 30 films); scene passes that cannot share helpers (10 of the 8-minute bike film's
 12 scene sessions pasted the same 1.7 KB renderer); a series pack (episodes re-read the last
 episode's film.js in 8-10 films); stills over 12 times refused (3-5 films).
+
+### The kit bakeoff (2026-10-01)
+
+`studio/bakeoff.py --set kit`: six real prompts of 2026-09-28..30 at 30 s, made four times on the
+laptop under the same load -- `before` and `before2` (studio-poc 0d3e8de, twice, to measure the
+noise), `kit` (the kit as a section at the end of the prompt) and `kit2` (also in the cue rule, each
+look's "write film.js" step and both examples; plus the broken-take guard). Claude minutes over the
+six films (studio.json `claude`), voice recordings, kit calls in the code, and the blind grade
+(`--grade`, professional and fits-the-subject, 1-5, mean):
+
+| arm | Claude min | first write of the picture | narration | recordings | kit calls | professional | fits |
+|---|---|---|---|---|---|---|---|
+| before | 90.5 | 41.0 | 8.9 | 25 | 10 | 4.33 | 4.83 |
+| before2 | 80.2 | 35.4 | 5.6 | 21 | 9 | 3.83 | 4.17 |
+| kit | 80.4 | 29.7 | 5.1 | 25 | 35 | 4.00 | 4.33 |
+| kit2 | 79.0 | 26.4 | 3.7 | 15 | 107 | 4.00 | 4.33 |
+
+(The 9-10 kit calls in the before arms are the collage film's own SK.mark/SK.layer.) What it says:
+
+- **Same code, two runs: 90.5 and 80.2 Claude minutes.** Run-to-run noise is ~11%, as large as the
+  total gain claimed, so the kit's effect on Claude's total time is not shown by six films: 79.0
+  against 85.4 for the two before runs.
+- **The first write of the picture is ~30% shorter** with the kit used (26.4 against 35.4-41.0), and
+  the kit is used only when the prompt says so where Claude acts: in `kit` four of six films wrote
+  their own pills, phones, glows and arrows; in `kit2` all six used it (4-44 calls each).
+- **Recordings: 15 against 21-25**, and narration composing 3.7 min against 5.6-8.9: the word budget
+  and the broken-take guard. Half of the first recordings in the first round had a broken line (a
+  16-word line drawled over 71 s; a 30 s narration ending at 217 s).
+- **Quality holds:** 4.00 professional for both kit arms, between the two before runs (3.83, 4.33);
+  side by side the frames read as equally finished, and the one film that used the kit most (the
+  news explainer) as the cleanest.
+
+So it ships for the narration (clear), and for the kit at no cost in quality, with the speed claim
+held to what was measured. A bigger set is what would show the total.

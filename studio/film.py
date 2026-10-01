@@ -763,6 +763,10 @@ class Film:
         if template:
             caps += tuple(c for c in template.get("caps") or () if c in CAPS and c not in caps)
             caps += ("template",)
+            # it runs on the engine its template was drawn with: a template made before the kit
+            # has no kit.js there, and its code never calls one
+            if not os.path.exists(os.path.join(template["_dir"], "engine", "kit.js")):
+                caps = tuple(c for c in caps if c != "kit")
         style = people_style(character_style, look) if people else None
         projects = os.path.join(HOME, "projects")
         os.makedirs(projects, exist_ok=True)
