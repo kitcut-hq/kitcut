@@ -705,6 +705,50 @@ model, with its own mouth shapes swapped on the voice -- the owner's preferred r
 model, no deepfake. Start from
 `config/sketch/heads-example/` (a 1903 front page that talks; free on edge-tts).
 
+## Cloud, shell and permission traps (read before touching Azure, Cloudflare or settings)
+
+Each cost an hour or more in one session (2026-09-29/30). Check here first.
+
+- **This session is the owner's Windows laptop**, not a cloud container, whatever the
+  environment banner says: cwd `C:\instafill\kitcut`, PowerShell 5.1 and Git Bash.
+  Do not tell the user "this remote environment can't do X" without testing it.
+- **PowerShell 5.1 has no `&&` or `||`.** Use `;` or `if ($?) { ... }`. A `&&` fails
+  the whole call as a parse error, before anything runs.
+- **Git Bash rewrites any argument starting with `/`** into a Windows path.
+  `az ... --scope /subscriptions/...` then fails with a baffling `MissingSubscription`.
+  `export MSYS_NO_PATHCONV=1` first, or use PowerShell.
+- **Never print success unconditionally.** `cmd; echo "✓ done"` printed "✓ Added" over
+  four failed commands. Use `cmd && echo ok`, and verify with a read (`az role
+  assignment list`) before saying it worked.
+- **Azure: look names up, never guess them.** The resource group was `kitcut-PROD`, not
+  `kitcut-prod`. Run `az keyvault list --query "[?name=='<vault>'].id"` (or
+  `az resource list`) to get the real scope, and `az ad sp list --display-name` /
+  `az ad user show` for object IDs. Subscription: `f61d1912-a4f0-4651-a39f-ca7094962cfa`
+  ("Botmakers 2026 ACTIVE"). `Connect-AzAccount` blocks on a browser; use `az`, which
+  is already signed in. `kitcut-kv-prod` reports `enableRbacAuthorization` empty: if
+  that is off, role assignments do not apply until RBAC authorization is enabled.
+- **Cloudflare / Email Routing (kitcut.ai).** `GET /zones/<id>/email/routing` returns
+  `10000 Authentication error` for a token that can still manage rules and addresses,
+  so `sketch-studio-mail/scripts/email-routing.mjs` reads it softly and carries on.
+  Turning Email Routing on is a dashboard click (zone > Email > Email Routing), not an
+  API call. State: `hello@kitcut.ai` forwards to `info@instafill.ai`, verified. Check
+  public DNS (`Resolve-DnsName kitcut.ai -Type MX`) instead of fighting the token.
+- **A secret pasted into chat goes into a gitignored file** (`.env.local`) and is read
+  with `node --env-file=`, never inlined in a command. Tell the user to rotate it.
+- **Permissions belong in `C:\Users\alex\.claude\settings.json`** (user level), which
+  the user means by "allow this". Project `.claude/settings.json` is committed and
+  shared; the allow rules went there by mistake first. Merge into the existing
+  `permissions.allow` array, skip duplicates, and read the file before editing.
+- **The auto-mode classifier blocks credential use, permission grants (Azure IAM,
+  tokens) and `.env` writes.** Retrying, splitting the command or rewording it is
+  pursuing the same outcome and is refused again. Say it once, in one line, and give the
+  one reliable unblock: the user presses Shift+Tab out of auto mode and approves the
+  prompt. Then run the command. Do not hand back multi-step dashboard instructions
+  first; the user asked not to be steered step by step.
+- **Prefer the CLI to the dashboard.** `vercel`, `gh`, `az` and `vm.sh` are all
+  allowed. A Vercel env var is `vercel env add NAME production`, a redeploy is
+  `vercel redeploy <url>`. Only fall back to a browser if no CLI covers it.
+
 ## Projects: the memory that outlives the session
 
 Each video is a folder, `projects/<id>/`: its manifests and two committed
