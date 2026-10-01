@@ -828,6 +828,7 @@ which cannot encode the glyphs at all.
 | `config/sketch/example/` | a 12 s sketch film to copy into a new project: manifest, `film.js`, score, cues |
 | `config/sketch/heads-example/` | a 9.5 s talking-heads film: two public-domain photos on a 1903 front page, one voice each; `scripts/head-rig.py` makes the rigs, `sketch/heads.js` draws them |
 | `scripts/resolve-export.py` | the cut as an OTIO/EDL/FCP7 XML timeline plus an SRT, for DaVinci Resolve (free edition); `check-resolve.py` is its test, `docs/davinci-resolve.md` the research behind it |
+| `scripts/route-map.py` | a real map for a film and the route on it as data: paper-relief terrain (OSM streets, real elevation, no labels, no orange) at two zooms that line up, and a GPX/OSM/routed ride as `[u, v, ft, mi, s]` rows a kitcut.ai film can copy; style `config/maps/`, example `config/maps/example-route-map.json` |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
 | `scripts/screencast-pipeline.py` | the silent-screencast job as one cached, checkpointed command; the stage scripts it drives are listed under pipeline 7 |
 | `docs/retro-books-giveaway.md` | where six hours went on the first silent-screencast edit, and the rule that now prevents each loss |
