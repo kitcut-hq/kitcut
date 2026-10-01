@@ -352,9 +352,16 @@ def leftovers(film):
     low = (text + "\n" + mine).lower()
     # a word the person asked for is theirs, even when the sample has it (the same city)
     left = sorted(w for w in words if w.lower() in low and w.lower() not in asked)
-    # the sample's pictures (its logo, its people) are seeded for a first draw, never to stay
+    # the sample's pictures (its logo, its people) are seeded for a first draw, never to stay: a key
+    # still pointing at template/sample/ -- the same key made the film's own ("logo", by
+    # template_pictures) is the person's picture
     pics = (t.get("manifest") or {}).get("images") or {}
-    return left + sorted("the picture %s" % k for k in pics if '"%s"' % k in mine)
+    have = (_read(film.manifest, {}) or {}).get("images") or {}
+    return left + sorted(
+        "the picture %s" % k
+        for k in pics
+        if '"%s"' % k in mine and str(have.get(k, "template/")).startswith("template/")
+    )
 
 
 def onscreen(film):

@@ -415,6 +415,22 @@ async def main():
         with open(f.path("content.json"), "w", encoding="utf-8") as fh:
             json.dump(remade, fh)
         check(templates.leftovers(f) == [], "a film remade whole has nothing left over")
+        # the sample's own picture key, made the person's own (template_pictures names a logo
+        # "logo" too): theirs, not a leftover
+        with open(f.manifest, encoding="utf-8") as fh:
+            mm = json.load(fh)
+        mm["images"]["wordmark"] = "images/logo.png"
+        with open(f.manifest, "w", encoding="utf-8") as fh:
+            json.dump(mm, fh)
+        with open(f.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump(dict(remade, logo={"image": "wordmark"}), fh)
+        check(
+            templates.leftovers(f) == [],
+            "a sample picture's key that now holds the person's picture is not a leftover",
+            templates.leftovers(f),
+        )
+        with open(f.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump(remade, fh)
         with open(f.path("film.js"), "a", encoding="utf-8") as fh:
             fh.write("\n// SAMPLE FEST was here\n")
         left = templates.leftovers(f)
