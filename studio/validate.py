@@ -32,7 +32,9 @@ MAX_ENGINE_JS = 400 * 1024  # each engine file: engine.js + props.js are ~105 KB
 MAX_CAST_JS = 64 * 1024  # one cast member (library.MAX_BYTES)
 MAX_JSON = 64 * 1024
 MAX_SCENE_JS = 64 * 1024  # one scene of a film made in scenes: 12-75 s, not a whole film
-VO_KEYS = set(VO_PINNED) | {"model", "voice", "style", "language", "lines", "cast"}
+# "jobs": pinned for a person's own ElevenLabs voice (film._own_pins); every key a pin set
+# writes must be here, or the guard puts it back and this refuses it on every check
+VO_KEYS = set(VO_PINNED) | {"model", "voice", "style", "language", "lines", "cast", "jobs"}
 # "who": the person (film.CAPS "people") who speaks a line; "cast" gives each their voice
 VO_LINE_KEYS = {"text", "start", "who"}
 MAX_LINE_CHARS = 300  # and at most film.limits()["lines"] lines

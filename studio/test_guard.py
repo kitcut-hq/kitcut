@@ -274,6 +274,34 @@ def main():
             ("Puck", "hushed, slow", "uk"),
         )
         expect("and Claude is told it was put back", "voice='Puck'" in note, True)
+
+        # a person's own ElevenLabs voice: every key its pins write is one the check accepts
+        # (2026-09-30: "jobs" was pinned and refused, so the film's voice step never ran)
+        E = films.Film.create(
+            "an own voice",
+            5,
+            "drawn",
+            narrator={
+                "source": "elevenlabs",
+                "voice": "a1B2c3D4e5F6g7H8i9J0",
+                "model": "eleven_v3",
+                "jobs": 3,
+                "chars": 900,
+                "grant": "Gq7" * 14 + "x",
+            },
+        )
+        with open(E.path("vo.json"), "w", encoding="utf-8") as f:
+            json.dump({"style": "warm", "language": "en", "lines": []}, f)
+        note = pin_after("vo.json", E)
+        with open(E.path("vo.json"), encoding="utf-8") as f:
+            vo = json.load(f)
+        expect("an own voice's pins are put in", (vo["tts"], vo["jobs"]), ("elevenlabs", 3))
+        expect("and none of them is refused", "not yours" in note, False)
+        expect(
+            "own-voice pins are all keys vo.json may hold",
+            set(E.vo_pins()) - validate.VO_KEYS,
+            set(),
+        )
         expect("the first message names it", "person's choice: Puck" in agent.voice_note(P), True)
         expect("a film without one says nothing", agent.voice_note(A), "")
         d = P.direction()
