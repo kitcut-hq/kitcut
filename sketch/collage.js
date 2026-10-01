@@ -40,107 +40,12 @@
     nudge: 1, steps: 12, grainFps: 12,
   };
 
-  /* ------------------------------------------------------------ time on twos, and the nudge */
-  SK.NUDGE_FPS = 12;
-  /** A clock of about `want` ticks a second that divides the frame rate being rendered (SK.FPS,
-   *  which the player sets), so every tick holds the same number of frames: 12 at 24 or 60 fps,
-   *  10 at 30 fps (a Free film), where 12 would hold 2 frames, then 3. `want` with no rate. */
-  SK.stepFps = function (want = SK.NUDGE_FPS) {
-    const f = SK.FPS;
-    if (!f || f % want === 0) return want;
-    const fits = [8, 9, 10, 11, 12, 13, 14, 15].filter((d) => f % d === 0);
-    return fits.length ? fits.reduce((a, d) => (Math.abs(d - want) < Math.abs(a - want) ? d : a)) : want;
-  };
-  /** t held to the last step of a clock ticking fps times a second (After Effects' Posterize Time) */
-  SK.step = (t, fps = SK.NUDGE_FPS) => { const k = SK.stepFps(fps); return Math.floor(t * k + 1e-4) / k; };
-  /** [dx, dy, rot]: a small offset that changes NUDGE_FPS times a second (0 unless the style nudges) */
-  SK.nudge = function (seed, amp = 1) {
-    amp *= SK.style.nudge ?? 0;
-    if (!amp) return [0, 0, 0];
-    const f = Math.floor(SK.T * SK.stepFps() + 1e-4), r = mulberry((seed * 9973 + f * 7919 + 17) | 0);
-    return [(r() - .5) * 2.2 * amp, (r() - .5) * 2.2 * amp, (r() - .5) * .006 * amp];
-  };
+  /* ------------------------------------------------------------ motion, from kit.js
+     Time on twos (SK.step, SK.nudge), the entrances (SK.motion, SK.place, SK.layer) and the marker
+     marks (SK.mark, SK.arrow) live in kit.js, which every look loads before this module. */
+  if (!SK.place || !SK.mark) throw new Error('collage.js needs kit.js before it: "modules": ["kit", "collage"]');
+  const place = (...a) => SK.place(...a);
   const hash = (s) => { let h = 2166136261; s = String(s); for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return (h >>> 0) % 100000; };
-
-  /* ------------------------------------------------------------ entrances and exits */
-  const DUR = { pop: .42, grow: .45, drop: .5, slap: .28, thump: .16, slide: .65, wipe: .5, rise: .45, fade: .35, none: 0 };
-  const SIDE = { l: [-1, 0], r: [1, 0], t: [0, -1], b: [0, 1] };
-  // a soft overshoot for things that land (a sheet sliding home, a picture dropped)
-  const land = (t) => { const c1 = 1.1, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
-  SK.E.land = land;
-  function apply(st, spec, u, leaving) {
-    const ty = spec.type || (leaving ? 'fade' : 'pop');
-    const dir = SIDE[spec.from] || SIDE[leaving ? 'r' : 'l'];
-    switch (ty) {
-      case 'pop': st.s *= E.back(u); st.r += (1 - u) * (spec.spin ?? -.22); st.a *= clamp(u * 4); break;
-      case 'grow': st.s *= E.out(u); st.a *= clamp(u * 3); break;
-      case 'drop': { const d = spec.dist ?? 170; st.dy -= (1 - land(u)) * d; st.s *= 1 + .07 * (1 - u); st.r += (1 - u) * (spec.spin ?? .08); st.a *= clamp(u * 5); break; }
-      case 'slap': st.s *= lerp(spec.from0 ?? 1.28, 1, E.out(u)); st.r += (1 - E.out(u)) * (spec.spin ?? .1); st.a *= clamp(u * 6); break;
-      case 'thump': st.s *= lerp(spec.from0 ?? 1.7, 1, E.in(u)); st.a *= clamp(u * 1.4); break;
-      // a sheet slides home fast and settles without overshoot: a bounce would bare the page under it
-      case 'slide': { const d = spec.dist ?? 1500, k = leaving ? E.in(u) : 1 - Math.pow(1 - u, 4); st.dx += dir[0] * (1 - k) * d; st.dy += dir[1] * (1 - k) * d; st.r += (1 - k) * (spec.spin ?? 0); break; }
-      case 'wipe': st.wipe = Math.min(st.wipe, leaving ? u : E.inOut(u)); st.wipeFrom = spec.from || 'l'; break;
-      case 'rise': st.dy += (1 - E.out(u)) * (spec.dist ?? 40); st.a *= E.out(u); break;
-      case 'fade': st.a *= leaving ? u : E.out(u); break;
-      default: break; // 'none'
-    }
-  }
-  /**
-   * Where an element is at time t, from its `in` and `out` specs ({t, type, d, from, dist, spin}):
-   * {a, dx, dy, s, r, wipe, wipeFrom, u}. `steps` (default: the style's) holds the entrance on a
-   * clock of that many ticks a second.
-   */
-  SK.motion = function (o, t = SK.T) {
-    const st = { a: 1, dx: 0, dy: 0, s: 1, r: 0, wipe: 1, wipeFrom: 'l', u: 1 };
-    const steps = o.steps ?? SK.style.steps, tq = steps ? SK.step(t, steps) : t;
-    const I = o.in, O = o.out;
-    if (I) {
-      if (tq < I.t) { st.a = 0; st.u = 0; return st; }
-      const d = I.d ?? DUR[I.type || 'pop'] ?? .4;
-      st.u = d > 0 ? clamp((tq - I.t) / d) : 1;
-      apply(st, I, st.u, false);
-    }
-    if (O && tq >= O.t) {
-      const d = O.d ?? DUR[O.type || 'fade'] ?? .35;
-      apply(st, O, 1 - (d > 0 ? clamp((tq - O.t) / d) : 1), true);
-    }
-    return st;
-  };
-
-  /**
-   * Draw fn(ctx, state) in an element's own frame, centred on (o.x, o.y): turned (o.rot), scaled
-   * (o.s, o.flip), entered and left (o.in, o.out), nudged (o.nudge: amplitude, 0 for none), faded
-   * (o.alpha), blended (o.blend). w, h: the element's size, for a wipe. Returns false when unseen.
-   */
-  function place(o, w, h, fn) {
-    const st = SK.motion(o);
-    if (st.a <= 0 || st.s <= 0 || (o.alpha ?? 1) <= 0) return false;
-    const c = SK.ctx();
-    const nz = o.nudge === 0 || o.nudge === false ? [0, 0, 0] : SK.nudge(o.seed ?? hash([o.x, o.y, w, h].join()), o.nudge ?? 1);
-    c.save();
-    c.translate((o.x ?? 0) + st.dx + nz[0], (o.y ?? 0) + st.dy + nz[1]);
-    const r = (o.rot ?? 0) + st.r + nz[2];
-    if (r) c.rotate(r);
-    const s = (o.s ?? 1) * st.s;
-    if (s !== 1 || o.flip) c.scale(o.flip ? -s : s, s);
-    c.globalAlpha *= st.a * (o.alpha ?? 1);
-    if (st.wipe < 1) {
-      const p = 30, W = w + 2 * p, H = h + 2 * p, x0 = -w / 2 - p, y0 = -h / 2 - p, f = st.wipeFrom;
-      c.beginPath();
-      if (f === 'r') c.rect(x0 + W * (1 - st.wipe), y0, W * st.wipe, H);
-      else if (f === 't') c.rect(x0, y0, W, H * st.wipe);
-      else if (f === 'b') c.rect(x0, y0 + H * (1 - st.wipe), W, H * st.wipe);
-      else c.rect(x0, y0, W * st.wipe, H);
-      c.clip();
-    }
-    if (o.blend) c.globalCompositeOperation = o.blend;
-    try { fn(c, st); } finally { c.restore(); }
-    return true;
-  }
-  SK.place = place;
-  /** everything fn draws enters, leaves and moves together: a sheet and what is pinned to it.
-   *  o: x, y (the group's origin, default 0, 0), rot, s, in, out, alpha, nudge (default 0), w, h */
-  SK.layer = function (o, fn) { return place({ nudge: 0, ...o }, o.w ?? SK.W, o.h ?? SK.H, fn); };
 
   /* ------------------------------------------------------------ caches: pixels derived from arguments */
   // least recently used first out, past ~480 MB of pixels: a long film played in one page (the
@@ -538,32 +443,6 @@
     });
     place({ nudge: 0, ...o, x, y }, w, h, (c) => c.drawImage(S.cv, -w / 2, -h / 2));
   };
-
-  /* ------------------------------------------------------------ marker marks drawn on */
-  /**
-   * A marker line along pts (SK.S.line / ell / path), drawn on over in.d seconds (or at o.p).
-   * o: col ('#c8322d'), w (6), in ({t, d: .45}), out, p, head (arrowhead size px; 0), seed, jit, alpha
-   */
-  SK.mark = function (pts, o = {}) {
-    if (!pts || pts.length < 2) return;
-    const tq = SK.style.steps ? SK.step(SK.T) : SK.T, I = o.in, d = I ? I.d ?? .45 : 0;
-    let p = o.p ?? (I ? E.inOut(clamp((tq - I.t) / d)) : 1);
-    if (p <= 0) return;
-    const col = o.col ?? '#c8322d', w = o.w ?? 6, seed = o.seed ?? hash(pts.length + ':' + pts[0].join());
-    place({ nudge: 1, seed, ...o, in: undefined, x: 0, y: 0 }, SK.W, SK.H, () => {
-      SK.ink(pts, { w, col, p, seed, jit: o.jit ?? .7, taper: true, dbl: false });
-      const hd = o.head ?? 0;
-      if (hd > 0) {
-        const hp = I ? clamp((tq - I.t - d) / .12) : 1;
-        if (hp > 0) {
-          const n = pts.length - 1, a = pts[n], b = pts[Math.max(0, n - 4)], ang = Math.atan2(a[1] - b[1], a[0] - b[0]);
-          for (const s of [-1, 1]) SK.ink(SK.S.line(a[0], a[1], a[0] - Math.cos(ang + s * .55) * hd, a[1] - Math.sin(ang + s * .55) * hd), { w: w * .95, col, p: hp, seed: seed + s + 5, jit: .4, dbl: false });
-        }
-      }
-    });
-  };
-  /** a marker arrow from (x1, y1) to (x2, y2), bowed by o.bow (40); o as SK.mark, head default 24 */
-  SK.arrow = function (x1, y1, x2, y2, o = {}) { SK.mark(SK.S.line(x1, y1, x2, y2, o.bow ?? 40), { head: 24, ...o }); };
 
   /** a strip of masking tape, w long, centred on (x, y): translucent, with torn ends. o: col, h, rot, alpha, in, out */
   SK.maskingTape = function (x, y, w, o = {}) {

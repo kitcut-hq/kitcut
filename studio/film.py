@@ -216,10 +216,32 @@ def people_style(style, look):
     return style if style in people_styles() else PEOPLE_AUTO.get(look, "crayon")
 
 
+# the kit (sketch/kit.js): the pieces films kept drawing by hand -- text, charts, screens, logos,
+# end cards, transitions, cues -- for every look, with its faces: Inter for crisp text (no
+# Cyrillic, so Sofia Sans stands in for it) and IBM Plex Mono for code. Its header is the system
+# prompt's reference ({KIT_REFERENCE}); the code itself is in the film's engine copy. First in
+# every recipe, since collage.js takes its motion from it (studio/harvest.py found the pieces)
+KIT_FONTS = [
+    {
+        "file": "fonts/Inter.woff2",
+        "family": "Inter",
+        "weight": "100 900",
+        "load": "500 600 700 800",
+    },
+    {
+        "file": "fonts/SofiaSans-VF.ttf",
+        "family": "Sofia Sans",
+        "weight": "1 1000",
+        "load": "500 600 700 800",
+    },
+    {"file": "fonts/IBMPlexMono-Regular.ttf", "family": "IBM Plex Mono", "weight": "400"},
+    {"file": "fonts/IBMPlexMono-Bold.ttf", "family": "IBM Plex Mono", "weight": "700"},
+]
+CAPS["kit"] = {"modules": ("kit",), "fonts": KIT_FONTS, "fills": {"KIT": ("sketch", "kit.js")}}
 RECIPES = {
-    "drawn": ("grounds",),
-    "painted": ("paintings",),
-    "collage": ("cutouts", "collage"),
+    "drawn": ("kit", "grounds"),
+    "painted": ("kit", "paintings"),
+    "collage": ("kit", "cutouts", "collage"),
 }
 # the voice: Google's Gemini text-to-speech. 3.8 needs the Gemini API enabled in the service
 # account's project; STUDIO_TTS_MODEL overrides it (e.g. gemini-3.1-flash-tts-preview)
@@ -292,8 +314,14 @@ def modules(caps):
 
 
 def fonts(caps):
-    """The faces these capabilities add to the manifest."""
-    return [f for c in caps for f in CAPS[c].get("fonts", ())]
+    """The faces these capabilities add to the manifest, each once."""
+    out, seen = [], set()
+    for f in (f for c in caps for f in CAPS[c].get("fonts", ())):
+        key = (f["file"], f.get("style"))
+        if key not in seen:
+            seen.add(key)
+            out.append(f)
+    return out
 
 
 # where a Free-plan film's "made with kitcut.ai" mark sits (studio/outro.js: 40 px from the right
@@ -512,7 +540,8 @@ class Film:
         got = self.record().get("caps")
         if isinstance(got, list) and got and all(c in CAPS for c in got):
             return tuple(got)
-        return RECIPES[self.look]
+        # its engine copy was made before the kit, and has no kit.js
+        return tuple(c for c in RECIPES[self.look] if c != "kit")
 
     def engine_files(self):
         """Its engine copy's files: every film's, and its capabilities' modules."""

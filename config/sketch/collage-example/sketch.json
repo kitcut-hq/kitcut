@@ -5,7 +5,7 @@
   "duration": 66.0,
   "fps": 24,
   "film": "film.js",
-  "modules": ["collage"],
+  "modules": ["kit", "collage"],
   "poster_t": 3.4,
   "fonts": [
     {

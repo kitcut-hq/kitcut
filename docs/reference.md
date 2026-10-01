@@ -3286,7 +3286,7 @@ member as `SK.cast.<name> = {about, draw(x, y, o)}`. An error in one names its f
 Studio keeps each signed-in person's cast between their films (`studio/library.py`).
 
 **Engine modules** are the manifest's `modules`: engine extensions only some films need
-(`["collage"]`), each `sketch/<name>.js` -- or the same file in the film's own `engine` folder,
+(`["kit", "collage"]`), each `sketch/<name>.js` -- or the same file in the film's own `engine` folder,
 which wins -- inlined after props.js and before the cast. A film that does not ask does not
 carry it, and an error in one names the file it ran from (`sketch/collage.js`, or
 `engine/collage.js` for a film's own copy). A name with no file stops the bundle.
@@ -3952,6 +3952,76 @@ python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 2,
 python scripts/sketch-render.py --manifest projects/<id>/sketch.json --preview narration
 ```
 
+### The kit: what every film was drawing by hand (`sketch/kit.js`)
+
+A module every studio film carries since 2026-10-01 (`film.CAPS["kit"]`, first in every look's
+recipe): about sixty pieces that films of 2026-09-28..30 kept building from scratch, each drawn
+crisp on the clean and collage looks and with the pen on crayon, in the ground's colours, and
+each a pure function of t. The file's header comment is the API, and it is all the studio puts
+in the system prompt (`agent.KIT_SECTION`; the code below `// studio: cut` stays in the film's
+`engine/kit.js`). Run `python scripts/check-kit.py` after touching it: every piece the header
+names is defined, the prompt carries the header and not the code, and the gallery
+(`config/sketch/kit-example`, every piece on one clock, clean for 24 s then crayon) renders with
+no page error.
+
+**What is in it, and why each.** `studio/harvest.py` read 172 films and 234 Claude sessions of
+those three days. 47% of Claude's composing time went into writing a film's picture the first
+time and 15% into fixing it after the stills; only ~10% of what Claude wrote was code, the rest
+working the design out. Seven agents then read the code of 69 films (one per distinct prompt)
+and listed 1,476 hand-built components; the ones that recur across unrelated films are the kit:
+
+| group | pieces | films that built their own |
+|---|---|---|
+| cues | `SK.cues` (every cue at once; a miss warns), `win`, `bump`, `typed`, `shake` | the cue table: 57 of 69 |
+| entrances, marks | `SK.motion` / `place` / `layer`, `mark`, `arrow`, `circle`, `underline`, `strike`, `dimension` -- moved here from collage.js, so drawn and painted films have them | arrows hand-rolled in every drawn film that needed one |
+| text | `label` (static, fitted), `measure`, `fit`, `para`, `title`, `pill`, `counter`, `fmt`, `checklist`, `cross`, `callout`, `quote`, `lowerThird` | pills 32, titles 28, counters 16, checklists 15, callouts 12 |
+| data | `bars`, `chart`, `donut`, `units`, `meter`, `ring`, `steps`, `timeline`, `flow`, `stat` | meters 27, flows 22, steppers 10 (five ways in one batch) |
+| screens | `window`, `phone`, `chat`, `cursor` + `cursorPath`, `ripple`, `button`, `field`, `toast`, `code`, `icon` (41 kinds) | cursors 29; four separate icon sets |
+| brand | `logo`, `endCard`, `palette`, `contrast`, `readable` | logo plates and end cards in 8+ |
+| light | `glow`, `particles`, `pulse`, `flash`, `dim`, `spotlight` | glows 21, particle systems 29 |
+| scenes, camera | `pages` (slide push wipe iris whip fade cut), `shots` (paintings under their own camera, kept inside the picture), `breath`, `screen`, `safe` | SK.scene used by none: every collage film rebuilt the same page carousel; every painted film the same shot list |
+| paths | `S.len`, `S.at`, `S.cut` | 5 films re-derived arc length |
+
+**Faces.** Crisp text defaults to Inter, which has no Cyrillic: the kit's font string falls back to
+Sofia Sans, then Balsamiq Sans, so a Ukrainian label sets in a sans and not the browser's serif
+(measured on the gallery, 2026-10-01). Code is IBM Plex Mono. The capability adds all four to the
+manifest; `SK.KIT.font` / `SK.KIT.mono` change the defaults for a film.
+
+**collage.js now needs it.** Its motion and marks are the kit's (a film's manifest says
+`["kit", "collage"]`); the collage example renders pixel-identical before and after the move (six
+stills, max difference 0). A film made before keeps its own engine copy, which still carries them.
+A film from before capabilities keeps its look's old recipe (`Film.caps`), since its engine copy
+has no kit.js.
+
+**Proving it.** `studio/bakeoff/kit.json`: six real prompts of those days at 30 s, made by the
+studio before the kit and with it. Results are in `docs/studio-speed.md`.
+
+### Harvest: reading the films back (`studio/harvest.py`)
+
+The studio keeps every film's folder and its Claude transcript; until 2026-10-01 nothing read them,
+so nothing films re-invented ever became a library piece (`outputs/engine.diff` -- "the curator's
+raw material" -- was empty on all but one film, and that one was an artefact). `harvest.py` is the
+reading, meant to be run every few days:
+
+```powershell
+python studio/harvest.py --plan --since 2026-09-28       # where the films are, how many
+python studio/harvest.py --pull --since 2026-09-28       # code + session digests -> temp/harvest/<since>/
+python studio/harvest.py --report temp/harvest/2026-09-28   # time split, tool errors, re-written helpers, kit use
+python studio/harvest.py --pace temp/harvest/2026-09-28 --write   # each voice's real pace -> config/sketch/voice-pace.json
+python studio/harvest.py --timelines temp/harvest/2026-09-28      # one readable timeline per session
+```
+
+`--pull` streams itself to the VM's python3 and digests there (a day's transcripts are ~200 MB,
+mostly the stills Claude looked at; the digest ~2%), then reads this machine's STUDIO_HOME and
+every bakeoff home (a bakeoff film's session is in `~/.claude/projects` under its folder's mangled
+path). `--report` measures time by Claude's *replies* -- from the answer a reply answers until its
+last call -- and names each by the most telling call it makes (code, narration, sound, pictures,
+look, read), so a 7-minute think before film.js counts as building the picture, not as "planning".
+A template's remakes count as one prompt, and imported films are left out of the helper search.
+The reading pass that found the kit gave agents `studio/harvest/inventory.md` (what each film
+builds) and `studio/harvest/process.md` (where each session's time went); the `video-sketch` skill's
+"Harvest" section is the procedure.
+
 ### Collage films: cut-outs and mixed media (`sketch/collage.js`)
 
 A collage film animates pictures cut out of paper rather than whole painted scenes: each
@@ -3959,8 +4029,8 @@ picture is one object (an engraving, a product photograph) with a transparent ba
 white scissor-cut border, pinned onto coloured sheets with torn edges, and the motion design is
 everything around it -- display type, tape labels, rubber stamps, marker arrows, ransom-note
 letters, halftone dots, a running timeline. `SK.setStyle('collage')` turns it on; the pieces are
-`sketch/collage.js`, an engine module: the manifest's `"modules": ["collage"]` has the bundler
-load it after engine.js and props.js, so film.js can override any piece (the film's engine
+`sketch/collage.js`, an engine module: the manifest's `"modules": ["kit", "collage"]` has the bundler
+load it after engine.js, props.js and the kit (whose motion and marks it uses), so film.js can override any piece (the film's engine
 copy of it when it has one, `sketch/collage.js` otherwise). A film that does not ask for it
 does not carry it.
 

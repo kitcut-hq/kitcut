@@ -31,9 +31,9 @@ def caps_cases(expect, A, B, C):
     expect(
         "caps: each look's recipe",
         (A.caps, B.caps, C.caps),
-        (("grounds",), ("paintings",), ("cutouts", "collage")),
+        (("kit", "grounds"), ("kit", "paintings"), ("kit", "cutouts", "collage")),
     )
-    expect("caps: in the record", C.record().get("caps"), ["cutouts", "collage"])
+    expect("caps: in the record", C.record().get("caps"), ["kit", "cutouts", "collage"])
     for look, recipe in films.RECIPES.items():
         for c in recipe:
             cap = films.CAPS[c]
@@ -45,13 +45,13 @@ def caps_cases(expect, A, B, C):
     expect(
         "caps: engine files",
         (A.engine_files(), C.engine_files()),
-        (("engine.js", "props.js"), ("engine.js", "props.js", "collage.js")),
+        (("engine.js", "props.js", "kit.js"), ("engine.js", "props.js", "kit.js", "collage.js")),
     )
     mods = []
     for film in (A, B, C):
         with open(film.manifest, encoding="utf-8") as f:
             mods.append(json.load(f).get("modules"))
-    expect("caps: the manifest names its modules", mods, [None, None, ["collage"]])
+    expect("caps: the manifest names its modules", mods, [["kit"], ["kit"], ["kit", "collage"]])
     # a film from before looks were recorded: painted if it has a paint.json
     old = films.Film.create("an old painted film", 5, "painted")
     rec = old.record()

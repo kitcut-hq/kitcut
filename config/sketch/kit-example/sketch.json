@@ -1,0 +1,67 @@
+{
+  "title": "Kit gallery",
+  "description": "Every piece of sketch/kit.js on one clock: the clean look for the first 24 s, the same pages in crayon for the next 24. Rendered by scripts/check-kit.py; a reference for what each piece looks like.",
+  "slug": "kit-gallery",
+  "duration": 48.0,
+  "fps": 30,
+  "film": "film.js",
+  "poster_t": 3.0,
+  "modules": [
+    "kit"
+  ],
+  "fonts": [
+    {
+      "file": "fonts/Caveat-Cyrillic-VF.ttf",
+      "family": "Caveat",
+      "weight": "400 700",
+      "load": "700"
+    },
+    {
+      "file": "fonts/BalsamiqSans-Regular.ttf",
+      "family": "Balsamiq Sans",
+      "weight": "400"
+    },
+    {
+      "file": "fonts/BalsamiqSans-Bold.ttf",
+      "family": "Balsamiq Sans",
+      "weight": "700"
+    },
+    {
+      "file": "fonts/Inter.woff2",
+      "family": "Inter",
+      "weight": "100 900",
+      "load": "500 600 700 800"
+    },
+    {
+      "file": "fonts/IBMPlexMono-Regular.ttf",
+      "family": "IBM Plex Mono",
+      "weight": "400"
+    },
+    {
+      "file": "fonts/IBMPlexMono-Bold.ttf",
+      "family": "IBM Plex Mono",
+      "weight": "700"
+    },
+    {
+      "file": "fonts/SofiaSans-VF.ttf",
+      "family": "Sofia Sans",
+      "weight": "1 1000",
+      "load": "500 600 700 800"
+    }
+  ],
+  "images": {
+    "logo": "../../../studio/brand/kitcut.png"
+  },
+  "player": {
+    "accent": "#2f6fdb",
+    "paper": "#fbfaf7",
+    "ink": "#1d2330",
+    "hint": "kit gallery",
+    "hint_font": "'Inter', sans-serif"
+  },
+  "render": {
+    "cq": 18,
+    "preset": "p5",
+    "audio_bitrate": "192k"
+  }
+}

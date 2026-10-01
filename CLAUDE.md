@@ -676,6 +676,12 @@ its stages into the run log; `--timings` answers "how long does a film take". Af
 any of it, run `python scripts/check-sketch.py` — the notation, every sound generator, the
 ducker, the tail-word cut and the bundler; no API, no browser, seconds.
 
+**The kit** (`sketch/kit.js`) is what films kept drawing by hand -- text, charts, screens, logos,
+end cards, page transitions, `SK.cues` -- in every look; its header is the API the studio's
+prompt carries. After touching it run `python scripts/check-kit.py` (headless Edge, ~15 s).
+`studio/harvest.py` reads recent studio films back (time by reply, re-written helpers, voice
+pace) -- run it every few days; the `video-sketch` skill's "Harvest" section is the procedure.
+
 **Thumbnails for a film** — kitcut.ai's "Publish to YouTube" offers four, each **a still of the
 film itself** with at most four words; the draft's Claude call picks the moments and the words
 (`studio/ytdraft.py`), `scripts/_thumb.py` makes and checks them (legible at 168 px, 4.5:1

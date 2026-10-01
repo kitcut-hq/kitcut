@@ -202,6 +202,26 @@ def _reference(*parts):
     return CUT.sub("", _read(*parts))
 
 
+# The kit in the system prompt: its header (sketch/kit.js above `// studio: cut`) and when to reach
+# for it. The pieces are the ones 69 films of 2026-09-28..30 built by hand (studio/harvest.py);
+# 47% of Claude's time went into writing a film's picture the first time
+KIT_SECTION = """# Reference: the kit (`engine/kit.js`)
+
+The pieces films keep needing, already drawn in this look and measured: text and labels, pills,
+counters, checklists, callouts, charts, steppers and timelines, app windows, phones, chats,
+cursors and buttons, icons, logos and end cards, page transitions, glows and particles, and a
+table of every word cue at once (`SK.cues`). Use them for any of that, with the film's own
+colours and type passed in, and spend your drawing on what is this film's alone: its people, its
+places, its objects. The header below is the reference; the code is in `engine/kit.js` if you
+need a detail.
+
+```js
+{KIT}
+```
+
+"""
+
+
 def system_prompt(look, caps=None):
     """prompt.md with the engine, the cast, the example and the sound notation filled in, read
     fresh so it always matches the code. It depends only on the look and what it is made of
@@ -238,6 +258,8 @@ def system_prompt(look, caps=None):
     fill["PEOPLE"] = _read("studio", "people.md") if "people" in (caps or ()) else ""
     # a capability's own references, read only for the looks made of it (film.CAPS "fills")
     fill.update({k: _reference(*parts) for k, parts in fills(caps or RECIPES[look]).items()})
+    # the kit's section, for the films made with it (a template's film made before it has none)
+    fill["KIT_REFERENCE"] = KIT_SECTION.replace("{KIT}", fill["KIT"]) if "KIT" in fill else ""
     # the look's own sections (studio/looks/<look>.md, "## NAME" headed) go in first, since
     # they carry placeholders of their own
     sections = {}
@@ -269,6 +291,19 @@ def closing_s(n):
     return 1 if n <= 60 else min(4, round(1 + n / 120))
 
 
+# Words per second of film the narration really takes, its lead, gaps and pauses included: 1.78
+# (English), 1.80 (Ukrainian), 1.93 (Spanish) over the first full takes of 71 films, 2026-09-28..30
+# (studio/harvest.py). The budget was 2.2: Claude wrote to it (words / budget 1.00 at the median),
+# and 53 of the 71 first takes ran past the film's end, each a recording and a rewrite more. At 1.7
+# about 57% fit as recorded, against 25%; a narration that ends a little early costs nothing.
+WORDS_PER_S = 1.7
+
+
+def narration_words(n):
+    """The narration's word budget for an n-second film."""
+    return max(4, round(WORDS_PER_S * (n - closing_s(n) - 0.5)))
+
+
 def ask(film, recent=()):
     """The first message: the film's own facts, then the visitor's prompt, then what recent
     films chose -- here and not in the system prompt, which stays the same for every film of a
@@ -282,7 +317,7 @@ def ask(film, recent=()):
         "counted); keep the last few for the music, the cues and the sound check.\n\nPrompt: %s"
         % (
             n,
-            round(n * 2.2 - 3),
+            narration_words(n),
             n - closing_s(n),
             limits(n)["claude_s"] // 60,
             film.record().get("prompt", "").strip()

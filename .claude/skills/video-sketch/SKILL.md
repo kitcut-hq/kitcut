@@ -17,7 +17,9 @@ python scripts/sketch-render.py --manifest projects/<id>/sketch.json --timings
 ```
 
 `docs/reference.md` has the reference under "Sketch films". The engine is `sketch/engine.js`,
-the cast `sketch/props.js`, the collage pieces `sketch/collage.js`, the page
+the cast `sketch/props.js`, the kit `sketch/kit.js` (text, charts, screens, logos, end
+cards, page transitions, cues -- every look; its header is the API, `config/sketch/kit-example/`
+shows every piece), the collage pieces `sketch/collage.js`, the page
 `sketch/player.html`. Finished examples: the committed `config/sketch/example/` (crayon), a
 real brand film (clean, 60 s, real estate) described in the reference, and the committed
 `config/sketch/collage-example/` (collage, 66 s: 17 cut-outs, ten sheets, stamps, a timeline
@@ -40,13 +42,20 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    for the audience: `crayon` is whimsical; `clean` is editorial (agents, finance, B2B);
    `collage` is mixed media -- real pictures cut out of paper and animated as motion design
    (history, explainers, anything with things to show). See "A collage film" below.
-3. **Script.** About 2.6 words a second: 60 s is ~130 words, 40 s ~90. One idea per line.
+3. **Script.** About 1.7 words per second of film (lead, gaps and pauses included): 30 s is ~50
+   words, 60 s ~100. That is measured: at the old 2.2 a second, 53 of 71 studio first takes ran
+   past the film's end (studio/harvest.py, 2026-10-01). One idea per line.
    `sketch-vo.py --plan` prints the layout and the credit cost; nothing is spent.
-4. **Voice.** `sketch-vo.py`. Read the take table it prints: accuracy under ~0.8 is usually
-   numbers ("45" vs "forty-five"), not a bad take; `HARD-CUT` means no silence was found before
+4. **Voice.** `sketch-vo.py`. Read the take table it prints. Accuracy already forgives numbers
+   heard as digits ("1986" for "nineteen eighty-six") and names in another spelling (`accuracy()`:
+   33 of 78 studio lines it used to flag were those); what still scores low is a real misread,
+   words the voice added, or its direction read aloud; `HARD-CUT` means no silence was found before
    the tail word — pick another take with `"pick"` on the line. Put brand names in `hotwords`.
    A long script: `--jobs 8` records eight takes at once (70 Gemini lines: 341 s -> 52 s).
-5. **Picture.** Write `film.js` scene by scene, every cue on a word: `SK.w(line, "word")`. A long
+5. **Picture.** Write `film.js` scene by scene, every cue on a word -- all of them at the top with
+   `const T = SK.cues({snap: [2, 'snap'], end: [5, null, 'e']})` (a miss warns instead of hiding
+   behind a fallback second). Reach for the kit before drawing text furniture, a chart, a screen,
+   a logo or an end card; draw by hand only what is the film's own. A long
    film can be a file per scene instead -- `"scenes": "scenes"` in the manifest, film.js the
    shared look with no `draw`, `scenes/NN-slug.js` each an `SK.scene({id, lines, draw})`
    (docs/reference.md, "A film in scenes").
@@ -199,6 +208,26 @@ Effects piece in the conference's own look. What it takes:
 Check the whip, the turns and every transition frame by frame from a `--draft` render
 (`ffmpeg ... -vf "fps=30,scale=216:216,tile=6x5"`), not only from stills: an empty frame between two
 scenes only shows in motion.
+
+## Harvest: turn what films keep re-inventing into kit pieces
+
+Every few days of studio films, read them back -- this is how `sketch/kit.js` was found, and the
+step that had stopped happening:
+
+1. `python studio/harvest.py --pull --since <date>` then `--report temp/harvest/<date>`: where
+   Claude's time went (by reply: first write of the picture, fixes, narration, sound...), the
+   tools' errors grouped, helpers re-written across unrelated prompts, and how much the kit is used.
+2. `--timelines` and `--pace --write` (each voice's real words a second, for the word budget).
+3. The reading pass: split the films (one per distinct prompt) into batches of ~250k characters
+   and give each to an agent with `studio/harvest/inventory.md`; the timelines, in three batches,
+   with `studio/harvest/process.md`. Merge their JSON; rank components by how many unrelated films
+   built one.
+4. Add the top ones to `sketch/kit.js` (header first: it is the API Claude reads), show each in
+   `config/sketch/kit-example/film.js`, run `python scripts/check-kit.py --sheet` and look at the
+   sheet in both looks.
+5. Prove it before it ships: `studio/bakeoff.py` with `studio/bakeoff/kit.json` (or a new set),
+   one arm at the released commit and one at the change; compare Claude's time, recordings and the
+   blind grade (`--grade`, `--compare`). Then release.
 
 ## Traps already paid for
 

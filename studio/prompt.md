@@ -172,7 +172,7 @@ narration's language.
 {PROPS}
 ```
 
-# Reference: two example films (technique, not looks to reuse)
+{KIT_REFERENCE}# Reference: two example films (technique, not looks to reuse)
 
 "Home" (12 s): a place built from backdrops on the night ground, a walker on the hills, cues
 hung on spoken words (`w(...)`).
