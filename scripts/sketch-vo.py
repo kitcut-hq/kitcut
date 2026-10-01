@@ -1168,14 +1168,17 @@ def main():
                         # a take far longer than its words is a broken one -- the voice drawled
                         # or said things the script does not: record it again before anyone
                         # pays a retake for it (stretched)
-                        for _ in range(STRETCH_TRIES):
+                        for k2 in range(STRETCH_TRIES):
                             if not stretched(ln["text"], audio):
                                 break
                             note += "\n    %.1fs for %d words: broken, recorded again" % (
                                 len(audio) / SR,
                                 len(words_of(ln["text"])),
                             )
-                            again, meta2 = gemini_plain(say, lvo)
+                            # the last try goes without the direction: a voice that reads its
+                            # direction aloud does it again and again with it (Leo, episode 3)
+                            last = k2 == STRETCH_TRIES - 1
+                            again, meta2 = gemini_plain(say, {**lvo, "style": ""} if last else lvo)
                             meta2["cost_usd"] = meta2.get("cost_usd", 0) + meta.get("cost_usd", 0)
                             if len(trim_silence(again)[0]) < len(trim_silence(audio)[0]):
                                 audio, meta = again, meta2
