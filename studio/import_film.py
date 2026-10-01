@@ -56,8 +56,18 @@ import store  # noqa: E402
 
 VM_HOME = "/srv/kitcut/studio"  # the studio's home on the VM (studio/deploy/ops.sh HOME_DIR)
 # what of the source folder the film keeps: its code and what its code reads, never its scratch
-KEEP = ("film.js", "score.json", "sfx.json", "score.py", "sfx.py", "description.txt")
-KEEP_DIRS = ("images", "assets", "scenes", "cast")
+# content.json: a template film's words and people; web/, inputs/, template/: the pictures its
+# manifest names (brought in, attached, the template's own) -- a later redraw needs them
+KEEP = (
+    "film.js",
+    "score.json",
+    "sfx.json",
+    "score.py",
+    "sfx.py",
+    "description.txt",
+    "content.json",
+)
+KEEP_DIRS = ("images", "assets", "scenes", "cast", "web", "inputs", "template")
 
 
 def say(*a):
@@ -195,6 +205,11 @@ async def main():
     ap.add_argument(
         "--unlisted", action="store_true", help="link-only: out of the gallery and the sitemap"
     )
+    ap.add_argument(
+        "--template",
+        help="the template it was made from, t-<slug>:<version> (a bake-off's remake): counted as "
+        "one of its films, and its page says so",
+    )
     ap.add_argument("--vm", help="also copy it into this VM's studio home (e.g. kitcut-studio-1)")
     ap.add_argument("--film", help="with --vm: copy a film this made earlier (its id) instead")
     ap.add_argument("--plan", action="store_true", help="say what would be made; change nothing")
@@ -228,6 +243,27 @@ async def main():
     say("owner:    %s  (%s)" % (args.email, client))
     say("project:  %s  %s" % (proj["_id"], proj.get("name")))
     say("listed:   %s" % ("no, link-only" if args.unlisted else "yes"))
+    tpl = None
+    if args.template:
+        tid, _, v = args.template.partition(":")
+        t = (
+            json.load(open(os.path.join(folder, "template", "template.json"), encoding="utf-8"))
+            if os.path.isfile(os.path.join(folder, "template", "template.json"))
+            else {}
+        )
+        if t.get("id") and t["id"] != tid:
+            sys.exit("the film was made from %s, not %s" % (t["id"], tid))
+        tpl = {
+            "id": tid,
+            "version": int(v or t.get("version") or 0),
+            "title": t.get("title") or tid,
+        }
+        if not tpl["version"]:
+            sys.exit("--template t-<slug>:<version>")
+        say("template: %s v%d (%s)" % (tpl["id"], tpl["version"], tpl["title"]))
+    frame = next(
+        (k for k, wh in films.FRAMES.items() if list(wh) == list(m.get("frame") or [])), None
+    )
     say(
         "online:   %s"
         % (
@@ -276,6 +312,7 @@ async def main():
         "created": now,
         "finished": now,
         "imported": {"from": os.path.basename(folder), "at": now},
+        **({"template": tpl, "frame": frame or "16:9", "narration": False} if tpl else {}),
     }
     film = build(folder, fid, m, files, rec)
     say("\nmade:     %s" % film.dir)
@@ -302,6 +339,7 @@ async def main():
         "cost_usd": 0.0,
         "finished_at": store.now(),
         "imported": {"from": os.path.basename(folder)},
+        **({"template": tpl, "frame": frame or "16:9"} if tpl else {}),
     }
     if not await agent.save(fid, first, final=True):
         sys.exit(
