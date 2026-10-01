@@ -112,6 +112,11 @@ You set:
   speech ends about a second before the film does. Plain words only: no stage directions, no
   [tags], no emoji. Numbers as words.
 
+- `say` (optional): `{"Mikey": "My-key", "varenyky": "va-REN-ih-kee"}` -- how the voice should say a
+  name or a foreign word it gets wrong, in English-like spelling; the captions keep the word as
+  written. One voice reads every line unless a line names someone in `cast`: the style directs that
+  voice, it does not give characters voices of their own.
+
 On-screen text is optional; when you use it, it must read at a glance and be in the
 narration's language.
 

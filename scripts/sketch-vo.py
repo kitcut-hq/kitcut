@@ -106,6 +106,42 @@ DIGIT = re.compile(r"\d")
 STRETCH_WPS, STRETCH_K, STRETCH_PAD, STRETCH_TRIES = 1.8, 2.0, 1.5, 2
 
 
+# A line Gemini's prompt filter refuses ("PROHIBITED_CONTENT") is a false alarm often enough, and
+# the voice direction is what trips it: in the Leo series (2026-10-01) "Like a team!", "I'm a big
+# boy!" and "Brrrr!" were refused with the film's style and read every time without it, and 14
+# lines across 6 episodes went to the backup voice -- another person's voice in the middle of the
+# film. So a refused line is asked again in the same voice without the direction, twice, before
+# the backup voice reads it.
+PLAIN_TRIES = 2
+
+
+def gemini_plain(text, vo):
+    """gemini_take, and on a refusal the same voice again without the style (PLAIN_TRIES times)."""
+    try:
+        return gemini_take(text, vo)
+    except Refused:
+        if not (vo.get("style") or "").strip():
+            raise
+    for k in range(PLAIN_TRIES):
+        try:
+            audio, meta = gemini_take(text, {**vo, "style": ""})
+            meta["plain"] = True  # read without the voice direction, after a refusal
+            return audio, meta
+        except Refused:
+            if k == PLAIN_TRIES - 1:
+                raise
+
+
+def said(text, vo):
+    """The line as the voice is given it: each word of vo.json's "say" map ({"Mikey": "My-key",
+    "varenyky": "vah-REH-nih-kih"}) replaced, whole words only, any case. The script keeps its own
+    spelling for the captions, the scoring and the word times (Gemini and the backup voice; edge
+    and ElevenLabs time the words they were sent, so they are given the script as written)."""
+    for word, as_said in (vo.get("say") or {}).items():
+        text = re.sub(r"(?<!\w)%s(?!\w)" % re.escape(word), as_said, text, flags=re.IGNORECASE)
+    return text
+
+
 def stretched(text, audio):
     """Is this take far longer than its words could take?"""
     n = len(words_of(text))
@@ -1091,7 +1127,8 @@ def main():
                 if i not in only:
                     continue
                 lvo = line_vo(vo, ln)  # the speaker's voice, when the line names one
-                fp = fingerprint(ln, {**lvo, "tts": tts})
+                # the words as said (the say map) are what is recorded: a new spelling records again
+                fp = fingerprint({**ln, "text": said(ln["text"], vo)}, {**lvo, "tts": tts})
                 key = _sketch.voice_line_key(ln["text"], lvo, tts)
                 if key in approved:
                     given[i] = key
@@ -1125,8 +1162,9 @@ def main():
                     if os.environ.get("ELEVENLABS_RELAY"):  # the person's own characters
                         user_spend(vdir, lvo, len(sent))
                 elif tts == "gemini":
+                    say = said(ln["text"], vo)  # what the voice is given: the say map applied
                     try:
-                        audio, meta = gemini_take(ln["text"], lvo)
+                        audio, meta = gemini_plain(say, lvo)
                         # a take far longer than its words is a broken one -- the voice drawled
                         # or said things the script does not: record it again before anyone
                         # pays a retake for it (stretched)
@@ -1137,7 +1175,7 @@ def main():
                                 len(audio) / SR,
                                 len(words_of(ln["text"])),
                             )
-                            again, meta2 = gemini_take(ln["text"], lvo)
+                            again, meta2 = gemini_plain(say, lvo)
                             meta2["cost_usd"] = meta2.get("cost_usd", 0) + meta.get("cost_usd", 0)
                             if len(trim_silence(again)[0]) < len(trim_silence(audio)[0]):
                                 audio, meta = again, meta2
@@ -1149,7 +1187,7 @@ def main():
                                 "Gemini TTS refused the line %r (%s): rephrase it"
                                 % (spoken(ln["text"]), e)
                             )
-                        audio, meta = backup_take(ln["text"], lvo, vdir)
+                        audio, meta = backup_take(say, lvo, vdir)
                         meta["refused"] = str(e)[:200]
                     _sketch.write_wav(base + ".wav", audio)
                     align = {"gemini": meta}  # no timings: Whisper supplies the words

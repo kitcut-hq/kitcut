@@ -512,6 +512,7 @@ def main():
         all(acc(a, b) < 0.9 for a, b in said_wrong),
         str([round(acc(a, b), 2) for a, b in said_wrong]),
     )
+
     def plain(a, b):
         return difflib.SequenceMatcher(None, vo_mod.words_of(a), vo_mod.words_of(b)).ratio()
 
@@ -536,6 +537,36 @@ def main():
         and not vo_mod.stretched(sixteen, tone(7.5))
         and not vo_mod.stretched(sixteen, tone(12.0)),
     )
+
+    # ---- what the voice is given: vo.json's say map, whole words, any case
+    say = {"say": {"varenyky": "va-REN-ih-kee", "Mikey": "My-key"}}
+    check(
+        "say: a word the map names is said its way, nothing else changes",
+        vo_mod.said("Varenyky! Mikey loves varenyky.", say)
+        == "va-REN-ih-kee! My-key loves va-REN-ih-kee."
+        and vo_mod.said("Mikeyville", say) == "Mikeyville"
+        and vo_mod.said("no map here", {}) == "no map here",
+    )
+
+    # ---- a refused line: the same voice again without the direction, before any backup voice
+    real_take, asked = vo_mod.gemini_take, []
+
+    def fake_take(text, v):
+        asked.append(v.get("style", ""))
+        if v.get("style"):
+            raise vo_mod.Refused("finish reason PROHIBITED_CONTENT")
+        return np.zeros(100), {"cost_usd": 0, "usage": {"input": 0, "output": 0}}
+
+    try:
+        vo_mod.gemini_take = fake_take
+        _, meta = vo_mod.gemini_plain("Like a team!", {"voice": "Puck", "style": "for kids"})
+        check(
+            "refused: read again in the same voice without its direction",
+            asked == ["for kids", ""] and meta.get("plain") is True,
+            str(asked),
+        )
+    finally:
+        vo_mod.gemini_take = real_take
 
     # ---- the backup voice, for a line Gemini refuses (no API: what decides it)
     check(

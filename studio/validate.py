@@ -35,7 +35,7 @@ MAX_JSON = 64 * 1024
 MAX_SCENE_JS = 64 * 1024  # one scene of a film made in scenes: 12-75 s, not a whole film
 # "jobs": pinned for a person's own ElevenLabs voice (film._own_pins); every key a pin set
 # writes must be here, or the guard puts it back and this refuses it on every check
-VO_KEYS = set(VO_PINNED) | {"model", "voice", "style", "language", "lines", "cast", "jobs"}
+VO_KEYS = set(VO_PINNED) | {"model", "voice", "style", "language", "lines", "cast", "jobs", "say"}
 # "who": the person (film.CAPS "people") who speaks a line; "cast" gives each their voice
 VO_LINE_KEYS = {"text", "start", "who"}
 MAX_LINE_CHARS = 300  # and at most film.limits()["lines"] lines
@@ -81,6 +81,18 @@ def _vo(d, max_lines, length=60, people=()):
         out.append('vo.json: language is an ISO 639-1 code such as "en" or "uk"')
     if not isinstance(d.get("style", ""), str) or len(d.get("style", "")) > 300:
         out.append("vo.json: style is one line of text (at most 300 characters)")
+    say = d.get("say", {})
+    if (
+        not isinstance(say, dict)
+        or not all(
+            isinstance(k, str) and isinstance(v, str) and 0 < len(k) <= 40 and 0 < len(v) <= 60
+            for k, v in say.items()
+        )
+        or len(say) > 30
+    ):
+        out.append(
+            'vo.json: say is {"word as written": "how the voice should say it", ...} (30 at most)'
+        )
     cast = d.get("cast", {})
     if not isinstance(cast, dict):
         out.append('vo.json: cast is {"p1": {"voice": "..."}, ...}')
