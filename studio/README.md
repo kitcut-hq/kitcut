@@ -529,7 +529,15 @@ python studio/templates.py make --folder projects/<id> --id t-<slug> --spec conf
 python studio/templates.py publish t-<slug> 1
 python studio/templates.py check
 python studio/agent.py --template t-<slug> --fields form.json --frame 16:9 --unlisted   # one on this machine
+bash studio/deploy/ops.sh template push <...>/templates/t-<slug>/v<N>    # a version made here, onto the VM
+bash studio/deploy/ops.sh template publish t-<slug> <N>
+bash studio/deploy/ops.sh film --template t-<slug>:<N> --fields form.json --unlisted   # one on the VM, through its API
 ```
+
+`ops.sh film --template` uploads every picture the form names (the logo, each person's photo) to the
+VM's studio as the site does, then posts the form; from the VM itself a draft may be tried. The
+first, 2026-09-30 (the PGConf.PL form on v3), took 8 minutes: 2 cutting out 9 photos, 5 of Claude,
+46 s of render. kitcut.ai's own side (its pages, the form, credits) is in the sketch-studio repo.
 
 `test_templates.py` (in the release gate) covers the version, the form, the API and a real render.
 

@@ -29,6 +29,9 @@
 #                                                     push copies a version made on this laptop into
 #                                                     the VM's home as a draft (a version never
 #                                                     changes: it refuses one already there)
+#   bash studio/deploy/ops.sh film --template t-x --fields form.json [--frame 16:9] [--language uk] [--unlisted]
+#                                                     a film remade from a template (a draft too: the
+#                                                     VM itself may), its form's pictures uploaded first
 #   bash studio/deploy/ops.sh film "<idea>" [--seconds N] [--look L] [--unlisted] [--api] [--no-watch]
 #                                                    a film made on the VM itself
 #                                                     (on the Claude login unless --api), followed;
@@ -329,14 +332,72 @@ EOF
     ;;
 
   film)
-    idea="${1:?film \"<idea>\" [--seconds N] [--look L] [--unlisted] [--api] [--no-watch] [--person Name=photo ...] [--style S]}"; shift
+    use="film \"<idea>\" [--seconds N] [--look L] [--unlisted] [--api] [--no-watch] [--person Name=photo ...] [--style S] | film --template t-x --fields form.json [--frame F] [--language L]"
+    idea=""; [[ "${1:-}" == --* ]] || { idea="${1:?$use}"; shift; }
     secs=30; auth=""; look=drawn; listed=1; follow=1; people=(); style=auto
+    tpl=""; fields=""; frame=""; lang=""
     while [ $# -gt 0 ]; do
       case "$1" in --seconds) secs="$2"; shift ;; --look) look="$2"; shift ;; --unlisted) listed=0 ;;
         --api) auth=', "auth": "api"' ;; --no-watch) follow=0 ;;
-        --person) people+=("$2"); shift ;; --style) style="$2"; shift ;; esac
+        --person) people+=("$2"); shift ;; --style) style="$2"; shift ;;
+        --template) tpl="$2"; shift ;; --fields) fields="$2"; shift ;; --frame) frame="$2"; shift ;;
+        --language) lang="$2"; shift ;; esac
       shift
     done
+    [ -n "$idea" ] || [ -n "$tpl" ] || die "$use"
+    if [ -n "$tpl" ]; then
+      # a template's film (studio/templates.py): every picture its form names -- the logo, each
+      # person's photo -- is uploaded to the VM's studio first, as the site does, then the form is
+      # sent with the upload ids in their place
+      [ -f "$fields" ] || die "--template needs --fields <form.json> (pictures as paths beside it)"
+      dir="$(cd "$(dirname "$fields")" && pwd)"
+      map="{}"
+      while IFS= read -r f; do
+        f="${f%$'\r'}"  # this laptop's python ends its lines with CR LF
+        [ -n "$f" ] || continue
+        case "$f" in *.png|*.PNG) ct=image/png ;; *.webp|*.WEBP) ct=image/webp ;; *) ct=image/jpeg ;; esac
+        if [ "$DRY" = 1 ]; then up="up-dryrun"; echo "  would upload $f ($ct)"
+        else
+          up="$(on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/uploads -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: $ct' --data-binary @-" < "$dir/$f" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("id") or sys.exit(json.dumps(d)))')" || exit 1
+        fi
+        map="$(python -c 'import json,sys; m=json.loads(sys.argv[1]); m[sys.argv[2]]=sys.argv[3]; print(json.dumps(m))' "$map" "$f" "$up")"
+      done < <(python -c '
+import json, sys
+form = json.load(open(sys.argv[1], encoding="utf-8"))
+pic = lambda v: isinstance(v, str) and v.lower().rsplit(".", 1)[-1] in ("png", "jpg", "jpeg", "webp")
+for v in form.values():
+    if pic(v):
+        print(v)
+    elif isinstance(v, list):
+        for row in v:
+            if isinstance(row, dict) and pic(row.get("photo")):
+                print(row["photo"])
+' "$fields")
+      body="$(python -c '
+import json, sys
+form, ids = json.load(open(sys.argv[1], encoding="utf-8")), json.loads(sys.argv[2])
+for k, v in list(form.items()):
+    if isinstance(v, str) and v in ids:
+        form[k] = ids[v]
+    elif isinstance(v, list):
+        form[k] = [dict(r, photo=ids[r["photo"]]) if isinstance(r, dict) and r.get("photo") in ids else r for r in v]
+tid, _, ver = sys.argv[3].partition(":")
+body = {"template": {"id": tid, **({"version": int(ver)} if ver else {})}, "fields": form, "listed": sys.argv[4] == "1"}
+if sys.argv[5]:
+    body["frame"] = sys.argv[5]
+if sys.argv[6]:
+    body["language"] = sys.argv[6]
+if sys.argv[7]:
+    body["prompt"] = sys.argv[7]
+print(json.dumps(body, ensure_ascii=False))
+' "$fields" "$map" "$tpl" "$listed" "$frame" "$lang" "$idea")"
+      body="${body%\}}$auth}"
+      [ "$DRY" = 1 ] && { echo "  would POST a template film ($tpl) to the VM's studio"; exit 0; }
+      id="$(printf '%s' "$body" | on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/films -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' --data-binary @-" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("id") or sys.exit(json.dumps(d)))')" || exit 1
+      echo "film $id"
+      [ "$follow" = 1 ] || exit 0
+      exec bash "$0" watch "$id"
+    fi
     # --person "Name=photo.jpg" (or just the photo), up to 4: a real person drawn into the film as a
     # character who talks (studio "people"), in --style (auto: the look's own). Each photo is uploaded
     # to the VM's studio first, as the site does; only with that person's permission.
@@ -412,7 +473,7 @@ EOF
         dest="$HOME_DIR/templates/$id/$v"
         on "test ! -e $dest" || die "$id $v is on the VM already: a version never changes (make v$((${v#v} + 1)))"
         if [ "$DRY" = 1 ]; then echo "  would copy $dir to $VM:$dest as a draft"; exit 0; fi
-        tar -C "$dir" -cf - . | on "mkdir -p $dest && tar -xf - -C $dest && find $dest -type f -exec chmod a-w {} + && cd $REMOTE && $envs $py draft $id ${v#v} >/dev/null && $envs nice -n 10 $py preview $id ${v#v} && echo pushed $id $v, a draft, its preview drawn here (the release check compares against it)"
+        tar -C "$dir" -cf - . | on "mkdir -p $dest && tar -xf - -C $dest && find $dest -type f -exec chmod a-w {} + && cd $REMOTE && $envs $py draft $id ${v#v} >/dev/null && $envs nice -n 10 $py preview $id ${v#v} && echo pushed $id $v as a draft, its preview drawn on this machine for the release check"
         ;;
       publish|retire|draft)
         [[ "${1:-}" =~ ^t-[a-z0-9-]+$ && "${2:-}" =~ ^[0-9]+$ ]] || die "$use"
