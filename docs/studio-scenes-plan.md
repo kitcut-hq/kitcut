@@ -2,7 +2,9 @@
 
 Approved 2026-09-29. **Status:** steps 1 and 2 built on branch `studio-scenes` (engine scenes,
 the three passes, checkpoints, carry-on after a restart, `test_scenes.py`), **on since 2026-09-29
-09:48 PDT for films over 5 minutes** (`STUDIO_SCENES_OVER_S=300`, the VM's .env and machine.env),
+09:48 PDT for films over 5 minutes, over 8 since 2026-10-01** (`STUDIO_SCENES_OVER_S=480`, the VM's .env
+and machine.env: at 6 minutes scenes cost about twice a single conversation per film minute, in money
+and in time, and nothing yet shows a better picture -- step 3 decides),
 turned on before step 3 at the user's call; the per-scene render cache (in step 1) and step 3's
 real films side by side are still to do -- watch the first real scenes films closely. Why: docs/todo.md #7 and docs/known-issues.md KI-034. A film is today one
 `film.js` written by one Claude conversation that grows with it (8-minute film: 73k -> 371k tokens,
