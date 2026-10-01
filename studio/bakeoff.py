@@ -32,12 +32,12 @@ time; and prints the tallies: per arm, the means, and how many films' look fits 
 or 5 of 5). Calibrated on the Dell documentary this was built for: its googly-eyed first minutes
 read childish 0.40, fits 3 -- a mild grader, so compare the arms, never one number to a bar.
 
-Templates (studio/templates.py): a set whose prompts carry a "form" (the template's form as JSON,
-its pictures as files beside it) and a "template" compares two ways of making the same film from
-one tree: --mode template remakes the template with the form (agent.template_film), --mode prompt
-makes a plain film of the same length from a prompt written out of the form, with the logo and the
-featured speakers' photos attached (the six a plain film may take). --templates names the folder
-of templates the films are made from (STUDIO_TEMPLATES). A set with "grade_extra": ["fidelity"]
+Templates (studio/templates.py): a set whose prompts carry a "template" compares two ways of
+making the same film from one tree, with the same words and the same attached files ("attach",
+or a "form" -- a local JSON of an event's details and pictures -- written out as a prompt): --mode
+template remakes the template as asked (agent.template_film), --mode prompt makes a plain film of
+the same length (with the six pictures a plain film may take). --templates names the folder of
+templates the films are made from (STUDIO_TEMPLATES). A set with "grade_extra": ["fidelity"]
 also has each template film read beside its template's preview at the template's moments: does
 it keep the template's scenes, layouts and finish (1-5)?
 
@@ -210,16 +210,16 @@ def worker(spec_path):
         lambda film, n=8: []
     )  # no note: the films of a set must not steer each other
     media.enabled = lambda: False  # a bake-off film stays on this machine
-    if spec.get("mode") == "template":  # a remake of the template, from its form
+    if spec.get("mode") == "template":  # a remake of the template, as asked
         film = agent.template_film(
             spec["template"],
-            spec["form"],
+            spec["prompt"],
+            spec.get("attach") or (),
             spec.get("frame"),
             listed=False,
             client="bakeoff",
             source="bakeoff",
             auth=spec["auth"],
-            language=spec.get("language"),
         )
     else:
         film = films.Film.create(
@@ -230,7 +230,7 @@ def worker(spec_path):
             source="bakeoff",
             auth=spec["auth"],
             listed=False,
-            **({"attachments": pictures(spec["attach"])} if spec.get("attach") else {}),
+            **({"attachments": pictures(spec["attach"][:6])} if spec.get("attach") else {}),
         )
     print("film %s" % film.dir, flush=True)
     events = os.path.join(spec["home"], "events.log")
@@ -295,9 +295,9 @@ def pictures(paths):
 
 
 def form_prompt(form_path, seconds, language=None):
-    """A template's form written out as a plain prompt, and the pictures a plain film can take
-    with it (the logo, then the featured speakers' photos: six at most) -- the same content,
-    asked for the way anyone would without the template."""
+    """An event's details (a local form.json, its pictures beside it) written out as the prompt a
+    person would type, and the pictures they would attach (the logo, then the featured speakers'
+    photos) -- the same for both arms."""
     form = read_json(form_path)
     base = os.path.dirname(os.path.abspath(form_path))
     d = form.get("dates") or {}
@@ -376,15 +376,18 @@ def run_arm(args, s, root, repo):
             "mode": args.mode,
             **({"templates": os.path.abspath(args.templates)} if args.templates else {}),
         }
-        if p.get("form"):  # a template's form: the remake, or the same content as a prompt
-            form = p["form"] if os.path.isabs(p["form"]) else os.path.join(tree, p["form"])
-            if args.mode == "template":
-                spec.update(template=p["template"], form=form, frame=p.get("frame"))
-                spec["language"] = p.get("language")
-            else:
-                spec["prompt"], spec["attach"] = form_prompt(
-                    form, spec["seconds"], p.get("language")
-                )
+
+        def here(x):
+            return x if os.path.isabs(x) else os.path.join(tree, x)
+
+        if p.get("form"):  # an event's details: the prompt and pictures a person would send
+            spec["prompt"], spec["attach"] = form_prompt(
+                here(p["form"]), spec["seconds"], p.get("language")
+            )
+        elif p.get("attach"):
+            spec["attach"] = [here(x) for x in p["attach"]]
+        if p.get("template") and args.mode == "template":  # the same words, the template's film
+            spec.update(template=p["template"], frame=p.get("frame"))
         write_json(os.path.join(home, "spec.json"), spec)
         todo.append(spec)
     if not todo:

@@ -1099,19 +1099,19 @@ async def leading():
 
 
 def template_of(body, local):
-    """A film asked for from a template: {"template": {"id", "version"}, "fields": {...},
-    "frame": "16:9"}. Returns (template, the form checked, frame, None) or (None, None, None,
-    (error body, status)). A draft is this machine's to try; the rest is live versions only."""
+    """A film asked for from a template: {"template": {"id", "version"}, "prompt": "...",
+    "attachments": [...], "frame": "16:9"} -- what the person wants in their own words, the
+    template its example. Returns (template, frame, None) or (None, None, (error body, status)).
+    A draft is this machine's to try; the rest is live versions only."""
     want = body.get("template")
     if not isinstance(want, dict) or not isinstance(want.get("id"), str):
-        return None, None, None, ({"error": "template must be {id, version}"}, 400)
+        return None, None, ({"error": "template must be {id, version}"}, 400)
     status = ("live", "draft") if local else ("live",)
     t = templates.load(want["id"], want.get("version"), status)
     if t is None:
         latest = templates.load(want["id"], None, status)
-        if latest is not None:  # an older version, retired: the form must be filled again
+        if latest is not None:  # an older version, retired: the page must be loaded again
             return (
-                None,
                 None,
                 None,
                 (
@@ -1119,17 +1119,13 @@ def template_of(body, local):
                     409,
                 ),
             )
-        return None, None, None, ({"error": "no such template"}, 404)
-    if body.get("attachments") or body.get("people") or body.get("project"):
-        return None, None, None, ({"error": "a template's film takes its form, nothing else"}, 400)
-    try:
-        clean = templates.validate_fields(t, body.get("fields") or {})
-    except templates.TemplateError as e:
-        return None, None, None, ({"error": str(e), "field": True}, 400)
+        return None, None, ({"error": "no such template"}, 404)
+    if body.get("people") or body.get("project"):  # music only, and the template's own film
+        return None, None, ({"error": "a template's film takes a prompt and attachments"}, 400)
     frame = body.get("frame") or t["frames"][0]
     if frame not in t["frames"]:
-        return None, None, None, ({"error": "frame is one of %s" % ", ".join(t["frames"])}, 400)
-    return t, clean, frame, None
+        return None, None, ({"error": "frame is one of %s" % ", ".join(t["frames"])}, 400)
+    return t, frame, None
 
 
 async def create(req):
@@ -1140,16 +1136,11 @@ async def create(req):
     except ValueError:
         return web.json_response({"error": 'send JSON: {"prompt": "..."}'}, status=400)
     prompt = str(body.get("prompt", "")).strip()[:PROMPT_MAX]
-    tpl = clean = frame = None
-    if body.get("template") is not None:  # a remake of a template, from its form (templates.py)
-        tpl, clean, frame, err = template_of(body, from_this_machine(req))
+    tpl = frame = None
+    if body.get("template") is not None:  # a remake of a template, as asked (templates.py)
+        tpl, frame, err = template_of(body, from_this_machine(req))
         if err:
             return web.json_response(err[0], status=err[1])
-        first = next(
-            (v for v in clean.values() if isinstance(v, str) and not v.startswith("up-")), ""
-        )
-        more = (" -- " + prompt) if prompt else ""
-        prompt = ("%s: %s%s" % (tpl["title"], first, more))[:PROMPT_MAX]
         body = dict(body, seconds=tpl["seconds"], look=tpl.get("look"))
     ids = body.get("attachments") or []
     # people to draw as talking characters: [{"upload": "up-...", "name": "Alex"}] (photos
@@ -1244,16 +1235,13 @@ async def create(req):
     # pictures and voice notes uploaded first (uploads.py): this client's own, and every voice
     # note written out -- which may take a moment, so before the lock
     try:
-        attached = await uploads.take(uploader, ids) if ids else []
+        # a template's film may take its own number of pictures (a line-up of speakers)
+        cap = tpl["limits"]["images"] if tpl else None
+        attached = await uploads.take(uploader, ids, cap) if ids else []
         faces = await uploads.take(uploader, [p["upload"] for p in people]) if people else []
-        # a template's pictures: its logo, its people's photos (up to the template's own cap)
-        tids = templates.upload_ids(tpl, clean) if tpl else []
-        shots = await uploads.take(uploader, tids, tpl["limits"]["images"]) if tids else []
     except uploads.UploadError as e:
         return web.json_response(e.body(), status=e.status)
-    if any(a["kind"] != "image" for a in shots):
-        return web.json_response({"error": "a template's pictures must be pictures"}, status=400)
-    for a in attached + faces + shots:
+    for a in attached + faces:
         a["src"] = uploads.file_of(uploader, a)
     for a, p in zip(faces, people, strict=True):
         if a["kind"] != "image":
@@ -1274,9 +1262,7 @@ async def create(req):
             return web.json_response({"error": refused}, status=429)
         # an account that may make two at once can send the same upload twice: the film admitted
         # first takes it (release, below), and this one must not start without it
-        gone = next(
-            (a for a in attached + faces + shots if uploads.get(uploader, a["id"]) is None), None
-        )
+        gone = next((a for a in attached + faces if uploads.get(uploader, a["id"]) is None), None)
         if gone:
             e = uploads.UploadError(
                 409, "attachment", "An attachment is no longer here; add it again.", gone["id"]
@@ -1303,20 +1289,9 @@ async def create(req):
             template=tpl,
             frame=frame,
         )
-        if tpl:  # its code, the person's content and pictures (templates.seed)
-            content, pics = templates.build_content(tpl, clean)
-            by_id = {a["id"]: a for a in shots}
-            await asyncio.to_thread(
-                templates.seed, f, tpl, content, {k: by_id[u] for k, u in pics.items()}
-            )
-            research = templates.research_needed(tpl, clean)
-            if research:
-                f.update(research=research)
-            lang = str(body.get("language") or "")
-            f.update(
-                fields=clean, **({"language": lang} if re.fullmatch(r"[a-z]{2}", lang) else {})
-            )
-        uploads.release(uploader, attached + faces + shots)  # the film has its own copies now
+        if tpl:  # its code and its own sample, the starting point (templates.seed)
+            await asyncio.to_thread(templates.seed, f, tpl)
+        uploads.release(uploader, attached + faces)  # the film has its own copies now
         try:  # the person's cast and earlier films (library.py); a film goes ahead without
             if not tpl:  # a remake keeps to its template, not to the person's other films
                 await asyncio.to_thread(library.seed, f)

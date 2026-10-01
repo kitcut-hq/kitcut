@@ -322,39 +322,7 @@ def people_note(film):
     return "\n".join(lines)
 
 
-# ------------------------------------------------------------------ before a template's film
-
-
-async def template_ready(film, tools, emit):
-    """Make a template's film ready for Claude (templates.py): its people cut out of their photos
-    (portrait-cutout.py, the cache first), its score and cues written from its own code for this
-    content (--sound-data), and its content drawn at the template's moments into
-    template/mine/sheet.png, beside the template's own sheet. Done once; a film picked up again
-    skips what it has."""
-    try:
-        await tools.cut_people()
-    except ToolError as e:
-        raise RuntimeError(str(e)) from None
-    tr = film.record()["template"]
-    tpl = templates.load(tr["id"], tr["version"], ("live", "draft", "retired")) or {}
-    with open(film.path("content.json"), encoding="utf-8") as f:
-        if not templates.complete(tpl, json.load(f)):
-            return  # the website is the form: Claude reads it, fills the content and draws it
-    emit({"type": "stage", "name": "claude", "text": "Drawing the template with your content"})
-    async with tools.lock:
-        await tools._sound_data_if_needed()
-    t = templates.load(
-        film.record()["template"]["id"], film.record()["template"]["version"], ("live", "draft")
-    )
-    if t and t.get("moments") and not os.path.exists(film.path("template", "mine", "sheet.png")):
-        ts = ",".join("%g" % x for x in t["moments"])
-        async with tools.lock:
-            await tools._script(
-                "stills",
-                "sketch-render.py",
-                ["--stills", ts, "--into", "template/mine", "--sheet"],
-                pools=[("browser", 1)],
-            )
+# ------------------------------------------------------------------ a template's film
 
 
 LEFTOVERS = (
@@ -1557,10 +1525,6 @@ async def make_film(
 
     state = "error"
     try:
-        if not finish_only and not resume and rec.get("template"):
-            s = time.time()
-            await template_ready(film, tools, emit)  # before the slot: no Claude is waiting on it
-            stages["ready"] = time.time() - s
         if not finish_only:
             async with sched["claude"].hold(1, film.id, on_wait, priority=rec.get("priority", 0)):
                 clock.t0, clock.paused = time.time(), 0.0  # the queue was not Claude's time
@@ -2178,57 +2142,61 @@ def _print(ev):
     sys.stdout.flush()
 
 
+PICTURE_EXT = ("png", "jpg", "jpeg", "webp", "gif")
+DOC_EXT = ("md", "txt")
+
+
+def local_attachment(path):
+    """A file on this machine as an upload a film takes (uploads.take's meta, "src" its file): a
+    picture or a short document."""
+    if not os.path.isfile(path):
+        sys.exit("no such file: %s" % path)
+    ext = path.rsplit(".", 1)[-1].lower()
+    meta = {"id": "up-local-" + os.path.basename(path), "src": path, "ext": ext}
+    if ext in PICTURE_EXT:
+        return meta | {"kind": "image"}
+    if ext in DOC_EXT:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        return meta | {
+            "kind": "text",
+            "name": os.path.basename(path),
+            "chars": len(text),
+            "words": len(text.split()),
+        }
+    sys.exit(
+        "attach a picture (%s) or a document (%s)" % (", ".join(PICTURE_EXT), ", ".join(DOC_EXT))
+    )
+
+
 def template_film(
     template,
-    fields,
+    prompt,
+    attach=(),
     frame=None,
     listed=True,
     client="local",
     source="cli",
     auth="login",
-    language=None,
 ):
     """A film remade from a template on this machine: template "t-<slug>[:version]" (a draft
-    may be tried), fields the form's JSON file, whose pictures are file paths relative to it and
-    stand in for uploads. Returns the film, seeded and ready for make_film."""
+    may be tried), what the person wants in their own words, and files that stand in for their
+    uploads. Returns the film, seeded and ready for make_film."""
     tid, _, v = template.partition(":")
     t = templates.load(tid, int(v) if v else None, ("live", "draft"))
     if not t:
         sys.exit("no template %s" % template)
-    with open(fields, encoding="utf-8") as f:
-        form = json.load(f)
-    base, metas = os.path.dirname(os.path.abspath(fields)), {}
-
-    def local(path):  # a picture's file, as an upload the film takes
-        uid = "up-local%d" % (len(metas) + 1)
-        p = os.path.join(base, path)
-        if not os.path.isfile(p):
-            sys.exit("no such picture: %s" % p)
-        metas[uid] = {"id": uid, "kind": "image", "src": p, "ext": p.rsplit(".", 1)[-1].lower()}
-        return uid
-
-    for fd in t["fields"]:
-        v = form.get(fd["key"])
-        if fd["kind"] in ("image", "logo") and isinstance(v, str) and v:
-            form[fd["key"]] = local(v)
-        elif fd["kind"] == "people" and isinstance(v, list):
-            form[fd["key"]] = [dict(p, photo=local(p["photo"])) for p in v]
-    clean = templates.validate_fields(t, form)
-    content, pics = templates.build_content(t, clean)
     film = Film.create(
-        "%s: %s" % (t["title"], next((x for x in clean.values() if isinstance(x, str)), "")),
+        prompt or "",
         client=client,
         source=source,
         auth=auth,
+        attachments=[local_attachment(p) for p in attach],
         template=t,
         frame=frame or t["frames"][0],
         listed=listed,
     )
-    templates.seed(film, t, content, {k: metas[u] for k, u in pics.items()})
-    film.update(fields=clean, **({"language": language} if language else {}))
-    research = templates.research_needed(t, clean)
-    if research:
-        film.update(research=research)
+    templates.seed(film, t)
     return film
 
 
@@ -2249,11 +2217,13 @@ def main():
     ap.add_argument("--smoke", action="store_true", help="a one-turn check, no film")
     ap.add_argument("--template", help="remake this template (templates.py): t-<slug>[:version]")
     ap.add_argument(
-        "--fields",
-        help="with --template: the form as JSON; a picture is a file path (relative to the JSON)",
+        "--attach",
+        action="append",
+        default=[],
+        metavar="FILE",
+        help="a picture or a short document the person attached (repeatable)",
     )
     ap.add_argument("--frame", help="with --template: one of its frames (16:9, 1:1...)")
-    ap.add_argument("--language", help="with --template: the film's language (uk, de...), else en")
     ap.add_argument(
         "--unlisted", action="store_true", help="keep the film out of every gallery (link-only)"
     )
@@ -2294,13 +2264,10 @@ def main():
         ok, _ = asyncio.run(smoke(args.auth))
         sys.exit(0 if ok else 1)
     if args.template:
+        if not args.prompt and not args.attach:
+            ap.error("say what you want made of the template, or attach something")
         film = template_film(
-            args.template,
-            args.fields,
-            args.frame,
-            not args.unlisted,
-            auth=args.auth,
-            language=args.language,
+            args.template, args.prompt, args.attach, args.frame, not args.unlisted, auth=args.auth
         )
     else:
         if not args.prompt:

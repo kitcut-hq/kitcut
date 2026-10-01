@@ -1,5 +1,5 @@
 {
- "about": "Does a template make a better film for less than the same content asked for as a prompt? Three real upcoming conferences (none Russia-linked; see each form's sources.md) fill the conference-speaker template's form: a big English one with 24 speakers, a small one whose site serves only 128 px photos, and a Ukrainian one. Arm 'template' remakes the template from the form (--mode template); arm 'prompt' is the same content written out as a 30 s prompt with the logo and the five featured photos attached (--mode prompt). The forms and pictures are local (temp/bakeoff/, third-party content). Bars (plan, 2026-09-30): every template film inside the time limit, fidelity >= 4, no sample left over, at least a point more professional than the prompt arm at half its Claude cost or less. The -web prompts give the website alone (template v4, website-first): Claude reads the site, brings in the logo and the speakers' photos and fills the form itself.",
+ "about": "Does a template make a better film for less than the same content asked for as a prompt? Three real upcoming conferences (none Russia-linked; see each form's sources.md) are written out as what a person would type and attach: a big English one with 24 speakers, a small one whose site serves only 128 px photos, and a Ukrainian one. Arm 'template' remakes the template as asked (--mode template); arm 'prompt' sends the same words and pictures as a plain 30 s film (--mode prompt; six pictures at most). The forms and pictures are local (temp/bakeoff/, third-party content). Bars (plan, 2026-09-30): every template film inside the time limit, fidelity >= 4, no sample left over, at least a point more professional than the prompt arm at half its Claude cost or less. The -web prompts are a line anyone would type, with nothing attached (template v5: no form): Claude reads the site, brings in the logo and the speakers' photos and remakes the film; mate-web asks in Ukrainian.",
  "seconds": 30,
  "grade_extra": [
   "fidelity"
@@ -30,24 +30,20 @@
   {
    "id": "slush-web",
    "audience": "founders and investors who follow Slush",
-   "prompt": "Slush 2026 from its website alone (the form: https://www.slush.org): Claude finds the event, the speakers, their photos, the logo and colours.",
-   "template": "t-conference-speakers",
-   "form": "temp/bakeoff/slush-2026-web/form.json"
+   "prompt": "A speaker promo for Slush 2026 -- slush.org",
+   "template": "t-conference-speakers"
   },
   {
    "id": "pgconf-web",
    "audience": "PostgreSQL developers in Poland and Europe",
-   "prompt": "PGConf.PL 2026 from its website alone (the form: https://2026.pgconf.pl).",
-   "template": "t-conference-speakers",
-   "form": "temp/bakeoff/pgconf-pl-2026-web/form.json"
+   "prompt": "Make one for PGConf.PL 2026, https://2026.pgconf.pl",
+   "template": "t-conference-speakers"
   },
   {
    "id": "mate-web",
    "audience": "Ukrainian product and tech people",
-   "prompt": "Mate Conf 2026 from its website alone (the form: https://conf.mate.academy), in Ukrainian.",
-   "template": "t-conference-speakers",
-   "form": "temp/bakeoff/mate-conf-2026-web/form.json",
-   "language": "uk"
+   "prompt": "Зроби промо спікерів Mate Conf 2026 — conf.mate.academy",
+   "template": "t-conference-speakers"
   }
  ]
 }

@@ -6,14 +6,14 @@ end through the API with the film itself stubbed -- no Claude, no image model; o
     python studio/test_templates.py
 
 Covers: what a version takes from a film (its code, its sample content, the engine, the sample's
-pictures -- never anything else) and refuses (a film whose content is still in its code); the
-form's rules (required, too long, colours, dates, people and the featured, unknown keys dropped);
-the content built from a form (the kept labels, paths, defaults, derived fields, people as image
-keys); drafts, live and retired versions through the API; a film asked for from a template (its
-exact length, frame, capabilities, frozen engine, no narration, the content and pictures laid
-in, a logo made readable on dark and light, the template's sheet beside it, more pictures than a
-plain film may take); the first message; the sample's own words caught; and the health check
-drawing a live version again with this release's renderer.
+pictures -- never anything else) and refuses (a film whose content is still in its code); what
+anyone sees of one (an example of what to ask -- no form, no brief); drafts, live and retired
+versions through the API; a film asked for from a template with a prompt and attachments (its
+exact length, frame, capabilities, frozen engine, no narration, the sample as its starting point,
+more pictures than a plain film may take); the first message; template_pictures (an attached or
+web logo made readable on dark and light, the template's own pictures refused); the sample's own
+words and pictures caught, the person's own words theirs, the sample's own event allowed when
+asked for; and the health check drawing a live version again with this release's renderer.
 """
 
 import os
@@ -34,6 +34,7 @@ import templates  # noqa: E402
 import uploads  # noqa: E402
 import film as films  # noqa: E402
 from film import Film  # noqa: E402
+import tools  # noqa: E402
 from tools import ToolError, Tools  # noqa: E402
 
 from aiohttp.test_utils import TestClient, TestServer  # noqa: E402
@@ -75,63 +76,9 @@ SPEC = {
     "moments": [1.0, 3.0],
     "limits": {"images": 9},
     "keep": ["_about", "copy"],
-    "derive": {"event.code": {"from": "event.city", "first": 3, "upper": True}},
-    "fields": [
-        {
-            "key": "name",
-            "kind": "text",
-            "label": "Event name",
-            "path": "event.name",
-            "required": True,
-            "upper": True,
-            "max": 20,
-        },
-        {
-            "key": "city",
-            "kind": "text",
-            "label": "City",
-            "path": "event.city",
-            "required": True,
-            "upper": True,
-            "max": 10,
-        },
-        {
-            "key": "dates",
-            "kind": "daterange",
-            "label": "Dates",
-            "paths": {"short": "event.dates", "long": "event.dates_long", "year": "event.year"},
-        },
-        {
-            "key": "cta",
-            "kind": "text",
-            "label": "Button",
-            "path": "event.cta",
-            "default": "GET TICKETS",
-        },
-        {"key": "url", "kind": "url", "label": "Website", "path": "event.url", "required": True},
-        {"key": "logo", "kind": "logo", "label": "Logo", "path": "logo", "required": True},
-        {
-            "key": "ground",
-            "kind": "colour",
-            "label": "Background",
-            "path": "palette.ground",
-            "required": True,
-        },
-        {
-            "key": "people",
-            "kind": "people",
-            "label": "Speakers",
-            "path": "speakers",
-            "required": True,
-            "min": 2,
-            "max": 8,
-            "featured": {"min": 1, "max": 5},
-            "item": [
-                {"key": "name", "label": "Name", "max": 20, "upper": True},
-                {"key": "role", "label": "Role", "max": 30},
-            ],
-        },
-    ],
+    "generic": ["GET TICKETS"],
+    "identity": ["event.name"],
+    "example": "A promo for Nordic Build 2027 in Helsinki: nordic.example",
     "brief": "Keep the title's slide.",
 }
 
@@ -245,86 +192,13 @@ async def main():
         "a new version is a draft, not live",
     )
 
-    # ---- the form
+    # ---- what anyone sees of it: an example to start from, never a form or the brief
     t = templates.load("t-test-promo", 1, ("draft",))
-
-    def refuses(values, word):
-        try:
-            templates.validate_fields(t, values)
-            return False
-        except templates.TemplateError as e:
-            return word in str(e)
-
-    ok_form = {
-        "name": "Nordic Build",
-        "city": "Helsinki",
-        "dates": {"from": "2027-05-20", "to": "2027-05-21"},
-        "url": "https://nordic.example/tickets",
-        "logo": "up-aaaa",
-        "ground": "#123524",
-        "people": [
-            {"photo": "up-p1", "name": "Aino Lehtinen", "role": "Founder"},
-            {"photo": "up-p2"},
-        ],
-        "nonsense": "dropped",
-    }
-    clean = templates.validate_fields(t, ok_form)
+    pub = templates.public(t)
     check(
-        clean["name"] == "NORDIC BUILD"
-        and "nonsense" not in clean
-        and clean["ground"] == "#123524",
-        "a form: upper-cased where the field says, unknown keys dropped",
-        clean,
-    )
-    check(refuses({**ok_form, "name": ""}, "required"), "a required field left empty is refused")
-    check(
-        refuses({**ok_form, "city": "HELSINKI-VANTAA"}, "at most 10"),
-        "too long is refused, not cut",
-    )
-    check(refuses({**ok_form, "ground": "green"}, "colour"), "a colour is #rrggbb")
-    check(
-        refuses({**ok_form, "dates": {"from": "2027-05-21", "to": "2027-05-20"}}, "before"),
-        "an end before the start is refused",
-    )
-    check(
-        refuses({**ok_form, "people": ok_form["people"][:1]}, "2 to 8"),
-        "too few people are refused",
-    )
-    check(
-        refuses({**ok_form, "people": [{"photo": "up-p1"}, {"photo": "up-p2"}]}, "featured"),
-        "a line-up with no featured (named) speaker is refused",
-    )
-    check(
-        refuses(
-            {**ok_form, "people": [{"photo": "up-p1", "name": "A"}, {"photo": "up-p1"}]}, "twice"
-        ),
-        "the same photo twice is refused",
-    )
-    check(
-        templates.dates_words("2026-11-09", "2026-11-12")
-        == ("NOV 9–12", "NOVEMBER 9–12, 2026", "2026")
-        and templates.dates_words("2026-10-30", "2026-11-02")[0] == "OCT30–NOV2",
-        "dates: a range in one month, and across two",
-    )
-    content, pics = templates.build_content(t, clean)
-    check(
-        content.get("copy") == SAMPLE["copy"] and "SAMPLE FEST" not in json.dumps(content),
-        "content keeps the labels and none of the sample's event",
-        content,
-    )
-    check(
-        content["event"]["cta"] == "GET TICKETS"
-        and content["event"]["code"] == "HEL"
-        and content["event"]["dates"] == "MAY 20–21"
-        and content["event"]["year"] == "2027",
-        "defaults, derived fields and dates fill in",
-        content["event"],
-    )
-    check(
-        pics == {"logo": "up-aaaa", "sp-1": "up-p1", "sp-2": "up-p2"}
-        and content["speakers"][0] == {"name": "AINO LEHTINEN", "role": "Founder", "image": "sp-1"},
-        "people become image keys the film draws",
-        (pics, content["speakers"]),
+        pub.get("example") == SPEC["example"] and "fields" not in pub and "brief" not in pub,
+        "a template shows an example of what to ask -- no form, no brief",
+        sorted(pub),
     )
 
     # ---- through the API
@@ -345,20 +219,15 @@ async def main():
         j = await r.json()
         check(
             r.status == 200 and "brief" not in j and j["preview"]["1:1"].endswith("/1x1/sheet.png"),
-            "this machine sees a draft's form, never its brief",
+            "this machine sees a draft, never its brief",
             j,
         )
         logo = await up(png(600, 200, bg=(255, 255, 255, 255)))  # a dark logo on white, no alpha
         photos = [await up(jpg(500, 600, (40 + i, 90, 120)), "image/jpeg") for i in range(7)]
-        form = {
-            **ok_form,
-            "logo": logo,
-            "people": [{"photo": photos[0], "name": "Aino Lehtinen", "role": "Founder"}]
-            + [{"photo": p} for p in photos[1:]],
-        }
         body = {
             "template": {"id": "t-test-promo", "version": 1},
-            "fields": form,
+            "prompt": "A promo for Nordic Build 2027 in Helsinki, nordic.example",
+            "attachments": [logo] + photos,
             "frame": "1:1",
             "seconds": 30,
         }
@@ -370,20 +239,17 @@ async def main():
             [x["id"] for x in (await r.json())["templates"]] == ["t-test-promo"],
             "a live one is listed",
         )
+        r = await c.post("/api/films", json={**body, "prompt": "", "attachments": []}, headers=out)
+        check(r.status == 400, "nothing asked and nothing attached is refused", r.status)
         r = await c.post(
-            "/api/films", json={**body, "fields": {**form, "city": "X" * 11}}, headers=out
+            "/api/films", json={**body, "people": [{"upload": photos[0]}]}, headers=out
         )
-        j = await r.json()
-        check(
-            r.status == 400 and j.get("field") and "City" in j.get("error", ""),
-            "a wrong field comes back named",
-            j,
-        )
+        check(r.status == 400, "a template's film draws no talking people", r.status)
         r = await c.post("/api/films", json=body, headers=out)
         j = await r.json()
         check(
             r.status == 202 and j.get("template") == {"id": "t-test-promo", "version": 1},
-            "a film from a template (8 pictures: over a plain film's 6)",
+            "a film from a template, from a prompt and 8 pictures (over a plain film's 6)",
             j,
         )
         f = Film.open(j.get("id"))
@@ -435,27 +301,20 @@ async def main():
         with open(f.path("content.json"), encoding="utf-8") as fh:
             cj = json.load(fh)
         check(
-            cj["event"]["name"] == "NORDIC BUILD"
-            and len(cj["speakers"]) == 7
-            and m["data"] == {"content": "content.json"},
-            "the person's content is the film's",
-            cj["event"],
+            cj == SAMPLE and m["data"] == {"content": "content.json"},
+            "it starts from the template's own sample, for Claude to remake",
+            cj.get("event"),
         )
         check(
-            m["images"].get("sp-3") == "images/people/sp-3.webp"
-            and os.path.exists(f.path("inputs", "people", "sp-3.jpg")),
-            "each photo waits to be cut out",
-            m["images"].get("sp-3"),
+            m["images"].get("upload8") == rec["attachments"][7]["file"]
+            and m["images"].get("sp-ada") == "template/sample/sp-ada.png"
+            and os.path.exists(f.path("template", "sample", "sp-ada.png")),
+            "the person's pictures are attached as any film's; the sample's are there to draw",
+            m["images"],
         )
-        lg, ll = (
-            Image.open(f.path("images", "logo.png")),
-            Image.open(f.path("images", "logo-light.png")),
-        )
-        corner, mid = lg.getpixel((2, 2)), ll.getpixel((lg.width // 2, lg.height // 2))
         check(
-            corner[3] == 0 and mid[3] > 200 and sum(mid[:3]) > 600,
-            "a logo on white: its background keyed out, a light copy for dark grounds",
-            (corner, mid),
+            rec.get("prompt") == body["prompt"] and not rec.get("fields"),
+            "the record keeps what they asked, in their words -- there is no form",
         )
         check(
             os.path.exists(f.path("template", "template.json"))
@@ -470,26 +329,93 @@ async def main():
         )
         ask = agent.ask(f)
         check(
-            "remake of the template" in ask
-            and "Narration: about" not in ask
-            and "Keep the title" in ask,
-            "the first message is the template's",
-            ask[:200],
+            body["prompt"] in ask
+            and "an example, not a form" in ask
+            and "Keep the title" in ask
+            and "template_pictures" in ask
+            and "WebSearch" in ask
+            and "Narration: about" not in ask,
+            "the first message: what they asked, the template as an example, the web theirs to use",
+            ask[:300],
+        )
+        check(
+            "upload1" in agent.attached_note(f),
+            "and it names what they attached",
+            agent.attached_note(f)[:200],
         )
         check(
             films.mark_box(f) == (820, 950, 1080, 1080),
             "the mark's corner in a square frame",
             films.mark_box(f),
         )
-        # the sample's own words are caught; the person's own are theirs
+
+        # ---- the sample's own words and pictures are caught; the person's own are theirs
+        left = templates.leftovers(f)
+        check(
+            "SAMPLE FEST" in left
+            and "the picture sp-ada" in left
+            and "GET TICKETS" not in left
+            and "SAMPLE FEST" not in " ".join(x for x in left if x.startswith("the picture")),
+            "a film still showing the sample is caught (its generic words are not)",
+            left,
+        )
+        tl = Tools(f, server.SCHED, lambda ev: None)
+        check(
+            tl.web_limit() == max(tools.MAX_WEB_PICTURES, 9),
+            "a template film may bring in its own number of pictures, never fewer than any film",
+            tl.web_limit(),
+        )
+        said = await tl.template_pictures("upload1", [])
+        with open(f.manifest, encoding="utf-8") as fh:
+            m = json.load(fh)
+        lg, ll = (
+            Image.open(f.path("images", "logo.png")),
+            Image.open(f.path("images", "logo-light.png")),
+        )
+        corner, mid = lg.getpixel((2, 2)), ll.getpixel((lg.width // 2, lg.height // 2))
+        check(
+            "logo-light" in said
+            and m["images"].get("logo") == "images/logo.png"
+            and corner[3] == 0
+            and mid[3] > 200
+            and sum(mid[:3]) > 600,
+            "an attached logo on white: its background keyed out, a light copy for dark grounds",
+            (said, corner, mid),
+        )
+        # a logo Claude brought in from the web is taken by its name too
+        os.makedirs(f.path("web"), exist_ok=True)
+        with open(f.path("web", "mark.png"), "wb") as fh:
+            fh.write(png(500, 160, bg=(255, 255, 255, 255)))
+        m["images"]["web_mark"] = "web/mark.png"
+        with open(f.manifest, "w", encoding="utf-8") as fh:
+            json.dump(m, fh)
+        said = await tl.template_pictures("mark", [])
+        check("logo-light" in said, "a picture brought in from the web is taken by its name", said)
+        for name in ("sp-ada", "nope"):
+            try:
+                await tl.template_pictures(name, [])
+                refused = False
+            except ToolError as e:
+                refused = "attached" in str(e)
+            check(refused, "the template's own picture or a missing one is refused: %s" % name)
+        remade = dict(
+            SAMPLE,
+            event={
+                "name": "NORDIC BUILD",
+                "city": "HELSINKI",
+                "url": "nordic.example",
+                "cta": "GET TICKETS",
+            },
+            logo={"image": "logo"},
+            speakers=[{"name": "AINO LEHTINEN", "image": "upload2"}],
+        )
+        with open(f.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump(remade, fh)
+        check(templates.leftovers(f) == [], "a film remade whole has nothing left over")
         with open(f.path("film.js"), "a", encoding="utf-8") as fh:
             fh.write("\n// SAMPLE FEST was here\n")
         left = templates.leftovers(f)
-        check(
-            left == ["SAMPLE FEST"],
-            "the sample's words left in the code are caught (a default it shares is not)",
-            left,
-        )
+        check(left == ["SAMPLE FEST"], "the sample's words left in the code are caught", left)
         import validate  # noqa: PLC0415
 
         sc = {"bpm": 120, "events": [{"inst": "sub_bass", "notes": "0 F1 1 .5"}]}
@@ -498,22 +424,32 @@ async def main():
             "a template's synthesised instrument (sub_bass) passes the score check",
             validate._score(sc, 5),
         )
-        form2 = {
-            **form,
-            "name": "Sample Fest",
-            "logo": await up(png(600, 200)),
-            "people": [
-                {"photo": await up(jpg(400, 400, (9, 9, 9)), "image/jpeg"), "name": "Aino"},
-                {"photo": await up(jpg(400, 400, (19, 9, 9)), "image/jpeg")},
-            ],
-        }
-        r = await c.post("/api/films", json={**body, "fields": form2}, headers=local)
-        f2 = Film.open((await r.json()).get("id"))
-        check(
-            f2 is not None and "SAMPLE FEST" not in templates.leftovers(f2),
-            "a word the person gave is theirs, even when the sample has it",
+        r = await c.post(
+            "/api/films",
+            json={
+                "template": {"id": "t-test-promo"},
+                "prompt": "Nordic Build 2027, also in Sampleville this year",
+            },
+            headers=local,
         )
-        # a new version retires the old one's form
+        f2 = Film.open((await r.json()).get("id"))
+        left = templates.leftovers(f2) if f2 else []
+        check(
+            "SAMPLEVILLE" not in left and "SAMPLE FEST" in left,
+            "a word the person asked for is theirs, even when the sample has it",
+            left,
+        )
+        r = await c.post(
+            "/api/films",
+            json={"template": {"id": "t-test-promo"}, "prompt": "Sample Fest again, in English"},
+            headers=local,
+        )
+        f3 = Film.open((await r.json()).get("id"))
+        check(
+            f3 is not None and templates.leftovers(f3) == [],
+            "asked for the sample's own event, nothing of it is a leftover",
+        )
+        # a new version retires the old one
         templates.make(src, "t-test-promo", SPEC)
         templates.set_status("t-test-promo", 2, "live")
         templates.set_status("t-test-promo", 1, "retired")
@@ -521,7 +457,7 @@ async def main():
         j = await r.json()
         check(
             r.status == 409 and j.get("version") == 2,
-            "a retired version asks for the form again",
+            "a retired version says which is current",
             j,
         )
 
@@ -539,97 +475,6 @@ async def main():
         except uploads.UploadError:
             took = False
         check(took, "a template's own cap lets it take more")
-
-    # ---- the website is the form: everything else the film finds for itself
-    web_spec = json.loads(json.dumps(SPEC))
-    web_spec["limits"] = {"images": 32}  # a line-up's photos and a logo
-    for f in web_spec["fields"]:
-        if f["key"] == "url":
-            f["source"] = True
-        else:
-            f["research"] = True
-    templates.make(src, "t-web-promo", web_spec)
-    templates.set_status("t-web-promo", 1, "live")
-    tw = templates.load("t-web-promo")
-    only = templates.validate_fields(tw, {"url": "https://nordic.example"})
-    check(only == {"url": "https://nordic.example"}, "the website alone is a whole form", only)
-    left = [x["key"] for x in templates.research_needed(tw, only)]
-    check(
-        left[:3] == ["name", "city", "dates"] and "people" in left,
-        "what the film must find on the site is named",
-        left,
-    )
-    check(
-        templates.research_needed(t, clean) == [],
-        "a template with no website field asks nothing of the web",
-    )
-    try:
-        templates.validate_fields(tw, {"name": "Nordic"})
-        need = False
-    except templates.TemplateError as e:
-        need = "required" in str(e)
-    check(need, "without the website, the form is required as before")
-    some = templates.validate_fields(
-        tw, {"url": "nordic.example", "people": [{"photo": "up-a1", "name": "Aino"}]}
-    )
-    check(len(some["people"]) == 1, "a website and one featured speaker: the film finds the rest")
-    c0, _ = templates.build_content(tw, only)
-    check(
-        not templates.complete(tw, c0),
-        "a website-only film has nothing to draw until Claude reads it",
-    )
-    c1, _ = templates.build_content(t, clean)
-    check(templates.complete(t, c1), "a filled form's content is complete")
-    async with TestClient(TestServer(server.make_app(TOKEN))) as c:
-        me = {"Authorization": "Bearer " + TOKEN, "X-Client-Ip": "u:alice"}
-        r = await c.post(
-            "/api/films",
-            json={"template": {"id": "t-web-promo"}, "fields": {"url": "nordic.example"}},
-            headers=me,
-        )
-        j = await r.json()
-        fw = Film.open(j.get("id"))
-        rec = fw.record() if fw else {}
-        check(
-            r.status == 202 and [x["key"] for x in rec.get("research") or []][:1] == ["name"],
-            "a film from the website alone: its record says what to find",
-            j,
-        )
-        ask = agent.ask(fw)
-        check(
-            "Research first" in ask and "nordic.example" in ask and "template_pictures" in ask,
-            "its first message sends Claude to the website first",
-            ask[:300],
-        )
-        tl = Tools(fw, server.SCHED, lambda ev: None)
-        check(
-            tl.web_limit() == 32,
-            "a template film may bring in its own number of pictures",
-            tl.web_limit(),
-        )
-        # a logo Claude brought in from the site becomes the film's, on dark and light
-        os.makedirs(fw.path("web"), exist_ok=True)
-        with open(fw.path("web", "logo.png"), "wb") as fh:
-            fh.write(png(500, 160, bg=(255, 255, 255, 255)))
-        with open(fw.manifest, encoding="utf-8") as fh:
-            mm = json.load(fh)
-        mm.setdefault("images", {})["web_logo"] = "web/logo.png"
-        with open(fw.manifest, "w", encoding="utf-8") as fh:
-            json.dump(mm, fh)
-        said = await tl.template_pictures("logo", [])
-        with open(fw.manifest, encoding="utf-8") as fh:
-            mm = json.load(fh)
-        check(
-            "logo-light" in said and mm["images"].get("logo") == "images/logo.png",
-            "template_pictures makes the website's logo the film's own",
-            said,
-        )
-        try:
-            await tl.template_pictures("nope", [])
-            refused = False
-        except ToolError as e:
-            refused = "picture tool" in str(e)
-        check(refused, "a picture it never brought in is refused, with what to do")
 
     # ---- the health check: a live version drawn again by this release
     t2 = templates.load("t-test-promo", 2)

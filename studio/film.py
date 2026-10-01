@@ -191,8 +191,8 @@ CAPS = {
 # without people keeps its look's prompt byte for byte
 CAPS["people"] = {"modules": ("heads",), "direction": ("people",)}
 # a template's (studio/templates.py): what its film needs besides its look's recipe. space: the 3D
-# module (sketch/space.js); portraits: people cut out of the photos in its form before Claude
-# starts (agent.template_ready); template: the film is a remake, its first message the template's
+# module (sketch/space.js); portraits: people cut out of their photos (tools.template_pictures);
+# template: the film is a remake, its first message the template's
 CAPS["space"] = {"modules": ("space",)}
 CAPS["portraits"] = {}
 CAPS["template"] = {}

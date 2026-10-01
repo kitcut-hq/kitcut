@@ -52,7 +52,7 @@ TESTS = (
     "test_memory.py",  # the still cache stays capped; every job beside the server is (KI-045)
     "test_scenes.py",  # a film made in scenes: SK.scene on real stills, the passes, carrying on
     "test_people.py",  # people drawn as talking characters: the request, brief, voices, drawing
-    "test_templates.py",  # a film remade from a template: the version, the form, the API, a render
+    "test_templates.py",  # a film remade from a template: the version, the API, the first message, a render
     "test_web.py",  # the studio's web tools: public URLs only, pictures, pages, fonts (stubbed)
 )
 

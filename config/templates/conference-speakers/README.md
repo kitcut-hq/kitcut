@@ -1,6 +1,6 @@
 # Conference speaker promo -- the template's code
 
-kitcut.ai's first template (studio/templates.py; its form and brief: `../conference-speakers.json`).
+kitcut.ai's first template (studio/templates.py; its spec and brief: `../conference-speakers.json`).
 
 - `film.js` -- the film: every word, colour, logo and person comes from `SK.DATA.content`; its music and
   cues are worked out from its own clock and content (`SK.film({sound})`, `sketch-render.py --sound-data`).
@@ -18,3 +18,5 @@ v2: the card turned the accent as the logo faded (2.0-2.45 s) -- the blot gone, 
 empty for half a second before the dive (fidelity 5 -> 4: "a blank card where the original's mark
 filled the space"). v3: the logo holds until the camera is already diving, and the card turns the
 accent as the logo dissolves in the last quarter-second (2.5-2.75 s).
+v4: the website alone could stand in for the form. v5 (no code change): there is no form -- a person
+says what they want, attaches what they have, and Claude remakes the film from this sample.

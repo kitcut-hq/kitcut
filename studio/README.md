@@ -493,69 +493,69 @@ with `STUDIO_ENV_FILE` naming the studio's `.env` (MONGODB_URI, the media SAS); 
 for `--vm`. The first import (2026-09-30): the Web Summit speaker promo,
 `studio-20260930-114530-nhdy7i`, in project `p-s2alo2aepx`.
 
-## Templates: a finished film others remake with their own content (`templates.py`)
+## Templates: a finished film others remake as they ask (`templates.py`)
 
-kitcut.ai's templates (the plan: a template is a finished film plus a form; Claude remakes that
-film with the person's content). A template is made from a film whose words, colours, logo and
-people live in a data file rather than in its code (`"data": {"content": "content.json"}`, read as
-`SK.DATA.content`) and whose sound is worked out by its own code (`SK.film({sound})`,
-`sketch-render.py --sound-data`) -- so new content is a data edit with its clicks and pops to
-match.
+kitcut.ai's templates. A template is a finished film offered as an example, not a form: a person
+says what they want in their own words ("a promo for PGConf.EU -- pgconf.eu"), attaches what they
+have, and Claude remakes that film for it -- changing what they ask to change, keeping what they do
+not mention, and finding what it needs (on the web when it decides to; there is no setting for
+it). A template is made from a film whose words, colours, logo and people live in a data file
+rather than in its code (`"data": {"content": "content.json"}`, read as `SK.DATA.content`) and whose
+sound is worked out by its own code (`SK.film({sound})`, `sketch-render.py --sound-data`) -- so new
+content is a data edit with its clicks and pops to match.
 
 - **A version** is `STUDIO_HOME/templates/<t-id>/v<N>/`, read-only once made: `template.json`
-  (the form, where each answer goes, the author's brief), the film's code, the author's content
-  as `content.sample.json`, the engine it was drawn with (frozen), the sample's pictures (for the
-  preview and the check only) and `preview/<16x9|1x1>/` stills and sheet. `templates.py make`
-  copies exactly the list `plan()` prints -- the code, the sample content, the engine, the pictures
-  the sample names -- and nothing else of the film (never its author's chat, uploads, voice or
-  project). A version is a draft, then live (`publish`), then retired; a new one is `v<N+1>`.
-- **The form** (`fields`): text, lines, url, colour, daterange, logo, image, select and people
-  (repeatable rows: photo, name, role, company; the named ones are the featured), each with the
-  path in content.json it fills. `validate_fields` refuses anything too long rather than cut it;
-  `build_content` keeps only the sample's labels (`keep`), fills each path, applies defaults and
-  derives what it can (a city code from the city, the short and long dates and the year from a
-  range). The first template's spec is `config/templates/conference-speakers.json`.
-- **A film from a template**: `POST /api/films` with `{"template": {"id", "version"}, "fields",
-  "frame"}` (a draft only from this machine). It gets the template's exact length (26 s is no
-  multiple of 5), look, capabilities (`space`: the 3D module; `portraits`: people cut out of their
-  photos) and frozen engine, the frame asked for, no narration (no vo.json, no voice tool), up to
-  the template's own number of pictures (a line-up of 24 speakers; a plain film keeps 6), and a
-  logo made readable on dark and light grounds (`logo_variants`: a flat background keyed out, a
-  silhouette for the other ground). The person's cast and earlier films are not seeded: a remake
-  keeps to its template.
-- **Before Claude starts** (`agent.template_ready`, outside the Claude slot): the people are cut
-  out (`portrait-cutout.py`, cached by photo and settings in `cache/cutouts/`), the score and cues
-  are written for this content, and the content is drawn at the template's moments into
-  `template/mine/sheet.png`, beside `template/sheet.png` (the template as its author made it).
-  Claude's first message is the template's (`templates.ask`): what stays (scenes, camera, motion,
-  clock, type, colour roles, sound), what changes (the content), the person's form, what was left
-  empty, the author's brief.
-- **Nothing of the sample leaves**: `templates.leftovers` finds any of the sample's own strings
-  (its event, people, places, address) in film.js or content.json -- a word the person's own form
-  holds is theirs -- and after Claude one short turn takes them out, or the film fails.
+  (what it is, an `example` of what to ask, the author's brief, `keep`/`generic`/`identity` for
+  the leftovers check), the film's code, the author's content as `content.sample.json`, the engine
+  it was drawn with (frozen), the sample's pictures and `preview/<16x9|1x1>/` stills and sheet.
+  `templates.py make` copies exactly the list `plan()` prints -- the code, the sample content, the
+  engine, the pictures the sample names -- and nothing else of the film (never its author's chat,
+  uploads, voice or project). A version is a draft, then live (`publish`), then retired; a new one
+  is `v<N+1>`. The first template's spec is `config/templates/conference-speakers.json`.
+- **A film from a template**: `POST /api/films` with `{"template": {"id", "version"}, "prompt",
+  "attachments", "frame"}` (a draft only from this machine; a prompt, or at least one attachment).
+  It gets the template's exact length (26 s is no multiple of 5), look, capabilities (`space`: the
+  3D module; `portraits`: people cut out of their photos) and frozen engine, the frame asked for,
+  no narration (no vo.json, no voice tool), and up to the template's own number of pictures (a
+  line-up of 24 speakers; a plain film keeps 6). It starts from the template's code and its sample
+  content (`templates.seed`), with the sample's pictures under `template/sample/` so it draws from
+  the first second; the person's cast and earlier films are not seeded.
+- **Claude's first message** is the template's (`templates.ask`): what they asked, the template as
+  an example, what to keep unless asked (scenes, camera, motion, clock, type, colour roles, sound),
+  to find the rest from their words, their attachments and the web, the language they asked in, and
+  the author's brief (where the film's places are tight). `template_pictures` makes an attached or
+  web logo readable on dark and light grounds (`logo_variants`) and cuts people out of their photos
+  (`portrait-cutout.py`, cached by photo and settings in `cache/cutouts/`).
+- **Nothing of the sample stays**: `templates.leftovers` finds any of the sample's own strings
+  (its event, people, places, address) in film.js or content.json, and its pictures still named in
+  content.json -- a word the person asked for is theirs, and asking for the sample's own event
+  (`identity`, e.g. its name in their words) turns the check off -- and after Claude one short turn
+  takes them out, or the film fails.
 - **The health check** (`templates.py check`): every live and draft version drawn again with this
   release's renderer at its moments, compared with its preview by SSIM (bar 0.99); a release that
   draws a template differently must not ship.
-- `GET /api/templates` (live ones), `GET /api/templates/<id>[?version=N]` (its form; never the
-  brief or the sample), `GET /api/templates/<id>/<v>/preview/<frame>/sheet.png`.
+- `GET /api/templates` (live ones), `GET /api/templates/<id>[?version=N]` (what it is and its
+  example; never the brief or the sample), `GET /api/templates/<id>/<v>/preview/<frame>/sheet.png`.
 
 ```powershell
 python studio/templates.py make --folder projects/<id> --id t-<slug> --spec config/templates/<slug>.json --plan
 python studio/templates.py make --folder projects/<id> --id t-<slug> --spec config/templates/<slug>.json
 python studio/templates.py publish t-<slug> 1
 python studio/templates.py check
-python studio/agent.py --template t-<slug> --fields form.json --frame 16:9 --unlisted   # one on this machine
+python studio/agent.py "a promo for PGConf.EU -- pgconf.eu" --template t-<slug> --attach logo.png --frame 16:9 --unlisted   # one on this machine
 bash studio/deploy/ops.sh template push <...>/templates/t-<slug>/v<N>    # a version made here, onto the VM
 bash studio/deploy/ops.sh template publish t-<slug> <N>
-bash studio/deploy/ops.sh film --template t-<slug>:<N> --fields form.json --unlisted   # one on the VM, through its API
+bash studio/deploy/ops.sh film "a promo for PGConf.EU -- pgconf.eu" --template t-<slug>:<N> [--attach file ...] --unlisted   # one on the VM
 ```
 
-`ops.sh film --template` uploads every picture the form names (the logo, each person's photo) to the
-VM's studio as the site does, then posts the form; from the VM itself a draft may be tried. The
-first, 2026-09-30 (the PGConf.PL form on v3), took 8 minutes: 2 cutting out 9 photos, 5 of Claude,
-46 s of render. kitcut.ai's own side (its pages, the form, credits) is in the sketch-studio repo.
+`ops.sh film --template` uploads each `--attach` file to the VM's studio as the site does, then
+posts the prompt; from the VM itself a draft may be tried. Measured 2026-09-30 on v4 with a website
+and nothing else (the bake-off's `-web` arm, three real conferences): 12-17 minutes each, about $3
+of Claude, graded professional 4/5 and fitting 4-5/5. kitcut.ai's own side (its pages, the prompt
+box, credits) is in the sketch-studio repo.
 
-`test_templates.py` (in the release gate) covers the version, the form, the API and a real render.
+`test_templates.py` (in the release gate) covers the version, the API, the first message, the
+pictures, the leftovers and a real render.
 
 ## Bake-off: measure a change to the brief before it ships
 

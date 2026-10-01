@@ -544,10 +544,10 @@ class Tools:
         return len(todo)
 
     async def template_pictures(self, logo=None, people=()):
-        """A template film whose form was its website: the logo and the speakers' photos Claude
-        brought in with the picture tool become the film's own -- the logo on dark and light
-        grounds (templates.logo_variants), each person cut out of their photo as sp-1, sp-2...
-        in the order given. Answers with the keys for content.json."""
+        """A template film's pictures -- the person's (upload1...) or ones Claude brought in with
+        the picture tool (web_...) -- become the film's own: the logo on dark and light grounds
+        (templates.logo_variants), each person cut out of their photo as sp-1, sp-2... in the
+        order given. Answers with the keys for content.json."""
         import templates  # noqa: PLC0415
 
         f = self.film
@@ -556,12 +556,19 @@ class Tools:
         m = self._manifest()
         images = m.setdefault("images", {})
 
-        def web(name):
-            key = name if str(name).startswith("web_") else "web_%s" % name
-            rel = images.get(key)
-            if not rel or not os.path.exists(f.path(*rel.split("/"))):
-                raise ToolError("No picture %r: bring it in with the picture tool first." % name)
-            return f.path(*rel.split("/"))
+        def web(name):  # a picture the person attached or Claude brought in, not the template's
+            for key in (str(name), "web_%s" % name):
+                rel = images.get(key)
+                if (
+                    rel
+                    and not rel.startswith(("template/", "images/"))
+                    and os.path.exists(f.path(*rel.split("/")))
+                ):
+                    return f.path(*rel.split("/"))
+            raise ToolError(
+                "No picture %r: name one the person attached (upload1...) or one brought in with "
+                "the picture tool (web_...)." % name
+            )
 
         said = []
         if logo:
@@ -833,12 +840,12 @@ class Tools:
             )(wrap(lambda a: self.motion())),
             tool(
                 "template_pictures",
-                "A film made from a template, whose form was the event's website: after bringing the "
-                "logo and the speakers' photos in with the picture tool, make them the film's own -- "
-                "logo: the logo picture's name; people: the photos' names, in the order the speakers "
-                "should take (the first five are the featured). Cuts each person out of their photo "
-                "and makes the logo readable on dark and light grounds; answers with the image keys "
-                "for content.json.",
+                "A film made from a template: make a logo and people's photos the film's own -- the "
+                "person's (upload1...) or ones brought in with the picture tool (web_...). logo: the "
+                "logo picture's name; people: the photos' names, in the order the people should take "
+                "(the first are the featured). Cuts each person out of their photo and makes the "
+                "logo readable on dark and light grounds; answers with the image keys for "
+                "content.json.",
                 {
                     "type": "object",
                     "properties": {
