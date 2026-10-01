@@ -20,6 +20,10 @@
 #   bash studio/deploy/ops.sh drafts [--days N] [--json]   the YouTube drafts written lately: seconds
 #                                                     to the words, to the thumbnail picks, to the
 #                                                     pictures, cost (studio/draft_times.py). Reads only
+#   bash studio/deploy/ops.sh usage [--hours N] [--at "HH:MM"] [--film ID]   who used the CPU and
+#                                                     memory: by hour, the low points of memory, by
+#                                                     film and by step (studio/deploy/usage.py)
+#   bash studio/deploy/ops.sh usage install           install and (re)start the sampler behind it
 #   bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]   pick up a film the studio
 #                                                     stopped half-way (studio/resume.py), in the
 #                                                     same film; --plan spends nothing
@@ -150,7 +154,7 @@ for i in h.get("instances") or []:
 PY
 public=$(curl -s --max-time 8 https://studio.kitcut.ai/api/health | python3 -c 'import json,sys; print(json.load(sys.stdin)["release"])' 2>/dev/null || echo "NOT REACHABLE")
 echo "studio.kitcut.ai: $public"
-echo "units: $(for u in kitcut-tunnel kitcut-studio-boot kitcut-login-check.timer; do printf '%s=%s ' $u $(systemctl is-active $u); done)"
+echo "units: $(for u in kitcut-tunnel kitcut-studio-boot kitcut-login-check.timer kitcut-usage; do printf '%s=%s ' $u $(systemctl is-active $u); done)"
 systemctl list-units --all --no-legend --plain 'kitcut-studio@*' kitcut-studio.service | awk '{ printf "  %s %s/%s\n", $1, $3, $4 }'
 python3 - <<'PY'
 import glob, json, os
@@ -196,6 +200,15 @@ EOF
       shift
     done
     on "journalctl -u $unit -n $n --no-pager $follow"
+    ;;
+
+  usage)
+    # who uses the machine: the sampler's timeline and the servers' steps log (deploy/usage.py)
+    if [ "${1:-}" = install ]; then
+      change_on "bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR && sudo systemctl enable -q kitcut-usage.service && sudo systemctl restart kitcut-usage.service && systemctl is-active kitcut-usage.service"
+    else
+      on "STUDIO_HOME=$HOME_DIR python3 $REMOTE/studio/deploy/usage.py report$(printf ' %q' "$@")"
+    fi
     ;;
 
   ship)

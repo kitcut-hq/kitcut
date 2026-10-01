@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Install the studio's systemd units on this machine (run on the VM, as the checkout's owner): the
 # server (a template, one instance per release), the unit that starts the current instance at
-# boot, the tunnel, and the daily Claude login check (a service and its timer) -- plus the one
-# kernel setting two servers on one port need.
+# boot, the tunnel, the daily Claude login check (a service and its timer) and the usage sampler
+# (kitcut-usage.service: who uses the CPU and memory) -- plus the one kernel setting two servers on
+# one port need.
 #
 #   bash studio/deploy/install.sh [--home /srv/kitcut/studio] [--dry-run]
 #
@@ -41,7 +42,7 @@ put() {  # <path> <body>: a root-owned file, shown instead in a dry run
 run mkdir -p "$HOME_DIR"
 run chmod +x "$REPO"/studio/deploy/*.sh "$REPO"/studio/serve.sh
 for unit in kitcut-studio@.service kitcut-studio-boot.service kitcut-tunnel.service \
-  kitcut-login-check.service kitcut-login-check.timer; do
+  kitcut-login-check.service kitcut-login-check.timer kitcut-usage.service; do
   body="$(sed -e "s#@REPO@#$REPO#g" -e "s#@HOME@#$HOME_DIR#g" -e "s#@USER@#$USER_NAME#g" \
     "$REPO/studio/deploy/$unit")"
   put "/etc/systemd/system/$unit" "$body"

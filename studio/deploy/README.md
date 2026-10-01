@@ -268,6 +268,42 @@ VM.
 kitcut.ai finds the studio) does nothing unless the `.env` has `STUDIO_ANNOUNCE=1`, and only the
 VM's does. Before the move the laptop's does.
 
+## Who uses the machine
+
+```bash
+bash studio/deploy/ops.sh usage                    # the last 24 h: by hour, memory's low points,
+                                                   # by film and by step
+bash studio/deploy/ops.sh usage --hours 6 --top 20
+bash studio/deploy/ops.sh usage --at "20:40"       # one moment in full: every group, the top processes
+bash studio/deploy/ops.sh usage --film 3mx2e4      # one film's steps
+bash studio/deploy/ops.sh usage install            # install and (re)start the sampler
+```
+
+Two records, because neither is enough alone (`studio/deploy/usage.py`):
+
+- **The timeline**: `kitcut-usage.service` samples every 15 s into `STUDIO_HOME/usage/<day>.jsonl`
+  (14 days kept, ~1.4 KB a sample, ~8 MB a day): CPU busy, memory available, the pressure-stall
+  averages (`/proc/pressure`: how long work waited for a CPU or for memory), and every cgroup that
+  matters with its cores, its memory and the part of it that is **held** (anonymous: the kernel
+  cannot take it back the way it takes file cache) -- each film's step, each server's own leaf
+  (the server and its films' Claude Code), each `ops.sh` job, the ssh sessions -- plus the twelve
+  biggest processes by CPU and by memory, each tied to its film off its command line. It runs on
+  the system python3 with the stdlib only (a release's venv cannot break it), niced, `MemoryMax=128M`.
+- **The bill**: every step a server (or a `resume`) runs leaves a line in
+  `STUDIO_HOME/usage/steps-<day>.jsonl` (`procs.record_step`): its film, what it was
+  (`sketch-render --stills`), its time, its exact CPU seconds and memory peak read off its own
+  cgroup just before it is removed, how often the cap killed something in it, its exit code. Exact
+  even for a step shorter than a sample.
+
+Each step's cgroup is named after its film and step (`step-<pid>-<n>-3mx2e4-sketch-render`), so a
+sample needs no lookup; a step started by an older server (`step-<pid>-<n>`) is named off its first
+process instead. sar (sysstat, every 10 minutes) stays for the machine as a whole, but a
+10-minute average hid the 14.8 GB moment at 2026-09-30 20:40 that this was built to explain.
+
+First reading, 2026-10-01 12:40: two films rendering at once (one a `resume`, which has pools of
+its own -- KI-043) ran 4 browsers each on the 4 cores, CPU pressure 90 %: each waited for a CPU
+almost all the time.
+
 ## Building it again
 
 ```bash

@@ -319,6 +319,18 @@ async def main():
             "a step past STUDIO_FILM_MEM_GB is killed (exit %s)" % code,
             code != 0 and "survived" not in tail,
         )
+        # its line in the steps log (procs.record_step, read off its cgroup): the kill, the peak
+        logs = sorted(
+            os.path.join(HOME, "usage", n)
+            for n in os.listdir(os.path.join(HOME, "usage"))
+            if n.startswith("steps-")
+        )
+        with open(logs[-1], encoding="utf-8") as f:
+            last = json.loads(f.read().splitlines()[-1])
+        expect(
+            "the steps log has the step its cap killed, with its peak at the cap %s" % last,
+            last.get("oom", 0) >= 1 and 200 <= (last.get("peak_mb") or 0) <= 300,
+        )
         left = [d for d in os.listdir(procs.cgroup_root()) if d.startswith("step-")]
         expect("no step cgroup is left behind %s" % left, not left)
     else:

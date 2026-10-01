@@ -25,6 +25,9 @@ bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--look collage] [--unlis
 bash studio/deploy/ops.sh watch <film-id>...        # one or several, a line per change
 bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]  # finish a film the studio stopped
 bash studio/deploy/ops.sh resume <film-id> --finish --patched  # a DONE film changed by hand: re-mix, re-render, new URLs
+bash studio/deploy/ops.sh usage [--hours 24] [--at "HH:MM"] [--film ID]   # who used the CPU and
+                                                    # memory: by hour, memory's low points, by film,
+                                                    # by step ("can we downsize", "what ate 15 GB")
 bash studio/deploy/ops.sh drafts [--days 7]          # YouTube drafts: seconds to the words, picks,
                                                     # pictures, and cost -- "why is publishing slow"
 bash studio/deploy/ops.sh pull <film-id> [dest] [--all]
@@ -141,7 +144,10 @@ it read (`web/<name>.txt`) before replacing: the person's name is on it.
 
 ## Resizing
 
-`vm.sh resize <name> <size>` deallocates, resizes and starts (about 3 minutes). Stop the studio
+Decide on the evidence first: `ops.sh usage --hours 24` (and `--hours 168` once a week of samples
+exists) says which hours are busy, who held the memory at its low points and what each film's
+steps cost; `studio/deploy/README.md`, "Who uses the machine". `vm.sh resize <name> <size>`
+deallocates, resizes and starts (about 3 minutes). Stop the studio
 first so nothing is cut off and the site shows it offline: `vm.sh ssh <name> 'bash
 /srv/kitcut/repo/studio/serve.sh stop'` (it drains). The units start with the machine. Then set
 the pools for the new size in the VM's `.env` (`STUDIO_RENDER_JOBS`, `STUDIO_BROWSERS`: the core

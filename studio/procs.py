@@ -19,12 +19,15 @@ killed, with no memory cap.
 """
 
 import os
+import re
 import sys
+import json
 import time
 import signal
 import itertools
 import asyncio
 import subprocess
+from datetime import datetime
 
 SECRETS = {}
 # settings from the .env that are not secret, and stay in the environment
@@ -276,16 +279,71 @@ def _rmdir_cgroup(path, tries=20):
     return False
 
 
+def _read(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+FILM_ID = re.compile(r"studio-\d{8}-\d{6}-([a-z0-9]{6})")
+
+
+def step_label(argv, cwd):
+    """(film, step) for a step's command: the film's short id (its folder's last six letters) and
+    what runs -- a script's name and its first option (`sketch-render --stills`), else the
+    program's. Names the step's cgroup, so the machine's sampler (deploy/usage.py) can say whose
+    it is, and its line in the steps log."""
+    m = FILM_ID.search(os.path.basename(os.path.normpath(cwd or "")))
+    film = m.group(1) if m else os.path.basename(os.path.normpath(cwd or "")) or "-"
+    args = [str(a) for a in argv]
+    i = next((i for i, a in enumerate(args) if a.endswith((".py", ".js", ".mjs"))), 0)
+    what = os.path.splitext(os.path.basename(args[i]))[0] if args else "?"
+    opt = next((a for a in args[i + 1 :] if a.startswith("--") and a != "--manifest"), "")
+    step = (what + (" " + opt if opt else "")).strip()
+    return film, step
+
+
+def _slug(s):
+    return re.sub(r"[^a-z0-9.]+", "-", s.lower()).strip("-")[:48]
+
+
+def record_step(film, step, wall, usage, code):
+    """One line per finished step in STUDIO_HOME/usage/steps-<day>.jsonl: who (the film, the
+    step), how long, the CPU it used and its memory peak, exactly -- read off the step's own
+    cgroup (Job Object on Windows) just before it goes. `ops.sh usage` sums them. Never raises: a
+    film is not stopped by its own bookkeeping."""
+    home = os.environ.get("STUDIO_HOME")
+    if not home:
+        return
+    try:
+        d = os.path.join(home, "usage")
+        os.makedirs(d, exist_ok=True)
+        now = datetime.now().astimezone()
+        row = {"t": now.isoformat(timespec="seconds"), "film": film, "step": step}
+        row.update(wall_s=round(wall, 1), code=code, **usage)
+        with open(
+            os.path.join(d, now.strftime("steps-%Y-%m-%d.jsonl")), "a", encoding="utf-8"
+        ) as f:
+            f.write(json.dumps(row) + "\n")
+    except Exception as e:  # noqa: BLE001
+        print("procs: step not recorded (%s)" % e, file=sys.stderr)
+
+
 class Job:
     """A step's process and everything it starts, killed as one."""
 
-    def __init__(self, mem_gb=None):
+    def __init__(self, mem_gb=None, label=None):
         self.h, self.pids, self.cg = None, [], None
         mem = mem_gb or float(os.environ.get("STUDIO_FILM_MEM_GB") or 12)
         if os.name != "nt":
             root = cgroup_root()
             if root:
-                self.cg = os.path.join(root, "step-%d-%d" % (os.getpid(), next(_STEPS)))
+                name = "step-%d-%d" % (os.getpid(), next(_STEPS))
+                if label:
+                    name += "-" + _slug(label)
+                self.cg = os.path.join(root, name)
                 os.makedirs(self.cg)
                 _write(os.path.join(self.cg, "memory.max"), int(mem * (1 << 30)))
                 # over the cap the whole step dies, as a Job Object's would, not one random child
@@ -324,6 +382,42 @@ class Job:
     def enter(self):
         """preexec_fn: the child joins its cgroup before it can start anything of its own."""
         _write(os.path.join(self.cg, "cgroup.procs"), os.getpid())
+
+    def usage(self):
+        """What the step used so far: CPU seconds, its memory peak (MB) and how often the cap
+        killed something in it. Empty where nothing measures it (a dev server's process group)."""
+        try:
+            if self.cg is not None:
+                cpu = re.search(
+                    r"^usage_usec (\d+)", _read(os.path.join(self.cg, "cpu.stat")), re.M
+                )
+                peak = _read(os.path.join(self.cg, "memory.peak")).strip()
+                oom = re.search(
+                    r"^oom_kill (\d+)", _read(os.path.join(self.cg, "memory.events")), re.M
+                )
+                return {
+                    "cpu_s": round(int(cpu.group(1)) / 1e6, 1) if cpu else None,
+                    "peak_mb": round(int(peak) / 2**20) if peak.isdigit() else None,
+                    "oom": int(oom.group(1)) if oom else 0,
+                }
+            if self.h is not None:
+                import win32job
+
+                acc = win32job.QueryInformationJobObject(
+                    self.h, win32job.JobObjectBasicAccountingInformation
+                )
+                ext = win32job.QueryInformationJobObject(
+                    self.h, win32job.JobObjectExtendedLimitInformation
+                )
+                cpu = (int(acc["TotalUserTime"]) + int(acc["TotalKernelTime"])) / 1e7
+                return {
+                    "cpu_s": round(cpu, 1),
+                    "peak_mb": round(int(ext["PeakJobMemoryUsed"]) / 2**20),
+                    "oom": 0,
+                }
+        except Exception:  # noqa: BLE001 -- bookkeeping, never the step's trouble
+            pass
+        return {}
 
     def kill(self):
         if self.cg is not None:
@@ -364,8 +458,11 @@ class StepTimeout(Exception):
 async def run(argv, cwd, env, timeout, on_line=None, jobs=None):
     """Run one step to the end. Returns (exit code, the last lines it printed). Raises
     StepTimeout past `timeout` seconds; a cancelled caller kills it too. `jobs` (a set) holds
-    the live ones, so a film can kill whatever it has running."""
-    job = Job()
+    the live ones, so a film can kill whatever it has running. Every step leaves a line in the
+    steps log (record_step): its film, what it was, its CPU seconds and memory peak."""
+    film, step = step_label(argv, cwd)
+    job = Job(label="%s-%s" % (film, step))
+    t0, code = time.monotonic(), None
     if os.name == "nt":
         kw = {"creationflags": subprocess.CREATE_NO_WINDOW | SUSPENDED}
     else:
@@ -414,6 +511,7 @@ async def run(argv, cwd, env, timeout, on_line=None, jobs=None):
     finally:
         if jobs is not None:
             jobs.discard(job)
+        record_step(film, step, time.monotonic() - t0, job.usage(), code)
         job.close()
     return code, tail
 
