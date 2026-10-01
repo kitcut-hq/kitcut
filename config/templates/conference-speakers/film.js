@@ -208,7 +208,8 @@ function scene1(t) {
   // With no symbol to dive into, the card itself turns the accent as the logo on it fades, and the
   // camera dives into the card (a disc of the accent opening over the logo read as a stray blot)
   const dive = ease(t, 2.3, 2.8, E.in);
-  const turn = MARK ? 0 : E.inOut(clamp((t - 2.0) / .45)), fade = 1 - clamp((t - 1.95) / .3);
+  // (late: the logo holds until the camera is already diving, so the card is never seen empty)
+  const turn = MARK ? 0 : E.inOut(clamp((t - 2.5) / .25)), fade = 1 - clamp((t - 2.52) / .2);
   const zoom = Math.exp(Math.log(40) * dive);
   c.fillStyle = C.groundDk; c.fillRect(0, 0, W, H);
   c.save();
