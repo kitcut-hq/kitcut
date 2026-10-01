@@ -1,0 +1,15 @@
+{
+  "bpm": 120,
+  "drum_gain": 0.4,
+  "events": [
+    {"inst": "music_box", "vel": 0.45, "notes": "0 F5 1; 1 A5 1; 2 C6 1; 3 E6 1; 4 D5 1; 5 F5 1; 6 A5 1; 7 C6 1"},
+    {"inst": "string_ensemble_1", "vel": 0.28, "notes": "0 F3+A3+C4+E4 4; 4 D3+F3+A3+C4 4; 8 Bb2+D3+F3+A3 4; 12 C3+E3+G3+Bb3 4; 16 F3+A3+C4 4; 20 F2+C3+F3+A3+C4 4"},
+    {"inst": "pizzicato_strings", "vel": 0.5, "notes": "0 F2 .5; 2 C3 .5; 4 D2 .5; 6 A2 .5; 8 Bb1 .5; 10 F2 .5; 12 C2 .5; 14 G2 .5; 16 F2 .5; 18 C3 .5"},
+    {"type": "strum", "at": 8, "chord": "F3+Bb3+D4+F4+Bb4", "vel": 0.45, "pattern": "bar"},
+    {"type": "strum", "at": 12, "chord": "E3+G3+Bb3+C4+E4", "vel": 0.45, "pattern": "bar"},
+    {"type": "strum", "at": 16, "chord": "F3+A3+C4+F4+A4", "vel": 0.45, "pattern": "bar"},
+    {"inst": "glockenspiel", "vel": 0.4, "notes": "8 C6 .5; 8.5 F6 .5; 9 A6 .5; 9.5 G6 .5; 10 F6 1; 12 E6 .5; 12.5 G6 .5; 13 Bb6 1; 16 A6 .5; 16.5 C7 .5; 17 F7 2"},
+    {"type": "gliss", "from": 7.3, "to": 8.0, "lo": "C4", "hi": "C7", "v0": 0.15, "v1": 0.4, "root": "F"},
+    {"type": "drums", "from": 16, "bars": 1, "kit": {"shaker": "o.o.o.o.o.o.o.o."}, "vel": 0.6}
+  ]
+}

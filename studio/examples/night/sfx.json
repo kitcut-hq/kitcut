@@ -1,0 +1,7 @@
+[
+ {"t": 0.05, "fx": "scribble", "db": -30, "args": {"sec": 1.0, "seed": 1}},
+ {"t": 4.6, "fx": "shimmer", "db": -26, "args": {"sec": 1.2, "f0": 600, "f1": 3600}},
+ {"t": 4.7, "fx": "sample", "inst": "celesta", "note": "A6", "db": -24, "send": 0.4},
+ {"t": 9.4, "fx": "pop", "db": -24, "pan": 0.3, "args": {"f0": 700, "f1": 300, "sec": 0.1}},
+ {"t": 9.45, "fx": "chime", "db": -24, "send": 0.35}
+]

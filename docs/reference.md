@@ -2995,6 +2995,223 @@ detected card still wins if it comes earlier.
 The cleaner way is not to have the mark at all: KitCut's owner can turn it off
 for an account.
 
+## Thumbnail options: four stills of the film (`thumb-options.py`, `_thumb.py`)
+
+kitcut.ai's "Publish to YouTube" offers four thumbnails, and the person picks one. Each is **a
+still of the film itself** with at most four words on it -- no stock art, no generated imagery.
+The studio makes them (`studio/thumbs.py`, see `studio/README.md`); the machinery is
+`scripts/_thumb.py`, and this CLI runs it on any finished sketch film:
+
+```powershell
+python scripts/thumb-options.py --film <film dir> --moments                 # the labelled moments sheet only
+python scripts/thumb-options.py --film <film dir> --concepts c.json --list  # frames, layouts, every check; no JPEGs
+python scripts/thumb-options.py --film <film dir> --concepts c.json --title "..." [--ocr]
+python scripts/thumb-options.py --film <film dir> --auto                    # the baseline: frames at 25/50/75%, no words
+python studio/ytdraft.py --film <film dir> --thumbs                         # Claude's own concepts, then the options
+python scripts/check-thumbnail.py                                           # the rules, plus the example film drawn
+python studio/test_thumbs.py                                                # end to end on the example film
+```
+
+A concept is `{"at": s, "words": "Can't *sleep*?", "layout": "headline|card|panel|still",
+"place": "top|bottom|left|right|top-left|top-right|bottom-left"}` (an older draft's `slab` is read
+as `card`); one word may be starred for the film's accent colour. Output: `thumb-N.jpg`
+(1920x1080, well under YouTube's 2 MB), `sheet.jpg` (side by side) and `feed.jpg` (at YouTube's
+360/246/168-px sizes, dark and light).
+
+**The film draws its own thumbnail.** A thumbnail has to look like the film it sells -- an
+Instafill film's thumbnail in Instafill's serif, amber and white cards, a crayon film's in its
+hand lettering on its paper. So nothing is laid over the picture from outside: the words, cards,
+panels and logo are drawn by the film's own engine, in the film's own type and palette, by
+`sketch/thumb.js`, which runs ahead of the film's code (the manifest's `head` scripts, a
+`sketch-render.py` key for exactly this) and does two jobs:
+
+- *The probe* wraps `SK.txt`, `SK.card` and `SK.image` while the stills render and notes every
+  text style (font, weight, colour, largest size, outline), card (fill, corners, outline,
+  shadow, area) and picture (a logo) the film draws. With the palette (`SK.C`), the ground and
+  the style (crayon boils, clean does not), `SK.REPORT()` returns it; `player.html` posts it to
+  `/report` after the stills and `sketch-render.py` writes it as `report.json` beside them.
+  `_thumb.film_style()` reads it (cached as `style.json`, merged over every stills run).
+- *The overlay*: `SK.THUMB.options`, keyed by a still's time, says what to add -- lines of word
+  runs, a card, a panel with a rule, a logo, a glow, a camera slide or push -- already laid out
+  in Python. A still's time picks the pass: `t` the film alone, `1000+t` the thumbnail,
+  `2000+t` its letters white on black, `3000+t` everything it added white on black (grain and
+  vignette off for the two masks). One browser run draws every option's three passes.
+
+**How an option is made.**
+1. *Stills* come from a copy of the film's manifest without its `tail`: a Free film's "made with
+   kitcut.ai" mark sits exactly under YouTube's duration stamp and cannot be read at feed size, so
+   thumbnails are clean on every plan. All paths in the copy are absolute (fonts and images
+   too); it renders into its own folder (`temp/thumbs/stills-<film key>/`), never the film's
+   outputs. The probe rides along.
+2. *Moments*: just before each narration line ends (what the line is about is drawn by then),
+   6-12 of them, a second apart, on one labelled sheet that the draft's Claude call sees.
+3. *Settle*: around each chosen moment (±0.6 s) the frame whose ±0.2 s neighbours differ least,
+   among the ones that are not thin (a scene not drawn in yet, a fade).
+4. *The film's look* (`film_style`): its text styles biggest first (its headline type) with
+   their colours and outlines, then the tooling's type for words its type has no glyphs for or
+   a film with no text of its own; its paper, text, ink and accent; its biggest card (else one of
+   its paper edged in its accent -- a hand-drawn note on crayon); a picture named `*logo*`.
+   A `.woff2` film font is measured through the tooling's `.ttf` of the same family (the
+   example film's Caveat), a variable font at the weight the film draws it.
+5. *Layout*, in Python, with the font files the page draws with: the largest cap height that
+   fits in at most two lines (four on a panel), in the film's ink where it reads with a margin
+   (`ink_margin`) and otherwise the nearest of its colours deepened just enough, the starred
+   word in its accent; placed where it hides the least of the subjects -- inside the writer's
+   `place` first. Layouts: *headline* (words on the picture, touching none of the film's own;
+   on a busy spot, a soft glow of the film's paper goes behind them), *card* (the film's card,
+   its logo in a top band, tilted a touch on crayon), *panel* (the film's paper on one side, a
+   rule of its accent, its logo above the words, the camera slid so the picture's busy part
+   stays in view), *still* (the camera pushed in a little when that keeps the subjects whole).
+6. *Draw* (`paint`): one browser run of the film with the spec, three passes an option;
+   `thumb.js` holds each line to the width Python planned, so a page that draws a font wider
+   trims it rather than letting it leave its box.
+7. *Checks* on the finished picture through the letters and footprint passes; *fallbacks*
+   (headline -> headline with its glow -> card -> still; panel -> card -> still; card -> still)
+   until every option passes.
+
+**The rules** (`config/thumbnails/thumbnails.json`, each with its source there):
+
+| rule | value | why |
+|---|---|---|
+| cap height at 168 px wide | >= 8 px (>= 92 px at 1080p) | the "up next" sidebar is YouTube's smallest place with a title |
+| contrast, letters vs the ring around them | >= 4.5:1 at the 10th percentile | WCAG 2.2 1.4.3; read on the picture smoothed by 1.5 px, because a crayon film's grain lies over its words too |
+| no letters in the bottom-right 15% x 15%, bottom 3%, 5% margins | 0 px | YouTube's duration stamp and progress bar |
+| words | <= 4 words, 32 characters, <= half of them in the title | glance test: complement the title, never repeat it |
+| film's own words | words on the picture touch none; a card, panel or glow hides a line whole (>= 90%) or not at all; <= 40 px otherwise | "On for everyone" set over an "AI MODEL UPDATE" label read as a collision; a half-hidden "Month-e" reads broken, a covered chip does not |
+| layouts | one each of headline, card, panel, still | four options are only a choice if they differ |
+
+**Measured** (2026-09-29, 8 studio films -- three crayon, a clean app film, a blueprint, a dark
+wine film, a photographic one and a painted Ukrainian one -- from Claude's own concepts; the
+film's-own-look version, 8-14 s of options a film):
+- all 24 worded options passed on the layout Claude asked for (no fallbacks); cap height 8.4-16.8
+  px at 168 px; RapidOCR read every word back on the 21 Latin-script ones at 246 and 360 px and
+  all but one word of one at 168 px. OCR cannot read Cyrillic (KI-035); for the Ukrainian film
+  only the cap height vouches.
+- contrast 4.81-11.08:1, median 5.89 -- lower than the stock-type version's 9.07 because the
+  words now wear the film's own colours (a crayon film's brown ink on its cream paper) rather
+  than white with a black outline; every one clears 4.5.
+- the type was the film's own on every film that titles itself with `SK.txt` (7 of 8); the wine
+  film draws its titles with its own pen and got Montserrat in its cream and gold (KI-038).
+- YouTube-like frames at 25/50/75% caught the film moving (mean difference over ±0.2 s > 0.03) in
+  10 of 24; the settled frames in 6 of 32; median movement 0.0149 -> 0.0054.
+
+**What the bake-off changed, and why** -- each was a visible defect in a round of 32 options:
+- *Saliency* (spectral residual, Hou & Zhang 2007) finds the characters, a phone, a bottle and
+  ignores hatching on drawn and clean films, and misses big subjects on painted ones (KI-036). So
+  Claude names a `place` from the sheet, and saliency only fine-tunes inside it.
+- *The film's own words* may not be cut into: a panel slides the picture to keep them wholly in
+  view or wholly under it, or moves side, widens, or falls back to a card.
+- *The quiet threshold* was 0.35 on a scale where an empty ground scores 0.001-0.02 and a busy
+  one 0.04-0.13: the largest size always won. It is 0.045, measured.
+- *Moments two seconds apart* was stricter than the sheet (moments one second apart), and cost a
+  second paid call on the first film. It is one second now.
+- *The prompt's example words* ("Only *3* steps") came back as "Just 4 steps": the example is now
+  just `*word*`, and the thumbnail words are held to the film like the description is.
+
+**What the first real publish changed** (2026-09-29, a 45 s film on kitcut.ai):
+- *A film's own fonts.* A film that fetched a web font keeps it in its own folder
+  (`web/fonts/Inter-400.ttf`, in its `sketch.json`); the manifest copy left that path relative,
+  sketch-render looked for it beside the tooling, and every still failed ("font missing"). The
+  copy now makes a font path absolute when the film has the file. `studio/test_thumbs.py`'s
+  fixture carries one.
+- *The wait.* The draft made the moments sheet before its Claude call, so the title and
+  description took 25-35 s where they had taken 10-16. A finished film now makes its sheet in the
+  background (`thumbs.premake`, from `server.run`), and one film's sheet is made once however many
+  ask at the same moment.
+
+**What the film's own look changed** (2026-09-29). The first version set every film's words in
+Anton or Balsamiq, white or near-black with an outline, on a stock slab and a scrim: legible, and
+on an Instafill film nothing like Instafill -- no Source Serif, no amber, no white cards, no logo.
+Rebuilt so the film draws its own thumbnail (above). What the rebuild had to learn:
+- *Protecting every word the film shows left no room on an app screen*, which is full of small
+  print. Words drawn straight on the picture avoid every line of the film's words 12 px and up;
+  a card, panel or glow may hide one whole, like a sticker, never cut through it.
+- *A busy spot re-places the words with the glow planned in* rather than adding a glow that
+  reaches past the block (it ghosted a UI card). The glow is the block, 97% opaque.
+- *A crayon film's own ink on its own paper read 4.2-4.5:1 once drawn* under its grain and
+  vignette though the colours alone measure more: the ink and the accent need a 0.8 margin, and
+  contrast is read on the picture smoothed by 1.5 px (grain is finer than any stroke allowed).
+- *A film that outlines its titles* (cream letters edged in its ink, to read over dark scenes)
+  gets its thumbnail's words edged the same way.
+- *Canvas drew Caveat wider than Pillow measured it*: `thumb.js` holds each line to the width
+  planned here.
+- *A film with no cards of its own* got a stock white card, which sat on the black-and-gold wine
+  film like a label from another shop; it gets one of its paper edged in its accent now.
+
+The draft costs ~$0.01 more with the sheet and four concepts. Thumbnails are opt-out, never
+forced: the dialog has "Let YouTube pick a frame", and a channel that YouTube will not let use
+custom thumbnails (unverified, KI-037) gets its video published with YouTube's frame and a line
+saying why.
+
+## Share title and image
+
+Every finished film on kitcut.ai gets a public page of its own (`kitcut.ai/v/<short>/<slug>`),
+and a link to it shows a preview wherever it is posted. The studio writes what that page and its
+preview say, the moment the film is done (`studio/share.py`):
+
+- **a title** a person would click -- at most 70 characters, no full stop, in the film's language,
+  never the request pasted back and never "AI-generated";
+- **a description** of one or two sentences saying what the film shows (at most 155 characters, the
+  length a search result or a link preview shows whole);
+- **a picture in the film's own look**: a still of the film with a few words on it, drawn by the
+  film itself -- the same machinery as the YouTube thumbnail options (`thumbs.py`,
+  `scripts/_thumb.py`), asked for two concepts (a headline and a card) instead of four. The first
+  one whose words survive the checks is used, cut two ways: `outputs/share.jpg` (1200x628, the link
+  preview, the whole frame in the middle with blurred sides, exactly as `card.jpg` is made) and
+  `outputs/thumb.jpg` (1280x720).
+
+The words come from what the YouTube draft reads (`ytdraft.material`: the narration with its
+times, who it was made for, what Claude said, the pages its facts came from, the sheet of the
+film's moments), in one Claude call with no tools; a pasted brief or a film called generated is
+asked once more, then given up. The two pictures go to the same Azure container as the film
+as `<id>/share-<v>.jpg` and `<id>/thumb-<v>.jpg`, where `<v>` is the first 8 hex characters of a
+hash of the two pictures' bytes. The film's record -- `studio.json` and `kitcut.studio_runs`,
+where only `share` is set -- then holds what the site reads:
+
+```json
+"share": {"title": "<= 70 chars", "description": "<= 155 chars", "language": "en",
+          "image": "https://kitcutst.blob.core.windows.net/films/<id>/share-0c636175.jpg",
+          "thumb": "https://kitcutst.blob.core.windows.net/films/<id>/thumb-0c636175.jpg",
+          "at": "2026-09-29T23:33:24Z", "key": "<draft key>"}
+```
+
+`language` is a short code (`en`, `uk`, `es`) whatever the film's voice settings say (`en-US`,
+`Ukrainian`). `image` and `thumb` are left out when the picture could not be made or copying online
+is off (the site then shows `card.jpg`); the files stay in `outputs/`. `GET /api/films/{id}` answers
+`share` = `{title, description, language, image, thumb}` for a film that has one.
+
+**It never fails a film.** It starts as a background task beside the moments sheet once the film is
+`done`; a failure is logged as `SHARE <id> failed: ...` and noted on the record as `share_error`,
+and the film's state is never touched. `STUDIO_SHARE=0` turns it off; it also stays off while
+Claude is a stub (the studio's tests), so a test never makes a paid call.
+
+**Cost:** about $0.05-0.13 a film on the key (one call with the moments sheet; occasionally two),
+kept on the record as `share_cost_usd` and added to `cost_usd`; on the Claude login it is counted
+but not charged. The draft is kept in `share/draft.json`, keyed by what it was written from, so
+asking again costs nothing until the film changes. The picture is CPU and a headless browser, at
+most `STUDIO_THUMB_JOBS` at once.
+
+```bash
+python studio/share.py --film <id>                     # write (or remake) one film's share
+python studio/share.py --missing [--limit N]           # every finished film without one, newest first
+python studio/share.py --missing --dry-run             # which films, and the estimated cost; no call
+bash studio/deploy/ops.sh share <id>                   # the same on the VM: the price first, then the work
+bash studio/deploy/ops.sh share --missing --limit 20   #   in a unit of its own (goes on if the laptop sleeps)
+bash studio/deploy/ops.sh share --missing --dry-run    # price only
+python studio/test_share.py                            # stubbed: the rules, the pictures, the record, the API
+```
+
+`--missing` also picks up a film whose share has no picture online when copying is on: its draft
+is kept, so that costs no model time.
+
+**Why the names carry a version.** The pictures go up with the film files' year-long immutable
+cache header. Under a fixed name, a remade picture would keep being served stale by any browser or
+link-preview cache that had fetched the old one. With the version in the name, the same picture
+keeps its URL and a different one gets a new URL. A remake leaves the older copies in place,
+because a preview already posted may still point at them. `media.py --delete <id>` removes the
+pair the record names (and any unversioned `share.jpg`/`thumb.jpg`).
+
+
 ## Chapter markers on a published video
 
 Turn a transcript into YouTube chapters, then write them into the video's own
@@ -3140,6 +3357,817 @@ Ids are accepted as bare ids or as any YouTube URL form, so the `url` field
 from a render's `.youtube.json` sidecar can be pasted straight in. After
 deleting, drop the deliverable's entry from `projects/<id>/project.json` and
 its `.youtube.json` sidecar yourself — no script records a deletion.
+
+## Sketch films: an explainer written as code
+
+A sketch film is an animated explainer with no footage at all: the picture is JavaScript,
+the voice is text-to-speech, the music is a score played on sampled instruments, and every
+sound effect is synthesised. Three scripts take one manifest from script to finished MP4, and
+the same code plays live in a browser as a self-contained HTML player.
+
+```powershell
+python scripts/sketch-vo.py     --manifest projects/<id>/sketch.json --plan   # price the voice
+python scripts/sketch-vo.py     --manifest projects/<id>/sketch.json          # takes, pick, word times, captions
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 2,9.5,31 --sheet
+python scripts/sketch-audio.py  --manifest projects/<id>/sketch.json --levels # score + sfx + mix + master
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json          # the video
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --timings
+python scripts/check-sketch.py                                                # free self-test
+```
+
+Start a film by copying `config/sketch/example/` to `projects/<id>/` (the scripts write
+`audio/ outputs/ temp/` next to the manifest). The example runs end to end for free: its
+voice is edge-tts.
+
+### The pieces
+
+| file | what it is |
+|---|---|
+| `sketch/engine.js` | the renderer: strokes that boil, cel fills, write-on text, camera, flight paths, paper, grain; `SK.setStyle('crayon' \| 'clean')`; the ground, `SK.setGround(name)` (paper, white, kraft, sky, mint, butter, blush, night, chalkboard, blueprint: the paper, its grain and the text colours that read on it, `C.text` `C.textSoft` `C.accent` `C.accentText`), or `ground: (t) => name` in `SK.film`; backdrops that cover whatever the camera shows: `SK.sky`, `SK.band` (ground, hills, waves, grass; returns `edge(x)`), `SK.stars` |
+| `sketch/collage.js` | the collage pieces, a module a film opts into (`"modules": ["collage"]`, loaded after the props): cut-out pictures, torn sheets, tape labels, headlines, stamps, bursts, halftone dots, ransom letters, marker lines, masking tape, a newspaper backdrop, groups, and the in/out motion they share; `SK.setStyle('collage')` (see "Collage films") |
+| `sketch/props.js` | the cast: ticket character, seated person with poses, a standing/walking/sitting kid (`P.kid`, also the grown-up at s ~1.4), paper plane, laptop, table, lightbulb, rocket, padlock, coin, stamp, browser window, thought bubble, confetti, architectural houses, phone, window (cracks), street siren, delta-wing drone, missile, stopwatch, debris; scenery: tree (round, pine, bare), bush, cloud, sun, moon (full, crescent), mountain, building |
+| `config/sketch/grounds/` | every ground and three places built from the backdrops, one a second: render its stills after changing any of them |
+| `sketch/player.html` | the page: player UI, and the export modes the renderer drives |
+| `projects/<id>/film.js` | the film: `SK.film({duration, camera, draw(t, vis)})` |
+| `projects/<id>/score.json` | the music, as data (notation below) |
+| `projects/<id>/sfx.json` | timed sound cues |
+
+**A closing after the film** is the manifest's `tail`: `{"secs": 3, "scripts": [...], "images":
+{...}, "audio": "closing.wav"}`. The scripts run after film.js and lengthen `SK._film` (Sketch
+Studio's `studio/outro.js` holds the last frame and draws over it); sketch-render renders `secs`
+more, and sketch-audio ends the film's sound at the film's end as always, then plays `audio`
+after it, as loud as the narration. `poster_t` stays in the film.
+
+**A cast of recurring characters** is the manifest's `cast`: a folder (`"cast": "cast"`) whose
+`<name>.js` files each run in their own scope after props.js and before film.js, and register one
+member as `SK.cast.<name> = {about, draw(x, y, o)}`. An error in one names its file. Sketch
+Studio keeps each signed-in person's cast between their films (`studio/library.py`).
+
+**Engine modules** are the manifest's `modules`: engine extensions only some films need
+(`["collage"]`), each `sketch/<name>.js` -- or the same file in the film's own `engine` folder,
+which wins -- inlined after props.js and before the cast. A film that does not ask does not
+carry it, and an error in one names the file it ran from (`sketch/collage.js`, or
+`engine/collage.js` for a film's own copy). A name with no file stops the bundle.
+
+**A film in scenes** is the manifest's `scenes`: a folder (`"scenes": "scenes"`) whose
+`NN-slug.js` files each run in their own scope after film.js, in name order, and register one
+scene: `SK.scene({id, lines: [a, b], draw(t, local, vis), camera?, out?, lead = .3})`. film.js then
+holds only what every scene shares -- the look, helpers in `SK.look`, the camera -- and calls
+`SK.film({duration, camera})` without a `draw`: the film draws the scene covering t. A scene
+starts `lead` s before line a is spoken (the scene of line 0 at 0 s) and ends where line b+1
+would start, so a stretch whose scene is not written yet draws nothing instead of failing the
+render or letting the scene before it run on; `local` is seconds since the scene began (its camera
+runs on it), `t` the film clock for `SK.w` cues, and `out` cross-fades into the scene that follows.
+A scene that throws at load names its file in the error; one that does not parse is named by a
+syntax check (a script that fails to parse never reads its own name -- cast members alike). A film
+without `scenes` renders exactly as before. Sketch Studio makes films this way past
+`STUDIO_SCENES_OVER_S` (`studio/scenes.py`; why: docs/known-issues.md KI-034).
+
+**Every frame is a pure function of time.** Nothing in a film may keep state between frames
+(no physics integration, no `Math.random`); randomness is `SK.rnd(seed)`, motion is `t`. That
+single rule is what lets the browser play the film against its audio *and* the renderer export
+frame 2,317 on its own.
+
+**Cue visuals to words, not to seconds.** The bundler injects the voice timeline, and
+`SK.w(line, "word")` returns when a word starts. A film written that way survives a
+re-recorded line: the visuals move with the voice. Hand-copied timestamps silently drift the
+first time a take changes.
+
+**Three looks, one engine** (the third, `collage`, has its own section below). `crayon` re-jitters every line 8 times a second (the traced-cel
+boil), adds a faint second pencil pass, and prints fills a few pixels off their outlines;
+`clean` turns all of that off for crisp editorial line art with flat fills, soft card shadows
+(`SK.card`), a drafting grid and letters that rise instead of pop. Both have shipped: a
+whimsical 40 s crayon film, and a 60 s clean real-estate film for a brand.
+
+### The voice: `sketch-vo.py`
+
+Per line: N takes (cached by a fingerprint of text + voice + model + settings, so an edit
+re-renders only that line), each cut at the silence before a throwaway tail word, scored by
+Whisper against the script, the best one picked (accuracy, then a clean cut, then the take
+nearest the median length) unless the line names `"pick"`. Lines are placed at their `start`
+or after the previous line plus `gap`; word times come from the ElevenLabs character
+alignment, minus `[audio tags]` and the tail. Writes `audio/vo/timeline.json` and
+`outputs/<slug>.srt/.vtt`.
+
+`"hotwords"` go to Whisper as its initial prompt, so a brand name is heard as one word
+instead of costing its take a lower rank.
+
+`--jobs N` (or `vo.jobs`) records N takes at once; the default is 1, one after another, and the
+studio passes 8 (`studio/tools.py` `VOICE_JOBS`). The services answer a line in seconds, so a
+long film waited minutes on them: measured on the 8-minute studio film (70 lines of Gemini 3.1
+Flash TTS, 2026-09-28), synth took **341 s one at a time and 52 s eight at a time** (6.6x), with
+the same word accuracy (mean 0.932, the same 21 lines under 0.9) and the same cost ($0.25). A
+429 or 5xx from Gemini (Vertex or the Gemini API) or ElevenLabs is asked again with jittered,
+doubling waits (`BUSY`, `busy_wait`) -- N at once meets the rate limit that one at a time never
+did. The takes are cached exactly as before, the `.json` written last, so an interrupted run
+keeps what it finished. Word timing (`score`, Whisper) is unchanged and was the other 239 s.
+
+Measured, 9 lines x 3 takes of `eleven_v3` (839 characters, ~2,500 credits): synth 91 s,
+trim 2.5 s, Whisper scoring (small.en, CPU) 81-99 s.
+
+**The scorer.** A take's score is remembered beside it (`<take>.score.json`, keyed on the
+audio, the line, the hotwords, the language and the scorer), so a re-recording scores only
+what changed. `SKETCH_SCORER` (the machine) or `vo.whisper` (the film) picks who listens:
+a local faster-whisper model, or `openrouter:<model>` -- a transcription model OpenRouter
+serves, scored `--jobs` at a time, needing `OPENROUTER_API_KEY`, and falling back to local
+Whisper for a take the service fails. `openrouter:microsoft/mai-transcribe-2` takes the
+hotwords as a phrase list; the other OpenRouter models ignore them. Compare scorers on a
+finished film with `scripts/vo-scorer-bench.py` (`--plan` prices them); the numbers are in
+`docs/studio-speed.md`.
+
+**A film in another language** sets `vo.language` (ISO 639-1) and a `tail` in that language
+(`"Добре."` for Ukrainian -- an English tail flips the voice's accent on the line's last
+words). Scoring then runs a multilingual Whisper (`vo.whisper`, default `large-v3` on the
+GPU, CPU if CUDA will not load), the words are compared letter-class-agnostic, `SK.w()`
+matches Cyrillic cue words, and the MP4's subtitle track is tagged with the language.
+Fonts must carry the script: the committed woff2 files are Latin subsets, so a Ukrainian film
+uses the complete `.ttf` fonts in `fonts/` (`Caveat-Cyrillic-VF.ttf`, `BalsamiqSans-*.ttf`).
+Voice choice is measured, not guessed: synthesize one line with each candidate and let
+Whisper large-v3 detect the language unprompted -- its confidence is an accent score. For
+Ukrainian on `eleven_v3`, `lily` came first (p = 0.997, 100% of words; 8 voices tried).
+Measured on the first Ukrainian film (10 lines x 3 takes, 738 characters): synth 142 s,
+scoring on large-v3/GPU 48 s. Lily speaks Ukrainian at ~1.8 words a second, not the 2.6 the
+`--plan` estimate assumes: budget ~100 words for a minute.
+
+**A line Gemini will not read.** Gemini TTS's content filter refuses some lines outright
+(`PROHIBITED_CONTENT`: a line naming the investor Carl Icahn in the Dell film, wine words
+in `ssemfm`), and asking again does not help. The same words may pass on another run, or
+with a different voice direction -- the filter is not repeatable. `gemini_take` now raises
+`Refused` for a content block (a glitch with no audio still gets its three tries), and with
+`vo.backup` set -- the studio pins `{"tts": "elevenlabs", "model": "eleven_v3",
+"voices": {"low": "brian", "high": "sarah"}}` -- that one line is read by ElevenLabs
+and the rest stays Gemini's:
+- **low or high** is measured, not looked up: the median pitch of the film's Gemini takes
+  already recorded (`pitch_hz`, below 165 Hz is low). Only when nothing is recorded yet does
+  the Gemini voice's label decide (`GEMINI_FEMALE`). Labels and voices disagree: a voice
+  direction moved Puck, Fenrir and Sadachbia above 220 Hz and Gacrux to 130 in real films.
+- **levelled** to the Gemini lines' median speech level (-18.4 dBFS over 40 lines; v3 came
+  out at -18.1, Turbo at -22.4), trimmed and timed by Whisper exactly as a Gemini take.
+- **recorded** in the timeline as `backup_voice`, and costed at the ElevenLabs API price
+  (`EL_USD_PER_CHAR`: v3 $0.10 per 1,000 characters) into the same `tts_cost_usd`.
+- the studio's `voice` tool tells Claude which line the backup read, so it can keep it or
+  reword it.
+
+Why ElevenLabs, measured 2026-09-27 (`scratchpad voice_bakeoff.py`; the refused line, a
+normal one, a wine line and a Ukrainian one): every candidate read the refused and the wine
+lines; Whisper accuracy was equal; speaker similarity to the film's Gemini narrator (NeMo
+TitaNet, 0.60 for Gemini against itself) was 0.17-0.33 for ElevenLabs `brian` and
+0.03-0.10 for OpenRouter's Microsoft MAI Voice 2 (one English voice, female; its Ukrainian
+slipped into Russian forms). Gemini through OpenRouter is the same model and the same
+filter, so it is no backup. Voice cloning on OpenRouter (Mistral Voxtral, Fish Audio) was
+not reachable with the key's allowed providers; MAI 2 Flash has no cloning endpoint there.
+
+### The soundtrack: `sketch-audio.py`
+
+Stages: fetch any missing instrument notes (FluidR3 GM, MIT, into
+`models/soundfonts/FluidR3_GM/`, shared by every project), render the score, render the cues,
+place the voice, duck the music under it (fast attack, slow release), hold it at least
+`mix.voice_margin_db` (8) under the voice wherever the voice speaks, mix, and master with a
+two-pass `loudnorm` to -14 LUFS / -1.5 dBTP. `--levels` prints music / ducked / heard / sfx /
+voice RMS per 2 s, which is how the balance is judged without listening; `--stems` writes them
+out. Every run also writes `audio/balance.json` (the same table, and what the voice gate did),
+which is what Sketch Studio's `sound` tool shows Claude.
+
+**The voice gate** is the backstop the ducker is not: the ducker follows the voice but trusts
+the score's own level, so a score written too loud buries the narration however well it
+ducks. The gate measures, in 1 s windows, the music over the whole window against the voice
+only while it sounds (a window counts when the voice sounds for 40% of it), and pulls the
+music down to the margin where it is closer -- at once, releasing over 0.6 s, and free again
+after the last word. Measured on the 13 finished studio films: at 8 dB it touches one of them
+by 1.4 dB for 1.2 s (6 dB: none; 9 dB: two by ~2 dB); on the one bad film it cuts up to 18 dB
+from 16 s to the end. The first version measured the voice over whole windows, where the pauses
+between lines diluted it by 8-11 dB, and it cut 2-4 s off the music of films that were fine.
+A score with any volume outside 0..1.5 is refused before anything renders (`check_score`).
+
+Measured on the 60 s film: samples 45 s the first time (69 notes), 0.5 s after; music 16.7 s;
+sfx 4.1 s; voice 3.5 s; mix 1.5 s; master 8.1 s.
+
+**Score notation** (`_sketchaudio.py` carries the full reference):
+
+```json
+{"bpm": 96, "drum_gain": 0.45, "events": [
+  {"inst": "acoustic_grand_piano", "vel": 0.3, "notes": "0 D4+F#4+A4 .5; .5 D4+F#4+A4 .5"},
+  {"type": "strum", "at": 22, "chord": "F3+A3+C4+F4+A4", "vel": 0.55, "pattern": "bar"},
+  {"type": "gliss", "from": 31.2, "to": 32, "lo": "D4", "hi": "D6", "v0": 0.12, "v1": 0.3, "root": "D"},
+  {"type": "roll", "inst": "timpani", "note": "C2", "from": 44, "to": 47.4, "v0": 0.12, "v1": 0.67},
+  {"type": "drums", "from": 32, "bars": 5, "kit": {"kick": "x.....x...x.....", "clap": "....x.......x..."}}
+]}
+```
+
+Times are in beats; every volume (`vel`, a note's own velocity, `v0`/`v1`, `drum_gain`, and
+`"swell": [g0, g1]`, each note's own volume ramp such as `[0.3, 1]`) is a gain from 0 to 1.5,
+never a time. **Choose the tempo so bar lines land on the story**: at 96 bpm a bar is
+2.5 s, which put the drop exactly on "Now, drop the files" (20.0 s) and the stabs on
+"Confirm" (40.0 s). A long score is easier to generate from chord charts with a small script
+beside it than to type by hand.
+
+**Cue notation** (`sfx.json`): `{"t", "fx", "db", "pan", "send", "args"}`, plus
+`"times": [...]` for a repeat. `fx` is any generator in `_sketchaudio.FX` (whoosh, pop, boing,
+thunk, clink, crash, rumble, boom, zip, blip, click, scribble, crinkle, keys, shimmer,
+swoosh_soft, tick, chime, siren -- a softened civil-defence wail), `"sample"` (an instrument note or a run of notes), or `"air"`:
+airflow that follows a moving object's speed and screen position, from the film's
+`automation` tracks (`sketch-render.py --automation` writes them).
+
+### The paintings: `sketch-paint.py`, and choosing a painter with `paint-compare.py`
+
+A painted film animates pictures made by an image model. The manifest's `paint` block (inline,
+or `"paint": "paint.json"`) lists them as `{"name", "prompt", "ref"?}`, with one `style` line
+in front of every prompt and a no-lettering, no-border suffix behind it. Each becomes
+`images/<name>.jpg` and joins the manifest's `images`, so `film.js` draws it with
+`SK.image(name, x, y, w)`. Paintings are cached by a fingerprint of backend, model, style,
+prompt and reference; `max_images` caps a film's total (Sketch Studio sets 8).
+
+Backends:
+- **`openrouter`**: any model OpenRouter's Image API serves (`"model": "<vendor>/<model>"`).
+  Each model is sent only what its entry in the public catalogue
+  (`/api/v1/images/models/<id>/endpoints`) lists. That means 16:9 or the landscape ratio
+  nearest it, 2K or the nearest size below, and JPEG where offered. `quality` is sent only to
+  models that have the setting (OpenAI's). The price comes back with each picture.
+- **`muse`**: the same backend pinned to `meta/muse-image`, the studio's painter. It is served
+  but missing from the catalogue, so it gets the settings it always got (2K, 16:9, PNG) and
+  answers 1920x1280 whatever ratio was asked. It costs about $0.01 a picture and takes 15-30 s.
+- **`gemini`**: Vertex AI.
+
+`ref` names a painting already made. It goes in as a reference picture (`input_references`,
+a data URL) wherever the model takes one, and is how a character stays the same from scene to
+scene. Muse takes no reference, so it paints the second scene from the words alone.
+
+**Choosing a painter.** `paint-compare.py` paints one paint block with several models side by
+side.
+- An image may carry its own `style`, so one test set can hold scenes from several films.
+- A `ref` is painted from the same model's own painting of the scene it names.
+- It writes into `temp/paint-compare/`: a contact sheet per model, a sheet per prompt with every
+  model's picture labelled (price, seconds, size), and `results.csv`/`results.json`.
+- `--plan` prices the run from the catalogue, and `--cap` stops it at a spend.
+- A rerun reuses every picture already painted.
+- The test set used on 2026-09-26 is `projects/paint-bakeoff/`: six scenes from studio films,
+  plus one character painted and then re-used as the reference for two more scenes. That run
+  painted 72 pictures on 8 models for $1.78, with no lettering or borders from any model.
+- **Muse is the best picture per dollar we can reach.** It gives $0.01 at 1920x1280 with the
+  most detail. The alternatives:
+  - GPT Image 2.5 Flare is $0.009, or $0.02 with a reference. It takes 14 s and composes well,
+    but its textures look blocky at full size.
+  - MAI Image 2.6 Flash is $0.02 and takes 14 s. It holds a character best and looks clean, but
+    comes out at only 1365x768.
+  - GPT Image 2 and MAI 2.6 look good, but cost 3-4 times as much.
+  - GPT Image 1 Mini is flat and sepia.
+  - The weighted scores are in the journal.
+
+**OpenRouter's allowed-providers setting overrides the model name.** A model whose only
+providers are outside the account's allow-list fails with `404 No allowed providers are
+available for the selected model`. On 2026-09-26 the kitcut key permitted only
+meta, azure, openai and typesafe. So Seedream, Qwen, FLUX.2, Recraft, Riverflow and Gemini all
+refused, even though they are in the catalogue at a price. `--plan` cannot see that setting;
+paint one scene per model before trusting a price.
+
+### The picture: `sketch-render.py`
+
+Bundles engine + props + film + fonts + images + voice timeline + mastered MP3 into
+`outputs/<slug>.html` (one file, plays offline) and `outputs/artifact/<slug>.html` (the same
+without html/head/body, for claude.ai Artifacts). `--stills` and `--sheet` are the review
+loop: 18 stills in 8.6 s. The video is rendered by opening the page in headless Edge/Chrome
+(`html-to-image.py`'s browser finder, so no Node and no Playwright): the page draws each frame
+and POSTs its raw pixels to a local server here, which pipes them into ffmpeg with
+`_encode.video_args`. The mux uses `-t`, never `-shortest` (see the gotchas), asserts the
+duration, and adds a soft subtitle track and the poster.
+
+**The first frame is the film's cover.** X, iMessage and a phone's `<video>` before play all
+show frame 0 of the file, and a film that opens on bare paper -- most do, the picture is drawn
+in -- showed there as an empty rectangle (the Collage launch film on X, 2026-09-30). So frame 0
+draws the poster instead (`poster_t`, the payoff), or, when the film ends on paper, the
+livelier of a few later moments (0.5/0.65/0.8/0.92 of the film, the tail excluded): the same
+rule, and the same 1.4x contrast margin, as the studio's link-preview card (`studio/media.py`),
+so the card and the first frame agree. It is one frame -- 17 ms at 60 fps, unseen in play --
+and replaces rather than inserts, so duration and sound are untouched; the frame after it is
+encoded as a keyframe, because it is a cut. The choice costs one browser and five stills (~7 s)
+and is printed with each candidate's contrast. Manifest `cover`: a number is that film time,
+`false` keeps the film's own opening; `--from` other than 0 has no cover.
+
+The frames are drawn in chunks (`--chunk`, 8 s of film each), each in a fresh browser: measured
+on the 63.5 s air-raid film, a single session fell from 13.8 to 1.5 frames a second and then
+stopped answering at frame ~2,700 of 3,810. `--jobs` browsers draw chunks at once (default a
+quarter of the logical cores, at most 6), each into its own encoder and segment file under
+`temp/`, and the segments are joined by stream copy. One browser is serial -- draw, read the
+canvas back, POST 8 MB, wait for the encoder -- so it left most of the machine idle. A film
+shorter than jobs x chunk is split evenly across the browsers instead, down to 1 s each.
+
+Every segment's frames are counted (`ffprobe -count_packets`) before it is accepted, and a
+chunk that fails or comes back short is redrawn from its start, up to three times -- safe
+because every frame is a pure function of t. The count is not paranoia: the first parallel
+run produced a segment with no moov atom whose chunk had reported clean, and the join is
+where that surfaced. The joined file is counted again against the frame total.
+
+Measured on an i9-11900H (8 cores/16 threads) + RTX 3050 Ti laptop, shared with other sessions:
+
+| render | jobs | wall clock | frames/s |
+|---|---|---|---|
+| air-raid, 63.5 s at 60 fps | 1 (the old serial path) | 809 s | 4.7 |
+| air-raid, 63.5 s at 60 fps | 4 | 269 s | 14.1 |
+| 32 s of it, chunk 4 | 2 / 4 / 6 / 8 | 219 / 108 / 102 / 95 s | 8.8 / 17.8 / 18.9 / 20.3 |
+| a 5 s studio-length film | 1 / 4 | 28 / 15 s | 10.8 / 20.1 |
+
+Past four browsers the gain flattens, which is why the default is a quarter of the cores.
+Speed also moves with the machine: the same 6 s ran at 13.8 fps and, an hour later with other
+sessions busy, at 2.3. A parallel render is not bit-identical to a serial one after the first
+chunk (SSIM 0.98 between them): each segment is its own encode, so a frame's compression no
+longer leans on the chunk before it. The drawn picture is the same -- against a lossless still
+of t = 30 s both renders score 0.972. `--draft` renders 30 fps.
+
+#### Encoding in the browser: `--encode browser`
+
+`--encode browser` (or `render.encode: "browser"`) has the page encode its own frames with the
+browser's hardware H.264 encoder (WebCodecs `VideoEncoder`, `_encode.webcodecs()`) and POST
+only the stream, one second of film per POST; ffmpeg wraps it without re-encoding
+(`-c copy`), tagging it BT.709. The script's default is still `pipe`; the studio passes `browser` (`studio/tools.py` `RENDER_ENCODE`, since 2026-09-28, after a blind test on three films in `docs/studio-speed.md`). A
+browser that cannot encode says `no-encoder` and the render falls back to `pipe`, loudly, for
+every remaining chunk.
+
+Why: profiled per frame on one browser (2026-09-28), a frame costs ~3 ms of draw calls, ~50 ms
+of actual drawing (deferred until the pixels are read), ~3 ms to copy them out, and ~28 ms to
+POST 8 MB to Python and ffmpeg; ffmpeg alone encodes ~170 frames/s. The POST is why `pipe`
+stopped scaling: the 33 s Clamly film took 87 s at 3 browsers and 91 s at 6. In the browser
+the frame never leaves the GPU:
+
+| film | pipe (today) | browser, 6 jobs |
+|---|---|---|
+| Clamly, 33 s at 60 fps | 87 s at 3 jobs (145 s with the machine busy) | 26-28 s |
+| the 8-minute studio film, 28,800 frames | 2,218 s at 3 jobs (13 fps) | **536 s (54 fps)** |
+
+Quality, scored against the true frames (PNG stills of the same t -- frames are a pure
+function of t -- decoded with each file's own colour matrix):
+
+| render | PSNR | SSIM (worst) | size |
+|---|---|---|---|
+| Clamly, pipe cq 18 | 38.8 dB | 0.967 (0.963) | 108 MB |
+| Clamly, browser QP 18 / 17 / 16 | 39.0 / 39.2 / 39.6 | 0.959 / 0.963 / 0.967 | 110 / 141 / 177 MB |
+| Clamly, browser at pipe's bitrate (VBR 26 Mbps) | 39.0 | 0.957 | 111 MB |
+| 8-min film, one minute: pipe cq 18 | 37.8 | 0.951 (0.907) | 273 MB |
+| same minute, browser QP 18 / 20 / 22 | 38.8 / 37.6 / 35.9 | 0.959 / 0.935 / 0.878 | 485 / 373 / 182 MB |
+| 8-min film, whole | pipe 38.1 dB, 0.955 (0.938), 2.2 GB | browser QP 18: 38.6 dB, 0.959 (0.956), 3.8 GB | |
+
+QP = cq (`WEBCODECS_QP_OFFSET` 0) is the one setting at least as good as pipe on both films;
+its price is file size on a grainy film (+75% here), because a fixed QP spends bits where
+NVENC's VBR and adaptive quantisation would not. Viewers get the 5 Mbps web copy either way;
+the master's size costs upload time and storage.
+
+The colour matrix: the browser encodes BT.709 and writes no tags; `pipe`'s rgba -> yuv420p is
+BT.601, also untagged. Decoded as BT.709 -- what a browser assumes for untagged HD -- the pipe
+render is 5.6 levels too dark in green (PSNR 33.6 dB against 38.8 read as BT.601). The browser
+path's wrap writes the BT.709 tags; the pipe path is untouched here and still untagged.
+
+What the machine offers (headless Edge, 2026-09-28): H.264 on the GPU in every bitrate mode
+including `quantizer`; HEVC not at all; AV1 in software only.
+
+### How long a film takes
+
+Machine time for the 60 s film, from its run logs (`--timings` prints them):
+
+| stage | seconds |
+|---|---|
+| voice (27 takes, scoring, placing) | ~185 |
+| soundtrack (first run, incl. sample fetch) | ~80 |
+| review stills (per round of 18) | ~9 |
+| final render, 60 fps | ~420 |
+
+The rest is authoring. Measured on the second film built with these tools (60 s, clean look,
+a brand explainer), wall clock:
+
+| phase | minutes |
+|---|---|
+| research: the product's claims and their sources, the brand's rules and assets | 9 |
+| script + manifest | 2 |
+| voice (`sketch-vo.py`, 27 takes) | 5 |
+| `film.js`, first pass | 5 |
+| review rounds (stills), fixes, score and cue list | 8 |
+| final render | 8 |
+| **total** | **~37** |
+
+The first film, which produced these tools, took most of a day; the saving is the engine,
+the cast, the voice/audio/render pipeline and the traps already paid for.
+
+### The picture: `sketch-render.py`
+
+Bundles engine + props + film + fonts + images + voice timeline + mastered MP3 into
+`outputs/<slug>.html` (one file, plays offline) and `outputs/artifact/<slug>.html` (the same
+without html/head/body, for claude.ai Artifacts). `--stills` and `--sheet` are the review
+loop: 18 stills in 8.6 s. The video is rendered by opening the page in headless Edge/Chrome
+(`html-to-image.py`'s browser finder, so no Node and no Playwright): the page draws each frame
+and POSTs its raw pixels to a local server here, which pipes them into ffmpeg with
+`_encode.video_args`. The mux uses `-t`, never `-shortest` (see the gotchas), asserts the
+duration, and adds a soft subtitle track and the poster.
+
+**The first frame is the film's cover.** X, iMessage and a phone's `<video>` before play all
+show frame 0 of the file, and a film that opens on bare paper -- most do, the picture is drawn
+in -- showed there as an empty rectangle (the Collage launch film on X, 2026-09-30). So frame 0
+draws the poster instead (`poster_t`, the payoff), or, when the film ends on paper, the
+livelier of a few later moments (0.5/0.65/0.8/0.92 of the film, the tail excluded): the same
+rule, and the same 1.4x contrast margin, as the studio's link-preview card (`studio/media.py`),
+so the card and the first frame agree. It is one frame -- 17 ms at 60 fps, unseen in play --
+and replaces rather than inserts, so duration and sound are untouched; the frame after it is
+encoded as a keyframe, because it is a cut. The choice costs one browser and five stills (~7 s)
+and is printed with each candidate's contrast. Manifest `cover`: a number is that film time,
+`false` keeps the film's own opening; `--from` other than 0 has no cover.
+
+The frames are drawn in chunks (`--chunk`, 8 s of film each), each in a fresh browser: measured
+on the 63.5 s air-raid film, a single session fell from 13.8 to 1.5 frames a second and then
+stopped answering at frame ~2,700 of 3,810. `--jobs` browsers draw chunks at once (default a
+quarter of the logical cores, at most 6), each into its own encoder and segment file under
+`temp/`, and the segments are joined by stream copy. One browser is serial -- draw, read the
+canvas back, POST 8 MB, wait for the encoder -- so it left most of the machine idle. A film
+shorter than jobs x chunk is split evenly across the browsers instead, down to 1 s each.
+
+Every segment's frames are counted (`ffprobe -count_packets`) before it is accepted, and a
+chunk that fails or comes back short is redrawn from its start, up to three times -- safe
+because every frame is a pure function of t. The count is not paranoia: the first parallel
+run produced a segment with no moov atom whose chunk had reported clean, and the join is
+where that surfaced. The joined file is counted again against the frame total.
+
+Measured on an i9-11900H (8 cores/16 threads) + RTX 3050 Ti laptop, shared with other sessions:
+
+| render | jobs | wall clock | frames/s |
+|---|---|---|---|
+| air-raid, 63.5 s at 60 fps | 1 (the old serial path) | 809 s | 4.7 |
+| air-raid, 63.5 s at 60 fps | 4 | 269 s | 14.1 |
+| 32 s of it, chunk 4 | 2 / 4 / 6 / 8 | 219 / 108 / 102 / 95 s | 8.8 / 17.8 / 18.9 / 20.3 |
+| a 5 s studio-length film | 1 / 4 | 28 / 15 s | 10.8 / 20.1 |
+
+Past four browsers the gain flattens, which is why the default is a quarter of the cores.
+Speed also moves with the machine: the same 6 s ran at 13.8 fps and, an hour later with other
+sessions busy, at 2.3. A parallel render is not bit-identical to a serial one after the first
+chunk (SSIM 0.98 between them): each segment is its own encode, so a frame's compression no
+longer leans on the chunk before it. The drawn picture is the same -- against a lossless still
+of t = 30 s both renders score 0.972. `--draft` renders 30 fps.
+
+#### Encoding in the browser: `--encode browser`
+
+`--encode browser` (or `render.encode: "browser"`) has the page encode its own frames with the
+browser's hardware H.264 encoder (WebCodecs `VideoEncoder`, `_encode.webcodecs()`) and POST
+only the stream, one second of film per POST; ffmpeg wraps it without re-encoding
+(`-c copy`), tagging it BT.709. The script's default is still `pipe`; the studio passes `browser` (`studio/tools.py` `RENDER_ENCODE`, since 2026-09-28, after a blind test on three films in `docs/studio-speed.md`). A
+browser that cannot encode says `no-encoder` and the render falls back to `pipe`, loudly, for
+every remaining chunk.
+
+Why: profiled per frame on one browser (2026-09-28), a frame costs ~3 ms of draw calls, ~50 ms
+of actual drawing (deferred until the pixels are read), ~3 ms to copy them out, and ~28 ms to
+POST 8 MB to Python and ffmpeg; ffmpeg alone encodes ~170 frames/s. The POST is why `pipe`
+stopped scaling: the 33 s Clamly film took 87 s at 3 browsers and 91 s at 6. In the browser
+the frame never leaves the GPU:
+
+| film | pipe (today) | browser, 6 jobs |
+|---|---|---|
+| Clamly, 33 s at 60 fps | 87 s at 3 jobs (145 s with the machine busy) | 26-28 s |
+| the 8-minute studio film, 28,800 frames | 2,218 s at 3 jobs (13 fps) | **536 s (54 fps)** |
+
+Quality, scored against the true frames (PNG stills of the same t -- frames are a pure
+function of t -- decoded with each file's own colour matrix):
+
+| render | PSNR | SSIM (worst) | size |
+|---|---|---|---|
+| Clamly, pipe cq 18 | 38.8 dB | 0.967 (0.963) | 108 MB |
+| Clamly, browser QP 18 / 17 / 16 | 39.0 / 39.2 / 39.6 | 0.959 / 0.963 / 0.967 | 110 / 141 / 177 MB |
+| Clamly, browser at pipe's bitrate (VBR 26 Mbps) | 39.0 | 0.957 | 111 MB |
+| 8-min film, one minute: pipe cq 18 | 37.8 | 0.951 (0.907) | 273 MB |
+| same minute, browser QP 18 / 20 / 22 | 38.8 / 37.6 / 35.9 | 0.959 / 0.935 / 0.878 | 485 / 373 / 182 MB |
+| 8-min film, whole | pipe 38.1 dB, 0.955 (0.938), 2.2 GB | browser QP 18: 38.6 dB, 0.959 (0.956), 3.8 GB | |
+
+QP = cq (`WEBCODECS_QP_OFFSET` 0) is the one setting at least as good as pipe on both films;
+its price is file size on a grainy film (+75% here), because a fixed QP spends bits where
+NVENC's VBR and adaptive quantisation would not. Viewers get the 5 Mbps web copy either way;
+the master's size costs upload time and storage.
+
+The colour matrix: the browser encodes BT.709 and writes no tags; `pipe`'s rgba -> yuv420p is
+BT.601, also untagged. Decoded as BT.709 -- what a browser assumes for untagged HD -- the pipe
+render is 5.6 levels too dark in green (PSNR 33.6 dB against 38.8 read as BT.601). The browser
+path's wrap writes the BT.709 tags; the pipe path is untouched here and still untagged.
+
+What the machine offers (headless Edge, 2026-09-28): H.264 on the GPU in every bitrate mode
+including `quantizer`; HEVC not at all; AV1 in software only.
+
+### How long a film takes
+
+Machine time for the 60 s film, from its run logs (`--timings` prints them):
+
+| stage | seconds |
+|---|---|
+| voice (27 takes, scoring, placing) | ~185 |
+| soundtrack (first run, incl. sample fetch) | ~80 |
+| review stills (per round of 18) | ~9 |
+| final render, 60 fps | ~420 |
+
+The rest is authoring. Measured on the second film built with these tools (60 s, clean look,
+a brand explainer), wall clock:
+
+| phase | minutes |
+|---|---|
+| research: the product's claims and their sources, the brand's rules and assets | 9 |
+| script + manifest | 2 |
+| voice (`sketch-vo.py`, 27 takes) | 5 |
+| `film.js`, first pass | 5 |
+| review rounds (stills), fixes, score and cue list | 8 |
+| final render | 8 |
+| **total** | **~37** |
+
+The first film, which produced these tools, took most of a day; the saving is the engine,
+the cast, the voice/audio/render pipeline and the traps already paid for.
+
+### Collage films: cut-outs and mixed media (`sketch/collage.js`)
+
+A collage film animates pictures cut out of paper rather than whole painted scenes: each
+picture is one object (an engraving, a product photograph) with a transparent background and a
+white scissor-cut border, pinned onto coloured sheets with torn edges, and the motion design is
+everything around it -- display type, tape labels, rubber stamps, marker arrows, ransom-note
+letters, halftone dots, a running timeline. `SK.setStyle('collage')` turns it on; the pieces are
+`sketch/collage.js`, an engine module: the manifest's `"modules": ["collage"]` has the bundler
+load it after engine.js and props.js, so film.js can override any piece (the film's engine
+copy of it when it has one, `sketch/collage.js` otherwise). A film that does not ask for it
+does not carry it.
+
+**Why it exists.** On 2026-09-28 a Runway employee (@notiansans, status 2104676565829505527)
+posted a 60 s "newspaper cutout / mixed media" history of ice cream made by Opus 5.5 with the
+Runway MCP, prompt verbatim: *Create a [60 second] motion graphic explainer video about [the
+history of ice cream from the inception, to present day]. All of the visual images should be
+handled by Runway, and all the motion graphics elements and animations should be handled by
+you. The art style should be [newspaper cutout / mixed media aesthetic] with a high degree of
+polish.* Measured off the post (1440 frames, 24 fps, 1080p): ten chapters of about 5 s, one per
+narration line (136 words over a swing groove, visuals cued to words); 18-20 cut-outs, each with
+a white scissor-cut border and a paper shadow; every piece shifts by a pixel or so on every
+second frame (frame differences alternate ~1 and 4-14 grey levels) and the grain re-rolls at
+12 fps -- stop motion on twos. Runway's hosted MCP (`https://mcp.runwayml.com/mcp`, OAuth,
+Pro/Max plans) lists `generate_image`, `remove_image_background`, `generate_speech` and
+`generate_music`, which is every asset in the film; the post does not say what rendered it.
+Everything else in it was already this engine's: the page is code, frames are a pure function
+of t, the voice is timed word by word. What was missing -- pictures as cut-outs, the collage
+pieces, print typefaces and the 12 fps nudge -- is this section.
+
+**The pieces.** Every one takes `in` / `out` specs `{t, type, d, from, dist, spin}`, `rot`,
+`s`, `alpha`, `nudge` (0 for none), and draws centred on its x, y:
+
+| piece | what | notable options |
+|---|---|---|
+| `SK.cutout(name, x, y, w)` | a cut-out picture with its paper shadow | `shadow` (fractions of its long side), `flip` |
+| `SK.sheet(x, y, w, h)` | a sheet of paper; torn sides show a white fibre rim | `col`, `edges` ('tblr', '' for cut), `amp`, `rim`, `tex`, `light`, `seed` |
+| `SK.tape(text, x, y)` | a strip of paper or tape carrying words; returns {w, h} | `font`, `size`, `col`, `ink` (reads on col by default), `ends` (cut, torn, zig), `distress` |
+| `SK.headline(text, x, y)` | display type in one piece | `font`, `size`, `italic`, `ls`, `align`, `distress` (letterpress), `stroke`, `maxW` |
+| `SK.stamp(x, y)` | a rubber stamp printed in ink (multiply) | `shape` (circle, rect), `text`, `top`/`bottom` (round the ring), `col`, `t` (its hit) |
+| `SK.burst(x, y, r)`, `SK.disc` | a starburst; a hand-cut paper circle | `spikes`, `inner`, `col`, `spin` |
+| `SK.halftone(x, y, w, h)` | printed dots fading away from a side or corner | `from`, `step`, `max`, `pow`, `angle` |
+| `SK.ransom(text, x, y)` | letters cut from different pages, landing in turn | `size`, `fonts`, `cols`, `stagger` |
+| `SK.mark(pts)`, `SK.arrow(x1, y1, x2, y2)` | a marker line drawn on | `in.d`, `col`, `w`, `head`, `bow` |
+| `SK.maskingTape(x, y, w)` | translucent masking tape with torn ends | `rot` |
+| `SK.newsprint()` | a newspaper page behind everything | `text`, `heads`, `headEvery`, `cols`, `size`, `ink` |
+| `SK.layer(o, fn)` | a group: everything fn draws moves, enters and leaves together | `w`, `h` (for a wipe), `steps` |
+
+`SK.motion(o, t)` is the state behind every entrance, `SK.place(o, w, h, fn)` draws in an
+element's own frame, `SK.step(t)` holds t on a 12 fps clock, `SK.nudge(seed)` is the per-piece
+shake. Entrance types: `pop` (overshooting scale and a turn), `grow`, `drop` (falls onto the
+page and settles), `slap` (a label slapped down), `thump` (a stamp), `slide` (a sheet from a
+side, landing with no overshoot), `wipe` (revealed from a side), `rise`, `fade`, `none`.
+
+**The stop-motion feel is the style, not the film.** Under `collage` every piece is nudged
+(~1 px, ~0.2 degrees) twelve times a second, entrances run on the same 12 fps clock (a layer
+with `steps: 0` moves smoothly: a full-width sheet stepped at 12 fps jumps 240 px a frame), the
+grain re-rolls at 12 fps (`style.grainFps`) and there is no handheld camera. Render at 24 fps,
+like the reference; it also halves the frames against 60.
+
+**Cut-outs** are painted by `sketch-paint.py` (see above): `"cutout": true` on an image, the
+block's `"cutouts"` for the model, quality, border and cut. The default model,
+`openai/gpt-image-2.5-flare`, is asked for `background: transparent` because OpenRouter's
+catalogue lists it; any model without it is asked for a white ground, keyed off it
+(`matte_white`: the near-white region connected to the picture's edge), and the paper border
+covers any hole the key leaves where the subject's own white touched the ground. Then specks
+under 1.5% of the subject are dropped, the subject is trimmed and scaled to 1024 px, and a
+border of `border` px is cut round it: the mask dilated by the border, closed over notches up
+to ~5 borders wide (scissors do not follow every notch) and simplified to straight snips
+(`approxPolyDP`) for `scissor`, or left smooth for `round`. Saved as WebP with alpha: 70-340 KB
+each, against 1.1-1.8 MB for the PNG the model sends.
+
+Measured (2026-09-28): 17 cut-outs for the example film at medium quality, $0.197 in all
+($0.0107-0.0137 each), 78 s of wall clock four at a time; one repaint $0.011. Tested both ways
+on three subjects (an engraved freezer, a photographed cone, an engraved portrait): Flare's
+alpha and Muse-on-white keyed by `matte_white` both came out clean enough that the border hid
+any difference. Flare takes 16 reference pictures; Muse takes none but has the most detail per
+dollar. One cut-out of 17 came back with a white paper shape painted behind it (an engraving
+of barley); "drawn alone with nothing behind it" in the prompt fixed it.
+
+**Fonts** (`fonts/SOURCES.md`): Abril Fatface (headlines), UnifrakturMaguntia (mastheads),
+Oswald (labels), Old Standard TT (body, datelines, with an italic), Playfair Display (italic
+kickers, heavy display in Cyrillic), Courier Prime (typewriter), with Anton and Caveat already
+here. Only Oswald, Old Standard TT and Playfair Display carry Cyrillic. A manifest font entry
+takes `"style": "italic"` for an italic face of a family.
+
+**Performance.** Each sheet, sticker, stamp, burst, dot field and label is drawn once per render
+chunk into an offscreen canvas with its shadow baked in; a frame is then a few dozen
+`drawImage` calls. The 66 s example (1584 frames) renders in 24-28 s with six browsers
+encoding in the browser (57-67 fps) on the laptop; a round of ten review stills takes ~8 s.
+
+**The example**, `config/sketch/collage-example/` (made as the local project
+`collage-paperwork` and copied in): "A Brief History of Paperwork", 66 s, eleven
+narration lines (Gemini 3.1 Flash TTS, Charon, $0.07), 17 cut-outs, ten scenes, a timeline
+ruler, a swing score from a chord chart (`score.py`) and 109 sound cues computed from the word
+times (`sfx.py`). `film.js` is ~320 lines: a `scene(t0, from, draw)` per sheet, drawn inside
+one sliding `SK.layer`, older scenes first. Built in one evening together with the pieces
+themselves; the review rounds are in the project journal.
+
+**The studio makes them too** (`studio/looks/collage.md`, the third look). Given the Runway
+post's own prompt, 60 s, the studio (Opus 5.5, CLI, 2026-09-28) planned ten pages, chose one
+medium for all 17 cut-outs ("hand-tinted antique copperplate engraving", none repainted, $0.20),
+and invented its own furniture with the pieces: a newspaper header and footer on every page, a
+flip counter of years, a code-drawn thermometer that falls to -21 C as "ICE + SALT" lands, a "?"
+burst that turns into the waffle cone. 21 minutes from prompt to MP4 (Claude 20.3, render 1.0),
+43 turns, Claude $4.43 at API prices, voice $0.11, -14.0 LUFS. It recorded the narration four
+times to fit (Gemini's pace again) and once asked the drum kit for a `crash` it does not have;
+`validate.py` now names an unknown drum before the soundtrack is rendered.
+
+**Made to sell (2026-09-29).** Four changes before the look is offered:
+- **Cyrillic.** Abril Fatface, Anton, Courier Prime and UnifrakturMaguntia have no Cyrillic
+  (fontTools over the Ukrainian alphabet), and the pieces default to Abril, so a Ukrainian
+  headline fell back to a system face. `SK.face(family, wt, text)` now sets a line with
+  Cyrillic letters in a stand-in from `SK.NO_CYRILLIC` -- Playfair Display 900, Oswald 700,
+  Old Standard TT 700, IBM Plex Mono (added) -- in every piece: headline, tape, ransom,
+  stamp, newsprint. `check-sketch` holds the table to the font files. `SK.txt` and a film's
+  own canvas text do not swap: the brief says to give them a face that has the letters.
+- **The clock at 30 fps.** 12 ticks a second hold 2 frames then 3 at 30 fps (a Free film).
+  `SK.stepFps(want)` picks the rate nearest 12 that divides the frame rate being rendered
+  (`SK.FPS`, which the player sets for `?export` and `?encode`): 12 at 24 and 60 fps, 10 at
+  30. Stills, which have no rate, keep 12.
+- **Less newspaper.** The only collage example is a newspaper, so the studio's copy of it
+  (`agent._reference`) leaves out what is marked `// studio: cut` ... `// studio: end cut`:
+  the "Daily Form" front page and closing page, the newsprint under every page, and three
+  of the ten pages. The collage prompt went from 196 KB to 189 KB.
+- **Variety.** A collage film records its cut-outs' medium (paint.json `style`), the print
+  faces its code names most and whether a newspaper page lies under it; the next collage
+  films are told (`recent_note`: "print faces", "a newspaper page under the film: n of the
+  last m"), as drawn films are told their grounds.
+
+Traps, each found on the example:
+- **A sheet that overshoots bares the page under it** (the first slide bounced 4.5%, 90 px on a
+  full-width sheet, and showed the title page at the edge): slides land with no overshoot now.
+- **A payoff on a line's last word gets covered** by the next sheet. Start a sheet 0.15 s before
+  its line, let a page arrive composed (label, title, main picture ride in on the sheet) and
+  land only details on words, and move a big reveal to an earlier word.
+- **Text on a card must shake with the card**: the card is its own `SK.layer({nudge: 1})`
+  and what is written on it takes `nudge: 0`, or the words drift across the paper.
+- **Gemini narration ran 24% longer than `--plan`'s 2.6 words a second** (140 words: 72 s, not
+  58 s); a "brisk" style note barely moved it. Budget ~1.9 words a second.
+
+### Sketch Studio: a prompt box that makes a short film (`studio/`)
+
+A prompt-to-film web app on this engine, set up with `pip install -r requirements-studio.txt`:
+
+- `python studio/server.py` (or `studio\serve.ps1`, with a public tunnel) serves a page on
+  127.0.0.1:8765 with one prompt box and a JSON API; the public site is create.kitcut.ai.
+- Claude (always Opus 5.5, `MODEL` in `agent.py`), through the Claude Agent SDK, writes the
+  narration, `film.js`, `score.json` and `sfx.json` (and for the painted look, the paintings),
+  reviews its own stills, and the studio renders the MP4.
+- **Several films are made at once, each in a sandbox of its own**: a folder per film under
+  `STUDIO_HOME` (its own engine copy, its own Claude session, no shell -- the pipeline is the
+  studio's typed tools), a scheduler for the machine (Claude sessions, browsers, CPU), secrets kept
+  out of every process that does not need them, an offline renderer the film's code cannot reach
+  out of, and every step in a Windows Job Object. The server runs from a release snapshot
+  (`studio/release.py`), so edits in the working tree never reach a film being made.
+- `python studio/agent.py "<idea>"` does the same from the command line, `--smoke` checks the
+  key, and `--auth login` runs on this machine's Claude Code login instead.
+
+`studio/README.md` has the sandbox, the scheduler, the permission model (tested by
+`studio/test_guard.py`, `test_isolation.py`, `test_sched.py`, `test_server.py`), the API and the
+limits. The pipeline scripts support it generically: a manifest `engine` folder,
+`SKETCH_RENDER_OFFLINE`, `SKETCH_WHISPER_DEVICE`, `KITCUT_DOTENV=0`, `KITCUT_LOCKS_DIR`, and
+names of paintings and instruments that can never be paths.
+
+Measured on the first two films (one at a time, before narration), wall clock from prompt to MP4:
+
+| film | Claude | render | total | turns | API cost |
+|---|---|---|---|---|---|
+| paper plane brings coffee (command line) | 113 s | 23 s | 136 s | 20 | $0.56 |
+| sticky-note rocket, SHIP IT (web page) | 110 s | 32 s | 141 s | 19 | $0.54 |
+
+Most of the cost is cache reads of the ~100 KB system prompt that carries the engine and the
+cast; it depends only on the look, so films made close together share the cache.
+
+**A look is a recipe of capabilities** (`studio/film.py` `CAPS`, `RECIPES`). The person picks a
+look (drawn, painted, collage); a capability is one kind of material and everything the studio
+does for it -- the engine modules a film carries, the fonts, the pictures it may paint (their
+pins, cap and keys in paint.json), the prompt references only its looks' briefs use, and the
+choices recorded for the recent-films note. Drawn is `grounds`, painted `paintings`, collage
+`cutouts` + `collage`. A film's capabilities are written into its record when it is made, so a
+later recipe change never reaches a film in the making. Granting a capability to another look
+is a recipe change, and so a brief change: proven with `studio/bakeoff.py` first. Refactored
+onto capabilities on 2026-09-29 with the drawn, painted and collage system prompts and new
+films' files byte-identical before and after.
+
+At 192k, the AAC encode pushed the rocket's confetti transients to -0.1 dBFS, against -1.5 dBTP
+in the master WAV, so the template now encodes at 320k.
+
+#### Pictures and voice notes: `studio/uploads.py`, and choosing a transcriber with `stt-compare.py`
+
+A film request can carry pictures and voice notes as well as words, or instead of them
+(`studio/README.md` has the API). A picture reaches Claude as a file it Reads; Claude decides
+whether it is material to show (`SK.image('upload1', ...)`), a reference to match, or the brief
+itself, and says which. A voice note reaches it written out, by `scripts/_stt.py`: one call over
+several engines (`openrouter:`, `gemini:`, `vertex:`, `openai:`, `whisper:`), every note normalised
+to 16 kHz mono FLAC first.
+
+`scripts/stt-compare.py` picks the engine instead of guessing. `--make-clips` writes a test set of
+film briefs read by edge-tts voices (English, Ukrainian, Spanish, brand names, one over noise, one
+silent) encoded as Chrome and Safari record them; every engine hears the same clips, and the table
+weighs accuracy 40, names spelt right 15, speed 20, cost 10, robustness 15. Measured 2026-09-26,
+eight clips:
+
+| engine | score | WER | names | median s | $/min |
+|---|---|---|---|---|---|
+| whisper:large-v3-turbo (CPU) | 97.1 | 2.0% | 18/21 | 15.2 | 0 |
+| vertex:gemini-3.1-flash-lite | 96.3 | 1.8% | 19/21 | 2.5 | 0.0012 |
+| openrouter:openai/gpt-audio-mini | 94.2 | 7.3% | 18/21 | 2.6 | 0.0010 |
+| vertex:gemini-3.5-flash-lite | 92.3 | 2.1% | 18/21 | 3.2 | 0.0011 |
+| vertex:gemini-3.8-flash | 80.2 | 1.4% | 20/21 | 5.4 | 0.0046 |
+| whisper:large-v3 (CPU) | 79.1 | 1.8% | 18/21 | 25.5 | 0 |
+| whisper:medium (CPU) | 77.4 | 9.8% | 19/21 | 18.4 | 0 |
+| openrouter:openai/gpt-audio | 75.3 | 15.4% | 16/21 | 3.5 | 0.021 |
+
+(Turbo ran on its own; its speed score is against itself, so its total is not comparable -- at
+15 s against 2.5 s it is the fallback, not the first choice.) The studio uses Gemini 3.1 Flash
+Lite first and Whisper turbo if that fails. Three things the table does not show:
+
+- **Every language model invents words for silence** -- a French sentence, "He is making a lot of
+  noise", the list of names it was given as hints. `_stt.transcribe()` therefore asks the Silero
+  VAD first and returns nothing for a note with under 0.4 s of speech, without calling any engine.
+- **A chat audio model can answer the note instead of writing it down.** A voice note is a film
+  brief, i.e. an instruction; `gpt-audio` replied "I'm sorry, but I can't assist with that" to one
+  and `gpt-audio-mini` skipped its first sentence. The Gemini models wrote every note down.
+- **Whisper medium turned Ukrainian into Russian** (61% WER on the mixed clip).
+
+#### Publishing a studio film to YouTube: `studio/youtube.py`
+
+A person connects one or more YouTube channels on kitcut.ai and publishes a finished film of their
+own to any of them. The design and the page are in the site's README ("YouTube"). This is the
+studio's half: the bytes, and the draft of the title and description (next section).
+
+- **The site owns everything Google-facing.** It holds the channel grants, sealed in
+  `kitcut.youtube_channels`, and opens a resumable upload session with the title, description and
+  privacy. It then posts that session's address to `POST /api/films/<id>/youtube`
+  `{"to", "key"}`. The studio never holds a Google token. A leaked session address can only
+  finish that one upload, into that one channel, within a week.
+- **What the studio refuses:**
+  - any address that is not `https://www.googleapis.com/upload/youtube/v3/videos?...upload_id=`;
+  - a film that is not finished;
+  - a client (`X-Client-Ip`) other than the film's own.
+- **How it sends.** It streams `outputs/film.mp4` in 8 MiB pieces; the protocol wants multiples
+  of 256 KiB. A 308 names the last byte kept. After a 5xx or a dropped connection, the studio asks
+  with `Content-Range: bytes */<size>` and carries on from there. A 404 or 410 means the session
+  expired.
+- **Sends are keyed by the site's post id.** Asking twice sends once, and asking after a restart
+  resumes. Sends live in memory only, and the site asks again whenever `GET .../youtube/<key>`
+  answers 404.
+- **Two things Google decides, not the code:**
+  - **The YouTube API audit.** Every video uploaded through an unaudited project created after
+    2020-07-28 is locked private. The final answer's `status.privacyStatus` shows it, and the
+    page reports it rather than claiming the video is public.
+  - **OAuth verification.** Both scopes are sensitive. Until the app is verified, people see an
+    "unverified app" screen and at most 100 of them can connect.
+- **The test.** `python studio/test_youtube.py` runs a stand-in for YouTube's endpoint that
+  half-keeps one piece and answers 503. It checks:
+  - every byte arrives in order;
+  - a pre-filled session gets only the rest;
+  - a repeated key sends nothing new;
+  - someone else's send is invisible.
+
+#### The title and description: `studio/ytdraft.py`
+
+The publish dialog opens with a title, a description and tags written from the film, not the
+prompt pasted in. Each side brings what only it has:
+
+- **The site brings the channel's voice.** With the `youtube.readonly` scope it already holds, it
+  reads the channel's latest uploads (titles, descriptions, tags; KitCut's own earlier posts left
+  out, so a pasted prompt cannot teach the voice). It posts them to
+  `POST /api/films/<id>/youtube/draft` `{"channel": {"id", "title", "handle"}, "recent": [...]}`.
+  Nothing of them is stored on either side.
+- **The studio brings the film.** `material()` reads the narration with each line's times
+  (`audio/vo/timeline.json`), who it was made for (film.js line 1) and the maker's note under it,
+  the paintings' prompts, the pages the facts came from (`web/sources.json` for pages read in the
+  browser, `events.jsonl` for WebFetch), what Claude said when it finished (its "please check"
+  notes included), the project, and the review sheet as one image. The prompt goes in marked
+  private: the request, not the film.
+- **One call, no tools.** Opus 5.5 at effort medium: 6-13 s and $0.05-0.13 a draft, measured
+  2026-09-28 on five films. Sonnet 5 wrote a correct but plainer draft at half the price; Opus
+  followed the channel's own structure ("In this video:", its links, its tagline).
+- **`check()` holds the answer to its inputs.** Only links that appear in the channel's own
+  descriptions or among the pages read survive; chapters must start at 0:00, be in order and end
+  inside the film, or the block goes with its heading; the title is one line cut at a word to 100
+  characters, the description 4,500 bytes (the site adds its credit line), the tags 500
+  characters counted YouTube's way. A draft that shares a run of 7 words with the prompt that
+  the film itself does not say is asked for again once, then given up; the site falls back to
+  its own defaults.
+- **Kept, and costed.** A draft is saved as `youtube/draft-<channel>.json` in the film, keyed by
+  everything it was written from, so asking again is free until the film or the uploads change
+  (`ops.sh replace` makes a new one). `youtube_drafts` and `youtube_draft_cost_usd` go on the
+  record and the run; on the key the cost joins `cost_usd`, so the day's budget sees it. At most
+  12 drafts per film.
+- **Try it by hand.** `python studio/ytdraft.py --film <id|folder> --sample-from @handle --plan`
+  prints the ask and its price and calls nothing; without `--plan` it writes the draft (on this
+  machine's login, not logged). `--sample-from` reads a public channel with yt-dlp.
+- **The test.** `python studio/test_ytdraft.py` stands in for Claude: the material, the link and
+  chapter rules, the prompt check, the cache, the cost, and the API (owner only, finished only,
+  202 then the draft).
 
 ## Projects: one folder and two files per video
 
@@ -3636,6 +4664,50 @@ Of those, `transcripts/` is the only expensive artifact (minutes of GPU time);
 everything in `temp/` regenerates in seconds.
 
 ## Gotchas worth knowing
+
+- **A cache that lives as long as the process grows with the batch, not with the film.** The
+  studio server makes one film's pictures and moves on; `share.py --missing` ran 55 films in
+  one process, `_thumb.load_still` kept every decoded still (2,196, 13.7 GB), and two films being
+  made on the same 16 GB VM failed with `Control request timeout: initialize` -- Claude could not
+  even start (KI-045). Two rules now, both enforced by `studio/test_memory.py` in the release
+  gate: a module-level cache of anything large is bounded (`_thumb.STILLS_MB`, least recently
+  used first); and every `systemd-run` in the deploy scripts carries `-p MemoryMax=` or says on
+  the line above `# memory: uncapped -- <why>`. `ops.sh status` warns under 2 GB available and
+  names the biggest process -- read it before and during any batch job on the VM.
+
+- **`-shortest` with a subtitle track cuts the film where the subtitles end.** A film's last
+  caption ends before its last frame, and `-shortest` counts the subtitle stream: a 40 s film
+  came out 38.57 s with its end card gone. Mux with `-t <duration>` and assert the duration
+  afterwards (`sketch-render.py` does).
+- **`eleven_v3` clips the last syllable of most takes.** Measured: 16 of 18 takes ended above
+  -30 dBFS, mid-word. Render "line + tail word" and cut in the silence before the tail
+  (`sketch-vo.py`); the line also gets a sentence-final ending that way. `mp3_44100_192` is a
+  403 below the Creator tier, so ask for `mp3_44100_128`; a TTS-scoped key gets 401 from the
+  music and sound-effects endpoints, which is why sketch films synthesise both.
+- **Chromium's blob store does not keep up with a frame export.** `canvas.toBlob()` per frame
+  failed with "Failed to fetch" after ~100 frames; the export posts raw RGBA from
+  `getImageData` instead (also twice as fast: no PNG encode or decode). An HTTP/1.0 server
+  opened a new connection per 8 MB frame and a render died on the one that got reset, so the
+  frame server speaks HTTP/1.1 keep-alive and the page retries a failed POST.
+- **Killing Chromium's parent on Windows leaves its children running.** A 1.3 GB renderer
+  outlived its run; `sketch-render.py` takes the whole tree with `taskkill /T`.
+- **Python's `hash()` of a string is salted per process.** A drum seeded from `hash(piece)`
+  sounded different every run; seed from the characters instead.
+- **`"swell": [from, to]` read as beats.** In `gliss` and `roll`, `from`/`to` are beats, so a
+  studio film wrote `"swell": [24, 30]` meaning "swell over beats 24-30". It is a gain ramp:
+  every string chord played 24-30x (+28 dB), from 16.5 s to the end, over the narration. Two
+  things let it through: nothing checked a score's volumes, and the studio's `sound` tool
+  returned the script's last 15 lines -- the stage timings -- so even `levels: true` never
+  showed Claude the balance. Now: `check_score` refuses volumes outside 0..1.5 (33 real scores
+  peak at 0.95), the voice gate holds the music 8 dB under the voice, and the tool reads
+  `audio/balance.json` (studio film ssemfm, 2026-09-26).
+- **A film that opens on blank paper looks broken.** A 0.35 s fade in from the paper colour
+  plus a draw-on that started at zero gave six identical blank frames and a slow fade: the
+  first thing a viewer saw was nothing. `SK.film` no longer fades in unless asked, and the
+  opening draw-ons start part-way. `ffmpeg ... -vf signalstats` on the first 40 frames
+  (YAVG) shows where the picture actually starts.
+- **A world-space paper texture balloons in a wide shot.** At zoom 0.4 its grain turned into
+  blotches; the engine draws paper in screen space and slides it with the camera.
 
 - **`-hwaccel cuda` fails the INPUT, so a missing card reads as a broken
   source file.** It is NVDEC on the input and a different axis from the NVENC

@@ -9,6 +9,40 @@ that has not happened yet.
 
 ---
 
+## 7. Studio films past ~15 minutes: scenes as the unit of work
+
+Measured on the 8-minute film llwtme (docs/known-issues.md KI-034): the film is one `film.js`,
+written by one Claude conversation that grows with it -- 73k tokens at the start, 371k at the end,
+the picture's first draft one reply of 57k tokens. Opus 5.5 allows 128K per reply and 1M per
+conversation, so the picture cannot be written in one reply past ~18 minutes of film, and the
+conversation outgrows the window past ~25; well before that each reply re-reads everything, so
+cost grows faster than length, and one stall puts the whole film at risk. The Phase 1 fixes
+(write in parts, the stall watchdog, lean narration results) push the limits out; they do not
+remove them.
+
+The redesign, agreed 2026-09-29, to build behind a switch for films over ~5 minutes (the
+step-by-step implementation plan, files and tests: docs/studio-scenes-plan.md):
+
+1. **Engine.** `SK.scene({lines: [a, b], draw(t, local)})` registered by `scenes/NN-*.js` files
+   loaded after `cast/`; the film's own draw composes the scenes covering t. A film is then a
+   shared look (`film.js`: palette, helpers, camera) plus a file per scene. Single-file films keep
+   working. "Every frame is a pure function of t" still holds, which is what lets a scene be
+   re-rendered alone.
+2. **Studio, three passes.** A director conversation writes the script, records the narration and
+   plans the scenes (line ranges, what each shows). Each scene is written and reviewed in a fresh
+   conversation carrying only the style guide, the shared look, its own lines and its neighbours'
+   last and first frames -- bounded whatever the film's length, and two or three can run at once.
+   An editor pass looks at the whole film's contact sheet for continuity.
+3. **Checkpoints.** A scene is done when its stills pass; a crash, stall or restart costs one scene,
+   and a resume continues from the next unfinished one -- no giant session to replay.
+4. **Render per scene,** cached, so a changed scene re-renders alone (the renderer already works in
+   parallel chunks).
+5. **Prove it first:** a stubbed-Claude ladder at 8, 16 and 30 minutes asserting every conversation
+   stays bounded and a killed scene recovers on its own; then real 2-, 8- and 16-minute films on
+   the VM's login against today's pipeline, for quality, cost and time. Adopt where it wins.
+
+---
+
 ## 1. Take an edit BACK from DaVinci Resolve
 
 **Half of this landed 2026-09-08.** `resolve-export.py` writes the cut as
@@ -209,3 +243,55 @@ rebuilding rather than rediscovering:**
    way `check-resolve.py` pins the interchange arithmetic.
 
 Do not open a third implementation.
+
+## 7. Ship the collage look on kitcut.ai
+
+**Built 2026-09-28 on branch `sketch-collage`, not released.** A third studio look, `collage`:
+an image model paints single objects cut out of paper (`sketch-paint.py` `"cutout": true`,
+openai/gpt-image-2.5-flare with real alpha, ~$0.012 each) and Claude builds pages round them
+with `sketch/collage.js` (sheets, tape labels, stamps, type, marker lines, ransom letters, the
+stop-motion nudge). Brief: `studio/looks/collage.md`; example: `config/sketch/collage-example/`;
+reference: "Collage films" in `docs/reference.md`. It answers a Runway + Opus 5.5 demo
+(@notiansans, 2026-09-28): the studio, given that post's own prompt (60 s, history of ice cream,
+"newspaper cutout / mixed media"), made a film at its level with no human edits in 21 minutes --
+17 cut-outs $0.20, voice $0.11, Claude $4.43 at API prices, 43 turns.
+
+**Decided 2026-09-29 (the owner approved):** a third *look* people pick -- Hand-drawn, Painted,
+Collage -- not capability checkboxes: people choose by the picture they want, only tested
+combinations can be promised, a ticked box becomes an order Claude must obey, and every
+capability is prompt Claude re-reads each turn at one flat price per second. Underneath, a look
+is a recipe of capabilities (`film.CAPS`, `RECIPES`), so parts can later move between looks
+(cut-outs in Painted, collage pieces in Drawn), each after its own bake-off. Checkboxes fit only
+delivery switches (no music, burned captions, 9:16), later. The plan: the owner's
+`concurrent-purring-biscuit` plan file, 2026-09-29.
+
+**Done 2026-09-29:** rebased onto studio-poc; looks as recipes of capabilities, prompts and new
+films byte-identical for all three looks; collage.js an opt-in engine module (the jelly
+branch's mechanism); the labels ("painting the cut-outs"), `/api/limits` cut-outs, the check
+tool covering `engine/collage.js`, a drawn film refused it; Cyrillic stand-in faces (IBM Plex
+Mono added); the stop-motion clock dividing 30 fps; the studio's copy of the example without
+its newspaper (196 -> 189 KB); collage direction and recent-films rows; `bakeoff.py --look`,
+`grade_extra` and the `collage` set (9 prompts).
+
+Open, in order:
+- **Run the bake-off** (`studio/README.md`, "Two looks from one tree"): collage and painted on
+  all nine, drawn on three; the owner watches the collage films and says go. The bar: all
+  made with no human edits; professional within 0.25 of painted; fits the subject 4+ on 7 of
+  9; childish at most 0.3 on the serious ones, the bedtime control still fits; a newspaper on
+  at most 1 of the 4 prompts where one is wrong; no missing Cyrillic; Claude's cost at most
+  1.3x painted's; if suez (120 s) fails, launch collage capped at 60 s.
+- **The site** (sketch-studio, a worktree from `origin/main`): three preview tiles for the
+  picker, the MCP enum and its descriptions ("when the idea names a style, pick the look that
+  matches"), projects, the gallery and film-page labels, pricing and privacy copy, the docs
+  (looks.md: painted's "collage" style becomes "paper-cut illustration"), the page mirror.
+- **VM pre-flight** before the ship: `import cv2` and WebP in the VM's venv, OpenRouter allows
+  `openai/gpt-image-2.5-flare`.
+- **Narration length, every look**: the first message asks for 2.2 words a second; Gemini reads
+  nearer 1.9 (the collage run re-recorded four times to fit 60 s; by hand, 140 words ran 72 s
+  against a 58 s plan). Measure over recent films and lower it -- a brief change, so bake-off.
+- **Cost**: the collage prompt is ~189 KB against ~133 KB. The studio's collage film called
+  nothing in props.js (59 KB of every prompt): leaving it out of collage films is a cost test
+  of its own. Separately, `lib/plans.js` `filmCost` is below measured cost in every look
+  (filmCost(60) $2.73; the 60 s collage film $4.74 at API prices).
+- **Release** with the studio-vm skill, after the user approves; then merge `sketch-collage`
+  into `studio-poc` (`--ff-only` after a rebase).

@@ -1,0 +1,50 @@
+{
+  "about": "Does a film look made for the audience its prompt implies? Five prompts for grown-ups on serious subjects, where a cartoonish look is a failure, and two controls where playfulness is right and must survive. Made for the no-style brief (2026-09-27), after the Dell/HP documentary studio-20260927-171047-mgkibw came out looking like a children's cartoon.",
+  "seconds": 30,
+  "prompts": [
+    {
+      "id": "dell",
+      "look": "drawn",
+      "audience": "adults: investors and business readers",
+      "prompt": "A documentary explainer: Dell went private in 2013, HP split in two in 2015, and a decade later the AI data-center boom decided which bet was right."
+    },
+    {
+      "id": "stroke",
+      "look": "drawn",
+      "audience": "adults: a patient's family, worried",
+      "prompt": "What happens in the first hour after someone arrives at hospital with a stroke, explained for the family waiting outside."
+    },
+    {
+      "id": "pripyat",
+      "look": "drawn",
+      "audience": "adults: a sombre piece of history",
+      "prompt": "The evacuation of Pripyat on 27 April 1986, the day after the accident at the Chernobyl nuclear plant."
+    },
+    {
+      "id": "expenses",
+      "look": "drawn",
+      "audience": "adults: a company's employees",
+      "prompt": "An internal announcement for our staff: from 1 November, expense approvals move from email to our new system, Ledgerly. What changes, and what everyone needs to do."
+    },
+    {
+      "id": "stroke-painted",
+      "look": "painted",
+      "audience": "adults: a patient's family, worried",
+      "prompt": "What happens in the first hour after someone arrives at hospital with a stroke, explained for the family waiting outside."
+    },
+    {
+      "id": "moon",
+      "look": "drawn",
+      "audience": "young children, at bedtime",
+      "control": true,
+      "prompt": "A bedtime story for a four-year-old: the moon can't fall asleep, so the stars help."
+    },
+    {
+      "id": "catcafe",
+      "look": "drawn",
+      "audience": "adults: a comic advert",
+      "control": true,
+      "prompt": "A funny ad for a cat cafe where the cats are the managers."
+    }
+  ]
+}

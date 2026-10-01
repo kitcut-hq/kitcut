@@ -72,6 +72,14 @@ afterwards against what was asked for. That applies to all of it.
 - **Card designer**: template x brand x words.
 - **Burned inside the render**, never a second encode.
 
+### Animated explainers
+- **A film with no footage**: hand-drawn or clean editorial animation written as
+  code, an AI voice-over, an original score and synthesised sound effects.
+- **Cues follow the voice**: visuals hang off spoken words, so a re-recorded
+  line takes its animation with it.
+- **Two deliverables**: a 60 fps MP4 with captions, and a one-file HTML player.
+- **Every stage timed**, so the next film can be priced before it starts.
+
 ### Publishing
 - **YouTube upload**, confirmed on the right channel, unlisted by default.
 - **Chapters from the transcript**, plus an audit of which videos lack them.
@@ -115,6 +123,12 @@ What changed and which capability it touched. Fixes that only a maintainer
 would care about are left to `git log`.
 
 ```
+2026-09-25
+  sketch     New pipeline: animated explainers written as code. Voice takes
+             picked by Whisper, a score on sampled instruments, synthesised
+             sound, a 60 fps render through headless Edge. Two looks, crayon
+             and clean; both shipped a film on day one.
+
 2026-09-03
   shorts     Picking the moments became its own stage: candidates shortlisted
              with reasoning, quotes resolved and hook timing priced BEFORE

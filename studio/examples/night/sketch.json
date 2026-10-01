@@ -1,0 +1,42 @@
+{
+  "title": "Home",
+  "description": "A Sketch Studio example film, inlined in the studio prompt.",
+  "slug": "night",
+  "duration": 12.0,
+  "fps": 60,
+  "film": "film.js",
+  "poster_t": 11.4,
+  "fonts": [
+    {
+      "file": "fonts/Caveat-Cyrillic-VF.ttf",
+      "family": "Caveat",
+      "weight": "400 700",
+      "load": "700"
+    },
+    {
+      "file": "fonts/BalsamiqSans-Regular.ttf",
+      "family": "Balsamiq Sans",
+      "weight": "400"
+    },
+    {
+      "file": "fonts/BalsamiqSans-Bold.ttf",
+      "family": "Balsamiq Sans",
+      "weight": "700"
+    }
+  ],
+  "player": {
+    "accent": "#d9733f",
+    "paper": "#f7f2e7",
+    "ink": "#2a2521",
+    "hint": "grounds",
+    "hint_font": "'Caveat', cursive"
+  },
+  "audio": {
+    "score": "score.json",
+    "sfx": "sfx.json",
+    "mix": {
+      "music_db": 6.0,
+      "sfx_db": 3.0
+    }
+  }
+}

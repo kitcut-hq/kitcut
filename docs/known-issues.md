@@ -448,3 +448,266 @@ yet cost a render.
 scenedetect 0.7.1; `auto-reframe.py` on `bbg-nvidia-hf` warns and then completes
 with faces found in 186/186 and 158/160 sampled frames.
 
+### KI-029 · limitation · render · With no GPU, the browser's H.264 takes a bitrate, not a quality
+
+**Symptom.** On a machine with no GPU encoder (the studio's Azure VM) `sketch-render.py --encode
+browser` prints `no-encoder: this browser will not encode {...prefer-hardware...}` and renders
+through the ffmpeg pipe instead, at a third of the speed.
+**Cause.** WebCodecs' H.264 on the GPU accepts `bitrateMode: "quantizer"` (a fixed QP, the `cq`
+contract). The browser's software H.264 (OpenH264) does not: Edge 154 on Ubuntu 24.04 offers only
+`variable` and `constant`. VP9 and AV1 take quantizer in software, but the master must be H.264.
+**Workaround.** `VIDEDIT_WEBCODECS=software` (or `render.webcodecs`) asks for the software encoder
+at `VIDEDIT_WEBCODECS_BITRATE` (default 24M). The VM runs 12M: VMAF 99.1 on a painted film, 99.99
+on line art; 5M scored 91.6 on the painted film. A bitrate is a ceiling the film does not choose,
+so a much busier look than any film so far may want more.
+**Evidence.** `studio/deploy/README.md`: D8ads_v5 35 fps software vs 18.8 fps pipe, same frames.
+
+### KI-030 · limitation · all · A laptop film's Claude session does not resume on the VM
+
+**Symptom.** Resuming a timed-out film's Claude session (`ClaudeAgentOptions(resume=sid)`, the
+`resume_film.py` route) fails, or works in the wrong folder, for a film made before the studio
+moved to the Azure VM.
+**Cause.** Claude Code keys a session transcript to its working directory, and the copied
+transcripts under `STUDIO_HOME/claude/<film>` record the laptop's `C:\` paths.
+**Workaround.** Finish such a film from its files (the studio's tools), not by resuming the
+session. Films made on the VM resume as before.
+
+### KI-031 · fixed · studio · A ship stopped a film and called it cancelled, then restarted onto the old code
+
+**Symptom.** A kitcut.ai film (`studio-20260928-165122-rts664`, 150 s) stopped 28 minutes in with
+"The film was cancelled." Nobody had pressed Stop. The studio came back on the release it already
+ran, not the one being shipped.
+**Cause.** Three things at once. (1) Three `ops.sh ship` runs overlapped, with no lock. (2) The
+first one's drain waited its 20 minutes (a 150 s film on the VM may take ~2 h), then restarted
+anyway. (3) `serve.sh release` ran `release.py` without `STUDIO_HOME`, so the release was built in
+`/srv/kitcut/kitcut-studio`, while the server reads `/srv/kitcut/studio/releases/current`: the
+restart changed nothing. On a restart, SIGTERM reaches `make_film` as a plain task cancel, the
+same path as the Stop button, so the film was recorded `cancelled`. A film that was mixing or
+rendering was recorded cancelled too, so the next server never finished it.
+**Fix.** `serve.sh` reads `STUDIO_HOME` from the unit, refuses to restart unless `current` names
+what it built, skips a restart onto what is already live, and holds `deploy.lock`. `ops.sh resume`
+(`studio/resume.py`) finishes a stopped film through Claude's own saved session, in the same film,
+its earlier cost carried. A stopping server tells its films why (`server.shutdown()`): one Claude
+was writing is recorded `interrupted` with a line on its page, one being mixed or rendered is left
+`finishing` for the next server, and the unit runs `KillMode=mixed`. Then (2026-09-29) one server per release: a ship starts the new release as its own
+`kitcut-studio@<instance>` beside the running one, which finishes its films and exits; nothing
+waits and nothing is stopped (`studio/peers.py`, `serve.sh switch`, `studio/deploy/README.md`). Live on the VM since 2026-09-28 21:55 PDT.
+**Evidence.** VM journal 2026-09-28 17:19:13 PDT (`Stopping kitcut-studio.service` in the same second
+as the film's last event); `/srv/kitcut/kitcut-studio/releases/266ba5829609` built beside the
+server's home; ship sessions from the laptop at 16:58, 17:08 and 17:13.
+
+### KI-032 · fixed · studio · On the VM every film step ran with no memory cap
+
+**Symptom.** The studio's log on the VM: `procs: no delegated cgroup ([Errno 16] Device or resource
+busy): steps run with no memory cap` (2026-09-28 13:40 and 16:08, once per server start). The unit's
+cgroup had no `server/` leaf and an empty `cgroup.subtree_control`.
+**Cause.** `procs.cgroup_root()` was set up lazily, at the first step. By then the first film's
+Claude Code child was already running in the unit's cgroup, and cgroup v2 refuses to hand the memory
+controller to children while the group itself holds a process. The failure is cached, so the
+server ran uncapped for its whole life.
+**Fix.** `server.main()` (and `resume.py`) call `procs.cgroup_root()` at start, before any child.
+**Evidence.** `/sys/fs/cgroup/system.slice/kitcut-studio.service`: `subtree_control` empty, no
+`server/`, on 2026-09-28 after films had run; the same EBUSY in the first `ops.sh resume` unit.
+
+### KI-033 · fixed · studio · A switch hung one request ~5 s through the tunnel
+
+**Symptom.** At each of the first two switches on the VM, one request through studio.kitcut.ai
+took the probe's whole timeout (5-8 s) about 3 s after the old server handed over; 398 requests
+straight to the port in another switch all answered in 2 ms.
+**Cause.** The old server closed the tunnel's held keep-alive connections itself at the handoff
+(aiohttp `pre_shutdown`), which can cut a request already on one.
+**Fix.** `server.bye()`: after the handoff the old server answers what still reaches it on those
+connections and tells the client to close each after its reply. Measured after: 44 requests through
+a switch, none failed, slowest 1.2 s. The first switch after shipping this fix still blips once
+(the old code does the handing over).
+**Verified on the VM 2026-09-29.** A film made on an old server through two switches finished done;
+rollback took 11 s and stopped nothing; a SIGKILLed leader restarted, led, and marked its orphaned
+film interrupted with a line on its page, leaving another server's films alone. Still to check at a
+quiet moment: a reboot (`kitcut-studio-boot` starting the current instance).
+
+### KI-034 · fixed · studio · A long film's picture, written in one reply, never came back
+
+**Symptom.** The 8-minute film llwtme sat for about an hour, twice, right after its narration was
+recorded: no events, no cost, the Claude Code process alive, its transcript showing `Request timed
+out.` every 5 minutes (retry n of 10). The API answered other requests at once.
+**Cause.** The next reply was the whole picture: 56,863 output tokens, 7.7 minutes (measured once
+the timeout was raised). Claude Code's request timeout was shorter, so it cut the reply off and
+asked again from scratch, forever. Three things grow with a film's length and meet here: the
+reply that writes the picture (57k tokens at 8 minutes; one reply may not pass 128K), the context
+Claude carries (73k at the start, 371k at the end: ~37k a minute of film, against a 1M window),
+and the narration tool's results (all 67 lines' word timings, 24,000 characters, every recording).
+**Fix.** `API_TIMEOUT_MS` 30 min and `CLAUDE_CODE_MAX_OUTPUT_TOKENS` 128000 (agent.claude_env); a film
+over 90 s is told to write its picture in parts and to leave a closing breath (agent.LONG_FILM,
+closing_s); a long narration's result carries each line's span and only the re-recorded line's
+words (tools.timeline_text); and a stall watchdog (agent.Pulse, talk_to_claude): 20 minutes with
+no message from Claude Code, no event and no tool at work cuts the reply off and picks the session
+up again with "shorter replies", at most twice -- then the film fails, and is refunded, instead of
+waiting hours. `ops.sh claude-log <film>` shows a film's replies, waits and stalls in one page.
+**Still open.** The film is one file written by one conversation that grows with it: past ~18
+minutes the picture cannot be written in one reply at all, past ~25 the conversation outgrows the
+window. The plan -- scenes as the unit of work, each in a fresh bounded conversation -- is in
+`docs/todo.md`.
+**Evidence.** `ops.sh claude-log studio-20260928-220505-llwtme --all`.
+
+### KI-035 · limitation · thumbnails · OCR cannot vouch for a thumbnail's words in Cyrillic
+
+**Symptom.** `thumb-options.py --ocr` (and the bake-off) report `None` for a Ukrainian option's
+legibility at feed size.
+**Cause.** RapidOCR's recognition model reads Latin script only: at 168 px it read "Знахідка в
+лісі" as "3HAXIAKA BΛICI" -- the shapes are legible, the alphabet is not its own.
+**Workaround.** None needed for the check that gates: the cap height at 168 px (>= 8 px) is
+measured from the layout and holds for any script. Only the second opinion is missing.
+
+### KI-036 · limitation · thumbnails · Saliency misses a painted film's big subjects
+
+**Symptom.** On painted films (`look: painted`), the subject map lights scattered specks and
+leaves the hedgehog and the squirrel that fill the frame dark; words placed by it alone would sit
+on them.
+**Cause.** Spectral-residual saliency finds what is small and different; a subject that fills half
+a painted frame is neither. Coarser scales did not fix it and lit up whole clean frames instead
+(bake-off 2026-09-29, `docs/reference.md` "Thumbnail options").
+**Workaround.** The draft's Claude call, which sees the moments, names each option's `place`; the
+subject map only fine-tunes inside it. An option with no `place` on a painted film can still land
+on a subject.
+
+### KI-037 · limitation · youtube · A channel that is not verified cannot take a custom thumbnail
+
+**Symptom.** A kitcut.ai publish finishes, and the dialog says "The thumbnail wasn't set: YouTube
+lets a channel use its own thumbnails once the channel is verified...". The video has YouTube's
+own frame.
+**Cause.** Custom thumbnails are an "intermediate" YouTube feature (support.google.com/youtube/
+answer/9890437): the channel needs a verified phone number. `thumbnails.set` answers 403
+`forbidden` without one.
+**Workaround.** The person verifies at youtube.com/verify and picks the thumbnail in YouTube Studio.
+The publish itself never fails on it (`api/youtube.js` setThumb).
+
+### KI-038 · limitation · thumbnails · A film that titles itself without SK.txt gets a stock type
+
+**Symptom.** A film's thumbnail words are in the tooling's Montserrat (or Balsamiq on a drawn
+film), coloured in the film's own text and accent colours, rather than in the type its titles use.
+**Cause.** The probe (`sketch/thumb.js`) learns a film's type from its `SK.txt` calls. The wine
+film `studio-20260928-110106-skiird` writes every title with its own vector pen
+(`P.lineText`, strokes in code, no font file), so there is no font to measure or draw with; 1 of
+40 films on the laptop (2026-09-29).
+**Workaround.** None yet. If more films take the pen, the probe can report its advance widths and
+`thumb.js` draw with it; the layout needs only widths and a cap height.
+
+### KI-039 · limitation · thumbnails · A card, panel or glow can cover the edge of a drawing
+
+**Symptom.** A thumbnail's words sit on a glow or card that hides the bottom of a calendar card
+or a phone in the frame: readable, but it looks like a collision.
+**Cause.** Only the film's *words* are protected exactly (OCR boxes: hidden whole or not at all).
+Everything else is weighed by the subject map, which misses flat UI drawings on clean films as
+it misses big painted subjects (KI-036).
+**Workaround.** The draft's `place` steers it; the person picks one of four and can choose
+another.
+
+### KI-040 · fixed · studio · A scene pass thought past its whole allowance before writing a line
+
+**Symptom.** The first real film made in scenes (i4d52n, 8 minutes, 12 scenes, collage, on the
+login) failed with "the scene did not finish in 2 tries". Scene 2 read its files, then Claude
+Code received only keep-alive pings (36 bytes every 30 s, `[Stall] stream_idle_partial`) until
+the pass's time ran out, twice. No API errors, no rate limit; the login's output speed matched the
+key's (316 vs 317-321 tokens/s on comparable films).
+**Cause.** At effort xhigh, Opus thought for over 10 minutes before the first token of a
+40-second scene, and a scene pass got 8 min + 3 per minute of scene, i.e. 10 minutes. The
+director had also needed a second try: its 28 minutes went on narration retakes. And the film's
+own limit (film.limits, sized for one conversation: 136 min at 8 minutes) could not have held
+a director plus eleven scenes at any per-scene figure that works.
+**Fix.** Passes in scenes mode think at `scenes.EFFORT` = high (a picked-up pass too); a scene
+gets 20 min + 3 per minute, the director 40 min + 20 s per minute of film; a scenes film's Claude
+time is the sum of its passes' (`scenes.film_claude_s`). i4d52n was resumed onto it.
+**Evidence.** `ops.sh claude-log studio-20260929-103129-i4d52n --all`.
+
+### KI-041 · fixed · studio · A narration that ran past the film's end failed the whole film at the mux
+
+**Symptom.** u3edgl (2:30, painted, on the login) wrote, painted and rendered all 9,000 frames,
+then failed: `mux failed ... rendered 150.96s, expected 150.00s`. Its twin from the same prompt
+(w3vfyn) came out fine.
+**Cause.** Its narration overran: it spent the film's six recordings ("keep the narration you
+have") and its last line was placed at 150.99 s of 150. `_sketch.captions` clamped each cue's end
+to the film's end but not its start, so the last cue ran backwards (`00:02:30,987 -->
+00:02:29,950`); ffmpeg's `-t` trims the audio and video but a mov_text sample keeps its length, so
+the subtitle track outlasted the picture and the duration check refused the file. Claude never
+knew: `sketch-vo.py` prints "voice ends at ..., after the film's ..." only to its own log, and the
+voice tool hands back just the timeline.
+**Fix.** No cue from the film's end on, none backwards, none past the picture (`_sketch.captions`,
+check-sketch "captions: nothing after the film's end"); the voice tool's result opens with a NOTE
+when the narration ends after the film (`tools.timeline_text`, test_server). Still open: a film
+that has used its last recording can only keep the overrun, and loses the words past the end.
+**Evidence.** `/srv/kitcut/studio/projects/studio-20260929-121021-u3edgl` (events.jsonl,
+outputs/film.srt).
+
+### KI-042 · fixed · studio · A collage film made in scenes could order no cut-outs
+
+**Symptom.** i4d52n (collage, 8 minutes, scenes) has no pictures at all: every scene drew its
+bikes in code ("there are no painted images yet"), and scene 2 went looking for
+`images/spec-epic.webp`, which was never painted.
+**Cause.** The director's write list allowed `paint.json` only when `film.look == "painted"`.
+Collage paints too (its recipe carries `cutouts`), so the director's two writes of `paint.json`
+(at 395 s and 1992 s) were refused, and no later pass may write it.
+**Fix.** `agent.director_files()` allows it whenever `film.paint_kinds(film.caps)` is not empty;
+`test_scenes.py` checks every look.
+**Evidence.** `blocked` events at 395.1 and 1991.6 in i4d52n's events.jsonl.
+
+### KI-043 · open · studio · A non-English narration's word timing starves behind renders on the 4-vCPU VM
+
+**Symptom.** c6ckpu (90 s, Spanish, drawn, 2026-09-29) spent 17.6 of its 38 Claude minutes in
+one `voice` call, then stalled 13 minutes thinking before its first line of film.js and ran out
+("Claude ran past the 38-minute limit"). Resumed, it wrote the whole film in 124 s of Claude time.
+Its Ukrainian twin 4kr5hv (90 s, collage, started 16 minutes later) went the same way: its first
+`voice` + `paint` call took 19.5 minutes, two more voice runs 10, then the limit. Both English
+films made beside them (small.en) finished on time.
+**Cause.** sketch-vo.py's `score` stage (Whisper, word times for Gemini's takes) took 1,040 s for
+13 lines, and 288 s to re-time one. English scores on small.en; every other language on
+large-v3, on the CPU (int8). At that moment the 4-vCPU machine was rendering four things (load
+9-13): two films on the handed-off server, one on the new leader, and a `resume --finish` unit.
+Each server and each resume unit has its own pools (browser 4, cpu 2), so a ship's handover or a
+resume multiplies the machine's real concurrency; and the step cgroups enable only the memory
+controller, so nothing gives a scoring step priority over a render.
+**Measured.** On the laptop's CPU, int8, 4 threads, the real takes of c6ckpu (13 es) and 4kr5hv
+(15 uk): large-v3 128 s / 157 s, large-v3-turbo 103 s / 113 s (1.2x / 1.4x faster); mean acc
+0.904 -> 0.908 (es), 0.947 -> 0.967 (uk), turbo equal or better on every line; word starts differ
+by a median 0.08-0.10 s, max 0.72 s. So the model is not the lever -- uncontended, large-v3 times
+a 90 s narration in ~2 minutes; contention cost 15 more.
+**Options (not done).** Make renders yield: `cpu` in the delegated subtree_control and a low
+`cpu.weight` on the final render's and web copy's step cgroups (nice works only inside one
+server's cgroup, and this incident's load came from other units); count other servers' and
+resume units' renders in the browser pool; turbo as the multilingual default (measured above:
+modest speed, no loss). Until then: do not `resume --finish` or ship while a non-English film is
+recording its voice.
+**Evidence.** `/srv/kitcut/studio/projects/studio-20260929-130142-c6ckpu/temp/pipeline/runs/`,
+`ops.sh claude-log studio-20260929-130142-c6ckpu`.
+
+### KI-044 · open · studio · A film that ends on a fade or on bare paper gets a blank gallery card
+
+**Symptom.** Apollo 13 (w3vfyn, painted) showed in kitcut.ai's gallery as a black tile with a
+ghost of its title: its poster is the frame 0.4 s before the end (`film.py`: `poster_t`), which
+was the fade-out of its closing card.
+**Measured.** The 70 posters in the public gallery on 2026-09-29: 2 near-black (mean < 30,
+contrast < 25: 2ohqb3, ekvghs) and 4 near-white bare paper (mean > 250, contrast < 10: l7bd42,
+il6box, 7c7q5d, ebqs2d) -- 6 of 70. `media.make_card` already swaps a mid-fade poster for the
+liveliest of four frames, but only for card.jpg (link previews); the gallery and the film page
+show the poster itself.
+**Workaround.** Replace `outputs/film_poster.png` with a chosen frame, delete `card.jpg`, then
+`studio/media.py --film <id>` in the current release with the studio's env (done for w3vfyn at
+144 s). **Fix (not done):** give the poster make_card's fallback, or let the gallery use the card.
+
+### KI-045 · fixed · studio · A share back-fill held 15 GB, and the films being made could not start Claude
+
+**Symptom.** 2026-09-29 21:38 PDT: two films failed 80 s in with `Control request timeout:
+initialize` (wtv3gp, and g3lna7, a Pro project episode). The Claude CLI could not start: the VM
+had 132 MB available of 16 GB. The page then showed the failed episode as a dead tile (site
+f567f72 fixed that: open, Try again, Edit idea).
+**Cause.** `ops.sh share --missing` (studio/share.py, started 19:41 for 97 films) ran every film's
+thumbnails in one process, and `scripts/_thumb.py load_still` kept every decoded still in a
+module-level dict, never evicted. Measured: 55 films' stills on disk = 2,196 stills of 1920x1080
+= 13.66 GB decoded RGB, against the process's 15.4 GB RSS. The server makes one film's pictures at
+a time and never grew enough to notice; a back-fill does many. Its own pictures then failed too
+("no progress from the page for 90s"), because the browser had no memory either.
+**Fix.** `load_still` is a least-recently-used cache capped at `THUMB_STILLS_MB` (600: two films
+at once); 200 stills now hold 597 MB instead of 1,244. `ops.sh share` runs the back-fill with
+`MemoryHigh=2G MemoryMax=3G Nice=10`, so a leak there kills the back-fill, not the films. The two
+films were made again as their owners through the site's createFilm (pzk2ay, py7ko5).
+**Lesson.** A batch job beside the live server needs a memory cap before it starts; watch
+`free -m` while it runs.

@@ -38,7 +38,9 @@ def load_dotenv(path=None, override=False):
     gitignored. Values already in the environment win unless override is set.
     """
     p = path or os.path.join(ROOT, ".env")
-    if not os.path.exists(p):
+    # KITCUT_DOTENV=0: a host that hands each run exactly the keys it needs (Sketch Studio) says
+    # so, and the repo's .env is then not read at all
+    if not os.path.exists(p) or (path is None and os.environ.get("KITCUT_DOTENV") == "0"):
         return {}
     got = {}
     with open(p, encoding="utf-8") as f:
@@ -179,11 +181,14 @@ def prune_foreign_site_packages():
     install before any third-party import happens.
     """
     own = site_roots()
-    sys.path[:] = [
-        x
-        for x in sys.path
-        if "site-packages" not in x.lower() or os.path.normcase(os.path.abspath(x)) in own
-    ]
+
+    def mine(x):
+        # a folder *inside* our own site-packages is ours too: pywin32's .pth adds
+        # site-packages/win32 and win32/lib, and dropping them breaks `import pywintypes`
+        n = os.path.normcase(os.path.abspath(x))
+        return any(n == r or n.startswith(r + os.sep) for r in own)
+
+    sys.path[:] = [x for x in sys.path if "site-packages" not in x.lower() or mine(x)]
 
 
 def bootstrap():

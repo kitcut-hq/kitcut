@@ -1,0 +1,1046 @@
+#!/usr/bin/env python
+"""Render a sketch film: the self-contained HTML player, review stills, and the video.
+
+A sketch film is JavaScript: sketch/engine.js + sketch/props.js + the project's film.js, where
+every frame is a pure function of time. This script bundles those with the fonts and the
+mastered soundtrack into one HTML file (plays anywhere, offline), and renders the video by
+opening that page in headless Edge/Chrome (the browser html-to-image.py already finds -- no
+Node, no Playwright). The page draws each frame and POSTs its PNG to a tiny local server here,
+which pipes it straight into ffmpeg; `_encode` chooses the encoder. With `--encode browser` the
+page encodes the frames itself (WebCodecs, the GPU's H.264 encoder) and POSTs only the stream.
+
+Every stage is timed into the project's run log; `--timings` prints the latest time of every
+stage of every sketch tool for the project -- the "how long does a film take" answer.
+
+Outputs (projects/<id>/outputs/):
+    <slug>.html                 the player (fonts, code, audio inlined)
+    artifact/<slug>.html        the same, without html/head/body, for claude.ai Artifacts
+    <slug>.mp4                  the film (audio + a soft English subtitle track when captions exist)
+    <slug>_poster.png           the poster frame
+    (the video's first frame is the film's cover -- see `cover` below)
+    review/<t>.png, review/sheet.png    (--stills / --sheet)
+
+Manifest keys: title, description, slug, duration, fps, film ("film.js"), fonts
+([{"file", "family", "weight", "load"}]), images ({"logo": "assets/logo.png"} -> SK.IMG.logo),
+player ({accent, paper, ink, hint, hint_font}), poster_t,
+cover (the video's first frame -- X, iMessage and a phone's player show it before play, and a film
+that opens on bare paper shows there as an empty rectangle: true (default) draws the poster, or a
+livelier later moment when the film ends on paper, as frame 0 -- 1/fps of a second, unseen in
+play; a number is that film time; false keeps the film's own opening),
+render ({cq, preset, audio_bitrate, encoder, encode}: encode "browser" has the page encode its own
+frames, see --encode),
+tail ({secs, scripts, images, audio}: a closing after the film -- `secs` more of picture, drawn by
+`scripts` run after film.js, which lengthen SK._film; its sound is sketch-audio's),
+head ({scripts}: run just before film.js, in its scope -- sketch/thumb.js, a thumbnail's probe and
+overlay; a stills run saves what the page's SK.REPORT() returns as <into>/report.json),
+cast ("cast": a folder whose <name>.js files each run before film.js, as SK.cast.<name>),
+modules (["collage"]: engine extensions a film opts into, sketch/<name>.js -- the film's own
+engine folder first -- run after props.js; "collage" is the cut-outs and paper pieces).
+
+Invoke as:
+    python scripts/sketch-render.py --manifest projects/<id>/sketch.json --plan
+    python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 1.5,9,23.8 --sheet
+    python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 0,0.25,0.5 --into temp/motion
+    python scripts/sketch-render.py --manifest projects/<id>/sketch.json --automation
+    python scripts/sketch-render.py --manifest projects/<id>/sketch.json --bundle
+    python scripts/sketch-render.py --manifest projects/<id>/sketch.json            (full render)
+    python scripts/sketch-render.py --manifest projects/<id>/sketch.json --draft    (30 fps, faster)
+    python scripts/sketch-render.py --manifest projects/<id>/sketch.json --encode browser --jobs 6
+    python scripts/sketch-render.py --manifest projects/<id>/sketch.json --timings
+"""
+
+import sys
+import os
+import re
+import json
+import html
+import io
+import time
+import secrets
+import base64
+import shutil
+import signal
+import argparse
+import tempfile
+import threading
+import subprocess
+import urllib.parse
+from importlib import import_module
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+
+import _encode  # noqa: E402
+import _project  # noqa: E402
+import _sketch  # noqa: E402
+
+SKETCH = os.path.join(_env.ROOT, "sketch")
+FRAME_BYTES = 1920 * 1080 * 4  # the page exports raw RGBA frames
+# the pipe's RGBA -> YUV is BT.709 and says so, as the browser encoder's is (_encode.webcodecs):
+# ffmpeg's default is BT.601, untagged, which a browser guessing BT.709 for HD shows 5.6 levels
+# too dark in green (docs/studio-speed.md). A CPU-only machine renders through the pipe.
+PIPE_COLOUR = [
+    "-vf",
+    "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p",
+    "-colorspace",
+    "bt709",
+    "-color_primaries",
+    "bt709",
+    "-color_trc",
+    "bt709",
+]
+
+
+# ------------------------------------------------------------------ bundling
+def b64(path):
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+
+def read_text(path):
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+def mime(path):
+    ext = os.path.splitext(path)[1].lower()
+    return {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".svg": "image/svg+xml",
+        ".webp": "image/webp",
+    }.get(ext, "application/octet-stream")
+
+
+def vo_timeline(m):
+    """sketch-vo's timeline, trimmed to what a film needs (line starts/ends and word times)."""
+    p = _sketch.rel(m, m.get("audio", {}).get("vo_timeline", "audio/vo/timeline.json"))
+    if not os.path.exists(p):
+        return {"lines": []}
+    with open(p, encoding="utf-8") as f:
+        tl = json.load(f)
+    return {
+        "lines": [{"start": L["start"], "end": L["end"], "words": L["words"]} for L in tl["lines"]]
+    }
+
+
+def cast_scripts(m):
+    """ "cast": "cast" -- a folder of cast members, each its own script between the props and
+    film.js (Sketch Studio: a person's recurring characters, studio/library.py). Each runs in its
+    own function scope and names itself in an error. "" for a manifest without one."""
+    if not m.get("cast"):
+        return ""
+    d = _sketch.rel(m, m["cast"])
+    out = ["<script>\nSK.cast = SK.cast || {};\n</script>"]
+    for n in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if re.fullmatch(r"[a-z][a-z0-9_]{0,30}\.js", n):
+            out.append(
+                "<script>\n(function () {\n%s\n})();\n//# sourceURL=cast/%s\n</script>"
+                % (read_text(os.path.join(d, n)), n)
+            )
+    return "\n".join(out)
+
+
+SCENE_FILE = re.compile(r"[0-9]{2}-[a-z0-9-]{1,40}\.js")
+
+
+def scene_scripts(m):
+    """ "scenes": "scenes" -- a film written a scene at a time (Sketch Studio's scenes mode): each
+    scenes/NN-slug.js registers one scene (SK.scene, engine.js) and loads after film.js, which holds
+    the shared look, in name order and in its own function scope, naming itself in an error like a
+    cast member. "" for a manifest without scenes."""
+    if not m.get("scenes"):
+        return ""
+    d = _sketch.rel(m, m["scenes"])
+    out = []
+    for n in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if SCENE_FILE.fullmatch(n):
+            out.append(
+                "<script>\n(function () {\n%s\n})();\n//# sourceURL=scenes/%s\n</script>"
+                % (read_text(os.path.join(d, n)), n)
+            )
+    return "\n".join(out)
+
+
+def module_scripts(m):
+    """ "modules": ["collage"] -- engine extensions only some films need, so every other film's
+    page does not carry them. Each is sketch/<name>.js, or the same file in the film's own
+    engine folder when it has one (Sketch Studio's per-film copy may extend it), and names
+    the one it ran from in an error: engine/<name>.js is the film's copy."""
+    out = []
+    for name in m.get("modules") or []:
+        _sketch.safe_name(name, "module")
+        for d in (m["_engine"], SKETCH):
+            p = os.path.join(d, name + ".js")
+            if os.path.exists(p):
+                break
+        else:
+            sys.exit("module %r: no sketch/%s.js" % (name, name))
+        where = "sketch" if os.path.samefile(d, SKETCH) else "engine"
+        out.append("<script>\n%s\n//# sourceURL=%s/%s.js\n</script>" % (read_text(p), where, name))
+    return "\n".join(out)
+
+
+def bundle(m, audio=True):
+    """The player page with everything inlined. Returns the HTML text."""
+    with open(os.path.join(SKETCH, "player.html"), encoding="utf-8") as f:
+        page = f.read()
+    faces, loads = [], []
+    for fnt in m.get("fonts", []):
+        p = _env.resolve(fnt["file"])
+        fmt = "woff2" if p.endswith(".woff2") else "truetype"
+        style = fnt.get("style", "normal")  # "italic" for a family's italic face
+        faces.append(
+            "@font-face { font-family: '%s'; src: url(data:font/%s;base64,%s) format('%s'); "
+            "font-weight: %s; font-style: %s; font-display: block; }"
+            % (fnt["family"], fmt, b64(p), fmt, fnt.get("weight", "400"), style)
+        )
+        italic = "italic " if fnt.get("style") == "italic" else ""
+        for w in str(fnt.get("load", fnt.get("weight", "400"))).split():
+            loads.append('%s%s 60px "%s"' % (italic, w, fnt["family"]))
+    pl = {
+        "accent": "#d9733f",
+        "paper": "#f7f2e7",
+        "ink": "#2a2521",
+        "hint": "play · sound on",
+        "hint_font": "system-ui, sans-serif",
+        **m.get("player", {}),
+    }
+    film = read_text(_sketch.rel(m, m.get("film", "film.js")))
+    # scripts that run before the film's own code, in its scope (a thumbnail's probe must see the
+    # film pick up SK's functions, and a film may take them into locals at its top)
+    for p in reversed((m.get("head") or {}).get("scripts", [])):
+        film = read_text(_sketch.rel(m, p)) + "\n;\n" + film
+    tail = m.get("tail") or {}
+    for p in tail.get("scripts", []):  # a closing drawn after the film (it lengthens SK._film)
+        film += "\n;\n" + read_text(_sketch.rel(m, p))
+    mp3 = os.path.join(m["_audio"], "final.mp3")
+    src = "data:audio/mpeg;base64," + b64(mp3) if audio and os.path.exists(mp3) else ""
+    rep = {
+        "__TITLE__": html.escape(m.get("title", m["_id"])),
+        "__DESCRIPTION__": html.escape(m.get("description", "")),
+        "__FONTFACES__": "\n".join(faces),
+        "__FONT_LOADS__": json.dumps(loads),
+        "__ACCENT__": pl["accent"],
+        "__PAPER__": pl["paper"],
+        "__INK__": pl["ink"],
+        "__HINT__": html.escape(pl["hint"]),
+        "__HINT_FONT__": pl["hint_font"],
+        "__POSTER_T__": str(m.get("poster_t", m["duration"] - 1)),
+        # the film's own engine folder when its manifest names one (Sketch Studio's per-film copy)
+        "__ENGINE__": read_text(os.path.join(m["_engine"], "engine.js")),
+        "__PROPS__": read_text(os.path.join(m["_engine"], "props.js")),
+        "__MODULES__": module_scripts(m),
+        "__CAST__": cast_scripts(m),
+        "__FILM__": film,
+        "__SCENES__": scene_scripts(m),
+        "__AUDIO__": src,
+        "__VO__": json.dumps(vo_timeline(m)),
+        "__IMAGES__": json.dumps(
+            {
+                k: "data:%s;base64,%s" % (mime(v), b64(_sketch.rel(m, v)))
+                for k, v in {**m.get("images", {}), **tail.get("images", {})}.items()
+            }
+        ),
+    }
+    # one pass, so a placeholder-looking string inside the film code is never re-substituted
+    return re.sub("|".join(re.escape(k) for k in rep), lambda mo: rep[mo.group(0)], page)
+
+
+def artifact_flavour(page):
+    """claude.ai Artifacts wrap the page in their own doctype/html/head/body and viewport meta."""
+    return re.sub(
+        r"<!doctype html>\s*|</?html[^>]*>\s*|</?head>\s*|</?body>\s*"
+        r'|<meta charset[^>]*>\s*|<meta name="viewport"[^>]*>\s*',
+        "",
+        page,
+        flags=re.IGNORECASE,
+    )
+
+
+# ------------------------------------------------------------------ the page drives, we listen
+# What the page may reach: only its own server. Everything it needs is inlined as data: URIs, so
+# the film's code can neither call out to the network nor into another render (or anything else)
+# listening on this machine's loopback ports.
+CSP = (
+    "default-src 'self' data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src 'self'; "
+    "form-action 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'"
+)
+
+
+class Session:
+    """Serve one page to headless Chromium and collect what it POSTs back.
+
+    The page lives under a random prefix (/<key>/film.html) and posts to paths relative to it; a
+    request without the key is refused, so nothing else on the machine can feed this render."""
+
+    def __init__(self, page, on_frame=None, on_still=None, on_h264=None):
+        self.page = page.encode("utf-8")
+        self.on_frame, self.on_still, self.on_h264 = on_frame, on_still, on_h264
+        self.done = threading.Event()
+        self.error, self.automation, self.frames, self.last = None, None, 0, time.time()
+        self.report = None  # what the page's SK.REPORT() said after its stills, if it has one
+        self.key = "/" + secrets.token_hex(12) + "/"
+        sess = self
+
+        class H(BaseHTTPRequestHandler):
+            # keep-alive: an HTTP/1.0 server opens a new connection for every 8 MB frame, and a
+            # render died on the one that got reset (~350 frames in, "Failed to fetch")
+            protocol_version = "HTTP/1.1"
+
+            def log_message(self, *a):
+                pass
+
+            def refuse(self):
+                self.send_response(404)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def do_GET(self):
+                if not self.path.startswith(sess.key):
+                    return self.refuse()
+                self.send_response(200)
+                self.send_header("Connection", "keep-alive")
+                self.send_header("Content-Security-Policy", CSP)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(sess.page)))
+                self.end_headers()
+                self.wfile.write(sess.page)
+
+            def do_POST(self):
+                n = int(self.headers.get("Content-Length") or 0)
+                body = self.rfile.read(n) if n else b""
+                if not self.path.startswith(sess.key):
+                    return self.refuse()
+                path, _, q = self.path[len(sess.key) - 1 :].partition("?")
+                sess.last = time.time()
+                try:
+                    if path == "/frame" and sess.on_frame:
+                        sess.on_frame(int(q.split("=")[1]), body)
+                        sess.frames += 1
+                    elif path == "/h264" and sess.on_h264:
+                        sess.on_h264(int(q.split("=")[1]), body)
+                    elif path == "/still" and sess.on_still:
+                        sess.on_still(q.split("=")[1], body)
+                    elif path == "/automation":
+                        sess.automation = json.loads(body)
+                    elif path == "/report":
+                        sess.report = json.loads(body)
+                    elif path == "/error":
+                        sess.error = body.decode("utf-8", "replace")
+                        sess.done.set()
+                    elif path == "/done":
+                        sess.done.set()
+                except Exception as e:  # noqa: BLE001 -- a handler that dies silently leaves the page waiting forever
+                    sess.error = "%s while handling %s: %s" % (type(e).__name__, self.path, e)
+                    sess.done.set()
+                self.send_response(204)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+        class Server(ThreadingHTTPServer):
+            def handle_error(self, request, client_address):
+                # Chromium closing its keep-alive connection when the run ends is not an error
+                if not isinstance(sys.exc_info()[1], (ConnectionError, OSError)):
+                    super().handle_error(request, client_address)
+
+        self.server = Server(("127.0.0.1", 0), H)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def run(self, query, stall=90, fatal=True):
+        """Drive the page until it reports /done. A failure exits, or with fatal=False is
+        returned as a string so the caller can retry."""
+        h2i = import_module("html-to-image")
+        browsers = h2i.find_browsers()
+        if not browsers:
+            sys.exit("no Edge/Chrome found (set HTML2IMG_BROWSER to a Chromium executable)")
+        prof = tempfile.mkdtemp(prefix="sketch-render-")
+        url = "http://127.0.0.1:%d%sfilm.html?%s" % (self.server.server_address[1], self.key, query)
+        # the four --disable-* flags keep Chromium from throttling a page it thinks nobody sees:
+        # a headless window on Windows counts as occluded, and a throttled page stalls a render
+        cmd = [
+            browsers[0],
+            "--headless=new",
+            "--disable-background-timer-throttling",
+            "--disable-renderer-backgrounding",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-features=CalculateNativeWinOcclusion",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--mute-audio",
+            "--hide-scrollbars",
+            "--user-data-dir=" + prof,
+            "--window-size=1920,1080",
+        ]
+        if os.environ.get("SKETCH_RENDER_OFFLINE") == "1":
+            # no network at all: every request that is not to this page's own loopback server
+            # goes to a proxy that is not there, names never resolve, and WebRTC stays off
+            cmd += [
+                "--proxy-server=http://127.0.0.1:9",
+                "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1",
+                "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+                "--disable-extensions",
+                "--disable-sync",
+                "--disable-component-update",
+                "--no-pings",
+            ]
+        cmd.append(url)
+        env, sock = None, None
+        if os.name != "nt":
+            # Chromium's singleton socket goes in $TMPDIR, and a Unix socket's path may not pass
+            # 107 bytes. The studio puts TMPDIR inside the film (projects/<film>/temp/tmp), which
+            # on the VM reached 108 and every browser died at start (FATAL "Socket path too
+            # long", exit -6). The socket gets a short private folder; the profile stays put.
+            sock = tempfile.mkdtemp(prefix="skr-", dir="/tmp")
+            env = {**os.environ, "TMPDIR": sock}
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+        try:
+            while not self.done.wait(1.0):
+                if proc.poll() is not None:
+                    self.error = self.error or "browser exited early (code %s)" % proc.returncode
+                    break
+                if time.time() - self.last > stall:
+                    self.error = "no progress from the page for %ds" % stall
+                    break
+        finally:
+            kill_tree(proc)
+            self.server.shutdown()
+            shutil.rmtree(prof, ignore_errors=True)
+            if sock:
+                shutil.rmtree(sock, ignore_errors=True)
+        if self.error and fatal:
+            sys.exit("page error: %s" % self.error)
+        return self.error
+
+
+def kill_tree(proc):
+    """Chromium is a process tree; on Windows killing the parent leaves the renderer and GPU
+    children running (measured: a 1.3 GB renderer outlived its run). Take the whole tree.
+
+    On Linux the tree is read off /proc rather than taken as a process group: the browser stays
+    in the step's own group, so the studio's kill of a step (studio/procs.py) still reaches it."""
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, check=False
+        )
+    else:
+        for pid in [*descendants(proc.pid), proc.pid]:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
+    proc.wait(timeout=10)
+
+
+def descendants(root):
+    """Every process below `root`, from /proc (empty where there is no /proc, e.g. macOS)."""
+    kids = {}
+    try:
+        names = os.listdir("/proc")
+    except OSError:
+        return []
+    for d in names:
+        if not d.isdigit():
+            continue
+        try:
+            with open("/proc/%s/stat" % d, encoding="utf-8", errors="replace") as f:
+                ppid = int(f.read().rsplit(")", 1)[1].split()[1])  # comm may hold spaces
+        except (OSError, ValueError, IndexError):
+            continue
+        kids.setdefault(ppid, []).append(int(d))
+    out, todo = [], [root]
+    while todo:
+        for c in kids.get(todo.pop(), []):
+            out.append(c)
+            todo.append(c)
+    return out
+
+
+def auto_jobs():
+    """Browsers to run at once. Each is a renderer process plus an encoder, about 2-3 cores
+    busy; past a quarter of the logical cores the page's GPU readback is the wall."""
+    return max(1, min(6, (os.cpu_count() or 4) // 4))
+
+
+def packets(path):
+    """Video frames in a file, counted from its packets (no decode); 0 when it will not open."""
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets"]
+        + ["-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", path],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return int(r.stdout.strip() or 0) if r.returncode == 0 else 0
+
+
+def render_frames(page, cfg, fps, t0, n_frames, chunk, jobs, temp, silent, how="pipe", cover=None):
+    """Draw frames [0, n_frames) into `silent`. The film is cut into chunks of `chunk` seconds;
+    `jobs` browsers draw chunks at once, each into its own encoder and segment file, and the
+    segments are joined by stream copy. One browser is serial -- draw, read back, POST 8 MB,
+    wait for the encoder -- so the machine sat mostly idle while it rendered.
+
+    `how` is where a chunk is encoded. "pipe": the page POSTs raw RGBA and ffmpeg encodes it with
+    `_encode.video_args`. "browser": the page encodes with its own hardware H.264 encoder
+    (`_encode.webcodecs`) and POSTs the stream, which ffmpeg only wraps. Measured on a 33 s film
+    (2026-09-28): pipe ran 87 s at 3 browsers and 91 s at 6 -- the 8 MB per frame, not the
+    drawing, was the wall -- and browser 28 s at 6. A browser that cannot encode falls back to
+    pipe, loudly, for the rest of the render.
+
+    `cover`: a film time the video's first frame draws instead of t0 (choose_cover).
+
+    A fresh browser per chunk: measured on a 63.5 s film, one session fell from 13.8 to 1.5 fps
+    and then stopped answering at frame ~2700. A chunk that fails is redrawn from its start
+    (frames are a pure function of t, so the redraw is identical), up to three times."""
+    per = max(1, int(round(chunk * fps)))
+    # a film shorter than jobs x chunk (a 5 s Sketch Studio film is one chunk) is split evenly
+    # across the browsers instead, down to 1 s each -- below that a browser's start-up dominates
+    per = min(per, max(fps, -(-n_frames // max(1, jobs))))
+    chunks = [(a, min(n_frames, a + per)) for a in range(0, n_frames, per)]
+    seg_dir = os.path.join(temp, os.path.splitext(os.path.basename(silent))[0] + "_segments")
+    shutil.rmtree(seg_dir, ignore_errors=True)
+    os.makedirs(seg_dir)
+    lock, t_start = threading.Lock(), time.time()
+    done, failed, next_report = [0], [], [fps * 5]
+    jobs = max(1, min(jobs, len(chunks)))
+    mode = [how]  # a browser with no encoder turns this to "pipe" for every chunk after it
+    print(
+        "  %d chunks of %d frames, %d at a time, encoded %s"
+        % (len(chunks), per, jobs, "in the browser" if how == "browser" else "by ffmpeg"),
+        flush=True,
+    )
+
+    def progress(k):
+        with lock:
+            done[0] += k
+            if done[0] >= next_report[0]:
+                next_report[0] += fps * 5
+                rate = done[0] / max(time.time() - t_start, 1e-3)
+                print(
+                    "  frame %d/%d  %.1f fps  eta %.0fs"
+                    % (done[0], n_frames, rate, (n_frames - done[0]) / max(rate, 1e-3)),
+                    flush=True,
+                )
+
+    def cover_q(a):
+        return "&cover=%r" % cover if cover is not None and a == 0 else ""
+
+    def encode_in_browser(a, b, seg):
+        """One chunk through the page's own encoder: the stream arrives in batches, is written
+        as raw H.264, and ffmpeg wraps it without re-encoding."""
+        h264 = seg + ".h264"
+        got = [0]
+        with open(h264, "wb") as out:
+
+            def stream(n, body):
+                if n <= got[0]:
+                    return  # a retried POST whose first attempt already landed
+                out.write(body)
+                k, got[0] = n - got[0], n
+                progress(k)
+
+            err = Session(page, on_h264=stream).run(
+                "encode=%s&fps=%d&from=%r&to=%r"
+                % (
+                    urllib.parse.quote(json.dumps(_encode.webcodecs(cfg, fps))),
+                    fps,
+                    t0 + a / fps,
+                    t0 + b / fps,
+                )
+                + cover_q(a),
+                fatal=False,
+            )
+        if not err and got[0] != b - a:
+            err = "chunk came back short (%d)" % got[0]
+        if not err:
+            r = subprocess.run(
+                ["ffmpeg", "-v", "error", "-y", "-r", str(fps), "-f", "h264", "-i", h264]
+                + ["-c", "copy", "-bsf:v", _encode.webcodecs(cfg, fps)["bsf"], seg],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if r.returncode != 0:
+                err = "wrapping the chunk's H.264 failed: %s" % r.stderr.strip()[-300:]
+        os.remove(h264)
+        return err, got[0]
+
+    def encode(a, b, seg):
+        if mode[0] == "browser":
+            err, got = encode_in_browser(a, b, seg)
+            if not err and packets(seg) != b - a:
+                err = "segment holds %d frames" % packets(seg)
+            if err:
+                progress(-got)
+            if not (err and "no-encoder" in err):
+                return err
+            with lock:
+                if mode[0] == "browser":
+                    print("  %s -- encoding with ffmpeg instead" % err[:200], flush=True)
+                    mode[0] = "pipe"
+        ff = subprocess.Popen(
+            ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgba"]
+            + ["-s", "1920x1080", "-framerate", str(fps), "-i", "-"]
+            + PIPE_COLOUR
+            + _encode.video_args(cfg)
+            + [seg],
+            stdin=subprocess.PIPE,
+        )
+        got = [0]
+
+        def frame(i, body):
+            if i < got[0]:
+                return  # a retried POST whose first attempt already landed
+            if i != got[0]:
+                raise RuntimeError("frame %d arrived, expected %d" % (a + i, a + got[0]))
+            if len(body) != FRAME_BYTES:
+                raise RuntimeError(
+                    "frame %d is %d bytes, expected %d (1920x1080 RGBA)"
+                    % (a + i, len(body), FRAME_BYTES)
+                )
+            ff.stdin.write(body)
+            got[0] += 1
+            progress(1)
+
+        err = Session(page, on_frame=frame).run(
+            "export=1&fps=%d&from=%r&to=%r" % (fps, t0 + a / fps, t0 + b / fps) + cover_q(a),
+            fatal=False,
+        )
+        try:
+            ff.stdin.close()
+        except OSError:
+            pass
+        code = ff.wait()
+        if not err and code != 0:
+            err = "ffmpeg exited %d encoding the chunk" % code
+        if not err and got[0] != b - a:
+            err = "chunk came back short (%d)" % got[0]
+        # read the segment back: a parallel run once produced a segment with no moov atom whose
+        # chunk had reported clean, and the join is where that would otherwise surface
+        if not err and packets(seg) != b - a:
+            err = "segment holds %d frames" % packets(seg)
+        if err:
+            progress(-got[0])
+        return err
+
+    def work(k):
+        a, b = chunks[k]
+        seg = os.path.join(seg_dir, "%05d.mp4" % k)
+        for attempt in range(4):
+            if failed:
+                return
+            err = encode(a, b, seg)
+            if not err:
+                return
+            print("  chunk %d-%d failed (%s); retry %d" % (a, b, err, attempt + 1), flush=True)
+        failed.append("chunk %d-%d: %s" % (a, b, err))
+
+    pending = list(range(len(chunks)))
+
+    def runner():
+        while not failed:
+            with lock:
+                if not pending:
+                    return
+                k = pending.pop(0)
+            work(k)
+
+    threads = [threading.Thread(target=runner, daemon=True) for _ in range(jobs)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    if failed:
+        sys.exit("page error: %s" % failed[0])
+
+    listing = os.path.join(seg_dir, "list.txt")
+    with open(listing, "w", encoding="utf-8") as f:
+        for k in range(len(chunks)):
+            f.write("file '%05d.mp4'\n" % k)
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", listing]
+        + ["-c", "copy", "-movflags", "+faststart", silent],
+        check=True,
+    )
+    count = packets(silent)
+    if count != n_frames:
+        sys.exit("joined %d frames, expected %d" % (count, n_frames))
+    shutil.rmtree(seg_dir, ignore_errors=True)
+    el = time.time() - t_start
+    print(
+        "  %d frames in %.0fs  (%.1f fps, %d jobs, encoded %s)"
+        % (
+            n_frames,
+            el,
+            n_frames / el,
+            jobs,
+            "in the browser" if mode[0] == "browser" else "by ffmpeg",
+        )
+    )
+    return mode[0]
+
+
+def choose_cover(m, page):
+    """The film time the video's first frame shows: the manifest's `cover` when it is a number,
+    else the poster unless a clearly livelier later moment beats it (_sketch.pick_cover), drawn
+    as stills in one browser and scored by contrast. None: `cover` is false.
+
+    Never fails a render: when the stills do not come back (a browser that would not close in
+    10 s on a busy laptop, 2026-09-30), the cover is the poster, unscored."""
+    want = m.get("cover", True)
+    if want is False:
+        return None
+    if not isinstance(want, bool):
+        return float(want)
+    from PIL import Image, ImageStat
+
+    scored = []
+
+    def save(t, body):
+        with Image.open(io.BytesIO(body)) as im:
+            scored.append((float(t), ImageStat.Stat(im.convert("L")).stddev[0]))
+
+    times = _sketch.cover_candidates(m)
+    try:
+        err = Session(page, on_still=save).run(
+            "stills=" + ",".join("%r" % t for t in times), fatal=False
+        )
+    except Exception as e:  # noqa: BLE001 -- the cover is a nicety; the film must still render
+        err = "%s: %s" % (type(e).__name__, e)
+    if err or len(scored) != len(times):
+        print("  cover: %.2fs, the poster -- the candidates were not drawn (%s)" % (times[0], err))
+        return times[0]
+    scored.sort(key=lambda s: times.index(s[0]))
+    t = _sketch.pick_cover(scored)
+    print(
+        "  cover: %.2fs  (%s)"
+        % (t, ", ".join("%.2fs %.0f" % s for s in scored) + " -- contrast of each candidate")
+    )
+    return t
+
+
+def contact_sheet(paths, out, cols=4):
+    from PIL import Image, ImageDraw
+
+    w, h = 1920 // cols, 1080 // cols
+    rows = (len(paths) + cols - 1) // cols
+    S = Image.new("RGB", (cols * w, rows * h), "white")
+    d = ImageDraw.Draw(S)
+    for i, p in enumerate(paths):
+        x, y = (i % cols) * w, (i // cols) * h
+        S.paste(Image.open(p).resize((w, h)), (x, y))
+        d.rectangle([x, y, x + 64, y + 20], fill="black")
+        d.text((x + 5, y + 4), os.path.splitext(os.path.basename(p))[0], fill="white")
+    S.save(out)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--manifest", required=True)
+    ap.add_argument(
+        "--plan", action="store_true", help="check inputs and price the render; render nothing"
+    )
+    ap.add_argument("--bundle", action="store_true", help="only write the HTML player(s)")
+    ap.add_argument("--stills", help="comma list of times -> outputs/review/<t>.png")
+    ap.add_argument(
+        "--into", help="with --stills: the folder for them (relative to the manifest's)"
+    )
+    ap.add_argument(
+        "--sheet",
+        action="store_true",
+        help="with --stills: also tile them into outputs/review/sheet.png",
+    )
+    ap.add_argument(
+        "--automation",
+        action="store_true",
+        help="write temp/automation.json for sketch-audio's 'air' cues",
+    )
+    ap.add_argument(
+        "--draft", action="store_true", help="30 fps, lower quality: a fast preview render"
+    )
+    ap.add_argument("--fps", type=int)
+    ap.add_argument(
+        "--chunk",
+        type=float,
+        default=8.0,
+        help="seconds of film per browser session (default 8): one long session slows down "
+        "as it runs, and a chunk that fails is retried from its first unwritten frame",
+    )
+    ap.add_argument(
+        "--jobs",
+        type=int,
+        default=0,
+        help="chunks drawn at once, each in its own browser and encoder "
+        "(default: a quarter of the logical cores, at most 6; 1 = the old serial render)",
+    )
+    ap.add_argument(
+        "--encode",
+        choices=["pipe", "browser"],
+        help="where frames are encoded (default render.encode, else pipe): pipe sends raw pixels "
+        "to ffmpeg; browser encodes in the page with its hardware H.264 encoder, ~3x faster",
+    )
+    ap.add_argument("--from", dest="t0", type=float, default=0.0)
+    ap.add_argument("--to", dest="t1", type=float)
+    ap.add_argument(
+        "--timings",
+        action="store_true",
+        help="print the latest stage timings of every sketch tool for this project",
+    )
+    args = ap.parse_args()
+
+    m = _sketch.load(args.manifest)
+    slug = _sketch.slug(m)
+    if args.timings:
+        rep = _sketch.timing_report(m["_dir"])
+        total = 0.0
+        for tool in ("sketch-vo", "sketch-audio", "sketch-render"):
+            for stage, secs in rep.get(tool, {}).items():
+                print("  %-14s %-12s %8.1fs" % (tool, stage, secs))
+                total += secs
+        print("  %-27s %8.1fs" % ("machine time", total))
+        return
+
+    fps = args.fps or (30 if args.draft else int(m.get("fps", 60)))
+    t1 = args.t1 if args.t1 is not None else _sketch.total(m)
+    cfg = _encode.resolve(
+        {
+            "cq": 16,
+            "preset": "p6",
+            "audio_bitrate": "320k",
+            **m.get("render", {}),
+            **({"cq": 24, "preset": "p3"} if args.draft else {}),
+        }
+    )
+    film = _sketch.rel(m, m.get("film", "film.js"))
+    final = os.path.join(m["_audio"], "final.wav")
+    srt = os.path.join(m["_outputs"], slug + ".srt")
+    n_frames = int(round((t1 - args.t0) * fps))
+    jobs = args.jobs or auto_jobs()
+    how = args.encode or m.get("render", {}).get("encode", "pipe")
+    if how not in ("pipe", "browser"):
+        sys.exit("render.encode is %r: pipe or browser" % how)
+    print("%s  %.1fs  %d fps  %d frames" % (m["_id"], t1 - args.t0, fps, n_frames))
+    print("  jobs:    %d browsers at once, %.0f s of film each" % (jobs, args.chunk))
+    print(
+        "  film:    %s%s"
+        % (os.path.relpath(film, _env.ROOT), "" if os.path.exists(film) else "  (MISSING)")
+    )
+    print(
+        "  audio:   %s"
+        % (
+            "audio/final.wav"
+            if os.path.exists(final)
+            else "none yet -- run sketch-audio.py (the video will be silent)"
+        )
+    )
+    if how == "browser":
+        w = _encode.webcodecs(cfg, fps)
+        print(
+            "  encoder: the browser's %s, %s, QP %d (from cq %s), keyframe every %d"
+            % (
+                w["config"]["codec"],
+                w["config"]["hardwareAcceleration"],
+                w["quantizer"],
+                cfg.get("cq", cfg.get("quality")),
+                w["gop"],
+            )
+        )
+    else:
+        print("  encoder: %s" % _encode.describe(cfg))
+    for fnt in m.get("fonts", []):
+        if not os.path.exists(_env.resolve(fnt["file"])):
+            sys.exit("font missing: %s" % fnt["file"])
+    cv = m.get("cover", True)
+    print(
+        "  cover:   %s"
+        % (
+            "the film's own opening (cover: false)"
+            if cv is False
+            else "%.2fs of the film, as frame 0" % float(cv)
+            if not isinstance(cv, bool)
+            else "the poster, or a livelier moment if the film ends on paper, as frame 0"
+        )
+    )
+    if args.plan:
+        print("\n  --plan: nothing rendered")
+        return
+
+    names = (
+        ["bundle"]
+        + (["stills"] if args.stills else [])
+        + (["automation"] if args.automation else [])
+    )
+    full = not (args.bundle or args.stills or args.automation)
+    if full:
+        names += (["cover"] if args.t0 == 0 and m.get("cover", True) is not False else []) + [
+            "frames",
+            "mux",
+            "poster",
+        ]
+    with _sketch.Stages(m, "sketch-render", names, argv=sys.argv[1:]) as st:
+        with st("bundle"):
+            page = bundle(m)
+            out_html = os.path.join(m["_outputs"], slug + ".html")
+            with open(out_html, "w", encoding="utf-8") as f:
+                f.write(page)
+            os.makedirs(os.path.join(m["_outputs"], "artifact"), exist_ok=True)
+            with open(
+                os.path.join(m["_outputs"], "artifact", slug + ".html"), "w", encoding="utf-8"
+            ) as f:
+                f.write(artifact_flavour(page))
+            print("  %s (%.1f MB)" % (os.path.relpath(out_html, _env.ROOT), len(page) / 1e6))
+        light = bundle(m, audio=False)  # the renderer needs no soundtrack inside the page
+
+        if args.stills:
+            with st("stills"):
+                rdir = (
+                    _sketch.rel(m, args.into)
+                    if args.into
+                    else os.path.join(m["_outputs"], "review")
+                )
+                os.makedirs(rdir, exist_ok=True)
+                got = []
+
+                def save(t, body):
+                    p = os.path.join(rdir, "%06.2f.png" % float(t))
+                    with open(p, "wb") as f:
+                        f.write(body)
+                    got.append(p)
+
+                sess = Session(light, on_still=save)
+                sess.run("stills=" + args.stills)
+                if sess.report is not None:  # the page's SK.REPORT(), beside the stills
+                    with open(os.path.join(rdir, "report.json"), "w", encoding="utf-8") as f:
+                        json.dump(sess.report, f, ensure_ascii=False)
+                if args.sheet:
+                    contact_sheet(
+                        got, os.path.join(rdir, "sheet.png"), cols=2 if len(got) <= 4 else 4
+                    )
+                print("  %d stills -> %s" % (len(got), os.path.relpath(rdir, _env.ROOT)))
+
+        if args.automation:
+            with st("automation"):
+                s = Session(light)
+                s.run("automation=1")
+                p = os.path.join(m["_temp"], "automation.json")
+                with open(p, "w", encoding="utf-8") as f:
+                    json.dump(s.automation, f)
+                print(
+                    "  %s: %s"
+                    % (os.path.relpath(p, _env.ROOT), ", ".join(s.automation or {}) or "no tracks")
+                )
+
+        if not full:
+            return
+
+        cover = None
+        if "cover" in names:
+            with st("cover"):
+                cover = choose_cover(m, light)
+        silent = os.path.join(m["_temp"], slug + "_silent.mp4")
+        with st("frames"):
+            how = render_frames(
+                light,
+                cfg,
+                fps,
+                args.t0,
+                n_frames,
+                args.chunk,
+                jobs,
+                m["_temp"],
+                silent,
+                how,
+                cover,
+            )
+
+        out = os.path.join(m["_outputs"], slug + ("_draft" if args.draft else "") + ".mp4")
+        with st("mux"):
+            cmd = ["ffmpeg", "-v", "error", "-y", "-i", silent]
+            maps = ["-map", "0:v"]
+            if os.path.exists(final):
+                cmd += ["-ss", str(args.t0), "-i", final]
+                maps += ["-map", "1:a"]
+            if os.path.exists(srt) and args.t0 == 0:
+                cmd += ["-i", srt]
+                maps += [
+                    "-map",
+                    "%d:s" % (2 if os.path.exists(final) else 1),
+                    "-c:s",
+                    "mov_text",
+                    "-metadata:s:s:0",
+                    "language=%s" % _sketch.iso639_2(m),
+                    "-disposition:s:0",
+                    "0",
+                ]
+            # -t, never -shortest: the subtitle track ends early and -shortest cuts the film there
+            cmd += (
+                maps
+                + ["-c:v", "copy"]
+                + (_encode.audio_args(cfg) if os.path.exists(final) else [])
+                + ["-t", "%.3f" % (t1 - args.t0), "-movflags", "+faststart", out]
+            )
+            subprocess.run(cmd, check=True)
+            dur = float(
+                subprocess.run(
+                    [
+                        "ffprobe",
+                        "-v",
+                        "error",
+                        "-show_entries",
+                        "format=duration",
+                        "-of",
+                        "csv=p=0",
+                        out,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout
+            )
+            if abs(dur - (t1 - args.t0)) > 0.1:
+                sys.exit("rendered %.2fs, expected %.2fs" % (dur, t1 - args.t0))
+            print(
+                "  %s  %.2fs  %.1f MB"
+                % (os.path.relpath(out, _env.ROOT), dur, os.path.getsize(out) / 1e6)
+            )
+        poster = os.path.join(m["_outputs"], slug + "_poster.png")
+        with st("poster"):
+            pt = min(float(m.get("poster_t", t1 - 1)) - args.t0, dur - 0.05)
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-v",
+                    "error",
+                    "-y",
+                    "-ss",
+                    str(max(0, pt)),
+                    "-i",
+                    out,
+                    "-frames:v",
+                    "1",
+                    poster,
+                ],
+                check=True,
+            )
+
+    _project.record(
+        m["_id"],
+        "sketch film rendered (%d fps%s%s)"
+        % (
+            fps,
+            ", draft" if args.draft else "",
+            ", encoded in the browser" if how == "browser" else "",
+        ),
+        out=out,
+        script=__file__,
+        argv=sys.argv[1:],
+        kind="video",
+        manifest=m["_path"],
+        sidecars={"html": out_html, "poster": poster, "srt": srt if os.path.exists(srt) else None},
+    )
+
+
+if __name__ == "__main__":
+    main()

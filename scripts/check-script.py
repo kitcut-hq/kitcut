@@ -48,6 +48,10 @@ ROOT = _env.ROOT
 
 # checks a script is allowed to skip, each with the reason it may
 EXCEPTIONS = {
+    "stt-compare.py": {
+        "record": "a measurement, not a deliverable: its table and test clips go under temp/, "
+        "and the numbers that matter are in docs/reference.md",
+    },
     "statusline.py": {
         "env": "status-line reader; must NOT import _env -- a re-exec per "
         "refresh would spawn a subprocess every second",

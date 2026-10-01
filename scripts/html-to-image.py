@@ -51,6 +51,10 @@ BROWSERS = [
     r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    # macOS keeps its browsers in app bundles, off PATH; Linux ones are found on PATH below
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
 ]
 
 
@@ -63,7 +67,15 @@ def find_browsers():
         if cand and os.path.exists(cand) and cand.lower() not in seen:
             seen.add(cand.lower())
             got.append(cand)
-    for name in ("msedge", "chrome", "chromium", "google-chrome"):
+    for name in (
+        "msedge",
+        "chrome",
+        "chromium",
+        "google-chrome",
+        "google-chrome-stable",
+        "chromium-browser",
+        "microsoft-edge",
+    ):
         p = shutil.which(name)
         if p and p.lower() not in seen:
             seen.add(p.lower())
@@ -124,15 +136,28 @@ def shoot(html, out, browser, viewport=(1600, 1000), scale=2, timeout=45, settle
             "--user-data-dir=%s" % profile,
             file_url(html),
         ]
+        # Chromium's singleton socket goes in $TMPDIR, and a Unix socket path may not pass
+        # 107 bytes: the studio's TMPDIR lives inside a film's folder and reached 108 on the VM,
+        # where every browser died at start (sketch-render.py hit it first). Give the socket a
+        # short private folder of its own.
+        env = ENV
+        sock = None
+        if os.name != "nt":
+            sock = tempfile.mkdtemp(prefix="h2i-", dir="/tmp")
+            env = dict(ENV, TMPDIR=sock)
         # Chromium 132 removed old headless, so on anything current `--headless`
         # IS the new one. Older builds need it spelled out; try that once rather
         # than making the caller know which vintage they have.
-        for flags in (base, ["--headless=new"] + base[1:]):
-            r = subprocess.run(
-                [browser] + flags, env=ENV, capture_output=True, text=True, timeout=timeout
-            )
-            if os.path.exists(out) and os.path.getsize(out) > 0:
-                return browser
+        try:
+            for flags in (base, ["--headless=new"] + base[1:]):
+                r = subprocess.run(
+                    [browser] + flags, env=env, capture_output=True, text=True, timeout=timeout
+                )
+                if os.path.exists(out) and os.path.getsize(out) > 0:
+                    return browser
+        finally:
+            if sock:
+                shutil.rmtree(sock, ignore_errors=True)
         sys.exit(
             "%s produced no screenshot for %s\n%s"
             % (os.path.basename(browser), html, (r.stderr or r.stdout or "").strip()[:800])

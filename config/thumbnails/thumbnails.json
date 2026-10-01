@@ -1,0 +1,222 @@
+{
+  "_comment": "Thumbnail options from a film's own stills, drawn in the film's own look (scripts/_thumb.py, sketch/thumb.js, scripts/thumb-options.py, studio/thumbs.py). Geometry is in the 1920x1080 design space. Every threshold names where it came from; the ones marked _measured were set by the bake-offs in docs/reference.md 'Thumbnail options'.",
+  "size": [
+    1920,
+    1080
+  ],
+  "jpeg_quality": 90,
+  "max_bytes": 2000000,
+  "_max_bytes": "YouTube takes 50 MB from a desktop or the API but still 2 MB from a phone (support.google.com/youtube/answer/72431); a 1080p JPEG at q90 is ~0.3-0.8 MB, so the phone limit is the one kept.",
+  "safe": {
+    "margin_frac": [
+      0.05,
+      0.05
+    ],
+    "badge_frac": [
+      0.15,
+      0.15
+    ],
+    "bar_frac": 0.03,
+    "_source": "No official spec. Practitioner rules (thumix.com/blog/youtube-thumbnail-safe-zone, ytdetective.com): ~5% margins, keep text out of the bottom-right ~15% where the duration stamp sits, and the bottom ~3% where the watched-progress bar sits."
+  },
+  "feed": {
+    "smallest_w": 168,
+    "min_cap_px": 8,
+    "check_widths": [
+      168,
+      246,
+      360
+    ],
+    "_source": "168x94 is the desktop up-next sidebar, the smallest place a video's thumbnail is shown with its title (thumbnailcreator.com, collabpals.com). A cap height of ~8 px there is the floor for reading a word at a glance: 1920 -> 168 is an 11.4x reduction, so the words need a cap height of >= 92 px at 1080p.",
+    "_measured": "Bake-off 2026-09-29, 8 studio films (crayon, clean, blueprint, painted, Ukrainian), 32 options from Claude's own concepts: every worded option set at a cap height of 8.4-17.5 px at 168 px wide; RapidOCR read every word back on all 21 Latin-script ones at 168, 246 and 360 px, the smallest included -- the gate is not too lax. Cyrillic is out of that OCR's reach (it reads the shapes as Latin lookalikes), so only the cap height vouches for it."
+  },
+  "contrast_min": 4.5,
+  "_contrast_min": "WCAG 2.2 1.4.3 (w3.org/WAI/WCAG22/Understanding/contrast-minimum.html): 4.5:1 for text, measured between the letters and the ring of pixels immediately around them on the finished picture -- which is the outline where there is one.",
+  "words": {
+    "max_words": 4,
+    "max_chars": 32,
+    "title_overlap_max": 0.5,
+    "_source": "Paddy Galloway's glance test: title and thumbnail are one unit and should complement, not repeat. 'Under 4 words' is a practitioner default, not a measured fact."
+  },
+  "fonts": {
+    "_comment": "The words are set in the film's own type -- its text styles as the probe saw it draw them, biggest first. These are for a film that draws no text of its own, and for words its type has no glyphs for (the page loads them too).",
+    "no_text": {
+      "crayon": [
+        {
+          "file": "fonts/BalsamiqSans-Bold.ttf",
+          "family": "Thumb Balsamiq",
+          "weight": "700"
+        }
+      ],
+      "clean": [
+        {
+          "file": "fonts/Montserrat-Bold.ttf",
+          "family": "Thumb Montserrat",
+          "weight": "700"
+        }
+      ]
+    },
+    "fallback": [
+      {
+        "file": "fonts/Montserrat-Bold.ttf",
+        "family": "Thumb Montserrat",
+        "weight": "700"
+      },
+      {
+        "file": "fonts/BalsamiqSans-Bold.ttf",
+        "family": "Thumb Balsamiq",
+        "weight": "700"
+      }
+    ]
+  },
+  "cap": {
+    "max_px": 200,
+    "min_px": 96,
+    "step_px": 8,
+    "line_gap": 0.3
+  },
+  "headline": {
+    "max_w_frac": 0.62,
+    "max_lines": 2,
+    "quiet_max": 0.045,
+    "centre_penalty": 0.15,
+    "cover_max": 0.1,
+    "_measured": "quiet_max is the mean detail (|dx|+|dy| of the grey frame at 1/8 scale) under a text-sized block above which the words get a scrim. Measured over the moment stills of 8 studio films (2026-09-29): a 320x160 block on an empty ground scores 0.001-0.02, a busy one 0.04-0.13; painted films sit at 0.05-0.09 through most of the frame. cover_max is the share of the frame's subject saliency the words may hide.",
+    "pad_frac": 0.06,
+    "busy_weight": 6.0,
+    "_busy_weight": "A block's score is the share of the subjects it hides plus busy_weight x the mean detail under it: detail runs 0.001-0.13, subject shares 0-0.3, so at 1 a busy spot barely counted and a headline landed on a UI card's labels (2026-09-29)."
+  },
+  "panel": {
+    "max_lines": 4,
+    "rule_px": 10,
+    "w_fracs": [
+      0.4,
+      0.5
+    ],
+    "logo_w_frac": 0.55,
+    "logo_max_h_frac": 0.16,
+    "logo_gap_frac": 0.6
+  },
+  "still": {
+    "max_zoom": 1.1,
+    "keep_min": 0.97,
+    "_why": "A still is pushed in (subject as large as possible, YouTube Help 12340300) only when the crop keeps 97% of the frame's subject saliency; otherwise it is shown whole."
+  },
+  "settle": {
+    "offsets": [
+      -0.6,
+      -0.3,
+      0.0,
+      0.3,
+      0.6
+    ],
+    "probe": 0.2,
+    "min_detail_frac": 0.6,
+    "_why": "A frame is settled when the film looks the same 0.2 s either side of it: a crossfade, a line still drawing itself or a camera move all differ there. Among the settled ones, a thin frame (a scene not drawn in yet, a fade) loses to a fuller one.",
+    "_measured": "Same bake-off: YouTube-like frames at 25/50/75% of the film caught it moving (mean difference over +-0.2 s above 0.03) 10 times in 24; the settled frames 6 in 32, median movement 0.0149 -> 0.0054."
+  },
+  "moments": {
+    "max": 12,
+    "min": 6,
+    "lead_out": 0.35,
+    "edge": 0.5,
+    "min_gap": 1.0
+  },
+  "concepts": {
+    "min_gap": 1.0,
+    "layouts": [
+      "headline",
+      "card",
+      "panel",
+      "still"
+    ],
+    "_min_gap": "The same as the moments sheet's own spacing: four picks from the sheet are four different frames. It was 2 s, which the sheet itself breaks (moments 1 s apart), and the first real draft spent a second call on it (2026-09-29)."
+  },
+  "places": {
+    "top": [
+      0,
+      0,
+      1,
+      0.5
+    ],
+    "bottom": [
+      0,
+      0.5,
+      1,
+      1
+    ],
+    "left": [
+      0,
+      0,
+      0.55,
+      1
+    ],
+    "right": [
+      0.45,
+      0,
+      1,
+      1
+    ],
+    "top-left": [
+      0,
+      0,
+      0.62,
+      0.58
+    ],
+    "top-right": [
+      0.38,
+      0,
+      1,
+      0.58
+    ],
+    "bottom-left": [
+      0,
+      0.42,
+      0.62,
+      1
+    ]
+  },
+  "_places": "Where a writer may ask the words to go, as fractions of the frame [x0, y0, x1, y1]; the margins and the duration badge are cut out of each. There is no bottom-right: that is where YouTube stamps the duration.",
+  "text": {
+    "grow_px": 14,
+    "min_score": 0.5,
+    "hide_max_px": 40,
+    "_measured": "OCR (RapidOCR, local) finds the words a film draws -- headings, thin labels, handwriting, Cyrillic, a rotated bottle label -- in 0.2-0.7 s a frame at half size (6 frames of 6 films, 2026-09-29). Boxes are grown by grow_px; a box read with less than min_score confidence is texture, not words. hide_max_px allows a drop shadow's fringe.",
+    "min_h_px": 32,
+    "_min_h_px": "Measured on 7 frames of 6 films (2026-09-29): an app screen's own print is 22-30 px tall at 1080p, the labels and captions people read 34-70 px (a wine's tasting notes 34-42, a diagram's labels 52-66), headings 70-116.",
+    "headline_min_h_px": 12
+  },
+  "_contrast_measured": "Same bake-off: contrast of the 24 worded options 4.81-12.4:1, median 9.07.",
+  "card": {
+    "max_w_frac": 0.62,
+    "max_lines": 2,
+    "pad_frac": [
+      0.42,
+      0.34
+    ],
+    "tilt_crayon": -2.0,
+    "default_clean": {
+      "r": 18,
+      "shadow": true,
+      "strokeW": 3
+    },
+    "default_crayon": {
+      "r": 12,
+      "sketch": true,
+      "strokeW": 3
+    },
+    "_why": "The film's own card (the probe's biggest) when it draws any; else one of its paper edged in its accent (a hand-drawn note on crayon) -- a stock white card looked foreign on a dark wine film (2026-09-29).",
+    "logo_h_frac": 0.62,
+    "logo_gap_frac": 0.38
+  },
+  "glow": {
+    "grow_frac": 0.35,
+    "blur_frac": 0.1,
+    "alpha": 0.97,
+    "_why": "Behind words on a busy part of the picture: a soft patch of the film's own paper, where the first design put a black outline and a drop shadow the film never used.",
+    "_measured": "At 0.86 alpha and a blur of 0.18 cap the glow left a ghost of a UI card under the words (the Instafill film, 2026-09-29): it reads as a smudge over crisp line art. Near-opaque with a short soft edge it is a borderless patch of the film's paper."
+  },
+  "ink_margin": 0.8,
+  "contrast_smooth_px": 1.5,
+  "_contrast_smooth_px": "The picture is smoothed (a Gaussian of this many pixels) before the letters' contrast is read: a crayon film's grain lies over its words as over everything, and per pixel it pulled plainly legible text to 4.2-4.5:1 (2026-09-29). Grain is finer than a letter's stroke at the sizes allowed, so this takes the noise out and leaves the ink."
+}
