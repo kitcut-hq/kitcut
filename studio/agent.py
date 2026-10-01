@@ -533,6 +533,14 @@ def attached_note(film):
             a["file"],
         )
         text = _doc_text(film.path(*a["file"].split("/")))
+        if (
+            text is not None and "<gpx" in text[:600]
+        ):  # a route: the route tool's, not words to read
+            lines.append(
+                head + ": a GPX track. The route tool reads it: route(gpx=%s); there is no need "
+                "to Read it." % json.dumps(a.get("name") or "Document %d" % i)
+            )
+            continue
         if text is not None and len(text) <= DOC_INLINE:
             lines += [head + ":", "<<<", text.strip(), ">>>"]
         else:
