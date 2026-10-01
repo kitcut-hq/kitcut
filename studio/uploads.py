@@ -69,7 +69,9 @@ MAX_TEXT_CHARS = 100_000  # about 25k tokens: a brief, not a book
 MAX_PIXELS = 40_000_000  # a 12000 x 12000 PNG is a decompression bomb, not a logo
 MAX_AUDIO_S = 185  # the page stops at 3:00
 KEEP_S = 24 * 3600  # an upload no film took
-DAY_FILES, DAY_BYTES = 60, 120 * 1024 * 1024  # per client, per 24 h
+# per client, per 24 h. 200 files since 2026-10-01: the owner's account met 60 in one working day
+# of series episodes and promos, each film taking up to 6 pictures and 3 documents
+DAY_FILES, DAY_BYTES = 200, 120 * 1024 * 1024
 MAX_IMAGES, MAX_NOTES, MAX_DOCS = 6, 3, 3  # per film
 # a control character that is not whitespace: binary, not a document
 CONTROL = re.compile(r"[\x00-\x08\x0b\x0e-\x1f\x7f]")
