@@ -23,6 +23,12 @@ Its last frames: {SHEET} -- Read it, and pick up where it leaves off so the cut 
 {LOOK}
 ```
 
+**Helpers the scenes before yours added** to `SK.look` -- use them rather than writing your own:
+{SHARED}
+A helper another scene could use (a renderer, a label style, a recurring object) goes on the shared
+look, at the top of your file with a one-line comment above it -- `// a medal on a ribbon` then
+`SK.look.medal = (x, y, o = {{}}) => {{...}};` -- and the scenes after yours are shown it here.
+
 Work: write the scene (a long one in parts), `check`, render `stills` inside {START}-{END} and
 look at them, fix, and run `motion` once if the scene moves a lot. Then stop with two sentences:
 what the scene shows and how it ends -- the scene after reads them. Working time: about {MINUTES}

@@ -22,6 +22,7 @@ design is docs/studio-scenes-plan.md.
 """
 
 import os
+import re
 import json
 
 import validate
@@ -178,6 +179,42 @@ def director_message(film, ask_text):
     )
 
 
+# a helper a scene puts on the shared look for the scenes after it: `SK.look.name = (...) =>` or
+# `= function (...)`, with the comment line above it as its description
+SHARED = re.compile(
+    r"(?:^[ \t]*(?://|/?\*+)[ \t]?(?P<doc>[^\n]*)\n)?^[ \t]*SK\.look\.(?P<name>[A-Za-z_$][\w$]*)\s*=\s*"
+    r"(?:function\s*)?(?P<args>\([^)]*\))?",
+    re.MULTILINE,
+)
+
+
+def shared_helpers(film, k):
+    """The helpers the scenes before scene k added to SK.look, one line each: the 8-minute bike film
+    (i4d52n) wrote the same paper-rim renderer in 10 of its 12 scene passes, because a pass saw
+    only what the director had put in SK.look (studio/harvest.py, 2026-10-01)."""
+    out = []
+    for scene, _, _ in spans(film)[:k]:
+        try:
+            with open(film.path(*scene_file(scene).split("/")), encoding="utf-8") as f:
+                src = f.read()
+        except OSError:
+            continue
+        for m in SHARED.finditer(src):
+            if not m.group("args"):
+                continue  # a value, not a helper
+            doc = (m.group("doc") or "").strip().rstrip("*/").strip()
+            out.append(
+                "- `SK.look.%s%s` (%s)%s"
+                % (
+                    m.group("name"),
+                    m.group("args") or "",
+                    scene_file(scene),
+                    " -- " + doc if doc else "",
+                )
+            )
+    return "\n".join(out) or "(none yet)"
+
+
 def scene_message(film, k, sheet=None):
     """Scene k's first message: everything it needs, nothing it does not (bounded)."""
     rows = spans(film)
@@ -208,6 +245,7 @@ def scene_message(film, k, sheet=None):
         AFTER=_about(nxt, "") if nxt else "(none -- this is the last scene)",
         SHEET=sheet or "(none: this is the first scene)",
         LOOK=look,
+        SHARED=shared_helpers(film, k),
         MINUTES=pass_limits(film, "scene", (start, end))["claude_s"] // 60,
         EXISTING=(
             "A previous attempt at this scene left %s: Read it, then finish it or rewrite it."

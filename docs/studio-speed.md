@@ -185,3 +185,48 @@ voxtral-small give text but no word times (`verbose_json` refused). The kitcut O
 allows only listed providers (settings/privacy); DeepInfra (Qwen3-ASR, Parakeet) is not on it.
 OpenRouter drops a transcription prompt, so the films' hotwords no longer bias the scorer; only
 Azure's MAI takes them, as a phrase list.
+
+## What Claude's own time goes to, and the kit (2026-10-01)
+
+`studio/harvest.py` over the 172 films of 2026-09-28..30 (234 Claude sessions), timing Claude by
+*reply* -- from the answer it replies to until its last call: **27.1 h of Claude composing against
+13.7 h of tools running.** Of Claude's time:
+
+| reply | share |
+|---|---|
+| writing a film's picture the first time | 47% |
+| fixing the picture after stills | 15% |
+| reading (most of it deciding the next scene) | 12% |
+| narration: the script and its retakes | 12% |
+| music and sound effects | 7% |
+| looking at stills, pictures, closing words | 8% |
+
+Only ~10% of Claude's output tokens are code; the rest is working the design out -- a 30 s film's
+first film.js is one reply of ~7 minutes, ~85% of it thought. Template remakes take a median 5.6
+minutes of Claude against 13.7 for a 30 s film from scratch: a starting point more than halves it.
+Seven agents read the code of 69 films and listed 1,476 hand-built components; what recurs across
+unrelated films became `sketch/kit.js` (the reference, "The kit"). Its effect, measured by
+`studio/bakeoff.py --set kit`, is below.
+
+**Narration.** Two causes of retakes, both fixed:
+
+- *The word budget.* The first message asked for 2.2 words a second; real narration takes 1.78 a
+  second of film (lead, gaps and pauses in), 1.80 Ukrainian, 1.93 Spanish (first full takes of 71
+  films). Claude writes to the budget (words / budget 1.00 at the median), so **53 of 71 first
+  takes ran past the film's end** and were recorded again. `agent.WORDS_PER_S` is now 1.7: about
+  57% of first takes fit as recorded, against 25%. A refusal before recording was tried on the same
+  71 and rejected: the pace varies by ±20% (voice, direction, the take), so it would have refused 14
+  of the 18 that fit.
+- *The scorer.* Numbers heard as digits and names in another spelling scored as misreads: 33 of the
+  78 lines under 0.9 among 646 takes. `sketch-vo.accuracy()` credits exactly those (above).
+
+Each voice's measured pace is `studio/harvest.py --pace` (speech only: English 2.26 words a second,
+Ukrainian 1.85; Vindemiatrix the slowest English voice at 1.85, Aoede and Kore the fastest at 2.42).
+
+**Still open, measured and not built:** the music-too-loud loop (the sound step pulls the music
+under the voice itself, then asks Claude to lower the score anyway: 10 of 19 narrated films, ~20
+extra sound runs per 25 films -- whether the automatic duck is good enough is a listening decision);
+a default camera breath on holds (`SK.breath` exists; the motion check's 4 s rule drew hand-written
+drift in 10-14 of 30 films); scene passes that cannot share helpers (10 of the 8-minute bike film's
+12 scene sessions pasted the same 1.7 KB renderer); a series pack (episodes re-read the last
+episode's film.js in 8-10 films); stills over 12 times refused (3-5 films).

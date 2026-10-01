@@ -280,6 +280,21 @@ async def main():
             )
         ]
 
+    # a helper scene 1 puts on the shared look is shown to the scenes after it, not to scene 1
+    first = scenes.scene_file(scenes.spans(g)[0][0])
+    os.makedirs(os.path.dirname(g.path(*first.split("/"))), exist_ok=True)
+    with open(g.path(*first.split("/")), "w", encoding="utf-8") as fh:
+        fh.write("// a medal on a ribbon\nSK.look.medal = (x, y, o = {}) => {};\nSK.look.size = 3;\n")
+    shared = scenes.scene_message(g, 1)
+    check(
+        "SK.look.medal(x, y, o = {})" in shared
+        and "a medal on a ribbon" in shared
+        and "SK.look.size" not in shared
+        and "SK.look.medal(" not in scenes.scene_message(g, 0),
+        "a helper an earlier scene shared is listed for the later ones, with its comment",
+    )
+    os.remove(g.path(*first.split("/")))
+
     plain = told()
     g.update(branding=True)
     branded = told()
