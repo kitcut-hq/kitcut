@@ -1526,9 +1526,10 @@ const NETS = {
 };
 let shareAt = '', dlAt = '';
 function showShare(id, s) {
-  // the full-quality file, for whoever made the film: its copy online is served as an attachment
-  // (kitcut studio/media.py), so the link saves it instead of opening a player
+  // the full-quality file, for anyone who can watch the film: its copy online is served as an
+  // attachment (kitcut studio/media.py), so the link saves it instead of opening a player
   dlAt = s.download_url || '';
+  if (dlAt) { $('dlBtn').href = dlAt; $('dlBtn').hidden = false; }
   $('dlBtn').download = `${(s.title || s.prompt || 'kitcut-film').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 60).toLowerCase() || 'kitcut-film'}.mp4`;
   const url = s.share_url || `${location.origin}/film/${id}`;
   const title = (s.share && s.share.title) || s.title || s.prompt || 'A film made with KitCut';
@@ -1545,7 +1546,6 @@ async function shareWho(id) {
     if (!r.ok || id !== currentId) return;
     const { mine, profile: p } = await r.json();
     if (mine) { OWN = id; if (!$('ideaAgain').hidden && FILM) $('ideaAgain').textContent = againLabel(); }
-    if (mine && dlAt) { $('dlBtn').href = dlAt; $('dlBtn').hidden = false; }
     if (!mine || !p) return;
     $('sbSay').textContent = "Your film's page";
     const face = p.photo ? `<img src="${esc(p.photo)}" alt="" referrerpolicy="no-referrer">` : `<span class="face" style="background:${esc(p.tint)}">${esc(p.letter)}</span>`;
