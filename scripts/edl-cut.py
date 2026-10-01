@@ -524,8 +524,12 @@ def moved_runs(src, segs):
         H, W = fr.shape[1:3]
         moved = []
         for i, f in enumerate(fr):
+            t = s["from"] + i / 10.0
             worst = 1.0
             for p in paint:
+                # a rect switched off by its `when` covers nothing to test here
+                if p.get("when") and not parse_t(p["when"][0]) <= t <= parse_t(p["when"][1]):
+                    continue
                 x, y, rw, rh = rect_px(p["rect"], W, H)
                 c = np.array(_overlay.hex_rgba(p["color"])[:3])
                 reg = f[y : y + rh, x : x + rw]
@@ -694,6 +698,312 @@ def prepare_follows(srcs, segs, tmpdir):
     return out
 
 
+# ---------------------------------------------------------------- callouts
+
+
+DEFAULT_CALLOUT_STYLE = "config/overlays/callout.json"
+
+
+def src_window(src_key, a, b, segs, fps):
+    """First contiguous film span showing source `src_key` between a and b s.
+
+    The same walk zoom_plan makes: a callout is authored against the SOURCE
+    frame where the field can be seen, so it survives any EDL change that
+    moves, speeds or holds that moment in the film.
+    """
+    total = segs[-1]["f0"] + segs[-1]["n"]
+    fa = fb = None
+    for g in range(total):
+        s = seg_at(segs, g)
+        on = s["src"]["key"] == src_key and a - 1e-6 <= src_time(s, g, fps) <= b + 1e-6
+        if fa is None:
+            if on:
+                fa = fb = g
+            continue
+        if not on:
+            break
+        fb = g
+    return fa, fb
+
+
+def to_canvas(src, rect, canvas):
+    """A source-pixel rect -> the canvas rect after the fit-and-pad every segment gets."""
+    cw, ch = canvas
+    k = min(cw / float(src["w"]), ch / float(src["h"]))
+    ox, oy = (cw - src["w"] * k) / 2.0, (ch - src["h"] * k) / 2.0
+    x, y, w, h = rect
+    return x * k + ox, y * k + oy, w * k, h * k
+
+
+def _font(path, size):
+    try:
+        return ImageFont.truetype(_env.resolve(path), size)
+    except OSError:
+        return ImageFont.load_default()
+
+
+def _rgba(c, alpha=1.0):
+    c = c.lstrip("#")
+    return tuple(int(c[i : i + 2], 16) for i in (0, 2, 4)) + (int(round(255 * alpha)),)
+
+
+def draw_callout(box, spec, st, canvas):
+    """A rounded box on the field, and a label pill beside it. Canvas-sized RGBA."""
+    cw, ch = canvas
+    img = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    pad = st.get("pad", 6)
+    x, y, w, h = box
+    r = [x - pad, y - pad, x + w + pad, y + h + pad]
+    rad = st.get("radius", 8)
+    d.rounded_rectangle(r, radius=rad, fill=_rgba(st["fill"], st.get("fill_alpha", 0.1)))
+    d.rounded_rectangle(r, radius=rad, outline=_rgba(st["stroke"]), width=st.get("stroke_px", 3))
+    text = spec.get("label")
+    if text:
+        lb = st["label"]
+        f = _font(lb["font"], lb["size"])
+        asc, desc = f.getmetrics()
+        pw = d.textlength(text, font=f) + 2 * lb["pad_x"]
+        ph = asc + desc + 2 * lb["pad_y"]
+        side, gap = spec.get("side", "right"), lb.get("gap", 10)
+        cy = (r[1] + r[3]) / 2.0
+        if side == "left":
+            px, py = r[0] - gap - pw, cy - ph / 2
+        elif side == "below":
+            px, py = r[0], r[3] + gap
+        elif side == "above":
+            px, py = r[0], r[1] - gap - ph
+        else:
+            px, py = r[2] + gap, cy - ph / 2
+        px = min(max(px, 4), cw - pw - 4)
+        py = min(max(py, 4), ch - ph - 4)
+        d.rounded_rectangle(
+            [px, py, px + pw, py + ph], radius=lb.get("radius", 14), fill=_rgba(lb["bg"])
+        )
+        d.text((px + lb["pad_x"], py + lb["pad_y"]), text, font=f, fill=_rgba(lb["fg"]))
+    return img
+
+
+def draw_pulse(box, st, canvas):
+    """The flash that marks the moment: a wider ring that fades out fast."""
+    cw, ch = canvas
+    img = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    pl = st["pulse"]
+    p = st.get("pad", 6) + pl.get("grow", 10)
+    x, y, w, h = box
+    d.rounded_rectangle(
+        [x - p, y - p, x + w + p, y + h + p],
+        radius=st.get("radius", 8) + 4,
+        outline=_rgba(st["stroke"], pl.get("alpha", 0.55)),
+        width=pl.get("width_px", 6),
+    )
+    return img
+
+
+def draw_panel(box, spec, st, canvas):
+    """A sum panel beside a rect: rows of (value, note), a rule, then the total."""
+    cw, ch = canvas
+    img = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    pn = st["panel"]
+    fv = _font(pn["font"], pn["size"])
+    fn = _font(pn["note_font"], pn["note_size"])
+    ft = _font(pn["total_font"], pn["total_size"])
+    rows = spec["rows"]
+    lh = pn["size"] + pn["row_gap"]
+    vw = max(d.textlength("+ " + v, font=fv) for v, _ in rows)
+    vw = max(vw, d.textlength("= " + spec["total"], font=ft))
+    nw = max(d.textlength(n, font=fn) for _, n in rows + [["", spec.get("total_note", "")]])
+    width = pn["pad"] * 2 + vw + pn["col_gap"] + nw
+    height = pn["pad"] * 2 + lh * len(rows) + pn["rule_gap"] * 2 + pn["total_size"] + 6
+    x, y, w, h = box
+    px = min(max(x + w + pn.get("offset_x", 24), 4), cw - width - 4)
+    py = min(max(y + h / 2.0 - height / 2.0, 4), ch - height - 4)
+    d.rounded_rectangle(
+        [px, py, px + width, py + height],
+        radius=pn["radius"],
+        fill=_rgba(pn["bg"]),
+        outline=_rgba(st["stroke"]),
+        width=2,
+    )
+    right = px + pn["pad"] + vw
+    cy = py + pn["pad"]
+    for i, (v, n) in enumerate(rows):
+        t = ("+ " if i else "") + v
+        d.text((right - d.textlength(t, font=fv), cy), t, font=fv, fill=_rgba(pn["fg"]))
+        ny = cy + (pn["size"] - pn["note_size"]) / 2
+        d.text((right + pn["col_gap"], ny), n, font=fn, fill=_rgba(pn["muted"]))
+        cy += lh
+    cy += pn["rule_gap"] - pn["row_gap"]
+    d.line([px + pn["pad"], cy, px + width - pn["pad"], cy], fill=_rgba(pn["muted"]), width=2)
+    cy += pn["rule_gap"]
+    t = "= " + spec["total"]
+    d.text((right - d.textlength(t, font=ft), cy), t, font=ft, fill=_rgba(st["stroke"]))
+    if spec.get("total_note"):
+        ny = cy + (pn["total_size"] - pn["note_size"]) / 2
+        d.text((right + pn["col_gap"], ny), spec["total_note"], font=fn, fill=_rgba(pn["muted"]))
+    return img
+
+
+def draw_patch(box, spec, canvas):
+    """A flat fill over something that must not be read -- a file name in a
+    viewer toolbar -- for exactly the source window that shows it. A `paint`
+    rect is per source and tracks the chrome through a recorder's zoom, which
+    is wrong on a take that alternates an editor tab and a viewer tab: the
+    same pixels are a toolbar in one and page navigation in the other."""
+    cw, ch = canvas
+    img = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+    x, y, w, h = box
+    ImageDraw.Draw(img).rectangle([x, y, x + w, y + h], fill=_rgba(spec["color"]))
+    return img
+
+
+def _as_overlay(img, at, dur, fade_in, fade_out, path, canvas):
+    """Crop to ink, save, and phrase it as an image-overlay spec placed to the pixel."""
+    bb = img.split()[3].getbbox()
+    if not bb:
+        return None
+    img.crop(bb).save(path)
+    return {
+        "image": path,
+        "at": round(at, 3),
+        "dur": round(dur, 3),
+        "layout": {
+            "corner": "top-left",
+            "margin_x_px": bb[0],
+            "margin_y_px": bb[1],
+            "width_frac": (bb[2] - bb[0]) / float(canvas[0]),
+            # the overlay preset caps images at 85% of the frame (an end card
+            # should not fill it) and SCALES a wider one down -- which shrank a
+            # full-width chrome patch to 1632 px and left the window's close
+            # button and menus showing past its end
+            "max_width_frac": 1.0,
+        },
+        "in": {"type": "fade", "dur": fade_in},
+        "out": {"type": "fade", "dur": fade_out},
+    }
+
+
+def callout_plan(specs, srcs, segs, fps, canvas, zooms, tmpdir, style_path=None):
+    """Film-timed image-overlay specs for every callout, and a report line each.
+
+    A callout is authored against a SOURCE frame: `src`, `from`/`to` in source
+    seconds, and `rect` [x, y, w, h] in SOURCE pixels -- read off a gridded
+    frame of the take. It is mapped through the EDL to film time and through
+    fit-and-pad to canvas pixels here, so it lands on the field whatever the
+    edit around it does. A cropped segment or an accent zoom would move the
+    field out from under it, so a callout over either is refused rather than
+    drawn in the wrong place.
+    """
+    if not specs:
+        return [], []
+    st = json.load(open(_env.resolve(style_path or DEFAULT_CALLOUT_STYLE), encoding="utf-8"))
+    out, report = [], []
+    for i, c in enumerate(specs):
+        if c["src"] not in srcs:
+            sys.exit("callouts[%d]: unknown source %r" % (i, c["src"]))
+        a, b = parse_t(c["from"]), parse_t(c["to"])
+        fa, fb = src_window(c["src"], a, b, segs, fps)
+        if fa is None:
+            sys.exit("callouts[%d]: %s %s-%s is not in the film" % (i, c["src"], fmt(a), fmt(b)))
+        for g in (fa, fb):
+            if seg_at(segs, g).get("crop"):
+                sys.exit("callouts[%d]: lands on a cropped segment -- the rect would be wrong" % i)
+        t0, t1 = fa / fps, (fb + 1) / fps
+        for z in zooms:
+            if z["a"] < t1 and t0 < z["b"]:
+                sys.exit(
+                    "callouts[%d] overlaps an accent zoom at %s -- refusing" % (i, fmt(z["a"]))
+                )
+        box = to_canvas(srcs[c["src"]], c["rect"], canvas)
+        kind = c.get("kind", "box")
+        if kind == "panel":
+            img = draw_panel(box, c, st, canvas)
+        elif kind == "patch":
+            img = draw_patch(box, c, canvas)
+        else:
+            img = draw_callout(box, c, st, canvas)
+        instant = kind == "patch"
+        sp = _as_overlay(
+            img,
+            t0,
+            t1 - t0,
+            0.01 if instant else st.get("fade_in", 0.18),
+            0.01 if instant else st.get("fade_out", 0.25),
+            os.path.join(tmpdir, "callout-%02d.png" % i),
+            canvas,
+        )
+        if sp:
+            out.append(sp)
+        if kind == "box" and c.get("pulse", True):
+            pl = st["pulse"]
+            pp = _as_overlay(
+                draw_pulse(box, st, canvas),
+                t0,
+                pl.get("dur", 0.5),
+                pl.get("in", 0.1),
+                pl.get("out", 0.35),
+                os.path.join(tmpdir, "callout-%02d-pulse.png" % i),
+                canvas,
+            )
+            if pp:
+                out.append(pp)
+        report.append(
+            "  callout %-2d %-5s %s %s-%s -> film %s-%s  %s"
+            % (
+                i,
+                kind,
+                c["src"],
+                fmt(a),
+                fmt(b),
+                fmt(t0),
+                fmt(t1),
+                c.get("label") or c.get("total", ""),
+            )
+        )
+    return out, report
+
+
+def callout_sheet(specs, srcs, tmpdir, cols=3, tile=(600, 120)):
+    """Every callout's rect drawn in red on the source frame it is authored
+    against, one tile each, so a rect that misses its field is seen in seconds.
+
+    The rects are read off gridded crops of the takes, and a crop's pixel is
+    not a source pixel: on acord-commercial draft 2 six rects were read in crop
+    pixels and landed 100-400 px beside their numbers -- found only on a
+    13-minute render. This sheet costs one decoded frame per callout.
+    """
+    import numpy as np
+
+    tw, th = tile
+    tiles = []
+    for c in specs:
+        if c.get("kind") == "panel":
+            continue
+        s = srcs[c["src"]]
+        t = parse_t(c["from"]) + 0.1
+        fr = _decode(s, t, t + 1.0 / s["fps"], fps=None)[0].astype(np.uint8)
+        im = Image.fromarray(fr)
+        x, y, w, h = c["rect"]
+        ImageDraw.Draw(im).rectangle(
+            [x - 6, y - 6, x + w + 6, y + h + 6], outline=(255, 0, 0), width=4
+        )
+        cx, cy = x + w / 2.0, y + h / 2.0
+        tiles.append(
+            im.crop((int(cx - tw / 2), int(cy - th / 2), int(cx + tw / 2), int(cy + th / 2)))
+        )
+    if not tiles:
+        return "no box or patch callouts"
+    rows = (len(tiles) + cols - 1) // cols
+    sheet = Image.new("RGB", (cols * tw, rows * th), "white")
+    for i, t in enumerate(tiles):
+        sheet.paste(t, ((i % cols) * tw, (i // cols) * th))
+    out = os.path.join(tmpdir, "callout-sheet.png")
+    sheet.save(out)
+    return "%d callouts -> %s" % (len(tiles), rel(out))
+
+
 # ---------------------------------------------------------------- zoom
 
 
@@ -787,6 +1097,9 @@ def zoom_expr(zooms, f0, fps, canvas):
 
 def rect_px(r, w, h):
     x, y, rw, rh = r
+    if not all(0 <= v <= 1 for v in r):
+        # a pixel rect scaled by the frame lands off-screen and draws nothing
+        sys.exit(f"paint/blur rect {r}: give it as fractions of the frame (0-1), not pixels")
     return (
         int(round(x * w)),
         int(round(y * h)),
@@ -877,6 +1190,32 @@ def treat(src, t0, length, lab_in, tag, follows, inputs):
     return parts, cur
 
 
+def screen_mask(spec, canvas, path):
+    """A full-canvas RGBA device frame: background outside, a bezel ring, and
+    a transparent rounded screen. It goes on AFTER the zoom, so a zoom stays
+    inside the phone instead of spilling over the background.
+    """
+    k = 4  # supersampled, so the corners are not stair-stepped
+    cw, ch = canvas
+    x, y, w, h = spec["box"]
+    r, b = int(spec.get("radius", 60)), int(spec.get("bezel", 18))
+    im = Image.new("RGBA", (cw * k, ch * k), _overlay.hex_rgba(spec.get("bg", "#e8f0fe")))
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle(
+        [(x - b) * k, (y - b) * k, (x + w + b) * k, (y + h + b) * k],
+        radius=(r + b) * k,
+        fill=_overlay.hex_rgba(spec.get("bezel_color", "#111111")),
+    )
+    # the hole sits 2 px inside the box: the scaled picture can round a pixel short
+    d.rounded_rectangle(
+        [(x + 2) * k, (y + 2) * k, (x + w - 2) * k, (y + h - 2) * k],
+        radius=r * k,
+        fill=(0, 0, 0, 0),
+    )
+    im.resize((cw, ch), Image.LANCZOS).save(path)
+    return path
+
+
 def fit(cw, ch, bg):
     return (
         "scale=%d:%d:force_original_aspect_ratio=decrease:flags=lanczos,"
@@ -921,20 +1260,40 @@ def build(
             if s.get("crop")
             else ""
         )
+        scr = src.get("screen")
+        # a `screen` source is fitted to its box and zoomed THERE, before it is
+        # padded onto the canvas: its zoom rects are fractions of the screen,
+        # and a zoom can never push the picture under the bezel
+        area = (scr["box"][2], scr["box"][3]) if scr else canvas
         chain = "%ssetpts=%s,fps=%g,%s,trim=end_frame=%d,setpts=PTS-STARTPTS" % (
             crop,
             pts,
             fps,
-            fit(cw, ch, src.get("bg", "#000000")),
+            "scale=%d:%d:flags=lanczos,setsar=1" % area
+            if scr
+            else fit(cw, ch, src.get("bg", "#000000")),
             s["n"],
         )
         a, b = s["f0"] / fps, (s["f0"] + s["n"]) / fps
         mine = [z for z in zooms if z["b"] > a and z["a"] < b]
         if mine:
-            zp, U = zoom_expr(mine, s["f0"], fps, canvas)
+            zp, U = zoom_expr(mine, s["f0"], fps, area)
             # zoompan crops on whole input pixels; at 2x the step is half a
             # film pixel, which is what keeps a slow push from shimmering
-            chain += ",scale=%d:%d:flags=lanczos,%s" % (cw * U, ch * U, zp)
+            chain += ",scale=%d:%d:flags=lanczos,%s" % (area[0] * U, area[1] * U, zp)
+        if scr:
+            chain += ",pad=%d:%d:%d:%d:color=0x%s" % (
+                cw,
+                ch,
+                scr["box"][0],
+                scr["box"][1],
+                scr.get("bg", "#e8f0fe").lstrip("#"),
+            )
+            # shortest=1: a looped PNG never ends, and the overlay would wait on it
+            mi = inputs.add("-loop", "1", "-framerate", "%g" % fps, "-i", src["screen_mask"])
+            parts.append("[%s]%s[p%d]" % (cur, chain, k))
+            parts.append("[p%d][%d:v]overlay=0:0:shortest=1,format=yuv420p[v%d]" % (k, mi, k))
+            continue
         parts.append("[%s]%s,format=yuv420p[v%d]" % (cur, chain, k))
     parts.append(
         "".join("[v%d]" % k for k in range(len(segs))) + "concat=n=%d:v=1:a=0[film]" % len(segs)
@@ -1249,6 +1608,11 @@ def main():
         metavar="M:SS",
         help="write the finished frame at this FILM time as a PNG; repeatable",
     )
+    ap.add_argument(
+        "--callout-sheet",
+        action="store_true",
+        help="draw every callout's rect on its own SOURCE frame into one sheet; encode nothing",
+    )
     ap.add_argument("--out", help="override the manifest's output path")
     args = ap.parse_args()
 
@@ -1262,10 +1626,32 @@ def main():
     zooms = zoom_plan(m.get("zooms") or [], segs, fps)
     tmpdir = os.path.join(_project.projects_dir(), mid, "temp", "edl")
     os.makedirs(tmpdir, exist_ok=True)
+    for key, src in srcs.items():
+        if src.get("screen"):
+            bw, bh = src["screen"]["box"][2:]
+            for s in segs:
+                w, h = (s.get("crop") or [0, 0, src["w"], src["h"]])[2:]
+                if s["src"] is src and abs(w / h - bw / bh) > 0.01 * bw / bh:
+                    sys.exit(
+                        "%s: crop %dx%d is not the screen box's shape %dx%d" % (key, w, h, bw, bh)
+                    )
+            src["screen_mask"] = screen_mask(
+                src["screen"], canvas, os.path.join(tmpdir, "screen-%s.png" % key)
+            )
+
+    call_specs, call_report = callout_plan(
+        m.get("callouts") or [], srcs, segs, fps, canvas, zooms, tmpdir, m.get("callout_style")
+    )
+
+    if args.callout_sheet:
+        print(callout_sheet(m.get("callouts") or [], srcs, tmpdir))
+        return
 
     if args.list:
         runs = {k: moved_runs(s, segs) for k, s in srcs.items() if s.get("paint")}
         show_list(segs, fps, total, cps, zooms, {k: v for k, v in runs.items() if v})
+        for line in call_report:
+            print(line)
         return
 
     follows = prepare_follows(srcs, segs, tmpdir)
@@ -1313,7 +1699,7 @@ def main():
         for k in ("voice", "music"):
             if audio.get(k) and not os.path.exists(audio[k]):
                 sys.exit("audio.%s: %s does not exist" % (k, audio[k]))
-    img_specs = m.get("image_overlays") or []
+    img_specs = list(m.get("image_overlays") or []) + call_specs
     ov = None
     if img_specs:
         preset = m.get("overlay_preset", "config/overlays/end-card.json")

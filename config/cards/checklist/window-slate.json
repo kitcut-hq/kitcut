@@ -1,0 +1,18 @@
+{
+  "_comment": "The `window` look on Instafill's own palette, for films recorded on the #F0F4F8 Cursorful backdrop (acord-commercial): the same white rounded panel, ticks in the brand blue #0D6EFD, and the logo WITH the address beside it -- the last frame of a film meant to convert says where to go.",
+  "background": "#F0F4F8",
+  "glow": "#F8FAFC",
+  "panel": {"w": 1120, "radius": 26, "fill": "#FFFFFF", "shadow": "#1A2A40", "shadow_alpha": 0.14},
+  "align": "left",
+  "pad": 72,
+  "headline": {"font": "fonts/Montserrat-Bold.ttf", "size": 58, "colour": "#1A1A1A"},
+  "item": {"font": "fonts/Montserrat-Medium.ttf", "size": 36, "colour": "#1A1A1A"},
+  "cta": {"font": "fonts/Montserrat-Bold.ttf", "size": 34, "colour": "#0D6EFD"},
+  "box": {"size": 44, "radius": 10, "stroke": 3, "outline": "#C9D2DE", "fill": "#0D6EFD",
+          "tick": "#FFFFFF", "tick_width": 5, "gap": 28},
+  "gap_head": 44,
+  "row": 80,
+  "gap_cta": 52,
+  "cta_logo": {"height": 58, "with_text": true, "text_gap": 32,
+               "_why": "logo then the call to action on the same row"}
+}

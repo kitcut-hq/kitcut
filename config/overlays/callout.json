@@ -1,0 +1,46 @@
+{
+  "_comment": "Field callouts burned by edl-cut.py (`callouts` in an edit manifest): a rounded box that settles on a form field, a label pill saying where the value came from, a wider ring that flashes once as the voice names the value, and a sum panel. Colours are Instafill's own, sampled off the Agent screen: blue #0D6EFD, ink #1A1A1A.",
+  "stroke": "#0D6EFD",
+  "stroke_px": 3,
+  "fill": "#0D6EFD",
+  "fill_alpha": 0.10,
+  "radius": 8,
+  "pad": 6,
+  "fade_in": 0.18,
+  "fade_out": 0.25,
+  "label": {
+    "font": "fonts/Montserrat-Bold.ttf",
+    "size": 20,
+    "bg": "#0D6EFD",
+    "fg": "#FFFFFF",
+    "pad_x": 14,
+    "pad_y": 7,
+    "radius": 16,
+    "gap": 12
+  },
+  "pulse": {
+    "grow": 10,
+    "width_px": 6,
+    "alpha": 0.55,
+    "dur": 0.55,
+    "in": 0.08,
+    "out": 0.4
+  },
+  "panel": {
+    "font": "fonts/Montserrat-Bold.ttf",
+    "size": 30,
+    "note_font": "fonts/Montserrat-Medium.ttf",
+    "note_size": 20,
+    "total_font": "fonts/Montserrat-Bold.ttf",
+    "total_size": 36,
+    "bg": "#FFFFFF",
+    "fg": "#1A1A1A",
+    "muted": "#6B7380",
+    "pad": 22,
+    "row_gap": 12,
+    "rule_gap": 12,
+    "col_gap": 16,
+    "radius": 14,
+    "offset_x": 28
+  }
+}

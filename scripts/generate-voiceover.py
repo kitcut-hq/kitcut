@@ -120,8 +120,14 @@ def estimate_duration(text):
     return word_count * 0.6
 
 
-def create_timed_voiceover(script_lines, voice_id, api_key, model):
+def create_timed_voiceover(script_lines, voice_id, api_key, model, tmpdir):
     """Generate individual clips at scheduled times, create timing file for FFmpeg.
+
+    `tmpdir` belongs to the CALLER and must outlive the returned path. This
+    function used to open its own TemporaryDirectory and return a file inside
+    it -- which the `with` deleted on the way out, so every caller then failed
+    copying or mixing a file that no longer existed, in both the music and the
+    --no-ducking paths.
 
     Returns: (audio_file, timing_list)
     """
@@ -129,60 +135,59 @@ def create_timed_voiceover(script_lines, voice_id, api_key, model):
     clips = []
     timing_map = []  # For FFmpeg atrim/adelay
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        for idx, line in enumerate(script_lines, 1):
-            start_time = line["time"]
-            text = line["text"]
+    for idx, line in enumerate(script_lines, 1):
+        start_time = line["time"]
+        text = line["text"]
 
-            print(f"[{idx}/{len(script_lines)}] Generating: {text[:50]}...", file=sys.stderr)
-            print(f"  Start: {start_time:.2f}s", file=sys.stderr)
+        print(f"[{idx}/{len(script_lines)}] Generating: {text[:50]}...", file=sys.stderr)
+        print(f"  Start: {start_time:.2f}s", file=sys.stderr)
 
-            # Generate TTS
-            audio_data = generate_speech(text, voice_id, api_key, model)
+        # Generate TTS
+        audio_data = generate_speech(text, voice_id, api_key, model)
 
-            # Save clip
-            clip_file = Path(tmpdir) / f"clip_{idx:02d}.wav"
-            with open(clip_file, "wb") as f:
-                f.write(audio_data)
+        # Save clip
+        clip_file = Path(tmpdir) / f"clip_{idx:02d}.wav"
+        with open(clip_file, "wb") as f:
+            f.write(audio_data)
 
-            estimated_duration = estimate_duration(text)
-            clips.append(
-                {
-                    "idx": idx,
-                    "file": str(clip_file),
-                    "start": start_time,
-                    "text": text,
-                    "estimated_duration": estimated_duration,
-                }
-            )
+        estimated_duration = estimate_duration(text)
+        clips.append(
+            {
+                "idx": idx,
+                "file": str(clip_file),
+                "start": start_time,
+                "text": text,
+                "estimated_duration": estimated_duration,
+            }
+        )
 
-            print(f"  Estimated duration: {estimated_duration:.2f}s", file=sys.stderr)
-            print()
+        print(f"  Estimated duration: {estimated_duration:.2f}s", file=sys.stderr)
+        print()
 
-        # Build FFmpeg concat file
-        concat_file = Path(tmpdir) / "concat.txt"
-        with open(concat_file, "w") as f:
-            f.writelines(f"file '{clip['file']}'\n" for clip in clips)
+    # Build FFmpeg concat file
+    concat_file = Path(tmpdir) / "concat.txt"
+    with open(concat_file, "w") as f:
+        f.writelines(f"file '{clip['file']}'\n" for clip in clips)
 
-        # Concatenate all clips
-        output_wav = Path(tmpdir) / "voiceover_raw.wav"
-        cmd = [
-            "ffmpeg",
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            str(concat_file),
-            "-c",
-            "pcm_s16le",
-            str(output_wav),
-        ]
-        subprocess.run(cmd, check=True, capture_output=True)
+    # Concatenate all clips
+    output_wav = Path(tmpdir) / "voiceover_raw.wav"
+    cmd = [
+        "ffmpeg",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        str(concat_file),
+        "-c",
+        "pcm_s16le",
+        str(output_wav),
+    ]
+    subprocess.run(cmd, check=True, capture_output=True)
 
-        print(f"Generated voiceover: {output_wav}", file=sys.stderr)
+    print(f"Generated voiceover: {output_wav}", file=sys.stderr)
 
-        return str(output_wav), clips
+    return str(output_wav), clips
 
 
 def mix_with_music(voiceover_file, music_file, output_file):
@@ -236,24 +241,28 @@ def main():
     print(f"Found {len(script)} lines", file=sys.stderr)
     print()
 
-    # Generate TTS
+    # Generate TTS, and finish with the file before its directory goes away
     api_key = get_elevenlabs_key()
-    voiceover_file, clips = create_timed_voiceover(script, args.voice, api_key, args.model)
+    import shutil
 
-    # Mix with music if provided
-    if args.background_music and not args.no_ducking:
-        if not Path(args.background_music).exists():
-            print(f"Warning: Background music not found: {args.background_music}", file=sys.stderr)
-            print("Skipping music mix. Saving voiceover only.", file=sys.stderr)
-            import shutil
+    with tempfile.TemporaryDirectory() as tmpdir:
+        voiceover_file, clips = create_timed_voiceover(
+            script, args.voice, api_key, args.model, tmpdir
+        )
 
-            shutil.copy(voiceover_file, args.output)
+        # Mix with music if provided
+        if args.background_music and not args.no_ducking:
+            if not Path(args.background_music).exists():
+                print(
+                    f"Warning: Background music not found: {args.background_music}",
+                    file=sys.stderr,
+                )
+                print("Skipping music mix. Saving voiceover only.", file=sys.stderr)
+                shutil.copy(voiceover_file, args.output)
+            else:
+                mix_with_music(voiceover_file, args.background_music, args.output)
         else:
-            mix_with_music(voiceover_file, args.background_music, args.output)
-    else:
-        import shutil
-
-        shutil.copy(voiceover_file, args.output)
+            shutil.copy(voiceover_file, args.output)
 
     print(f"\nDone! Output: {args.output}", file=sys.stderr)
 

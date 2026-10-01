@@ -16,11 +16,14 @@ Two things this refuses to do, both learned the hard way on this account:
     mistake, and the API will not tell you.
 
 Defaults to unlisted: the safe end of the scale, and the one you can widen
-later without having shown anything to anyone.
+later without having shown anything to anyone. --publish-at schedules it: the
+video goes up private and YouTube makes it public at that time (the API takes
+a schedule only on a private video).
 
 Invoke as:
   python scripts/yt-upload.py <file> --title "..." --channel @handle --dry-run
   python scripts/yt-upload.py <file> --title "..." --channel @handle
+  python scripts/yt-upload.py <file> --title "..." --channel @handle --publish-at 2026-10-02T15:45
 """
 
 import sys
@@ -28,6 +31,7 @@ import os
 import json
 import time
 import argparse
+import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
@@ -97,8 +101,25 @@ def main():
     ap.add_argument(
         "--thumbnail", help="a JPEG/PNG (1280x720, under 2 MB) set as the custom thumbnail"
     )
+    ap.add_argument(
+        "--publish-at",
+        help="schedule: goes up private, public at this time (ISO; no offset = this machine's zone)",
+    )
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+
+    publish_at = None
+    if args.publish_at:
+        when = datetime.datetime.fromisoformat(args.publish_at)
+        if when.tzinfo is None:
+            when = when.astimezone()
+        when = when.astimezone(datetime.timezone.utc).replace(microsecond=0)
+        if when <= datetime.datetime.now(datetime.timezone.utc):
+            sys.exit("--publish-at %s is not in the future" % args.publish_at)
+        if args.privacy != "private":
+            print("  --publish-at: uploading private; YouTube publishes it at that time")
+            args.privacy = "private"
+        publish_at = when.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     path = _env.resolve(args.file)
     if not os.path.exists(path):
@@ -116,6 +137,17 @@ def main():
         sys.exit("description is %d chars; YouTube's limit is 5000" % len(desc))
     if len(args.title) > 100:
         sys.exit("title is %d chars; YouTube's limit is 100" % len(args.title))
+    # YouTube rejects '<' and '>' anywhere in a title or description with a
+    # bare "invalidDescription" -- and only once the upload is under way. An
+    # arrow written "->" in acord-commercial's document map was enough.
+    for field, text in (("title", args.title), ("description", desc)):
+        bad = [i for i, ch in enumerate(text) if ch in "<>"]
+        if bad:
+            line = text.count("\n", 0, bad[0]) + 1
+            sys.exit(
+                "%s contains '<' or '>' (first on line %d) -- YouTube refuses both; "
+                "use an arrow character or words" % (field, line)
+            )
 
     publish_at = None
     if args.publish_at:
@@ -151,7 +183,10 @@ def main():
     print("  title:   %s" % args.title)
     print("  privacy: %s" % args.privacy)
     if publish_at:
-        print("  public:  %s (scheduled)" % publish_at)
+        print(
+            "  publish: %s UTC (%s local)"
+            % (publish_at, when.astimezone().strftime("%a %Y-%m-%d %H:%M"))
+        )
     thumb = None
     if args.thumbnail:
         thumb = _env.resolve(args.thumbnail)
@@ -182,6 +217,12 @@ def main():
         try:
             status, resp = req.next_chunk()
         except Exception as e:  # noqa: BLE001
+            code = getattr(getattr(e, "resp", None), "status", None)
+            if code is not None and 400 <= int(code) < 500:
+                # A 4xx is YouTube refusing the request, not the network
+                # dropping a chunk: the same bytes will be refused again, so
+                # retrying only spends a minute before the same failure.
+                sys.exit("YouTube refused the upload (%s): %s" % (code, e))
             tries += 1
             if tries > 5:
                 raise
@@ -210,7 +251,10 @@ def main():
     for label, want, have in (
         ("title", args.title, sn.get("title")),
         ("privacy", args.privacy, st.get("privacyStatus")),
-        *((("publish", publish_at, st.get("publishAt")),) if publish_at else ()),
+    ) + (
+        (("publish", publish_at, (st.get("publishAt") or "").replace(".000", "")),)
+        if publish_at
+        else ()
     ):
         mark = "ok" if want == have else "MISMATCH"
         if want != have:
@@ -245,7 +289,7 @@ def main():
                 "url": url,
                 "title": args.title,
                 "privacy": args.privacy,
-                **({"publish_at": publish_at} if publish_at else {}),
+                "publish_at": publish_at,
                 "bytes": size,
                 "thumbnail": thumb and _project.norm(thumb),
                 "uploaded_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -264,7 +308,12 @@ def main():
             out=path,
             script=__file__,
             argv=sys.argv[1:],
-            published={"url": url, "privacy": args.privacy, "sidecar": _project.norm(side)},
+            published={
+                "url": url,
+                "privacy": args.privacy,
+                "publish_at": publish_at,
+                "sidecar": _project.norm(side),
+            },
             note="uploaded %s" % args.title,
         )
     else:

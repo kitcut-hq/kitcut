@@ -1,0 +1,17 @@
+{
+  "_comment": "Invented loss-control / property inspection firm. Technical, slate and orange.",
+  "name": "Keystone Risk Survey, Inc.",
+  "tagline": "Commercial property loss control",
+  "address": "615 Beckwith Ave, Cleveland, OH 44113",
+  "phone": "(216) 555-0188",
+  "web": "keystonerisksurvey.com",
+  "mark": "KR",
+  "ink": "#22262b",
+  "muted": "#6b727a",
+  "paper": "#ffffff",
+  "accent": "#c05621",
+  "rule": "#cdd2d8",
+  "band": "#eef0f2",
+  "font_head": "'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+  "font_body": "'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+}

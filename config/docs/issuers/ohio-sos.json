@@ -1,0 +1,17 @@
+{
+  "_comment": "Invented state filing office. Plain, black, serif, wide letter spacing.",
+  "name": "Ohio Secretary of State",
+  "tagline": "Business Services Division",
+  "address": "22 North Fourth Street, Columbus, OH 43215",
+  "phone": "(614) 555-0400",
+  "web": "ohiosos.example.gov",
+  "mark": "OH",
+  "ink": "#1a1a1a",
+  "muted": "#5a5a5a",
+  "paper": "#ffffff",
+  "accent": "#8a6a1f",
+  "rule": "#bdbdbd",
+  "band": "#f2f0ea",
+  "font_head": "'Times New Roman', Georgia, serif",
+  "font_body": "'Times New Roman', Georgia, serif"
+}
