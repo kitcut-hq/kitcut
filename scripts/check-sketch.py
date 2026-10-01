@@ -19,6 +19,7 @@ import os
 import re
 import json
 import shutil
+import difflib
 import argparse
 import tempfile
 from importlib import import_module
@@ -465,6 +466,65 @@ def main():
         str([w["text"] for w in words]),
     )
 
+    # ---- a take's accuracy: the studio's own takes (2026-09-28..30), what the script said and what
+    # the transcriber heard. Numbers come back in digits and names in other spellings; neither is
+    # a misread, and each one flagged was a retake for nothing. A word the voice added, dropped or
+    # garbled must still count against the take.
+    acc = vo_mod.accuracy
+    said_right = [
+        ("Saturday, October tenth, two thirty to six!", "Saturday, October 10th, 2.30 to 6.00."),
+        (
+            "One: aero. Smooth legs save about a minute over forty kilometres.",
+            "1. Aero. Smooth legs save about a minute over 40 kilometers.",
+        ),
+        (
+            "Два відсотки від ста гривень — якраз дві гривні.",
+            "2% від 100 гривень – якраз 2 гривні.",
+        ),
+        ("Sign in to Kit Cut once, and press Allow.", "Sign in to KitKut once and press Allow."),
+        (
+            "At the pebble harbour, a snail waved it in.",
+            "At the pebble harbor, a snail waved it in.",
+        ),
+    ]
+    check(
+        "accuracy: digits for spelled-out numbers, and other spellings of a name, are no misread",
+        all(acc(a, b) >= 0.9 for a, b in said_right),
+        str([round(acc(a, b), 2) for a, b in said_right]),
+    )
+    said_wrong = [
+        (
+            "Bats sleep upside down!",
+            "Bats sleep upside down. Hats sleep upside down. Hello, bats. I'm a big boy.",
+        ),
+        (
+            "KitCut turns it into a finished animated film.",
+            "An easygoing, upbeat founder, warm and friendly, with a grin in his voice.",
+        ),
+        ("Bats love varenyky.", "That's love, Vareniki."),
+        (
+            "Then do the rest from the chat.",
+            "Then do the rest from the chat. Kit-cut as two words.",
+        ),
+    ]
+    check(
+        "accuracy: words the voice added, or its direction read aloud, still fail the take",
+        all(acc(a, b) < 0.9 for a, b in said_wrong),
+        str([round(acc(a, b), 2) for a, b in said_wrong]),
+    )
+    plain = lambda a, b: difflib.SequenceMatcher(
+        None, vo_mod.words_of(a), vo_mod.words_of(b)
+    ).ratio()  # noqa: E731
+    pairs = (
+        said_right
+        + said_wrong
+        + [("It carried some eighteen thousand containers.", "It carried some 18,000 containers.")]
+    )
+    check(
+        "accuracy: never below the plain word ratio it replaced",
+        all(acc(a, b) >= plain(a, b) - 1e-9 for a, b in pairs),
+    )
+
     # ---- the backup voice, for a line Gemini refuses (no API: what decides it)
     check(
         "backup: Gemini's content block is a refusal, a glitch is not",
@@ -506,8 +566,9 @@ def main():
     vdir = tempfile.mkdtemp(prefix="check-sketch-vo-")
     real, calls = vo_mod.whisper_score, []
     try:
+        # scored as the real one scores (a memo's accuracy is worked out again from what was heard)
         vo_mod.whisper_score = lambda path, text, *a, **k: (
-            calls.append(text) or (0.9, text, [(text, 0.0, 0.5)])
+            calls.append(text) or (vo_mod.accuracy(text, text), text, [(text, 0.0, 0.5)])
         )
         base, wav = os.path.join(vdir, "L00_T0_x"), os.path.join(vdir, "L00_T0_x_line.wav")
         _sketch.write_wav(wav, voiced(230, 0.5))

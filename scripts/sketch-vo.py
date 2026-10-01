@@ -97,6 +97,67 @@ def words_of(text):
     return re.sub(r"[^\w$ ]", " ", t).split()
 
 
+DIGIT = re.compile(r"\d")
+
+
+def _same_word(a, b):
+    """One word spelled two ways: harbour/harbor, Kit Cut/KitKut (>= .8 of their letters)."""
+    return a == b or difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= 0.8
+
+
+def _credit(ref, hyp):
+    """The script words a stretch of what was heard accounts for, where plain matching failed:
+    a word spelled a little differently, one word heard as two or two as one, and a number the
+    transcriber wrote in digits ("1986") for the words the script spells out ("nineteen eighty
+    six") -- the studio's brief has every number written as words, and Whisper writes digits.
+    Returns (matched script words, how many more words the heard side counts as)."""
+    R, H = len(ref), len(hyp)
+    best = [[None] * (H + 1) for _ in range(R + 1)]
+    best[0][0] = (0, 0)
+
+    def put(i, j, m, x):
+        if i <= R and j <= H and (best[i][j] is None or (m, -x) > (best[i][j][0], -best[i][j][1])):
+            best[i][j] = (m, x)
+
+    for i in range(R + 1):
+        for j in range(H + 1):
+            if best[i][j] is None:
+                continue
+            m, x = best[i][j]
+            put(i + 1, j, m, x)
+            put(i, j + 1, m, x)
+            if i < R and j < H and _same_word(ref[i], hyp[j]):
+                put(i + 1, j + 1, m + 1, x)
+            if i < R and j + 1 < H and _same_word(ref[i], hyp[j] + hyp[j + 1]):
+                put(i + 1, j + 2, m + 1, x - 1)
+            if i + 1 < R and j < H and _same_word(ref[i] + ref[i + 1], hyp[j]):
+                put(i + 2, j + 1, m + 2, x + 1)
+            if j < H and DIGIT.search(hyp[j]):  # digits heard for up to six spelled-out words
+                for k in range(1, 7):
+                    if i + k <= R and not any(DIGIT.search(w) for w in ref[i : i + k]):
+                        put(i + k, j + 1, m + k, x + k - 1)
+    return best[R][H]
+
+
+def accuracy(text, heard):
+    """How much of the script line the take says, 0..1: difflib's ratio over the two word lists,
+    with the stretches it cannot match (a 'replace') given the credit _credit finds. Measured on
+    the studio's 646 takes of 2026-09-28..30: of the 78 lines the plain ratio put under 0.9, 33
+    were numbers in digits or names spelled another way (each one a retake for nothing); the 45
+    left are the voice model adding or garbling words, or reading its direction aloud. No take
+    scores lower than it did (studio/harvest.py, docs/studio-speed.md)."""
+    ref, hyp = words_of(text), words_of(heard)
+    matched, heard_n = 0, len(hyp)
+    for op, a0, a1, b0, b1 in difflib.SequenceMatcher(None, ref, hyp, autojunk=False).get_opcodes():
+        if op == "equal":
+            matched += a1 - a0
+        elif op == "replace" and a1 - a0 <= 12 and b1 - b0 <= 12:
+            m, extra = _credit(ref[a0:a1], hyp[b0:b1])
+            matched += m
+            heard_n += extra
+    return 2 * matched / max(1, len(ref) + heard_n)
+
+
 def line_vo(vo, ln):
     """The voice settings one line is read with: the film's, with its speaker's laid over them.
     A film where several people speak (talking heads) names them in "cast", {who: {"voice",
@@ -819,7 +880,7 @@ def whisper_score(path, text, hotwords, lang="en", model=None, words=False):
     if remote(model):
         try:
             heard, ws = openrouter_heard(path, lang, model, hotwords)
-            acc = difflib.SequenceMatcher(None, words_of(text), words_of(heard)).ratio()
+            acc = accuracy(text, heard)
             return (acc, heard.strip(), ws) if words else (acc, heard.strip())
         except (RuntimeError, ValueError, KeyError) as e:  # the service is down: slower, same job
             if not FALLBACK:
@@ -834,8 +895,7 @@ def whisper_score(path, text, hotwords, lang="en", model=None, words=False):
     )
     segs = list(segs)
     heard = " ".join(s.text for s in segs)
-    ref, hyp = words_of(text), words_of(heard)
-    acc = difflib.SequenceMatcher(None, ref, hyp).ratio()
+    acc = accuracy(text, heard)
     if not words:
         return acc, heard.strip()
     ws = [(w.word.strip(), w.start, w.end) for s in segs for w in (s.words or [])]
@@ -883,7 +943,9 @@ def cached_score(base, path, text, hotwords, lang="en", model=None, words=False)
             with open(memo, encoding="utf-8") as f:
                 got = json.load(f)
             if got.get("key") == key:
-                return tuple(got["got"])
+                got = list(got["got"])
+                got[0] = accuracy(text, got[1])  # what was heard keeps; how it scores may change
+                return tuple(got)
         except (OSError, ValueError, KeyError):
             pass  # a torn or older memo: score again
     got = whisper_score(path, text, hotwords, lang, model, words)
