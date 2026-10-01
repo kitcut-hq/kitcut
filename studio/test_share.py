@@ -142,7 +142,7 @@ async def main():
     f = fixture_film()
     mat = ytdraft.material(f)
     text = share.ask_text(mat)
-    check("brief it was made from (private)" in text and PROMPT in text, "the brief, private")
+    check(PROMPT not in text and "(private)" not in text, "the brief is never sent")
     check("4.4-  9.0 s  Forms come back sooner" in text, "the narration with its times")
     check("at most 70 characters" in text and "at most 155" in text, "the page's limits")
     check("# The channel" not in text, "no channel")
@@ -211,7 +211,6 @@ async def main():
 
     # ---------------------------------------------------------------- the brief and the pictures
     check(share.problem(share.check(good(), mat)[0], mat) is None, "a share from the film passes")
-    check(share.problem({"title": PROMPT, "description": "x"}, mat), "the brief as the title fails")
     gen = {"title": "Acme's new engine", "description": "An AI-generated update for Acme."}
     check(share.problem(gen, mat), "calling the film generated fails")
     title = good()["title"]
@@ -269,16 +268,15 @@ async def main():
     blob = TestServer(app, host="127.0.0.1")
     await blob.start_server()
     try:
-        answers[:] = [good(title=PROMPT), good()]
+        answers[:] = [good()]
         d = await share.write(f, "api")
-        check(d["title"] == good()["title"] and len(calls) == 2, "a pasted brief is asked again")
-        check("broke a rule" in (calls[1][1] or ""), "and told why", calls)
+        check(d["title"] == good()["title"] and len(calls) == 1, "one call")
         rec = f.record()
         check(
             rec["share_drafts"] == 1
-            and abs(rec["share_cost_usd"] - 0.1) < 1e-6
-            and abs(rec["cost_usd"] - 1.1) < 1e-6,
-            "both calls paid for on the record",
+            and abs(rec["share_cost_usd"] - 0.05) < 1e-6
+            and abs(rec["cost_usd"] - 1.05) < 1e-6,
+            "the call paid for on the record",
             rec,
         )
         check(os.path.isfile(f.path("share", "draft.json")), "the draft is kept in share/")
@@ -295,12 +293,12 @@ async def main():
             g.record(),
         )
         h = fixture_film()
-        answers[:] = [good(title=PROMPT), good(title=PROMPT)]
+        answers[:] = [good(description="An AI-generated update.")] * 2
         try:
             await share.write(h, "api")
-            check(False, "twice the brief is given up")
+            check(False, "called generated twice is given up")
         except RuntimeError as e:
-            check("kept going wrong" in str(e), "twice the brief is given up", e)
+            check("kept going wrong" in str(e), "called generated twice is given up", e)
 
         # ------------------------------------------------------------ the pictures
         src = f.path("temp", "src.jpg")

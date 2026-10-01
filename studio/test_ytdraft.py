@@ -5,7 +5,7 @@ network, no cost, seconds.
     python studio/test_ytdraft.py
 
 Covers: what the film is read from (the narration with its times, the maker's note, the pages
-read and fetched, what Claude said) and that the brief goes in marked private; the draft held to
+read and fetched, what Claude said) and that the brief is never sent; the draft held to
 YouTube and to its inputs -- a link nobody gave removed, chapters past the end or not from 0:00
 removed with their heading, good ones kept, the title cut at a word, the tags to 500; the brief
 pasted back refused, once asked again, twice given up; a draft kept and reused until the film
@@ -131,7 +131,8 @@ async def main():
     )
     check(mat["sources"][0]["title"] == "The new engine | Maker", "a page read has its title")
     text = ytdraft.ask_text(mat, CHANNEL, ytdraft.sample(RECENT))
-    check("brief it was made from (private)" in text and PROMPT in text, "the brief, private")
+    check(PROMPT not in text and "(private)" not in text, "the brief is never sent")
+    check("prompt" not in mat, "nor kept in what the draft is written from", sorted(mat))
     check("4.4-  9.0 s  Forms come back sooner" in text, "the narration in the ask", text[:200])
     check("## How to fill out PDF forms" in text, "the channel's uploads in the ask")
     none = ytdraft.ask_text(mat, {"id": "x", "title": "New"}, [])
@@ -241,39 +242,6 @@ async def main():
         (out["tags"][:3], cost),
     )
 
-    # ---------------------------------------------------------------- the brief is private
-    check(ytdraft.leak(good(), mat) is None, "a draft from the film is not a leak")
-    check(ytdraft.leak(good(title=PROMPT), mat) is not None, "the prompt as the title is")
-    pasted = good(
-        description="We moved every account to the new faster engine and that it is "
-        "the best one on the market."
-    )
-    check(ytdraft.leak(pasted, mat) is not None, "the prompt in the description is")
-    said = good(description="Nothing to change. Just upload your next form.")
-    mat2 = dict(mat, prompt="tell them: nothing to change, just upload your next form, easy")
-    check(ytdraft.leak(said, mat2) is None, "words the narration says too are the film's own")
-    # a heading over a sentence is two thoughts, not a paste, though the brief has the same pair
-    # (ewwd6b: every draft refused for "making a film say the idea the")
-    headed = good(
-        description="Chapters\n0:55 Making a film\nSay the idea, the length and the look."
-    )
-    mat3 = dict(
-        mat,
-        prompt="3. Making a film. Say the idea, the length and the look, one beat each.",
-        narration=[
-            *mat["narration"],
-            (55.0, 58.0, "To make a film, say the idea, the length and the look."),
-        ],
-    )
-    check(ytdraft.leak(headed, mat3) is None, "a run across a sentence's end is not a paste")
-    check(
-        ytdraft.leak(
-            good(description="Say the idea, the length and the look, one beat each."), mat3
-        )
-        is not None,
-        "a run of the brief's inside one sentence still is",
-    )
-
     # ---------------------------------------------------------------- writing, kept, costed
     answers, calls, picked, tcalls, order = [], [], [], [], []
 
@@ -315,11 +283,10 @@ async def main():
     real_sheet, real_make = thumbs.sheet, thumbs.make
     thumbs.sheet, thumbs.make = fake_sheet, fake_make
     try:
-        answers[:] = [good(title=PROMPT), good()]
+        answers[:] = [good()]
         before = f.record().get("cost_usd") or 0
         d = await ytdraft.write(f, CHANNEL, recent, "api", on_words=lambda w: order.append("shown"))
-        check(d["title"] == good()["title"] and len(calls) == 2, "a pasted brief is asked again")
-        check(calls[1] and "repeated the brief" in calls[1], "and told why", calls)
+        check(d["title"] == good()["title"] and len(calls) == 1, "one call for the words")
         check(len(tcalls) == 1, "the thumbnails asked once, at the same time", tcalls)
         check(
             order.index("shown") < order.index("picks"),
@@ -329,9 +296,9 @@ async def main():
         rec = f.record()
         check(
             rec["youtube_drafts"] == 1
-            and abs(rec["youtube_draft_cost_usd"] - 0.15) < 1e-6
-            and abs(rec["cost_usd"] - before - 0.15) < 1e-6,
-            "all three calls are paid for on the record",
+            and abs(rec["youtube_draft_cost_usd"] - 0.1) < 1e-6
+            and abs(rec["cost_usd"] - before - 0.1) < 1e-6,
+            "both calls are paid for on the record",
             rec,
         )
         check(
@@ -371,15 +338,11 @@ async def main():
             "twice: put right from the film, the draft still written",
             d4["notes"],
         )
-        answers[:] = [good(title=PROMPT), good(title=PROMPT)]
-        try:
-            await ytdraft.write(f, dict(CHANNEL, id="UCother"), recent, "login")
-            check(False, "twice the brief is given up")
-        except RuntimeError as e:
-            check("repeating the brief" in str(e), "twice the brief is given up", e)
+        answers[:] = [good(title="On the login")]
+        await ytdraft.write(f, dict(CHANNEL, id="UCother"), recent, "login")
         rec = f.record()
         check(
-            rec["youtube_drafts"] == 5 and abs(rec["cost_usd"] - before - 0.55) < 1e-6,
+            rec["youtube_drafts"] == 5 and abs(rec["cost_usd"] - before - 0.5) < 1e-6,
             "a draft on the login is counted, but not in cost_usd",
             rec,
         )

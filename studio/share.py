@@ -87,10 +87,8 @@ the way a good publisher titles a film like this -- not a label, not the request
 
 Hold it to the film:
 - Every fact comes from the narration, the pages listed, or what the maker said. Name no number, \
-feature, date or claim the film does not make, and where the maker says something is unconfirmed \
-or came only from the brief, do not state more than the film does.
-- The brief is the request the film was made from, and it is private. Do not quote it, restate \
-it as a request, or say the film was asked for, generated or made with AI.
+feature, date or claim the film does not make, and where the maker says something is unconfirmed, \
+do not state more than the film does. Do not say the film was asked for, generated or made with AI.
 
 Then choose two pictures for its link, made the way YouTube thumbnails are: one moment of the \
 film, its subject pushed in large on one side, and a few big words on the other -- the only \
@@ -124,7 +122,7 @@ def ask_text(mat):
 
 
 def key_of(mat, model, effort):
-    """What a draft was written from: a changed film, prompt or model is a new one."""
+    """What a draft was written from: a changed film or model is a new one."""
     h = hashlib.sha256()
     rest = {k: v for k, v in mat.items() if k not in ("sheet", "moments_sheet")}
     for part in (WRITER, ASK, model, effort, json.dumps(rest, sort_keys=True, default=str)):
@@ -195,11 +193,7 @@ def check(d, mat):
 
 
 def problem(out, mat):
-    """Why the words must be written again, or None: the brief pasted back, or the film said to
-    be generated."""
-    why = ytdraft.leak(out, mat)
-    if why:
-        return why
+    """Why the words must be written again, or None: the film said to be generated."""
     m = GENERATED.search(out["title"] + " " + out["description"])
     if m:
         return 'it says how the film was made ("%s")' % m.group(0)
@@ -232,7 +226,7 @@ def auth_of(film):
 
 async def write(film, auth=None, model=MODEL, effort=EFFORT, mat=None, record=True):
     """The share words for this film: from the cache, else one call (and one more if the first
-    repeated the brief, said the film was generated, or broke the pictures' rules)."""
+    said the film was generated, or broke the pictures' rules)."""
     auth = auth or auth_of(film)
     mat = mat or await asyncio.to_thread(ytdraft.material, film)
     key = key_of(mat, model, effort)
@@ -280,8 +274,8 @@ async def write(film, auth=None, model=MODEL, effort=EFFORT, mat=None, record=Tr
         asks = []
         if why:
             asks.append(
-                "Your last answer broke a rule (%s). The brief is private and the film is not "
-                "said to be generated: write the title and description from the film itself." % why
+                "Your last answer broke a rule (%s). The film is not said to be generated: "
+                "write the title and description from the film itself." % why
             )
         if problems:
             asks.append(
