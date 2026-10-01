@@ -512,9 +512,9 @@ def main():
         all(acc(a, b) < 0.9 for a, b in said_wrong),
         str([round(acc(a, b), 2) for a, b in said_wrong]),
     )
-    plain = lambda a, b: difflib.SequenceMatcher(
-        None, vo_mod.words_of(a), vo_mod.words_of(b)
-    ).ratio()  # noqa: E731
+    def plain(a, b):
+        return difflib.SequenceMatcher(None, vo_mod.words_of(a), vo_mod.words_of(b)).ratio()
+
     pairs = (
         said_right
         + said_wrong
@@ -523,6 +523,18 @@ def main():
     check(
         "accuracy: never below the plain word ratio it replaced",
         all(acc(a, b) >= plain(a, b) - 1e-9 for a, b in pairs),
+    )
+
+    # ---- a broken take: a 16-word line drawled over 71 s (kit bakeoff, penalty) is recorded again;
+    # a line spoken at an ordinary pace, or a slow one with its pauses, is not
+    sixteen = (
+        "Twelve yards, one ball, forty thousand people holding their breath. Steady now, keeper."
+    )
+    check(
+        "stretched: a line far longer than its words is a broken take",
+        vo_mod.stretched(sixteen, tone(71.0))
+        and not vo_mod.stretched(sixteen, tone(7.5))
+        and not vo_mod.stretched(sixteen, tone(12.0)),
     )
 
     # ---- the backup voice, for a line Gemini refuses (no API: what decides it)

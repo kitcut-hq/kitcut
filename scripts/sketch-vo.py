@@ -98,6 +98,18 @@ def words_of(text):
 
 
 DIGIT = re.compile(r"\d")
+# A Gemini take is broken when it runs past twice the time its words take at a slow narrator's
+# pace (1.8 words a second of speech; the studio's voices measured 1.85-2.42) plus 1.5 s. In the
+# kit bakeoff (2026-10-01) 6 of 12 first recordings came back with such a line -- a 16-word line
+# drawled over 71 s, a 12-word nursery line sung as 46 words -- and each cost a full recording and
+# a rewrite. A broken take is recorded again up to STRETCH_TRIES times and the shortest kept.
+STRETCH_WPS, STRETCH_K, STRETCH_PAD, STRETCH_TRIES = 1.8, 2.0, 1.5, 2
+
+
+def stretched(text, audio):
+    """Is this take far longer than its words could take?"""
+    n = len(words_of(text))
+    return len(trim_silence(audio)[0]) / SR > STRETCH_K * n / STRETCH_WPS + STRETCH_PAD
 
 
 def _same_word(a, b):
@@ -1115,6 +1127,22 @@ def main():
                 elif tts == "gemini":
                     try:
                         audio, meta = gemini_take(ln["text"], lvo)
+                        # a take far longer than its words is a broken one -- the voice drawled
+                        # or said things the script does not: record it again before anyone
+                        # pays a retake for it (stretched)
+                        for _ in range(STRETCH_TRIES):
+                            if not stretched(ln["text"], audio):
+                                break
+                            note += "\n    %.1fs for %d words: broken, recorded again" % (
+                                len(audio) / SR,
+                                len(words_of(ln["text"])),
+                            )
+                            again, meta2 = gemini_take(ln["text"], lvo)
+                            meta2["cost_usd"] = meta2.get("cost_usd", 0) + meta.get("cost_usd", 0)
+                            if len(trim_silence(again)[0]) < len(trim_silence(audio)[0]):
+                                audio, meta = again, meta2
+                            else:
+                                meta["cost_usd"] = meta2["cost_usd"]
                     except Refused as e:
                         if not vo.get("backup"):
                             sys.exit(
