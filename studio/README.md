@@ -458,6 +458,16 @@ its films, next to `projects\`, never in git:
 - **After an ok film.** `agent.keep_cast` takes in each new or changed member as a new version
   (the last five are kept), draws it alone for a thumbnail, and remembers which films used it.
   A failed film keeps nothing.
+- **Only over the version it started from.** A member whose library version moved on while the
+  film was made (another episode changed it, or an old film is finished again) is not saved:
+  the newer one stays, the film keeps its copy in its own `cast\`, and the film's `cast` summary
+  says `clashed`. On 2026-10-01 four Leo episodes were finished again, oldest first, and the
+  first wrote its night-before Leo over the series' newest: rain boots, bike helmet and sitting
+  poses gone until a later one happened to put them back.
+- **Places.** A set the films return to (a room, a yard) is a member with `kind: 'place'` and
+  `camera: [x, y, zoom]`: the sheet draws it at its origin through that camera, the note and
+  `/api/library` mark it a place. Its header comment is its manual: floor line, camera, options,
+  and what it draws in front of the cast (`o.layer = 'front'`).
 - **Routes** (the asker's own library): `GET /api/library`, `GET /api/library/<name>/thumb.png`
   and `DELETE /api/library/<name>`. A delete keeps the files, and later films leave the member
   out.

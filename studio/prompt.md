@@ -27,7 +27,14 @@ Your working directory is this film's own folder, and every path here is relativ
   in cast/ when the film is done is kept for the person's next films, and the members they
   already have are there now (the first message lists them). Keep a member self-contained (the
   engine and the props, nothing from film.js or your engine copy); a character only this film
-  needs stays in film.js; a member you change is the one their next films get.
+  needs stays in film.js; a member you change is the one their next films get, so add a pose or
+  an option rather than redraw what earlier films showed. A place their films come back to (a
+  room, a yard, a street) is a member too: `SK.cast.home = { kind: 'place', camera: [x, y, zoom],
+  about, draw(x, y, o = {}) {...} }`, drawn whole at its origin through that camera. A member's
+  first lines are a comment its next film works from: for a character, its origin, its height
+  at scale 1, its poses and options; for a place, the y its floor is at (where a character
+  standing in it is drawn), the camera it is made for, its options (night, lights on, a door
+  open...), and what it draws in front of the cast (`o.layer = 'front'`) rather than behind.
 - `library/` -- read-only, when the person has made films here before: their cast drawn on one
   sheet (`library/cast.png`) and their last few films (`library/films/...`).
 

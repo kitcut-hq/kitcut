@@ -274,6 +274,9 @@ def main():
             not e.get("deleted") and "green" in e["about"], "a film that changed it brings it back"
         )
 
+        clashes(check)
+        places(check)
+
         # ------------------------------------------------ films from before libraries
         old = Film.create("carol's old film", 5, "drawn", client="u:carol")
         old.update(state="done")
@@ -290,6 +293,118 @@ def main():
         shutil.rmtree(HOME, ignore_errors=True)
     print("%d failed" % len(bad))
     sys.exit(1 if bad else 0)
+
+
+def clashes(check):
+    """Two films change one member: the first to finish saves; the other is not saved over it.
+    An old film finished again does not take the library back to its copy (Leo, 2026-10-01)."""
+
+    CL = "u:fred"
+    K0 = Film.create("the first kite", 5, "drawn", client=CL)
+    library.seed(K0)
+    write(K0, "cast/kite.js", KITE)
+    write(K0, "film.js", scene(""))
+    finish(K0)
+
+    def kite(f):
+        e = library.load(CL)["cast"]["kite"]
+        p = os.path.join(library.dir_of(CL), "cast", "kite", "v%d.js" % e["version"])
+        return e, open(p, encoding="utf-8").read()
+
+    H1 = Film.create("kite race one", 5, "drawn", client=CL)
+    H2 = Film.create("kite race two", 5, "drawn", client=CL)
+    library.seed(H1)
+    library.seed(H2)
+    v = kite(H1)[0]["version"]
+    for f, col in ((H1, "#a1a"), (H2, "#b2b")):
+        write(f, "cast/kite.js", KITE.replace("#d33", col))
+        write(f, "film.js", scene(""))
+    k1, k2 = finish(H1), finish(H2)
+    e, code = kite(H1)
+    check(
+        k1["saved"] == ["kite"] and e["version"] == v + 1 and "#a1a" in code,
+        "two films change one member: the first to finish saves its version",
+    )
+    check(
+        k2["saved"] == [] and k2.get("clashed") == ["kite"] and "#a1a" in kite(H2)[1],
+        "the other is not saved over it, and says so (%s)" % k2,
+    )
+    check("#b2b" in open(H2.path("cast", "kite.js"), encoding="utf-8").read(), "it keeps its copy")
+    # a later film adds to the kite; then the first is finished again (resume --finish)
+    H3 = Film.create("kite with a tail", 5, "drawn", client=CL)
+    library.seed(H3)
+    write(H3, "cast/kite.js", KITE.replace("#d33", "#a1a").replace("} };", "/* tail */ } };"))
+    write(H3, "film.js", scene(""))
+    finish(H3)
+    again = finish(H1)
+    e, code = kite(H1)
+    check(
+        again.get("clashed") == ["kite"] and e["version"] == v + 2 and "tail" in code,
+        "an old film finished again leaves the newer version (%s)" % again,
+    )
+    # the same new name made by two films at once
+    M1 = Film.create("a moon", 5, "drawn", client=CL)
+    M2 = Film.create("another moon", 5, "drawn", client=CL)
+    library.seed(M1)
+    library.seed(M2)
+    moon = (
+        "SK.cast.moon = { about: 'the moon', draw(x, y) {\n"
+        "  SK.wash(SK.S.ellC(x, y, 60, 60), '%s');\n} };\n"
+    )
+    for f, col in ((M1, "#eed"), (M2, "#dde")):
+        write(f, "cast/moon.js", moon % col)
+        write(f, "film.js", scene(""))
+    m1, m2 = finish(M1), finish(M2)
+    check(
+        m1["saved"] == ["moon"] and m2.get("clashed") == ["moon"],
+        "a new name another film made first is not saved over it",
+    )
+
+
+HOUSE = """/* home: the family's living room. Floor at y = 300; made for the camera [0, 0, 1]. */
+SK.cast.home = { kind: 'place', camera: [0, 0, 1], about: 'the living room',
+  draw(x, y, o = {}) {
+    SK.wash(SK.S.poly([[x - 900, y - 500], [x + 900, y - 500], [x + 900, y + 300],
+      [x - 900, y + 300]]), '#9bc');
+} };
+"""
+# a place whose set is far from the origin: only its own camera finds it
+AWAY = """SK.cast.away = { kind: "place", camera: [3000, 0, 1], about: 'a yard far off',
+  draw(x, y, o = {}) {
+    SK.wash(SK.S.poly([[x + 2400, y - 300], [x + 3600, y - 300], [x + 3600, y + 300],
+      [x + 2400, y + 300]]), '#7a5');
+} };
+"""
+
+
+def places(check):
+    """A place is a member like the rest: kept, drawn for the sheet through its own camera, and
+    named as a place in the next film's note."""
+    P = Film.create("the living room", 5, "drawn", client="u:dora")
+    library.seed(P)
+    write(P, "cast/home.js", HOUSE)
+    write(P, "cast/away.js", AWAY)
+    write(P, "film.js", scene("SK.cast.home.draw(0, 0); SK.cast.away.draw(0, 0);"))
+    kept = finish(P)
+    idx = library.load("u:dora")
+    check(
+        kept["saved"] == ["away", "home"]
+        and idx["cast"]["home"]["kind"] == "place"
+        and idx["cast"]["away"]["kind"] == "place",
+        "a place is kept, as a place (%s)" % kept,
+    )
+    check(
+        idx["cast"]["home"]["thumb"] and idx["cast"]["away"]["thumb"],
+        "each drawn for the sheet, through the camera it names",
+    )
+    Q = Film.create("back in the living room", 5, "drawn", client="u:dora")
+    library.seed(Q)
+    note = library.note(Q)
+    check("- home (a place): the living room" in note, "the next film's note names it a place")
+    check(
+        [c["kind"] for c in library.listing("u:dora")["cast"]] == ["place", "place"],
+        "and so does the listing",
+    )
 
 
 P1, P2 = "p-aaaaaaaaaa", "p-bbbbbbbbbb"

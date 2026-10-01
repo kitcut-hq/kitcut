@@ -165,6 +165,12 @@ def _about(code):
     return " ".join(m.group(2).split())[:200] if m else ""
 
 
+def _kind(code):
+    """'place' for a member that says it is one (kind: 'place': a set the films return to), else
+    None: a character or a thing."""
+    return "place" if re.search(r"\bkind\s*:\s*(['\"`])place\1", code or "") else None
+
+
 def load(lib):
     """The library's index. A person's that has never been written starts from their finished
     films outside projects (made before there were libraries); a project's starts empty."""
@@ -256,6 +262,7 @@ def _bring_account_cast(lib):
             "version": 1,
             "hash": e["hash"],
             "about": e.get("about", ""),
+            "kind": e.get("kind"),
             "films": [],
             "created": now,
             "updated": now,
@@ -297,6 +304,7 @@ def seed(film):
             {
                 "name": n,
                 "about": e.get("about", ""),
+                **({"kind": e["kind"]} if e.get("kind") else {}),
                 "hash": e["hash"],
                 "films": len(e.get("films") or []),
                 "last_used": e.get("last_used") or e.get("updated"),
@@ -413,7 +421,15 @@ def note(film):
         for c in cast:
             n = c.get("films") or 0
             seen = "in %d film%s" % (n, "" if n == 1 else "s") if n else "not used yet"
-            out.append("- %s: %s (%s)" % (c["name"], c.get("about") or "no description", seen))
+            out.append(
+                "- %s%s: %s (%s)"
+                % (
+                    c["name"],
+                    " (a place)" if c.get("kind") == "place" else "",
+                    c.get("about") or "no description",
+                    seen,
+                )
+            )
     if memory:
         out += [
             "" if out else None,
@@ -499,13 +515,17 @@ def changes(film):
             continue
         h = _hash(code)
         if had.get(name) != h:
-            out.append({"name": name, "code": code, "hash": h, "about": _about(code)})
+            out.append(
+                {"name": name, "code": code, "hash": h, "about": _about(code), "kind": _kind(code)}
+            )
     return out
 
 
 def sheet(film, names):
     """A small film that draws each member alone, for its thumbnail: nothing at i + 0.25 s, the
-    member at i + 0.75 s. Written into the film's temp/; returns (manifest, times)."""
+    member at i + 0.75 s. Written into the film's temp/; returns (manifest, times). A place is
+    drawn at its origin through the camera it names (camera: [x, y, zoom]), so its thumbnail is
+    the set as its films frame it; anything else stands at (0, 140) under the plain camera."""
     d = film.path("temp", "castsheet")
     shutil.rmtree(d, ignore_errors=True)
     os.makedirs(d)
@@ -514,11 +534,16 @@ def sheet(film, names):
     js = (
         "SK.setGround('white');\n"
         "const NAMES = %s;\n"
+        "const place = (m) => !!m && m.kind === 'place';\n"
+        "const view = (m) => place(m) && Array.isArray(m.camera) && m.camera.length === 3\n"
+        "  && m.camera.every(Number.isFinite) && m.camera[2] > 0 ? m.camera : [0, 0, 1];\n"
+        "const KEYS = NAMES.flatMap((n, i) => {\n"
+        "  const c = view(SK.cast[n]); return [[i + 0.05, c], [i + 0.95, c]]; });\n"
         "SK.film({ duration: %d, fadeOut: 0, handheld: false,\n"
-        "  camera: SK.camera([[0, [0, 0, 1]]]), draw(t) {\n"
+        "  camera: SK.camera(KEYS.length ? KEYS : [[0, [0, 0, 1]]]), draw(t) {\n"
         "  const i = Math.floor(t), m = SK.cast[NAMES[i]];\n"
         "  if (!m || t - i < 0.5 || typeof m.draw !== 'function') return;\n"
-        "  try { m.draw(0, 140, { t: 0 }); } catch (e) {}\n"
+        "  try { place(m) ? m.draw(0, 0, { t: 0 }) : m.draw(0, 140, { t: 0 }); } catch (e) {}\n"
         "} });\n" % (json.dumps(names), len(names) + 1)
     )
     with open(os.path.join(d, "film.js"), "w", encoding="utf-8") as f:
@@ -611,7 +636,8 @@ def _contact(lib, idx):
 def keep(film, items, pictures=None):
     """Take in what a finished film made: its new and changed members (changes()) as new
     versions, with their thumbnails (thumbs()); the film joins the members it used and the
-    library's films. Returns {"saved": [...], "used": [...]}, or None without a library."""
+    library's films. Returns {"saved": [...], "used": [...]} and "clashed": [...] when a member
+    had moved on in the library since the film got it (_keep), or None without a library."""
     lib = lib_of(film.record())
     if not lib:
         return None
@@ -620,13 +646,25 @@ def keep(film, items, pictures=None):
 
 
 def _keep(film, lib, items, pictures):
+    """A member is saved only over the version the film started from. When the library's has moved
+    on since (another episode changed it while this one was made, or this is an old film finished
+    again), the newer one stays: saving this film's copy would undo what the other film added
+    (2026-10-01: four of Leo's episodes finished again, oldest first, and the first one took his
+    rain boots, bike helmet and sitting poses out of the series). The film's own copy stays in its
+    cast/, and the clash is in the answer."""
     idx = load(lib)
     d = dir_of(lib)
     now = datetime.now().isoformat(timespec="seconds")
-    saved = []
+    had = {c["name"]: c["hash"] for c in (film.record().get("library") or {}).get("cast") or []}
+    saved, clashed = [], []
     for it in items:
         n = it["name"]
-        e = idx["cast"].get(n) or {"version": 0, "films": [], "created": now, "from_film": film.id}
+        e = idx["cast"].get(n)
+        if e and e.get("hash") != had.get(n):  # changed since this film got it, or made elsewhere
+            if e.get("hash") != it["hash"]:
+                clashed.append(n)
+            continue
+        e = e or {"version": 0, "films": [], "created": now, "from_film": film.id}
         v = e["version"] + 1
         md = os.path.join(d, "cast", n)
         os.makedirs(md, exist_ok=True)
@@ -646,6 +684,7 @@ def _keep(film, lib, items, pictures):
             version=v,
             hash=it["hash"],
             about=it["about"] or e.get("about", ""),
+            kind=it.get("kind"),
             updated=now,
             film=film.id,
             release=film.record().get("release"),
@@ -665,7 +704,10 @@ def _keep(film, lib, items, pictures):
     if saved:
         _contact(lib, idx)
     _poster(lib, film)
-    return {"saved": saved, "used": [n for n in names if n in idx["cast"]]}
+    out = {"saved": saved, "used": [n for n in names if n in idx["cast"]]}
+    if clashed:
+        out["clashed"] = clashed
+    return out
 
 
 # ---------------------------------------------------------------- what the person sees
@@ -679,6 +721,7 @@ def listing(client, project=None):
         {
             "name": n,
             "about": e.get("about", ""),
+            "kind": e.get("kind"),
             "version": e["version"],
             "films": e.get("films") or [],
             "updated": e.get("updated"),

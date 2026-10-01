@@ -2002,7 +2002,17 @@ async def keep_cast(film, tools, emit):
                 pictures = await asyncio.to_thread(library.thumbs, film, names)
             except ToolError as e:  # kept all the same, without a picture
                 print("film %s: no cast pictures: %s" % (film.id, e), file=sys.stderr, flush=True)
-        return await asyncio.to_thread(library.keep, film, items, pictures)
+        kept = await asyncio.to_thread(library.keep, film, items, pictures)
+        if kept and kept.get(
+            "clashed"
+        ):  # its copy stays in its own cast/; the library's newer one leads
+            print(
+                "film %s: cast not saved over a newer version: %s"
+                % (film.id, ", ".join(kept["clashed"])),
+                file=sys.stderr,
+                flush=True,
+            )
+        return kept
     except Exception as e:  # noqa: BLE001 -- the film is made; its cast is a bonus
         print("film %s: cast not kept: %s" % (film.id, e), file=sys.stderr, flush=True)
         return {"error": (str(e) or type(e).__name__)[:200]}
