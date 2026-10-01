@@ -26,7 +26,8 @@ and hand-drawn marks on top.
 3. Write `paint.json` (see "The paintings") and call `paint`. Read `images/sheet.jpg`. Repaint
    an image that is wrong -- lettering in it, the wrong subject, a character who does not match
    -- at most twice in all.
-4. Write `film.js`: the paintings moving and changing on the spoken words, then call `check`.
+4. Write `film.js`: the paintings moving and changing on the spoken words ({CUE_SHORT}).{KIT_STEP}
+   Then call `check`.
 5. Call `stills` with about six times spread over the film -- ten or twelve for a film over
    a minute -- (always 0, and one just before the end), and Read `outputs/review/sheet.png`;
    then call `motion` once and Read `outputs/review/motion.png`. Look first at the sheet as a

@@ -222,6 +222,21 @@ need a detail.
 """
 
 
+CUE_RULE = """- Cue visuals to spoken words: `const w = (li, word, fb, n = 0) => SK.w(li, word, fb, 's', n);`
+  then `const tSoap = w(1, 'милом', 6.2);` -- the word as written in `vo.json` (any script works;
+  punctuation and case are ignored), with a fallback time in seconds from the timeline."""
+CUE_RULE_KIT = """- Cue visuals to spoken words, every cue at once at the top of film.js:
+  `const T = SK.cues({soap: [1, 'милом'], again: [1, 'soap', 1], close: [4, null, 'e']});` then
+  `T.soap` -- the word as written in `vo.json` (any script works; punctuation and case are
+  ignored), the n-th match as a third element, a line's start (or with 'e' its end) for null. A
+  word it cannot find is reported and takes its line's start: no fallback seconds to copy."""
+KIT_STEP = """ Every piece the kit has comes from the kit (see "Reference: the kit"): text and labels,
+   pills, counters, checklists, callouts, charts, screens, phones, chats, cursors and buttons,
+   icons, logos and end cards, arrows and marks, glows and particles, page transitions -- with
+   the film's own colours and type passed in. Draw by hand only what is this film's own: its
+   people, its places, its objects."""
+
+
 def system_prompt(look, caps=None):
     """prompt.md with the engine, the cast, the example and the sound notation filled in, read
     fresh so it always matches the code. It depends only on the look and what it is made of
@@ -260,6 +275,13 @@ def system_prompt(look, caps=None):
     fill.update({k: _reference(*parts) for k, parts in fills(caps or RECIPES[look]).items()})
     # the kit's section, for the films made with it (a template's film made before it has none)
     fill["KIT_REFERENCE"] = KIT_SECTION.replace("{KIT}", fill["KIT"]) if "KIT" in fill else ""
+    # where Claude acts: the cue rule and the step that writes film.js. In the kit's first bakeoff
+    # (2026-10-01) the kit was only a section at the end, and four of six films still wrote their
+    # own pills, phones, glows, arrows and confetti, and every one the old `w` cue wrapper
+    kit = "KIT" in fill
+    fill["CUE_RULE"] = CUE_RULE_KIT if kit else CUE_RULE
+    fill["CUE_SHORT"] = "`const T = SK.cues({...})` at the top" if kit else "`SK.w(line, 'word', fallbackSeconds)`"
+    fill["KIT_STEP"] = KIT_STEP if kit else ""
     # the look's own sections (studio/looks/<look>.md, "## NAME" headed) go in first, since
     # they carry placeholders of their own
     sections = {}

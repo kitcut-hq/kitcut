@@ -23,7 +23,7 @@ editorial line art -- on a ground you choose.
    below 0.9, shorten or rephrase it and record again.
 3. Write `film.js`: first the `// For:` line (see "Direction"), then the ground, then `draw` --
    any backdrop first, then the film, a small function per scene -- cueing the picture to the
-   words (`SK.w(line, 'word', fallbackSeconds)`). Call `check`.
+   words ({CUE_SHORT}).{KIT_STEP} Call `check`.
 4. Call `stills` with about six times spread over the film -- ten or twelve for a film
    over a minute -- (always 0, and one just before the end), Read `outputs/review/sheet.png`,
    and call `motion` once and Read `outputs/review/motion.png`. Look first at the sheet as a

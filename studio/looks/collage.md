@@ -27,8 +27,8 @@ printed words, labels, stamps and marks -- every piece entering and moving on th
 3. Write `paint.json` (see "The cut-outs") and call `paint`. Read `images/sheet.jpg`. Repaint an
    image that is wrong -- lettering in it, the wrong subject, a background or paper shape left
    behind it, the border biting into the subject -- at most twice in all.
-4. Write `film.js`: the pages and what is on them, each piece entering on the word that names it,
-   then call `check`.
+4. Write `film.js`: the pages and what is on them, each piece entering on the word that names it
+   ({CUE_SHORT}).{KIT_STEP} Then call `check`.
 5. Call `stills` with about six times spread over the film -- ten or twelve for a film over a
    minute -- (always 0, one just after each page arrives, and one just before the end), and Read
    `outputs/review/sheet.png`; then call `motion` once and Read `outputs/review/motion.png`. Look

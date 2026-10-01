@@ -121,9 +121,7 @@ narration's language.
 
 - Every frame is a pure function of `t`. No state kept between frames, no `Math.random`
   (use `SK.rnd(seed)`), no timers, no DOM, no network (the renderer is offline).
-- Cue visuals to spoken words: `const w = (li, word, fb, n = 0) => SK.w(li, word, fb, 's', n);`
-  then `const tSoap = w(1, 'милом', 6.2);` -- the word as written in `vo.json` (any script works;
-  punctuation and case are ignored), with a fallback time in seconds from the timeline.
+{CUE_RULE}
 - The canvas is 1920x1080 world units at zoom 1, origin at the centre. Keep what matters inside
   about +-900 x +-500 of the camera centre.
 - Text: `SK.txt` in the hand font (Caveat, the default) covers Latin and Cyrillic; for a printed

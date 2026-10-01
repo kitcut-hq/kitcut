@@ -8,12 +8,12 @@
 (function () {
   'use strict';
   const { S, E, clamp, tw, P } = SK;
-  const w = (li, word, fb, n = 0) => SK.w(li, word, fb, 's', n);
   SK.setStyle('crayon');
   SK.setGround('night'); // the paper, the text colours and the grain, chosen together
   const C = SK.C;
 
-  const tMoon = w(1, 'moon', 4.6), tHome = w(2, 'home', 9.4);
+  // every cue at once (the fallbacks only because this example is shown without its recording)
+  const { moon: tMoon, home: tHome } = SK.cues({ moon: [1, 'moon'], home: [2, 'home'] }, { fallback: { moon: 4.6, home: 9.4 } });
   const walkX = (t) => SK.kf(t, [[0, -760], [tHome - .3, 760]], E.sine);
   const camera = SK.camera([[0, [-520, -40, 1.12]], [tHome, [660, -60, 1]], [12, [700, -80, 1.05], E.sine]]);
 
