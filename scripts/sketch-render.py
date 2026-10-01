@@ -19,6 +19,10 @@ Outputs (projects/<id>/outputs/):
     <slug>_poster.png           the poster frame
     (the video's first frame is the film's cover -- see `cover` below)
     review/<t>.png, review/sheet.png    (--stills / --sheet)
+    review/preview.html         (--preview) the film as it stands, its narration the only sound
+                                and the words under the picture: what Sketch Studio shows while a
+                                film is made; 'narration' is the narration over the bare ground,
+                                before there is a picture to trust
 
 Manifest keys: title, description, slug, duration, fps, frame ([w, h]; 1920x1080 unless set: a
 square film is [1080, 1080], a vertical one [1080, 1920] -- the engine's SK.W/SK.H),
@@ -44,6 +48,8 @@ Invoke as:
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --plan
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 1.5,9,23.8 --sheet
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 0,0.25,0.5 --into temp/motion
+    python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 2,9 --sheet --preview
+    python scripts/sketch-render.py --manifest projects/<id>/sketch.json --preview narration
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --automation
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json --bundle
     python scripts/sketch-render.py --manifest projects/<id>/sketch.json            (full render)
@@ -207,8 +213,88 @@ def film_data(m):
     return out
 
 
-def bundle(m, audio=True):
-    """The player page with everything inlined. Returns the HTML text."""
+# ------------------------------------------------------------------ the preview
+PREVIEW = "review/preview.html"  # under outputs/: what Sketch Studio shows while a film is made
+PREVIEW_NOTE = "The picture is still being drawn. This is the narration so far."
+
+
+def preview_voice(m):
+    """The narration alone, each line at its place on the film clock, as one MP3 as long as the
+    film (the player's clock is its audio, so a shorter track would stop the picture where the
+    voice stops). Rebuilt only when the timeline changes; silence while nothing is recorded."""
+    tl_path = _sketch.rel(m, m.get("audio", {}).get("vo_timeline", "audio/vo/timeline.json"))
+    have = os.path.exists(tl_path)
+    dur = float(m["duration"])
+    out = os.path.join(m["_temp"], "preview", "voice.mp3")
+    key = "%s %d %g" % (os.path.getmtime(tl_path), os.path.getsize(tl_path), dur) if have else "-"
+    stamp = out + ".key"
+    if os.path.exists(out) and os.path.exists(stamp):
+        with open(stamp, encoding="utf-8") as f:
+            if f.read() == key:
+                return out
+    import _sketchaudio as A  # numpy and friends: only a preview needs them here
+
+    tl = {"lines": []}
+    if have:
+        with open(tl_path, encoding="utf-8") as f:
+            tl = json.load(f)
+    # a line past the film's end is the narration's problem to fix, not the preview's
+    tl = dict(tl, lines=[L for L in tl.get("lines", []) if L["start"] < dur and L.get("file")])
+    vo = A.build_vo(tl, dur, base=m["_dir"])
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    wav = out[:-4] + ".wav"
+    _sketch.write_wav(wav, vo)
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-i", wav, "-ac", "1", "-c:a", "libmp3lame"]
+        + ["-b:a", "64k", out],
+        check=True,
+    )
+    os.remove(wav)
+    with open(stamp, "w", encoding="utf-8") as f:
+        f.write(key)
+    return out
+
+
+def preview_lines(m):
+    """The narration's lines and word times, for the captions under the preview."""
+    p = _sketch.rel(m, m.get("audio", {}).get("vo_timeline", "audio/vo/timeline.json"))
+    if not os.path.exists(p):
+        return []
+    with open(p, encoding="utf-8") as f:
+        tl = json.load(f)
+    return [
+        {
+            "start": L["start"],
+            "end": L["end"],
+            "text": L.get("text", ""),
+            "words": [{"t": w["text"], "s": w["s"], "e": w["e"]} for w in L.get("words", [])],
+        }
+        for L in tl.get("lines", [])
+    ]
+
+
+def write_preview(m, narration_only=False):
+    """outputs/review/preview.html: the player as the film stands, its narration as the only sound
+    and the words under the picture. narration_only: before there is a picture to trust (no
+    stills have been drawn yet), the narration over the bare ground. Returns the path."""
+    page = bundle(m, preview={"narration_only": narration_only, "audio": preview_voice(m)})
+    out = os.path.join(m["_outputs"], *PREVIEW.split("/"))
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    tmp = out + ".tmp"  # whole or not at all: a page may be loading it while it is rewritten
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(page)
+    os.replace(tmp, out)
+    return out
+
+
+def say_preview(p):
+    print("  %s (%.1f MB)" % (os.path.relpath(p, _env.ROOT), os.path.getsize(p) / 1e6))
+
+
+def bundle(m, audio=True, preview=None):
+    """The player page with everything inlined. Returns the HTML text. preview ({narration_only,
+    audio}): write_preview's page -- the narration as its sound and the captions under it, and with
+    narration_only a film that draws nothing yet in place of the film's own code."""
     with open(os.path.join(SKETCH, "player.html"), encoding="utf-8") as f:
         page = f.read()
     faces, loads = [], []
@@ -232,16 +318,30 @@ def bundle(m, audio=True):
         "hint_font": "system-ui, sans-serif",
         **m.get("player", {}),
     }
-    film = read_text(_sketch.rel(m, m.get("film", "film.js")))
-    # scripts that run before the film's own code, in its scope (a thumbnail's probe must see the
-    # film pick up SK's functions, and a film may take them into locals at its top)
-    for p in reversed((m.get("head") or {}).get("scripts", [])):
-        film = read_text(_sketch.rel(m, p)) + "\n;\n" + film
+    bare = bool(preview and preview["narration_only"])
     tail = m.get("tail") or {}
-    for p in tail.get("scripts", []):  # a closing drawn after the film (it lengthens SK._film)
-        film += "\n;\n" + read_text(_sketch.rel(m, p))
-    mp3 = os.path.join(m["_audio"], "final.mp3")
-    src = "data:audio/mpeg;base64," + b64(mp3) if audio and os.path.exists(mp3) else ""
+    if bare:  # nothing of the film's own code yet: the ground, and the clock its narration runs on
+        film = "SK.film({ duration: %s });" % json.dumps(float(m["duration"]))
+    else:
+        film = read_text(_sketch.rel(m, m.get("film", "film.js")))
+        # scripts that run before the film's own code, in its scope (a thumbnail's probe must see
+        # the film pick up SK's functions, and a film may take them into locals at its top)
+        for p in reversed((m.get("head") or {}).get("scripts", [])):
+            film = read_text(_sketch.rel(m, p)) + "\n;\n" + film
+        for p in tail.get("scripts", []):  # a closing drawn after the film (it lengthens SK._film)
+            film += "\n;\n" + read_text(_sketch.rel(m, p))
+    mp3 = preview["audio"] if preview else os.path.join(m["_audio"], "final.mp3")
+    src = "data:audio/mpeg;base64," + b64(mp3) if audio and mp3 and os.path.exists(mp3) else ""
+    extra = ""
+    if preview:
+        extra = read_text(os.path.join(SKETCH, "preview.html"))
+        for k, v in (
+            ("__FW__", str(_sketch.frame(m)[0])),
+            ("__FH__", str(_sketch.frame(m)[1])),
+            ("__PREVIEW_LINES__", json.dumps(preview_lines(m), ensure_ascii=False)),
+            ("__PREVIEW_NOTE__", json.dumps(PREVIEW_NOTE if bare else "")),
+        ):
+            extra = extra.replace(k, v)
     rep = {
         "__TITLE__": html.escape(m.get("title", m["_id"])),
         "__DESCRIPTION__": html.escape(m.get("description", "")),
@@ -261,7 +361,7 @@ def bundle(m, audio=True):
         "__MODULES__": module_scripts(m),
         "__CAST__": cast_scripts(m),
         "__FILM__": film,
-        "__SCENES__": scene_scripts(m),
+        "__SCENES__": "" if bare else scene_scripts(m),
         "__AUDIO__": src,
         "__VO__": json.dumps(vo_timeline(m)),
         "__DATA__": json.dumps(film_data(m), ensure_ascii=False),
@@ -274,7 +374,10 @@ def bundle(m, audio=True):
                     **(_heads.images(m) if m.get("heads") else {}),
                 }.items()
             }
+            if not bare
+            else {}
         ),
+        "__PREVIEW__": extra,
     }
     # one pass, so a placeholder-looking string inside the film code is never re-substituted
     return re.sub("|".join(re.escape(k) for k in rep), lambda mo: rep[mo.group(0)], page)
@@ -839,6 +942,16 @@ def main():
         "--plan", action="store_true", help="check inputs and price the render; render nothing"
     )
     ap.add_argument("--bundle", action="store_true", help="only write the HTML player(s)")
+    ap.add_argument(
+        "--preview",
+        nargs="?",
+        const="film",
+        choices=["film", "narration"],
+        help="also write outputs/%s: the film as it stands, its narration as the only sound and "
+        "the words under the picture, for watching while it is still being made (with --stills: "
+        "only once they have drawn). 'narration': the narration over the bare ground, before "
+        "there is a picture to trust" % PREVIEW,
+    )
     ap.add_argument("--stills", help="comma list of times -> outputs/review/<t>.png")
     ap.add_argument(
         "--into", help="with --stills: the folder for them (relative to the manifest's)"
@@ -981,13 +1094,24 @@ def main():
         print("\n  --plan: nothing rendered")
         return
 
+    if args.preview and not (args.bundle or args.stills or args.automation or args.sound_data):
+        # the preview alone: no film code is read unless it is shown, so a narration's preview
+        # runs before there is any
+        with (
+            _sketch.Stages(m, "sketch-render", ["preview"], argv=sys.argv[1:]) as st,
+            st("preview"),
+        ):
+            say_preview(write_preview(m, narration_only=args.preview == "narration"))
+        return
+
     names = (
         ["bundle"]
         + (["stills"] if args.stills else [])
         + (["automation"] if args.automation else [])
         + (["sound"] if args.sound_data else [])
+        + (["preview"] if args.preview else [])
     )
-    full = not (args.bundle or args.stills or args.automation or args.sound_data)
+    full = not (args.bundle or args.stills or args.automation or args.sound_data or args.preview)
     if full:
         names += (["cover"] if args.t0 == 0 and m.get("cover", True) is not False else []) + [
             "frames",
@@ -1054,6 +1178,15 @@ def main():
         if args.sound_data:
             with st("sound"):
                 write_sound(m, light, size)
+
+        if args.preview:
+            # after the stills, so a preview only ever shows a film that has drawn; and never the
+            # reason they fail -- it is something to watch, not part of the film
+            with st("preview"):
+                try:
+                    say_preview(write_preview(m, narration_only=args.preview == "narration"))
+                except Exception as e:  # noqa: BLE001
+                    print("  preview not written: %s" % e)
 
         if not full:
             return

@@ -33,7 +33,10 @@ the day's budget still holds.
                                  "listed": false keeps it out of the gallery (link-only).
                                  X-Source: mcp and X-App: <name> (from the site): it was asked for
                                  through an assistant. {"auth": "login"} (this machine only):
-                                 Claude runs on its Claude Code login.
+                                 Claude runs on its Claude Code login. X-Preview: 1 (from the
+                                 site; {"preview": true} from this machine): the film's log gets
+                                 "preview" events, a signed review/preview.html to watch while it
+                                 is made (tools.py PREVIEW).
                                  "project": {id, name, brief, from_account_cast}: an episode of
                                  the site's project, with the project's library (library.py)
     GET  /api/library            the asker's cast and films; ?project=<id>: that project's, and
@@ -1220,6 +1223,11 @@ async def create(req):
     )
     # link-only: kept out of the gallery (and the site's sitemap), still watchable by its link
     listed = body.get("listed") is not False
+    # the preview: the film as it stands, to watch while it is made (tools.py PREVIEW; the site
+    # sends it, trusted like X-Priority; this machine may ask for it to try it)
+    preview = req.headers.get("X-Preview", "").strip() == "1" or (
+        body.get("preview") is True and from_this_machine(req)
+    )
     # where the request came from: the site's own page, or an assistant through its MCP server
     # (the site sends both, trusted like X-Priority)
     source = "mcp" if req.headers.get("X-Source", "").strip() == "mcp" else "web"
@@ -1289,6 +1297,8 @@ async def create(req):
             template=tpl,
             frame=frame,
         )
+        if preview:
+            f.update(preview=True)
         if tpl:  # its code and its own sample, the starting point (templates.seed)
             await asyncio.to_thread(templates.seed, f, tpl)
         uploads.release(uploader, attached + faces)  # the film has its own copies now
@@ -1900,10 +1910,11 @@ async def status(req):
     since = max(0, int(req.query.get("since") or 0))
 
     def with_urls(events):
-        # a review sheet gets a signed URL, so a browser can show it without the token
+        # a review sheet and a preview get a signed URL, so a browser can show them without the
+        # token
         return [
             ev | {"url": signed(req, jid, ev["path"]) + "&v=%d" % ev["v"]}
-            if ev["type"] == "image"
+            if ev["type"] in ("image", "preview")
             else ev
             for ev in events
         ]
@@ -2022,6 +2033,10 @@ async def files(req):
     if not os.path.isfile(p):
         raise web.HTTPNotFound()
     headers = {"Cache-Control": "no-cache"}
+    if p.endswith(".html"):
+        # a page of the film's (the preview, the player) runs code Claude wrote: always in a
+        # sandbox of its own, never as this origin -- opened on its own as well as framed
+        headers["Content-Security-Policy"] = "sandbox allow-scripts"
     if req.query.get("dl") == "1":  # the download_url: saved, not played (as media.py's copy)
         f = film_of(req.match_info["id"])
         headers["Content-Disposition"] = media.download_name(f)

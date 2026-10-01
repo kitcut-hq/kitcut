@@ -1,0 +1,66 @@
+<!-- The preview (sketch-render.py --preview): the film as it stands while it is still being made,
+     with its narration alone (no music or effects yet) and the words written under the picture as
+     they are said. sketch-render.py puts it at the end of player.html; a film's own page never
+     carries it.
+     The page that frames it may set its colours in the address: ?bg=f1ede7&ink=1d1a17&accent=d9733f
+     (hex), so the preview sits on the page around it rather than in a box of its own. -->
+<style>
+:root { --capfs: clamp(12px, 2.3vw, 21px); --caph: calc(var(--capfs) * 1.4 * 2 + 6px); }
+body.preview { flex-direction: column; gap: 6px; padding: 6px 8px; }
+body.preview #stage { width: min(100%, calc((100vh - 18px - var(--caph)) * __FW__ / __FH__)); }
+body.preview canvas, body.preview #overlay { box-shadow: none; border-radius: 6px; }
+#pv-cap { width: 100%; max-width: 70em; height: var(--caph); text-align: center; font: 600 var(--capfs)/1.4 system-ui, sans-serif; color: var(--fg); overflow: hidden; }
+#pv-cap span { opacity: .4; transition: opacity .1s, color .1s; }
+#pv-cap span.on { opacity: 1; }
+#pv-cap span.now { opacity: 1; color: var(--accent); }
+#pv-note { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; padding: 8%;
+  font: 600 clamp(14px, 2.6vw, 30px)/1.35 system-ui, sans-serif; color: var(--ink); opacity: .55; text-align: center; }
+</style>
+<div id="pv-cap" aria-hidden="true"></div>
+<script>
+(function () {
+  'use strict';
+  const LINES = __PREVIEW_LINES__, NOTE = __PREVIEW_NOTE__;
+  const Q = new URLSearchParams(location.search), root = document.documentElement.style;
+  const hex = (k) => /^[0-9a-f]{6}$/i.test(Q.get(k) || '') ? '#' + Q.get(k) : null;
+  if (hex('bg')) root.setProperty('--bg', hex('bg'));
+  if (hex('ink')) root.setProperty('--fg', hex('ink'));
+  if (hex('accent')) root.setProperty('--accent', hex('accent'));
+  document.body.classList.add('preview');
+  const stage = document.getElementById('stage'), cap = document.getElementById('pv-cap');
+  stage.after(cap);
+  if (NOTE) {
+    const n = document.createElement('div');
+    n.id = 'pv-note'; n.textContent = NOTE;
+    stage.insertBefore(n, document.getElementById('overlay'));
+  }
+  const audio = document.getElementById('audio');
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  // the line being said; between lines, the next one a moment early and the last one a moment late
+  const lineAt = (t) => LINES.findIndex((L) => t >= L.start - .3 && t <= L.end + .7);
+  // the script's own words, with their punctuation, when they line up one for one with the timed ones
+  const shownWords = (L) => {
+    const said = String(L.text || '').split(/\s+/).filter(Boolean);
+    return said.length === L.words.length ? said : L.words.map((w) => w.t);
+  };
+  let shown = -2;
+  function tick() {
+    const t = audio.currentTime, i = lineAt(t);
+    if (i !== shown) {
+      shown = i;
+      cap.innerHTML = i < 0 ? '' : LINES[i].words.length
+        ? shownWords(LINES[i]).map((w) => '<span>' + esc(w) + '</span>').join(' ')
+        : '<span class="on">' + esc(LINES[i].text) + '</span>';
+    }
+    if (i >= 0 && LINES[i].words.length) {
+      const ws = LINES[i].words, el = cap.children;
+      for (let k = 0; k < ws.length; k++) {
+        el[k].classList.toggle('on', t >= ws[k].s);
+        el[k].classList.toggle('now', t >= ws[k].s && t < ws[k].e + .08);
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>

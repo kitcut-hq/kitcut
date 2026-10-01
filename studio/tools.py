@@ -5,7 +5,8 @@ Each one runs a kitcut script on the film's own manifest, and nothing else:
     check()                  node --check on film.js, the engine copy and the cast
     voice(retake_line?)      sketch-vo.py: records the narration and times every word
     paint(retake?)           sketch-paint.py (a film that paints): its pictures, tiled on a sheet
-    stills(times, sheet?)    sketch-render.py --stills: review frames, tiled into a sheet
+    stills(times, sheet?)    sketch-render.py --stills: review frames, tiled into a sheet (and,
+                             for a film that asks, the preview the site plays: PREVIEW)
     sound(levels?)           sketch-audio.py (after --automation when a cue needs it)
     name_film(title)         the title, for a film whose visitor typed nothing (voice or pictures)
 
@@ -20,6 +21,7 @@ asks for them together. What a tool returns is short: the problem to fix, or wha
 
 import os
 import json
+import time
 import shutil
 import asyncio
 import contextlib
@@ -61,6 +63,13 @@ RENDER_ENCODE = os.environ.get("STUDIO_RENDER_ENCODE") or "browser"
 # browsers one final render draws with (and takes from the browser pool): 3 on the laptop, where
 # more did not help; a CPU-only machine draws in software and scales with cores
 RENDER_JOBS = int(os.environ.get("STUDIO_RENDER_JOBS") or 3)
+# the preview (sketch-render.py --preview), for a film whose record asks for it (the site's
+# X-Preview): outputs/review/preview.html, the film as it stands with its narration and the words
+# under it, to watch while it is made. Written once the narration is recorded (over the bare
+# ground: no picture is trusted before a sheet has drawn) and again with every review sheet, and
+# announced as a "preview" event. It is something to watch, never part of the film: it fails
+# quietly and costs Claude nothing it would see.
+PREVIEW = "review/preview.html"
 
 
 class ToolError(Exception):
@@ -226,7 +235,8 @@ class Tools:
         self.film, self.sched, self.emit, self.clock = film, sched, emit, clock
         self.lock = asyncio.Lock()  # one step of this film at a time
         self.jobs = set()  # the steps running now (procs.Job), killed on cancel
-        self.voice_runs, self.sheet_v = 0, 0
+        self.voice_runs, self.sheet_v, self.preview_v = 0, 0, 0
+        self._bg = None  # the narration's preview, being made beside Claude's turn
         # a pass of a film made in scenes (scenes.py): its name, the stretch of the film it looks
         # at, the files it may write, and its Claude session
         self.pass_name, self.span, self.allow, self.session = None, None, None, None
@@ -308,6 +318,32 @@ class Tools:
         for job in list(self.jobs):
             job.kill()
 
+    def wants_preview(self):
+        return bool(self.film.record().get("preview"))
+
+    def _announce_preview(self, since, kind):
+        """A "preview" event, when the stills (kind "film") or the narration ("narration") have
+        just written one."""
+        p = self.film.path("outputs", *PREVIEW.split("/"))
+        if os.path.exists(p) and os.path.getmtime(p) >= since:
+            self.preview_v += 1
+            self.emit({"type": "preview", "path": PREVIEW, "v": self.preview_v, "kind": kind})
+
+    async def _narration_preview(self):
+        """The narration over the bare ground, before the picture has drawn: a background step, so
+        Claude's turn goes on, and nothing it hears about."""
+        try:
+            async with self.lock:
+                if self.sheet_v:  # a sheet has drawn: from now on the picture's previews stand
+                    return
+                since = time.time()
+                await self._script(
+                    "preview", "sketch-render.py", ["--preview", "narration"], timeout=90
+                )
+                self._announce_preview(since, "narration")
+        except Exception as e:  # noqa: BLE001 -- something to watch, never the film's trouble
+            self.emit({"type": "log", "text": "preview not made: %s" % str(e)[-200:]})
+
     def timeout(self, kind):
         return TIMEOUT.get(kind) or limits(self.film.length)[kind + "_s"]
 
@@ -387,6 +423,8 @@ class Tools:
             # only recordings that worked count: a TTS that gave no audio cost nothing (and the
             # narration's budget above caps what a film may spend on its voice either way)
             self.voice_runs += 1
+        if not self.sheet_v and self.wants_preview():
+            self._bg = asyncio.ensure_future(self._narration_preview())
         text = timeline_text(self.film, retake_line)
         if text.count("  words: ") < text.count("\nline ") + 1:  # a long narration: words on demand
             text += (
@@ -427,7 +465,10 @@ class Tools:
         if not ts or len(ts) > MAX_STILLS or any(t < lo or t > hi for t in ts):
             raise ToolError("give 1-%d times between %g and %g seconds" % (MAX_STILLS, lo, hi))
         args = ["--stills", ",".join("%g" % t for t in ts)] + (["--sheet"] if sheet else [])
+        preview = self.wants_preview()
+        args += ["--preview"] if preview else []
         told = await self.people_ready()
+        since = time.time()
         async with self.lock:
             self.gate()
             await self._script("stills", "sketch-render.py", args, pools=[("browser", 1)])
@@ -436,6 +477,8 @@ class Tools:
             self.sheet_v += 1
             self.emit({"type": "image", "path": "review/sheet.png", "v": self.sheet_v})
             what = "outputs/review/sheet.png"
+        if preview:
+            self._announce_preview(since, "film")
         return "Rendered %d stills. Read %s to look at them." % (len(ts), what) + told
 
     # ---------------------------------------------------------------- from the web
