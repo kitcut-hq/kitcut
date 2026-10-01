@@ -91,6 +91,10 @@ def main():
     )
     ap.add_argument("--made-for-kids", action="store_true")
     ap.add_argument(
+        "--publish-at",
+        help="schedule it: an ISO time (2026-10-02T15:00:00Z) when YouTube makes it public; uploads as private until then",
+    )
+    ap.add_argument(
         "--thumbnail", help="a JPEG/PNG (1280x720, under 2 MB) set as the custom thumbnail"
     )
     ap.add_argument("--dry-run", action="store_true")
@@ -113,6 +117,22 @@ def main():
     if len(args.title) > 100:
         sys.exit("title is %d chars; YouTube's limit is 100" % len(args.title))
 
+    publish_at = None
+    if args.publish_at:
+        from datetime import datetime, timezone
+
+        try:
+            when = datetime.fromisoformat(args.publish_at.replace("Z", "+00:00"))
+        except ValueError:
+            sys.exit("--publish-at: not an ISO time: %r" % args.publish_at)
+        if when.tzinfo is None:
+            sys.exit("--publish-at needs a time zone (Z or +hh:mm): %r" % args.publish_at)
+        if when <= datetime.now(timezone.utc):
+            sys.exit("--publish-at is in the past: %s" % args.publish_at)
+        # YouTube schedules only private videos: one asked public would be refused
+        args.privacy = "private"
+        publish_at = when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
     body = {
         "snippet": {
             "title": args.title,
@@ -123,12 +143,15 @@ def main():
         "status": {
             "privacyStatus": args.privacy,
             "selfDeclaredMadeForKids": bool(args.made_for_kids),
+            **({"publishAt": publish_at} if publish_at else {}),
         },
     }
 
     print("%s  (%.1f MB)" % (os.path.relpath(path, _env.ROOT), size / 1e6))
     print("  title:   %s" % args.title)
     print("  privacy: %s" % args.privacy)
+    if publish_at:
+        print("  public:  %s (scheduled)" % publish_at)
     thumb = None
     if args.thumbnail:
         thumb = _env.resolve(args.thumbnail)
@@ -187,6 +210,7 @@ def main():
     for label, want, have in (
         ("title", args.title, sn.get("title")),
         ("privacy", args.privacy, st.get("privacyStatus")),
+        *((("publish", publish_at, st.get("publishAt")),) if publish_at else ()),
     ):
         mark = "ok" if want == have else "MISMATCH"
         if want != have:
@@ -221,6 +245,7 @@ def main():
                 "url": url,
                 "title": args.title,
                 "privacy": args.privacy,
+                **({"publish_at": publish_at} if publish_at else {}),
                 "bytes": size,
                 "thumbnail": thumb and _project.norm(thumb),
                 "uploaded_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

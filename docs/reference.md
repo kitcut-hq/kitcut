@@ -2651,6 +2651,20 @@ enough to author one. The evidence, the field-by-field breakdown and the
 Studio-only scripting/MCP situation are in
 [`docs/davinci-resolve.md`](davinci-resolve.md).
 
+## Scheduling an upload: `yt-upload.py --publish-at`
+
+```powershell
+python scripts/yt-upload.py <mp4> --title "..." --channel @handle --publish-at 2026-10-02T15:00:00Z
+```
+
+YouTube schedules only **private** videos, so `--publish-at` uploads private (whatever
+`--privacy` says) with `status.publishAt`, and it goes public on its own at that time. The time
+needs a zone (`Z` or `+hh:mm`) and must be in the future; the read-back asserts YouTube kept it,
+and the sidecar records it. A series going out one a day is one run per episode with the date
+moved on. kitcut.ai's own Publish dialog cannot schedule, and its channel grants are sealed with
+the production `AUTH_SECRET`, so a schedule from this machine needs this script's own grant for
+the channel (`yt-connect.py --channel @handle`, below).
+
 ## Connecting a YouTube channel
 
 Everything that publishes -- `yt-upload.py`, `yt-set-chapters.py`,
