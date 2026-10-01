@@ -1,0 +1,21 @@
+{
+ "about": "The template 'The conference in numbers' (t-conference-numbers) remade by the real studio pipeline for two real conferences the sample is not, each asked the way a person types it -- one line, the event and its website, nothing attached: a recap of a Ukrainian event that has just happened, asked in Ukrainian (IT Arena, Lviv, Sept 2026: the site states round numbers, the next edition's dates and no 2026 recap), and an upcoming European one whose numbers come from its last edition (Slush, Helsinki, Nov 2026). Neither is Russia-linked. What it checks: Claude finds real numbers and never invents one, picks kinds that fit them, gets the logo, colours, dates and venue right, and the layouts hold with other words, another language and another count of numbers. Bars: inside the time limit, fidelity >= 4, no sample left over, professional >= 4.",
+ "seconds": 88,
+ "grade_extra": [
+  "fidelity"
+ ],
+ "prompts": [
+  {
+   "id": "itarena",
+   "audience": "Ukrainian tech people who follow IT Arena",
+   "prompt": "Зроби «IT Arena 2026 у цифрах» — itarena.ua",
+   "template": "t-conference-numbers"
+  },
+  {
+   "id": "slush",
+   "audience": "founders and investors who follow Slush",
+   "prompt": "Slush 2026 in numbers, to hype the event -- slush.org",
+   "template": "t-conference-numbers"
+  }
+ ]
+}

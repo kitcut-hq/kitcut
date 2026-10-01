@@ -1,0 +1,19 @@
+{
+ "about": "The programme template (t-conference-programme) remade for two real upcoming conferences with published schedules, none Russia-linked, from one line a person would type with nothing attached: Claude reads the site and the schedule, brings in the logo and remakes the metro map. fwdays asks in Ukrainian for a one-day online event with three tracks (fwdays.com, Kyiv; its programme is on the event page); kubecon is a four-day event with a schedule of hundreds of sessions, from which the film must choose. Bars: inside the time limit, fidelity >= 4, no sample left over, every stop on the event's own schedule.",
+ "seconds": 90,
+ "grade_extra": ["fidelity"],
+ "prompts": [
+  {
+   "id": "fwdays",
+   "audience": "Ukrainian engineers, tech leads and engineering managers who follow fwdays",
+   "prompt": "Зроби відео з програмою Fwdays Tech Summit — fwdays.com/event/tech-summit-26",
+   "template": "t-conference-programme"
+  },
+  {
+   "id": "kubecon",
+   "audience": "cloud native engineers and platform teams going to KubeCon",
+   "prompt": "A programme video for KubeCon + CloudNativeCon North America 2026 -- events.linuxfoundation.org/kubecon-cloudnativecon-north-america -- highlight the keynotes",
+   "template": "t-conference-programme"
+  }
+ ]
+}

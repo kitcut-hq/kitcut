@@ -1,0 +1,81 @@
+{
+ "_about": "What this film says: every word, date, colour and logo it shows. film.js reads it as SK.DATA.content and keeps none of it in code, so another event is this file and its logo. Dates the film counts with are ISO (yyyy-mm-dd); the words it shows are the *_text and date fields, written as the event writes them. lang is the language of the words (it picks the plural for 'days left' and the upper case).",
+ "lang": "en",
+ "event": {
+  "name": "KubeCon + CloudNativeCon Europe",
+  "year": "2027",
+  "city": "Barcelona",
+  "country": "Spain",
+  "dates": "15–18 March 2027"
+ },
+ "cfp": {
+  "as_of": "2026-10-01",
+  "deadline": "2026-10-11",
+  "deadline_text": "11 October 2026, 23:59 CEST",
+  "url": "sessionize.com/kubecon-cloudnativecon-europe-2027"
+ },
+ "topics": [
+  {"name": "Agentic AI", "detail": "Agent architectures, MCP, A2A, AgentOps"},
+  {"name": "AI Inference and Infrastructure", "detail": "Serving models on Kubernetes, accelerators, inference at scale"},
+  {"name": "Cloud Native Application Development", "detail": "Frameworks, microservice patterns, Wasm, resilience"},
+  {"name": "Cloud Native Experience", "detail": "Community, business value, startups, misadventures"},
+  {"name": "Cloud Native Novice"},
+  {"name": "Connectivity"},
+  {"name": "Data Processing + Storage"},
+  {"name": "Emerging + Advanced"},
+  {"name": "Observability"},
+  {"name": "Operations + Performance"},
+  {"name": "Platform Engineering: DevEx & IDPs"},
+  {"name": "Platform Engineering: Infrastructure & Delivery"},
+  {"name": "Security"}
+ ],
+ "formats": [
+  {"name": "Session Presentation", "minutes": 30},
+  {"name": "Panel Discussion", "minutes": 30},
+  {"name": "Lightning Talk", "minutes": 5},
+  {"name": "Tutorial", "minutes": 80}
+ ],
+ "perks": [
+  "A free pass to the event for every accepted speaker"
+ ],
+ "timeline": [
+  {"label": "CFP opens", "date": "10 Aug 2026", "iso": "2026-08-10"},
+  {"label": "CFP closes", "date": "11 Oct 2026", "iso": "2026-10-11", "deadline": true},
+  {"label": "Notifications", "date": "7 Dec 2026", "iso": "2026-12-07"},
+  {"label": "Schedule announced", "date": "9 Dec 2026", "iso": "2026-12-09"},
+  {"label": "KubeCon + CloudNativeCon Europe", "date": "15–18 Mar 2027", "iso": "2027-03-15"}
+ ],
+ "palette": {
+  "ground": "#111245",
+  "accent": "#93EAFF",
+  "second": "#326CE5",
+  "light": "#F4F6FF"
+ },
+ "logo": {
+  "image": "kubecon-logo",
+  "light": "kubecon-logo-light"
+ },
+ "copy": {
+  "title": "CALL FOR SPEAKERS",
+  "could": "THIS COULD BE YOU",
+  "speaker": "SPEAKER",
+  "you": "YOU",
+  "your_talk": "YOUR TALK HERE",
+  "topics": "WHAT WE WANT TO HEAR",
+  "track": "TRACK",
+  "all_topics": "EVERY TRACK",
+  "formats": "STAGE TIME",
+  "formats_sub": "PICK YOUR FORMAT",
+  "min": "MIN",
+  "why": "WHY SPEAK",
+  "pass": "ALL ACCESS",
+  "reasons": ["SHARE WHAT YOU BUILT", "MEET YOUR COMMUNITY", "TAKE THE STAGE"],
+  "dates": "KEY DATES",
+  "today": "YOU ARE HERE",
+  "deadline": "DEADLINE",
+  "left": {"one": "DAY LEFT", "other": "DAYS LEFT"},
+  "weeks_left": {"one": "WEEK LEFT", "other": "WEEKS LEFT"},
+  "last_day": "LAST DAY",
+  "cta": "SUBMIT YOUR TALK"
+ }
+}

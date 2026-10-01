@@ -1,0 +1,57 @@
+{
+ "_about": "What this film is about: every word, time, colour, logo and person it shows. film.js reads it as SK.DATA.content and keeps nothing of it in code, so another event is this file and its pictures. tracks are the map's lines (2-6, in the order the bundle stacks them; colour is the line's). stops are the highlighted sessions in any order: day is 1-based into days, time is the start as the schedule prints it (09:25, 9:25 AM, 14:00), track a track id (a keynote may leave it empty: it is an interchange, where every line meets), kind keynote|talk|workshop|panel|social (or the schedule's own word for a session, summit or demo, shown as written; a keynote is an interchange, a social stop is on the night board), short the station's name on the overview map. The ride takes up to 12 stops that are not social; social stops (1-3) are the after-hours board. image (optional, a keynote's speaker) is a key of the manifest's images. lang is the language the words are in (bg keeps Sofia Sans's Bulgarian letterforms; any other Cyrillic gets the standard ones). Copy lines may name an event field in braces: {name}, {year}, {city}; DAY {n} is the day's number.",
+ "lang": "en",
+ "event": {
+  "name": "PGConf.EU",
+  "year": "2026",
+  "full_name": "PostgreSQL Conference Europe",
+  "city": "Valencia",
+  "country": "Spain",
+  "venue": "Palacio de Congresos",
+  "dates": "20–23 October 2026",
+  "url": "2026.pgconf.eu",
+  "cta": "SEE THE FULL SCHEDULE"
+ },
+ "copy": {
+  "title": "THE PROGRAMME",
+  "lines": "LINES",
+  "day": "DAY {n}",
+  "first": "FIRST STOP",
+  "interchange": "ALL LINES",
+  "night": "LAST TRAINS",
+  "kinds": {"keynote": "KEYNOTE", "talk": "TALK", "workshop": "WORKSHOP", "panel": "PANEL", "social": "AFTER HOURS"}
+ },
+ "days": [
+  {"label": "TUE", "date": "20 OCT"},
+  {"label": "WED", "date": "21 OCT"},
+  {"label": "THU", "date": "22 OCT"},
+  {"label": "FRI", "date": "23 OCT"}
+ ],
+ "tracks": [
+  {"id": "dba", "name": "DBA", "colour": "#0eaf5e"},
+  {"id": "dev", "name": "App Developer", "colour": "#af5912"},
+  {"id": "internals", "name": "Postgres Internals", "colour": "#af1040"},
+  {"id": "community", "name": "Community", "colour": "#790daf"}
+ ],
+ "stops": [
+  {"day": 1, "time": "10:00", "title": "Welcome", "short": "Welcome", "kind": "keynote", "room": "Audit 1"},
+  {"day": 1, "time": "11:15", "title": "You Shall Not YOLO: Model Your Damn Data", "short": "You Shall Not YOLO", "speaker": "Lætitia Avrot", "org": "Docker", "track": "dev", "kind": "talk", "room": "SM1-B"},
+  {"day": 1, "time": "13:05", "title": "Is PostgreSQL On My Raspberry Pi Faster Than Your Cloud Instance", "short": "Raspberry Pi vs Cloud", "speaker": "Chris Ellis", "org": "Nexteam", "track": "dba", "kind": "talk", "room": "Audit 1"},
+  {"day": 2, "time": "09:25", "title": "Creating a “Dungeon Master” with Postgres and MCP", "short": "A Dungeon Master", "speaker": "Matt Cornillon", "org": "Google", "track": "dev", "kind": "talk", "room": "Audit 1"},
+  {"day": 2, "time": "15:35", "title": "What does the EU Cyber Resilience Act mean for PostgreSQL and its community?", "short": "The EU Cyber Resilience Act", "speaker": "Peter Eisentraut", "org": "EDB", "track": "community", "kind": "talk", "room": "Audit 1"},
+  {"day": 2, "time": "16:55", "title": "Platinum Sponsor Keynotes", "short": "Sponsor Keynotes", "speaker": "pganalyze · CYBERTEC · Google Cloud · EDB · Microsoft", "kind": "keynote", "room": "Audit 1"},
+  {"day": 3, "time": "09:25", "title": "Where next for parallel query execution?", "short": "Parallel query", "speaker": "Thomas Munro", "org": "Microsoft", "track": "internals", "kind": "talk", "room": "SM1-A"},
+  {"day": 3, "time": "14:55", "title": "Identifying bottlenecks in Postgres workloads", "short": "Bottlenecks", "speaker": "Andres Freund", "org": "Microsoft", "track": "dba", "kind": "talk", "room": "Audit 1"},
+  {"day": 4, "time": "13:30", "title": "PostgreSQL on Kubernetes Summit", "short": "Kubernetes Summit", "speaker": "Floor Drees, Gülçin Yıldırım Jelinek", "org": "EDB, ClickHouse", "track": "community", "kind": "summit", "room": "Audit 2"},
+  {"day": 3, "time": "16:55", "title": "Lightning Talks", "short": "Lightning Talks", "kind": "social", "room": "Audit 1"},
+  {"day": 3, "time": "17:40", "title": "Closing Remarks", "short": "Closing", "kind": "social", "room": "Audit 1"}
+ ],
+ "palette": {
+  "paper": "#F3F2EE",
+  "ink": "#202125",
+  "ground": "#1353A9",
+  "accent": "#F28418",
+  "light": "#FFFFFF"
+ },
+ "logo": {"image": "logo", "light": "logo-light"}
+}

@@ -1,0 +1,55 @@
+{
+ "_about": "The spec of kitcut.ai's call-for-speakers template (studio/templates.py make --spec): what it is, what the film keeps of its sample (keep, generic), when the sample is the person's own event (identity), and its author's notes to Claude. Its film is projects/call-for-speakers (local: the code is ours, the sample's logo is the Linux Foundation's). v1 (2026-10-01): the sample is KubeCon + CloudNativeCon Europe 2027's call for proposals.",
+ "title": "Call for speakers",
+ "description": "A 90-second call for speakers for a conference or meetup, told on an empty stage that waits for you: a spotlight finds the microphone and a marquee lights up with the call, a speaker's badge types YOU, the tracks as slides on the big screen, the formats as stage timers, a backstage pass with the perks stamped beside it, the key dates taped to the floor with the deadline circled, the days left counted down, and the stage again asking for your talk. Music only, no narration.",
+ "author": "KitCut",
+ "look": "drawn",
+ "frames": [
+  "16:9"
+ ],
+ "caps": [
+  "space"
+ ],
+ "limits": {
+  "images": 6
+ },
+ "moments": [
+  1.4,
+  6.6,
+  12.5,
+  17.0,
+  21.0,
+  29.5,
+  38.5,
+  52.6,
+  60.5,
+  66.8,
+  73.5,
+  84.0
+ ],
+ "keep": [
+  "_about",
+  "copy"
+ ],
+ "generic": [
+  "CALL FOR SPEAKERS",
+  "SUBMIT YOUR TALK",
+  "CFP opens",
+  "CFP closes",
+  "Notifications",
+  "Schedule announced",
+  "Session Presentation",
+  "Panel Discussion",
+  "Lightning Talk",
+  "Tutorial",
+  "Agentic AI",
+  "Connectivity",
+  "Observability",
+  "Security"
+ ],
+ "identity": [
+  "event.name"
+ ],
+ "example": "A call for speakers for JCON EUROPE 2027 -- sessionize.com/jcon-europe-2027",
+ "brief": "A 90-second call for speakers with no narration, on one 120 bpm clock (a bar is 2 s), every beat on a hit of the music: the dark stage where the spotlight finds the empty microphone and the marquee lights copy.title letter by letter (0-8 s); the badge on its lanyard on the accent colour, the name field typing copy.you (8-16); the tracks as slides on the big screen -- the first four topics a slide each, then every topic on one wall (16-32); the formats as stage timers that start to run (32-42); the curtain, a backstage pass and the stamps on a road case (42-54); the key dates printed on a sheet taped to the floor, past dates struck through, today drawn in and the deadline circled (54-68); the days left rolling down on the screen (68-76); and the stage again, the sign asking for the talk over the logo, dates, submission address and deadline (76-90). The content never moves the clock: more or fewer topics, formats, perks or dates fill the same bars, and the music and every sound effect are worked out by film.js from the clock and the content.\n\nEverything the film says is content.json. event: name (as the event writes it; up to ~60 characters, two lines), year, city, country, dates (as written: '15–18 March 2027'). cfp: deadline (yyyy-mm-dd), deadline_text (as the event writes it, with the time and time zone when stated), url (the page to submit at, without https://, up to ~55 characters: the shortest address that works), as_of (yyyy-mm-dd: the day the film is made). topics: 3-15, each {name, detail?}; put the four that best sell the call first -- they get slides of their own, with their one-line detail (up to ~60 characters, shortened from the event's own description); a name up to ~60 characters fits in three lines. formats: 1-5, each {name, minutes} (minutes under 100 read as MM:SS, more as H:MM:SS) or {name, label} for one with no length in minutes ('2 days'); leave out a format with no length rather than inventing one. perks: 0-5 short sentences, only what the event's own page states (travel, hotel, ticket, dinner...); with fewer than three, copy.reasons fills the stamps with reasons every speaker has -- never add a perk the page does not state. timeline: up to 6 rows {label, date, iso}, in order, the deadline row with \"deadline\": true; the event itself is a good last row.\n\nThe count: the days from cfp.as_of to cfp.deadline, in days up to 99, in weeks beyond, 'last day' on the day itself. You are not told today's date: take it from the call's page when it says how long is left (Sessionize writes 'open, 23 days left': as_of is the deadline minus 23 days) or from a page that states the date; when you cannot be sure, leave as_of out -- the film then shows the deadline date in place of a count and draws no 'you are here' line, never a wrong count. Past dates are struck through by the same date.\n\nWords: copy holds every label (the sign, the headings, the plural forms of 'days left' by Intl.PluralRules category: one/few/many/other) -- translate copy whole when the film is in another language, set lang, and keep the sign's words short (copy.title and copy.cta read best up to ~20 characters, one line; longer takes two). The fonts carry Latin and Cyrillic. palette: ground (a dark colour the stage is made of), accent (the light: lamps, highlights, the badge's ground), second (the lanyard, the badge's foot); film.js works every shade out from these and picks what reads on what. logo: image (for light grounds: the badge's and pass's paper) and light (for dark grounds: the screen); template_pictures makes both from one picture. Without a logo the event's name is set in type in its place."
+}

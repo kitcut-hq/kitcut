@@ -1,0 +1,48 @@
+{
+ "_about": "What this film is about: every word, number, colour, logo and place it shows. film.js reads it as SK.DATA.content and keeps nothing of it in code, so another event is this file and its pictures. Copy lines may name an event field in braces: {year}, {numbers_year}, {city}, {name}. stats: 3 to 7, in the order they play; each {value, prefix?, suffix?, label, kind, note?}; kind picks the picture (people, countries, companies, network, speakers, sessions, years, media, type). origins (optional): [lat, lon] pairs the countries' arcs fly in from.",
+ "event": {
+  "name": "WEB SUMMIT",
+  "year": "2026",
+  "numbers_year": "2025",
+  "city": "LISBON",
+  "country": "PORTUGAL",
+  "dates": "NOV 9–12",
+  "dates_long": "NOVEMBER 9–12, 2026",
+  "start": "2026-11-09",
+  "end": "2026-11-12",
+  "month": "NOVEMBER",
+  "venue": "MEO ARENA",
+  "lat": 38.7685,
+  "lon": -9.0939,
+  "url": "websummit.com",
+  "cta": "BOOK TICKETS",
+  "tagline": "THE BEST TECH CONFERENCE ON THE PLANET"
+ },
+ "stats": [
+  {"value": "71,386", "label": "ATTENDEES", "kind": "people"},
+  {"value": "157", "label": "COUNTRIES", "kind": "countries"},
+  {"value": "2,725", "label": "STARTUPS", "kind": "companies", "note": "40% WOMEN-FOUNDED"},
+  {"value": "1,857", "label": "INVESTORS", "kind": "network", "note": "THE MOST EVER"},
+  {"value": "869", "label": "SPEAKERS", "kind": "speakers"},
+  {"value": "1,519", "label": "MEDIA", "kind": "media", "note": "PUBLISHERS, EDITORS & REPORTERS"}
+ ],
+ "topics_title": "17 TRACKS. FOUR DAYS. ONE EVENT.",
+ "topics": ["AI", "CYBERSECURITY", "MONEYCONF", "FUTURE OF WORK", "SAAS", "ENERGY", "HEALTH", "NEW MEDIA", "VENTURE", "POLICY", "DEVELOPER", "SPORT", "COMMERCE", "CREATIVE", "GROWTH", "MARKETING", "CORPORATE INNOVATION"],
+ "quote": {"text": "GLASTONBURY FOR GEEKS", "by": "THE GUARDIAN"},
+ "palette": {
+  "ground": "#0C1439",
+  "accent": "#DF0E7B",
+  "second": "#00ACA8"
+ },
+ "logo": {"image": "websummit-logo", "light": "websummit-logo-light"},
+ "copy": {
+  "headline": "{numbers_year} IN NUMBERS",
+  "in_numbers": "IN NUMBERS",
+  "when": "WHEN",
+  "where": "WHERE",
+  "days": "DAYS",
+  "weekdays": ["MO", "TU", "WE", "TH", "FR", "SA", "SU"],
+  "topics": "ON STAGE",
+  "join": "JOIN US IN {year}"
+ }
+}

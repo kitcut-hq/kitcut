@@ -1,0 +1,29 @@
+{
+ "_about": "The spec of kitcut.ai's programme template (studio/templates.py make --spec): what it is, what the film keeps of its sample (keep, generic), when the sample is the person's own event (identity), and its author's notes to Claude. Its film is projects/conference-programme (local: the code is ours, the sample's logo and schedule are PGConf.EU's). v1 (2026-09-30).",
+ "title": "The programme",
+ "description": "A 90-second film of a conference's agenda, drawn as a metro map: every track a coloured line, the highlighted sessions stations with an enamel sign (time, title, speaker, room), keynotes interchanges where every line meets, each day a row of the network under its own departure board, the evening on a night board, and the whole map as the poster. Music only, no narration.",
+ "author": "KitCut",
+ "look": "drawn",
+ "frames": ["16:9"],
+ "caps": ["portraits"],
+ "portraits": {"frame": true, "tone": "mono", "px": 800},
+ "limits": {"images": 16},
+ "moments": [0.6, 2.2, 4.0, 6.0, 10.5, 15.5, 25.0, 30.0, 44.0, 49.0, 67.0, 71.5, 76.0, 87.0],
+ "keep": ["_about", "copy"],
+ "generic": [
+  "SEE THE FULL SCHEDULE",
+  "THE PROGRAMME",
+  "Welcome",
+  "Closing",
+  "Closing Remarks",
+  "Lightning Talks",
+  "Community",
+  "Keynote",
+  "Microsoft",
+  "Google",
+  "Docker"
+ ],
+ "identity": ["event.name"],
+ "example": "The programme of Devoxx Belgium 2026 -- devoxx.be. Highlight the keynotes.",
+ "brief": "A 90-second programme film with no narration, told as a transit map, every beat on a 112 bpm groove: the logo, the name and THE PROGRAMME while the legend draws each line and the lines race out across the map; a dive to the terminus, where an LED board shows day 1 and its first stop; a cab that rides from stop to stop, an enamel sign at each (the time, the title, who, the room) with a chime as it pulls in; a bend and a new LED board for every new day; the pull-back to the whole network as night falls, with the evening's stops on a night board; and the dawn that turns it into the poster (dates, place, the button, the address). film.js works its own clock and its sound out from content.json, so any programme within the limits below keeps the 90 seconds: leave the clock (B), the scenes, the camera and scoreData/sfxData alone and change the content.\n\nThe content (content.json; its _about says what each field is):\n- tracks: 2 to 6 lines, in the order the bundle stacks them, each with its colour. Many schedules colour their tracks: use those colours (the sample's are PGConf.EU's own); else the brand's palette, kept distinct. A big event has more tracks than six: take the ones the highlights are on and the ones the event leads with; a sponsor or expo track is rarely worth a line. Track names up to ~24 characters (the legend and the sign's band).\n- days: one per day of the event, label and date short (WED, 21 OCT). 1 to 4 read best (up to 6 work); a one-day event is drawn as two rows, morning and afternoon. Pre-event or co-located days count only if a highlight is on them.\n- stops: the highlights, 6 to 12 that are not social (8-10 reads best; each sign holds about 4.5 s at 9 stops, 3.7 s at 12 over four days, 7 s at 6). Choose them from the schedule itself, never invent one, and copy titles as printed: every keynote and the opening (kind keynote: an interchange, where every line meets, track left empty); at least one stop a day; spread over the tracks so every line gets a station; named people with clear titles before panels of many. A title up to ~90 characters fits (3 lines, smaller type as it grows, cut with an ellipsis past that); speaker and org up to ~60 together (several people: 'A, B' and 'Org A, Org B'); room up to ~20; short (the overview map's station name) up to ~22. time as the schedule prints it (09:25, 9:25 AM): stations sit along their day's row by time. kind is keynote, talk, workshop, panel or social, or the schedule's own word (summit, demo), shown on the sign's pill.\n- social stops (kind social, 1-3): the party, reception, networking or dinner, with day, time and place; they go on the night board (header copy.night: AFTER HOURS for parties). When the schedule lists none, the evening's last sessions (the lightning talks, the closing) can stand there under copy.night LAST TRAINS, as in the sample; with none at all the board lists the days.\n- image (optional, keynote stops only): the speaker cut out with template_pictures, in a circle on the sign. Only for people the schedule names on that keynote.\n- event: name (fitted; with the year up to ~22 characters reads large), full_name (optional), city, country, venue, dates as the event writes them, url (up to ~34 characters), cta (the button; up to ~24 characters).\n- palette: paper (the map, light), ink (its type, dark), ground (the signs' enamel: the brand's dark colour; it is darkened until white type reads), accent (the brand's bright colour: LED boards, the night stops, the button). logo: the light-ground version as image, the dark-ground one as light (template_pictures makes both).\n- copy: every label on screen, in the film's language (THE PROGRAMME, LINES, DAY {n}, FIRST STOP, ALL LINES, the night board's header, the kinds). Write them all in the language asked for; set lang (uk, de, ...). Sofia Sans carries Cyrillic; film.js gives it the standard letterforms unless lang is bg.\n\nWhat to leave out: a session you cannot confirm on the event's own schedule; any session given by a Russian person or company, and anything with Russian symbols (leave it out without comment and choose another); sponsor slots unless they are the event's keynotes. Missing pieces are fine: no room and the pin goes; no speaker and the title stands alone; no full name and the line under the name goes. Never make a fact up to fill a place."
+}

@@ -1,0 +1,22 @@
+{
+ "about": "The call-for-speakers template (t-call-for-speakers) remade for two real calls open on 2026-10-01, neither Russia-linked, each asked as one line naming the event and its call's page, nothing attached: phpday 2027 (Verona, 13-14 May 2027; the call on Sessionize closes 13 Dec 2026: a count in days over two months away, four perks, five topic groups, formats not stated on the page) and SCaLE 24x (Pasadena, 1-4 April 2027; the call closes 1 Nov 2026: a long list of topics on its own CFP page, four key dates). Claude reads the page, brings in the logo and colours and remakes the film. Bars: inside the time limit, fidelity >= 4, no sample left over, every fact on screen from the event's own page.",
+ "seconds": 90,
+ "grade_extra": [
+  "fidelity",
+  "legible"
+ ],
+ "prompts": [
+  {
+   "id": "phpday",
+   "audience": "PHP developers in Italy and across Europe",
+   "prompt": "A call for speakers video for phpday 2027 -- sessionize.com/phpday-2027",
+   "template": "t-call-for-speakers"
+  },
+  {
+   "id": "scale",
+   "audience": "Linux and open-source people in Southern California and beyond",
+   "prompt": "Make a call for presentations video for SCaLE 24x: https://www.socallinuxexpo.org/scale/24x/cfp",
+   "template": "t-call-for-speakers"
+  }
+ ]
+}
