@@ -109,7 +109,9 @@ FIDELITY_ASK = (
 
 def grade_ask(s):
     """The grader's question for a set: the same for every set, plus what the set asks besides."""
-    extra = [k for k in s.get("grade_extra", []) if k in GRADE_EXTRA]  # fidelity is a read of its own
+    extra = [
+        k for k in s.get("grade_extra", []) if k in GRADE_EXTRA
+    ]  # fidelity is a read of its own
     return GRADE_ASK % (FRAMES, "".join(GRADE_EXTRA[k] for k in extra))
 
 
