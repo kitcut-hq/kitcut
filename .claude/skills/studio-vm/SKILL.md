@@ -36,6 +36,9 @@ bash studio/deploy/ops.sh replace <film-id> <folder>   # a remade film takes its
                                                     # and page, old one to backups/, new URLs
 bash studio/deploy/ops.sh forward [8765]            # the VM's studio on this laptop's 127.0.0.1:8765
 bash studio/deploy/ops.sh snapshot [--keep 7]       # data disk: films, checkout, .env, models
+bash studio/deploy/ops.sh library-get <project> <dir>   # a series' library here (cast/<name>.js, cast.png)
+bash studio/deploy/ops.sh library-put <project> [--dry-run] [--replace] <cast/x.js>...   # back into
+                                                    # it as the next version (thumbnail, sheet)
 bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
 ```
 
@@ -108,6 +111,16 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
   `STUDIO_OWN_VOICE=1` (and `STUDIO_VOICE_RELAY` for a site other than kitcut.ai) in
   `machine.env`, and `KITCUT_SITE_TOKEN` in `.env`, the same value as the site's. The person's key
   never reaches the VM: every line goes through the site's relay with that film's grant.
+
+## Improving a series' places and characters
+
+A series' places and characters are library members (code), and every new episode starts from the
+latest version, so one can be improved on its own and the next episodes pick it up. Finished
+episodes keep their copies. The procedure is `studio/README.md`, "Improving a series' places and
+characters": `library-get`, change it keeping its contract (origin, floor line, camera, option
+names; new things are new options, off by default), render it beside the episodes and get the
+person's go, back the library up, `library-put --dry-run`, then for real while no episode of that
+series is being made, and check the next episode drew `SK.cast.<name>` instead of its own set.
 
 ## Replacing a film
 
