@@ -12,7 +12,7 @@
             timeline.sample.json    the sample's recorded word times: the preview's clock, and
                                     what a film's sfx.json is moved from when it records its own
             score.json sfx.json     a template whose sound is files, not code ("sound": "files")
-            cast\*.js              its characters (SK.cast.<name>), seeded as the film's own
+            cast\\*.js             its characters (SK.cast.<name>), seeded as the film's own
             engine\\*.js            the engine it was drawn with, frozen
             sample\\                the sample's pictures (its logo, its people): the preview and
                                     the health check only, never seeded
