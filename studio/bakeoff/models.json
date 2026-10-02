@@ -30,5 +30,6 @@
    "audience": "children at bedtime",
    "prompt": "A bedtime story about a lighthouse keeper's cat who is afraid of the dark, until one stormy night."
   }
- ]
+ ],
+ "findings": "2026-10-02, studio 6bc843b, --auth login, both arms at once on the laptop. Blind grade (Opus grader): Opus fits 4.75 professional 4.0, Sonnet fits 4.5 professional 3.75. Claude cost: Opus $3.51 a film, Sonnet $2.59 (26% less, not 50%: cache reads cost the same $0.20 and Sonnet read more). Time: 14.6 vs 15.7 min a film, no faster. Read by eye: Sonnet's Cloudflare explainer was the better of the pair (it explains DNS); Opus won the bedtime story (a full arc vs a held last shot) and the collage piece (Sonnet left a blank China panel, an empty TODAY frame and a 1843/1851 mismatch); the launch films were level. One Sonnet run sent stills times out of range once. Verdict: Opus stays."
 }
