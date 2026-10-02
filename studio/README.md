@@ -473,9 +473,44 @@ its films, next to `projects\`, never in git:
   (`studio/library_put.py`) makes it the next version, thumbnail and sheet included, as keep()
   would. Leo's townhouse, street, park, bedroom and home and Duchess's room went in this way on
   2026-10-01. A character's file needs a plain `draw(x, y, o)` for the sheet to show it.
+  Improving a member outside any episode: "Improving a series' places and characters" below.
 - **Routes** (the asker's own library): `GET /api/library`, `GET /api/library/<name>/thumb.png`
   and `DELETE /api/library/<name>`. A delete keeps the files, and later films leave the member
   out.
+
+**Improving a series' places and characters.** A library member is code, and every new episode
+starts from its latest version, so a place (or a character) can be made better on its own, outside
+any episode, and the next episodes pick it up without being told. Finished episodes keep their own
+copies and do not change. The procedure:
+1. **Get what the library holds now:** `ops.sh library-get <project> <dir>` writes each member's
+   latest version as `<dir>/cast/<name>.js`, with `cast.png` (what Claude sees) and `index.json`.
+   Read the member's header comment first: it is the contract the next episodes work from.
+2. **Keep the contract; add to it.** Improve the drawing freely, but keep the origin, the floor
+   line, the `camera`, and every option's name and meaning, and keep what it draws in front of the
+   cast in `o.layer = 'front'`. Episodes already written against them (and Claude's habits) rely
+   on them. Something new is a new option, off by default (`o.playground`), never a change to
+   what the default draws in a way that moves where characters stand. Keep it self-contained
+   (the engine, the props, other members by `SK.cast.<name>`, nothing from a film.js) and under
+   64 KB, and add each new option to the header in the same words as the rest.
+3. **Look before and after, in context:** render a small test film (a `sketch.json` with
+   `"cast": "cast"` and the newest episode's `fonts`, and a film.js that draws the place through
+   its own `camera`, with the series' star standing on its floor line at the episodes' scale, in
+   each option you touched) with `scripts/sketch-render.py --stills`, the old version beside the
+   new. Render a moment of a finished episode that shows the set too (its own `sketch.json`, its
+   folder pulled from the VM), so the comparison is with what viewers saw. Show the person the
+   pictures and wait for their go: it changes every later episode's look.
+4. **Dry run, then put it in:** `ops.sh library-put <project> --dry-run --replace <dir>/cast/<name>.js`
+   draws the thumbnail on the VM with the whole cast loaded and writes nothing; without
+   `--dry-run` it becomes the next version, the sheet redrawn. It refuses when an episode changed
+   the member since your `library-get`: get it again and carry your change onto theirs. Do it
+   while no episode of the series is being made (`ops.sh status`): a running one started from
+   the older version, and its own change to the member would then be refused (clashed).
+5. **Back it up first** (`tar` the project's library folder into `STUDIO_HOME/backups/`, as on
+   2026-10-01); the library keeps only the last five versions of a member.
+6. **Check the next episode used it:** its `cast/<name>.js` should be the new version or a later
+   one of its own, its film.js should draw `SK.cast.<name>`, and it should not have redrawn the
+   set inline. If an episode drew the set itself instead, say so to the person; that is the
+   signal the member's header or options do not cover what the story needed.
 
 **Projects: a series or a channel with a library of its own.** The site keeps projects (a name,
 a brief, defaults) in Mongo and sends `"project": {id, name, brief, from_account_cast}` with a

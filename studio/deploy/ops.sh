@@ -48,6 +48,9 @@
 #   bash studio/deploy/ops.sh watch <film-id>...      follow films to the end (one line per change)
 #   bash studio/deploy/ops.sh pull <film-id> [dest] [--all]   its outputs (or the whole folder) here
 #   bash studio/deploy/ops.sh hide|show <film-id>     out of / back into the public gallery
+#   bash studio/deploy/ops.sh library-get <project> <dir>   a project's library to work on here:
+#                                                     each member's latest version as
+#                                                     <dir>/cast/<name>.js, cast.png, index.json
 #   bash studio/deploy/ops.sh library-put <project> [--dry-run] [--replace] <cast/x.js>...
 #                                                     a back-fill: cast files (places a series
 #                                                     drew in film.js) into its library as the
@@ -486,6 +489,25 @@ print(json.dumps(body, ensure_ascii=False))
       check) on "cd $REMOTE && $envs nice -n 10 $py check" ;;
       *) die "$use" ;;
     esac
+    ;;
+
+  library-get)
+    # the other half of library-put: what a project's library holds now, to improve a member
+    # (a place, a character) outside any episode and put it back as the next version
+    use="library-get <project> <dir>"
+    project="${1:?$use}"; out="${2:?$use}"
+    [[ "$project" =~ ^p-[a-z0-9]+$ ]] || die "not a project id: $project"
+    mkdir -p "$out/cast"
+    on "cd $HOME_DIR/library && d=\$(ls -d */$project 2>/dev/null) && [ \$(echo \"\$d\" | wc -l) = 1 ] || exit 3; cd \$d && python3 -c \"
+import json, os, tarfile, sys
+i = json.load(open('index.json'))
+with tarfile.open(fileobj=sys.stdout.buffer, mode='w|') as t:
+    t.add('index.json')
+    if os.path.exists('cast.png'): t.add('cast.png')
+    for n, e in i['cast'].items():
+        if not e.get('deleted'): t.add('cast/%s/v%d.js' % (n, e['version']), 'cast/%s.js' % n)
+\"" | tar -xf - -C "$out" || die "no library for $project on $VM"
+    echo "$out: $(ls "$out/cast" | tr '\n' ' ')"
     ;;
 
   library-put)
