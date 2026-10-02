@@ -39,6 +39,9 @@ A project on the site (a series, a channel) has a library of its own, inside its
                                                lines its person approved by ear; every episode
                                                gets them in audio/vo/approved/, and a line with
                                                the same words and voice plays one (sketch-vo.py)
+        canon.json                              the episode log, one entry per finished episode
+                                               (studio/canon.py): every episode reads the whole
+                                               of it (canon_note), not only the last MEMORY
 
 An episode seeds from and keeps into its project's library, never the person's own; a film outside
 projects, the other way round. A library is named (client, project), project None for the
@@ -73,7 +76,7 @@ SEEDED = 24  # members a film starts with (the most recently used)
 MEMORY = 5  # earlier films a film may look at
 LISTED = 20  # film ids the index remembers
 MAX_BYTES = 64 * 1024  # one member's code
-FILES = ("film.js", "vo.json", "score.json", "sfx.json", "paint.json")
+FILES = ("film.js", "vo.json", "score.json", "sfx.json", "sounds.json", "paint.json")
 PICTURES = 6  # a project's pictures: every review render carries them all
 PICTURE_EXT = ("png", "jpg", "webp")
 VOICE_LINES = 12  # a project's approved voice lines: every episode carries them all
@@ -346,8 +349,126 @@ def seed(film):
     if lib[1]:
         got["pictures"] = _seed_pictures(film, lib, idx)
         got["voice"] = _seed_voice(film, lib, idx)
+        got["sounds"] = _seed_sounds(film, lib)
     film.update(library=got)
     return got
+
+
+# ---------------------------------------------------------------- a series' sounds
+SOUNDS = "sounds.json"  # a project's kept sounds and themes: {"sounds": {}, "themes": {}}
+SOUND_KINDS = ("sounds", "themes")
+
+
+def sounds_of(lib):
+    """A project's kept sounds: {"sounds": {name: entry}, "themes": {name: entry}}, each entry
+    the film's own {about, cue | events} plus what the library knows (films, updated, hash)."""
+    try:
+        with open(os.path.join(dir_of(lib), SOUNDS), encoding="utf-8") as f:
+            got = json.load(f)
+    except (OSError, ValueError):
+        got = {}
+    got = got if isinstance(got, dict) else {}
+    return {k: got.get(k) if isinstance(got.get(k), dict) else {} for k in SOUND_KINDS}
+
+
+def _sound_hash(e):
+    own = {k: e.get(k) for k in ("about", "cue", "events") if k in e}
+    return hashlib.sha256(json.dumps(own, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
+
+def _film_sounds(film):
+    try:
+        with open(film.path(SOUNDS), encoding="utf-8") as f:
+            got = json.load(f)
+    except (OSError, ValueError):
+        return {k: {} for k in SOUND_KINDS}
+    got = got if isinstance(got, dict) else {}
+    return {
+        k: {n: e for n, e in (got.get(k) or {}).items() if isinstance(e, dict)}
+        if isinstance(got.get(k), dict)
+        else {}
+        for k in SOUND_KINDS
+    }
+
+
+def _seed_sounds(film, lib):
+    """A project's kept sounds into the episode's sounds.json, the film's own to play by name,
+    change or add to. {"sounds": {name: hash}, "themes": {name: hash}} of what it got."""
+    kept = sounds_of(lib)
+    if not any(kept.values()):
+        return {k: {} for k in SOUND_KINDS}
+    own = {
+        k: {n: {x: e[x] for x in ("about", "cue", "events") if x in e} for n, e in kept[k].items()}
+        for k in SOUND_KINDS
+    }
+    _write_json(film.path(SOUNDS), own)
+    return {k: {n: _sound_hash(e) for n, e in own[k].items()} for k in SOUND_KINDS}
+
+
+def _keep_sounds(film, lib, now):
+    """The episode's new and changed sounds and themes into its project's: a sound saved only
+    over the one the film started from, as a cast member is (_keep). Returns the names saved."""
+    if not os.path.exists(film.path(SOUNDS)):
+        return []
+    had = (film.record().get("library") or {}).get("sounds") or {}
+    mine, kept = _film_sounds(film), sounds_of(lib)
+    saved = []
+    for k in SOUND_KINDS:
+        for n, e in mine[k].items():
+            if not NAME.match(n):
+                continue
+            h, old = _sound_hash(e), kept[k].get(n)
+            if old and old.get("hash") == h:
+                old["films"] = ([film.id] + [x for x in old.get("films") or [] if x != film.id])[
+                    :LISTED
+                ]
+                continue
+            if old and old.get("hash") != (had.get(k) or {}).get(n):
+                continue  # moved on in the library since this film got it: the newer stays
+            kept[k][n] = {
+                **{x: e[x] for x in ("about", "cue", "events") if x in e},
+                "hash": h,
+                "films": [film.id] + [x for x in (old or {}).get("films") or [] if x != film.id],
+                "created": (old or {}).get("created") or now,
+                "updated": now,
+                "from_film": film.id,
+            }
+            saved.append(n)
+    _write_json(os.path.join(dir_of(lib), SOUNDS), kept)
+    return saved
+
+
+def sounds_note(film):
+    """How an episode plays its series' sounds by name, and which it has: for the first message
+    and the editor of a film made in scenes. "" for a film that is not an episode."""
+    rec = film.record()
+    if not rec.get("project"):
+        return ""
+    got = (rec.get("library") or {}).get("sounds") or {}
+    kit = _film_sounds(film)
+    out = [
+        "A series keeps its sounds as it keeps its cast: a sound effect or a theme its episodes "
+        "share goes in sounds.json, by name, and is played from sfx.json and score.json. Kept "
+        "sounds are what makes a series sound like itself: play them for the moments they were "
+        "made for (the same bell, the same sad trombone, the same theme), and add one when this "
+        "episode makes a sound the series should keep. sounds.json is "
+        '{"sounds": {"<name>": {"about": "<what it is, when it plays>", "cue": <one sfx.json '
+        'cue without t>}}, "themes": {"<name>": {"about": "...", "events": [<score.json "notes" '
+        'events, beats from 0>]}}}; play a sound with {"t": 3.2, "sound": "<name>"} in sfx.json '
+        "(any other key overrides the kept cue's), a theme with "
+        '{"type": "theme", "theme": "<name>", "at": <beat or [beats]>} in score.json (optional '
+        '"transpose", and "only": [instruments] for part of it). Names: lowercase letters, '
+        "digits and _.",
+    ]
+    names = [
+        '- %s "%s": %s' % (k[:-1], n, (e.get("about") or "")[:160])
+        for k in SOUND_KINDS
+        for n, e in kit[k].items()
+        if n in (got.get(k) or {})
+    ]
+    if names:
+        out.append("The series' sounds, already in sounds.json:\n" + "\n".join(names))
+    return "\n".join(out)
 
 
 def _seed_pictures(film, lib, idx):
@@ -455,6 +576,12 @@ def note(film):
             out.append(
                 '- %s: "%s" (%s)' % (m["dir"], m.get("title"), "; ".join(b for b in bits if b))
             )
+    lib = lib_of(rec)
+    log = canon_note(canon_of(lib)) if project and lib else ""
+    if log:
+        out += ["", log]
+    if project and lib:
+        out += ["", sounds_note(film)]
     if project and memory:
         out += [
             "",
@@ -474,6 +601,89 @@ def note(film):
             "the look, the voice, the music); if it is a new idea, make it its own film.",
         ]
     return "\n".join(x for x in out if x is not None)
+
+
+# ---------------------------------------------------------------- the episode log
+CANON = "canon.json"  # a project's episode log (studio/canon.py writes it)
+CANON_NOTE_MAX = 16000  # characters of log an episode is given; older entries shrink past it
+CANON_WHOLE = 8  # the newest entries, never shrunk
+
+
+def canon_of(lib):
+    """A project's episode log, oldest first: [entry] (studio/canon.py), [] when there is none."""
+    if not lib:
+        return []
+    try:
+        with open(os.path.join(dir_of(lib), CANON), encoding="utf-8") as f:
+            got = json.load(f).get("episodes")
+    except (OSError, ValueError, AttributeError):
+        return []
+    return [e for e in got or [] if isinstance(e, dict) and e.get("film")]
+
+
+def put_canon(lib, entry):
+    """Write one episode's entry into its project's log, in its film's place (a film finished
+    again replaces its own), the log kept oldest first by when each film was made."""
+    with _lock(lib):
+        got = [e for e in canon_of(lib) if e.get("film") != entry["film"]] + [entry]
+        got.sort(key=lambda e: (e.get("made") or "", e["film"]))
+        _write_json(os.path.join(dir_of(lib), CANON), {"episodes": got})
+    return got
+
+
+def _canon_line(i, e, short=False):
+    head = '%d. "%s" (%s, %s s): %s' % (
+        i,
+        e.get("title") or "untitled",
+        (e.get("made") or "")[:10],
+        e.get("length") or "?",
+        e.get("story") or "",
+    )
+    bits = [
+        "catchphrases: %s" % "; ".join('"%s"' % c for c in e["catchphrases"])
+        if e.get("catchphrases")
+        else None,
+        None if short or not e.get("twist") else "twist: %s" % e["twist"],
+        None if short or not e.get("fact") else "true fact: %s" % e["fact"],
+        None if short or not e.get("new") else "new: %s" % "; ".join(e["new"]),
+        None
+        if short or not e.get("callbacks")
+        else "could come back: %s" % "; ".join(e["callbacks"]),
+    ]
+    return head + "".join("\n   %s" % b for b in bits if b)
+
+
+def canon_note(entries):
+    """The log as an episode reads it: every episode, oldest first. Past CANON_NOTE_MAX the
+    oldest shrink to their story and catchphrases, so a long series still fits."""
+    if not entries:
+        return ""
+    lines = [_canon_line(i, e) for i, e in enumerate(entries, 1)]
+
+    def over():
+        return sum(len(x) + 1 for x in lines) > CANON_NOTE_MAX
+
+    older = entries[: max(0, len(entries) - CANON_WHOLE)]  # the newest always stay whole
+    for k, e in enumerate(older):  # the oldest first: story and catchphrases only
+        if not over():
+            break
+        lines[k] = _canon_line(k + 1, e, short=True)
+    for k, e in enumerate(older):  # then their title only
+        if not over():
+            break
+        lines[k] = '%d. "%s"' % (k + 1, e.get("title") or "untitled")
+    gone = 0
+    while over() and len(lines) > CANON_WHOLE:  # then not at all
+        lines.pop(0)
+        gone += 1
+    if gone:
+        lines.insert(0, "(episodes 1-%d: too many to list)" % gone)
+    return (
+        "The series so far, every episode in order (the project's episode log). Keep to what "
+        "happened: don't reuse a twist, a fact or an episode's own catchphrase unless the brief "
+        "says it recurs, and where it fits, bring something back as a call-back:\n"
+        + "\n".join(lines)
+    )
 
 
 # ---------------------------------------------------------------- after the film
@@ -701,12 +911,15 @@ def _keep(film, lib, items, pictures):
             e["last_used"] = now
     idx["films"] = ([film.id] + [x for x in idx["films"] if x != film.id])[:LISTED]
     _save(lib, idx)
+    sounds = _keep_sounds(film, lib, now) if lib[1] else []
     if saved:
         _contact(lib, idx)
     _poster(lib, film)
     out = {"saved": saved, "used": [n for n in names if n in idx["cast"]]}
     if clashed:
         out["clashed"] = clashed
+    if sounds:
+        out["sounds"] = sounds
     return out
 
 

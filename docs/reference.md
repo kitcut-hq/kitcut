@@ -3758,6 +3758,18 @@ swoosh_soft, tick, chime, siren -- a softened civil-defence wail), `"sample"` (a
 airflow that follows a moving object's speed and screen position, from the film's
 `automation` tracks (`sketch-render.py --automation` writes them).
 
+**Kept sounds** (`sounds.json`, beside the score). A series sounds like itself when its bell, its
+"sad trombone" and its theme are the same in every episode, so they are kept by name, the way the
+cast is: `{"sounds": {name: {"about", "cue"}}, "themes": {name: {"about", "events"}}}`, a cue
+being one sfx.json cue without `t`, a theme a list of `"notes"` events with beats from 0.
+`{"t": 3.2, "sound": "bell"}` in sfx.json plays one (its other keys override the kept cue's;
+`args` merge); `{"type": "theme", "theme": "main", "at": 16}` in score.json plays a theme (`at` a
+beat or a list, optional `transpose`, `"only": [instruments]` for part of it).
+`_sketchaudio.expand_sounds` turns both into plain cues and events before anything renders, and
+refuses a name the kit lacks, naming the ones it has. In the studio only a project's episode may
+write `sounds.json`; the library seeds it from the series and keeps what the episode added or
+changed (`studio/README.md`, "A series"). `check-sketch.py` and `studio/test_sounds.py` cover it.
+
 ### The paintings: `sketch-paint.py`, and choosing a painter with `paint-compare.py`
 
 A painted film animates pictures made by an image model. The manifest's `paint` block (inline,

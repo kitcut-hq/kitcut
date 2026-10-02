@@ -139,6 +139,7 @@ import uploads  # noqa: E402
 import youtube  # noqa: E402
 import ytdraft  # noqa: E402
 import share  # noqa: E402
+import canon  # noqa: E402
 from film import Film  # noqa: E402
 from sched import Sched  # noqa: E402
 
@@ -486,6 +487,7 @@ def idle():
         and not youtube.in_flight()
         and not ytdraft.in_flight()
         and not share.in_flight()
+        and not canon.in_flight()
         and not transcribing()
     )
 
@@ -568,6 +570,7 @@ def start(film, finish_only=False, resume=None):
             if ok:  # its moments sheet now, so a YouTube draft does not wait for it
                 thumbs.premake(film)
                 share.premake(film)  # its share page's title and picture (never raises)
+                canon.premake(film)  # an episode's entry in its project's log (never raises)
         except asyncio.CancelledError:
             c = J["control"]  # drain() requeued it; shutdown() stopped it; else its person did
             J["status"] = (

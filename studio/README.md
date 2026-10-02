@@ -468,6 +468,19 @@ its films, next to `projects\`, never in git:
   `camera: [x, y, zoom]`: the sheet draws it at its origin through that camera, the note and
   `/api/library` mark it a place. Its header comment is its manual: floor line, camera, options,
   and what it draws in front of the cast (`o.layer = 'front'`).
+- **The episode log** (`canon.py`, 2026-10-02). An episode sees only its last five episodes'
+  files, so at episode twelve the first seven are gone and a twist comes round again. After every
+  finished episode one Claude call with no tools (beside the share, `server.py`; ~$0.02-0.05 on
+  the key, uncharged on the login) writes its entry into the project's `canon.json`: title, a
+  one-line story, its catchphrases, the twist, the true fact, what was new, what could come back.
+  Every next episode's note carries the whole log (`library.canon_note`, ~16k characters at most:
+  the newest eight whole, older ones shrinking to their story, then their title).
+  `ops.sh canon <p-id> [--show | --dry-run | --force]` back-fills a series made before it.
+- **Kept sounds** (2026-10-02). An episode's `sounds.json` (named sound effects and themes,
+  played by name from sfx.json and score.json: `docs/reference.md`, "Kept sounds") is kept like a
+  member: seeded into the next episode, its new and changed entries saved after an ok film, only
+  over the version the film started from. `sounds_note` tells the episode (and a scenes film's
+  editor, who writes the music) what the series has and how to play it.
 - **Back-fill by hand.** A set a series drew in its episodes' film.js never reached the library:
   write it as a cast file and `ops.sh library-put <project> [--dry-run] <cast/x.js>...`
   (`studio/library_put.py`) makes it the next version, thumbnail and sheet included, as keep()

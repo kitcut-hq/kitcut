@@ -270,6 +270,62 @@ def _sfx(d, length):
     return out
 
 
+MAX_SOUNDS, MAX_THEMES = 24, 6  # what a series' sounds.json keeps (library.py)
+MAX_THEME_EVENTS = 40
+
+
+def _kit(film):
+    """The film's kept sounds (sounds.json), or {} -- sfx.json and score.json play them by name."""
+    d, _ = _load(film, "sounds.json")
+    return d if isinstance(d, dict) else {}
+
+
+def _sounds(d, length):
+    """sounds.json: a series' named sound effects and themes (_sketchaudio.expand_sounds)."""
+    if not isinstance(d, dict) or set(d) - {"sounds", "themes"}:
+        return ['sounds.json must be {"sounds": {name: {about, cue}}, "themes": {name: ...}}']
+    out = []
+    sounds, themes = d.get("sounds") or {}, d.get("themes") or {}
+    if not isinstance(sounds, dict) or not isinstance(themes, dict):
+        return ["sounds.json: sounds and themes are objects, keyed by name"]
+    if len(sounds) > MAX_SOUNDS or len(themes) > MAX_THEMES:
+        out.append("sounds.json: at most %d sounds and %d themes" % (MAX_SOUNDS, MAX_THEMES))
+    for kind, got in (("sound", sounds), ("theme", themes)):
+        for n, e in got.items():
+            where = "sounds.json %s %r" % (kind, n)
+            if not A.SOUND_NAME.match(n):
+                out.append("%s: a name is lowercase letters, digits and _" % where)
+            if not isinstance(e, dict) or not isinstance(e.get("about", ""), str):
+                out.append(
+                    '%s must be {"about": "...", %s}'
+                    % (where, kind == "sound" and '"cue": {...}' or '"events": [...]')
+                )
+                continue
+            if len(e.get("about", "")) > 200:
+                out.append("%s: about is at most 200 characters" % where)
+            if kind == "sound":
+                cue = e.get("cue")
+                if not isinstance(cue, dict) or "sound" in cue:
+                    out.append("%s: cue is one sfx.json cue (fx, args, db...)" % where)
+                    continue
+                out += [
+                    "%s: %s" % (where, m.split(": ", 1)[-1])
+                    for m in _sfx([{**cue, "t": 0}], length)
+                ]
+            else:
+                ev = e.get("events")
+                if not isinstance(ev, list) or not ev or len(ev) > MAX_THEME_EVENTS:
+                    out.append("%s: events is a list of 1-%d" % (where, MAX_THEME_EVENTS))
+                    continue
+                if any(not isinstance(x, dict) or x.get("type", "notes") != "notes" for x in ev):
+                    out.append('%s: a theme is made of "notes" events' % where)
+                    continue
+                out += [
+                    "%s: %s" % (where, m.split(": ", 1)[-1]) for m in _score({"events": ev}, length)
+                ]
+    return out
+
+
 def problems(film, name):
     """What is wrong with one of Claude's files ([] when nothing, or when it is not there yet)."""
     if name.startswith("engine"):
@@ -308,10 +364,18 @@ def problems(film, name):
         return _vo(d, limits(film.length)["lines"], film.length, people)
     if name == "paint.json":
         return _paint(d, film.length, film.caps)
-    if name == "score.json":
-        return _score(d, film.length)
-    if name == "sfx.json":
-        return _sfx(d, film.length)
+    if name in ("score.json", "sfx.json"):  # a kept sound or theme, played by name
+        try:
+            score, cues = A.expand_sounds(
+                d if name == "score.json" else None, d if name == "sfx.json" else [], _kit(film)
+            )
+        except (ValueError, TypeError) as e:
+            return ["%s: %s" % (name, e)]
+        if name == "score.json":
+            return _score(score, film.length)
+        return _sfx(cues if isinstance(d, list) else d, film.length)
+    if name == "sounds.json":
+        return _sounds(d, film.length)
     if name == "scenes.json":
         return _scenes(d, film)
     return []

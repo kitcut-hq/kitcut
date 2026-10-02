@@ -31,6 +31,9 @@
 #                                                     share-page title, description and picture
 #                                                     (studio/share.py); the price is printed
 #                                                     first, and --dry-run stops there
+#   bash studio/deploy/ops.sh canon <p-id> [--show | --dry-run | --force]   a project's episode
+#                                                     log (studio/canon.py): write the entries it
+#                                                     lacks, oldest first; --show prints it
 #   bash studio/deploy/ops.sh template push <templates/t-x/vN folder> | publish|retire|draft <t-x> <N>
 #                                  | list | check      kitcut.ai's templates (studio/templates.py):
 #                                                     push copies a version made on this laptop into
@@ -358,6 +361,31 @@ EOF
     # capped, and behind the films: an uncapped --missing grew to 15 GB of the VM's 16 on
     # 2026-09-29 and the films being made could not start Claude (KI-045)
     change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=2G -p MemoryMax=3G -p Nice=10 $UNIT_ENV $py"
+    [ "$DRY" = 1 ] && exit 0
+    follow "$unit"
+    ;;
+
+  canon)
+    # a project's episode log (studio/canon.py): --show reads it, --dry-run names the episodes
+    # without an entry; else they are written, oldest first, in a capped unit like share's
+    use="canon <p-id> [--show | --dry-run | --force]"
+    proj="${1:?$use}"; shift
+    [[ "$proj" =~ ^p-[a-z2-7]{10}$ ]] || die "not a project id: $proj"
+    args="--project $proj --missing"; mode=write
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --show) mode=show ;; --dry-run) mode=price ;; --force) args="$args --force" ;;
+        *) die "$use" ;;
+      esac
+      shift
+    done
+    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/canon.py $args"
+    envs="STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env"
+    if [ "$mode" = show ]; then on "cd $REMOTE && $envs $py --show"; exit $?; fi
+    on "cd $REMOTE && $envs $py --dry-run" || exit 1
+    [ "$mode" = price ] && exit 0
+    unit="kitcut-canon-$(date +%Y%m%d-%H%M%S)"
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=1G -p MemoryMax=2G -p Nice=10 $UNIT_ENV $py"
     [ "$DRY" = 1 ] && exit 0
     follow "$unit"
     ;;

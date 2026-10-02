@@ -256,6 +256,14 @@ def scene_message(film, k, sheet=None):
     ) + mark_note(film)
 
 
+def _sounds(film):
+    """An episode's kept sounds, for the pass that writes its score and cues (library.py)."""
+    import library  # noqa: PLC0415 -- library imports film, as this module does; keep it lazy
+
+    text = library.sounds_note(film)
+    return "\n\n" + text if text else ""
+
+
 def editor_message(film, sheets):
     rows = spans(film)
     pr = progress(film)
@@ -271,12 +279,16 @@ def editor_message(film, sheets):
         )
         for s, a, b in rows
     )
-    return _read("editor.md").format(
-        N=len(rows),
-        PLAN=plan_text,
-        SHEETS="\n".join("- " + p for p in sheets) or "(none)",
-        MINUTES=pass_limits(film, "editor")["claude_s"] // 60,
-    ) + mark_note(film)
+    return (
+        _read("editor.md").format(
+            N=len(rows),
+            PLAN=plan_text,
+            SHEETS="\n".join("- " + p for p in sheets) or "(none)",
+            MINUTES=pass_limits(film, "editor")["claude_s"] // 60,
+        )
+        + mark_note(film)
+        + _sounds(film)
+    )
 
 
 def contact_times(film):

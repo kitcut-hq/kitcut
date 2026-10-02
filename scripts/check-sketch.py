@@ -275,6 +275,64 @@ def heads():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def kept_sounds():
+    """A series' sounds.json played by name (expand_sounds): a cue's overrides, a theme moved to
+    its beats and transposed, part of a theme, and a name the kit lacks refused."""
+    kit = {
+        "sounds": {
+            "bell": {"about": "collar bell", "cue": {"fx": "chime", "db": -24, "args": {"sec": 1}}},
+            "trombone": {
+                "about": "sad trombone",
+                "cue": {"fx": "sample", "inst": "bassoon", "notes": ["F2", "E2"], "every": 0.4},
+            },
+        },
+        "themes": {
+            "main": {
+                "about": "her theme",
+                "events": [
+                    {"inst": "clarinet", "notes": "0 C5 1; 1 F5 1"},
+                    {"inst": "bassoon", "notes": "0 F2 2"},
+                ],
+            }
+        },
+    }
+    score = {
+        "bpm": 120,
+        "events": [{"type": "theme", "theme": "main", "at": [8, 16], "transpose": 2}],
+    }
+    cues = [{"t": 1.5, "sound": "bell", "db": -18, "args": {"tau": 0.3}}, {"t": 4, "fx": "pop"}]
+    s2, c2 = A.expand_sounds(score, cues, kit)
+    check(
+        "sounds: a cue's own keys override the kept one's",
+        c2[0] == {"fx": "chime", "db": -18, "t": 1.5, "args": {"sec": 1, "tau": 0.3}},
+        str(c2[0]),
+    )
+    check("sounds: other cues pass through", c2[1] == {"t": 4, "fx": "pop"})
+    ev = A.score_events(s2)
+    clar = sorted((e[2], e[1]) for e in ev if e[0] == "clarinet")
+    check(
+        "sounds: a theme plays at each beat, transposed",
+        clar == [(8, A.M("D5")), (9, A.M("G5")), (16, A.M("D5")), (17, A.M("G5"))],
+        str(clar),
+    )
+    part = {"events": [{"type": "theme", "theme": "main", "at": 0, "only": ["bassoon"]}]}
+    check(
+        "sounds: only part of a theme",
+        {e[0] for e in A.score_events(A.expand_sounds(part, [], kit)[0])} == {"bassoon"},
+    )
+    for bad in ([{"t": 1, "sound": "gong"}], []):
+        sc = score if bad else {"events": [{"type": "theme", "theme": "waltz"}]}
+        try:
+            A.expand_sounds(sc, bad, kit)
+            check("sounds: an unknown name is refused", False)
+        except ValueError as e:
+            check("sounds: an unknown name is refused, naming what there is", "have:" in str(e))
+    same = A.expand_sounds({"events": [{"inst": "celesta", "notes": "0 C5 1"}]}, [], None)
+    check(
+        "sounds: a film without sounds.json is unchanged", same[0]["events"][0]["inst"] == "celesta"
+    )
+
+
 def inputs_join():
     """Every picture in inputs/ is drawable by its name, even when the manifest lists only some:
     a film listed upload1 alone and drew three real logos as blank cards (2026-10-01)."""
@@ -983,6 +1041,7 @@ def main():
 
     cyrillic()
     heads()
+    kept_sounds()
     inputs_join()
 
     # ---- the bundler, against the committed example

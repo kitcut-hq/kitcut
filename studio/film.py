@@ -261,7 +261,7 @@ ACTIVE = ("queued", "claude", "finishing")
 ID = re.compile(r"^studio-\d{8}-\d{6}(-[a-z2-7]{6})?$")
 # a project on the site (a series, a channel): its id, and how long its brief may be
 PROJECT_ID = re.compile(r"^p-[a-z2-7]{10}$")
-BRIEF_MAX = 2000
+BRIEF_MAX = 10000  # a series bible: its household, places, running gags (docs/series-plan.md)
 _B32 = "abcdefghijklmnopqrstuvwxyz234567"
 
 
@@ -568,6 +568,8 @@ class Film:
             + (("content.json",) if rec.get("template") else ())
             + (("paint.json",) if paint_kinds(self.caps) else ())
             + (("scenes.json",) if self.mode == "scenes" else ())
+            # an episode's named sounds and themes, kept for the series (library.py)
+            + (("sounds.json",) if rec.get("project") else ())
         )
 
     @property

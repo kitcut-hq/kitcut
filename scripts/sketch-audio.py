@@ -99,11 +99,15 @@ def main():
     score, score_p = load_json(m, "score")
     if score is None:
         sys.exit("no score: set audio.score in %s (missing: %s)" % (m["_path"], score_p))
+    cues, _ = load_json(m, "sfx")
+    kit, _ = load_json(m, "sounds", "sounds.json")  # a series' kept sounds, played by name
+    try:
+        score, cues = A.expand_sounds(score, cues or [], kit)
+    except ValueError as e:
+        sys.exit(str(e))
     bad = A.check_score(score)
     if bad:
         sys.exit("%s: volumes that cannot be right\n  %s" % (score_p, "\n  ".join(bad)))
-    cues, _ = load_json(m, "sfx")
-    cues = cues or []
     autom, _ = load_json(m, "automation", "temp/automation.json")
     tl_path = _sketch.rel(m, au.get("vo_timeline", "audio/vo/timeline.json"))
     timeline = None
