@@ -13,6 +13,10 @@
     python studio/bakeoff.py --set models --arm sonnet --tree <checkout> --model claude-sonnet-5-5
                                                                       the arm's films by another
                                                                       model (one tree, two models)
+    python studio/bakeoff.py --set models --arm sol --tree <checkout> --model openai/gpt-6.1-sol
+                                                                      a model that is not Claude's,
+                                                                      in the same Claude Code,
+                                                                      through OpenRouter
 
 A change to how films are made -- the brief (prompt.md, looks/), a limit, a tool -- is a proposal,
 and this measures it before it ships. A set (studio/bakeoff/<set>.json) is a few prompts, each with
@@ -30,7 +34,7 @@ run an arm again to finish it (--redo makes them afresh).
 prompt, no arm -- for what it is about, how much its look belongs in children's animation (0-1,
 whatever the subject), how well the look fits the subject, and how professionally made it looks
 (1-5 each), and whatever else the set asks ("grade_extra": "newspaper" -- does it look like a
-newspaper; "legible" -- do its words read at a glance). --compare writes compare.html: per prompt, each arm's frames, choices, grade, cost and
+newspaper; "legible" -- do its words read at a glance). --compare writes compare-<A>-vs-<B>.html: per prompt, each arm's frames, choices, grade, cost and
 time; and prints the tallies: per arm, the means, and how many films' look fits their subject (4
 or 5 of 5). Calibrated on the Dell documentary this was built for: its googly-eyed first minutes
 read childish 0.40, fits 3 -- a mild grader, so compare the arms, never one number to a bar.
@@ -870,7 +874,7 @@ td.none{color:#b8432e} .arms th{border:0;padding-top:4px;font-size:16px}
         "b": html.escape(b),
         "rows": rows,
     }
-    out = os.path.join(base, "compare.html")
+    out = os.path.join(base, "compare-%s-vs-%s.html" % (a, b))  # a set may have more arms
     with open(out, "w", encoding="utf-8") as f:
         f.write(page)
     print(out)

@@ -579,7 +579,7 @@ python studio/bakeoff.py --set audience --plan                     # what runs, 
 python studio/bakeoff.py --set audience --arm before --tree C:\instafill\kitcut-fit-base
 python studio/bakeoff.py --set audience --arm after  --tree C:\instafill\kitcut-fit
 python studio/bakeoff.py --set audience --grade                    # a blind read of each film
-python studio/bakeoff.py --set audience --compare before after     # compare.html + the tallies
+python studio/bakeoff.py --set audience --compare before after     # compare-before-vs-after.html + the tallies
 ```
 
 Two looks from one tree: `--look` makes every film of an arm in that look, whatever the

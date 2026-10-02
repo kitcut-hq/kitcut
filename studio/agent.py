@@ -167,7 +167,23 @@ def claude_env(film=None, auth="api"):
         # this Claude Code version picks; a long film writes in parts anyway (LONG_FILM, STALLED)
         "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "128000",
     }
-    if auth == "api":
+    if not MODEL.startswith("claude-"):
+        # another maker's model (a bake-off arm, never the served studio): Claude Code talks to
+        # OpenRouter's Anthropic-shaped endpoint, which passes the effort on as reasoning effort
+        # and serves WebSearch itself. Measured on openai/gpt-6.1-sol, 2026-10-02: tool calls,
+        # thinking and WebFetch all work; low thought 867 tokens where xhigh hit a 20,000 cap
+        key = procs.secret("OPENROUTER_API_KEY")
+        if not key:
+            sys.exit("OPENROUTER_API_KEY is not set (put it in the studio's .env)")
+        cfg = film.claude_dir if film else os.path.join(HOME, "claude", "_smoke")
+        os.makedirs(cfg, exist_ok=True)
+        env.update(
+            ANTHROPIC_BASE_URL="https://openrouter.ai/api",
+            ANTHROPIC_AUTH_TOKEN=key,
+            ANTHROPIC_API_KEY="",  # or Claude Code prefers a key to the token
+            CLAUDE_CONFIG_DIR=cfg,
+        )
+    elif auth == "api":
         key = procs.secret("ANTHROPIC_API_KEY")
         if not key:
             sys.exit("ANTHROPIC_API_KEY is not set (put it in the studio's .env)")
@@ -282,7 +298,9 @@ def system_prompt(look, caps=None):
     # own pills, phones, glows, arrows and confetti, and every one the old `w` cue wrapper
     kit = "KIT" in fill
     fill["CUE_RULE"] = CUE_RULE_KIT if kit else CUE_RULE
-    fill["CUE_SHORT"] = "`const T = SK.cues({...})` at the top" if kit else "`SK.w(line, 'word', fallbackSeconds)`"
+    fill["CUE_SHORT"] = (
+        "`const T = SK.cues({...})` at the top" if kit else "`SK.w(line, 'word', fallbackSeconds)`"
+    )
     fill["KIT_STEP"] = KIT_STEP if kit else ""
     # the look's own sections (studio/looks/<look>.md, "## NAME" headed) go in first, since
     # they carry placeholders of their own
@@ -761,6 +779,8 @@ PRICES = {
     "claude-opus-5-5": {"in": 4, "out": 20, "w5m": 5, "w1h": 8, "read": 0.2},
     "claude-sonnet-5": {"in": 2, "out": 10, "w5m": 2.5, "w1h": 4, "read": 0.2},
     "claude-sonnet-5-5": {"in": 2, "out": 10, "w5m": 2.5, "w1h": 4, "read": 0.2},
+    # through OpenRouter, at OpenAI's list price: a cache write costs what input does
+    "openai/gpt-6.1-sol": {"in": 2, "out": 10, "w5m": 2, "w1h": 2, "read": 0.1},
 }
 # every run's record lives in kitcut's MongoDB (store.py); the outbox holds what could not be sent
 STORE = store.MongoStore(uri=procs.secret("MONGODB_URI"), outbox=os.path.join(HOME, "outbox.jsonl"))
