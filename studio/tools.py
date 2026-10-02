@@ -398,6 +398,13 @@ class Tools:
         narrator = self.film.record().get("narrator") or {}
         own = narrator.get("source") == "elevenlabs"
         args = ["--jobs", str(int(narrator.get("jobs") or 2) if own else VOICE_JOBS)]
+        # a model that must fill every argument (GPT through OpenRouter: -1, then 0) asks for the
+        # whole narration this way; before any take exists there is no line to retake either
+        if retake_line is not None and (
+            int(retake_line) < 0
+            or not os.path.exists(self.film.path("audio", "vo", "timeline.json"))
+        ):
+            retake_line = None
         if retake_line is not None and approved_line(self.film, retake_line):
             raise ToolError(
                 "Line %d plays the project's approved recording of those words, which its person"
@@ -820,7 +827,7 @@ class Tools:
                     },
                     "required": ["url", "name"],
                 },
-            )(wrap(lambda a: self.picture(a.get("url"), a.get("name"), a.get("width")))),
+            )(wrap(lambda a: self.picture(a.get("url"), a.get("name"), a.get("width") or None))),
             tool(
                 "page",
                 "Open a web page in a real browser (it also reads pages WebFetch is refused) and "
@@ -843,7 +850,7 @@ class Tools:
             )(
                 wrap(
                     lambda a: self.page(
-                        a.get("url"), a.get("name"), a.get("width"), a.get("height")
+                        a.get("url"), a.get("name"), a.get("width") or None, a.get("height") or None
                     )
                 )
             ),
