@@ -590,7 +590,7 @@ content is a data edit with its clicks and pops to match.
   "attachments", "frame"}` (a draft only from this machine; a prompt, or at least one attachment).
   It gets the template's exact length (26 s is no multiple of 5), look, capabilities (`space`: the
   3D module; `portraits`: people cut out of their photos) and frozen engine, the frame asked for,
-  no narration (no vo.json, no voice tool), and up to the template's own number of pictures (a
+  no narration unless the template is narrated (below), and up to the template's own number of pictures (a
   line-up of 24 speakers; a plain film keeps 6). It starts from the template's code and its sample
   content (`templates.seed`), with the sample's pictures under `template/sample/` so it draws from
   the first second; the person's cast and earlier films are not seeded.
@@ -611,6 +611,19 @@ content is a data edit with its clicks and pops to match.
   pictures like the content, so the sample's map is a leftover until a route of the person's own
   replaces it. A spec's `assets` are the template's own generic pictures (a ride's bike, jersey,
   gels): copied to `assets/`, seeded as `template/assets/`, kept by every film, never a leftover.
+- **A narrated template** (spec `"narration": true`; the birthday invitations, 2026-10-02). The
+  version keeps the sample's script as `vo.sample.json` (lines, style, and a Gemini voice -- never
+  an author's own ElevenLabs voice, never the takes) and its word times as `timeline.sample.json`,
+  which the preview and the health check draw on (`SK.w`). A film from it gets the script as its
+  `vo.json` (pinned to the studio's voice backend; a voice the person picked wins), captions, the
+  voice tool, and is not done until it records. Claude rewrites every line for the new party,
+  keeping the number of lines and their length so the scenes keep their timing. `"sound":
+  "files"` keeps the sample's `score.json` and `sfx.json` instead of code-written sound; each time
+  the voice records, `vo-retime.py --by-line` moves every cue with its line, from the sample's word
+  times (`template/timeline.sample.json`) or the film's last recording. `cast/*.js` (the drawn
+  characters) are copied with any template. The leftovers check also reads the narration, as
+  written and as recorded (a line changed but not recorded again still says the sample's name),
+  and a spec's `watch` paths find words too short for it (a child's name) as whole words.
 - **Routes** (`ride-replay`, `caps: ["routes"]`): the route tool draws the film's real route on a
   real map -- from a GPX the person attached, or places it routes along real roads and trails --
   with `scripts/route-map.py --film` (docs/reference.md, "A real map and a real route"): the map as

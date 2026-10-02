@@ -387,7 +387,8 @@ def people_note(film):
 LEFTOVERS = (
     "The film still shows the template's own sample: %s. None of the sample's event, people, "
     "places or addresses may be in this film -- replace them with the person's content (or leave "
-    "them out), in film.js and content.json, call check, and stop with one sentence."
+    "them out), in film.js and content.json -- and in vo.json, recording the changed lines again "
+    "with the voice tool, when the film is narrated -- call check, and stop with one sentence."
 )
 
 
@@ -1819,7 +1820,13 @@ async def make_film(
                 "project_id": (film.record().get("project") or {}).get("id"),
                 # again here, like project_id: a template's films are counted by it
                 **(
-                    {"template": film.record()["template"]} if film.record().get("template") else {}
+                    {
+                        "template": {
+                            k: film.record()["template"].get(k) for k in ("id", "version", "title")
+                        }
+                    }
+                    if film.record().get("template")
+                    else {}
                 ),
                 "title": film.record().get("title"),  # name_film's, when nothing was typed
                 "media": summary.get("media"),  # its lasting copy online (media.py)
@@ -2058,7 +2065,14 @@ def first_record(film, source, client):
         # the site's project it is an episode of: the id only (the name and brief are the site's)
         "project_id": (rec.get("project") or {}).get("id"),
         # the template it was remade from (templates.py): kitcut.ai counts a template's films by it
-        **({"template": rec["template"], "frame": rec.get("frame")} if rec.get("template") else {}),
+        **(
+            {
+                "template": {k: rec["template"].get(k) for k in ("id", "version", "title")},
+                "frame": rec.get("frame"),
+            }
+            if rec.get("template")
+            else {}
+        ),
         "state": "queued",
         "cost_usd": 0.0,
     }

@@ -16,7 +16,13 @@ it, cues after the last with the last.
 Without --write it only prints what would move (nothing is changed). With it, sfx.json is rewritten
 and the old one kept as sfx.before-retime.json.
 
-Invoke as:  python scripts/vo-retime.py --manifest <sketch.json> --before <timeline.json> [--write]
+--by-line pairs the lines by their place instead of their text: a template's film
+(studio/templates.py) rewrites every line of its sample's narration for another party, so no line
+keeps its words, but line 3 is still the scene line 3 was. The studio's voice step runs it that way
+after each recording.
+
+Invoke as:
+    python scripts/vo-retime.py --manifest <sketch.json> --before <old> [--by-line] [--write]
 """
 
 import argparse
@@ -36,12 +42,18 @@ def norm(s):
     return re.sub(r"[^\w]", "", str(s).lower())
 
 
-def anchors(old, new):
-    """[(old seconds, new seconds)] from two timelines' lines: matched by text, then their words."""
+def anchors(old, new, by_line=False):
+    """[(old seconds, new seconds)] from two timelines' lines: matched by text (or, by_line, by
+    their place), then their words."""
     a = [norm(L["text"]) for L in old]
     b = [norm(L["text"]) for L in new]
+    if by_line:
+        n = min(len(old), len(new))
+        blocks = [difflib.Match(0, 0, n)]
+    else:
+        blocks = difflib.SequenceMatcher(None, a, b, autojunk=False).get_matching_blocks()
     pairs = []
-    for blk in difflib.SequenceMatcher(None, a, b, autojunk=False).get_matching_blocks():
+    for blk in blocks:
         for k in range(blk.size):
             Lo, Ln = old[blk.a + k], new[blk.b + k]
             pairs += [(Lo["start"], Ln["start"]), (Lo["end"], Ln["end"])]
@@ -75,6 +87,9 @@ def main():
     ap.add_argument(
         "--before", required=True, help="the narration's timeline.json before it was recorded again"
     )
+    ap.add_argument(
+        "--by-line", action="store_true", help="pair lines by their place, not their words"
+    )
     ap.add_argument("--write", action="store_true", help="rewrite sfx.json (else only print)")
     args = ap.parse_args()
     root = os.path.dirname(os.path.abspath(args.manifest))
@@ -86,7 +101,7 @@ def main():
     with open(os.path.join(root, "audio", "vo", "timeline.json"), encoding="utf-8") as f:
         new_tl = json.load(f)
     new = new_tl["lines"]
-    pairs = anchors(old, new)
+    pairs = anchors(old, new, args.by_line)
     with open(sfx_path, encoding="utf-8") as f:
         cues = json.load(f)
     dur = new_tl.get("duration") or m.get("duration") or 1e9

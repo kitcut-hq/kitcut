@@ -1,0 +1,49 @@
+{
+ "_about": "The spec of kitcut.ai's birthday-party-invitation template (studio/templates.py make --spec): what it is, what the film keeps of its sample (keep, generic), when the sample is the person's own party (identity), the short words watched for (watch), and its author's notes to Claude. Its film is projects/birthday-party-invitation (local: the sample is a real child's party, with the child's photo). v1 (2026-10-02): from kitcut.ai film studio-20260929-143101-qshcoy, a 4-year-old's slime party; narrated, its sound the sample's score.json and sfx.json.",
+ "title": "Birthday party invitation",
+ "description": "A 40-second drawn invitation to a child's birthday party, told by a bubbly kids'-TV host. A pink slime blob asks who's turning the big number and pops into the child's photo; the camera slides along to the venue's storefront; the star squishes, stretches, pokes and pops a lump of slime and fills the jars with every colour, and a bucket of slime tips over them. The invitation lands last: a cake, the headline, the place, the date and a YOU'RE INVITED! stamp.",
+ "author": "KitCut",
+ "look": "drawn",
+ "frames": [
+  "16:9"
+ ],
+ "caps": [
+  "grounds"
+ ],
+ "limits": {
+  "images": 6
+ },
+ "moments": [
+  2.9,
+  6.0,
+  10.6,
+  15.0,
+  17.7,
+  21.0,
+  24.5,
+  26.3,
+  31.8,
+  35.0,
+  39.5
+ ],
+ "narration": true,
+ "sound": "files",
+ "keep": [
+  "_about",
+  "copy"
+ ],
+ "generic": [
+  "Hey, friends!",
+  "YOU'RE INVITED!",
+  "Birthday!",
+  "{name}'s {nth}"
+ ],
+ "watch": [
+  "child.name"
+ ],
+ "identity": [
+  "venue.name"
+ ],
+ "example": "Mia is turning 6! Slime party at Squishy Lab Studio in Chicago, Saturday May 9, 2-4 PM -- her photo is attached",
+ "brief": "A 40-second drawn (crayon) invitation to a child's birthday party, narrated by a bubbly kids'-TV party host: one wide slime world the camera slides through, left to right, past five stops, with the star (the venue's mascot, or the child drawn) surfing along on slime between them and rainbow goo dripping from the ceiling the whole way.\n\nTHE CLOCK IS THE NARRATION. vo.json has eight lines, one per scene, and every cue in film.js hangs on a word of its line (SK.w); each slide between stops starts on a line's start. The sample's times: line 0 (0.5-3.6 s) stop 1: the greeting writes on, a '?' blob in a ring of pink slime, the big age number pops on the age word ('Guess who's turning four?'); line 1 (3.9-7.7) the blob becomes the child's photo on the name, the name plate under it, the star jumps in on 'come', jiggles on 'slimy', confetti on 'party'; slide; line 2 (8.0-13.8) stop 2, the venue's storefront: the sign's first line pops letter by letter on its first word, the second line on its second word, the city plate on the city's first word, the building jiggles on 'squishiest'; slide; line 3 (14.2-18.6) stop 3, the slime bar: the star kneads a lump of slime, SQUISH! STRETCH! POKE! POP! one per verb; line 4 (18.9-23.0) the jars fill on 'every', RAINBOW! on 'rainbow'; slide; line 5 (23.3-27.3) stop 4: the SLIME ZONE sign and the bucket that wobbles on 'watch' and tips on 'slimed'; slide; line 6 (27.6-32.2) stop 5, the invitation: the photo again, the star holds up the cake (a candle a year) on 'celebrate', the headline on the name's possessive and on 'birthday', then the venue, address, date and time write on; line 7 (32.6-36.8) the stamp lands on 'invited', confetti on the venue's name; held to 40 s.\n\nTHE NARRATION. Rewrite each of the eight lines for the new party in the same bubbly host style (vo.json's style: a big smile in the voice, bouncy and brisk, playful squishy emphasis on the silly words), keeping the count and about the same length, so the scenes keep their timing. Keep the words the cues hang on where the scene stays: hey, come, slimy, party, squishiest, squish, stretch, poke, pop, make, every, rainbow, watch, slimed, celebrate, birthday, invited. The age (line 0, as a word: 'six'), the child's name (line 1, and its possessive in line 6), the sign's first word (lines 2 and 7) and the city's first word (line 2) are found in the narration by film.js from content.json -- say them as the content writes them. When a cue's word changes (a re-themed scene, another language), point the cue at the new word in film.js (SK.w(line, 'word', fallbackSeconds)). sfx.json's cues are in seconds on the sample's narration; the studio moves them with their lines after the new narration is recorded, so leave them unless a scene changes what happens in it.\n\nTHE CONTENT (content.json; its _about says the same). star: 'mascot' (cast/mascot.js, the venue's mascot) or 'kid' (cast/kid.js, the birthday child drawn, the age on the shirt). child: name (as it is said, up to ~16 characters; the plate shows it in capitals; a long name is set smaller, and the headline moves the ordinal down to the second line), age (a whole number: the big number, the candles up to 9, the shirt), nth (the ordinal for the headline, '6th'; worked out in English when absent, so set it for another language), photo (a picture key: the child cut out of their photo; null shows the name's initial instead). venue: name (as the venue writes it, up to ~24 characters), sign (one or two lines of the storefront sign in capitals: the first up to ~8 letters, the second up to ~14), city (up to ~16 characters; the plate shows it in capitals; '' for none), address (0-2 lines, up to ~34 characters each; fewer lines move the date up). when: date ('Saturday, May 9', up to ~22 characters) and time ('2:00 – 4:00 PM', or '' for none). copy: hello (the greeting), headline (two lines, {name} and {nth} filled in), invited (the stamp, up to ~16 characters) -- the template's own words, kept unless the film is in another language. palette: goo (six slime colours: ceiling, jars, sticker words, puddles; keep them bright and distinct), front and trim (the storefront), date (the date, the time and the stamp). Every word is fitted to its place; nothing on the clock moves with the content.\n\nTHE CHILD AND THE PHOTO. The attached photo of the child becomes their cut-out (the template_pictures tool, cut_people) under a NEW picture name, and child.photo points at it: it is shown in a circle in a ring of pink slime twice, head and shoulders filling it, so a photo close to the face reads best. With star 'kid', redraw cast/kid.js from the photo: the hair (colour, length, fringe), the skin, glasses or none, the clothes (COL and the head block); the shirt shows the age, which film.js passes. Keep its draw()/poseAt() calling convention and its POSE names. No photo: the circle shows the initial; with no photo and star 'kid', draw the child from what the person says.\n\nTHE VENUE. The storefront (stop2 in film.js) is drawn after the sample venue's building: a hot-pink facade with an arched pediment window, arched side windows, the mascot's eyes as two wall medallions, shop windows full of slime jars, an arched door, and a palm beside it (the sample city's touch). Redraw it for the person's venue from what they attach or what you find (its colours, its shape, its sign), and swap the palm for the new city's touch or drop it. The mascot (cast/mascot.js) is the sample venue's: redraw it as the new venue's mascot when it has one, else make the child the star ('kid') and take the eye medallions off the wall. When the party is not at a slime place (trampolines, a pool, a zoo, a playground, a home), keep the frame -- the '?' blob and the photo, the storefront, the invitation -- and re-theme the three middle scenes to what happens there (stop 3's kneaded slime and sticker verbs, stop 4's slime bucket, the ceiling goo and the puddles), and narration lines 3-5 with them, one line per scene at about its length; say in your reply what changed."
+}

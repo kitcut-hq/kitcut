@@ -7,6 +7,12 @@
             film.js                 the film's code; it reads its words and people from
                                     content.json (SK.DATA.content) and writes its own sound
             content.sample.json     the author's content: the preview's, never seeded
+            vo.sample.json          a narrated template's script (its lines, style, voice): seeded
+                                    as the film's vo.json, which Claude rewrites and records
+            timeline.sample.json    the sample's recorded word times: the preview's clock, and
+                                    what a film's sfx.json is moved from when it records its own
+            score.json sfx.json     a template whose sound is files, not code ("sound": "files")
+            cast\*.js              its characters (SK.cast.<name>), seeded as the film's own
             engine\\*.js            the engine it was drawn with, frozen
             sample\\                the sample's pictures (its logo, its people): the preview and
                                     the health check only, never seeded
@@ -225,7 +231,41 @@ def seed(film, t):
             m.setdefault("images", {}).setdefault(
                 os.path.splitext(name)[0], "template/%s/%s" % (sub, name)
             )
+    if t.get("narration"):  # its script, rewritten by Claude and recorded as the film's own
+        sample_vo = _read(os.path.join(d, "vo.sample.json"), {})
+        vo = _read(film.path("vo.json"), {}) or {}
+        picked = (film.record().get("narrator") or {}).get("voice")
+        for k, v in sample_vo.items():
+            if k != "voice" or not picked:  # a voice the person picked wins over the sample's
+                vo[k] = v
+        _write_json(film.path("vo.json"), vo)
+        for name in ("vo.sample.json", "timeline.sample.json"):
+            if os.path.exists(os.path.join(d, name)):
+                shutil.copyfile(os.path.join(d, name), os.path.join(ref, name))
+    if t.get("sound") == "files":  # its music and cues as files, kept unless asked
+        for name in ("score.json", "sfx.json"):
+            shutil.copyfile(os.path.join(d, name), film.path(name))
+    if os.path.isdir(os.path.join(d, "cast")):  # its characters, the film's own to redraw
+        os.makedirs(film.path("cast"), exist_ok=True)
+        for name in sorted(os.listdir(os.path.join(d, "cast"))):
+            shutil.copyfile(os.path.join(d, "cast", name), film.path("cast", name))
     _write_json(film.manifest, m)
+
+
+def sample_timeline(film):
+    """The timeline a template film's sfx.json was last placed on: the film's own recording, or
+    before there is one the template sample's (template/timeline.sample.json); None for a film
+    whose cues are not files of its template's."""
+    t = film.record().get("template") or {}
+    if t.get("sound") != "files":
+        return None
+    for p in (
+        film.path("audio", "vo", "timeline.json"),
+        film.path("template", "timeline.sample.json"),
+    ):
+        if os.path.exists(p):
+            return p
+    return None
 
 
 def fdir(frame):
@@ -285,24 +325,52 @@ def ask(film):
 
     n = film.length
     asked = (rec.get("prompt") or "").strip()
+    narrated = bool(t.get("narration"))
+    if narrated:
+        voice = (
+            "Narration: vo.json holds the template's own script -- its lines, the way they are "
+            "read (style) and the voice. Rewrite every line for what they ask, keeping the "
+            "number of lines and about the length of each (the scenes hang off them: film.js "
+            "places its cues on words with SK.w(line, 'word'), so where a cue's word is gone, "
+            "point it at the new one), then record it with the voice tool -- a film from this "
+            "template is not finished until its narration is recorded."
+        )
+    else:
+        voice = "No narration: the music carries it -- there is no vo.json and no voice tool."
+    if t.get("sound") == "files":
+        sound = (
+            "The sound is the template's: score.json (the music, already the film's length) and "
+            "sfx.json (its cues, in seconds on the template's narration, "
+            "template/timeline.sample.json). Each time the voice tool records, the studio moves "
+            "every cue with its line, so keep them unless they ask for other sounds or a cue "
+            "no longer fits what is drawn."
+        )
+    else:
+        sound = (
+            "The sound is written by the film itself (SK.film({sound}): score() and sfx() work "
+            "it out from the clock and the content); the studio writes score.json and sfx.json "
+            "from it before the mix, so never write those two by hand."
+        )
     parts = [
         'Make the film: the template "%s", remade for what this person asks.'
         % t.get("title", tr.get("id")),
-        "Length: %d seconds (fixed). No narration: the music carries it -- there is no vo.json "
-        "and no voice tool. Your working time: about %d minutes (waiting for the machine is not "
-        "counted)." % (n, limits(n)["claude_s"] // 60),
+        "Length: %d seconds (fixed). %s Your working time: about %d minutes (waiting for the "
+        "machine is not counted)." % (n, voice, limits(n)["claude_s"] // 60),
         "What they asked:\n<<<\n%s\n>>>"
         % (asked or "(nothing typed: what they want is in what they attached)"),
         "The template is a finished film -- an example, not a form. Its code is already your "
-        "film.js, and its words, colours, logo and people are in content.json "
+        "film.js%s, and its words, colours, logo and people are in content.json "
         "(SK.DATA.content) -- for now still the template's own sample, which template/sheet.png "
-        "shows. Both are yours to edit.",
+        "shows. All of it is yours to edit."
+        % (
+            " (its characters in cast/, to redraw as the person's own when they differ)"
+            if os.path.isdir(film.path("cast")) and os.listdir(film.path("cast"))
+            else ""
+        ),
         "Do what they ask. Whatever they ask to change, change: the content, and the film itself "
         "where they want something different. Whatever they do not mention, keep as the template "
         "has it: its scenes and their order, the camera, the motion and the clock, the type, the "
-        "colour roles and the sound. The sound is written by the film itself (SK.film({sound}): "
-        "score() and sfx() work it out from the clock and the content); the studio writes "
-        "score.json and sfx.json from it before the mix, so never write those two by hand.",
+        "colour roles and the sound. " + sound,
         "Find what the film needs yourself. Their words and what they attached come first. For "
         "the rest -- whatever the film shows that they did not give: names, dates, places, people "
         "and their photos, a logo and colours -- look it up when it exists (WebSearch, WebFetch, "
@@ -314,8 +382,9 @@ def ask(film):
         "out of their photos and makes the logo readable on dark and light grounds, and answers "
         "with the keys to put in content.json.",
         "Replace the whole sample: none of the template's own event, people, places, addresses, "
-        "marks or pictures (template/content.sample.json) may stay unless they asked for them. "
-        "The studio checks, and stops the film while any are left.",
+        "marks or pictures (template/content.sample.json%s) may stay unless they asked for them. "
+        "The studio checks, and stops the film while any are left."
+        % (", and in its narration, template/vo.sample.json" if narrated else ""),
         "Its words are in the language they ask for -- when they do not say, the one they wrote "
         "in -- names as they are, and every face the film draws them in must have their letters "
         "(a face without them falls back to the browser's own).",
@@ -372,6 +441,7 @@ def leftovers(film):
     }
     # an image key or a colour is not a word anyone reads
     words = {w for w in words if not re.fullmatch(r"#[0-9A-Fa-f]{6}|sp-[a-z0-9-]+|[a-z-]+", w)}
+    words -= set((t.get("manifest") or {}).get("images") or {})  # its pictures: checked below
     mine = _read(film.path("content.json"), {})
     text = ""
     for name in ("film.js",):
@@ -385,9 +455,34 @@ def leftovers(film):
     # until a route of the person's own replaces it
     for key in t.get("data") or ():
         mine += "\n" + json.dumps(_read(film.path("%s.json" % key), {}), ensure_ascii=False)
-    low = (text + "\n" + mine).lower()
+    # a narrated template's film says its sample's words too: its lines are searched like the
+    # code, as written (vo.json) and as recorded (a line changed and not recorded again still says
+    # the sample's words)
+    said = ""
+    if t.get("narration"):
+        for p in (film.path("vo.json"), film.path("audio", "vo", "timeline.json")):
+            said += "\n" + "\n".join(
+                str(L.get("text") or "")
+                for L in (_read(p, {}) or {}).get("lines") or []
+                if isinstance(L, dict)
+            )
+    everything = text + "\n" + mine + "\n" + said
+    low = everything.lower()
     # a word the person asked for is theirs, even when the sample has it (the same city)
     left = sorted(w for w in words if w.lower() in low and w.lower() not in asked)
+    # a word too short for the search above (a child's name: "Leo"): the content paths the spec
+    # watches, found as a whole word with its capital, so "leo" in a variable is no leftover
+    for path in t.get("watch") or ():
+        v = sample
+        for k in path.split("."):
+            v = v.get(k) if isinstance(v, dict) else None
+        v = v.strip() if isinstance(v, str) else ""
+        word = r"(?<!\w)%s(?!\w)"
+        if len(v) < 2 or v in left or re.search(word % re.escape(v.lower()), asked):
+            continue
+        if re.search(word % re.escape(v), everything):
+            left.append(v)
+    left.sort()
     # the sample's pictures (its logo, its people) are seeded for a first draw, never to stay: a key
     # still pointing at template/sample/ -- the same key made the film's own ("logo", by
     # template_pictures) is the person's picture
@@ -467,6 +562,23 @@ def plan(folder, spec):
     for key in sorted(assets):
         rel = images[key]
         out.append((os.path.join(folder, rel), "assets/%s%s" % (key, os.path.splitext(rel)[1])))
+    # a narrated template: its script and the sample's word times (make() keeps only the
+    # narration of each, never a voice that is the author's own or where its takes were)
+    if spec.get("narration"):
+        if not m.get("vo"):
+            raise TemplateError("a narrated template's film has no vo.json in its manifest")
+        out.append((os.path.join(folder, m["vo"]), "vo.sample.json"))
+        tl = (m.get("audio") or {}).get("vo_timeline") or "audio/vo/timeline.json"
+        out.append((os.path.join(folder, tl), "timeline.sample.json"))
+    if spec.get("sound") == "files":  # its music and cues as the film wrote them
+        audio = m.get("audio") or {}
+        for key in ("score", "sfx"):
+            out.append((os.path.join(folder, audio.get(key) or key + ".json"), key + ".json"))
+    cast = os.path.join(folder, m.get("cast") or "cast")
+    if m.get("cast") and os.path.isdir(cast):  # its characters
+        for n in sorted(os.listdir(cast)):
+            if n.endswith(".js"):
+                out.append((os.path.join(cast, n), "cast/" + n))
     for src, _ in out:
         if not os.path.isfile(src):
             raise TemplateError("missing: %s" % src)
@@ -497,8 +609,30 @@ def make(folder, tid, spec, owner="kitcut"):
         if os.path.isdir(os.path.join(d, sub)):
             for n in sorted(os.listdir(os.path.join(d, sub))):
                 sample_images[os.path.splitext(n)[0]] = "%s/%s" % (sub, n)
-    keep_keys = ("fonts", "player", "audio", "render", "poster_t", "fps", "modules")
+    narrated = bool(spec.get("narration"))
+    if narrated:  # the script and the word times only: no voice of the author's, no take files
+        vo = _read(os.path.join(d, "vo.sample.json"), {})
+        keep = {"style", "language", "lines", "say"} | (
+            {"voice"} if vo.get("tts") == "gemini" else set()
+        )
+        _write_json(os.path.join(d, "vo.sample.json"), {k: vo[k] for k in vo if k in keep})
+        tl = _read(os.path.join(d, "timeline.sample.json"), {})
+        _write_json(
+            os.path.join(d, "timeline.sample.json"),
+            {
+                "duration": tl.get("duration"),
+                "lines": [
+                    {k: L.get(k) for k in ("i", "text", "start", "end", "words")}
+                    for L in tl.get("lines") or []
+                ],
+            },
+        )
+    keep_keys = ("fonts", "player", "audio", "render", "poster_t", "fps", "modules", "captions")
     man = {k: m[k] for k in keep_keys if k in m}
+    if narrated:  # the preview draws on the sample's word times (SK.w)
+        man["audio"] = dict(man.get("audio") or {}, vo_timeline="timeline.sample.json")
+    if os.path.isdir(os.path.join(d, "cast")):
+        man["cast"] = "cast"
     man.update(
         title=spec.get("title") or m.get("title"),
         slug="template",
@@ -523,7 +657,10 @@ def make(folder, tid, spec, owner="kitcut"):
         "frames": frames,
         "look": spec.get("look", "drawn"),
         "caps": spec.get("caps") or [],
-        "narration": False,
+        "narration": narrated,
+        # "files": its score.json and sfx.json as the film wrote them, moved with the narration
+        # when a film records its own; "code": written by film.js (SK.film({sound}))
+        "sound": "files" if spec.get("sound") == "files" else "code",
         "moments": spec.get("moments") or [],
         "limits": spec.get("limits") or {"images": 32},
         "portraits": spec.get("portraits") or {},
@@ -531,6 +668,7 @@ def make(folder, tid, spec, owner="kitcut"):
         "example": spec.get("example", ""),
         "generic": spec.get("generic") or [],
         "identity": spec.get("identity") or [],
+        "watch": spec.get("watch") or [],
         "brief": spec.get("brief", ""),
         "assets": sorted(spec.get("assets") or []),
         "data": extra_data(m),

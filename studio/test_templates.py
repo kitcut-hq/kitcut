@@ -179,6 +179,95 @@ def route_fixture():
     return d
 
 
+PARTY_JS = """// For: a test -- a narrated party invite, its words in content.json
+const D = SK.DATA.content;
+SK.setStyle('clean', { grain: 0, vignette: 0 });
+SK.film({
+  duration: 5, camera: SK.camera([[0, [SK.W / 2, SK.H / 2, 1]]]), handheld: false, speedLines: false,
+  fadeOut: 0,
+  draw(t) {
+    const c = SK.ctx(); c.fillStyle = '#204060'; c.fillRect(0, 0, SK.W, SK.H);
+    c.fillStyle = '#ffffff'; c.font = '90px sans-serif';
+    if (t > SK.w(1, 'come', 1.2)) c.fillText(D.child.name, 100, 300);
+    SK.cast.kid.draw(c, 900, 600);
+  },
+});
+"""
+
+
+def party_fixture():
+    """A finished narrated film: its party in content.json, its script and recorded word times,
+    a character in cast/, its music and cues as files, spoken in the author's own voice."""
+    d = os.path.join(HOME, "src-party")
+    os.makedirs(os.path.join(d, "images"))
+    os.makedirs(os.path.join(d, "cast"))
+    os.makedirs(os.path.join(d, "audio", "vo"))
+    files = {
+        "film.js": PARTY_JS,
+        "cast/kid.js": "SK.cast.kid = { about: 'a doodle child', draw(c, x, y) {"
+        " c.fillStyle = '#f0c040'; c.fillRect(x, y, 80, 160); } };",
+        "content.json": {
+            "_about": "a test party",
+            "child": {"name": "Ted", "age": 4, "photo": "kid-photo"},
+            "venue": {"name": "Bouncy Castle Club"},
+        },
+        "vo.json": {
+            "tts": "elevenlabs",
+            "model": "eleven_multilingual_v2",
+            "voice": "an-authors-own-voice",
+            "jobs": 3,
+            "style": "a bubbly party host",
+            "language": "en",
+            "lines": [{"text": "Hey, friends!"}, {"text": "It's Ted! Come to the party!"}],
+        },
+        "audio/vo/timeline.json": {
+            "duration": 5.0,
+            "lines": [
+                {
+                    "i": 0,
+                    "text": "Hey, friends!",
+                    "file": "audio/vo/L00.wav",
+                    "start": 0.2,
+                    "end": 0.8,
+                    "words": [{"text": "Hey,", "s": 0.2, "e": 0.5}],
+                },
+                {
+                    "i": 1,
+                    "text": "It's Ted! Come to the party!",
+                    "file": "audio/vo/L01.wav",
+                    "start": 1.0,
+                    "end": 2.0,
+                    "words": [],
+                },
+            ],
+        },
+        "score.json": {"bpm": 120, "events": []},
+        "sfx.json": [{"t": 1.0, "fx": "pop", "db": -20}],
+    }
+    for rel, body in files.items():
+        with open(os.path.join(d, *rel.split("/")), "w", encoding="utf-8") as f:
+            f.write(body if isinstance(body, str) else json.dumps(body))
+    with open(os.path.join(d, "images", "kid-photo.png"), "wb") as f:
+        f.write(png(300, 300))
+    with open(os.path.join(d, "sketch.json"), "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "title": "Ted's party",
+                "duration": 5.0,
+                "fps": 30,
+                "film": "film.js",
+                "cast": "cast",
+                "vo": "vo.json",
+                "captions": {"max_words": 8},
+                "data": {"content": "content.json"},
+                "images": {"kid-photo": "images/kid-photo.png"},
+                "audio": {"score": "score.json", "sfx": "sfx.json", "mix": {"music_db": 0}},
+            },
+            f,
+        )
+    return d
+
+
 async def main():
     agent.STORE = store.MemoryStore()
     server.start = lambda f, finish_only=False: None  # the film itself is test_server.py's job
@@ -615,6 +704,152 @@ async def main():
         except ToolError:
             refused = True
         check(refused, "a QR code of nothing is refused")
+
+        # ---- a narrated template: its script, its word times, its cast and its sound as files
+        src3 = party_fixture()
+        spec3 = dict(
+            SPEC,
+            title="Test party",
+            caps=[],
+            frames=["16:9"],
+            narration=True,
+            sound="files",
+            watch=["child.name"],
+            identity=["venue.name"],
+            generic=[],
+        )
+        got3 = sorted(rel for _, rel in templates.plan(src3, spec3))
+        check(
+            {"vo.sample.json", "timeline.sample.json", "score.json", "sfx.json", "cast/kid.js"}
+            <= set(got3),
+            "a narrated version takes the script, the word times, the sound files and the cast",
+            got3,
+        )
+        templates.make(src3, "t-test-party", spec3)
+        templates.set_status("t-test-party", 1, "live")
+        t5 = templates.load("t-test-party")
+        with open(os.path.join(t5["_dir"], "vo.sample.json"), encoding="utf-8") as fh:
+            vo5 = json.load(fh)
+        with open(os.path.join(t5["_dir"], "timeline.sample.json"), encoding="utf-8") as fh:
+            tl5 = json.load(fh)
+        check(
+            t5["narration"] is True
+            and t5["sound"] == "files"
+            and "voice" not in vo5
+            and "tts" not in vo5
+            and vo5["lines"][1]["text"] == "It's Ted! Come to the party!"
+            and "file" not in tl5["lines"][0]
+            and t5["manifest"]["audio"]["vo_timeline"] == "timeline.sample.json"
+            and t5["manifest"]["cast"] == "cast",
+            "the version keeps the narration, never the author's own voice or its take files",
+            (vo5, tl5["lines"][0], t5["manifest"].get("audio")),
+        )
+        check(
+            templates.public(t5)["narration"] is True and "brief" not in templates.public(t5),
+            "anyone sees it is narrated",
+        )
+        r = await c.post(
+            "/api/films",
+            json={"template": {"id": "t-test-party"}, "prompt": "Mia is turning 6! Pool party"},
+            headers=local,
+        )
+        f5 = Film.open((await r.json()).get("id"))
+        with open(f5.manifest, encoding="utf-8") as fh:
+            m5 = json.load(fh)
+        with open(f5.path("vo.json"), encoding="utf-8") as fh:
+            v5 = json.load(fh)
+        check(
+            f5.record().get("narration") is not False
+            and f5.record()["template"]["sound"] == "files"
+            and m5.get("vo") == "vo.json"
+            and "vo_timeline" not in m5["audio"]
+            and m5.get("captions") == {"max_words": 8}
+            and v5["lines"][0]["text"] == "Hey, friends!"
+            and v5["tts"] == films.VO_PINNED["tts"]
+            and os.path.exists(f5.path("cast", "kid.js"))
+            and os.path.exists(f5.path("sfx.json"))
+            and os.path.exists(f5.path("template", "timeline.sample.json"))
+            and "vo.json" in f5.editable(),
+            "a film from it is narrated: the sample's script pinned to the studio's voice, its "
+            "cast, its sound, captions, and the sample's word times to move its cues from",
+            (f5.record().get("narration"), m5.get("vo"), m5.get("audio"), v5),
+        )
+        first = templates.ask(f5)
+        check(
+            "record it with the voice tool" in first
+            and "No narration" not in first
+            and "never write those two by hand" not in first,
+            "its first message asks for the lines rewritten and recorded, the sound kept",
+            first[:400],
+        )
+        check(
+            templates.sample_timeline(f5) == f5.path("template", "timeline.sample.json"),
+            "before it records, its cues sit on the sample's word times",
+        )
+        left5 = templates.leftovers(f5)
+        check(
+            "Ted" in left5 and "Bouncy Castle Club" in left5,
+            "the sample's short name and venue are caught in its narration",
+            left5,
+        )
+        content5 = {"child": {"name": "Mia", "photo": "upload1"}, "venue": {"name": "our house"}}
+        with open(f5.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump(content5, fh)
+        v5["lines"] = [{"text": "Hey, friends!"}, {"text": "It's Mia! Come to the party!"}]
+        with open(f5.path("vo.json"), "w", encoding="utf-8") as fh:
+            json.dump(v5, fh)
+        os.makedirs(f5.path("audio", "vo"), exist_ok=True)
+        with open(f5.path("audio", "vo", "timeline.json"), "w", encoding="utf-8") as fh:
+            json.dump({"lines": [dict(L, text="It's Ted!") for L in tl5["lines"]]}, fh)
+        check(
+            templates.leftovers(f5) == ["Ted"],
+            "a line rewritten but not recorded again still says the sample's name",
+            templates.leftovers(f5),
+        )
+        tl_new = {
+            "duration": 5.0,
+            "lines": [
+                dict(tl5["lines"][0], start=0.5, end=1.5),
+                {
+                    "i": 1,
+                    "text": "It's Mia! Come to the party!",
+                    "start": 2.5,
+                    "end": 4.0,
+                    "words": [],
+                },
+            ],
+        }
+        with open(f5.path("audio", "vo", "timeline.json"), "w", encoding="utf-8") as fh:
+            json.dump(tl_new, fh)
+        check(
+            templates.leftovers(f5) == [],
+            "the person's own name, said and recorded: nothing left over",
+            templates.leftovers(f5),
+        )
+        import subprocess  # noqa: PLC0415
+
+        before = f5.path("template", "timeline.sample.json")
+        r5 = subprocess.run(
+            [
+                sys.executable,
+                os.path.join(films.KIT, "scripts", "vo-retime.py"),
+                "--manifest",
+                f5.manifest,
+                "--before",
+                before,
+                "--by-line",
+                "--write",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        with open(f5.path("sfx.json"), encoding="utf-8") as fh:
+            cues = json.load(fh)
+        check(
+            r5.returncode == 0 and abs(cues[0]["t"] - 2.5) < 0.01,
+            "its cue on line 1 moves with line 1, rewritten and said later",
+            (r5.stdout[-300:], r5.stderr[-300:], cues),
+        )
 
     # ---- the health check: a live version drawn again by this release
     t2 = templates.load("t-test-promo", 2)

@@ -408,8 +408,10 @@ class Tools:
             )
         if retake_line is not None:
             args += ["--only", str(int(retake_line)), "--retake"]
+        moved = ""
         async with self.lock:
             self.gate()
+            before = await asyncio.to_thread(self._timeline_before)
             try:
                 await self._script("voice", "sketch-vo.py", args, pools=[("cpu", 1)])
             except ToolError as e:
@@ -425,6 +427,11 @@ class Tools:
             # only recordings that worked count: a TTS that gave no audio cost nothing (and the
             # narration's budget above caps what a film may spend on its voice either way)
             self.voice_runs += 1
+            if before:  # a template's cues, placed on the narration before: moved with its lines
+                tail = await self._script(
+                    "sound", "vo-retime.py", ["--before", before, "--by-line", "--write"]
+                )
+                moved = next((x for x in reversed(tail) if " cues move" in x), "")
         if not self.sheet_v and self.wants_preview():
             self._bg = asyncio.ensure_future(self._narration_preview())
         text = timeline_text(self.film, retake_line)
@@ -433,6 +440,8 @@ class Tools:
                 "\n\n(A line's words and their times are in audio/vo/timeline.json: Read it for "
                 "the lines you place cues on -- SK.w(line, 'word') finds them by itself.)"
             )
+        if moved:
+            text += "\n\nsfx.json moved with the narration: %s." % moved.split(",")[0]
         return (
             "Recorded. The timeline (also in audio/vo/timeline.json), times on the film clock:\n"
             + text
@@ -443,6 +452,19 @@ class Tools:
                 else ""
             )
         )
+
+    def _timeline_before(self):
+        """A copy of the timeline a template film's sfx.json is placed on, taken before the voice
+        records over it (templates.sample_timeline); None for any other film."""
+        import templates  # noqa: PLC0415
+
+        src = templates.sample_timeline(self.film)
+        if not src:
+            return None
+        dst = self.film.path("temp", "timeline.before.json")
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copyfile(src, dst)
+        return dst
 
     async def paint(self, retake=None):
         if not paint_kinds(self.film.caps):
@@ -804,7 +826,8 @@ class Tools:
         """A template's film writes its own score and cues (SK.film({sound})): worked out again
         from its code and content whenever either changed since, before the mix hears them."""
         f = self.film
-        if not f.record().get("template"):
+        t = f.record().get("template")
+        if not t or t.get("sound") == "files":  # a template whose cues are files keeps them
             return
         if _newer(f.path("sfx.json"), f.path("film.js"), f.path("content.json")) and _newer(
             f.path("score.json"), f.path("film.js"), f.path("content.json")

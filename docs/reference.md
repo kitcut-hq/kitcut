@@ -4312,6 +4312,20 @@ python scripts/sketch-render.py --manifest projects/<id>/sketch.json --sound-dat
 python scripts/sketch-audio.py  --manifest projects/<id>/sketch.json
 ```
 
+**A narrated template: the narration, its word times and its sound files go with it.** The birthday
+invitations (`config/templates/birthday-party-invitation*`, `pool-party-invitation*`, 2026-10-02) were
+parents' kitcut.ai films with a narrator, made template-ready the same way -- every fact of the party
+(the child's name and age, the photo, the place, the date and time) moved into `content.json`, proven
+pixel-identical to the original at 19-20 moments and checked with a long made-up name and a two-digit
+age -- but their sound stays files: `score.json` and `sfx.json` as Claude wrote them, the cues in
+seconds on the sample's narration. A film from one rewrites the lines and records its own;
+`vo-retime.py --by-line` then moves every cue with its line (the lines keep their place, not their
+words). Cues that name the party's words (the name, the age said as a word, the weekday) find them
+from the content (`said()` / `SAY` in film.js) and fall back to the sample's seconds. Spec keys:
+`"narration": true`, `"sound": "files"`, `"watch": ["child.name"]`. The sample is a real child's
+party, so its content and photo stay in the local project; only the code, cast and spec are
+committed. `studio/README.md` "Templates" has the studio side.
+
 **A copy to post: `sketch-render.py --web`.** The browser-encoded master of a 1080x1080 60 fps
 film runs ~31 Mbps (26 s: 110 MB). `--web` writes `<slug>_web.mp4` beside it through `_encode`,
 capped at 8 Mbps (`WEB`; a manifest `web` block overrides): 25.6 MB, VMAF 98.3 against the master.

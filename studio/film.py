@@ -796,12 +796,17 @@ class Film:
             shutil.copyfile(os.path.join(src, name), film.path("engine", name))
         with open(os.path.join(HERE, "template", "sketch.json"), encoding="utf-8") as f:
             m = json.load(f)
-        if template:  # its own look: fonts, player, the mix; no narration, no captions
-            for k in ("fonts", "player", "audio", "render"):
+        if template:  # its own look: fonts, player, the mix; narration and captions if it has one
+            for k in ("fonts", "player", "audio", "render") + (
+                ("captions",) if template.get("narration") else ()
+            ):
                 if k in template.get("manifest", {}):
                     m[k] = template["manifest"][k]
-            m.pop("vo", None)
-            m.pop("captions", None)
+            if template.get("narration"):  # the film records its own: not the sample's word times
+                m["audio"] = {k: v for k, v in m["audio"].items() if k != "vo_timeline"}
+            else:
+                m.pop("vo", None)
+                m.pop("captions", None)
             m["data"] = {"content": "content.json"}
             m["frame"] = FRAMES.get(frame) or FRAMES[template["frames"][0]]
         words = re.sub(r"\s+", " ", prompt).strip()
@@ -870,8 +875,8 @@ class Film:
         }
         if (narrator or {}).get("source") == "elevenlabs":
             vo = {**_own_pins(narrator), "language": "en"}
-        if not template:  # a template's film has no narration: the music carries it
-            _write_json(film.path("vo.json"), vo | {"lines": []})
+        if not template or template.get("narration"):  # else the music carries it
+            _write_json(film.path("vo.json"), vo | {"lines": []})  # a template's: seed() fills it
         if (narrator or {}).get("grant"):  # the film's pass to the relay: for the voice step only
             p = film.path("temp", "voice.json")
             with open(
@@ -919,16 +924,18 @@ class Film:
                 "release": RELEASE,
                 "state": "queued",
                 "created": datetime.now().isoformat(timespec="seconds"),
-                # a remake of a template (templates.py): which one, in which frame; no narration
+                # a remake of a template (templates.py): which one, in which frame; narrated or
+                # music only, and whether its sound is files (moved with the narration) or code
                 **(
                     {
                         "template": {
                             "id": template["id"],
                             "version": template["version"],
                             "title": template.get("title"),
+                            "sound": template.get("sound") or "code",
                         },
                         "frame": frame if frame in FRAMES else template["frames"][0],
-                        "narration": False,
+                        **({} if template.get("narration") else {"narration": False}),
                     }
                     if template
                     else {}
