@@ -845,6 +845,7 @@ which cannot encode the glyphs at all.
 | `docs/product-strategy.md` | how this repo becomes a product: the audience, the licensed-plugin model, install/update/routing mechanics, the learning flywheel. Read it before designing anything customer-facing |
 | `docs/market-shorts-2026.md` | what the AI shorts/clipping market actually looks like, researched 2026-09-01 with sources: who died, who is healthy, the GTM playbooks and what each produces, who pays, and where local-first does and does not matter. Findings only, no recommendation — read it before re-arguing the shorts question from priors |
 | `docs/davinci-resolve.md` | whether we can interoperate with DaVinci Resolve, researched 2026-09-08: its project files (`.drp`, the disk database) are closed and not ours to write; OTIO/EDL/FCP7 XML + SRT are the door, and work in the free edition; external scripting and the new 21.1 MCP server are Studio-only. Includes a measured export of a real keep-list and what each format drops |
+| `docs/market-templates-2026.md` | which niches kitcut.ai templates should cover, researched 2026-10-02: Keyword Planner volumes and bids per niche, HeyGen's market and where we overlap (and where it is building our architecture), what 13 template tools cover, who already pays for ready-made video, and a 154-template catalogue in three portfolios (habit, revenue, reach). Read it before choosing the next template |
 
 ## House rules
 
