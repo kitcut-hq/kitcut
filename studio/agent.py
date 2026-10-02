@@ -97,8 +97,10 @@ from claude_agent_sdk import (  # noqa: E402
 )
 
 ROOT = KIT
-# Opus only: the drawing is the product, and a smaller model's films are not worth the saving
-MODEL = "claude-opus-5-5"
+# Opus only: the drawing is the product, and a smaller model's films are not worth the saving.
+# STUDIO_MODEL exists for one caller, bakeoff.py --model, which measures that claim; the served
+# studio never sets it
+MODEL = os.environ.get("STUDIO_MODEL") or "claude-opus-5-5"
 # how hard it thinks: adaptive thinking at this effort (the CLI's --effort). Pinned here, so a CLI
 # update that moves the default cannot change the films unnoticed
 EFFORT = "xhigh"
@@ -754,10 +756,11 @@ def _result_text(block):
 
 # ------------------------------------------------------------------ what it costs
 # USD per million tokens, from the price table inside Claude Code 2.1.281 (the CLI this SDK
-# bundles). Sonnet is here only to price a run already on record; the studio runs MODEL.
+# bundles). Sonnet is here to price a run on record or a bake-off arm; the studio runs MODEL.
 PRICES = {
     "claude-opus-5-5": {"in": 4, "out": 20, "w5m": 5, "w1h": 8, "read": 0.2},
     "claude-sonnet-5": {"in": 2, "out": 10, "w5m": 2.5, "w1h": 4, "read": 0.2},
+    "claude-sonnet-5-5": {"in": 2, "out": 10, "w5m": 2.5, "w1h": 4, "read": 0.2},
 }
 # every run's record lives in kitcut's MongoDB (store.py); the outbox holds what could not be sent
 STORE = store.MongoStore(uri=procs.secret("MONGODB_URI"), outbox=os.path.join(HOME, "outbox.jsonl"))

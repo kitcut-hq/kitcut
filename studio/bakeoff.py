@@ -10,6 +10,9 @@
                                                                       one look (two looks, one tree)
     python studio/bakeoff.py --set audience --grade                   a blind read of each film
     python studio/bakeoff.py --set audience --compare A B             the side-by-side page
+    python studio/bakeoff.py --set models --arm sonnet --tree <checkout> --model claude-sonnet-5-5
+                                                                      the arm's films by another
+                                                                      model (one tree, two models)
 
 A change to how films are made -- the brief (prompt.md, looks/), a limit, a tool -- is a proposal,
 and this measures it before it ships. A set (studio/bakeoff/<set>.json) is a few prompts, each with
@@ -195,6 +198,8 @@ def worker(spec_path):
     )
     if spec.get("templates"):  # the templates the films are made from (templates.root)
         os.environ["STUDIO_TEMPLATES"] = spec["templates"]
+    if spec.get("model"):  # another model makes the arm's films (agent.MODEL reads it)
+        os.environ["STUDIO_MODEL"] = spec["model"]
     sys.path.insert(0, os.path.join(tree, "studio"))
     import asyncio
 
@@ -206,6 +211,10 @@ def worker(spec_path):
     here = os.path.dirname(os.path.abspath(agent.__file__))
     if os.path.normcase(here) != os.path.normcase(os.path.join(tree, "studio")):
         sys.exit("imported the studio from %s, not from %s" % (here, tree))
+    if spec.get("model") and agent.MODEL != spec["model"]:
+        sys.exit(
+            "the tree's studio runs %s, not %s (no STUDIO_MODEL)" % (agent.MODEL, spec["model"])
+        )
     agent.recent_films = (
         lambda film, n=8: []
     )  # no note: the films of a set must not steer each other
@@ -268,6 +277,8 @@ def worker(spec_path):
             "dirty": spec["dirty"],
             "film": film.dir,
             "look": spec["look"],
+            "model": agent.MODEL,
+            "effort": agent.EFFORT,
             "ok": bool(rec.get("ok")),
             "error": rec.get("error"),
             "minutes": round((time.time() - t0) / 60, 1),
@@ -371,6 +382,7 @@ def run_arm(args, s, root, repo):
             "seconds": p.get("seconds") or s["seconds"],
             "look": args.look or p.get("look", "drawn"),
             "auth": args.auth,
+            **({"model": args.model} if args.model else {}),
             "commit": commit,
             "dirty": dirty,
             "mode": args.mode,
@@ -763,7 +775,7 @@ def compare(args, s, root):
             "<td><img src='%s' loading=lazy>%s<div class=facts>For: %s<br>%s %s &middot; %s, "
             "&ldquo;%s&rdquo; &middot; %s &middot; %s bpm<br>faces %d &middot; kid/person %d "
             "&middot; pop/boing %d of %d cues%s<br>Claude $%.2f &middot; %s min &middot; %s turns"
-            "</div></td>"
+            "%s</div></td>"
             % (
                 img,
                 grade_line,
@@ -795,6 +807,9 @@ def compare(args, s, root):
                 r.get("claude_cost_usd") or 0,
                 r.get("minutes"),
                 r.get("turns"),
+                " &middot; %s %s" % (html.escape(r["model"]), html.escape(r.get("effort") or ""))
+                if r.get("model")
+                else "",
             )
         )
 
@@ -887,6 +902,11 @@ def main():
         help="for a set with template forms: remake the template, or the same content as a prompt",
     )
     ap.add_argument("--templates", help="the templates folder the films are made from")
+    ap.add_argument(
+        "--model",
+        help="the model that makes the arm's films (else the tree's agent.MODEL); the grader "
+        "stays on this checkout's",
+    )
     args = ap.parse_args()
     s = load_set(args.set)
     repo = main_checkout()
