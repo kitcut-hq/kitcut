@@ -78,7 +78,20 @@ film that a person remakes with a free prompt ([[kitcut-templates]] in the memor
    - The fastest risers are "ai birthday invitation" (3.3×) and "ai real estate video" (1.9×).
    - "Video templates" (40,500) and "AI video templates" (880) both grow, and name what our
      gallery is.
-8. **The calendar matters now.** On 2026-10-02 the next peaks are:
+8. **The early play on "ai" searches is one-to-many** (section 1b).
+   - Each film is made for every recipient:
+     - each guest at a wedding (India first; "wedding invitation video" peaks with the Hindu
+       wedding season);
+     - each runner in a race;
+     - each child for Santa;
+     - each friend at a birthday party.
+   - So one search click becomes dozens to thousands of films, and each recipient sees "make
+     yours".
+   - The open results pages are "ai wedding invitation video", "ai birthday invitation" (3.3×),
+     "ai story video generator", "ai santa video" (8,100 in December) and caricature wedding
+     invitations.
+   - Every per-guest rival found is photoreal (Vox Invite at $1.49–2.49 a guest, HeyGen batch).
+9. **The calendar matters now.** On 2026-10-02 the next peaks are:
    - US benefits open enrollment (October–November);
    - Halloween;
    - Black Friday;
@@ -250,6 +263,171 @@ seasonal phrases (weddings, Christmas, training), trend mostly measures the seas
 - **Creator pages:** lead with "AI": "AI story video generator", "AI video generator for YouTube".
 - **Business pages:** the plain job phrase. These pages serve ads (high bids) more than organic
   search; use the "ai … generator" form for paid search.
+
+## 1b. Growing "ai" searches, and one search that makes many films (2026-10-02)
+
+**What this section covers:**
+- More planner queries, with each phrase's 12 months (Sep 2025–Aug 2026).
+- Rankings read through a web-search index (Google itself blocks scraping), so read them as
+  directional.
+- Per-recipient markets from vendors' own pages.
+
+### What is growing, and whether the results page is still open
+
+| Search | / month | 12-month change | Who ranks | Open? |
+|---|---:|---|---|---|
+| ai video generation | 49,500 | 27k → 110k | giants | no |
+| ai video generator for youtube | 4,400 | **880 → 8,100** | vidIQ, HeyGen, listicles | no |
+| ai invitation maker | 2,900 | 1,900 → 4,400 | (not checked) | ? |
+| ai story video generator | 2,900 | flat | thin new tools (morphic, flexclip) | **yes** |
+| ai cartoon video generator | 9,900 | 8.1k → 12.1k ("…free" 4.4k → 9.9k) | — | ? |
+| ai wedding invitation video | 1,600 | season peaks 2.4–2.9k (Nov, Jan, Apr) | vidu/higgsfield blogs, krikey, CapCut, HeyGen | **yes** |
+| ai wedding invitation | 1,300 | spring peak 2.9k | — | ? |
+| ai invitation card | 1,000 | 590 → 1,300 | — | ? |
+| ai invitation | 720 | 480 → 1,000 | — | ? |
+| ai birthday invitation | 590 | **320 → 1,300 (3.3×)** | krikey, jotform, venngage, directories | **yes** |
+| ai party invitation | 320 | 210 → 590 (2.8×) | — | ? |
+| ai happy birthday video | 320 | 210 → 590 (2.8×) | — | ? |
+| ai birthday song | 140 | 90 → 260 (2.9×) | — | ? |
+| ai real estate video | 320 | 140 → 480 (1.9×) | lumalabs, invideo, CapCut; HeyGen owns "listing" | no |
+| ai santa video | 140 avg | **8,100 in December** | HeyGen Santa page, thin sites, Fiverr | **yes, December only** |
+| ai christmas card | 1,000 avg | **8,100 in December** | — | ? |
+| personalized santa video | 2,900 avg | **27,100 in December** | Portable North Pole and small sellers | open to a drawn look |
+| video message from santa | 1,600 avg | **14,800 in December** | Portable North Pole | as above |
+| caricature wedding invitation video | (low) | — | Fiverr ×3, freelancer.in, filmora | **yes: a service market with no AI tool** |
+| ai documentary maker | 170 | flat | mootion, Fiverr | **yes** |
+| free ai music video generator | 8,100 | 1.8× (ai music video generator 18,100, 1.3×) | — | needs "your song as the soundtrack" |
+| ai story generator | 201,000 | flat ("free ai story generator" 14.8k, 3.5×) | text tools | a story → film bridge |
+
+**Falling.** These suggest the photo-trick and generic-generator phase is over:
+- ai talking photo, ai photo to cartoon, ai animate photo: all 0.4×
+- ai animated video maker: 1,900 → 880
+- ai training video generator: 0.5×
+- ai course creator: 0.5×, though its bid is $23.92
+- ai slideshow maker: 0.4×
+
+**Contested, not worth an early push:**
+- ai video generator for youtube
+- ai explainer video (HeyGen ×4)
+- ai training video generator (Guidde)
+- ai video templates (CapCut/Pictory)
+- ai birthday video (HeyGen)
+- ai real estate and listing video
+
+**"Wedding invitation video" is mostly India.**
+- 27,100 a month, identical to "marriage invitation video".
+- Monthly: 49.5k in Nov, 40.5k in Jan, 49.5k in Apr, 9.9k in Jul. That is the Hindu wedding
+  calendar; July is Chaturmas, with no weddings.
+- Caricature and animated invitations are already the custom there, delivered by WhatsApp.
+
+### The multiplier: one search, many films
+
+**How it works.** A couple finds us through one search, makes **one** invitation, and KitCut makes
+**a version for every guest**: the guest's name, their journey from their city on a map, and one
+line spoken to them. One click becomes N films. Each film is watched by a person who may have an
+event of their own, and ends with "make yours".
+
+**The arithmetic:**
+- 300 guests at an Indian wedding: if 1 viewer in 300 starts a film, each couple brings one more
+  couple, and the loop pays for itself.
+- 15 children at a birthday party: the same loop needs 1 parent in 15. That is harder, but
+  parties happen every year.
+
+**Three things this fixes:**
+- **Retention.** One occasion carries several touches to the same list: save the date →
+  invitation → the day's schedule and map → a thank-you per guest. That is our "nobody came back"
+  problem solved inside one event.
+- **Revenue.** We charge per recipient, not per film.
+- **Distribution.** Recipients see the brand without us paying for the view.
+
+### Who already sells one video per recipient, and for how much
+
+| Market | Who | Price | Scale |
+|---|---|---|---|
+| Santa per child | Portable North Pole (Montreal, 2008) | $4.99–11.99 a video; $24.99–34.99 a family pass; Magic Pass+ covers **50 recipients for 5 years** | 340M+ videos and calls in total, about 20–25M a season (est.); 75K ratings at 4.8 |
+| Santa, others | personalsantavideo, It's the Real Santa, Santa's Whisper, Cameo Kids | $7.99–33.99 a video | — |
+| Wedding invitation per guest | Vox Invite (photoreal avatar says the guest's name) | **$1.49–2.49 per guest** | launched about Aug 2026, 4 Product Hunt upvotes |
+| Wedding invitation per guest | HeyGen invitation maker (batch, guest variables) | $24–29 a month | "50,000+ personalized videos" (one agency) |
+| Wedding invitation per guest | Krikey (3D cartoon, spoken message per guest) | free tier | — |
+| Race finisher per runner | iRewind | **$0.10–3 per participant**, usually sponsor-paid | NYC Marathon: 33,000 videos; 50,000 in 12 hours |
+| Graduation per graduate | StageClip | $2 a clip (institution), $19.99 (graduate) | 2,000+ institutions |
+| Donor thank-you | ThankView | $3,000–6,000 a year | 2,000+ nonprofits (2021) |
+| Sales prospect | Sendspark, BHuman, Maverick, Tavus | $0.06–0.50 a video; avatar APIs $1–5 a minute | commoditised |
+| Child's name, not video | Wonderbly books, Songfinch songs | $34.99 a book; $199 a song | Wonderbly 11M books (bought by Penguin, 2025); Songfinch 375K songs |
+| Name per video, on YouTube | "Happy Birthday Song with Names" | free, ad-paid | 2.3M subscribers, ~809K views a day |
+
+No vendor sells a "Wrapped" for conferences (Swapcard, Bizzabo and Brella don't), and no one makes
+drawn per-person films. Every per-guest rival found is photoreal.
+
+### The order to build in
+
+| # | Market | Recipients per buyer | Who pays | Why us |
+|---|---|---|---|---|
+| 1 | **Weddings, India first** (then Latin America and the US) | 100–500+ | the couple; Vox charges $1.49+ a guest | caricature and drawn couples are the custom; guest's journey on our route map; any language |
+| 2 | **Finisher films for races and rides, and a "Wrapped" for conferences** | 1,000–50,000 | organiser or sponsor, $0.10–3 a head | ride replay and the event templates already exist; nobody does it drawn |
+| 3 | **Santa and Christmas, one per child** | 1–50 (a family; 25 for a class; more for a business) | parents, $5–35 | a drawn Santa needs no likeness; the child drawn in; a route from the North Pole to their town |
+| 4 | **Kids' birthday invitation, then thank-you, one per friend** | 10–30 | parents | fastest-rising phrase (3.3×); every child, every year |
+| 5 | **Donor and customer thank-yous** | 100s–1,000s | $3–6k a year | medium fit |
+| — | Sales prospecting | many | $0.06–0.50 a video | skip: commoditised, needs a face |
+
+### What has to exist
+
+1. **"Make one for every guest."**
+   - The film is written once by Claude, with marked slots: name, city, a line, optionally a photo.
+   - The guest list goes in as typed names, a pasted list or a CSV.
+   - **Variants must not run Claude.** Render only the personal stretch (the opening and the map
+     leg), render the shared stretch once, and join the pieces. The pieces we already have:
+     - template "data beside content" (`SK.DATA`, as in the ride replay);
+     - the route tool;
+     - the caricature head;
+     - content-addressed pieces with a stream-copy join (screen-cut).
+   - To measure before any promise: seconds and cents per variant. Vox's $1.49 sets the ceiling;
+     iRewind's $0.10–3 shows what a race will pay.
+2. **The guest's page.**
+   - A private link (unlisted, not indexed) and WhatsApp share.
+   - RSVP, plus "watched" shown to the couple: Evite's best feature.
+   - At the end, "make yours", which is the loop.
+3. **Names said right.**
+   - Indian and other non-English names will be misread by TTS (this already happened with a
+     Ukrainian place name).
+   - Before sending, the couple hears each name and corrects it. Portable North Pole has 50,000+
+     recorded names, which shows how much this matters.
+
+### Pages to build first, and by when
+
+| Page (title leads with the job) | Film on the page | Must be live by |
+|---|---|---|
+| AI Santa video, personalised for each child | drawn Santa, the child's name and drawing, North Pole → their town | **~20 Oct** (Dec peak; pages need weeks to rank) |
+| AI Christmas video card for everyone on your list | family drawn from a photo; each recipient named | ~1 Nov |
+| AI wedding invitation video (Hindi + English), one for every guest | caricature couple, guest's journey map | **end Oct** (season opens Nov) |
+| Caricature wedding invitation video | the same, in caricature | end Oct |
+| AI birthday invitation video, one for every friend | child drawn, "Maya, you're invited!" | Nov |
+| AI story video generator (and for kids) | story → film | Nov |
+| AI cartoon video generator | our look, the generic front door | Nov |
+| Race finisher film / conference "Wrapped" | route replay per rider; a recap per attendee | sell direct to organisers; the page supports the pitch |
+| AI documentary maker | painted history | Dec |
+
+**Programmatic, done honestly.**
+- The "song with your name" channels show that one film per first name ranks on Google and on
+  YouTube.
+- Each name page must carry its own real film, not a near-duplicate. That keeps it inside our
+  "one real film per page" rule.
+
+**Measure before the pages mature.**
+- Run search ads on the open AI phrases. Top bids are $0.30–2.30, inside the Ads connector's
+  $50-a-day cap.
+- Measure sign-up and per-guest conversion first.
+- This needs the owner's go, because it spends money.
+
+### Risks
+- **Price sensitivity in India.** Price per pack of guests, in rupees, and check UPI support.
+- **Privacy.** Guest names and cities are personal data. Keep pages private and unindexed, with
+  deletion after the event.
+- **Children's photos.** Never public; no training on them.
+- **Abuse.** Per-recipient messaging can be used for spam. Cap batch size on free plans.
+- **Season.** Santa is a six-week window.
+- **Characters.** Licensed characters (CoComelon, Spider-Man) are what Etsy sellers sell and what
+  we must not.
 
 ## 2. HeyGen: who it sells to, and where we meet it
 
