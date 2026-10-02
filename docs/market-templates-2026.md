@@ -1,7 +1,8 @@
 # Templates for kitcut.ai: which niches, industries and use cases
 
 Researched 2026-10-02. Sources:
-- Google Keyword Planner, through our own Ads account (1,401 keywords).
+- Google Keyword Planner, through our own Ads account: 1,401 keywords, then about 2,070 with the
+  "ai" and "template" versions.
 - HeyGen's live site, sitemap, pricing and customer stories.
 - The template catalogues of 13 animated and template video tools.
 - Freelance marketplaces and agency price lists.
@@ -69,7 +70,15 @@ film that a person remakes with a free prompt ([[kitcut-templates]] in the memor
      back on another day by day 5 ([[kitcut-traction-baseline]]).
    - **Revenue:** niches that already pay a subscription for ready-made video.
    - **Reach:** personal occasions. Every guest who opens an invitation sees the film.
-7. **The calendar matters now.** On 2026-10-02 the next peaks are:
+7. **"ai" and "template" versions** (section 1a):
+   - People search for the job ("wedding invitation video" 27,100), not the technology ("ai …"
+     1,600) or the template ("… templates" 5,400).
+   - The exceptions are creators, where the "ai" phrase is the search: "ai video generator for
+     youtube" 4,400, up 4×; "ai story video generator" 2,900.
+   - The fastest risers are "ai birthday invitation" (3.3×) and "ai real estate video" (1.9×).
+   - "Video templates" (40,500) and "AI video templates" (880) both grow, and name what our
+     gallery is.
+8. **The calendar matters now.** On 2026-10-02 the next peaks are:
    - US benefits open enrollment (October–November);
    - Halloween;
    - Black Friday;
@@ -141,6 +150,106 @@ film that a person remakes with a free prompt ([[kitcut-templates]] in the memor
   looking for something to watch; that is the market a kids' channel sells into.
 - **Search demand is not the reason to build an industry template.** The reason is the buyer's
   budget and how often they need a film.
+
+## 1a. The same niches with "ai" and with "template" (measured 2026-10-02)
+
+**How it was measured:** 17 more planner queries, about 2,070 keywords in all. Each row compares
+the plain phrase, the "ai …" version and the "… template(s)" version. Each cell is monthly
+searches and the top bid. "—" means the planner returned nothing, i.e. under 10 a month.
+
+**Trend** is the last three months (Jun–Aug 2026) against the first three (Sep–Nov 2025). For
+seasonal phrases (weddings, Christmas, training), trend mostly measures the season.
+
+| Niche | Plain | With "ai" | With "template(s)" |
+|---|---|---|---|
+| Video in general | — | ai video generator **1,500,000** ($1.48, trend 1.5×) | video templates **40,500** ($1.54, 1.8×); capcut template 9,140,000 (2.9×) |
+| The product category itself | — | **ai video templates 880** ($2.20, 1.2×) | — |
+| Animated / cartoon | animated video maker 27,100 ($0.67) | ai animated video generator 9,900 ($2.30); ai cartoon video generator 9,900 | animated video templates 390 ($4.43) |
+| Explainer | explainer video 6,600 ($13.06) | ai explainer video 1,000 ($7.35) | explainer video templates 210 ($4.56) |
+| Whiteboard | whiteboard animation 6,600 ($4.71) | ai whiteboard animation 210 | whiteboard animation templates 20 |
+| Wedding invitation | 27,100 ($0.36) | 1,600 ($0.30) | **5,400** (+9,900 "…free download") |
+| Birthday | birthday video maker 12,100 ($0.30) | ai birthday video maker 1,900; ai birthday video 390 (1.6×) | birthday video templates **2,900** (1.3×) |
+| Birthday invitation | 1,900 ($0.95) | **ai birthday invitation 590, trend 3.3×** (320 → 1,300 a month) | 210 |
+| Save the date | 2,900 ($2.25) | 10 | 720 |
+| Anniversary | 1,900 | 10 | 590 |
+| Graduation | 880 | 10 | 170 (1.8×) |
+| Retirement | 590 ($5.06) | — | 140 |
+| Memorial | memorial video 880; funeral slideshow 1,900 ($4.13) | 20 ($7.00) | memorial 70; funeral tribute 110 |
+| Christmas | christmas video card 480 | 140 (1,300 in December) | 170 (seasonal) |
+| Thank-you | 3,600 ($1.76) | — | — |
+| Kids' stories | bedtime story video 390 | **ai story video generator 2,900** ($0.65) | story video template 30 |
+| History / documentary | history video 6,600; animated documentary 720 | ai documentary maker 170 | documentary template 210 |
+| YouTube Shorts / channels | youtube shorts maker 5,400 (3.0×); faceless youtube channel 6,600 | **ai video generator for youtube 4,400 (4.0×)**; ai youtube shorts generator 1,900 (1.7×); ai faceless video 210 | youtube video templates 2,400; youtube shorts templates 1,600 |
+| Education | lesson video 1,900; educational video maker 170 | ai educational video generator 210 ($5.52); ai teacher video 90 | educational video templates 50 |
+| Workplace training | training video 49,500 ($21.61) | ai training videos 590 ($22.66); ai training video generator 390 (**$35.49**, 0.5×) | training video templates 170 ($7.67, **5.8×**) |
+| Safety / onboarding / recruitment | 480 ($18) / 590 ($19.49) / 1,000 ($14.43) | — / — / — | — / 20 ($11.04) / 10 ($13.84) |
+| Testimonial | 4,400 ($21.37) | — | 260 ($12.78) |
+| Product | product launch video 720 ($11.13); product video maker 590 | ai product video 880 ($8.11) | product video templates 140; launch 50 |
+| Ads | ad video maker 2,900 ($7.67) | ai ad generator 6,600 ($13.16); ai ad maker 3,600 ($15.59); ai ad creator 1,300 ($21.66) | video ad templates 390 ($5.86) |
+| Real estate | real estate video 4,400 ($6.18) | **ai real estate video 320** ($10.17, 1.9×); ai listing video 20 ($16.18, new since March 2026) | real estate video templates 260 ($4.55) |
+| Church | church video 1,900; sermon video 390 | 10 | church announcement template 390 ($4.93) |
+| Podcast | podcast video 12,100 ($8.36) | 110 ($7.47) | 170 |
+| Events | speaker announcement 3,600; call for speakers 2,400 ($6.94); event promo video 210 | ai invitation video maker 390; ai event / conference video — | countdown video template 260; event recap 70; event promo 50; speaker announcement 30; call for speakers 10 |
+| Maps and travel | animated travel map 3,600; map animation video 260 | ai map animation 320 | travel video template 320; map animation template 70 |
+| Infographic / year in review | infographic video 1,900; year in review video 170 | 20 / — | 110; year recap video template 140 |
+| Photo → character | turn photo into cartoon 5,400; talking photo 4,400; cartoon yourself 1,900 | ai caricature 5,400 (1.4×); ai talking photo 3,600 (**0.4×**); ai photo to cartoon 590 (0.4×) | — |
+| Medical, legal, nonprofit, insurance, restaurant, small business | 50–1,300 (bids $9–20) | ≤10 each | ≤40 each |
+
+**What it means:**
+
+1. **People search for the job, not the technology.**
+   - In most niches the "ai" version is 5–30% of the plain phrase:
+     - wedding invitation video: 27,100 plain, 1,600 with "ai";
+     - explainer video: 6,600 against 1,000;
+     - training video: 49,500 against 390–590.
+   - Lead every page title with the job; "AI" goes second.
+2. **Three exceptions, where the "ai" phrase is the search:**
+   - **stories:** "ai story video generator" 2,900 against "bedtime story video" 390;
+   - **YouTube:** "ai video generator for youtube" 4,400, up 4× in a year;
+   - **caricature:** "ai caricature" 5,400.
+
+   Creators already think in AI tools.
+3. **What "ai" is growing on, and what it is falling on.**
+   - Rising:
+     - "ai birthday invitation", up 3.3× in a year;
+     - "ai real estate video", up 1.9×;
+     - "ai wedding video", up 1.7×;
+     - "ai birthday video", up 1.6×;
+     - "ai listing video", new since March 2026.
+   - Falling: photo-animation searches ("ai talking photo", "ai photo to cartoon", "ai animate photo", all 0.4×) and "ai training video generator" (0.5×). Training buyers may be finding vendors by name now (synthesia 368k, heygen 1.5M).
+
+   AI for a specific job is rising; the photo-trick fad is fading.
+4. **"ai" is where B2B advertisers pay most:**
+   - ai training video generator: $35.49
+   - ai ad creator: $21.66
+   - ai listing video: $16.18
+   - ai ad maker: $15.59
+
+   Volumes are small, but these are buyers who already decided to use AI.
+5. **"Template" searches are consumer and editor searches.**
+   - Volume sits in occasions and YouTube:
+     - wedding invitation video templates: 5,400, plus 9,900 "…free download";
+     - birthday video templates: 2,900;
+     - youtube video templates: 2,400;
+     - youtube shorts and intro templates: 1,600 each.
+   - Business templates are close to zero: onboarding 20, recruitment 10, product demo 40,
+     explainer 210. The exceptions are testimonial (260, $12.78 bid) and church announcement (390).
+   - Many template searchers want an editable file: after effects templates 14,800, premiere pro
+     templates 4,400, motion graphics templates 6,600, and "free download" variants everywhere.
+     A remake-by-prompt template has to say so on the page: no software, no download, the film
+     is made for you.
+6. **Events are searched for by the job, not as a template.** "Speaker announcement" gets 3,600 and
+   "call for speakers" 2,400, but their "template" versions get 10–30. Name event pages after the job.
+7. **Training templates are tiny but growing fastest:** 170 a month, up 5.8×. Worth a page now.
+
+**How to name pages:**
+- **Template gallery index:** target "video templates" (40,500, growing) and "AI video templates"
+  (880, growing). Both describe exactly what the gallery is.
+- **Occasion pages:** the plain job phrase, then "template" and "maker". For example: "Wedding
+  invitation video: a template made from your photos, by AI".
+- **Creator pages:** lead with "AI": "AI story video generator", "AI video generator for YouTube".
+- **Business pages:** the plain job phrase. These pages serve ads (high bids) more than organic
+  search; use the "ai … generator" form for paid search.
 
 ## 2. HeyGen: who it sells to, and where we meet it
 
