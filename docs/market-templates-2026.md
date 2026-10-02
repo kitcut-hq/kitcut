@@ -80,8 +80,9 @@ film that a person remakes with a free prompt ([[kitcut-templates]] in the memor
      gallery is.
 8. **The early play on "ai" searches is one-to-many** (section 1b).
    - Each film is made for every recipient:
-     - each guest at a wedding (India first; "wedding invitation video" peaks with the Hindu
-       wedding season);
+     - each guest at a wedding ("wedding invitation video" follows the Hindu wedding calendar,
+       probably India-heavy but not proven; in India the guest's name in text is already free,
+       so we win on a spoken line, the guest's journey map and a drawn couple);
      - each runner in a race;
      - each child for Santa;
      - each friend at a birthday party.
@@ -314,11 +315,17 @@ seasonal phrases (weddings, Christmas, training), trend mostly measures the seas
 - ai birthday video (HeyGen)
 - ai real estate and listing video
 
-**"Wedding invitation video" is mostly India.**
+**"Wedding invitation video": probably India-heavy, but not proven.**
 - 27,100 a month, identical to "marriage invitation video".
-- Monthly: 49.5k in Nov, 40.5k in Jan, 49.5k in Apr, 9.9k in Jul. That is the Hindu wedding
-  calendar; July is Chaturmas, with no weddings.
-- Caricature and animated invitations are already the custom there, delivered by WhatsApp.
+- Evidence for India:
+  - Monthly: 49.5k in Nov, 40.5k in Jan, 49.5k in Apr, 9.9k in Jul. That follows the Hindu wedding
+    calendar; July is Chaturmas, with no weddings.
+  - Indian-language demand is real: "invitation in marathi" gets 49,500 a month.
+- Evidence against: on Etsy, 83% of the 10,528 "wedding video invitation" listings come from US
+  sellers and 3% from Indian sellers (median $11).
+- Google Trends could not be read (HTTP 429), so check it before betting the first market on India.
+- India's size: 8–10M weddings a year, 326–420 guests on average, and 46 lakh weddings in the
+  Nov–Dec 2025 season alone (CAIT).
 
 ### The multiplier: one search, many films
 
@@ -349,6 +356,10 @@ event of their own, and ends with "make yours".
 | Wedding invitation per guest | Vox Invite (photoreal avatar says the guest's name) | **$1.49–2.49 per guest** | launched about Aug 2026, 4 Product Hunt upvotes |
 | Wedding invitation per guest | HeyGen invitation maker (batch, guest variables) | $24–29 a month | "50,000+ personalized videos" (one agency) |
 | Wedding invitation per guest | Krikey (3D cartoon, spoken message per guest) | free tier | — |
+| Digital invitations, West (the guest's name on the envelope; the card itself is the same for everyone) | Paperless Post; Greenvelope; Evite | Paperless Post $0.50–1.44 a guest after 50 free; Greenvelope ~$1 a guest ($99 for 100); Evite $14.99–79.99 an event | Evite 200M+ invitations a year; Paperless Post 200M users served |
+| Per-guest e-invites, India (**the guest's name in text**, sent from the couple's WhatsApp) | Weddingkart; Ayozan; eInvit; Selfanimate | **flat per wedding, never per name**: Weddingkart ₹5,999–49,999; Ayozan free until 15 Oct 2026; eInvit free | eInvit "500+ couples this month" |
+| Spoken name per guest, India | Jeevansathi × Gan.AI (a singer's cloned voice says each guest's name) | free brand campaign | "thousands" of videos (Feb 2025) |
+| One invitation video, India | DesiEvite; Celebrare; VideoGiri; Fiverr | ₹99–3,999; caricature $17.99 (Celebrare) to $100–200 (Fiverr) | Celebrare app ~2.35M installs (unverified) |
 | Race finisher per runner | iRewind | **$0.10–3 per participant**, usually sponsor-paid | NYC Marathon: 33,000 videos; 50,000 in 12 hours |
 | Graduation per graduate | StageClip | $2 a clip (institution), $19.99 (graduate) | 2,000+ institutions |
 | Donor thank-you | ThankView | $3,000–6,000 a year | 2,000+ nonprofits (2021) |
@@ -357,7 +368,16 @@ event of their own, and ends with "make yours".
 | Name per video, on YouTube | "Happy Birthday Song with Names" | free, ad-paid | 2.3M subscribers, ~809K views a day |
 
 No vendor sells a "Wrapped" for conferences (Swapcard, Bizzabo and Brella don't), and no one makes
-drawn per-person films. Every per-guest rival found is photoreal.
+drawn per-person films.
+
+**A guest's name in text is already free in India**, sold as a flat price per wedding or given away
+(Ayozan, eInvit). What nobody sells is a line **spoken** to each guest plus **their own journey**
+on a map, in a drawn film. The only close precedents are a brand campaign (Jeevansathi × Gan.AI)
+and the photoreal avatars (Vox Invite, HeyGen).
+
+**Pricing that follows.**
+- India: one flat price per wedding, with extra guests at close to zero cost to us.
+- The West: about $0.50–1.50 per guest, the Paperless Post / Greenvelope / Vox range.
 
 ### The order to build in
 
@@ -420,7 +440,11 @@ drawn per-person films. Every per-guest rival found is photoreal.
 - This needs the owner's go, because it spends money.
 
 ### Risks
-- **Price sensitivity in India.** Price per pack of guests, in rupees, and check UPI support.
+- **Price sensitivity in India.** The going rate for name-in-text per guest is a flat ₹0–14k per
+  wedding. Price per wedding, in rupees; check UPI support. An extra guest must cost us almost
+  nothing.
+- **Is the head term India?** Not proven (see above). Read Google Trends by region before
+  committing the first wedding market.
 - **Privacy.** Guest names and cities are personal data. Keep pages private and unindexed, with
   deletion after the event.
 - **Children's photos.** Never public; no training on them.
