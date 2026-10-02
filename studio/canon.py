@@ -93,9 +93,15 @@ def key_of(mat):
     return hashlib.sha256(json.dumps(mat, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
 
-def ask_text(mat):
+def ask_text(mat, before=()):
+    """The ask, with the log of the episodes made before this one, so "new" means new to the
+    series (written without it, every Duchess entry called her sad trombone new)."""
+    so_far = library.canon_note(list(before)) or "This is the series' first episode."
     return (
         "One finished episode. Write its entry in the series' episode log.\n\n"
+        + so_far
+        + "\n\nThis episode.\n\n"
+    ) + (
         "What it was asked for (the person's prompt):\n<<<\n%s\n>>>\n\n"
         "Its narration, as spoken:\n<<<\n%s\n>>>\n\n"
         "What its maker said it made:\n<<<\n%s\n>>>\n\n"
@@ -108,8 +114,8 @@ def ask_text(mat):
         "the series' fixed lines), at most %d,\n"
         ' "twist": how it ends, at most %d characters,\n'
         ' "fact": the true thing it teaches, or "" if none, at most %d characters,\n'
-        ' "new": what it brought into the series for the first time (a character, a place, a '
-        "prop, a sound), at most %d items,\n"
+        ' "new": what it brought into the series for the first time -- a character, a place, a '
+        "prop, a sound no earlier episode above had -- at most %d items,\n"
         ' "callbacks": jokes, objects or lines from it that a later episode could bring back, at '
         "most %d items}\n"
         "Each list item at most %d characters."
@@ -169,8 +175,13 @@ async def write(film, auth=None, model=MODEL, effort=EFFORT, force=False):
             if e.get("film") == film.id and e.get("key") == key_of(mat):
                 return e
     auth = auth or share.auth_of(film)
+    before = [
+        e
+        for e in library.canon_of(lib)
+        if e.get("film") != film.id and (e.get("made") or "") < (mat["made"] or "~")
+    ]
     d, cost = await ytdraft.ask_json(
-        ask_text(mat), None, auth, film, model, effort, WRITER, "canon"
+        ask_text(mat, before), None, auth, film, model, effort, WRITER, "canon"
     )
     entry = clean(d, mat, film.id)
     await asyncio.to_thread(library.put_canon, lib, entry)

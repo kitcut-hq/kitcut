@@ -78,11 +78,19 @@ def main():
     log = library.canon_of(lib)
     check([e["film"] for e in log] == [e1.id, e2.id], "the log is oldest first, not by writing")
     check(b["made"].startswith("2026-09-30T21"), "an entry carries when its film was made")
+    check("first episode" in CALLS[1], "the oldest episode is told it is the first")
 
     asyncio.run(canon.write(e1))
     check(len(CALLS) == 2, "an up-to-date entry costs no call")
     asyncio.run(canon.write(e1, force=True))
     check(len(CALLS) == 3 and len(library.canon_of(lib)) == 2, "a rewrite replaces its own entry")
+    asyncio.run(canon.write(e2, force=True))
+    check(
+        "The series so far" in CALLS[3]
+        and e1.id not in CALLS[3]
+        and "first episode" not in CALLS[3],
+        "a later episode is written knowing the ones before it",
+    )
 
     nxt = episode("The Sour Cream", "2026-10-01T20:00:00")
     nxt.update(state="queued", library={"cast": [], "films": []})
