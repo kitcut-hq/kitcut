@@ -48,6 +48,10 @@
 #   bash studio/deploy/ops.sh watch <film-id>...      follow films to the end (one line per change)
 #   bash studio/deploy/ops.sh pull <film-id> [dest] [--all]   its outputs (or the whole folder) here
 #   bash studio/deploy/ops.sh hide|show <film-id>     out of / back into the public gallery
+#   bash studio/deploy/ops.sh library-put <project> [--dry-run] [--replace] <cast/x.js>...
+#                                                     a back-fill: cast files (places a series
+#                                                     drew in film.js) into its library as the
+#                                                     next versions (studio/library_put.py)
 #   bash studio/deploy/ops.sh replace <film-id> <folder>   a remade film takes its place (same id
 #                                                     and page; the old one to backups/)
 #   bash studio/deploy/ops.sh forward [port]          the VM's studio on this laptop's 127.0.0.1:port
@@ -482,6 +486,28 @@ print(json.dumps(body, ensure_ascii=False))
       check) on "cd $REMOTE && $envs nice -n 10 $py check" ;;
       *) die "$use" ;;
     esac
+    ;;
+
+  library-put)
+    # cast members written by hand (a series' places, from its episodes' film.js) into a project's
+    # library, as a finished episode's keep() would: thumbnails, the sheet, the next version
+    use="library-put <project> [--dry-run] [--replace] <cast/name.js>..."
+    project="${1:?$use}"; shift
+    [[ "$project" =~ ^p-[a-z0-9]+$ ]] || die "not a project id: $project"
+    flags=""; files=()
+    for a in "$@"; do
+      case "$a" in
+        --dry-run|--replace) flags="$flags $a" ;;
+        *) [ -f "$a" ] || die "no file $a"; files+=("$a") ;;
+      esac
+    done
+    [ "${#files[@]}" -gt 0 ] || die "$use"
+    [ "$DRY" = 1 ] && flags="$flags --dry-run"
+    stage="$HOME_DIR/tmp/library-put-$(date +%Y%m%d-%H%M%S)"
+    on "mkdir -p $stage/cast"
+    for f in "${files[@]}"; do on "cat > $stage/cast/$(basename "$f")" < "$f"; done
+    names=$(for f in "${files[@]}"; do printf ' %s/cast/%s' "$stage" "$(basename "$f")"; done)
+    on "sudo systemd-run --wait --pipe --quiet --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=2G -p MemoryMax=3G -p Nice=10 $UNIT_ENV $REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/library_put.py --project $project$flags$names; rc=\$?; rm -rf $stage; exit \$rc"
     ;;
 
   replace)

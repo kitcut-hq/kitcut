@@ -468,6 +468,11 @@ its films, next to `projects\`, never in git:
   `camera: [x, y, zoom]`: the sheet draws it at its origin through that camera, the note and
   `/api/library` mark it a place. Its header comment is its manual: floor line, camera, options,
   and what it draws in front of the cast (`o.layer = 'front'`).
+- **Back-fill by hand.** A set a series drew in its episodes' film.js never reached the library:
+  write it as a cast file and `ops.sh library-put <project> [--dry-run] <cast/x.js>...`
+  (`studio/library_put.py`) makes it the next version, thumbnail and sheet included, as keep()
+  would. Leo's townhouse, street, park, bedroom and home and Duchess's room went in this way on
+  2026-10-01. A character's file needs a plain `draw(x, y, o)` for the sheet to show it.
 - **Routes** (the asker's own library): `GET /api/library`, `GET /api/library/<name>/thumb.png`
   and `DELETE /api/library/<name>`. A delete keeps the files, and later films leave the member
   out.
