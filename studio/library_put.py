@@ -96,8 +96,13 @@ def draw(d, idx, items, episode, out):
                 f.write(it["code"])
         stage.manifest = stage.path("sketch.json")
         shutil.copyfile(episode.manifest, stage.manifest)
-        if os.path.isdir(episode.path("fonts")):
-            shutil.copytree(episode.path("fonts"), stage.path("fonts"))
+        with open(episode.manifest, encoding="utf-8") as f:
+            fonts = json.load(f).get("fonts", [])
+        for ft in fonts:  # the episode's own (fonts/, web/fonts/), where the manifest names them
+            src = episode.path(*ft["file"].split("/"))
+            if os.path.exists(src):
+                os.makedirs(os.path.dirname(stage.path(*ft["file"].split("/"))), exist_ok=True)
+                shutil.copyfile(src, stage.path(*ft["file"].split("/")))
         names = [it["name"] for it in items]
         man, times = library.sheet(stage, names)
         r = subprocess.run(
