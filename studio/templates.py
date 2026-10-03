@@ -245,6 +245,11 @@ def seed(film, t):
     if t.get("sound") == "files":  # its music and cues as files, kept unless asked
         for name in ("score.json", "sfx.json"):
             shutil.copyfile(os.path.join(d, name), film.path(name))
+    for fnt in (t.get("manifest") or {}).get("fonts") or ():  # the faces it fetched for itself
+        here = os.path.join(d, *str(fnt.get("file") or "").split("/"))
+        if fnt.get("file") and os.path.isfile(here):
+            os.makedirs(os.path.dirname(film.path(*fnt["file"].split("/"))), exist_ok=True)
+            shutil.copyfile(here, film.path(*fnt["file"].split("/")))
     if os.path.isdir(os.path.join(d, "cast")):  # its characters, the film's own to redraw
         os.makedirs(film.path("cast"), exist_ok=True)
         for name in sorted(os.listdir(os.path.join(d, "cast"))):
@@ -574,6 +579,11 @@ def plan(folder, spec):
         audio = m.get("audio") or {}
         for key in ("score", "sfx"):
             out.append((os.path.join(folder, audio.get(key) or key + ".json"), key + ".json"))
+    # a face the film fetched for itself (web/fonts/..., the font tool): kept beside its code
+    for fnt in m.get("fonts") or ():
+        here = os.path.join(folder, *str(fnt.get("file") or "").split("/"))
+        if fnt.get("file") and not os.path.isabs(fnt["file"]) and os.path.isfile(here):
+            out.append((here, fnt["file"]))
     cast = os.path.join(folder, m.get("cast") or "cast")
     if m.get("cast") and os.path.isdir(cast):  # its characters
         for n in sorted(os.listdir(cast)):

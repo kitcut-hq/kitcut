@@ -529,6 +529,18 @@ async def main():
             json.dump(m, fh)
         said = await tl.template_pictures("mark", [])
         check("logo-light" in said, "a picture brought in from the web is taken by its name", said)
+        said = await tl.template_pictures(None, [], None, ["upload1", "mark"])
+        with open(f.manifest, encoding="utf-8") as fh:
+            imgs = json.load(fh)["images"]
+        check(
+            '"logo-2-light"' in said
+            and all(
+                os.path.exists(f.path(*imgs[k].split("/")))
+                for k in ("logo-1", "logo-1-light", "logo-2", "logo-2-light")
+            ),
+            "several logos (co-hosts) each made readable on dark and light, in order",
+            said,
+        )
         for name in ("sp-ada", "nope"):
             try:
                 await tl.template_pictures(name, [])

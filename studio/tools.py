@@ -610,12 +610,12 @@ class Tools:
             shutil.copyfile(got, hit)
         return len(todo)
 
-    async def template_pictures(self, logo=None, people=(), qr=None):
+    async def template_pictures(self, logo=None, people=(), qr=None, logos=()):
         """A template film's pictures -- the person's (upload1...) or ones Claude brought in with
         the picture tool (web_...) -- become the film's own: the logo on dark and light grounds
-        (templates.logo_variants), each person cut out of their photo as sp-1, sp-2... in the
-        order given, and a QR code of a link (templates.qr_picture). Answers with the keys for
-        content.json."""
+        (templates.logo_variants), and each of several logos (co-hosts, sponsors) as logo-1,
+        logo-2...; each person cut out of their photo as sp-1, sp-2... in the order given, and a
+        QR code of a link (templates.qr_picture). Answers with the keys for content.json."""
         import templates  # noqa: PLC0415
 
         f = self.film
@@ -651,6 +651,12 @@ class Tools:
             images["logo"] = os.path.relpath(p1, f.dir).replace("\\", "/")
             images["logo-light"] = os.path.relpath(p2, f.dir).replace("\\", "/")
             said.append('the logo: {"image": "logo", "light": "logo-light"}')
+        for i, name in enumerate(logos or (), 1):  # several: a folder each, the same two files
+            out = f.path("images", "logos", str(i))
+            p1, p2 = await asyncio.to_thread(templates.logo_variants, web(name), out)
+            images["logo-%d" % i] = os.path.relpath(p1, f.dir).replace("\\", "/")
+            images["logo-%d-light" % i] = os.path.relpath(p2, f.dir).replace("\\", "/")
+            said.append('%s: {"image": "logo-%d", "light": "logo-%d-light"}' % (name, i, i))
         rows = list(f.record().get("people_cutouts") or [])
         start = len(rows)
         os.makedirs(f.path("inputs", "people"), exist_ok=True)
@@ -1017,11 +1023,14 @@ class Tools:
                 "logo picture's name; people: the photos' names, in the order the people should take "
                 "(the first are the featured); qr: a link to make a QR code of (it is read back "
                 "before it is kept). Cuts each person out of their photo and makes the logo "
-                "readable on dark and light grounds; answers with the image keys for content.json.",
+                "readable on dark and light grounds; logos: several logos (co-hosts, sponsors), "
+                "each made readable the same way as logo-1, logo-2... in the order given; answers "
+                "with the image keys for content.json.",
                 {
                     "type": "object",
                     "properties": {
                         "logo": {"type": "string"},
+                        "logos": {"type": "array", "items": {"type": "string"}},
                         "people": {"type": "array", "items": {"type": "string"}},
                         "qr": {"type": "string", "description": "a link, e.g. https://..."},
                     },
@@ -1029,7 +1038,7 @@ class Tools:
             )(
                 wrap(
                     lambda a: self.template_pictures(
-                        a.get("logo"), a.get("people") or [], a.get("qr")
+                        a.get("logo"), a.get("people") or [], a.get("qr"), a.get("logos") or []
                     )
                 )
             ),
