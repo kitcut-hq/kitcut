@@ -460,7 +460,7 @@ def code_leftovers(slug, spec=None):
     words = {
         s.strip()
         for k, v in content.items()
-        if k != "_about"
+        if k != "_about" and k not in (spec.get("keep") or ())  # kept by every film: labels
         for s in strings(v)
         if len(s.strip()) >= 4
         and s.strip() not in generic
