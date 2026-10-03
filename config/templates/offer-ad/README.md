@@ -9,7 +9,7 @@ A kitcut.ai template (studio/templates.py; its spec and brief: `../offer-ad.json
   the bank's logo -- is third-party creative, so it stays in the local working project
   `projects/offer-ad/` (gitignored), whose `film.js` this is a copy of.
 
-7 s, 60 fps, loops, 1080 x 1080 (and 1080 x 1920 from the same code; the layout also lays out 1920 x 1080, which the template does not offer until a sample photo suits it), one
+5 s (v7: the ad's own 4.95 s loop), 60 fps, loops, 1080 x 1080 (and 1080 x 1920 from the same code; the layout also lays out 1920 x 1080, which the template does not offer until a sample photo suits it), one
 looping ad with a light score and soft cues written by the film itself (`SK.film({sound})`).
 
 The layout re-measures itself per frame: the product beside the words in square and wide frames,

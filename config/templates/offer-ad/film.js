@@ -1,5 +1,5 @@
 // For: anyone with an offer worth one number -- a card, a discount, a free trial, a ticket, a pair of shoes
-/* The offer ad: one big figure over the brand's own picture. 7 s, 60 fps, loops; 1:1 for a feed (1080 x 1080),
+/* The offer ad: one big figure over the brand's own picture. 5 s, 60 fps, loops; 1:1 for a feed (1080 x 1080),
    9:16 for stories and reels, 16:9 for a page or a video ad -- one layout that re-measures itself per frame.
 
    Every word, picture and colour is in content.json (SK.DATA.content, read here as FACTS) and nothing of any
@@ -17,11 +17,15 @@
    The length and the clock never change with the content. */
 const FACTS = SK.DATA.content;
 const W = SK.W, H = SK.H, E = SK.E, clamp = SK.clamp, lerp = SK.lerp, inv = SK.inv;
-const DUR = 7.0, BPM = 120;
+const DUR = 5.0, BPM = 120;
 const FONT = "'Inter','Sofia Sans',system-ui,sans-serif";
 const U = Math.min(W, H) / 1080; // one design unit: 1080 px of the short side
 const WIDE = W > H * 1.2, TALL = H > W * 1.2;
-const CLOCK = { prod: .5, fig: .75, logo: 1.0, sub: 2.0, legal: 2.3, cta: 3.0, out: 6.0 };
+// the figure's tracking, of its size: the square is the ad's, whose face sets wider than Inter's tight -3%
+const FLS = !WIDE && !TALL ? .04 : -.03;
+// measured off the ad it recreates (a 4.95 s loop): the picture alone .4 s, the product and the figure in together,
+// the subline word by word from the right, everything holds, and the loop cuts back to the picture alone
+const CLOCK = { prod: .35, fig: .35, logo: 0, sub: 1.05, line: .32, legal: 1.6, cta: 1.9, out: 99 };
 
 /* ------------------------------------------------------------------ the facts, read once */
 const str = (v) => (v == null ? '' : String(v).trim());
@@ -71,7 +75,8 @@ function layout() {
   const ctaInk = contrast(ctaFill, '#FFFFFF') > contrast(ctaFill, DARK) ? '#FFFFFF' : DARK;
 
   // the frame's own margins; a vertical frame keeps clear of the app's top bar and bottom controls
-  const M = (WIDE ? 104 : 76) * U, topM = (TALL ? 240 : WIDE ? 84 : 80) * U, botM = (TALL ? 330 : WIDE ? 60 : 56) * U;
+  const SQ = !WIDE && !TALL; // the square: the ad's own frame, its numbers measured off it
+  const M = (WIDE ? 104 : 76) * U, topM = (TALL ? 240 : WIDE ? 84 : SQ ? 90 : 80) * U, botM = (TALL ? 330 : WIDE ? 60 : 56) * U;
   const zoneMax = (hasPhoto ? (TALL ? 760 : WIDE ? 640 : 520) : TALL ? 1160 : WIDE ? 700 : 640) * U;
   const STACK = TALL && !!prodIm; // a vertical frame has the width for the figure, so the product sits above the words
 
@@ -79,20 +84,21 @@ function layout() {
   let pw = 0, ph = 0;
   if (prodIm) {
     const asp = prodIm.width / prodIm.height;
-    const mxW = STACK ? .5 * W : (WIDE ? 400 : 300) * U * (hasPhoto ? 1 : 1.1), mxH = STACK ? .3 * zoneMax : .84 * zoneMax;
+    const mxW = STACK ? .5 * W : (WIDE ? 400 : SQ && hasPhoto ? 250 : 300) * U * (hasPhoto ? 1 : 1.1), mxH = STACK ? .3 * zoneMax : .84 * zoneMax;
     ph = Math.min(mxH, mxW / asp); pw = ph * asp;
   }
   const align = FACTS.align === 'center' && (!prodIm || STACK) ? 'center' : 'left';
-  const gap = 56 * U;
-  const x0 = M + (prodIm && !STACK ? pw + gap : 0);
+  const gap = (SQ && hasPhoto ? 74 : 56) * U;
+  const left = SQ && hasPhoto && prodIm ? 166 * U : M; // the ad's group starts well in from the edge
+  const x0 = left + (prodIm && !STACK ? pw + gap : 0);
   let rw = W - M - x0;
   if (WIDE && !prodIm) rw = Math.min(rw, W * .62);
   const tx = align === 'center' ? W / 2 : x0, ta = align === 'center' ? 'center' : 'left';
 
   // the figure: one line that fits, or two when a long one would shrink to nothing
-  const capMax = (STACK ? .3 : hasPhoto ? .46 : .52) * zoneMax;
+  const capMax = (STACK ? .3 : hasPhoto ? (SQ ? .30 : .46) : .52) * zoneMax;
   const figSize = (lines) => {
-    const wmax = Math.max(...lines.map((s) => mw(s, 100, 800, -3))), n = lines.length;
+    const wmax = Math.max(...lines.map((s) => mw(s, 100, 800, FLS * 100))), n = lines.length;
     return Math.min(rw / wmax * 100, capMax / (CAPR * n + .2 * (n - 1)));
   };
   let figLines = FIG ? FIG.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 2) : [];
@@ -108,7 +114,7 @@ function layout() {
   const FS = figLines.length ? figSize(figLines) : 0;
   const capH = CAPR * FS, figGap = .2 * FS;
   const figH = figLines.length ? capH * figLines.length + figGap * (figLines.length - 1) : 0;
-  const figW = figLines.length ? Math.max(...figLines.map((s) => mw(s, FS, 800, -.03 * FS))) : 0;
+  const figW = figLines.length ? Math.max(...figLines.map((s) => mw(s, FS, 800, FLS * FS))) : 0;
 
   // the subline: words with a weight each; fitted to the column, wrapped only when fitting would make it small
   const parse = (s) => {
@@ -117,7 +123,7 @@ function layout() {
     return ws;
   };
   let subLines = SUB.map(parse);
-  const SMAX = (hasPhoto ? 56 : 60) * U * (WIDE ? 1.15 : 1);
+  const SMAX = (hasPhoto ? (SQ ? 52 : 56) : 60) * U * (WIDE ? 1.15 : 1);
   const lineW = (ws, s) => ws.reduce((a, x) => a + mw(x.w, s, x.bold ? 700 : 300), 0) + mw(' ', s, 300) * Math.max(0, ws.length - 1);
   let SS = SMAX;
   if (subLines.length) {
@@ -136,7 +142,7 @@ function layout() {
   }
   const pitch = SS * 1.26, subH = subLines.length ? pitch * subLines.length - (pitch - SS * .73) + SS * .26 : 0;
   const subW = subLines.length ? Math.max(...subLines.map((ws) => lineW(ws, SS))) : 0;
-  const subGap = figLines.length && subLines.length ? Math.max(.17 * FS, 40 * U) : 0;
+  const subGap = figLines.length && subLines.length ? Math.max((SQ && hasPhoto ? .15 : .17) * FS, 40 * U) : 0;
 
   // the button
   const cs = 30 * U, ctaW = CTA ? mw(CTA, cs, 700) + 76 * U : 0, ctaH = CTA ? 70 * U : 0;
@@ -146,7 +152,7 @@ function layout() {
 
   // the foot: the logo and the fine print, on the bottom edge (the logo moves up when the words are low)
   let lw = 0, lh = 0;
-  if (logoIm) { const asp = logoIm.width / logoIm.height, mxW = (WIDE ? 230 : 200) * U, mxH = 84 * U; lh = Math.min(mxH, mxW / asp); lw = lh * asp; }
+  if (logoIm) { const asp = logoIm.width / logoIm.height, mxW = (WIDE ? 230 : SQ ? 190 : 200) * U, mxH = 84 * U; lh = Math.min(mxH, mxW / asp); lw = lh * asp; }
   else if (NAME) { lh = 40 * U; lw = mw(NAME, lh, 800); }
   const legalSize = (TALL ? 23 : 20) * U, legalMaxW = W - 2 * M - (lw && ANCHOR === 'top' ? lw + 44 * U : 0);
   let legalLines = [];
@@ -169,8 +175,9 @@ function layout() {
   else zoneTop = footBottom - (legalH ? legalH + 36 * U : 0) - zoneH;
   const place = (h) => (hasPhoto && ANCHOR === 'top' ? zoneTop : zoneTop + (zoneH - h) / 2); // the shorter block centres on the taller
   const textTop = STACK ? zoneTop + ph + gap : place(textH), prodTop = STACK ? zoneTop : place(ph);
-  const prodX = STACK && align === 'center' ? (W - pw) / 2 : M;
-  const logoX = W - M - lw, logoY = ANCHOR === 'top' ? footBottom - lh : topM;
+  const prodX = STACK && align === 'center' ? (W - pw) / 2 : left;
+  const tuck = SQ && hasPhoto && ANCHOR === 'top'; // the ad tucks its logo into the corner
+  const logoX = W - (tuck ? 22 * U : M) - lw, logoY = ANCHOR === 'top' ? (tuck ? H - 40 * U : footBottom) - lh : topM;
   const logoDarkVariant = !!LOGO && LOGO.image && LOGO.light && !hasPhoto && lumOf(GROUND) > .45;
 
   // no photo: the figure is also drawn huge and hollow under the words, so the words sit a little above the middle
@@ -291,9 +298,9 @@ function drawField(Lay, t) {
   c.restore();
 }
 function drawPhoto(Lay, t) {
-  const c = Lay.c, G = photoGeom(Lay), z = 1 + .075 * Math.pow(Math.sin(Math.PI * t / DUR), 2);
+  const c = Lay.c, G = photoGeom(Lay), z = 1 + .02 * Math.pow(Math.sin(Math.PI * t / DUR), 2); // the ad's footage barely moves
   // a push in, and a slow drift sideways that is back where it started when the loop is
-  const drift = Math.sin(t / DUR * Math.PI * 2) * .01 * W;
+  const drift = Math.sin(t / DUR * Math.PI * 2) * .004 * W;
   c.save(); c.translate(drift, 0); c.translate(G.px, G.py); c.scale(z, z); c.translate(-G.px, -G.py);
   c.drawImage(Lay.photoIm, G.dx, G.dy, G.pw, G.ph); c.restore();
 }
@@ -308,11 +315,9 @@ function rr(c, x, y, w, h, r) { c.beginPath(); c.roundRect(x, y, w, h, Math.min(
 
 function drawProduct(Lay, t) {
   if (!Lay.prodIm) return;
-  const c = Lay.c, p = ramp(t, CLOCK.prod, .9), q = 1 - leave(t, CLOCK.out + .1);
-  const a = clamp(p * 1.6) * (1 - q); if (a <= .002) return;
-  const float = Math.sin((t - CLOCK.prod) / 4 * Math.PI * 2) * 5 * U * clamp(p);
-  const s = (.94 + .06 * p) * (1 + .02 * q);
-  const x = Lay.prodX + (1 - p) * -50 * U, y = Lay.prodTop + (1 - p) * 30 * U + float - q * 14 * U;
+  const c = Lay.c, a = clamp(inv(CLOCK.prod, CLOCK.prod + .2, t)); // a plain fade, as the ad's card
+  if (a <= .002) return;
+  const s = 1, x = Lay.prodX, y = Lay.prodTop;
   const w = Lay.pw, h = Lay.ph;
   c.save(); c.globalAlpha *= a; c.translate(x + w / 2, y + h / 2); c.scale(s, s); c.translate(-w / 2, -h / 2);
   c.shadowColor = 'rgba(0,0,0,.38)'; c.shadowBlur = 44 * U; c.shadowOffsetY = 18 * U;
@@ -320,7 +325,7 @@ function drawProduct(Lay, t) {
     rr(c, 1.5, 1.5, w - 3, h - 3, Lay.round); c.fillStyle = '#000'; c.fill();
     c.shadowColor = 'transparent'; c.save(); rr(c, 0, 0, w, h, Lay.round); c.clip(); c.drawImage(Lay.prodIm, 0, 0, w, h);
     // one slow sheen across the face, once, as the figure settles
-    const sh = inv(2.1, 3.0, t);
+    const sh = -1; // no sheen: the ad's card has none
     if (sh > 0 && sh < 1) {
       const sx = lerp(-w * .6, w * 1.4, E.inOut(sh)), g = c.createLinearGradient(sx - w * .18, 0, sx + w * .18, h * .35);
       g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(.5, 'rgba(255,255,255,.20)'); g.addColorStop(1, 'rgba(255,255,255,0)');
@@ -336,15 +341,10 @@ function drawWords(Lay, t) {
   const out = (d) => 1 - leave(t, CLOCK.out + d, .4);
   // the figure: rises out of a mask on its baseline
   if (Lay.figLines.length) {
-    const p = ramp(t, CLOCK.fig, .95), q = out(0), a = clamp(p * 2.2) * (1 - q);
+    const a = clamp(inv(CLOCK.fig, CLOCK.fig + .2, t));
     if (a > .002) Lay.figLines.forEach((s, i) => {
-      const pi = ramp(t, CLOCK.fig + i * .09, .95), base = Lay.textTop + Lay.capH * (i + 1) + Lay.figGap * i;
-      const dy = (1 - pi) * Lay.capH * .62 - q * 20 * U;
-      c.save();
-      const w = Lay.mw(s, Lay.FS, 800, -.03 * Lay.FS), cx = ta === 'center' ? x - w / 2 : x;
-      c.beginPath(); c.rect(cx - 14 * U, base - Lay.capH * 1.12, w + 28 * U, Lay.capH * 1.12 + .3 * Lay.FS); c.clip();
-      text(c, s, x, base + dy, Lay.FS, 800, Lay.figCol, clamp(pi * 2.2) * (1 - q), { align: ta, ls: -.03 * Lay.FS, shadow: sh });
-      c.restore();
+      const u = E.out(clamp(inv(CLOCK.fig + i * .06, CLOCK.fig + i * .06 + .25, t))), base = Lay.textTop + Lay.capH * (i + 1) + Lay.figGap * i;
+      text(c, s, x + (1 - u) * .1 * W, base, Lay.FS, 800, Lay.figCol, a, { align: ta, ls: FLS * Lay.FS, shadow: sh });
     });
   }
   // the subline: word by word, each rising a little
@@ -356,8 +356,8 @@ function drawWords(Lay, t) {
     const total = wds.reduce((s, v) => s + v, 0) + sp * (ws.length - 1);
     let cx = ta === 'center' ? x - total / 2 : x;
     ws.forEach((w, wi) => {
-      const st = CLOCK.sub + k * .11, p = ramp(t, st, .55);
-      text(c, w.w, cx, base + (1 - p) * 20 * U - (1 - leave(t, CLOCK.out + .05, .4)) * 10 * U, Lay.SS, w.bold ? 700 : 300, Lay.ink, p * (1 - (1 - leave(t, CLOCK.out + .05, .4))), { shadow: sh });
+      const st = CLOCK.sub + li * CLOCK.line, p = E.out(clamp(inv(st, st + .4, t))); // the ad slides a line in whole, from past the frame's right edge
+      text(c, w.w, cx + (1 - p) * (W - x), base, Lay.SS, w.bold ? 700 : 300, Lay.ink, clamp(p * 3), { shadow: sh });
       cx += wds[wi] + sp; k++;
     });
   });
@@ -377,9 +377,9 @@ function drawWords(Lay, t) {
 
 function drawFoot(Lay, t) {
   const c = Lay.c, sh = Lay.hasPhoto && Lay.shadowF;
-  const la = ramp(t, CLOCK.logo, .8) * leave(t, CLOCK.out + .2, .45);
+  const la = 1; // the ad's logo never leaves
   if (Lay.lw && la > .002) {
-    const y = Lay.logoY + (1 - ramp(t, CLOCK.logo, .8)) * 10 * U;
+    const y = Lay.logoY;
     const dark = Lay.logoDarkVariant || (LOGO && !Lay.hasPhoto && lumOf(GROUND) > .45);
     const key = LOGO ? (dark ? LOGO.image || LOGO.light : LOGO.light || LOGO.image) : null;
     if (Lay.logoIm) { c.save(); c.globalAlpha *= la; if (sh) { c.shadowColor = sh === 'light' ? 'rgba(255,255,255,.3)' : 'rgba(0,0,0,.30)'; c.shadowBlur = 14 * U; c.shadowOffsetY = 2 * U; } c.drawImage(SK.IMG[key] || Lay.logoIm, Lay.logoX, y, Lay.lw, Lay.lh); c.restore(); }
@@ -408,14 +408,14 @@ const gf = (x) => String(+x.toPrecision(6));
 function scoreData() {
   const CH = [['C3+E3+G3+B3', 'C2'], ['A2+C3+E3+G3', 'A1'], ['F2+A2+C3+E3', 'F1'], ['G2+B2+D3+F3', 'G1']];
   const pad = [], bass = [], pluck = [], bell = [];
+  // four chords over the 10 beats of the loop, 2.5 beats each, the last ending on the loop's last beat
   CH.forEach(([chord, root], i) => {
-    const b = i * 4, len = i === 3 ? 2.2 : 4;
+    const b = i * 2.5, len = i === 3 ? 2.3 : 2.5;
     pad.push(`${gf(b)} ${chord} ${len} .5`);
     bass.push(`${gf(b)} ${root} 1.2 .55`);
-    if (i < 3) bass.push(`${gf(b + 2)} ${root} .8 .4`);
   });
-  const line = ['E5', 'G5', 'C6', 'G5', 'A5', 'C6', 'E6', 'C6', 'A5', 'F5', 'A5', 'C6', 'B5', 'D6'];
-  for (let k = 0; k < 13; k++) if (k >= 4 && k % 1 === 0) pluck.push(`${gf(4 + (k - 4) * .5 + 0)} ${line[k]} .45 ${(k % 2 ? .3 : .42).toFixed(2)}`);
+  const line = ['E5', 'G5', 'C6', 'G5', 'A5', 'C6', 'E6', 'C6', 'A5', 'F5', 'A5', 'C6', 'B5', 'D6', 'C6'];
+  for (let k = 0; k < 15; k++) pluck.push(`${gf(2 + k * .5)} ${line[k]} .45 ${(k % 2 ? .3 : .42).toFixed(2)}`);
   bell.push(`${gf(beatOf(CLOCK.fig) + .3)} C5+E5+G5+C6 1.6 .5`);
   return {
     bpm: BPM, drum_gain: .4,
@@ -430,7 +430,7 @@ function scoreData() {
       { inst: 'acoustic_bass', vel: .8, notes: bass.join('; '), humanize: false },
       { inst: 'marimba', vel: .8, notes: pluck.join('; ') },
       { inst: 'glockenspiel', vel: .8, notes: bell.join('; ') },
-      { type: 'drums', from: 4, bars: 2, steps: 16, vel: .6, kit: { shaker: '.o.o.o.o.o.o.o.o' }, gains: { shaker: .22 } },
+      { type: 'drums', from: 2, bars: 2, steps: 16, vel: .6, kit: { shaker: '.o.o.o.o.o.o.o.o' }, gains: { shaker: .22 } },
     ],
   };
 }
@@ -439,11 +439,11 @@ function sfxData() {
   const add = (t, fx, db, args = {}, o = {}) => { const c = { t: r(Math.max(0, t), 3), fx, db }; if (o.pan) c.pan = r(o.pan, 2); if (o.send !== undefined) c.send = o.send; if (Object.keys(args).length) c.args = args; cues.push(c); return c; };
   if (PRODUCT) add(CLOCK.prod - .05, 'swoosh_soft', -24, { sec: .7 }, { pan: -.3 });
   if (FIG) { add(CLOCK.fig + .12, 'whoosh', -26, { sec: .5, f0: 400, f1: 2600 }); add(CLOCK.fig + .38, 'thunk', -19, { sec: .3 }); add(CLOCK.fig + .4, 'shimmer', -27, { sec: .8, f0: 1500, f1: 6000 }); }
-  if (LOGO || NAME) add(CLOCK.logo + .1, 'blip', -30, { f: 1320, sec: .08 }, { pan: .4 });
-  const words = SUB.join(' ').replace(/\*/g, '').split(/\s+/).filter(Boolean).length;
-  if (words) { const tk = add(CLOCK.sub, 'tick', -29, {}, { pan: .1 }); tk.times = Array.from({ length: Math.min(words, 12) }, (_, i) => r(CLOCK.sub + i * .11, 3)); }
+  // a tick as each line lands: the same clock as drawWords
+  const times = [];
+  SUB.forEach((ln, li) => times.push(r(CLOCK.sub + li * CLOCK.line + .15, 3))); // one as each line lands
+  if (times.length) { const tk = add(times[0], 'tick', -29, {}, { pan: .1 }); tk.times = times.slice(0, 12); }
   if (CTA) { add(CLOCK.cta + .02, 'pop', -21, { f0: 620, f1: 210, sec: .1 }); add(CLOCK.cta + .1, 'blip', -27, { f: 1175, sec: .1 }); }
-  add(CLOCK.out, 'swoosh_soft', -27, { sec: .6 }, { pan: .2 });
   return cues.sort((p, q) => p.t - q.t);
 }
 
