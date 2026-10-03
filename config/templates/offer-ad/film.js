@@ -212,7 +212,7 @@ function scrims(Lay) {
   };
   // Two ways to make words legible on a picture: light words on a dark veil, or dark words on a light one.
   // Each is solved for the smallest veil under which the 94th-percentile worst pixel of the box meets the ratio;
-  // the one that needs less veil wins (light words unless dark ones are clearly gentler on the picture).
+  // the one that needs less veil wins (light words unless they would need a heavy veil and dark ones a clearly lighter one).
   const lightInk = lumOf(INK_IN) > .5 ? INK_IN : '#FFF8EC';
   const veilDark = mixHex(GROUND, '#000000', .7), veilLight = mixHex(GROUND, '#FFFFFF', .94);
   const solve = (box, ratio, allowDark) => {
@@ -224,7 +224,7 @@ function scrims(Lay) {
     let aL = .92, aD = allowDark ? .92 : 9;
     for (let a = 0; a <= .92; a += .02) if (hiPct(a) <= wantHi) { aL = a; break; }
     if (allowDark) for (let a = 0; a <= .92; a += .02) if (loPct(a) >= wantLo) { aD = a; break; }
-    const dark = allowDark && aD < aL - .12;
+    const dark = allowDark && aL > .4 && aD < aL - .15; // dark words only where light ones would need a heavy veil
     return dark ? { dark, a: Math.max(.08, aD), ink: DARK, veil: veilLight } : { dark, a: Math.max(.14, aL), ink: lightInk, veil: veilDark };
   };
   // the words; and the foot (the fine print needs 4.8:1, a logo alone 3:1; a logo that comes in one tone cannot flip)
@@ -285,7 +285,7 @@ function text(c, s, x, y, size, wt, col, alpha, o = {}) {
   if (alpha <= .002) return;
   c.save(); c.globalAlpha *= alpha; c.font = `${wt} ${size}px ${FONT}`; c.fillStyle = col; c.textBaseline = 'alphabetic';
   c.textAlign = o.align || 'left'; c.letterSpacing = (o.ls || 0) + 'px';
-  if (o.shadow) { c.shadowColor = o.shadow === 'light' ? 'rgba(255,255,255,.35)' : 'rgba(0,0,0,.30)'; c.shadowBlur = 18 * U; c.shadowOffsetY = 3 * U; }
+  if (o.shadow) { c.shadowColor = o.shadow === 'light' ? 'rgba(255,255,255,.18)' : 'rgba(0,0,0,.30)'; c.shadowBlur = 14 * U; c.shadowOffsetY = 3 * U; }
   c.fillText(s, x, y); c.restore();
 }
 function rr(c, x, y, w, h, r) { c.beginPath(); c.roundRect(x, y, w, h, Math.min(r, w / 2, h / 2)); }
