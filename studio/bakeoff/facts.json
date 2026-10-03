@@ -1,0 +1,41 @@
+{
+ "about": "Does asking every film to keep its facts in one `const FACTS = {...}` at the top of film.js (studio/prompt.md, 2026-10-02) cost anything? It makes a finished film a template with no hand refactor (studio/template_from_film.py pull). Arms: 'before' studio-poc c7871f3, 'facts' the same plus the rule. Compare the blind grade, Claude's time and cost, and whether the film keeps its facts in one object (template_from_film.find_object).",
+ "seconds": 30,
+ "prompts": [
+  {
+   "id": "launch",
+   "look": "drawn",
+   "audience": "adults: owners of small businesses, a product launch",
+   "prompt": "A 30-second launch video for Brightfold, a new app for small businesses: snap a photo of a receipt and Brightfold files it, matches it to the right line on the bank statement, and closes your books at the end of the month. The audience is owners of businesses with 5 to 50 people, who dread month-end and the shoebox of receipts. Make it look like a polished product launch from a top software company: the app's screens, the receipts flying into place, the month closing itself. End on the name Brightfold and the line \"Close your month in minutes.\" Brightfold is a made-up company for a showcase: no prices, customer names or statistics.",
+   "from": "studio-20260928-102314-adduja"
+  },
+  {
+   "id": "taxes",
+   "look": "collage",
+   "audience": "adults: a general audience, an explainer",
+   "prompt": "Explain how taxes work in america.",
+   "from": "studio-20260929-144139-4r5esx"
+  },
+  {
+   "id": "bunny",
+   "look": "drawn",
+   "audience": "children aged 2-6",
+   "prompt": "Create a cheerful, colorful nursery rhyme video for children ages 2–6.\n\nTheme: **“The Little Bunny’s Morning Adventure”**\n\nCreate an original nursery rhyme with very simple, repetitive lyrics that are easy for young children to sing along with.\n\nStory:\nA cute little bunny wakes up in the morning, says hello to the sun, meets a friendly bird, hops through a colorful garden, plays with butterflies, picks some flowers, and returns home happily before bedtime.\n\nMusic:\n\n* Cheerful and playful children's melody\n* Simple repetitive rhythm\n* Soft, friendly child-safe vocals\n* Easy sing-along structure\n* Add gentle bells, xylophone, ukulele and soft percussion\n* Keep the music bright and happy without being too loud or overwhelming\n\nVisual style:\n\n* Colorful 3D cartoon animation\n* Cute, expressive bunny character\n* Bright flowers, trees, clouds and butterflies\n* Soft rounded shapes\n* Warm and friendly environment\n* Smooth animation suitable for toddlers\n* Keep the bunny's appearance consistent throughout the entire video\n* No scary scenes, violence, frightening characters or dark imagery\n\nVideo structure:\n\n1. Opening — Bunny wakes up and stretches\n2. Verse 1 — Bunny greets the smiling sun\n3. Verse 2 — Bunny meets a little bird\n4. Chorus — Bunny hops around the garden\n5. Verse 3 — Butterflies fly around Bunny\n6. Chorus — Everyone dances together\n7. Ending — Bunny waves goodbye and goes home\n\nMake the video approximately **60–90 seconds** long.\n\nAdd large, colorful on-screen lyrics synchronized with the singing so children can sing along.\n\nThe final video should feel joyful, wholesome, educational, memorable and suitable for a children's YouTube channel.",
+   "from": "studio-20260930-021827-3rdtmz"
+  },
+  {
+   "id": "penalty",
+   "look": "drawn",
+   "audience": "adults and teens: football fans",
+   "prompt": "The last penalty of a cup final, from the goalkeeper's point of view",
+   "from": "studio-20260929-220610-py7ko5"
+  },
+  {
+   "id": "devday",
+   "look": "drawn",
+   "audience": "developers: an event promo",
+   "prompt": "A 30-second promo for Northwind Dev Day 2027, a one-day developer conference in Denver on Thursday, March 18, 2027 at the Colorado Convention Center: talks on AI agents, platform engineering and the modern frontend, a hallway track and an evening party. Speakers include engineers from GitHub, Vercel and Stripe. Early-bird tickets $199 until January 31; register at northwind.dev/day. Northwind is a made-up company for a showcase."
+  }
+ ],
+ "result": "2026-10-02, 5 prompts x 2 arms at 30 s, graded blind: facts kept in one object 5/5 (before 0/5); professional 4.0 vs 3.8, fits 4.4 vs 4.6, childish .36 vs .34; Claude $2.99 vs $3.02 a film, 15.9 vs 17.1 min. Adopted: no cost, and every film is a template with no hand refactor (template_from_film.py pull)."
+}

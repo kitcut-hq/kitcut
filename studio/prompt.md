@@ -147,6 +147,11 @@ narration's language.
   cue), the `sound` tool traces it before it mixes.
 - Keep film.js under about 200 lines for a short film; a long one needs more, so keep it tidy
   (a small helper per scene, and the scenes one after another in `draw`).
+- Keep the film's facts in one place: every name, date, time, place, number, quote, link and the
+  key of each picture of a real thing goes in one `const FACTS = {...}` of plain data at the top
+  of film.js, and the scenes draw from it, so another event, person or product is a change to that
+  object alone (kitcut.ai makes templates of films this way). Fit long values; never hard-code a
+  fact in a scene.
 
 # Sound
 
