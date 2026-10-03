@@ -25,12 +25,15 @@ stage you can run again, and each with --plan to say what it would do and change
            the conference templates met -- and fails loudly otherwise: a template is not done
            until a stranger's sentence makes a good film from it
 
+    find   someone's films on kitcut.ai by their email (the site's prod.mjs films)
+
 The order, and what is a person's (the film-to-template skill walks it):
-    pull -> (refactor by an agent if pull asked for one) -> prove -> alt -> check -> spec
+    find -> pull -> (refactor by an agent if pull asked for one) -> prove -> alt -> check -> spec
     -> (write the brief, the example, the page's words) -> make --push --publish -> site
     --publish -> test (twice: words only, and words with pictures)
 
 Invoke as:
+    python studio/template_from_film.py find <email>
     python studio/template_from_film.py pull <film-id> --slug <slug> [--facts FACTS] [--plan]
     python studio/template_from_film.py prove --slug <slug> [--times 1,5,9]
     python studio/template_from_film.py alt --slug <slug> --content <content.alt.json>
@@ -213,6 +216,18 @@ original is {src}, never write there). Work only in {proj}.
 6. python studio/template_from_film.py check --slug {slug}  must find nothing.
 Report the content.json schema, the prove numbers and what you fixed.
 """
+
+
+# ------------------------------------------------------------------ find
+def stage_find(a):
+    """Someone's films on kitcut.ai, newest first, with their projects (the site's prod.mjs)."""
+    site = os.path.abspath(a.site)
+    argv = [shutil.which("node"), os.path.join(site, "scripts", "prod.mjs"), "films", a.film]
+    if a.plan:
+        say("would run: " + " ".join(argv))
+        return
+    r = subprocess.run(argv, cwd=site, capture_output=True, text=True, encoding="utf-8")
+    say((r.stdout + r.stderr).strip())
 
 
 # ------------------------------------------------------------------ pull
@@ -588,6 +603,7 @@ def stage_site(a):
     if not spec:
         raise Stop("no %s: spec first" % site_spec)
     slug = spec["slug"]
+    say(site_cmd(a, "check", "--spec", site_spec, env_file=None).splitlines()[-1])
     listed = site_cmd(a, "list", env_file=None)
     exists = re.search(r"\s/templates/%s\s" % re.escape(slug), listed + " ") or spec["id"] in listed
     verb = "update" if exists else "create"
@@ -714,10 +730,10 @@ def main():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument(
-        "stage", choices=("pull", "prove", "alt", "check", "spec", "make", "site", "test")
+        "stage", choices=("find", "pull", "prove", "alt", "check", "spec", "make", "site", "test")
     )
-    ap.add_argument("film", nargs="?", help="pull: the studio film id")
-    ap.add_argument("--slug", required=True, help="the template's name: projects/<slug>, t-<slug>")
+    ap.add_argument("film", nargs="?", help="pull: the studio film id; find: an email")
+    ap.add_argument("--slug", default="", help="the template's name: projects/<slug>, t-<slug>")
     ap.add_argument(
         "--facts", help="pull: the name of film.js's facts object (default: FACTS, EVENT...)"
     )
@@ -740,10 +756,13 @@ def main():
         a.film = a.film_id
         if not (a.prompt or a.film):
             ap.error("test needs --prompt")
-    if a.stage == "pull" and not a.film:
-        ap.error("pull needs the film id")
+    if a.stage in ("pull", "find") and not a.film:
+        ap.error("%s needs %s" % (a.stage, "the film id" if a.stage == "pull" else "an email"))
+    if a.stage != "find" and not a.slug:
+        ap.error("--slug is needed")
     try:
         {
+            "find": stage_find,
             "pull": stage_pull,
             "prove": stage_prove,
             "alt": stage_alt,

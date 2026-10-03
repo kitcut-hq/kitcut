@@ -611,6 +611,20 @@ content is a data edit with its clicks and pops to match.
   pictures like the content, so the sample's map is a leftover until a route of the person's own
   replaces it. A spec's `assets` are the template's own generic pictures (a ride's bike, jersey,
   gels): copied to `assets/`, seeded as `template/assets/`, kept by every film, never a leftover.
+- **From a film to a live template: `studio/template_from_film.py`** (the `film-to-template`
+  skill walks it). One command a stage, each with `--plan`: `find <email>` (someone's films, the
+  site's `prod.mjs films`), `pull <film>` (code, cast, engine, its own fonts, narration, sound and
+  the pictures it draws into `projects/<slug>/`; a facts object at the top of film.js --
+  `const FACTS`, which the brief asks every film for since 2026-10-02 -- becomes content.json, else
+  a refactor brief for an agent), `prove` (pixel-identical to the film), `alt` (other content, read
+  by eye), `check` (no sample word in the code), `spec` (both specs from the film), `make --push
+  --publish`, `site --publish` (runs `templates.mjs check` first), and `test`: a film from one
+  sentence on the VM, graded blind with bakeoff's grader -- professional >= 4 and fidelity >= 4 or
+  it fails. The tech meetup template (2026-10-02) went from film to live in under an hour, with no
+  hand refactor; its first test, a real You.com event from its link alone, graded 4 and 5.
+- **Several logos**: `template_pictures(logos=[...])` makes each (co-hosts, sponsors) readable on
+  dark and light grounds as `logo-1`, `logo-1-light`...; a film's own fonts (`web/fonts/`, the font
+  tool) travel with its template into every remake.
 - **A narrated template** (spec `"narration": true`; the birthday invitations, 2026-10-02). The
   version keeps the sample's script as `vo.sample.json` (lines, style, and a Gemini voice -- never
   an author's own ElevenLabs voice, never the takes) and its word times as `timeline.sample.json`,
