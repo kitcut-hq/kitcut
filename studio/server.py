@@ -140,6 +140,7 @@ import youtube  # noqa: E402
 import ytdraft  # noqa: E402
 import share  # noqa: E402
 import canon  # noqa: E402
+import brandkit  # noqa: E402
 from film import Film  # noqa: E402
 from sched import Sched  # noqa: E402
 
@@ -488,6 +489,7 @@ def idle():
         and not ytdraft.in_flight()
         and not share.in_flight()
         and not canon.in_flight()
+        and not brandkit.in_flight()
         and not transcribing()
     )
 
@@ -1641,6 +1643,141 @@ async def library_delete(req):
     return web.json_response({"name": name, "deleted": True})
 
 
+# ------------------------------------------------------------------ a project's brand (brandkit.py)
+async def _brand_dir(req, body=None):
+    """The asker's project's brand folder, from ?project= or the body's "project"."""
+    p = (body or {}).get("project") if isinstance(body, dict) else None
+    p = str(p or req.query.get("project") or "")
+    lib = library.owner(client_of(req), p) if films.PROJECT_ID.match(p) else None
+    if not lib:
+        raise web.HTTPNotFound(
+            text='{"error": "No such project."}', content_type="application/json"
+        )
+    return brandkit.dir_of(lib)
+
+
+async def _json(req):
+    try:
+        body = await req.json()
+    except ValueError:
+        body = None
+    return body if isinstance(body, dict) else {}
+
+
+def _brand_error(e):
+    return web.json_response({"error": e.text}, status=e.status)
+
+
+def _look(v):
+    return v if v in brandkit.LOOK_STYLE else "drawn"
+
+
+async def brand_get(req):
+    """The brand as the page shows it: its state, files, card and what was found."""
+    d = await _brand_dir(req)
+    return web.json_response(await asyncio.to_thread(brandkit.public, d))
+
+
+async def brand_file_add(req):
+    """Start a file: ?project=&name=&size= -> {id, ...}; its bytes follow in parts."""
+    d = await _brand_dir(req)
+    try:
+        size = int(req.query.get("size") or 0)
+        m = await asyncio.to_thread(brandkit.add_file, d, req.query.get("name"), size)
+    except ValueError:
+        return web.json_response({"error": "Say how big the file is."}, status=400)
+    except brandkit.BrandError as e:
+        return _brand_error(e)
+    return web.json_response(m, status=201)
+
+
+async def brand_file_part(req):
+    """One part of a file, the raw body (at most brandkit.PART): ?project=&offset=."""
+    d = await _brand_dir(req)
+    buf, n = bytearray(), 0
+    async for chunk in req.content.iter_chunked(256 * 1024):
+        n += len(chunk)
+        if n > brandkit.PART:
+            return web.json_response({"error": "A part is at most 4 MB."}, status=413)
+        buf += chunk
+    try:
+        offset = int(req.query.get("offset") or 0)
+        m = await asyncio.to_thread(brandkit.put_part, d, req.match_info["fid"], offset, bytes(buf))
+    except ValueError:
+        return web.json_response({"error": "Say where the part goes."}, status=400)
+    except brandkit.BrandError as e:
+        return _brand_error(e)
+    return web.json_response({"id": m["id"], "got": m["got"], "size": m["size"]})
+
+
+async def brand_file_done(req):
+    d = await _brand_dir(req)
+    try:
+        m = await asyncio.to_thread(brandkit.finish, d, req.match_info["fid"])
+    except brandkit.BrandError as e:
+        return _brand_error(e)
+    return web.json_response(m)
+
+
+async def brand_file_delete(req):
+    d = await _brand_dir(req)
+    if not await asyncio.to_thread(brandkit.remove_file, d, req.match_info["fid"]):
+        return web.json_response({"error": "No such file."}, status=404)
+    return web.json_response({"deleted": True})
+
+
+async def brand_read(req):
+    """Read the brand's files (again) in the background: {"project", "look"}."""
+    body = await _json(req)
+    d = await _brand_dir(req, body)
+    try:
+        st = brandkit.start(d, site_auth(), _look(body.get("look")))
+    except brandkit.BrandError as e:
+        return _brand_error(e)
+    return web.json_response(st, status=202)
+
+
+async def brand_edit(req):
+    """The person's corrections to the card: {"project", "look", ...fields}."""
+    body = await _json(req)
+    d = await _brand_dir(req, body)
+    try:
+        card = await asyncio.to_thread(brandkit.edit, d, body)
+    except brandkit.BrandError as e:
+        return _brand_error(e)
+    brandkit.preview_again(d, _look(body.get("look")))
+    return web.json_response({"card": card})
+
+
+async def brand_preview(req):
+    """The preview drawn in a look (the project's look changed): {"project", "look"}."""
+    body = await _json(req)
+    d = await _brand_dir(req, body)
+    try:
+        st = brandkit.preview_again(d, _look(body.get("look")))
+    except brandkit.BrandError as e:
+        return _brand_error(e)
+    return web.json_response(st, status=202)
+
+
+async def brand_delete(req):
+    d = await _brand_dir(req)
+    await asyncio.to_thread(brandkit.remove, d)
+    return web.json_response({"deleted": True})
+
+
+async def brand_asset(req):
+    """A page, a picture, a face's specimen, a logo or the preview, for the page."""
+    d = await _brand_dir(req)
+    got = brandkit.asset(d, req.match_info["kind"], req.match_info["name"])
+    if not got:
+        return web.json_response({"error": "not found"}, status=404)
+    path, ctype = got
+    return web.FileResponse(
+        path, headers={"Content-Type": ctype, "Cache-Control": "private, max-age=60"}
+    )
+
+
 async def picture_add(req):
     """Put one of the asker's uploads into their project as a picture its episodes get:
     {"project": id, "upload": "up-...", "name": "logo"}. The upload goes; the picture stays. The
@@ -2112,6 +2249,16 @@ def make_app(token):
             web.post("/api/library/voice", voice_add),
             web.get("/api/library/voice/{key}.mp3", voice_audio),
             web.delete("/api/library/voice/{key}", voice_delete),
+            web.get("/api/library/brand", brand_get),
+            web.patch("/api/library/brand", brand_edit),
+            web.delete("/api/library/brand", brand_delete),
+            web.post("/api/library/brand/read", brand_read),
+            web.post("/api/library/brand/preview", brand_preview),
+            web.post("/api/library/brand/files", brand_file_add),
+            web.put("/api/library/brand/files/{fid}", brand_file_part),
+            web.post("/api/library/brand/files/{fid}/done", brand_file_done),
+            web.delete("/api/library/brand/files/{fid}", brand_file_delete),
+            web.get("/api/library/brand/{kind}/{name}", brand_asset),
             web.get("/api/library/{name}/thumb.png", library_thumb),
             web.delete("/api/library/{name}", library_delete),
             web.get("/api/films/{id}", status),

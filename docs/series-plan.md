@@ -57,6 +57,11 @@ What breaks at scale:
     given, logo files, tone of voice, do's and don'ts), show it for the person to correct, keep it
     in the project like its pictures. A brand book dropped on a single film's prompt still works
     and offers "keep it for the project". Get a real brand book first and build against it.
+    *Built 2026-10-02* (`studio/brandkit.py`, the site's Brand tab; decided with the owner: the
+    brand sets colours, type and logo while the look keeps the drawing style; one brand per
+    project; uploaded fonts used after a tick). Any file goes up in parts; tested on two public
+    brand books and a made-up one. Still open: a brand dropped on one film's prompt, "use the brand
+    from another project", and the MCP tools (an assistant cannot see or set a brand yet).
 
 Open question for the content, not the system: Duchess is "she" in every film so far; the owner
 says "he" (Ukrainian кіт is masculine). The bible settles it.

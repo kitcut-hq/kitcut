@@ -102,8 +102,8 @@ def main():
 
     srv = http.server.HTTPServer(("127.0.0.1", 0), Redirect)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    pub_addr, pub_url = _web.public_addr, _web.public_url
-    _web.public_addr = lambda h, p: "127.0.0.1" if h == "pub.test" else pub_addr(h, p)
+    pub_addr, pub_url = _web.public_addrs, _web.public_url
+    _web.public_addrs = lambda h, p: ["127.0.0.1"] if h == "pub.test" else pub_addr(h, p)
     _web.public_url = lambda u: (True, "") if "pub.test" in u else pub_url(u)
     try:
         try:
@@ -113,7 +113,7 @@ def main():
             got = "refused" if "127.0.0.1" in str(e) else "refused, but: %s" % e
         expect("a redirect to 127.0.0.1", got, "refused")
     finally:
-        _web.public_addr, _web.public_url = pub_addr, pub_url
+        _web.public_addrs, _web.public_url = pub_addr, pub_url
         srv.shutdown()
     try:
         _web.fetch("http://127.0.0.1:1/")

@@ -481,6 +481,28 @@ its films, next to `projects\`, never in git:
   member: seeded into the next episode, its new and changed entries saved after an ok film, only
   over the version the film started from. `sounds_note` tells the episode (and a scenes film's
   editor, who writes the music) what the series has and how to play it.
+- **A project's brand** (`brandkit.py`, 2026-10-02). Pictures are things to show; a brand is how
+  every frame looks and sounds. The person sends anything (a zip of the brand folder, PDF
+  guidelines, logos, fonts, slides) in parts of up to 4 MB (the site's functions take 4.5 MB), into
+  `<project library>/brand/files/`, kept so a read can run again. A read:
+  - **ingest, no Claude:** zips unpacked to three deep (a zip-bomb entry skipped), PDF pages drawn
+    with pdfium (not PyMuPDF: AGPL) and each PDF kept for sharp logo crops, office files' words,
+    media and theme colours and fonts, SVGs drawn by the browser (`web-grab.svg_raster`), fonts
+    read with fontTools (woff/woff2 unpacked to sfnt, licence bits noted), colour codes found in
+    the words, junk (`__MACOSX`, `.DS_Store`) ignored, an EPS or a video listed with the reason;
+  - **one Claude call with no tools:** the ten pages that matter most (by their words), a numbered
+    sheet of the pictures, the words, and the evidence -> the card, held to its shape (`clean_card`);
+  - **assets:** each logo trimmed and keyed off a plain background (only where the background
+    touches the edge: a white letter in a blue badge stays), cut from its page when it is only
+    there; the faces in use (uploaded ones only with the person's `fonts_consent`, else the free
+    stand-in from Google Fonts); `brand.js` (`SK.BRAND`, the kit's font, `SK.BRAND.logoFor(bg)`);
+  - **the preview:** three frames the film engine draws in the project's look, with the brand.
+  An episode gets it at seed (`brandkit.seed`: `brand/` in the film, its faces in the manifest's
+  fonts, logos as `brand_logo*` images, `brand.js` first in `head.scripts`, which thumbnails and the
+  cast sheet keep too) and a note in its first message (`brandkit.note`). Routes:
+  `/api/library/brand[...]` (`server.py`); the site's are `/api/projects/<id>/brand[...]`.
+  Measured on two public brand books and a made-up one: 21-30 pages read in 1-10 s, the card in
+  16-30 s at $0.15-0.41 on the key. `test_brandkit.py` covers it without Claude.
 - **Back-fill by hand.** A set a series drew in its episodes' film.js never reached the library:
   write it as a cast file and `ops.sh library-put <project> [--dry-run] <cast/x.js>...`
   (`studio/library_put.py`) makes it the next version, thumbnail and sheet included, as keep()

@@ -60,6 +60,7 @@ from datetime import datetime
 import sys
 import subprocess
 
+import brandkit
 import clients
 import locks
 from film import CAST_USE, HOME, PROJECT_ID, VO_PINNED, Film, _write_json
@@ -349,6 +350,11 @@ def seed(film):
     if lib[1]:
         got["pictures"] = _seed_pictures(film, lib, idx)
         got["voice"] = _seed_voice(film, lib, idx)
+        try:  # the project's brand (brandkit.py): its faces, logos and brand.js
+            got["brand"] = brandkit.seed(film, lib)
+        except Exception as e:  # noqa: BLE001 -- an episode is made without it rather than not
+            print("film %s: brand not seeded: %s" % (film.id, e), file=sys.stderr, flush=True)
+            got["brand"] = None
         got["sounds"] = _seed_sounds(film, lib)
     film.update(library=got)
     return got
@@ -507,6 +513,10 @@ def note(film):
         out.append('This film is an episode of the project "%s".' % project.get("name"))
         if (project.get("brief") or "").strip():
             out.append("Its brief, from the person who runs it:\n" + project["brief"].strip())
+    if project and (got.get("brand") or {}).get("name"):
+        mark = brandkit.note(film, lib_of(rec))
+        if mark:
+            out += ["", mark]
     if pics:
         out += [
             "" if out else None,
@@ -773,6 +783,17 @@ def sheet(film, names):
         "cast": film.path("cast"),
         # a member may draw with its film's modules (a collage film's pieces)
         **({"modules": m["modules"]} if m.get("modules") else {}),
+        # and read what its head scripts set (a project's brand.js: SK.BRAND)
+        **(
+            {"head": {"scripts": [film.path(*p.split("/")) for p in m["head"]["scripts"]]}}
+            if (m.get("head") or {}).get("scripts")
+            else {}
+        ),
+        "images": {
+            k: v if os.path.isabs(v) else film.path(*v.split("/"))
+            for k, v in (m.get("images") or {}).items()
+            if isinstance(v, str) and k.startswith("brand_")
+        },
     }
     _write_json(os.path.join(d, "sketch.json"), man)
     times = [t for i in range(len(names)) for t in (i + 0.25, i + 0.75)]

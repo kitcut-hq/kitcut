@@ -515,7 +515,9 @@ def clean_manifest(film_dir, into, head=None, fonts=()):
     audio = dict(m.get("audio") or {})
     audio["vo_timeline"] = ab(audio.get("vo_timeline") or "audio/vo/timeline.json")
     m["audio"] = {"vo_timeline": audio["vo_timeline"]}  # stills need no score or effects
-    m["head"] = {"scripts": list(head if head is not None else [THUMB_JS])}
+    # the film's own head scripts first (a project's brand.js: SK.BRAND, which its code reads)
+    own = [ab(p) for p in (m.get("head") or {}).get("scripts", []) if isinstance(p, str)]
+    m["head"] = {"scripts": own + list(head if head is not None else [THUMB_JS])}
     m["slug"] = "thumbs"
     os.makedirs(into, exist_ok=True)
     out = os.path.join(into, "sketch.json")

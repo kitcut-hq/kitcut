@@ -59,14 +59,31 @@ def addresses(host, port=443):
         raise NotPublic("%s does not resolve (%s)" % (host, e)) from None
 
 
-def public_addr(host, port):
-    """One public address of `host` to connect to; NotPublic when any of them is not public (a
-    name with one private address among public ones is not trusted)."""
+def public_addrs(host, port):
+    """Every address of `host`, all public; NotPublic when any of them is not (a name with one
+    private address among public ones is not trusted)."""
     addrs = addresses(host, port)
     bad = [a for a in addrs if not public_ip(a)]
     if bad or not addrs:
         raise NotPublic("%s is not on the public internet (%s)" % (host, ", ".join(bad or addrs)))
-    return addrs[0]
+    return addrs
+
+
+def public_addr(host, port):
+    """One public address of `host` (public_addrs)."""
+    return public_addrs(host, port)[0]
+
+
+def _connect(host, port, timeout):
+    """A socket to the first of `host`'s public addresses that answers: a network with no route
+    for one family (IPv6 on a laptop's VPN, 2026-10-02: WinError 10051) still reaches the rest."""
+    err = None
+    for ip in public_addrs(host, port):
+        try:
+            return socket.create_connection((ip, port), timeout)
+        except OSError as e:
+            err = e
+    raise err
 
 
 def public_url(url):
@@ -94,14 +111,12 @@ def public_url(url):
 
 class _HTTP(http.client.HTTPConnection):
     def connect(self):
-        ip = public_addr(self.host, self.port)
-        self.sock = socket.create_connection((ip, self.port), self.timeout)
+        self.sock = _connect(self.host, self.port, self.timeout)
 
 
 class _HTTPS(http.client.HTTPSConnection):
     def connect(self):
-        ip = public_addr(self.host, self.port)
-        sock = socket.create_connection((ip, self.port), self.timeout)
+        sock = _connect(self.host, self.port, self.timeout)
         self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
 
 

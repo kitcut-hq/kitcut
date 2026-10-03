@@ -3770,6 +3770,17 @@ refuses a name the kit lacks, naming the ones it has. In the studio only a proje
 write `sounds.json`; the library seeds it from the series and keeps what the episode added or
 changed (`studio/README.md`, "A series"). `check-sketch.py` and `studio/test_sounds.py` cover it.
 
+**A project's brand** (`SK.BRAND`). An episode of a project with a brand (`studio/brandkit.py`,
+`studio/README.md` "A project's brand") has `brand/brand.js` first in its manifest's
+`head.scripts`: `SK.BRAND = {name, colors: {primary, accent, background, text, ...}, palette,
+fonts: {headline, headlineWeight, body, bodyWeight}, logos: {primary: 'brand_logo', on_dark,
+on_light, mark, ...}, logoInk, tagline}`, `SK.KIT.font` set to the body face, and
+`SK.BRAND.logoFor(bg)` -> `{logo, plate?}`: the on-dark or on-light version when there is one,
+else the primary, on a plate when its own colour has under 3:1 contrast with `bg`. Its faces are
+in the manifest's `fonts` (`brand/fonts/...`) and its logos in `images`. `_thumb.clean_manifest`
+and the cast sheet keep a film's own head scripts ahead of theirs, so a film reading `SK.BRAND`
+draws in its thumbnails too.
+
 ### The paintings: `sketch-paint.py`, and choosing a painter with `paint-compare.py`
 
 A painted film animates pictures made by an image model. The manifest's `paint` block (inline,
