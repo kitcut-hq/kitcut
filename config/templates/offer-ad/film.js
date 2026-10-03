@@ -164,7 +164,7 @@ function layout() {
   let zoneTop;
   if (!hasPhoto) {
     const room = footBottom - (footH ? footH + 36 * U : 0);
-    zoneTop = clamp((H - zoneH) / 2 - .02 * H, topM, Math.max(topM, room - zoneH));
+    zoneTop = clamp((H - zoneH) / 2 - (figLines.length ? .07 : .02) * H, topM, Math.max(topM, room - zoneH));
   } else if (ANCHOR === 'top') zoneTop = topM;
   else zoneTop = footBottom - (legalH ? legalH + 36 * U : 0) - zoneH;
   const place = (h) => (hasPhoto && ANCHOR === 'top' ? zoneTop : zoneTop + (zoneH - h) / 2); // the shorter block centres on the taller
@@ -173,8 +173,12 @@ function layout() {
   const logoX = W - M - lw, logoY = ANCHOR === 'top' ? footBottom - lh : topM;
   const logoDarkVariant = !!LOGO && LOGO.image && LOGO.light && !hasPhoto && lumOf(GROUND) > .45;
 
+  // no photo: the figure is also drawn huge and hollow under the words, so the words sit a little above the middle
+  const ghostText = figLines.slice().sort((p, q) => mw(q, 100, 800, -3) - mw(p, 100, 800, -3))[0] || '';
+  const ghostW = ghostText ? mw(ghostText, 100, 800, -3) : 0;
+  const ghostSize = !hasPhoto && ghostText ? Math.min(W * .98 / ghostW * 100, H * .62 / CAPR) : 0;
   const Lay = {
-    c, hasPhoto, photoIm, prodIm, logoIm, field, ink, figCol, ctaFill, ctaInk, M, topM, botM, pw, ph, tx, ta, rw, mw,
+    ghostSize, ghostText, c, hasPhoto, photoIm, prodIm, logoIm, field, ink, figCol, ctaFill, ctaInk, M, topM, botM, pw, ph, tx, ta, rw, mw,
     figLines, FS, capH, figGap, figH, figW, subLines, SS, pitch, subH, subW, subGap, cs, ctaW, ctaH, ctaGap, textH, textW,
     lw, lh, legalSize, legalLines, legalPitch, legalH, footBottom, zoneTop, zoneH, textTop, prodTop, logoX, logoY, logoDarkVariant,
     prodX, round: PRODUCT ? Math.max(0, +PRODUCT.round || 0) * U : 0,
@@ -272,6 +276,16 @@ function drawField(Lay, t) {
   const glow = c.createRadialGradient(W * .78 + ph * 40 * U, H * .28 + ph2 * 30 * U, 0, W * .78, H * .28, R * .75);
   glow.addColorStop(0, rgba(ACCENT, .42)); glow.addColorStop(.55, rgba(ACCENT, .12)); glow.addColorStop(1, rgba(ACCENT, 0));
   c.fillStyle = glow; c.fillRect(0, 0, W, H);
+  // two big flat discs drifting on the loop: the page has a picture of its own even on the beats with no words
+  c.fillStyle = rgba(Lay.ink, .075); c.beginPath(); c.arc(W * .84 + ph * 34 * U, H * .84 + ph2 * 22 * U, R * .44, 0, Math.PI * 2); c.fill();
+  c.fillStyle = rgba(ACCENT, .16); c.beginPath(); c.arc(W * .1 - ph2 * 26 * U, H * .1 + ph * 18 * U, R * .24, 0, Math.PI * 2); c.fill();
+  // the figure again, huge and only an outline, bleeding off the bottom edge: a typographic poster under the words
+  if (Lay.figLines.length && Lay.ghostSize) {
+    const gx = W * 1.01 + ph * 18 * U, gy = H * 1.03 + ph2 * 10 * U;
+    c.save(); c.font = `800 ${Lay.ghostSize}px ${FONT}`; c.letterSpacing = (-.03 * Lay.ghostSize) + 'px'; c.textAlign = 'right'; c.textBaseline = 'alphabetic';
+    c.strokeStyle = rgba(Lay.figCol === Lay.ink ? Lay.ink : Lay.figCol, .22); c.lineWidth = 3 * U; c.lineJoin = 'round';
+    c.strokeText(Lay.ghostText, gx, gy); c.restore();
+  }
   c.save(); c.strokeStyle = rgba(Lay.ink, .09); c.lineWidth = 2 * U;
   for (let i = 0; i < 3; i++) { c.beginPath(); c.arc(W * .1 - ph2 * 20 * U, H * .92 + ph * 14 * U, R * (.3 + i * .12), 0, Math.PI * 2); c.stroke(); }
   c.restore();
