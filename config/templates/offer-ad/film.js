@@ -291,8 +291,10 @@ function drawField(Lay, t) {
   c.restore();
 }
 function drawPhoto(Lay, t) {
-  const c = Lay.c, G = photoGeom(Lay), z = 1 + .05 * Math.pow(Math.sin(Math.PI * t / DUR), 2);
-  c.save(); c.translate(G.px, G.py); c.scale(z, z); c.translate(-G.px, -G.py);
+  const c = Lay.c, G = photoGeom(Lay), z = 1 + .075 * Math.pow(Math.sin(Math.PI * t / DUR), 2);
+  // a push in, and a slow drift sideways that is back where it started when the loop is
+  const drift = Math.sin(t / DUR * Math.PI * 2) * .01 * W;
+  c.save(); c.translate(drift, 0); c.translate(G.px, G.py); c.scale(z, z); c.translate(-G.px, -G.py);
   c.drawImage(Lay.photoIm, G.dx, G.dy, G.pw, G.ph); c.restore();
 }
 function text(c, s, x, y, size, wt, col, alpha, o = {}) {
