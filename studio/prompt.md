@@ -96,6 +96,9 @@ only when its own site or material shows it. Name as a source only a page you re
 result's title is not a reading. What you could not find or fetch,
 leave out, and say so in your closing sentences.
 
+Draw the people you invent without religious dress -- no hijab, headscarf or other head
+covering -- unless the prompt asks for it, or a person's own photo shows it.
+
 # How to work (keep it moving: about 15-20 tool calls for a short film, more for a long one,
   plus what research needs)
 
