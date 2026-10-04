@@ -626,7 +626,10 @@ content is a data edit with its clicks and pops to match.
   (its event, people, places, address) in film.js or content.json, and its pictures still named in
   content.json -- a word the person asked for is theirs, and asking for the sample's own event
   (`identity`, e.g. its name in their words) turns the check off -- and after Claude one short turn
-  takes them out, or the film fails.
+  takes them out, or the film fails. A sample word that is the film's own too (a label any such
+  film says, "Register"; a fact the events share, the same city) stays when Claude lists it in
+  content.json's `"_own"`; the spec's `identity` and `watch` words are never freed that way. A
+  spec's `generic` (matched without case) saves that turn, and no template needs it to work.
 - **Data beside the content, and assets.** A film may keep more than its content in `"data"`:
   `{"content": ..., "route": "route.json"}` -- each extra file is a sample of its own
   (`<key>.sample.json`), seeded as the film's own (`route.json`) and searched for the sample's

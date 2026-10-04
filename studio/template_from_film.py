@@ -447,7 +447,7 @@ def code_leftovers(slug, spec=None):
     p = project(slug)
     content = read_json(os.path.join(p, "content.json"), {})
     spec = spec or read_json(os.path.join(KIT, "config", "templates", slug + ".json"), {}) or {}
-    generic = set(spec.get("generic") or ())
+    generic = {g.strip().lower() for g in spec.get("generic") or ()}
     images = set((read_json(os.path.join(p, "sketch.json"), {}) or {}).get("images") or {})
     code = open(os.path.join(p, "film.js"), encoding="utf-8").read()
     for n in (
@@ -463,7 +463,7 @@ def code_leftovers(slug, spec=None):
         if k != "_about" and k not in (spec.get("keep") or ())  # kept by every film: labels
         for s in strings(v)
         if len(s.strip()) >= 4
-        and s.strip() not in generic
+        and s.strip().lower() not in generic
         and s.strip() not in images
         and not re.fullmatch(r"[\d\W_]+|#[0-9A-Fa-f]{3,8}|[a-z-]+", s.strip())
     }

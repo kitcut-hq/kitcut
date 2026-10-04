@@ -388,7 +388,11 @@ def ask(film):
         "with the keys to put in content.json.",
         "Replace the whole sample: none of the template's own event, people, places, addresses, "
         "marks or pictures (template/content.sample.json%s) may stay unless they asked for them. "
-        "The studio checks, and stops the film while any are left."
+        "The studio checks, and stops the film while any are left. A word of the sample that is "
+        'this film\'s own too -- an ordinary label any film of this kind says ("Register", '
+        '"Kitchen"), or a fact their event truly shares with the sample (the same city, the '
+        "same hours) -- stays, and is listed, exactly as the sample has it, in content.json under "
+        '"_own" (a list); the sample\'s event, people, places and addresses never are.'
         % (", and in its narration, template/vo.sample.json" if narrated else ""),
         "Its words are in the language they ask for -- when they do not say, the one they wrote "
         "in -- names as they are, and every face the film draws them in must have their letters "
@@ -439,15 +443,31 @@ def leftovers(film):
     kept = set(_strings({k: sample.get(k) for k in t.get("keep") or ()}))
     # the template's own words for everyone ("BOOK TICKETS"), not the sample's
     kept |= set(t.get("generic") or ())
+    kept = {k.strip().lower() for k in kept}  # "REGISTER" in the spec, "Register" in the sample
     words = {
         s.strip()
         for s in _strings({k: v for k, v in sample.items() if k not in (t.get("keep") or ())})
-        if len(s.strip()) >= 4 and s.strip() not in kept and not re.fullmatch(r"[\d\W_]+", s)
+        if len(s.strip()) >= 4
+        and s.strip().lower() not in kept
+        and not re.fullmatch(r"[\d\W_]+", s)
     }
     # an image key or a colour is not a word anyone reads
     words = {w for w in words if not re.fullmatch(r"#[0-9A-Fa-f]{6}|sp-[a-z0-9-]+|[a-z-]+", w)}
     words -= set((t.get("manifest") or {}).get("images") or {})  # its pictures: checked below
     mine = _read(film.path("content.json"), {})
+    # the sample's words this film says for itself: an ordinary label ("Register", "Kitchen") or
+    # a fact the person's event shares with the sample (the same city, the same hours), which
+    # Claude lists in content.json's "_own". A sample is full of such words, and a film that kept
+    # one failed whole (2026-10-03: four films, on "Register", "Kitchen" and "Bedrooms"). Never
+    # the sample's identity or a watched name: only the person's own words free those
+    own = {s.strip().lower() for s in _strings(mine.get("_own") if isinstance(mine, dict) else 0)}
+    for path in list(t.get("identity") or ()) + list(t.get("watch") or ()):
+        v = sample
+        for k in path.split("."):
+            v = v.get(k) if isinstance(v, dict) else None
+        if isinstance(v, str):
+            own.discard(v.strip().lower())
+    words = {w for w in words if w.lower() not in own}
     text = ""
     for name in ("film.js",):
         try:
@@ -455,6 +475,8 @@ def leftovers(film):
                 text += f.read()
         except OSError:
             pass
+    if isinstance(mine, dict):  # the list is not the film: a word only there is shown nowhere
+        mine = {k: v for k, v in mine.items() if k != "_own"}
     mine = json.dumps(mine, ensure_ascii=False)
     # the data beside the content (a route) names pictures too: the sample's map is a leftover
     # until a route of the person's own replaces it

@@ -562,6 +562,29 @@ async def main():
         with open(f.path("content.json"), "w", encoding="utf-8") as fh:
             json.dump(remade, fh)
         check(templates.leftovers(f) == [], "a film remade whole has nothing left over")
+        # a word of the sample the film says for itself (the same city) is listed in "_own"; the
+        # sample's identity never is, whatever the list says
+        same = dict(remade, event=dict(remade["event"], city="SAMPLEVILLE"))
+        with open(f.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump(same, fh)
+        check(templates.leftovers(f) == ["SAMPLEVILLE"], "a sample word kept is a leftover")
+        with open(f.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump(dict(same, _own=["Sampleville", "SAMPLE FEST"]), fh)
+        check(
+            templates.leftovers(f) == [],
+            'a sample word the film lists in "_own" is its own',
+            templates.leftovers(f),
+        )
+        with open(f.path("content.json"), "w", encoding="utf-8") as fh:
+            ev = dict(same["event"], name="SAMPLE FEST")
+            json.dump(dict(same, event=ev, _own=["SAMPLEVILLE", "SAMPLE FEST"]), fh)
+        check(
+            templates.leftovers(f) == ["SAMPLE FEST"],
+            'the identity of the sample is never freed by "_own"',
+            templates.leftovers(f),
+        )
+        with open(f.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump(remade, fh)
         # the sample's own picture key, made the person's own (template_pictures names a logo
         # "logo" too): theirs, not a leftover
         with open(f.manifest, encoding="utf-8") as fh:

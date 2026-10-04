@@ -388,7 +388,11 @@ LEFTOVERS = (
     "The film still shows the template's own sample: %s. None of the sample's event, people, "
     "places or addresses may be in this film -- replace them with the person's content (or leave "
     "them out), in film.js and content.json -- and in vo.json, recording the changed lines again "
-    "with the voice tool, when the film is narrated -- call check, and stop with one sentence."
+    "with the voice tool, when the film is narrated -- call check, and stop with one sentence. "
+    "A word of these that is this film's own too -- an ordinary label any film of this kind says "
+    '("Register", "Kitchen"), or a fact their event truly shares with the sample (the '
+    "same city, the same hours) -- may stay: list it, exactly as written here, in content.json "
+    'under "_own" (a list). Never list the event, people, places or addresses of the sample.'
 )
 
 

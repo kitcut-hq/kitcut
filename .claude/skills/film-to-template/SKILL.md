@@ -71,7 +71,7 @@ Fix what breaks in film.js (fit, re-split, move up), then **prove again**. `chec
   - `description`: the film scene by scene.
   - `example`: what a stranger would type; no made-up URLs.
   - `brief`: the clock (which scene runs when, hung on which narration line), every content field and its limit, where to find the facts, what never to invent, and how pictures become the film's own (`template_pictures(logo=…)`, `logos=[…]` for co-hosts, `people=[…]`, `qr=`).
-  - `generic`: words every film may keep.
+  - `generic`: words every film may keep (matched without case). Fill it from the sample's real content, after the film exists: every label a film of this kind says ("Register", "Kitchen", "Bedrooms"). It saves each remake a turn; a remake no longer fails without it, because Claude lists such words in content.json's `"_own"` (2026-10-03: four test films failed on those three words, with specs written before the films existed).
   - `watch`: content paths of short words such as a child's name.
   - `identity`: asking for the sample's own event turns the leftovers check off.
   - `narration` / `sound` come from the film: `"sound": "files"` keeps its score and cues, and moves the cues with a re-recorded narration.
