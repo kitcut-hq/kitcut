@@ -585,6 +585,28 @@ async def main():
         )
         with open(f.path("content.json"), "w", encoding="utf-8") as fh:
             json.dump(remade, fh)
+        # a picture the film's data names (not its code) is drawn: it stays in the manifest
+        with open(f.manifest, encoding="utf-8") as fh:
+            mm = json.load(fh)
+        before = dict(mm["images"])
+        mm["images"].update(web_hall="images/logo.png", web_spare="images/logo.png")
+        with open(f.manifest, "w", encoding="utf-8") as fh:
+            json.dump(mm, fh)
+        with open(f.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump(dict(remade, hero={"img": "web_hall"}), fh)
+        gone = agent.drop_unused_uploads(f)
+        check(
+            "web_spare" in gone and "web_hall" not in gone and "upload2" not in gone,
+            "a picture only the film's content names stays; one nothing names leaves",
+            gone,
+        )
+        with open(f.manifest, encoding="utf-8") as fh:
+            mm = json.load(fh)
+        mm["images"] = before
+        with open(f.manifest, "w", encoding="utf-8") as fh:
+            json.dump(mm, fh)
+        with open(f.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump(remade, fh)
         # the sample's own picture key, made the person's own (template_pictures names a logo
         # "logo" too): theirs, not a leftover
         with open(f.manifest, encoding="utf-8") as fh:

@@ -608,11 +608,14 @@ PICTURE = r"upload\d+|pic_[a-z0-9_]+|web_[a-z0-9_]+"
 def drop_unused_uploads(film):
     """The pictures (the person's, attached or their project's, and those Claude took from the
     web) that neither film.js nor the cast draws leave the manifest before the final render, so
-    they are never bundled into the film's files. Returns the names dropped."""
+    they are never bundled into the film's files. Returns the names dropped. A template's film
+    names its pictures in its data (content.json), not its code: read too, or every photo it
+    found left the film and its frames drew empty (an open house remake, 2026-10-04)."""
     with open(film.manifest, encoding="utf-8") as f:
         m = json.load(f)
     images = m.get("images") or {}
     code = [film.path("film.js")]
+    code += [film.path(*str(rel).split("/")) for rel in (m.get("data") or {}).values()]
     if os.path.isdir(film.path("cast")):
         code += [film.path("cast", n) for n in os.listdir(film.path("cast")) if n.endswith(".js")]
     used = set()
