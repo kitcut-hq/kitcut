@@ -601,8 +601,9 @@ def _doc_text(path):
         return None
 
 
-# the visitor's pictures, their project's, and what Claude took from the web (web-grab.py)
-PICTURE = r"upload\d+|pic_[a-z0-9_]+|web_[a-z0-9_]+"
+# the visitor's pictures, their project's, its brand's (brandkit.py: brand_pic_<name>; never its
+# logos, which the end card draws through SK.BRAND), and what Claude took from the web (web-grab.py)
+PICTURE = r"upload\d+|pic_[a-z0-9_]+|brand_pic_[a-z0-9_]+|web_[a-z0-9_]+"
 
 
 def drop_unused_uploads(film):

@@ -4,7 +4,10 @@ font files, slides -- read into a brand card every episode follows.
 
 A project's Pictures are things to show; its brand is how everything looks and sounds: the
 colours (drawings included), every typeface, the logo and its rules, the tone of voice. The look
-(drawn, painted, collage) still decides the drawing style. One brand per project:
+(drawn, painted, collage) still decides the drawing style. A brand has pictures of its own too
+(a mascot, a product shot, a screenshot of the app): each with a name and a line saying what it
+is and how to use it, given to every episode, so nobody attaches them film after film and they
+take none of the project's six Pictures. One brand per project:
 
     <project library>/brand/                     (library.dir_of: never in git, never public)
         files/<fid>.json  files/<fid>.bin        what the person sent, as sent, kept: reading
@@ -22,8 +25,9 @@ colours (drawings included), every typeface, the logo and its rules, the tone of
         card.json                                the brand card: Claude's reading of all that
                                                  (read()), then the person's corrections (edit())
         assets/                                  what an episode gets (build_assets): the logos
-                                                 trimmed (brand_logo*.png), fonts/ the faces in
-                                                 use, brand.js, used.json
+                                                 trimmed (brand_logo*.png), the brand's pictures
+                                                 as they are (brand_pic_<name>.png), fonts/ the
+                                                 faces in use, brand.js, used.json
         standin/                                 free stand-ins fetched from Google Fonts
         preview/<look>.png                       three frames the film engine drew with the brand
         state.json                               {state, step, done, total, error, server, at,
@@ -33,8 +37,8 @@ The state is empty (nothing sent), files (sent, not read), reading, ready or fai
 ingest() (no Claude: unpack, draw, read, normalise), then one Claude call with no tools that sees
 the pages that matter most and a sheet of the pictures and writes the card (ask), held to its
 shape (clean_card), then the assets and the preview. An episode of the project gets the assets
-(seed: fonts into its manifest, logos as SK.image names, brand.js before film.js) and a note
-(note). Uploaded fonts are used only once the person ticked that they may be (fonts_consent);
+(seed: fonts into its manifest, logos and pictures as SK.image names, brand.js before film.js)
+and a note (note) that says what each logo and each picture is for. Uploaded fonts are used only once the person ticked that they may be (fonts_consent);
 until then every face is a free stand-in from Google Fonts, named as such on the card.
 
     python studio/brandkit.py --files a.zip b.pdf --out <dir> --plan   read, no Claude: what
@@ -93,6 +97,11 @@ STALE_S = 30 * 60  # a read with no progress this long is one nobody is doing an
 
 ROLES = ("primary", "secondary", "accent", "background", "text", "neutral")
 LOGO_ROLES = ("primary", "on_dark", "on_light", "mark", "other")
+# a brand's own pictures (a mascot, a product, a screenshot): every episode's review renders carry
+# them all, as they carry the project's six (library.PICTURES)
+MAX_PICTURES = 8
+PICTURE_NAME = re.compile(r"^[a-z][a-z0-9_]{0,23}$")
+PICTURE_NOTE = 200
 TYPE_ROLES = ("headline", "body")
 FID = re.compile(r"^b-[a-z2-7]{10}$")
 HEX = re.compile(r"(?<![0-9A-Za-z&])#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})(?![0-9A-Za-z])")
@@ -788,6 +797,12 @@ CARD_SHAPE = """{"name": the brand's name,
    it}] -- the brand's logo files; where a logo is only on a page, {"page": a page id, "box":
    [x0, y0, x1, y1] as fractions of that page, "role", "note"}, a tight box around ONE logo on a
    plain background. Primary first, at most 6,
+ "pictures": [{"image": a picture id from the sheet, "name": a short name for it (lowercase
+   letters, digits and _, starting with a letter: mascot, app_start, product_box), "note": what
+   it shows and when and how a film should use it, one or two sentences}] -- the brand's other
+   pictures a film can show as they are: a mascot or character, a product, a screenshot of the
+   app, a key illustration. Not logos, not page scraps, icons or backgrounds; at most MAX_PICTURES,
+   [] when there are none,
  "logo_rules": the logo's rules (clear space, minimum size, what never to do), at most 6,
  "tone": a few words for the voice, at most 6,
  "voice": how the brand speaks, one or two sentences a narrator can follow,
@@ -821,15 +836,20 @@ def ask_text(inv, text, pages, sheet_ids):
     page_list = ", ".join(
         "%s (%s p.%d)" % (p["id"], p["from"], p["page"]) for p in inv["pages"] if p["id"] in pages
     )
-    shape = CARD_SHAPE.replace("LOGO_ROLES", " | ".join(LOGO_ROLES)).replace(
-        "ROLES", " | ".join(ROLES)
+    shape = (
+        CARD_SHAPE.replace("MAX_PICTURES", str(MAX_PICTURES))
+        .replace("LOGO_ROLES", " | ".join(LOGO_ROLES))
+        .replace("ROLES", " | ".join(ROLES))
     )
+    # each picture with the file it came from: a name (mascot.png, app/start.png) says what it is
+    src = {i["id"]: i.get("from") or "" for i in inv["images"]}
+    on_sheet = ", ".join("%s (%s)" % (i, src[i]) if src.get(i) else i for i in sheet_ids)
     return "\n\n".join(
         [
             "What was sent:\n" + files,
             "Pages shown above, in order: %s." % (page_list or "(none)"),
-            "The sheet of pictures shows: %s (each picture's id is under it)."
-            % (", ".join(sheet_ids) or "(no pictures)"),
+            "The sheet of pictures shows, each with the file it came from: %s (each picture's "
+            "id is under it)." % (on_sheet or "(no pictures)"),
             "Font files sent:\n" + (fonts or "(none)"),
             "Colour codes written in the files, most mentioned first: " + (colours or "(none)"),
             "Office theme colours and fonts: "
@@ -943,6 +963,22 @@ def _box(b):
     return [round(x0, 4), round(y0, 4), round(x1, 4), round(y1, 4)]
 
 
+def picture_name(v, taken=()):
+    """A brand picture's name as a film writes it (brand_pic_<name>): what was given, held to
+    lowercase letters, digits and _, starting with a letter, and not one already taken."""
+    s = re.sub(r"[^a-z0-9]+", "_", str(v or "").lower()).strip("_")
+    s = re.sub(r"^(brand_)?pic_", "", s)
+    if not s or not s[0].isalpha():
+        s = "picture" + ("_" + s if s else "")
+    s = s[:24].rstrip("_")
+    name, k = s, 1
+    while name in taken or not PICTURE_NAME.match(name):
+        k += 1
+        tail = "_%d" % k
+        name = s[: 24 - len(tail)].rstrip("_") + tail
+    return name
+
+
 def clean_card(d, inv):
     """A card held to its shape: colours that are colours, faces and pictures that exist, one
     primary of each. Used on Claude's reading and on every edit the person makes."""
@@ -995,12 +1031,24 @@ def clean_card(d, inv):
         logos[0]["role"] = "primary"
     for g in [g for g in logos if g["role"] == "primary"][1:]:
         g["role"] = "other"
+    pictures, names = [], set()
+    for g in d.get("pictures") if isinstance(d.get("pictures"), list) else []:
+        if not isinstance(g, dict) or g.get("image") not in images:
+            continue
+        if any(x["image"] == g["image"] for x in pictures):
+            continue
+        name = picture_name(g.get("name"), names)
+        names.add(name)
+        note = _t(g.get("note"), PICTURE_NOTE)
+        pictures.append({"image": g["image"], "name": name, "note": note})
+    pictures = pictures[:MAX_PICTURES]
     return {
         "name": _t(d.get("name"), 60) or "Brand",
         "summary": _t(d.get("summary"), 240),
         "palette": palette,
         "type": types,
         "logos": logos,
+        "pictures": pictures,
         "logo_rules": _list(d.get("logo_rules"), 6),
         "tone": _list(d.get("tone"), 6, 30),
         "voice": _t(d.get("voice"), 300),
@@ -1119,9 +1167,10 @@ def standin(d, family, weights, log=print):
 
 
 def build_assets(d, card, log=print):
-    """assets/: the logos as trimmed PNGs, the faces in use (the sent ones only with the
-    person's consent, else free stand-ins), fonts.json for an episode's manifest, and brand.js.
-    Returns what an episode gets: {"logos": {role: name}, "fonts": {role: family}, ...}."""
+    """assets/: the logos as trimmed PNGs, the brand's pictures as they are, the faces in use
+    (the sent ones only with the person's consent, else free stand-ins), fonts.json for an
+    episode's manifest, and brand.js. Returns what an episode gets: {"logos": {role: name},
+    "pictures": [{name, w, h, note}], "fonts": {role: family}, ...}."""
     read = os.path.join(d, "read")
     inv = _read_json(os.path.join(read, "inventory.json"), {})
     out = os.path.join(d, "assets.new")
@@ -1148,6 +1197,20 @@ def build_assets(d, card, log=print):
         logos[role if role not in logos and role != "other" else name] = name
         inks[name] = (dominant(im, 1) or ["#000000"])[0]
         logo_files.append(name)
+    pictures, picture_files = [], []
+    for g in card.get("pictures") or []:  # shown as they are: never keyed out, never trimmed
+        name = "brand_pic_" + g["name"]
+        try:
+            with Image.open(os.path.join(read, "images", g["image"] + ".png")) as im:
+                im.load()
+                im.save(os.path.join(out, name + ".png"))
+                size = im.size
+        except Exception as e:  # noqa: BLE001
+            log("picture %s: %s" % (g, e))
+            picture_files.append(None)
+            continue
+        pictures.append({"name": name, "w": size[0], "h": size[1], "note": g.get("note") or ""})
+        picture_files.append(name)
     faces, families = [], {}
     fonts = {f["id"]: f for f in inv.get("fonts") or []}
     for role in TYPE_ROLES:
@@ -1221,6 +1284,8 @@ def build_assets(d, card, log=print):
         "families": families,
         "logos": logos,
         "logo_files": logo_files,
+        "pictures": pictures,
+        "picture_files": picture_files,
         "brand": brand,
     }
     _write_json(os.path.join(out, "used.json"), used)
@@ -1539,6 +1604,7 @@ EDITABLE = (
     "palette",
     "type",
     "logos",
+    "pictures",
     "logo_rules",
     "tone",
     "voice",
@@ -1610,7 +1676,10 @@ def public(d):
             for f in inv.get("files") or []
         ],
         "pages": [{k: p[k] for k in ("id", "from", "page")} for p in inv.get("pages") or []],
-        "images": [{k: i[k] for k in ("id", "w", "h", "alpha")} for i in inv.get("images") or []],
+        "images": [
+            {k: i.get(k) for k in ("id", "w", "h", "alpha", "from")}
+            for i in inv.get("images") or []
+        ],
         "fonts": [
             {k: f[k] for k in ("id", "family", "style", "weight", "italic", "embedding")}
             for f in inv.get("fonts") or []
@@ -1619,7 +1688,9 @@ def public(d):
             "fonts": used.get("families"),
             "logos": used.get("logos"),
             "logo_files": used.get("logo_files") or [],
+            "picture_files": used.get("picture_files") or [],
         },
+        "limits": {"pictures": MAX_PICTURES, "picture_note": PICTURE_NOTE},
         "previews": previews,
         "read_at": st.get("read_at"),
     }
@@ -1648,7 +1719,8 @@ def asset(d, kind, name):
 # ------------------------------------------------------------------ an episode's brand
 def seed(film, lib):
     """A ready brand into a new episode: its assets in brand/, its faces in the manifest's fonts,
-    its logos as images (brand_logo...), brand.js before film.js. What it got, or None."""
+    its logos and pictures as images (brand_logo..., brand_pic_<name>), brand.js before
+    film.js. What it got, or None."""
     d = dir_of(lib)
     used = _read_json(os.path.join(d, "assets", "used.json"))
     card = _read_json(os.path.join(d, "card.json"))
@@ -1663,6 +1735,7 @@ def seed(film, lib):
     m["fonts"] = fonts + [dict(f, file="brand/" + f["file"]) for f in used["faces"]]
     images = {k: v for k, v in (m.get("images") or {}).items() if not k.startswith("brand_")}
     images.update({n: "brand/%s.png" % n for n in used["logos"].values()})
+    images.update({p["name"]: "brand/%s.png" % p["name"] for p in used.get("pictures") or []})
     m["images"] = images
     head = [s for s in (m.get("head") or {}).get("scripts", []) if s != "brand/brand.js"]
     m["head"] = {**(m.get("head") or {}), "scripts": ["brand/brand.js", *head]}
@@ -1670,8 +1743,22 @@ def seed(film, lib):
     return {
         "name": card["name"],
         "logos": sorted(used["logos"].values()),
+        "pictures": [p["name"] for p in used.get("pictures") or []],
         "fonts": used["families"],
     }
+
+
+def _stop(s):
+    s = (s or "").strip()
+    return s if not s or s[-1] in ".!?…" else s + "."
+
+
+def film_images(film):
+    try:
+        with open(film.manifest, encoding="utf-8") as f:
+            return json.load(f).get("images") or {}
+    except (OSError, ValueError):
+        return {}
 
 
 def note(film, lib):
@@ -1687,7 +1774,13 @@ def note(film, lib):
         "'%s' (%s%s)" % (n, r.replace("_", " "), "" if r in LOGO_ROLES else "")
         for r, n in used["logos"].items()
     )
-    notes = {g["role"]: g["note"] for g in card["logos"] if g.get("note")}
+    # what each logo is for, by the name a film draws it with (two "other" versions differ)
+    notes = {
+        n: g["note"]
+        for g, n in zip(card["logos"], used.get("logo_files") or [])
+        if n and g.get("note")
+    }
+    pictures = [p for p in used.get("pictures") or [] if p["name"] in film_images(film)]
 
     def face(role):
         f = fam[role]
@@ -1714,10 +1807,27 @@ def note(film, lib):
             "- Logos, drawn with SK.logo(name, x, y, {w, h, plate}) and never redrawn by hand: "
             "%s.%s On any background, SK.BRAND.logoFor(bg) -> {logo, plate} picks the version "
             "that shows, and a plate when none does: pass both on."
-            % (logos, " " + " ".join("%s: %s." % (k, v) for k, v in notes.items()) if notes else "")
+            % (
+                logos,
+                " " + " ".join("'%s': %s" % (k, _stop(v)) for k, v in notes.items())
+                if notes
+                else "",
+            )
         )
     if card.get("logo_rules"):
         lines.append("- Logo rules: " + "; ".join(card["logo_rules"]) + ".")
+    if pictures:
+        lines.append(
+            "- The brand's own pictures, in every episode of this project. Each is shown as it "
+            "is, with SK.image(name, x, y, w): never redrawn, restyled or recoloured, and nothing "
+            "invented in its place. Read brand/<name>.png to see one. What each is and how to "
+            "use it, in its person's words (follow them):"
+        )
+        lines += [
+            "  - '%s' (%sx%s): %s"
+            % (p["name"], p["w"], p["h"], _stop(p["note"]) or "(no note: Read it to see)")
+            for p in pictures
+        ]
     lines.append(
         "- The end card: SK.endCard({...SK.BRAND.logoFor(SK.BRAND.colors.primary), title, "
         "tagline, bg: SK.BRAND.colors.primary, font: SK.BRAND.fonts.headline}), unless the "

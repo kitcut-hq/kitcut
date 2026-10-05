@@ -580,7 +580,19 @@ its films, next to `projects\`, never in git:
   - **the preview:** three frames the film engine draws in the project's look, with the brand.
   An episode gets it at seed (`brandkit.seed`: `brand/` in the film, its faces in the manifest's
   fonts, logos as `brand_logo*` images, `brand.js` first in `head.scripts`, which thumbnails and the
-  cast sheet keep too) and a note in its first message (`brandkit.note`). Routes:
+  cast sheet keep too) and a note in its first message (`brandkit.note`).
+  - **The brand's own pictures** (2026-10-05): a project's person attached the same logo and
+    mascot to film after film, and they took two of the project's six Pictures. The card now has
+    `pictures`: up to `MAX_PICTURES` (8) of the pictures found in the files (a mascot, a product,
+    a screenshot of the app), each `{image, name, note}`, proposed by the read (which now hears
+    each picture's file name) and corrected on the card. `build_assets` keeps each as it is
+    (never keyed out or trimmed: a mascot's orange ground is hers) as `brand_pic_<name>.png`;
+    `seed` puts them in the manifest's images; `note` lists each with its size and its person's
+    words on what it is and how to use it, and says they are shown with `SK.image`, never redrawn.
+    A logo's note is told by the name a film draws it with (two "other" versions no longer share
+    one). One a film never draws leaves its manifest before the final render
+    (`agent.drop_unused_uploads`); the logos always stay. `GET /api/limits` says
+    `library.brand_pictures`. Routes:
   `/api/library/brand[...]` (`server.py`); the site's are `/api/projects/<id>/brand[...]`.
   Measured on two public brand books and a made-up one: 21-30 pages read in 1-10 s, the card in
   16-30 s at $0.15-0.41 on the key. `test_brandkit.py` covers it without Claude.

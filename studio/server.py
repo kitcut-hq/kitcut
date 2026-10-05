@@ -1061,6 +1061,7 @@ def limits_doc():
             "earlier_films_remembered": library.MEMORY,
             "versions_kept": library.KEEP,
             "project_pictures": library.PICTURES,
+            "brand_pictures": brandkit.MAX_PICTURES,
             "project_voice_lines": library.VOICE_LINES,
         },
         "by_length": {

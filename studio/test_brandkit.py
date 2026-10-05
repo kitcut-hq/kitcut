@@ -6,9 +6,11 @@ to), everything a brand folder can hold read from one zip -- a PDF drawn page by
 its transparency, a JPEG logo keyed off white with the white inside it kept, an SVG drawn by the
 browser, a TrueType face and a woff2 one unpacked, a PowerPoint theme's colours and fonts, the
 colour codes in a text file, an EPS refused with its reason, junk ignored, a zip in the zip --
-then the card held to its shape, the assets (sent fonts only with consent, a stand-in otherwise),
-the preview drawn by the film engine, a read as a job (the state it leaves), and an episode of the
-project getting the brand (its manifest, brand.js, its note) while a film outside projects does
+then the card held to its shape (the brand's own pictures too: named once, each with what it is
+for), the assets (sent fonts only with consent, a stand-in otherwise; a picture kept as it is), the
+preview drawn by the film engine, a read as a job (the state it leaves), and an episode of the
+project getting the brand (its manifest, brand.js, its note with each logo's and picture's
+purpose; a brand picture the film never draws left out of it) while a film outside projects does
 not. Everything in a throwaway STUDIO_HOME; the preview and the SVG take a browser (~20 s).
 """
 
@@ -79,6 +81,9 @@ def fixture():
         z.writestr("ppt/theme/theme1.xml", theme)
         z.writestr("ppt/slides/slide1.xml", "<p:sld><a:t>Learn anything, anywhere</a:t></p:sld>")
         z.writestr("ppt/media/image1.png", png(logo.rotate(90, expand=True)))
+    # a mascot on a plain orange ground: a picture to show, whose ground is part of it
+    mascot = Image.new("RGB", (400, 400), "#e8a33d")
+    ImageDraw.Draw(mascot).ellipse((120, 80, 280, 320), fill="#222222")
     inner = io.BytesIO()
     with zipfile.ZipFile(inner, "w") as z:
         z.writestr("deep/mark.png", png(Image.new("RGBA", (120, 120), "#ff6600")))
@@ -99,6 +104,7 @@ def fixture():
         z.writestr("Brand/Deck.pptx", pptx.getvalue())
         z.writestr("Brand/colours.txt", "Primary blue #0056D2, orange #F60, RGB 17 17 17.")
         z.writestr("Brand/more.zip", inner.getvalue())
+        z.writestr("Brand/Mascot/mascot.png", png(mascot))
         z.writestr("__MACOSX/Brand/._logo.png", b"junk")
         z.writestr("Brand/.DS_Store", b"junk")
     return out.getvalue()
@@ -254,6 +260,38 @@ def main():
     check(k.getpixel((5, 5))[3] == 0, "a logo's white surround goes transparent")
     check(k.getpixel((250, 150))[3] == 255, "the white inside the logo stays")
 
+    # ---- the brand's own pictures: each named once, with what it is for
+    mascot = next(i for i in inv["images"] if i["from"].endswith("mascot.png"))
+    said = "The brand's one character. Show her on the end card"
+    pics = brandkit.clean_card(
+        {
+            **CLAUDE,
+            "pictures": [
+                {"image": mascot["id"], "name": "The Mascot!", "note": said},
+                {"image": mascot["id"], "name": "twice"},
+                {"image": "i999", "name": "nowhere"},
+                {"image": badge["id"], "name": "pic_the_mascot"},
+                "junk",
+            ],
+        },
+        inv,
+    )["pictures"]
+    check(
+        [g["name"] for g in pics] == ["the_mascot", "the_mascot_2"] and pics[0]["note"] == said,
+        "pictures that exist, once, each under a name of its own",
+        pics,
+    )
+    check(
+        len(
+            brandkit.clean_card(
+                {"pictures": [{"image": i["id"]} for i in inv["images"]] * 3}, inv
+            )["pictures"]
+        )
+        == min(brandkit.MAX_PICTURES, len(inv["images"])),
+        "at most MAX_PICTURES of them",
+    )
+    card["pictures"] = pics
+
     # ---- assets: sent fonts only with consent
     brandkit.standin = lambda d, family, weights, log=print: []  # no network here
     card["type"]["headline"]["font"] = next(
@@ -280,6 +318,17 @@ def main():
     check(
         any(n.startswith("brand_logo_on_dark") for n in os.listdir(os.path.join(d, "assets"))),
         "a logo cut from a page",
+    )
+    with Image.open(os.path.join(d, "assets", "brand_pic_the_mascot.png")) as im:
+        check(
+            im.size == (400, 400) and im.convert("RGBA").getpixel((5, 5))[3] == 255,
+            "a brand picture is kept as it is, its ground too",
+            im.size,
+        )
+    check(
+        used["picture_files"] == ["brand_pic_the_mascot", "brand_pic_the_mascot_2"],
+        "the pictures an episode gets, in the card's order",
+        used["picture_files"],
     )
     with open(os.path.join(d, "assets", "brand.js"), encoding="utf-8") as f:
         js = f.read()
@@ -322,6 +371,32 @@ def main():
         note[-800:],
     )
     check("Never: Never stretch the logo" in note, "with the brand's rules")
+    check(
+        man["images"].get("brand_pic_the_mascot") == "brand/brand_pic_the_mascot.png"
+        and got["brand"]["pictures"] == ["brand_pic_the_mascot", "brand_pic_the_mascot_2"],
+        "its pictures are images",
+        got["brand"],
+    )
+    check(
+        "'brand_pic_the_mascot' (400x400): %s." % said in note and "never redrawn" in note,
+        "its note says what each picture is and how to use it",
+        note[-1200:],
+    )
+    check(
+        "'brand_logo': the mark." in note and "'brand_logo_2': the badge." in note,
+        "and what each logo is for, by the name a film draws it with",
+        note[-1200:],
+    )
+    with open(ep.path("film.js"), "w", encoding="utf-8") as f:
+        f.write("SK.image('brand_pic_the_mascot', 0, 0, 400);\n")
+    gone = agent.drop_unused_uploads(ep)
+    with open(ep.manifest, encoding="utf-8") as f:
+        man = json.load(f)
+    check(
+        gone == ["brand_pic_the_mascot_2"] and "brand_logo" in man["images"],
+        "a brand picture the film never draws leaves it; its logos stay",
+        gone,
+    )
     lone = Film.create("Not a lesson", 5, "drawn", client="u:alice")
     library.seed(lone)
     check(not os.path.exists(lone.path("brand")), "a film outside projects gets no brand")
@@ -358,6 +433,20 @@ def main():
     check(
         edited["name"] == "Course Company" and edited["palette"][0]["hex"] == "#123456",
         "an edit is held to the card's shape",
+    )
+    hero = pub["images"][0]
+    edited = brandkit.edit(
+        d, {"pictures": [{"image": hero["id"], "name": "Hero shot", "note": "The product."}]}
+    )
+    pub = brandkit.public(d)
+    check(
+        edited["pictures"] == [{"image": hero["id"], "name": "hero_shot", "note": "The product."}]
+        and pub["in_use"]["picture_files"] == ["brand_pic_hero_shot"]
+        and brandkit.asset(d, "logo", "brand_pic_hero_shot")
+        and hero.get("from")
+        and pub["limits"]["pictures"] == brandkit.MAX_PICTURES,
+        "a picture the person adds on the card is one every episode gets",
+        (edited.get("pictures"), pub["in_use"]),
     )
     brandkit.remove(d)
     check(brandkit.public(d)["state"] == "empty", "a removed brand is empty")
