@@ -407,8 +407,8 @@ button.icon.send { background: var(--accent); color: var(--accent-ink); border-c
 .work { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 @media (max-width: 1100px) { .work { grid-template-columns: minmax(0, 1fr); } }
 div.stage { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; } /* the video's panel, not the log's stage lines */
-.screen { aspect-ratio: 16 / 9; max-width: 100%; display: grid; place-items: center; background: var(--sunk); position: relative; }
-.screen video, .screen img { width: 100%; height: 100%; object-fit: contain; display: block; background: var(--sunk); }
+.screen { aspect-ratio: var(--ar, 16 / 9); max-width: 100%; display: grid; place-items: center; background: var(--sunk); position: relative; overflow: hidden; }  /* --ar: the film's own frame (shape()) */
+.screen video, .screen img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; background: var(--sunk); }  /* never taller than the box: a square film once filled the width and ran off the screen */
 .screen .idle { font: 500 16px/1.4 Inter, system-ui, sans-serif; color: var(--ink-3); text-align: center; padding: 20px; }
 /* a film paused for its narrator's voice: why, the fix, Continue */
 .screen .idle.paused { max-width: 460px; display: grid; gap: 10px; justify-items: center; color: var(--ink-2); }
@@ -564,7 +564,7 @@ html[data-view=film] .again { display: flex; align-items: center; justify-conten
 .again h2 { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -.01em; }
 /* finished: the player takes the column, as tall as leaves its row of actions on the same screen */
 html[data-view=film] .work.done { grid-template-columns: minmax(0, 1fr); }
-html[data-view=film] .work.done .screen { width: min(100%, max(calc((100svh - 230px) * 16 / 9), 480px)); margin-inline: auto; }
+html[data-view=film] .work.done .screen { width: min(100%, calc(max(100svh - 230px, 270px) * var(--arn, 1.7778))); margin-inline: auto; }  /* --arn: width over height, so a square or tall film fits the screen too */
 /* being made, on a wide screen: the log beside the sheet, exactly as tall, scrolling in itself */
 @media (min-width: 1101px) {
   html[data-view=film] .work:not(.done) { align-items: stretch; }
@@ -1060,8 +1060,20 @@ function line(kind, text, at) {
   return li;
 }
 function screen(html) { $('screen').innerHTML = html; }
+// the player takes the film's own frame (the studio's 16:9, 1:1 or 9:16): a square or a tall film
+// is shown whole, as tall as the screen allows, and never as wide as a wide one
+function shape(frame) {
+  const m = /^(\d+):(\d+)$/.exec(frame || ''), el = $('screen');
+  if (m && Math.abs(m[1] / m[2] - 16 / 9) > 0.01) { el.style.setProperty('--ar', `${m[1]} / ${m[2]}`); el.style.setProperty('--arn', String(m[1] / m[2])); }
+  else { el.style.removeProperty('--ar'); el.style.removeProperty('--arn'); }
+}
 function play(video, poster) {
   screen(`<video src="${esc(video)}" poster="${esc(poster || '')}" controls autoplay playsinline></video>`);
+  // a film whose record names no frame (one brought in from outside the studio): its own picture says it
+  const v = $('screen').querySelector('video');
+  v.addEventListener('loadedmetadata', () => {
+    if (v.isConnected && v.videoWidth && v.videoHeight && !$('screen').style.getPropertyValue('--ar')) shape(`${v.videoWidth}:${v.videoHeight}`);
+  }, { once: true });
 }
 function stats(ev) {
   const st = ev.stages || {};
@@ -1235,7 +1247,7 @@ function home() {
   reset(); currentId = null; drawSide(); view(false); closeForm();
   if (HOME) { document.querySelector('.hero h1').textContent = HOME.h1; document.querySelector('.hero h1').title = ''; document.title = HOME.title; }
   fromTemplate(null);
-  screen('<div class="idle">Your film appears here.</div>');
+  shape(null); screen('<div class="idle">Your film appears here.</div>');
   $('status').textContent = studioUp ? 'Ready.' : 'The studio is offline right now.';
 }
 // a plan that makes more than one film at a time (Pro: 2, the site's lib/plans.js) may start the
@@ -1245,7 +1257,7 @@ function openFilm(id, push) {
   if (push && location.pathname !== '/film/' + id) history.pushState({ id }, '', '/film/' + id);
   reset(); currentId = id; drawSide(); view(true); $('go').disabled = !(studioUp && canAnother());
   if (push) closeForm();
-  screen('<div class="idle">Loading the film...</div>');
+  shape(null); screen('<div class="idle">Loading the film...</div>');
   $('status').innerHTML = '<span class="pen"></span>Loading';
   follow(0);
 }
@@ -1319,6 +1331,7 @@ async function follow(since = 0, misses = 0) {
           : '<div class="idle">Claude is thinking up the film...</div>');
       }
     }
+    if (s.frame) shape(s.frame);
     for (const ev of s.events) onEvent(ev);
     const live = s.status === 'queued' || s.status === 'running';
     $('stop').hidden = !(live && mine.has(id)); $('stop').disabled = false;
@@ -1335,6 +1348,7 @@ async function follow(since = 0, misses = 0) {
         stats(s); $('status').textContent = `Done in ${mmss(s.seconds)}.`;
         if (s.claude_said) line('say', s.claude_said, null);
       }
+      else if (!showedDone) $('status').textContent = 'Done.';  // a film brought in from outside: no log, no time
       // the film fills the page; how it was made folds into one line under it
       filmHead(s);
       $('work').classList.add('done'); $('made').open = false;
