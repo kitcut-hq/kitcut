@@ -2422,6 +2422,8 @@ async def status(req):
     if made_from:
         out["template"] = {k: made_from.get(k) for k in ("id", "version", "title")}
         out["frame"] = f.record().get("frame")
+    elif f.record().get("frame"):  # a square or tall film brought in (import_film.py): its page
+        out["frame"] = f.record()["frame"]  # shapes its player by it
     keys = (
         "prompt",
         "title",

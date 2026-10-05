@@ -146,6 +146,20 @@ def main():
         os.path.isabs(m["film"]) and os.path.isabs(m["audio"]["vo_timeline"]),
         "and every path is absolute",
     )
+    # a template's film keeps its words in a data file: the copy has to find it where the film does
+    tdir = os.path.join(HOME, "data-film")
+    os.makedirs(tdir, exist_ok=True)
+    with open(os.path.join(tdir, "content.json"), "w", encoding="utf-8") as fh:
+        json.dump({"title": "x"}, fh)
+    with open(os.path.join(tdir, "sketch.json"), "w", encoding="utf-8") as fh:
+        json.dump({"film": "film.js", "data": {"content": "content.json"}}, fh)
+    with open(_thumb.clean_manifest(tdir, os.path.join(HOME, "data-copy")), encoding="utf-8") as fh:
+        dm = json.load(fh)
+    check(
+        os.path.isabs(dm["data"]["content"]) and os.path.isfile(dm["data"]["content"]),
+        "a template film's data file is found from the copy (stills of such a film once all failed)",
+        dm.get("data"),
+    )
     own = [x["file"] for x in m["fonts"] if x["family"] == "Own"]
     check(own and os.path.isabs(own[0]), "the film's own font too, where the film keeps it", own)
     # the control: the same copy with the tail put back, as the film's final render draws it

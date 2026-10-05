@@ -511,6 +511,11 @@ def clean_manifest(film_dir, into, head=None, fonts=()):
         if isinstance(m.get(k), str):
             m[k] = ab(m[k])
     m["images"] = film_images(film_dir, m)
+    # what a template's film reads as SK.DATA (content.json, a route): the film's own files, by
+    # their place. Left relative, every still of every template film failed (the copy has no
+    # content.json beside it), so such a film got no share picture and no thumbnail options.
+    if isinstance(m.get("data"), dict):
+        m["data"] = {k: ab(p) if isinstance(p, str) else p for k, p in m["data"].items()}
     m.pop("paint", None)
     audio = dict(m.get("audio") or {})
     audio["vo_timeline"] = ab(audio.get("vo_timeline") or "audio/vo/timeline.json")
