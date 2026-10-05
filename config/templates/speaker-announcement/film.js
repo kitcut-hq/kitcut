@@ -304,6 +304,36 @@ function card3(pose, t, o = {}) {
   const front = SK.face3(F, CARD.w, CARD.h, () => { cardFront(t); if (o.shine) shine(o.shine.u, o.shine.a); }, { key: 'cardF', res: o.res, shade: 1 - SK.lit3(F, L) });
   if (!front) { const Bm = [B[1], B[0], B[3], B[2]]; SK.face3(Bm, CARD.w, CARD.h, () => cardBack(), { key: 'cardB', res: o.res, shade: 1 - SK.lit3(Bm, L) }); }
 }
+/* the speakers already announced (content.announced): at most eight, the latest kept; each sits open in the
+   binder as a small card -- their photo or initials, their name -- around the new one */
+const initialsOf = (name) => String(name ?? '').replace(/^(dr|prof|mr|mrs|ms)\.?\s+/i, '').split(/[\s]+/).filter(Boolean).map((w) => w[0]).filter((ch, i, a2) => i === 0 || i === a2.length - 1).join('').toUpperCase();
+const ANN = (Array.isArray(D.announced) ? D.announced : []).filter((p) => p && p.name).slice(-8);
+const ANN_SLOTS = [0, 1, 2, 3, 5, 6, 7, 8];                 // reading order around the middle, the new card's
+function cardMini(p) {
+  const c = g(), w = CARD.w, h = CARD.h, b = CARD.b, X0 = 36, IW = w - 72, gold = p.border || (p.featured ? GOLD : null);
+  SK.rrPath(0, 0, w, h, CARD.r);
+  if (gold) { const gr = c.createLinearGradient(0, 0, w, h); [[0, gold[0]], [.5, gold[1]], [1, gold[2] || gold[1]]].forEach(([k, col]) => gr.addColorStop(k, col)); c.fillStyle = gr; } else c.fillStyle = C.second;
+  c.fill();
+  rrect(b, b, w - 2 * b, h - 2 * b, CARD.r - 12, C.ground);
+  const sub = UP([p.role, p.org].filter(Boolean).join(', '));
+  const subH = sub ? 62 : 0, nmax = 104;
+  const nm = wrapFit(UP(p.name), IW, nmax, { wt: 900, lines: 2, keep: .8 }), nh = nm.lines.length * nm.size * .92;
+  const y1 = h - b - 22 - subH, top = y1 - nh, wy = b + 22, wh = top - 26 - wy;
+  // the window: their photo over the event's colours, or their initials
+  const im = p.image && SK.IMG[p.image];
+  c.save(); SK.rrPath(X0, wy, IW, wh, 14); c.clip();
+  const gr = c.createLinearGradient(0, wy, 0, wy + wh); gr.addColorStop(0, C.accentLt); gr.addColorStop(.45, C.accent); gr.addColorStop(1, C.accentDk);
+  c.fillStyle = gr; c.fillRect(X0, wy, IW, wh);
+  mark(X0 + IW * .6, wy + wh + 6, IW * 1.02 / 291, [1, 1], [C.second, C.accentDk]);
+  if (im) { const k = Math.max(IW / im.width, wh / im.height) * 1.08, dw = im.width * k, dh = im.height * k; c.drawImage(im, X0 + IW / 2 - dw / 2, wy + wh - dh + dh * .04, dw, dh); }
+  else { const ini = initialsOf(p.name); if (ini) text(ini, X0 + IW / 2, wy + wh * .5 + wh * .15, { size: Math.min(wh * .46, fit(ini, IW * .7, wh * .46)), align: 'center', col: C.light, alpha: .92 }); }
+  const sh = c.createLinearGradient(0, wy + wh * .72, 0, wy + wh); sh.addColorStop(0, `rgba(${C.groundRGB},0)`); sh.addColorStop(1, `rgba(${C.groundRGB},.5)`);
+  c.fillStyle = sh; c.fillRect(X0, wy, IW, wh);
+  c.restore();
+  c.lineWidth = 4; c.strokeStyle = gold ? gold[0] : C.secondLt; SK.rrPath(X0, wy, IW, wh, 14); c.stroke();
+  nm.lines.forEach((l, i) => text(l, w / 2, top + nm.size * (.8 + i * .92), { size: nm.size, wt: 900, col: C.light, align: 'center' }));
+  if (sub) { const o = { wt: 800, fam: FONT.wide, ls: 1 }, fs = fit(sub, IW, 40, o); text(sub, w / 2, h - b - 30, { ...o, size: fs, col: C.secondLt, align: 'center' }); }
+}
 /** the card flat, centred on x, y at scale s (the binder) */
 function card2(x, y, s, front, t) { withT(x, y, 0, s, () => { g().translate(-CARD.w / 2, -CARD.h / 2); front ? cardFront(t) : cardBack(); }); }
 
@@ -533,7 +563,15 @@ function binder(t) {
   for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
     const x = gx + i * (B.sw + B.gap), y = gy + j * (B.sh + B.gap), mid = i === 1 && j === 1;
     rrect(x, y, B.sw, B.sh, 12, `rgba(${C.groundRGB},.55)`);
-    card2(x + B.sw / 2, y + B.sh / 2 + 2, B.k, mid, t);
+    const who = mid ? null : ANN[ANN_SLOTS.indexOf(j * 3 + i)];
+    if (who) { // already announced: open, a touch quieter than the new one
+      withT(x + B.sw / 2, y + B.sh / 2 + 2, 0, B.k, () => { c.translate(-CARD.w / 2, -CARD.h / 2); cardMini(who); });
+      c.save(); SK.rrPath(x, y, B.sw, B.sh, 12); c.clip(); c.fillStyle = `rgba(${C.groundRGB},.16)`; c.fillRect(x, y, B.sw, B.sh); c.restore();
+    } else card2(x + B.sw / 2, y + B.sh / 2 + 2, B.k, mid, t);
+    if (mid && ANN.length) { // the new card among the others: a halo as it lands
+      const pu = ease(t, SLOT[1] - .05, SLOT[1] + .9, E.out), pa = (1 - pu) * clamp((t - SLOT[1] + .05) / .1);
+      if (pa > 0) { c.save(); c.globalAlpha *= pa; c.lineWidth = 6 + 10 * (1 - pu); c.strokeStyle = GOLD[0]; SK.rrPath(x - 10 - pu * 26, y - 10 - pu * 26, B.sw + 20 + pu * 52, B.sh + 20 + pu * 52, 16 + pu * 16); c.stroke(); c.restore(); }
+    }
     c.save(); SK.rrPath(x, y, B.sw, B.sh, 12); c.clip(); // the sleeve: a clear pocket with a glint
     c.fillStyle = 'rgba(255,255,255,.06)'; c.fillRect(x, y, B.sw, B.sh);
     const gl = x - B.sw + (sweep - (i + j) * .08) * B.pw * 1.6, gr = c.createLinearGradient(gl, y, gl + B.sw * .6, y + B.sh * .3);

@@ -23,3 +23,7 @@ Conference speaker promo with every scene replaced; proven pixel-identical to it
 the wide frame's camera no longer pulls the card under the talk's details, the card, pack, reading
 stops, binder and end card fit a vertical frame, a long role wraps to two lines, a speaker with no
 photo gets their initials, and labels in scripts the UI face lacks fall back to the wide face.
+
+v2 (2026-10-05): the binder shows the speakers already announced (`announced` in the content, 0 to
+8): each sits open in a slot as a small card with their photo or initials and their name, the new
+card lands in the middle with a halo, and the rest stay face down. With none it is v1's film.
