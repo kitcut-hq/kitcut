@@ -19,6 +19,7 @@ A few minutes, most of it rendering. Everything happens in a throwaway STUDIO_HO
 import os
 import sys
 import json
+import stat
 import time
 import shutil
 import asyncio
@@ -65,6 +66,9 @@ async def fake_claude(
     if not film.record().get("round_of"):  # the film itself: the example, no narration
         for f in films.MADE:
             shutil.copy(os.path.join(ex, f), film.dir)
+            # as a film scaffolded from a release has them (a release's files are read-only, and
+            # a copy keeps that): a round must change the film all the same
+            os.chmod(film.path(f), stat.S_IREAD)
         with open(film.path("vo.json"), "w", encoding="utf-8") as f:
             json.dump({"voice": "Kore", "language": "en", "lines": []}, f)
         os.makedirs(film.path("audio", "vo"), exist_ok=True)
@@ -687,6 +691,7 @@ async def main():
             "only the last %d: an older one's files go, and it says so" % rounds.KEEP,
         )
 
+    rounds._ours(HOME)  # the films here carry read-only files, which Windows will not remove
     shutil.rmtree(HOME, ignore_errors=True)
     print("\n%s" % ("ALL OK" if not bad else "%d FAILED:\n  - %s" % (len(bad), "\n  - ".join(bad))))
     sys.exit(1 if bad else 0)

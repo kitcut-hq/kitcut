@@ -44,6 +44,7 @@ with a round not yet over, so the leader can pick up one whose server went away 
 import os
 import sys
 import json
+import stat
 import time
 import shutil
 import asyncio
@@ -487,6 +488,7 @@ def copy_of(film, rid, notes):
     for name in ("film.srt", "film.vtt"):  # the captions: the narration's, kept when it is
         with contextlib.suppress(OSError):
             shutil.copy2(film.path("outputs", name), os.path.join(d, "outputs", name))
+    _ours(d)
     for parts in SPENT:
         with contextlib.suppress(OSError):
             os.remove(os.path.join(d, *parts))
@@ -509,6 +511,21 @@ def copy_of(film, rid, notes):
     if m.pop("tail", None) is not None:
         films._write_json(work.manifest, m)
     return work
+
+
+def _ours(d):
+    """Everything under `d` may be written by this user. A copy keeps its source's permissions,
+    and a film can carry read-only files (one scaffolded from a release, whose files are): the
+    round's copy is the round's to change, and to remove."""
+    for root, dirs, files in os.walk(d):
+        for n in dirs:
+            p = os.path.join(root, n)
+            with contextlib.suppress(OSError):
+                os.chmod(p, os.stat(p).st_mode | stat.S_IRWXU)
+        for n in files:
+            p = os.path.join(root, n)
+            with contextlib.suppress(OSError):
+                os.chmod(p, os.stat(p).st_mode | stat.S_IRUSR | stat.S_IWUSR)
 
 
 def _pins(work, rec):
@@ -1374,10 +1391,20 @@ def _move(src, dst):
 
 
 def _gone(p):
+    """Remove a file or a tree, read-only files included (Windows refuses those until they are
+    made writable; a version kept from a film with read-only files has them)."""
+
+    def again(fn, path, _exc):
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+        fn(path)
+
     if os.path.isdir(p) and not os.path.islink(p):
-        shutil.rmtree(p)
+        shutil.rmtree(p, onexc=again)
     elif os.path.lexists(p):
-        os.remove(p)
+        try:
+            os.remove(p)
+        except PermissionError as e:
+            again(os.remove, p, e)
 
 
 def _swap(film, src, cur, to):
@@ -1488,7 +1515,8 @@ def prune(film, vs, cur):
     still plays from its copy online, and can no longer be made the film again)."""
     old = sorted((v["n"] for v in vs if v["n"] != cur and v.get("kept", True)), reverse=True)
     for n in old[KEEP:]:
-        shutil.rmtree(film.path(KEPT, "v%d" % n), ignore_errors=True)
+        with contextlib.suppress(OSError):
+            _gone(film.path(KEPT, "v%d" % n))
     drop = set(old[KEEP:])
     return [dict(v, kept=False) if v["n"] in drop else v for v in vs]
 
