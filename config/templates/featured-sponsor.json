@@ -1,0 +1,61 @@
+{
+ "_about": "The spec of kitcut.ai's featured sponsor template (studio/templates.py make --spec). Its film is projects/featured-sponsor (local: the sponsor's and the event's logos are third-party), pulled with studio/template_from_film.py from kitcut.ai film studio-20261005-122631-gzityz: Red Hat, a Diamond sponsor of KubeCon + CloudNativeCon North America 2026 (Salt Lake City, Nov 9-12; events.linuxfoundation.org/kubecon-cloudnativecon-north-america). That film was itself a remake of the Conference speaker promo with every scene replaced; proven pixel-identical to it before the polish of 2026-10-05 (the press with its yoke and the die's approach, the flash of the blow, a large coin and readable words in the who-they-are scene, a larger tray, the wide and vertical layouts, a name in type where a logo file is missing).",
+ "title": "Featured sponsor",
+ "description": "A 26-second sponsor announcement with no narration, every beat on the music: a coin press in the event's colours, its die carrying the sponsor's logo, creeps down over a blank coin as the tier line arrives; it draws back and strikes on the music's hit, with a flash, a ring and sparks, and lifts to show the logo in relief in the tier's metal (platinum, gold, silver or bronze; with no tier, the sponsor's own colour); the coin is tossed, spins in 3D and lands on its other face, the event's logo; it then stands large and turns slowly beside the sponsor's name, one line about them and where to find them; and it rolls along a tray of blank slots and drops into the first, over the event's logo, dates, city and link. In a square or vertical frame the coin stands above the words; in a wide frame the coin is on the left and the words on the right.",
+ "author": "KitCut",
+ "source_film": "studio-20261005-122631-gzityz",
+ "look": "drawn",
+ "frames": [
+  "1:1",
+  "16:9",
+  "9:16"
+ ],
+ "caps": [
+  "space"
+ ],
+ "limits": {
+  "images": 4
+ },
+ "moments": [
+  0.6,
+  2.4,
+  3.7,
+  4.15,
+  5.6,
+  7.4,
+  9.0,
+  11.4,
+  14.5,
+  17.5,
+  21.4,
+  25.2
+ ],
+ "narration": false,
+ "sound": "code",
+ "keep": [
+  "_about",
+  "copy",
+  "metal"
+ ],
+ "generic": [
+  "FEATURED SPONSOR",
+  "SPONSOR",
+  "DIAMOND SPONSOR",
+  "PLATINUM SPONSOR",
+  "GOLD SPONSOR",
+  "SILVER SPONSOR",
+  "BRONZE SPONSOR",
+  "DIAMOND",
+  "PLATINUM",
+  "GOLD",
+  "SILVER",
+  "BRONZE",
+  "MORE SPONSORS SOON"
+ ],
+ "watch": [],
+ "identity": [
+  "event.name"
+ ],
+ "example": "Welcome Northwind as a Gold sponsor of our conference, PlatformCon 2027, June 3-4 in Berlin. Find them at booth B12 for live demos. Their logo and ours are attached.",
+ "brief": "The film announces ONE sponsor of ONE event as a coin struck in a press, in the EVENT's own look (its logo, colours and type, read off its site), never a costume taken from its name. Keep the five beats, the clock and the sound; change the content.\n\ncontent.json (SK.DATA.content): sponsor {name; logo {image: a picture key, ink: 'dark' when the logo is drawn in dark ink (it sits on the bright metal) or 'light' when it is a white logo (it sits on an enamel field of the ground colour)}; line: ONE line about who they are, in their own words from their site, at most ~90 characters (a longer one is cut to three or four lines with an ellipsis, so shorten it at a clause, never rewrite it); tier: the tier in the event's own word, upper case ('GOLD'), only if the event's page or the person says it, else \"\" (the film then says copy.featured and the coin takes sponsor.color); find: where to find them (a booth, a session, an offer; at most ~40 characters), only if published or given, else \"\"; link: their shortest address without https://, or \"\"; color: their brand colour}. event {name, year, dates ('NOVEMBER 9-12, 2026'), city, venue or \"\", url: the shortest address that opens the event, without https:// (an address too long to read is cut back to its site by the code), logo {image, ink}}. copy {tier and coin ('{tier} SPONSOR'), coin_reverse (a line under the event's logo on the coin, usually \"\"), featured ('FEATURED SPONSOR': the line when there is no tier), more ('MORE SPONSORS SOON'), arrow}: copy lines may name a field in braces ({tier}, {year}, {sponsor}); translate them for another language. palette {ground, accent, second, light, dark}: the event's colours (the ground is darkened by the code until white reads on it). metal.tiers: the event's own tier names, upper case, each given a metal from the top down: its highest tier 'platinum', then 'gold', 'silver', 'bronze' (an event whose top tier is Diamond maps DIAMOND to platinum, PLATINUM to gold, and so on); keep the four metals' colours as they are. fonts {head, body} only when the event's own faces were fetched.\n\nLimits, all fitted by the code: a sponsor's name up to two lines; the line up to three; a long event name wraps; a wide logotype and a square or tall logo both fit the coin. A fact that is missing is left out and the layout closes over it: no tier, no line, no booth, no link, no venue. With no logo file the name stands on the coin in type: never a drawn or guessed logo.\n\nPictures become the film's own with template_pictures: logo= the event's logo; logos=[...] the sponsor's logo. An attached picture first, else the one on the sponsor's or the event's own site (a brand or press page). Name each picture's key in content.json. Draw a logo exactly as its file draws it: never redraw or recolour it, and say its ink honestly so it sits on the right ground.\n\nNEVER INVENT. Every fact is the person's own, from their words, their attachments or the event's and the sponsor's own pages on the web: no made-up tier, booth number, session, offer or description. A fact that cannot be found is left out.\n\nThe frame is the person's choice: square and vertical stand the coin above the words; wide stands it beside them. Check the stills of the strike, the who-they-are scene and the end card after changing the content."
+}
