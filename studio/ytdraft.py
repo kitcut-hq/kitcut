@@ -125,11 +125,14 @@ Choose four thumbnails for this film's video on YouTube. Each is a poster compos
 film's own pictures -- not a frame of it: one picture set large (somebody from the waist up, or \
 an object whole) on the film's own coloured ground, at most one more tucked in beside it, and a \
 few big words -- the only words on the picture -- in the film's own title type, with its logo:
-- "hero": the picture the poster is built on, by its name from the list below. Somebody whose \
-face or pose shows what the words say, before an object; an object when the object is the \
-point. Four different pictures (another pose of the same character is a different picture).
-- "with": at most one more picture, by name -- what the hero is looking at, holding or talking \
-about -- or [] for none.
+- "hero": the picture the poster is built on, by its name from the list below. A face is what \
+a viewer looks at first: when the film has characters, a character is the hero of at least \
+three of the four -- the one whose face and pose show what the words say (worried, delighted, \
+saying stop) -- and an object is the hero only where no character fits the words. Four \
+different pictures (another pose of the same character is a different picture).
+- "with": at most one more picture, by name -- beside a character, the thing the words are \
+about (what they are afraid of, holding, tempted by), or a second character when the words are \
+about the two of them -- or [] for none.
 - "at": a moment of the film, in seconds, from the sheet of its moments (the time is printed on \
 every frame), where that hero is on screen: the poster takes that moment's ground and colours. \
 Four different moments.

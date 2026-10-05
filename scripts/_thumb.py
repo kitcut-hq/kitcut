@@ -1144,15 +1144,25 @@ def film_style(film_dir, env=None):
         return x["letters"] >= 3 if "letters" in x else x.get("chars", 0) >= 2
 
     styles = [x for x in rep.get("txt") or [] if lettered(x) and x.get("max", 0) >= 24]
+    # A type's case is everything the film sets in it, in whatever colour: a film that titles in
+    # capitals and closes on one sentence in sentence case ("Зупинись. Не плати. Спитай.", in its
+    # biggest title's colour) set 79.97% of that style in capitals, under the 80% that says
+    # "capitals", and its thumbnails came out in lower case (2026-10-05).
+    case = {}
+    for x in styles:
+        t = case.setdefault((x["font"], _weight(x["wt"])), [0, 0])
+        t[0] += x.get("letters", 0)
+        t[1] += x.get("upper", 0)
     heads, seen = [], set()
     for x in sorted(styles, key=lambda x: (rank.get(x.get("kind"), 0), -x["max"], -x["n"])):
         f = font_for(fonts, x["font"], x["wt"])
         if f and (x["font"], _weight(x["wt"])) not in seen:
             seen.add((x["font"], _weight(x["wt"])))
             k = x.get("stroke") or None
+            letters, caps = case[x["font"], _weight(x["wt"])]
             heads.append({"file": f, "family": x["font"], "weight": str(_weight(x["wt"])),
                           "col": colour(x["col"], text), "size": x["max"], "film": True,
-                          "upper": x.get("letters", 0) >= 3 and x.get("upper", 0) >= 0.8 * x["letters"],
+                          "upper": letters >= 3 and caps >= 0.8 * letters,
                           "ls": float(x.get("ls") or 0),
                           "stroke": {"w": float(k["w"]), "col": colour(k["col"], ink)} if k else None})  # fmt: skip
     for f in c["fonts"]["no_text"]["crayon" if crayon else "clean"] + c["fonts"]["fallback"]:

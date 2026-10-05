@@ -581,6 +581,34 @@ def posters():
     check("and one strip that does not read fails the whole poster",
           any("contrast" in x for x in fails), (res, fails))  # fmt: skip
 
+    print("\nthe film's case")
+    # a film that titles in capitals and closes on one sentence in sentence case, in its biggest
+    # title's own colour: that style alone is 79.97% capitals (the numbers of a real film)
+    home = tempfile.mkdtemp(prefix="check-thumb-case-")
+    with open(os.path.join(home, "sketch.json"), "w", encoding="utf-8") as fh:
+        json.dump({"duration": 10, "fonts": [{"file": "fonts/Oswald-VF.ttf", "family": "Oswald",
+                                              "weight": "200 700"}]}, fh)  # fmt: skip
+
+    def txt(col, size, letters, upper, kind="headline"):
+        return {"kind": kind, "font": "Oswald", "wt": "700", "col": col, "max": size, "n": 9,
+                "chars": letters, "letters": letters, "upper": upper, "stroke": None, "ls": 0}  # fmt: skip
+
+    rep = {"C": {}, "style": {}, "img": {}, "images": [], "card": [], "strip": [],
+           "txt": [txt("#1f1b5c", 160, 2401, 1920), txt("#fffaf0", 150, 455, 455),
+                   txt("#fffaf0", 70, 1161, 1161, "tape")]}  # fmt: skip
+    os.makedirs(os.path.dirname(_thumb.style_path(home)))
+    with open(_thumb.style_path(home), "w", encoding="utf-8") as fh:
+        json.dump(rep, fh)
+    st = _thumb.film_style(home)
+    check("a type the film sets in capitals nearly everywhere is set in capitals",
+          st["heads"][0]["family"] == "Oswald" and st["heads"][0]["upper"], st["heads"][:1])  # fmt: skip
+    rep["txt"] = [txt("#1f1b5c", 160, 2401, 300)]
+    with open(_thumb.style_path(home), "w", encoding="utf-8") as fh:
+        json.dump(rep, fh)
+    check("and one it sets in sentence case is not",
+          not _thumb.film_style(home)["heads"][0]["upper"])  # fmt: skip
+    shutil.rmtree(home, ignore_errors=True)
+
 
 def collage_fixture(home):
     """The collage example in a throwaway folder: its 17 cut-outs stood in for by paper shapes

@@ -3308,7 +3308,7 @@ the template could be dynamic, slightly modified each time."
   left; a dash could start a line; a burst reached under words with no outline (white on orange,
   3.26:1); "a tall sheaf of wheat, standing" was taken for a standing figure and cut at the
   waist; a flyer somebody gave a film was tucked in as a second piece; a figure tucked beside a
-  figure was a doll at her elbow.
+  figure was a doll at her elbow. On the studio's machine the first real set came out in lower case: the film's biggest title style was 79.97% capitals, because its closing sentence is set in that colour in sentence case, so a type's case is now everything the film sets in it; and its writer built three of four posters on objects until it was told a face comes first.
 - *What is still weak*: a film that draws everything itself (crayon, clean) has no pieces and
   still gets frames (KI-055); who is "somebody" is read from the words a picture was painted
   from, so a picture nobody described is an object (KI-057); a print whose own edges fade keeps a
