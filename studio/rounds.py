@@ -474,7 +474,9 @@ def copy_of(film, rid, notes):
     shutil.rmtree(d, ignore_errors=True)
     os.makedirs(d)
     for name in sorted(os.listdir(film.dir)):
-        if name in OWN or name == "outputs":
+        # library/: what the film was given to read (its person's cast and earlier films), the
+        # film's own and never swapped, but there for Claude as it was when the film was made
+        if (name in OWN and name != "library") or name == "outputs":
             continue
         src, dst = film.path(name), os.path.join(d, name)
         if os.path.isdir(src):
