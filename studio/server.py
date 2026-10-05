@@ -58,6 +58,9 @@ the day's budget still holds.
                                  "listed", ...}; a film copied online (media.py) has its lasting
                                  URLs there instead of signed ones
     POST /api/films/{id}/cancel  the film's own client (or this machine) stops it
+    POST /api/films/{id}/unbrand X-Fps, X-Priority: the film's own client has a finished film
+                                 that carries the Free plan's mark and closing drawn again
+                                 without them (unbrand.py); its status says how it stands
     POST /api/films/{id}/listed  {"listed": true|false}: the film's own client shows it in the
                                  gallery or keeps it link-only
     GET  /api/uploads            the asker's pictures, voice notes and documents no film has taken
@@ -138,6 +141,7 @@ import thumbs  # noqa: E402
 import uploads  # noqa: E402
 import youtube  # noqa: E402
 import ytdraft  # noqa: E402
+import unbrand  # noqa: E402
 import share  # noqa: E402
 import canon  # noqa: E402
 import brandkit  # noqa: E402
@@ -451,6 +455,7 @@ def beat():
         sends=youtube.in_flight(),
         drafts=ytdraft.in_flight(),
         transcribing=transcribing(),
+        unbrands=unbrand.in_flight(),
     )
 
 
@@ -490,6 +495,7 @@ def idle():
         and not share.in_flight()
         and not canon.in_flight()
         and not brandkit.in_flight()
+        and not unbrand.in_flight()
         and not transcribing()
     )
 
@@ -664,6 +670,11 @@ async def adopt(app=None):
                 why = "the studio restarted while Claude was working on it"
                 await put_down(f, "interrupted", why, agent.INTERRUPTED)
 
+    # the finished films that were being drawn again without their branding when their server
+    # went (unbrand.py): started again here, a few times at most
+    for f, _ in await asyncio.to_thread(unbrand.orphans):
+        unbrand.resume(f, SCHED)
+
     # the films that waited too long for their person's voice: put down, their credits back
     for f in await asyncio.to_thread(overdue):
         await put_down(
@@ -731,6 +742,7 @@ async def shutdown(app):
         tasks.append(J["task"])
     if tasks:
         await asyncio.wait(tasks, timeout=SHUTDOWN_WAIT_S)
+    await unbrand.stop_all()  # back in the queue, for the next leader
 
 
 # ------------------------------------------------------------------ a server's life among others
@@ -1419,6 +1431,15 @@ async def youtube_send(req):
         return web.json_response({"error": "only whoever made a film can publish it"}, status=403)
     if not rec.get("ok"):
         return web.json_response({"error": "This film is not finished."}, status=409)
+    if f.id in unbrand.in_flight() or peer_has("unbrands", f.id):
+        # its master is about to be replaced: a send started now could carry half of each
+        return web.json_response(
+            {
+                "error": "This film is being drawn again without the KitCut branding. "
+                "Publish it in a few minutes."
+            },
+            status=409,
+        )
     try:
         body = await req.json()
         key = body.get("key")
@@ -1948,6 +1969,38 @@ async def set_listed(req):
     return web.json_response({"id": f.id, "listed": listed})
 
 
+async def unbrand_film(req):
+    """Draw a finished film again without the Free plan's mark and closing (unbrand.py), at the
+    frame rate its maker's plan gives (X-Fps) and in its place in the line (X-Priority). The
+    film's own client (or this machine) only -- the site asks once that client is on a paid
+    plan. Asked again, it answers how the first stands; a film with no branding left is answered
+    as done."""
+    f = film_of(req.match_info["id"])
+    rec = f.record()
+    if not (from_this_machine(req) or clients.same(rec.get("client"), client_of(req))):
+        return web.json_response({"error": "only whoever made a film can change that"}, status=403)
+    if rec.get("state") != "done" or not rec.get("ok"):
+        return web.json_response({"error": "This film is not finished."}, status=409)
+    if not rec.get("branding"):
+        return web.json_response({"id": f.id, "branded": False, "unbrand": "done"})
+    if f.id in unbrand.in_flight() or peer_has("unbrands", f.id):
+        st = (rec.get("unbrand") or {}).get("state") or "queued"
+        return web.json_response({"id": f.id, "branded": True, "unbrand": st}, status=202)
+    if not await leading():
+        return web.json_response({"error": RESTARTING}, status=503)
+    try:
+        job = unbrand.start(
+            f,
+            SCHED,
+            fps=30 if req.headers.get("X-Fps", "").strip() == "30" else 60,
+            priority=1 if req.headers.get("X-Priority", "").strip() == "1" else 0,
+            by=req.headers.get("X-Member", "").strip() or client_of(req),
+        )
+    except unbrand.UnbrandError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    return web.json_response({"id": f.id, "branded": True, "unbrand": job["state"]}, status=202)
+
+
 def film_urls(req, jid, rec):
     """A finished film's video and poster: its copy online (media.py) when there is one --
     lasting, and playing when this machine is off -- else signed URLs through the tunnel."""
@@ -2129,6 +2182,8 @@ async def status(req):
         }
     if out["status"] == "done":
         out.update(film_urls(req, jid, r))
+        # whether it carries the Free plan's mark and closing, and how removing them stands
+        out.update(unbrand.public(f.record()))
     out["listed"] = r.get("listed") is not False  # a film from before the switch was listed
     made_from = f.record().get("template")  # a remake of a template: its "Made from" line
     if made_from:
@@ -2267,6 +2322,7 @@ def make_app(token):
             web.post("/api/films/{id}/cancel", cancel),
             web.post("/api/films/{id}/continue", continue_film),
             web.post("/api/films/{id}/listed", set_listed),
+            web.post("/api/films/{id}/unbrand", unbrand_film),
             web.post("/api/films/{id}/youtube", youtube_send),
             web.post("/api/films/{id}/youtube/draft", youtube_draft),
             web.get("/api/films/{id}/youtube/draft/{channel}", youtube_drafted),

@@ -3562,6 +3562,16 @@ Studio's `studio/outro.js` holds the last frame and draws over it); sketch-rende
 more, and sketch-audio ends the film's sound at the film's end as always, then plays `audio`
 after it, as loud as the narration. `poster_t` stays in the film.
 
+**Rendering a film a second time, beside itself.** A manifest's `"work": "<folder>"` (relative
+to the manifest) is where the tools WRITE: `audio/`, `outputs/` and `temp/` go under it, while
+everything the manifest names is still read from the manifest's own folder. Sketch Studio uses it
+to take a film's closing off after the fact (`studio/unbrand.py`): a copy of the manifest with no
+`tail` and `"work": "temp/unbrand"` renders next to the finished film, which stays whole until the
+new one is. Its sound is not mixed again: `sketch-audio.py --from-mix audio/mix_pre.wav` cuts the
+film's own un-mastered mix to the manifest's length and masters that, so nothing is synthesised,
+no voice is asked for, and the film sounds as it did -- the closing was appended after the film's
+own fade, so cutting at the film's end removes exactly it.
+
 **A cast of recurring characters** is the manifest's `cast`: a folder (`"cast": "cast"`) whose
 `<name>.js` files each run in their own scope after props.js and before film.js, and register one
 member as `SK.cast.<name> = {about, draw(x, y, o)}`. An error in one names its file. Sketch

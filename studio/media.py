@@ -96,12 +96,13 @@ def url_of(fid, name):
     return "%s/%s/%s" % (base(), fid, name)
 
 
-def blob_of(film, name):
+def blob_of(film, name, rev=None):
     """Where a film's file goes online: <id>/<name>, or <id>/r<n>/<name> once the film has been
-    rendered again after a hand patch (resume.py --patched sets media_rev). Its files are served
-    as immutable for a year (CACHE), so a changed film must have new names, or everyone who
-    watched it keeps the old one."""
-    rev = film.record().get("media_rev")
+    rendered again -- after a hand patch (resume.py --patched sets media_rev), or without its
+    branding (unbrand.py, which names the revision it is making as `rev` before the record has
+    it). Its files are served as immutable for a year (CACHE), so a changed film must have new
+    names, or everyone who watched it keeps the old one."""
+    rev = film.record().get("media_rev") if rev is None else rev
     return "r%d/%s" % (rev, name) if rev else name
 
 
@@ -292,14 +293,15 @@ def web_settings(film):
     return WEB | machine | {k: v for k, v in own.items() if not k.startswith("_")}
 
 
-def make_web(film):
+def make_web(film, out=None):
     """outputs/film_web.mp4: the master re-encoded to stream (WEB), its soft subtitles kept; a
     master already light enough is copied as it is. Made once (a newer copy is kept). Returns
-    its path, or None when there is no master. Raises on a failed encode."""
+    its path, or None when there is no master. Raises on a failed encode. `out`: another folder
+    holding the master (a second render of the film, beside it)."""
     import shutil
     import subprocess
 
-    out = film.path("outputs")
+    out = out or film.path("outputs")
     src, dst = os.path.join(out, "film.mp4"), os.path.join(out, "film_web.mp4")
     if not os.path.isfile(src):
         return None
@@ -368,22 +370,24 @@ async def _put(session, blob, path, ctype, disposition=None):
                 raise MediaError("%s: %d %s" % (blob, r.status, (await r.text())[:200]))
 
 
-async def publish(film, timeout=3600):
+async def publish(film, timeout=3600, out=None, rev=None):
     """Make the web copy, then copy the finished film's files; answers {"web", "video", "poster",
     "card", "subtitles"} (the ones there are), or {} when copying is off or the master could not
     be copied. A web copy that failed leaves the master to play. A film whose picture changed
-    gets new URLs by its record's media_rev (blob_of): CACHE keeps the old ones for a year."""
+    gets new URLs by its record's media_rev (blob_of): CACHE keeps the old ones for a year.
+    `out` and `rev`: the film's files from another folder, as that revision (unbrand.py copies
+    the new film online before it takes the old one's place)."""
     if not enabled():
         return {}
     import aiohttp
 
-    out = film.path("outputs")
+    out = out or film.path("outputs")
     try:
         await asyncio.to_thread(ensure_card, out, film.record().get("length") or film.length)
     except Exception as e:  # noqa: BLE001 -- no card is no reason to keep the film offline
         print("film %s: no card: %s" % (film.id, e), file=sys.stderr, flush=True)
     try:
-        await asyncio.to_thread(make_web, film)
+        await asyncio.to_thread(make_web, film, out)
     except Exception as e:  # noqa: BLE001 -- the master plays instead
         print("film %s: no web copy: %s" % (film.id, e), file=sys.stderr, flush=True)
     urls = {}
@@ -393,8 +397,8 @@ async def publish(film, timeout=3600):
                 p = os.path.join(out, name)
                 if os.path.isfile(p):
                     how = download_name(film) if key == "video" else None
-                    await _put(s, "%s/%s" % (film.id, blob_of(film, name)), p, ctype, how)
-                    urls[key] = url_of(film.id, blob_of(film, name))
+                    await _put(s, "%s/%s" % (film.id, blob_of(film, name, rev)), p, ctype, how)
+                    urls[key] = url_of(film.id, blob_of(film, name, rev))
     except Exception as e:  # noqa: BLE001 -- the film is made; the copy is a bonus
         print("film %s: not copied online: %s" % (film.id, e), file=sys.stderr, flush=True)
         return urls if "video" in urls else {}

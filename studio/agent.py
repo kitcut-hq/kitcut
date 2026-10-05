@@ -1692,6 +1692,8 @@ async def make_film(
             if missing:
                 print("film %s: no closing: %s" % (film.id, missing), file=sys.stderr, flush=True)
                 summary["branding_error"] = missing
+        else:
+            debrand(film)
 
         s = time.time()
         emit({"type": "stage", "name": "sound", "text": "Mixing the soundtrack"})
@@ -1996,6 +1998,26 @@ def brand(film):
     }
     films._write_json(film.manifest, m)
     return None
+
+
+def debrand(film):
+    """The other way: a film whose record says it carries no branding is finished without a
+    `tail`, at its record's frame rate. One that lost its branding after it was made (unbrand.py
+    swaps in a second render and leaves the manifest as it was, so what is keyed on the manifest
+    stays valid) would otherwise get the closing back the next time it is finished by hand.
+    Writes nothing when there is nothing to change."""
+    try:
+        with open(film.manifest, encoding="utf-8") as f:
+            m = json.load(f)
+    except (OSError, ValueError):
+        return
+    fps = film.record().get("fps")
+    if "tail" not in m and (fps not in (30, 60) or m.get("fps", 60) == fps):
+        return
+    m.pop("tail", None)
+    if fps in (30, 60):
+        m["fps"] = fps
+    films._write_json(film.manifest, m)
 
 
 async def keep_cast(film, tools, emit):

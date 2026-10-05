@@ -484,6 +484,171 @@ NOT_LOGGED_IN = "Not logged in · Please run /login"
 BAD_TOKEN = "Failed to authenticate. API Error: 401 Invalid bearer token"
 
 
+def probe(mp4):
+    """(seconds, frame rate as ffprobe writes it) of a video."""
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries"]
+        + ["stream=r_frame_rate:format=duration", "-of", "json", mp4],
+        capture_output=True,
+        text=True,
+    ).stdout
+    j = json.loads(out or "{}")
+    return float(j["format"]["duration"]), j["streams"][0]["r_frame_rate"]
+
+
+async def unbranded(c, auth, mem, check, ids):
+    """A finished Free-plan film drawn again without its mark and closing (unbrand.py): only for
+    its own client; a failed render leaves the film exactly as it was; then the same film, 3 s
+    shorter, at the paid frame rate, still the film it was (done, its finish time, its costs)."""
+    unbrand = server.unbrand
+    paid, free = ids[0], ids[1]
+    f = films.Film.open(free)
+    was = f.record()
+    mp4 = f.path("outputs", "film.mp4")
+    url = "/api/films/%s/unbrand"
+
+    async def stands(want):
+        for _ in range(600):
+            s = await (await c.get("/api/films/%s?since=100000" % free, headers=auth)).json()
+            if s.get("unbrand") in want:
+                return s
+            await asyncio.sleep(0.5)
+        return s
+
+    s = await (await c.get("/api/films/%s" % free, headers=auth)).json()
+    check(
+        s.get("branded") is True and "unbrand" not in s,
+        "a Free-plan film's status says it is branded",
+    )
+    r = await c.post(url % free, headers=auth | {"Cf-Ray": "t", "X-Client-Ip": "u:test-0"})
+    check(r.status == 403, "another client cannot take a film's branding off (%d)" % r.status)
+    r = await c.post(url % paid, headers=auth | {"X-Client-Ip": "u:test-0"})
+    b = await r.json()
+    check(
+        r.status == 200 and b.get("branded") is False and b.get("unbrand") == "done",
+        "a film with no branding: nothing to do (%s)" % b,
+    )
+
+    # a render that comes out wrong: said, and the film is untouched
+    real = unbrand.check
+    unbrand.check = lambda *a: "forced: not the film"
+    try:
+        r = await c.post(url % free, headers=auth | {"Cf-Ray": "t", "X-Client-Ip": "u:test-1"})
+        again = await c.post(url % free, headers=auth | {"Cf-Ray": "t", "X-Client-Ip": "u:test-1"})
+        check(
+            r.status == 202 and again.status == 202 and len(unbrand.JOBS) == 1,
+            "asked for, and asked twice is the same job (%d, %d)" % (r.status, again.status),
+        )
+        s = await stands(("failed", "done"))
+    finally:
+        unbrand.check = real
+    rec = f.record()
+    secs, rate = probe(mp4)
+    check(
+        s.get("unbrand") == "failed"
+        and s.get("status") == "done"
+        and s.get("branded") is True
+        and rec.get("state") == "done"
+        and rec.get("ok") is True
+        and rec.get("branding") is True
+        and rec.get("finished") == was.get("finished")
+        and abs(secs - 8) < 0.1
+        and rate == "30/1"
+        and mem.docs[free].get("state") == "done"
+        and mem.docs[free].get("branding") is True
+        and not os.path.exists(f.path("temp", "unbrand"))
+        and not os.path.exists(f.path(unbrand.SIDE)),
+        "a failed one leaves the film as it was: done, branded, 8 s (%s, %.2f s, %s)"
+        % (s.get("unbrand"), secs, (rec.get("unbrand") or {}).get("error")),
+    )
+
+    # asked again: the same film without them
+    r = await c.post(
+        url % free, headers=auth | {"Cf-Ray": "t", "X-Client-Ip": "u:test-1", "X-Fps": "60"}
+    )
+    check(r.status == 202, "a failed one can be asked for again (%d)" % r.status)
+    s = await stands(("done", "failed"))
+    rec = f.record()
+    secs, rate = probe(mp4)
+    d = mem.docs[free]
+    check(
+        s.get("unbrand") == "done" and s.get("branded") is False and s.get("status") == "done",
+        "its status: no branding left (%s, %s)"
+        % (s.get("unbrand"), (rec.get("unbrand") or {}).get("error")),
+    )
+    check(
+        abs(secs - 5) < 0.1 and rate == "60/1",
+        "the same film without the closing, at the paid frame rate (%.2f s, %s)" % (secs, rate),
+    )
+    check(
+        rec.get("branding") is False
+        and rec.get("fps") == 60
+        and rec.get("state") == "done"
+        and rec.get("ok") is True
+        and rec.get("finished") == was.get("finished")
+        and rec.get("seconds") == was.get("seconds")
+        and rec.get("cost_usd") == was.get("cost_usd")
+        and (rec.get("unbrand") or {}).get("before", {}).get("fps") == 30,
+        "its record: still the film it was, finished when it was, and what it was before",
+    )
+    check(
+        d.get("branding") is False
+        and d.get("fps") == 60
+        and d.get("state") == "done"
+        and (d.get("unbrand") or {}).get("state") == "done"
+        and len(d.get("calls", [])) == 1,
+        "the run's record says so too, with no new Claude call",
+    )
+    check(
+        os.path.getsize(f.path("outputs", "film_poster.png")) > 1000
+        and os.path.getsize(f.path("audio", "final.wav")) > 1000
+        and not os.path.exists(f.path("temp", "unbrand"))
+        and not os.path.exists(f.path(unbrand.SIDE))
+        and not os.listdir(unbrand.MARKS),
+        "its poster and sound are the new film's, and nothing of the second render is left",
+    )
+    r = await c.post(url % free, headers=auth | {"Cf-Ray": "t", "X-Client-Ip": "u:test-1"})
+    b = await r.json()
+    check(
+        r.status == 200 and b.get("unbrand") == "done" and not unbrand.in_flight(),
+        "asked once more: already done",
+    )
+
+    # a server that went away mid-way: the leader finds the film by its mark (orphans). One whose
+    # new film was already in place is only recorded done; one tried too often is given up on,
+    # and its film stays as it is
+    gone = {"state": "running", "server": "gone.1", "tries": 1, "fps": 60}
+    unbrand.JOBS.pop(free, None)
+    f.update(unbrand=gone)
+    unbrand._set_mark(free)
+    found = [x.id for x, _ in unbrand.orphans()]
+    unbrand.resume(f, server.SCHED)
+    await asyncio.sleep(0.2)
+    rec = f.record()
+    check(
+        found == [free]
+        and rec["unbrand"]["state"] == "done"
+        and not os.listdir(unbrand.MARKS)
+        and mem.docs[free]["unbrand"]["state"] == "done"
+        and not unbrand.orphans(),
+        "an orphan whose new film was already in place is recorded done (%s)" % found,
+    )
+    f.update(branding=True, unbrand=gone | {"tries": unbrand.TRIES})
+    unbrand._set_mark(free)
+    unbrand.resume(f, server.SCHED)
+    await asyncio.sleep(0.2)
+    rec = f.record()
+    check(
+        rec["unbrand"]["state"] == "failed"
+        and rec.get("state") == "done"
+        and not os.listdir(unbrand.MARKS)
+        and mem.docs[free]["unbrand"]["state"] == "failed"
+        and not unbrand.in_flight(),
+        "one whose server went away %d times is given up on, the film untouched" % unbrand.TRIES,
+    )
+    f.update(branding=False, unbrand=rec["unbrand"] | {"state": "done"})  # as it really is
+
+
 async def main():
     bad = []
 
@@ -676,6 +841,9 @@ async def main():
             )
         waits = [e for st in results for e in st["all_events"] if e["type"] == "wait"]
         check(bool(waits), "films queued for the renderer (%d waits)" % len(waits))
+
+        # ------------------------------------------------ the Free film, without its branding
+        await unbranded(c, auth, mem, check, ids)
 
         pv = [e for e in results[2]["all_events"] if e["type"] == "preview"][-1]["url"]
         r = await c.get(pv[pv.index("/files/") :])

@@ -51,6 +51,9 @@
 #   bash studio/deploy/ops.sh watch <film-id>...      follow films to the end (one line per change)
 #   bash studio/deploy/ops.sh pull <film-id> [dest] [--all]   its outputs (or the whole folder) here
 #   bash studio/deploy/ops.sh hide|show <film-id>     out of / back into the public gallery
+#   bash studio/deploy/ops.sh unbrand <film-id> [--no-watch]   a finished Free-plan film drawn again
+#                                                     without its mark and closing (studio/unbrand.py):
+#                                                     a render, no Claude; followed to the end
 #   bash studio/deploy/ops.sh library-get <project> <dir>   a project's library to work on here:
 #                                                     each member's latest version as
 #                                                     <dir>/cast/<name>.js, cast.png, index.json
@@ -611,6 +614,23 @@ print("record: " + ", ".join(sorted(fields)))
 PY
 rm -rf "$STAGE"
 EOF
+    ;;
+
+  unbrand)
+    # a finished Free-plan film drawn again without its mark and closing (studio/unbrand.py): asked
+    # as this machine, then followed to the end. The film plays as it was until the new one is in.
+    id="${1:?unbrand <film-id> [--no-watch]}"; shift || true
+    watch=1; [ "${1:-}" = "--no-watch" ] && watch=0
+    change_on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/films/$id/unbrand -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' -d '{}'; echo"
+    if [ "$DRY" = 1 ] || [ "$watch" = 0 ]; then exit 0; fi
+    on "$TOKEN_SH; last=''; while :; do
+      d=\$(curl -s 'http://127.0.0.1:$PORT/api/films/$id?since=1000000' -H \"Authorization: Bearer \$TOKEN\")
+      s=\$(printf '%s' \"\$d\" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get(\"unbrand\"), \"branded\" if d.get(\"branded\") else \"clean\")' 2>/dev/null) || s='unreadable'
+      [ \"\$s\" != \"\$last\" ] && echo \"\$(date +%T)  \$s\"; last=\$s
+      case \"\$s\" in done*|failed*|None*) break ;; esac
+      sleep 10
+    done
+    printf '%s' \"\$d\" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps({k: d.get(k) for k in (\"status\",\"branded\",\"unbrand\",\"video_url\",\"download_url\")}, indent=1))'"
     ;;
 
   hide|show)

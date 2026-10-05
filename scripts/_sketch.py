@@ -47,8 +47,13 @@ def load(path):
     d = os.path.dirname(path)
     m["_path"], m["_dir"] = path, d
     m["_id"] = _project.project_id(m, path)
+    # "work": "temp/unbrand" -- where the tools WRITE (audio/, outputs/, temp/), when that is not
+    # beside the manifest. Everything the manifest names is still read from its own folder, so a
+    # finished film can be rendered a second time next to itself (the studio's unbrand.py) and
+    # the one that is online stays whole until the new one is.
+    w = os.path.join(d, m["work"]) if m.get("work") else d
     for sub in ("audio", "outputs", "temp"):
-        m["_" + sub] = os.path.join(d, sub)
+        m["_" + sub] = os.path.join(w, sub)
         os.makedirs(m["_" + sub], exist_ok=True)
     m.setdefault("duration", 30.0)
     m.setdefault("fps", 60)

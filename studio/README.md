@@ -441,6 +441,29 @@ instead (`film.mark_note`, in the first message, and in each scene's and the edi
 made in scenes): the corner `film.MARK_BOX` (x 1660-1920, y 950-1080) is taken, nothing to be
 read goes there. Before that, i4d52n ran its race timer under the mark.
 
+**A finished film without them** (`unbrand.py`, `POST /api/films/<id>/unbrand`, 2026-10-05): when
+its maker moves to a paid plan the site asks for the same film with no mark and no closing, at the
+plan's frame rate (`X-Fps`, `X-Priority`). No Claude and no voice: a render, minutes of machine.
+- **The film is never at risk.** It is made a second time BESIDE the first: `sketch.clean.json`
+  (the manifest with no `tail`, the new `fps`, and `"work": "temp/unbrand"`, so the tools read the
+  film's own files and write into `temp/unbrand/`), the film's own `audio/mix_pre.wav` cut at the
+  film's end and mastered again (`sketch-audio.py --from-mix`), then `sketch-render.py` on the
+  server's pools. It goes online under the next revision's names (`media.blob_of`), and only then
+  takes the old film's place: files, then the record (`branding` false, `fps`, `media`,
+  `media_rev`, `unbrand: {state: "done", before: {...}}`). It never goes through
+  `agent.make_film`, whose failure path marks a film failed and takes its files off its page.
+- **What it leaves alone:** the film's `state`, `finished`, `seconds`, costs, log, share page and
+  `sketch.json` (the YouTube draft and thumbnails are keyed on its bytes; `agent.debrand` drops
+  the `tail` if the film is ever finished again by hand).
+- **A failure** leaves the film exactly as it was and says why in `unbrand` (`{"state":
+  "failed", "error"}`); it can be asked for again. The film's status carries `branded` and
+  `unbrand` (queued, running, done, failed).
+- **One at a time,** and a server that is stopping puts its job back in the queue: the leader
+  starts it again (`unbrand.orphans`, from the marks in `<home>/unbrand/`), three times at most. A
+  YouTube send of the film is not started while it runs, and the swap waits for one to end.
+- `test_server.py` covers it on the Free-plan film it makes: refused for another client, a forced
+  failure that changes nothing, then 5 s at 60 fps, still the film it was.
+
 **A series: the person's cast and memory** (`library.py`). A signed-in person's workspace (the
 site's `o:<id>` client; `u:<id>` before workspaces, the same owner) has a library that outlives
 its films, next to `projects\`, never in git:

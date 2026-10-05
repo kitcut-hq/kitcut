@@ -9,6 +9,7 @@
 <!-- The home page's link preview (X, Facebook, Slack...). A film's page, /film/<id>, gets its
      own in place of everything between the two markers (the site's api/film.js). -->
 <!-- meta -->
+<meta name="robots" content="max-image-preview:large, max-video-preview:-1, max-snippet:-1">
 <meta name="description" content="Make a Claude video from one prompt. Opus 5.5 writes, animates, narrates and scores your idea in minutes: motion graphics, explainers, launch videos. 30 s free.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="KitCut">
@@ -634,6 +635,36 @@ html[data-view=film] .work.done .screen { width: min(100%, max(calc((100svh - 23
 .feed b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font: 600 14px/1.35 Roboto, Arial, sans-serif; }
 .feed small { display: block; margin-top: 3px; color: #606060; font: 12px/1.4 Roboto, Arial, sans-serif; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .feed { background: #0f0f0f; color: #f1f1f1; } :root:not([data-theme="light"]) .feed small { color: #aaa; } }
+/* removing the KitCut branding: a button beside Download on a film of your own that carries the
+   mark and the ending, and the dialog it opens -- both as they are on this film, then the plan */
+#ubOpen { border-color: var(--accent); color: var(--accent-2); }
+#ubOpen:hover:not(:disabled) { background: var(--accent-soft); }
+#ubOpen svg { width: 14px; height: 14px; flex: none; display: block; }
+#ub { width: min(480px, calc(100% - 32px)); }
+#ub .ubnow { padding: 14px 16px 12px; background: var(--sunk); border-bottom: 1px solid var(--line); }
+#ub .ubnow .label { display: block; margin: 0 40px 10px 4px; }
+#ub .ubpics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+#ub .ubpics:has(figure[hidden]) { grid-template-columns: minmax(0, 60%); justify-content: center; }
+#ub figure { margin: 0; }
+#ub .ubshot { display: block; aspect-ratio: 16 / 9; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel) no-repeat 100% 100% / 500% auto; overflow: hidden; }
+#ub .ubshot video { display: block; width: 100%; height: 100%; object-fit: cover; }
+#ub .ubshot.wait { background: linear-gradient(90deg, var(--panel) 20%, var(--hover) 50%, var(--panel) 80%) 0 0 / 250% 100%; animation: shimmer 1.4s linear infinite; }
+#ub .ubshot.wait video { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { #ub .ubshot.wait { animation: none; } }
+#ub figcaption { margin-top: 6px; font-size: 12px; color: var(--ink-2); text-align: center; }
+#ub .ubbody { display: grid; gap: 14px; padding: 18px 24px 20px; }
+#ub h2 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -.01em; }
+#ub .of { margin: 2px 0 0; font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#ub .ubgets { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 14px; }
+#ub .ubgets li { display: flex; align-items: flex-start; gap: 10px; }
+#ub .ubgets svg { flex: none; width: 18px; height: 18px; margin-top: 2px; color: var(--good); }
+#ub .err { margin: 0; color: var(--bad); font-weight: 600; font-size: 13px; }
+#ubGo { width: 100%; }
+#ub .close { top: 4px; right: 8px; }
+#ub .ubnote { margin: -6px 0 0; font-size: 12.5px; color: var(--ink-2); text-align: center; }
+#ub .ubfoot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-top: -2px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; }
+#ub .ubfoot a:not(.btn) { color: var(--accent-2); }
+#ub .ubfoot .acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-left: auto; }
 </style>
 <script>
 // Where this visitor came from, for the sign-up to record (lib/attribution.js): the link's utm_*
@@ -741,7 +772,7 @@ if (/^\/film\/studio-/.test(location.pathname)) document.documentElement.dataset
   <section class="work" id="work">
     <div class="stage">
       <div class="screen" id="screen"><div class="idle">Your film appears here.</div></div>
-      <div class="caption"><span id="status">Ready.</span><span class="right"><a class="btn sm" id="dlBtn" href="#" download target="_blank" rel="noopener" hidden title="Download the full-quality MP4"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg> Download</a><button class="btn sm yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><button class="btn sm" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span class="fresh" id="views" hidden></span><span id="clock"></span></span></div>
+      <div class="caption"><span id="status">Ready.</span><span class="right"><a class="btn sm" id="dlBtn" href="#" download target="_blank" rel="noopener" hidden title="Download the full-quality MP4"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg> Download</a><button class="btn sm" type="button" id="ubOpen" hidden title="This film again, without the KitCut mark and ending"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7zM19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z"/></svg> Remove branding</button><button class="btn sm yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><button class="btn sm" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span class="fresh" id="views" hidden></span><span id="clock"></span></span></div>
       <div class="sharebar" id="sharebar" hidden>
         <div class="sb">
           <div class="sb-l"><b id="sbSay">Share this film</b><a id="sbLink" href="#" target="_blank" rel="noopener"></a></div>
@@ -820,6 +851,7 @@ if (/^\/film\/studio-/.test(location.pathname)) document.documentElement.dataset
     <a class="more" id="ytAdd" href="/api/youtube/connect">+ Add another channel</a>
     <p class="note" id="ytAgain" hidden></p>
     <p class="redo" id="ytRedo" hidden><span id="ytRedoText"></span><button type="button" id="ytRedoBtn"></button></p>
+    <p class="redo" id="ytBrand" hidden><span>This film carries the KitCut mark and ending, and so will its copy on YouTube.</span><button type="button" id="ytBrandGo">Remove them first</button></p>
     <p class="note" id="ytDraftNote" aria-live="polite" hidden></p>
     <label class="field">Title<span class="box"><input type="text" id="ytName" maxlength="100" required><span class="skel" aria-hidden="true"><i></i></span></span></label>
     <label class="field">Description<span class="box"><textarea id="ytDesc" rows="8" maxlength="5000"></textarea><span class="skel" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span></label>
@@ -849,6 +881,24 @@ if (/^\/film\/studio-/.test(location.pathname)) document.documentElement.dataset
       <p class="note" id="ytDoneNote"></p>
       <p class="row"><a class="btn primary" id="ytWatch" target="_blank" rel="noopener">Watch on YouTube</a><button class="btn" type="button" id="ytMore">Publish to another channel</button></p>
     </div>
+  </div>
+</dialog>
+<dialog id="ub" aria-labelledby="ubTitle">
+  <form method="dialog"><button class="btn quiet icon close" aria-label="Close">&times;</button></form>
+  <div class="ubnow">
+    <span class="label">On your film now</span>
+    <div class="ubpics">
+      <figure><span class="ubshot" id="ubMark" role="img" aria-label="The corner of your film, with the made with kitcut.ai mark on it"></span><figcaption>The mark, on every frame</figcaption></figure>
+      <figure id="ubEndFig"><span class="ubshot" id="ubEnd"></span><figcaption>The KitCut ending</figcaption></figure>
+    </div>
+  </div>
+  <div class="ubbody">
+    <div><h2 id="ubTitle">Remove the KitCut branding</h2><p class="of" id="ubOf"></p></div>
+    <ul class="ubgets" id="ubGets"></ul>
+    <p class="err" id="ubErr" hidden></p>
+    <button class="btn primary go" type="button" id="ubGo" autofocus>Remove branding</button>
+    <p class="ubnote">Cancel any time. The clean film stays yours.</p>
+    <div class="ubfoot"><a id="ubPlans" href="/pricing">See all plans</a><span class="acts"><a class="btn sm" id="ubDl" href="#" download target="_blank" rel="noopener" hidden>Download with branding</a><button class="btn sm quiet" type="button" id="ubKeep">Keep the branding</button></span></div>
   </div>
 </dialog>
 <dialog id="signin" aria-labelledby="signinTitle">
@@ -1104,7 +1154,7 @@ function tick() { $('clock').textContent = (lastCost != null ? `${usd(lastCost)}
 function startClock(elapsed) { t0 = Date.now() - (elapsed || 0) * 1000; clearInterval(timer); tick(); timer = setInterval(tick, 500); }
 function finish() { clearInterval(timer); timer = null; clearTimeout(poll); poll = null; pending = null; unfresh(); $('go').disabled = !studioUp; $('stop').hidden = true; }
 function reset() {
-  finish(); ytReset(); t0 = 0; lastCost = null; lastLog = null; showedDone = false; FILM = null; OWN = null;
+  finish(); ytReset(); ubReset(); t0 = 0; lastCost = null; lastLog = null; showedDone = false; FILM = null; OWN = null; filmDone = null; whoFor = null;
   $('stats').hidden = true; $('log').innerHTML = ''; $('clock').textContent = ''; $('views').hidden = true;
   $('work').classList.remove('done'); $('made').open = true;
   $('logHead').textContent = 'What Claude is doing'; $('logMore').textContent = '';
@@ -1115,6 +1165,7 @@ function reset() {
 // its title, the film, what can be done with it, and its prompt folded to one line. The idea box is
 // folded away under it until Make it again or Try again opens it, filled in from the film.
 let FILM = null, OWN = null;  // the film on screen ({prompt, look, length}), and the id of one that is the viewer's own
+let filmDone = null, whoFor = null;  // the finished film's status as last read, and the id whose owner was asked about
 const HOME = FILM_PATH.test(location.pathname) ? null  // the home page's own title, to put back after a film
   : { h1: document.querySelector('.hero h1').textContent, title: document.title };
 function view(film) {
@@ -1264,6 +1315,7 @@ async function follow(since = 0, misses = 0) {
     else if (s.status === 'running' && s.wait) $('status').innerHTML = `<span class="pen"></span>${esc(s.wait)}`;
     if (s.status === 'done') {
       if (s.video_url) play(s.video_url, s.poster_url);
+      filmDone = s;
       showShare(id, s);
       countView(id);
       ytDoneId = id; ytLoad();
@@ -1488,6 +1540,7 @@ async function whoami() {
     if (FILM_PATH.test(location.pathname)) openForm('Your idea');
   }
   ytLoad();
+  if (USER && currentId && ytDoneId === currentId) shareWho(currentId);  // the film was on screen before the account was known
 }
 
 
@@ -1553,11 +1606,13 @@ function showShare(id, s) {
   if (USER) shareWho(id);
 }
 async function shareWho(id) {
+  if (whoFor === id) return;  // asked once a film: when it is shown, or when the account is known, whichever is later
+  whoFor = id;
   try {
     const r = await fetch(`/api/account/film?id=${encodeURIComponent(id)}`, { headers: { Accept: 'application/json' } });
     if (!r.ok || id !== currentId) return;
-    const { mine, profile: p } = await r.json();
-    if (mine) { OWN = id; if (!$('ideaAgain').hidden && FILM) $('ideaAgain').textContent = againLabel(); }
+    const { mine, profile: p, unbrand } = await r.json();
+    if (mine) { OWN = id; if (!$('ideaAgain').hidden && FILM) $('ideaAgain').textContent = againLabel(); ubSet(id, unbrand); }
     if (!mine || !p) return;
     $('sbSay').textContent = "Your film's page";
     const face = p.photo ? `<img src="${esc(p.photo)}" alt="" referrerpolicy="no-referrer">` : `<span class="face" style="background:${esc(p.tint)}">${esc(p.letter)}</span>`;
@@ -1572,6 +1627,211 @@ async function shareWho(id) {
 function shared(net) {
   try { if (USER) navigator.sendBeacon(`/api/invites/share?c=${net === 'copy' ? 'copy' : 'film'}`); } catch (e) { /* counting never blocks sharing */ }
   try { window.va && window.va('event', { name: 'film_share', data: { net, from: 'film' } }); } catch (e) { /* nor does this */ }
+}
+
+// ---------------------------------------------------------------- removing the KitCut branding
+// A film made on the Free plan carries the "made with kitcut.ai" mark and KitCut's ending. Whoever
+// made it is offered both gone: on a paid plan the studio draws this same film again without them
+// (no credits used), and new films never carry them. /api/account/film says which it is for the
+// film on screen: `offer` (on Free: the dialog, then Stripe, which comes back here with
+// ?upgraded=1), `free` (already on a paid plan: one click) or `running`. Where there are no
+// accounts it is never asked, and none of this shows.
+// The dialog opens by itself once a film (kcUnbrand remembers which): the first time the film
+// plays to its end, or at the first Download, which it never stands in the way of.
+let UB = null;  // {id, how}: the film on screen, when its branding can come off
+let ubPlans = null, ubFrom = '', ubPoll = null;
+const UB_BACK = (() => {  // back from Stripe (?upgraded=1), or here from an email's link (?unbrand=1)
+  const q = new URLSearchParams(location.search), back = { paid: q.has('upgraded'), ask: q.has('unbrand') };
+  if (back.paid || back.ask) {
+    q.delete('upgraded'); q.delete('unbrand');
+    history.replaceState(history.state, '', location.pathname + (q.toString() ? `?${q}` : ''));
+  }
+  return back;
+})();
+const ubSeen = {
+  all() { try { return JSON.parse(localStorage.getItem('kcUnbrand') || '[]'); } catch (e) { return []; } },
+  add(id) { try { localStorage.setItem('kcUnbrand', JSON.stringify([id, ...this.all().filter((x) => x !== id)].slice(0, 50))); } catch (e) { /* private window */ } },
+  has(id) { return this.all().includes(id); },
+};
+const UB_TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+// how often the offer is shown, taken up and closed, and from where (ended, download, button, youtube, email)
+function ubCount(event, from, film) {
+  try { window.va && window.va('event', { name: `upsell_${event}`, data: { from } }); } catch (e) { /* counting never blocks the page */ }
+  try { navigator.sendBeacon('/api/billing/seen', new Blob([JSON.stringify({ event, from, film })], { type: 'application/json' })); } catch (e) { /* nor does this */ }
+}
+function ubReset() {
+  clearTimeout(ubPoll); ubPoll = null; UB = null;
+  $('ubOpen').hidden = true; $('ubOpen').disabled = false;
+  if ($('ub').open) $('ub').close();
+}
+// what /api/account/film said about the film on screen, which is the viewer's own
+function ubSet(id, how) {
+  if (id !== currentId || !filmDone) return;
+  const paid = UB_BACK.paid, ask = UB_BACK.ask;
+  UB_BACK.paid = UB_BACK.ask = false;
+  if (how === 'running') return ubWatch(id);
+  if (how !== 'offer' && how !== 'free') return;
+  UB = { id, how };
+  $('ubOpen').hidden = false;
+  if (paid) return how === 'free' ? ubStart(id) : ubWait(id);
+  if (ask) return how === 'free' ? ubStart(id) : ubShow('email');
+}
+async function ubShow(from) {
+  if (!UB || UB.how !== 'offer' || $('ub').open || !filmDone) return;
+  const id = UB.id;
+  if (!ubPlans) {
+    try {
+      const r = await fetch('/api/billing/plans', { headers: { Accept: 'application/json' } });
+      ubPlans = r.ok ? await r.json() : null;
+    } catch (e) { /* said below */ }
+  }
+  if (!UB || UB.id !== id || $('ub').open) return;  // the viewer moved on while the plans were read
+  const plan = ubPlans && ubPlans.standard, tier = plan && plan.tiers && plan.tiers[0], free = (ubPlans && ubPlans.free) || {};
+  if (!tier) { if (from === 'button') location.href = '/pricing'; return; }
+  ubFrom = from;
+  ubSeen.add(id);
+  const main = $('screen').querySelector('video');
+  if (main && !main.paused) main.pause();
+  // both, as they are on this film: its poster's corner, and a still from its last second
+  $('ubMark').style.backgroundImage = filmDone.poster_url ? `url("${encodeURI(filmDone.poster_url)}")` : '';
+  $('ubEndFig').hidden = !filmDone.video_url;
+  $('ubEnd').innerHTML = filmDone.video_url ? `<video src="${esc(filmDone.video_url)}" muted playsinline preload="metadata" tabindex="-1" aria-label="The KitCut ending that plays after your film"></video>` : '';
+  const end = $('ubEnd').querySelector('video');
+  $('ubEnd').classList.toggle('wait', !!end);
+  if (end) {  // shown once it is on that frame; a film that will not load it is shown by its mark alone
+    const gone = () => { if (end.isConnected) $('ubEndFig').hidden = true; };
+    const late = setTimeout(gone, 8000);
+    end.addEventListener('loadedmetadata', () => { try { end.currentTime = Math.max(0, end.duration - 1); } catch (e) { gone(); } }, { once: true });
+    end.addEventListener('seeked', () => { clearTimeout(late); $('ubEnd').classList.remove('wait'); }, { once: true });
+    end.addEventListener('error', () => { clearTimeout(late); gone(); }, { once: true });
+  }
+  const name = (filmDone.share && filmDone.share.title) || filmDone.title || '';
+  $('ubOf').textContent = name ? `from “${clip(name, 90)}”` : '';
+  $('ubOf').hidden = !name;
+  $('ubGets').innerHTML = [
+    'This film again, clean, in a few minutes. No credits used.',
+    `Every new film clean, and smoother: ${plan.fps} frames a second.`,
+    `${tier.minutes} minutes of film a month${free.seconds_per_cycle ? ` (Free gives ${free.seconds_per_cycle} seconds)` : ''}.`,
+  ].map((t) => `<li>${UB_TICK}<span>${esc(t)}</span></li>`).join('');
+  $('ubGo').textContent = `Remove branding · $${tier.usd} a month`;
+  $('ubGo').dataset.minutes = tier.minutes;
+  $('ubGo').disabled = false;
+  $('ubPlans').href = `/pricing?plan=standard&minutes=${tier.minutes}`;
+  $('ubErr').hidden = true;
+  // from Download: the download itself is the way out, in place of "Keep the branding"
+  $('ubDl').hidden = !(from === 'download' && dlAt);
+  $('ubKeep').hidden = !$('ubDl').hidden;
+  if (!$('ubDl').hidden) { $('ubDl').href = dlAt; $('ubDl').download = $('dlBtn').download; }
+  $('ub').showModal();
+  ubCount('shown', from, id);
+}
+$('ubGo').addEventListener('click', async () => {
+  if (!UB) return;
+  const from = ubFrom;
+  $('ubGo').disabled = true; $('ubErr').hidden = true;
+  ubCount('click', from, UB.id);
+  try {
+    const r = await fetch('/api/billing/checkout', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: 'standard', minutes: +$('ubGo').dataset.minutes, from: 'unbrand', film: UB.id, shown: from }),
+    });
+    const b = await r.json().catch(() => ({}));
+    if (!r.ok || !b.url) throw new Error(b.error || `HTTP ${r.status}`);
+    ubFrom = '';  // off to Stripe: not a dialog closed
+    location.href = b.url;
+  } catch (err) {
+    $('ubErr').textContent = `That did not open the checkout: ${String(err.message || err)}`;
+    $('ubErr').hidden = false; $('ubGo').disabled = false;
+  }
+});
+$('ubKeep').addEventListener('click', () => $('ub').close());
+$('ubDl').addEventListener('click', () => setTimeout(() => $('ub').close(), 0));  // the download starts, then the dialog goes
+$('ub').addEventListener('close', () => {
+  $('ubEnd').innerHTML = '';
+  if (ubFrom && UB) ubCount('dismiss', ubFrom, UB.id);
+  ubFrom = '';
+});
+$('ubOpen').addEventListener('click', () => { if (UB && UB.how === 'free') ubStart(UB.id); else ubShow('button'); });
+$('ytBrandGo').addEventListener('click', () => {
+  if (!UB) return;
+  $('yt').close();
+  if (UB.how === 'free') ubStart(UB.id); else ubShow('youtube');
+});
+$('dlBtn').addEventListener('click', (e) => {
+  if (!UB || UB.how !== 'offer' || ubSeen.has(UB.id)) return;
+  e.preventDefault();  // asked once; the dialog has the download in it
+  ubShow('download');
+});
+// 'ended' does not bubble: caught on its way down to the player. A beat after the last frame, once
+// the film is out of full screen (a dialog under a full-screen video is never seen), and never
+// over another dialog.
+$('screen').addEventListener('ended', () => {
+  if (!UB || UB.how !== 'offer' || ubSeen.has(UB.id)) return;
+  const show = () => setTimeout(() => { if (!document.querySelector('dialog[open]')) ubShow('ended'); }, 700);
+  if (document.fullscreenElement) document.addEventListener('fullscreenchange', show, { once: true }); else show();
+}, true);
+// On a paid plan: ask for the clean film, then follow it.
+async function ubStart(id) {
+  $('ubOpen').disabled = true;
+  try {
+    const r = await fetch(`/api/films/${encodeURIComponent(id)}/unbrand`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const b = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(b.error || `HTTP ${r.status}`);
+    if (id === currentId) ubWatch(id);
+  } catch (err) {
+    if (id !== currentId) return;
+    $('status').textContent = `Removing the branding did not start: ${String(err.message || err)}`;
+    $('ubOpen').disabled = false;
+  }
+}
+// Back from Stripe: the plan arrives a moment after its person does (Stripe tells the site, which
+// asks for the clean film itself). Looked for a few times, then left to finish on its own.
+async function ubWait(id, n = 0) {
+  if (id !== currentId) return;
+  $('ubOpen').hidden = true;
+  $('status').innerHTML = '<span class="pen"></span>Thank you. Setting up your plan...';
+  let how = null;
+  try {
+    const r = await fetch(`/api/account/film?id=${encodeURIComponent(id)}`, { headers: { Accept: 'application/json' } });
+    if (r.ok) how = (await r.json()).unbrand || 'none';
+  } catch (e) { /* asked again */ }
+  if (id !== currentId) return;
+  if (how && how !== 'offer') refreshCredits();
+  if (how === 'running') return ubWatch(id);
+  if (how === 'free') return ubStart(id);
+  if (how === 'none') return openFilm(id, false);  // already clean
+  if (n >= 15) { $('status').textContent = 'Your payment is still being confirmed. The branding comes off this film as soon as it is: there is nothing more to do.'; return; }
+  ubPoll = setTimeout(() => ubWait(id, n + 1), 2500);
+}
+// While the studio draws it again the film on screen keeps playing; the clean one takes its place.
+function ubWatch(id, n = 0) {
+  if (id !== currentId) return;
+  UB = null; $('ubOpen').hidden = true; $('ubOpen').disabled = false;
+  if (!n) $('status').innerHTML = '<span class="pen"></span>Removing the KitCut branding. It takes a few minutes, and you can leave: it finishes on its own.';
+  clearTimeout(ubPoll);
+  ubPoll = setTimeout(async () => {
+    let s = null;
+    try {
+      const r = await api(`/api/films/${encodeURIComponent(id)}?since=1000000`);  // where it stands, without its log
+      s = r.ok ? await r.json() : null;
+    } catch (e) { /* looked at again */ }
+    if (id !== currentId) return;
+    if (s && s.status === 'done' && (s.unbrand === 'done' || s.branded === false)) return ubDone(id, s);
+    if (s && s.unbrand === 'failed') {
+      $('status').textContent = 'Removing the branding did not work this time. Your film is as it was: press Remove branding to try again.';
+      whoFor = null;
+      return shareWho(id);  // the button comes back
+    }
+    ubWatch(id, n + 1);
+  }, n ? 5000 : 2500);
+}
+function ubDone(id, s) {
+  clearTimeout(ubPoll); ubPoll = null;
+  filmDone = s;
+  if (s.video_url) play(s.video_url, s.poster_url);
+  showShare(id, s);  // Download is the clean film now
+  $('status').innerHTML = '<span class="okmark">&#10003;</span> The KitCut branding is gone: this is your film, clean.';
+  refreshCredits();
 }
 $('sbCopy').addEventListener('click', async () => {
   if (!shareAt) return;
@@ -1693,6 +1953,7 @@ function ytShow(err, pick) {
   if (!f) return;
   $('ytConnectBtn').href = $('ytAdd').href = '/api/youtube/connect?back=' + encodeURIComponent('/film/' + f.id);
   ytErr(err);
+  $('ytBrand').hidden = !(UB && UB.id === f.id);
   $('ytSend').hidden = true;
   $('ytConnect').hidden = f.channels.length > 0;
   $('ytForm').hidden = !f.channels.length;

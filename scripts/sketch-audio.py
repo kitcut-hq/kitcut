@@ -18,7 +18,9 @@ Outputs, in projects/<id>/audio/:
     balance.json    music / ducked / heard / sfx / voice per 2 s, and what the voice gate did
 
 A manifest `tail` ({secs, audio}: a closing after the film) adds its recording after the film's
-sound, which still ends at the film's end.
+sound, which still ends at the film's end. `--from-mix <mix_pre.wav>` goes the other way for a
+film already mixed: it cuts that mix to the manifest's length and masters it again, with nothing
+synthesised -- how a film loses its closing and keeps its sound (the studio's unbrand.py).
 
 Manifest keys (audio block), all optional except score:
     score, sfx, automation ("temp/automation.json"), vo_timeline ("audio/vo/timeline.json")
@@ -30,6 +32,7 @@ Invoke as:
     python scripts/sketch-audio.py --manifest projects/<id>/sketch.json --plan
     python scripts/sketch-audio.py --manifest projects/<id>/sketch.json
     python scripts/sketch-audio.py --manifest projects/<id>/sketch.json --levels --stems
+    python scripts/sketch-audio.py --manifest projects/<id>/sketch.clean.json --from-mix audio/mix_pre.wav
 """
 
 import sys
@@ -77,11 +80,19 @@ def main():
         "--stems", action="store_true", help="also write the music, sfx and voice stems"
     )
     ap.add_argument("--no-vo", action="store_true", help="mix without the voice (music + sfx only)")
+    ap.add_argument(
+        "--from-mix",
+        metavar="WAV",
+        help="master this un-mastered mix (a mix_pre.wav, manifest-relative) cut to the "
+        "manifest's length, instead of mixing: the same film with its closing gone",
+    )
     args = ap.parse_args()
 
     m = _sketch.load(args.manifest)
     dur = float(m["duration"])
     au = m.get("audio", {})
+    if args.from_mix:
+        return remaster(m, args, {"lufs": -14.0, "tp": -1.5, **au.get("master", {})})
     mix = {
         "music_db": 6.0,
         "sfx_db": 3.0,
@@ -218,29 +229,7 @@ def main():
                 for r in rows:
                     print("  %5.0f " % r[0] + " ".join("%8.1f" % v for v in r[1:]))
         with st("master"):
-            final = os.path.join(m["_audio"], "final.wav")
-            A.loudnorm(pre, final, master["lufs"], master["tp"])
-            mp3 = os.path.join(m["_audio"], "final.mp3")
-            import subprocess
-
-            subprocess.run(
-                [
-                    "ffmpeg",
-                    "-v",
-                    "error",
-                    "-y",
-                    "-i",
-                    final,
-                    "-c:a",
-                    "libmp3lame",
-                    "-b:a",
-                    "192k",
-                    mp3,
-                ],
-                check=True,
-            )
-            lufs, peak = A.measure(final)
-            print("  final: %s LUFS integrated, %s dBTP" % (lufs, peak))
+            final, mp3, lufs = write_master(m, pre, master)
 
     _project.record(
         m["_id"],
@@ -251,6 +240,59 @@ def main():
         kind="audio",
         manifest=m["_path"],
         sidecars={"mp3": mp3, "mix_pre": pre, "balance": bal},
+    )
+
+
+def write_master(m, pre, master):
+    """final.wav and final.mp3 from an un-mastered mix: (final, mp3, its measured LUFS)."""
+    import subprocess
+
+    final = os.path.join(m["_audio"], "final.wav")
+    A.loudnorm(pre, final, master["lufs"], master["tp"])
+    mp3 = os.path.join(m["_audio"], "final.mp3")
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-i", final, "-c:a", "libmp3lame", "-b:a", "192k", mp3],
+        check=True,
+    )
+    lufs, peak = A.measure(final)
+    print("  final: %s LUFS integrated, %s dBTP" % (lufs, peak))
+    return final, mp3, lufs
+
+
+def remaster(m, args, master):
+    """--from-mix: a mix already made, cut to the manifest's length and mastered again. Nothing is
+    synthesised and no voice is asked for, so a film whose manifest lost its tail (the Free
+    plan's closing) sounds exactly as it did, and ends where the film does."""
+    src = _sketch.rel(m, args.from_mix)
+    if not os.path.isfile(src):
+        sys.exit("--from-mix: no such mix: %s" % src)
+    x = _sketch.decode(src, SR, mono=False)
+    n = int(round(_sketch.total(m) * SR))
+    if x.shape[1] < n - SR // 10:
+        sys.exit(
+            "--from-mix: %s is %.2f s, shorter than the film's %.2f s"
+            % (args.from_mix, x.shape[1] / SR, n / SR)
+        )
+    x = x[:, :n]
+    if x.shape[1] < n:
+        x = np.concatenate([x, np.zeros((x.shape[0], n - x.shape[1]))], axis=1)
+    x = x / (np.abs(x).max() + 1e-9) * 0.89
+    print("%s  (%.1fs, from %s)" % (m["_id"], n / SR, os.path.relpath(src, m["_dir"])))
+    with _sketch.Stages(m, "sketch-audio", ["mix", "master"], argv=sys.argv[1:]) as st:
+        with st("mix"):
+            pre = os.path.join(m["_audio"], "mix_pre.wav")
+            _sketch.write_wav(pre, x)
+        with st("master"):
+            final, mp3, lufs = write_master(m, pre, master)
+    _project.record(
+        m["_id"],
+        "sketch soundtrack mastered again from its mix (%s LUFS)" % lufs,
+        out=final,
+        script=__file__,
+        argv=sys.argv[1:],
+        kind="audio",
+        manifest=m["_path"],
+        sidecars={"mp3": mp3, "mix_pre": pre},
     )
 
 

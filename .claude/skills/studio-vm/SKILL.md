@@ -32,6 +32,7 @@ bash studio/deploy/ops.sh drafts [--days 7]          # YouTube drafts: seconds t
                                                     # pictures, and cost -- "why is publishing slow"
 bash studio/deploy/ops.sh pull <film-id> [dest] [--all]
 bash studio/deploy/ops.sh hide|show <film-id>       # public gallery
+bash studio/deploy/ops.sh unbrand <film-id>         # a finished Free-plan film drawn again without its mark and closing (a render, no Claude)
 bash studio/deploy/ops.sh replace <film-id> <folder>   # a remade film takes its place: same id
                                                     # and page, old one to backups/, new URLs
 bash studio/deploy/ops.sh forward [8765]            # the VM's studio on this laptop's 127.0.0.1:8765
