@@ -185,14 +185,18 @@ async def make(film, channel, draft, want=4):
 
 
 def public(rec, state=None):
-    """What the site is told: the state and, when done, each option's picture and words."""
+    """What the site is told: the state and, when done, each option's picture and words. `v`
+    names what the pictures were made from -- the draft and the design: the site puts it in each
+    picture's address and lets a browser keep the picture for an hour, so options made again
+    under a new design for the same draft need an address of their own, or the person who looked
+    within the hour is shown the old ones."""
     if rec is None:
         return {"state": state or "none"}
     if rec.get("state") in ("making", "failed"):
         return {k: rec[k] for k in ("state", "error") if rec.get(k)}
     return {
         "state": "done",
-        "v": rec.get("key"),
+        "v": "%s-%s" % (rec.get("key"), rec.get("design") or ""),
         "options": [
             {k: o[k] for k in ("n", "path", "layout", "words", "at", "t")}
             for o in rec.get("options") or []

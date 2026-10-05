@@ -265,10 +265,15 @@ def main():
     pub = thumbs.public(rec)
     check(
         pub["state"] == "done"
-        and pub["v"] == "draft-1"
         and set(pub["options"][0]) == {"n", "path", "layout", "words", "at", "t"},
         "the site is told the options, not their checks or notes",
         pub,
+    )
+    check(
+        pub["v"] == "draft-1-" + _thumb.DESIGN
+        and thumbs.public(dict(rec, design="yt-0"))["v"] != pub["v"],
+        "and their version names the draft and the design: remade options are not a cached picture",
+        pub["v"],
     )
     check(thumbs.public({"state": "making"}) == {"state": "making"}, "or that they are being made")
     check(thumbs.public(None) == {"state": "none"}, "or that there are none")
