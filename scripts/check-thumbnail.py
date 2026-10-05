@@ -394,6 +394,275 @@ def rules():
     shutil.rmtree(tmp, ignore_errors=True)
 
 
+def pieces():
+    """A film's pictures as film_pieces() returns them: two figures, a prop, a print, a brand's
+    mark and a flyer full of words."""
+
+    def p(w, h, **kw):
+        base = {"file": "", "w": w, "h": h, "cut": True, "being": False, "figure": False,
+                "mark": False, "lettered": False, "about": "",
+                "colours": [((242, 201, 76), 0.6), ((106, 152, 129), 0.4)]}  # fmt: skip
+        return dict(base, **kw)
+
+    return {
+        "girl": p(408, 1053, being=True, figure=True),
+        "mum": p(424, 1054, being=True, figure=True),
+        "trap": p(1053, 808),
+        "photo": p(900, 600, cut=False),
+        "web_mark": p(600, 600, mark=True),
+        "flyer": p(800, 1100, cut=False, lettered=True),
+    }
+
+
+def posters():
+    """A poster's rules, with no browser: what varies and what never does, who it is built on,
+    where its pieces and its words go in each template, and that its words are judged where
+    they stand."""
+    W, H = _thumb.size()
+    k = _thumb.cfg()["poster"]
+    safe, badge = _thumb.safe_rects()
+    pcs = pieces()
+
+    print("\nposters: what changes from one to the next")
+    vs = [_thumb.poster_variant("film-a", n) for n in (1, 2, 3, 4)]
+    check("the same film and option, the same poster", vs == [_thumb.poster_variant("film-a", n) for n in (1, 2, 3, 4)])  # fmt: skip
+    check("four options take both templates, turn about",
+          [v["template"] for v in vs[:2]] in (["side", "band"], ["band", "side"])
+          and vs[0]["template"] == vs[2]["template"] and vs[1]["template"] == vs[3]["template"], vs)  # fmt: skip
+    check("and both sides", {v["side"] for v in vs} == {"left", "right"}, vs)
+    seeds = {json.dumps(_thumb.poster_variant("film-%d" % i, 1), sort_keys=True) for i in range(12)}
+    check("another film, another poster", len(seeds) >= 4, len(seeds))
+
+    print("\nposters: the stage")
+    page = [{"box": [40, 53, 1880, 1003], "col": "#22c1b4"}]
+    cam = _thumb.stage_camera(page)
+    check("an inset page is pushed in until it fills the frame, and a little past its edge",
+          cam and abs(cam["zoom"] - k["stage_overscan"] * H / 950) < 0.01, cam)  # fmt: skip
+    plate = Image.new("RGB", (W, H), (43, 40, 112))
+    ImageDraw.Draw(plate).rectangle([40, 53, 1880, 1003], fill=(34, 193, 180))
+    shown = _thumb.staged(plate, cam)
+    corners = [shown.getpixel(xy) for xy in ((4, 4), (W - 5, 4), (4, H - 5), (W - 5, H - 5))]
+    check(
+        "...so none of the mat under it shows", all(c == (34, 193, 180) for c in corners), corners
+    )
+    check("no page, no push", _thumb.stage_camera([]) is None)
+    check("a page that fills the frame, no push",
+          _thumb.stage_camera([{"box": [0, 0, W, H], "col": "#fff"}]) is None)  # fmt: skip
+
+    print("\nposters: who it is built on")
+    c4 = [{"at": 1.0, "words": "a"}, {"at": 2.0, "words": "b"}, {"at": 3.0, "words": "c"},
+          {"at": 4.0, "words": "d"}]  # fmt: skip
+    got = _thumb.poster_heroes(
+        pcs, [["trap", "girl"], [], [], []], c4, {"photo": {"n": 9, "w": 400}}
+    )
+    check("somebody before an object, the object beside her", got[0] == ("girl", ["trap"]), got)
+    check("a moment with nothing on screen takes a picture nobody has, somebody first",
+          got[1][0] == "mum" and len({h for h, _ in got}) == 4, got)  # fmt: skip
+    check("a brand's mark and a flyer full of words are the last a poster is built on",
+          not {"web_mark", "flyer"} & {h for h, _ in got}, got)  # fmt: skip
+    got = _thumb.poster_heroes(pcs, [["girl", "trap"], ["girl", "trap"]], c4[:2])
+    check("two moments with the same pieces, two different heroes",
+          [h for h, _ in got] == ["girl", "trap"], got)  # fmt: skip
+    named = [dict(c4[0], hero="mum", **{"with": ["girl"]}), dict(c4[1], hero="nobody")]
+    got = _thumb.poster_heroes(pcs, [["trap"], ["trap"]], named)
+    check("the writer's own choice stands", got[0] == ("mum", ["girl"]), got)
+    check("a name the film has no picture for: the frame's own", got[1][0] == "trap", got)
+    got = _thumb.poster_heroes({"scene": dict(pcs["photo"])}, [[]], c4[:1], {"scene": {"n": 40, "w": 1920}})  # fmt: skip
+    check("a painted scene laid across the frame is no piece of it", got[0][0] is None, got)
+    cs, notes, probs = _thumb.check_concepts(
+        [{"at": 2, "hero": "girl", "with": ["trap", "mum"], "words": "Stop and *think*"},
+         {"at": 5, "hero": "ghost", "with": ["flyer"], "words": "Ask first"},
+         {"at": 8, "words": "Never share codes"}, {"at": 11, "words": "It is *real* money"}],
+        30, "", pieces=list(pcs))  # fmt: skip
+    check("a concept carries its hero and one more picture",
+          not probs and cs[0]["hero"] == "girl" and cs[0]["with"] == ["trap"], (cs, probs))  # fmt: skip
+    check("a picture the film does not have is dropped, and said",
+          cs[1].get("hero") is None and any("ghost" in x for x in notes), (cs[1], notes))  # fmt: skip
+    check("a poster's writer names no layout: one is kept in hand, without a note",
+          sorted(c["layout"] for c in cs) == sorted(_thumb.cfg()["concepts"]["layouts"])
+          and not any("became" in x for x in notes), (cs, notes))  # fmt: skip
+
+    print("\nposters: the words")
+    st = style(outline={"fill": (255, 250, 240), "accent": (255, 216, 74),
+                        "stroke": {"w": 0.14, "col": (31, 27, 92)}},
+               strips=[(255, 216, 74), (224, 38, 47), (31, 27, 92)])  # fmt: skip
+    st["heads"][0].update(file="fonts/Oswald-VF.ttf", family="Oswald", weight="700", upper=True)
+    font = _thumb._font(st["heads"][0])
+    toks = _thumb.tokens("Цифрові гроші — *справжні*")
+    starts = []
+    for width in (700, 900, 1200, 1700):
+        b = _thumb.block_at(toks, font, 120, width, 900, 3, 0.24)
+        starts += [L["text"].split()[0] for L in (b or {"lines": []})["lines"]]
+    check("a dash ends a line, it never starts one", starts and "—" not in starts, starts)
+
+    def boxes(lay):
+        cut = [L for L in lay["spec"]["scene"] if L["k"] in ("cut", "print")]
+        return cut[-1], cut[:-1], [L for L in lay["spec"]["scene"] if L["k"] == "burst"]
+
+    for side in ("left", "right"):
+        v = dict(_thumb.poster_variant("film-a", 1), template="side", side=side, strips=False)
+        lay = _thumb.layout_poster("Знайомий голос — не *доказ*", st, pcs, "girl", ["trap"],
+                                   page, v, "film-a", 1)  # fmt: skip
+        hero, rest, burst = boxes(lay)
+        b = lay["box"]
+        half = hero["w"] / 2
+        clear = b[2] <= hero["x"] - half if side == "right" else b[0] >= hero["x"] + half
+        check("side, hero %s: the words on the other side, clear of the hero" % side,
+              lay["template"] == "side" and clear, (b, hero))  # fmt: skip
+        check("...inside the margins, out of YouTube's corner, at a size that reads",
+              b[0] >= safe[0] - 1 and b[2] <= safe[2] + 1 and b[1] >= safe[1] - 1
+              and not (b[2] > badge[0] and b[3] > badge[1])
+              and lay["cap"] >= _thumb.cfg()["cap"]["min_px"], (b, lay["cap"]))  # fmt: skip
+        check("...the hero drawn last, on its burst, the other piece behind it",
+              lay["spec"]["scene"][-1] is hero and lay["spec"]["scene"][0]["k"] == "burst"
+              and [r["name"] for r in rest] == ["trap"], lay["spec"]["scene"])  # fmt: skip
+        h = hero["w"] * pcs["girl"]["h"] / pcs["girl"]["w"]
+        check("...a figure from the waist up: head in the frame, feet far under it",
+              hero["y"] - h / 2 >= 0 and hero["y"] + h / 2 >= 1.4 * H, (hero, h))  # fmt: skip
+    check("the film's page under it, pushed in, nothing of the film on it",
+          lay["spec"]["stage"] is True and lay["spec"]["camera"] == cam, lay["spec"]["camera"])  # fmt: skip
+    check("the words in the film's own outline",
+          lay["spec"]["lines"][0]["stroke"] and lay["stroke_px"] > 0, lay["spec"]["lines"][0])  # fmt: skip
+    v = dict(_thumb.poster_variant("film-a", 2), template="band", side="left", strips=False)
+    lay = _thumb.layout_poster("Покупки — з *дорослим*", st, pcs, "girl", ["mum"], page, v, "film-a", 2)  # fmt: skip
+    hero, rest, _ = boxes(lay)
+    top = hero["y"] - hero["w"] * pcs["girl"]["h"] / pcs["girl"]["w"] / 2
+    check("band: the words across the top, in two lines at most, the hero under them",
+          lay["template"] == "band" and len(lay["spec"]["lines"]) <= 2 and lay["box"][3] <= top + 1,
+          (lay["box"], top))  # fmt: skip
+    check("...somebody beside somebody: a second bust behind, nearly as large",
+          len(rest) == 1 and rest[0]["name"] == "mum" and rest[0]["w"] >= 0.8 * hero["w"]
+          and abs(rest[0]["x"] - hero["x"]) > 0.3 * hero["w"], (rest, hero))  # fmt: skip
+    v = dict(v, template="side")
+    lay = _thumb.layout_poster("Покупки тільки з *дорослим*", st, pcs, "trap", [], page, v, "film-a", 3,
+                               strips=True)  # fmt: skip
+    cards = lay["spec"].get("cards") or []
+    check("strips: a line to a strip of the film's paper, no outline",
+          lay["strips"] and len(cards) == len(lay["spec"]["lines"]) >= 2
+          and not lay["spec"]["lines"][0]["stroke"], lay["spec"].get("cards"))  # fmt: skip
+    check("...the starred word's line on a strip of another of its colours",
+          len({c["fill"] for c in cards}) == 2, [c["fill"] for c in cards])  # fmt: skip
+    check("...an object whole and turned, its burst behind the strips too",
+          boxes(lay)[0]["rot"] != 0 and len(boxes(lay)[2]) == 1, lay["spec"]["scene"])  # fmt: skip
+    lay = _thumb.layout_poster("One *canvas*", st, pcs, "photo", [], page, v, "film-a", 4)
+    check("a picture with a ground of its own is set as a print, with a border of paper",
+          boxes(lay)[0]["k"] == "print" and boxes(lay)[0]["border"] > 0, boxes(lay)[0])  # fmt: skip
+    quiet = _thumb.backing_colour(st, (34, 193, 180), pcs["girl"], "film-a", 1)
+    check("the burst is not the page's colour, nor the hero's",
+          not _thumb._near(quiet, (34, 193, 180)) and not _thumb._near(quiet, (242, 201, 76)), quiet)  # fmt: skip
+
+    print("\nposters: judged where the words stand")
+    final = Image.new("RGB", (W, H), (240, 168, 60))
+    mask = Image.new("L", (W, H), 0)
+    d, dm = ImageDraw.Draw(final), ImageDraw.Draw(mask)
+    f = _thumb.pil_font("fonts/Oswald-VF.ttf", 180, "700")
+    for y, strip, ink in (
+        (200, (255, 216, 74), (31, 27, 92)),
+        (480, (106, 63, 214), (255, 250, 240)),
+    ):
+        d.rectangle([700, y, 1700, y + 220], fill=strip)
+        d.text((740, y + 10), "ДОРОСЛИМ", font=f, fill=ink)
+        dm.text((740, y + 10), "ДОРОСЛИМ", font=f, fill=255)
+    o = {"layout": "poster", "cap": 146, "px": 180, "box": (700, 200, 1700, 700), "stroke_px": 0}
+    res, fails = _thumb.checks(o, final, mask)
+    check("dark words on a light strip and light on a dark one both read",
+          not fails and res["contrast"] >= 4.5, (res, fails))  # fmt: skip
+    d.rectangle([700, 480, 1700, 700], fill=(255, 240, 200))
+    d.text((740, 490), "ДОРОСЛИМ", font=f, fill=(255, 250, 240))
+    res, fails = _thumb.checks(o, final, mask)
+    check("and one strip that does not read fails the whole poster",
+          any("contrast" in x for x in fails), (res, fails))  # fmt: skip
+
+
+def collage_fixture(home):
+    """The collage example in a throwaway folder: its 17 cut-outs stood in for by paper shapes
+    with a transparent ground (the real ones are painted by an image model), and a voice
+    timeline for its cues."""
+    src = os.path.join(_env.ROOT, "config", "sketch", "collage-example")
+    d = os.path.join(home, "collage")
+    os.makedirs(os.path.join(d, "audio", "vo"))
+    os.makedirs(os.path.join(d, "images"))
+    for n in ("film.js", "sketch.json", "paint.json"):
+        shutil.copyfile(os.path.join(src, n), os.path.join(d, n))
+    with open(os.path.join(d, "paint.json"), encoding="utf-8") as f:
+        paint = json.load(f)
+    rng = np.random.default_rng(3)
+    for im in paint["images"]:
+        w, h = {"2:3": (500, 750), "3:2": (750, 500)}.get(im.get("aspect"), (640, 640))
+        pic = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        col = tuple(int(v) for v in rng.integers(40, 215, 3))
+        dr = ImageDraw.Draw(pic)
+        dr.ellipse([6, 6, w - 6, h - 6], fill=(250, 248, 240, 255))  # the white border paper has
+        dr.ellipse([20, 20, w - 20, h - 20], fill=col + (255,))
+        pic.save(os.path.join(d, "images", im["name"] + ".webp"))
+    with open(os.path.join(d, "sketch.json"), encoding="utf-8") as f:
+        m = json.load(f)
+    lines = m["vo"]["lines"]
+    step = m["duration"] / len(lines)
+    tl = {"duration": m["duration"],
+          "lines": [{"i": i, "start": round(0.5 + i * step, 2), "end": round((i + 1) * step, 2),
+                     "text": x["text"], "words": []} for i, x in enumerate(lines)]}  # fmt: skip
+    with open(os.path.join(d, "audio", "vo", "timeline.json"), "w", encoding="utf-8") as f:
+        json.dump(tl, f)
+    return d
+
+
+def live_posters():
+    print("\nlive: the collage example, its posters drawn")
+    if not importlib.import_module("html-to-image").find_browsers():
+        print("  skip no Edge/Chrome found (set HTML2IMG_BROWSER)")
+        return
+    home = tempfile.mkdtemp(prefix="check-thumb-poster-")
+    film = collage_fixture(home)
+    pcs = _thumb.film_pieces(film)
+    check("its cut-outs are its pieces", len(pcs) == 17 and all(p["cut"] for p in pcs.values()), list(pcs))  # fmt: skip
+    check("a portrait is somebody, a filing cabinet is not",
+          pcs["printer"]["being"] and pcs["puzzled"]["being"] and not pcs["cabinet"]["being"],
+          {n: p["being"] for n, p in pcs.items()})  # fmt: skip
+    concepts = [
+        {"at": 4.0, "layout": "headline", "words": "Paperwork is *old*", "place": None},
+        {"at": 11.0, "layout": "card", "words": "Beer, on a *receipt*", "place": None},
+        {
+            "at": 19.0,
+            "layout": "panel",
+            "words": "The first *form*",
+            "place": None,
+            "hero": "printer",
+        },
+        {"at": 25.0, "layout": "headline", "words": "Fill in the *blanks*", "place": None},
+    ]
+    opts = _thumb.make_options(film, concepts, os.path.join(home, "out"), log=print)
+    check("four posters", [o["layout"] for o in opts] == ["poster"] * 4,
+          [(o["layout"], o["notes"]) for o in opts])  # fmt: skip
+    for o in opts:
+        ck = o["checks"]
+        check("poster %d: legible, in contrast, clear of the stamp, under 2 MB" % o["n"],
+              ck.get("cap_168", 0) >= 8 and ck.get("contrast", 0) >= 4.5 and ck.get("in_badge") == 0
+              and os.path.getsize(o["file"]) < 2_000_000, (ck, o["notes"]))  # fmt: skip
+    check("the writer's hero is the one it is built on",
+          any("printer" in n.split(":")[-1].split("+")[0] for n in opts[2]["notes"] if n.startswith("poster")),
+          opts[2]["notes"])  # fmt: skip
+    check("the words are in the film's own type", all(o["font"] for o in opts), [o["font"] for o in opts])  # fmt: skip
+    # the film opens on a newspaper, with no page down yet: its second moment has one
+    t = opts[1]["t"]
+    into = _thumb.stills_dir(film)
+    pages = _thumb.stage_at(into, t)
+    check("the stage pass found the film's page, and its colour",
+          pages and _thumb._area(pages[0]["box"]) > 0.45 * 1920 * 1080 and pages[0]["col"].startswith("#"),
+          pages or "no page")  # fmt: skip
+    stage = _thumb.load_still(os.path.join(into, _thumb.still_name(_thumb.STAGE + t)))
+    check("the stage is bare: none of the film's words on it",
+          not _thumb.text_boxes(stage, min_h=40), _thumb.text_boxes(stage, min_h=40))  # fmt: skip
+    final = opts[1]["final"]
+    under = _thumb.staged(stage, _thumb.stage_camera(pages))
+    diff = (
+        np.abs(np.asarray(final, dtype="int16") - np.asarray(under, dtype="int16")).max(axis=2) > 40
+    )
+    check("and the poster put pieces and words on it (%d%% of the frame)" % round(100 * diff.mean()),
+          0.12 < diff.mean() < 0.9, diff.mean())  # fmt: skip
+    shutil.rmtree(home, ignore_errors=True)
+
+
 def fixture(home):
     """The example film in a throwaway folder, with a voice timeline (its cues hang off it)."""
     d = os.path.join(home, "example")
@@ -491,8 +760,10 @@ def main():
     ap.add_argument("--rules-only", action="store_true", help="no browser, no OCR")
     a = ap.parse_args()
     rules()
+    posters()
     if not a.rules_only:
         live()
+        live_posters()
     print("\n%d passed, %d failed" % (PASSED[0], len(FAILED)))
     for f in FAILED:
         print("  FAILED: %s" % f)

@@ -118,6 +118,35 @@ Put first the one you would choose yourself.
 Answer with one JSON object and nothing else:
 {{"thumbnails": [{{"at": 0.0, "layout": "headline", "words": "...", "place": "top"}}, ...]}}"""
 
+# A film that shows pictures (cut-outs, prints) gets posters composed from them (_thumb.py
+# layout_poster), so its writer names the picture each is built on rather than a layout.
+ASK_POSTERS = """\
+Choose four thumbnails for this film's video on YouTube. Each is a poster composed from the \
+film's own pictures -- not a frame of it: one picture set large (somebody from the waist up, or \
+an object whole) on the film's own coloured ground, at most one more tucked in beside it, and a \
+few big words -- the only words on the picture -- in the film's own title type, with its logo:
+- "hero": the picture the poster is built on, by its name from the list below. Somebody whose \
+face or pose shows what the words say, before an object; an object when the object is the \
+point. Four different pictures (another pose of the same character is a different picture).
+- "with": at most one more picture, by name -- what the hero is looking at, holding or talking \
+about -- or [] for none.
+- "at": a moment of the film, in seconds, from the sheet of its moments (the time is printed on \
+every frame), where that hero is on screen: the poster takes that moment's ground and colours. \
+Four different moments.
+- "words": at most 4 words and 32 characters, in the film's language ({language}); fewer and \
+shorter words are set larger. The first thumbnail says the video's main message -- {main}, in \
+fewer words; the others each say one of the film's main points. Words a viewer reads at a \
+glance and wants to click on, and they hold to the film -- no number or claim it does not show \
+or say. Star one word to colour it (write it as *word*).
+Put first the one you would choose yourself.
+
+The film's pictures (name: what it shows):
+{pieces}
+
+Answer with one JSON object and nothing else:
+{{"thumbnails": [{{"at": 0.0, "hero": "name", "with": [], "words": "..."}}, ...]}}"""
+PIECES_MAX = 60  # pictures listed for the writer
+
 # (film id, channel id) -> {"film", "channel", "client", "state", "draft", "error", "t", "task"}
 JOBS = {}
 
@@ -295,6 +324,9 @@ def ask_text(mat, channel, recent, part="words", title=None):
     thumbnails (part "thumbs": no uploads to match, and the title once it is known)."""
     if part == "thumbs":
         main = 'its title, "%s"' % title if title else "what the video promises or asks"
+        ask = ASK_THUMBS.format(language=mat["language"], main=main)
+        if mat.get("pieces"):
+            ask = ASK_POSTERS.format(language=mat["language"], main=main, pieces=mat["pieces"])
         return "\n".join(
             [
                 "# The channel",
@@ -303,7 +335,7 @@ def ask_text(mat, channel, recent, part="words", title=None):
                 *film_text(mat),
                 "",
                 "# What to choose",
-                ASK_THUMBS.format(language=mat["language"], main=main),
+                ask,
             ]
         )
     parts = [
@@ -475,7 +507,31 @@ def check_thumbs(d, mat, title, n=4, layouts=None):
     """The draft's four thumbnails (or `n`, of `layouts`) held to _thumb's rules: (concepts,
     notes, problems). A problem is something only the writer can put right; it is asked once,
     then repair() decides."""
-    return _thumb.check_concepts(d.get("thumbnails"), mat["length"] or 0, title, n, layouts)
+    return _thumb.check_concepts(
+        d.get("thumbnails"), mat["length"] or 0, title, n, layouts, mat.get("piece_names")
+    )
+
+
+def pieces_text(film_dir):
+    """(the film's pictures as lines for the writer, their names) -- ("", None) for a film with
+    none it can be told about, whose writer then picks moments and each poster takes its moment's
+    own pieces. Listed: the pictures that were painted for the film, by what each was painted as
+    (paint.json). A picture somebody gave it has no such words, so the writer cannot know what it
+    shows and is not asked to choose it; a brand's mark is left off too."""
+    try:
+        pcs = _thumb.film_pieces(film_dir)
+    except Exception as e:  # noqa: BLE001 -- the picks are then made the way they were before posters
+        print("youtube draft: no pictures listed for %s: %s" % (film_dir, e), flush=True)
+        return "", None
+    rows = []
+    for name, p in pcs.items():
+        about = " ".join(p["about"].split())[:160]
+        if not about or p["lettered"] or p["mark"]:
+            continue
+        rows.append("- %s: %s" % (name, about))
+    if not rows:
+        return "", None
+    return "\n".join(rows[:PIECES_MAX]), [r.split(":", 1)[0][2:] for r in rows[:PIECES_MAX]]
 
 
 def repair(concepts, problems, mat, n=4):
@@ -669,6 +725,10 @@ async def _pick(film, mat, channel, auth, model, effort):
             if got
             else dict(mat, sheet=_sheet(film), moments_sheet=False)
         )
+    # a film with pictures is asked for posters built on them (not part of the draft's key: a
+    # draft written before posters keeps its picks, and its posters take each moment's own pieces)
+    text, names = await asyncio.to_thread(pieces_text, film.dir)
+    m = dict(m, pieces=text, piece_names=names)
     d, cost = await _call(m, channel, [], auth, film, model, effort, part="thumbs")
     return d, cost, m
 
@@ -908,7 +968,10 @@ async def _main(a):
             json.dump({"channel": channel, "recent": recent}, fh, indent=1, ensure_ascii=False)
     mat = material(f, a.events, sheet=True)
     if a.plan:
-        print(ask_text(mat, channel, [], "thumbs") + "\n\n=== and, at the same time, the words:\n")
+        shown = dict(mat, pieces=pieces_text(f.dir)[0])  # as _pick() asks it
+        print(
+            ask_text(shown, channel, [], "thumbs") + "\n\n=== and, at the same time, the words:\n"
+        )
         text = ask_text(mat, channel, recent)
         t, usd = estimate(mat, text, a.model)
         print(text)

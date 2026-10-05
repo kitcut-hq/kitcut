@@ -266,12 +266,110 @@
     ],
     "_why": "The film's logo (a picture it shows named *logo*) above the words, as a round paper badge when it is a square picture -- how the channel shows its face -- else as it is, held to max_w_frac of the width. The owner asked to try the logo, not to require it (2026-09-30), so options 1 and 3 carry it and 2 and 4 do not: the person picking sees both. A frame that already shows the film's logo is not given a second one."
   },
+  "poster": {
+    "_why": "A thumbnail composed from the film's own pieces, not cut from one of its frames (2026-10-05). A frame is laid out for motion: on a 6-minute collage film the characters stood 164-296 px wide in 1920, and the furthest push the camera allows (1.5x) left a slide with a caption -- 'all bad', said the owner of the first channel to publish through it. A poster takes the film's pictures themselves (its cut-outs with their paper shadow, its prints) and sets them as large as it likes on the film's own page (the stage pass: the film drawn with everything hushed but its ground, its pages and the dots printed on them), with the words in its title type and outline, or on its label strips. An image model given the stills (GPT Image 2.5, Nano Banana Pro, Nano Banana 2 via OpenRouter, 2026-10-05) composed the same picture but redrew the characters: refused, the film's own style is the point.",
+    "_templates": "Both read off channels that draw rather than film, from their own thumbnails (2026-10-05): side -- the words stacked on one side, one subject on the other (TED-Ed: 3-5 words in 2-3 lines on ~45% of the frame, the object at 55-60% of its height); band -- 2-3 words across the top ~20%, one subject under them at 70-80% of the height and off the bottom edge (Kurzgesagt, The Infographics Show). At most three things to look at (Paddy Galloway, x.com/PaddyG96/status/1450463472907657220): the hero with what is tucked behind it, the words, the logo.",
+    "_figure": "figure_hs x the frame's height is how tall a standing figure is set (1.62 shows it to the hips, 1.85 to the waist), figure_top its head's clearance; band.bust_h (1.9) shows head and shoulders under the words. max_up holds any picture to 2.1x its own pixels: a 1053-px cut-out at 1.9x the frame is 1.95x -- soft at 1920, clean at the 1280 YouTube serves. mate: somebody tucked in beside somebody is a second figure nearly as large, not a doll at her elbow.",
+    "_variety": "switch and drop_prop: a poster keeps its own template and its second piece unless the words come out 1.25x (1.18x) larger the other way -- 'ДУМАЙ, ПЕРШ НІЖ НАТИСКАТИ' beside a figure and a mousetrap set at 110 px, beside the figure alone at 150. tilts, backings, figure_hs, strips_options and the hero's side are what _thumb.poster_variant draws from, by the film's key and the option's number: one film always gets the same four, another film another four -- a channel's thumbnails share a hand and are never the same picture.",
+    "_burst": "burst_over is how far a burst may reach under outlined words (7% of the height); under words with no outline it stops at their edge (white on an orange burst measured 3.26:1), and a burst cut to under burst_keep of its size is left out (it read as a crown on the object). Under strips it is whole: paper reads over anything.",
+    "_pieces": "piece_min_px: a picture smaller than this is an icon. lettered_lines: the OCR lines that make a picture 'full of words' (a flyer somebody gave a film was tucked in as a second piece, 2026-10-05). print_zoom: a print shows its middle 1/1.18 -- a painted picture's edges are where it fades. scene_w: a print the film draws wider than 75% of the frame is its scene, not a piece of it. stage_overscan: a page is pushed 3% past the fit, so its torn edge and white rim stay out of the frame.",
+    "_logo": "Bottom-left, 15% of the height: the corner opposite YouTube's duration stamp, where a kids' channel keeps its mark (Cocomelon's lockup is bottom-left; TED-Ed's badge is ~12% of the width). Small on purpose ('If a logo is required, keep it small', lowerstreet.co/blog/podcast-youtube-thumbnail). logo.options still says which options carry it.",
+    "_measured": "Bake-off 2026-10-05, 6 studio films with pictures (two Ukrainian clay cut-out episodes of 6 min, an engraving collage, a Haitian Creole promo, a product film of photographs, Persian road works; 15 s to 6 min), 24 options from each film's own draft concepts made up to four: 24 posters, none fell back to a frame. Caps 120-260 px (10.5-22.8 px at 168 wide), median 160; contrast 4.86-12.84:1; 12.5-16.8 s a film with its stills made, 30-45 s from cold. The first run had 7 of 24 fall back to a frame: 4 at a moment with no picture on screen (such a poster now takes a picture no other option has) and 3 whose words did not read on their page (they now go onto strips first: 2 of 24 in the last run). The legibility check read a two-colour stack of strips as 1.4:1 until each letter was judged against its own ring.",
+    "margin": -0.015,
+    "gap": 0.02,
+    "stage_zoom_max": 1.6,
+    "stage_overscan": 1.03,
+    "max_up": 2.1,
+    "piece_min_px": 240,
+    "lettered_lines": 3,
+    "print_zoom": 1.18,
+    "burst_over": 0.07,
+    "burst_keep": 0.7,
+    "mate": 0.86,
+    "mate_out": 0.55,
+    "mate_drop": 0.05,
+    "switch": 1.25,
+    "drop_prop": 1.18,
+    "scene_w": 0.75,
+    "strips_options": [
+      2,
+      3
+    ],
+    "print_border": 0.022,
+    "figure_hs": [
+      1.62,
+      1.62,
+      1.85
+    ],
+    "figure_top": 0.05,
+    "hero_w": 0.44,
+    "object_w": 0.46,
+    "object_h": 0.8,
+    "object_cy": 0.5,
+    "object_rot": 0.12,
+    "object_margin": 0.03,
+    "burst_r": 0.45,
+    "prop_h": 0.52,
+    "prop_w": 0.24,
+    "prop_out": 0.5,
+    "prop_cy": 0.4,
+    "prop_rot": 0.2,
+    "cap_max": 300,
+    "max_lines": 3,
+    "line_gap": 0.24,
+    "words_cy": 0.45,
+    "tilts": [
+      -0.05,
+      -0.035,
+      -0.02,
+      0.025
+    ],
+    "backings": [
+      "burst",
+      "burst",
+      "sun",
+      "disc"
+    ],
+    "shapes": {
+      "burst": {
+        "spikes": 24,
+        "inner": 0.82
+      },
+      "sun": {
+        "spikes": 14,
+        "inner": 0.7
+      },
+      "disc": {
+        "spikes": 90,
+        "inner": 0.992
+      }
+    },
+    "logo_h": 0.15,
+    "logo_margin": 0.035,
+    "logo_corner": "bottom-left",
+    "band": {
+      "h": 0.47,
+      "tilt": 0.4,
+      "max_lines": 2,
+      "cap_max": 230,
+      "bust_h": 1.9,
+      "hero_cx": 0.57,
+      "object_w": 0.6,
+      "cut": 0.1,
+      "prop_h": 0.5,
+      "prop_w": 0.26,
+      "prop_cy": 0.74,
+      "prop_in": 0.3,
+      "mate_out": 0.62
+    }
+  },
   "strip": {
     "pad": [
       0.34,
       0.3
     ],
     "gap_frac": 0.16,
+    "margin": 1.5,
     "rot": -0.02,
     "_why": "A film that labels with strips (collage.js's tape: 'ЗДОРОВ'Я' on red, 'ПОМИЛКА ЛІКАРЯ' on indigo) gets its thumbnail's words on strips like them, a line to a strip, tilted as the film tilts its labels (-0.02 to -0.05 rad)."
   },

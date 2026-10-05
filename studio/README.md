@@ -255,8 +255,13 @@ Only links it was given survive, chapters must fit the film, and a draft that pa
 back is refused. Try one by hand with `python studio/ytdraft.py --film <id> --sample-from @handle`
 (`--plan` prints the ask and its price). Details: `docs/reference.md`.
 
-**The thumbnail** (`thumbs.py`, `scripts/_thumb.py`): four options, each a moment of the film itself
-with a few big words on it, offered in the publish dialog. The same Claude call chooses them: it
+**The thumbnail** (`thumbs.py`, `scripts/_thumb.py`): four options with a few big words on each,
+offered in the publish dialog. A film that shows pictures (cut-outs, photographs) gets posters
+composed from them -- one picture large on the film's own page, another behind it, the words beside
+or above, by a template that varies with the film and the option; its writer answers four
+`{at, hero, with, words}`, naming the pictures (`ytdraft.ASK_POSTERS`). What follows is the other
+case, a film that draws everything itself, whose options are moments of it (and what a poster
+falls back to). The same Claude call chooses them: it
 sees a sheet of the film's clean moments with their times (made first, ~12 stills; no Free-plan
 mark) and answers four `{at, words, layout, place}` -- headline, card, panel, headline, the first
 the video's main message. Once the draft is written, the job makes the options the way YouTube

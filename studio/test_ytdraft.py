@@ -148,6 +148,31 @@ async def main():
     k1 = ytdraft.key_of(mat, CHANNEL, [], "m", "e")
     k2 = ytdraft.key_of(dict(mat, sheet=b"other", moments_sheet=True), CHANNEL, [], "m", "e")
     check(k1 == k2, "the key is the film's, not the sheet's bytes")
+    # a film that shows pictures is asked for posters built on them, by name
+    check(ytdraft.pieces_text(f.dir) == ("", None), "a film with no pictures lists none")
+    listed = "- girl: A worried girl, full figure\n- trap: A wooden mousetrap"
+    posters = ytdraft.ask_text(dict(mat, pieces=listed), CHANNEL, [], "thumbs", "Acme | New")
+    check(
+        '"hero"' in posters and '"with"' in posters and listed in posters,
+        "posters are asked for by the pictures' names",
+        posters[-600:],
+    )
+    check(
+        '"layout"' not in posters and '"layout"' in picks and '"hero"' not in picks,
+        "and no layout; a film with none is asked as before",
+    )
+    named = [dict(THUMBS[0], hero="girl", **{"with": ["trap"]}), dict(THUMBS[1], hero="fox")]
+    cs, notes, _ = ytdraft.check_thumbs(
+        good(thumbnails=named + THUMBS[2:]),
+        dict(mat, piece_names=["girl", "trap"]),
+        good()["title"],
+    )
+    check(
+        cs[0].get("hero") == "girl" and cs[0].get("with") == ["trap"] and not cs[1].get("hero"),
+        "a concept keeps the pictures it named that the film has",
+        cs[:2],
+    )
+    check(any("fox" in n for n in notes), "and says which it has not", notes)
 
     # ---------------------------------------------------------------- the thumbnails' rules
     title = good()["title"]

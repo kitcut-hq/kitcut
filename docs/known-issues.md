@@ -871,3 +871,46 @@ referee), never against the model it replaces, and never on a WER headline. Re-a
 2026-10-01 when Microsoft announced MAI-Transcribe-2-Streaming ("most accurate real time
 transcription", 2.5 % WER, $0.54/h): still no. Nothing in KitCut transcribes live, and the claim
 is about words, not timing. Bench the streaming model only once OpenRouter serves it.
+
+### KI-055 · limitation · thumbnails · A film that draws everything itself still gets frames, not posters
+
+**Symptom.** A crayon or clean film with no pictures of its own -- its characters and screens are
+drawn by its code, stroke by stroke -- is offered four moments of the film with words on them
+(the design of 2026-09-30), while a film with cut-outs or photographs is offered posters composed
+from them (2026-10-05). On the day posters shipped, most studio films were of the first kind.
+**Cause.** A poster needs pieces it can set at any size apart from the frame they were drawn in.
+A picture file is one; a character drawn by forty calls inside a scene function is not: nothing
+says where it starts and the scene around it ends.
+**What would do it.** Draw the frame with no ground under it (the film's `draw()` loud, the
+paper, grain and vignette hushed), take the islands of what is left as pieces by their alpha, and
+let the film draw itself again inside the hero's box at the scale the poster wants -- the same
+vector lines, clipped to the island. Not built: it wants its own bake-off, and a frame whose
+drawing runs edge to edge (a floor line, a sky) has no islands.
+
+### KI-056 · limitation · thumbnails · Words in a script whose letters join are set smaller on a Windows laptop
+
+**Symptom.** A Persian or Arabic film's thumbnail words come out a third smaller from
+`thumb-options.py` on the laptop than from the studio's machine: 120 px caps where there was room
+for 160.
+**Cause.** The words are laid out in Python with Pillow, which shapes text only where it has
+libraqm (`_thumb.shapes()`): the studio's Linux machine does, a Windows wheel does not. Unshaped,
+every letter is measured in its isolated form, far wider than the joined word the page draws.
+**What is done.** The page (`sketch/thumb.js`) sets a right-to-left line from the right, first
+word first -- it was set first word left until 2026-10-05, on every machine -- holds a line to
+the width planned and centres one drawn narrower, so the words are never out of their box, only
+smaller than they could be. Judge such a film's thumbnails on the studio's machine.
+
+### KI-057 · limitation · thumbnails · Who a poster is built on is read from what a picture was painted as
+
+**Symptom.** A poster sets a sheaf of wheat large and the hunter small beside it; or cuts a
+kneeling baker at the waist; or builds on a photograph somebody uploaded that is not what the
+moment is about.
+**Cause.** A picture file does not say what it shows. `_thumb.film_pieces` reads the words it was
+painted from (`paint.json`): `BEING` (a list of nouns: girl, man, baker, fox, portrait...) says
+it is somebody, `FIGURE` ("full figure", "standing") and a tall picture that it stands whole and
+is shown from the waist up. A picture nobody described -- an upload, a picture fetched from a
+page -- is an object, and is left off the list the draft's writer chooses from.
+**What is done.** The writer (Claude, in the YouTube draft) names each poster's `hero` and `with`
+from the painted pictures and what each shows, which is right far more often than the rule; the
+rule is for a draft written before posters and a picture the writer could not be told about.
+Four options are four different pictures, so one wrong guess is one option of four.

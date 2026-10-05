@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-"""Four YouTube thumbnail options for a sketch film, each built on a still of the film itself.
+"""Four YouTube thumbnail options for a sketch film: posters composed from the film's own
+pictures (its cut-outs, its photographs) when it has any, else stills of the film itself.
 
 The same machinery kitcut.ai's "Publish to YouTube" runs (studio/thumbs.py), from the command
 line: for trying concepts by hand, for the bake-off that set the thresholds in
@@ -8,7 +9,9 @@ config/thumbnails/thumbnails.json, and for looking at what a film would be offer
   --film DIR        a finished film's folder (its sketch.json, film.js, voice timeline)
   --concepts FILE   four {"at", "words", "layout"} as JSON (a list, or {"thumbnails": [...]});
                     layout is one each of headline, card, panel, still; one word may be
-                    *starred* for the film's accent colour
+                    *starred* for the film's accent colour. A film with pictures gets posters
+                    whatever the layout: "hero" and "with" (a list of one) name the pictures a
+                    poster is built on, else it takes the pieces of its moment's frame
   --auto            no concepts: the picture alone at 25/50/75% of the film -- about what
                     YouTube offers when it picks for itself (the baseline)
   --moments         only the labelled sheet of moments a writer chooses from

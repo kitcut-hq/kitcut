@@ -88,17 +88,23 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    least as good at the same `cq`, but a bigger master on grainy films. The studio renders
    this way; the script's default is still the pipe. It falls back to ffmpeg by itself where the browser cannot encode.
 9. **Publish** with `yt-upload.py --channel <handle>` — unlisted unless told otherwise. For a
-   thumbnail, make four from the film's own frames: `python studio/ytdraft.py --film <folder>
-   --thumbs` (Claude picks the moments and words, the first the video's main message; ~$0.06) or
+   thumbnail, make four from the film itself: `python studio/ytdraft.py --film <folder>
+   --thumbs` (Claude picks the moments, the words and -- for a film with pictures -- which of
+   them each is built on, the first the video's main message; ~$0.06) or
    `python scripts/thumb-options.py --film <folder> --concepts c.json [--logo all|none]` (your
    own), then look at `feed.jpg` -- the options at YouTube's feed sizes -- and pass the one you
-   pick to `yt-upload.py --thumbnail`. They are made the way YouTube thumbnails are: the film's
-   own titles and labels left out of the frame, its subject pushed in on one side, the message
-   large on the other in the film's title type and outline, its logo on options 1 and 3. Every
+   pick to `yt-upload.py --thumbnail`. A film with pictures (cut-outs, photographs) gets posters
+   composed from them: one large on the film's own page (somebody from the waist up, an object
+   whole), another tucked behind it, the message beside or above in the film's title type and
+   outline or on its label strips, the template varied by the film and the option. A film that
+   draws everything itself gets frames of it: its own titles and labels left out, its subject
+   pushed in on one side, the message large on the other. Its logo on options 1 and 3. Every
    option has passed the checks (legible at 168 px, contrast, clear of the duration stamp). So
    give the film's titles to `SK.txt` / `SK.headline` (an outline on them carries into the
-   thumbnail), its labels to `SK.tape`, its pictures to `SK.image` / `SK.cutout` (their boxes
-   are the subject), and its logo a name with `logo` in it -- the thumbnail finds them all.
+   thumbnail), its labels to `SK.tape`, its pictures to `SK.image` / `SK.cutout` (they are what
+   a poster is made of, so paint a character as "full figure, standing" and it is shown from
+   the waist up; lay a page down with `SK.sheet` and the poster stands on it), and its logo a
+   name with `logo` in it -- the thumbnail finds them all.
 10. **Report the timings** (`--timings`) with the deliverables.
 
 ## A collage film (mixed media, paper cut-out, "newspaper" motion design)

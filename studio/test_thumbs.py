@@ -284,6 +284,58 @@ def main():
         o,
     )
 
+    # ---------------------------------------------------------------- a film with pictures
+    # the collage example, its cut-outs stood in for by paper shapes (check-thumbnail.py's
+    # fixture): its options are posters composed from them, the writer's hero on the one it named
+    import importlib
+
+    made = importlib.import_module("check-thumbnail").collage_fixture(HOME)
+    d = os.path.join(HOME, "projects", "studio-20261005-120000-poster")
+    shutil.move(made, d)
+    with open(os.path.join(d, "studio.json"), "w", encoding="utf-8") as fh:
+        json.dump({"ok": True, "state": "done", "direction": {"style": "collage"}}, fh)
+    g = Film(d)
+    draft3 = {
+        "key": "draft-3",
+        "title": "A Brief History of Paperwork",
+        "thumbnails": [
+            {"at": 11.0, "layout": "headline", "words": "Beer, on a *receipt*", "place": None},
+            {"at": 19.0, "layout": "card", "words": "The first *form*", "hero": "printer"},
+        ],
+    }
+    rec3 = thumbs.make_now(g, "UCtest", draft3, want=2)
+    opts3 = rec3["options"]
+    check(
+        [o["layout"] for o in opts3] == ["poster", "poster"] and rec3["design"] == _thumb.DESIGN,
+        "a film with pictures: its options are posters",
+        [(o["layout"], o["notes"]) for o in opts3],
+    )
+    for o in opts3:
+        p = g.path("outputs", o["path"])
+        ck = o["checks"]
+        check(
+            os.path.exists(p)
+            and Image.open(p).size == (1920, 1080)
+            and ck.get("cap_168", 0) >= 8
+            and ck.get("contrast", 0) >= 4.5
+            and ck.get("in_badge") == 0,
+            "poster %d: a 1920x1080 JPEG, legible, in contrast, clear of the stamp" % o["n"],
+            (ck, o["notes"]),
+        )
+    check(
+        any(
+            n.startswith("poster") and n.split(": ")[1].startswith("printer")
+            for n in opts3[1]["notes"]
+        ),
+        "built on the picture the writer named",
+        opts3[1]["notes"],
+    )
+    check(
+        thumbs.public(rec3)["options"][0]["layout"] == "poster",
+        "and the site is told so",
+        thumbs.public(rec3),
+    )
+
     shutil.rmtree(HOME, ignore_errors=True)
     print("\n%d failed" % len(bad) if bad else "\nall passed")
     sys.exit(1 if bad else 0)

@@ -3009,13 +3009,17 @@ detected card still wins if it comes earlier.
 The cleaner way is not to have the mark at all: KitCut's owner can turn it off
 for an account.
 
-## Thumbnail options: four moments of the film, made like YouTube's (`thumb-options.py`, `_thumb.py`)
+## Thumbnail options: posters from the film's own pieces, else four moments of it (`thumb-options.py`, `_thumb.py`)
 
-kitcut.ai's "Publish to YouTube" offers four thumbnails, and the person picks one. Each is **a
-moment of the film itself**, made the way YouTube thumbnails are: the film's own titles and labels
-left out of the frame, its subject pushed in large on one side, and at most four big words on the
-other -- the first option the video's main message -- in the film's title type and outline, with
-its logo on options 1 and 3. No stock art, no generated imagery.
+kitcut.ai's "Publish to YouTube" offers four thumbnails, and the person picks one. A film that
+shows pictures -- cut-out characters and props, photographs -- gets **posters composed from those
+pictures**: one of them large (somebody from the waist up, an object whole) on the film's own
+page, another tucked in behind it, and at most four big words in the film's title type and outline
+or on its label strips, with its logo on options 1 and 3 (see "A poster" below). A film that draws
+everything itself gets **a moment of the film**, made the way YouTube thumbnails are: the film's
+own titles and labels left out of the frame, its subject pushed in large on one side, and the words
+on the other. Either way the first option says the video's main message, and nothing is stock art
+or generated imagery: every pixel is the film's own drawing.
 The studio makes them (`studio/thumbs.py`, see `studio/README.md`); the machinery is
 `scripts/_thumb.py`, and this CLI runs it on any finished sketch film:
 
@@ -3032,7 +3036,12 @@ python studio/test_thumbs.py                                                # en
 A concept is `{"at": s, "words": "Can't *sleep*?", "layout": "headline|card|panel",
 "place": "left|right|top|bottom"}` -- the writer gives headline, card, panel, headline (an older
 draft's `slab` is read as `card`; its `still` takes the free layout and is asked for words; the
-still is now only the last fallback); one word may be starred for the film's accent colour. Output: `thumb-N.jpg`
+still is now only the last fallback); one word may be starred for the film's accent colour. For a
+film with pictures the writer is asked for `{"at", "hero", "with", "words"}` instead: `hero` and
+`with` name the pictures the poster is built on, from a list of the film's painted pictures with
+what each was painted as (`ytdraft.ASK_POSTERS`, `pieces_text`); a layout is still kept in hand
+for a concept no poster can be made for, and a concept without a hero (every draft written before
+posters) takes the pieces of its moment's own frame. Output: `thumb-N.jpg`
 (1920x1080, well under YouTube's 2 MB), `sheet.jpg` (side by side) and `feed.jpg` (at YouTube's
 360/246/168-px sizes, dark and light).
 
@@ -3064,7 +3073,18 @@ panels and logo are drawn by the film's own engine, in the film's own type and p
   logo as a round paper badge, a glow, the camera's push and slide -- already laid out in Python.
   A still's time picks the pass: `t` the film alone, `1000+t` the thumbnail, `2000+t` its letters
   white on black, `3000+t` everything it added white on black (grain and vignette off for the two
-  masks), `4000+t` the clean picture alone. One browser run draws every option's three passes.
+  masks), `4000+t` the clean picture alone, `5000+t` the stage (below). One browser run draws
+  every option's three passes.
+- *The stage and the pieces* (posters): with `stage` on an option, and on the `5000+t` pass, the
+  film draws nothing but its ground and what lies flat on it -- the whole of its `draw()` is
+  hushed, and only a sheet of paper as large as 45% of the frame (a collage film's page), the dots
+  printed on it (`SK.halftone`) and a newspaper under it all (`SK.newsprint`) draw after all. The
+  `5000+t` pass notes each page's box and colour (`boxes.json`, key `P<t>`). On top, an option's
+  `scene` lists pieces back to front, each drawn the way the film draws its own: a cut-out with
+  the shadow paper casts (`SK.cutout`), a print (a picture with a ground of its own, its middle,
+  with a paper border), a starburst or disc of paper (`SK.burst`). The `4000+t` pass also notes
+  every picture a film draws by hand (`c.drawImage(SK.IMG.x)` in a helper of its own): a product
+  film framed its photographs that way and the probe saw none of them.
 
 **How an option is made.**
 1. *Stills* come from a copy of the film's manifest without its `tail`: a Free film's "made with
@@ -3114,9 +3134,45 @@ panels and logo are drawn by the film's own engine, in the film's own type and p
    `thumb.js` holds each line to the width Python planned, so a page that draws a font wider
    trims it rather than letting it leave its box.
 8. *Checks* on the finished picture through the letters and footprint passes (outlined letters
-   read against their outline); *fallbacks*
-   (headline -> headline with its glow -> card -> still; panel -> card -> still; card -> still)
-   until every option passes.
+   read against their outline, and each letter against its own ring: a stack of strips sets dark
+   words on a light strip and light on a dark one); *fallbacks*
+   (poster -> the poster with its words set the other way -> headline -> ...; headline -> headline
+   with its glow -> card -> still; panel -> card -> still; card -> still) until every option passes.
+
+**A poster** (a film that shows pictures; `film_pieces`, `poster_heroes`, `layout_poster`). Steps
+1-4 are the same; then, in place of *compose* and *layout*:
+
+- *Pieces*: every picture of the film's that is not its logo and is at least 240 px -- `cut` when
+  it has a transparent ground (set as it is), else a print; `being` when what it was painted as
+  (`paint.json`) names somebody, `figure` when that somebody stands whole and the picture is tall
+  (shown from the waist up, so the face is the size a thumbnail needs); `mark` for a brand's mark
+  by its name, `lettered` for a picture nobody described that OCR finds full of words (a flyer):
+  the last things a poster is built on, and never its second piece.
+- *Who it is built on*: the writer's `hero` and `with` when the film has them; else, of the pieces
+  in the moment's frame, somebody before an object, one the options before have not used, with the
+  largest thing that is not a figure beside it; else (no piece on screen at that moment) a piece no
+  option has taken, the ones the film shows most first -- never a print it lays across the frame.
+- *The stage*: the `5000+t` picture, pushed in until the film's page fills the frame and 3% past
+  its torn edge (a collage film lays its pages on a mat; at 168 px the band of mat is a frame round
+  a smaller picture).
+- *Two templates*, read off channels that draw rather than film: **side** -- the hero on one side
+  (a figure 1.62-1.85 frames tall with its head 5% from the top; an object fitted to 46% x 80% and
+  turned), the other piece tucked half behind it, the words stacked in up to three lines on the
+  other side; **band** -- the words in one or two lines across the top, the hero under them (a
+  figure 1.9 frames tall: head and shoulders), off the bottom edge. Somebody beside somebody is a
+  second figure nearly as large. Behind the hero, a starburst, sun or disc of the film's paper in
+  one of the film's own colours, the one furthest from both the page and the hero.
+- *What varies* (`poster_variant`, from the film's key and the option's number, so one film always
+  gets the same four and another film another four): which template leads, the hero's side, how
+  close a figure stands, how the words lean (-3 to +1.5 degrees), the paper shape behind the hero,
+  and which one option (2 or 3) sets its words on strips. A poster keeps its template and its
+  second piece unless the words come out 1.25x (1.18x) larger the other way.
+- *The words*: the largest cap height (300 down to 110 px) that fits; in the film's outline when
+  it has one, else its ink where it reads on the page as drawn (sampled from the stage, not the
+  page's nominal colour); or a line to a strip of the film's label paper, the starred word's line
+  on a strip of another of its colours. A dash ends a line, it never starts one. A line in a
+  script written right to left is set from the right, and measured joined where Pillow can shape
+  it (KI-056). The logo is a small badge bottom-left, the corner opposite YouTube's stamp.
 
 **The rules** (`config/thumbnails/thumbnails.json`, each with its source there):
 
@@ -3129,7 +3185,10 @@ panels and logo are drawn by the film's own engine, in the film's own type and p
 | film's own words | words on the picture touch none; a card, panel or glow hides a line whole (>= 90%) or not at all; <= 40 px otherwise | "On for everyone" set over an "AI MODEL UPDATE" label read as a collision; a half-hidden "Month-e" reads broken, a covered chip does not |
 | layouts | headline, card, panel, headline; the still only as a fallback | four options are only a choice if they differ, and a picture with no words is not a thumbnail |
 | the film's own words | left out of the picture under the thumbnail's (34 px and up), with the discs and cards they leave empty | one message: a card saying "Від чого залежить зарплата?" sat over the film's own heading saying the same |
-| cap height | 110-250 px at 1080p | 96-200 read as a caption on a slide |
+| cap height | 110-250 px at 1080p (to 300 on a poster) | 96-200 read as a caption on a slide |
+| a film with pictures | posters, never frames, while a poster can be made | a frame is laid out for motion: its subject is small and its layout shows (2026-10-05) |
+| a poster's pieces | the film's own files, at most 2.1x their pixels; the hero and one more | nothing is redrawn; three things to look at with the words and the logo |
+| a poster's words under a burst | never without an outline; 7% of the height with one; whole under strips | white on an orange burst measured 3.26:1 |
 
 **Measured** (2026-09-29, 8 studio films -- three crayon, a clean app film, a blueprint, a dark
 wine film, a photographic one and a painted Ukrainian one -- from Claude's own concepts; the
@@ -3214,6 +3273,46 @@ subject read off its pictures and pushed 1.1-1.5x, the other films' off saliency
 film the subject is guessed (KI-036), and a panel can cut it at the frame's edge; a crayon film's
 busy town leaves a headline no clean place, and it takes the quietest; a film that draws its
 titles with its own pen keeps them (KI-038).
+
+**What the second review changed: posters** (2026-10-05, the same channel's episode 9, a
+six-minute collage film). "I don't like what I see here", and of the next attempt, "all bad. We
+must keep the style... it maybe doesn't have to be AI. We could easily render by a template. And
+the template could be dynamic, slightly modified each time."
+- *Why a frame could not be fixed.* A frame is laid out for motion and narration: on this film the
+  characters stood 164-296 px wide in 1920 and a card, a chapter strip and a heading filled the
+  rest. Leaving the words out left their empty cards; the furthest push (1.5x) left the subject
+  small. Four options, four slides with a caption.
+- *Why not an image model.* GPT Image 2.5, Nano Banana Pro and Nano Banana 2 (OpenRouter), given
+  two stills and a brief, composed what a designer would -- the girl large on one side, the words
+  on the other -- and spelled the Ukrainian right, for $0.05-0.14 a picture. They also redrew the
+  girl. The film's own style is the point; refused.
+- *What channels that draw do* (their own thumbnails, 2026-10-05; sources in
+  `config/thumbnails/thumbnails.json` `poster._templates`): two skeletons cover most of them --
+  words stacked on one side and one subject on the other (TED-Ed), or two or three words across
+  the top and one subject under them, off the bottom edge (Kurzgesagt, The Infographics Show).
+  At most three things to look at (Paddy Galloway); a median of four words, in capitals with an
+  outline or a box on most (Thumbnail Bench 2026, 11,223 thumbnails); a logo small or absent, a
+  series held together by its skeleton and its type. Nobody documents how a series is varied, so
+  the variation here is ours: template, side, closeness, lean, the paper behind the hero.
+- *So a poster is composed, by a template, from the film's own pieces* -- the design above.
+  Nothing is redrawn: the cut-outs are the film's files, the page is the film drawing its own
+  page, the type and the strips are the film's.
+- *Measured*, on six studio films with pictures (two Ukrainian clay episodes, an engraving
+  collage, a Haitian Creole promo, a product film of photographs, Persian road works): 24 options,
+  24 posters, none fell back to a frame; caps 120-260 px (10.5-22.8 px at 168 wide, median 160 px
+  where the frames they replace were set at 110-140); contrast 4.86-12.84:1; 12.5-16.8 s a film
+  with its stills made. The first run had 7 of 24 fall back: 4 at moments with no picture on
+  screen, 3 whose words did not read on their page.
+- *What it found on the way*: the legibility check read a stack of two strips as 1.4:1 (one
+  median ring for dark-on-light and light-on-dark words); a line of Persian was set first word
+  left; a dash could start a line; a burst reached under words with no outline (white on orange,
+  3.26:1); "a tall sheaf of wheat, standing" was taken for a standing figure and cut at the
+  waist; a flyer somebody gave a film was tucked in as a second piece; a figure tucked beside a
+  figure was a doll at her elbow.
+- *What is still weak*: a film that draws everything itself (crayon, clean) has no pieces and
+  still gets frames (KI-055); who is "somebody" is read from the words a picture was painted
+  from, so a picture nobody described is an object (KI-057); a print whose own edges fade keeps a
+  smoky rim; on a Windows laptop joined scripts are measured unjoined and set smaller (KI-056).
 
 ## Share title and image
 

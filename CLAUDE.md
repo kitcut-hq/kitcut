@@ -684,8 +684,13 @@ prompt carries. After touching it run `python scripts/check-kit.py` (headless Ed
 `studio/harvest.py` reads recent studio films back (time by reply, re-written helpers, voice
 pace) -- run it every few days; the `video-sketch` skill's "Harvest" section is the procedure.
 
-**Thumbnails for a film** — kitcut.ai's "Publish to YouTube" offers four, each **a still of the
-film itself** with at most four words; the draft's Claude call picks the moments and the words
+**Thumbnails for a film** — kitcut.ai's "Publish to YouTube" offers four with at most four words
+each. A film that shows pictures (cut-outs, photographs) gets **posters composed from its own
+pieces by a template** -- one picture large on the film's own page, another tucked behind it, the
+words beside or above, the template varied by the film and the option (`_thumb.layout_poster`,
+`poster_variant`); a film that draws everything itself gets **a still of the film** (KI-055).
+Never an image model: three were tried and each redrew the characters. The draft's Claude call
+picks the moments, the words and each poster's pictures
 (`studio/ytdraft.py`), `scripts/_thumb.py` makes and checks them (legible at 168 px, 4.5:1
 contrast, clear of YouTube's duration stamp, never cutting into the film's own words), and
 `scripts/thumb-options.py` runs it on any film by hand. **The film draws its own thumbnail**:
@@ -693,9 +698,9 @@ contrast, clear of YouTube's duration stamp, never cutting into the film's own w
 colour and logo the film uses, and draws the words in them -- an Instafill film's thumbnail is in
 Instafill's serif and amber on its white cards, never a stock slab. Every threshold in
 `config/thumbnails/thumbnails.json` was measured on real films; `docs/reference.md` "Thumbnail
-options" has the bake-off. After touching any of it, run `python scripts/check-thumbnail.py`
-(the rules, then the example film drawn; ~40 s) and `python studio/test_thumbs.py` (end to end,
-~35 s).
+options" has the bake-offs. After touching any of it, run `python scripts/check-thumbnail.py`
+(the rules, then the example film and the collage example's posters drawn; ~90 s) and
+`python studio/test_thumbs.py` (end to end, ~35 s).
 
 **Talking heads** are real people from their photos, speaking in any of the looks: a manifest's
 `"heads"` names the photos, `head-rig.py` measures each once on the CPU (MediaPipe landmarks and
@@ -820,7 +825,7 @@ which cannot encode the glyphs at all.
 | `scripts/kitcut-clean.py` | a kitcut.ai export made usable as an insert: closing promo card cut, corner mark removed (`delogo`, or `--clone DY` from an identical twin where the drawing runs under it), soundtrack dropped; every box measured per file, checked after |
 | `scripts/make-doc.py` | the synthetic paperwork a form gets filled FROM: a template (`config/docs/templates/`), an issuer's letterhead (`config/docs/issuers/`) and a spec under `projects/<id>/docs/` -> a printable PDF |
 | `scripts/make-thumbnail.py` | a 1280x720 YouTube thumbnail in the channel's house style from a spec; `yt-upload.py --thumbnail` sets it |
-| `scripts/thumb-options.py` | four YouTube thumbnail options for a sketch film, each a still of the film with a few words in the film's own look, checked; `_thumb.py` is the machinery and `sketch/thumb.js` the film-side probe and overlay (kitcut.ai's publish dialog uses it via `studio/thumbs.py`), `check-thumbnail.py` its test |
+| `scripts/thumb-options.py` | four YouTube thumbnail options for a sketch film -- posters composed from its own pictures, else stills of it -- with a few words in the film's own look, checked; `_thumb.py` is the machinery and `sketch/thumb.js` the film-side probe and overlay (kitcut.ai's publish dialog uses it via `studio/thumbs.py`), `check-thumbnail.py` its test |
 | `scripts/voice-samples.py` | one sentence in each of KitCut's 30 narrator voices, levelled alike, for kitcut.ai's voice picker (`config/sketch/voice-samples.json`; `--plan` prices it). The narrator a person picks, and their own ElevenLabs voice through the site's relay: `docs/reference.md`, "Workspaces, and the narrator a person picks" |
 | `scripts/edl-cut.py` | a film from hand-chosen ranges of a few silent takes, with an elapsed counter driven by SOURCE time so it stays true over a sped-up wait |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |

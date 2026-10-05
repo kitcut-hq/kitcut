@@ -1,6 +1,13 @@
-"""Thumbnail options from a film's own frames, in the film's own look, made the way YouTube
-thumbnails are: which frame, what of it the picture shows, where the words go, what they look
-like, and proof that the result reads where YouTube shows it smallest.
+"""Thumbnail options from a film's own pieces or frames, in the film's own look, made the way
+YouTube thumbnails are: what the picture shows, where the words go, what they look like, and
+proof that the result reads where YouTube shows it smallest.
+
+A film that shows pictures -- cut-out characters and props, photographs -- gets posters composed
+from them by a template: one picture large on the film's own page (a figure from the waist up,
+an object whole), another tucked in behind it, the words beside or above. The template varies
+from option to option and film to film (which of two skeletons, the side, the lean, the paper
+behind the hero), from the film's key, so a channel's thumbnails share a hand without being one
+picture. A film that draws everything itself gets a frame of it instead, as below.
 
 The picture is always the film -- a frame of it with its own titles and labels left out, its
 camera pushed in on its subject -- and so is everything added to it: the words are set in the
@@ -22,12 +29,16 @@ finished picture through those.
     concepts   four {at, words, layout, place}: inside the film, apart, short, the first the
                video's message
     settle     the frame near a moment that is not mid-transition, and not a thin one
+    posters    for a film with pictures: its pieces (film_pieces), who each poster is built on
+               (poster_heroes), the film's bare page (the 5000 pass) and the template on it
+               (layout_poster, poster_variant) -- in place of the two steps below
     compose    the subject (the film's pictures, else saliency), the side the words take, the push
     layout     size, line breaks and the cleanest place for the words, in the film's type
     draw       one browser run for every option: the thumbnail, its letters, its footprint
     checks     cap height at 168 px, contrast, YouTube's overlays, the film's own words kept clear
-    fallbacks  a glow of the film's paper, then a card, then the frame alone -- an option that
-               fails is never shown
+    fallbacks  a poster's words on strips of the film's paper, then a frame; on a frame a glow
+               of the film's paper, then a card, then the frame alone -- an option that fails is
+               never shown
 
 Config: config/thumbnails/thumbnails.json. CLI: scripts/thumb-options.py. Studio:
 studio/thumbs.py. Self-test: scripts/check-thumbnail.py.
@@ -59,13 +70,17 @@ CONFIG = "config/thumbnails/thumbnails.json"
 THUMB_JS = os.path.join(_env.ROOT, "sketch", "thumb.js")
 # How stills are drawn. v2: a collage film's cut-outs (.webp) are in them -- v1 stills left every
 # one out, so its thumbnails, moments sheet and share picture showed empty paper (2026-09-30).
-STILLS = "v2"
+# v3: the probe also notes the pictures a film draws itself, past SK.image (2026-10-05).
+STILLS = "v3"
 DECLUTTER = 4000  # a still's time + this: the film with its own words left out (sketch/thumb.js)
 # How options are designed. yt-2: the film's own words left out, its subject pushed in, the
 # message large in its title type and outline, its logo (2026-09-30). Options saved under another
 # design are made again (studio/thumbs.py saved()).
-DESIGN = "yt-2"
-LAYOUTS = ("headline", "card", "panel", "still")
+# yt-3: a film that shows pictures gets posters composed from them -- its own cut-outs large on
+# its own page, its words in its title type or on its label strips -- not frames of it
+# (2026-10-05: the frames read as slides with a caption; see docs/reference.md).
+DESIGN = "yt-3"
+LAYOUTS = ("poster", "headline", "card", "panel", "still")
 RENAMED = {"slab": "card"}  # a writer (or an older draft) may still say slab
 WORD = re.compile(r"[\w'’-]+", re.UNICODE)
 STOP = {
@@ -193,9 +208,23 @@ def _weight(wt):
     return int(n[0]) if n else 400
 
 
+JOINED = re.compile(r"[֐-ࣿיִ-﷿ﹰ-ﻼ]")  # Hebrew, Arabic, Persian...
+
+
+def shapes():
+    """Can Pillow shape text here (libraqm)? Letters that join -- Persian, Arabic -- are far
+    narrower joined than one by one, and only a shaping engine measures them as a page draws them."""
+    if "raqm" not in _CACHE:
+        from PIL import features
+
+        _CACHE["raqm"] = bool(features.check("raqm"))
+    return _CACHE["raqm"]
+
+
 def pil_font(path, px, wt=None):
     """Pillow's font at `px`; a variable font (Caveat's is) set to the weight it is drawn at, so
-    what is measured here is what the page draws."""
+    what is measured here is what the page draws. Pillow shapes with libraqm where it has it
+    (shapes(): the studio's machine does, a Windows laptop does not)."""
     k = ("pil", path, px, str(wt))
     if k not in _CACHE:
         f = ImageFont.truetype(_env.resolve(path), px)
@@ -324,9 +353,13 @@ def title_overlap(words, title):
 NUMBER = {1: "one", 2: "two", 3: "three", 4: "four"}
 
 
-def check_concepts(raw, length, title="", n=4, layouts=None):
+def check_concepts(raw, length, title="", n=4, layouts=None, pieces=None):
     """Four {at, words, layout} held to the rules: (concepts, notes, problems). `n` and `layouts`
     ask for another number of them, from fewer layouts (the share image: two, headline or card).
+    A concept may name the pictures its poster is built on ("hero", "with": names from `pieces`,
+    the film's own); a name the film has no picture for is dropped, and the poster then takes the
+    pieces of its moment's frame. A poster's writer gives no layout: one is kept in hand for a
+    concept that cannot be made as a poster.
 
     `notes` are what was put right here; `problems` ({n, text}; n is the thumbnail, None for
     all of them) are what only the writer can fix -- words that are too long or repeat the
@@ -371,7 +404,19 @@ def check_concepts(raw, length, title="", n=4, layouts=None):
                 "thumbnail %d: place %r is not one of %s" % (i, where, ", ".join(cfg()["places"]))
             )
             where = None
-        out.append({"at": round(at, 2), "words": words, "layout": lay, "place": where})
+        o = {"at": round(at, 2), "words": words, "layout": lay, "place": where}
+        hero = str(x.get("hero") or "").strip() or None
+        extra = x.get("with") if isinstance(x.get("with"), list) else []
+        extra = [str(e).strip() for e in extra if str(e).strip()][:1]
+        if pieces is not None:
+            for name in [hero, *extra]:
+                if name and name not in pieces:
+                    notes.append("thumbnail %d: the film has no picture named %r" % (i, name))
+            hero = hero if hero in pieces else None
+            extra = [e for e in extra if e in pieces and e != hero]
+        if hero or extra:
+            o.update(hero=hero, **{"with": extra})
+        out.append(o)
     # the layouts asked for, each as many times as it is listed (a second headline): an unknown
     # one, or one past its count, takes a layout nobody used yet
     free = list(layouts or c["concepts"]["layouts"])
@@ -382,7 +427,8 @@ def check_concepts(raw, length, title="", n=4, layouts=None):
             free.remove(o["layout"])
     for o, kept in zip(out, keep, strict=True):
         if not kept and free:
-            notes.append("a %r thumbnail became %r" % (o["layout"] or "?", free[0]))
+            if o["layout"]:  # a poster's writer names none: nothing was changed
+                notes.append("a %r thumbnail became %r" % (o["layout"], free[0]))
             o["layout"] = free.pop(0)
     w = c["words"]
     for i, o in enumerate(out, 1):
@@ -990,18 +1036,25 @@ def block_at(toks, font, cap, max_w, max_h, max_lines, gap_frac, pad=0.0):
     a dict of lines with their widths and ink extents, or None."""
     ratio = cap_ratio(font["file"])
     px = max(8, round(cap / ratio))
-    f = pil_font(font["file"], px, font.get("weight"))
     tr = font.get("tracking", 0.0) * px
     up = font.get("upper")
     words = [[(t.upper() if up else t, a) for t, a in segs] for segs in toks]
+    # letters that join are measured joined where Pillow can (shapes()); elsewhere one by one,
+    # which is wider than the page draws them: the words come out smaller, never out of their box
+    joined = bool(JOINED.search(" ".join(word_text(w) for w in words)))
+    f = pil_font(font["file"], px, font.get("weight"))
+    how = {"direction": "rtl"} if joined and shapes() else {}
     best = None
     for sp in _splits(len(words), max_lines):
+        # a dash belongs to the line it ends, never the start of the next
+        if any(not re.search(r"\w", word_text(words[a])) for a, _ in sp[1:]):
+            continue
         lines = []
         for a, b in sp:
             ws = words[a:b]
             text = " ".join(word_text(w) for w in ws)
-            x0, y0, x1, y1 = f.getbbox(text, anchor="ls")
-            w = f.getlength(text) + tr * max(0, len(text) - 1)
+            x0, y0, x1, y1 = f.getbbox(text, anchor="ls", **how)
+            w = f.getlength(text, **how) + tr * max(0, len(text) - 1)
             # a hand font's swash reaches past its advance (Caveat's d, 30 px at a 246 px size):
             # the room a line takes is its ink, where that is wider
             over = max(0.0, x1 - w)
@@ -1150,6 +1203,7 @@ def film_style(film_dir, env=None):
             break
     return {"crayon": crayon, "paper": paper, "text": text, "ink": ink, "accent": accent,
             "accent_fill": accent_fill, "heads": heads, "outline": outline, "card": card,
+            "strips": [colour(x["col"], paper) for x in strips if x.get("n", 0) >= 2],
             "logo": logo}  # fmt: skip
 
 
@@ -1236,6 +1290,7 @@ def _lines(b, ax, top, anchor, head, ink, accent, rot=0.0, cx=0.0, cy=0.0, strok
         out.append({"x": round(x, 1), "y": round(y, 1), "size": b["px"], "w": round(L["w"], 1),
                     "family": head["family"], "wt": head["weight"], "runs": runs(L["words"], ink, accent),
                     "rot": rot, "cx": round(cx, 1), "cy": round(cy, 1), "ls": round(b.get("tracking") or 0, 2),
+                    "anchor": anchor,
                     "stroke": {"w": round(stroke["w"] * b["px"], 1), "col": rgb_hex(stroke["col"])} if stroke else None})  # fmt: skip
         y += b["step"]
     return out
@@ -1999,7 +2054,8 @@ def checks(o, final, mask, foot=None):
         fails.append("the JPEG is %.1f MB" % (len(data) / 1e6))
     if o["layout"] == "still":
         return res, fails
-    res["hides_text"] = covered_text(o, foot)
+    # a poster is set on the film's bare stage: there are none of its words under it to hide
+    res["hides_text"] = 0 if o["layout"] == "poster" else covered_text(o, foot)
     if res["hides_text"] > c["text"]["hide_max_px"]:
         fails.append("it hides %d pixels of the film's own words" % res["hides_text"])
     m = np.asarray(mask) > 127
@@ -2044,22 +2100,592 @@ def checks(o, final, mask, foot=None):
     if o.get("stroke_px"):
         r = max(2, round(0.4 * o["stroke_px"]))
     inner = ndimage.binary_erosion(m, iterations=2)
-    ring = ndimage.binary_dilation(m, iterations=r) & ~ndimage.binary_dilation(m, iterations=1)
+    near = ndimage.binary_dilation(m, iterations=r)
+    ring = near & ~ndimage.binary_dilation(m, iterations=1)
     L = ndimage.gaussian_filter(luminance_map(final), c["contrast_smooth_px"])
     if inner.sum() < 20 or ring.sum() < 20:
         fails.append("the letters are too thin to measure")
     else:
-        lr = float(np.median(L[ring]))
-        ratio = contrast(L[inner], lr)
+        # each letter (or run of touching ones) against its own ring: a poster's strips set dark
+        # words on a light strip and light on a dark one, and one median over every ring read the
+        # second as 1.4:1 (2026-10-05)
+        lab, n = ndimage.label(near)
+        lr = np.full(n + 1, float(np.median(L[ring])))
+        got = ndimage.median(L, labels=np.where(ring, lab, 0), index=np.arange(1, n + 1))
+        lr[1:] = np.where(np.isfinite(got), got, lr[1:])
+        ratio = contrast(L[inner], lr[lab[inner]])
         res["contrast"] = round(float(np.percentile(ratio, 10)), 2)
         if res["contrast"] < c["contrast_min"]:
             fails.append("contrast %.2f:1 against what is around the letters" % res["contrast"])
     return res, fails
 
 
+# ------------------------------------------------------------------ posters
+STAGE = 5000  # a still's time + this: the film's ground and pages, nothing on them (thumb.js)
+FIGURE = re.compile(r"\b(full figure|full body|full[- ]length|whole figure|standing)\b", re.I)
+FIGURE_TALL = 1.5  # ...and this much taller than wide: "a tablet and a laptop standing" is not one
+# A picture of somebody, by what it was painted as: who a poster is built on before any object,
+# and the only kind shown from the waist up ("a tall sheaf of wheat, standing" is no figure).
+BEING = re.compile(
+    r"\b(girl|boy|woman|man|women|men|mum|mom|mother|dad|father|kid|child|children|teen|teenager"
+    r"|baby|person|people|lady|guy|grandma|grandpa|grandmother|grandfather|sister|brother|friend"
+    r"|student|teacher|doctor|nurse|chef|baker|farmer|hunter|worker|builder|driver|seller|buyer"
+    r"|customer|scientist|engineer|artist|king|queen|robot|mascot|character|portrait|cat|dog|fox"
+    r"|bear|bird|rabbit|owl|lion|tiger|monkey|horse|donkey|dragon|monster|alien)\b",
+    re.I,
+)
+MARK = re.compile(r"(^|[_-])(mark|icon|favicon|wordmark|brand|badge)($|[_-])", re.I)
+TEMPLATES = ("side", "band")
+
+
+def _pick(seed, n, what, choices):
+    """One of `choices`: the same one every time for this film, option and question."""
+    h = hashlib.sha256(("%s|%s|%s" % (seed, n, what)).encode()).digest()
+    return choices[int.from_bytes(h[:4], "big") % len(choices)]
+
+
+def _lab(rgb):
+    """CIE L*a*b* of an sRGB colour: distances in it are differences a viewer sees."""
+    r, g, b = (float(_lin(v)) for v in rgb[:3])
+    x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047
+    y = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883
+
+    def f(t):
+        return t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116
+
+    fx, fy, fz = f(x), f(y), f(z)
+    return (116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz))
+
+
+def _apart(a, b):
+    return math.dist(_lab(a), _lab(b))
+
+
+def _lettered(rgba):
+    """Is this picture full of words (a flyer, a screenshot, an infographic somebody gave the
+    film)? A thumbnail carries one message: such a picture is the last thing a poster is built
+    on, and never tucked in as its second piece. Read with OCR at 640 px (~0.3 s), so only asked
+    of pictures nobody described (a painted one was told to carry no words)."""
+    k = cfg()["poster"]
+    im = Image.new("RGB", rgba.size, (255, 255, 255))
+    im.paste(rgba, mask=rgba.getchannel("A"))
+    im.thumbnail((640, 640))
+    try:
+        res, _ = ocr()(np.asarray(im))
+    except Exception:  # noqa: BLE001 -- no OCR here: nothing is known, so nothing is held back
+        return False
+    lines = [
+        x for x in res or [] if (float(x[2]) if len(x) > 2 else 1.0) >= cfg()["text"]["min_score"]
+    ]
+    return len(lines) >= k["lettered_lines"]
+
+
+def film_pieces(film_dir):
+    """{name: {file, w, h, cut, being, figure, mark, lettered, about, colours}} -- what a poster
+    can be composed from: the film's pictures, each of which it can set as large as it likes.
+
+    cut      the picture has a transparent ground (a clay character, a prop cut out of paper): it
+             is set as it is, with the shadow paper casts. Without one it is a print: set with a
+             border of the film's paper, the way a photograph is pinned to a page
+    being    a picture of somebody, from what it was painted as (paint.json: BEING)
+    figure   ...standing whole (FIGURE), and tall: a poster shows a figure from the waist up, so
+             its face is the size a thumbnail needs
+    mark     a brand's mark by its name (web_mark, an icon): the last thing to build a poster on
+    lettered a picture full of words (_lettered): the last thing too, and never the second piece
+    colours  its main ones, [(rgb, share)]
+
+    Never the film's logo, which a poster carries as its badge."""
+    key = ("pieces", film_dir, film_key(film_dir))
+    if key in _CACHE:
+        return _CACHE[key]
+    with open(os.path.join(film_dir, "sketch.json"), encoding="utf-8") as f:
+        m = json.load(f)
+    pj = m.get("paint") or {}
+    if isinstance(pj, str):
+        try:
+            with open(
+                pj if os.path.isabs(pj) else os.path.join(film_dir, pj), encoding="utf-8"
+            ) as f:
+                pj = json.load(f)
+        except (OSError, ValueError):
+            pj = {}
+    said = {
+        x["name"]: str(x.get("prompt") or "")
+        for x in pj.get("images") or []
+        if isinstance(x, dict) and x.get("name")
+    }
+    out = {}
+    for name, path in film_images(film_dir, m).items():
+        if "logo" in name.lower() or not os.path.exists(path):
+            continue
+        try:
+            with Image.open(path) as im:
+                rgba = im.convert("RGBA")
+        except OSError:
+            continue
+        w, h = rgba.size
+        if min(w, h) < cfg()["poster"]["piece_min_px"]:
+            continue
+        k = 64 / max(w, h)
+        a = np.asarray(rgba.resize((max(1, round(w * k)), max(1, round(h * k)))))
+        al = a[..., 3]
+        cut = sum(1 for v in (al[0, 0], al[0, -1], al[-1, 0], al[-1, -1]) if v < 16) >= 3
+        px = np.ascontiguousarray(a[al > 200][:, :3])
+        if len(px) < 30:
+            continue
+        q = Image.fromarray(px.reshape(-1, 1, 3), "RGB").quantize(
+            5, method=Image.Quantize.MEDIANCUT
+        )
+        pal = q.getpalette()
+        cols = sorted(
+            ((n / len(px), tuple(pal[3 * i : 3 * i + 3])) for n, i in q.getcolors()), reverse=True
+        )
+        being = bool(BEING.search(said.get(name, "")))
+        out[name] = {"file": path, "w": w, "h": h, "cut": cut, "about": said.get(name, ""),
+                     "being": being, "lettered": name not in said and _lettered(rgba),
+                     "figure": cut and being and bool(FIGURE.search(said[name])) and h >= FIGURE_TALL * w,
+                     "mark": bool(MARK.search(name)),
+                     "colours": [(c, round(share, 3)) for share, c in cols]}  # fmt: skip
+    _CACHE[key] = out
+    return out
+
+
+def stage_at(into, t):
+    """[{box, col}] of the pages the film had down at `t` (the 5000 pass), largest first."""
+    try:
+        with open(os.path.join(into, "boxes.json"), encoding="utf-8") as f:
+            got = json.load(f).get("P%.2f" % t) or []
+    except (OSError, ValueError):
+        got = []
+    return sorted(got, key=lambda b: -_area(b["box"]))
+
+
+def stage_camera(pages):
+    """The push that makes the film's page fill the frame (a collage film lays its pages on a
+    mat, a band of it showing all round: at 168 px that band is a frame round a smaller picture),
+    as thumb.js's camera -- or None when there is no page, or it fills the frame already."""
+    W, H = size()
+    if not pages:
+        return None
+    x0, y0, x1, y1 = pages[0]["box"]
+    k = cfg()["poster"]
+    z = max(W / max(1, x1 - x0), H / max(1, y1 - y0))
+    if z <= 1.01:
+        return None
+    # a little past the fit: a page's torn edge and its white rim stay out of the frame
+    z = min(k["stage_zoom_max"], z * k["stage_overscan"])
+    vw, vh = W / z, H / z
+    vx0 = min(W - vw, max(0.0, (x0 + x1) / 2 - vw / 2))
+    vy0 = min(H - vh, max(0.0, (y0 + y1) / 2 - vh / 2))
+    return {
+        "zoom": round(z, 4),
+        "cx": round(vx0 * z / (z - 1), 2),
+        "cy": round(vy0 * z / (z - 1), 2),
+    }
+
+
+def staged(img, camera):
+    """The stage still as the camera's push shows it: what the poster's words are set on."""
+    if not camera:
+        return img
+    W, H = size()
+    z = camera["zoom"]
+    vx0, vy0 = camera["cx"] * (z - 1) / z, camera["cy"] * (z - 1) / z
+    box = (round(vx0), round(vy0), round(vx0 + W / z), round(vy0 + H / z))
+    return img.crop(box).resize((W, H), Image.LANCZOS)
+
+
+def cast_at(pcs, boxes):
+    """The film's pieces in a frame, largest on screen first -- not a picture that is the frame's
+    whole scene (a painted backdrop), which is no piece of it."""
+    W, H = size()
+    seen = {}
+    for b in boxes or []:
+        n = str(b.get("name", ""))
+        if n in pcs:
+            a = _area(_clip(tuple(float(v) for v in b["box"]), (0, 0, W, H)))
+            seen[n] = max(seen.get(n, 0), a)
+    big = cfg()["compose"]["backdrop_frac"] * W * H
+    return [n for n, a in sorted(seen.items(), key=lambda x: -x[1]) if 0 < a < big]
+
+
+def _rank(pcs, names, shown=None, used=()):
+    """Pieces in the order a poster would build on them: one no other option has taken, somebody
+    (a face) before an object, a cut-out before a print, a brand's mark last, then as given --
+    or, with `shown` (the probe's {name: {n, w}}), the ones the film draws most often."""
+    order = {n: i for i, n in enumerate(names)}
+
+    def key(n):
+        p = pcs[n]
+        often = -(shown.get(n) or {}).get("n", 0) if shown is not None else order[n]
+        return (p["mark"] or p["lettered"], n in used, not p["being"], not p["cut"], often)
+
+    return sorted(names, key=key)
+
+
+def poster_heroes(pcs, casts, concepts, shown=None):
+    """[(hero, extras)], one per concept, for a film's posters: the writer's own choice when it
+    named pieces the film has; else, of the pieces in that moment's frame (`casts`), somebody
+    before an object, with the largest thing that is not a figure beside it; else -- a moment
+    with no piece on screen -- a piece no other option has taken, the ones the film shows most
+    first, never one it lays across the whole frame (a painted scene is the frame, not a piece
+    of it). (None, []) for a concept no poster can be made for."""
+    W, _ = size()
+    wide = cfg()["poster"]["scene_w"] * W
+    shown = shown or {}
+    out = []
+    named = [cpt.get("hero") for cpt in concepts if cpt.get("hero") in pcs]
+    for cpt, cast in zip(concepts, casts, strict=True):
+        hero = cpt.get("hero") if cpt.get("hero") in pcs else None
+        extras = [n for n in cpt.get("with") or [] if n in pcs and n != hero]
+        if not hero and cast:
+            # of the frame's pieces, one the options before this have not built on
+            hero = _rank(pcs, cast, None, named + [h for h, _ in out if h])[0]
+            if not extras:
+                extras = [n for n in cast if n != hero and not pcs[n]["figure"]
+                          and not pcs[n]["mark"] and not pcs[n]["lettered"]]  # fmt: skip
+        out.append([hero, extras[:1]])
+    used = [h for h, _ in out if h]
+    free = [n for n in pcs if pcs[n]["cut"] or (shown.get(n) or {}).get("w", 0) < wide]
+    for row in out:
+        if not row[0] and free:
+            row[0] = _rank(pcs, free, shown, used)[0]
+            used.append(row[0])
+    return [(h, e) for h, e in out]
+
+
+def backing_colour(st, page, piece, seed, n):
+    """The colour of the paper behind a poster's hero: of the colours the film itself uses (its
+    labels', its accent, its paper), one far from both the page and the hero's own colours -- a
+    lemon hoodie on a lemon burst is one yellow shape."""
+    cands = list(st.get("strips") or []) + [st["accent_fill"], st["paper"]]
+    if st.get("outline"):
+        cands += [st["outline"]["fill"], st["outline"]["accent"]]
+    uniq = []
+    for c in cands:
+        if not any(_near(c, u, 30) for u in uniq):
+            uniq.append(tuple(c))
+    main = [c for c, share in piece["colours"] if share >= 0.12] or [piece["colours"][0][0]]
+
+    def score(c):
+        return min(_apart(c, page), min(_apart(c, m) for m in main))
+
+    ranked = sorted(uniq, key=lambda c: -score(c))
+    good = [c for c in ranked if score(c) >= 0.8 * score(ranked[0])]
+    return _pick(seed, n, "backing", good)
+
+
+def poster_variant(seed, n):
+    """What changes from one poster to the next -- across one film's four options, and from film
+    to film on a channel: the template, which side the hero stands, how close it is, how the words
+    lean, the paper behind the hero. The same film and option always get the same answer."""
+    k = cfg()["poster"]
+    flip = {"left": "right", "right": "left"}
+    first = _pick(seed, 0, "side", ["left", "right"])
+    lead = _pick(seed, 0, "template", [0, 1])
+    return {
+        "template": TEMPLATES[(n + lead) % len(TEMPLATES)],
+        "side": first if (n - 1) // 2 % 2 == 0 else flip[first],
+        "tilt": _pick(seed, n, "tilt", k["tilts"]),
+        "close": _pick(seed, n, "close", k["figure_hs"]),
+        "backing": _pick(seed, n, "backing-kind", k["backings"]),
+        "spin": _pick(seed, n, "spin", [0.0, 0.07, 0.13]),
+    }
+
+
+def _fit_words(toks, font, stroke, zw, zh, rot, cap_max, max_lines, strips=False):
+    """(block, pad, strip padding) for the words at the largest cap height that fits zw x zh once
+    turned by `rot` -- each line on a strip of paper when `strips` -- or None."""
+    c, k = cfg(), cfg()["poster"]
+    cs, sn = abs(math.cos(rot)), abs(math.sin(rot))
+    for cap in range(cap_max, c["cap"]["min_px"] - 1, -c["cap"]["step_px"]):
+        px = cap / cap_ratio(font["file"])
+        if strips:
+            sx, sy = c["strip"]["pad"][0] * cap, c["strip"]["pad"][1] * cap
+            gap = (2 * sy + c["strip"]["gap_frac"] * cap) / cap
+            b = block_at(toks, font, cap, zw - 2 * sx, zh - 2 * sy, max_lines, gap)
+            if (
+                b
+                and (b["w"] + 2 * sx) * cs + (b["h"] + 2 * sy) * sn <= zw
+                and (b["w"] + 2 * sx) * sn + (b["h"] + 2 * sy) * cs <= zh
+            ):
+                return b, 0.0, (sx, sy)
+            continue
+        pad = (stroke["w"] * px * 0.5 if stroke else 0) + 0.04 * cap
+        b = block_at(toks, font, cap, zw, zh, max_lines, k["line_gap"], pad)
+        if b and b["w"] * cs + b["h"] * sn <= zw and b["w"] * sn + b["h"] * cs <= zh:
+            return b, pad, None
+    return None
+
+
+def _turned(w, h, rot):
+    """Half the width and height of a w x h picture's box once turned by `rot`."""
+    cs, sn = abs(math.cos(rot)), abs(math.sin(rot))
+    return (w * cs + h * sn) / 2, (w * sn + h * cs) / 2
+
+
+def _backing(st, page, P, v, seed, n, x, y, r):
+    k = cfg()["poster"]
+    fill = backing_colour(st, page, P, seed, n)
+    rim = st["outline"]["fill"] if st.get("outline") else st["paper"]
+    if _near(rim, fill, 40) or _near(rim, page, 40):
+        rim = None
+    b = {"k": "burst", "x": round(x), "y": round(y), "r": round(r), "col": rgb_hex(fill),
+         "rim": rgb_hex(rim) if rim else None, "rot": v["spin"], "seed": 60 + n}  # fmt: skip
+    b.update(k["shapes"][v["backing"]])
+    return b
+
+
+def _piece(name, P, x, y, w, rot, st):
+    """A piece for thumb.js: a cut-out as it is, a print with a border of the film's paper."""
+    d = {"k": "cut" if P["cut"] else "print", "name": name, "x": round(x), "y": round(y),
+         "w": round(w), "rot": round(rot, 4)}  # fmt: skip
+    if not P["cut"]:
+        k = cfg()["poster"]
+        light = max((st["paper"], st["text"], (255, 255, 255)), key=luminance)
+        d.update(border=round(k["print_border"] * w), col=rgb_hex(light), zoom=k["print_zoom"])
+    return d
+
+
+def strip_pair(st, head, page):
+    """(fill, ink, accent) for words on strips of paper: the film's own label when it labels with
+    strips, else of its colours the one furthest from the page that one of its inks reads on."""
+    need = cfg()["contrast_min"] + cfg()["ink_margin"]
+    inks = [st["paper"], st["text"], st["ink"]]
+    if st.get("outline"):
+        inks.append(st["outline"]["fill"])
+    look = st["card"]
+    fills = ([look["fill"]] if look.get("strip") else []) + list(st.get("strips") or [])
+    fills += [st["ink"], st["text"], st["accent_fill"], st["paper"]]
+    ok = [f for f in fills if max(_reads(i, f) for i in inks) >= need and _apart(f, page) >= 25]
+    # a strip's paper grain takes more off the contrast than a page's does (navy on an orange
+    # strip: 5.4:1 as colours, 4.49:1 drawn): a pair with room to spare before one without
+    roomy = [f for f in ok if max(_reads(i, f) for i in inks) >= need + cfg()["strip"]["margin"]]
+    ok = roomy or ok
+    fill = ok[0] if look.get("strip") and ok and ok[0] == look["fill"] else (
+        max(ok, key=lambda f: _apart(f, page)) if ok else max(fills, key=lambda f: _apart(f, page)))  # fmt: skip
+    ink = max(inks, key=lambda i: _reads(i, fill))
+    if _reads(ink, fill) < need:
+        ink = fit_contrast(ink, fill, need)
+    accent = _accent(st, ink, fill)
+    o = st.get("outline")
+    if o and not _near(o["accent"], ink) and _reads(o["accent"], fill) >= need:
+        accent = o["accent"]
+    # the starred word's line on a strip of another of the film's colours, when it has one that
+    # stands off both the first strip and the page: the stack then says which line matters
+    hots = list(st.get("strips") or []) + [st["accent_fill"]] + ([o["accent"]] if o else [])
+    hots = [h for h in hots if not _near(h, fill, 70) and _apart(h, page) >= 25 and _chroma(h) >= 0.35
+            and max(_reads(i, h) for i in inks) >= need + cfg()["strip"]["margin"]]  # fmt: skip
+    hot = None
+    if hots:
+        hf = max(hots, key=lambda h: min(_apart(h, fill), _apart(h, page)))
+        hot = (hf, max(inks, key=lambda i: _reads(i, hf)))
+    return fill, ink, accent, hot
+
+
+def layout_poster(words, st, pcs, hero, extras, pages, v, seed, n, logo=None, stage=None,
+                  strips=False):  # fmt: skip
+    """A poster, composed from the film's own pieces rather than cut from one of its frames: its
+    page filling the frame, one of its pictures large on a burst of its paper -- a figure from the
+    waist up, an object whole and turned, a print with a paper border -- another piece tucked in
+    behind it, and the words as large as the room allows, in the film's title type and outline (or,
+    with `strips`, each line on a strip of its paper, the way it labels), leaning a little.
+
+    Two templates (v["template"]), both read off channels that draw rather than film:
+      side   the words stacked on one side, the hero on the other
+      band   the words in a line or two across the top, the hero under them, off the bottom edge
+    `stage` is the picture the words are set on (the film's bare page, as the push shows it).
+    None when the words cannot be set at a legible size."""
+    k = cfg()["poster"]
+    W, H = size()
+    toks = tokens(words)
+    head = pick_head(st, words)
+    if not head or not toks or hero not in pcs:
+        return None
+    font = _font(head)
+    P = pcs[hero]
+    page = colour(pages[0]["col"], st["paper"]) if pages else st["paper"]
+    if stage is not None:
+        page = _mean_rgb(stage, (W * 0.2, H * 0.2, W * 0.8, H * 0.8))
+    out = st.get("outline") if head.get("film") and not strips else None
+    stroke = out["stroke"] if out else None
+    safe, badge = safe_rects()
+    mx, gap, rot = k["margin"] * W, k["gap"] * W, v["tilt"]
+    lh = lw = 0
+    lbox = None
+    if logo:
+        lh = round(k["logo_h"] * H)
+        lw = lh if logo.get("round") else round(min(lh * logo["aspect"], 0.3 * W))
+        lh = lh if logo.get("round") else round(lw / logo["aspect"])
+        m = k["logo_margin"] * H
+        lx = m if k["logo_corner"].endswith("left") else W - m - lw
+        ly = m if k["logo_corner"].startswith("top") else H - m - lh
+        lbox = (lx, ly, lx + lw, ly + lh)
+    scene = []
+    if v["template"] == "band":
+        kb = k["band"]
+        rot *= kb["tilt"]  # a line across the whole frame climbs a long way at the same lean
+        fit = _fit_words(toks, font, stroke, safe[2] - safe[0], kb["h"] * H - safe[1], rot,
+                         kb["cap_max"], kb["max_lines"], strips)  # fmt: skip
+        if not fit:
+            return None
+        b, pad, sp = fit
+        bw, bh = b["w"] + (2 * sp[0] if sp else 0), b["h"] + (2 * sp[1] if sp else 0)
+        rw, rh = (2 * e for e in _turned(bw, bh, rot))
+        cx, cy = W / 2, safe[1] + rh / 2
+        floor = cy + rh / 2 + 0.01 * H  # where the picture starts, under the words
+        left = (lbox is not None and lbox[0] < W / 2) or (lbox is None and v["side"] == "left")
+        sign = 1 if left else -1  # the hero stands off the logo's side; its prop on that side
+        hx = W * (kb["hero_cx"] if left else 1 - kb["hero_cx"])
+        if P["figure"]:
+            fh = min(kb["bust_h"] * H, k["max_up"] * P["h"])
+            fw = fh * P["w"] / P["h"]
+            hy, hrot = floor + fh / 2, 0.0
+            bx, by, br = hx, floor + 0.2 * fh, k["burst_r"] * H
+        else:
+            hrot = -sign * k["object_rot"]
+            room = (H - floor) / (1 - kb["cut"])
+            s = min(kb["object_w"] * W / P["w"], room / P["h"], k["max_up"])
+            fw, fh = P["w"] * s, P["h"] * s
+            ex, ey = _turned(fw, fh, hrot)
+            hy = floor + ey
+            bx, by, br = hx, hy, 1.05 * max(ex, ey)
+        # the burst stays under the words' line: words without an outline do not read across
+        # its edge (white on an orange burst: 3.3:1), and with one a burst behind them is clutter.
+        # Words on strips of paper read over anything. A burst cut down to a crown is left out.
+        reach = br if strips else min(br, by - floor + (k["burst_over"] * H if stroke else 0))
+        if v["backing"] and reach >= k["burst_keep"] * br:
+            scene.append(_backing(st, page, P, v, seed, n, bx, by, reach))
+        for name in extras:
+            Q = pcs[name]
+            if Q["figure"] and P["figure"]:  # somebody beside somebody: a second bust, behind
+                qh = fh * k["mate"]
+                qw = qh * Q["w"] / Q["h"]
+                qx = hx - sign * fw * kb["mate_out"]
+                scene.append(_piece(name, Q, qx, floor + k["mate_drop"] * H + qh / 2, qw, 0.0, st))
+                continue
+            s = min(kb["prop_h"] * H / Q["h"], kb["prop_w"] * W / Q["w"], k["max_up"])
+            qw = Q["w"] * s
+            qx = hx - sign * (fw / 2 + qw * (0.5 - kb["prop_in"]))
+            scene.append(_piece(name, Q, qx, kb["prop_cy"] * H, qw, -sign * k["prop_rot"], st))
+        scene.append(_piece(hero, P, hx, hy, fw, hrot, st))
+        side = "top"
+    else:
+        left = v["side"] == "left"
+        sign = 1 if left else -1  # toward the middle of the frame, from the hero
+        if P["figure"]:
+            fh = min(v["close"] * H, k["max_up"] * P["h"])
+            fw = fh * P["w"] / P["h"]
+            if fw > k["hero_w"] * W:
+                fw = k["hero_w"] * W
+                fh = fw * P["h"] / P["w"]
+            top = k["figure_top"] * H
+            hx, hy, hrot = (mx + fw / 2 if left else W - mx - fw / 2), top + fh / 2, 0.0
+            hbox = (hx - fw / 2, top, hx + fw / 2, H)
+            bx, by, br = hx, top + 0.3 * fh, k["burst_r"] * H
+        else:
+            hrot = -sign * k["object_rot"]
+            ex, ey = _turned(P["w"], P["h"], hrot)
+            s = min(k["object_w"] * W / (2 * ex), k["object_h"] * H / (2 * ey), k["max_up"])
+            fw, fh = P["w"] * s, P["h"] * s
+            ex, ey = ex * s, ey * s
+            om = max(mx, k["object_margin"] * W)
+            hx, hy = (om + ex if left else W - om - ex), k["object_cy"] * H
+            hbox = (hx - ex, hy - ey, hx + ex, hy + ey)
+            bx, by, br = hx, hy, 1.08 * max(ex, ey)
+        inner = hbox[2] if left else hbox[0]
+        for name in extras:
+            Q = pcs[name]
+            if Q["figure"] and P["figure"]:  # somebody beside somebody: a second figure, behind
+                qh = fh * k["mate"]
+                qw = qh * Q["w"] / Q["h"]
+                qx = inner + sign * qw * (k["mate_out"] - 0.5)
+                scene.append(_piece(name, Q, qx, top + k["mate_drop"] * H + qh / 2, qw, 0.0, st))
+                inner = qx + sign * qw / 2
+                continue
+            qrot = sign * k["prop_rot"]
+            s = min(k["prop_h"] * H / Q["h"], k["prop_w"] * W / Q["w"], k["max_up"])
+            qw = Q["w"] * s
+            qex, _ = _turned(qw, Q["h"] * s, qrot)
+            qx = inner + sign * (2 * qex * k["prop_out"] - qex)
+            scene.append(_piece(name, Q, qx, k["prop_cy"] * H, qw, qrot, st))
+            inner = qx + sign * qex
+        scene.append(_piece(hero, P, hx, hy, fw, hrot, st))
+        zx0, zx1 = (inner + gap, safe[2]) if left else (safe[0], inner - gap)
+        zy0, zy1 = safe[1], safe[3]
+        # behind everything, and short of the words' side (as in the band)
+        reach = (zx0 - bx) if left else (bx - zx1)
+        reach = br if strips else min(br, reach + (k["burst_over"] * H if stroke else 0))
+        if v["backing"] and reach >= k["burst_keep"] * br:
+            scene.insert(0, _backing(st, page, P, v, seed, n, bx, by, reach))
+        if zx1 > badge[0]:
+            zy1 = min(zy1, badge[1])
+        if lbox and lbox[2] > zx0 and lbox[0] < zx1:  # the logo's corner is in the words' side
+            if lbox[1] > H / 2:
+                zy1 = min(zy1, lbox[1] - 0.02 * H)
+            else:
+                zy0 = max(zy0, lbox[3] + 0.02 * H)
+        fit = _fit_words(toks, font, stroke, zx1 - zx0, zy1 - zy0, rot, k["cap_max"],
+                         k["max_lines"], strips)  # fmt: skip
+        if not fit:
+            return None
+        b, pad, sp = fit
+        bw, bh = b["w"] + (2 * sp[0] if sp else 0), b["h"] + (2 * sp[1] if sp else 0)
+        rw, rh = (2 * e for e in _turned(bw, bh, rot))
+        cx, cy = (zx0 + zx1) / 2, zy0 + rh / 2 + (zy1 - zy0 - rh) * k["words_cy"]
+        side = "right" if left else "left"
+    box = tuple(round(e) for e in (cx - rw / 2, cy - rh / 2, cx + rw / 2, cy + rh / 2))
+    spec = {"stage": True, "camera": stage_camera(pages), "scene": scene}
+    if sp:  # a line to a strip, the strips stacked about the middle and leaning as one
+        fill, ink, accent, hot = strip_pair(st, head, page)
+        cards, lines = [], []
+        top = cy - bh / 2 + sp[1]
+        for i, L in enumerate(b["lines"]):
+            base = top + b["ascent"] + i * b["step"]
+            sw, sh = L["w"] + 2 * sp[0], b["cap"] + 2 * sp[1] + max(0, L["bottom"])
+            sx, sy = cx - sw / 2, base - b["cap"] - sp[1]
+            starred = hot and len(b["lines"]) > 1 and any(a for segs in L["words"] for _, a in segs)
+            f_, i_, a_ = (hot[0], hot[1], hot[1]) if starred else (fill, ink, accent)
+            # every strip turns about the block's middle, so the stack leans as one piece
+            cards.append({"x": round(sx, 1), "y": round(sy, 1), "w": round(sw, 1), "h": round(sh, 1),
+                          "r": 0, "fill": rgb_hex(f_), "strip": True, "rot": rot,
+                          "cx": round(cx, 1), "cy": round(cy, 1)})  # fmt: skip
+            one = dict(b, lines=[L])
+            lines += _lines(one, cx, base - b["ascent"], "middle", head, i_, a_, rot, cx, cy)
+        spec.update(cards=cards, lines=lines)
+    else:
+        if out:
+            ink, accent = out["fill"], out["accent"]
+        else:
+            under = _mean_rgb(stage, box) if stage is not None else page
+            ink = _ink(st, head, under)
+            accent = _accent(st, ink, under)
+        spec["lines"] = _lines(b, cx, cy - b["h"] / 2 + pad, "middle", head, ink, accent, rot,
+                               cx, cy, stroke)  # fmt: skip
+    if lbox:
+        rim = st["outline"]["fill"] if st.get("outline") else st["paper"]
+        spec["logo"] = _logo_spec(logo, lbox[0], lbox[1], lh, lw, rim)
+    return {
+        "layout": "poster",
+        "template": v["template"],
+        "words": words,
+        "head": head,
+        "cap": b["cap"],
+        "px": b["px"],
+        "box": box,
+        "stroke_px": round(stroke["w"] * b["px"], 1) if stroke else 0,
+        "strips": bool(sp),
+        "side": side,
+        "spec": spec,
+    }
+
+
 # ------------------------------------------------------------------ the whole thing
-DROP = ("spec", "box", "head", "cap", "px", "busy", "cover", "glow", "shift", "stroke_px")
+DROP = ("spec", "box", "head", "cap", "px", "busy", "cover", "glow", "shift", "stroke_px",
+        "strips", "template", "alt")  # fmt: skip
 FALLBACK = {
+    "poster": ["poster+alt", "headline", "headline+glow", "card", "still"],
     "headline": ["headline+glow", "card", "still"],
     "card": ["still"],
     "panel": ["card", "still"],
@@ -2072,6 +2698,38 @@ def _lay(o, kind, st):
     frame as the film drew it."""
     if kind == "still" or not o["words"]:
         return layout_still(o["film"])
+    if kind in ("poster", "poster+alt"):
+        p = o["poster"]
+        lay = None
+        # the other way of setting the words (strips for type, type for strips) is the first
+        # thing a poster falls back to: words that do not read on a page read on a strip of paper
+        alt = kind == "poster+alt"
+        # Its own template with its second piece, unless the words come out much larger another
+        # way: in the other template (a long word wants the whole width, a short line a side), or
+        # without the second piece, whose room they then take. A thumbnail is read at 168 px.
+        k = cfg()["poster"]
+        best = None
+        for tpl in [p["variant"]["template"]] + [
+            t for t in TEMPLATES if t != p["variant"]["template"]
+        ]:
+            for extras in [p["extras"], []] if p["extras"] else [[]]:
+                got = layout_poster(o["words"], st, p["pieces"], p["hero"], extras, p["pages"],
+                                    dict(p["variant"], template=tpl), p["seed"], o["n"],
+                                    logo=p["logo"], stage=p["stage"],
+                                    strips=p["variant"]["strips"] != alt)  # fmt: skip
+                if got is None:
+                    continue
+                score = got["cap"] / (
+                    (1 if tpl == p["variant"]["template"] else k["switch"])
+                    * (1 if len(extras) == len(p["extras"]) else k["drop_prop"])
+                )
+                if best is None or score > best[0] + 1e-9:
+                    best = (score, got)
+        if best:
+            lay = best[1]
+            lay["alt"] = alt
+            o["img"] = p["stage"]
+        return lay
     comp = o["comp"]
     lay = None
     if kind == "headline":
@@ -2100,6 +2758,13 @@ def _lay(o, kind, st):
         cam.update(spec.get("camera") or {})  # a panel's slide rides on the push
         spec["camera"] = cam or None
     return lay
+
+
+def poster_note(o):
+    """What a poster was composed of, for the record: its template, its pieces, how its words are set."""
+    names = [L["name"] for L in o["spec"]["scene"] if L["k"] in ("cut", "print")]
+    return "poster (%s%s): %s" % (
+        o["template"], ", strips" if o.get("strips") else "", " + ".join(reversed(names)))  # fmt: skip
 
 
 def first_layout(o, kind, st):
@@ -2151,17 +2816,26 @@ def make_options(film_dir, concepts, out_dir, env=None, log=print, logo=None):
     shutil.rmtree(work, ignore_errors=True)
     # 1. every frame the settle step looks at, and each candidate without the film's own words,
     # in one browser run (the probe rides along, and notes where the film's pictures landed)
+    pcs = film_pieces(film_dir)  # a film with cut-outs gets posters composed from them
+    seed = film_key(film_dir)
     want = set()
     for o in concepts:
         cands, every = settle_times(o["at"], length)
         want |= set(every) | {DECLUTTER + t for t in cands}
+        if pcs:
+            want |= {STAGE + t for t in cands}
     stills = render_stills(film_dir, want, env=env)
     st = film_style(film_dir, env)
+    shown = probe(film_dir, env).get("img") or {}  # how often, and how large, it draws each
+    strips_n = _pick(seed, 0, "strips", cfg()["poster"]["strips_options"])
     t_stills = time.time() - t0
     # 2. the frame, the picture made of it, then the words on it, in the film's look
+    settled = [settle(cpt["at"], stills, length)[0] for cpt in concepts]
+    casts = [cast_at(pcs, boxes_at(stills_dir(film_dir), t)) for t in settled]
+    heroes = poster_heroes(pcs, casts, concepts, shown)
     opts = []
     for i, cpt in enumerate(concepts, 1):
-        t, _ = settle(cpt["at"], stills, length)
+        t = settled[i - 1]
         kind = RENAMED.get(cpt["layout"], cpt["layout"])
         o = {"n": i, "at": cpt["at"], "t": t, "requested": kind, "words": cpt["words"],
              "place": cpt.get("place"), "notes": [], "tried": []}  # fmt: skip
@@ -2175,10 +2849,26 @@ def make_options(film_dir, concepts, out_dir, env=None, log=print, logo=None):
         o["comp"], o["img"] = comp, comp["img"]
         # the film's own logo already in the picture: it is not added a second time
         o["logo"] = st["logo"] if st["logo"] and wants_logo(i, logo) and not comp["logo"] else None
-        o["notes"].append(
-            "words %s, subject by %s, push %.2fx" % (comp["side"], comp["how"], comp["zoom"])
-        )
+        hero, extras = heroes[i - 1]
+        if hero and kind != "still" and o["words"]:
+            # composed from the film's own pieces, on its own page: not a frame of it
+            pages = stage_at(stills_dir(film_dir), t)
+            v = poster_variant(seed, i)
+            v["strips"] = bool(st["card"].get("strip")) and i == strips_n
+            o["poster"] = {
+                "pieces": pcs, "hero": hero, "extras": extras, "seed": seed, "pages": pages,
+                "variant": v,
+                "stage": staged(load_still(stills[round(STAGE + t, 2)]), stage_camera(pages)),
+                "logo": st["logo"] if st["logo"] and wants_logo(i, logo) else None,
+            }  # fmt: skip
+            kind = o["requested"] = "poster"
+        else:
+            o["notes"].append(
+                "words %s, subject by %s, push %.2fx" % (comp["side"], comp["how"], comp["zoom"])
+            )
         o.update(first_layout(o, kind, st))
+        if o["layout"] == "poster":
+            o["notes"].append(poster_note(o))
         opts.append(o)
     # 3. draw, check, fall back -- until every option passes
     for rnd in range(4):
@@ -2193,13 +2883,15 @@ def make_options(film_dir, concepts, out_dir, env=None, log=print, logo=None):
             if not fails:
                 o["final"] = final
                 continue
-            tag = o["layout"] + ("+glow" if o.get("glow") else "")
+            tag = o["layout"] + ("+glow" if o.get("glow") else "+alt" if o.get("alt") else "")
             o["notes"].append("%s failed: %s" % (tag, "; ".join(fails)))
             o["tried"].append(tag)
             lay = first_layout(o, _next(o), st)
             for k in DROP:
                 o.pop(k, None)
             o.update(lay)
+            if o["layout"] == "poster":
+                o["notes"].append(poster_note(o))
             if o["layout"] == "still":
                 o["words"] = ""
     for o in opts:

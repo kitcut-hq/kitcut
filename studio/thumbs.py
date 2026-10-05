@@ -1,15 +1,20 @@
-"""A film's YouTube thumbnail options: four moments of the film itself, each with a few big words.
+"""A film's YouTube thumbnail options: four posters composed from the film's own pictures, or --
+for a film that draws everything itself -- four moments of it, each with a few big words.
 
 The draft (ytdraft.py) picks them: Claude, which already writes the title and description from
 the film, is shown the film's moments -- a sheet of clean stills with their times, made here --
-and answers with four {at, words, layout, place}, the first the video's main message. The
+and answers with four {at, words, layout, place}, the first the video's main message; for a film
+with pictures, four {at, hero, with, words} naming the pictures each poster is built on. The
 options are then made from the film with scripts/_thumb.py, drawn by the film itself in its own
-look (its title type and outline, colours, labels, logo) the way YouTube thumbnails are made: the
-frame near each moment that is not mid-transition, the film's own words left out of it, its
-subject pushed in on one side and the words large on the other, checked to be legible at
-YouTube's smallest size, in contrast, and clear of its duration stamp. An option that fails a
-check falls back (a glow of the film's paper, one of its cards, the frame alone) before anyone
-sees it. Options saved under an older design (_thumb.DESIGN) are made again.
+look (its title type and outline, colours, labels, logo) the way YouTube thumbnails are made. A
+poster: one of the film's pictures large on its own page, another tucked in behind it, the words
+beside or above, by a template that varies with the film and the option. A moment: the frame near
+it that is not mid-transition, the film's own words left out of it, its subject pushed in on one
+side and the words large on the other. Both are checked to be legible at YouTube's smallest size,
+in contrast, and clear of its duration stamp. An option that fails a check falls back (a poster's
+words onto strips of the film's paper, then a frame; a glow of the film's paper, one of its cards,
+the frame alone) before anyone sees it. Options saved under an older design (_thumb.DESIGN) are
+made again.
 
     outputs/youtube/<channel>/thumb-<n>.jpg   the options (served by /files, token or signed)
     youtube/thumbs-<channel>.json             what they are, keyed by the draft they came from
