@@ -1433,9 +1433,13 @@ function renderAccount() {
     }).catch(() => { /* the sidebar keeps its links without projects */ });
   }
 }
-function askSignIn(err) {
-  const back = location.pathname;  // come back to the page you were on
-  $('googleBtn').href = '/api/auth/signin?return_to=' + encodeURIComponent(back);
+// why: the dialog's heading when it is not for making a film. SIGNIN_BACK: what to add to the
+// address signing in comes back to (the offer an email's link asked for), for this one sign-in.
+let SIGNIN_BACK = '';
+const signinBack = () => location.pathname + SIGNIN_BACK;  // come back to the page you were on
+function askSignIn(err, why) {
+  $('signinTitle').textContent = why || 'Sign in to make your film';
+  $('googleBtn').href = '/api/auth/signin?return_to=' + encodeURIComponent(signinBack());
   $('googleBtn').hidden = $('signinOr').hidden = !GOOGLE;
   $('signinErr').textContent = err || ''; $('signinErr').hidden = !err;
   $('emailForm').hidden = false; $('sent').hidden = true;
@@ -1447,7 +1451,7 @@ $('emailForm').addEventListener('submit', async (e) => {
   btn.disabled = true;
   try {
     const r = await fetch('/api/auth/magic', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, website: $('website').value, return_to: location.pathname }) });
+      body: JSON.stringify({ email, website: $('website').value, return_to: signinBack() }) });
     const body = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
     $('sentTo').textContent = email; $('emailForm').hidden = true; $('sent').hidden = false; $('signinErr').hidden = true;
@@ -1531,6 +1535,12 @@ async function whoami() {
   invited();
   const q = new URLSearchParams(location.search), failed = q.get('signin');
   if (failed != null) { history.replaceState(null, '', location.pathname); if (!USER) askSignIn(SIGNIN_ERRORS[failed] || SIGNIN_ERRORS.link); }
+  // an email's "remove the branding" link opened signed out (another browser, a session that
+  // ended): sign in first, and come back to the film with its offer open
+  if (!USER && UB_BACK.ask && FILM_PATH.test(location.pathname) && failed == null) {
+    UB_BACK.ask = false; SIGNIN_BACK = '?unbrand=1';
+    askSignIn('', 'Sign in to remove the branding');
+  }
   const d = USER && draft.take();
   if (d) {
     if (d.prompt) { $('prompt').value = d.prompt; countPrompt(); }
@@ -1745,6 +1755,7 @@ $('ubGo').addEventListener('click', async () => {
   }
 });
 $('ubKeep').addEventListener('click', () => $('ub').close());
+$('signin').addEventListener('close', () => { SIGNIN_BACK = ''; });  // the offer's sign-in, turned down: the next one is an ordinary one
 $('ubDl').addEventListener('click', () => setTimeout(() => $('ub').close(), 0));  // the download starts, then the dialog goes
 $('ub').addEventListener('close', () => {
   $('ubEnd').innerHTML = '';
