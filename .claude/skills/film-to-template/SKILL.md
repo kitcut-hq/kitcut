@@ -111,3 +111,36 @@ Fix what breaks in film.js (fit, re-split, move up), then **prove again**. `chec
 
 Related: `studio/README.md` "Templates", `docs/reference.md` "A narrated template", the
 `video-sketch` skill (the films themselves), the `studio-vm` skill (ship, template push/publish).
+
+## 7. A new template by remaking one, then polishing by hand (2026-10-05)
+
+The fastest route to a new template at the bar of an existing one: ask the studio to remake that
+template with "replace every scene" and a beat sheet. The first cut comes back in about ten minutes
+with its facts already in `content.json`, sound written in code and the 3D and cut-out pieces working.
+
+```powershell
+node --env-file=../sketch-studio/.env scripts/film.mjs make --as <owner> --template conference-speaker-promo `
+    --prompt-file beat-sheet.md --frame 1:1 --unlisted --studio-env ../kitcut/.env      # in the site repo
+python studio/template_from_film.py pull <film-id> --slug <slug>      # takes a film whose facts are in a data file
+```
+
+- **Open the style books before the beat sheet.** Screenshot the event's own site and its social card,
+  and read the logo page of each brand's standards. Put what they say, and their key art as a picture,
+  in the prompt. "The event's own look" is not enough: the first Featured sponsor film struck a logo
+  into a metal coin, and its owner called it cringe; both brands' rules forbade it.
+- **A third party's logo sits flat and still on a solid panel in an approved colour, with clear space.**
+  Never on metal or a gradient, never rotated, embossed or swept by a shine. The motion belongs to
+  panels and type.
+- **A budget stop is not the end:** `ops.sh resume <id> --minutes 20` finishes a first cut that stopped
+  with `error_max_budget_usd`.
+- **Polish locally, three frames:** copies of `sketch.json` with a `frame` key and their own `slug`
+  (`sketch-wide.json`, `sketch-sq.json`, `sketch-tall.json`). Check every transition with stills at
+  0.1 s steps (each frame is a pure function of t), stress the content, then `check`.
+- **Put the master back under the same id:** `ops.sh replace <film-id> projects/<slug>` (with the pulled
+  film's `events.jsonl` in the folder), then copy `content.json` and `inputs/` to the film's folder on
+  the VM: `replace` does not take them.
+- **A film for every frame on the page:** render the other frames, stage each as a folder
+  (`sketch.json` = that frame's manifest, `outputs/` = its files) and import it link-only with
+  `studio/import_film.py --unlisted --vm kitcut-studio-1`; then `templates.mjs update <slug>
+  --square-film <id> --tall-film <id>` (and `--wide-film` when the template's first frame is square).
+- **Show the owner a new look before its page goes public.** The link-only film is the preview.
