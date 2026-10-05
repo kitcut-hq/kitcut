@@ -288,7 +288,9 @@ def stage_pull(a):
     # a film that already keeps its facts in a data file (a template's remake does): that file is
     # the content as it stands, and any other data file it reads comes along
     data = {k: v for k, v in (m.get("data") or {}).items() if isinstance(v, str)}
-    from_data = not found and os.path.isfile(os.path.join(src, *data.get("content", "-").split("/")))
+    from_data = not found and os.path.isfile(
+        os.path.join(src, *data.get("content", "-").split("/"))
+    )
     if from_data:
         content = read_json(os.path.join(src, *data["content"].split("/")))
     for k, rel in data.items():

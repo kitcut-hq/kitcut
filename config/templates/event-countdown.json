@@ -1,0 +1,66 @@
+{
+ "_about": "The spec of kitcut.ai's event countdown template (studio/templates.py make --spec). Its film is projects/event-countdown (local: the event's logo is third-party), pulled with studio/template_from_film.py from kitcut.ai film studio-20261005-122635-bjqeeq: TechCrunch Disrupt 2026 (San Francisco, Oct 13-15), '7 days to go' as posted on Oct 6, with the page's own numbers and prices (techcrunch.com/events/tc-disrupt-2026, read 2026-10-05). That film was itself a remake of the Conference speaker promo with every scene replaced; proven pixel-identical to it before the polish of 2026-10-05 (no blank frame out of the count, larger facts and month, the tag's flip, long lockups on two lines, the count as a word or a deadline, wide and vertical layouts).",
+ "title": "Event countdown",
+ "description": "A 26-second countdown to an event with no narration, every beat on the music: a tear-off wall calendar in the event's colours drops onto its nail with the logo on its header and today's page; its pages rip off and fly past the camera, faster and faster, counting down to a huge number with DAYS TO GO (or a word such as TOMORROW, or a deadline); the count page tears off at the camera and leaves up to three published facts pinned as torn pages, their numbers rolling up; a ticket turns in and its price tag flips from today's price to the next one, with the deadline large under it; and the month's grid circles the event's first day over the logo, the dates, the city, a button and the link.",
+ "author": "KitCut",
+ "source_film": "studio-20261005-122635-bjqeeq",
+ "look": "drawn",
+ "frames": [
+  "1:1",
+  "16:9",
+  "9:16"
+ ],
+ "caps": [
+  "space"
+ ],
+ "limits": {
+  "images": 3
+ },
+ "moments": [
+  0.9,
+  3.6,
+  5.4,
+  7.2,
+  9.0,
+  11.7,
+  13.5,
+  15.3,
+  17.1,
+  18.9,
+  22.5,
+  25.2
+ ],
+ "narration": false,
+ "sound": "code",
+ "keep": [
+  "_about",
+  "_own",
+  "_sources",
+  "copy"
+ ],
+ "generic": [
+  "DAYS TO GO",
+  "DAY TO GO",
+  "DAYS LEFT",
+  "TOMORROW",
+  "TODAY",
+  "THIS WEEK",
+  "LAST CHANCE",
+  "GET TICKETS",
+  "REGISTER",
+  "REGULAR PRICE",
+  "ATTENDEES",
+  "SPEAKERS",
+  "DAYS",
+  "GENERAL ADMISSION",
+  "DATES",
+  "CITY",
+  "VENUE"
+ ],
+ "watch": [],
+ "identity": [
+  "event.name"
+ ],
+ "example": "A '3 days to go' countdown for React Summit 2027 in Amsterdam, June 11-15. Early-bird tickets end Friday. Our logo is attached.",
+ "brief": "The film counts down to ONE event (or to one deadline of it: early bird ends, registration closes), in the EVENT's own look (its logo, colours and type, read off its site), never a costume taken from its name. Keep the five beats, the clock and the sound; change the content.\n\nTHE COUNT. The person's own words win: '3 days to go', 'tomorrow', 'early bird ends Friday'. With no count given, count the days from the day this film is made to the event's first day, and say in your reply that the count is right for that day only. An event that has already begun or passed is never counted down to: look for its next edition, and with none say so instead of making the film up. count {number: '7' (1 to 3 digits) or '' when the count is a word; label: 'DAYS TO GO' with a number ('DAY TO GO' for 1), or the word itself ('TOMORROW', 'TODAY') or the deadline ('EARLY BIRD ENDS FRIDAY', up to ~24 characters, it wraps to three lines); today: the ISO date the film is posted (its page opens the calendar), or leave it out; days: with no number, the days until what is counted to, so the torn pages count down to it; note: one short line under the count, only a published fact (a deadline, a saving), or ''}.\n\ncontent.json (SK.DATA.content): event {name; lockup: the event's word set beside its logo ('DISRUPT'), short, '' when the logo already says the name; year; dates ('OCT 13-15'); dates_long; city; venue or ''; url: the shortest address, without https://, or ''; first_day and last_day as ISO dates (YYYY-MM-DD): the month grid, its weekday columns and the circled day are worked out from them, so check them against the calendar; logo {image, light: picture keys of the logo on light and on dark; box, col, shapes: the logo as polygons in its own viewBox, only when its file is that simple; without them the picture is drawn}}. facts: 0 to 3 {value, label}: numbers the event itself publishes ('10,000+' 'ATTENDEES'), value up to ~8 characters, label up to ~40; with none the count holds longer and says the dates. ticket {name: the pass as the event calls it; price_now, price_next, deadline ('PRICES RISE OCT 13'), badge ('SAVE $100')}: each only as published or given; with one price the tag does not flip, with none there is no tag and the ticket shows the dates and the place alone. copy: every label (today, next_label, facts_title, ticket_title, cta, dates_label, city_label, venue_label, days_label, day_label, months, weekdays, weekday_names, week_start: 0 Sunday, 1 Monday); copy lines may name an event field in braces ({city}, {year}); translate them all for another language. palette {ground, accent, second, ...}: the event's own colours (a dark ground and a bright accent read best; the rest are worked out). fonts {display, ui} only when the event's own faces were fetched.\n\nPictures become the film's own with template_pictures(logo=...): an attached logo first, else the one on the event's own site; name its keys in content.json. Draw a logo exactly as its file draws it: never redraw or recolour it.\n\nNEVER INVENT. Every fact is the person's own, from their words, their attachments or the event's own pages on the web: no made-up price, deadline, saving, attendance or speaker number, date or venue. A fact that cannot be found is left out ('' or dropped from its list) and the layout closes over it.\n\nThe frame is the person's choice; every layout is worked out from it. Check the stills of the count, the facts, the ticket after its flip and the end card after changing the content."
+}
