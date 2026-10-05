@@ -45,6 +45,7 @@ TESTS = (
     "test_ytdraft.py",
     "test_share.py",  # a finished film's share page: title, description, picture (stubbed)
     "test_thumbs.py",  # a film's four YouTube thumbnail options, drawn for real
+    "test_outro.py",  # the Free plan's mark and closing read the same on a right-to-left film
     "test_media.py",
     "test_multi.py",  # two servers on one home (peers.py): the ship that never stops a film
     "test_shared.py",  # the files two servers share, raced by real processes (locks.py)
