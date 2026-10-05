@@ -1,0 +1,54 @@
+{
+ "_about": "The spec of kitcut.ai's open house invitation template (studio/templates.py make --spec). Its film is projects/open-house-invitation (local: the builder's logo and photos are third-party), pulled with studio/template_from_film.py from studio film studio-20261003-220824-nkmkf2: Lennar's grand opening of the Driftwood model home at Pepperwood, Stuart, Florida (Sat Oct 17 2026, 12-4 PM; lennar.com). Proven pixel-identical to the film. The square frame is not offered: the yard sign and the end card overlap in it (2026-10-05).",
+ "title": "Open house invitation",
+ "description": "A 30-second narrated open house invitation. A yard sign swings in with the host's logo, the day and the hours; the home's photo with its address; its bedrooms, bathrooms, square feet and price ticking in one by one; two or three more photos, each with its room's name; a pin dropping on a drawn street map; and an end card with the day, the hours, the address and who to call.",
+ "author": "KitCut",
+ "look": "drawn",
+ "frames": [
+  "16:9",
+  "9:16"
+ ],
+ "caps": [
+  "grounds"
+ ],
+ "limits": {
+  "images": 6
+ },
+ "moments": [
+  1.2,
+  2.5,
+  4.8,
+  7.5,
+  12.5,
+  14.6,
+  15.8,
+  17.8,
+  21.0,
+  24.5,
+  26.0,
+  29.3
+ ],
+ "narration": true,
+ "sound": "files",
+ "keep": [
+  "_about"
+ ],
+ "generic": [
+  "You're invited",
+  "Open house",
+  "Model grand opening",
+  "Grand opening",
+  "Bedrooms",
+  "Bathrooms",
+  "Square feet",
+  "Priced from",
+  "Kitchen",
+  "Great room",
+  "Living room",
+  "Welcome Home Center"
+ ],
+ "watch": [],
+ "identity": [],
+ "example": "Open house this Saturday, 1 to 4 PM, at 12 Oak Lane, Austin: 4 beds, 3 baths, 2,450 sq ft, $685,000. Photos of the house and my logo are attached.",
+ "brief": "The film invites people to ONE open house, model-home opening or showing. Six narration lines, one scene each: the invitation (the yard sign and the home's name); the day and hours; the facts; the rooms; where it is (the map); the goodbye and the end card.\n\nTHE DAY IS REAL AND STILL TO COME. day ('Saturday, October 17'), dayShort ('Sat, Oct 17') and hours ('12–4 PM') come from the person's words or the event's own page, with the weekday the calendar gives that date: work it out, never copy a weekday on trust. An event that has already happened is not the one to invite people to: look for the host's next one, and when there is none, or no day is given, leave day, dayShort and hours \"\" (the sign then shows the kicker alone, and the narration says to check the page for the date). Never guess a day.\n\ncontent.json (SK.DATA.content): logo: the host's logo (the agent's, the brokerage's or the builder's), a picture key; invite ('You're invited'); kicker: what kind of event, in the host's words ('Open house', 'Model grand opening'); home: the home's name or its street address when it has no name; homeSub: one short line under it, or \"\"; venue: where to arrive if it is not the home itself, or \"\"; street, cityZip, mapStreet (the street's name as a map writes it); contact: who to call or the agent's name and phone, only as published; facts: 0 to 4 {value, label} of bedrooms, bathrooms, square feet and price, only those given, each value as the listing writes it. hero {img, crop, fx}: the home's EXTERIOR (an interior only when no exterior exists); rooms: 0 to 3 {img, label} of interiors, each labelled with the room it really shows. The photos are the person's own attachments first; else the host's own published photos of this home (the picture tool); with none, leave hero and rooms empty. Never use a photo of another home.\n\nNEVER INVENT. Every fact is the person's own, from their words, their attachments or the event's own pages on the web: no made-up date, time, address, price, name, number or booth. A fact that cannot be found is left out (an empty string, or the item dropped from its list) and the layout closes over it. Use their real logo and their own colours and fonts: an attached logo first, else the one on their site (the picture tool), and name the picture's key in content.json. colors and fonts are theirs too, read off their site.\n\nTHE NARRATION sets the clock. Rewrite every line of vo.json for their event, keeping the number of lines and about their length, and record them with the voice tool. The scene cues at the top of film.js (SK.cues) hang on words of those lines: after rewriting a line, point each cue at a word the new line really says. Never read a URL or a phone number aloud; say dates and times the way a person would.\n\nKeep the scenes, their order, the camera, the type and the sound. Long values are fitted by the code; check the stills after changing them."
+}

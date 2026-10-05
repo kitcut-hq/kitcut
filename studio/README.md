@@ -647,6 +647,13 @@ content is a data edit with its clicks and pops to match.
   sentence on the VM, graded blind with bakeoff's grader -- professional >= 4 and fidelity >= 4 or
   it fails. The tech meetup template (2026-10-02) went from film to live in under an hour, with no
   hand refactor; its first test, a real You.com event from its link alone, graded 4 and 5.
+- **A night of templates, unattended: `studio/overnight_templates.py`** (runs on the VM under a
+  memory cap; no Claude of its own). From a jobs file it waits for source films, starts the ones
+  the account's two-at-once limit refused, makes a DRAFT template of each finished film (pull,
+  prove, check, spec, make) and test films from each draft, and writes REPORT.md. Nothing is
+  published. The morning after is a person's: look at the films, rewrite the specs from them,
+  choose the frames, make the next version, then the site. `studio/deploy/overnight.example/` is
+  the first night's jobs and prompts (2026-10-03: booth invitation, open house, webinar promo).
 - **Several logos**: `template_pictures(logos=[...])` makes each (co-hosts, sponsors) readable on
   dark and light grounds as `logo-1`, `logo-1-light`...; a film's own fonts (`web/fonts/`, the font
   tool) travel with its template into every remake.

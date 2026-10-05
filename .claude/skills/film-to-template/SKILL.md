@@ -40,6 +40,8 @@ studio has to run the release that knows what the template needs: if you changed
   - Use a **real** event or product by a **well-known name**, found on its own page, and its real logos from its brand page. Never invent a fact.
   - Judge the film by eye, using 10 frames from `outputs/film.mp4`, before building on it.
 
+- **Several at once, overnight.** `studio/overnight_templates.py` (on the VM, from a jobs file; `--plan` first) makes the source films, a draft template of each and test films while nobody watches. It judges nothing: the next morning look at every film, rewrite each spec from its film, check 1:1 and 9:16 stills before offering those frames, and make the next version before publishing.
+
 ## 2. Pull and prove
 
 - **pull** copies the film into `projects/<slug>/`: code, cast, engine, its own fonts, narration and sound, and the pictures it draws.

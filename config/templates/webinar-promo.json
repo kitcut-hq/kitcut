@@ -1,0 +1,47 @@
+{
+ "_about": "The spec of kitcut.ai's webinar promo template (studio/templates.py make --spec). Its film is projects/webinar-promo (local: the host's logo is third-party), pulled with studio/template_from_film.py from studio film studio-20261003-220824-tklmoy: the National Board of Public Health Examiners' Webinar Wednesday 'Seizure Recognition and Response for Public Health Professionals' (Wed Nov 18 2026, 3 p.m. ET; nbphe.org). Proven pixel-identical to the film. Wide only: in the square and vertical frames the header's logo is cut by the top edge (2026-10-05).",
+ "title": "Webinar promo",
+ "description": "A 30-second narrated promo for a webinar or online workshop, in the host's own colours. The host's logo with a LIVE WEBINAR tag and the date; the title set large, arriving phrase by phrase; the speaker or speakers with their photos, names, roles and organisations; up to three things people will learn; the date, the time with its time zone, the length and whether it is free; and a Register end card with the link.",
+ "author": "KitCut",
+ "look": "drawn",
+ "frames": [
+  "16:9"
+ ],
+ "caps": [
+  "grounds"
+ ],
+ "limits": {
+  "images": 5
+ },
+ "moments": [
+  3.5,
+  5.6,
+  8.5,
+  11.0,
+  13.5,
+  14.5,
+  15.5,
+  20.2,
+  21.2,
+  26.8,
+  27.8,
+  29.0
+ ],
+ "narration": true,
+ "sound": "files",
+ "keep": [
+  "_about"
+ ],
+ "generic": [
+  "LIVE WEBINAR",
+  "Free",
+  "1 hour",
+  "Register",
+  "PRESENTED BY",
+  "YOU'LL LEARN"
+ ],
+ "watch": [],
+ "identity": [],
+ "example": "A promo for our free webinar 'Reading the 2027 housing market', Thursday November 12 at 1 PM ET, with our chief economist. Her photo and our logo are attached.",
+ "brief": "The film promotes ONE webinar, online seminar or workshop. Six narration lines, one scene each: the host and the tag; the title; the speakers; what people will learn; when; the call to register.\n\nTHE DATE IS REAL AND STILL TO COME: from the person's words or the webinar's own page, with the weekday the calendar gives it. Never promote one that has already happened: look for the host's next one.\n\ncontent.json (SK.DATA.content): host: the organisation; logo: its logo, a picture key; series: the name of the series it belongs to, or \"\"; tag ('LIVE WEBINAR', or what the host calls it: 'VIRTUAL EVENT'); title: as the page writes it, fitted however long; dateShort ('WED · NOV 18, 2026'), dateLong, time with its time zone ('3 p.m. ET'), timeAlt: the same hour in one more zone, or \"\"; length ('1 hour') or \"\"; price: 'Free', or the credit offered ('1 CE credit'), only if the page says so, else \"\". speakers: 1 to 3 {name, creds, role, org, photo}: photo is a picture key of the speaker's own photo (attached, or from the webinar's page), or null and the name stands in type; never a photo of someone else. learn: 0 to 3 points, each up to ~70 characters, only from the page's own description or the person's words. cta ('Register'); link: the shortest address that opens the registration, without https://; words: the small labels (translate them for another language).\n\nNEVER INVENT. Every fact is the person's own, from their words, their attachments or the event's own pages on the web: no made-up date, time, address, price, name, number or booth. A fact that cannot be found is left out (an empty string, or the item dropped from its list) and the layout closes over it. Use their real logo and their own colours and fonts: an attached logo first, else the one on their site (the picture tool), and name the picture's key in content.json. colors and fonts are theirs too, read off their site.\n\nTHE NARRATION sets the clock. Rewrite every line of vo.json for their event, keeping the number of lines and about their length, and record them with the voice tool. The scene cues at the top of film.js (SK.cues) hang on words of those lines: after rewriting a line, point each cue at a word the new line really says. Never read a URL or a phone number aloud; say dates and times the way a person would.\n\nKeep the scenes, their order, the camera, the type and the sound. Long values are fitted by the code; check the stills after changing them."
+}

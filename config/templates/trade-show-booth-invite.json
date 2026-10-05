@@ -1,0 +1,50 @@
+{
+ "_about": "The spec of kitcut.ai's trade show booth invitation template (studio/templates.py make --spec). Its film is projects/trade-show-booth-invite (local: the exhibitor's logos are third-party), pulled with studio/template_from_film.py from kitcut.ai film studio-20261003-215229-l6j4hi: Radiology Partners and Mosaic Clinical Technologies at RSNA 2026 (Chicago, Nov 29 - Dec 3; South Hall, booth 5304; radpartners.com/event/rsna-2026). Proven pixel-identical to the film. Two remakes from one sentence each (GE HealthCare at MEDICA, Henry Schein at the Greater New York Dental Meeting) came out in the exhibitor's own look, 2026-10-03.",
+ "title": "Trade show booth invitation",
+ "description": "A 30-second narrated 'find us at booth ...' film an exhibitor posts before a show. The show's name, dates and city with the exhibitor's logo; a drawn hall of stands the camera flies over until one lights up with its hall and booth number; the stand rises with the logo on it and up to three things to see there; the exhibit hours day by day; and an end card with the booth number large, the dates, the logos and the link.",
+ "author": "KitCut",
+ "look": "drawn",
+ "frames": [
+  "16:9",
+  "1:1",
+  "9:16"
+ ],
+ "caps": [
+  "grounds"
+ ],
+ "limits": {
+  "images": 4
+ },
+ "moments": [
+  3.5,
+  6.5,
+  8.5,
+  11.5,
+  12.5,
+  14.2,
+  17.5,
+  21.5,
+  23.8,
+  24.9,
+  26.0,
+  29.5
+ ],
+ "narration": true,
+ "sound": "files",
+ "keep": [
+  "_about"
+ ],
+ "generic": [
+  "We're exhibiting",
+  "Find us at",
+  "See you in",
+  "Booth",
+  "Stand",
+  "Exhibit hall hours",
+  "Meet our team"
+ ],
+ "watch": [],
+ "identity": [],
+ "example": "We're exhibiting at MEDICA 2026 in Düsseldorf, Hall 10, Stand A18. Come and see our new handheld ultrasound. Our logo is attached.",
+ "brief": "The film invites visitors to ONE exhibitor's stand at ONE show, in the exhibitor's own look (its logo, colours and font, never the show's). Five narration lines, one scene each: the show and who is exhibiting; where to find the stand (the fly-over); what to see there; the exhibit hours; the goodbye and the end card.\n\ncontent.json (SK.DATA.content): show {name as the show writes it with its year, dates, venue, city}; kicker ('We're exhibiting'), findUs, seeYou; logos: 1 or 2 {img: a picture key, h: its height} (a second logo only for a co-exhibitor or the product shown); link: the shortest address of the exhibitor's page for this show, without https://; stand {hall, booth, area, word}: word is what this show calls it ('Booth', 'Stand'); hall and area are \"\" when the show has none; booth is \"\" when no number is published, and then the film says only the show. see: 0 to 3 {icon, text} of what happens at the stand, each up to ~28 characters, only what the exhibitor publishes (keep the icons the film already uses). hours {title, days: 1 to 5 {d: 'Sun', date: 'Nov 29'}, time}: the exhibition's own opening days and hours, or days: [] to leave the scene short.\n\nThe floor plan is generic: never copy a show's real plan, and never name or draw another exhibitor.\n\nNEVER INVENT. Every fact is the person's own, from their words, their attachments or the event's own pages on the web: no made-up date, time, address, price, name, number or booth. A fact that cannot be found is left out (an empty string, or the item dropped from its list) and the layout closes over it. Use their real logo and their own colours and fonts: an attached logo first, else the one on their site (the picture tool), and name the picture's key in content.json. colors and fonts are theirs too, read off their site.\n\nTHE NARRATION sets the clock. Rewrite every line of vo.json for their event, keeping the number of lines and about their length, and record them with the voice tool. The scene cues at the top of film.js (SK.cues) hang on words of those lines: after rewriting a line, point each cue at a word the new line really says. Never read a URL or a phone number aloud; say dates and times the way a person would.\n\nKeep the scenes, their order, the camera, the type and the sound. Long values are fitted by the code; check the stills after changing them."
+}
