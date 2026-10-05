@@ -30,8 +30,14 @@
     const u = t - D;
     const img = u >= 0 ? snapshot() : null; // the film's last frame, taken before the mark
     const leave = u < 0 ? 1 : 1 - clamp(u / .3);
+    // the film's canvas settings are its own: a Persian film leaves it right-to-left, which threw
+    // every letter of the mark and the closing one width off (foeqt6). Ours start from the defaults
+    const c = ctx(); c.save();
+    c.direction = 'ltr'; c.textAlign = 'start'; c.letterSpacing = '0px'; c.wordSpacing = '0px';
+    c.filter = 'none'; c.globalCompositeOperation = 'source-over'; c.shadowColor = 'transparent';
     if (leave > 0) mark(leave);
     if (u >= 0) closing(u, img);
+    c.restore();
   };
 
   const ctx = () => SK.ctx();

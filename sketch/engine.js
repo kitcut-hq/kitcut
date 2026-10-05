@@ -321,6 +321,9 @@
         else if (mode === 'type') { sc = 1; al = 1; }
         ctx.save(); ctx.translate(cx + ws[i] / 2, y + dy); ctx.rotate(rot); ctx.scale(sc, sc);
         ctx.globalAlpha = base * al;
+        // each letter is placed from its own left edge: a film that left the canvas right-to-left
+        // (or right-aligned) would otherwise draw every letter one width off, in a jumble
+        ctx.direction = 'ltr'; ctx.textAlign = 'left';
         if (o.stroke) { ctx.lineWidth = o.stroke; ctx.strokeStyle = o.strokeCol ?? SK.C.ink; ctx.lineJoin = 'round'; ctx.strokeText(chars[i], -ws[i] / 2 + ls / 2, 0); }
         ctx.fillText(chars[i], -ws[i] / 2 + ls / 2, 0);
         ctx.restore();

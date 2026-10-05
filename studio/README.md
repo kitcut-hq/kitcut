@@ -26,6 +26,7 @@ python studio/test_direction.py                 # one cached prompt per look, a 
 python studio/test_server.py                    # the API end to end, 3 films at once, Claude stubbed out, no cost
 python studio/test_media.py                     # the copy online, against a stand-in for Azure
 python studio/test_share.py                     # a film's share page words and picture, Claude stubbed
+python studio/test_outro.py                     # the Free plan's mark and closing, on a right-to-left film too
 ```
 
 `serve.ps1` writes the tunnel URL to `STUDIO_HOME\url.txt` and to MongoDB `kitcut.studio_hosts`.
