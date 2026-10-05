@@ -1,0 +1,62 @@
+{
+ "_about": "The spec of kitcut.ai's speaker announcement card template (studio/templates.py make --spec). Its film is projects/speaker-announcement (local: the speaker's photo and the logos are third-party), pulled with studio/template_from_film.py from kitcut.ai film studio-20261003-215221-mikimq: Andreas Blattmann (Black Forest Labs) at Web Summit 2026, 'Teaching AI to see the world', Centre Stage, Wed Nov 11 (websummit.com). That film was itself a remake of the Conference speaker promo with every scene replaced; proven pixel-identical to it before the polish of 2026-10-05 (the wide and vertical layouts, long roles, initials for a missing photo).",
+ "title": "Speaker announcement card",
+ "description": "A 26-second speaker announcement with no narration, every beat on the music: a foil pack in the event's colours wobbles and tears open; a card shoots out face down, spins in 3D and lands face up under a holographic shine; the card is read (the speaker's cut-out photo, the name, role and company with its logo, the talk's title, the track, and the day, time and stage); it tilts in 3D with sparks; then it drops into the middle slot of a binder page of face-down cards, over the event's logo, dates and link. In a square or vertical frame the camera reads the card in two stops; in a wide frame the card stands on the left and the talk is set large on the right.",
+ "author": "KitCut",
+ "source_film": "studio-20261003-215221-mikimq",
+ "look": "drawn",
+ "frames": [
+  "1:1",
+  "16:9",
+  "9:16"
+ ],
+ "caps": [
+  "space",
+  "portraits"
+ ],
+ "portraits": {
+  "frame": true,
+  "tone": "mono",
+  "px": 800
+ },
+ "limits": {
+  "images": 8
+ },
+ "moments": [
+  0.6,
+  2.4,
+  3.7,
+  4.6,
+  6.4,
+  8.4,
+  10.6,
+  12.6,
+  15.0,
+  18.4,
+  22.6,
+  25.2
+ ],
+ "narration": false,
+ "sound": "code",
+ "keep": [
+  "_about",
+  "copy"
+ ],
+ "generic": [
+  "FEATURED SPEAKER",
+  "SPEAKER",
+  "KEYNOTE SPEAKER",
+  "SPEAKER CARDS",
+  "SESSION",
+  "TALK",
+  "KEYNOTE",
+  "WORKSHOP",
+  "MORE SPEAKERS SOON"
+ ],
+ "watch": [],
+ "identity": [
+  "event.name"
+ ],
+ "example": "Announce our speaker Priya Nair, Staff Engineer at Stripe, at React Summit 2027: her talk is 'Payments at the edge', June 12 at 2 PM on the Main Stage. Her photo and our logo are attached.",
+ "brief": "The film announces ONE speaker of ONE event as a collectible trading card, in the EVENT's own look (its logo, colours and type, read off its site), never a costume taken from its name. Keep the five beats, the clock and the sound; change the content.\n\ncontent.json (SK.DATA.content): event {name, year, city, dates_long, venue, url: the shortest address, without https://}. copy {pack: the pack's name ('SPEAKER CARDS'), pack_sub, move: what the event calls the item ('SESSION', 'TALK', 'KEYNOTE', 'WORKSHOP': only its own word, never 'keynote' unless the event says so), binder ('MORE SPEAKERS SOON'), line}: copy lines may name an event field in braces ({city}, {year}, {dates_long}); translate them for another language. speaker {name, role, org, image: the picture key of the cut-out photo, logo {image, light}: the company's logotype on light and on dark, emblem {image, light}: its symbol alone, for the card's seal}. talk {title, day ('WED'), date ('NOV 11'), start, end, stage}. track {name, color, icon} or null. rarity {label: the line the event itself uses for this speaker ('FEATURED SPEAKER', 'KEYNOTE SPEAKER', or just 'SPEAKER'), border: three golds}. palette {ground, accent, second}: the event's three colours (the rest are worked out). logo {image, light}: the event's logo on light and on dark; logo.mark and logo.letters (its symbol as two polygons, its letters' column spans) only when the logo has a clear symbol and there is time: without them the whole logo is used. fonts {cond, wide, ui} only when the event's own faces were fetched.\n\nLimits, all fitted by the code: a name up to two lines; role and company up to two lines; a talk title up to three lines; a long stage name shrinks. A fact that is missing is left out and the card closes over it: no talk, no time, no stage, no track, no company logo, no role. With no photo the speaker's initials stand in the card's window: never a photo of someone else, never a drawn face.\n\nPictures become the film's own with template_pictures: people=[the speaker's photo] cuts them out (the photo stays a photo); logo= the event's logo; logos=[...] the company's logotype and symbol. An attached picture first, else the one on the event's or the company's own site. Name each picture's key in content.json. Draw a logo exactly as its file draws it: never redraw or recolour it.\n\nNEVER INVENT. Every fact is the person's own, from their words, their attachments or the event's own pages on the web: no made-up talk title, day, time, stage, role or company. A fact that cannot be found is left out.\n\nThe frame is the person's choice: square and vertical read the card in two camera stops; wide sets the talk large beside the card. Check the stills at the two stops and the end card after changing the content."
+}

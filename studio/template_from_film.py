@@ -285,9 +285,22 @@ def stage_pull(a):
     if found:
         name, s, e = found
         content = object_json(code[s:e])
+    # a film that already keeps its facts in a data file (a template's remake does): that file is
+    # the content as it stands, and any other data file it reads comes along
+    data = {k: v for k, v in (m.get("data") or {}).items() if isinstance(v, str)}
+    from_data = not found and os.path.isfile(os.path.join(src, *data.get("content", "-").split("/")))
+    if from_data:
+        content = read_json(os.path.join(src, *data["content"].split("/")))
+    for k, rel in data.items():
+        if k != "content" and os.path.isfile(os.path.join(src, *rel.split("/"))):
+            os.makedirs(os.path.dirname(os.path.join(dst, *rel.split("/"))) or dst, exist_ok=True)
+            shutil.copyfile(os.path.join(src, *rel.split("/")), os.path.join(dst, *rel.split("/")))
     # the pictures the film draws: those its code or its facts name; an attached one (upload1)
     # is renamed sample1..., so a remake's own upload1 never takes its place by accident
-    images, keep = m.get("images") or {}, {}
+    images, keep = dict(m.get("images") or {}), {}
+    for att in rec.get("attachments") or ():  # an attached picture is drawn by its name with no
+        if att.get("kind") == "image" and att.get("name") and att.get("file"):  # manifest entry
+            images.setdefault(att["name"], att["file"])
     said = code + cast_code + json.dumps(content or {})
     bare = (code[: found[1]] + code[found[2] :] if found else code) + cast_code  # outside the facts
     for key, rel in images.items():
@@ -311,6 +324,8 @@ def stage_pull(a):
             "_about": "The sample's facts (%s): every field the film draws." % a.film
         } | content
         write_json(os.path.join(dst, "content.json"), content)
+    elif from_data:
+        write_json(os.path.join(dst, "content.json"), content)
     with open(os.path.join(dst, "film.js"), "w", encoding="utf-8") as f:
         f.write(code)
     man = {k: v for k, v in m.items() if k not in ("tail", "images")}
@@ -326,7 +341,7 @@ def stage_pull(a):
             "film": a.film,
             "pulled": src,
             "narrated": narrated,
-            "facts": found[0] if found else None,
+            "facts": found[0] if found else ("data" if from_data else None),
             "look": rec.get("look"),
             "caps": rec.get("caps"),
             "prompt": rec.get("prompt"),
@@ -337,13 +352,16 @@ def stage_pull(a):
         "made %s (%s, %s)"
         % (dst, "narrated" if narrated else "music only", ", ".join(keep) or "no pictures")
     )
+    if from_data:
+        say("  facts: its own content.json (%d strings), kept as it is" % len(strings(content)))
+        say("  next: prove --slug %s" % a.slug)
     if found:
         say(
             "  facts: const %s -> content.json (%d strings); film.js reads SK.DATA.content"
             % (found[0], len(strings(content)))
         )
         say("  next: prove --slug %s" % a.slug)
-    else:
+    elif not from_data:
         brief = os.path.join(dst, "temp", "refactor-brief.md")
         os.makedirs(os.path.dirname(brief), exist_ok=True)
         with open(brief, "w", encoding="utf-8") as f:
