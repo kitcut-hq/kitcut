@@ -1,115 +1,104 @@
-// For: the people who follow a conference on LinkedIn, X and YouTube, and its sponsors -- the organiser's featured-sponsor post; crisp, premium, celebratory
+// For: the people who follow a conference on LinkedIn, X and YouTube, and its sponsors -- the organiser's thank-you post for one sponsor; flat, brand-led, typographic
 /* One sponsor of one conference in 26 s, no narration: the music carries it. A template: every word, colour,
-   logo and metal is in content.json (SK.DATA.content); nothing of the event or the sponsor is in this code.
+   logo and picture is in content.json (SK.DATA.content); nothing of the event or the sponsor is in this code.
    The frame is the manifest's (1080 x 1080 first; 1920 x 1080 and 1080 x 1920 hold too): layouts read W, H.
-     1 the blank (0-4)    a blank slides onto the anvil; the press's die carries the sponsor's logo; the tier
-     2 the strike (4-8)   the die comes down on the bar, sparks, it lifts: the logo stands in relief
-     3 the flip (8-12)    tossed, it spins in 3D and lands on its other face: the event's logo
-     4 who (12-20)        the coin stands beside (or above) the name, their line and where to find them
-     5 the tray (20-26)   it rolls along a tray of blank slots, drops into the first; the event signs off
-   The coin is one component (two faces, a reeded edge with thickness, a metal), reused small in the tray.
-   Logos are drawn as their files draw them, never recoloured: dark ink on the bright metal, a white logo
-   on an enamel field of the ground colour. The clock below is the one home of the timing; the sound
-   (SK.film({sound})) is worked out from it. */
-const W = SK.W, H = SK.H, E = SK.E, clamp = SK.clamp, lerp = SK.lerp, TAU = SK.TAU, rnd = SK.rnd, PI = Math.PI;
-const CX = W / 2, CY = H / 2, WIDE = W / H > 1.3, U = Math.min(W, H) / 1080, VS = clamp(H / W, 1, 1.5);
-const D = SK.DATA.content, SP = D.sponsor || {}, EV = D.event || {};
+   The look is the EVENT's own: its ground colour, its type, its key art along the bottom, its buttons.
+   The sponsor's logo is only ever flat and whole on a solid panel with clear space round it. It fades in and
+   it rides its panel (one size, one move, together); it is never turned, squashed, shaded, lit, cut inside
+   the frame or laid on the art.
+     1 the event's world (0-4)   the ground, the key art drifting along the bottom, the lockup; the thanks and the tier, large
+     2 the reveal (4-8)          the art drops away, a line opens into a panel and the sponsor's logo is there, still; the art comes back quiet
+     3 who they are (8-16)       the panel, the tier over a rule, their line (their name when the logo does not spell it) and where to find them: one block, balanced above the art
+     4 the wall (16-20)          the panel grows into the event's sponsor wall: the tier over its rule, the logo large
+     5 the sign-off (20-26)      the wall drops away; the lockup, the dates and the city as the event sets them, the link
+   The clock below is the one home of the timing; the sound (SK.film({sound})) is worked out from it. */
+const W = SK.W, H = SK.H, E = SK.E, clamp = SK.clamp, lerp = SK.lerp;
+const WIDE = W / H > 1.3, TALL = H / W > 1.3, U = Math.min(W, H) / 1080, M = Math.round((WIDE ? 112 : 80) * U);
+const D = SK.DATA.content, SP = D.sponsor || {}, EV = D.event || {}, SPL = SP.logo || {}, EVL = EV.logo || {}, ART = EV.art || {};
 
-/* ------------------------------------------------------------------ the palette */
-function rgbOf(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
-function hslOf(hex) {
-  const [r, g2, b] = rgbOf(hex).map((v) => v / 255), mx = Math.max(r, g2, b), mn = Math.min(r, g2, b), l = (mx + mn) / 2;
-  if (mx === mn) return [0, 0, l];
-  const d = mx - mn, s = l > .5 ? d / (2 - mx - mn) : d / (mx + mn);
-  const h = mx === r ? (g2 - b) / d + (g2 < b ? 6 : 0) : mx === g2 ? (b - r) / d + 2 : (r - g2) / d + 4;
-  return [h / 6, s, l];
-}
-function withL(hex, l, sk = 1) {
-  const [h, s0] = hslOf(hex), s = clamp(s0 * sk), L = clamp(l);
-  const q = L < .5 ? L * (1 + s) : L + s - L * s, p = 2 * L - q;
-  const ch = (x) => { x = (x + 1) % 1; return x < 1 / 6 ? p + (q - p) * 6 * x : x < .5 ? q : x < 2 / 3 ? p + (q - p) * (2 / 3 - x) * 6 : p; };
-  return '#' + [ch(h + 1 / 3), ch(h), ch(h - 1 / 3)].map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('').toUpperCase();
-}
+/* ------------------------------------------------------------------ the palette: the event's, flat */
+function rgbOf(hex) { const n = parseInt(String(hex).slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 function contrast(a, b) {
   const lum = (hex) => { const [r, g2, b2] = rgbOf(hex).map((v) => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126 * r + .7152 * g2 + .0722 * b2; };
   const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05);
 }
-function palette(p) {
-  const light = p.light ?? '#FFFFFF', L = (hex) => hslOf(hex)[2];
-  let ground = p.ground ?? '#113E82';
-  while (contrast(ground, light) < 7 && L(ground) > .04) ground = withL(ground, L(ground) - .02);
-  const g0 = L(ground);
-  const d = { light, accent: p.accent, second: p.second, dark: p.dark ?? '#212326', enamel: ground, enamelLt: withL(ground, Math.min(.55, g0 * 1.5)),
-    groundDk: withL(ground, g0 * .5), groundLt: withL(ground, Math.min(.6, g0 * 1.42)), soft: withL(ground, .86, .4),
-    steelHi: withL(ground, .9, .12), steelLt: withL(ground, .72, .12), steel: withL(ground, .52, .13), steelDk: withL(ground, .32, .16), steelDeep: withL(ground, .17, .2) };
-  d.shadow = rgbOf(withL(ground, g0 * .3)).join(',');
-  return { ...d, ...p, ground };
-}
-const C = palette(D.palette || {});
-SK.setStyle('clean', { grain: .4, vignette: .25, handheld: 0, vignetteRGB: C.shadow });
-Object.assign(SK.C, { paper: C.ground, text: C.light, textSoft: C.soft, accent: C.accent, accentText: C.accent, ink: C.ground });
-const FONTS = { head: 'Sofia Sans', body: 'Sofia Sans', ...(D.fonts || {}) }, FH = `"${FONTS.head}"`, FB = `"${FONTS.body}"`;
+const C = { ground: '#16234A', accent: '#D8457F', second: '#FFE680', light: '#FFFFFF', dark: '#1D1F24', ...(D.palette || {}) };
+/** the ink that reads on a flat colour */
+const inkOn = (bg) => (contrast(bg, C.light) >= 3 ? C.light : contrast(bg, C.ground) >= 4.5 ? C.ground : C.dark);
+SK.setStyle('clean', { grain: 0, vignette: 0, handheld: 0 }); // flat: nothing is laid over a logo, not even grain
+Object.assign(SK.C, { paper: C.ground, text: C.light, textSoft: C.light, accent: C.accent, accentText: C.accent, ink: C.ground });
+const FONTS = { head: 'Sofia Sans', body: 'Sofia Sans', ...(D.fonts || {}) };
+const WT = { bold: 800, mid: 600, light: 400, ...(FONTS.weights || {}) };
 
-/* ------------------------------------------------------------------ the words, the metal, the logos */
+/* ------------------------------------------------------------------ the words and the pictures */
 const TIER = String(SP.tier ?? '').trim();
-const VARS = { ...EV, tier: TIER, sponsor: SP.name ?? '' };
-const words = (s) => String(s ?? '').replace(/\{(\w+)\}/g, (_, k) => VARS[k] ?? '').trim();
+const VARS = { ...Object.fromEntries(Object.entries(EV).filter(([, v]) => typeof v === 'string')), tier: TIER, sponsor: SP.name ?? '' };
+const words = (s) => String(s ?? '').replace(/\{(\w+)\}/g, (_, k) => VARS[k] ?? '').replace(/\s+/g, ' ').trim();
 const COPY = Object.fromEntries(Object.entries(D.copy || {}).map(([k, v]) => [k, words(v)]));
-const TIER_LINE = TIER ? COPY.tier : (COPY.featured || ''), COIN_LINE = TIER ? COPY.coin : '';
-const FIND = String(SP.find || SP.link || '').trim();
-function metalOf() {
-  const M = D.metal || {}, name = TIER ? (M.tiers || {})[TIER.toUpperCase()] : null;
-  if (name && Array.isArray(M[name])) return M[name];
-  const b = SP.color || C.accent; // no tier: the sponsor's own colour
-  return [withL(b, .88), withL(b, .68), withL(b, .48), withL(b, .28)];
-}
-const METAL = metalOf();
-const SPL = SP.logo || {}, EVL = EV.logo || {};
+const TIER_LINE = TIER ? (COPY.tier || TIER) : (COPY.featured || '');
+const WALL_LINE = TIER ? (COPY.wall || TIER_LINE) : (COPY.featured || '');
+const NAME = String(SP.name ?? '').trim(), LINE = String(SP.line ?? '').trim(), FIND = String(SP.find ?? '').trim(), LINK = String(SP.link ?? '').trim();
+const ARROW = COPY.arrow ? ' ' + COPY.arrow : '';
 const IMG = (k) => (k ? SK.IMG[k] : null);
+const PANEL = SPL.ink === 'light' ? (SP.color || C.dark) : C.light, PANEL_INK = SPL.ink === 'light' ? C.light : C.dark;
 
 /* ------------------------------------------------------------------ the clock (120 bpm: a beat .5 s, a bar 2 s) */
-const HIT = 4.0, TOSS = 8.0, LAND = 10.0, STAND = 12.0, OUT = 19.55, ROLL = [20.25, 21.7], SETTLE = 22.0, LAST = 24.0;
+const REVEAL = 4.0, WHO = 8.0, WALL = 16.0, SIGN = 20.0, LAST = 24.0;
 
 /* ------------------------------------------------------------------ small helpers */
 const g = () => SK.ctx();
 const ease = (t, a, b, e = E.inOut) => e(clamp((t - a) / (b - a)));
 const back = (k) => (t) => { const c3 = k + 1; return 1 + c3 * Math.pow(t - 1, 3) + k * Math.pow(t - 1, 2); };
-const outBack = back(1.5), outBackSoft = back(.9);
-const font = (size, wt = 800, fam = FH) => `${wt} ${size}px ${fam}, "Sofia Sans", sans-serif`; // the second face carries the scripts the first lacks
+const outBack = back(1.4), outBackSoft = back(.7);
+const font = (size, wt = WT.bold, fam = FONTS.head) => `${wt} ${size}px "${fam}", "Sofia Sans", sans-serif`; // the second face carries the scripts the first lacks
 function text(str, x, y, o = {}) {
-  const c = g(); c.save(); c.font = font(o.size ?? 60, o.wt ?? 800, o.fam ?? FH);
-  c.textAlign = o.align ?? 'left'; c.textBaseline = 'alphabetic'; c.letterSpacing = (o.ls ?? 0) + 'px';
-  c.globalAlpha *= o.alpha ?? 1; c.fillStyle = o.col ?? C.light; c.fillText(str, x, y); c.restore();
+  const a = o.alpha ?? 1; if (a <= 0 || !str) return;
+  const c = g(), ls = o.ls ?? 0; c.save(); c.font = font(o.size ?? 60, o.wt ?? WT.bold, o.fam ?? FONTS.head);
+  c.textAlign = o.align ?? 'left'; c.textBaseline = 'alphabetic'; c.letterSpacing = ls + 'px';
+  c.globalAlpha *= a; c.fillStyle = o.col ?? C.light;
+  c.fillText(str, x + (o.align === 'center' ? ls / 2 : o.align === 'right' ? ls : 0), y); c.restore();
 }
-function measure(str, o = {}) { const c = g(); c.save(); c.font = font(o.size ?? 60, o.wt ?? 800, o.fam ?? FH); c.letterSpacing = (o.ls ?? 0) + 'px'; const w = c.measureText(str).width; c.restore(); return w; }
-const fit = (str, width, max, o = {}) => Math.min(max, max * width / Math.max(1, measure(str, { ...o, size: max })));
+function measure(str, o = {}) { const c = g(), ls = o.ls ?? 0; c.save(); c.font = font(o.size ?? 60, o.wt ?? WT.bold, o.fam ?? FONTS.head); c.letterSpacing = ls + 'px'; const w = c.measureText(str).width - (str ? ls : 0); c.restore(); return w; }
+const fit = (str, width, max, o = {}) => Math.min(max, max * width / Math.max(1, measure(str, { ...o, size: max, ls: o.em ? o.em * max : o.ls })));
 function wrap(str, width, o) {
   const out = []; let line = '';
   for (const w of String(str).split(/\s+/).filter(Boolean)) { const n = line ? line + ' ' + w : w; if (line && measure(n, o) > width) { out.push(line); line = w; } else line = n; }
   if (line) out.push(line); return out;
 }
-/** shrink, then wrap: the largest size from max to min at which str takes at most maxLines lines */
-function fitBlock(str, width, max, min, maxLines, o = {}) {
-  for (let s = max; s >= min; s -= 2) { const lines = wrap(str, width, { ...o, size: s }); if (lines.length <= maxLines && lines.every((l) => measure(l, { ...o, size: s }) <= width)) return { size: s, lines }; }
-  const lines = wrap(str, width, { ...o, size: min }); return { size: Math.min(min, ...lines.map((l) => fit(l, width, min, o))), lines };
+/** the largest type at which str sets in at most maxLines lines of `width` inside `height`; one line counts `one` times its size */
+function fitType(str, width, height, max, min, maxLines, o = {}, lead = 1.04, one = 1) {
+  let best = null;
+  for (let n = 1; n <= maxLines; n++) for (let s = max; s >= min; s -= 2) {
+    const lines = wrap(str, width, { ...o, size: s });
+    if (lines.length > n || lines.some((l) => measure(l, { ...o, size: s }) > width) || s * (.74 + (lines.length - 1) * lead) > height) continue;
+    const score = s * (lines.length === 1 ? one : 1); if (!best || score > best.score) best = { size: s, lines, score };
+    break;
+  }
+  if (best) return best;
+  const lines = wrap(str, width, { ...o, size: min }).slice(0, maxLines);
+  return { size: Math.min(min, ...lines.map((l) => fit(l, width, min, o))), lines };
 }
 /** the same number of lines, evened: the narrowest width that still wraps str into n lines */
 function balance(b, str, width, o = {}) {
   const n = b.lines.length; if (n < 2 || /…$/.test(b.lines[n - 1])) return b;
   let lo = width / n * .8, hi = width, best = b.lines;
   for (let i = 0; i < 12; i++) { const mid = (lo + hi) / 2, ls = wrap(str, mid, { ...o, size: b.size }); if (ls.length <= n && ls.every((l) => measure(l, { ...o, size: b.size }) <= width)) { best = ls; hi = mid; } else lo = mid; }
-  return { size: b.size, lines: best };
+  return { ...b, lines: best };
 }
-/** a block of at most maxLines lines: shrink to min, then one more line at a smaller size, then cut with an ellipsis */
+/** a paragraph of at most maxLines lines: the largest type that sets it without a lone short word at its end; under min, cut with an ellipsis */
 function clampBlock(str, width, max, min, maxLines, o = {}) {
-  let b = fitBlock(str, width, max, min, maxLines, o);
-  if (b.lines.length <= maxLines) return b;
-  b = fitBlock(str, width, min, min * .8, maxLines + 1, o);
-  if (b.lines.length <= maxLines + 1) return b;
-  const lines = b.lines.slice(0, maxLines + 1); let last = lines[maxLines];
-  while (last && measure(last + '…', { ...o, size: b.size }) > width) last = last.replace(/\s*\S+$/, '');
-  lines[maxLines] = last.replace(/[\s,;:.]+$/, '') + '…';
-  return { size: b.size, lines };
+  let best = null;
+  for (let n = 1; n <= maxLines; n++) for (let s = max; s >= min; s -= 2) {
+    const q = { ...o, size: s }, lines = wrap(str, width, q); if (lines.length > n || lines.some((l) => measure(l, q) > width)) continue;
+    const b = balance({ size: s, lines }, str, width, o), last = b.lines[b.lines.length - 1], widest = Math.max(...b.lines.map((l) => measure(l, q)));
+    const lone = b.lines.length > 1 && !/\s/.test(last) && measure(last, q) < widest * .5, score = s * (lone ? .72 : 1) * Math.pow(.94, b.lines.length - 1);
+    if (!best || score > best.score) best = { ...b, score };
+    break;
+  }
+  if (best) return best;
+  const all = wrap(str, width, { ...o, size: min }), lines = all.slice(0, maxLines); let last = lines[maxLines - 1] || '';
+  if (all.length > maxLines) { while (last && measure(last + '…', { ...o, size: min }) > width) last = last.replace(/\s*\S+$/, ''); lines[maxLines - 1] = last.replace(/[\s,;:.]+$/, '') + '…'; }
+  return { size: Math.min(min, ...lines.map((l) => fit(l, width, min, o))), lines };
 }
 /** an address as people type it; when it cannot be read at `min`, its path is cut back, segment by segment */
 function shortUrl(url, width, size, min, o = {}) {
@@ -117,364 +106,307 @@ function shortUrl(url, width, size, min, o = {}) {
   while (fit(u, width, size, o) < min && /[/?#]/.test(u)) u = u.replace(/[/?#][^/?#]*$/, '');
   return u;
 }
-function rrect(x, y, w, h, r, fill) { const c = g(); SK.rrPath(x, y, w, h, r); c.fillStyle = fill; c.fill(); }
-function disc(c, x, y, r, fill) { c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = fill; c.fill(); }
-const v3 = { sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], k: (a, s) => [a[0] * s, a[1] * s, a[2] * s],
-  n: (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; } };
-const TOL = v3.n([-.45, -.8, -.45]); // towards the light: top left, in front
-/** a logo's size inside a circle of radius rho, k of the way to its edge */
-function logoFit(im, rho, k = .86) { const a = im.width / im.height, w = k * 2 * rho / Math.sqrt(1 + 1 / (a * a)); return { w, h: w / a }; }
-/** a pill: text on a rounded bar; anchor x is its middle (or its left with o.left) */
-function pill(str, x, y, o = {}) {
-  const size = o.size ?? 28 * U, ls = o.ls ?? 2 * U, w = Math.min(o.max ?? W, measure(str, { size, wt: 700, ls }) + 2 * (o.pad ?? 26 * U)), h = o.h ?? size * 2;
-  const sz = fit(str, w - 2 * (o.pad ?? 26 * U), size, { wt: 700, ls }), x0 = o.left ? x : x - w / 2;
-  rrect(x0, y - h / 2, w, h, o.r ?? 6 * U, o.fill ?? C.accent);
-  text(str, x0 + w / 2, y + sz * .36, { size: sz, wt: 700, ls, col: o.col ?? C.light, align: 'center' });
-  return w;
+function rr(x, y, w, h, r, fill, corners = [1, 1, 1, 1]) { // corners: top-left, top-right, bottom-right, bottom-left
+  if (w <= 0 || h <= 0) return; const c = g(), q = corners.map((k) => k * Math.max(0, Math.min(r, w / 2, h / 2)));
+  c.beginPath(); c.moveTo(x + q[0], y); c.arcTo(x + w, y, x + w, y + h, q[1]); c.arcTo(x + w, y + h, x, y + h, q[2]); c.arcTo(x, y + h, x, y, q[3]); c.arcTo(x, y, x + w, y, q[0]); c.closePath();
+  c.fillStyle = fill; c.fill();
 }
-
-/* ------------------------------------------------------------------ the coin: one drawn component */
-const FS = 512; // a face is drawn on a FS x FS sheet and laid onto its disc in 3D
-function metalFill(c, r, M, flip = false, soft = false) {
-  const a = flip ? -1 : 1, gr = c.createLinearGradient(-r * .75 * a, -r * .75 * a, r * .75 * a, r * .75 * a);
-  if (soft) { gr.addColorStop(0, M[0]); gr.addColorStop(.55, M[1]); gr.addColorStop(1, M[2]); }
-  else { gr.addColorStop(0, M[1]); gr.addColorStop(.28, M[0]); gr.addColorStop(.62, M[2]); gr.addColorStop(1, M[3]); }
-  return gr;
-}
-/** the image raised from the face: a lit edge above it, a shadow below -- its own colours untouched */
-function relief(c, im, x, y, w, h, d, lit) {
-  const k = c.getTransform().a; c.save();
-  if (lit) { c.shadowColor = 'rgba(255,255,255,.85)'; c.shadowOffsetX = -d * .6 * k; c.shadowOffsetY = -d * .6 * k; c.shadowBlur = d * .4 * k; c.drawImage(im, x, y, w, h); }
-  c.shadowColor = 'rgba(0,0,0,.45)'; c.shadowOffsetX = d * .7 * k; c.shadowOffsetY = d * k; c.shadowBlur = d * 1.1 * k; c.drawImage(im, x, y, w, h);
+/** a picture as its file draws it: whole, its own proportions, nothing on it */
+function pic(im, x, y, w, h, a = 1) { if (!im || a <= 0) return; const c = g(); c.save(); c.globalAlpha *= a; c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'; c.drawImage(im, x, y, w, h); c.restore(); }
+/** a line of type rising into (p) and out of (q) its own mask */
+function rise(str, x, base, o, p, q = 0) {
+  if (p <= 0 || q >= 1 || !str) return;
+  const c = g(), s = o.size, w = measure(str, o) + Math.abs(o.ls ?? 0) + s * .2, x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x - s * .1;
+  c.save(); c.beginPath(); c.rect(x0, base - s * .98, w, s * 1.3); c.clip();
+  text(str, x, base + (1 - E.out(clamp(p))) * s * 1.2 - E.in(clamp(q)) * s * 1.2, o);
   c.restore();
 }
-/** a face: 'obv' (the sponsor's, blank until struck) or 'rev' (the event's). o: struck, sheen (-1..1 sweeps a glint) */
-function coinFace(side, o = {}) {
-  return (c, w) => {
-    const r = w / 2, M = METAL, L = side === 'obv' ? SPL : EVL, enamel = L.ink === 'light', fr = r * .855;
-    c.save(); c.translate(r, r);
-    disc(c, 0, 0, r, metalFill(c, r, M));
-    disc(c, 0, 0, r * .885, metalFill(c, r, M, true));
-    if (enamel) { const eg = c.createRadialGradient(-r * .3, -r * .35, 0, 0, 0, fr); eg.addColorStop(0, C.enamelLt); eg.addColorStop(1, C.enamel); disc(c, 0, 0, fr, eg); }
-    else disc(c, 0, 0, fr, metalFill(c, r, M, false, true));
-    if (side === 'rev' || o.struck) {
-      for (let i = 0; i < 84; i++) { const a = i / 84 * TAU, x = Math.cos(a) * r * .943, y = Math.sin(a) * r * .943; disc(c, x + r * .004, y + r * .006, r * .013, M[3]); disc(c, x - r * .003, y - r * .004, r * .009, M[0]); }
-      const im = IMG(L.image), label = side === 'obv' ? COIN_LINE : COPY.coin_reverse, lift = label ? r * .08 : 0;
-      if (im) { const s = logoFit(im, fr, label ? .84 : .9); relief(c, im, -s.w / 2, -s.h / 2 - lift, s.w, s.h, r * .016, !enamel); }
-      else { // no logo file: the name stands on the face in type
-        const nm = side === 'obv' ? String(SP.name || '') : [EV.name, EV.year].filter(Boolean).join(' '), col = enamel ? C.light : SK.mix(M[3], '#000000', .45);
-        const b = balance(fitBlock(nm, fr * 1.42, r * .3, r * .1, 3, { wt: 800 }), nm, fr * 1.42, { wt: 800 });
-        c.save(); c.shadowColor = enamel ? 'rgba(0,0,0,.4)' : 'rgba(255,255,255,.8)'; c.shadowOffsetX = c.shadowOffsetY = (enamel ? 2 : -1.5) * c.getTransform().a;
-        b.lines.forEach((l, i) => text(l, 0, -lift + b.size * (.34 + (i - (b.lines.length - 1) / 2) * 1.04), { size: b.size, wt: 800, col, align: 'center' })); c.restore();
-      }
-      if (label) {
-        const size = fit(label, fr * 1.2, r * .1, { wt: 800, ls: r * .02 });
-        c.save(); c.shadowColor = enamel ? 'rgba(0,0,0,.4)' : 'rgba(255,255,255,.8)'; c.shadowOffsetX = c.shadowOffsetY = (enamel ? 2 : -1.5) * c.getTransform().a;
-        text(label, 0, fr * .64, { size, wt: 800, ls: r * .02, col: enamel ? C.light : SK.mix(M[3], '#000000', .4), align: 'center' }); c.restore();
-      }
+/** tracked capitals: the tracking settles as they fade in */
+function track(str, x, base, o, p, q = 0) {
+  const u = E.out(clamp(p)), a = u * (1 - clamp(q)); if (a <= 0 || !str) return;
+  text(str, x, base, { ...o, ls: (o.ls ?? 0) * (1 + .8 * (1 - u)), alpha: (o.alpha ?? 1) * a });
+}
+/** a button as the event's site draws them: a flat block, bold capitals */
+const chipBox = (str, size) => [measure(str, { size, wt: WT.bold, ls: size * .04 }) + size * 1.9, size * 2.15];
+function chip(str, x, cy, size, bg, s = 1, a = 1) { // x: its left edge; cy: its middle; s: its pop, about its middle
+  if (a <= 0 || s <= 0 || !str) return; const [w, h] = chipBox(str, size), c = g();
+  c.save(); c.globalAlpha *= a; c.translate(x + w / 2, cy); c.scale(s, s);
+  rr(-w / 2, -h / 2, w, h, 9 * U, bg); text(str, 0, size * .36, { size, wt: WT.bold, align: 'center', col: inkOn(bg), ls: size * .04 });
+  c.restore();
+}
+const pulse = (t, at) => (t > at && t < at + .5 ? .05 * Math.sin(Math.PI * (t - at) / .5) : 0);
+
+/* ------------------------------------------------------------------ the layout, from the frame and the pictures' own sizes */
+let LAY = null, LAYKEY = '';
+function layout() {
+  const sim = IMG(SPL.image), eim = IMG(EVL.image), key = [!!sim, !!eim, !!IMG(ART.image), !!IMG(ART.bright)].join();
+  if (LAY && key === LAYKEY) return LAY;
+  const L = (LAY = {}), tw = W - 2 * M; LAYKEY = key;
+
+  // the event's lockup: a masthead, top right, where its own card puts it
+  if (eim) { const a = eim.width / eim.height; L.lkH = Math.min((WIDE ? 150 : TALL ? 162 : 128) * U, (WIDE ? 390 : TALL ? 430 : 330) * U / a); L.lkW = L.lkH * a; }
+  else { const s = [EV.name, EV.year].filter(Boolean).join(' ') || ' ', b = fitType(s, tw * (WIDE ? .46 : .56), 1e9, (WIDE ? 46 : 40) * U, 26 * U, 3, { wt: WT.bold }, 1.12, 1.2); L.lkName = b; L.lkW = Math.max(...b.lines.map((l) => measure(l, { size: b.size, wt: WT.bold }))); L.lkH = b.size * (.8 + (b.lines.length - 1) * 1.12); }
+  L.lkX = W - M - L.lkW; L.lkY = Math.round(M * .78); L.lkB = L.lkY + L.lkH;
+
+  // the key art, along the bottom: the event's own picture in full colour (bright) for the opening and the sign-off,
+  // and as it runs behind a page of its site (image) while the sponsor is on; either serves for all three.
+  // `top` leaves out a picture's empty sky.
+  const artPic = (k, top) => { const im = IMG(k); if (!im) return null; const ct = clamp(+top || 0, 0, .7), sh = im.height * (1 - ct), sc = Math.max(H * FULL / sh, W * 1.1 / im.width); return { im, sy: im.height * ct, sh, w: im.width * sc, h: sh * sc }; };
+  const FULL = WIDE ? .56 : .46, SHOW = WIDE ? [.44, .26, .56] : TALL ? [.42, .33, .46] : [.4, .29, .46]; // of the frame's height: the picture, and how much of it shows in scene 1, scenes 2-3 and scene 5
+  const dim = artPic(ART.image, ART.top), bright = artPic(ART.bright, ART.bright_top);
+  if (dim || bright) L.art = { pics: [bright || dim, dim || bright, bright || dim], top: SHOW.map((f) => H - H * f) };
+  const artTop = (i) => (L.art ? L.art.top[i] : H - M * .7), sky = L.art ? 26 * U : 0; // the picture's top edge melts into the ground: type may touch it
+
+  { // 1. the thanks and the tier, large, in the space above the art
+    const top = L.lkB + 34 * U, bot = artTop(0) + sky, ts = COPY.thanks ? (WIDE ? 40 : TALL ? 42 : 34) * U : 0, lead = 1.03;
+    const big = fitType(TIER_LINE, tw, bot - top - ts * 2.1, (WIDE ? 196 : TALL ? 200 : 160) * U, 56 * U, WIDE ? 2 : 3, { wt: WT.bold }, lead, WIDE ? 1.45 : 1);
+    const bh = ts * .74 + (ts ? big.size * .36 : 0) + big.size * (.74 + (big.lines.length - 1) * lead), y0 = top + Math.max(0, (bot - top - bh) * (L.art ? .5 : .42));
+    L.s1 = { ts, thanksY: y0 + ts * .74, big, bigY: y0 + ts * .74 + (ts ? big.size * .36 : 0) + big.size * .74, lead };
+  }
+
+  { // 2. the panel and the logo on it: clear space k of the logo's height on every side, never under a quarter
+    const a = sim ? sim.width / sim.height : null, k = Math.max(.25, +SPL.clear || (a && a < 2 ? .36 : WIDE ? .42 : .5));
+    const rs = (WIDE ? 32 : TALL ? 34 : 29) * U, rowH = (COPY.thanks || TIER_LINE) ? rs * 3.4 : 0;
+    const top = L.lkB + 26 * U + rowH, bot = artTop(1) - (L.art ? 30 * U : M * .5); // clear of the art: the panel sits on the flat ground
+    const maxW = Math.min(tw, (WIDE ? 1180 : 2000) * U), maxH = Math.min(bot - top, maxW * (TALL ? .7 : .6));
+    let lw, lh, nm = null;
+    if (a) { lh = Math.min(maxH / (1 + 2 * k), maxW / (a + 2 * k)); lw = a * lh; }
+    else { /* no logo file: the name in type, never a drawn or guessed logo */ nm = fitType(NAME || ' ', maxW * .8, maxH * .62, 150 * U, 40 * U, 3, { wt: WT.bold }); lh = nm.size * (.74 + (nm.lines.length - 1) * 1.04); lw = Math.max(...nm.lines.map((l) => measure(l, { size: nm.size, wt: WT.bold }))); }
+    let pw = Math.min(maxW, lw + 2 * k * lh); const ph = Math.min(maxH, Math.max(lh * (1 + 2 * k), pw * (TALL ? .6 : .44)));
+    pw = Math.min(maxW, Math.max(pw, ph * 1.3));
+    const cy = top + (bot - top) / 2;
+    L.p2 = { x: W / 2 - pw / 2, y: cy - ph / 2, w: pw, h: ph }; L.logo = { w: lw, h: lh, nm }; L.r = 26 * U;
+    // the row over the panel: the thanks, then the tier as a button
+    let f = 1; const rowW = () => (COPY.thanks ? measure(COPY.thanks, { size: rs * f, wt: WT.mid, ls: rs * f * .16 }) + rs * f * .9 : 0) + (TIER_LINE ? chipBox(TIER_LINE, rs * f * .94)[0] : 0);
+    const over = rowW() > pw; while (over && rowW() > tw && f > .7) f -= .04; // wider than its panel: centred on the frame instead
+    L.row = { size: rs * f, y: L.p2.y - rs * 1.75, x: over ? W / 2 - Math.min(rowW(), tw) / 2 : L.p2.x, stack: rowW() > tw };
+  }
+
+  { // 3. who they are: the panel, the tier over its rule, their line and where to find them -- ONE block, balanced in the space above the art
+    const P2 = L.p2, kc = Math.max(.3, +SPL.clear || 0), plate = eim && EVL.ink === 'dark' ? 22 * U : 0, lkBot = L.lkB + plate; // plate: a dark-ink lockup's white plate reaches under it
+    const beside = tw - L.lkW - 44 * U - plate; // the width a panel has in the lockup's own band
+    const hmin = (pw) => L.logo.h * (pw / P2.w) * (1 + 2 * kc); // the panel is never closer to its logo than this
+    const named = !!NAME && !!sim && (SPL.named === false || !LINE); // the name in type only beside a logo that does not spell it, or when nothing else is said
+    L.hold = !named && !LINE && !FIND && !LINK; // nothing to say beside it: the panel holds its place, the thanks over it, until the wall
+    const words = (cw, f, maxLines) => { // the words in a column cw wide, at f of the largest size the column allows
+      const hs = (WIDE ? 40 : TALL ? 46 : 36) * U * Math.max(f, .86), q = { hs, w: cw }, o = { wt: named ? WT.mid : WT.bold };
+      const mx = named ? (WIDE ? 46 : TALL ? 52 : 42) * U : (WIDE ? 104 : TALL ? 110 : 100) * U, mn = named ? (WIDE ? 34 : TALL ? 36 : 31) * U : (WIDE ? 46 : TALL ? 50 : 42) * U;
+      if (named) { const s0 = fitType(NAME, cw, 1e9, (WIDE ? 96 : TALL ? 108 : 84) * U, 44 * U, 2, { wt: WT.bold }, 1.04, 1.5).size; q.name = fitType(NAME, cw, 1e9, Math.max(44 * U, s0 * f), 44 * U, 2, { wt: WT.bold }, 1.04, 1.5); }
+      q.lineWt = o.wt; q.lead = named ? 1.34 : 1.14;
+      if (LINE) { const s0 = clampBlock(LINE, cw, mx, mn, maxLines, o).size; q.line = clampBlock(LINE, cw, Math.max(mn, s0 * f), mn, maxLines, o); }
+      const url = LINK ? shortUrl(LINK, cw * .8, 44 * U, 34 * U, { wt: WT.bold }) : '';
+      q.chip = FIND ? FIND + ARROW : url ? url + ARROW : ''; q.link = FIND && url ? url : '';
+      q.cs = q.line && !named ? clamp(q.line.size * .56, 30 * U, 58 * U) : (WIDE ? 40 : TALL ? 46 : 38) * U * Math.max(f, .8); // the button follows the line
+      if (q.chip && chipBox(q.chip, q.cs)[0] > cw) q.cs = Math.max(18 * U, q.cs * cw / chipBox(q.chip, q.cs)[0]);
+      const cb = q.chip ? chipBox(q.chip, q.cs) : [0, 0]; q.ls = q.link ? Math.min(q.cs, fit(q.link, cw, q.cs, { wt: WT.bold })) : 0;
+      q.linkBelow = !!q.link && cb[0] + q.cs * .8 + measure(q.link, { size: q.cs, wt: WT.bold }) > cw;
+      let y = 0; q.headY = hs * .74; q.ruleY = TIER_LINE ? q.headY + hs * .8 : 0; y = TIER_LINE ? q.ruleY + hs * .62 : 0;
+      if (q.name) { y += q.name.size * (TIER_LINE ? .3 : 0); q.nameY = y + q.name.size * .74; y = q.nameY + (q.name.lines.length - 1) * q.name.size * 1.04; }
+      if (q.line) { y += q.line.size * (q.name ? .95 : TIER_LINE ? .28 : 0); q.lineY = y + q.line.size * .74; y = q.lineY + (q.line.lines.length - 1) * q.line.size * q.lead + q.line.size * .14; }
+      if (q.chip) { y += cb[1] * (y ? .62 : 0); q.chipY = y + cb[1] / 2; y += cb[1]; if (q.linkBelow) { q.linkY = y + q.ls * 1.5; y = q.linkY + q.ls * .2; } }
+      q.h = y; return q;
+    };
+    // the space above the art ends in the picture's own melting edge; the words keep a size a phone can read:
+    // they shrink a little, then the art sinks, then the line loses its third row
+    const room = () => artTop(1) + (L.art ? L.art.pics[1].h * .05 : -M * .3), maxSink = L.art ? Math.max(0, H * .9 - L.art.top[1]) : 0, FS = [1, .94, .88, .82, .76];
+    let T = null, p3 = null;
+    if (L.hold) { T = {}; p3 = { ...P2 }; }
+    else if (WIDE) { // the panel left, the words right: one pair of one height, centred between the lockup and the art
+      const pw = Math.min(P2.w, W * .34), x0 = M + pw + 64 * U, cw = W - M - x0, R0 = lkBot + 30 * U;
+      for (const f of FS) { T = words(cw, f, 3); if (R0 + T.h <= room()) break; }
+      if (R0 + T.h > room() + maxSink) T = words(cw, .76, 2);
+      if (L.art) L.art.top[1] += clamp(R0 + T.h - room(), 0, maxSink);
+      const R1 = Math.max(room(), R0 + T.h), cy = (R0 + R1) / 2, ph = clamp(Math.max(T.h, P2.h * pw / P2.w), hmin(pw), Math.max(hmin(pw), R1 - R0));
+      p3 = { x: M, y: Math.max(L.lkY, cy - ph / 2), w: pw, h: ph }; T.x = x0; T.top = cy - T.h / 2;
+    } else { // stacked: the panel as large as the words leave it room for, the words under it
+      const stack = (R0, wmax, R1, scMin, fs, maxLines, tight) => {
+        for (const f of fs) {
+          const q = words(tw, f, maxLines), gap = (TALL ? 72 : 54) * U * Math.max(f, .86), avail = R1 - R0 - gap - q.h;
+          let pw = Math.min(P2.w, wmax); if (hmin(pw) > avail) pw *= avail / hmin(pw);
+          if (!(pw >= P2.w * scMin)) continue;
+          return { q, pw, gap, R0, ph: tight ? hmin(pw) : clamp(avail, hmin(pw), P2.h * pw / P2.w * 1.15) };
+        }
+        return null;
+      };
+      // square: under the lockup when little is said, else beside it, in its band; vertical: under it
+      const under = lkBot + (TALL ? 110 : 24) * U, sm = TALL ? .5 : .42, wide = beside >= P2.w * sm, ext = room() + maxSink;
+      const S = (!TALL && stack(under, tw, room(), .6, [1], 3)) || (!TALL && wide && stack(L.lkY, beside, room(), sm, FS, 3)) || stack(under, tw, room(), sm, FS, 3)
+        || (!TALL && wide && stack(L.lkY, beside, ext, sm, FS, 3, true)) || stack(under, tw, ext, sm, FS, 3, true) || stack(under, tw, ext, sm * .7, [.76], 2, true)
+        || { q: words(tw, .76, 2), pw: Math.min(P2.w, tw) * sm, gap: 40 * U, R0: under, ph: hmin(Math.min(P2.w, tw) * sm) };
+      const bh = S.ph + S.gap + S.q.h; if (L.art) L.art.top[1] += clamp(S.R0 + bh - room(), 0, maxSink);
+      const y0 = S.R0 + Math.max(0, (room() - S.R0 - bh) / 2);
+      p3 = { x: M, y: y0, w: S.pw, h: S.ph }; T = S.q; T.x = M; T.top = y0 + S.ph + S.gap;
     }
-    const s = o.sheen ?? -9;
-    if (s > -1.3 && s < 1.3) {
-      c.globalCompositeOperation = 'source-atop';
-      const gr = c.createLinearGradient(-r, -r * .6, r, r * .6), p = (s + 1) / 2;
-      gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-      for (const [u, a] of [[p - .13, 0], [p, .6], [p + .13, 0]]) if (u >= 0 && u <= 1) gr.addColorStop(u, `rgba(255,255,255,${a})`);
-      c.fillStyle = gr; c.fillRect(-r, -r, 2 * r, 2 * r);
+    L.p3 = p3; L.who = T;
+  }
+
+  { // 4. the wall: the tier over its rule and the logo, large and alone, as the event's sponsor page sets them
+    const tab = { x: L.lkX - 40 * U, h: L.lkB + 34 * U }, top = tab.h, y1 = H - M * .7; // the lockup keeps a corner of its own ground
+    const hs = fit(WALL_LINE || ' ', tw * .86, (WIDE ? 48 : TALL ? 52 : 42) * U, { wt: WT.light, em: .46 });
+    const a = sim ? sim.width / sim.height : L.logo.w / L.logo.h, lh = Math.min((y1 - top) * (TALL ? .26 : .4), tw * (WIDE ? .56 : .84) / a);
+    const head = WALL_LINE ? hs * 1.62 : 0, gap = WALL_LINE ? Math.max(lh * .62, 84 * U) : 0, gy = top + (y1 - top - head - gap - lh) * .42;
+    L.wall = { tab, hs, headY: gy + hs * .74, ruleY: gy + head, logo: { w: a * lh, h: lh, cx: W / 2, cy: gy + head + gap + lh / 2, k: lh / L.logo.h } };
+  }
+
+  { // 5. the sign-off: the dates and the city in bold capitals as the event's card sets them, the link
+    const cw = WIDE ? tw - L.lkW - 70 * U : tw, big = [EV.dates, EV.city].filter(Boolean);
+    const top = WIDE ? L.lkY + 4 * U : L.lkB + 36 * U, bot = artTop(2) + sky * (WIDE ? 1.3 : 1);
+    const url = EV.url ? shortUrl(EV.url, cw * .8, 36 * U, 31 * U, { wt: WT.bold }) : '';
+    let T = null;
+    for (const f of (L.art ? [] : [1.6, 1.45, 1.3, 1.15]).concat([1, .92, .84, .76, .68, .6])) { // with no art the words have the frame
+      const bs = Math.min((WIDE ? 90 : TALL ? 88 : 74) * U * f, ...big.map((s) => fit(s, cw, 400 * U, { wt: WT.bold }))), ss = (WIDE ? 42 : TALL ? 44 : 36) * U * clamp(f, .8, 1.25);
+      const q = { bs, ss, rows: [] }; let y = 0;
+      big.forEach((s, i) => { y += i ? bs * 1.1 : bs * .74; q.rows.push({ s, y, size: bs, wt: WT.bold }); });
+      for (const [str, wt, soft] of [[EV.venue, WT.mid, true], [EV.tags, WT.light, false]]) {
+        if (!str) continue; const b = clampBlock(str, cw, ss, ss * .78, 2, { wt });
+        b.lines.forEach((l, i) => { y += i ? b.size * 1.3 : q.rows.length ? (q.rows[q.rows.length - 1].wt === WT.bold ? bs * .3 + ss * 1.25 : ss * 1.42) : ss * .74; q.rows.push({ s: l, y, size: b.size, wt, soft }); });
+      }
+      q.cs = (WIDE ? 36 : TALL ? 40 : 32) * U * clamp(f, .8, 1.25); q.chip = url ? url + ARROW : '';
+      if (q.chip && chipBox(q.chip, q.cs)[0] > cw) q.cs *= cw / chipBox(q.chip, q.cs)[0];
+      if (q.chip) { const cb = chipBox(q.chip, q.cs); y += q.rows.length ? cb[1] * .62 : 0; q.chipY = y + cb[1] / 2; y += cb[1]; }
+      if (COPY.more) { y += ss * 1.5; q.moreY = y; }
+      q.h = y; T = q;
+      if (top + q.h <= bot) break;
     }
-    c.restore();
-  };
-}
-/** the coin at x, y (radius R) turned rx, ry, rz: the edge strips that face the camera, then the face that does */
-function coin(o) {
-  const R = o.R, T = R * .17, d = 1800, pose = { x: o.x, y: o.y, z: 0, rx: o.rx, ry: o.ry ?? 0, rz: o.rz ?? 0 };
-  SK.view3({ x: o.x, y: o.y, z: 0, sx: o.x, sy: o.y, d });
-  const P = (p) => SK.pose3(p, pose), O = P([0, 0, 0]), cam = [o.x, o.y, -d], dir = (p) => v3.n(v3.sub(P(p), O)), c = g(), M = METAL;
-  const N = 72;
-  for (let i = 0; i < N; i++) {
-    const a0 = i / N * TAU, a1 = (i + 1) / N * TAU, am = (a0 + a1) / 2, n = dir([Math.cos(am), Math.sin(am), 0]);
-    if (v3.dot(n, v3.sub(P([R * Math.cos(am), R * Math.sin(am), 0]), cam)) >= 0) continue;
-    const Q = [[a0, -T / 2], [a1, -T / 2], [a1, T / 2], [a0, T / 2]].map(([a, z]) => SK.proj3(P([R * Math.cos(a), R * Math.sin(a), z])));
-    if (Q.some((q) => !q)) continue;
-    let col = SK.mix(M[3], M[0], .12 + .88 * clamp(v3.dot(n, TOL))); if (i % 2) col = SK.mix(col, M[3], .2);
-    c.beginPath(); Q.forEach((q, k) => (k ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]))); c.closePath();
-    c.fillStyle = col; c.fill(); c.strokeStyle = col; c.lineWidth = 1.2; c.stroke();
+    L.sign = { ...T, x: M, w: cw, top: WIDE && L.art ? top : top + Math.max(0, (bot - top - T.h) * (L.art ? .3 : .42)) };
   }
-  const nF = dir([0, 0, -1]), front = v3.dot(nF, v3.sub(P([0, 0, -T / 2]), cam)) < 0;
-  const corners = front ? [[-R, -R, -T / 2], [R, -R, -T / 2], [R, R, -T / 2], [-R, R, -T / 2]] : [[-R, R, T / 2], [R, R, T / 2], [R, -R, T / 2], [-R, -R, T / 2]];
-  // (no shade: face3 lays it over the whole square sheet, and the coin is round)
-  SK.face3(corners.map(P), FS, FS, front ? o.front : o.back, { cull: false, key: (o.key || 'coin') + (front ? 'F' : 'B') });
+  return L;
 }
 
-/* ------------------------------------------------------------------ 1-3: the press */
-const FLAT = -.70, K = Math.cos(FLAT); // a coin lying flat, seen from above: its disc reads K as tall as wide
-const ST = { x: CX, y: CY + 150 * U * VS, R: 230 * U, anvil: 290 * U, die: 248 * U, dieH: 190 * U, col: 410 * U, open: 440 * U };
-const contactY = ST.y - 14 * U;
-function dieY(t) {
-  const top = ST.y - ST.open, low = top + 150 * U, up = low - 95 * U; // it creeps down, draws back, then slams
-  if (t < .9) return top;
-  if (t < 3.2) return lerp(top, low, E.inOut((t - .9) / 2.3)) + 2.5 * U * Math.sin(t * 46) * clamp((t - .9) * 2);
-  if (t < 3.72) return lerp(low, up, E.out((t - 3.2) / .52));
-  if (t < HIT) return lerp(up, contactY, E.in((t - 3.72) / .28));
-  if (t < 4.22) return contactY;
-  return lerp(contactY, ST.y - 1500 * U * VS, E.inOut(clamp((t - 4.22) / 1.5)));
+/* ------------------------------------------------------------------ the pieces */
+function art(t) { // the event's own picture, whole, drifting: it opens the film, clears the stage for the sponsor, comes back quiet, and closes the film
+  const A = LAY.art; if (!A) return;
+  const i = t >= WALL + 1 ? 2 : t < REVEAL ? 0 : 1, P = A.pics[i], c = g();
+  const y = i === 0 ? A.top[0] + (1 - E.out(clamp(t / 1.0))) * 90 * U + (H - A.top[0] + 4) * ease(t, REVEAL - .55, REVEAL - .04, E.in)
+    : i === 1 ? lerp(H + 4, A.top[1], ease(t, REVEAL + .3, REVEAL + 1.2, E.out)) : A.top[2];
+  if (y >= H) return;
+  const travel = Math.min(P.w - W, 22 * U * 26), x = -(P.w - W) / 2 + travel * (.5 - t / 26);
+  c.save(); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'; c.drawImage(P.im, 0, P.sy, P.im.width, P.sh, x, y, P.w, P.h); c.restore();
+  const m = P.h * .09, f = c.createLinearGradient(0, y - 1, 0, y + m), [r, g2, b] = rgbOf(C.ground); // its top edge melts into the ground
+  f.addColorStop(0, `rgba(${r},${g2},${b},1)`); f.addColorStop(1, `rgba(${r},${g2},${b},0)`); c.fillStyle = f; c.fillRect(0, y - 2, W, m + 2);
 }
-function cylinder(x, yTop, yBot, r, top) { // a steel cylinder standing upright, seen from a little above
-  const c = g(), ry = r * K, gr = c.createLinearGradient(x - r, 0, x + r, 0);
-  [[0, C.steelDk], [.16, C.steel], [.34, C.steelHi], [.56, C.steelLt], [.86, C.steel], [1, C.steelDeep]].forEach(([u, col]) => gr.addColorStop(u, col));
-  c.beginPath(); c.moveTo(x - r, yTop); c.lineTo(x - r, yBot); c.ellipse(x, yBot, r, ry, 0, PI, 0, true); c.lineTo(x + r, yTop); c.closePath(); c.fillStyle = gr; c.fill();
-  if (top) { const tg = c.createLinearGradient(x - r, yTop - ry, x + r, yTop + ry); tg.addColorStop(0, C.steelHi); tg.addColorStop(1, C.steel); c.beginPath(); c.ellipse(x, yTop, r, ry, 0, 0, TAU); c.fillStyle = tg; c.fill(); }
+function lockup() {
+  const L = LAY, im = IMG(EVL.image);
+  if (im) { if (EVL.ink === 'dark') rr(L.lkX - 22 * U, L.lkY - 18 * U, L.lkW + 44 * U, L.lkH + 36 * U, 16 * U, C.light); pic(im, L.lkX, L.lkY, L.lkW, L.lkH); }
+  else if (L.lkName) L.lkName.lines.forEach((l, i) => text(l, W - M, L.lkY + L.lkName.size * (.78 + i * 1.12), { size: L.lkName.size, wt: WT.bold, align: 'right' }));
 }
-function pressStage(t) { // the columns, the feed rail, the anvil and the tier on its front
-  const c = g(), yA = ST.y + 16 * U, drop = 1400 * U * VS * E.in(clamp((t - STAND) / .6));
-  c.save(); c.translate(0, drop);
-  for (const sd of [-1, 1]) {
-    const x = ST.x + sd * ST.col, cg = c.createLinearGradient(x - 33 * U, 0, x + 33 * U, 0);
-    cg.addColorStop(0, C.steelDk); cg.addColorStop(.4, C.steelLt); cg.addColorStop(1, C.steelDeep);
-    c.fillStyle = cg; c.fillRect(x - 33 * U, -2000 * U, 66 * U, yA + 2600 * U);
-    rrect(x - 46 * U, yA - 40 * U, 92 * U, 60 * U, 8 * U, C.steelDk);
+/** the sponsor's logo on its panel: as its file draws it, centred, k times the size it has on the first panel */
+function logo(cx, cy, k, a) {
+  const L = LAY.logo, im = IMG(SPL.image); if (a <= 0) return;
+  if (im) return pic(im, cx - L.w * k / 2, cy - L.h * k / 2, L.w * k, L.h * k, a);
+  if (!L.nm) return;
+  const s = L.nm.size * k, n = L.nm.lines.length, y0 = cy - s * (.74 + (n - 1) * 1.04) / 2 + s * .74;
+  L.nm.lines.forEach((l, i) => text(l, cx, y0 + i * s * 1.04, { size: s, wt: WT.bold, align: 'center', col: PANEL_INK, alpha: a }));
+}
+
+function opening(t) { // 1. the thanks, small and tracked; the tier, large
+  if (t > REVEAL + .1) return;
+  const S = LAY.s1, o = { size: S.big.size, wt: WT.bold };
+  track(COPY.thanks, M, S.thanksY, { size: S.ts, wt: WT.mid, ls: S.ts * .2 }, (t - .35) / .6, (t - (REVEAL - .55)) / .3);
+  S.big.lines.forEach((l, i) => rise(l, M - S.big.size * .04, S.bigY + i * S.big.size * S.lead, o, (t - (.8 + i * .22)) / .6, (t - (REVEAL - .5 + i * .06)) / .36));
+}
+function panelRect(t) { // the panel: a line, then open; it settles; it grows into the wall; the wall drops away
+  const L = LAY, a = L.p2, b = L.p3;
+  if (t < REVEAL - .22) return null;
+  if (t < WHO - .25) { const l = ease(t, REVEAL - .22, REVEAL, E.in), v = outBackSoft(clamp((t - REVEAL) / .5)), w = a.w * l, h = Math.max(6 * U, a.h * v); return { x: W / 2 - w / 2, y: a.y + a.h / 2 - h / 2, w, h, r: L.r, k: 1 }; }
+  const m = ease(t, WHO - .25, WHO + .32), n = ease(t, WHO - .05, WHO + .55), p = { x: lerp(a.x, b.x, WIDE ? n : m), y: lerp(a.y, b.y, n), w: lerp(a.w, b.w, m), h: lerp(a.h, b.h, m) }; // it narrows, then it travels: it never crosses the lockup
+  if (t < WALL - .22) return { ...p, r: L.r * lerp(1, b.w / a.w, m), k: p.w / a.w };
+  const gw = ease(t, WALL - .22, WALL + .42), dy = (H + 4) * ease(t, SIGN - .52, SIGN + .06, E.in); // the wall drops away as one sheet
+  return { x: lerp(b.x, 0, gw), y: lerp(b.y, 0, gw) + dy, w: lerp(b.w, W, gw), h: lerp(b.h, H, gw), r: L.r * (b.w / a.w) * (1 - gw), k: b.w / a.w, grow: gw, dy };
+}
+function panel(t) { // 2. the panel opens and the logo is there; it rides its panel, whole
+  const P = panelRect(t); if (!P || P.h <= 0 || P.y >= H) return;
+  rr(P.x, P.y, P.w, P.h, P.r, PANEL);
+  if (P.grow === undefined) logo(P.x + P.w / 2, P.y + P.h / 2, P.k, ease(t, REVEAL + .22, REVEAL + .6, E.out));
+}
+function row(t) { // the thanks and the tier over the panel
+  const end = LAY.hold ? WALL : WHO; if (t < REVEAL + .3 || t > end) return;
+  const R = LAY.row, q = (t - (end - .5)) / .25; let x = R.x;
+  if (COPY.thanks && !R.stack) { const o = { size: R.size, wt: WT.mid, ls: R.size * .16 }; track(COPY.thanks, x, R.y + R.size * .36, o, (t - (REVEAL + .5)) / .5, q); x += measure(COPY.thanks, o) + R.size * .9; }
+  if (TIER_LINE) { const p = clamp((t - (REVEAL + .8)) / .35); chip(TIER_LINE, x, R.y, R.size * .94, C.accent, outBack(p) * (1 + pulse(t, 6)), clamp(p * 3) * (1 - clamp(q))); }
+}
+function who(t) { // 3. the tier over a rule, their line (and their name when the logo does not spell it), where to find them
+  if (t < WHO + .2 || t > WALL || LAY.hold) return;
+  const L = LAY.who, c = g(), x = L.x, y = L.top, out = (i) => (t - (WALL - .58 + i * .03)) / .28;
+  if (TIER_LINE) {
+    const hs = Math.min(L.hs, fit(TIER_LINE, L.w, L.hs, { wt: WT.light, em: .34 }));
+    track(TIER_LINE, x, y + L.headY, { size: hs, wt: WT.light, ls: hs * .34 }, (t - (WHO + .45)) / .5, out(4));
+    const rw = L.w * ease(t, WHO + .55, WHO + 1.05, E.out) * (1 - ease(t, WALL - .5, WALL - .25));
+    c.save(); c.globalAlpha *= .75; c.fillStyle = C.light; c.fillRect(x, y + L.ruleY, rw, 2 * U); c.restore();
   }
-  const hw = ST.R * 1.08 * K; // the feed rail the blank slides in on
-  c.fillStyle = C.steel; c.fillRect(-200 * U, yA - hw, ST.x - ST.anvil * .6 + 200 * U, 2 * hw);
-  c.fillStyle = C.steelLt; c.fillRect(-200 * U, yA - hw, ST.x - ST.anvil * .6 + 200 * U, 10 * U);
-  c.fillStyle = C.steelDk; c.fillRect(-200 * U, yA + hw, ST.x - ST.anvil * .6 + 200 * U, 34 * U);
-  cylinder(ST.x, yA, yA + 1400 * U, ST.anvil, true);
-  c.strokeStyle = `rgba(${C.shadow},.35)`; c.lineWidth = 3 * U; c.beginPath(); c.ellipse(ST.x, yA, ST.anvil * .9, ST.anvil * .9 * K, 0, 0, TAU); c.stroke();
-  const a = ease(t, 1.2, 1.65, outBack);
-  if (TIER_LINE && a > 0) SK.at(ST.x, yA + ST.anvil * K + 92 * U, 0, a, () => pill(TIER_LINE, 0, 0, { size: 40 * U, ls: 5 * U, h: 84 * U, max: W - 120 * U }));
-  c.restore();
+  if (L.name) L.name.lines.forEach((l, i) => rise(l, x - L.name.size * .03, y + L.nameY + i * L.name.size * 1.04, { size: L.name.size, wt: WT.bold }, (t - (WHO + .85 + i * .12)) / .5, out(3)));
+  const l0 = WHO + (L.name ? 1.3 : .85);
+  if (L.line) L.line.lines.forEach((l, i) => rise(l, x - (L.name ? 0 : L.line.size * .03), y + L.lineY + i * L.line.size * L.lead, { size: L.line.size, wt: L.lineWt, alpha: L.name ? .94 : 1 }, (t - (l0 + i * .16)) / .55, out(2)));
+  if (L.chip) {
+    const p = clamp((t - (WHO + 2.5)) / .35), a = clamp(p * 3) * (1 - clamp(out(1)));
+    chip(L.chip, x, y + L.chipY, L.cs, C.second, outBack(p) * (1 + pulse(t, 12) + pulse(t, 14)), a);
+    if (L.link) { const la = ease(t, WHO + 2.9, WHO + 3.3) * (1 - clamp(out(0))); if (L.linkBelow) text(L.link, x, y + L.linkY, { size: L.ls, wt: WT.bold, alpha: la }); else text(L.link, x + chipBox(L.chip, L.cs)[0] + L.cs * .8, y + L.chipY + L.cs * .36, { size: L.cs, wt: WT.bold, alpha: la }); }
+  }
 }
-function dieAndSparks(t) {
-  const c = g(), yd = dieY(t), gap = Math.max(0, contactY - yd);
-  if (gap < 320 * U) { c.fillStyle = `rgba(${C.shadow},${.5 * (1 - gap / (320 * U))})`; c.beginPath(); c.ellipse(ST.x, ST.y + 6 * U, ST.die, ST.die * K, 0, 0, TAU); c.fill(); }
-  const yk = yd - ST.dieH - 36 * U, yg = c.createLinearGradient(0, yk - 60 * U, 0, yk + 60 * U); // the yoke rides the columns with the ram
-  yg.addColorStop(0, C.steelLt); yg.addColorStop(.5, C.steel); yg.addColorStop(1, C.steelDeep);
-  c.save(); c.shadowColor = `rgba(${C.shadow},.45)`; c.shadowBlur = 18 * U; c.shadowOffsetY = 10 * U; rrect(ST.x - ST.col - 60 * U, yk - 60 * U, 2 * ST.col + 120 * U, 120 * U, 16 * U, yg); c.restore();
-  c.fillStyle = C.steelHi; c.globalAlpha = .55; c.fillRect(ST.x - ST.col - 44 * U, yk - 52 * U, 2 * ST.col + 88 * U, 5 * U); c.globalAlpha = 1;
-  for (const sd of [-1, 1]) { rrect(ST.x + sd * ST.col - 50 * U, yk - 78 * U, 100 * U, 156 * U, 12 * U, C.steelDk); rrect(ST.x + sd * ST.col - 50 * U, yk - 78 * U, 100 * U, 10 * U, 5 * U, C.steelLt);
-    for (const by of [-44, 44]) disc(c, ST.x + sd * (ST.col - 110 * U), yk + by * U * .5, 7 * U, C.steelDeep); }
-  cylinder(ST.x, -3000 * U, yd - ST.dieH + 20 * U, 92 * U, false); // the ram
-  cylinder(ST.x, yd - ST.dieH, yd, ST.die, false); // the die
-  const gl = (t - 1.5) / 1.3; // a light runs across the die as it comes down
-  if (gl > 0 && gl < 1) { c.save(); c.beginPath(); c.rect(ST.x - ST.die, yd - ST.dieH, 2 * ST.die, ST.dieH + ST.die * K); c.clip();
-    const gx = ST.x - ST.die * 1.4 + gl * ST.die * 2.8, gg = c.createLinearGradient(gx - 70 * U, 0, gx + 70 * U, 0); gg.addColorStop(0, 'rgba(255,255,255,0)'); gg.addColorStop(.5, `rgba(255,255,255,${.55 * Math.sin(gl * PI)})`); gg.addColorStop(1, 'rgba(255,255,255,0)');
-    c.transform(1, 0, -.35, 1, 0, 0); c.fillStyle = gg; c.fillRect(gx - 70 * U + .35 * yd, yd - ST.dieH - 40 * U, 140 * U, ST.dieH + ST.die); c.restore(); }
-  c.fillStyle = `rgba(${C.shadow},.35)`; c.beginPath(); c.ellipse(ST.x, yd, ST.die, ST.die * K, 0, 0, PI); c.ellipse(ST.x, yd - 22 * U, ST.die, ST.die * K, 0, PI, 0, true); c.fill();
-  // the sponsor's logo on a plate on the die, as its file draws it
-  const pw = 360 * U, ph = 104 * U, py = yd - ST.dieH * .55, im = IMG(SPL.image);
-  const pg = c.createLinearGradient(0, py - ph / 2, 0, py + ph / 2); pg.addColorStop(0, '#FFFFFF'); pg.addColorStop(1, '#E4E8EE');
-  c.save(); c.shadowColor = `rgba(${C.shadow},.5)`; c.shadowBlur = 12 * U; c.shadowOffsetY = 5 * U; rrect(ST.x - pw / 2, py - ph / 2, pw, ph, 10 * U, SPL.ink === 'light' ? C.enamel : pg); c.restore();
-  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) disc(c, ST.x + sx * (pw / 2 - 13 * U), py + sy * (ph / 2 - 13 * U), 4.5 * U, C.steel);
-  if (im) { const s = Math.min((pw - 70 * U) / im.width, (ph - 34 * U) / im.height); c.drawImage(im, ST.x - im.width * s / 2, py - im.height * s / 2, im.width * s, im.height * s); }
-  const age = t - HIT; if (age < 0 || age > .95) return;
-  c.save(); c.lineCap = 'round';
-  const f = 1 - clamp(age / .3);
-  if (f > 0) { c.globalAlpha = .55 * f; c.fillStyle = '#FFFFFF'; c.beginPath(); c.ellipse(ST.x, ST.y, ST.die * (1 + age * 2.5), ST.die * K * (1 + age * 2.5), 0, 0, TAU); c.fill(); }
-  const rg = clamp(age / .55); // the ring the blow sends across the anvil
-  if (rg < 1) { c.globalAlpha = .7 * (1 - rg); c.strokeStyle = '#FFFFFF'; c.lineWidth = (14 - 10 * rg) * U; c.beginPath(); c.ellipse(ST.x, ST.y, ST.die * (1 + 1.6 * E.out(rg)), ST.die * K * (1 + 1.6 * E.out(rg)), 0, 0, TAU); c.stroke(); }
-  for (let i = 0; i < 72; i++) {
-    const a = rnd(i * 7 + 1) * TAU, v = (650 + rnd(i * 13 + 2) * 950) * U, up = (250 + rnd(i * 17 + 3) * 600) * U, life = .4 + rnd(i * 5 + 4) * .5;
-    if (age > life) continue;
-    const x0 = ST.x + Math.cos(a) * ST.die, y0 = ST.y + Math.sin(a) * ST.die * K;
-    const px = (q) => x0 + Math.cos(a) * v * q, py2 = (q) => y0 + Math.sin(a) * v * K * q - up * q + 1500 * U * q * q, q0 = Math.max(0, age - .04);
-    c.globalAlpha = 1 - age / life; c.strokeStyle = [C.second, '#FFFFFF', C.second, C.accent][i % 4]; c.lineWidth = (3 + rnd(i + 9) * 3) * U;
-    c.beginPath(); c.moveTo(px(q0), py2(q0)); c.lineTo(px(age), py2(age)); c.stroke();
+function wall(t) { // 4. the sponsor wall: nothing on it but the tier, its rule and the logo
+  const P = panelRect(t); if (!P || P.grow === undefined || P.y >= H) return;
+  const L = LAY.wall, b = LAY.p3, c = g(), gw = P.grow;
+  c.save(); c.translate(0, P.dy);
+  logo(lerp(b.x + b.w / 2, L.logo.cx, gw), lerp(b.y + b.h / 2, L.logo.cy, gw), lerp(P.k, L.logo.k, gw), 1);
+  if (WALL_LINE && gw >= 1) {
+    track(WALL_LINE, W / 2, L.headY, { size: L.hs, wt: WT.light, ls: L.hs * .46, align: 'center', col: PANEL_INK }, (t - (WALL + .45)) / .55);
+    const rw = (W - 2 * M) * ease(t, WALL + .5, WALL + 1.05, E.out); c.save(); c.globalAlpha *= .8; c.fillStyle = PANEL_INK; c.fillRect(W / 2 - rw / 2, L.ruleY, rw, 2 * U); c.restore();
   }
   c.restore();
+  rr(L.tab.x, -2, W - L.tab.x + 2, L.tab.h + 2, 34 * U, C.ground, [0, 0, 0, 1]); // the lockup keeps a corner of its own ground, as on the event's site
+}
+function signoff(t) { // 5. the dates and the city as the event sets them; the link
+  if (t < SIGN - .1) return;
+  const L = LAY.sign, x = L.x, y = L.top;
+  L.rows.forEach((r, i) => {
+    const o = { size: r.size, wt: r.wt, alpha: r.soft ? .86 : 1 }, at = SIGN + .12 + i * .2;
+    if (r.wt === WT.bold) rise(r.s, x - r.size * .03, y + r.y, o, (t - at) / .55); else text(r.s, x, y + r.y + (1 - ease(t, at, at + .5, E.out)) * 14 * U, { ...o, alpha: o.alpha * ease(t, at, at + .45) });
+  });
+  if (L.chip) { const p = clamp((t - (SIGN + 2)) / .35); chip(L.chip, x, y + L.chipY, L.cs, C.accent, outBack(p) * (1 + pulse(t, LAST)), clamp(p * 3)); }
+  if (COPY.more) track(COPY.more, x, y + L.moreY, { size: L.ss * .7, wt: WT.mid, ls: L.ss * .14, alpha: .85 }, (t - (SIGN + 2.6)) / .6);
 }
 
-/* ------------------------------------------------------------------ 4: who they are */
-const INFO_OUT = OUT - .5; // the words are gone before the tray comes up
-let _lay = null;
-/** the scene's layout, worked out once type can be measured: the coin large, the words beside it (wide) or under it */
-function LAY() {
-  if (_lay) return _lay;
-  const L = WIDE ? { x: W * .5, w: W * .44, align: 'left' } : { x: CX, w: W - 130 * U, align: 'center' };
-  const blocks = (k) => { // the words at scale k
-    const B = [];
-    if (TIER_LINE) B.push({ k: 'tier', h: 60 * U * k, t0: 12.55 });
-    const nm = balance(fitBlock(SP.name || '', L.w, (WIDE ? 136 : 108) * U * k, 48 * U, 2, { wt: 800 }), SP.name || '', L.w, { wt: 800 });
-    B.push({ k: 'name', h: nm.lines.length * nm.size * 1.02, nm, t0: 12.7 });
-    if (SP.line) { const o = { wt: 600, fam: FB }, ln = balance(clampBlock(SP.line, L.w, (WIDE ? 46 : 42) * U * k, (WIDE ? 36 : 34) * U * Math.min(k, 1.15), 3, o), SP.line, L.w, o); B.push({ k: 'line', h: ln.lines.length * ln.size * 1.3, ln, t0: 12.9 }); }
-    if (FIND) B.push({ k: 'find', h: 78 * U * k, t0: 13.3 });
-    return { B, gap: 26 * U * k, total: B.reduce((a, b) => a + b.h, 0) + 26 * U * k * (B.length - 1) };
-  };
-  // the largest type the frame has room for, the coin never smaller than it should be
-  const TALL = VS > 1.2, Rmin = (WIDE ? 300 : TALL ? 300 : 215) * U, room = (k) => (WIDE ? H - 240 * U : H - 110 * U - 2 * Rmin - 80 * U * k);
-  let k = WIDE ? 1.35 : TALL ? 1.6 : 1.3, G = blocks(k);
-  while (k > 1 && G.total > room(k)) { k = +(k - .05).toFixed(2); G = blocks(k); }
-  if (WIDE) { // the coin and the words are one pair, centred
-    let tw = 0; for (const b of G.B) { if (b.k === 'name') for (const l of b.nm.lines) tw = Math.max(tw, measure(l, { size: b.nm.size, wt: 800 })); if (b.k === 'line') for (const l of b.ln.lines) tw = Math.max(tw, measure(l, { size: b.ln.size, wt: 600, fam: FB })); }
-    tw = clamp(tw, 420 * U, L.w); L.R = 310 * U; const x0 = (W - (2 * L.R + 110 * U + tw)) / 2;
-    L.cx = x0 + L.R; L.x = x0 + 2 * L.R + 110 * U; L.cy = CY; L.top = CY - G.total / 2; }
-  else { // the coin and the words are one group, centred in the frame
-    L.R = clamp((H - 110 * U - G.total - 80 * U * k) / 2, 150 * U, (TALL ? 330 : 240) * U);
-    const y0 = (H - (2 * L.R + 80 * U * k + G.total)) / 2; L.cx = CX; L.cy = y0 + L.R; L.top = L.cy + L.R + 80 * U * k;
-  }
-  let y = L.top; for (const b of G.B) { b.y = y; y += b.h + G.gap; }
-  L.B = G.B; L.TS = k; return (_lay = L);
-}
-function info(t) {
-  const L = LAY(), TS = L.TS, left = L.align === 'left', out = ease(t, INFO_OUT, INFO_OUT + .3, E.in);
-  for (const b of L.B) {
-    const a = ease(t, b.t0, b.t0 + .45, E.out) * (1 - out); if (a <= 0) continue;
-    SK.at(-out * 50 * U, (1 - a) * 34 * U, 0, 1, () => SK.alpha(a, () => {
-      if (b.k === 'tier') pill(TIER_LINE, L.x, b.y + b.h / 2, { size: 28 * U * TS, ls: 4 * U, h: b.h, left, max: L.w });
-      if (b.k === 'name') b.nm.lines.forEach((l, i) => text(l, L.x, b.y + b.nm.size * (.78 + i * 1.02), { size: b.nm.size, wt: 800, align: L.align }));
-      if (b.k === 'line') b.ln.lines.forEach((l, i) => SK.alpha(ease(t, b.t0 + i * .08, b.t0 + i * .08 + .4), () => text(l, L.x, b.y + b.ln.size * (.92 + i * 1.3), { size: b.ln.size, wt: 600, fam: FB, col: C.soft, align: L.align })));
-      if (b.k === 'find') pill(`${FIND}  ${COPY.arrow ?? ''}`.trim(), L.x, b.y + b.h / 2, { size: 38 * U * TS, ls: 1 * U, h: b.h, pad: 34 * U, r: 10 * U, fill: C.second, col: C.dark, left, max: L.w });
-    }));
-  }
-}
-
-/* ------------------------------------------------------------------ 5: the tray and the sign-off */
-const Y5 = (y) => CY + (y - 540) * U * VS;
-// wide: the tray on the left, the event's sign-off on the right; otherwise one centred column
-const SG = WIDE ? { x: W * .25, y: CY - 30 * U, cx: W * .735, w: W * .45, logo: CY - 215 * U, dates: CY + 8 * U, venue: CY + 62 * U, url: CY + 190 * U, more: CY + 395 * U, mw: W * .46 }
-  : { x: CX, y: Y5(628), cx: CX, w: W - 120 * U, logo: Y5(172), dates: Y5(330), venue: Y5(380), url: Y5(1004), more: Y5(925), mw: W - 120 * U };
-const TR = { x: SG.x, y: SG.y, w: WIDE ? 760 * U : Math.min(W - 200 * U, 900 * U), d: 500 * U, th: 50 * U, cols: 3, rows: 2 };
-TR.rs = Math.min(TR.w / TR.cols, TR.d / TR.rows) * .41;
-const trayY = (t) => lerp(TR.y + 1100 * U * VS, TR.y, outBackSoft(ease(t, 19.6, 20.3, E.lin)));
-function trayProj(p, y = TR.y) { SK.view3({ x: TR.x, y, z: 0, sx: TR.x, sy: y, d: 1800 }); return SK.proj3(SK.pose3(p, { x: TR.x, y, z: 0, rx: FLAT })); }
-const slotLocal = (i) => [-TR.w / 2 + TR.w / TR.cols * (i % TR.cols + .5), -TR.d / 2 + TR.d / TR.rows * (Math.floor(i / TR.cols) + .5), 0];
-function rollGeom() {
-  const qb = trayProj([0, -TR.d / 2, 0]), R = TR.rs * .86 * 1800 / qb[2], q0 = trayProj(slotLocal(0));
-  return { R, y: qb[1] - R - 3 * U, xs: trayProj([TR.w / 2, -TR.d / 2, 0])[0] - R * 1.2, xe: q0[0], sx: q0[0], sy: q0[1], Rs: TR.rs * .86 * 1800 / q0[2] };
-}
-function trayTop(c, w, d, t) {
-  const m = 22 * U, sg = c.createLinearGradient(0, 0, 0, d); sg.addColorStop(0, C.steelLt); sg.addColorStop(1, C.steel);
-  SK.rrPath(0, 0, w, d, 26 * U); c.fillStyle = sg; c.fill();
-  SK.rrPath(m, m, w - 2 * m, d - 2 * m, 14 * U); c.fillStyle = C.groundDk; c.fill();
-  for (let i = 0; i < TR.cols * TR.rows; i++) {
-    const [lx, ly] = slotLocal(i), x = lx + w / 2, y = ly + d / 2, r = TR.rs;
-    const rg = c.createLinearGradient(0, y - r, 0, y + r); rg.addColorStop(0, '#050B1C'); rg.addColorStop(1, C.ground);
-    disc(c, x, y, r, rg);
-    c.strokeStyle = 'rgba(255,255,255,.18)'; c.lineWidth = 3 * U; c.beginPath(); c.arc(x, y, r, .15 * PI, .85 * PI); c.stroke();
-    if (i === 0) continue;
-    c.strokeStyle = 'rgba(255,255,255,.22)'; c.lineWidth = 4 * U; c.lineCap = 'round'; c.beginPath(); c.moveTo(x - r * .22, y); c.lineTo(x + r * .22, y); c.moveTo(x, y - r * .22); c.lineTo(x, y + r * .22); c.stroke();
-    const p = Math.pow(Math.max(0, Math.sin((t - 20.6) * 2.4 - i * .55)), 6) * clamp((t - 20.6) * 2);
-    if (p > .01) { c.strokeStyle = C.second; c.globalAlpha = p * .8; c.lineWidth = 4 * U; c.beginPath(); c.arc(x, y, r * 1.12, 0, TAU); c.stroke(); c.globalAlpha = 1; }
-  }
-}
-function tray(t) {
-  const y = trayY(t), w = TR.w, d = TR.d;
-  SK.view3({ x: TR.x, y, z: 0, sx: TR.x, sy: y, d: 1800 });
-  const P = (p) => SK.pose3(p, { x: TR.x, y, z: 0, rx: FLAT });
-  SK.poly3([P([-w / 2, d / 2, 0]), P([w / 2, d / 2, 0]), P([w / 2, d / 2, TR.th]), P([-w / 2, d / 2, TR.th])], C.steelDk, { light: false });
-  SK.face3([P([-w / 2, -d / 2, 0]), P([w / 2, -d / 2, 0]), P([w / 2, d / 2, 0]), P([-w / 2, d / 2, 0])], w, d, (c) => trayTop(c, w, d, t), { cull: false, key: 'tray' });
-}
-function signoff(t) {
-  const c = g();
-  if (COPY.more) { const sz = fit(COPY.more, SG.mw, 40 * U, { wt: 800, ls: 6 * U }), full = measure(COPY.more, { size: sz, wt: 800, ls: 6 * U }), n = Math.ceil(clamp((t - 20.35) / .6) * COPY.more.length);
-    text(COPY.more.slice(0, n), SG.x - full / 2, SG.more, { size: sz, wt: 800, ls: 6 * U, col: C.second }); }
-  const im = IMG(EVL.image), la = ease(t, 22.3, 22.8, outBackSoft);
-  if (im && la > 0) {
-    const w = Math.min(580 * U, SG.w, 196 * U * im.width / im.height), h = w * im.height / im.width;
-    SK.alpha(clamp(la), () => { if (EVL.ink === 'dark') rrect(SG.cx - w / 2 - 24 * U, SG.logo - h / 2 - 20 * U, w + 48 * U, h + 40 * U, 14 * U, C.light); c.drawImage(im, SG.cx - w / 2, SG.logo - h / 2 + (1 - la) * 30 * U, w, h); });
-  } else if (!im && EV.name && la > 0) SK.alpha(clamp(la), () => { const nm = fitBlock([EV.name, EV.year].filter(Boolean).join(' '), SG.w, 84 * U, 40 * U, 2, { wt: 800 }); nm.lines.forEach((l, i) => text(l, SG.cx, SG.logo + nm.size * (.36 + (i - (nm.lines.length - 1) / 2) * 1.04), { size: nm.size, wt: 800, align: 'center' })); });
-  const line = [EV.dates, EV.city].filter(Boolean).join('  ·  ');
-  if (line) SK.alpha(ease(t, 22.5, 22.9), () => text(line, SG.cx, SG.dates, { size: fit(line, SG.w, 46 * U, { wt: 800, ls: 2 * U }), wt: 800, ls: 2 * U, align: 'center' }));
-  if (EV.venue) SK.alpha(ease(t, 22.62, 23.0), () => text(EV.venue, SG.cx, SG.venue, { size: fit(EV.venue, SG.w, 30 * U, { wt: 600, ls: 4 * U }), wt: 600, ls: 4 * U, col: C.soft, align: 'center' }));
-  const pa = ease(t, 22.85, 23.25, outBack) * (1 + .06 * Math.exp(-Math.max(0, t - LAST) * 6) * (t > LAST));
-  if (EV.url && pa > 0) { const u = shortUrl(EV.url, SG.w - 80 * U, 34 * U, 25 * U, { wt: 700, ls: 1 * U }); SK.at(SG.cx, SG.url, 0, pa, () => pill(u, 0, 0, { size: 34 * U, ls: 1 * U, h: 76 * U, pad: 40 * U, r: 10 * U, max: SG.w })); }
-}
-
-/* ------------------------------------------------------------------ the coin's path through the film */
-function standPose(t) {
-  const s = clamp((t - 12.8) / .6), q = t - 12.8;
-  const L = LAY(); return { x: L.cx, y: L.cy + Math.sin(q * 1.6) * 7 * U * s, R: L.R, rx: -4 * PI + .06 * Math.sin(q * 1.3) * s, ry: .5 * Math.sin(q * .9) * s, rz: 0 };
-}
-function coinAt(t) {
-  const R0 = ST.R;
-  if (t < TOSS) return { x: lerp(ST.x - CX - ST.R * 2 - 200 * U, ST.x, outBackSoft(clamp((t - .1) / 1.05))), y: ST.y, R: R0, rx: FLAT, ry: 0, rz: 0 };
-  if (t < LAND) { const u = (t - TOSS) / (LAND - TOSS); return { x: ST.x, y: ST.y - 400 * U * 4 * u * (1 - u), R: R0, rx: FLAT - 3 * PI * (.4 * u + .6 * E.sine(u)), ry: 0, rz: .2 * Math.sin(u * PI), h: 4 * u * (1 - u) }; }
-  if (t < STAND) { const b = t - LAND; return { x: ST.x, y: ST.y - 26 * U * Math.abs(Math.sin(b * 10)) * Math.exp(-b * 7), R: R0, rx: FLAT - 3 * PI + .1 * Math.sin(b * 16) * Math.exp(-b * 6), ry: 0, rz: 0 }; }
-  if (t < OUT) { const u = E.inOut(clamp((t - STAND) / .8)), S = standPose(t); return { x: lerp(ST.x, S.x, u), y: lerp(ST.y, S.y, u) - 140 * U * Math.sin(PI * u), R: lerp(R0, S.R, u), rx: lerp(FLAT - 3 * PI, S.rx, u), ry: S.ry * u, rz: 0 }; }
-  const S0 = standPose(OUT), G = rollGeom();
-  if (t < ROLL[0]) { const u = E.inOut(clamp((t - OUT) / (ROLL[0] - OUT))); return { x: lerp(S0.x, G.xs, u), y: lerp(S0.y, G.y, u) - 70 * U * Math.sin(PI * u), R: lerp(S0.R, G.R, u), rx: lerp(S0.rx, -4 * PI, u), ry: lerp(S0.ry, 0, u), rz: 0 }; }
-  if (t < ROLL[1]) { const x = lerp(G.xs, G.xe, E.sine((t - ROLL[0]) / (ROLL[1] - ROLL[0]))); return { x, y: G.y, R: G.R, rx: -4 * PI, ry: 0, rz: (x - G.xs) / G.R }; }
-  const rzE = (G.xe - G.xs) / G.R, rzT = Math.round(rzE / TAU) * TAU;
-  if (t < SETTLE) { const v = clamp((t - ROLL[1]) / (SETTLE - ROLL[1])), u = E.in(v); return { x: G.xe, y: lerp(G.y, G.sy, u), R: lerp(G.R, G.Rs, u), rx: -4 * PI + FLAT * u, ry: 0, rz: lerp(rzE, rzT, E.inOut(v)) }; }
-  const b = t - SETTLE; return { x: G.sx, y: G.sy - 8 * U * Math.abs(Math.sin(b * 12)) * Math.exp(-b * 9), R: G.Rs, rx: -4 * PI + FLAT, ry: 0, rz: rzT };
-}
-const sweep = (t, wins) => { for (const [a, b] of wins) if (t >= a && t <= b) return lerp(-1.3, 1.3, (t - a) / (b - a)); return -9; };
-function drawCoin(t) {
-  const s = coinAt(t), c = g();
-  if (s.h !== undefined) { c.fillStyle = `rgba(${C.shadow},${.45 * (1 - .6 * s.h)})`; c.beginPath(); c.ellipse(ST.x, ST.y + 10 * U, ST.R * (1 - .35 * s.h), ST.R * K * (1 - .35 * s.h), 0, 0, TAU); c.fill(); }
-  const sa = ease(t, 12.3, 12.8) * (1 - ease(t, OUT, OUT + .4));
-  if (sa > 0) SK.alpha(sa, () => { const r = c.createRadialGradient(s.x, s.y + s.R * 1.18, 0, s.x, s.y + s.R * 1.18, s.R * .8); r.addColorStop(0, `rgba(${C.shadow},.55)`); r.addColorStop(1, `rgba(${C.shadow},0)`); c.fillStyle = r; c.save(); c.translate(s.x, s.y + s.R * 1.18); c.scale(1, .14); c.translate(-s.x, -s.y - s.R * 1.18); c.beginPath(); c.arc(s.x, s.y + s.R * 1.18, s.R * .8, 0, TAU); c.fill(); c.restore(); });
-  coin({ ...s, key: 'hero', front: coinFace('obv', { struck: t >= HIT, sheen: sweep(t, [[1.3, 2.2], [4.9, 5.8], [6.6, 7.5], [13.0, 13.9], [15.4, 16.3], [17.6, 18.5], [LAST, LAST + .8]]) }), back: coinFace('rev', { sheen: sweep(t, [[10.15, 11.0]]) }) });
-}
-
-/* ------------------------------------------------------------------ the camera and the film */
-const PRESS = (() => { // the whole press in the frame at the start: from the yoke to the tier line
-  const top = ST.y - ST.open - ST.dieH - 130 * U, bot = ST.y + 16 * U + ST.anvil * K + 92 * U + (TIER_LINE ? 70 : -40) * U;
-  return [ST.x, (top + bot) / 2, Math.min(1, H * .95 / (bot - top), W * .95 / (2 * ST.col + 200 * U))];
-})();
-function camera(t) { // [x, y, zoom]: the stage point at the frame's middle
-  const P = PRESS, A = (q) => SK.kf(q, [[0, [P[0], P[1] - 30 * U, P[2] * .94]], [3.7, [P[0], P[1] + 20 * U, P[2] * 1.04]], [4.6, [ST.x, ST.y - 60 * U, 1.12]], [7.7, [ST.x, ST.y + 44 * U, 1.4]], [8.35, [ST.x, ST.y - 190 * U, 1.08]], [9.6, [ST.x, ST.y - 100 * U, 1.12]], [10.2, [ST.x, ST.y - 20 * U, 1.3]], [11.95, [ST.x, ST.y + 62 * U, 1.5]]]);
-  let v;
-  if (t < STAND) v = A(t);
-  else if (t < 12.8) { const u = E.inOut((t - STAND) / .8), a = A(STAND); v = [lerp(a[0], CX, u), lerp(a[1], CY, u), lerp(a[2], 1, u)]; }
-  else v = [CX, CY, 1 + .035 * E.sine(clamp((t - SETTLE) / 4))];
-  if (t > HIT && t < HIT + 1) v = [v[0], v[1], v[2] * (1 + .09 * Math.exp(-(t - HIT) / .11))]; // the blow kicks the camera in
-  return v;
-}
-function shake(t) {
-  let x = 0, y = 0;
-  for (const [h, a, w] of [[HIT, 30, .16], [LAND, 8, .1], [SETTLE, 5, .08]]) if (t > h) { const k = a * U * Math.exp(-(t - h) / w); x += k * Math.sin((t - h) * 83); y += k * .8 * Math.cos((t - h) * 71); }
-  return [x, y];
-}
-function backdrop(t) {
-  const c = g(), gr = c.createRadialGradient(CX, CY * .9, 0, CX, CY, Math.hypot(W, H) * .62);
-  gr.addColorStop(0, C.groundLt); gr.addColorStop(.55, C.ground); gr.addColorStop(1, C.groundDk);
-  c.fillStyle = gr; c.fillRect(0, 0, W, H);
-  const st = 48 * U, ox = (t * 9 * U) % st, oy = (t * 5 * U) % st; c.fillStyle = 'rgba(255,255,255,.07)';
-  for (let y = -st + oy; y < H + st; y += st) for (let x = -st + ox; x < W + st; x += st) c.fillRect(x, y, 2.4 * U, 2.4 * U);
-}
 function draw(t) {
-  const c = g(), [fx, fy, z] = camera(t), [sx, sy] = shake(t);
-  backdrop(t);
-  c.save(); c.translate(CX + sx, CY + sy); c.scale(z, z); c.translate(-fx, -fy);
-  if (t < 12.8) pressStage(t);
-  if (t >= OUT) { tray(t); signoff(t); }
-  drawCoin(t);
-  if (t < 6.4) dieAndSparks(t);
-  c.restore();
-  if (t >= HIT && t < HIT + .4) { c.save(); c.globalAlpha = .6 * Math.exp(-(t - HIT) / .08); c.fillStyle = '#FFFFFF'; c.fillRect(0, 0, W, H); c.restore(); } // the flash of the blow
-  if (t >= 12.4 && t < INFO_OUT + .32) info(t);
+  layout();
+  art(t);
+  opening(t);
+  row(t);
+  if (t < WALL - .22) { panel(t); who(t); } else { who(t); panel(t); wall(t); }
+  lockup();
+  signoff(t);
 }
 
 /* ------------------------------------------------------------------ the sound, from the clock and the content
-   A 120 bpm groove in F minor: a build into the strike, a stab on every hit, the groove holding its breath
-   for the toss, a roll into the tray and a last chord at LAST. */
+   A 120 bpm groove in F minor: light under the opening, a lift into the reveal, the full groove while the
+   words are read, held back for the wall, back for the sign-off and a last chord at LAST. */
 const BPM = 120, beat = (t) => t * BPM / 60, gf = (x) => String(+x.toPrecision(6));
 function scoreData() {
   const CHART = [['F1', 'F2', 'Ab3+C4+F4', 'F3+Ab3+C4+Eb4'], ['Db2', 'Db3', 'Ab3+Db4+F4', 'Db3+F3+Ab3+C4'], ['Ab1', 'Ab2', 'Ab3+C4+Eb4', 'Ab3+C4+Eb4+G4'], ['Eb2', 'Eb3', 'G3+Bb3+Eb4', 'Eb3+G3+Bb3+Db4']];
-  const BARS = Math.round(SK._film.duration / (240 / BPM)), HITS = [HIT, LAND, STAND, SETTLE].map(beat), FINAL = beat(LAST);
+  const BARS = Math.round(SK._film.duration / (240 / BPM)), HITS = [REVEAL, WHO, SIGN].map(beat), FINAL = beat(LAST);
   const GROOVE = { kick: 'x...x...x...x...', clap: '....x.......x...', openhat: '..x...x...x...x.', hat: 'o.o.o.o.o.o.o.o.', shaker: '.o.o.o.o.o.o.o.o' };
   const FULL = { ...GROOVE, rim: '...o..o....o..o.' };
   const DRUMS = [
-    { kick: 'x.......x.......', hat: 'o.o.o.o.o.o.o.o.' }, // 0: the blank slides in
-    { kick: 'x.......x.......', hat: 'o.o.o.o.o.o.o.o.', snare: '........ooxxxxXX' }, // 1: the press winds down, a roll into the strike
-    { ...GROOVE, kick: 'X...x...x...x...' }, GROOVE, // 2-3: the strike and the reveal
-    { hat: 'oooooooooooooooo', snare: '............oxxX' }, // 4: the toss, held breath
-    { ...FULL, kick: 'X...x...x...x...' }, FULL, FULL, FULL, // 5-8: the landing; who they are
-    { ...FULL, snare: '............oxxX' }, // 9: into the tray
-    { kick: 'x.......x.......', hat: 'o.o.o.o.o.o.o.o.', shaker: '.o.o.o.o.o.o.o.o', snare: '..........ooxxxX' }, // 10: the roll
-    { ...GROOVE, kick: 'X...x...x...x...', snare: '............oxxX' }, // 11: in the slot, the sign-off
+    { kick: 'x.......x.......', hat: 'o.o.o.o.o.o.o.o.' }, // 0: the event's world
+    { kick: 'x.......x.......', hat: 'o.o.o.o.o.o.o.o.', snare: '..........ooxxxX' }, // 1: a lift into the reveal
+    { ...GROOVE, kick: 'X...x...x...x...' }, GROOVE, // 2-3: the panel opens; the logo holds
+    { ...FULL, kick: 'X...x...x...x...' }, FULL, FULL, { ...FULL, snare: '............oxxX' }, // 4-7: who they are
+    { kick: 'X.......x.......', hat: 'o.o.o.o.o.o.o.o.', shaker: '.o.o.o.o.o.o.o.o' }, // 8: the wall, held back
+    { kick: 'x.......x.......', hat: 'o.o.o.o.o.o.o.o.', shaker: '.o.o.o.o.o.o.o.o', snare: '..........ooxxxX' }, // 9: into the sign-off
+    { ...FULL, kick: 'X...x...x...x...' }, { ...FULL, snare: '............oxxX' }, // 10-11: the sign-off
     { kick: 'X...............', openhat: 'x...............' }, // 12: the last chord
   ];
-  const KIT_GAINS = { kick: 1.15, snare: .42, clap: .42, hat: .26, openhat: .16, shaker: .2, rim: .45 };
-  const QUIET = { 4: [1, 4] };
+  const KIT_GAINS = { kick: 1.1, snare: .4, clap: .4, hat: .26, openhat: .16, shaker: .2, rim: .45 };
+  const QUIET = { 8: [0, 4], 9: [0, 4] }; // the wall: the bass sits out, the pad holds
   const bass = [], sub = [], pad = [], keys = [], brass = [];
   for (let bar = 0; bar < BARS - 1; bar++) {
     const [root, octv, stab, chord] = CHART[bar % 4], b0 = bar * 4, q = QUIET[bar];
     for (let k = 0; k < 8; k++) { const b = k * .5; if (q && q[0] <= b && b < q[1]) continue; bass.push(`${gf(b0 + b)} ${k % 2 ? octv : root} .42 ${(k % 2 ? .52 : .62).toFixed(2)}`); if (k % 2) sub.push(`${gf(b0 + b - .02)} ${root} .4 .8`); }
-    if (bar >= 2) for (const k of [.5, 1.5, 2.5, 3.5]) { if (q && q[0] <= k && k < q[1]) continue; keys.push(`${gf(b0 + k)} ${stab} .3 ${(k === 1.5 || k === 3.5 ? .34 : .26).toFixed(2)}`); }
-    pad.push(`${gf(b0)} ${chord} 4 ${bar < 2 ? .22 : .3}`);
+    if (q) sub.push(`${gf(b0)} ${root} 3.8 .7`);
+    if (bar >= 2) for (const k of [.5, 1.5, 2.5, 3.5]) keys.push(`${gf(b0 + k)} ${stab} .3 ${(q ? .2 : k === 1.5 || k === 3.5 ? .34 : .26).toFixed(2)}`);
+    pad.push(`${gf(b0)} ${chord} 4 ${bar < 2 ? .22 : q ? .36 : .3}`);
   }
-  for (const b of HITS) brass.push(`${gf(b)} ${CHART[Math.floor(b / 4) % 4][2]} .9 .62`);
-  bass.push(`${gf(FINAL)} F1 4 .7`); sub.push(`${gf(FINAL)} F1 4 .9`); pad.push(`${gf(FINAL)} F3+Ab3+C4+F4+C5 4 .5`); keys.push(`${gf(FINAL)} F3+Ab3+C4+F4 3 .5`); brass.push(`${gf(FINAL)} F4+Ab4+C5 2 .7`);
+  for (const b of HITS) brass.push(`${gf(b)} ${CHART[Math.floor(b / 4) % 4][2]} .9 .56`);
+  bass.push(`${gf(FINAL)} F1 4 .7`); sub.push(`${gf(FINAL)} F1 4 .9`); pad.push(`${gf(FINAL)} F3+Ab3+C4+F4+C5 4 .5`); keys.push(`${gf(FINAL)} F3+Ab3+C4+F4 3 .5`); brass.push(`${gf(FINAL)} F4+Ab4+C5 2 .66`);
   const run = (t0) => 'F5 Ab5 C6 Eb6 F6 Ab6 C7'.split(' ').map((n, i) => `${gf(beat(t0) + i * .18)} ${n} .6 ${(.3 + i * .03).toFixed(2)}`).join('; ');
   const events = [
     { inst: 'synth_bass_1', vel: .9, notes: bass.join('; '), humanize: false },
@@ -482,52 +414,44 @@ function scoreData() {
     { inst: 'electric_piano_1', vel: .8, notes: keys.join('; ') },
     { inst: 'pad_3_polysynth', vel: .6, notes: pad.join('; ') },
     { inst: 'synth_brass_1', vel: .8, notes: brass.join('; ') },
-    { inst: 'glockenspiel', vel: .5, notes: [run(4.95), run(10.15), run(LAST + .1)].join('; ') },
+    { inst: 'glockenspiel', vel: .5, notes: [run(REVEAL + .3), run(WALL + .5), run(LAST + .1)].join('; ') },
   ];
   DRUMS.forEach((kit, bar) => events.push({ type: 'drums', from: bar * 4, bars: 1, steps: 16, vel: .85, kit, gains: KIT_GAINS }));
-  return { bpm: BPM, drum_gain: .62, instruments: {
-    synth_bass_1: { g: .62, pan: 0, send: .04, rel: .12 }, sub_bass: { g: .5, pan: 0, send: 0, rel: .05 },
-    electric_piano_1: { g: .26, pan: -.22, send: .3, rel: .25 }, pad_3_polysynth: { g: .17, pan: 0, send: .5, rel: .8, soft_attack: true },
-    synth_brass_1: { g: .22, pan: .12, send: .35, rel: .35 }, glockenspiel: { g: .16, pan: .3, send: .45, rel: 1.0 } }, events };
+  return { bpm: BPM, drum_gain: .6, instruments: {
+    synth_bass_1: { g: .6, pan: 0, send: .04, rel: .12 }, sub_bass: { g: .5, pan: 0, send: 0, rel: .05 },
+    electric_piano_1: { g: .26, pan: -.22, send: .3, rel: .25 }, pad_3_polysynth: { g: .18, pan: 0, send: .5, rel: .8, soft_attack: true },
+    synth_brass_1: { g: .2, pan: .12, send: .35, rel: .35 }, glockenspiel: { g: .16, pan: .3, send: .45, rel: 1.0 } }, events };
 }
 function sfxData() {
-  const cues = [], r = (x, n) => +x.toFixed(n);
+  const cues = [], r = (x, n) => +x.toFixed(n), n1 = Math.min(3, Math.max(1, Math.ceil((TIER_LINE || '').length / 9)));
   const add = (t, fx, db, args = {}, o = {}) => { const c = { t: r(t, 3), fx, db }; if (o.pan) c.pan = r(o.pan, 2); if (o.send !== undefined) c.send = o.send; if (o.times) c.times = o.times.map((x) => r(x, 3)); if (Object.keys(args).length) c.args = args; cues.push(c); };
-  // 1. the blank slides in and stops; the tier; the press winds down
-  add(.12, 'swoosh_soft', -20, { sec: .7 }, { pan: -.4 });
-  add(1.1, 'clink', -20, { sec: .6, tau: .14 });
-  if (TIER_LINE) add(1.22, 'pop', -20, { f0: 620, f1: 220, sec: .09 });
-  add(.9, 'rumble', -26, { sec: 2.3 });
-  add(1.5, 'shimmer', -30, { sec: 1.0 });
-  add(3.2, 'swoosh_soft', -22, { sec: .5 });
-  add(3.72, 'whoosh', -14, { sec: .28, f0: 900, f1: 200, peak: .8 });
-  // 2. the strike
-  add(HIT, 'boom', -10, { sec: 1.1 }); add(HIT, 'crash', -22, { sec: 1.8 }, { send: .3 }); add(HIT, 'clink', -14, { sec: 1.0, tau: .3 });
-  add(HIT + .02, 'crinkle', -20, { sec: .5, dens: 420 });
-  add(4.3, 'whoosh', -20, { sec: .9, f0: 200, f1: 1600, peak: .5 });
-  add(4.95, 'shimmer', -22, { sec: 1.0, f0: 800, f1: 5000 });
-  // 3. the toss, the spin, the landing
-  add(TOSS, 'whoosh', -15, { sec: .5, f0: 300, f1: 3200, peak: .7 });
-  add(TOSS + .15, 'tick', -28, {}, { times: Array.from({ length: 9 }, (_, i) => TOSS + .15 + i * .2) });
-  add(LAND, 'clink', -13, { sec: .9, tau: .25 }); add(LAND, 'thunk', -18, { sec: .3 });
-  add(10.15, 'shimmer', -24, { sec: .9, f0: 700, f1: 4200 });
-  // 4. it stands; the words arrive
-  add(STAND, 'whoosh', -16, { sec: .8, f0: 250, f1: 2800, peak: .6 });
-  if (TIER_LINE) add(12.55, 'pop', -22, { f0: 700, f1: 260, sec: .08 });
-  add(12.7, 'zip', -22, { sec: .3, f0: 500, f1: 2600 });
-  if (SP.line) add(12.9, 'keys', -32, { sec: .5, rate: 16 });
-  if (FIND) { add(13.3, 'pop', -19, { f0: 520, f1: 180, sec: .1 }); add(13.32, 'blip', -27, { f: 1320, sec: .08 }); }
-  add(13.0, 'shimmer', -28, { sec: .8 }); add(15.4, 'shimmer', -31, { sec: .8 }); add(17.6, 'shimmer', -31, { sec: .8 });
-  // 5. the tray, the roll, the slot, the sign-off
-  add(INFO_OUT, 'swoosh_soft', -24, { sec: .4 });
-  add(OUT, 'whoosh', -17, { sec: .6, f0: 400, f1: 2400, peak: .5 });
-  add(19.7, 'swoosh_soft', -20, { sec: .5 }); add(20.25, 'thunk', -20, { sec: .3 });
-  add(ROLL[0], 'rumble', -28, { sec: ROLL[1] - ROLL[0] + .1 });
-  if (COPY.more) add(20.4, 'tick', -29, {}, { times: Array.from({ length: Math.min(18, COPY.more.length) }, (_, i) => 20.4 + i * .6 / Math.min(18, COPY.more.length)) });
-  add(21.75, 'clink', -20, { sec: .5, tau: .12 }); add(SETTLE, 'thunk', -14, { sec: .4 }); add(SETTLE + .02, 'clink', -20, { sec: .7, tau: .2 });
-  add(22.3, 'swoosh_soft', -22, { sec: .5 }); add(22.5, 'pop', -24, { f0: 600, f1: 220, sec: .08 });
-  add(22.85, 'pop', -18, { f0: 500, f1: 160, sec: .12 }); add(22.87, 'blip', -26, { f: 988, sec: .1 });
-  add(LAST, 'crash', -21, { sec: 2.2 }, { send: .4 }); add(LAST, 'chime', -22, {}, { send: .35 });
+  // 1. the art rises; the thanks; the tier, line by line
+  add(.05, 'swoosh_soft', -22, { sec: .9 }, { pan: -.3 });
+  if (COPY.thanks) add(.4, 'shimmer', -31, { sec: .7 });
+  if (TIER_LINE) for (let i = 0; i < n1 && i < 3; i++) add(.82 + i * .22, 'swoosh_soft', -23, { sec: .35 }, { pan: -.25 });
+  add(REVEAL - .5, 'swoosh_soft', -24, { sec: .4 });
+  if (ART.image || ART.bright) add(REVEAL + .4, 'swoosh_soft', -27, { sec: .7 }, { pan: .2 }); // the art comes back, quiet
+  // 2. the panel: a line, then it opens; the logo
+  add(REVEAL - .24, 'zip', -24, { sec: .22, f0: 500, f1: 2400 });
+  add(REVEAL, 'whoosh', -15, { sec: .55, f0: 260, f1: 2600, peak: .6 }); add(REVEAL, 'thunk', -19, { sec: .3 });
+  add(REVEAL + .3, 'chime', -24, {}, { send: .35 });
+  if (TIER_LINE) { add(REVEAL + .82, 'pop', -20, { f0: 620, f1: 220, sec: .09 }); add(6, 'blip', -30, { f: 1320, sec: .07 }); }
+  // 3. the panel settles; the words
+  add(WHO - .25, 'whoosh', -18, { sec: .7, f0: 300, f1: 2000, peak: .5 });
+  if (WALL_LINE) add(WHO + .5, 'tick', -29, {}, { times: Array.from({ length: Math.min(14, WALL_LINE.length) }, (_, i) => WHO + .5 + i * .45 / Math.min(14, WALL_LINE.length)) });
+  if (NAME) add(WHO + .86, 'swoosh_soft', -22, { sec: .4 }, { pan: WIDE ? .3 : 0 });
+  if (LINE) add(WHO + 1.3, 'keys', -32, { sec: .55, rate: 16 });
+  if (FIND || LINK) { add(WHO + 2.5, 'pop', -19, { f0: 520, f1: 180, sec: .1 }); add(WHO + 2.52, 'blip', -27, { f: 1320, sec: .08 }); add(12, 'blip', -31, { f: 988, sec: .07 }); add(14, 'blip', -31, { f: 988, sec: .07 }); }
+  add(WALL - .58, 'swoosh_soft', -24, { sec: .4 });
+  // 4. the wall
+  add(WALL - .22, 'whoosh', -15, { sec: .7, f0: 200, f1: 2400, peak: .6 }); add(WALL + .2, 'boom', -19, { sec: .9 });
+  add(WALL + .5, 'shimmer', -24, { sec: 1.1, f0: 800, f1: 5000 });
+  // 5. the wall drops away; the sign-off
+  add(SIGN - .5, 'whoosh', -17, { sec: .6, f0: 2200, f1: 300, peak: .5 });
+  const big = [EV.dates, EV.city].filter(Boolean).length;
+  for (let i = 0; i < big; i++) add(SIGN + .14 + i * .2, 'swoosh_soft', -23, { sec: .35 }, { pan: -.25 });
+  if (EV.url) { add(SIGN + 2, 'pop', -18, { f0: 500, f1: 160, sec: .12 }); add(SIGN + 2.02, 'blip', -26, { f: 988, sec: .1 }); }
+  add(LAST, 'crash', -22, { sec: 2.2 }, { send: .4 }); add(LAST, 'chime', -22, {}, { send: .35 });
   return cues.sort((a, b) => a.t - b.t);
 }
 
