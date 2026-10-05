@@ -585,7 +585,12 @@ in `engine/`, `outputs/film.mp4` and its poster), a done `studio.json` with `sou
 `kitcut.studio_runs` record (owner, `project_id`, state done) written before anything goes online,
 then `media.publish` (web copy, card, blobs), and with `--vm` the folder copied into the VM's home,
 where the film page, Download and Publish to YouTube read it. No credits are spent and no Claude
-call is made; `--unlisted` keeps it link-only; `--plan` says what it would do. Run it on the laptop
+call is made; `--unlisted` keeps it link-only; `--plan` says what it would do. A square or vertical
+film's record carries its `frame` ("1:1", "9:16"): KitCut TV sizes its player by it, and without
+it takes the film for 16:9. Every picture the manifest names must sit in one of the folders that are
+copied (`assets/`, `images/`...): one reached for outside the folder (`../../studio/brand/...`)
+is refused, because on the studio the film could not be drawn again -- no share picture, no
+thumbnails. Run it on the laptop
 with `STUDIO_ENV_FILE` naming the studio's `.env` (MONGODB_URI, the media SAS); the VPN must be up
 for `--vm`. The first import (2026-09-30): the Web Summit speaker promo,
 `studio-20260930-114530-nhdy7i`, in project `p-s2alo2aepx`.

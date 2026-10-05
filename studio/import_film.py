@@ -113,6 +113,19 @@ def source(folder):
         sys.exit("%s has no sketch.json" % folder)
     with open(man, encoding="utf-8") as f:
         m = json.load(f)
+    # a picture the manifest reaches out of the folder for (a logo kept in the repo), or keeps in a
+    # folder that is not copied, is not there on the studio: the film could never be drawn again --
+    # no share picture, no thumbnails, no stills (the first square import, 2026-10-05)
+    for name, rel in (m.get("images") or {}).items():
+        if isinstance(rel, str) and (
+            os.path.isabs(rel)
+            or os.path.normpath(rel).replace("\\", "/").split("/")[0] not in KEEP_DIRS
+        ):
+            sys.exit(
+                "picture %r (%s) is not in one of the film's own folders (%s): copy it into assets/ "
+                "and name it there, or the studio cannot draw the film again"
+                % (name, rel, ", ".join(KEEP_DIRS))
+            )
     slug = re.sub(r"[^a-z0-9]+", "-", (m.get("slug") or os.path.basename(folder)).lower()).strip(
         "-"
     )
@@ -281,6 +294,9 @@ async def main():
 
     fid = new_id()
     now = datetime.now().isoformat(timespec="seconds")
+    # a square or vertical film says so in its record: KitCut TV sizes its player by it (tv.js), and
+    # without it takes the film for 16:9
+    shape = {"frame": frame} if frame and frame != "16:9" else {}
     project = {
         "id": proj["_id"],
         "name": proj.get("name"),
@@ -312,7 +328,7 @@ async def main():
         "created": now,
         "finished": now,
         "imported": {"from": os.path.basename(folder), "at": now},
-        **({"template": tpl, "frame": frame or "16:9", "narration": False} if tpl else {}),
+        **({"template": tpl, "frame": frame or "16:9", "narration": False} if tpl else shape),
     }
     film = build(folder, fid, m, files, rec)
     say("\nmade:     %s" % film.dir)
@@ -339,7 +355,7 @@ async def main():
         "cost_usd": 0.0,
         "finished_at": store.now(),
         "imported": {"from": os.path.basename(folder)},
-        **({"template": tpl, "frame": frame or "16:9"} if tpl else {}),
+        **({"template": tpl, "frame": frame or "16:9"} if tpl else shape),
     }
     if not await agent.save(fid, first, final=True):
         sys.exit(
