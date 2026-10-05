@@ -464,6 +464,63 @@ plan's frame rate (`X-Fps`, `X-Priority`). No Claude and no voice: a render, min
 - `test_server.py` covers it on the Free-plan film it makes: refused for another client, a forced
   failure that changes nothing, then 5 s at 60 fps, still the film it was.
 
+**A finished film changed from its maker's notes** (`rounds.py`, `GET|POST
+/api/films/<id>/versions`, 2026-10-05): the film's maker points at a moment, a spot in the
+picture, a stretch, a line of the narration or the whole film and says what should change; one
+ROUND makes all of it into the film's next VERSION -- the same film, page and link.
+- **The film is never at risk.** A round works on a COPY of the film in
+  `<home>/rounds/<rid>/` (rid is `<film id>.r<k>`), never in the film's folder and never through
+  `agent.make_film`. Claude gets the notes at once (`rounds.ASK`), each with the frame it points
+  at drawn from the film's code at that moment (`notes/<n>.png`, a spot ringed) and what is being
+  said there, and two tools of the round's own: `note` (one sentence per note: done, or not
+  changed and why) and `summary`. Then the studio mixes, renders and puts the copy online under
+  the next revision's names. Only then the swap: the copy's files take the film's place and the
+  film's own go to `versions/v<n>/` -- renames, under a marker (`versions/.swap.json`) that
+  `rounds.heal` undoes if a restart cut it short -- and then the record (`version`, `versions`,
+  `media`, `media_rev`).
+- **A round that fails, is stopped or changes nothing is its copy deleted.** The film's `state`
+  stays `done` throughout; its page plays the version it has. The round has its own document in
+  `kitcut.studio_runs` (`_id` rid, `kind: "round"`, `state` queued, running, finishing, done,
+  failed, cancelled, interrupted or unchanged), which the site settles its credits on, with
+  Claude's answer to each note (`notes`) and what the round cost. The film's own costs are left
+  as they were.
+- **A version's files are in one place:** the film's folder while it is the film,
+  `versions/v<n>/` when it is not. So going back (`POST .../versions/<n>/current`, `rounds.use`)
+  is the same swap the other way with nothing rendered, and the master YouTube is sent is always
+  the version on the page. The last `rounds.KEEP` versions are kept beside the film; an older
+  one still plays from its copy online and says `kept: false`.
+- **What does not move in a round:** the film's length; the voice's and the painter's models,
+  pinned in the copy's record to what the film was made with (`pins`, read by `Film.vo_pins`
+  and `guard.pin_paint`), or a changed default would record every line again in another voice;
+  and what each tool spent before (the copy starts with no `spend.jsonl`, so a round's allowance
+  and its cost are its own: `rounds.limits`).
+- **What it cannot do yet:** change the words of a film told in a person's own ElevenLabs voice
+  (their pass to their account was for the film's making), or change a film made in scenes.
+- **Limits.** A round takes one of its maker's films-at-once places and holds its reserve of the
+  day's budget (`rounds.mine`, `rounds.reserve`), but is not one of the day's films. A film may
+  have `STUDIO_ROUNDS_PER_DAY` (5) rounds in a day, a round up to 20 notes. A YouTube send and a
+  redraw without branding each wait for a round, and a round for them.
+- **A filmstrip per version** (`rounds.make_strip`, `outputs/strip.jpg`, online beside the rest):
+  24 small frames in a row, each sought in the web copy rather than the film decoded. The
+  site's notes page cannot read a video's pixels off another host, so it cannot make its own.
+- **By hand:** `ops.sh notes <film-id> <notes.json>` (followed to the end, Claude's answers
+  printed), `ops.sh versions <film-id>`, `ops.sh version <film-id> <n>`; beside the server,
+  `python studio/rounds.py <film-id> --notes notes.json [--plan]`.
+- `test_rounds.py` covers it on a Free-plan film it makes: a version made and the one before
+  kept, the film done and playable throughout, a failed, a stopped and an unchanged round each
+  leaving it byte for byte as it was, back to version 1 and forward again, a swap cut short
+  undone, a round whose server went away made again once, and the limits.
+
+**What a run is doing, in the database** (`live.py`, 2026-10-05). A film being made and a round
+each keep one line in their document in `kitcut.studio_runs`: `now` (the sentence the page
+shows: the stage, or what it waits for), `now_at` (written again every 30 s while the run lives,
+so a reader can tell a run that is thinking from one whose server is gone), and for a film
+`stage` and `ahead` (the films before it in the line for Claude). The site asks this studio for
+a film's status, and until now had only "running" to say when it could not reach it -- during a
+restart, a ship or a dropped tunnel, exactly when a person wants to know. Each change is written
+once, one write in flight per run, and a write that fails is dropped: a status never fails a
+film. The log itself stays the studio's (`events.jsonl`).
+
 **A series: the person's cast and memory** (`library.py`). A signed-in person's workspace (the
 site's `o:<id>` client; `u:<id>` before workspaces, the same owner) has a library that outlives
 its films, next to `projects\`, never in git:

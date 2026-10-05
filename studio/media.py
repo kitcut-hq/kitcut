@@ -405,6 +405,26 @@ async def publish(film, timeout=3600, out=None, rev=None):
     return urls if "video" in urls else {}
 
 
+async def publish_one(film, name, ctype, out=None, rev=None, timeout=300):
+    """Copy one more of the film's files online, beside the rest (rounds.py: a version's
+    filmstrip). Its URL, or None when copying is off, the file is not there, or it failed."""
+    if not enabled():
+        return None
+    import aiohttp
+
+    p = os.path.join(out or film.path("outputs"), name)
+    if not os.path.isfile(p):
+        return None
+    blob = blob_of(film, name, rev)
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
+            await _put(s, "%s/%s" % (film.id, blob), p, ctype)
+    except Exception as e:  # noqa: BLE001 -- a nicety, never the reason a film is not online
+        print("film %s: %s not copied online: %s" % (film.id, name, e), file=sys.stderr, flush=True)
+        return None
+    return url_of(film.id, blob)
+
+
 async def publish_web(film, timeout=3600):
     """Make and copy only the web copy (a film already online): {"web": url}. Raises."""
     import aiohttp

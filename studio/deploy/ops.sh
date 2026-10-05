@@ -54,6 +54,13 @@
 #   bash studio/deploy/ops.sh unbrand <film-id> [--no-watch]   a finished Free-plan film drawn again
 #                                                     without its mark and closing (studio/unbrand.py):
 #                                                     a render, no Claude; followed to the end
+#   bash studio/deploy/ops.sh notes <film-id> <notes.json> [--no-watch]   a round of changes to a
+#                                                     finished film (studio/rounds.py): the notes in the
+#                                                     file made into its next version; followed to the end.
+#                                                     notes.json: [{"kind": "moment|spot|stretch|line|film",
+#                                                     "t", "t2", "x", "y", "line", "words", "text"}, ...]
+#   bash studio/deploy/ops.sh versions <film-id>      a film's versions, and how its last round ended
+#   bash studio/deploy/ops.sh version <film-id> <n>   version n is the film again (nothing is rendered)
 #   bash studio/deploy/ops.sh library-get <project> <dir>   a project's library to work on here:
 #                                                     each member's latest version as
 #                                                     <dir>/cast/<name>.js, cast.png, index.json
@@ -631,6 +638,44 @@ EOF
       sleep 10
     done
     printf '%s' \"\$d\" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps({k: d.get(k) for k in (\"status\",\"branded\",\"unbrand\",\"video_url\",\"download_url\")}, indent=1))'"
+    ;;
+
+  notes)
+    # a round of changes to a finished film (studio/rounds.py): its maker's notes, asked as this
+    # machine, then followed to the end. The film plays as it is until the new version is in; a
+    # round that fails leaves it untouched. The notes cross the wire as base64, so a quote or a
+    # line break in one is nobody's shell syntax.
+    id="${1:?notes <film-id> <notes.json> [--no-watch]}"; file="${2:?notes <film-id> <notes.json>}"
+    [ -f "$file" ] || die "no file $file"
+    watch=1; [ "${3:-}" = "--no-watch" ] && watch=0
+    body=$(python - "$file" <<'PY'
+import base64, json, sys, time
+notes = json.load(open(sys.argv[1], encoding="utf-8"))
+notes = notes.get("notes") if isinstance(notes, dict) else notes
+for i, n in enumerate(notes, 1):
+    n.setdefault("id", "n%d" % i)
+print(base64.b64encode(json.dumps({"key": "ops-%d" % time.time(), "notes": notes}).encode()).decode())
+PY
+    ) || die "$file is not a list of notes"
+    change_on "$TOKEN_SH; echo $body | base64 -d | curl -s -X POST http://127.0.0.1:$PORT/api/films/$id/versions -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' --data-binary @-; echo"
+    if [ "$DRY" = 1 ] || [ "$watch" = 0 ]; then exit 0; fi
+    on "$TOKEN_SH; last=''; while :; do
+      d=\$(curl -s 'http://127.0.0.1:$PORT/api/films/$id/versions' -H \"Authorization: Bearer \$TOKEN\")
+      s=\$(printf '%s' \"\$d\" | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get(\"round\") or {}; l=d.get(\"last\") or {}; print(r.get(\"state\") or l.get(\"state\"), \"-\", r.get(\"now\") or \"\")' 2>/dev/null) || s='unreadable'
+      [ \"\$s\" != \"\$last\" ] && echo \"\$(date +%T)  \$s\"; last=\$s
+      case \"\$s\" in queued*|running*|finishing*) sleep 5 ;; *) break ;; esac
+    done
+    printf '%s' \"\$d\" | python3 -c 'import json,sys; d=json.load(sys.stdin); l=d.get(\"last\") or {}; print(json.dumps({\"version\": d.get(\"version\"), \"round\": {k: l.get(k) for k in (\"id\",\"state\",\"error\",\"summary\")}, \"answers\": l.get(\"answers\")}, indent=1, ensure_ascii=False))'"
+    ;;
+
+  versions)
+    id="${1:?versions <film-id>}"
+    on "$TOKEN_SH; curl -s 'http://127.0.0.1:$PORT/api/films/$id/versions' -H \"Authorization: Bearer \$TOKEN\" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps({\"version\": d.get(\"version\"), \"versions\": [{k: v.get(k) for k in (\"n\",\"at\",\"rev\",\"kept\",\"summary\",\"round\")} for v in d.get(\"versions\") or []], \"round\": d.get(\"round\"), \"last\": d.get(\"last\"), \"words\": d.get(\"words\"), \"limits\": d.get(\"limits\"), \"error\": d.get(\"error\")}, indent=1, ensure_ascii=False))'"
+    ;;
+
+  version)
+    id="${1:?version <film-id> <n>}"; n="${2:?version <film-id> <n>}"
+    change_on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/films/$id/versions/$n/current -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' -d '{}'; echo"
     ;;
 
   hide|show)

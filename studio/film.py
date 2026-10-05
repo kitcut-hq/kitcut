@@ -627,6 +627,9 @@ class Film:
         """What vo.json must hold (guard.pin_vo puts it back after every edit): the studio's
         backend, model and takes -- and, when the person picked the narrator (studio.json
         "narrator"), that voice too. Claude still chooses how it is read."""
+        frozen = (self.record().get("pins") or {}).get("vo")
+        if isinstance(frozen, dict) and frozen:  # a round's copy (rounds.copy_of): the film's own
+            return frozen
         n = self.record().get("narrator") or {}
         if n.get("source") == "elevenlabs":
             return _own_pins(n)

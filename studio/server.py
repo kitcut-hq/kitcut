@@ -63,6 +63,13 @@ the day's budget still holds.
                                  without them (unbrand.py); its status says how it stands
     POST /api/films/{id}/listed  {"listed": true|false}: the film's own client shows it in the
                                  gallery or keeps it link-only
+    GET  /api/films/{id}/versions            the film's own client: its versions (each with its
+                                 filmstrip and narration), how a round of changes stands, whether
+                                 its words may change, the rounds it has left today (rounds.py)
+    POST /api/films/{id}/versions            {"key", "from", "notes": [...]}: its maker's notes
+                                 made into the film's next version; 202 {"round": {id, n, state}}
+    POST /api/films/{id}/versions/stop       stop the round being made
+    POST /api/films/{id}/versions/{n}/current  version n is the film again (nothing is rendered)
     GET  /api/uploads            the asker's pictures, voice notes and documents no film has taken
     POST /api/films/{id}/youtube {"to": <YouTube upload session>, "key"}: the film's own client
                                  sends the finished film into a session the site opened (youtube.py)
@@ -141,6 +148,8 @@ import thumbs  # noqa: E402
 import uploads  # noqa: E402
 import youtube  # noqa: E402
 import ytdraft  # noqa: E402
+import live as nowline  # noqa: E402 -- `live` is this module's own (its films in the making)
+import rounds  # noqa: E402
 import unbrand  # noqa: E402
 import share  # noqa: E402
 import canon  # noqa: E402
@@ -407,7 +416,7 @@ def mine():
         }
         for jid, J in JOBS.items()
         if J["status"] in ("queued", "running") and not J.get("ended")
-    ]
+    ] + rounds.mine()  # a round of changes to a finished film counts as one in the making
 
 
 def everyone(status=("queued", "running"), others=None):
@@ -456,6 +465,7 @@ def beat():
         drafts=ytdraft.in_flight(),
         transcribing=transcribing(),
         unbrands=unbrand.in_flight(),
+        rounds=rounds.in_flight(),
     )
 
 
@@ -496,6 +506,7 @@ def idle():
         and not canon.in_flight()
         and not brandkit.in_flight()
         and not unbrand.in_flight()
+        and not rounds.in_flight()
         and not transcribing()
     )
 
@@ -534,6 +545,9 @@ def start(film, finish_only=False, resume=None):
         "control": {},
         "ended": None,
     }
+    # the one line the site has when it cannot ask this server (live.py): the film's stage, or
+    # what it waits for, in its document in the database
+    told = nowline.of(film.id, lambda rid, fields: agent.STORE.save(rid, fields))
 
     def emit(ev):
         # t: seconds into the run, so a page reloaded half-way shows the same times
@@ -554,6 +568,7 @@ def start(film, finish_only=False, resume=None):
             # the login failed and the film is being made on the key (agent.make_film): from here
             # it is held against the day's budget as a film on the key
             J["auth"], J["reserve"] = "api", reserve(film.length, "api")
+        told.event(ev)
 
     async def run():
         ok = False
@@ -588,6 +603,7 @@ def start(film, finish_only=False, resume=None):
             emit({"type": "error", "text": str(e)})
             J["status"] = "error"
         J["ended"] = time.time()
+        told.end()  # its record's state says the rest (or the next server's own line does)
 
     def over(task):
         # cancelled before it ever ran (a handover or a shutdown right after it was started):
@@ -596,6 +612,7 @@ def start(film, finish_only=False, resume=None):
             c = J["control"]
             J["status"] = "queued" if c.get("requeue") or c.get("shutdown") else "cancelled"
             J["ended"] = time.time()
+            told.end()
 
     J["task"] = asyncio.create_task(run())
     J["task"].add_done_callback(over)
@@ -675,6 +692,11 @@ async def adopt(app=None):
     for f, _ in await asyncio.to_thread(unbrand.orphans):
         unbrand.resume(f, SCHED)
 
+    # the rounds of changes whose server went (rounds.py): a swap cut short is undone, and the
+    # round is made again from its notes, once
+    for f in await asyncio.to_thread(rounds.orphans):
+        rounds.resume(f, SCHED)
+
     # the films that waited too long for their person's voice: put down, their credits back
     for f in await asyncio.to_thread(overdue):
         await put_down(
@@ -743,6 +765,7 @@ async def shutdown(app):
     if tasks:
         await asyncio.wait(tasks, timeout=SHUTDOWN_WAIT_S)
     await unbrand.stop_all()  # back in the queue, for the next leader
+    await rounds.stop_all()  # and so do the rounds of changes
 
 
 # ------------------------------------------------------------------ a server's life among others
@@ -999,6 +1022,13 @@ def limits_doc():
             "waiting_max": MAX_QUEUE,
             "made_at_once": SCHED["claude"].capacity,
         },
+        # a round of changes to a finished film (rounds.py)
+        "rounds": {
+            "per_film_per_day": rounds.PER_DAY,
+            "notes": rounds.MAX_NOTES,
+            "note_chars": rounds.NOTE_MAX,
+            "versions_kept": rounds.KEEP,
+        },
         "attachments": {
             "pictures_per_film": uploads.MAX_IMAGES,
             "voice_notes_per_film": uploads.MAX_NOTES,
@@ -1069,10 +1099,14 @@ def at_once_of(req):
     return max(1, min(n, AT_ONCE_MAX))
 
 
-async def over_limit(client, seconds, auth="api", at_once=1, others=None):
+async def over_limit(
+    client, seconds, auth="api", at_once=1, others=None, need=None, films_day=True
+):
     """Why this request must wait (for now, or until tomorrow), or None. Today is local time.
     Nothing is refused to this machine itself except by the budget. The films being made count
-    on every live server (others: their heartbeats, else read now)."""
+    on every live server (others: their heartbeats, else read now). need: what it may spend, when
+    that is not a film's reserve (a round of changes); films_day False: not one of the day's
+    films (a round changes one that exists)."""
     midnight = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
     try:
         rows = await asyncio.to_thread(agent.STORE.runs, None, midnight)
@@ -1085,7 +1119,7 @@ async def over_limit(client, seconds, auth="api", at_once=1, others=None):
     # record shows so far; the new one is held at its own
     reserved = sum(max(0.0, (j.get("reserve") or 0) - (j.get("cost_usd") or 0)) for j in making_all)
     spent = sum(r.get("cost_usd") or 0 for r in rows)
-    if spent + reserved + reserve(seconds, auth) > DAILY_USD:
+    if spent + reserved + (reserve(seconds, auth) if need is None else need) > DAILY_USD:
         return "Today's budget ($%.0f) is used up. Please try again tomorrow." % DAILY_USD
     if client == "local":
         return None
@@ -1098,7 +1132,7 @@ async def over_limit(client, seconds, auth="api", at_once=1, others=None):
             % making
         )
     mine = sum(1 for r in rows if clients.same(r.get("client"), client) and r.get("kind") == "film")
-    if mine >= PER_CLIENT_DAILY and clients.canon(client) not in DAILY_EXEMPT:
+    if films_day and mine >= PER_CLIENT_DAILY and clients.canon(client) not in DAILY_EXEMPT:
         return "That is %d films today, the limit for now. Please try again tomorrow." % mine
     return None
 
@@ -1431,6 +1465,16 @@ async def youtube_send(req):
         return web.json_response({"error": "only whoever made a film can publish it"}, status=403)
     if not rec.get("ok"):
         return web.json_response({"error": "This film is not finished."}, status=409)
+    if f.id in rounds.in_flight() or peer_has("rounds", f.id):
+        # the film's next version is being made: what would be sent is about to be the old one
+        return web.json_response(
+            {
+                "reason": "round",
+                "error": "A new version of this film is being made. Publish it when it is "
+                "ready, in a few minutes.",
+            },
+            status=409,
+        )
     if f.id in unbrand.in_flight() or peer_has("unbrands", f.id):
         # its master is about to be replaced: a send started now could carry half of each
         return web.json_response(
@@ -1983,6 +2027,12 @@ async def unbrand_film(req):
         return web.json_response({"error": "This film is not finished."}, status=409)
     if not rec.get("branding"):
         return web.json_response({"id": f.id, "branded": False, "unbrand": "done"})
+    if f.id in rounds.in_flight() or peer_has("rounds", f.id):
+        # the round's version is made from the film as it stood: asked again once it is done
+        return web.json_response(
+            {"error": "A new version of this film is being made; try again in a few minutes."},
+            status=409,
+        )
     if f.id in unbrand.in_flight() or peer_has("unbrands", f.id):
         st = (rec.get("unbrand") or {}).get("state") or "queued"
         return web.json_response({"id": f.id, "branded": True, "unbrand": st}, status=202)
@@ -1999,6 +2049,189 @@ async def unbrand_film(req):
     except unbrand.UnbrandError as e:
         return web.json_response({"error": e.text}, status=e.status)
     return web.json_response({"id": f.id, "branded": True, "unbrand": job["state"]}, status=202)
+
+
+# ------------------------------------------------------------------ a film's versions (rounds.py)
+def _round_error(e):
+    body = {"error": e.text}
+    if e.reason:
+        body["reason"] = e.reason
+    return web.json_response(body, status=e.status)
+
+
+def _own_done(req):
+    """The finished film of this route, when its own client asks (or this machine); else the
+    answer to give instead."""
+    f = film_of(req.match_info["id"])
+    rec = f.record()
+    if not (from_this_machine(req) or clients.same(rec.get("client"), client_of(req))):
+        return None, web.json_response(
+            {"error": "only whoever made a film can change it"}, status=403
+        )
+    if rec.get("state") != "done" or not rec.get("ok"):
+        return None, web.json_response(
+            {"reason": "state", "error": "This film is not finished."}, status=409
+        )
+    return f, None
+
+
+async def versions(req):
+    """A finished film's versions, for its own client: each with its filmstrip and narration,
+    how a round of changes stands, whether its words may change, its rounds left today. The
+    first time it is asked for a film, its filmstrip is made (two seconds)."""
+    f, no = _own_done(req)
+    if no is not None:
+        return no
+    if f.mode == "scenes":
+        return web.json_response(
+            {
+                "reason": "scenes",
+                "error": "This film was made in scenes; it cannot be changed here yet.",
+            },
+            status=409,
+        )
+    try:
+        rec = await rounds.prepare(f)
+    except Exception as e:  # noqa: BLE001 -- the film plays whether or not its notes open
+        print(
+            "film %s: its versions could not be read: %s" % (f.id, e), file=sys.stderr, flush=True
+        )
+        return web.json_response({"error": "This film's versions could not be read."}, status=500)
+    return web.json_response({"id": f.id, **rounds.public(rec)})
+
+
+async def versions_make(req):
+    """A round of changes: the film's maker's notes, made into its next version (rounds.py). The
+    film's own client only. It takes one of that client's films-at-once places and its reserve
+    of the day's budget, but is not one of the day's films. Asked again with the same key, it
+    answers the round already asked for."""
+    if DRAINING or MODE == "stopping":
+        return web.json_response({"error": RESTARTING}, status=503)
+    f, no = _own_done(req)
+    if no is not None:
+        return no
+    try:
+        body = await req.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return web.json_response(
+            {"error": 'send JSON: {"key", "from", "notes": [...]}'}, status=400
+        )
+    key = str(body.get("key") or "")[:80] or None
+    rec = f.record()
+    was = rec.get("round") or {}
+    if key and was.get("key") == key:  # the same asking, again: how it stands
+        return web.json_response(
+            {"id": f.id, "round": {k: was.get(k) for k in ("id", "n", "state")}}, status=202
+        )
+    if f.id in rounds.in_flight() or peer_has("rounds", f.id):
+        return web.json_response(
+            {"reason": "round", "error": "A round of changes to this film is already being made."},
+            status=409,
+        )
+    if f.id in unbrand.in_flight() or peer_has("unbrands", f.id):
+        return web.json_response(
+            {
+                "reason": "unbrand",
+                "error": "This film is being drawn again without the KitCut branding. Send "
+                "your notes in a few minutes.",
+            },
+            status=409,
+        )
+    if any(j["film"] == f.id and j["state"] == "sending" for j in youtube.SENDS.values()):
+        return web.json_response(
+            {
+                "reason": "sending",
+                "error": "This film is being sent to YouTube. Send your notes when that is done.",
+            },
+            status=409,
+        )
+    try:
+        notes = rounds.clean_notes(f, body.get("notes"))
+    except rounds.RoundError as e:
+        return _round_error(e)
+    if not await leading():
+        return web.json_response({"error": RESTARTING}, status=503)
+    local = from_this_machine(req)
+    auth = (os.environ.get("STUDIO_LOCAL_AUTH") or "login") if local else site_auth()
+    client = client_of(req)
+    async with ADMIT:
+        if not peers.leads() or MODE != "serving" or DRAINING:
+            return web.json_response({"error": RESTARTING}, status=503)
+        refused = await over_limit(
+            client,
+            f.length,
+            auth,
+            at_once_of(req),
+            peers.peers(),
+            need=rounds.reserve(f, len(notes), auth),
+            films_day=False,
+        )
+        if refused:
+            return web.json_response(
+                {"reason": "budget" if "budget" in refused else "busy", "error": refused},
+                status=429,
+            )
+        try:
+            await rounds.prepare(f)  # the version the notes are on has its entry before the next
+            job = rounds.start(
+                f,
+                SCHED,
+                notes,
+                key=key,
+                client=rec.get("client") or client,
+                member=req.headers.get("X-Member", "").strip() or None,
+                priority=1 if req.headers.get("X-Priority", "").strip() == "1" else 0,
+                auth=auth,
+                src=body.get("from"),
+            )
+        except rounds.RoundError as e:
+            return _round_error(e)
+    return web.json_response(
+        {"id": f.id, "round": {"id": job["rid"], "n": job["n"], "state": job["state"]}}, status=202
+    )
+
+
+async def versions_stop(req):
+    """Stop the round of changes being made: the film stays as it is."""
+    f, no = _own_done(req)
+    if no is not None:
+        return no
+    try:
+        r = await asyncio.to_thread(rounds.stop, f)
+    except rounds.RoundError as e:
+        return _round_error(e)
+    return web.json_response({"id": f.id, "round": {k: r.get(k) for k in ("id", "n", "state")}})
+
+
+async def versions_use(req):
+    """Make an earlier (or later) version the film again: its files come back, nothing is
+    rendered, and the film's addresses are that version's."""
+    if DRAINING or MODE == "stopping":
+        return web.json_response({"error": RESTARTING}, status=503)
+    f, no = _own_done(req)
+    if no is not None:
+        return no
+    try:
+        n = int(req.match_info["n"])
+    except ValueError:
+        raise web.HTTPNotFound() from None
+    if peer_has("rounds", f.id) or peer_has("unbrands", f.id):
+        return web.json_response(
+            {"reason": "round", "error": "This film is being changed; try again in a few minutes."},
+            status=409,
+        )
+    try:
+        rec = await asyncio.to_thread(rounds.use, f, n)
+    except rounds.RoundError as e:
+        return _round_error(e)
+    fields = {"version": n, "versions": rec.get("versions"), "media_rev": rec.get("media_rev")}
+    if rec.get("media"):
+        fields["media"] = rec["media"]
+    await agent.save(f.id, fields, final=True)
+    thumbs.premake(f)  # its moments are another version's now
+    return web.json_response({"id": f.id, "version": n})
 
 
 def film_urls(req, jid, rec):
@@ -2323,6 +2556,10 @@ def make_app(token):
             web.post("/api/films/{id}/continue", continue_film),
             web.post("/api/films/{id}/listed", set_listed),
             web.post("/api/films/{id}/unbrand", unbrand_film),
+            web.get("/api/films/{id}/versions", versions),
+            web.post("/api/films/{id}/versions", versions_make),
+            web.post("/api/films/{id}/versions/stop", versions_stop),
+            web.post("/api/films/{id}/versions/{n}/current", versions_use),
             web.post("/api/films/{id}/youtube", youtube_send),
             web.post("/api/films/{id}/youtube/draft", youtube_draft),
             web.get("/api/films/{id}/youtube/draft/{channel}", youtube_drafted),

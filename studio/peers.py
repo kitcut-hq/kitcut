@@ -96,7 +96,15 @@ def hold_own():
 
 
 def heartbeat(
-    mode, leader=False, jobs=(), slots=None, sends=(), drafts=(), transcribing=(), unbrands=()
+    mode,
+    leader=False,
+    jobs=(),
+    slots=None,
+    sends=(),
+    drafts=(),
+    transcribing=(),
+    unbrands=(),
+    rounds=(),
 ):
     """Tell the other servers what this one is doing, in <id>.json:
 
@@ -112,6 +120,7 @@ def heartbeat(
     sends         YouTube sends in flight (youtube.SENDS keys); drafts: ytdraft.JOBS keys;
     transcribing  upload ids whose voice note is being transcribed (uploads.TASKS)
     unbrands      the films it is drawing again without their branding (unbrand.JOBS)
+    rounds        the films whose next version it is making from their maker's notes (rounds.JOBS)
     """
     assert mode in MODES, mode
     hold_own()
@@ -132,6 +141,7 @@ def heartbeat(
             "drafts": list(drafts),
             "transcribing": list(transcribing),
             "unbrands": list(unbrands),
+            "rounds": list(rounds),
         },
     )
 

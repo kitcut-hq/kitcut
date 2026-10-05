@@ -121,7 +121,9 @@ def pin_vo(film):
 
 def pin_paint(film):
     """paint.json: the painter, its model and the cap on paintings are the studio's."""
-    return _pin(film, "paint.json", paint_pins(film.length, film.caps), keep=validate.PAINT_KEYS)
+    frozen = (film.record().get("pins") or {}).get("paint")  # a round's copy (rounds.copy_of)
+    want = frozen if isinstance(frozen, dict) and frozen else paint_pins(film.length, film.caps)
+    return _pin(film, "paint.json", want, keep=validate.PAINT_KEYS)
 
 
 def pin_after(file_path, film):

@@ -244,6 +244,8 @@ class Tools:
         self.pass_name, self.span, self.allow, self.session = None, None, None, None
         self.priority = film.record().get("priority", 0)
         self.people_told = False  # whether Claude has been told how the people were drawn
+        # a round of changes to a finished film (rounds.Round): its two tools, its verdicts
+        self.round = None
 
     # ---------------------------------------------------------------- plumbing
     def _on_wait(self, pool, ahead):
@@ -428,8 +430,10 @@ class Tools:
             # narration's budget above caps what a film may spend on its voice either way)
             self.voice_runs += 1
             if before:  # a template's cues, placed on the narration before: moved with its lines
+                # (a round's by the lines' words: its film's own cues, on its own recording)
+                by_line = [] if self.round is not None else ["--by-line"]
                 tail = await self._script(
-                    "sound", "vo-retime.py", ["--before", before, "--by-line", "--write"]
+                    "sound", "vo-retime.py", ["--before", before, *by_line, "--write"]
                 )
                 moved = next((x for x in reversed(tail) if " cues move" in x), "")
         if not self.sheet_v and self.wants_preview():
@@ -458,7 +462,11 @@ class Tools:
         records over it (templates.sample_timeline); None for any other film."""
         import templates  # noqa: PLC0415
 
-        src = templates.sample_timeline(self.film)
+        if self.round is not None:  # a round: the film's own recording, as it was before this one
+            src = self.film.path("audio", "vo", "timeline.json")
+            src = src if os.path.isfile(src) else None
+        else:
+            src = templates.sample_timeline(self.film)
         if not src:
             return None
         dst = self.film.path("temp", "timeline.before.json")
@@ -1106,6 +1114,9 @@ class Tools:
             tools = [t for t in tools if t.name != "paint"]
         if "routes" not in self.film.caps:  # a film that replays a route on its map: a template's
             tools = [t for t in tools if t.name != "route"]
+        if self.round is not None:  # a round of changes: its own two, and none it must not use
+            tools = [t for t in tools if t.name not in self.round.without]
+            tools += self.round.tools(tool, wrap)
         return create_sdk_mcp_server("studio", tools=tools)
 
 
