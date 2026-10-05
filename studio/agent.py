@@ -1674,6 +1674,7 @@ async def make_film(
                 )
                 if res.is_error:
                     raise RuntimeError("Claude stopped early: %s" % (res.result or res.subtype))
+            await own_sound(film, tools)
             missing = [f for f in MADE if not os.path.exists(film.path(f))]
             if missing:
                 raise RuntimeError("Claude finished without writing %s" % ", ".join(missing))
@@ -1892,9 +1893,21 @@ def unvoiced(film):
         return False
 
 
+async def own_sound(film, tools):
+    """A template's film writes its score and cues in its code, and the sound tool works them
+    out. Claude can stop without calling it (a card whose picture it reviewed and never heard
+    was refused for 'not writing score.json, sfx.json'): worked out here instead."""
+    if not film.record().get("template") or not os.path.exists(film.path("film.js")):
+        return
+    with contextlib.suppress(ToolError):  # the check below names what is still missing
+        async with tools.lock:
+            await tools._sound_data_if_needed()
+
+
 async def written(film, tools):
     """Whether the film Claude wrote is whole: every file it must make, a recorded narration,
     and files that pass the gate and the syntax check."""
+    await own_sound(film, tools)
     if any(not os.path.exists(film.path(f)) for f in MADE):
         return False
     narrated = film.record().get("narration") is not False  # a template's film is music only
