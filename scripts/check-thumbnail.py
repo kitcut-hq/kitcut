@@ -458,8 +458,16 @@ def posters():
     check("somebody before an object, the object beside her", got[0] == ("girl", ["trap"]), got)
     check("a moment with nothing on screen takes a picture nobody has, somebody first",
           got[1][0] == "mum" and len({h for h, _ in got}) == 4, got)  # fmt: skip
-    check("a brand's mark and a flyer full of words are the last a poster is built on",
+    check("a brand's mark and a flyer full of words are never what a poster is built on",
           not {"web_mark", "flyer"} & {h for h, _ in got}, got)  # fmt: skip
+    only = {n: pcs[n] for n in ("web_mark", "flyer")}
+    got = _thumb.poster_heroes(
+        only, [["web_mark", "flyer"], []], c4[:2], {"flyer": {"n": 5, "w": 300}}
+    )
+    check("a film with nothing else to show gets no poster (its frames, as before)",
+          [h for h, _ in got] == [None, None], got)  # fmt: skip
+    got = _thumb.poster_heroes(only, [[]], [dict(c4[0], hero="web_mark")])
+    check("unless its writer asks for that picture by name", got[0][0] == "web_mark", got)
     got = _thumb.poster_heroes(pcs, [["girl", "trap"], ["girl", "trap"]], c4[:2])
     check("two moments with the same pieces, two different heroes",
           [h for h, _ in got] == ["girl", "trap"], got)  # fmt: skip

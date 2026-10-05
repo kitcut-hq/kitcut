@@ -2330,24 +2330,30 @@ def poster_heroes(pcs, casts, concepts, shown=None):
     before an object, with the largest thing that is not a figure beside it; else -- a moment
     with no piece on screen -- a piece no other option has taken, the ones the film shows most
     first, never one it lays across the whole frame (a painted scene is the frame, not a piece
-    of it). (None, []) for a concept no poster can be made for."""
+    of it). Never, unasked, a brand's mark or a picture full of words: a film with nothing else
+    to show gets frames. (None, []) for a concept no poster can be made for."""
     W, _ = size()
     wide = cfg()["poster"]["scene_w"] * W
     shown = shown or {}
     out = []
     named = [cpt.get("hero") for cpt in concepts if cpt.get("hero") in pcs]
+
+    def plain(n):
+        return not pcs[n]["mark"] and not pcs[n]["lettered"]
+
     for cpt, cast in zip(concepts, casts, strict=True):
         hero = cpt.get("hero") if cpt.get("hero") in pcs else None
         extras = [n for n in cpt.get("with") or [] if n in pcs and n != hero]
+        cast = [n for n in cast if plain(n)]
         if not hero and cast:
             # of the frame's pieces, one the options before this have not built on
             hero = _rank(pcs, cast, None, named + [h for h, _ in out if h])[0]
             if not extras:
-                extras = [n for n in cast if n != hero and not pcs[n]["figure"]
-                          and not pcs[n]["mark"] and not pcs[n]["lettered"]]  # fmt: skip
+                extras = [n for n in cast if n != hero and not pcs[n]["figure"]]
         out.append([hero, extras[:1]])
     used = [h for h, _ in out if h]
-    free = [n for n in pcs if pcs[n]["cut"] or (shown.get(n) or {}).get("w", 0) < wide]
+    free = [n for n in pcs
+            if plain(n) and (pcs[n]["cut"] or (shown.get(n) or {}).get("w", 0) < wide)]  # fmt: skip
     for row in out:
         if not row[0] and free:
             row[0] = _rank(pcs, free, shown, used)[0]
