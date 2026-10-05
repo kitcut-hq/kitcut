@@ -515,6 +515,11 @@ a.google { width: 100%; margin-top: 14px; }
 .sharebar .who { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
 .sharebar .who img, .sharebar .who .face { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; display: inline-grid; place-items: center; color: #fff; font-size: 11px; font-weight: 700; }
 .sharebar .who a { color: var(--accent); font-weight: 600; }
+/* a film of your own: which version is on the page, or that the next one is being made (notes.js) */
+.ntver { display: inline-flex; align-items: center; gap: 6px; height: 24px; margin-right: auto; padding: 0 9px; border: 0; border-radius: 999px; background: var(--sunk); color: var(--ink-2); font: 550 12.5px/1 Inter, system-ui, sans-serif; cursor: pointer; }
+.ntver:hover { background: var(--hover); color: var(--ink); }
+.ntver.busy { background: var(--accent-soft); color: var(--ink); }
+.ntver .pulse { width: 7px; height: 7px; }
 .posts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 0 14px 10px; font-size: 13px; color: var(--ink-2); }
 .posts a { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); text-decoration: none; border: 1px solid var(--line-2); border-radius: 999px; padding: 3px 10px 3px 4px; }
 .posts a:hover { background: var(--hover); }
@@ -772,7 +777,7 @@ if (/^\/film\/studio-/.test(location.pathname)) document.documentElement.dataset
   <section class="work" id="work">
     <div class="stage">
       <div class="screen" id="screen"><div class="idle">Your film appears here.</div></div>
-      <div class="caption"><span id="status">Ready.</span><span class="right"><a class="btn sm" id="dlBtn" href="#" download target="_blank" rel="noopener" hidden title="Download the full-quality MP4"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg> Download</a><button class="btn sm" type="button" id="ubOpen" hidden title="This film again, without the KitCut mark and ending"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7zM19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z"/></svg> Remove branding</button><button class="btn sm yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><button class="btn sm" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span class="fresh" id="views" hidden></span><span id="clock"></span></span></div>
+      <div class="caption"><span id="status">Ready.</span><button class="ntver" type="button" id="ntVer" hidden></button><span class="right"><button class="btn sm" type="button" id="ntOpen" hidden title="Point at what should change, and Claude makes the next version"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg> Change something</button><a class="btn sm" id="dlBtn" href="#" download target="_blank" rel="noopener" hidden title="Download the full-quality MP4"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg> Download</a><button class="btn sm" type="button" id="ubOpen" hidden title="This film again, without the KitCut mark and ending"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7zM19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z"/></svg> Remove branding</button><button class="btn sm yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><button class="btn sm" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span class="fresh" id="views" hidden></span><span id="clock"></span></span></div>
       <div class="sharebar" id="sharebar" hidden>
         <div class="sb">
           <div class="sb-l"><b id="sbSay">Share this film</b><a id="sbLink" href="#" target="_blank" rel="noopener"></a></div>
@@ -1154,7 +1159,7 @@ function tick() { $('clock').textContent = (lastCost != null ? `${usd(lastCost)}
 function startClock(elapsed) { t0 = Date.now() - (elapsed || 0) * 1000; clearInterval(timer); tick(); timer = setInterval(tick, 500); }
 function finish() { clearInterval(timer); timer = null; clearTimeout(poll); poll = null; pending = null; unfresh(); $('go').disabled = !studioUp; $('stop').hidden = true; }
 function reset() {
-  finish(); ytReset(); ubReset(); t0 = 0; lastCost = null; lastLog = null; showedDone = false; FILM = null; OWN = null; filmDone = null; whoFor = null;
+  finish(); ytReset(); ubReset(); ntReset(); t0 = 0; lastCost = null; lastLog = null; showedDone = false; FILM = null; OWN = null; filmDone = null; whoFor = null;
   $('stats').hidden = true; $('log').innerHTML = ''; $('clock').textContent = ''; $('views').hidden = true;
   $('work').classList.remove('done'); $('made').open = true;
   $('logHead').textContent = 'What Claude is doing'; $('logMore').textContent = '';
@@ -1306,7 +1311,13 @@ async function follow(since = 0, misses = 0) {
     if (since === 0) {  // first look: what the film is, and a clock that carries on from the run's start
       FILM = { prompt: s.prompt || '', look: s.look || null, length: s.length || null };
       filmHead(s);
-      if (s.status === 'queued' || s.status === 'running') { startClock(s.elapsed_s); screen('<div class="idle">Claude is thinking up the film...</div>'); }
+      if (s.status === 'queued' || s.status === 'running') {
+        startClock(s.elapsed_s);
+        // answered from its record (the studio is away): what it is doing is said under it; its
+        // pictures and its log are the studio's, and come back with it
+        screen(s.studio_offline ? '<div class="idle">This film is being made. Its pictures and its log come back when the studio answers; this page keeps looking.</div>'
+          : '<div class="idle">Claude is thinking up the film...</div>');
+      }
     }
     for (const ev of s.events) onEvent(ev);
     const live = s.status === 'queued' || s.status === 'running';
@@ -1319,6 +1330,7 @@ async function follow(since = 0, misses = 0) {
       showShare(id, s);
       countView(id);
       ytDoneId = id; ytLoad();
+      ntOffer(id);
       if (!showedDone && s.seconds != null) {  // a film from before the log was kept: its summary stands in
         stats(s); $('status').textContent = `Done in ${mmss(s.seconds)}.`;
         if (s.claude_said) line('say', s.claude_said, null);
@@ -1354,8 +1366,8 @@ async function follow(since = 0, misses = 0) {
       if (mine.has(id)) refreshCredits();
       return finish();
     }
-    if (live) fresh(true);
-    later(document.hidden ? 10000 : 1500, s.next, 0);
+    if (live) fresh(!s.studio_offline);  // answered from its record: the studio is away
+    later(document.hidden ? 10000 : s.studio_offline ? 5000 : 1500, s.next, 0);
   } catch (err) {
     if (id !== currentId) return;
     fresh(false);
@@ -1391,6 +1403,56 @@ function paused(id, w, next = 0) {
     say.innerHTML = `${esc(body.error || 'That did not work. Please try again.')}${body.fix ? ` <a href="${esc(body.fix.href)}">${esc(body.fix.text)}</a>` : ''}`;
   };
 }
+
+// ---- notes on a finished film of your own: "Change something" opens them over the film (notes.js
+// and notes.css, the site's own, fetched when first opened; the studio's own page has neither, and
+// its /api/films/<id>/notes is not found). The chip by the status tells which version the page
+// shows once there are several, or that the next one is being made. /film/<id>#notes opens them.
+let NT = null;  // {id, doc}: the film's notes as lib/notes.js last gave them
+function ntReset() {
+  NT = null; $('ntOpen').hidden = true; $('ntVer').hidden = true; $('ytOpen').disabled = false; $('ytOpen').title = '';
+  if (window.KCNotes && KCNotes.isOpen()) KCNotes.close();
+}
+function ntShow(id, doc) {
+  NT = { id, doc };
+  const r = doc.round || {}, making = r.state === 'making', v = $('ntVer');
+  $('ntOpen').hidden = making;
+  v.hidden = !(making || doc.versions.length > 1);
+  v.classList.toggle('busy', making);
+  v.innerHTML = making ? `<span class="pulse"></span>${r.waiting ? `Version ${r.n} is waiting its turn` : `Claude is making version ${r.n}`}` : `Version ${doc.current} of ${doc.versions.length}`;
+  v.title = making ? 'See how it is going' : 'See the versions, and what changed';
+  // what YouTube would be sent is about to be the version before: Publish waits, and says so
+  $('ytOpen').disabled = making;
+  $('ytOpen').title = making ? `Version ${r.n} is being made. Publish when it is ready, in a few minutes.` : '';
+}
+async function ntOffer(id) {
+  try {
+    const r = await fetch(`/api/films/${encodeURIComponent(id)}/notes`);
+    if (!r.ok || id !== currentId) return;  // not this viewer's film, or a page with no notes
+    ntShow(id, await r.json());
+    if (location.hash === '#notes') ntOpen();
+  } catch (e) { /* the film plays without them */ }
+}
+async function ntOpen() {
+  if (!NT || (window.KCNotes && KCNotes.isOpen())) return;
+  const id = NT.id, was = NT.doc.current;
+  try {
+    if (!window.KCNotes) await new Promise((ok, bad) => { const s = document.createElement('script'); s.src = '/notes.js'; s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
+  } catch (e) { return; }
+  if (id !== currentId) return;
+  const v = $('screen').querySelector('video');
+  await KCNotes.open(id, NT.doc, {
+    t: v ? v.currentTime : 0,
+    onClose: (doc) => {
+      if (location.hash === '#notes') history.replaceState(history.state, '', location.pathname + location.search);
+      if (id !== currentId) return;
+      ntShow(id, doc);
+      if (doc.current !== was) follow(0);  // another version is the film now: its download, card and words
+    },
+  });
+}
+$('ntOpen').addEventListener('click', ntOpen);
+$('ntVer').addEventListener('click', ntOpen);
 
 // ---- the sign-up wall, on the public site only. /api/me exists where the site has accounts
 // (Vercel, api/auth.js); on the laptop and through the bare tunnel it is not found, AUTH stays
@@ -1540,6 +1602,12 @@ async function whoami() {
   if (!USER && UB_BACK.ask && FILM_PATH.test(location.pathname) && failed == null) {
     UB_BACK.ask = false; SIGNIN_BACK = '?unbrand=1';
     askSignIn('', 'Sign in to remove the branding');
+  }
+  // an email's "version 2 is ready" link opened signed out (another browser, a session that
+  // ended): sign in first, and come back to the film with its notes open
+  if (!USER && location.hash === '#notes' && FILM_PATH.test(location.pathname) && failed == null && !$('signin').open) {
+    SIGNIN_BACK = '#notes';
+    askSignIn('', "Sign in to see your film's notes");
   }
   const d = USER && draft.take();
   if (d) {
@@ -2766,8 +2834,9 @@ paintLength();
 whoami().finally(() => { known = true; sync(); PPL.sync(); });
 online().then((up) => {
   const m = location.pathname.match(FILM_PATH);
-  if (m && up) openFilm(m[1], false);
-  else if (m) screen('<div class="idle">The studio is offline, so this film cannot be shown right now.</div>');
+  // a film opens whether or not the studio answers: the site has its record (a finished film
+  // plays from its copy online; one being made says what it last said it was doing)
+  if (m) openFilm(m[1], false);
   if (up) recent();  // a 401 from recent() asks for the token
 });
 </script>
