@@ -66,6 +66,7 @@ KEEP = (
     "sfx.py",
     "description.txt",
     "content.json",
+    "vo.json",
 )
 KEEP_DIRS = ("images", "assets", "scenes", "cast", "web", "inputs", "template")
 
@@ -154,6 +155,17 @@ def build(folder, fid, m, files, rec):
     for d in KEEP_DIRS:
         if os.path.isdir(os.path.join(folder, d)):
             shutil.copytree(os.path.join(folder, d), film.path(d))
+    # what else its code reads: the data beside its content (a map's place.json, a route) and the
+    # narration's word times its cues hang on -- without them a later still, share picture or
+    # thumbnail draws another film (no map, every cue at its line's start)
+    timeline = (m.get("audio") or {}).get("vo_timeline") or "audio/vo/timeline.json"
+    for rel in [*(m.get("data") or {}).values(), timeline]:
+        src = os.path.join(folder, *str(rel).split("/"))
+        if isinstance(rel, str) and not os.path.isabs(rel) and os.path.isfile(src):
+            dst = film.path(*rel.split("/"))
+            if not os.path.exists(dst):
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copyfile(src, dst)
     # the engine the film was drawn with, beside it (a studio film's own copy): the release on the
     # VM may not have a module it uses yet
     engine = m.get("engine")
