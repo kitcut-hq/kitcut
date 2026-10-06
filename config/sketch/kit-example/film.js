@@ -1,6 +1,6 @@
 // For: whoever changes sketch/kit.js; a plain reference sheet of every piece, clean then crayon
-/* Kit gallery: eight 3-second pages, each a group of kit pieces entering on its own clock. The
-   first 24 s are the clean look on the white ground, the next 24 s the same pages in crayon on
+/* Kit gallery: nine 3-second pages, each a group of kit pieces entering on its own clock. The
+   first 27 s are the clean look on the white ground, the next 27 s the same pages in crayon on
    paper. scripts/check-kit.py renders it and fails on any error the page reports. */
 SK.setStyle('clean');
 SK.setGround('white');
@@ -84,14 +84,22 @@ const PAGES = [
   (t, t0) => {
     SK.endCard({ logo: 'logo', title: 'Make films from a sentence', tagline: 'Drawn, narrated and scored in minutes', url: 'kitcut.ai', cta: 'Try it free', t: t0 + .1, bg: '#14171f', accent: '#2f6fdb' });
   },
+  // 8 -- places: the real map of a real address (the Ferry Building, San Francisco), its street lit, a pin
+  (t, t0) => {
+    const m = SK.map(-120, 60, { s: 1.6, names: 6, namesT: t0 + .5, own: { col: '#2f6fdb', w: 12, p: Math.min(1, Math.max(0, (t - t0 - .2) / .9)) } });
+    if (!m) return;
+    SK.mapPin(m.pin[0], m.pin[1], { t: t0 + 1.1, col: '#14171f' });
+    const [px, py] = m.ll(37.7968, -122.3958); // a second place on the same map, by latitude and longitude
+    SK.pill('by lat, lon', px, py, { size: 24, fill: '#14171f', col: '#ffffff', in: { t: t0 + 1.6, type: 'pop' } });
+  },
 ];
 
 SK.film({
-  duration: 48,
+  duration: 54,
   camera: SK.breath(SK.camera([[0, [0, 0, 1]]]), { amp: 6, zoom: .01 }),
   fadeOut: 0,
   draw(t) {
-    const crayon = t >= 24, k = Math.floor((t % 24) / P), t0 = t - pageT(t);
+    const crayon = t >= 27, k = Math.floor((t % 27) / P), t0 = t - pageT(t);
     if (crayon) { SK.setStyle('crayon'); SK.setGround('paper'); } else { SK.setStyle('clean'); SK.setGround('white'); }
     SK.at(0, 0, 0, 1, () => PAGES[k](t, t0));
   },

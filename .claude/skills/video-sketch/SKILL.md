@@ -215,6 +215,27 @@ Check the whip, the turns and every transition frame by frame from a `--draft` r
 (`ffmpeg ... -vf "fps=30,scale=216:216,tile=6x5"`), not only from stills: an empty frame between two
 scenes only shows in motion.
 
+## A pin, an address, "find us here": the real map
+
+A film that shows where a real place is draws the real map of it -- never a made-up street plan.
+
+1. Price it: `python scripts/place-map.py --at "<the address as written, with its town>" --list` says
+   what it matched and **how exactly** (`house`, `block`, `street`, `place`), and what is there. When
+   only the street is known the pin marks the street: letter it, point at no house, and say "on
+   <street>" in the narration. A street on no map is refused (`no map:`): show the address in type.
+2. Make it into the film: `--film spec.json --out-image <film>/images/place_map.jpg --out-data
+   <film>/place.json` (spec: `at`, and `tint` = the film's main colour, or `tone: "dark"`), then add
+   `"place_map": "images/place_map.jpg"` to the manifest's `images` and `"place": "place.json"` to its
+   `data`. On kitcut.ai the studio's `map` tool does both.
+3. Draw it with the kit: `const m = SK.map(x, y, {s, own: {col, p}, names, clear: [[card box]]})`
+   puts the address at (x, y) and letters the real street names; `SK.mapPin(x, y, {t})` drops the
+   pin. Keep `s >= m.cover` or the map's edge shows. `© OpenStreetMap` must show (SK.map letters it).
+4. Look at a still of every frame the film is made in: the pin off-centre plus a card over the map
+   is the usual layout, and a name half under the card is why `clear` exists.
+
+`docs/reference.md`, "A real map of a real address". The open house template
+(`config/templates/open-house-invitation/`) is the worked example, with its no-map fallback.
+
 ## A ride or a route on a real map (a cycling-app replay)
 
 The studio's Claude cannot fetch a map or a route, so make both here and attach them:

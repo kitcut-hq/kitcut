@@ -109,6 +109,20 @@
      SK.palette(brand, o)             brand colours -> {bg, ink, soft, accent, accentInk, on(col)} with
                                       text that reads (contrast 4.5:1); SK.contrast(a, b), SK.readable(bg)
 
+   Places (the map tool's real street map of a real address: never draw a stand-in map)
+     SK.map(x, y, o) -> m             the map picture with the address's own spot at (x, y). o: s (scale,
+                                      1 = a picture pixel a unit; m.cover is the least that fills the
+                                      frame from here), alpha, names (how many real street names to
+                                      letter along their streets: 8; 0 for none), nameSize, nameCol,
+                                      halo, font, namesT (they fade in), clear: [[x, y, w, h], ...]
+                                      (boxes no name is lettered under: a card, a title), own: {col,
+                                      w, p} (the address's own street lit, p draws it out), credit
+                                      ('bl' | 'br' | 'tl' | 'tr': where '© OpenStreetMap' is lettered --
+                                      it must show; false only if you letter it yourself), place (the
+                                      data, SK.DATA.place). m.at(u, v) and m.ll(lat, lon) -> [x, y];
+                                      m.street -> {x, y, a, name} where the own street's name can go
+     SK.mapPin(x, y, o)               a pin whose tip lands on (x, y) at o.t: col, dot, s, drop, pulse
+
    Light and particles
      SK.glow(x, y, r, col, o)         a soft radial glow (o.alpha, o.blend: 'lighter' | 'screen')
      SK.particles(o)                  a pure-function emitter: x, y (or fn(t)), t0, t1, rate, life,
@@ -1240,6 +1254,75 @@
       const u = (since - k * d * .35) / d; if (u <= 0 || u >= 1) continue;
       disc(x, y, (o.r0 ?? 10) + (o.r1 ?? 70) * E.out(u), { stroke: o.col ?? C().accent, w: (o.w ?? 4) * (1 - u * .6), alpha: (1 - u) * (o.alpha ?? 1) });
     }
+  };
+  /* ================================================================ places: the real map of a real address
+     The map tool (scripts/place-map.py) makes the picture and SK.DATA.place: where the address is on
+     it (pin.u, pin.v), its own street as lines, and a spot on a straight stretch of each street
+     where its name can be lettered. The picture carries no lettering and no pin: these draw both. */
+  /** The map with the address's own spot at (x, y) -> {at(u, v), ll(lat, lon), s, cover, pin, street,
+   *  place}, or null (and a warning) while the film has no map. */
+  SK.map = function (x, y, o = {}) {
+    const P = o.place ?? (SK.DATA || {}).place, im = P && SK.IMG[P.image];
+    if (!P || !im || !P.pin) { warn('SK.map: no map yet -- the map tool makes it (SK.DATA.place)'); return null; }
+    const v = SK.view || { x0: -SK.W / 2, x1: SK.W / 2, y0: -SK.H / 2, y1: SK.H / 2 };
+    const W = P.w, H = P.h, pu = P.pin.u, pv = P.pin.v;
+    const cover = Math.max((x - v.x0) / (pu * W), (v.x1 - x) / ((1 - pu) * W), (y - v.y0) / (pv * H), (v.y1 - y) / ((1 - pv) * H)); // the view has a margin past the frame: room for the camera to breathe
+    const s = o.s ?? 1, t = SK.T, c = ctx();
+    if (s < cover * .98) warn('SK.map: at this scale the map does not fill the frame (m.cover is the least that does)');
+    const at = (u, vv) => [x + (u - pu) * W * s, y + (vv - pv) * H * s];
+    const my = (lat) => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)), [bw, bs, be, bn] = P.bounds;
+    const ll = (lat, lon) => at((lon - bw) / (be - bw), (my(bn) - my(lat)) / (my(bn) - my(bs)));
+    const ink = o.nameCol ?? P.ink ?? '#4a5563', halo = o.halo ?? (P.look || {}).land ?? '#ffffff';
+    const ownSpot = (P.streets || []).find((r) => r.own), street = ownSpot ? { x: at(ownSpot.u, ownSpot.v)[0], y: at(ownSpot.u, ownSpot.v)[1], a: ownSpot.a, name: ownSpot.short || ownSpot.name, len: ownSpot.len * s } : null;
+    c.save(); c.globalAlpha *= o.alpha ?? 1;
+    c.drawImage(im, x - pu * W * s, y - pv * H * s, W * s, H * s);
+    if (o.own && (P.pin.lines || []).length) { // the address's own street, drawn out from the address
+      const p = clamp(o.own.p ?? 1); c.lineCap = 'round'; c.lineJoin = 'round'; c.strokeStyle = o.own.col ?? C().accent; c.lineWidth = o.own.w ?? 14;
+      P.pin.lines.forEach((ln, i) => {
+        const pts = ln.map(([u, vv]) => at(u, vv)); if (pts.length < 2 || p <= 0) return;
+        let u0 = 0;
+        if (!i && P.pin.on) { const q = at(P.pin.on[0], P.pin.on[1]); let best = 1e18; for (let k = 0; k <= 60; k++) { const r = S.at(pts, k / 60), d = Math.hypot(r[0] - q[0], r[1] - q[1]); if (d < best) { best = d; u0 = k / 60; } } }
+        const cut = S.cut(pts, u0 - p * u0, u0 + p * (1 - u0)); if (cut.length < 2) return;
+        c.beginPath(); cut.forEach((q, k) => (k ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]))); c.stroke();
+      });
+    }
+    const n = o.names ?? 8, size0 = o.nameSize ?? 26, keep = o.clear || [], placed = [];
+    (P.streets || []).filter((r) => !r.own || o.ownName !== false).slice(0, n).forEach((r, i) => {
+      let left = o.namesT == null ? 1 : clamp((t - o.namesT - i * .06) / .35); if (left <= 0) return;
+      const str = o.full ? r.name : r.short || r.name, f = { size: size0, font: o.font, wt: r.own ? 800 : o.nameWt ?? 600, ls: size0 * .02 };
+      // its spot, or the next of its spare ones when that is off the frame, under a kept-clear box (a
+      // name half under a card reads as a mistake) or on another name; one nearing the frame's edge
+      // fades as the next comes up (the view runs 100 past each edge)
+      for (const [cu, cv, ca, clen] of [[r.u, r.v, r.a, r.len], ...(r.alt || [])]) {
+        const size = SK.fit(str, clen * s * .92, f); if (size < size0 * .62) continue; // the stretch is too short for it
+        const [lx, ly] = at(cu, cv), hw = SK.measure(str, { ...f, size }) / 2, dx = Math.cos(ca) * hw, dy = Math.sin(ca) * hw;
+        const pts = [[lx - dx, ly - dy], [lx, ly], [lx + dx, ly + dy]];
+        if (keep.some(([bx, by, bw, bh]) => pts.some(([qx, qy]) => qx > bx - size && qx < bx + bw + size && qy > by - size && qy < by + bh + size))) continue;
+        if (placed.some(([qx, qy]) => pts.some(([px, py]) => Math.hypot(px - qx, py - qy) < size * 1.7))) continue;
+        const e = clamp(Math.min(...pts.map(([qx, qy]) => Math.min(qx - v.x0, v.x1 - qx, qy - v.y0, v.y1 - qy) - 100 - size * .5)) / 60 * 2 - .5); if (e <= 0) continue; // nothing, then all of it: no ghost of a name left behind
+        SK.label(str, lx, ly, { ...f, size, rot: ca, col: r.own && o.own ? o.own.nameCol ?? ink : ink, stroke: size * .28, strokeCol: halo, alpha: left * e });
+        placed.push(...pts); left *= 1 - e; if (left <= .02) break;
+      }
+    });
+    if (o.credit !== false) { // on the frame itself, whatever the camera does: it has to show
+      const k = o.credit ?? 'bl', m = 28, right = k[1] === 'r', top = k[0] === 't';
+      SK.screen(() => SK.label(P.credit || '© OpenStreetMap', (right ? 1 : -1) * (SK.W / 2 - m), (top ? -1 : 1) * (SK.H / 2 - m), { size: o.creditSize ?? 20, font: o.font, wt: 500, col: ink, stroke: 5, strokeCol: halo, align: right ? 'right' : 'left', alpha: .85 }));
+    }
+    c.restore();
+    return { at, ll, s, cover, pin: [x, y], street, place: P };
+  };
+  /** A map pin whose tip lands on (x, y) at o.t (always there without it). o: col, dot (the eye's
+   *  colour), s, drop (how far it falls), pulse (false, or SK.pulse's options for its rings) */
+  SK.mapPin = function (x, y, o = {}) {
+    const t = SK.T, t0 = o.t ?? -1e6, col = o.col ?? C().accent, s = o.s ?? 1;
+    if (t < t0 - .1) return;
+    const k = clamp(E.back(clamp((t - t0 + .1) / .55)) * 1.2), py = y - (1 - land(clamp((t - t0 + .1) / .5))) * (o.drop ?? 260) * s;
+    if (o.pulse !== false) SK.pulse(x, y, t0 + .35, { col, r1: 100 * s, ...(typeof o.pulse === 'object' ? o.pulse : {}) });
+    const c = ctx(); c.save(); c.translate(x, py); c.scale(s * k, s * k);
+    c.fillStyle = 'rgba(0,0,0,.22)'; c.beginPath(); c.ellipse(0, 4, 22, 8, 0, 0, TAU); c.fill();
+    c.fillStyle = col; c.beginPath(); c.moveTo(0, 0); c.bezierCurveTo(-14, -30, -42, -52, -42, -84); c.arc(0, -84, 42, Math.PI, 0); c.bezierCurveTo(42, -52, 14, -30, 0, 0); c.fill();
+    c.fillStyle = o.dot ?? '#ffffff'; c.beginPath(); c.arc(0, -84, 16, 0, TAU); c.fill();
+    c.restore();
   };
   /** a white (o.col) flash over the frame at t0, fading over o.d (.4) */
   SK.flash = function (t, t0, o = {}) { const a = t >= t0 ? 1 - clamp((t - t0) / (o.d ?? .4)) : 0; if (a <= 0) return; SK.screen((c) => { c.fillStyle = o.col ?? '#ffffff'; c.globalAlpha *= a * (o.alpha ?? .85); c.fillRect(-SK.W / 2, -SK.H / 2, SK.W, SK.H); }); };

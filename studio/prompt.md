@@ -63,6 +63,10 @@ web), and the studio's tools, which run the pipeline on your film:
   inline is saved as `web/<name>_logo1.png`); its words are in `web/<name>.txt`.
 - `font` -- adds a Google Fonts family (`family`, `weights`) to the film, for
   `SK.txt(..., {font: '<family>', wt: <weight>})`.
+- `map` -- makes the real street map of a real address or place (OpenStreetMap) into
+  `images/place_map.jpg`, with `place.json` (`SK.DATA.place`): where the address is on the
+  picture, its own street, and the real street names with a spot each. `SK.map` and `SK.mapPin`
+  (the kit) draw it.
 
 Change files with Edit or Write. The tools share this machine with other films, so one may wait
 its turn for a moment; that time is not counted against you. You cannot render the final video:
@@ -95,6 +99,13 @@ ones. State only what the prompt says or what you found, and call a font or a co
 only when its own site or material shows it. Name as a source only a page you read; a search
 result's title is not a reading. What you could not find or fetch,
 leave out, and say so in your closing sentences.
+
+A map that shows where a real place is -- a pin on it, an address, "find us here", a venue, a
+shop, a home -- is the real map of that place: make it with the `map` tool and draw it with
+`SK.map`. Never draw a made-up street plan for a real address: the people it is for know their
+own streets. When the tool cannot find the place, show the address in type and no map. (A map
+that is an idea and not a place -- a metro diagram of a programme, a treasure map in a story --
+is yours to draw.)
 
 Draw the people you invent without religious dress -- no hijab, headscarf or other head
 covering -- unless the prompt asks for it, or a person's own photo shows it.

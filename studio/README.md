@@ -806,6 +806,16 @@ content is a data edit with its clicks and pops to match.
   `images/route_map.jpg`, the route as `route.json` (SK.DATA.route). Its tiles and answers are
   cached in `STUDIO_HOME/cache/`. `template_pictures(qr=...)` makes a QR code of a link with
   OpenCV's own encoder and reads it back before keeping it.
+- **Maps** (every film, no capability): the `map` tool makes the real street map of an address or a
+  place with `scripts/place-map.py --film` (docs/reference.md, "A real map of a real address") --
+  `images/place_map.jpg` and `place.json` (SK.DATA.place), drawn with the kit's `SK.map` and
+  `SK.mapPin`. The brief's rule: a map that shows a pin or an address is the real one, never a
+  drawn stand-in. It tells Claude how exactly the address was found; a place that is not on the map
+  (`no map:`) leaves the film with none -- `place.json` says why, the manifest's sample map is
+  dropped, and the film shows the address in type. A template whose sample has a map
+  (`open-house-invitation`: `"data": {"place": "place.json"}`) is seeded with the sample's, which
+  the leftovers check then finds until the person's own replaces it. Answers are cached in
+  `STUDIO_HOME/cache/`.
 - **The health check** (`templates.py check`): every live and draft version drawn again with this
   release's renderer at its moments, compared with its preview by SSIM (bar 0.99); a release that
   draws a template differently must not ship.

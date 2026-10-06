@@ -1,8 +1,8 @@
 {
   "title": "Kit gallery",
-  "description": "Every piece of sketch/kit.js on one clock: the clean look for the first 24 s, the same pages in crayon for the next 24. Rendered by scripts/check-kit.py; a reference for what each piece looks like.",
+  "description": "Every piece of sketch/kit.js on one clock: the clean look for the first 27 s, the same pages in crayon for the next 27. Rendered by scripts/check-kit.py; a reference for what each piece looks like.",
   "slug": "kit-gallery",
-  "duration": 48.0,
+  "duration": 54.0,
   "fps": 30,
   "film": "film.js",
   "poster_t": 3.0,
@@ -50,7 +50,8 @@
     }
   ],
   "images": {
-    "logo": "../../../studio/brand/kitcut.png"
+    "logo": "../../../studio/brand/kitcut.png",
+    "place_map": "place_map.jpg"
   },
   "player": {
     "accent": "#2f6fdb",
@@ -63,5 +64,8 @@
     "cq": 18,
     "preset": "p5",
     "audio_bitrate": "192k"
+  },
+  "data": {
+    "place": "place.json"
   }
 }

@@ -762,6 +762,91 @@ async def main():
             refused = True
         check(refused, "a QR code of nothing is refused")
 
+        # ---- the map tool (every film's): the real map of an address, or no map at all -- never
+        # the sample's, never a made-up one. place-map.py is stood in for: what it prints, and how
+        # it refuses a place that is not on the map ("no map:")
+        real_script = tl4._script
+
+        async def mapped(kind, script, args, **k):
+            out_img, out_data = (
+                args[args.index("--out-image") + 1],
+                args[args.index("--out-data") + 1],
+            )
+            os.makedirs(os.path.dirname(out_img), exist_ok=True)
+            with open(out_img, "wb") as fh:
+                fh.write(b"jpeg")
+            with open(out_data, "w", encoding="utf-8") as fh:
+                json.dump({"image": "place_map", "pin": {"u": 0.5, "v": 0.5}}, fh)
+            got = {
+                "map": "place_map.jpg, 4001 x 4001 px, 0.50 m a pixel, 1000 m from the pin to each edge",
+                "found": "12, Oak Lane, Lviv",
+                "how": "the address itself is on OpenStreetMap: the pin is the house",
+                "pin": [0.5, 0.5],
+                "street": "Oak Lane",
+                "streets": ["Oak Lane", "Elm Street"],
+                "areas": ["Founders Park (green)"],
+            }
+            return ["place-map --film ran in 1 s", json.dumps(got)]
+
+        tl4._script = mapped
+        said = await tl4.map("12 Oak Lane, Lviv", tint="#235aa6")
+        with open(f4.manifest, encoding="utf-8") as fh:
+            m5 = json.load(fh)
+        with open(f4.path("temp", "place-spec.json"), encoding="utf-8") as fh:
+            asked = json.load(fh)
+        check(
+            m5["images"].get("place_map") == "images/place_map.jpg"
+            and m5["data"].get("place") == "place.json"
+            and "SK.map" in said
+            and "Oak Lane" in said
+            and "the pin is the house" in said
+            and asked == {"at": "12 Oak Lane, Lviv", "image": "place_map", "tint": "#235aa6"},
+            "the map tool: the real map is the film's picture and data, and Claude is told how exactly",
+            (m5.get("images"), m5.get("data"), said, asked),
+        )
+
+        async def unmapped(kind, script, args, **k):
+            raise ToolError("found nothing\nno map: '9 Nowhere Court' is not on OpenStreetMap.")
+
+        m5["images"]["place_map"] = (
+            "template/sample/place_map.jpg"  # as a template's sample seeds it
+        )
+        with open(f4.manifest, "w", encoding="utf-8") as fh:
+            json.dump(m5, fh)
+        tl4._script = unmapped
+        said = await tl4.map("9 Nowhere Court, Lviv")
+        with open(f4.manifest, encoding="utf-8") as fh:
+            m5 = json.load(fh)
+        with open(f4.path("place.json"), encoding="utf-8") as fh:
+            none = json.load(fh)
+        check(
+            said.startswith("No map:")
+            and "in type" in said
+            and "place_map" not in m5["images"]
+            and m5["data"].get("place") == "place.json"
+            and none == {"none": "'9 Nowhere Court' is not on OpenStreetMap."},
+            "a place that is not on the map: the film has none, not the sample's, and says why",
+            (said, m5.get("images"), none),
+        )
+
+        async def broken(kind, script, args, **k):
+            raise ToolError("Overpass did not answer: timed out")
+
+        tl4._script = broken
+        try:
+            await tl4.map("12 Oak Lane, Lviv")
+            raised = False
+        except ToolError:
+            raised = True
+        check(raised, "a map that failed for another reason is an error, to try again")
+        try:
+            await tl4.map(None)
+            raised = False
+        except ToolError:
+            raised = True
+        check(raised, "a map of nowhere in particular is refused")
+        tl4._script = real_script
+
         # ---- a narrated template: its script, its word times, its cast and its sound as files
         src3 = party_fixture()
         spec3 = dict(

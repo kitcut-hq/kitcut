@@ -914,3 +914,22 @@ page -- is an object, and is left off the list the draft's writer chooses from.
 from the painted pictures and what each shows, which is right far more often than the rule; the
 rule is for a draft written before posters and a picture the writer could not be told about.
 Four options are four different pictures, so one wrong guess is one option of four.
+
+### KI-055 · fixed · films · A film's "map" of a real address was a made-up one
+
+**Symptom.** The open house template (v1-v3, and every film made from it) closed on "a drawn
+street map": a ruled grid, two green ovals, one line lit as the host's street, and a pin. Nothing
+on it existed. The owner, 2026-10-06: every film that shows a pin or a specific address must use
+the real map.
+**Cause.** The studio had a real map only for routes (`route-map.py`, the ride template), behind a
+capability no other film had, so a film that needed "where it is" drew a stand-in -- and the brief
+that produced the template asked for one in so many words ("a simple drawn street map").
+**Fix.** `scripts/place-map.py` (the real street map of one address from OpenStreetMap, and where
+the address is on it), the studio's `map` tool for every film, the kit's `SK.map` / `SK.mapPin`,
+and one rule in the brief. The template's sample changed with it, to a real listing whose street
+is on the map.
+**Lesson.** Two limits are part of the tool's answer, not hidden: a house number the map lacks is
+placed along its street (`block`: right to a house or two, the pin on the street), and an address
+whose street is on no map yet -- any subdivision still being built -- is refused, and the film
+shows it in type. Check a new sample's address with `place-map.py --list` before building a film
+on it. `scripts/check-map.py` pins the rules.

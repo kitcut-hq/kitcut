@@ -1,0 +1,204 @@
+{
+ "_comment": "A street map of the few blocks round one address, drawn from OpenStreetMap by scripts/place-map.py: land, buildings, parks, water and streets, with no lettering and no pin -- the film letters the real street names (the data sheet says where each runs) and drops its own pin, in its own look. Sizes are METRES on the ground, so a street keeps its real width at any scale; min_px keeps the thin ones visible. A tone is a whole palette; a film's tint moves each surface toward its own colour by the fraction in `tint`, and `colors` in a spec replaces any surface outright.",
+ "px": 4000,
+ "radius_m": 1000,
+ "tones": {
+  "light": {
+   "land": "#EEF1F4",
+   "building": "#DEE3EA",
+   "building_edge": "#CDD4DD",
+   "green": "#D7E7CF",
+   "sand": "#F2EBD7",
+   "water": "#BAD6EC",
+   "road": "#FFFFFF",
+   "road_major": "#FFFFFF",
+   "motorway": "#FBEFC9",
+   "casing": "#D3DAE3",
+   "path": "#CCD3DC",
+   "rail": "#C2C9D3",
+   "pier": "#E6E0D2"
+  },
+  "dark": {
+   "land": "#1B2129",
+   "building": "#232B35",
+   "building_edge": "#2B3440",
+   "green": "#1D3027",
+   "sand": "#2C2A22",
+   "water": "#12293D",
+   "road": "#35404D",
+   "road_major": "#414D5C",
+   "motorway": "#4E5564",
+   "casing": "#141920",
+   "path": "#3A4553",
+   "rail": "#4A5564",
+   "pier": "#2A2E33"
+  }
+ },
+ "tint": {
+  "_comment": "how far each surface moves toward a film's tint colour (0 = the tone's own). The tint is first made as light as the surface it tints, so it changes the hue and never the lightness",
+  "land": 0.35,
+  "building": 0.4,
+  "building_edge": 0.4,
+  "casing": 0.45,
+  "path": 0.4,
+  "rail": 0.3,
+  "green": 0.1,
+  "water": 0.15,
+  "sand": 0.1
+ },
+ "roads": {
+  "_comment": "drawn in this order, every casing first; w_m and case_m in metres. skip: ways never drawn (a driveway and a parking aisle per house turn a neighbourhood to hatching; a sidewalk mapped as its own way doubles every street)",
+  "order": [
+   "path",
+   "service",
+   "pedestrian",
+   "residential",
+   "tertiary",
+   "secondary",
+   "primary",
+   "trunk",
+   "motorway"
+  ],
+  "classes": {
+   "motorway": {
+    "highway": [
+     "motorway",
+     "motorway_link"
+    ],
+    "w_m": 16,
+    "case_m": 1.5,
+    "fill": "motorway",
+    "rank": 6
+   },
+   "trunk": {
+    "highway": [
+     "trunk",
+     "trunk_link"
+    ],
+    "w_m": 15,
+    "case_m": 1.4,
+    "fill": "road_major",
+    "rank": 5
+   },
+   "primary": {
+    "highway": [
+     "primary",
+     "primary_link"
+    ],
+    "w_m": 14,
+    "case_m": 1.3,
+    "fill": "road_major",
+    "rank": 4
+   },
+   "secondary": {
+    "highway": [
+     "secondary",
+     "secondary_link"
+    ],
+    "w_m": 13,
+    "case_m": 1.3,
+    "fill": "road_major",
+    "rank": 3
+   },
+   "tertiary": {
+    "highway": [
+     "tertiary",
+     "tertiary_link"
+    ],
+    "w_m": 12,
+    "case_m": 1.2,
+    "fill": "road",
+    "rank": 2
+   },
+   "residential": {
+    "highway": [
+     "residential",
+     "unclassified",
+     "living_street",
+     "road"
+    ],
+    "w_m": 9.5,
+    "case_m": 1.1,
+    "fill": "road",
+    "rank": 1
+   },
+   "pedestrian": {
+    "highway": [
+     "pedestrian"
+    ],
+    "w_m": 6,
+    "case_m": 0.9,
+    "fill": "road",
+    "rank": 1
+   },
+   "service": {
+    "highway": [
+     "service"
+    ],
+    "w_m": 4.5,
+    "case_m": 0.8,
+    "fill": "road",
+    "rank": 0
+   },
+   "path": {
+    "highway": [
+     "footway",
+     "path",
+     "cycleway",
+     "bridleway",
+     "track",
+     "steps"
+    ],
+    "w_m": 1.1,
+    "fill": "path",
+    "dash_m": [
+     4,
+     4
+    ],
+    "rank": 0
+   }
+  },
+  "skip": {
+   "service": [
+    "driveway",
+    "parking_aisle",
+    "drive-through"
+   ],
+   "footway": [
+    "sidewalk",
+    "crossing",
+    "traffic_island"
+   ]
+  },
+  "min_px": 1.4
+ },
+ "waterways_m": {
+  "river": 14,
+  "canal": 9,
+  "stream": 3.5,
+  "drain": 2,
+  "ditch": 2
+ },
+ "rail": {
+  "w_m": 1.4,
+  "dash_m": [
+   8,
+   6
+  ]
+ },
+ "labels": {
+  "_comment": "where each street's name is lettered: n streets at most (the pin's own first, then the larger and the nearer), each on a straight stretch about `ring` of the map's width from the pin (the pin's own street nearer, at own_ring) and long enough to hold the name (`char` of the width a letter), `apart` of the width clear of every other name and of the pin, `margin` from the edge; alt: spare spots a street, alt_apart of the width from each other",
+  "n": 16,
+  "ring": 0.15,
+  "own_ring": 0.075,
+  "apart": 0.03,
+  "margin": 0.06,
+  "straight": 0.96,
+  "own_within_m": 90,
+  "char": 0.0055,
+  "alt": 3,
+  "alt_apart": 0.11
+ },
+ "jpeg_quality": 90,
+ "max_bytes": 6000000
+}

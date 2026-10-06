@@ -4176,6 +4176,89 @@ Stryi, 60 km away. So: up to five answers in English, the one whose address name
 part wins, the nearest to the place before it next; a place more than 150 km from the one before,
 or a route spanning more than 400 km, is refused with the reason.
 
+### A real map of a real address: `place-map.py`
+
+**The rule: a map that shows where a real place is -- a pin, an address, "find us here" -- is the
+real map of that place.** A film's viewers live there, and a ruled grid with a pin on it reads as a
+fake the moment they look for their own street (the open house template drew exactly that until
+2026-10-06: two green ovals, a grid, one line lit as "the host's street"). A map that is an idea
+and not a place -- a metro diagram of a programme, a treasure map in a story -- is still the
+film's to draw.
+
+`place-map.py` makes the real one from OpenStreetMap: the streets, buildings, parks, water and
+coast of the blocks round one address, a square picture with the address at its centre, and a data
+sheet saying where everything is on it.
+
+```powershell
+python scripts/place-map.py --at "2601 NE 29th St, Fort Lauderdale, FL 33306" --list   # what it matched, how exactly, what is there; draws nothing
+python scripts/place-map.py --at "..." --out projects/<id>/outputs/map [--radius 800 --px 3200 --tone dark --tint "#b5532a"]
+python scripts/place-map.py --manifest projects/<id>/place-map.json                    # the same from a manifest, recorded in the project
+python scripts/place-map.py --film spec.json --out-image images/place_map.jpg --out-data place.json [--cache <dir>]   # the studio's map tool
+```
+
+**The picture carries no lettering and no pin.** The film letters the street names in its own type
+and drops its own pin, so the map sits in the film's look; `tone` (light or dark), `tint` (the
+film's own colour) and `colors` (any surface outright) make it the film's. Widths in the style
+(`config/maps/street.json`) are METRES on the ground, so a street keeps its real width at any
+scale. A tint is first made as light as the surface it tints, so it changes a surface's hue and
+never its lightness: a brand's navy mixed straight in turned every house to slate.
+
+**How exactly the address was found is part of the answer** (`pin.match`, and the tool's own
+words), because a pin that claims more than is known is the fake map again:
+
+| match | what is known | what the film may show |
+|---|---|---|
+| `house` | the building or address point itself is on OpenStreetMap | the pin is the house |
+| `block` | the street is; the number is placed along it from its address range (Nominatim's own ranges, or the US Census geocoder for a US address) | the pin stands on the street, right to a house or two |
+| `street` | only the street | the pin marks the street: letter it, point at no house |
+| `place` | a named place (a venue, a park) | the pin is the place |
+| `point` | the `[lat, lon]` given | as given |
+
+Measured on a listing whose page publishes its own coordinates (11501 Buckingham Rd, Austin): the
+`house` match landed 3 m from them. A number that answers as "place / house" on a WAY is not a
+mapped house -- the way is the street -- so it is `block`, not `house`. **An address whose street
+is not on the map is refused** (`no map: ...`, which the studio's map tool looks for): the first
+sample, a model home in a subdivision still being built, has a street neither OpenStreetMap nor
+the Census knows, and a pin on bare land is a worse lie than no map. The film then shows the
+address in type. An answer must be in the town the address names: "Stuart, FL 34997" is never
+allowed to answer Stuart, Iowa.
+
+**`place.json` (SK.DATA.place)**: `{image, w, h, m_per_px, bounds, pin: {u, v, lat, lon, match,
+found, street, street_short, on, lines}, streets: [{name, short, kind, u, v, a, len, alt, own}],
+areas: [{name, kind, u, v}], look, ink, credit}`. u and v are fractions of the picture; `pin.lines`
+is the address's own street as lines (a film lights it); each street has a spot on a straight
+stretch long enough for its name, the angle it runs at there, and up to three spare spots (`alt`)
+well apart -- a film frames the map its own way, and the first spot may be off its frame or under
+a card. `short` is the name the way a map letters it ("SW Flagler Ave"). `look` and `ink` are what
+the map is painted in and an ink that reads on it.
+
+**The film draws it with two kit pieces** (`sketch/kit.js`): `SK.map(x, y, {s, own, names, clear,
+namesT, credit})` puts the address's own spot at (x, y), lights its street, letters the names
+(none under a `clear` box, none across another, each fading out before the frame's edge cuts it)
+and letters `© OpenStreetMap` on the frame itself; `SK.mapPin(x, y, {t, col})` drops the pin. It
+returns `m.at(u, v)`, `m.ll(lat, lon)` and `m.cover`, the least scale that still fills the frame
+from there. The default picture is 4000 px for 1000 m to each edge: a film rarely puts the pin in
+the middle (a card takes the other half), and the far edge then decides how far out the map can be
+shown.
+
+**The sea needs only the coastline's direction.** OSM draws a coastline with the land on its left.
+The lines cut the frame into regions, and each region takes the side most of its shore says it is
+(`sea_mask`): no "where is the open sea" point, and a river mouth with both banks in frame, a bay
+with islands and a marina all come out right (the St. Lucie at Stuart, the Ferry Building's piers).
+Lakes and wide rivers are polygons, their holes cut out even-odd.
+
+**Overpass.** One query for the whole map, cached by its text; a few blocks answer in 1-3 s
+(2.5 MB for a dense square kilometre). The mirror is on a short leash (`_map.overpass`): on
+2026-10-06 it accepted connections and said nothing, and each turn it was given cost three
+minutes while the main server answered the same query in under a second. A driveway and a parking
+aisle per house turn a neighbourhood to hatching, and a sidewalk mapped as its own way doubles
+every street: both are skipped (`roads.skip`).
+
+After touching `place-map.py`, `route-map.py` or `_map.py`, run `python scripts/check-map.py` --
+the precision rules, the right-town rule, the sea, the names and one whole map of a made-up town,
+asking nobody; a few seconds. Map data (c) OpenStreetMap contributors (ODbL): a film that shows
+the map credits OpenStreetMap on it.
+
 ### How long a film takes
 
 Machine time for the 60 s film, from its run logs (`--timings` prints them):

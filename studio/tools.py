@@ -43,7 +43,15 @@ LOCKS = os.path.join(REPO, "temp", "locks")
 # seconds a step may run; the voice, the mix and the render get longer for a longer film
 # route: tiles, OSM's answer (a busy Overpass is retried for minutes) and a ~30 MP map drawn on a
 # core -- 90 s on the laptop with a warm cache
-TIMEOUT = {"check": 30, "stills": 120, "paint": 300, "automation": 180, "web": 150, "route": 900}
+TIMEOUT = {
+    "check": 30,
+    "stills": 120,
+    "paint": 300,
+    "automation": 180,
+    "web": 150,
+    "route": 900,
+    "map": 600,
+}
 MAX_STILLS = 12
 PEOPLE_WAIT_S = 420  # the longest a picture tool waits for the people to be drawn (agent.py)
 # what one film may bring in from the web (web-grab.py): pictures and page photographs together,
@@ -686,6 +694,70 @@ class Tools:
             )
         return "Ready. In content.json use " + "; ".join(said) + "."
 
+    async def map(self, at=None, radius_m=None, tone=None, tint=None, colors=None):
+        """The real street map of the place a film shows (scripts/place-map.py --film): the picture
+        as images/place_map.jpg (SK.image key place_map) and place.json, SK.DATA.place -- where the
+        address is on it, its own street, the real street names with a spot each. A place that is
+        not on the map leaves the film with none (place.json says why), never with a made-up one
+        or a template's sample."""
+        f = self.film
+        if not at:
+            raise ToolError(
+                "Give at: the address as written (street, town, state or country), a place's "
+                "name with its town, or [lat, lon]."
+            )
+        spec = {"at": at, "image": "place_map"}
+        for k, v in (("radius_m", radius_m), ("tone", tone), ("tint", tint), ("colors", colors)):
+            if v:
+                spec[k] = v
+        os.makedirs(f.path("temp"), exist_ok=True)
+        _write_json(f.path("temp", "place-spec.json"), spec)
+        args = ["--film", f.path("temp", "place-spec.json")]
+        args += ["--out-image", f.path("images", "place_map.jpg")]
+        args += ["--out-data", f.path("place.json")]
+        args += ["--cache", os.path.join(HOME, "cache")]
+        m = self._manifest()
+        try:
+            async with self.lock:
+                tail = await self._script("map", "place-map.py", args, pools=[("cpu", 1)])
+        except ToolError as e:
+            why = str(e).strip().splitlines()[-1] if str(e).strip() else ""
+            if not why.startswith("no map:"):
+                raise
+            # no truthful map can be made: the film keeps none -- not the template's sample either
+            why = why[len("no map:") :].strip()
+            _write_json(f.path("place.json"), {"none": why})
+            (m.get("images") or {}).pop("place_map", None)
+            m.setdefault("data", {})["place"] = "place.json"
+            _write_json(f.manifest, m)
+            return (
+                "No map: %s The film has no map now (SK.DATA.place.none says why; SK.map draws "
+                "nothing and returns null): show the address in type instead." % why
+            )
+        got = json.loads(tail[-1])
+        m.setdefault("images", {})["place_map"] = "images/place_map.jpg"
+        m.setdefault("data", {})["place"] = "place.json"
+        _write_json(f.manifest, m)
+        return (
+            "The map is made: %s (SK.image key place_map; its data is SK.DATA.place). Found: %s. "
+            "How exactly: %s. The pin is at u %.4f, v %.4f%s. Street names it can letter: %s.%s "
+            "Draw it with SK.map(x, y, {s, own, names}) and SK.mapPin (the kit): the picture has "
+            "no lettering and no pin of its own, and '\u00a9 OpenStreetMap' must show on it "
+            "(SK.map letters it). Look at a still of it before you finish."
+            % (
+                got["map"],
+                got["found"],
+                got["how"],
+                got["pin"][0],
+                got["pin"][1],
+                ", on %s" % got["street"] if got["street"] else "",
+                ", ".join(got["streets"]) or "none",
+                " Parks and water with names: %s." % ", ".join(got["areas"])
+                if got["areas"]
+                else "",
+            )
+        )
+
     async def route(
         self,
         gpx=None,
@@ -1083,6 +1155,44 @@ class Tools:
                         a.get("finish_at"),
                         a.get("places"),
                         a.get("units"),
+                    )
+                )
+            ),
+            tool(
+                "map",
+                "Make the real street map of a real address or place (OpenStreetMap: its streets, "
+                "buildings, parks and water for a few blocks round it) -- for any film that shows "
+                "where something is: a pin, an address, 'find us here'. at: the address as written "
+                "('2601 NE 29th St, Fort Lauderdale, FL 33306'), a place's name with its town, or "
+                "[lat, lon]. Writes images/place_map.jpg (SK.image key place_map) and place.json "
+                "(SK.DATA.place: the pin's u, v on the picture, its own street as lines, real "
+                "street names with a spot and an angle each, named parks and water). The picture "
+                "has no lettering and no pin: SK.map and SK.mapPin (the kit) draw both. radius_m: "
+                "metres from the pin to each edge (800; less is closer in). tone: light or dark. "
+                "tint: the film's own colour (#rrggbb), which every surface leans toward; colors: "
+                "any of land, road, road_major, building, green, water, sand, casing set outright. "
+                "It says how exactly the address was found (when only the street is known, letter "
+                "the street and point at no house) and, when the place is not on the map, that "
+                "there is no map: then show the address in type. Takes under a minute.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "at": {},
+                        "radius_m": {"type": "number"},
+                        "tone": {"type": "string", "enum": ["light", "dark"]},
+                        "tint": {"type": "string"},
+                        "colors": {"type": "object"},
+                    },
+                    "required": ["at"],
+                },
+            )(
+                wrap(
+                    lambda a: self.map(
+                        a.get("at"),
+                        a.get("radius_m"),
+                        a.get("tone"),
+                        a.get("tint"),
+                        a.get("colors"),
                     )
                 )
             ),

@@ -736,6 +736,8 @@ def _describe(name, inp, film):
         return "checking the cuts and the motion"
     if tool == "route":
         return "drawing the route on a real map"
+    if tool == "map":
+        return "making the real map of %s" % str(inp.get("at", ""))[:120]
     if tool == "voice":
         if inp.get("retake_line") is not None:
             return "recording line %s again" % inp["retake_line"]

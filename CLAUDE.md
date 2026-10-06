@@ -681,6 +681,15 @@ ducker, the tail-word cut and the bundler; no API, no browser, seconds.
 **The kit** (`sketch/kit.js`) is what films kept drawing by hand -- text, charts, screens, logos,
 end cards, page transitions, `SK.cues` -- in every look; its header is the API the studio's
 prompt carries. After touching it run `python scripts/check-kit.py` (headless Edge, ~15 s).
+
+**A map that shows a pin or an address is the real map.** Any film that shows where a real place
+is gets the real streets round it, never a drawn stand-in: `scripts/place-map.py` (the studio's
+`map` tool) makes the picture and `SK.DATA.place` from OpenStreetMap, and the kit's `SK.map` and
+`SK.mapPin` draw it, letter its real street names and credit OpenStreetMap. It says how exactly
+the address was found (house, block, street) and refuses one whose street is on no map -- the
+film then shows the address in type. After touching `place-map.py`, `route-map.py` or `_map.py`,
+run `python scripts/check-map.py` (no network, seconds). `docs/reference.md`, "A real map of a
+real address".
 `studio/harvest.py` reads recent studio films back (time by reply, re-written helpers, voice
 pace) -- run it every few days; the `video-sketch` skill's "Harvest" section is the procedure.
 
@@ -835,6 +844,7 @@ which cannot encode the glyphs at all.
 | `studio/template_from_film.py` | a kitcut.ai film into a live template, one command a stage (find, pull, prove, alt, check, spec, make, site, test -- a graded film from one sentence); the `film-to-template` skill walks it |
 | `scripts/resolve-export.py` | the cut as an OTIO/EDL/FCP7 XML timeline plus an SRT, for DaVinci Resolve (free edition); `check-resolve.py` is its test, `docs/davinci-resolve.md` the research behind it |
 | `scripts/route-map.py` | a real map for a film and the route on it as data: paper-relief terrain (OSM streets, real elevation, no labels, no orange) at two zooms that line up, and a GPX/OSM/routed ride as `[u, v, ft, mi, s]` rows a kitcut.ai film can copy; style `config/maps/`, example `config/maps/example-route-map.json` |
+| `scripts/place-map.py` | the real street map of one address for a film (OpenStreetMap streets, buildings, parks, water, coast; no lettering, no pin) and where the address is on it: the pin, its own street, real street names with a spot each; says how exactly the address was found and refuses a street no map has; style `config/maps/street.json`, example `config/maps/example-place-map.json`; `_map.py` is what it shares with `route-map.py`, `check-map.py` their test |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
 | `scripts/screencast-pipeline.py` | the silent-screencast job as one cached, checkpointed command; the stage scripts it drives are listed under pipeline 7 |
 | `docs/retro-books-giveaway.md` | where six hours went on the first silent-screencast edit, and the rule that now prevents each loss |
