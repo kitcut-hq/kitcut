@@ -47,6 +47,7 @@ TESTS = (
     "test_thumbs.py",  # a film's four YouTube thumbnail options, drawn for real
     "test_outro.py",  # the Free plan's mark and closing read the same on a right-to-left film
     "test_media.py",
+    "test_delete_film.py",  # a film deleted for good: gone everywhere, the one beside it whole
     "test_multi.py",  # two servers on one home (peers.py): the ship that never stops a film
     "test_shared.py",  # the files two servers share, raced by real processes (locks.py)
     "test_bluegreen.py",  # an old server handing over to a new one, end to end

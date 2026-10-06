@@ -154,6 +154,7 @@ import unbrand  # noqa: E402
 import share  # noqa: E402
 import canon  # noqa: E402
 import brandkit  # noqa: E402
+import delete_film  # noqa: E402
 from film import Film  # noqa: E402
 from sched import Sched  # noqa: E402
 
@@ -2014,6 +2015,42 @@ async def set_listed(req):
     return web.json_response({"id": f.id, "listed": listed})
 
 
+async def delete(req):
+    """Delete a film for good (delete_film.py): its copy online, its record, its folder and what
+    else names it. {"plan": true} answers what would go and removes nothing. The film's own
+    client (or this machine) only; a film being made, changed, drawn again or sent to YouTube is
+    refused (409, with the reason)."""
+    if DRAINING or MODE == "stopping":
+        return web.json_response({"error": RESTARTING}, status=503)
+    f = film_of(req.match_info["id"])
+    if not (from_this_machine(req) or clients.same(f.record().get("client"), client_of(req))):
+        return web.json_response({"error": "only whoever made a film can delete it"}, status=403)
+    try:
+        only_plan = bool((await req.json()).get("plan"))
+    except (ValueError, AttributeError):
+        only_plan = False
+    J = JOBS.get(f.id)
+    no = delete_film.why_not(f)
+    if J is not None and J["status"] in ("queued", "running") and not J.get("ended"):
+        no = ("making", "This film is still being made. Stop it first.")
+    elif not no and (peer_has("rounds", f.id) or peer_has("unbrands", f.id)):
+        no = ("round", "This film is being changed; try again in a few minutes.")
+    if only_plan:
+        what = await asyncio.to_thread(delete_film.plan, f)
+        return web.json_response(
+            what | {"refused": {"reason": no[0], "error": no[1]} if no else None}
+        )
+    if no:
+        return web.json_response({"reason": no[0], "error": no[1]}, status=409)
+    try:
+        gone = await delete_film.delete(f)
+    except delete_film.DeleteError as e:
+        return web.json_response({"reason": e.reason, "error": str(e)}, status=e.status)
+    JOBS.pop(f.id, None)
+    print("deleted %s: %d online, %d records" % (f.id, gone["online"], gone["records"]), flush=True)
+    return web.json_response(gone | {"deleted": True})
+
+
 async def unbrand_film(req):
     """Draw a finished film again without the Free plan's mark and closing (unbrand.py), at the
     frame rate its maker's plan gives (X-Fps) and in its place in the line (X-Priority). The
@@ -2556,6 +2593,7 @@ def make_app(token):
             web.get("/api/films/{id}/lines", film_lines),
             web.get("/api/films/{id}/lines/{i}.mp3", film_line_audio),
             web.post("/api/films/{id}/cancel", cancel),
+            web.post("/api/films/{id}/delete", delete),
             web.post("/api/films/{id}/continue", continue_film),
             web.post("/api/films/{id}/listed", set_listed),
             web.post("/api/films/{id}/unbrand", unbrand_film),
