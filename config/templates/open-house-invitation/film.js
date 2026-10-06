@@ -260,7 +260,8 @@
       const s = MSC * (1 + .07 * tw(t, T.find - .6, T.bring + .4, E.sine));
       const m = SK.map(PIN[0], PIN[1], { s, names: 10, nameSize: 27 * U, font: FB, nameCol: K.soft, namesT: landAt - .25, ownName: false, clear: [[R4[0], R4[1], R4[2], R4[3]], [PIN[0] - 56 * U, PIN[1] - 150 * U, 112 * U, 160 * U]], own: { col: K.blue, w: 15 * U, p: ent(t, T.find - .2, 1.1) } });
       if (!m) return;
-      const at = FACTS.mapStreet ? nameSpot(m) : null, on = ent(t, T.street - .2, .5);
+      // its own street may leave no clear spot (a short lane running up under the card): the name stands beside the pin then
+      const at = FACTS.mapStreet ? nameSpot(m) || [PIN[0] + (wide ? 250 : 230) * U, PIN[1] - 46 * U] : null, on = ent(t, T.street - .2, .5);
       if (at && on > 0) {
         const size = Math.min(40 * U, fit(FACTS.mapStreet, W * .5, { size: 40 * U, font: FB, wt: 700 }));
         SK.alpha(on, () => pill(FACTS.mapStreet, at[0], at[1] + (1 - on) * 20 * U, { size, fill: K.navy, col: K.white, wt: 700, align: 'center', stroke: K.white, strokeW: 4 * U }));
