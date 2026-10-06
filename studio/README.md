@@ -25,6 +25,7 @@ python studio/test_isolation.py                 # names, the gate, secrets, the 
 python studio/test_direction.py                 # one cached prompt per look, a film's choices, the recent note
 python studio/test_server.py                    # the API end to end, 3 films at once, Claude stubbed out, no cost
 python studio/test_media.py                     # the copy online, against a stand-in for Azure
+python studio/test_delete_film.py               # a film deleted for good, against stand-ins: no network
 python studio/test_share.py                     # a film's share page words and picture, Claude stubbed
 python studio/test_outro.py                     # the Free plan's mark and closing, on a right-to-left film too
 ```
@@ -468,6 +469,30 @@ plan's frame rate (`X-Fps`, `X-Priority`). No Claude and no voice: a render, min
   YouTube send of the film is not started while it runs, and the swap waits for one to end.
 - `test_server.py` covers it on the Free-plan film it makes: refused for another client, a forced
   failure that changes nothing, then 5 s at 60 fps, still the film it was.
+
+**A film deleted for good** (`delete_film.py`, `POST /api/films/<id>/delete`, 2026-10-05): the
+film's own client (the site, for its owner) or this machine asks, and nothing is kept, not even
+a backup. `{"plan": true}` answers what would go and removes nothing.
+- **The order is the one that asking again can always finish:** the copy online first (every
+  revision, every version a round left, the share pictures: it is what the public can reach),
+  then the record in `kitcut.studio_runs` and its rounds' (`store.forget`, which also takes them
+  out of the outbox so a later sync cannot write them back), then what names the film outside
+  its folder (its library's index and cast lists, its project's episode log `canon.json`, the
+  cached poster, its Claude sessions, a round's copy and marks, the backups `ops.sh replace`
+  kept), and last the folder, moved out of `projects/` in one rename and then removed.
+- **Storage that refuses stops it with the record and the folder in place** (502); **a database
+  that cannot be reached leaves the folder** (503), so the same request finishes the job.
+- **Refused (409, with `reason`)** while the film is being made or waits for a voice (`making`),
+  has a round under way (`round`), is being drawn again (`unbrand`) or is on its way to YouTube
+  (`youtube`).
+- **What it leaves:** a cast member the film made (it is the library's), and everything in the
+  site's own collections (views, likes, notes, YouTube rows, the credit table): the site cleans
+  what is its own (`lib/films.js` `deleteFilm`).
+- **By hand:** `ops.sh --dry-run delete <film-id>`, then `ops.sh delete <film-id>`; beside the
+  server, `python studio/delete_film.py <film-id> [--plan]`.
+- `test_delete_film.py` covers it: gone everywhere with the film beside it untouched, a plan
+  that removes nothing, each refusal, storage and the database failing, and the endpoint's own
+  client, a stranger and a second ask.
 
 **A finished film changed from its maker's notes** (`rounds.py`, `GET|POST
 /api/films/<id>/versions`, 2026-10-05): the film's maker points at a moment, a spot in the

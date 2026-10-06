@@ -70,6 +70,9 @@
 #                                                     next versions (studio/library_put.py)
 #   bash studio/deploy/ops.sh replace <film-id> <folder>   a remade film takes its place (same id
 #                                                     and page; the old one to backups/)
+#   bash studio/deploy/ops.sh delete <film-id>        a film deleted for good: its copy online, its
+#                                                     record, its folder, what else names it. Nothing
+#                                                     is kept. --dry-run says what would go
 #   bash studio/deploy/ops.sh forward [port]          the VM's studio on this laptop's 127.0.0.1:port
 #                                                     (default 8765), as if it ran here
 #   bash studio/deploy/ops.sh snapshot [--keep N]     an incremental snapshot of the data disk
@@ -621,6 +624,15 @@ print("record: " + ", ".join(sorted(fields)))
 PY
 rm -rf "$STAGE"
 EOF
+    ;;
+
+  delete)
+    # a film deleted for good (studio/delete_film.py), asked as this machine: its copy online, its
+    # record, its folder and what else names it. Nothing is kept, so --dry-run first: it asks the
+    # studio what would go (and whether it would be refused) and removes nothing.
+    id="${1:?delete <film-id>}"
+    body='{}'; [ "$DRY" = 1 ] && body='{"plan": true}'
+    on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/films/$id/delete -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' -d '$body'; echo"
     ;;
 
   unbrand)

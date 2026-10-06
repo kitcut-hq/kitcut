@@ -41,6 +41,7 @@ and a row appended while a sync is sending is still there after it.
 """
 
 import os
+import re
 import json
 import socket
 import contextlib
@@ -50,6 +51,11 @@ import locks
 
 COLLECTION = "studio_runs"
 DB = "kitcut"
+
+
+def own(run_id):
+    """The pattern of a film's own documents: its id, and its rounds' <film id>.r<k> (rounds.py)."""
+    return "^" + re.escape(run_id) + r"(\.r\d+)?$"
 
 
 def now():
@@ -133,6 +139,24 @@ class MongoStore:
         rows = list(self.col().find(q, {"calls": 0}).sort("created_at", 1))
         return rows[-limit:] if limit else rows
 
+    def forget(self, run_id):
+        """Remove a film's document and its rounds' (<id>.r<k>) for good, and whatever of them
+        still waits in the outbox (a later sync would write it back). Returns how many documents
+        went. Unlike save(), this raises when the database cannot be reached: a film is not
+        called deleted while its record may still be there."""
+        n = self.col().delete_many({"_id": {"$regex": own(run_id)}}).deleted_count
+        if self.outbox and os.path.exists(self.outbox):
+            mine = re.compile(own(run_id))
+            with locks.locked(self.outbox + ".lock"):
+                rows = self._rows()
+                keep = [x for x in rows if not mine.search(str(json.loads(x).get("_id")))]
+                if len(keep) != len(rows):
+                    tmp = "%s.%d.tmp" % (self.outbox, os.getpid())
+                    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+                        f.writelines(x + "\n" for x in keep)
+                    os.replace(tmp, self.outbox)
+        return n
+
     def announce(self, url):
         """Where the studio can be reached now (its tunnel URL; None when it stops), for the public
         site to find: kitcut.studio_hosts, document "studio"."""
@@ -211,6 +235,14 @@ class MemoryStore:
 
     def get(self, run_id):
         return self.docs.get(run_id)
+
+    def forget(self, run_id):
+        mine = re.compile(own(run_id))
+        gone = [k for k in self.docs if mine.search(k)]
+        for k in gone:
+            del self.docs[k]
+            self.finals.discard(k)
+        return len(gone)
 
     def runs(self, limit=None, since=None):
         rows = sorted(
