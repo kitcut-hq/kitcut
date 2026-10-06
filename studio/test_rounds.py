@@ -21,6 +21,7 @@ import sys
 import json
 import stat
 import time
+import types
 import shutil
 import asyncio
 import tempfile
@@ -229,9 +230,19 @@ async def main():
                 "text": "",
             },
             {"id": "4", "kind": "film", "text": "Warmer."},
+            {
+                "id": "5",
+                "kind": "spot",
+                "t": 0.8,
+                "x": 0.5,
+                "y": 0.2,
+                "w": 0.3,
+                "h": 0.12,
+                "text": "This title.",
+            },
         ],
         lines,
-        {"1": "notes/1.png"},
+        {"1": "notes/1.png", "5": "notes/5.png"},
     )
     check(
         'at the word "bee"' in told
@@ -242,6 +253,43 @@ async def main():
         and "[the whole film]" in told
         and "notes/1.png (the orange ring is the spot)" in told,
         "a note is told to Claude with its moment, its spot in words, and what is being said",
+    )
+    check(
+        "an area: the box around the top centre of the picture (50% from the left, 20% from "
+        "the top), 30% of the picture wide and 12% tall"
+        in told
+        and "notes/5.png (the orange box is the area)" in told,
+        "a note on a boxed area is told with where the box is and how big",
+    )
+    f0 = types.SimpleNamespace(  # a film as clean_notes reads one: its length, no narration
+        length=8, record=lambda: {}, path=lambda *a: os.path.join(HOME, "no-such-file")
+    )
+    boxed = rounds.clean_notes(
+        f0,
+        [
+            {
+                "id": "a",
+                "kind": "spot",
+                "t": 1,
+                "x": 0.5,
+                "y": 0.5,
+                "w": 0.4,
+                "h": 0.001,
+                "text": "x",
+            },
+            {"id": "b", "kind": "spot", "t": 1, "x": 0.5, "y": 0.5, "w": 0.4, "text": "x"},
+            {"id": "c", "kind": "spot", "t": 1, "x": 0.5, "y": 0.5, "w": 7, "h": 0.5, "text": "x"},
+        ],
+    )
+    check(
+        [(n.get("w"), n.get("h")) for n in boxed] == [(0.4, 0.02), (None, None), (1.0, 0.5)],
+        "a box is kept with its size (never thinner than a sliver, never past the picture); "
+        "half a size is a point",
+    )
+    check(
+        [round(v) for v in rounds._box({"x": 0.1, "y": 0.5, "w": 0.4, "h": 0.2}, 1000, 500)]
+        == [0, 200, 300, 300],
+        "a box that runs past the picture's edge is drawn inside it",
     )
     lim = rounds.limits(30, 3)
     check(

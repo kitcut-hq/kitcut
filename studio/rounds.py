@@ -92,6 +92,7 @@ EFFORT = "high"  # a round changes a film that exists: it reads more than it inv
 STRIP = (24, 160)  # the filmstrip: tiles in a row, and a tile's width in px
 STRIP_FILE = "strip.jpg"
 RING = (217, 115, 63)  # the colour a note's spot is ringed in on its frame
+AREA_MIN = 0.02  # a boxed area is at least this much of the picture each way
 
 JOBS = {}  # film id -> the round being made here
 # what Claude is doing, as the round's person reads it: the log's own lines (agent._describe)
@@ -258,7 +259,7 @@ def orphans():
 
 # ------------------------------------------------------------------ the notes, checked
 def clean_notes(film, notes):
-    """The notes as the studio keeps them: [{id, kind, t, t2, x, y, line, was, words, text}],
+    """The notes as the studio keeps them: [{id, kind, t, t2, x, y, w, h, line, was, words, text}],
     times inside the film. Raises RoundError for what cannot be a round."""
     rec = film.record()
     if not isinstance(notes, list) or not notes:
@@ -286,6 +287,15 @@ def clean_notes(film, notes):
                 n["y"] = round(min(1.0, max(0.0, float(raw["y"]))), 3)
             except (KeyError, TypeError, ValueError):
                 raise RoundError(400, "A note on a spot says where: x and y, 0 to 1.") from None
+            # an area boxed on the picture: its width and height around that spot (both, or it
+            # is a point)
+            try:
+                w, h = float(raw["w"]), float(raw["h"])
+            except (KeyError, TypeError, ValueError):
+                w = h = 0.0
+            if w > 0 and h > 0:
+                n["w"] = round(min(1.0, max(AREA_MIN, w)), 3)
+                n["h"] = round(min(1.0, max(AREA_MIN, h)), 3)
         if n["kind"] == "stretch":
             try:
                 n["t2"] = round(min(length, max(n["t"], float(raw["t2"]))), 2)
@@ -581,6 +591,22 @@ def _where(x, y):
     )
 
 
+def _area(n):
+    """A boxed area in words: where its middle is, and how much of the picture it takes."""
+    return "the box around %s, %d%% of the picture wide and %d%% tall" % (
+        _where(n["x"], n["y"]),
+        round(n["w"] * 100),
+        round(n["h"] * 100),
+    )
+
+
+def _box(n, width, height):
+    """A boxed area's corners on a frame of this size, kept inside it."""
+    x0, x1 = (n["x"] - n["w"] / 2) * width, (n["x"] + n["w"] / 2) * width
+    y0, y1 = (n["y"] - n["h"] / 2) * height, (n["y"] + n["h"] / 2) * height
+    return max(0, x0), max(0, y0), min(width - 1, x1), min(height - 1, y1)
+
+
 def said_at(lines, t, t2=None):
     """What is being said at t (or between t and t2), in a sentence for the notes, or ""."""
     t2 = t if t2 is None else t2
@@ -617,6 +643,8 @@ def notes_text(notes, lines, frames):
     for i, n in enumerate(notes, 1):
         if n["kind"] == "film":
             head = "the whole film"
+        elif n["kind"] == "spot" and n.get("w"):
+            head = "at %s, an area: %s" % (_mmss(n["t"]), _area(n))
         elif n["kind"] == "spot":
             head = "at %s, a spot: %s" % (_mmss(n["t"]), _where(n["x"], n["y"]))
         elif n["kind"] == "stretch":
@@ -640,7 +668,13 @@ def notes_text(notes, lines, frames):
         elif n["kind"] == "line" and not n.get("words"):
             body.append('   The line: "%s"' % n["was"])
         if frames.get(n["id"]):
-            ring = " (the orange ring is the spot)" if n["kind"] == "spot" else ""
+            ring = (
+                " (the orange box is the area)"
+                if n["kind"] == "spot" and n.get("w")
+                else " (the orange ring is the spot)"
+                if n["kind"] == "spot"
+                else ""
+            )
             body.append("   The frame at %s: %s%s" % (_mmss(frame_time(n)), frames[n["id"]], ring))
         out.append("\n".join(body))
     return "\n\n".join(out)
@@ -790,7 +824,12 @@ async def pack(work, t, notes):
                 continue
             with Image.open(src) as im:
                 im = im.convert("RGB")
-                if n["kind"] == "spot":
+                if n["kind"] == "spot" and n.get("w"):  # an area: its box, as it was drawn
+                    d = ImageDraw.Draw(im)
+                    x0, y0, x1, y1 = _box(n, im.width, im.height)
+                    for k, col in ((5, (255, 255, 255)), (0, RING)):
+                        d.rectangle((x0 - k, y0 - k, x1 + k, y1 + k), outline=col, width=5)
+                elif n["kind"] == "spot":
                     d = ImageDraw.Draw(im)
                     cx, cy, r = n["x"] * im.width, n["y"] * im.height, max(18, im.width // 55)
                     for k, col in ((r + 5, (255, 255, 255)), (r, RING)):
