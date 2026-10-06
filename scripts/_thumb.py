@@ -71,7 +71,8 @@ THUMB_JS = os.path.join(_env.ROOT, "sketch", "thumb.js")
 # How stills are drawn. v2: a collage film's cut-outs (.webp) are in them -- v1 stills left every
 # one out, so its thumbnails, moments sheet and share picture showed empty paper (2026-09-30).
 # v3: the probe also notes the pictures a film draws itself, past SK.image (2026-10-05).
-STILLS = "v3"
+# v4: ...and its cards of paper smaller than a page (SK.sheet), so a blank one can be left out.
+STILLS = "v4"
 DECLUTTER = 4000  # a still's time + this: the film with its own words left out (sketch/thumb.js)
 # How options are designed. yt-2: the film's own words left out, its subject pushed in, the
 # message large in its title type and outline, its logo (2026-09-30). Options saved under another
@@ -2065,7 +2066,8 @@ def checks(o, final, mask, foot=None):
     if o["layout"] == "still":
         return res, fails
     # a poster is set on the film's bare stage: there are none of its words under it to hide
-    res["hides_text"] = 0 if o["layout"] == "poster" else covered_text(o, foot)
+    # ...and a cover's still has the film's words left out of it
+    res["hides_text"] = 0 if o["layout"] in ("poster", "cover") else covered_text(o, foot)
     if res["hides_text"] > c["text"]["hide_max_px"]:
         fails.append("it hides %d pixels of the film's own words" % res["hides_text"])
     m = np.asarray(mask) > 127
@@ -2695,6 +2697,571 @@ def layout_poster(words, st, pcs, hero, extras, pages, v, seed, n, logo=None, st
         "side": side,
         "spec": spec,
     }
+
+
+# ------------------------------------------------------------------ covers
+# A cover is what a YouTube thumbnail is on the channels people watch: a picture that fills the
+# frame, its subject large, and a few heavy words set ON it -- made readable by what is under
+# them (a fade of dark, a soft shade, a solid box), not by a quiet place found for them. Here the
+# picture is the film's own still, its own words left out, pushed in until its subject is large.
+COVERS = ("bottom", "word", "boxes", "band", "scene", "arrow")
+
+
+def cover_tones(st):
+    """(dark, light, accent, hot) -- the four colours a cover is made of, each the film's own
+    where it has one: its dark (its titles' outline, a dark label, its ink) for the fade under the
+    words and their shadow; its light (the fill of its outlined titles, its paper) for the words;
+    its accent for the starred word and a box; its hottest label colour for an arrow."""
+    o = st.get("outline")
+    strips = [tuple(c) for c in st.get("strips") or []]
+    need = cfg()["contrast_min"] + cfg()["ink_margin"]
+    darks = (
+        ([o["stroke"]["col"]] if o else [])
+        + sorted(strips, key=luminance)
+        + [st["ink"], st["text"]]
+    )
+    dark = next((tuple(c) for c in darks if luminance(c) < 0.08), (22, 20, 30))
+    lights = ([o["fill"]] if o else []) + [st["paper"], st["text"]]
+    light = next((tuple(c) for c in lights if luminance(c) > 0.72), (255, 255, 255))
+    accents = ([o["accent"]] if o else []) + [st["accent_fill"], st["accent"]] + strips
+    accent = next((tuple(c) for c in accents if _reads(c, dark) >= need and not _near(c, light, 70)
+                   and _chroma(c) >= 0.3), (255, 216, 74))  # fmt: skip
+
+    def warm(c):
+        h = colorsys.rgb_to_hsv(*(v / 255 for v in c))[0]
+        return _chroma(c) >= 0.45 and (h < 0.09 or h > 0.86) and not _near(c, accent, 70)
+
+    hot = next((c for c in sorted(strips, key=lambda c: -_chroma(c)) if warm(c)), accent)
+    return dark, light, accent, hot
+
+
+def cover_subject(img, boxes, pcs, focus=None):
+    """What the frame is pushed onto: {box, kind, name, zcap}. The picture the writer named, when
+    it is in the frame; else, of the film's pictures there, somebody before an object (a mark or a
+    picture full of words never); else the frame's subject as compose() finds it. `kind` is
+    figure (shown head to waist), object (shown whole) or area (a film that draws everything
+    itself). `zcap` is how far it may be pushed before its own pixels run out: a cut-out drawn at
+    half its size can be pushed 2x and be 1:1; a drawn film is lines and stays sharp."""
+    W, H = size()
+    k = cfg()["covers"]
+    cast = [n for n in cast_at(pcs, boxes) if not pcs[n]["mark"] and not pcs[n]["lettered"]]
+    name = focus if focus in cast else (_rank(pcs, cast)[0] if cast else None)
+    if name:
+        bs = [tuple(float(v) for v in b["box"]) for b in boxes if b.get("name") == name]
+        box = max(bs, key=lambda b: _area(_clip(b, (0, 0, W, H))))
+        own = pcs[name]["h"] / max(1.0, box[3] - box[1])  # its own pixels to one drawn
+        return {"box": box, "kind": "figure" if pcs[name]["figure"] else "object", "name": name,
+                "zcap": min(k["zoom_max"], cfg()["poster"]["max_up"] * own)}  # fmt: skip
+    box = salient_core(img) or subject_box(img, boxes)[0]
+    zcap = k["zoom_drawn"]
+    for b in boxes or []:  # a painted scene behind everything is pixels: no further than they go
+        bb = tuple(float(v) for v in b["box"])
+        if (
+            b.get("name") in pcs
+            and _area(_clip(bb, (0, 0, W, H))) >= cfg()["compose"]["backdrop_frac"] * W * H
+        ):
+            zcap = min(
+                zcap, cfg()["poster"]["max_up"] * pcs[b["name"]]["h"] / max(1.0, bb[3] - bb[1])
+            )
+    return {
+        "box": tuple(float(v) for v in box),
+        "kind": "area",
+        "name": None,
+        "zcap": max(1.0, zcap),
+    }
+
+
+def salient_core(img):
+    """The hottest connected part of the clean picture's saliency, as a box -- on a film that
+    draws everything itself, what the eye goes to first: a character's face, the one figure in a
+    wide scene (measured on the two drawn films of the look round, 2026-10-05: the cat's head in
+    four frames of four, the man between the buildings; subject_box's middle 80% of the saliency
+    was the whole room). None on a frame with nothing in it."""
+    from scipy import ndimage
+
+    k = cfg()["covers"]
+    s = ndimage.gaussian_filter(subject_map(img), k["core_blur"])
+    top = float(s.max())
+    if top <= 0:
+        return None
+    lab, n = ndimage.label(s >= k["core"] * top)
+    if not n:
+        return None
+    mass = ndimage.sum(s, lab, range(1, n + 1))
+    ys, xs = np.where(lab == int(np.argmax(mass)) + 1)
+    return (int(xs.min()) * 8, int(ys.min()) * 8, (int(xs.max()) + 1) * 8, (int(ys.max()) + 1) * 8)
+
+
+def cover_camera(img, sub, cx, top, fill, max_w=0.8, boxes=(), part=None, slide=False):
+    """The push that sets the subject where a recipe wants it: its middle at `cx` of the width,
+    its top at `top` of the height, the part of it a cover shows (a figure's head to waist, an
+    object whole) spanning `fill` of the height -- as far as its pixels allow, and never past the
+    film's own frame: the mat a collage film lays its pages on stays out of the picture, and so
+    does a strip of paper along its top or bottom edge (a chapter strip: wide, thin, full of
+    small print). (camera for thumb.js, the picture as the push shows it, the subject's box on
+    screen)."""
+    W, H = size()
+    k = cfg()["covers"]
+    x0, y0, x1, y1 = sub["box"]
+    fx0, fy0, fx1, fy1 = x0, y0, x1, y1  # what is framed
+    if sub["kind"] == "area":  # a core is a face or less: the room round it comes with it
+        gx, gt, gb = k["core_grow"]
+        fx0, fy0, fx1, fy1 = (
+            x0 - gx * (x1 - x0),
+            y0 - gt * (y1 - y0),
+            x1 + gx * (x1 - x0),
+            y1 + gb * (y1 - y0),
+        )
+    part = (part or k["figure_part"]) if sub["kind"] == "figure" else 1.0
+    z = fill * H / max(1.0, part * (fy1 - fy0))
+    z = min(z, max_w * W / max(1.0, fx1 - fx0), sub["zcap"])
+    z = max(1.0, z)
+    left = top_ = 0.0
+    right, bottom = float(W), float(H)
+    for b in frame_border(img):  # the flat band round an inset page
+        if b[2] - b[0] >= W - 1:  # a band across the top or the bottom
+            top_, bottom = (max(top_, b[3]), bottom) if b[1] <= 0 else (top_, min(bottom, b[1]))
+        else:
+            left, right = (max(left, b[2]), right) if b[0] <= 0 else (left, min(right, b[0]))
+    for b in boxes or []:
+        if b.get("name") != "#card":
+            continue
+        bx0, by0, bx1, by1 = (float(v) for v in b["box"])
+        if bx1 - bx0 >= k["strip_w"] * W and by1 - by0 <= k["strip_h"] * H:
+            if by0 > H / 2 and by0 > y0 + 0.5 * (y1 - y0):
+                bottom = min(bottom, by0)
+            elif by1 < H / 2 and by1 < y0:
+                top_ = max(top_, by1)
+    # a hair inside the page: its edge is a shadow on the mat, not a line
+    e = k["edge_inset"] * W
+    left, top_ = (left + e if left else left), (top_ + e if top_ else top_)
+    right, bottom = (right - e if right < W else right), (bottom - e if bottom < H else bottom)
+    z = max(z, W / (right - left), H / (bottom - top_))  # at least the push that hides the band
+    if sub["kind"] != "figure":
+        # a still cannot be slid past its own edge: what stands in the middle of an unpushed frame
+        # reaches the side a recipe wants (`slide`: the words stand beside it) only with the push
+        # that leaves the frame room to slide -- and gets clear of a band across the top the same way
+        mid = (fx0 + fx1) / 2
+        need = (
+            max(W * cx / max(1.0, mid - left), W * (1 - cx) / max(1.0, right - mid))
+            if slide
+            else 1.0
+        )
+        if top > 0.15:  # a core's first sixth is ears or hair: a band may cross that, not the face
+            clear = y0 + (k["core_crown"] * (y1 - y0) if sub["kind"] == "area" else 0.0)
+            need = max(need, H * top / max(1.0, clear - top_))
+        z = max(z, min(need, sub["zcap"], max_w * W / max(1.0, fx1 - fx0)))
+    vw, vh = W / z, H / z
+    vx0 = min(right - vw, max(left, (fx0 + fx1) / 2 - cx * vw))
+    vy0 = min(bottom - vh, max(top_, fy0 - top * vh))
+    shown = img.crop((round(vx0), round(vy0), round(vx0 + vw), round(vy0 + vh))).resize(
+        (W, H), Image.LANCZOS
+    )
+    on = tuple(round(v) for v in ((x0 - vx0) * z, (y0 - vy0) * z, (x1 - vx0) * z, (y1 - vy0) * z))
+    cam = None
+    if z > 1.01:
+        cam = {
+            "zoom": round(z, 4),
+            "cx": round(vx0 * z / (z - 1), 2),
+            "cy": round(vy0 * z / (z - 1), 2),
+        }
+    return cam, shown, on
+
+
+def fit_stack(toks, font, zw, zh, max_lines, cap_max, gap=0.2, justify=True, spread=1.9):
+    """The words as a stack for a cover: each line at a size of its own so that every line is as
+    wide as the block (`justify`: the stacked look of a thumbnail's words, the short line the
+    loud one), or all at one size. The largest stack that fits zw x zh, no line under the floor,
+    none more than `spread` times another: {lines: [{words, text, cap, px, w}], w, h, gap}, or
+    None. A dash never starts a line."""
+    c = cfg()
+    ratio = cap_ratio(font["file"])
+    f0 = pil_font(font["file"], 200, font.get("weight"))
+    up = font.get("upper")
+    words = [[(t.upper() if up else t, a) for t, a in segs] for segs in toks]
+    how = (
+        {"direction": "rtl"}
+        if JOINED.search(" ".join(word_text(w) for w in words)) and shapes()
+        else {}
+    )
+    floor = c["covers"]["cap_min"]
+    best = None
+    for sp in _splits(len(words), max_lines):
+        if any(not re.search(r"\w", word_text(words[a])) for a, _ in sp[1:]):
+            continue
+        texts = [" ".join(word_text(w) for w in words[a:b]) for a, b in sp]
+        # a line's width at a cap height of 1: its advance (and its tracking) over the cap ratio
+        unit = [(f0.getlength(t, **how) / 200 + font.get("tracking", 0.0) * max(0, len(t) - 1)) / ratio
+                for t in texts]  # fmt: skip
+        # ...and its ink above and below the baseline, as shares of the cap height: a Й's breve
+        # stands over the capitals and a comma hangs under them, and lines are stacked by ink
+        ink = [f0.getbbox(t, anchor="ls", **how) for t in texts]
+        up_, down = (
+            [max(1.0, -b[1] / 200 / ratio) for b in ink],
+            [max(0.0, b[3] / 200 / ratio) for b in ink],
+        )
+        if justify:
+            caps = [min(cap_max, zw / u) for u in unit]
+            lo = min(caps)
+            caps = [min(cp, spread * lo) for cp in caps]
+        else:
+            caps = [min(cap_max, zw / max(unit))] * len(texts)
+
+        def height(cs):
+            g_ = gap * sum(cs) / len(cs)
+            return sum(cp * (u_ + d_) for cp, u_, d_ in zip(cs, up_, down, strict=True)) + g_ * (
+                len(cs) - 1
+            )
+
+        if height(caps) > zh:
+            # too tall: every line smaller by one factor -- a line that would fall under the floor
+            # stays at it, and the others give up the difference
+            n_ = len(caps)
+            each = [u_ + d_ + gap * (n_ - 1) / n_ for u_, d_ in zip(up_, down, strict=True)]
+            held = set()
+            while len(held) < n_:
+                rest = sum(each[i] * caps[i] for i in range(n_) if i not in held)
+                f_ = (zh - sum(each[i] * floor for i in held)) / rest
+                low = {i for i in range(n_) if i not in held and caps[i] * f_ < floor}
+                if not low:
+                    caps = [floor if i in held else caps[i] * f_ for i in range(n_)]
+                    break
+                held |= low
+            else:
+                caps = [floor] * n_
+        if min(caps) < floor - 0.01 or height(caps) > zh + 0.5:
+            continue
+        g = gap * sum(caps) / len(caps)
+        area = sum(cp * cp * u for cp, u in zip(caps, unit, strict=True))
+        if best is None or area > best[0]:
+            lines = []
+            for (a, b), t, cp, u, u_, d_ in zip(sp, texts, caps, unit, up_, down, strict=True):
+                lines.append({"words": words[a:b], "text": t, "cap": cp, "px": cp / ratio, "w": cp * u,
+                              "up": cp * u_, "down": cp * d_})  # fmt: skip
+            best = (
+                area,
+                {"lines": lines, "w": max(L["w"] for L in lines), "h": height(caps), "gap": g},
+            )
+    return best[1] if best else None
+
+
+def _cover_lines(
+    stack, x, top, anchor, head, light, accent, dark, skew=0.0, shadow=True, ink=None, halo=None
+):
+    """A stack's lines for thumb.js: x is the block's left, middle or right by `anchor`, `top` the
+    top of the first line's ink. `ink` sets every letter in one colour (dark letters on a light
+    box). `halo` ({blur, passes}) widens the soft dark round the letters: words set in the scene,
+    with no fade under them, carry their own."""
+    k = {**cfg()["covers"]["shadow"], "passes": 2, **(halo or {})}
+    out, y = [], top
+    for L in stack["lines"]:
+        y += L.get("up", L["cap"])
+        lx = {"start": x, "middle": x - L["w"] / 2, "end": x - L["w"]}[anchor]
+        px = L["px"]
+        out.append({
+            "x": round(lx, 1), "y": round(y, 1), "size": round(px, 1), "w": round(L["w"], 1),
+            "cap": round(L["cap"], 1), "family": head["family"], "wt": head["weight"],
+            "runs": runs(L["words"], ink or light, ink or accent), "rot": 0.0, "cx": 0.0, "cy": 0.0,
+            "ls": round((head.get("ls") or 0.0) * px if (head.get("ls") or 0) >= 0.01 else 0.0, 2),
+            "anchor": anchor, "stroke": None, "skew": skew,
+            "shadow": {"dx": round(k["dx"] * px, 1), "dy": round(k["dy"] * px, 1), "col": rgb_hex(dark),
+                       "blur": round(k["blur"] * px, 1), "passes": k["passes"]} if shadow else None,
+        })  # fmt: skip
+        y += L.get("down", 0.0) + stack["gap"]
+    return out
+
+
+def layout_cover(recipe, words, st, img, boxes, pcs, v, focus=None, logo=None):
+    """One cover: the film's still pushed onto its subject, and the words on it the way `recipe`
+    sets them --
+
+      bottom   a fade of the film's dark over the lower half; one or two wide lines along the
+               bottom, from the left
+      word     the same fade; the starred word alone, as wide as the frame allows
+      boxes    the picture untouched; a line to a straight solid box (the film's accent for the
+               starred line, its light for the rest), dark letters, stacked on one side
+      band     the picture untouched; one band of the film's dark across the top, the words in it
+      scene    huge slanted words across the picture, a dark halo round the letters only
+      arrow    a slanted stack on one side, a block arrow under it at the subject on the other
+
+    `v` is what varies (cover_variant): the side the subject sits on. `img` is the clean still
+    (the film's own words left out), `boxes` what the film drew there. None when the words cannot
+    be set at a size that reads."""
+    c, k = cfg(), cfg()["covers"]
+    r = k[recipe]
+    W, H = size()
+    toks = tokens(words)
+    head = pick_head(st, words)
+    if not head or not toks:
+        return None
+    if recipe == "word":  # the one word the writer starred, else the longest
+        hot_ = [segs for segs in toks if any(a for _, a in segs)]
+        toks = hot_[:1] or [max(toks, key=lambda segs: len(word_text(segs)))]
+        toks = [[(t, a) for t, a in toks[0] if re.search(r"\w", t)] or toks[0]]
+    font = _font(head)
+    dark, light, accent, hot = cover_tones(st)
+    safe, badge = safe_rects()
+    sub = cover_subject(img, boxes, pcs, focus)
+    # The side the subject sits on: a still cannot be slid past its own edge, so a subject that
+    # stands near one side of the frame stays on that side; one in the middle goes where `v` says.
+    mid = (sub["box"][0] + sub["box"][2]) / 2 / W
+    side = "left" if mid < 0.36 else "right" if mid > 0.64 else v["side"]
+    obj = sub["kind"] != "figure"
+    fx, box, lines = [], None, None
+    mirror = (lambda x: x) if side == "right" else (lambda x: 1 - x)
+    scx = mirror(r["subject_cx"]) if r.get("subject_cx") else 0.5
+    fill = {"figure": r["fill"], "object": r["fill_object"], "area": k["fill_area"]}[sub["kind"]]
+    top = r.get("top", 0.05)
+    # beside the words, a wide subject is pushed no further than its own side of the frame
+    max_w = min(0.8, 2 * (1 - r["subject_cx"]) + 0.08) if obj and r.get("subject_cx") else 0.8
+    gap_ = 0.012 * H
+    # an object is pushed until it can sit where the recipe wants it (it is small in its frame, and
+    # the larger for it); a core only when the words stand beside it -- pushed for a fade along the
+    # bottom it leaves the words no room under its face
+    slide = sub["kind"] == "object" or (obj and recipe in ("boxes", "arrow"))
+    mark = None  # the corner the logo takes: no word in it
+    if logo and recipe != "band":
+        lh_ = k["logo_h"] * H
+        lw_ = lh_ if logo.get("round") else min(lh_ * logo["aspect"], 0.3 * W)
+        mark = (0, 0, k["logo_margin"] * H + lw_ + 2 * gap_, k["logo_margin"] * H + lh_ + 2 * gap_)
+    if recipe == "band":
+        lead = r["logo_w"] * W if logo else 0
+        py_ = r["pad"] * H
+        stack = fit_stack(toks, font, safe[2] - safe[0] - lead, r["h_max"] * H - 2 * py_, r["max_lines"],
+                          r["cap_max"], gap=r["gap"], justify=False)  # fmt: skip
+        if not stack:
+            return None
+        pt = max(py_, safe[1])  # the first line clear of the frame's own margin
+        bh = stack["h"] + pt + py_
+        cam, shown, on = cover_camera(img, sub, scx, bh / H + 0.03, min(fill, 1 - bh / H - 0.03),
+                                      max_w=max_w, boxes=boxes, part=r["figure_part"], slide=slide)  # fmt: skip
+        fx.append({"k": "box", "x": 0, "y": 0, "w": W, "h": round(bh), "col": rgb_hex(dark),
+                   "shadow": "rgba(0,0,0,.35)"})  # fmt: skip
+        x0 = safe[0] + lead
+        lines = _cover_lines(stack, x0, pt, "start", head, light, accent, dark, shadow=False)
+        box = (x0, pt, x0 + stack["w"], pt + stack["h"])
+    else:
+        skew = r.get("skew", 0.0)
+        lean = math.tan(skew) * r.get("cap_max", 200)  # the room a slant takes at each end
+        pad = r.get("pad", [0.0, 0.0])
+        stack = None
+        # the subject as large as the recipe asks, then smaller, until the words have their room
+        for less in k["fill_steps"]:
+            cam, shown, on = cover_camera(img, sub, scx, top, fill * less, max_w=max_w, boxes=boxes,
+                                          slide=slide)  # fmt: skip
+            zx0, zy0, zx1, zy1 = r["zone"]
+            if r.get("subject_cx") and side == "left":  # the words take the other side
+                zx0, zx1 = 1 - zx1, 1 - zx0
+            zx0, zx1 = max(zx0 * W, safe[0]), min(zx1 * W, safe[2])
+            zy0, zy1 = max(zy0 * H, safe[1]), min(zy1 * H, safe[3])
+            if (
+                zx1 > badge[0] and zy1 > badge[1]
+            ):  # YouTube's stamp: the words stop short of its corner
+                if recipe in ("bottom", "word"):
+                    zx1 = badge[0]
+                else:
+                    zy1 = badge[1]
+            if mark and zx0 < mark[2] and zy0 < mark[3]:
+                zy0 = mark[3]
+            # what the cover is of is never under the words: beside it they stop short of it when
+            # that leaves them room, and anywhere else they start below it
+            ko = _keep_out(sub, on)
+            if zx0 < ko[2] and zx1 > ko[0] and zy0 < ko[3] and zy1 > ko[1]:
+                nx0, nx1 = (
+                    (zx0, min(zx1, ko[0] - gap_))
+                    if side == "right"
+                    else (max(zx0, ko[2] + gap_), zx1)
+                )
+                if recipe in ("boxes", "arrow") and obj and nx1 - nx0 >= k["side_min"] * W:
+                    zx0, zx1 = nx0, nx1
+                else:
+                    zy0 = max(zy0, ko[3] + gap_)
+            for cap_max in range(r["cap_max"], k["cap_min"] - 1, -10):
+                stack = fit_stack(toks, font, zx1 - zx0 - lean - 2 * pad[0] * cap_max, zy1 - zy0,
+                                  r["max_lines"], cap_max, gap=r["gap"] + 2 * pad[1],
+                                  justify=r.get("justify", True))  # fmt: skip
+                if stack:
+                    break
+            if stack:
+                break
+        if not stack:
+            return None
+        anchor = r["anchor"]
+        bw, bh = stack["w"], stack["h"]
+        ax = {"start": zx0 + lean / 2 + pad[0] * stack["lines"][0]["cap"], "middle": (zx0 + zx1) / 2,
+              "end": zx1 - lean / 2}[anchor]  # fmt: skip
+        if r.get("subject_cx") and anchor != "middle" and side == "left":
+            anchor, ax = "end", zx1 - lean / 2 - pad[0] * stack["lines"][0]["cap"]
+        ty = {"bottom": zy1 - bh, "middle": (zy0 + zy1 - bh) / 2, "top": zy0}[r["valign"]]
+        left = {"start": ax, "middle": ax - bw / 2, "end": ax - bw}[anchor]
+        box = (left - lean / 2, ty, left + bw + lean / 2, ty + bh)
+        if recipe in ("bottom", "word"):
+            fx.append({"k": "scrim", "side": "bottom", "size": round(H - ty + r["scrim_over"] * H),
+                       "col": rgb_hex(dark), "a": r["scrim_a"], "mid": 0.42})  # fmt: skip
+            lines = _cover_lines(stack, ax, ty, anchor, head, light, accent, dark, skew)
+        elif recipe == "boxes":
+            y = ty
+            lines = []
+            for L in stack["lines"]:
+                starred = any(a for segs in L["words"] for _, a in segs)
+                px_, py_ = pad[0] * L["cap"], pad[1] * L["cap"]
+                lx = {"start": ax, "middle": ax - L["w"] / 2, "end": ax - L["w"]}[anchor]
+                base = y + L["up"]
+                fx.append({"k": "box", "x": round(lx - px_), "y": round(base - L["cap"] - py_),
+                           "w": round(L["w"] + 2 * px_), "h": round(L["cap"] + 2 * py_),
+                           "col": rgb_hex(accent if starred else light), "shadow": "rgba(0,0,0,.4)"})  # fmt: skip
+                one = {"lines": [L], "gap": 0}
+                lines += _cover_lines(
+                    one, ax, y, anchor, head, light, accent, dark, shadow=False, ink=dark
+                )
+                y += L["up"] + L["down"] + stack["gap"]
+            box = (box[0] - pad[0] * r["cap_max"], box[1] - pad[1] * r["cap_max"],
+                   box[2] + pad[0] * r["cap_max"], box[3] + pad[1] * r["cap_max"])  # fmt: skip
+        else:  # scene, arrow: the film's dark behind the letters only -- a halo that hugs them
+            if r.get("shade_a"):
+                g = r["shade_grow"] * stack["lines"][0]["cap"]
+                fx.append({"k": "shade", "x": round(box[0] - g), "y": round(box[1] - g * 0.6),
+                           "w": round(box[2] - box[0] + 2 * g), "h": round(bh + 1.2 * g), "r": round(g),
+                           "col": rgb_hex(dark), "a": r["shade_a"], "blur": round(r["shade_blur"] * H)})  # fmt: skip
+            lines = _cover_lines(
+                stack, ax, ty, anchor, head, light, accent, dark, skew, halo=r.get("halo")
+            )
+            if recipe == "arrow":
+                # under the words, pointing sideways at the subject: it crosses neither
+                sw = on[2] - on[0]
+                way = -1 if side == "left" else 1  # the way the arrow points
+                tip = (on[2] - 0.1 * sw) if side == "left" else (on[0] + 0.1 * sw)
+                ay = min(H * 0.9, box[3] + r["arrow_gap"] * H)
+                fx.append({"k": "arrow", "x1": round(tip - way * r["arrow_len"] * W), "y1": round(ay + 0.02 * H),
+                           "x2": round(tip), "y2": round(ay - 0.03 * H), "w": round(r["arrow_w"] * H),
+                           "col": rgb_hex(hot), "rim": rgb_hex(light)})  # fmt: skip
+    spec = {
+        "declutter": True,
+        "hide": empty_backings(boxes, img),
+        "camera": cam,
+        "fx": fx,
+        "lines": lines,
+    }
+    if logo:
+        lh = round(k["logo_h"] * H)
+        band_h = fx[0]["h"] if recipe == "band" else 0
+        if band_h:  # in the band, before the words
+            lh = round(min(band_h * 0.8, r["logo_w"] * W * 0.8))
+        lw = lh if logo.get("round") else round(min(lh * logo["aspect"], 0.3 * W))
+        lh = lh if logo.get("round") else round(lw / logo["aspect"])
+        m = (band_h - lh) / 2 if band_h else k["logo_margin"] * H
+        spec["logo"] = _logo_spec(logo, max(m, k["logo_margin"] * H * 0.6), m, lh, lw, light)
+    caps = [L["cap"] for L in stack["lines"]]
+    return {
+        "layout": "cover",
+        "recipe": recipe,
+        "words": words,
+        "head": head,
+        "cap": round(min(caps)),
+        "cap_max": round(max(caps)),
+        "px": round(min(L["px"] for L in stack["lines"])),
+        "box": tuple(round(e) for e in box),
+        "stroke_px": 0,
+        "subject": {
+            "name": sub["name"],
+            "kind": sub["kind"],
+            "on": on,
+            "zoom": cam["zoom"] if cam else 1.0,
+        },
+        "img": shown,
+        "spec": spec,
+    }
+
+
+def _keep_out(sub, on):
+    """The part of a cover's subject no word is set over, on screen: a figure's face, the upper
+    part of an object, most of a core (it is a face or less already; under it is a collar)."""
+    k = cfg()["covers"]
+    x0, y0, x1, y1 = on
+    w, h = x1 - x0, y1 - y0
+    if sub["kind"] == "area":
+        return (x0, y0, x1, y0 + k["area_part"] * h)
+    part = k["face_part"] if sub["kind"] == "figure" else k["object_part"]
+    return (x0 + 0.2 * w, y0, x1 - 0.2 * w, y0 + part * h)
+
+
+def cover_variant(seed, n):
+    """What changes from one cover to the next: the side its subject sits on. The same film and
+    option always get the same answer."""
+    first = _pick(seed, 0, "cover-side", ["left", "right"])
+    return {"side": first if n % 2 else {"left": "right", "right": "left"}[first]}
+
+
+def make_looks(film_dir, concepts, out_dir, recipes=COVERS, env=None, log=print, logo="all"):
+    """The look round: every recipe for each of a film's concepts, drawn and measured, nothing
+    chosen -- [{recipe, n (the concept), words, t, checks, fails, final, subject}], and the JPEGs
+    as look-<recipe>-<n>.jpg in out_dir. What a person looks at before any recipe is offered."""
+    t0 = time.time()
+    length = film_length(film_dir)
+    work = os.path.join(film_dir, "temp", "thumbs", "looks")
+    shutil.rmtree(work, ignore_errors=True)
+    pcs = film_pieces(film_dir)
+    seed = film_key(film_dir)
+    want = set()
+    for o in concepts:
+        cands, every = settle_times(o["at"], length)
+        want |= set(every) | {DECLUTTER + t for t in cands}
+    stills = render_stills(film_dir, want, env=env)
+    st = film_style(film_dir, env)
+    opts = []
+    for i, cpt in enumerate(concepts, 1):
+        if not cpt.get("words"):
+            continue
+        t, _ = settle(cpt["at"], stills, length)
+        img = load_still(stills[round(DECLUTTER + t, 2)])
+        boxes = boxes_at(stills_dir(film_dir), t)
+        for recipe in recipes:
+            lay = layout_cover(recipe, cpt["words"], st, img, boxes, pcs, cover_variant(seed, i),
+                               focus=cpt.get("hero"), logo=st["logo"] if logo == "all" else None)  # fmt: skip
+            if lay is None:
+                log("  look %s %d: the words cannot be set" % (recipe, i))
+                continue
+            opts.append(dict(lay, n=len(opts) + 1, concept=i, t=t, at=cpt["at"], notes=[]))
+    shots = paint(film_dir, opts, work, st, env) if opts else {}
+    os.makedirs(out_dir, exist_ok=True)
+    out = []
+    for o in opts:
+        final, mask, foot = shots[o["n"]]
+        res, fails = checks(o, final, mask, foot)
+        path = os.path.join(out_dir, "look-%s-%d.jpg" % (o["recipe"], o["concept"]))
+        with open(path, "wb") as f:
+            f.write(jpeg(final))
+        out.append({"recipe": o["recipe"], "n": o["concept"], "words": o["words"], "t": o["t"], "file": path,
+                    "checks": {k_: v_ for k_, v_ in res.items() if k_ != "ink_box"}, "fails": fails,
+                    "cap": o["cap"], "cap_max": o["cap_max"], "subject": o["subject"], "final": final})  # fmt: skip
+    log(
+        "  looks: %d covers in %.1f s; type %s"
+        % (len(out), time.time() - t0, (opts[0]["head"]["family"] if opts else "-"))
+    )
+    return out
+
+
+def looks_sheet(looks, out, tile=(640, 360), recipes=COVERS):
+    """The look round on one sheet: a row a recipe, a column a concept."""
+    cols = sorted({x["n"] for x in looks})
+    rows = [r for r in recipes if any(x["recipe"] == r for x in looks)]
+    tw, th = tile
+    pad, side = 6, 150
+    sheet = Image.new(
+        "RGB", (side + len(cols) * (tw + pad), len(rows) * (th + pad) + pad), (24, 24, 24)
+    )
+    d = ImageDraw.Draw(sheet)
+    f = pil_font("fonts/Montserrat-Bold.ttf", 26)
+    for ri, r in enumerate(rows):
+        y = pad + ri * (th + pad)
+        d.text((14, y + th // 2 - 16), "%d %s" % (ri + 1, r), font=f, fill=(240, 240, 240))
+        for ci, n in enumerate(cols):
+            hit = next((x for x in looks if x["recipe"] == r and x["n"] == n), None)
+            if hit:
+                sheet.paste(hit["final"].resize(tile, Image.LANCZOS), (side + ci * (tw + pad), y))
+    os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+    sheet.save(out, quality=90)
+    return out
 
 
 # ------------------------------------------------------------------ the whole thing

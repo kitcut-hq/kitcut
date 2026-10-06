@@ -53,6 +53,13 @@ def main():
         help="which options carry the film's logo (config: logo.options)",
     )
     ap.add_argument("--list", action="store_true", help="print everything; write no options")
+    ap.add_argument(
+        "--looks",
+        nargs="?",
+        const="all",
+        help="the look round: every cover recipe (or the ones named, comma-separated) for each "
+        "concept, on one sheet (looks.jpg) -- what a person picks from before any is offered",
+    )
     a = ap.parse_args()
 
     film = os.path.abspath(a.film)
@@ -85,6 +92,29 @@ def main():
         for p in problems:
             print("  PROBLEM: %s" % p["text"])
         concepts = _thumb.fill_concepts(concepts, moments, length)
+
+    if a.looks:
+        recipes = _thumb.COVERS if a.looks == "all" else tuple(a.looks.split(","))
+        looks = _thumb.make_looks(
+            film, concepts, out, recipes, logo="none" if a.logo == "none" else "all"
+        )
+        for x in looks:
+            print(
+                "  %-7s %d  caps %3d-%3d px  %s on %s (%.2fx)  %s%s"
+                % (
+                    x["recipe"],
+                    x["n"],
+                    x["cap"],
+                    x["cap_max"],
+                    x["subject"]["kind"],
+                    x["subject"]["name"] or "the frame",
+                    x["subject"]["zoom"],
+                    json.dumps(x["checks"], ensure_ascii=False),
+                    ("  FAILS: " + "; ".join(x["fails"])) if x["fails"] else "",
+                )
+            )
+        print("  %s" % _thumb.looks_sheet(looks, os.path.join(out, "looks.jpg"), recipes=recipes))
+        return
 
     opts = _thumb.make_options(film, concepts, out, logo=a.logo)
     for o in opts:

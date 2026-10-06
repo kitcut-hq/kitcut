@@ -48,6 +48,7 @@
   const seen = { txt: {}, card: {}, img: {}, strip: {} };
   const boxes = {};
   let own = false; // the overlay's own drawing is not the film's
+  let sheetN = {}; // how many sheets of each size and colour this frame has drawn so far
   let inside = 0; // inside one of the film's word-drawing calls (a ransom's letters are tapes)
 
   // ------------------------------------------------------------------ the pass and the option
@@ -250,7 +251,19 @@
   if (typeof SK.sheet === 'function') {
     const sheet0 = SK.sheet;
     SK.sheet = function (x, y, w, h, o = {}) {
-      if (!staged()) return sheet0.apply(this, arguments);
+      if (!staged()) {
+        // A sheet smaller than a page is a card of paper (a list, a note) or a strip along an
+        // edge: noted on the 4000 pass like SK.card's, and left out when an option's `hide`
+        // names it (a card whose words are out is a blank slab). Its id is its size and colour
+        // and which one of those it is in the frame's own drawing order -- the same on every
+        // pass, where its place on screen is not (the camera's push moves it).
+        if (own || hushed || w * h >= T.pageMin * SK.W * SK.H) return sheet0.apply(this, arguments);
+        const key = idOf(w, h, o.col), n = (sheetN[key] = (sheetN[key] || 0) + 1), id = 'sheet|' + key + '#' + n;
+        const opt = cur();
+        if (opt && opt.hide && opt.hide.includes(id)) return hush(() => sheet0.apply(this, arguments));
+        if (T.mode === 4 && (o.alpha ?? 1) > 0) note4({ name: '#card', id, box: onScreen(x - w / 2, y - h / 2, x + w / 2, y + h / 2) });
+        return sheet0.apply(this, arguments);
+      }
       const b = onScreen(x - w / 2, y - h / 2, x + w / 2, y + h / 2);
       const seen = Math.max(0, Math.min(SK.W, b[2]) - Math.max(0, b[0])) * Math.max(0, Math.min(SK.H, b[3]) - Math.max(0, b[1]));
       if (seen < T.pageMin * SK.W * SK.H) return sheet0.apply(this, arguments);
@@ -284,6 +297,7 @@
   SK.render = function (t) {
     const mode = Math.floor(t / 1000), real = t - mode * 1000;
     T.mode = mode; T.key = real.toFixed(2);
+    sheetN = {};
     if (mode === 4) boxes[T.key] = [];
     if (mode === 5) boxes['P' + T.key] = [];
     // the masks are exact white on black: no grain or vignette over them
@@ -329,6 +343,8 @@
     for (const L of o.lines || []) {
       c.save();
       if (L.rot) { c.translate(L.cx, L.cy); c.rotate(L.rot); c.translate(-L.cx, -L.cy); }
+      // a slant: the line sheared about its baseline, in every pass (the masks match the picture)
+      if (L.skew) { c.translate(0, L.y); c.transform(1, 0, -Math.tan(L.skew), 1, 0, 0); c.translate(0, -L.y); }
       c.font = `${L.wt} ${L.size}px "${L.family}"`;
       c.letterSpacing = (L.ls || 0) + 'px';
       // held to the width _thumb.py planned with the same font file: a page that draws it wider
@@ -353,12 +369,30 @@
         at.push(x);
         if (!rtl) x += w;
       }
+      if (mode === 1 && L.shadow) { // under everything: a soft dark, then the hard drop a cover's words stand on
+        const s = L.shadow;
+        if (s.blur) {
+          c.save(); c.shadowColor = s.col; c.shadowBlur = s.blur; c.shadowOffsetX = s.dx * .5; c.shadowOffsetY = s.dy * .5;
+          c.fillStyle = s.col;
+          for (let k = 0; k < (s.passes || 1); k++) L.runs.forEach((r, i) => c.fillText(r.text, at[i], L.y));
+          c.restore();
+        }
+        c.fillStyle = s.col;
+        // a hard drop is the letters again, a step at a time down to the offset: no gap at a corner
+        const n = Math.max(1, Math.ceil(Math.hypot(s.dx, s.dy) / 2));
+        for (let k = 1; k <= n; k++) L.runs.forEach((r, i) => c.fillText(r.text, at[i] + s.dx * k / n, L.y + s.dy * k / n));
+      }
       if (mode === 1 && L.stroke) { // the outline under every run first, so no run's edge cuts the next
         c.lineJoin = 'round'; c.lineWidth = L.stroke.w; c.strokeStyle = L.stroke.col;
         L.runs.forEach((r, i) => c.strokeText(r.text, at[i], L.y));
       }
       L.runs.forEach((r, i) => {
-        c.fillStyle = mode === 1 ? r.col : '#ffffff';
+        let fill = r.col;
+        if (mode === 1 && r.grad) { // top of the capitals to the baseline
+          fill = c.createLinearGradient(0, L.y - (L.cap || L.size * .7), 0, L.y);
+          fill.addColorStop(0, r.grad[0]); fill.addColorStop(1, r.grad[1]);
+        }
+        c.fillStyle = mode === 1 ? fill : '#ffffff';
         c.fillText(r.text, at[i], L.y);
       });
       c.restore();
@@ -476,12 +510,59 @@
       SK.halftone(L.x, L.y, L.w, L.h, { col: L.col, from: L.from || 'c', step: L.step || 20, nudge: 0 });
     }
   }
+  // A cover's effects, in the order given: what makes words readable ON a picture, where a quiet
+  // place used to be hunted for. Each is the film's own colour doing the work -- its dark as a
+  // fade under the words, its accent as a box.
+  function effect(e, mode) {
+    const c = ctx(), W = SK.W, H = SK.H;
+    if (e.k === 'grade') { // the picture a little richer: itself, drawn back through a filter
+      if (mode !== 1) return;
+      const cv = document.createElement('canvas'); cv.width = c.canvas.width; cv.height = c.canvas.height;
+      cv.getContext('2d').drawImage(c.canvas, 0, 0);
+      c.save(); c.filter = `saturate(${e.saturate ?? 1}) contrast(${e.contrast ?? 1}) brightness(${e.brightness ?? 1})`;
+      c.drawImage(cv, 0, 0, W, H); c.restore();
+    } else if (e.k === 'scrim') { // a fade of the film's dark from one side: dark under the words only
+      if (mode !== 1) return;
+      const s = e.size, v = e.side === 'top' || e.side === 'bottom';
+      const g = e.side === 'bottom' ? c.createLinearGradient(0, H - s, 0, H) : e.side === 'top' ? c.createLinearGradient(0, s, 0, 0)
+        : e.side === 'left' ? c.createLinearGradient(s, 0, 0, 0) : c.createLinearGradient(W - s, 0, W, 0);
+      const [r, gg, b] = [1, 3, 5].map((i) => parseInt(e.col.slice(i, i + 2), 16));
+      const at = (a) => `rgba(${r},${gg},${b},${a})`;
+      g.addColorStop(0, at(0)); g.addColorStop(e.mid ?? .45, at(e.a * .62)); g.addColorStop(1, at(e.a));
+      c.fillStyle = g;
+      if (v) c.fillRect(0, e.side === 'bottom' ? H - s : 0, W, s); else c.fillRect(e.side === 'left' ? 0 : W - s, 0, s, H);
+    } else if (e.k === 'shade') { // a soft dark behind a block of words set in the scene
+      if (mode !== 1) return;
+      c.save(); c.filter = `blur(${e.blur}px)`; c.globalAlpha = e.a;
+      SK.rrPath(e.x, e.y, e.w, e.h, e.r || 0); c.fillStyle = e.col; c.fill(); c.restore();
+    } else if (e.k === 'box') { // a straight solid box under a line (or a band across the frame)
+      if (mode === 2) return;
+      c.save();
+      if (e.rot) { c.translate(e.cx, e.cy); c.rotate(e.rot); c.translate(-e.cx, -e.cy); }
+      if (e.skew) { c.translate(0, e.y + e.h); c.transform(1, 0, -Math.tan(e.skew), 1, 0, 0); c.translate(0, -(e.y + e.h)); }
+      if (mode === 1 && e.shadow) { c.shadowColor = e.shadow; c.shadowBlur = e.h * .12; c.shadowOffsetY = e.h * .06; }
+      c.fillStyle = mode === 3 ? '#ffffff' : e.col; c.fillRect(e.x, e.y, e.w, e.h);
+      c.restore();
+    } else if (e.k === 'arrow') { // a block arrow, edged in the light colour, at what the words are about
+      if (mode !== 1) return;
+      const dx = e.x2 - e.x1, dy = e.y2 - e.y1, L = Math.hypot(dx, dy), a = Math.atan2(dy, dx), w = e.w, h = Math.min(L * .5, w * 2.2);
+      c.save(); c.translate(e.x1, e.y1); c.rotate(a);
+      c.beginPath();
+      c.moveTo(0, -w / 2); c.lineTo(L - h, -w / 2); c.lineTo(L - h, -w * 1.25); c.lineTo(L, 0);
+      c.lineTo(L - h, w * 1.25); c.lineTo(L - h, w / 2); c.lineTo(0, w / 2); c.closePath();
+      c.lineJoin = 'round';
+      if (e.rim) { c.shadowColor = 'rgba(0,0,0,.35)'; c.shadowBlur = w * .5; c.shadowOffsetY = w * .2; c.lineWidth = w * .45; c.strokeStyle = e.rim; c.stroke(); }
+      c.shadowColor = 'transparent'; c.fillStyle = e.col; c.fill();
+      c.restore();
+    }
+  }
   function draw(o, mode) {
     const c = ctx();
     c.save();
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.globalAlpha = 1;
     if (mode >= 2) { c.fillStyle = '#000000'; c.fillRect(0, 0, SK.W, SK.H); }
+    for (const e of o.fx || []) effect(e, mode);
     if (o.panel) {
       if (mode !== 2) { c.fillStyle = mode === 3 ? '#ffffff' : o.panel.fill; c.fillRect(o.panel.x, 0, o.panel.w, SK.H); }
       if (mode === 1 && o.panel.rule) { c.fillStyle = o.panel.rule.col; c.fillRect(o.panel.rule.x, 0, o.panel.rule.w, SK.H); }

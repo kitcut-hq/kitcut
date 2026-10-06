@@ -363,6 +363,166 @@
       "mate_out": 0.62
     }
   },
+  "covers": {
+    "zoom_max": 3.6,
+    "zoom_drawn": 2.0,
+    "figure_part": 0.58,
+    "face_part": 0.27,
+    "fill_steps": [
+      1.0,
+      0.85,
+      0.7
+    ],
+    "strip_w": 0.6,
+    "strip_h": 0.14,
+    "edge_inset": 0.008,
+    "cap_min": 110,
+    "logo_h": 0.15,
+    "logo_margin": 0.035,
+    "shadow": {
+      "dx": 0.03,
+      "dy": 0.045,
+      "blur": 0.12
+    },
+    "bottom": {
+      "subject_cx": 0.6,
+      "fill": 0.92,
+      "fill_object": 0.6,
+      "top": 0.05,
+      "zone": [
+        0.04,
+        0.5,
+        0.96,
+        0.955
+      ],
+      "anchor": "start",
+      "valign": "bottom",
+      "max_lines": 2,
+      "cap_max": 220,
+      "gap": 0.2,
+      "justify": true,
+      "scrim_over": 0.16,
+      "scrim_a": 0.93
+    },
+    "word": {
+      "fill": 0.92,
+      "fill_object": 0.6,
+      "top": 0.05,
+      "zone": [
+        0.04,
+        0.5,
+        0.96,
+        0.955
+      ],
+      "anchor": "middle",
+      "valign": "bottom",
+      "max_lines": 1,
+      "cap_max": 330,
+      "gap": 0.2,
+      "justify": true,
+      "scrim_over": 0.14,
+      "scrim_a": 0.93
+    },
+    "boxes": {
+      "subject_cx": 0.72,
+      "fill": 0.92,
+      "fill_object": 0.7,
+      "top": 0.05,
+      "zone": [
+        0.04,
+        0.28,
+        0.6,
+        0.94
+      ],
+      "anchor": "start",
+      "valign": "bottom",
+      "max_lines": 3,
+      "cap_max": 170,
+      "gap": 0.14,
+      "justify": false,
+      "pad": [
+        0.3,
+        0.2
+      ]
+    },
+    "band": {
+      "h_max": 0.4,
+      "pad": 0.04,
+      "max_lines": 2,
+      "cap_max": 170,
+      "gap": 0.2,
+      "logo_w": 0.13,
+      "figure_part": 0.36,
+      "fill": 0.9,
+      "fill_object": 0.6
+    },
+    "scene": {
+      "fill": 0.95,
+      "fill_object": 0.8,
+      "top": 0.04,
+      "zone": [
+        0.05,
+        0.34,
+        0.95,
+        0.9
+      ],
+      "anchor": "middle",
+      "valign": "middle",
+      "max_lines": 2,
+      "cap_max": 250,
+      "gap": 0.14,
+      "justify": true,
+      "skew": 0.14,
+      "shade_a": 0.0,
+      "shade_blur": 0.05,
+      "shade_grow": 0.5,
+      "halo": {
+        "blur": 0.2,
+        "passes": 5
+      }
+    },
+    "arrow": {
+      "subject_cx": 0.74,
+      "fill": 0.92,
+      "fill_object": 0.62,
+      "top": 0.06,
+      "zone": [
+        0.04,
+        0.1,
+        0.54,
+        0.8
+      ],
+      "anchor": "start",
+      "valign": "middle",
+      "max_lines": 3,
+      "cap_max": 190,
+      "gap": 0.16,
+      "justify": true,
+      "skew": 0.1,
+      "shade_a": 0.0,
+      "shade_blur": 0.05,
+      "shade_grow": 0.5,
+      "arrow_w": 0.045,
+      "arrow_len": 0.2,
+      "arrow_gap": 0.09,
+      "halo": {
+        "blur": 0.2,
+        "passes": 5
+      }
+    },
+    "core": 0.35,
+    "core_blur": 4,
+    "core_grow": [
+      0.25,
+      0.3,
+      0.15
+    ],
+    "fill_area": 0.6,
+    "object_part": 0.5,
+    "side_min": 0.34,
+    "area_part": 0.7,
+    "core_crown": 0.17
+  },
   "strip": {
     "pad": [
       0.34,
