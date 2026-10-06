@@ -10,9 +10,9 @@
   SK.setGround('sky', { paper: K.panel, text: K.ink, textSoft: K.soft, accent: K.blue, accentText: K.blue });
 
   const T = SK.cues({
-    invite: [0, 'invited'], drift: [0, 'Driftwood'], pep: [0, 'Pepperwood'], sat: [1, 'Saturday'], noon: [1, 'noon'],
+    invite: [0, 'invited'], day: [1, 'Sunday'],
     bed: [2, 'bedrooms'], bath: [2, 'baths'], sqft: [2, 'thousand'], feet: [2, 'feet'],
-    tour: [3, 'Tour'], find: [4, 'Find'], welcome: [4, 'Welcome'], helms: [4, 'Helmsman'],
+    tour: [3, 'Tour'], find: [4, 'Find'], pin: [4, 'Northeast'], street: [4, 'Street'],
     bring: [5, 'Bring'],
   });
 
@@ -32,15 +32,22 @@
   const PIN = wide ? [W * .14, H * .3] : tall ? [0, H * .2] : [0, H * .33];
   const MW = (wide ? 620 : tall ? 700 : 560) * U, MPH = MW * .52, MS = 150 * U;
   const R4 = [PIN[0] - MW / 2, PIN[1] - 150 * U - MPH - MS, MW, MPH + MS, MPH];
-  const backAt = T.find - .5, landAt = T.welcome + .2;
+  const backAt = T.find - .5, landAt = T.pin + .2;
+  /* the real map of the place (the map tool: SK.DATA.place); a place that is not on the map has none,
+     and the card then stays large with the address under the picture */
+  let MAP = null, MSC = 1;
   function setUp() {
     if (ready) return; ready = true;
+    const P = SK.DATA.place;
+    MAP = P && P.pin && SK.IMG[P.image] ? P : null;
+    // the least scale at which the map fills the frame round the pin (the view runs 100 past each edge), and a little over
+    if (MAP) MSC = 1.05 * Math.max((PIN[0] + W / 2 + 100) / (P.pin.u * P.w), (W / 2 + 100 - PIN[0]) / ((1 - P.pin.u) * P.w), (PIN[1] + H / 2 + 100) / (P.pin.v * P.h), (H / 2 + 100 - PIN[1]) / ((1 - P.pin.v) * P.h), .62);
     HERO = has(FACTS.hero) ? FACTS.hero : null;
     ROOMS = (FACTS.rooms || []).filter(has).slice(0, 3);
     // a panoramic strip is not blown up to fill a tall box: about a third of its width stays in view
     const heroH = HERO ? Math.min(PH, CW / (cropOf(HERO)[2] / cropOf(HERO)[3] * (tall ? .25 : .3))) : PH;
     R1 = cardOf(heroH); R3 = ROOMS.length ? cardOf(PH) : R1;
-    RK = [[T.sat - .35, R1], [T.tour - .45, R1], [T.tour, R3], [backAt, R3], [landAt, R4]];
+    RK = [[T.day - .35, R1], [T.tour - .45, R1], [T.tour, R3], [backAt, R3], [landAt, MAP ? R4 : R1]];
     const s1 = Math.max(T.tour + .5, T.find - .6);
     starts = ROOMS.map((_, i) => lerp(T.tour, s1, i / ROOMS.length));
   }
@@ -107,14 +114,14 @@
       const y0 = 34 * U, x0 = -pw / 2, k = pw / (560 * U);
       SK.card(x0, y0, pw, ph, { r: 10 * U, fill: K.white, shadow: { blur: 30, y: 18, col: 'rgba(29,58,99,.22)' } });
       if (dated) {
-        SK.image(FACTS.logo, 0, y0 + ph * .13, pw * .62);
+        SK.logo(FACTS.logo, 0, y0 + ph * .13, { w: pw * .66, h: ph * .215, pad: 0 });
         c.fillStyle = K.blue; c.fillRect(x0, y0 + ph * .26, pw, ph * .24);
         text(FACTS.kicker.toUpperCase(), 0, y0 + ph * .38, pw * .86, { size: 44 * U * k, font: FB, wt: 700, col: K.white, ls: 3 * U });
         const both = FACTS.day && FACTS.hours;
         text(FACTS.day, 0, y0 + ph * (both ? .64 : .74), pw * .86, { size: 60 * U * k, font: FH, wt: 400, col: K.ink });
         text(FACTS.hours, 0, y0 + ph * (both ? .82 : .74), pw * .8, { size: 64 * U * k, font: FB, wt: 500, col: K.blue });
       } else { // no day given: the sign carries the logo and the kind of event alone
-        SK.image(FACTS.logo, 0, y0 + ph * .22, pw * .62);
+        SK.logo(FACTS.logo, 0, y0 + ph * .23, { w: pw * .66, h: ph * .36, pad: 0 });
         c.fillStyle = K.blue; c.fillRect(x0, y0 + ph * .46, pw, ph * .42);
         text(FACTS.kicker.toUpperCase(), 0, y0 + ph * .67, pw * .86, { size: 50 * U * k, font: FB, wt: 700, col: K.white, ls: 3 * U });
       }
@@ -136,7 +143,7 @@
   /* what the card's picture is: the exterior, the rooms wiping over it, or the home's name in type */
   function picture(t, x, y, w, h) {
     const c = SK.ctx();
-    if (HERO) photo(HERO, x, y, w, h, 1 + .07 * tw(t, T.sat - .35, T.tour, E.lin), lerp(HERO.fx?.[0] ?? .5, HERO.fx?.[1] ?? .5, tw(t, T.sat, T.tour, E.sine)));
+    if (HERO) photo(HERO, x, y, w, h, 1 + .07 * tw(t, T.day - .35, T.tour, E.lin), lerp(HERO.fx?.[0] ?? .5, HERO.fx?.[1] ?? .5, tw(t, T.day, T.tour, E.sine)));
     else {
       c.fillStyle = K.panel; c.fillRect(x, y, w, h);
       const ks = Math.min(34 * U, h * .07), ns = Math.min(150 * U, h * .24), ss = Math.min(56 * U, h * .1), mw = w * .84, no = { size: ns, font: FH, wt: 300 };
@@ -164,12 +171,12 @@
     const aRoom = ROOMS.map((_, i) => SK.win(t, starts[i] + .15, ROOMS[i + 1] ? starts[i + 1] + .15 : backAt, .3, .25));
     const aAddr = clamp(1 - aFacts * 1.6 - Math.max(0, ...aRoom) * 1.6);
     if (aAddr > 0) SK.alpha(aAddr, () => {
-      const p = ent(t, T.sat - .25, 1), two = PLACE.length > 1 && FACTS.street;
+      const p = ent(t, T.day - .25, 1), two = PLACE.length > 1 && FACTS.street;
       if (wide) {
         const rw = w * .34, lw = w - 2 * pad - rw - 40 * U;
         text(TOP, x + pad, cy - (two ? 24 : 0) * U, lw, { size: 66 * U, font: FH, wt: 400, col: K.ink, align: 'left', p });
         if (two) text(FACTS.cityZip, x + pad, cy + 44 * U, lw, { size: 34 * U, font: FB, wt: 500, col: K.soft, align: 'left', p });
-        const q = ent(t, T.sat + .1, .6), named = FACTS.street && FACTS.home && !FACTS.street.startsWith(FACTS.home);
+        const q = ent(t, T.day + .1, .6), named = FACTS.street && FACTS.home && !FACTS.street.startsWith(FACTS.home);
         if (HERO || ROOMS.length) text(FACTS.kicker.toUpperCase(), x + w - pad, cy - (named ? 30 : 0) * U, rw, { size: 26 * U, font: FB, wt: 700, col: K.blue, ls: 4 * U, align: 'right', p: q, one: true });
         if (named && (HERO || ROOMS.length)) text(FACTS.home, x + w - pad, cy + 26 * U, rw, { size: 46 * U, font: FH, wt: 400, col: K.ink, align: 'right', p: q, one: true });
       } else stack([
@@ -214,14 +221,14 @@
   }
 
   function cardScene(t) {
-    if (t < T.sat - .35 || t > T.bring + .2) return;
-    const r = SK.kf(t, RK), m = E.inOut(inv(backAt, landAt, t)), u = ent(t, T.sat - .35, .5);
+    if (t < T.day - .35 || t > T.bring + .2) return;
+    const r = SK.kf(t, RK), m = MAP ? E.inOut(inv(backAt, landAt, t)) : 0, u = ent(t, T.day - .35, .5);
     const a = clamp(u * 1.4) * (1 - tw(t, T.bring - .3, T.bring + .2));
     SK.layer({ alpha: a, y: (1 - u) * 50 * U }, () => {
       const [x, y, w, h, ph] = r, sh = h - ph;
       SK.card(x, y, w, h, { r: lerp(22, 14, m) * U, fill: K.white, shadow: { blur: 44, y: 18, col: 'rgba(29,58,99,.2)' }, clip: () => picture(t, x, y, w, ph) });
       if (m < .4) SK.alpha(1 - m / .4, () => strip(t, x, y + ph, w, sh));
-      if (m < .4 && WHEN && HERO) { const on = 1 - tw(t, T.tour - .3, T.tour); if (on > 0) SK.alpha(on * (1 - m / .4), () => pill(WHEN, x + 34 * U, y + 60 * U, { size: (tall ? 42 : 38) * U, fill: K.blue, col: K.white, wt: 700, in: { t: T.sat, type: 'rise' } })); }
+      if (m < .4 && WHEN && HERO) { const on = 1 - tw(t, T.tour - .3, T.tour); if (on > 0) SK.alpha(on * (1 - m / .4), () => pill(WHEN, x + 34 * U, y + 60 * U, { size: (tall ? 42 : 38) * U, fill: K.blue, col: K.white, wt: 700, in: { t: T.day, type: 'rise' } })); }
       if (m > .6) SK.alpha((m - .6) / .4, () => { // on the map the card is the pin's: where to arrive
         const l1 = FACTS.venue || FACTS.street || FACTS.home, l2 = (FACTS.venue ? PLACE : [FACTS.cityZip].filter(Boolean)).join(', ');
         text(l1, x + w / 2, y + ph + sh * (l2 ? .34 : .5), w * .88, { size: 42 * U, font: FB, wt: 700, col: K.ink, one: true });
@@ -230,43 +237,35 @@
     });
   }
 
-  /* beat 5: a drawn street map, the host's street lit, the pin dropping under the card */
+  /* beat 5: the real map, the home's own street lit and named, the pin dropping under the card */
+  /* where the street's name goes: a spot on its own street, clear of the card and the pin, inside the frame */
+  function nameSpot(m) {
+    const ln = (MAP.pin.lines || [])[0]; if (!ln || ln.length < 2) return m.street ? [m.street.x, m.street.y] : null;
+    const pts = ln.map(([u, v]) => m.at(u, v)), mx = W / 2 - 240 * U, my = H / 2 - 150 * U;
+    let best = null, bd = -1;
+    for (let k = 0; k <= 80; k++) {
+      const [x, y] = SK.S.at(pts, k / 80), dp = Math.hypot(x - PIN[0], y - PIN[1]);
+      if (Math.abs(x) > mx || Math.abs(y) > my || dp < 210 * U || dp > 620 * U) continue;
+      const inCard = x > R4[0] - 200 * U && x < R4[0] + R4[2] + 200 * U && y > R4[1] - 60 * U && y < R4[1] + R4[3] + 70 * U;
+      if (inCard) continue;
+      const d = -Math.abs(dp - 330 * U); // near the pin, not on it
+      if (best === null || d > bd) { best = [x, y]; bd = d; }
+    }
+    return best;
+  }
   function map(t) {
+    if (!MAP) return;
     const a = SK.win(t, T.find - .6, T.bring + .4, .5, .6); if (a <= 0) return;
-    const v = SK.view, c = SK.ctx(), sy = PIN[1], g = 250 * U, x0 = v.x0 - 40, x1 = v.x1 + 40, y0 = v.y0 - 40, y1 = v.y1 + 40;
     SK.alpha(a, () => {
-      c.fillStyle = '#e8eef5'; c.fillRect(x0, y0, x1 - x0, y1 - y0);
-      c.fillStyle = K.green;
-      c.beginPath(); c.ellipse(PIN[0] - W * .36, sy - g * 1.5, W * .2, g * .62, .25, 0, SK.TAU); c.fill();
-      c.beginPath(); c.ellipse(PIN[0] + W * .42, sy + g * 1.5, W * .16, g * .42, -.2, 0, SK.TAU); c.fill();
-      // house lots along the blocks, faint
-      const rnd = SK.mulberry(11); c.fillStyle = '#dbe4ee';
-      for (let gx = Math.floor(x0 / g) * g; gx < x1; gx += g) for (let gy = sy - 5 * g; gy < y1; gy += g) for (let k = 0; k < 4; k++) {
-        const bw = (34 + rnd() * 30) * U, bh = (26 + rnd() * 22) * U, bx = gx + (38 + (k % 2) * 104 + rnd() * 16) * U, by = gy + (40 + Math.floor(k / 2) * 96 + rnd() * 14) * U;
-        if (rnd() < .78) c.fillRect(bx, by, bw, bh);
+      const s = MSC * (1 + .07 * tw(t, T.find - .6, T.bring + .4, E.sine));
+      const m = SK.map(PIN[0], PIN[1], { s, names: 10, nameSize: 27 * U, font: FB, nameCol: K.soft, namesT: landAt - .25, ownName: false, clear: [[R4[0], R4[1], R4[2], R4[3]], [PIN[0] - 56 * U, PIN[1] - 150 * U, 112 * U, 160 * U]], own: { col: K.blue, w: 15 * U, p: ent(t, T.find - .2, 1.1) } });
+      if (!m) return;
+      const at = FACTS.mapStreet ? nameSpot(m) : null, on = ent(t, T.street - .2, .5);
+      if (at && on > 0) {
+        const size = Math.min(40 * U, fit(FACTS.mapStreet, W * .5, { size: 40 * U, font: FB, wt: 700 }));
+        SK.alpha(on, () => pill(FACTS.mapStreet, at[0], at[1] + (1 - on) * 20 * U, { size, fill: K.navy, col: K.white, wt: 700, align: 'center', stroke: K.white, strokeW: 4 * U }));
       }
-      c.lineCap = 'round'; c.strokeStyle = K.white;
-      for (let gx = Math.floor(x0 / g) * g; gx < x1; gx += g) { c.lineWidth = 18 * U; c.beginPath(); c.moveTo(gx + 40 * U, y0); c.lineTo(gx - 40 * U, y1); c.stroke(); }
-      for (let gy = sy - 5 * g; gy < y1; gy += g) { if (Math.abs(gy - sy) < 1) continue; c.lineWidth = 18 * U; c.beginPath(); c.moveTo(x0, gy); c.lineTo(x1, gy); c.stroke(); }
-      c.lineWidth = 36 * U; c.strokeStyle = '#d3ddea'; c.beginPath(); c.moveTo(x0, sy + g * 2.1); c.quadraticCurveTo(PIN[0] - W * .1, sy + g * 1.3, x1, sy + g * 2.5); c.stroke();
-      c.lineWidth = 30 * U; c.strokeStyle = K.white; c.beginPath(); c.moveTo(x0, sy); c.lineTo(x1, sy); c.stroke();
-      const hl = ent(t, T.find - .2, .9);
-      c.lineWidth = 24 * U; c.strokeStyle = K.blue; c.beginPath(); c.moveTo(x0, sy); c.lineTo(lerp(x0, x1, hl), sy); c.stroke();
-      if (FACTS.mapStreet) {
-        const lx = wide ? PIN[0] - W * .33 : PIN[0], ly = wide ? sy : sy + 84 * U, mw = wide ? W * .3 : W * .8;
-        const size = Math.min(40 * U, fit(FACTS.mapStreet, mw - 60 * U, { size: 40 * U, font: FB, wt: 700 }));
-        SK.alpha(ent(t, T.helms - .2, .5), () => pill(FACTS.mapStreet, lx, ly + (1 - ent(t, T.helms - .2, .5)) * 20 * U, { size, fill: K.navy, col: K.white, wt: 700, align: 'center', stroke: K.white, strokeW: 4 * U }));
-      }
-      // the pin
-      const d = SK.pop(t, T.welcome - .1, .55), py = PIN[1] - (1 - E.land(clamp((t - T.welcome + .1) / .5))) * 260 * U;
-      if (t > T.welcome - .1) {
-        SK.pulse(PIN[0], PIN[1], T.welcome + .35, { col: K.blue, r: 110 * U });
-        SK.at(PIN[0], py, 0, U * clamp(d * 1.2), () => {
-          c.fillStyle = 'rgba(29,58,99,.25)'; c.beginPath(); c.ellipse(0, 4, 22, 8, 0, 0, SK.TAU); c.fill();
-          c.fillStyle = K.navy; c.beginPath(); c.moveTo(0, 0); c.bezierCurveTo(-14, -30, -42, -52, -42, -84); c.arc(0, -84, 42, Math.PI, 0); c.bezierCurveTo(42, -52, 14, -30, 0, 0); c.fill();
-          c.fillStyle = K.white; c.beginPath(); c.arc(0, -84, 16, 0, SK.TAU); c.fill();
-        });
-      }
+      SK.mapPin(PIN[0], PIN[1], { t: T.pin, col: K.navy, s: U, pulse: { col: K.blue, r1: 110 * U } });
     });
   }
 
@@ -292,7 +291,7 @@
     ], -H * .01, s(tall ? 40 : 30));
   }
 
-  const camera = SK.breath(SK.camera([[0, [0, 0, 1.02]], [T.sat, [0, 0, 1]], [T.bring - .4, [0, 0, 1.01]], [30, [0, 0, 1.06], E.sine]]), { amp: 8, zoom: .015, period: 10 });
+  const camera = SK.breath(SK.camera([[0, [0, 0, 1.02]], [T.day, [0, 0, 1]], [T.bring - .4, [0, 0, 1.01]], [30, [0, 0, 1.06], E.sine]]), { amp: 8, zoom: .015, period: 10 });
   SK.film({
     duration: 30,
     camera,
@@ -300,7 +299,7 @@
     draw(t) {
       setUp();
       map(t);
-      const out1 = 1 - tw(t, T.sat - .65, T.sat - .2);
+      const out1 = 1 - tw(t, T.day - .65, T.day - .2);
       if (out1 > 0) SK.layer({ alpha: out1, y: -60 * U * (1 - out1) }, () => { sign(t); headline(t); });
       cardScene(t);
       endCard(t);
