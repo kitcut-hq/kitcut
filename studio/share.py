@@ -23,6 +23,12 @@ runs after the film is done, and a failure is logged (SHARE) and noted as share_
     python studio/share.py --film <id>              write (or remake) one film's share
     python studio/share.py --missing [--limit N]    every finished film without one, newest first
     python studio/share.py --missing --dry-run      which films, and what it would cost; no call
+    python studio/share.py --film <id> --frame 2    the film's own frame at 2 s as its thumbnail
+    python studio/share.py --film <id> --frame off  back to the drawn one
+
+--frame changes thumb alone (what the film's page shows before it plays): the words and the link
+preview stay, no call is made and it costs nothing. The share keeps the time as `frame`, so a
+later remake of the share keeps the frame too.
 
 A draft costs about $0.05-0.13 on the key (one call, occasionally two); on the login it is counted
 but not charged. Asking again costs nothing until the film changes.
@@ -366,6 +372,12 @@ async def run(film, auth=None, log=print, model=MODEL):
         share.update({k: got[k] for k in ("image", "thumb") if got.get(k)})
     except Exception as e:  # noqa: BLE001 -- the words are worth having without the picture
         log("SHARE %s: no picture: %s" % (film.id, e))
+    at = frame_of(film.record().get("share"))
+    if at is not None:  # the owner's frame outlives a remake
+        try:
+            share.update(await frame_thumb(film, at), frame=at)
+        except Exception as e:  # noqa: BLE001 -- the drawn thumbnail stands in
+            log("SHARE %s: no frame at %s s: %s" % (film.id, at, e))
     share.update(at=utc_now(), key=draft["key"])
     await save(film, share)
     log(
@@ -378,6 +390,50 @@ async def run(film, auth=None, log=print, model=MODEL):
             draft.get("cost_usd") or 0,
         )
     )
+    return share
+
+
+def frame_of(share):
+    """The time of the frame a share's thumbnail is, in seconds, or None when it is the drawn one."""
+    at = share.get("frame") if isinstance(share, dict) else None
+    return at if isinstance(at, (int, float)) and not isinstance(at, bool) and at >= 0 else None
+
+
+async def frame_thumb(film, at):
+    """thumb.jpg from the film's frame at `at` seconds, copied online: {"thumb": url}, or {} when
+    copying is off."""
+    await asyncio.to_thread(media.make_frame_thumb, film.path("outputs"), at)
+    urls = await media.publish_share(film, only=("thumb",))
+    return {k: urls[k] for k in ("thumb",) if urls.get(k)}
+
+
+async def set_frame(film, at, log=print):
+    """A film's own frame as its share thumbnail (at seconds), or the drawn one back (None). The
+    words and the link preview stay; nothing is asked of Claude. Raises when the film has no
+    share yet, the time is past its end, or the picture could not be made or copied."""
+    share = dict(film.record().get("share") or {})
+    if not share.get("title"):
+        raise RuntimeError("no share yet: write it first (share.py --film %s)" % film.id)
+    if at is None:
+        share.pop("frame", None)
+        o = pick(thumbs.saved(film, CHANNEL))
+        if o is None:
+            raise RuntimeError("the drawn thumbnail was not kept: remake the share")
+        src = film.path("outputs", o["path"])
+        await asyncio.to_thread(media.make_share, film.path("outputs"), src)
+        got = await media.publish_share(film)
+        share.update({k: got[k] for k in ("image", "thumb") if got.get(k)})
+    else:
+        length = thumbs.length(film)
+        if length and at >= length:
+            raise RuntimeError("the film is %s s long" % length)
+        got = await frame_thumb(film, at)
+        if not got:
+            raise RuntimeError("copying online is off")
+        share.update(got, frame=at)
+    share["at"] = utc_now()
+    await save(film, share)
+    log("SHARE %s: thumbnail %s" % (film.id, "drawn" if at is None else "the frame at %s s" % at))
     return share
 
 
@@ -463,6 +519,12 @@ async def _main(a):
     else:
         todo = [f for f in films.Film.all() if finished(f) and missing(f)]
         todo = todo[: a.limit] if a.limit else todo
+    at = getattr(a, "frame", None)
+    if at is not None:
+        if not a.film:
+            sys.exit("--frame needs --film")
+        await set_frame(todo[0], None if at == "off" else at)
+        return
     if a.dry_run:
         total = 0.0
         for f in todo:
@@ -485,6 +547,18 @@ async def _main(a):
         sys.exit("%d of %d failed" % (failed, len(todo)))
 
 
+def frame_arg(v):
+    if v == "off":
+        return v
+    try:
+        t = float(v)
+    except ValueError:
+        t = -1
+    if not 0 <= t < 36000:
+        raise argparse.ArgumentTypeError("seconds from the film's start, or off")
+    return t
+
+
 def main():
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -495,6 +569,11 @@ def main():
     ap.add_argument("--limit", type=int, help="with --missing: at most this many, newest first")
     ap.add_argument("--dry-run", action="store_true", help="list the films and the cost; no call")
     ap.add_argument("--auth", choices=("login", "api"), help="default: what the film was made on")
+    ap.add_argument(
+        "--frame",
+        type=frame_arg,
+        help="with --film: the film's frame at this many seconds as its thumbnail, or off",
+    )
     ap.add_argument("--model", default=MODEL)
     asyncio.run(_main(ap.parse_args()))
 

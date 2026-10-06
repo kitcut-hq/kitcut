@@ -294,7 +294,9 @@ of four; `outputs/share.jpg` 1200x628 and `outputs/thumb.jpg` 1280x720, copied o
 film under names carrying a hash of the pictures, so a remade picture gets a new URL). It lands on the record as `share` (only that field is written) and in `GET /api/films/{id}`.
 It runs in the background and never fails the film; about $0.05-0.13 on the key. Earlier films:
 `python studio/share.py --missing --dry-run` prices it, without it does it (`ops.sh share` on the
-VM). Details: `docs/reference.md` "Share title and image".
+VM). A film's own frame as the thumbnail instead of the drawn one: `python studio/share.py --film
+<id> --frame 2` (`ops.sh share <id> --frame 2`; `off` puts the drawn one back). Details:
+`docs/reference.md` "Share title and image".
 
 ## What it costs, and where that is recorded
 

@@ -188,6 +188,29 @@ def make_share(outputs, src_jpg):
     return out
 
 
+def make_frame_thumb(outputs, t):
+    """thumb.jpg from the film's own frame at t seconds (share.py --frame): 1280x720, the frame as
+    it is when the film is 16:9, else whole in the middle over a blurred stretch of itself.
+    share.jpg, the link preview, is left as it is. Raises MediaError when there is no such frame."""
+    from PIL import Image, ImageFilter
+
+    mp4 = os.path.join(outputs, "film.mp4")
+    src = _frame(mp4, t) if os.path.isfile(mp4) else None
+    if src is None:
+        raise MediaError("no frame at %.2f s" % t)
+    w = round(src.width * THUMB[1] / src.height)
+    if abs(w - THUMB[0]) <= 2:
+        out = src.resize(THUMB, Image.LANCZOS)
+    else:
+        out = src.resize(THUMB, Image.LANCZOS).filter(ImageFilter.GaussianBlur(24))
+        h = THUMB[1] if w < THUMB[0] else round(src.height * THUMB[0] / src.width)
+        w = min(w, THUMB[0])
+        out.paste(src.resize((w, h), Image.LANCZOS), ((THUMB[0] - w) // 2, (THUMB[1] - h) // 2))
+    path = os.path.join(outputs, "thumb.jpg")
+    _save_jpeg(out, path)
+    return path
+
+
 def share_version(outputs):
     """The share pictures' version: the first 8 hex of a hash of their bytes. It is in their blob
     names (share-<v>.jpg, thumb-<v>.jpg), so a remade picture gets a new URL -- the files go up
@@ -213,11 +236,11 @@ def share_blob(name, v):
 SHARE_BLOB = re.compile(r"^(share|thumb)(-[0-9a-f]{8})?\.jpg$")
 
 
-async def publish_share(film, timeout=300):
+async def publish_share(film, timeout=300, only=None):
     """Copy the share pictures online under versioned names (share_version): {"image": url,
-    "thumb": url} (the ones there are), or {} when copying is off. Raises when a copy is
-    refused. A remake's older copies are left where they are: a preview already posted may still
-    point at them."""
+    "thumb": url} (the ones there are; `only` names the ones to copy), or {} when copying is off.
+    Raises when a copy is refused. A remake's older copies are left where they are: a preview
+    already posted may still point at them."""
     if not enabled():
         return {}
     import aiohttp
@@ -227,7 +250,7 @@ async def publish_share(film, timeout=300):
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
         for key, name in SHARE_FILES:
             p = film.path("outputs", name)
-            if os.path.isfile(p):
+            if os.path.isfile(p) and (only is None or key in only):
                 blob = share_blob(name, v)
                 await _put(s, "%s/%s" % (film.id, blob), p, "image/jpeg")
                 urls[key] = url_of(film.id, blob)

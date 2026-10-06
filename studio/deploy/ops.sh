@@ -31,6 +31,9 @@
 #                                                     share-page title, description and picture
 #                                                     (studio/share.py); the price is printed
 #                                                     first, and --dry-run stops there
+#   bash studio/deploy/ops.sh share <film-id> --frame <seconds>|off   the film's own frame as its
+#                                                     page's thumbnail, or the drawn one back; the
+#                                                     words and the link preview stay, no cost
 #   bash studio/deploy/ops.sh canon <p-id> [--show | --dry-run | --force]   a project's episode
 #                                                     log (studio/canon.py): write the entries it
 #                                                     lacks, oldest first; --show prints it
@@ -351,24 +354,27 @@ EOF
   share)
     # a finished film's share (studio/share.py): the price first, always -- it spends nothing --
     # then the work in a unit of its own, like resume, so it goes on if this laptop sleeps
-    use="share <film-id>|--missing [--dry-run] [--limit N]"
+    use="share <film-id>|--missing [--dry-run] [--limit N] | share <film-id> --frame <seconds>|off"
     what="${1:?$use}"; shift
     if [ "$what" = "--missing" ]; then args="--missing"
     else
       [[ "$what" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $what"
       args="--film $what"
     fi
-    only_price=0
+    only_price=0; frame=0
     while [ $# -gt 0 ]; do
       case "$1" in
         --dry-run) only_price=1 ;;
+        --frame)
+          [[ "$args" == --film* && "${2:-}" =~ ^(off|[0-9]+(\.[0-9]+)?)$ ]] || die "--frame needs a film id and seconds, or off"
+          args="$args --frame $2"; frame=1; shift ;;
         --limit) [[ "${2:-}" =~ ^[0-9]+$ ]] || die "--limit needs a number"; args="$args --limit $2"; shift ;;
         *) die "$use" ;;
       esac
       shift
     done
     py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/share.py $args"
-    on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env $py --dry-run" || exit 1
+    [ "$frame" = 1 ] || on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env $py --dry-run" || exit 1
     [ "$only_price" = 1 ] && exit 0
     unit="kitcut-share-$(date +%Y%m%d-%H%M%S)"
     # capped, and behind the films: an uncapped --missing grew to 15 GB of the VM's 16 on

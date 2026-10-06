@@ -3351,6 +3351,15 @@ where only `share` is set -- then holds what the site reads:
 is off (the site then shows `card.jpg`); the files stay in `outputs/`. `GET /api/films/{id}` answers
 `share` = `{title, description, language, image, thumb}` for a film that has one.
 
+**A frame of the film as the thumbnail.** `python studio/share.py --film <id> --frame 2`
+(`ops.sh share <id> --frame 2` on the VM) makes `thumb.jpg` from the film's own frame at 2 s --
+the frame as it is at 1280x720, a film that is not 16:9 whole in the middle over a blurred stretch
+of itself -- copies it online under a new name and sets `share.thumb`. The words and `image`, the
+link preview, stay as they were; no call is made and it costs nothing. The share keeps the time as
+`frame` (not part of what `GET /api/films/{id}` answers), so a later remake of the share puts the
+frame back over the drawn thumbnail. `--frame off` drops it and copies the drawn one again. A time
+past the film's end, or a film with no share yet, is refused.
+
 **It never fails a film.** It starts as a background task beside the moments sheet once the film is
 `done`; a failure is logged as `SHARE <id> failed: ...` and noted on the record as `share_error`,
 and the film's state is never touched. `STUDIO_SHARE=0` turns it off; it also stays off while

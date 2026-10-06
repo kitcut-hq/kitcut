@@ -13,7 +13,8 @@ twice given up; the draft kept and reused; what it cost on the record; the pictu
 named in the share; the share written as a partial update that leaves the rest of the record
 alone; no picture when it could not be made or copying is off; premake swallowing a failure
 (even SystemExit) and never touching the film's state, and not running at all while Claude is a
-stub; GET /api/films/{id} answering the share; the CLI's dry run pricing without calling.
+stub; GET /api/films/{id} answering the share; the CLI's dry run pricing without calling; the
+film's own frame as the thumbnail (thumb alone, no call, kept by a remake, refused past the end).
 Everything happens in a throwaway STUDIO_HOME.
 """
 
@@ -407,6 +408,57 @@ async def main():
         )
         sh = new
 
+        # ------------------------------------------------------------ a frame as the thumbnail
+        import subprocess
+
+        mp4 = f.path("outputs", "film.mp4")
+        lav = ["-f", "lavfi", "-i", "color=c=red:s=640x360:d=2:r=10"]
+        lav += ["-f", "lavfi", "-i", "color=c=blue:s=640x360:d=2:r=10"]
+        cut = ["-filter_complex", "[0][1]concat=n=2:v=1[v]", "-map", "[v]", "-pix_fmt", "yuv420p"]
+        subprocess.run(["ffmpeg", "-y", "-v", "error"] + lav + cut + [mp4], check=True)
+        mem.saves.clear()
+        n = len(calls)
+        fr = await share.set_frame(f, 3, log=lambda s: None)
+        with Image.open(f.path("outputs", "thumb.jpg")) as im:
+            px, size = im.convert("RGB").getpixel((640, 360)), im.size
+        check(size == (1280, 720) and px[2] > 180 and px[0] < 80, "thumb.jpg is the frame", px)
+        v3 = media.share_version(f.path("outputs"))
+        check(
+            fr["thumb"] == base + "thumb-%s.jpg" % v3
+            and "%s/thumb-%s.jpg" % (f.id, v3) in BLOBS
+            and "%s/share-%s.jpg" % (f.id, v3) not in BLOBS,
+            "copied online under a new name, the link preview not copied again",
+            sorted(BLOBS),
+        )
+        check(
+            fr["frame"] == 3
+            and all(fr[k] == sh[k] for k in ("title", "description", "language", "image", "key")),
+            "the share keeps its words and its link preview, and the frame's time",
+            fr,
+        )
+        check(
+            len(calls) == n and [s for s in mem.saves if s[0] == f.id] == [(f.id, {"share": fr})],
+            "no call, one partial update",
+            mem.saves,
+        )
+        kept = await share.run(f, "api", log=lambda s: None)
+        check(
+            kept.get("frame") == 3 and kept["thumb"].rsplit("/", 1)[1].startswith("thumb-"),
+            "a remade share keeps the frame",
+            kept,
+        )
+        with Image.open(f.path("outputs", "thumb.jpg")) as im:
+            px = im.convert("RGB").getpixel((640, 360))
+        check(px[2] > 180 and px[0] < 80, "and thumb.jpg is still the frame", px)
+        try:
+            await share.set_frame(f, 99, log=lambda s: None)
+            past = None
+        except RuntimeError as e:
+            past = str(e)
+        check(past and "long" in past, "a time past the film's end is refused", past)
+        check(share.frame_arg("off") == "off" and share.frame_arg("2") == 2.0, "--frame's values")
+        sh = kept
+
         # no picture: the words still go on the record
         async def no_make(film, channel, draft, want=4):
             raise RuntimeError("no browser")
@@ -497,7 +549,7 @@ async def main():
         async with TestClient(TestServer(server.make_app(TOKEN))) as c:
             r = await c.get("/api/films/%s" % f.id, headers={"Authorization": "Bearer " + TOKEN})
             j = await r.json()
-            want = {k: v for k, v in f.record()["share"].items() if k not in ("at", "key")}
+            want = {k: v for k, v in f.record()["share"].items() if k not in ("at", "key", "frame")}
             check(r.status == 200 and j.get("share") == want, "GET /api/films/{id}: the share", j)
             r = await c.get("/api/films/%s" % h.id, headers={"Authorization": "Bearer " + TOKEN})
             j = await r.json()
