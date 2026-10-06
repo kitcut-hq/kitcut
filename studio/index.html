@@ -577,8 +577,8 @@ html[data-view=film] .work.done .screen { width: min(100%, calc(max(100svh - 230
 .screen .idle .btn { margin-top: 14px; }
 #yt { width: min(480px, calc(100% - 32px)); }
 #yt label.field { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
-#yt input[type=text], #yt input[type=datetime-local], #yt textarea { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font: 14px/1.45 Inter, system-ui, sans-serif; resize: vertical; min-height: 0; color-scheme: inherit; }
-#yt input[type=text]:focus, #yt input[type=datetime-local]:focus, #yt textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
+#yt input[type=text], #yt textarea { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font: 14px/1.45 Inter, system-ui, sans-serif; resize: vertical; min-height: 0; color-scheme: inherit; }
+#yt input[type=text]:focus, #yt input[type=time]:focus, #yt textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
 /* while the words are being written: grey lines where they will go, gone the moment you type */
 #yt .box { position: relative; display: block; }
 #yt .skel { display: none; position: absolute; inset: 0; padding: 15px 13px; gap: 10px; align-content: start; pointer-events: none; }
@@ -620,7 +620,8 @@ html[data-view=film] .work.done .screen { width: min(100%, calc(max(100svh - 230
 .progress.wait i { width: 30% !important; animation: slide 1.2s ease-in-out infinite alternate; }
 @keyframes slide { from { margin-left: 0; } to { margin-left: 70%; } }
 .okmark { color: var(--good); font-weight: 700; }
-/* the thumbnail: four stills of the film with a few words on them (the studio's thumbs.py), and
+/* the thumbnail: four made from the film -- posters of its own pictures, or stills of it -- with
+   a few words on them (the studio's thumbs.py), and
    the one picked as it will sit in YouTube's feed, beside its title */
 .thumbgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .thumb { position: relative; display: block; aspect-ratio: 16 / 9; border: 2px solid var(--line); border-radius: 10px; overflow: hidden; cursor: pointer; background: var(--sunk); }
@@ -640,6 +641,83 @@ html[data-view=film] .work.done .screen { width: min(100%, calc(max(100svh - 230
 .feed b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font: 600 14px/1.35 Roboto, Arial, sans-serif; }
 .feed small { display: block; margin-top: 3px; color: #606060; font: 12px/1.4 Roboto, Arial, sans-serif; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .feed { background: #0f0f0f; color: #f1f1f1; } :root:not([data-theme="light"]) .feed small { color: #aaa; } }
+/* scheduling: the channel's calendar -- a square a day, each video by its picture, what went out
+   and what is scheduled -- the day suggested from the pace the channel keeps, the day picked, and
+   under it the same videos by title */
+#yt:has(#ytPlan:not([hidden])) { width: min(580px, calc(100% - 32px)); }
+.plan { display: grid; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.plan .best { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); font-size: 13px; }
+.plan .best b { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 650; }
+.plan .best b svg { flex: none; width: 15px; height: 15px; color: var(--accent-2); }
+.plan .best p { grid-column: 1 / -1; margin: 0; }
+.plan .best small { grid-column: 1 / -1; color: var(--ink-2); font-size: 12px; }
+.plan .best button, .calnav button, .onchan .all { flex: none; margin: 0; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font: 550 13px/1 Inter, system-ui, sans-serif; cursor: pointer; }
+.plan .best button:hover, .calnav button:hover:not(:disabled), .onchan .all:hover { background: var(--hover); }
+.plan .best .on { color: var(--good); font-size: 13px; font-weight: 650; white-space: nowrap; }
+.plan .best.plain { background: var(--sunk); }
+.plan .best.wait i { display: block; height: 11px; margin: 4px 0; border-radius: 6px; background: linear-gradient(90deg, var(--sunk) 20%, var(--hover) 50%, var(--sunk) 80%); background-size: 250% 100%; animation: shimmer 1.4s linear infinite; }
+.plan .best.wait i + i { width: 62%; }
+.calhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.calhead b { font-size: 14px; font-weight: 650; }
+.calnav { display: flex; gap: 4px; }
+.calnav button { height: 28px; min-width: 28px; padding: 0 8px; }
+.calnav button:disabled { opacity: .4; cursor: default; }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal .wd { padding-bottom: 1px; text-align: center; font-size: 11px; font-weight: 600; color: var(--ink-3); }
+.cal .day { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 2px; min-width: 0; overflow: hidden; margin: 0; padding: 3px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel); color: var(--ink); font: 600 11.5px/1.25 Inter, system-ui, sans-serif; text-align: left; cursor: pointer; }
+.cal .day::after { content: ''; display: block; grid-row: 2; grid-column: 1; aspect-ratio: 16 / 9; }  /* every square as tall as one with a picture */
+.cal .day .n { justify-self: start; max-width: 100%; padding: 1px 4px; border-radius: 999px; white-space: nowrap; overflow: hidden; }
+.cal .day.past { border-color: transparent; background: var(--sunk); color: var(--ink-3); }
+.cal .day:disabled { cursor: default; }
+.cal .day.today .n { background: var(--ink); color: var(--panel); }
+.cal .day:not(.past):hover { border-color: var(--accent); }
+.cal .day.best { border: 1.5px dashed var(--accent); padding: 2.5px; }
+.cal .day.pick { border: 2px solid var(--accent); padding: 2px; background: var(--accent-soft); }
+.cal .day.hot { box-shadow: var(--ring); }
+.cal .pic { position: relative; grid-row: 2; grid-column: 1; display: block; align-self: end; width: 100%; min-width: 0; aspect-ratio: 16 / 9; border-radius: 4px; overflow: hidden; background: var(--hover); }
+.cal .pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.cal .day.past .pic img { opacity: .82; }
+.cal .pic.mine { outline: 1.5px solid var(--accent); }
+.cal .pic .clk, .key .sch { background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M6 3.2V6l1.9 1.2' fill='none' stroke='%23fff' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% no-repeat; }
+.cal .pic .clk { position: absolute; left: 2px; bottom: 2px; width: 13px; height: 13px; border-radius: 50%; box-shadow: 0 0 0 1.5px #fff; }
+.cal .more { position: absolute; top: 4px; right: 5px; font-size: 10px; font-weight: 700; color: var(--ink-2); }
+.plan .key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; color: var(--ink-2); font-size: 12px; }
+.plan .key span { display: inline-flex; align-items: center; gap: 5px; }
+.plan .key .k { display: block; width: 13px; height: 13px; border-radius: 4px; }
+.plan .key .was { background: var(--sunk); border: 1px solid var(--line-2); }
+.plan .key .sch { border-radius: 50%; }
+.plan .key .sug { border: 1.5px dashed var(--accent); }
+.plan .key .you { border: 2px solid var(--accent); background: var(--accent-soft); }
+.plan .when { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 14px; }
+.plan .when b { font-weight: 650; }
+#yt input[type=time] { width: auto; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font: 14px/1.3 Inter, system-ui, sans-serif; }
+.plan .note.bad { color: var(--bad); font-weight: 600; }
+.onchan { display: grid; gap: 2px; min-width: 0; }
+.onchan h3 { margin: 8px 0 2px; font-size: 12px; font-weight: 650; letter-spacing: .02em; color: var(--ink-2); }
+.onchan .vrow { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 10px; align-items: center; padding: 4px; border-radius: 8px; color: inherit; text-decoration: none; }
+.onchan a.vrow:hover, .onchan .vrow.hot { background: var(--hover); }
+.onchan .vrow .pic { display: block; width: 88px; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: var(--sunk); }
+.onchan .vrow .pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.onchan .vrow b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; font-weight: 600; line-height: 1.3; }
+.onchan .vrow small { display: block; margin-top: 2px; color: var(--ink-2); font-size: 12px; }
+.onchan .vrow.this { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.onchan .chip { display: inline-block; margin-right: 5px; padding: 0 6px; border-radius: 999px; background: var(--sunk); color: var(--ink-2); font-size: 11px; font-weight: 650; line-height: 17px; }
+.onchan .this .chip { background: var(--accent); color: var(--accent-ink); }
+.onchan .all { justify-self: start; margin-top: 4px; }
+.onchan .vrow.can { grid-template-columns: 88px minmax(0, 1fr) auto; }
+.onchan .vrow.can a { color: inherit; text-decoration: none; }
+.onchan .vrow.can:hover { background: var(--hover); }
+.onchan .mv { margin: 0 4px 0 0; height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font: 550 12.5px/1 Inter, system-ui, sans-serif; cursor: pointer; }
+.onchan .mv:hover { background: var(--hover); }
+.plan .best .acts { display: flex; gap: 6px; }
+.plan .best .go { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.plan .best .go:hover:not(:disabled) { background: var(--accent-2); }
+.plan .best button:disabled { opacity: .6; cursor: default; }
+.plan .best .err { color: var(--bad); font-weight: 600; }
+.plan .note.good { color: var(--good); font-weight: 600; }
+.onchan .none { margin: 4px 0; color: var(--ink-2); font-size: 13px; }
+@media (max-width: 460px) { .onchan .vrow.can { grid-template-columns: 72px minmax(0, 1fr) auto; } .plan { padding: 8px; } .plan .when .lead { display: none; } .cal { gap: 3px; } .cal .day { padding: 2px; font-size: 10.5px; } .cal .day.best { padding: 1.5px; } .cal .day.pick { padding: 1px; } .cal .day .n { padding: 1px 3px; } .onchan .vrow { grid-template-columns: 72px minmax(0, 1fr); } .onchan .vrow .pic { width: 72px; } }
+@media (prefers-reduced-motion: reduce) { .plan .best.wait i { animation: none; } }
 /* removing the KitCut branding: a button beside Download on a film of your own that carries the
    mark and the ending, and the dialog it opens -- both as they are on this film, then the plan */
 #ubOpen { border-color: var(--accent); color: var(--accent-2); }
@@ -873,7 +951,18 @@ if (/^\/film\/studio-/.test(location.pathname)) document.documentElement.dataset
       <label><input type="radio" name="ytWho" value="private"><span>Private</span></label>
       <label><input type="radio" name="ytWho" value="scheduled"><span>Scheduled</span></label>
     </fieldset>
-    <label class="field" id="ytWhenRow" hidden>Goes public on<span class="box"><input type="datetime-local" id="ytWhen"></span></label>
+    <div class="plan" id="ytPlan" hidden>
+      <div class="best" id="ytBest" aria-live="polite"></div>
+      <div class="calhead">
+        <b id="ytCalTitle"></b>
+        <span class="calnav"><button type="button" id="ytCalNow">Today</button><button type="button" id="ytCalPrev" aria-label="Earlier weeks">&#8249;</button><button type="button" id="ytCalNext" aria-label="Later weeks">&#8250;</button></span>
+      </div>
+      <div class="cal" id="ytCal" role="group" aria-label="The channel's calendar: pick the day it goes public"></div>
+      <p class="key" aria-hidden="true"><span><i class="k was"></i>Published</span><span><i class="k sch"></i>Scheduled</span><span><i class="k sug"></i>Suggested</span><span><i class="k you"></i>This film</span></p>
+      <div class="when" id="ytWhen"><span class="lead">Goes public</span><b id="ytPickDay"></b><span>at</span><input type="time" id="ytTime" step="300" aria-label="The time it goes public"></div>
+      <p class="note" id="ytPickNote" aria-live="polite" hidden></p>
+      <div class="onchan" id="ytOnChan"></div>
+    </div>
     <p class="note" id="ytWhoNote"></p>
     <label class="check"><input type="checkbox" id="ytKids"> Made for kids</label>
     <button class="btn primary go" type="submit" id="ytGo">Publish</button>
@@ -1971,10 +2060,9 @@ const ytZone = (() => {
   } catch (e) { return ''; }
 })();
 const pad2 = (n) => String(n).padStart(2, '0');
-const toLocalInput = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 const whenText = (iso) => new Date(iso).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-// the time offered: a day after the last one scheduled from this browser (a series, one a day), else
-// tomorrow at 9:00
+// the time offered when the channel's calendar cannot be read (ytPlanDraw): a day after the last one
+// scheduled from this browser (a series, one a day), else tomorrow at 9:00
 function ytWhenDefault() {
   const last = new Date(ls.get('ytWhenLast') || 0), next = new Date(+last + 864e5);
   if (+last && next - Date.now() > 20 * 60e3) return next;
@@ -2013,6 +2101,7 @@ async function ytLoad() {
     ytFilm = { ...(await r.json()), id };
   } catch (e) { return; }
   ytDrafts = {}; ytTyped = {}; ytThumbPick = {}; ytBase = null; ytPrev = null; ytSaid = '';
+  ytCals = {}; ytPick = null; ytCalFrom = null; ytAllRecent = false; ytMove = null; ytMoved = '';
   $('ytOpen').hidden = false;
   ytList();
   if (ytChosen()) ytDraft(ytChosen());  // written while you watch, so it is ready when you open the dialog
@@ -2215,7 +2304,7 @@ function ytThumbsFill(channel, d) {
     }
     for (const r of document.querySelectorAll('input[name=ytThumb]')) {
       r.checked = r.value === String(pick);
-      r.onchange = () => { ytThumbPick[channel] = { v: t.v, n: r.value === 'none' ? 'none' : Number(r.value) }; ytFeed(); };
+      r.onchange = () => { ytThumbPick[channel] = { v: t.v, n: r.value === 'none' ? 'none' : Number(r.value) }; ytFeed(); ytPlanDraw(); };
     }
     note.hidden = true;
   } else if (failed) {
@@ -2227,10 +2316,11 @@ function ytThumbsFill(channel, d) {
   } else {
     grid.dataset.v = '';
     grid.innerHTML = '<div class="shimmer"></div>'.repeat(4);
-    note.textContent = 'Making four thumbnails from stills of the film...';
+    note.textContent = 'Making four thumbnails from the film...';
     note.hidden = false;
   }
   ytFeed();
+  ytPlanDraw();  // the calendar shows this film by the thumbnail picked
 }
 // the thumbnail picked, where people meet it: 168 pixels wide beside its title, as in YouTube's
 // "up next" list -- if the words cannot be read here, they cannot be read there
@@ -2256,7 +2346,7 @@ function ytForm(pick) {
       <span>${esc(c.title)}${c.handle ? ` <small>${esc(c.handle)}</small>` : ''}</span>
       ${c.broken ? `<a href="${esc($('ytAdd').href)}">Reconnect</a>` : ''}
     </label>`).join('');
-  for (const r of $('ytChans').querySelectorAll('input')) r.onchange = () => ytSwitch(r.value);
+  for (const r of $('ytChans').querySelectorAll('input')) r.onchange = () => { ytSwitch(r.value); ytWhoNote(); };
   if (ytFormFor !== f.id) {  // a new film starts from its own draft; a reopened dialog keeps your edits
     ytFormFor = f.id;
     $('ytName').value = ''; $('ytDesc').value = ''; $('ytTags').value = ''; $('ytKids').checked = false;
@@ -2269,15 +2359,298 @@ function ytForm(pick) {
 function ytWhoNote() {
   const w = document.querySelector('input[name=ytWho]:checked');
   const later = !!w && w.value === 'scheduled';
-  $('ytWhenRow').hidden = !later;
-  if (later) {
-    const now = new Date(Date.now() + 15 * 60e3);
-    $('ytWhen').min = toLocalInput(now);
-    if (!$('ytWhen').value || new Date($('ytWhen').value) < now) $('ytWhen').value = toLocalInput(ytWhenDefault());
-  }
+  if (later) ytPlanLoad(ytChecked());
+  ytPlanDraw();
   $('ytWhoNote').textContent = w ? WHO[w.value].note + (later && ytZone ? ` The time is in ${ytZone}.` : '') : '';
 }
 for (const r of document.querySelectorAll('input[name=ytWho]')) r.onchange = ytWhoNote;
+
+// ---- scheduling: the channel's calendar (api/youtube.js GET calendar; lib/ytplan.js) ----
+// Picking "Scheduled" shows what the channel published lately and what is scheduled on it, a
+// square a day with each video's picture, and under it the same videos by title. It offers the day
+// and time that keep the channel's pace (its series', for an episode), worked out on the site from
+// the days the channel publishes on; any day from today on can be picked instead, and one that has
+// a video already says which. The days are the viewer's own: their time zone goes with the ask.
+// A channel that cannot be read has an empty calendar, and the time offered is ytWhenDefault().
+let ytCals = {};       // channel id -> {state: loading | done | failed, at, ...the site's answer}
+let ytPick = null;     // the day and time picked: {channel, day, mins, own, from}; own: picked by hand
+let ytCalFrom = null;  // the first day of the calendar's top row; null: wherever today and the pick are
+let ytAllRecent = false;
+// A scheduled video being moved to another day (Move, beside it in the list): {channel, post, id,
+// title, thumb, day, mins, was, busy, error}. While there is one the calendar picks ITS day, not
+// this film's; "Move it" changes its time on YouTube (POST /api/youtube/reschedule).
+let ytMove = null, ytMoved = '';
+const YT_TZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } })();
+const CAL_WEEKS = 5, CAL_RECENT = 3, CAL_STEP = 21;
+const SOONEST_MS = 15 * 60e3;  // lib/youtube.js SCHEDULE_MIN_MS
+const dayKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const dayDate = (k, mins = 0) => new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, +k.slice(8, 10), 0, mins);
+const dayAdd = (k, n) => { const d = dayDate(k, 720); d.setDate(d.getDate() + n); return dayKey(d); };
+const daySpan = (a, b) => Math.round((dayDate(b, 720) - dayDate(a, 720)) / 864e5);
+const dayText = (k) => dayDate(k).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+const timeText = (mins) => dayDate('2026-01-01', mins).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const minsOf = (d) => d.getHours() * 60 + d.getMinutes();
+// the first day of the week where the viewer lives: 0 Sunday, 1 Monday, 6 Saturday
+const WEEK_START = (() => {
+  try {
+    const l = new Intl.Locale(navigator.language), w = (l.getWeekInfo ? l.getWeekInfo() : l.weekInfo) || {};
+    if (w.firstDay) return w.firstDay % 7;
+  } catch (e) { /* guessed from the country */ }
+  return /^en$|-(US|CA|MX|BR|JP|IL|PH)$/i.test(navigator.language || '') ? 0 : 1;
+})();
+const weekOf = (k) => dayAdd(k, -((dayDate(k).getDay() - WEEK_START + 7) % 7));
+const SPARK = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7zM19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z"/></svg>';
+const DAY_NAMES = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
+
+async function ytPlanLoad(channel) {
+  const f = ytFilm, had = ytCals[channel];
+  if (!f || !channel || (had && (had.state === 'loading' || Date.now() - had.at < 60000))) return;
+  // read again after a minute (the dialog opened a second time): what it showed stays until the new answer
+  if (had && had.state === 'done') had.at = Date.now(); else ytCals[channel] = { state: 'loading', at: Date.now(), videos: [] };
+  let b = null;
+  try {
+    const r = await fetch(`/api/youtube/calendar?channel=${encodeURIComponent(channel)}&film=${encodeURIComponent(f.id)}&tz=${encodeURIComponent(YT_TZ)}`, { headers: { Accept: 'application/json' } });
+    if (r.ok) b = await r.json();
+  } catch (e) { /* an empty calendar, then */ }
+  if (ytFilm !== f) return;  // you have moved on to another film
+  // each video on the day and at the time this browser shows it
+  const here = (v) => { const d = new Date(v.at); return { ...v, day: dayKey(d), mins: minsOf(d) }; };
+  if (b && Array.isArray(b.videos)) ytCals[channel] = { ...b, state: 'done', at: Date.now(), videos: b.videos.map(here) };
+  else if (ytCals[channel].state !== 'done') ytCals[channel] = { state: 'failed', at: Date.now(), videos: [] };
+  ytPlanDraw();
+}
+// the day and time the form is on: yours once you pick one, else the one suggested for the channel,
+// once its calendar is read (none until then, so the day never jumps under you)
+const ytCalMark = (cal) => `${cal.state}:${(cal.suggest && cal.suggest.at) || ''}`;  // what a pick that is not yours was made from
+function ytPickFor(channel, cal) {
+  if (ytPick && ytPick.channel === channel && (ytPick.own || ytPick.from === ytCalMark(cal))) return;
+  ytCalFrom = null;
+  if (cal.state === 'loading') { ytPick = null; return; }
+  let at = cal.state === 'done' && cal.suggest ? new Date(cal.suggest.at) : null;
+  if (!at || Number.isNaN(+at)) at = ytWhenDefault();
+  ytPick = { channel, day: dayKey(at), mins: minsOf(at), own: false, from: ytCalMark(cal) };
+}
+const ytPicked = () => (ytPick ? dayDate(ytPick.day, ytPick.mins) : null);
+// this film's own picture: the thumbnail picked for it, else its poster
+function ytThumbNow() {
+  const t = (ytBase && (ytDrafts[ytBase] || {}).thumbs) || {}, n = ytBase ? ytThumbChosen(ytBase) : null;
+  const o = n && t.options.find((x) => x.n === n);
+  return o ? o.src : (filmDone && filmDone.poster_url) || '';
+}
+// the calendar's top row starts two weeks back, so what went out lately is on it; later when the
+// day picked is further off than it reaches
+function ytCalStart(today) {
+  if (ytCalFrom) return ytCalFrom;
+  const from = dayAdd(weekOf(today), -14);
+  const sel = ytMove || ytPick;
+  return sel && daySpan(from, sel.day) > CAL_WEEKS * 7 - 1 ? dayAdd(weekOf(sel.day), -21) : from;
+}
+// why that day: the pace the channel (or the series) keeps, and where the day falls in it
+function ytPaceWords(cal, channel) {
+  const c = cal.cadence || {}, s = cal.suggest, series = c.scope === 'series';
+  const who = series ? 'This series' : ytChanTitle(channel);
+  const day = dayText(dayKey(new Date(s.at)));
+  if (!c.known) return cal.videos.length ? `${who} has too few videos to show a pace yet, so this is its first free day.` : `Nothing is on ${who} yet, so this is simply the first morning it can go out.`;
+  const list = (a) => (a.length < 2 ? a.join('') : `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}`);
+  const pace = c.weekdays ? (c.weekdays.join() === '1,2,3,4,5' ? 'on weekdays' : `on ${list(c.weekdays.map((d) => DAY_NAMES[d]))}`)
+    : (c.steady ? '' : 'about ') + (c.every === 1 ? 'every day' : c.every === 2 ? 'every other day' : c.every === 7 ? 'once a week' : c.every === 14 ? 'every two weeks' : `every ${c.every} days`);
+  const time = c.time_sure ? `, usually around ${timeText(c.mins)}` : '';
+  const n = s.days_after, after = s.after && s.after.title ? `“${clip(s.after.title, 56)}”` : 'the one before';
+  const then = s.late ? `${series ? 'Its last episode' : 'Its last video'} went out ${n} days ago, so the first free day is the best one.`
+    : n ? `${day} is the first free day that keeps that: ${n === 1 ? 'the day' : `${n} days`} after ${after}.` : `${day} is the first free day that keeps that.`;
+  return `${who} ${series ? 'goes out' : 'publishes'} ${pace}${time}. ${then}`;
+}
+function ytRow(v) {
+  const chip = v.moving ? 'Moving' : v.mine ? 'This film' : v.pending === 'sending' ? 'Going up' : v.pending === 'queued' ? 'Queued' : v.state === 'scheduled' ? 'Scheduled' : v.state === 'unlisted' ? 'Unlisted' : '';
+  const seen = !v.mine && v.state !== 'scheduled' && v.views != null ? ` · ${v.views.toLocaleString()} view${v.views === 1 ? '' : 's'}` : '';
+  const body = `<span class="pic">${v.thumb ? `<img src="${esc(v.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>`
+    + `<span><b>${esc(v.title || 'Untitled')}</b><small>${chip ? `<span class="chip">${chip}</span>` : ''}${esc(dayText(v.day))} · ${esc(timeText(v.mins))}${seen}</small></span>`;
+  // one KitCut put there and YouTube still has scheduled can be moved to another day
+  if (!v.mine && v.post && v.state === 'scheduled' && !v.pending && !ytMove) {
+    const link = (inner) => (v.url ? `<a href="${esc(v.url)}" target="_blank" rel="noopener">${inner}</a>` : inner);
+    return `<div class="vrow can" data-day="${v.day}">${link(`<span class="pic">${v.thumb ? `<img src="${esc(v.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>`)}`
+      + `<span>${link(`<b>${esc(v.title || 'Untitled')}</b>`)}<small><span class="chip">Scheduled</span>${esc(dayText(v.day))} · ${esc(timeText(v.mins))}</small></span>`
+      + `<button type="button" class="mv" data-move="${esc(v.id)}" title="Move it to another day">Move</button></div>`;
+  }
+  return v.url ? `<a class="vrow" data-day="${v.day}" href="${esc(v.url)}" target="_blank" rel="noopener">${body}</a>` : `<div class="vrow${v.mine ? ' this' : ''}" data-day="${v.day}">${body}</div>`;
+}
+function ytPlanDraw() {
+  const channel = ytChecked(), w = document.querySelector('input[name=ytWho]:checked');
+  const on = !!ytFilm && !!channel && !!w && w.value === 'scheduled';
+  $('ytPlan').hidden = !on;
+  if (!on) return;
+  const cal = ytCals[channel] || { state: 'loading', videos: [] };
+  ytPickFor(channel, cal);
+  if (ytMove && ytMove.channel !== channel) ytMove = null;
+  const mv = ytMove, sel = mv || ytPick;  // the day the calendar is picking: the moved video's, else this film's
+  const videos = mv ? cal.videos.filter((v) => v.id !== mv.id) : cal.videos;
+  const now = new Date(), today = dayKey(now), name = ytChanTitle(channel);
+  const by = {};
+  for (const v of videos) (by[v.day] = by[v.day] || []).push(v);
+  const sAt = cal.state === 'done' && cal.suggest ? new Date(cal.suggest.at) : null;
+  const best = sAt ? dayKey(sAt) : null;
+
+  // the day suggested, and why
+  const el = $('ytBest');
+  if (mv) {
+    el.className = 'best';
+    el.innerHTML = `<b>Moving “${esc(clip(mv.title, 48))}”</b><span class="acts"><button type="button" class="go" id="ytMoveGo"${mv.busy ? ' disabled' : ''}>${mv.busy ? 'Moving...' : 'Move it'}</button><button type="button" id="ytMoveNo"${mv.busy ? ' disabled' : ''}>Cancel</button></span>`
+      + `<p>It is scheduled for ${esc(dayText(mv.was.day))} at ${esc(timeText(mv.was.mins))}. Pick its new day on the calendar and set the time, then press Move it. YouTube makes it public then instead.</p>`
+      + (mv.error ? `<p class="err">${esc(mv.error)}</p>` : '');
+    $('ytMoveNo').onclick = () => { ytMove = null; ytCalFrom = null; ytPlanDraw(); };
+    $('ytMoveGo').onclick = () => ytMoveGo(channel);
+  } else if (cal.state === 'loading') {
+    el.className = 'best wait';
+    el.innerHTML = `<p>Reading what is on ${esc(name)}...</p><p aria-hidden="true"><i></i><i></i></p>`;
+  } else if (!sAt) {
+    el.className = 'best plain';
+    el.innerHTML = `<p>${esc(name)}'s videos couldn't be read just now, so the calendar is empty. Pick any day.</p>`;
+  } else {
+    const same = !!ytPick && ytPick.day === best && ytPick.mins === minsOf(sAt);
+    // the channel itself could not be read: only what KitCut put there is known, so no pace is claimed
+    const why = cal.read ? ytPaceWords(cal, channel)
+      : cal.note === 'reconnect' ? `Connect ${name} again to see everything on it. Until then this shows only what KitCut published there, and the first day free of those.`
+        : `YouTube didn't answer just now, so this shows only what KitCut published on ${name}, and the first day free of those.`;
+    el.className = 'best';
+    el.innerHTML = `<b>${SPARK}Suggested: ${esc(dayText(best))} at ${esc(timeText(minsOf(sAt)))}</b>`
+      + (same ? '<span class="on">&#10003; Picked</span>' : '<button type="button" id="ytBestUse">Use it</button>')
+      + `<p>${esc(why)}</p><small>KitCut's suggestion, worked out from the days this channel publishes on.</small>`;
+    const use = $('ytBestUse');
+    if (use) use.onclick = () => { ytPick = { channel, day: best, mins: minsOf(sAt), own: false, from: ytCalMark(cal) }; ytCalFrom = null; ytPlanDraw(); };
+  }
+
+  // the calendar
+  const from = ytCalStart(today), to = dayAdd(from, CAL_WEEKS * 7 - 1), mine = mv ? mv.thumb : ytThumbNow();
+  const short = (k) => dayDate(k).toLocaleDateString([], { month: 'short', day: 'numeric' });
+  $('ytCalTitle').textContent = `${short(from)} – ${short(to)}${dayDate(to).getFullYear() !== now.getFullYear() ? `, ${dayDate(to).getFullYear()}` : ''}`;
+  $('ytCalPrev').disabled = daySpan(from, today) > 120;
+  $('ytCalNext').disabled = daySpan(today, to) > 366;
+  $('ytCalNow').disabled = from === dayAdd(weekOf(today), -14);
+  const cells = [];
+  for (let i = 0; i < 7; i++) cells.push(`<span class="wd" aria-hidden="true">${esc(dayDate(dayAdd(from, i)).toLocaleDateString([], { weekday: 'short' }))}</span>`);
+  for (let i = 0; i < CAL_WEEKS * 7; i++) {
+    const k = dayAdd(from, i), d = dayDate(k), vs = by[k] || [], past = k < today, pick = !!sel && sel.day === k;
+    const cls = ['day', past ? 'past' : '', k === today ? 'today' : '', vs.length ? 'has' : '', pick ? 'pick' : '', k === best && !pick && !mv ? 'best' : ''].filter(Boolean).join(' ');
+    const said = [d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }), pick ? (mv ? 'picked for the video being moved' : 'picked for this film') : '', k === best && !mv ? 'suggested' : '',
+      ...vs.map((v) => `${v.state === 'scheduled' ? 'scheduled for' : 'published'} ${timeText(v.mins)}: ${v.title}`), !vs.length && !past ? 'free' : ''].filter(Boolean).join(', ');
+    const pic = pick ? `<span class="pic mine">${mine ? `<img src="${esc(mine)}" alt="">` : ''}</span>`
+      : vs[0] ? `<span class="pic">${vs[0].thumb ? `<img src="${esc(vs[0].thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}${vs[0].state === 'scheduled' ? '<i class="clk"></i>' : ''}</span>` : '';
+    const count = vs.length + (pick ? 1 : 0);
+    cells.push(`<button type="button" class="${cls}" data-day="${k}" title="${esc(said)}" aria-label="${esc(said)}"${pick ? ' aria-pressed="true"' : ''}${k === today ? ' aria-current="date"' : ''}${past && !vs.length ? ' disabled' : ''}>`
+      + `<span class="n">${esc(d.getDate() === 1 ? short(k) : String(d.getDate()))}</span>${pic}${count > 1 ? `<span class="more">+${count - 1}</span>` : ''}</button>`);
+  }
+  $('ytCal').innerHTML = cells.join('');
+
+  // the day and time picked, and what is wrong with it or already on it
+  const note = $('ytPickNote');
+  $('ytWhen').hidden = !sel;
+  if (sel) {
+    $('ytPickDay').textContent = dayText(sel.day);
+    if (document.activeElement !== $('ytTime')) $('ytTime').value = `${pad2(Math.floor(sel.mins / 60))}:${pad2(sel.mins % 60)}`;
+    const there = by[sel.day] || [], soon = dayDate(sel.day, sel.mins) - now < SOONEST_MS;
+    note.textContent = soon ? (sel.day < today ? 'That day has passed. Pick another one.' : 'That time is less than 15 minutes away. Pick a later one.')
+      : there.length ? `${dayText(sel.day)} already has “${clip(there[0].title, 56)}” at ${timeText(there[0].mins)}${there.length > 1 ? ` and ${there.length - 1} more` : ''}, so two would go out that day.` : (!mv && ytMoved) || '';
+    note.className = soon ? 'note bad' : !there.length && !mv && ytMoved ? 'note good' : 'note';
+  }
+  note.hidden = !sel || !note.textContent;
+
+  // the same videos by title: what is coming (this film among them, where it would fall), then what went out
+  const me = !sel ? [] : [{ mine: true, moving: !!mv, day: sel.day, mins: sel.mins, at: dayDate(sel.day, sel.mins).toISOString(), title: mv ? mv.title : $('ytName').value.trim() || ytFilm.defaults.title, thumb: mine, state: 'scheduled' }];
+  const ahead = [...videos.filter((v) => new Date(v.at) > now), ...me].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  const out = videos.filter((v) => new Date(v.at) <= now).reverse();
+  const shown = ytAllRecent ? out : out.slice(0, CAL_RECENT);
+  $('ytOnChan').innerHTML = (ahead.length ? `<h3>Coming up on ${esc(name)}</h3>${ahead.map(ytRow).join('')}` : '')
+    + (cal.state === 'loading' ? '' : `<h3>Published lately</h3>${shown.length ? shown.map(ytRow).join('') : `<p class="none">${cal.state === 'done' && cal.read ? 'Nothing in the last few months.' : 'Nothing to show.'}</p>`}`)
+    + (out.length > shown.length ? `<button type="button" class="all" id="ytAllRecent">Show all ${out.length}</button>` : '');
+  const all = $('ytAllRecent');
+  if (all) all.onclick = () => { ytAllRecent = true; ytPlanDraw(); };
+  for (const img of $('ytPlan').querySelectorAll('img')) img.onerror = () => img.remove();  // a picture that will not load leaves its grey square
+}
+// a day picked on the calendar; a day gone by shows its video in the list under it
+$('ytCal').addEventListener('click', (e) => {
+  const b = e.target.closest('.day'), channel = ytChecked();
+  if (!b || !channel) return;
+  const k = b.dataset.day;
+  if (k < dayKey(new Date())) {
+    const row = $('ytOnChan').querySelector(`.vrow[data-day="${k}"]`);
+    if (!row && !ytAllRecent) { ytAllRecent = true; ytPlanDraw(); }
+    const r = $('ytOnChan').querySelector(`.vrow[data-day="${k}"]`);
+    if (r) { r.classList.add('hot'); r.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); setTimeout(() => r.classList.remove('hot'), 1800); }
+    return;
+  }
+  ytMoved = '';
+  if (ytMove) ytMove = { ...ytMove, day: k, error: '' };
+  // a day picked before the calendar is read keeps the time last used, else 9:00
+  else ytPick = ytPick ? { ...ytPick, day: k, own: true } : { channel, day: k, mins: minsOf(ytWhenDefault()), own: true };
+  ytPlanDraw();
+  const now = $('ytCal').querySelector('.pick');
+  if (now) now.focus();
+});
+// the arrow keys walk the days, a row of weeks further when they run off the calendar
+$('ytCal').addEventListener('keydown', (e) => {
+  const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key], b = e.target.closest('.day');
+  if (!step || !b) return;
+  e.preventDefault();
+  const k = dayAdd(b.dataset.day, step), at = () => $('ytCal').querySelector(`.day[data-day="${k}"]`);
+  if (!at() && !$(step < 0 ? 'ytCalPrev' : 'ytCalNext').disabled) { ytCalFrom = dayAdd(ytCalStart(dayKey(new Date())), step < 0 ? -CAL_STEP : CAL_STEP); ytPlanDraw(); }
+  const to = at();
+  if (to && !to.disabled) to.focus();
+});
+// Move, beside a scheduled video: the calendar now picks that video's day
+$('ytOnChan').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-move]'), channel = ytChecked(), cal = channel && ytCals[channel];
+  const v = b && cal && cal.videos.find((x) => x.id === b.dataset.move);
+  if (!v) return;
+  ytMoved = '';
+  ytMove = { channel, post: v.post, id: v.id, title: v.title, thumb: v.thumb, day: v.day, mins: v.mins, was: { day: v.day, mins: v.mins }, busy: false, error: '' };
+  ytCalFrom = null;
+  ytPlanDraw();
+  $('ytBest').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+});
+async function ytMoveGo(channel) {
+  const mv = ytMove, at = mv && dayDate(mv.day, mv.mins);
+  if (!mv || mv.busy) return;
+  if (at - Date.now() < SOONEST_MS) { ytMove = { ...mv, error: 'Pick a time at least 15 minutes from now.' }; return ytPlanDraw(); }
+  if (mv.day === mv.was.day && mv.mins === mv.was.mins) { ytMove = { ...mv, error: 'That is the day and time it already has. Pick another on the calendar.' }; return ytPlanDraw(); }
+  ytMove = { ...mv, busy: true, error: '' };
+  ytPlanDraw();
+  let said = '';
+  try {
+    const r = await fetch('/api/youtube/reschedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ post: mv.post, publish_at: at.toISOString() }) });
+    const b = await r.json().catch(() => ({}));
+    if (!r.ok) said = b.error || `HTTP ${r.status}`;
+  } catch (e) { said = "That didn't reach KitCut. Try again."; }
+  if (ytMove !== null && ytMove.id !== mv.id) return;  // another one is being moved by now
+  if (said) { ytMove = { ...mv, busy: false, error: said }; return ytPlanDraw(); }
+  // on its new day at once; the channel is read again behind it (the day suggested may move too)
+  const cal = ytCals[channel];
+  if (cal && cal.videos) {
+    cal.videos = cal.videos.map((v) => (v.id === mv.id ? { ...v, at: at.toISOString(), day: mv.day, mins: mv.mins } : v)).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+    cal.at = 0;
+  }
+  ytMove = null;
+  ytMoved = `Moved “${clip(mv.title, 48)}” to ${dayText(mv.day)} at ${timeText(mv.mins)}.`;
+  ytPlanDraw();
+  ytPlanLoad(channel);
+}
+// a row in the list lights its day on the calendar
+for (const how of ['mouseover', 'mouseout']) {
+  $('ytOnChan').addEventListener(how, (e) => {
+    const r = e.target.closest('.vrow'), d = r && $('ytCal').querySelector(`.day[data-day="${r.dataset.day}"]`);
+    if (d) d.classList.toggle('hot', how === 'mouseover');
+  });
+}
+$('ytCalPrev').addEventListener('click', () => { ytCalFrom = dayAdd(ytCalStart(dayKey(new Date())), -CAL_STEP); ytPlanDraw(); });
+$('ytCalNext').addEventListener('click', () => { ytCalFrom = dayAdd(ytCalStart(dayKey(new Date())), CAL_STEP); ytPlanDraw(); });
+$('ytCalNow').addEventListener('click', () => { ytCalFrom = dayAdd(weekOf(dayKey(new Date())), -14); ytPlanDraw(); });
+$('ytTime').addEventListener('change', () => {
+  const [h, m] = $('ytTime').value.split(':').map(Number);
+  if (!(ytMove || ytPick) || !Number.isFinite(h) || !Number.isFinite(m)) return;
+  if (ytMove) ytMove = { ...ytMove, mins: h * 60 + m, error: '' };
+  else ytPick = { ...ytPick, mins: h * 60 + m, own: true };
+  ytPlanDraw();
+});
+$('ytName').addEventListener('input', () => { if (!$('ytPlan').hidden) ytPlanDraw(); });
 // publishing to a channel that has it already makes a second copy: say so before, not after
 function ytAgain() {
   const c = document.querySelector('input[name=ytChan]:checked');
@@ -2296,9 +2669,10 @@ $('ytForm').addEventListener('submit', async (e) => {
   if (!$('ytName').value.trim()) return ytErr('Give the video a title.');
   let publishAt = null;
   if (who.value === 'scheduled') {
-    const at = new Date($('ytWhen').value);
-    if (!$('ytWhen').value || Number.isNaN(+at)) return ytErr('Pick the day and time it goes public.');
-    if (at - Date.now() < 15 * 60e3) return ytErr('Pick a time at least 15 minutes from now.');
+    if (ytMove) return ytErr('You are moving another video on the calendar. Press Move it or Cancel there first.');
+    const at = ytPick && ytPick.channel === chan.value ? ytPicked() : null;
+    if (!at || Number.isNaN(+at)) return ytErr('Pick the day and time it goes public.');
+    if (at - Date.now() < SOONEST_MS) return ytErr('Pick a time at least 15 minutes from now.');
     publishAt = at.toISOString();
   }
   ytErr(''); $('ytGo').disabled = true;
@@ -2320,6 +2694,7 @@ $('ytForm').addEventListener('submit', async (e) => {
     }
     ls.set('ytChannel', chan.value); ls.set('ytWho', who.value);
     if (publishAt) ls.set('ytWhenLast', publishAt);
+    delete ytCals[chan.value]; ytPick = null;  // the channel's calendar has one more on it: read again next time
     // it goes up in the background: the dialog closes, a note at the foot of the screen follows it
     // (the studio finishes it even if the page is closed), and the film's YouTube line shows it
     $('yt').close();
