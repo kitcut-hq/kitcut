@@ -54,6 +54,7 @@ LISTS = {"phrase": "Similar terms", "any_phrase": "Exploratory ideas"}
 CONVERSION = {0: "Very Low", 1: "Low", 2: "Average", 3: "High", 4: "Very High"}
 TREND_BATCH = 3  # chart-series-data answers for at most three terms a call
 PAUSE = (1.2, 2.6)  # seconds between requests
+RETRIES = 3
 
 AJAX = [
     "accept: */*",
@@ -105,19 +106,19 @@ def curl(url: str, headers: list[str], body: dict | None = None) -> str:
         cmd += ["-H", h]
     if body is not None:
         cmd += ["--data-raw", json.dumps(body)]
-    out = subprocess.run(
-        [*cmd, url], capture_output=True, text=True, encoding="utf-8", errors="replace"
-    )
-    _last[0] = time.monotonic()
-    text, _, status = out.stdout.rpartition("\n")
-    if out.returncode or status != "200":
-        hint = (
-            " (captcha: the session was challenged, refresh the cookie)"
-            if "captcha" in text
-            else ""
+    for attempt in range(1, RETRIES + 1):
+        out = subprocess.run(
+            [*cmd, url], capture_output=True, text=True, encoding="utf-8", errors="replace"
         )
-        raise SystemExit(f"HTTP {status or out.stderr.strip()} for {url}{hint}")
-    return text
+        _last[0] = time.monotonic()
+        text, _, status = out.stdout.rpartition("\n")
+        if not out.returncode and status == "200":
+            return text
+        if status in {"401", "403"} or attempt == RETRIES:
+            break
+        time.sleep(5 * attempt)  # a timeout or a 5xx: Etsy answers the next try
+    hint = " (captcha: the session was challenged, refresh the cookie)" if "captcha" in text else ""
+    raise SystemExit(f"HTTP {status or out.stderr.strip()} for {url}{hint}")
 
 
 def embedded(html: str, key: str) -> dict:
@@ -135,11 +136,14 @@ def load_page(term: str | None = None) -> tuple[str, str]:
         url += "/search?" + urllib.parse.urlencode(
             {"query": term, "search_trigger": "results_search_bar"}
         )
-    html = curl(url, PAGE)
-    nonce = re.search(r'name="csrf_nonce" content="([^"]+)"', html)
-    if not nonce:
-        raise SystemExit("no csrf nonce on the page: the session is signed out")
-    return html, nonce.group(1)
+    for attempt in range(1, RETRIES + 1):
+        html = curl(url, PAGE)
+        nonce = re.search(r'name="csrf_nonce" content="([^"]+)"', html)
+        if nonce:
+            return html, nonce.group(1)
+        if attempt < RETRIES:
+            time.sleep(5 * attempt)  # now and then Etsy serves a 200 page with no app in it
+    raise SystemExit("no csrf nonce on the page, three times running: the session is signed out")
 
 
 def shop_id() -> str:

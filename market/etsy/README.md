@@ -28,6 +28,27 @@ rebuilds the four CSVs from the whole cache:
 | `data/listings.csv` | the 20 listings Etsy shows as the competition for each seed: title, price, shop, shop review count, Bestseller / Star Seller |
 | `data/trend.csv` | twelve months of monthly searches per term, and the peak month |
 
+## From terms to a decision
+
+```powershell
+python market/etsy/analyze.py --rules market/etsy/seeds/video-services.families.json
+```
+
+`analyze.py` reads the CSVs and writes the two tables advice gets built on:
+
+| file | what |
+|---|---|
+| `data/families.csv` | every term Etsy returned, summed into product families: searches, the share that names someone else's character or brand, the share sitting in High / Very High conversion terms, the top terms |
+| `data/price_classes.csv` | the competing listings split into non-video, video templates and made-to-order video, with the quartiles of the price each class asks |
+
+The grouping is regexes in a JSON file beside the seed list, so a new topic
+brings its own rules (`families`, first match wins; `licensed`; `physical`;
+`listing_classes`) and the script does not change. `--verbose` prints the terms
+behind each family, which is how a pattern that swallows the wrong terms shows.
+
+The classes are read off listing **titles**, so they are a floor: a made-to-order
+listing that does not say "custom" or "personalized" lands in "video, unclear".
+
 ## The session
 
 The data belongs to a signed-in seller, so the tool needs that seller's cookie.

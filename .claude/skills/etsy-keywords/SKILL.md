@@ -60,7 +60,33 @@ anything big or small: Santa and Christmas terms are near zero for nine months.
 - Licensed characters (Bluey, Paw Patrol, Disney) show up in the suggestions
   with good numbers. They are other people's trademarks; leave them out.
 
+## 5. Sum it into products before advising
+
+One term is not a product. A buyer who wants a gender reveal film types it 400
+ways, and a quarter of a family's searches can name a character you may not use.
+
+```powershell
+python market/etsy/analyze.py --rules market/etsy/seeds/<topic>.families.json
+```
+
+Write the rules file beside the seeds (copy `video-services.families.json`):
+one regex per product family, most specific first, plus `licensed` for other
+people's characters. Read `--verbose` once to see what each pattern caught.
+`data/families.csv` is the size of each product; `data/price_classes.csv` is
+what templates ask against what made-to-order work asks.
+
+What the first run (2026-10-07, video services) found, so the next does not
+start from nothing: the big invitation terms pay about $2 and belong to
+templates; made-to-order video asks a median of $35 against a template's $12;
+the families that already buy a film made for them are reveals (gender,
+pregnancy) and, in season, Santa. The report is a PDF outside the repo.
+
 ## Traps
+
+- Etsy's conversion rate has no stated denominator. Use it to rank terms, never
+  to multiply into "orders a month".
+- A listing preview on Etsy plays without sound, so a voice has to be sold in
+  the picture and the title, not by letting people hear it.
 
 - The public pages (`etsy.com/search`, `/listing/...`) answer 403 with a
   captcha. The tool does not touch them; do not try with curl.
