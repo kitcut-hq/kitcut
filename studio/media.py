@@ -698,12 +698,15 @@ def moved(value, old, new):
 
 
 async def move_records(old, dry=False, say=print):
-    """Every film's record pointed at this place: answers how many records changed."""
+    """Every film's record pointed at this place: answers how many records changed. The films
+    here first (studio.json and the database), then the records only the database still has -- a
+    film whose folder is gone keeps its copy online, and its pages read the database."""
     import agent
     from film import Film
 
-    old, n = old.rstrip("/"), 0
+    old, n, here = old.rstrip("/"), 0, set()
     for f in Film.all():
+        here.add(f.id)
         rec = f.record()
         new = {k: moved(v, old, base()) for k, v in rec.items()}
         changed = {k: v for k, v in new.items() if v != rec[k]}
@@ -715,6 +718,21 @@ async def move_records(old, dry=False, say=print):
         f.update(**changed)
         if not await agent.save(f.id, changed):
             say("  %s: its record here is changed, the database's is NOT" % f.id)
+    for doc in await asyncio.to_thread(agent.STORE.runs):
+        if doc["_id"] in here:
+            continue
+        changed = {
+            k: w
+            for k, v in doc.items()
+            if k not in ("_id", "created_at", "updated_at") and (w := moved(v, old, base())) != v
+        }
+        if not changed:
+            continue
+        n += 1
+        if dry:
+            say("  %s: only in the database" % doc["_id"])
+        elif not await agent.save(doc["_id"], changed):
+            say("  %s: the database's record is NOT changed" % doc["_id"])
     return n
 
 

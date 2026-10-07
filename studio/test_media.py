@@ -452,6 +452,25 @@ async def main():
             rec,
         )
         check(await media.move_records(old) == 0, "records again: nothing left to change")
+        gone = "studio-20260101-000000-nofldr"  # its folder is gone: only the database has it
+        agent.STORE.save(gone, {"media": {"video": old + "/%s/film.mp4" % gone}, "state": "done"})
+        said = []
+        check(
+            await media.move_records(old, dry=True, say=said.append) == 1
+            and gone in said[0]
+            and agent.STORE.get(gone)["media"]["video"].startswith(old + "/"),
+            "records --dry-run: one only the database has, named and not changed",
+            said,
+        )
+        check(
+            await media.move_records(old) == 1
+            and agent.STORE.get(gone)["media"]["video"] == new + "/%s/film.mp4" % gone
+            and agent.STORE.get(gone)["state"] == "done"
+            and await media.move_records(old) == 0,
+            "records: a film only the database has is moved there too",
+            agent.STORE.get(gone),
+        )
+        agent.STORE.forget(gone)
         os.environ["STUDIO_MEDIA_BASE"] = old
         f.update(media=urls, share=None, versions=None, prompt="a film for the copy")
         OBJECTS.clear()
