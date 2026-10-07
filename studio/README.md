@@ -493,8 +493,9 @@ It never fails a film: a reader that raises or runs out of time (`CALL_S`, 5 min
 leaves the film as it was. It does not run when Claude's time was already up, on a film that was
 read before (one carried on after a restart), on a film remade from a template (a remake of a film
 a person approved, whose flips and wipes are meant: not measured yet), or when Claude is stood in
-for by a test. A film made in scenes is read, and what is found is kept, but there is no one
-session to fix it in.
+for by a test. A film made in scenes has no one session to fix it in once it is whole, so it is
+read before its last pass and the editor is told what was found (`review.for_editor`): the editor
+is its fix turn.
 
 `python studio/review.py --film <id>` (on the VM: `ops.sh review <id>`) reads a finished film the
 same way and prints what it finds, changing nothing; `--machine` prints only the drawing code's

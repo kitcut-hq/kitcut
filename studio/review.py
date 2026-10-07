@@ -578,6 +578,66 @@ def _dirs_differ(film, before):
     return False
 
 
+EDITOR_NOTE = (
+    "\n\nBefore this pass the studio had the whole film read by someone who did not make it, a "
+    "frame a second (outputs/review/film-01.jpg ... -- Read them: they are the whole film in "
+    "order, each frame with its time and the words being said). They found:\n\n%s\n\nFix what a "
+    'viewer would take for a mistake (the lines not marked "could be better") in the scene '
+    "files, `check`, and `strip` each moment you changed to see it; prefer the fix that keeps "
+    "the scene."
+)
+
+
+async def for_editor(film, emit, tools, auth):
+    """A film made in scenes has no one session to fix it in once it is whole, so it is read
+    before its last pass and the editor is told what was found: the text to add to the
+    editor's opening message ("" when nothing was found, or the reading failed). Read once: a
+    second try of the editor is told the same. Never raises."""
+    import agent  # noqa: PLC0415
+    import ytdraft  # noqa: PLC0415
+
+    t0 = time.time()
+    try:
+        rec = film.record()
+        had = rec.get("review")
+        if had:
+            found = had.get("findings") or []
+            return EDITOR_NOTE % words(found) if found else ""
+        if not enabled() or rec.get("template"):
+            return ""
+
+        async def ask(text, images):
+            return await ytdraft.ask_json(
+                text, images, auth, film, ytdraft.MODEL, EFFORT, system(), "review"
+            )
+
+        emit(
+            {"type": "stage", "name": "claude", "text": "Checking the whole film, a frame a second"}
+        )
+        r = await read(view_of(film, tools), ask, log=lambda s: emit({"type": "log", "text": s}))
+        out = {
+            "findings": r["findings"],
+            "events": len(r["events"]),
+            "calls": r["calls"],
+            "read_s": r["seconds"],
+            "cost_usd": r["cost_usd"],
+            "outcome": "given to the editor" if r["findings"] else "clean",
+            "seconds": round(time.time() - t0, 1),
+        }
+        film.update(review=out)
+        await agent.save(film.id, {"review": out})
+        return EDITOR_NOTE % words(r["findings"]) if r["findings"] else ""
+    except (Exception, SystemExit) as e:  # noqa: BLE001 -- never fails a film
+        print(
+            "REVIEW %s failed before the editor: %s" % (film.id, e or type(e).__name__), flush=True
+        )
+        with contextlib.suppress(Exception):
+            note = {"outcome": "not read: %s" % (str(e) or type(e).__name__)[:200]}
+            film.update(review=note)
+            await agent.save(film.id, {"review": note})
+        return ""
+
+
 async def gate(film, emit, meter, tools, auth, overtime=False):
     """The studio's step after the author's last turn: read the film, and if something must be
     fixed, one bounded turn to fix exactly that. Returns the record kept on the film (also under

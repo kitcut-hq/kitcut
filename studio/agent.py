@@ -1593,10 +1593,14 @@ async def make_film(
             sheets = []
             for i, ts in enumerate(scenes.contact_times(film)):
                 sheets.append(await tools.sheet_of(ts, "contact-%d" % (i + 1)))
+            import review  # noqa: PLC0415 -- it imports this module
+
+            # the whole film read by a second pair of eyes first: the editor is its fix turn
+            found = await review.for_editor(film, emit, tools, auth)
             res = await one(
                 "editor",
                 scenes.EDITOR,
-                scenes.editor_message(film, sheets),
+                scenes.editor_message(film, sheets) + found,
                 ["scenes/*.js", "score.json", "sfx.json"],
                 text="Claude is checking the whole film",
             )
