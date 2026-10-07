@@ -163,6 +163,9 @@ async def main():
     base = "http://127.0.0.1:%d/films" % srv.port
     os.environ["STUDIO_MEDIA_BASE"] = base
     procs.SECRETS["STUDIO_MEDIA_SAS"] = SAS
+    os.environ.pop("STUDIO_R2_ENDPOINT", None)  # the stand-in is Azure's, whatever the .env says
+    procs.SECRETS.pop("STUDIO_R2_KEY_ID", None)
+    procs.SECRETS.pop("STUDIO_R2_SECRET", None)
     agent.STORE = mem = store.MemoryStore()
     try:
         a = episode("One", base, mem)
