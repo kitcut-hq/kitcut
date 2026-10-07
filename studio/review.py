@@ -59,6 +59,12 @@ KINDS = (
 # composed, and a fix turn spent on one moved a crown off a name plate (2 of the 2 musts the
 # reader raised on a film with nothing broken, 2026-10-07). They are kept and shown.
 SOFT = ("cutoff", "continuity")
+# ... and kinds that are a must-fix when they last, whatever the reader says. A reader told to
+# call a must only what it is sure of reported a dog's head going into a wall beside his door
+# (0.7 s, twice in one film) as "could be better", so the one fix turn did not touch it; a
+# second reading of the finished film called both a mistake. These three are what an owner
+# sees first. On the bench the rule adds one must to three clean films.
+HARD, HARD_S = ("through", "squash", "double"), 0.3
 MAX_FINDINGS = 14
 MAX_CLOSER = 8  # close-ups the reader may ask for
 MAX_STRIPS = 12  # ... and all the studio renders: its own moments first come first
@@ -228,7 +234,8 @@ def clean(d, length):
                 "kind": kind if kind in KINDS else "other",
                 "what": what,
                 "fix": " ".join(str(f.get("fix") or "").split())[:400],
-                "must": bool(f.get("must")) and kind in KINDS and kind not in SOFT,
+                "must": (bool(f.get("must")) and kind in KINDS and kind not in SOFT)
+                or (kind in HARD and t1 - t0 >= HARD_S - 1e-6),
             }
         )
     found.sort(key=lambda f: (not f["must"], f["t0"]))

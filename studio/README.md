@@ -479,7 +479,10 @@ folders stay out of the repo).
   against a fixed list of glitch kinds (`prompts/review.md`: through, squash, double, poke, idle,
   untold, wash, stray, text, cutoff, continuity -- never taste). Two calls: the whole film, with
   the narration's times and the machine's notes; then close-ups of the moments it and the machine
-  asked for. A finding is a `must` only when a viewer would call it a mistake at normal speed.
+  asked for. A finding is a `must` only when a viewer would call it a mistake at normal speed;
+  one about framing or continuity never is (`SOFT`), and a body through a wall, squashed or twice
+  on screen for 0.3 s or more always is, whatever the reader called it (`HARD`: a reader told to
+  be sure reported a dog's head in a wall as "could be better", and the fix turn left it).
   When there are any, Claude's own session gets one turn of `FIX_S` (6 minutes, effort high, the
   tools `check`, `stills` and `strip` only) to fix exactly those. The fix is then judged: the
   film must still run, the narration's words must not have moved (vo.json is put back), and the

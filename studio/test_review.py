@@ -326,6 +326,32 @@ def main():
         "reader: a finding about framing is kept, and is never a must-fix",
         [x["must"] for x in soft["findings"]] == [False],
     )
+    hard = review.clean(
+        {
+            "findings": [
+                {
+                    "t0": "0:19.2",
+                    "t1": "0:19.9",
+                    "kind": "through",
+                    "what": "his head goes into the wall",
+                    "must": False,
+                },
+                {
+                    "t0": "0:59.8",
+                    "t1": "0:59.9",
+                    "kind": "double",
+                    "what": "one odd frame",
+                    "must": False,
+                },
+            ]
+        },
+        60,
+    )
+    expect(
+        "reader: through a wall for most of a second is a must-fix whatever it was called; one odd frame is not",
+        [x["must"] for x in hard["findings"]] == [True, False],
+        hard,
+    )
     expect(
         "reader: its close-ups are inside the film and apart",
         c["look_closer"] == [80.4, 86.5],
