@@ -48,9 +48,13 @@ web), and the studio's tools, which run the pipeline on your film:
 {LOOK_COMMANDS}- `check` -- syntax-checks film.js (and your engine copy and cast).
 - `stills` -- renders frames at the times you give (seconds) into `outputs/review/`, tiled into
   `outputs/review/sheet.png`; Read the sheet to look at them.
-- `motion` -- renders the whole film a few times a second and reports its cuts and any stretch
-  where nothing moves for 4 s or more, with the frames around each in
-  `outputs/review/motion.png`.
+- `motion` -- renders the whole film a few times a second: the whole of it a frame a second on
+  sheets (`outputs/review/film-01.jpg` ...), each frame with its time and the words being
+  said; its cuts and any stretch where nothing moves for 4 s or more, with the frames around
+  each in `outputs/review/motion.png`; and what the drawing code shows for a moment only (a
+  character on screen twice, cut by the edge of what it is inside, squashed through flat).
+- `strip` -- a close look at up to 6 moments: 8 frames a tenth of a second apart round each
+  (`outputs/review/strip-1.jpg` ...), for what happens inside one second.
 - `sound` -- renders the soundtrack from score.json and sfx.json (with the narration) to prove
   they work; `levels: true` also prints the balance.
 - `picture` -- saves a picture from the web by its own URL (PNG, JPEG, WebP, GIF, ICO or SVG: a

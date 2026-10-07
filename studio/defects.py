@@ -37,6 +37,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(KIT, "scripts"))
 import agent  # noqa: E402, F401 -- imports _env first
 import motion  # noqa: E402
+import review  # noqa: E402
 
 LABELS = os.path.join(HERE, "bakeoff", "defects.json")
 PAD = 1.0  # seconds: a finding this near a known glitch's window has found it
@@ -135,11 +136,67 @@ def part_probe(d):
     return motion.events(probe(d, force=True))
 
 
-def run_part(part, d):
+def view_of(d):
+    """A bench film as review.read() takes one: its facts, and how to lay it out and look closer."""
+    import asyncio  # noqa: PLC0415
+
+    import tools  # noqa: PLC0415
+
+    words = said(d)
+    out_dir = os.path.join(d, "outputs", "review")
+
+    async def sheets():
+        fr, _ = await asyncio.to_thread(frames, d)
+        return await asyncio.to_thread(motion.sheets, fr, out_dir, words)
+
+    async def strips(want):
+        n = length(d)
+        groups = [tools.strip_times(t, 0, n - 0.02) for t, _ in want]
+        every = sorted({x for g in groups for x in g})
+        into = os.path.join(d, "temp", "strip")
+        for f in os.listdir(into) if os.path.isdir(into) else []:
+            os.remove(os.path.join(into, f))
+        await asyncio.to_thread(render, d, every, os.path.join("temp", "strip"))
+        return await asyncio.to_thread(
+            tools.strips_of, into, out_dir, [t for t, _ in want], groups, words
+        )
+
+    return {
+        "mat": review.material(d),
+        "sheets": sheets,
+        "events": motion.events(probe(d)),
+        "strips": strips,
+    }
+
+
+def part_review(d, auth="login"):
+    """The reviewer: review.read() on this machine's Claude login. Its findings carry `what`."""
+    import asyncio  # noqa: PLC0415
+
+    import ytdraft  # noqa: PLC0415
+
+    async def ask(text, images):
+        return await ytdraft.ask_json(
+            text, images, auth, None, ytdraft.MODEL, review.EFFORT, review.system(), "review"
+        )
+
+    r = asyncio.run(review.read(view_of(d), ask, log=lambda s: print("    " + s, flush=True)))
+    with open(os.path.join(d, "temp", "review-last.json"), "w", encoding="utf-8") as f:
+        json.dump(r, f, indent=1, ensure_ascii=False)
+    print(
+        "    %d call(s), %.0f s, $%.2f, %d close-up(s)"
+        % (r["calls"], r["seconds"], r["cost_usd"], len(r["closer"])),
+        flush=True,
+    )
+    return [dict(f, text=f["what"]) for f in r["findings"]]
+
+
+def run_part(part, d, tag=""):
     fn = globals().get("part_" + part)
     if fn is None:
         sys.exit("the %s part is not built yet" % part)
     found = fn(d)
+    part += tag
     p = os.path.join(d, "temp", "findings-%s.json" % part)
     os.makedirs(os.path.dirname(p), exist_ok=True)
     with open(p, "w", encoding="utf-8") as f:
@@ -194,10 +251,24 @@ def flagged(found, total):
     return cover
 
 
-def score(home, parts=PARTS, only=None):
+def kept(home, only=None):
+    """Every part that has findings on the bench, a repeated one under each of its tags."""
+    seen = []
+    for _, d in films(home, only):
+        t = os.path.join(d, "temp")
+        for f in sorted(os.listdir(t)) if os.path.isdir(t) else []:
+            m = re.fullmatch(r"findings-(.+)\.json", f)
+            if m and m.group(1) not in seen:
+                seen.append(m.group(1))
+    return sorted(
+        seen, key=lambda p: (next((i for i, q in enumerate(PARTS) if p.startswith(q)), 9), p)
+    )
+
+
+def score(home, parts=None, only=None):
     """{part: {found, known, by_kind, clean_alarms, clean_musts, clean_films, films: {...}}}."""
     lab, out = labels(), {}
-    for part in parts:
+    for part in parts or kept(home, only):
         s = {
             "found": 0,
             "known": 0,
@@ -240,7 +311,7 @@ def table(sc):
     lines = []
     for part, s in sc.items():
         lines.append(
-            "%-7s found %d of %d known glitches; on %d clean film(s): %d finding(s), %d must-fix"
+            "%-8s found %d of %d known glitches; on %d clean film(s): %d finding(s), %d must-fix"
             % (part, s["found"], s["known"], s["clean_films"], s["clean_alarms"], s["clean_musts"])
         )
         lines.append(
@@ -277,6 +348,9 @@ def main():
         "--part", choices=PARTS, help="run one check over the bench and keep its findings"
     )
     ap.add_argument("--score", action="store_true", help="print the table")
+    ap.add_argument(
+        "--tag", default="", help="with --part: keep this run's findings apart (review --tag 2)"
+    )
     ap.add_argument(
         "--list",
         action="store_true",
@@ -316,7 +390,10 @@ def main():
                 flush=True,
             )
         if a.part:
-            print("%s: %s -> %d finding(s)" % (name, a.part, len(run_part(a.part, d))), flush=True)
+            print(
+                "%s: %s -> %d finding(s)" % (name, a.part, len(run_part(a.part, d, a.tag))),
+                flush=True,
+            )
     if a.score:
         print(table(score(home, only=only)))
 

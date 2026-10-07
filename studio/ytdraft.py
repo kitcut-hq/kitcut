@@ -557,17 +557,19 @@ async def _call(
 
 
 async def ask_json(text, sheet, auth, film, model, effort, system, session):
-    """One Claude call with no tools -- the text, and the sheet (JPEG bytes) as an image before
-    it -- on the film's key (auth "api") or this machine's login: (the parsed JSON object, cost
-    in USD). share.py asks through it too."""
+    """One Claude call with no tools -- the text, and the sheet (JPEG bytes, or a list of them,
+    in order) as images before it -- on the film's key (auth "api") or this machine's login: (the
+    parsed JSON object, cost in USD). share.py, canon.py and review.py ask through it too. It has
+    no time limit of its own: a caller that must not wait wraps it (asyncio.wait_for)."""
     from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ResultMessage, TextBlock
     from claude_agent_sdk import query
 
     content = [{"type": "text", "text": text}]
-    if sheet:
-        img = base64.b64encode(sheet).decode("ascii")
+    sheets = [sheet] if isinstance(sheet, (bytes, bytearray)) else list(sheet or [])
+    for n, one in enumerate(sheets):
+        img = base64.b64encode(one).decode("ascii")
         content.insert(
-            0,
+            n,
             {
                 "type": "image",
                 "source": {"type": "base64", "media_type": "image/jpeg", "data": img},

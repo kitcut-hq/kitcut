@@ -85,6 +85,14 @@ def main():
             "%s: the review calls motion" % look,
             "`motion`" in p and "One film, not a slideshow" in p,
         )
+        expect(
+            "%s: the review reads the whole film and looks inside the seconds" % look,
+            "film-NN.jpg" in p and "`strip`" in p and "Two review rounds at most" in p,
+        )
+    expect(
+        "drawn: what a viewer takes for a mistake is named",
+        "Nothing breaks the picture" in drawn and "never by scaling through" in drawn,
+    )
 
     # ---- the ensembles use only cached instruments
     sf = os.path.join(films.KIT, "models", "soundfonts", "FluidR3_GM")

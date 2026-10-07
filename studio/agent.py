@@ -1691,6 +1691,23 @@ async def make_film(
                 raise RuntimeError("Claude finished without recording the narration")
             if film.record().get("template"):
                 await no_leftovers(film, emit, meter, tools, auth)
+            # a second pair of eyes on the whole film, and one bounded turn to fix what it must
+            # (review.py). It never fails a film: one it could not read goes on as it is.
+            s = time.time()
+            import review  # noqa: PLC0415 -- it imports this module
+
+            rv = await review.gate(
+                film, emit, meter, tools, auth, overtime=bool(summary.get("overtime"))
+            )
+            if rv:
+                stages["review"] = time.time() - s
+                # its two readings and its fix turn are Claude's work too: price() above took
+                # the main conversation's own total, so they are added here, once
+                extra = round((rv.get("cost_usd") or 0) + (rv.get("fix_cost_usd") or 0), 4)
+                summary["review_cost_usd"] = extra
+                summary["claude_cost_usd"] = round((summary.get("claude_cost_usd") or 0) + extra, 4)
+                if summary.get("claude_billed"):
+                    summary["cost_usd"] = round((summary.get("cost_usd") or 0) + extra, 4)
             film.update(state="finishing", **summary)
             await save(film.id, {"state": "finishing"})
         pin_vo(film)  # whatever Claude left there, the backends and models stay the studio's

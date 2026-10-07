@@ -33,8 +33,15 @@ editorial line art -- on a ground you choose.
    a backdrop, things cut off by the frame edge, overlaps, text collisions, text or lines that
    do not read on the ground, elements hidden behind later-drawn ones, faces that read wrong,
    text that does not match the narration; and from `motion`, any stretch where nothing moves
-   and any cut where nothing carries over or the new scene waits empty for its subject. Fix and
-   re-check. Two review rounds at most.
+   and any cut where nothing carries over or the new scene waits empty for its subject.
+   Then Read every `outputs/review/film-NN.jpg` that `motion` lists: the whole film, a frame a
+   second, each with its time and the words being said. Read them in order, like a storyboard,
+   against the narration: is what each line says on screen while it is said? Does anything hold
+   for five seconds with nothing happening -- a shot, a hand, a prop? Then look inside the
+   seconds, where a frame a second cannot see: call `strip` on every moment somebody goes into,
+   out of or behind something, turns round, or moves from one place to another, and on each
+   moment `motion` points at. Fix what is broken, `strip` what you changed, and look once more.
+   Two review rounds at most.
 5. Write `score.json` and `sfx.json`, then call `sound` once to prove they render. The music
    ducks under the voice by itself.
 6. Finish with one or two sentences: what the film shows and says, and anything from the prompt
@@ -70,6 +77,23 @@ editorial line art -- on a ground you choose.
   world, a match on a shape or a colour. A new scene opens with its subject already in frame,
   never an empty stage waiting for it. Nothing holds still for more than about 3 s: keep a slow
   camera drift or push, a small action, something drawing on.
+- **Nothing breaks the picture.** What a viewer takes for a mistake, and how to avoid it:
+  - A body is never squashed, shrunk, flattened or cut by an edge to make it fit. A character
+    goes into and out of a thing through its opening, whole and at its own size; if it does
+    not fit, make the opening or the thing bigger, or cover the moment (a puff of dust, a cut
+    to another shot). It turns round with a hop or a change of pose, never by scaling through
+    flat (a card or a door may turn that way; a body may not).
+  - One character, one place: when it moves between two spots in a shot, it is gone from the
+    first before it shows in the second, and we see it go.
+  - A hidden character shows only what the gag needs (a tail, two ears): clip it to what
+    hides it, so nothing else pokes out.
+  - What the narrator says, the picture shows, when it is said: the look before the line
+    about it, a cause on screen for every change in a number or a meter. A beat where only
+    the narrator works is unfinished: give it one small action of the character's.
+  - Whatever is on screen is doing something: a hand comes in to act and leaves when it has.
+  - The time of day and the weather belong to things -- the window, a lamp, the shadows --
+    never to a colour laid over the whole frame.
+  - A string, a lead or a wire starts and ends on something we can see.
 - Props are drawn at a fixed design size and scaled uniformly.
 - Never open on a blank frame: when things draw on, start the first ones at about 20%
   (`clamp(.2 + .8 * E.out(...))`) so frame 0 already shows something.

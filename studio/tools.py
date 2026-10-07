@@ -57,6 +57,11 @@ MAX_STILLS = 12
 # her carrier's wall in 0.4 s and was flipped through a sliver in 0.3 s; neither was on any of the
 # twelve review stills of its two-minute film (docs/known-issues.md, KI-059)
 STRIP_MAX, STRIP_N, STRIP_STEP = 6, 8, 0.1
+# the film played once more without painting, in the motion check's own browser run
+# (sketch/probe.js): every PROBE_STEP seconds, and what it may add to that step's time
+PROBE_STEP, PROBE_S = 0.1, 60
+# which of its moments the author is told (a thing that pops up is nearly always meant), and how many
+EVENTS_TOLD, EVENTS_MAX = ("double", "cut", "into", "sliver", "wash", "jump", "squash"), 10
 PEOPLE_WAIT_S = 420  # the longest a picture tool waits for the people to be drawn (agent.py)
 # what one film may bring in from the web (web-grab.py): pictures and page photographs together,
 # and font families -- each is inlined into the film's page, which a phone downloads whole
@@ -278,6 +283,7 @@ class Tools:
         # a pass of a film made in scenes (scenes.py): its name, the stretch of the film it looks
         # at, the files it may write, and its Claude session
         self.pass_name, self.span, self.allow, self.session = None, None, None, None
+        self.only = None  # a turn that may use only these of the studio's tools (review.py's fix)
         self.priority = film.record().get("priority", 0)
         self.people_told = False  # whether Claude has been told how the people were drawn
         # a round of changes to a finished film (rounds.Round): its two tools, its verdicts
@@ -898,13 +904,15 @@ class Tools:
     async def film_sheets(self):
         """The film a few times a second (the whole of it, or a scene's own stretch), read by
         studio/motion.py: (what it says in words, whether it wrote motion.png, the whole-film
-        sheets' paths as Claude names them). Claude's motion tool and the studio's own review
-        (review.py) both look at a film through this."""
+        sheets' paths as Claude names them, what the drawing code shows -- motion.events). The
+        same browser run plays the film once more without painting it (sketch/probe.js). Claude's
+        motion tool and the studio's own review (review.py) both look at a film through this."""
         ts = motion.times(self.film.length)
         if self.span:  # a scene's pass: only its stretch
             ts = [t for t in ts if self.span[0] <= t <= self.span[1]]
         shutil.rmtree(self.film.path("temp", "motion"), ignore_errors=True)
         args = ["--stills", ",".join("%g" % t for t in ts), "--into", "temp/motion"]
+        args += ["--probe", "%g" % PROBE_STEP]
         async with self.lock:
             self.gate()
             await self._script(
@@ -912,8 +920,9 @@ class Tools:
                 "sketch-render.py",
                 args,
                 pools=[("browser", 1)],
-                timeout=120 + 2 * len(ts),
+                timeout=120 + 2 * len(ts) + PROBE_S,
             )
+        events = await asyncio.to_thread(self._events)
         text, sheet = await asyncio.to_thread(
             motion.analyse,
             self.film.path("temp", "motion"),
@@ -927,13 +936,27 @@ class Tools:
             said,
             span=self.span,
         )
-        return text, sheet, ["outputs/review/" + os.path.basename(p) for p in made]
+        return text, sheet, ["outputs/review/" + os.path.basename(p) for p in made], events
+
+    def _events(self):
+        """motion.events() over the probe's report of the last motion run, within a scene's own
+        stretch; [] when the page gave none (a film with no cast draws nothing it can name)."""
+        try:
+            with open(self.film.path("temp", "motion", "report.json"), encoding="utf-8") as f:
+                rep = json.load(f).get("probe") or {}
+            ev = motion.events(rep)
+        except Exception as e:  # noqa: BLE001 -- a pointer the film can do without, never a failure
+            self.emit({"type": "log", "text": "the drawing code could not be read: %s" % e})
+            return []
+        if self.span:
+            ev = [e for e in ev if e["t1"] >= self.span[0] and e["t0"] <= self.span[1]]
+        return ev
 
     async def motion(self):
         """The film a few times a second, for what a sheet of stills cannot show: the whole of it
         a frame a second, its cuts, and any stretch where nothing moves (studio/motion.py)."""
         told = await self.people_ready()
-        text, sheet, sheets = await self.film_sheets()
+        text, sheet, sheets, events = await self.film_sheets()
         if sheet:
             self.sheet_v += 1
             self.emit({"type": "image", "path": "review/motion.png", "v": self.sheet_v})
@@ -943,6 +966,14 @@ class Tools:
                 " under it: Read %s. Read every one: what a film gets wrong between two review "
                 "stills is on these. Then `strip` the moments that need a closer look."
                 % ", ".join(sheets)
+            )
+        told_ev = [e for e in events if e["kind"] in EVENTS_TOLD][:EVENTS_MAX]
+        if told_ev:
+            text += (
+                "\n\nWhat the drawing code shows for a moment only (it cannot see the picture: "
+                "`strip` each and look -- a door or a card may turn through flat, a body may not; "
+                "a character may be half hidden on purpose):\n"
+                + "\n".join("- " + e["text"] for e in told_ev)
             )
         return text + told
 
@@ -957,27 +988,41 @@ class Tools:
         lo, hi = self.span or (0, n)
         if not ts or len(ts) > STRIP_MAX or any(t < lo or t > hi for t in ts):
             raise ToolError("give 1-%d moments between %g and %g seconds" % (STRIP_MAX, lo, hi))
+        await self.people_ready()
+        made = await self.strips(ts)
+        return "Read %s: %d frames %g s apart round each moment, with the words being said." % (
+            ", ".join("outputs/review/" + os.path.basename(p) for p in made),
+            STRIP_N,
+            STRIP_STEP,
+        )
+
+    async def strips(self, ts, name="strip"):
+        """Close-ups of the moments ts as outputs/review/<name>-<n>.jpg, in that order (the strip
+        tool's, and under another name the studio's own review's). -> their paths."""
+        n = self.film.length
+        lo, hi = self.span or (0, n)
         groups = [strip_times(t, lo, min(hi, n - 0.02)) for t in ts]
         every = sorted({x for g in groups for x in g})
         shutil.rmtree(self.film.path("temp", "strip"), ignore_errors=True)
         args = ["--stills", ",".join("%g" % t for t in every), "--into", "temp/strip"]
-        await self.people_ready()
         async with self.lock:
             self.gate()
-            await self._script("stills", "sketch-render.py", args, pools=[("browser", 1)])
+            await self._script(
+                "stills",
+                "sketch-render.py",
+                args,
+                pools=[("browser", 1)],
+                timeout=TIMEOUT["stills"] + 2 * len(every),
+            )
         said = motion.spoken(self.film.path("audio", "vo", "timeline.json"))
-        made = await asyncio.to_thread(
+        return await asyncio.to_thread(
             strips_of,
             self.film.path("temp", "strip"),
             self.film.path("outputs", "review"),
             ts,
             groups,
             said,
-        )
-        return "Read %s: %d frames %g s apart round each moment, with the words being said." % (
-            ", ".join("outputs/review/" + os.path.basename(p) for p in made),
-            STRIP_N,
-            STRIP_STEP,
+            name,
         )
 
     async def _automation_if_needed(self):
@@ -1322,6 +1367,8 @@ class Tools:
             tools = [t for t in tools if t.name != "paint"]
         if "routes" not in self.film.caps:  # a film that replays a route on its map: a template's
             tools = [t for t in tools if t.name != "route"]
+        if self.only is not None:  # the fix after the studio's review: look and check, no more
+            tools = [t for t in tools if t.name in self.only]
         if self.round is not None:  # a round of changes: its own two, and none it must not use
             tools = [t for t in tools if t.name not in self.round.without]
             tools += self.round.tools(tool, wrap)

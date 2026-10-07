@@ -37,8 +37,15 @@ printed words, labels, stamps and marks -- every piece entering and moving on th
    that before anything else. Then look hard at the details: a page that stays bare for long
    after it arrives, a piece covering words or another piece's point, text too small or hard to
    read, a piece cut off by the frame, a reveal the next page covers before it has been seen;
-   and from `motion`, any stretch where nothing moves. Fix and re-check. Two review rounds at
-   most.
+   and from `motion`, any stretch where nothing moves.
+   Then Read every `outputs/review/film-NN.jpg` that `motion` lists: the whole film, a frame a
+   second, each with its time and the words being said. Read them in order, like a storyboard,
+   against the narration: is what each line says on screen while it is said? Does anything hold
+   for five seconds with nothing happening -- a shot, a hand, a prop? Then look inside the
+   seconds, where a frame a second cannot see: call `strip` on every moment somebody goes into,
+   out of or behind something, turns round, or moves from one place to another, and on each
+   moment `motion` points at. Fix what is broken, `strip` what you changed, and look once more.
+   Two review rounds at most.
 6. Write `score.json` and `sfx.json`, then call `sound` once to prove they render. The music
    ducks under the voice by itself.
 7. Finish with one or two sentences: what the film shows and says, and anything from the prompt

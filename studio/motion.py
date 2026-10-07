@@ -382,7 +382,7 @@ def events(report, step=None):
     on = [[s for s in ss if s["on"]] for _, _, ss in frames]
     t_of = [t for t, _, _ in frames]
     near = NEAR + 0.6 * max(0.0, step - 0.1)  # a coarser look: more room for a pose to hand over
-    seen, cover, where = {}, {}, {}  # key -> frames on screen / frame shares / world centres
+    seen, drawn, cover, where = {}, {}, {}, {}  # key -> frames on screen / drawn / shares / centres
     for i, (_, _, ss) in enumerate(frames):
         for s in ss:
             if s["ov"]:
@@ -392,23 +392,36 @@ def events(report, step=None):
                 max(0.0, min(1, x1) - max(0, x0)) * max(0.0, min(1, y1) - max(0, y0))
             )
             where.setdefault(s["key"], []).append(s["world"])
+            drawn.setdefault(s["key"], set()).add(i)
             if s["on"]:
                 seen.setdefault(s["key"], set()).add(i)
     mid = lambda v: sorted(v)[len(v) // 2]  # noqa: E731
-    # Who can be somebody. Not a set (a room fills the frame); not furniture (the sofa, the
-    # portrait on the wall stay where they are in the world: the camera turns away from them,
-    # they do not come and go); not a thing to be in (what another cast call is drawn inside: a
-    # carrier, a picture frame); and big enough (a sparkle or a crumb is drawn by the cast too).
-    # A cat on screen all film long in one pose is still somebody: only standing still in the
-    # WORLD makes furniture.
+    # Who can be somebody. Not a set (a room fills the frame). Not furniture: the sofa, the
+    # portrait on the wall never leave their place in the world, and they are there from the
+    # moment their set is, to the moment it goes -- the camera turns away from them, they do not
+    # come and go. (A cat who walks in and then sits in one spot till the end has not left her
+    # place either, but she arrived in the middle of the room's time: somebody.) Not a thing to
+    # be in (what another cast call is drawn inside: a carrier, a picture frame). And big enough
+    # (a sparkle or a crumb is drawn by the cast too).
     holds = {s["parent"] for _, _, ss in frames for s in ss if s["parent"]}
+    sets = [k for k in drawn if mid(cover[k]) >= 0.9]
+    edges = {0, n}  # the frames where a set comes or goes, and the film's two ends
+    for a in sets:
+        for i0, i1 in _index_runs(drawn[a]):
+            edges |= {i0, i1 + 1}
     body = set()
     for k, fr in seen.items():
-        if k in holds or mid(cover[k]) >= 0.9 or mid(cover[k]) < BODY:
+        if k in holds or k in sets or mid(cover[k]) < BODY:
             continue
         mx, my = mid([p[0] for p in where[k]]), mid([p[1] for p in where[k]])
         off = sorted(((x - mx) ** 2 + (y - my) ** 2) ** 0.5 for x, y in where[k])
-        if off[int(0.9 * (len(off) - 1))] >= STATIC and fr:
+        still = off[int(0.9 * (len(off) - 1))] < STATIC
+        with_its_set = all(
+            any(abs(e - i) <= 2 for e in edges)
+            for i0, i1 in _index_runs(drawn[k])
+            for i in (i0, i1 + 1)
+        )
+        if not (still and with_its_set):
             body.add(k)
     members = {}
     for k in sorted(body):
@@ -517,16 +530,19 @@ def events(report, step=None):
         and not any(j in cuts for j in range(i - k + 1, i + 1))
     ]
     for i0, i1 in _index_runs(moved):
-        a, b = veil[max(0, i0 - k)], veil[i1]
+        j0 = max(0, i0 - k)
+        a, b = veil[j0], veil[i1]
+        while j0 < i0 and abs(veil[j0 + 1] - a) <= 0.01:  # where it starts to move, not 2 s before
+            j0 += 1
         add(
             "wash",
-            max(0, i0 - k),
+            j0,
             i1,
             "the film",
             "a colour is laid over the whole frame from %s to %s (its strength goes from %d%% to "
             "%d%%): it reads as a filter being switched %s"
             % (
-                _clock2(t_of[max(0, i0 - k)]),
+                _clock2(t_of[j0]),
                 _clock2(t_of[i1]),
                 round(100 * a),
                 round(100 * b),
