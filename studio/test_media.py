@@ -185,6 +185,10 @@ def poster(path):
     Image.new("RGB", (1920, 1080), (240, 230, 210)).save(path)
 
 
+def moved_urls(urls, old, new):
+    return {k: new + u[len(old) :] for k, u in urls.items()}
+
+
 async def main():
     bad = []
 
@@ -202,6 +206,7 @@ async def main():
             web.delete("/bucket/films/{name:.+}", r2_delete),
             web.put("/bucket/new/films/{name:.+}", r2_put),
             web.head("/bucket/new/films/{name:.+}", r2_head),
+            web.delete("/bucket/new/films/{name:.+}", r2_delete),
             web.get("/films/{name:.+}", get),
         ]
     )
@@ -211,6 +216,7 @@ async def main():
         os.environ.pop("STUDIO_MEDIA_BASE", None)
         procs.SECRETS.pop("STUDIO_MEDIA_SAS", None)
         os.environ.pop("STUDIO_R2_ENDPOINT", None)  # nor to R2, whatever the .env says
+        os.environ.pop("STUDIO_MEDIA_OLD_BASE", None)
         procs.SECRETS.pop("STUDIO_R2_KEY_ID", None)
         procs.SECRETS.pop("STUDIO_R2_SECRET", None)
         f = films.Film.create("a film for the copy", 5, "drawn", client="u:m")
@@ -471,6 +477,16 @@ async def main():
             agent.STORE.get(gone),
         )
         agent.STORE.forget(gone)
+        # a film deleted after the move goes from the place left behind too
+        f.update(media=moved_urls(urls, old, new), share=None, versions=None)
+        os.environ["STUDIO_MEDIA_OLD_BASE"] = old + "/"
+        n = await media.delete(f.id, urls=f.record()["media"].values())
+        check(
+            n == 10 and not OBJECTS and not BLOBS and not UNSIGNED,
+            "deleted after a move: gone from R2 and from the place left behind",
+            (n, list(OBJECTS), list(BLOBS)),
+        )
+        os.environ.pop("STUDIO_MEDIA_OLD_BASE")
         os.environ["STUDIO_MEDIA_BASE"] = old
         f.update(media=urls, share=None, versions=None, prompt="a film for the copy")
         OBJECTS.clear()
@@ -484,6 +500,7 @@ async def main():
         )
         check(await media.delete(f.id) == 0, "R2: deleting again finds nothing, and says so")
         os.environ.pop("STUDIO_R2_ENDPOINT", None)
+        os.environ.pop("STUDIO_MEDIA_OLD_BASE", None)
         procs.SECRETS.pop("STUDIO_R2_KEY_ID", None)
         procs.SECRETS.pop("STUDIO_R2_SECRET", None)
     finally:

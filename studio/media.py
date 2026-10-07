@@ -40,7 +40,9 @@ before. Or Cloudflare R2, which charges nothing for downloads (r2 below): STUDIO
 then the bucket's public address and folder (https://media.kitcut.ai/films), STUDIO_R2_ENDPOINT
 its S3 address and STUDIO_R2_KEY_ID / STUDIO_R2_SECRET an R2 token allowed to write objects; the
 three win over the SAS when all are set. A film's record keeps the URLs it was given, so films
-copied to one place still play after new ones go to the other. Each file is one upload,
+copied to one place still play after new ones go to the other. After a move
+(--move-from, --move-records) STUDIO_MEDIA_OLD_BASE names the place left behind: nothing is
+written there, but --delete (and a film deleted for good) removes a film's files there too. Each file is one upload,
 <id>/<name>; the film's record keeps the URLs as "media".
 The share page's two pictures (share.jpg, thumb.jpg: make_share, publish_share) go up the same
 way when share.py has made them, as share-<v>.jpg and thumb-<v>.jpg (<v> a hash of their bytes,
@@ -109,6 +111,13 @@ def r2():
     end = (os.environ.get("STUDIO_R2_ENDPOINT") or "").strip().rstrip("/")
     kid, sec = procs.secret("STUDIO_R2_KEY_ID"), procs.secret("STUDIO_R2_SECRET")
     return (end, kid, sec) if end and kid and sec else None
+
+
+def old_base():
+    """Where the copies were before they moved to R2 (STUDIO_MEDIA_OLD_BASE: Azure's container,
+    still written with the SAS). Nothing is copied there any more; a film deleted for good is
+    removed there too, for as long as that place is kept -- or its old address would still play."""
+    return (os.environ.get("STUDIO_MEDIA_OLD_BASE") or "").strip().rstrip("/")
 
 
 def enabled():
@@ -618,14 +627,22 @@ async def delete(fid, timeout=60, urls=()):
                     if r.status not in (200, 204):
                         raise MediaError("%s: %d %s" % (blob, r.status, (await r.text())[:200]))
                 gone += 1
+                if old_base() and sas():  # the copy left where it was before the move
+                    gone += await _delete_azure(s, old_base(), blob)
                 continue
-            url = "%s/%s?%s" % (base(), quote(blob), sas())
-            async with s.delete(url, headers={"x-ms-version": VERSION}) as r:
-                if r.status in (200, 202):
-                    gone += 1
-                elif r.status != 404:
-                    raise MediaError("%s: %d %s" % (blob, r.status, (await r.text())[:200]))
+            gone += await _delete_azure(s, base(), blob)
     return gone
+
+
+async def _delete_azure(session, where, blob):
+    """One Delete Blob with the SAS: 1 when it went, 0 when it was not there."""
+    url = "%s/%s?%s" % (where, quote(blob), sas())
+    async with session.delete(url, headers={"x-ms-version": VERSION}) as r:
+        if r.status in (200, 202):
+            return 1
+        if r.status != 404:
+            raise MediaError("%s: %d %s" % (blob, r.status, (await r.text())[:200]))
+    return 0
 
 
 # ------------------------------------------------------------------ moving house

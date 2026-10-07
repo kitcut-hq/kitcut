@@ -44,6 +44,7 @@ from aiohttp.test_utils import TestClient, TestServer  # noqa: E402
 os.environ.pop("STUDIO_MEDIA_BASE", None)
 server.procs.SECRETS.pop("STUDIO_MEDIA_SAS", None)
 os.environ.pop("STUDIO_R2_ENDPOINT", None)  # nor to R2, whatever the .env says
+os.environ.pop("STUDIO_MEDIA_OLD_BASE", None)
 server.procs.SECRETS.pop("STUDIO_R2_KEY_ID", None)
 server.procs.SECRETS.pop("STUDIO_R2_SECRET", None)
 

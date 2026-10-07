@@ -48,6 +48,7 @@ from PIL import Image, ImageChops, ImageStat  # noqa: E402
 os.environ.pop("STUDIO_MEDIA_BASE", None)
 procs.SECRETS.pop("STUDIO_MEDIA_SAS", None)
 os.environ.pop("STUDIO_R2_ENDPOINT", None)  # nor to R2, whatever the .env says
+os.environ.pop("STUDIO_MEDIA_OLD_BASE", None)
 procs.SECRETS.pop("STUDIO_R2_KEY_ID", None)
 procs.SECRETS.pop("STUDIO_R2_SECRET", None)
 TOKEN = "test-token"
@@ -479,6 +480,7 @@ async def main():
         os.environ.pop("STUDIO_MEDIA_BASE", None)
         procs.SECRETS.pop("STUDIO_MEDIA_SAS", None)
         os.environ.pop("STUDIO_R2_ENDPOINT", None)  # nor to R2, whatever the .env says
+        os.environ.pop("STUDIO_MEDIA_OLD_BASE", None)
         procs.SECRETS.pop("STUDIO_R2_KEY_ID", None)
         procs.SECRETS.pop("STUDIO_R2_SECRET", None)
         g3 = fixture_film()

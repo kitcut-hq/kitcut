@@ -164,6 +164,7 @@ async def main():
     os.environ["STUDIO_MEDIA_BASE"] = base
     procs.SECRETS["STUDIO_MEDIA_SAS"] = SAS
     os.environ.pop("STUDIO_R2_ENDPOINT", None)  # the stand-in is Azure's, whatever the .env says
+    os.environ.pop("STUDIO_MEDIA_OLD_BASE", None)
     procs.SECRETS.pop("STUDIO_R2_KEY_ID", None)
     procs.SECRETS.pop("STUDIO_R2_SECRET", None)
     agent.STORE = mem = store.MemoryStore()
