@@ -96,30 +96,13 @@ def main():
     ap.add_argument("--made-for-kids", action="store_true")
     ap.add_argument(
         "--publish-at",
-        help="schedule it: an ISO time (2026-10-02T15:00:00Z) when YouTube makes it public; uploads as private until then",
+        help="schedule it: an ISO time (2026-10-02T15:00:00Z; no offset = this machine's zone) when YouTube makes it public; uploads as private until then",
     )
     ap.add_argument(
         "--thumbnail", help="a JPEG/PNG (1280x720, under 2 MB) set as the custom thumbnail"
     )
-    ap.add_argument(
-        "--publish-at",
-        help="schedule: goes up private, public at this time (ISO; no offset = this machine's zone)",
-    )
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
-
-    publish_at = None
-    if args.publish_at:
-        when = datetime.datetime.fromisoformat(args.publish_at)
-        if when.tzinfo is None:
-            when = when.astimezone()
-        when = when.astimezone(datetime.timezone.utc).replace(microsecond=0)
-        if when <= datetime.datetime.now(datetime.timezone.utc):
-            sys.exit("--publish-at %s is not in the future" % args.publish_at)
-        if args.privacy != "private":
-            print("  --publish-at: uploading private; YouTube publishes it at that time")
-            args.privacy = "private"
-        publish_at = when.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     path = _env.resolve(args.file)
     if not os.path.exists(path):
@@ -149,21 +132,21 @@ def main():
                 "use an arrow character or words" % (field, line)
             )
 
+    # One handler: a merge had left two, and the second's local `from datetime import datetime`
+    # made the first die with UnboundLocalError before anything was read.
     publish_at = None
     if args.publish_at:
-        from datetime import datetime, timezone
-
         try:
-            when = datetime.fromisoformat(args.publish_at.replace("Z", "+00:00"))
+            when = datetime.datetime.fromisoformat(args.publish_at.replace("Z", "+00:00"))
         except ValueError:
             sys.exit("--publish-at: not an ISO time: %r" % args.publish_at)
         if when.tzinfo is None:
-            sys.exit("--publish-at needs a time zone (Z or +hh:mm): %r" % args.publish_at)
-        if when <= datetime.now(timezone.utc):
+            when = when.astimezone()  # no offset: this machine's zone
+        if when <= datetime.datetime.now(datetime.timezone.utc):
             sys.exit("--publish-at is in the past: %s" % args.publish_at)
         # YouTube schedules only private videos: one asked public would be refused
         args.privacy = "private"
-        publish_at = when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        publish_at = when.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     body = {
         "snippet": {
