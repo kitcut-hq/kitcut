@@ -11,6 +11,7 @@ laptop, through the scripts in this folder.
 | disks | 128 GB OS + 512 GB data at `/srv/kitcut`, both Standard HDD (disk speed is not the bottleneck) |
 | code | `/srv/kitcut/repo`, pushed from the laptop (`push.sh`); the VM holds no GitHub credentials |
 | films | `/srv/kitcut/studio` (`STUDIO_HOME`) |
+| copies online | Cloudflare R2 bucket `kitcut-media`, public at `https://media.kitcut.ai/films/<id>/<file>`, since 2026-10-07 (downloads are free there; Azure billed them per GB). The `.env` holds `STUDIO_MEDIA_BASE` and the three `STUDIO_R2_` settings; `.env.bak-before-r2` is the file from before. Azure's `kitcutst/films` still holds the films copied before the move |
 | reach | SSH from the VPN only (no public IP); the studio leaves through the Cloudflare named tunnel (outbound), `studio.kitcut.ai`; `vm.sh network` also denies outbound to the VNet (`no-network-outbound`: films fetch from the web) |
 | cost | ~$180/month for the VM on D4ads_v5 ($361 on D8) + ~$22 the data disk (list prices, 2026-09-28) |
 

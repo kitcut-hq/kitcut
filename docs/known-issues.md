@@ -933,3 +933,19 @@ placed along its street (`block`: right to a house or two, the pin on the street
 whose street is on no map yet -- any subdivision still being built -- is refused, and the film
 shows it in type. Check a new sample's address with `place-map.py --list` before building a film
 on it. `scripts/check-map.py` pins the rules.
+
+### KI-058 · fixed · studio · A release's tests read the machine's `.env`, so a new storage setting sent test files to the real bucket
+
+**Symptom.** 2026-10-07, moving film copies from Azure to Cloudflare R2: with the three
+`STUDIO_R2_` settings in the VM's `.env`, `ops.sh ship` refused two releases in a row. `test_share`
+uploaded its stand-in pictures to the real bucket (four files, removed), then `test_delete_film`
+asked the real bucket to refuse a file and it did not.
+**Cause.** Every studio test imports `agent`, which loads the machine's `.env`. The tests that put
+a stand-in in Azure's place cleared `STUDIO_MEDIA_BASE` and `STUDIO_MEDIA_SAS` and nothing else,
+so the R2 settings, which win over the SAS, stayed real. On the laptop there were none, and every
+test passed.
+**Fix.** `ed2b4c1`, `048dee1`: each of those tests clears the R2 settings with the SAS.
+**Lesson.** A new setting that names a real service is cleared in every test that stands in for
+that service, in the same commit. Check it the way the VM will: run the release's list
+(`studio/release.py`) with the new settings exported to a dead address
+(`STUDIO_R2_ENDPOINT=http://127.0.0.1:9/b`) before the first ship.
