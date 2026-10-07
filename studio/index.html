@@ -176,7 +176,9 @@ svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
 .head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
 .head h1 { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 650; letter-spacing: -.015em; text-wrap: balance; }
 .head p { margin: 4px 0 0; max-width: 64ch; color: var(--ink-2); }
-.crumbs { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-3); margin-bottom: 6px; }
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-3); margin-bottom: 6px; }
+.crumbs > a, .crumbs > span { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.crumbs > svg { flex: none; }
 .crumbs a { color: var(--ink-3); text-decoration: none; }
 .crumbs a:hover { color: var(--ink); }
 .facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
@@ -1880,12 +1882,12 @@ function ytShow(opts = {}) {
 }
 $('ytOpen').addEventListener('click', () => ytShow());
 // where the film already is on YouTube, under the film: each video where it stands there now (it
-// may have been made private or removed there since), a removed one included; a publish that never
-// got there is left out. A scheduled one says when it goes public, and its day can be changed here.
+// may have been made private there since). One that is gone from YouTube, and a publish that never
+// got there, are left out. A scheduled one says when it goes public, and its day can be changed here.
 function ytList() {
   const f = ytFilm;
   if (!f) { $('ytPosts').hidden = true; return; }
-  const list = (f.posts || []).filter((p) => p.state !== 'failed' || p.url);
+  const list = (f.posts || []).filter((p) => (p.state !== 'failed' || p.url) && p.state !== 'deleted' && (p.status || {}).key !== 'removed');
   const when = (iso) => (window.KCPublish ? KCPublish.whenText(iso) : new Date(iso).toLocaleString());
   // Publish only while nothing of it is on YouTube or on its way there (a film goes to a channel
   // once): after that this line says where it stands, and its page in the Studio is where it is
