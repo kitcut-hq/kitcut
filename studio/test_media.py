@@ -6,6 +6,9 @@
 A finished film's files go up as Put Blob calls with the SAS, the type and the cache header; the
 answer names their lasting URLs; a refused video means no copy at all (the film then plays from
 the tunnel as before); delete removes them; and with no settings nothing is attempted.
+
+The same against a stand-in for Cloudflare R2 (the three STUDIO_R2_ settings): signed S3 calls,
+each signature worked out again here from the secret, and refused when it differs.
 """
 
 import os
@@ -21,6 +24,9 @@ import agent  # noqa: E402,F401 -- imports _env first
 import film as films  # noqa: E402
 import media  # noqa: E402
 import procs  # noqa: E402
+import store  # noqa: E402
+
+agent.STORE = store.MemoryStore()  # never the real database: move_records writes to it
 
 from aiohttp import web  # noqa: E402
 from aiohttp.test_utils import TestServer  # noqa: E402
@@ -47,11 +53,103 @@ async def put(req):
     return web.Response(status=201)
 
 
+async def get(req):  # anonymous read, as the public container gives (HEAD too)
+    h, body = BLOBS.get(req.match_info["name"], (None, b""))
+    if h is None:
+        return web.Response(status=404)
+    out = {"Content-Type": h.get("x-ms-blob-content-type", "application/octet-stream")}
+    for mine, theirs in (
+        ("Cache-Control", "cache-control"),
+        ("Content-Disposition", "content-disposition"),
+    ):
+        if h.get("x-ms-blob-" + theirs):
+            out[mine] = h["x-ms-blob-" + theirs]
+    return web.Response(body=body, headers=out)
+
+
 async def delete(req):
     name = req.match_info["name"]
     if req.query_string != SAS:
         return web.Response(status=403)
     return web.Response(status=202 if BLOBS.pop(name, None) else 404)
+
+
+R2_KEY, R2_SECRET = "r2keyid", "r2secret"
+OBJECTS = {}  # key -> (headers, body)
+UNSIGNED = []  # requests whose signature did not check out
+
+
+def r2_signed(req):
+    """The request's AWS Signature V4, worked out again from the secret (not media.py's code)."""
+    import hmac
+    import hashlib
+
+    auth = req.headers.get("Authorization", "")
+    try:
+        cred, names, sig = (x.split("=", 1)[1] for x in auth.split(" ", 1)[1].split(", "))
+    except (IndexError, ValueError):
+        return False
+    kid, day, region, service, _ = cred.split("/")
+    names = names.split(";")
+    amz = req.headers.get("x-amz-date", "")
+    canon = "%s\n%s\n\n%s\n%s\nUNSIGNED-PAYLOAD" % (
+        req.method,
+        req.raw_path,
+        "".join("%s:%s\n" % (n, req.headers[n].strip()) for n in names),
+        ";".join(names),
+    )
+    text = "AWS4-HMAC-SHA256\n%s\n%s/auto/s3/aws4_request\n%s" % (
+        amz,
+        day,
+        hashlib.sha256(canon.encode()).hexdigest(),
+    )
+    k = ("AWS4" + R2_SECRET).encode()
+    for part in (day, "auto", "s3", "aws4_request"):
+        k = hmac.new(k, part.encode(), hashlib.sha256).digest()
+    ok = (
+        kid == R2_KEY
+        and (region, service) == ("auto", "s3")
+        and amz.startswith(day)
+        and "host" in names
+        and all(n in names for n in req.headers if n.lower().startswith("x-amz-"))
+        and hmac.new(k, text.encode(), hashlib.sha256).hexdigest() == sig
+    )
+    if not ok:
+        UNSIGNED.append((req.method, req.raw_path))
+    return ok
+
+
+async def r2_put(req):
+    name = req.match_info["name"]
+    if not r2_signed(req):
+        return web.Response(status=403, text="SignatureDoesNotMatch")
+    if name.split("/")[-1] in REFUSE:
+        return web.Response(status=500, text="InternalError")
+    source = req.headers.get("x-amz-copy-source")
+    if source:  # CopyObject onto itself, its headers replaced
+        key = source[len("/bucket/films/") :]
+        if key not in OBJECTS or req.headers.get("x-amz-metadata-directive") != "REPLACE":
+            return web.Response(status=404, text="NoSuchKey")
+        OBJECTS[name] = (dict(req.headers), OBJECTS[key][1])
+        return web.Response(status=200)
+    OBJECTS[name] = (dict(req.headers), await req.read())
+    return web.Response(status=200)
+
+
+async def r2_head(req):
+    if not r2_signed(req):
+        return web.Response(status=403)
+    h, body = OBJECTS.get(req.match_info["name"], (None, b""))
+    if h is None:
+        return web.Response(status=404)
+    return web.Response(status=200, headers={"Content-Length": str(len(body))})
+
+
+async def r2_delete(req):
+    if not r2_signed(req):
+        return web.Response(status=403)
+    OBJECTS.pop(req.match_info["name"], None)
+    return web.Response(status=204)  # S3: the same answer whether it was there or not
 
 
 def master(path, srt=None, heavy=True):
@@ -97,6 +195,16 @@ async def main():
 
     app = web.Application(client_max_size=64 * 2**20)
     app.add_routes([web.put("/films/{name:.+}", put), web.delete("/films/{name:.+}", delete)])
+    app.add_routes(
+        [
+            web.put("/bucket/films/{name:.+}", r2_put),
+            web.head("/bucket/films/{name:.+}", r2_head),
+            web.delete("/bucket/films/{name:.+}", r2_delete),
+            web.put("/bucket/new/films/{name:.+}", r2_put),
+            web.head("/bucket/new/films/{name:.+}", r2_head),
+            web.get("/films/{name:.+}", get),
+        ]
+    )
     srv = TestServer(app, host="127.0.0.1")
     await srv.start_server()
     try:
@@ -246,6 +354,116 @@ async def main():
         )
         n = await media.delete(f.id, urls=urls.values())
         check(n == 10 and not BLOBS, "delete with the record's URLs removes both", (n, list(BLOBS)))
+
+        # Cloudflare R2: the public address stays STUDIO_MEDIA_BASE, the files go to the
+        # bucket's S3 address, signed; its three settings win over the SAS
+        f.update(media_rev=None, media=None, title="Кіт і Café")
+        os.environ["STUDIO_R2_ENDPOINT"] = "http://127.0.0.1:%d/bucket/" % srv.port
+        procs.SECRETS["STUDIO_R2_KEY_ID"] = R2_KEY
+        check(media.r2() is None and media.enabled(), "R2 needs all three settings")
+        procs.SECRETS["STUDIO_R2_SECRET"] = R2_SECRET
+        urls = await media.publish(f)
+        check(
+            len(urls) == 5 and urls.get("video") == base + "film.mp4" and not BLOBS,
+            "R2: the same public URLs, and nothing goes to Azure",
+            (urls, list(BLOBS)),
+        )
+        h, body = OBJECTS.get("%s/film.mp4" % f.id, ({}, b""))
+        with open(os.path.join(out, "film.mp4"), "rb") as fh:
+            same = body == fh.read()
+        check(
+            same
+            and h.get("Content-Type") == "video/mp4"
+            and h.get("Cache-Control") == media.CACHE
+            and h.get("Content-Disposition") == media.download_name(f)
+            and "Content-Disposition" not in OBJECTS.get("%s/film_web.mp4" % f.id, ({},))[0],
+            "R2: the video whole, with its type, a lasting cache, and the master a download",
+            h,
+        )
+        check(not UNSIGNED, "R2: every call's signature checks out", UNSIGNED)
+        f.update(media=urls, title="Another name")
+        async with aiohttp.ClientSession() as s:
+            await media.mark_download(s, f)
+        mh, mbody = OBJECTS["%s/film.mp4" % f.id]
+        check(
+            mh.get("Content-Disposition") == 'attachment; filename="another-name.mp4"'
+            and mh.get("Content-Type") == "video/mp4"
+            and mh.get("Cache-Control") == media.CACHE
+            and mbody == body
+            and not UNSIGNED,
+            "R2: --download-backfill copies the master onto itself with the new name",
+            mh,
+        )
+        REFUSE.add("film.mp4")
+        check(await media.publish(f) == {}, "R2: a refused video: no copy at all")
+        REFUSE.clear()
+        procs.SECRETS["STUDIO_R2_SECRET"] = "wrong"
+        check(
+            await media.publish(f) == {} and UNSIGNED, "R2: a wrong secret: no copy, no exception"
+        )
+        procs.SECRETS["STUDIO_R2_SECRET"] = R2_SECRET
+        UNSIGNED.clear()
+        # moving house: what is in Azure copied to R2 under the same names, then the records
+        procs.SECRETS.pop("STUDIO_R2_SECRET")
+        await media.publish(f)  # to the stand-in for Azure
+        procs.SECRETS["STUDIO_R2_SECRET"] = R2_SECRET
+        old = "http://127.0.0.1:%d/films" % srv.port
+        os.environ["STUDIO_MEDIA_BASE"] = "http://127.0.0.1:%d/new/films" % srv.port
+        OBJECTS.clear()
+        names = sorted(BLOBS) + ["%s/never.mp4" % f.id]
+        got = await media.move_files(old, names, dry=True, say=lambda _: None)
+        check(got[:3] == (5, 0, 1) and not OBJECTS, "move --dry-run: counts, copies nothing", got)
+        got = await media.move_files(old, names, say=lambda _: None)
+        vh, vbody = OBJECTS.get("%s/film.mp4" % f.id, ({}, b""))
+        check(
+            got[:3] == (5, 0, 1)
+            and sorted(OBJECTS) == sorted(BLOBS)
+            and vbody == BLOBS["%s/film.mp4" % f.id][1]
+            and vh.get("Content-Type") == "video/mp4"
+            and vh.get("Cache-Control") == media.CACHE
+            and vh.get("Content-Disposition", "").startswith("attachment;")
+            and not UNSIGNED,
+            "move: every file copied whole with its type, cache and download name; one missing said",
+            (got, vh),
+        )
+        got = await media.move_files(old, sorted(BLOBS), say=lambda _: None)
+        check(got[:3] == (0, 5, 0), "move again: all already there", got)
+        f.update(
+            media={"video": old + "/%s/film.mp4" % f.id},
+            share={"image": old + "/%s/share-1.jpg" % f.id, "v": "1"},
+            versions=[{"n": 1, "media": {"web": old + "/%s/r1/film_web.mp4" % f.id}}],
+            prompt="see %s/x" % old,
+        )
+        check(await media.move_records(old, dry=True) == 1, "records --dry-run: one to change")
+        check(f.record()["media"]["video"].startswith(old), "and it is not changed")
+        n = await media.move_records(old)
+        rec, new = f.record(), os.environ["STUDIO_MEDIA_BASE"]
+        check(
+            n == 1
+            and rec["media"]["video"] == new + "/%s/film.mp4" % f.id
+            and rec["share"] == {"image": new + "/%s/share-1.jpg" % f.id, "v": "1"}
+            and rec["versions"][0]["media"]["web"] == new + "/%s/r1/film_web.mp4" % f.id
+            and rec["prompt"] == "see %s/x" % old
+            and agent.STORE.get(f.id)["media"] == rec["media"],
+            "records: every URL under the old base moved, here and in the database; words left",
+            rec,
+        )
+        check(await media.move_records(old) == 0, "records again: nothing left to change")
+        os.environ["STUDIO_MEDIA_BASE"] = old
+        f.update(media=urls, share=None, versions=None, prompt="a film for the copy")
+        OBJECTS.clear()
+        BLOBS.clear()
+        await media.publish(f)
+        n = await media.delete(f.id)
+        check(
+            n == 5 and not OBJECTS and not UNSIGNED,
+            "R2: delete removes them all",
+            (n, list(OBJECTS)),
+        )
+        check(await media.delete(f.id) == 0, "R2: deleting again finds nothing, and says so")
+        os.environ.pop("STUDIO_R2_ENDPOINT", None)
+        procs.SECRETS.pop("STUDIO_R2_KEY_ID", None)
+        procs.SECRETS.pop("STUDIO_R2_SECRET", None)
     finally:
         await srv.close()
     print("%d failed" % len(bad))

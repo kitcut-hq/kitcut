@@ -220,6 +220,15 @@ while this machine is off. A copy that fails leaves the film as it was. `python 
 --backfill` copies earlier films; `--film <id>` one; `--delete <id>` removes one. Never use the
 container `media`: the catalog site's `upload-media.py` prunes it of anything not its own.
 
+The copies can go to Cloudflare R2 instead, which charges nothing for downloads: set
+`STUDIO_MEDIA_BASE` to the bucket's public address and folder (`https://media.kitcut.ai/films`),
+`STUDIO_R2_ENDPOINT` to its S3 address (`https://<account>.r2.cloudflarestorage.com/<bucket>`) and
+`STUDIO_R2_KEY_ID` / `STUDIO_R2_SECRET` to an R2 token that may write objects; the three win over
+the SAS. Records keep the URLs they were given, so earlier films play from Azure until they are
+moved: `media.py --move-from <old base> --blobs <names>` copies the files (again and again:
+what is already there at the same size is skipped), then `--move-records <old base>` points
+every record at the new place; both take `--dry-run`.
+
 **Publishing to YouTube** (`youtube.py`). The public site holds each person's channel grants and
 opens a resumable upload session with YouTube for the film. The studio gets only that session's
 address:
