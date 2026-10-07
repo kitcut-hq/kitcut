@@ -101,6 +101,23 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    are the subject), and its logo a name with `logo` in it -- the thumbnail finds them all.
 10. **Report the timings** (`--timings`) with the deliverables.
 
+## A product walkthrough from screenshots (no screen recording)
+
+When the user can give you sharp screenshots of the product instead of recording the screen, build
+the walkthrough from them: start from `config/sketch/screens-example/` (`docs/reference.md`, "A film
+from screenshots"). Ask for every state the voice will name (empty, filled in, working, done, the
+result opened), all at one window size, and at a device pixel ratio of 2 if you will zoom past 1.4.
+
+1. Write positions in screenshot pixels (`px()`/`py()`); read them off a gridded copy of the picture.
+2. Show the later screenshot with its new parts under `cover()` patches and drop each on its cue;
+   wipe a cover along a line to type a prompt; `ring()` what the voice names; click with `SK.cursor`.
+3. Put the brand's logo on a plate only after cropping the PNG to its ink (they are rarely centred).
+4. KitCut or other clips go in afterwards with `edl-cut.py` over a window the film leaves bare;
+   never open the film on an insert -- a title card on the insert's own background first.
+5. For the Short, ask for PHONE screenshots and let them fill the frame, unzoomed; captions burn in
+   with `config/presets/instafill-short.json` (or a preset measured for that brand) over the lower
+   part of the screen.
+
 ## A collage film (mixed media, paper cut-out, "newspaper" motion design)
 
 The look of the Runway + Opus 5.5 demos: every picture is one object cut out of paper (an
