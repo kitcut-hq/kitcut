@@ -339,7 +339,7 @@ dialog .dfoot { display: flex; justify-content: flex-end; gap: 8px; padding: 14p
 .hero .fromtpl { margin: 2px 0 0; color: var(--ink-3); font-size: 13.5px; }
 .hero .fromtpl a { color: var(--ink-2); font-weight: 600; text-underline-offset: 3px; text-decoration-color: var(--line-2); }
 .hero .fromtpl a:hover { color: var(--accent-2); }
-#form, #emailForm, #ytForm { display: grid; gap: 10px; margin: 0; }
+#form, #emailForm { display: grid; gap: 10px; margin: 0; }
 #tokenForm { margin: 0; }
 #token { flex: 1 1 280px; min-width: 0; width: auto; }
 .count { margin: -4px 2px 0; text-align: right; }
@@ -464,13 +464,13 @@ div.stage { background: var(--panel); border: 1px solid var(--line); border-radi
 .film div { padding: 0 2px; font-size: 13px; }
 .film p { margin: 0 0 2px; font-size: 14px; font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .film small { color: var(--ink-3); font-variant-numeric: tabular-nums; }
-/* the two dialogs of the page's own: signing in, and publishing to YouTube */
-#signin, #yt { padding: 22px 24px 24px; }
+/* the page's own dialog: signing in (publishing to YouTube is publish.js's, with publish.css) */
+#signin { padding: 22px 24px 24px; }
 #signin { width: min(420px, calc(100% - 32px)); }
-#signin h2, #yt h2 { margin: 0 36px 6px 0; font-size: 18px; font-weight: 650; }
-#signin p, #yt p { margin: 6px 0; }
+#signin h2 { margin: 0 36px 6px 0; font-size: 18px; font-weight: 650; }
+#signin p { margin: 6px 0; }
 dialog .close { position: absolute; top: 12px; right: 12px; font-size: 22px; font-weight: 400; }
-#signin .err, #yt .err { color: var(--bad); font-weight: 600; }
+#signin .err { color: var(--bad); font-weight: 600; }
 #signin .or { text-align: center; color: var(--ink-3); font-size: 12px; }
 a.google { width: 100%; margin-top: 14px; }
 .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
@@ -498,7 +498,7 @@ a.google { width: 100%; margin-top: 14px; }
 #lenHint a, .credit a, #status a { color: var(--accent-2); }
 .credit { margin: 4px 0 0; }
 .credit.short { color: var(--bad); }
-/* publishing to YouTube: a button under a finished film of your own, and the dialog it opens */
+/* publishing to YouTube: a button under a finished film of your own (the dialog is publish.js's) */
 .ytmark { width: 20px; height: 14px; flex: none; display: block; }
 .dlmark { width: 15px; height: 15px; flex: none; display: block; }
 /* a finished film's share bar: its page's link, copied or sent in one click (lib/sharepage.js is the page) */
@@ -521,18 +521,15 @@ a.google { width: 100%; margin-top: 14px; }
 .ntver.busy { background: var(--accent-soft); color: var(--ink); }
 .ntver .pulse { width: 7px; height: 7px; }
 .posts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 0 14px 10px; font-size: 13px; color: var(--ink-2); }
-.posts a { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); text-decoration: none; border: 1px solid var(--line-2); border-radius: 999px; padding: 3px 10px 3px 4px; }
-.posts a:hover { background: var(--hover); }
-.posts img, .chan img { width: 22px; height: 22px; border-radius: 50%; display: block; }
-/* a publish going on in the background: a note at the foot of the screen, then the link */
-.yttoast { position: fixed; z-index: 60; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: max-content; max-width: calc(100% - 24px);
-  display: flex; align-items: center; gap: 12px; padding: 10px 8px 10px 16px; border-radius: 12px; background: var(--ink); color: var(--bg); box-shadow: var(--dialog); font-size: 14px; line-height: 1.4; }
-.yttoast a { color: inherit; font-weight: 650; text-underline-offset: 3px; white-space: nowrap; }
-.yttoast button.again { background: none; border: 0; padding: 0; color: inherit; font: inherit; font-weight: 650; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
-.yttoast .x { flex: none; width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: inherit; opacity: .7; font-size: 20px; line-height: 1; cursor: pointer; }
-.yttoast .x:hover { opacity: 1; background: rgba(127, 127, 127, .25); }
-.yttoast .bar { flex: none; width: 64px; height: 5px; border-radius: 3px; background: rgba(127, 127, 127, .4); overflow: hidden; }
-.yttoast .bar i { display: block; height: 100%; background: var(--accent); transition: width .6s ease; }
+#ytOn { text-decoration: none; }
+#ytOn b { margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--line-2); font-weight: 650; color: var(--accent-2); }
+.posts a.vid { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); text-decoration: none; border: 1px solid var(--line-2); border-radius: 999px; padding: 3px 10px 3px 4px; }
+.posts a.vid:hover { background: var(--hover); }
+.posts img { width: 22px; height: 22px; border-radius: 50%; display: block; }
+.posts .post { display: inline-flex; align-items: center; gap: 6px; }
+.posts button { height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font: 550 12.5px/1 Inter, system-ui, sans-serif; cursor: pointer; }
+.posts button:hover { background: var(--hover); }
+.posts .studio { margin-left: auto; color: var(--accent-2); font-weight: 600; text-underline-offset: 3px; }
 /* the film's prompt, one line under the film: opened in full by a click, copied, or made again */
 .idea { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; border-top: 1px solid var(--line); font-size: 13.5px; }
 .idea .k { flex: none; color: var(--ink-3); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
@@ -575,149 +572,8 @@ html[data-view=film] .work.done .screen { width: min(100%, calc(max(100svh - 230
   html[data-view=film] .hero h1 { font-size: 18px; white-space: normal; text-wrap: balance; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 }
 .screen .idle .btn { margin-top: 14px; }
-#yt { width: min(480px, calc(100% - 32px)); }
-#yt label.field { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
-#yt input[type=text], #yt textarea { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font: 14px/1.45 Inter, system-ui, sans-serif; resize: vertical; min-height: 0; color-scheme: inherit; }
-#yt input[type=text]:focus, #yt input[type=time]:focus, #yt textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
-/* while the words are being written: grey lines where they will go, gone the moment you type */
-#yt .box { position: relative; display: block; }
-#yt .skel { display: none; position: absolute; inset: 0; padding: 15px 13px; gap: 10px; align-content: start; pointer-events: none; }
-#yt .box.wait .skel { display: grid; }
-#yt .box.wait ::placeholder { color: transparent; }
-#yt .skel i { display: block; height: 11px; border-radius: 6px; background: linear-gradient(90deg, var(--sunk) 20%, var(--hover) 50%, var(--sunk) 80%); background-size: 250% 100%; animation: shimmer 1.4s linear infinite; }
-#ytName + .skel i { width: 68%; }
-#ytTags + .skel i { width: 46%; }
-#ytDesc + .skel i:nth-child(1) { width: 96%; } #ytDesc + .skel i:nth-child(2) { width: 89%; }
-#ytDesc + .skel i:nth-child(3) { width: 93%; } #ytDesc + .skel i:nth-child(4) { width: 57%; }
-#ytDesc + .skel i:nth-child(5) { visibility: hidden; } #ytDesc + .skel i:nth-child(6) { width: 82%; }
-#ytDesc + .skel i:nth-child(7) { width: 38%; }
-/* the words were written for another of your channels: write them for this one, when you ask */
-#yt .redo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 10px; border-radius: 10px; background: var(--accent-soft); font-size: 13px; color: var(--ink); }
-#yt .redo span { flex: 1 1 220px; min-width: 0; }
-#yt .redo button { flex: none; margin: 0; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font: 550 13px/1 Inter, system-ui, sans-serif; cursor: pointer; }
-#yt .redo button:hover { background: var(--hover); }
-#yt fieldset { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
-#yt legend { font-size: 13px; font-weight: 600; padding: 0; margin-bottom: 4px; }
-.chan { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 10px; cursor: pointer; font-size: 14px; }
-.chan:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
-.chan input { accent-color: var(--accent); margin: 0; }
-.chan span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chan small { color: var(--ink-2); }
-.chan.broken { cursor: default; opacity: .8; }
-.chan a { color: var(--accent-2); font-size: 13px; font-weight: 600; }
-.seg { display: flex !important; flex-wrap: wrap; gap: 6px; }
-.seg label { flex: 1 1 0; min-width: 90px; }
-.seg input { position: absolute; opacity: 0; pointer-events: none; }
-.seg span { display: block; text-align: center; padding: 7px 6px; border: 1px solid var(--line-2); border-radius: 8px; cursor: pointer; font-size: 13.5px; font-weight: 550; }
-.seg input:checked + span { border-color: var(--accent); background: var(--accent-soft); }
-.seg input:focus-visible + span { box-shadow: var(--ring); }
-#yt .check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-#yt .check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
-#yt a.more { font-size: 13px; color: var(--accent-2); justify-self: start; }
-#yt .go { justify-self: end; }
-.progress { height: 8px; border-radius: 4px; background: var(--sunk); overflow: hidden; margin: 10px 0 4px; }
-.progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .6s ease; }
-.progress.wait i { width: 30% !important; animation: slide 1.2s ease-in-out infinite alternate; }
-@keyframes slide { from { margin-left: 0; } to { margin-left: 70%; } }
 .okmark { color: var(--good); font-weight: 700; }
-/* the thumbnail: four made from the film -- posters of its own pictures, or stills of it -- with
-   a few words on them (the studio's thumbs.py), and
-   the one picked as it will sit in YouTube's feed, beside its title */
-.thumbgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.thumb { position: relative; display: block; aspect-ratio: 16 / 9; border: 2px solid var(--line); border-radius: 10px; overflow: hidden; cursor: pointer; background: var(--sunk); }
-.thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.thumb input { position: absolute; opacity: 0; pointer-events: none; }
-.thumb:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
-.thumb:has(input:focus-visible) { box-shadow: 0 0 0 2px var(--accent), var(--ring); }
-.thumb .tick { display: none; position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font: 700 13px/22px Inter, system-ui, sans-serif; text-align: center; }
-.thumb:has(input:checked) .tick { display: block; }
-.shimmer { aspect-ratio: 16 / 9; border-radius: 10px; background: linear-gradient(90deg, var(--sunk) 20%, var(--hover) 50%, var(--sunk) 80%); background-size: 250% 100%; animation: shimmer 1.4s linear infinite; }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
-@media (prefers-reduced-motion: reduce) { .shimmer, #yt .skel i { animation: none; } }
-#yt .own { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-#yt .own input { accent-color: var(--accent); margin: 0; }
-.feed { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 10px; background: #fff; color: #0f0f0f; border: 1px solid var(--line); }
-.feed img { width: 168px; height: 94.5px; flex: none; display: block; border-radius: 8px; object-fit: cover; }
-.feed b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font: 600 14px/1.35 Roboto, Arial, sans-serif; }
-.feed small { display: block; margin-top: 3px; color: #606060; font: 12px/1.4 Roboto, Arial, sans-serif; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .feed { background: #0f0f0f; color: #f1f1f1; } :root:not([data-theme="light"]) .feed small { color: #aaa; } }
-/* scheduling: the channel's calendar -- a square a day, each video by its picture, what went out
-   and what is scheduled -- the day suggested from the pace the channel keeps, the day picked, and
-   under it the same videos by title */
-#yt:has(#ytPlan:not([hidden])) { width: min(580px, calc(100% - 32px)); }
-.plan { display: grid; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
-.plan .best { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); font-size: 13px; }
-.plan .best b { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 650; }
-.plan .best b svg { flex: none; width: 15px; height: 15px; color: var(--accent-2); }
-.plan .best p { grid-column: 1 / -1; margin: 0; }
-.plan .best small { grid-column: 1 / -1; color: var(--ink-2); font-size: 12px; }
-.plan .best button, .calnav button, .onchan .all { flex: none; margin: 0; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font: 550 13px/1 Inter, system-ui, sans-serif; cursor: pointer; }
-.plan .best button:hover, .calnav button:hover:not(:disabled), .onchan .all:hover { background: var(--hover); }
-.plan .best .on { color: var(--good); font-size: 13px; font-weight: 650; white-space: nowrap; }
-.plan .best.plain { background: var(--sunk); }
-.plan .best.wait i { display: block; height: 11px; margin: 4px 0; border-radius: 6px; background: linear-gradient(90deg, var(--sunk) 20%, var(--hover) 50%, var(--sunk) 80%); background-size: 250% 100%; animation: shimmer 1.4s linear infinite; }
-.plan .best.wait i + i { width: 62%; }
-.calhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.calhead b { font-size: 14px; font-weight: 650; }
-.calnav { display: flex; gap: 4px; }
-.calnav button { height: 28px; min-width: 28px; padding: 0 8px; }
-.calnav button:disabled { opacity: .4; cursor: default; }
-.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
-.cal .wd { padding-bottom: 1px; text-align: center; font-size: 11px; font-weight: 600; color: var(--ink-3); }
-.cal .day { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 2px; min-width: 0; overflow: hidden; margin: 0; padding: 3px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel); color: var(--ink); font: 600 11.5px/1.25 Inter, system-ui, sans-serif; text-align: left; cursor: pointer; }
-.cal .day::after { content: ''; display: block; grid-row: 2; grid-column: 1; aspect-ratio: 16 / 9; }  /* every square as tall as one with a picture */
-.cal .day .n { justify-self: start; max-width: 100%; padding: 1px 4px; border-radius: 999px; white-space: nowrap; overflow: hidden; }
-.cal .day.past { border-color: transparent; background: var(--sunk); color: var(--ink-3); }
-.cal .day:disabled { cursor: default; }
-.cal .day.today .n { background: var(--ink); color: var(--panel); }
-.cal .day:not(.past):hover { border-color: var(--accent); }
-.cal .day.best { border: 1.5px dashed var(--accent); padding: 2.5px; }
-.cal .day.pick { border: 2px solid var(--accent); padding: 2px; background: var(--accent-soft); }
-.cal .day.hot { box-shadow: var(--ring); }
-.cal .pic { position: relative; grid-row: 2; grid-column: 1; display: block; align-self: end; width: 100%; min-width: 0; aspect-ratio: 16 / 9; border-radius: 4px; overflow: hidden; background: var(--hover); }
-.cal .pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.cal .day.past .pic img { opacity: .82; }
-.cal .pic.mine { outline: 1.5px solid var(--accent); }
-.cal .pic .clk, .key .sch { background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M6 3.2V6l1.9 1.2' fill='none' stroke='%23fff' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% no-repeat; }
-.cal .pic .clk { position: absolute; left: 2px; bottom: 2px; width: 13px; height: 13px; border-radius: 50%; box-shadow: 0 0 0 1.5px #fff; }
-.cal .more { position: absolute; top: 4px; right: 5px; font-size: 10px; font-weight: 700; color: var(--ink-2); }
-.plan .key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; color: var(--ink-2); font-size: 12px; }
-.plan .key span { display: inline-flex; align-items: center; gap: 5px; }
-.plan .key .k { display: block; width: 13px; height: 13px; border-radius: 4px; }
-.plan .key .was { background: var(--sunk); border: 1px solid var(--line-2); }
-.plan .key .sch { border-radius: 50%; }
-.plan .key .sug { border: 1.5px dashed var(--accent); }
-.plan .key .you { border: 2px solid var(--accent); background: var(--accent-soft); }
-.plan .when { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 14px; }
-.plan .when b { font-weight: 650; }
-#yt input[type=time] { width: auto; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font: 14px/1.3 Inter, system-ui, sans-serif; }
-.plan .note.bad { color: var(--bad); font-weight: 600; }
-.onchan { display: grid; gap: 2px; min-width: 0; }
-.onchan h3 { margin: 8px 0 2px; font-size: 12px; font-weight: 650; letter-spacing: .02em; color: var(--ink-2); }
-.onchan .vrow { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 10px; align-items: center; padding: 4px; border-radius: 8px; color: inherit; text-decoration: none; }
-.onchan a.vrow:hover, .onchan .vrow.hot { background: var(--hover); }
-.onchan .vrow .pic { display: block; width: 88px; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: var(--sunk); }
-.onchan .vrow .pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.onchan .vrow b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; font-weight: 600; line-height: 1.3; }
-.onchan .vrow small { display: block; margin-top: 2px; color: var(--ink-2); font-size: 12px; }
-.onchan .vrow.this { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
-.onchan .chip { display: inline-block; margin-right: 5px; padding: 0 6px; border-radius: 999px; background: var(--sunk); color: var(--ink-2); font-size: 11px; font-weight: 650; line-height: 17px; }
-.onchan .this .chip { background: var(--accent); color: var(--accent-ink); }
-.onchan .all { justify-self: start; margin-top: 4px; }
-.onchan .vrow.can { grid-template-columns: 88px minmax(0, 1fr) auto; }
-.onchan .vrow.can a { color: inherit; text-decoration: none; }
-.onchan .vrow.can:hover { background: var(--hover); }
-.onchan .mv { margin: 0 4px 0 0; height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font: 550 12.5px/1 Inter, system-ui, sans-serif; cursor: pointer; }
-.onchan .mv:hover { background: var(--hover); }
-.plan .best .acts { display: flex; gap: 6px; }
-.plan .best .go { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.plan .best .go:hover:not(:disabled) { background: var(--accent-2); }
-.plan .best button:disabled { opacity: .6; cursor: default; }
-.plan .best .err { color: var(--bad); font-weight: 600; }
-.plan .note.good { color: var(--good); font-weight: 600; }
-.onchan .none { margin: 4px 0; color: var(--ink-2); font-size: 13px; }
-@media (max-width: 460px) { .onchan .vrow.can { grid-template-columns: 72px minmax(0, 1fr) auto; } .plan { padding: 8px; } .plan .when .lead { display: none; } .cal { gap: 3px; } .cal .day { padding: 2px; font-size: 10.5px; } .cal .day.best { padding: 1.5px; } .cal .day.pick { padding: 1px; } .cal .day .n { padding: 1px 3px; } .onchan .vrow { grid-template-columns: 72px minmax(0, 1fr); } .onchan .vrow .pic { width: 72px; } }
-@media (prefers-reduced-motion: reduce) { .plan .best.wait i { animation: none; } }
 /* removing the KitCut branding: a button beside Download on a film of your own that carries the
    mark and the ending, and the dialog it opens -- both as they are on this film, then the plan */
 #ubOpen { border-color: var(--accent); color: var(--accent-2); }
@@ -855,7 +711,7 @@ if (/^\/film\/studio-/.test(location.pathname)) document.documentElement.dataset
   <section class="work" id="work">
     <div class="stage">
       <div class="screen" id="screen"><div class="idle">Your film appears here.</div></div>
-      <div class="caption"><span id="status">Ready.</span><button class="ntver" type="button" id="ntVer" hidden></button><span class="right"><button class="btn sm" type="button" id="ntOpen" hidden title="Point at what should change, and Claude makes the next version"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg> Change something</button><a class="btn sm" id="dlBtn" href="#" download target="_blank" rel="noopener" hidden title="Download the full-quality MP4"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg> Download</a><button class="btn sm" type="button" id="ubOpen" hidden title="This film again, without the KitCut mark and ending"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7zM19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z"/></svg> Remove branding</button><button class="btn sm yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><button class="btn sm" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span class="fresh" id="views" hidden></span><span id="clock"></span></span></div>
+      <div class="caption"><span id="status">Ready.</span><button class="ntver" type="button" id="ntVer" hidden></button><span class="right"><button class="btn sm" type="button" id="ntOpen" hidden title="Point at what should change, and Claude makes the next version"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg> Change something</button><a class="btn sm" id="dlBtn" href="#" download target="_blank" rel="noopener" hidden title="Download the full-quality MP4"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg> Download</a><button class="btn sm" type="button" id="ubOpen" hidden title="This film again, without the KitCut mark and ending"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7zM19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z"/></svg> Remove branding</button><button class="btn sm yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><a class="btn sm yt" id="ytOn" href="/studio" hidden title="Its page in your Studio: its details on YouTube, its day, who can watch it, its views"><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> <span id="ytOnText"></span><b>Manage</b></a><button class="btn sm" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span class="fresh" id="views" hidden></span><span id="clock"></span></span></div>
       <div class="sharebar" id="sharebar" hidden>
         <div class="sb">
           <div class="sb-l"><b id="sbSay">Share this film</b><a id="sbLink" href="#" target="_blank" rel="noopener"></a></div>
@@ -918,65 +774,6 @@ if (/^\/film\/studio-/.test(location.pathname)) document.documentElement.dataset
 </div>
 
 <dialog id="peek" aria-label="Picture"><img alt=""></dialog>
-<div class="yttoast" id="ytToast" role="status" aria-live="polite" hidden></div>
-<dialog id="yt" aria-labelledby="ytTitle">
-  <form method="dialog"><button class="btn quiet icon close" aria-label="Close">&times;</button></form>
-  <h2 id="ytTitle">Publish to YouTube</h2>
-  <p class="err" id="ytErr" hidden></p>
-  <div id="ytConnect" hidden>
-    <p>Connect your YouTube channel once, then publish any of your films to it from here.</p>
-    <p class="note">KitCut only uploads the films you choose, and you can disconnect it any time from your account page.</p>
-    <p><a class="btn primary" id="ytConnectBtn" href="/api/youtube/connect"><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Connect YouTube</a></p>
-    <p class="note">Google will ask which account to use. If your channel belongs to a business or brand, choose the channel's name there.</p>
-  </div>
-  <form id="ytForm" hidden>
-    <fieldset id="ytChans"><legend>Channel</legend></fieldset>
-    <a class="more" id="ytAdd" href="/api/youtube/connect">+ Add another channel</a>
-    <p class="note" id="ytAgain" hidden></p>
-    <p class="redo" id="ytRedo" hidden><span id="ytRedoText"></span><button type="button" id="ytRedoBtn"></button></p>
-    <p class="redo" id="ytBrand" hidden><span>This film carries the KitCut mark and ending, and so will its copy on YouTube.</span><button type="button" id="ytBrandGo">Remove them first</button></p>
-    <p class="note" id="ytDraftNote" aria-live="polite" hidden></p>
-    <label class="field">Title<span class="box"><input type="text" id="ytName" maxlength="100" required><span class="skel" aria-hidden="true"><i></i></span></span></label>
-    <label class="field">Description<span class="box"><textarea id="ytDesc" rows="8" maxlength="5000"></textarea><span class="skel" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span></label>
-    <fieldset class="thumbs" id="ytThumbs" hidden><legend>Thumbnail</legend>
-      <div class="thumbgrid" id="ytThumbGrid"></div>
-      <label class="own"><input type="radio" name="ytThumb" value="none"> Let YouTube pick a frame</label>
-      <p class="note" id="ytThumbNote" aria-live="polite" hidden></p>
-      <div class="feed" id="ytFeed" hidden aria-label="How it looks in YouTube's feed"><img id="ytFeedImg" alt=""><div><b id="ytFeedTitle"></b><small id="ytFeedChan"></small></div></div>
-    </fieldset>
-    <label class="field">Tags<span class="box"><input type="text" id="ytTags" maxlength="500" placeholder="Separated by commas"><span class="skel" aria-hidden="true"><i></i></span></span></label>
-    <fieldset class="seg" id="ytWho"><legend>Who can watch it</legend>
-      <label><input type="radio" name="ytWho" value="public"><span>Public</span></label>
-      <label><input type="radio" name="ytWho" value="unlisted"><span>Unlisted</span></label>
-      <label><input type="radio" name="ytWho" value="private"><span>Private</span></label>
-      <label><input type="radio" name="ytWho" value="scheduled"><span>Scheduled</span></label>
-    </fieldset>
-    <div class="plan" id="ytPlan" hidden>
-      <div class="best" id="ytBest" aria-live="polite"></div>
-      <div class="calhead">
-        <b id="ytCalTitle"></b>
-        <span class="calnav"><button type="button" id="ytCalNow">Today</button><button type="button" id="ytCalPrev" aria-label="Earlier weeks">&#8249;</button><button type="button" id="ytCalNext" aria-label="Later weeks">&#8250;</button></span>
-      </div>
-      <div class="cal" id="ytCal" role="group" aria-label="The channel's calendar: pick the day it goes public"></div>
-      <p class="key" aria-hidden="true"><span><i class="k was"></i>Published</span><span><i class="k sch"></i>Scheduled</span><span><i class="k sug"></i>Suggested</span><span><i class="k you"></i>This film</span></p>
-      <div class="when" id="ytWhen"><span class="lead">Goes public</span><b id="ytPickDay"></b><span>at</span><input type="time" id="ytTime" step="300" aria-label="The time it goes public"></div>
-      <p class="note" id="ytPickNote" aria-live="polite" hidden></p>
-      <div class="onchan" id="ytOnChan"></div>
-    </div>
-    <p class="note" id="ytWhoNote"></p>
-    <label class="check"><input type="checkbox" id="ytKids"> Made for kids</label>
-    <button class="btn primary go" type="submit" id="ytGo">Publish</button>
-  </form>
-  <div id="ytSend" hidden>
-    <p id="ytSendText" aria-live="polite">Sending your film to YouTube...</p>
-    <div class="progress" id="ytBar"><i></i></div>
-    <div id="ytDone" hidden>
-      <p id="ytDoneText"></p>
-      <p class="note" id="ytDoneNote"></p>
-      <p class="row"><a class="btn primary" id="ytWatch" target="_blank" rel="noopener">Watch on YouTube</a><button class="btn" type="button" id="ytMore">Publish to another channel</button></p>
-    </div>
-  </div>
-</dialog>
 <dialog id="ub" aria-labelledby="ubTitle">
   <form method="dialog"><button class="btn quiet icon close" aria-label="Close">&times;</button></form>
   <div class="ubnow">
@@ -1513,7 +1310,7 @@ function paused(id, w, next = 0) {
 // shows once there are several, or that the next one is being made. /film/<id>#notes opens them.
 let NT = null;  // {id, doc}: the film's notes as lib/notes.js last gave them
 function ntReset() {
-  NT = null; $('ntOpen').hidden = true; $('ntVer').hidden = true; $('ytOpen').disabled = false; $('ytOpen').title = '';
+  NT = null; $('ntOpen').hidden = true; $('ntVer').hidden = true;
   if (window.KCNotes && KCNotes.isOpen()) KCNotes.close();
 }
 function ntShow(id, doc) {
@@ -1524,9 +1321,10 @@ function ntShow(id, doc) {
   v.classList.toggle('busy', making);
   v.innerHTML = making ? `<span class="pulse"></span>${r.waiting ? `Version ${r.n} is waiting its turn` : `Claude is making version ${r.n}`}` : `Version ${doc.current} of ${doc.versions.length}`;
   v.title = making ? 'See how it is going' : 'See the versions, and what changed';
-  // what YouTube would be sent is about to be the version before: Publish waits, and says so
-  $('ytOpen').disabled = making;
-  $('ytOpen').title = making ? `Version ${r.n} is being made. Publish when it is ready, in a few minutes.` : '';
+  // what YouTube would be sent is about to be the version before: the publish dialog says to wait
+  // for it, so the button never sits there dead. It is told when a version starts and when it is
+  // done, so it never waits for one that is finished
+  if (window.KCPublish && ytFilm && ytFilm.id === id && ytMaking !== making) { ytMaking = making; KCPublish.reload(id); }
 }
 async function ntOffer(id) {
   try {
@@ -1547,6 +1345,8 @@ async function ntOpen() {
   await KCNotes.open(id, NT.doc, {
     t: v ? v.currentTime : 0,
     onClose: (doc) => {
+      // opened from the film's page in the Studio ("Change something" there): back to it, on its Film tab
+      if (new URLSearchParams(location.search).get('from') === 'studio') { location.href = `/studio/film/${id}#film`; return; }
       if (location.hash === '#notes') history.replaceState(history.state, '', location.pathname + location.search);
       if (id !== currentId) return;
       ntShow(id, doc);
@@ -1934,11 +1734,6 @@ $('ub').addEventListener('close', () => {
   ubFrom = '';
 });
 $('ubOpen').addEventListener('click', () => { if (UB && UB.how === 'free') ubStart(UB.id); else ubShow('button'); });
-$('ytBrandGo').addEventListener('click', () => {
-  if (!UB) return;
-  $('yt').close();
-  if (UB.how === 'free') ubStart(UB.id); else ubShow('youtube');
-});
 $('dlBtn').addEventListener('click', (e) => {
   if (!UB || UB.how !== 'offer' || ubSeen.has(UB.id)) return;
   e.preventDefault();  // asked once; the dialog has the download in it
@@ -2028,56 +1823,15 @@ $('sbCopy').addEventListener('click', async () => {
 for (const a of $('sharebar').querySelectorAll('[data-net]')) a.addEventListener('click', () => shared(a.dataset.net));
 
 // ---------------------------------------------------------------- publishing to YouTube
-// Under a finished film of your own: "Publish to YouTube" opens a dialog to pick one of your
-// channels, a title, a description and who can watch. The site opens the upload with YouTube and
-// the studio sends the file (api/youtube.js); the dialog follows it through to the link. With no
-// channel yet, the same dialog connects one first (Google's chooser), and comes back here.
+// Under a finished film of your own: "Publish to YouTube" opens the site's publish dialog
+// (publish.js and publish.css, the site's own, fetched when a film of yours is on screen; the
+// studio's own page has neither, and no /api/youtube) -- publish it now or schedule it, on the
+// channel's calendar. Under the film a line says where it is on YouTube already, with what can be
+// done to a scheduled video there (change its day), and the way to its page in the Studio.
 let YT = false;        // /api/me: this account may publish to YouTube
 let ytDoneId = null;   // the finished film on screen
-let ytFilm = null;     // that film, when it is yours: {id, channels, posts, defaults}
-let ytFormFor = null, ytPoll = null, ytPost = null;
-let ytDrafts = {};     // channel id -> its draft for that film: {state, title, description, tags, language, category}
-let ytTyped = {};      // the fields you have typed in: a draft never overwrites them
-let ytThumbPick = {};  // channel id -> {v, n}: the thumbnail picked among that draft's options (n 1..4, or 'none')
-// The draft the form shows (its channel's id). The film's first is written for the channel you
-// publish to most, while you watch; another channel's only when you ask for it (a Claude call
-// each): picking a channel shows the draft it already has, else keeps these words and offers to
-// write them for it. ytPrev: the one shown before you asked, back again if the new one fails.
-let ytBase = null, ytPrev = null, ytSaid = '';
-const ls = { get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
-             set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private window */ } } };
-const WHO = {
-  public: { label: 'Public', note: 'Anyone can find it and watch it.' },
-  unlisted: { label: 'Unlisted', note: 'Only people you send the link to can watch it.' },
-  private: { label: 'Private', note: 'Only you can watch it.' },
-  scheduled: { label: 'Scheduled', note: 'Private until then, and YouTube makes it public at that time.' },
-};
-// a scheduled publish: shown and typed in the person's own time zone, sent as UTC
-const ytZone = (() => {
-  try {
-    const long = new Intl.DateTimeFormat([], { timeZoneName: 'long' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName');
-    return (long && long.value) || Intl.DateTimeFormat().resolvedOptions().timeZone.replace(/_/g, ' ');
-  } catch (e) { return ''; }
-})();
-const pad2 = (n) => String(n).padStart(2, '0');
-const whenText = (iso) => new Date(iso).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-// the time offered when the channel's calendar cannot be read (ytPlanDraw): a day after the last one
-// scheduled from this browser (a series, one a day), else tomorrow at 9:00
-function ytWhenDefault() {
-  const last = new Date(ls.get('ytWhenLast') || 0), next = new Date(+last + 864e5);
-  if (+last && next - Date.now() > 20 * 60e3) return next;
-  const d = new Date(Date.now() + 864e5);
-  d.setHours(9, 0, 0, 0);
-  return d;
-}
+let ytFilm = null;     // that film, when it is yours: {id, channels, posts, defaults} (api/youtube.js GET film)
 // back from Google's chooser: /film/<id>?youtube=<how it went>&channel=<the one connected>
-const YT_SAID = {
-  again: "That channel was already connected. To add a different one, pick it on Google's screen: a business or brand channel is listed under its own name.",
-  cancelled: 'Connecting was cancelled, so nothing changed.',
-  noscope: 'KitCut needs the permissions to upload and to see your channel\'s videos, to publish for you. Try again and leave those boxes ticked.',
-  nochannel: 'That Google account has no YouTube channel yet. Create one on youtube.com, then connect it here.',
-  failed: "Connecting didn't work. Please try again.",
-};
 const YT_BACK = (() => {
   const q = new URLSearchParams(location.search), back = { said: q.get('youtube'), channel: q.get('channel') };
   if (back.said) {
@@ -2086,692 +1840,90 @@ const YT_BACK = (() => {
   }
   return back;
 })();
+let ytKit = null, ytMaking = null;  // ytMaking: whether the film's next version was being made, as the publish dialog was last told
+function ytNeed() {  // the publish dialog's code and look, fetched once
+  if (window.KCPublish) return Promise.resolve();
+  if (!ytKit) {
+    ytKit = new Promise((ok, bad) => {
+      const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/publish.css'; document.head.appendChild(l);
+      const sc = document.createElement('script'); sc.src = '/publish.js'; sc.onload = ok; sc.onerror = () => { ytKit = null; bad(new Error('no publish.js')); }; document.head.appendChild(sc);
+    });
+  }
+  return ytKit;
+}
 function ytReset() {
-  clearTimeout(ytPoll); ytPoll = null; ytPost = null; ytDoneId = null; ytFilm = null;
-  if ($('ytToast')) $('ytToast').hidden = true;
-  $('ytOpen').hidden = true; $('ytPosts').hidden = true; $('sharebar').hidden = true; $('sbWho').hidden = true; $('dlBtn').hidden = true;
-  if ($('yt').open) $('yt').close();
+  ytDoneId = null; ytFilm = null; ytMaking = null;
+  for (const id of ['kcp', 'kcm']) { const d = document.getElementById(id); if (d && d.open) d.close(); }  // another film's dialog
+  $('ytOpen').hidden = true; $('ytOn').hidden = true; $('ytPosts').hidden = true; $('sharebar').hidden = true; $('sbWho').hidden = true; $('dlBtn').hidden = true;
 }
 async function ytLoad() {
   const id = currentId;
   if (!YT || !USER || !id || ytDoneId !== id || (ytFilm && ytFilm.id === id)) return;
-  try {
-    const r = await fetch(`/api/youtube/film?id=${encodeURIComponent(id)}`, { headers: { Accept: 'application/json' } });
-    if (!r.ok || id !== currentId) return;  // not yours, or you have moved on
-    ytFilm = { ...(await r.json()), id };
-  } catch (e) { return; }
-  ytDrafts = {}; ytTyped = {}; ytThumbPick = {}; ytBase = null; ytPrev = null; ytSaid = '';
-  ytCals = {}; ytPick = null; ytCalFrom = null; ytAllRecent = false; ytMove = null; ytMoved = '';
-  $('ytOpen').hidden = false;
+  let info = null;
+  try { await ytNeed(); info = await KCPublish.prepare(id); } catch (e) { return; }  // the words are written while you watch
+  if (!info || id !== currentId) return;  // not yours, or you have moved on
+  ytFilm = { ...info, id };
   ytList();
-  if (ytChosen()) ytDraft(ytChosen());  // written while you watch, so it is ready when you open the dialog
-  const sending = ytFilm.posts.find((p) => p.state === 'sending');
-  if (sending) ytTrack(sending);
   if (YT_BACK.said) {
     const said = YT_BACK.said; YT_BACK.said = null;
-    ytShow(YT_SAID[said] || null, YT_BACK.channel);
+    ytShow({ said, channel: YT_BACK.channel });
   }
 }
-function ytErr(text) { $('ytErr').textContent = text || ''; $('ytErr').hidden = !text; }
-// where the film already is on YouTube, under the film
-function ytList() {
-  // where each video stands on YouTube now (it may have been made private or removed there since),
-  // a removed one included; a publish that never got there is left out
-  const list = ((ytFilm && ytFilm.posts) || []).filter((p) => p.state !== 'failed' || p.url);
-  $('ytPosts').hidden = !list.length;
-  $('ytPosts').innerHTML = !list.length ? '' : '<span>On YouTube:</span>' + list.map((p) => {
-    const face = (p.channel.thumb ? `<img src="${esc(p.channel.thumb)}" alt="" referrerpolicy="no-referrer">` : '') + esc(p.channel.title);
-    let st = p.status || { label: WHO[p.held ? 'private' : p.privacy].label, detail: '' };
-    if (st.key === 'scheduled' && p.publish_at) st = { ...st, label: `Scheduled for ${whenText(p.publish_at)}`, detail: 'Private until then, when YouTube makes it public.' };
-    const seen = p.views != null ? ` · ${p.views.toLocaleString()} view${p.views === 1 ? '' : 's'} there` : '';
-    return p.url
-      ? `<a href="${esc(p.url)}" target="_blank" rel="noopener" title="${esc([p.title, st.detail].filter(Boolean).join('. '))}">${face} · ${esc(st.label)}${seen}</a>`
-      : `<a href="#" data-sending="1">${face} · sending ${p.pct}%</a>`;
-  }).join('');
-  for (const a of $('ytPosts').querySelectorAll('[data-sending]')) a.onclick = (e) => { e.preventDefault(); $('yt').showModal(); };
-}
-function ytShow(err, pick) {
-  const f = ytFilm;
-  if (!f) return;
-  $('ytConnectBtn').href = $('ytAdd').href = '/api/youtube/connect?back=' + encodeURIComponent('/film/' + f.id);
-  ytErr(err);
-  $('ytBrand').hidden = !(UB && UB.id === f.id);
-  $('ytSend').hidden = true;
-  $('ytConnect').hidden = f.channels.length > 0;
-  $('ytForm').hidden = !f.channels.length;
-  if (f.channels.length) ytForm(pick);
-  if (!$('yt').open) $('yt').showModal();
-}
-// the channel the form starts on: the one asked for, else the episode's project's (the one it last
-// published to, or picked in its Settings), else the one you used last here, else the first
-function ytChosen(pick) {
-  const ok = ((ytFilm && ytFilm.channels) || []).filter((c) => !c.broken);
-  const has = (id) => id && ok.some((c) => c.id === id);
-  const want = [pick, ytFilm && ytFilm.project_channel, ls.get('ytChannel')].find(has);
-  return (ok.find((c) => c.id === want) || ok[0] || {}).id;
-}
-// The title, description and tags, written from the film in the channel's voice (the studio's
-// ytdraft.py reads the film; the site reads the channel's latest uploads), and the thumbnails with
-// them. One ask per channel, and only the first without asking; a field you have typed in is
-// never overwritten; if none can be written, the basics.
-async function ytDraft(channel) {
-  const f = ytFilm;
-  if (!f || !channel) return;
-  ytBase = channel;
-  if (ytDrafts[channel] && ['writing', 'done'].includes(ytDrafts[channel].state)) return ytRender();
-  ytDrafts[channel] = { state: 'writing', since: Date.now() };
-  ytRender();
-  let b = { state: 'failed' };
-  try {
-    const r = await fetch('/api/youtube/draft', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ film: f.id, channel }),
-    });
-    if (r.ok) b = await r.json();
-  } catch (e) { /* the basics, then */ }
-  ytDraftSeen(f, channel, b);
-}
-// a channel's draft if it has one already (written earlier, on another visit): a look costs nothing
-async function ytPeek(channel) {
-  const f = ytFilm;
-  ytDrafts[channel] = { state: 'looking' };
-  ytRender();
-  let b = { state: 'none' };
-  try {
-    const r = await fetch(`/api/youtube/draft?film=${encodeURIComponent(f.id)}&channel=${encodeURIComponent(channel)}`, { headers: { Accept: 'application/json' } });
-    if (r.ok) b = await r.json();
-  } catch (e) { /* none, then */ }
-  if (ytFilm !== f) return;
-  if (b.state !== 'done' && b.state !== 'writing') { ytDrafts[channel] = { state: 'none' }; return ytRender(); }
-  ytDrafts[channel] = { since: Date.now() };
-  ytDraftSeen(f, channel, b);
-}
-function ytDraftSeen(f, channel, b) {
-  if (ytFilm !== f) return;  // you have moved on to another film
-  const d = ytDrafts[channel] = { ...ytDrafts[channel], ...b };
-  if (d.state === 'none' || (d.state === 'writing' && Date.now() - d.since > 60000)) d.state = 'failed';
-  // the thumbnails come after the words: follow them for up to two minutes; a draft written before
-  // (another server's, or before a restart) is asked for once more, which has them made
-  const t = d.thumbs || {};
-  if (d.state === 'done' && t.state === 'making' && Date.now() - d.since > 120000) d.thumbs = { state: 'failed' };
-  if (d.state === 'done' && t.state === 'none' && !d.again) {
-    d.again = true;
-    fetch('/api/youtube/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ film: f.id, channel }) })
-      .then((r) => (r.ok ? r.json() : { state: 'done' })).catch(() => ({ state: 'done' }))
-      .then((next) => ytDraftSeen(f, channel, next));
-  }
-  if (d.state === 'writing' || (d.state === 'done' && (d.thumbs || {}).state === 'making')) {
-    setTimeout(async () => {
-      let next = { state: 'writing' };
-      try {
-        const r = await fetch(`/api/youtube/draft?film=${encodeURIComponent(f.id)}&channel=${encodeURIComponent(channel)}`, { headers: { Accept: 'application/json' } });
-        if (r.ok) next = await r.json();
-      } catch (e) { /* ask again */ }
-      ytDraftSeen(f, channel, next);
-    }, 1500);
-  }
-  ytRender();
-}
-const YT_FIELDS = ['ytName', 'ytDesc', 'ytTags'];
-function ytChecked() {
-  const c = document.querySelector('input[name=ytChan]:checked');
-  return c ? c.value : ytChosen();
-}
-function ytChanTitle(id) {
-  const ch = ((ytFilm && ytFilm.channels) || []).find((x) => x.id === id);
-  return ch ? ch.title : 'that channel';
-}
-// picking a channel: its own draft if it has one, else a look for one (free), else the offer
-function ytSwitch(channel) {
-  ytAgain(); ytSaid = '';
-  if (!ytBase) return ytDraft(channel);
-  if (!ytDrafts[channel] || ytDrafts[channel].state === 'none') return ytPeek(channel);
-  ytRender();
-}
-$('ytRedoBtn').addEventListener('click', () => {
-  const c = ytChecked();
-  if (!c || c === ytBase) return;
-  ytPrev = { base: ytBase, to: c }; ytSaid = '';
-  delete ytDrafts[c];  // one that failed is asked for again
-  ytDraft(c);
-});
-// the form from the draft it shows: the words (or grey lines while they are written), what is
-// going on, the offer to write them for the channel picked, the thumbnails
-function ytRender() {
-  if (!ytFilm) return;
-  const c = ytChecked();
-  if (!c) return;
-  const own = ytDrafts[c];
-  if (own && ['writing', 'done'].includes(own.state)) ytBase = c;  // the channel's own, once there is one
-  if (!ytBase) ytBase = c;
-  if (ytPrev && ytBase !== ytPrev.to) ytPrev = null;
-  let b = ytBase, d = ytDrafts[b] || {};
-  if (d.state === 'failed' && ytPrev) {  // the one you asked for could not be written: back to before
-    ytSaid = `They couldn't be written for ${ytChanTitle(b)} this time, so these are still the ones written for ${ytChanTitle(ytPrev.base)}.`;
-    b = ytBase = ytPrev.base; d = ytDrafts[b] || {}; ytPrev = null;
-  }
-  const put = (id, v) => { if (!ytTyped[id]) $(id).value = v; };
-  if (d.state === 'done') {
-    put('ytName', d.title || ytFilm.defaults.title);
-    put('ytDesc', [d.description, ytFilm.defaults.description].filter(Boolean).join('\n\n'));
-    put('ytTags', (d.tags || []).join(', '));
-  } else if (d.state === 'writing') {
-    for (const id of YT_FIELDS) put(id, '');
-  } else if (d.state === 'failed') {
-    put('ytName', ytFilm.defaults.title); put('ytDesc', ytFilm.defaults.description); put('ytTags', '');
-  }
-  ytSkel();
-  const note = $('ytDraftNote');
-  note.textContent = ytSaid || (d.state === 'writing' ? `Writing a title and description from the film, in the voice of ${ytChanTitle(b)}...`
-    : d.state === 'failed' ? "They couldn't be written from the film this time, so here are the basics. Change anything you like." : '');
-  note.hidden = !note.textContent;
-  // another channel picked: these words stay until you ask for its own (nothing is spent unasked)
-  const offer = c !== b && !(own && ['looking', 'writing', 'done'].includes(own.state));
-  $('ytRedo').hidden = !offer;
-  if (offer) {
-    $('ytRedoText').textContent = d.state === 'done' ? `The title, description and thumbnails were written for ${ytChanTitle(b)}.`
-      : d.state === 'writing' ? `The title, description and thumbnails are being written for ${ytChanTitle(b)}.` : 'These are the basics.';
-    $('ytRedoBtn').textContent = own && own.state === 'failed' ? `Try again for ${ytChanTitle(c)}` : `Write them for ${ytChanTitle(c)}`;
-  }
-  ytThumbsFill(b, d);
-}
-// grey lines in an empty field while its words are being written
-function ytSkel() {
-  const d = (ytBase && ytDrafts[ytBase]) || {};
-  for (const id of YT_FIELDS) $(id).parentNode.classList.toggle('wait', d.state === 'writing' && !$(id).value);
-  $('ytForm').setAttribute('aria-busy', String(d.state === 'writing'));
-}
-// the four thumbnails for the draft shown: the first is the one picked unless you pick another
-function ytThumbsFill(channel, d) {
-  const t = d.thumbs || {}, grid = $('ytThumbGrid'), note = $('ytThumbNote');
-  const making = d.state === 'writing' || t.state === 'making';
-  // made, being made, or could not be made: the section stays and says which. It used to vanish
-  // when they failed, and nobody could tell there should have been four (the first real publish)
-  const failed = d.state === 'done' && (t.state === 'failed' || (t.state === 'none' && d.again));
-  $('ytThumbs').hidden = !(making || failed || t.state === 'done');
-  if ($('ytThumbs').hidden) return ytFeed();
-  if (t.state === 'done') {
-    const had = ytThumbPick[channel];
-    if (!had || had.v !== t.v) ytThumbPick[channel] = { v: t.v, n: t.options[0].n };
-    const pick = ytThumbPick[channel].n;
-    if (grid.dataset.v !== `${channel}:${t.v}`) {
-      grid.dataset.v = `${channel}:${t.v}`;
-      grid.innerHTML = t.options.map((o) => `
-        <label class="thumb" title="${esc(o.words || 'The picture alone')}">
-          <input type="radio" name="ytThumb" value="${o.n}">
-          <img src="${esc(o.src)}" alt="${esc(`Thumbnail ${o.n}: ${o.words || 'the picture alone'}`)}">
-          <span class="tick" aria-hidden="true">&#10003;</span>
-        </label>`).join('');
-    }
-    for (const r of document.querySelectorAll('input[name=ytThumb]')) {
-      r.checked = r.value === String(pick);
-      r.onchange = () => { ytThumbPick[channel] = { v: t.v, n: r.value === 'none' ? 'none' : Number(r.value) }; ytFeed(); ytPlanDraw(); };
-    }
-    note.hidden = true;
-  } else if (failed) {
-    grid.dataset.v = '';
-    grid.innerHTML = '';
-    for (const r of document.querySelectorAll('input[name=ytThumb]')) r.checked = r.value === 'none';
-    note.textContent = "The thumbnails couldn't be made from this film this time, so YouTube will pick a frame. Reopen this page to try again.";
-    note.hidden = false;
-  } else {
-    grid.dataset.v = '';
-    grid.innerHTML = '<div class="shimmer"></div>'.repeat(4);
-    note.textContent = 'Making four thumbnails from the film...';
-    note.hidden = false;
-  }
-  ytFeed();
-  ytPlanDraw();  // the calendar shows this film by the thumbnail picked
-}
-// the thumbnail picked, where people meet it: 168 pixels wide beside its title, as in YouTube's
-// "up next" list -- if the words cannot be read here, they cannot be read there
-function ytFeed() {
-  const c = ytChecked();
-  const d = (ytBase && ytDrafts[ytBase]) || {}, t = d.thumbs || {}, p = ytBase && ytThumbPick[ytBase];
-  const o = t.state === 'done' && p && p.n !== 'none' && t.options.find((x) => x.n === p.n);
-  $('ytFeed').hidden = !o;
-  if (!o) return;
-  if ($('ytFeedImg').getAttribute('src') !== o.src) $('ytFeedImg').src = o.src;
-  $('ytFeedTitle').textContent = $('ytName').value.trim() || ytFilm.defaults.title;
-  $('ytFeedChan').textContent = ytFilm.channels.some((x) => x.id === c) ? ytChanTitle(c) : '';
-}
-$('ytName').addEventListener('input', ytFeed);
-for (const id of YT_FIELDS) $(id).addEventListener('input', () => { ytTyped[id] = true; ytSkel(); });
-function ytForm(pick) {
-  const f = ytFilm;
-  const chosen = ytChosen(pick);
-  $('ytChans').innerHTML = '<legend>Channel</legend>' + f.channels.map((c) => `
-    <label class="chan${c.broken ? ' broken' : ''}">
-      <input type="radio" name="ytChan" value="${esc(c.id)}"${c.id === chosen ? ' checked' : ''}${c.broken ? ' disabled' : ''}>
-      ${c.thumb ? `<img src="${esc(c.thumb)}" alt="" referrerpolicy="no-referrer">` : ''}
-      <span>${esc(c.title)}${c.handle ? ` <small>${esc(c.handle)}</small>` : ''}</span>
-      ${c.broken ? `<a href="${esc($('ytAdd').href)}">Reconnect</a>` : ''}
-    </label>`).join('');
-  for (const r of $('ytChans').querySelectorAll('input')) r.onchange = () => { ytSwitch(r.value); ytWhoNote(); };
-  if (ytFormFor !== f.id) {  // a new film starts from its own draft; a reopened dialog keeps your edits
-    ytFormFor = f.id;
-    $('ytName').value = ''; $('ytDesc').value = ''; $('ytTags').value = ''; $('ytKids').checked = false;
-    const who = WHO[ls.get('ytWho')] ? ls.get('ytWho') : 'public';
-    document.querySelector(`input[name=ytWho][value=${who}]`).checked = true;
-  }
-  ytWhoNote();
-  if (chosen) ytSwitch(chosen);
-}
-function ytWhoNote() {
-  const w = document.querySelector('input[name=ytWho]:checked');
-  const later = !!w && w.value === 'scheduled';
-  if (later) ytPlanLoad(ytChecked());
-  ytPlanDraw();
-  $('ytWhoNote').textContent = w ? WHO[w.value].note + (later && ytZone ? ` The time is in ${ytZone}.` : '') : '';
-}
-for (const r of document.querySelectorAll('input[name=ytWho]')) r.onchange = ytWhoNote;
-
-// ---- scheduling: the channel's calendar (api/youtube.js GET calendar; lib/ytplan.js) ----
-// Picking "Scheduled" shows what the channel published lately and what is scheduled on it, a
-// square a day with each video's picture, and under it the same videos by title. It offers the day
-// and time that keep the channel's pace (its series', for an episode), worked out on the site from
-// the days the channel publishes on; any day from today on can be picked instead, and one that has
-// a video already says which. The days are the viewer's own: their time zone goes with the ask.
-// A channel that cannot be read has an empty calendar, and the time offered is ytWhenDefault().
-let ytCals = {};       // channel id -> {state: loading | done | failed, at, ...the site's answer}
-let ytPick = null;     // the day and time picked: {channel, day, mins, own, from}; own: picked by hand
-let ytCalFrom = null;  // the first day of the calendar's top row; null: wherever today and the pick are
-let ytAllRecent = false;
-// A scheduled video being moved to another day (Move, beside it in the list): {channel, post, id,
-// title, thumb, day, mins, was, busy, error}. While there is one the calendar picks ITS day, not
-// this film's; "Move it" changes its time on YouTube (POST /api/youtube/reschedule).
-let ytMove = null, ytMoved = '';
-const YT_TZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } })();
-const CAL_WEEKS = 5, CAL_RECENT = 3, CAL_STEP = 21;
-const SOONEST_MS = 15 * 60e3;  // lib/youtube.js SCHEDULE_MIN_MS
-const dayKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-const dayDate = (k, mins = 0) => new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, +k.slice(8, 10), 0, mins);
-const dayAdd = (k, n) => { const d = dayDate(k, 720); d.setDate(d.getDate() + n); return dayKey(d); };
-const daySpan = (a, b) => Math.round((dayDate(b, 720) - dayDate(a, 720)) / 864e5);
-const dayText = (k) => dayDate(k).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-const timeText = (mins) => dayDate('2026-01-01', mins).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-const minsOf = (d) => d.getHours() * 60 + d.getMinutes();
-// the first day of the week where the viewer lives: 0 Sunday, 1 Monday, 6 Saturday
-const WEEK_START = (() => {
-  try {
-    const l = new Intl.Locale(navigator.language), w = (l.getWeekInfo ? l.getWeekInfo() : l.weekInfo) || {};
-    if (w.firstDay) return w.firstDay % 7;
-  } catch (e) { /* guessed from the country */ }
-  return /^en$|-(US|CA|MX|BR|JP|IL|PH)$/i.test(navigator.language || '') ? 0 : 1;
-})();
-const weekOf = (k) => dayAdd(k, -((dayDate(k).getDay() - WEEK_START + 7) % 7));
-const SPARK = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7zM19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z"/></svg>';
-const DAY_NAMES = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
-
-async function ytPlanLoad(channel) {
-  const f = ytFilm, had = ytCals[channel];
-  if (!f || !channel || (had && (had.state === 'loading' || Date.now() - had.at < 60000))) return;
-  // read again after a minute (the dialog opened a second time): what it showed stays until the new answer
-  if (had && had.state === 'done') had.at = Date.now(); else ytCals[channel] = { state: 'loading', at: Date.now(), videos: [] };
-  let b = null;
-  try {
-    const r = await fetch(`/api/youtube/calendar?channel=${encodeURIComponent(channel)}&film=${encodeURIComponent(f.id)}&tz=${encodeURIComponent(YT_TZ)}`, { headers: { Accept: 'application/json' } });
-    if (r.ok) b = await r.json();
-  } catch (e) { /* an empty calendar, then */ }
-  if (ytFilm !== f) return;  // you have moved on to another film
-  // each video on the day and at the time this browser shows it
-  const here = (v) => { const d = new Date(v.at); return { ...v, day: dayKey(d), mins: minsOf(d) }; };
-  if (b && Array.isArray(b.videos)) ytCals[channel] = { ...b, state: 'done', at: Date.now(), videos: b.videos.map(here) };
-  else if (ytCals[channel].state !== 'done') ytCals[channel] = { state: 'failed', at: Date.now(), videos: [] };
-  ytPlanDraw();
-}
-// the day and time the form is on: yours once you pick one, else the one suggested for the channel,
-// once its calendar is read (none until then, so the day never jumps under you)
-const ytCalMark = (cal) => `${cal.state}:${(cal.suggest && cal.suggest.at) || ''}`;  // what a pick that is not yours was made from
-function ytPickFor(channel, cal) {
-  if (ytPick && ytPick.channel === channel && (ytPick.own || ytPick.from === ytCalMark(cal))) return;
-  ytCalFrom = null;
-  if (cal.state === 'loading') { ytPick = null; return; }
-  let at = cal.state === 'done' && cal.suggest ? new Date(cal.suggest.at) : null;
-  if (!at || Number.isNaN(+at)) at = ytWhenDefault();
-  ytPick = { channel, day: dayKey(at), mins: minsOf(at), own: false, from: ytCalMark(cal) };
-}
-const ytPicked = () => (ytPick ? dayDate(ytPick.day, ytPick.mins) : null);
-// this film's own picture: the thumbnail picked for it, else its poster
-function ytThumbNow() {
-  const t = (ytBase && (ytDrafts[ytBase] || {}).thumbs) || {}, n = ytBase ? ytThumbChosen(ytBase) : null;
-  const o = n && t.options.find((x) => x.n === n);
-  return o ? o.src : (filmDone && filmDone.poster_url) || '';
-}
-// the calendar's top row starts two weeks back, so what went out lately is on it; later when the
-// day picked is further off than it reaches
-function ytCalStart(today) {
-  if (ytCalFrom) return ytCalFrom;
-  const from = dayAdd(weekOf(today), -14);
-  const sel = ytMove || ytPick;
-  return sel && daySpan(from, sel.day) > CAL_WEEKS * 7 - 1 ? dayAdd(weekOf(sel.day), -21) : from;
-}
-// why that day: the pace the channel (or the series) keeps, and where the day falls in it
-function ytPaceWords(cal, channel) {
-  const c = cal.cadence || {}, s = cal.suggest, series = c.scope === 'series';
-  const who = series ? 'This series' : ytChanTitle(channel);
-  const day = dayText(dayKey(new Date(s.at)));
-  if (!c.known) return cal.videos.length ? `${who} has too few videos to show a pace yet, so this is its first free day.` : `Nothing is on ${who} yet, so this is simply the first morning it can go out.`;
-  const list = (a) => (a.length < 2 ? a.join('') : `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}`);
-  const pace = c.weekdays ? (c.weekdays.join() === '1,2,3,4,5' ? 'on weekdays' : `on ${list(c.weekdays.map((d) => DAY_NAMES[d]))}`)
-    : (c.steady ? '' : 'about ') + (c.every === 1 ? 'every day' : c.every === 2 ? 'every other day' : c.every === 7 ? 'once a week' : c.every === 14 ? 'every two weeks' : `every ${c.every} days`);
-  const time = c.time_sure ? `, usually around ${timeText(c.mins)}` : '';
-  const n = s.days_after, after = s.after && s.after.title ? `“${clip(s.after.title, 56)}”` : 'the one before';
-  const then = s.late ? `${series ? 'Its last episode' : 'Its last video'} went out ${n} days ago, so the first free day is the best one.`
-    : n ? `${day} is the first free day that keeps that: ${n === 1 ? 'the day' : `${n} days`} after ${after}.` : `${day} is the first free day that keeps that.`;
-  return `${who} ${series ? 'goes out' : 'publishes'} ${pace}${time}. ${then}`;
-}
-function ytRow(v) {
-  const chip = v.moving ? 'Moving' : v.mine ? 'This film' : v.pending === 'sending' ? 'Going up' : v.pending === 'queued' ? 'Queued' : v.state === 'scheduled' ? 'Scheduled' : v.state === 'unlisted' ? 'Unlisted' : '';
-  const seen = !v.mine && v.state !== 'scheduled' && v.views != null ? ` · ${v.views.toLocaleString()} view${v.views === 1 ? '' : 's'}` : '';
-  const body = `<span class="pic">${v.thumb ? `<img src="${esc(v.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>`
-    + `<span><b>${esc(v.title || 'Untitled')}</b><small>${chip ? `<span class="chip">${chip}</span>` : ''}${esc(dayText(v.day))} · ${esc(timeText(v.mins))}${seen}</small></span>`;
-  // one KitCut put there and YouTube still has scheduled can be moved to another day
-  if (!v.mine && v.post && v.state === 'scheduled' && !v.pending && !ytMove) {
-    const link = (inner) => (v.url ? `<a href="${esc(v.url)}" target="_blank" rel="noopener">${inner}</a>` : inner);
-    return `<div class="vrow can" data-day="${v.day}">${link(`<span class="pic">${v.thumb ? `<img src="${esc(v.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>`)}`
-      + `<span>${link(`<b>${esc(v.title || 'Untitled')}</b>`)}<small><span class="chip">Scheduled</span>${esc(dayText(v.day))} · ${esc(timeText(v.mins))}</small></span>`
-      + `<button type="button" class="mv" data-move="${esc(v.id)}" title="Move it to another day">Move</button></div>`;
-  }
-  return v.url ? `<a class="vrow" data-day="${v.day}" href="${esc(v.url)}" target="_blank" rel="noopener">${body}</a>` : `<div class="vrow${v.mine ? ' this' : ''}" data-day="${v.day}">${body}</div>`;
-}
-function ytPlanDraw() {
-  const channel = ytChecked(), w = document.querySelector('input[name=ytWho]:checked');
-  const on = !!ytFilm && !!channel && !!w && w.value === 'scheduled';
-  $('ytPlan').hidden = !on;
-  if (!on) return;
-  const cal = ytCals[channel] || { state: 'loading', videos: [] };
-  ytPickFor(channel, cal);
-  if (ytMove && ytMove.channel !== channel) ytMove = null;
-  const mv = ytMove, sel = mv || ytPick;  // the day the calendar is picking: the moved video's, else this film's
-  const videos = mv ? cal.videos.filter((v) => v.id !== mv.id) : cal.videos;
-  const now = new Date(), today = dayKey(now), name = ytChanTitle(channel);
-  const by = {};
-  for (const v of videos) (by[v.day] = by[v.day] || []).push(v);
-  const sAt = cal.state === 'done' && cal.suggest ? new Date(cal.suggest.at) : null;
-  const best = sAt ? dayKey(sAt) : null;
-
-  // the day suggested, and why
-  const el = $('ytBest');
-  if (mv) {
-    el.className = 'best';
-    el.innerHTML = `<b>Moving “${esc(clip(mv.title, 48))}”</b><span class="acts"><button type="button" class="go" id="ytMoveGo"${mv.busy ? ' disabled' : ''}>${mv.busy ? 'Moving...' : 'Move it'}</button><button type="button" id="ytMoveNo"${mv.busy ? ' disabled' : ''}>Cancel</button></span>`
-      + `<p>It is scheduled for ${esc(dayText(mv.was.day))} at ${esc(timeText(mv.was.mins))}. Pick its new day on the calendar and set the time, then press Move it. YouTube makes it public then instead.</p>`
-      + (mv.error ? `<p class="err">${esc(mv.error)}</p>` : '');
-    $('ytMoveNo').onclick = () => { ytMove = null; ytCalFrom = null; ytPlanDraw(); };
-    $('ytMoveGo').onclick = () => ytMoveGo(channel);
-  } else if (cal.state === 'loading') {
-    el.className = 'best wait';
-    el.innerHTML = `<p>Reading what is on ${esc(name)}...</p><p aria-hidden="true"><i></i><i></i></p>`;
-  } else if (!sAt) {
-    el.className = 'best plain';
-    el.innerHTML = `<p>${esc(name)}'s videos couldn't be read just now, so the calendar is empty. Pick any day.</p>`;
-  } else {
-    const same = !!ytPick && ytPick.day === best && ytPick.mins === minsOf(sAt);
-    // the channel itself could not be read: only what KitCut put there is known, so no pace is claimed
-    const why = cal.read ? ytPaceWords(cal, channel)
-      : cal.note === 'reconnect' ? `Connect ${name} again to see everything on it. Until then this shows only what KitCut published there, and the first day free of those.`
-        : `YouTube didn't answer just now, so this shows only what KitCut published on ${name}, and the first day free of those.`;
-    el.className = 'best';
-    el.innerHTML = `<b>${SPARK}Suggested: ${esc(dayText(best))} at ${esc(timeText(minsOf(sAt)))}</b>`
-      + (same ? '<span class="on">&#10003; Picked</span>' : '<button type="button" id="ytBestUse">Use it</button>')
-      + `<p>${esc(why)}</p><small>KitCut's suggestion, worked out from the days this channel publishes on.</small>`;
-    const use = $('ytBestUse');
-    if (use) use.onclick = () => { ytPick = { channel, day: best, mins: minsOf(sAt), own: false, from: ytCalMark(cal) }; ytCalFrom = null; ytPlanDraw(); };
-  }
-
-  // the calendar
-  const from = ytCalStart(today), to = dayAdd(from, CAL_WEEKS * 7 - 1), mine = mv ? mv.thumb : ytThumbNow();
-  const short = (k) => dayDate(k).toLocaleDateString([], { month: 'short', day: 'numeric' });
-  $('ytCalTitle').textContent = `${short(from)} – ${short(to)}${dayDate(to).getFullYear() !== now.getFullYear() ? `, ${dayDate(to).getFullYear()}` : ''}`;
-  $('ytCalPrev').disabled = daySpan(from, today) > 120;
-  $('ytCalNext').disabled = daySpan(today, to) > 366;
-  $('ytCalNow').disabled = from === dayAdd(weekOf(today), -14);
-  const cells = [];
-  for (let i = 0; i < 7; i++) cells.push(`<span class="wd" aria-hidden="true">${esc(dayDate(dayAdd(from, i)).toLocaleDateString([], { weekday: 'short' }))}</span>`);
-  for (let i = 0; i < CAL_WEEKS * 7; i++) {
-    const k = dayAdd(from, i), d = dayDate(k), vs = by[k] || [], past = k < today, pick = !!sel && sel.day === k;
-    const cls = ['day', past ? 'past' : '', k === today ? 'today' : '', vs.length ? 'has' : '', pick ? 'pick' : '', k === best && !pick && !mv ? 'best' : ''].filter(Boolean).join(' ');
-    const said = [d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }), pick ? (mv ? 'picked for the video being moved' : 'picked for this film') : '', k === best && !mv ? 'suggested' : '',
-      ...vs.map((v) => `${v.state === 'scheduled' ? 'scheduled for' : 'published'} ${timeText(v.mins)}: ${v.title}`), !vs.length && !past ? 'free' : ''].filter(Boolean).join(', ');
-    const pic = pick ? `<span class="pic mine">${mine ? `<img src="${esc(mine)}" alt="">` : ''}</span>`
-      : vs[0] ? `<span class="pic">${vs[0].thumb ? `<img src="${esc(vs[0].thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}${vs[0].state === 'scheduled' ? '<i class="clk"></i>' : ''}</span>` : '';
-    const count = vs.length + (pick ? 1 : 0);
-    cells.push(`<button type="button" class="${cls}" data-day="${k}" title="${esc(said)}" aria-label="${esc(said)}"${pick ? ' aria-pressed="true"' : ''}${k === today ? ' aria-current="date"' : ''}${past && !vs.length ? ' disabled' : ''}>`
-      + `<span class="n">${esc(d.getDate() === 1 ? short(k) : String(d.getDate()))}</span>${pic}${count > 1 ? `<span class="more">+${count - 1}</span>` : ''}</button>`);
-  }
-  $('ytCal').innerHTML = cells.join('');
-
-  // the day and time picked, and what is wrong with it or already on it
-  const note = $('ytPickNote');
-  $('ytWhen').hidden = !sel;
-  if (sel) {
-    $('ytPickDay').textContent = dayText(sel.day);
-    if (document.activeElement !== $('ytTime')) $('ytTime').value = `${pad2(Math.floor(sel.mins / 60))}:${pad2(sel.mins % 60)}`;
-    const there = by[sel.day] || [], soon = dayDate(sel.day, sel.mins) - now < SOONEST_MS;
-    note.textContent = soon ? (sel.day < today ? 'That day has passed. Pick another one.' : 'That time is less than 15 minutes away. Pick a later one.')
-      : there.length ? `${dayText(sel.day)} already has “${clip(there[0].title, 56)}” at ${timeText(there[0].mins)}${there.length > 1 ? ` and ${there.length - 1} more` : ''}, so two would go out that day.` : (!mv && ytMoved) || '';
-    note.className = soon ? 'note bad' : !there.length && !mv && ytMoved ? 'note good' : 'note';
-  }
-  note.hidden = !sel || !note.textContent;
-
-  // the same videos by title: what is coming (this film among them, where it would fall), then what went out
-  const me = !sel ? [] : [{ mine: true, moving: !!mv, day: sel.day, mins: sel.mins, at: dayDate(sel.day, sel.mins).toISOString(), title: mv ? mv.title : $('ytName').value.trim() || ytFilm.defaults.title, thumb: mine, state: 'scheduled' }];
-  const ahead = [...videos.filter((v) => new Date(v.at) > now), ...me].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
-  const out = videos.filter((v) => new Date(v.at) <= now).reverse();
-  const shown = ytAllRecent ? out : out.slice(0, CAL_RECENT);
-  $('ytOnChan').innerHTML = (ahead.length ? `<h3>Coming up on ${esc(name)}</h3>${ahead.map(ytRow).join('')}` : '')
-    + (cal.state === 'loading' ? '' : `<h3>Published lately</h3>${shown.length ? shown.map(ytRow).join('') : `<p class="none">${cal.state === 'done' && cal.read ? 'Nothing in the last few months.' : 'Nothing to show.'}</p>`}`)
-    + (out.length > shown.length ? `<button type="button" class="all" id="ytAllRecent">Show all ${out.length}</button>` : '');
-  const all = $('ytAllRecent');
-  if (all) all.onclick = () => { ytAllRecent = true; ytPlanDraw(); };
-  for (const img of $('ytPlan').querySelectorAll('img')) img.onerror = () => img.remove();  // a picture that will not load leaves its grey square
-}
-// a day picked on the calendar; a day gone by shows its video in the list under it
-$('ytCal').addEventListener('click', (e) => {
-  const b = e.target.closest('.day'), channel = ytChecked();
-  if (!b || !channel) return;
-  const k = b.dataset.day;
-  if (k < dayKey(new Date())) {
-    const row = $('ytOnChan').querySelector(`.vrow[data-day="${k}"]`);
-    if (!row && !ytAllRecent) { ytAllRecent = true; ytPlanDraw(); }
-    const r = $('ytOnChan').querySelector(`.vrow[data-day="${k}"]`);
-    if (r) { r.classList.add('hot'); r.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); setTimeout(() => r.classList.remove('hot'), 1800); }
-    return;
-  }
-  ytMoved = '';
-  if (ytMove) ytMove = { ...ytMove, day: k, error: '' };
-  // a day picked before the calendar is read keeps the time last used, else 9:00
-  else ytPick = ytPick ? { ...ytPick, day: k, own: true } : { channel, day: k, mins: minsOf(ytWhenDefault()), own: true };
-  ytPlanDraw();
-  const now = $('ytCal').querySelector('.pick');
-  if (now) now.focus();
-});
-// the arrow keys walk the days, a row of weeks further when they run off the calendar
-$('ytCal').addEventListener('keydown', (e) => {
-  const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key], b = e.target.closest('.day');
-  if (!step || !b) return;
-  e.preventDefault();
-  const k = dayAdd(b.dataset.day, step), at = () => $('ytCal').querySelector(`.day[data-day="${k}"]`);
-  if (!at() && !$(step < 0 ? 'ytCalPrev' : 'ytCalNext').disabled) { ytCalFrom = dayAdd(ytCalStart(dayKey(new Date())), step < 0 ? -CAL_STEP : CAL_STEP); ytPlanDraw(); }
-  const to = at();
-  if (to && !to.disabled) to.focus();
-});
-// Move, beside a scheduled video: the calendar now picks that video's day
-$('ytOnChan').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-move]'), channel = ytChecked(), cal = channel && ytCals[channel];
-  const v = b && cal && cal.videos.find((x) => x.id === b.dataset.move);
-  if (!v) return;
-  ytMoved = '';
-  ytMove = { channel, post: v.post, id: v.id, title: v.title, thumb: v.thumb, day: v.day, mins: v.mins, was: { day: v.day, mins: v.mins }, busy: false, error: '' };
-  ytCalFrom = null;
-  ytPlanDraw();
-  $('ytBest').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-});
-async function ytMoveGo(channel) {
-  const mv = ytMove, at = mv && dayDate(mv.day, mv.mins);
-  if (!mv || mv.busy) return;
-  if (at - Date.now() < SOONEST_MS) { ytMove = { ...mv, error: 'Pick a time at least 15 minutes from now.' }; return ytPlanDraw(); }
-  if (mv.day === mv.was.day && mv.mins === mv.was.mins) { ytMove = { ...mv, error: 'That is the day and time it already has. Pick another on the calendar.' }; return ytPlanDraw(); }
-  ytMove = { ...mv, busy: true, error: '' };
-  ytPlanDraw();
-  let said = '';
-  try {
-    const r = await fetch('/api/youtube/reschedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ post: mv.post, publish_at: at.toISOString() }) });
-    const b = await r.json().catch(() => ({}));
-    if (!r.ok) said = b.error || `HTTP ${r.status}`;
-  } catch (e) { said = "That didn't reach KitCut. Try again."; }
-  if (ytMove !== null && ytMove.id !== mv.id) return;  // another one is being moved by now
-  if (said) { ytMove = { ...mv, busy: false, error: said }; return ytPlanDraw(); }
-  // on its new day at once; the channel is read again behind it (the day suggested may move too)
-  const cal = ytCals[channel];
-  if (cal && cal.videos) {
-    cal.videos = cal.videos.map((v) => (v.id === mv.id ? { ...v, at: at.toISOString(), day: mv.day, mins: mv.mins } : v)).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
-    cal.at = 0;
-  }
-  ytMove = null;
-  ytMoved = `Moved “${clip(mv.title, 48)}” to ${dayText(mv.day)} at ${timeText(mv.mins)}.`;
-  ytPlanDraw();
-  ytPlanLoad(channel);
-}
-// a row in the list lights its day on the calendar
-for (const how of ['mouseover', 'mouseout']) {
-  $('ytOnChan').addEventListener(how, (e) => {
-    const r = e.target.closest('.vrow'), d = r && $('ytCal').querySelector(`.day[data-day="${r.dataset.day}"]`);
-    if (d) d.classList.toggle('hot', how === 'mouseover');
+function ytShow(opts = {}) {
+  if (!ytFilm || !window.KCPublish) return;
+  const id = ytFilm.id;
+  KCPublish.open(id, {
+    title: (filmDone && filmDone.share && filmDone.share.title) || '', poster: (filmDone && filmDone.poster_url) || '',
+    branded: !!(UB && UB.id === id), onUnbrand: () => { if (!UB) return; if (UB.how === 'free') ubStart(UB.id); else ubShow('youtube'); },
+    ...opts,
   });
 }
-$('ytCalPrev').addEventListener('click', () => { ytCalFrom = dayAdd(ytCalStart(dayKey(new Date())), -CAL_STEP); ytPlanDraw(); });
-$('ytCalNext').addEventListener('click', () => { ytCalFrom = dayAdd(ytCalStart(dayKey(new Date())), CAL_STEP); ytPlanDraw(); });
-$('ytCalNow').addEventListener('click', () => { ytCalFrom = dayAdd(weekOf(dayKey(new Date())), -14); ytPlanDraw(); });
-$('ytTime').addEventListener('change', () => {
-  const [h, m] = $('ytTime').value.split(':').map(Number);
-  if (!(ytMove || ytPick) || !Number.isFinite(h) || !Number.isFinite(m)) return;
-  if (ytMove) ytMove = { ...ytMove, mins: h * 60 + m, error: '' };
-  else ytPick = { ...ytPick, mins: h * 60 + m, own: true };
-  ytPlanDraw();
-});
-$('ytName').addEventListener('input', () => { if (!$('ytPlan').hidden) ytPlanDraw(); });
-// publishing to a channel that has it already makes a second copy: say so before, not after
-function ytAgain() {
-  const c = document.querySelector('input[name=ytChan]:checked');
-  const had = c && ytFilm.posts.find((p) => p.channel.id === c.value && p.state !== 'failed');
-  $('ytAgain').hidden = !had;
-  $('ytAgain').textContent = had ? 'This film is already on that channel. Publishing again adds a second copy.' : '';
-}
-$('ytOpen').addEventListener('click', () => {
-  if (ytPost && ytPost.state === 'sending') $('yt').showModal(); else ytShow();
-});
-$('ytMore').addEventListener('click', () => ytShow());
-$('ytForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const chan = document.querySelector('input[name=ytChan]:checked'), who = document.querySelector('input[name=ytWho]:checked');
-  if (!chan) return ytErr('Pick a channel to publish to.');
-  if (!$('ytName').value.trim()) return ytErr('Give the video a title.');
-  let publishAt = null;
-  if (who.value === 'scheduled') {
-    if (ytMove) return ytErr('You are moving another video on the calendar. Press Move it or Cancel there first.');
-    const at = ytPick && ytPick.channel === chan.value ? ytPicked() : null;
-    if (!at || Number.isNaN(+at)) return ytErr('Pick the day and time it goes public.');
-    if (at - Date.now() < SOONEST_MS) return ytErr('Pick a time at least 15 minutes from now.');
-    publishAt = at.toISOString();
+$('ytOpen').addEventListener('click', () => ytShow());
+// where the film already is on YouTube, under the film: each video where it stands there now (it
+// may have been made private or removed there since), a removed one included; a publish that never
+// got there is left out. A scheduled one says when it goes public, and its day can be changed here.
+function ytList() {
+  const f = ytFilm;
+  if (!f) { $('ytPosts').hidden = true; return; }
+  const list = (f.posts || []).filter((p) => p.state !== 'failed' || p.url);
+  const when = (iso) => (window.KCPublish ? KCPublish.whenText(iso) : new Date(iso).toLocaleString());
+  // Publish only while nothing of it is on YouTube or on its way there (a film goes to a channel
+  // once): after that this line says where it stands, and its page in the Studio is where it is
+  // looked after (KCPublish.standing: the same answer every page draws from)
+  const stand = window.KCPublish ? KCPublish.standing(f.posts) : null, on = stand && stand.post;
+  $('ytOpen').hidden = !!on;
+  $('ytOn').hidden = !on;
+  if (on) {
+    const k = stand.key, label = (on.status && on.status.label) || 'On YouTube';
+    $('ytOn').href = `/studio/film/${f.id}`;
+    $('ytOnText').textContent = k === 'uploading' ? `Uploading${on.pct ? ` ${on.pct}%` : ''}` : k === 'processing' ? 'YouTube is processing it'
+      : k === 'scheduled' && on.publish_at ? `Scheduled for ${when(on.publish_at)}` : k === 'unknown' ? label : `${label} on YouTube`;
   }
-  ytErr(''); $('ytGo').disabled = true;
-  try {
-    const r = await fetch('/api/youtube/publish', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        film: ytFilm.id, channel: chan.value, title: $('ytName').value, description: $('ytDesc').value, tags: $('ytTags').value,
-        language: (ytDrafts[ytBase] || {}).language, category: (ytDrafts[ytBase] || {}).category, kids: $('ytKids').checked,
-        ...(publishAt ? { privacy: 'private', publish_at: publishAt } : { privacy: who.value }),
-        // the thumbnail picked, and the channel whose draft made it (when it was another's)
-        thumb: ytThumbChosen(ytBase), ...(ytBase && ytBase !== chan.value ? { thumb_from: ytBase } : {}),
-      }),
-    });
-    const b = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      if (b.reason === 'reconnect' && b.channel) { ytFilm.channels = ytFilm.channels.map((c) => (c.id === b.channel.id ? { ...c, broken: true } : c)); ytForm(); }
-      throw new Error(b.error || `HTTP ${r.status}`);
-    }
-    ls.set('ytChannel', chan.value); ls.set('ytWho', who.value);
-    if (publishAt) ls.set('ytWhenLast', publishAt);
-    delete ytCals[chan.value]; ytPick = null;  // the channel's calendar has one more on it: read again next time
-    // it goes up in the background: the dialog closes, a note at the foot of the screen follows it
-    // (the studio finishes it even if the page is closed), and the film's YouTube line shows it
-    $('yt').close();
-    ytTrack(b.post);
-  } catch (err) { ytErr(String(err.message || err)); }
-  $('ytGo').disabled = false;
-});
-// the thumbnail to set on the video: the option picked in a draft's options, when they are there
-function ytThumbChosen(channel) {
-  const t = (ytDrafts[channel] || {}).thumbs || {}, p = ytThumbPick[channel];
-  return t.state === 'done' && p && p.v === t.v && p.n !== 'none' ? p.n : null;
-}
-// The note at the foot of the screen while a publish goes on in the background (the dialog is
-// closed, or the page was opened again mid-way): its progress, then the link, or what went wrong
-// with Try again. A finished one stays a while; × closes it.
-let ytNoteT = null, ytNoteDone = new Set();
-function ytNote(p) {
-  const el = $('ytToast');
-  clearTimeout(ytNoteT);
-  if ($('yt').open || ytNoteDone.has(p.id)) { el.hidden = true; return; }
-  const chan = `<b>${esc(p.channel.title)}</b>`;
-  const x = '<button class="x" type="button" aria-label="Close">&times;</button>';
-  if (p.state === 'sending') {
-    el.innerHTML = `<span>Publishing to ${chan} in the background${p.pct ? ` (${p.pct}%)` : ''}. You can keep going, or leave: it finishes on its own.</span><span class="bar"><i style="width:${p.pct || 4}%"></i></span>${x}`;
-  } else if (p.state === 'failed') {
-    el.innerHTML = `<span>Publishing to ${chan} didn't go through. <button class="again" type="button">Try again</button></span>${x}`;
-  } else {
-    el.innerHTML = p.publish_at
-      ? `<span>&#10003; On ${chan}, private until ${esc(whenText(p.publish_at))}, when it goes public. <a href="${esc(p.url)}" target="_blank" rel="noopener">Open on YouTube</a></span>${x}`
-      : `<span>&#10003; Published to ${chan}${p.held ? ' (private while Google reviews KitCut)' : ''}. <a href="${esc(p.url)}" target="_blank" rel="noopener">Watch on YouTube</a></span>${x}`;
-    ytNoteT = setTimeout(() => { el.hidden = true; }, 15000);
+  $('ytPosts').hidden = false;
+  $('ytPosts').innerHTML = (list.length ? '<span>On YouTube:</span>' + list.map((p) => {
+    const face = (p.channel.thumb ? `<img src="${esc(p.channel.thumb)}" alt="" referrerpolicy="no-referrer">` : '') + esc(p.channel.title);
+    let st = p.status || { label: p.held ? 'Private' : 'On YouTube', detail: '' };
+    const later = st.key === 'scheduled' && p.publish_at;
+    if (later) st = { ...st, label: `Scheduled for ${when(p.publish_at)}`, detail: 'Private until then, when YouTube makes it public.' };
+    const seen = p.views != null && !later ? ` · ${p.views.toLocaleString()} view${p.views === 1 ? '' : 's'} there` : '';
+    return p.url
+      ? `<span class="post"><a class="vid" href="${esc(p.url)}" target="_blank" rel="noopener" title="${esc([p.title, st.detail].filter(Boolean).join('. '))}">${face} · ${esc(st.label)}${seen}</a>${later && !p.theirs ? `<button type="button" data-move="${esc(p.id)}">Change date</button>` : ''}</span>`
+      : `<span class="post"><a class="vid" href="#" data-sending="1" title="On its way to YouTube: it finishes on its own">${face} · Uploading${p.pct ? ` ${p.pct}%` : ''}</a></span>`;
+  }).join('') : '<span>Not on YouTube yet.</span>')
+    + `<a class="studio" href="/studio/film/${esc(f.id)}" title="Its page in your Studio: its details on YouTube, its day, who can watch it, its views">Open in Studio</a>`;
+  for (const a of $('ytPosts').querySelectorAll('[data-sending]')) a.onclick = (e) => { e.preventDefault(); ytShow(); };
+  for (const b of $('ytPosts').querySelectorAll('[data-move]')) {
+    b.onclick = () => { const p = f.posts.find((x) => x.id === b.dataset.move); if (p) KCPublish.move(p, { thumb: (filmDone && filmDone.poster_url) || '' }); };
   }
-  el.hidden = false;
-  el.querySelector('.x').onclick = () => { el.hidden = true; ytNoteDone.add(p.id); };
-  const again = el.querySelector('.again');
-  if (again) again.onclick = () => { el.hidden = true; ytShow(p.error || null, p.channel.id); };
 }
-$('yt').addEventListener('close', () => { if (ytPost && ytFilm && ytPost.film === ytFilm.id && ytPost.state === 'sending') ytNote(ytPost); });
-
-// follow one publish: the bar while the studio sends the file, then the link
-function ytTrack(p) {
-  if (!ytFilm || ytFilm.id !== p.film) return;
-  ytPost = p;
-  ytFilm.posts = [...ytFilm.posts.filter((x) => x.id !== p.id), p];
+// what the dialogs did (publish.js says so on the page): the line under the film follows it
+document.addEventListener('kc:youtube', (e) => {
+  const d = e.detail || {};
+  if (!ytFilm || !d.post || d.post.film !== ytFilm.id) return;
+  const had = ytFilm.posts.find((x) => x.id === d.post.id) || {};
+  ytFilm.posts = [...ytFilm.posts.filter((x) => x.id !== d.post.id), { ...had, ...d.post }];
   ytList();
-  ytNote(p);
-  clearTimeout(ytPoll);
-  if (p.state === 'failed') {
-    $('ytSend').hidden = true; $('ytForm').hidden = false; ytForm(p.channel.id);
-    return ytErr(p.error || 'The upload did not go through. Please try again.');
-  }
-  $('ytForm').hidden = true; $('ytConnect').hidden = true; $('ytSend').hidden = false; ytErr('');
-  const bar = $('ytBar'), sending = p.state === 'sending';
-  bar.hidden = !sending; $('ytDone').hidden = sending;
-  if (sending) {
-    bar.classList.toggle('wait', !p.pct);
-    bar.querySelector('i').style.width = `${p.pct}%`;
-    $('ytSendText').textContent = `Sending your film to ${p.channel.title}...` + (p.pct ? ` ${p.pct}%` : '');
-    ytPoll = setTimeout(async () => {
-      try {
-        const r = await fetch(`/api/youtube/post?id=${encodeURIComponent(p.id)}`, { headers: { Accept: 'application/json' } });
-        if (r.ok) return ytTrack((await r.json()).post);
-      } catch (e) { /* ask again */ }
-      ytTrack(p);
-    }, 1500);
-    return;
-  }
-  $('ytSendText').innerHTML = `<span class="okmark">&#10003;</span> ${p.publish_at ? 'Scheduled on' : 'Published to'} <b>${esc(p.channel.title)}</b>`;
-  $('ytWatch').href = p.url;
-  $('ytDoneNote').textContent = (p.publish_at
-    ? `It is private on YouTube until ${whenText(p.publish_at)}, when YouTube makes it public.`
-    : p.held
-    ? "YouTube is keeping it private for now, while Google reviews KitCut's access to YouTube."
-    : p.state === 'live' ? `It is on YouTube now, as ${WHO[p.privacy].label.toLowerCase()}.`
-      : 'YouTube takes a few minutes to get a new video ready. Until then it may say "processing".')
-    + (!p.thumb ? '' : p.thumb.state === 'set' ? ' It has the thumbnail you picked.' : p.thumb.state === 'failed' ? ` The thumbnail wasn't set: ${p.thumb.error}` : '');
-}
+});
 
 
 // ---------------------------------------------------------------- pictures, voice notes, text files
