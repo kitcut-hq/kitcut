@@ -4067,7 +4067,17 @@ paint one scene per model before trusting a price.
 Bundles engine + props + film + fonts + images + voice timeline + mastered MP3 into
 `outputs/<slug>.html` (one file, plays offline) and `outputs/artifact/<slug>.html` (the same
 without html/head/body, for claude.ai Artifacts). `--stills` and `--sheet` are the review
-loop: 18 stills in 8.6 s. The video is rendered by opening the page in headless Edge/Chrome
+loop: 18 stills in 8.6 s. With `--probe STEP` a stills run afterwards plays the whole film
+once more every STEP seconds WITHOUT painting it (`sketch/probe.js`, put ahead of the film's
+code in that page only): every call made through a cast object (`SK.cast.x.fn(...)`) is a
+named scope, the canvas calls inside it are counted instead of drawn, and what each drew --
+its box on the frame, the squash of its transform, how much of it the clip it was called in
+hides -- is saved as `report.json` beside the stills (the format is at the top of probe.js).
+About 10 ms a frame; a film that will not fit 30 s is read at a coarser step, whole.
+`studio/motion.py` reads it (`events`): the same character on screen twice for a moment, a
+body cut by what it is inside, squashed through flat, a colour laid over the whole frame.
+By hand: `python studio/review.py --folder projects/<id> --machine`. The video is rendered by
+opening the page in headless Edge/Chrome
 (`html-to-image.py`'s browser finder, so no Node and no Playwright): the page draws each frame
 and POSTs its raw pixels to a local server here, which pipes them into ffmpeg with
 `_encode.video_args`. The mux uses `-t`, never `-shortest` (see the gotchas), asserts the
@@ -4397,7 +4407,17 @@ the cast, the voice/audio/render pipeline and the traps already paid for.
 Bundles engine + props + film + fonts + images + voice timeline + mastered MP3 into
 `outputs/<slug>.html` (one file, plays offline) and `outputs/artifact/<slug>.html` (the same
 without html/head/body, for claude.ai Artifacts). `--stills` and `--sheet` are the review
-loop: 18 stills in 8.6 s. The video is rendered by opening the page in headless Edge/Chrome
+loop: 18 stills in 8.6 s. With `--probe STEP` a stills run afterwards plays the whole film
+once more every STEP seconds WITHOUT painting it (`sketch/probe.js`, put ahead of the film's
+code in that page only): every call made through a cast object (`SK.cast.x.fn(...)`) is a
+named scope, the canvas calls inside it are counted instead of drawn, and what each drew --
+its box on the frame, the squash of its transform, how much of it the clip it was called in
+hides -- is saved as `report.json` beside the stills (the format is at the top of probe.js).
+About 10 ms a frame; a film that will not fit 30 s is read at a coarser step, whole.
+`studio/motion.py` reads it (`events`): the same character on screen twice for a moment, a
+body cut by what it is inside, squashed through flat, a colour laid over the whole frame.
+By hand: `python studio/review.py --folder projects/<id> --machine`. The video is rendered by
+opening the page in headless Edge/Chrome
 (`html-to-image.py`'s browser finder, so no Node and no Playwright): the page draws each frame
 and POSTs its raw pixels to a local server here, which pipes them into ffmpeg with
 `_encode.video_args`. The mux uses `-t`, never `-shortest` (see the gotchas), asserts the

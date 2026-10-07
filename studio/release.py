@@ -58,6 +58,7 @@ TESTS = (
     "test_templates.py",  # a film remade from a template: the version, the API, the first message, a render
     "test_web.py",  # the studio's web tools: public URLs only, pictures, pages, fonts (stubbed)
     "test_rounds.py",  # a finished film changed from its maker's notes: versions, the swap, the line
+    "test_review.py",  # the whole film a frame a second, the probe in a real browser, the reader (stubbed)
 )
 
 

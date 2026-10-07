@@ -37,7 +37,12 @@ What breaks at scale:
    library the way the cast is: a film's `sounds.json`, used from `sfx.json` and `score.json` by
    name, kept after the film, seeded into the next. *Built 2026-10-02.*
 5. **A guaranteed final check:** reserve Claude's time for the motion check, and flag any
-   stretch where the picture holds with nothing said or happening.
+   stretch where the picture holds with nothing said or happening. *Built 2026-10-07 as
+   more than that, after three Duchess episodes shipped with glitches of half a second: the
+   author reads the whole film a frame a second, the drawing code is read for what breaks
+   between two stills, and the studio has the finished film read by a fresh Claude, with
+   one bounded turn to fix what must be fixed (`studio/review.py`; studio/README.md, "A
+   second pair of eyes"). The owner's standing corrections for a series go in its bible.*
 6. **Pitches and a queue:** the project pitches ideas from the bible and the log; the owner
    picks; episodes are made one after another, each stopping at its storyboard. Replaces the
    hand-run batch scripts.

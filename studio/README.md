@@ -430,15 +430,81 @@ docs/studio-scenes-plan.md.
    priced at $0.01 (`WEB_SEARCH_USD`, `tokens.web_search`).
 3. Claude writes the narration and records it (`voice`), writes `film.js` (for a painted film,
    the paintings first), renders review stills and looks at the sheet, runs `motion` -- the film a few
-   times a second, reporting its cuts and any stretch where nothing moves for 4 s
-   (`motion.py`) -- fixes what it sees, writes the score and the cues, and checks the
-   soundtrack (`sound`). It is told its working time
+   times a second: the whole of it a frame a second on sheets, its cuts, any stretch where nothing
+   moves for 4 s, and what the drawing code shows for a moment only (`motion.py`, "A second pair
+   of eyes" below) -- looks inside the seconds with `strip`, fixes what it sees, writes the score
+   and the cues, and checks the soundtrack (`sound`). It is told its working time
    (`film.limits`). **When the time runs out,** a film that is whole and passes the checks is
    finished anyway (`overtime` on its record); one whose picture is written gets one short last
    turn in the same session to write what is missing (`wrap_up`, 4 minutes); only then does it
    fail.
-4. The studio then mixes the soundtrack and renders the video (three browsers at once), and the
+4. The studio reads the finished film once more itself, and Claude gets one bounded turn to fix
+   what must be fixed ("A second pair of eyes" below).
+5. The studio then mixes the soundtrack and renders the video (three browsers at once), and the
    MP4 lands in the film's `outputs\film.mp4`.
+
+### A second pair of eyes (`motion.py`, `sketch/probe.js`, `review.py`)
+
+A film's author checks it against what it meant to draw, and misses what it did not mean. Three
+two-minute episodes shipped on 2026-10-07 with 4-8 glitches each that last between a tenth of a
+second and a second (docs/known-issues.md, KI-059): the author had looked at twelve frames. Three
+things now look at every film, and each was measured on a bench of those glitches before it was
+wired in (`python studio/defects.py --score`; the labels are `bakeoff/defects.json`, the film
+folders stay out of the repo).
+
+- **The whole film, a frame a second.** `motion` tiles the frames it already renders onto sheets
+  of 20 (`outputs/review/film-01.jpg` ...), each frame with its time and the words being said in
+  that second (`motion.sheets`), in the film's own shape. `strip` shows up to six moments as eight
+  frames a tenth of a second apart (`outputs/review/strip-N.jpg`). The review step of every look
+  is written round them: read the whole film against the narration, then strip every moment
+  somebody goes into, out of or behind something, turns round, or changes place.
+- **What the drawing code shows.** The same browser run plays the film once more every 0.1 s
+  without painting it (`sketch-render.py --stills ... --probe 0.1`, `sketch/probe.js`): each call
+  made through a cast object (`SK.cast.duchess.sit(...)`) is a named scope, and the canvas calls
+  inside it are counted instead of drawn -- where it drew, under what transform, through what
+  clip. A muted frame costs about 10 ms; a film that will not fit 30 s is read at a coarser step,
+  whole. `motion.events()` turns the report into sentences: the same character on screen twice for
+  a moment (two functions of one cast member that otherwise take turns), a body cut by the edge of
+  what it is inside (more than 30% of it hidden by the clip it was called in: a cat inside her
+  carrier loses 25% and looks right, one too big for its door 49-60%), going into or out of a
+  thing, squashed through flat (the ratio of its transform's two scales under 0.6, and changing),
+  a jump across the frame, and a colour laid over the whole frame that comes or goes (kept only
+  when the pixels move with it: `motion.shown`). Nothing is asked of how a film is written: a set
+  fills the frame, furniture never leaves its place in the world and is there as long as its set,
+  a carrier has others drawn inside it; what is left is somebody. These are pointers for a closer
+  look, never verdicts: a door turns through flat too, and a cat may be half hidden on purpose.
+  What a film draws with its own local functions has no name and is not reported.
+- **The reader** (`review.py`). After the author's last turn the studio lays the film out the
+  same way and a fresh Claude, with no tools and nothing of the author's conversation, reads it
+  against a fixed list of glitch kinds (`prompts/review.md`: through, squash, double, poke, idle,
+  untold, wash, stray, text, cutoff, continuity -- never taste). Two calls: the whole film, with
+  the narration's times and the machine's notes; then close-ups of the moments it and the machine
+  asked for. A finding is a `must` only when a viewer would call it a mistake at normal speed.
+  When there are any, Claude's own session gets one turn of `FIX_S` (6 minutes, effort high, the
+  tools `check`, `stills` and `strip` only) to fix exactly those. The fix is then judged: the
+  film must still run, the narration's words must not have moved (vo.json is put back), and the
+  frames that changed more than 2 s away from every finding are shown to the reader side by side
+  with what they were; a fix that broke something is thrown away (`temp/before-review`) and the
+  film goes out as its author finished it. What it found and what came of it is kept under
+  `review` on the film's record (`outcome`: clean, fixed, or kept as it was and why), its cost in
+  `review_cost_usd`, its time in `stages.review`.
+
+It never fails a film: a reader that raises or runs out of time (`CALL_S`, 5 minutes a call)
+leaves the film as it was. It does not run when Claude's time was already up, on a film that was
+read before (one carried on after a restart), on a film remade from a template (a remake of a film
+a person approved, whose flips and wipes are meant: not measured yet), or when Claude is stood in
+for by a test. A film made in scenes is read, and what is found is kept, but there is no one
+session to fix it in.
+
+`python studio/review.py --film <id>` (on the VM: `ops.sh review <id>`) reads a finished film the
+same way and prints what it finds, changing nothing; `--machine` prints only the drawing code's
+moments, with no Claude call.
+
+Measured (2026-10-07, `defects.py`): on the first 22 known glitches, `motion` as it was named 1;
+the drawing code 10, every one of the kinds it can see; the reader 21. In two of the three films
+believed fixed the reader found four real glitches nobody had seen (a one-frame sliver, a shout
+under the meter, a caption in red on a red door, twice), which became labels 23-27. A reading
+takes 2.5-4.5 minutes (two calls, 7-11 close-ups).
 
 **The live preview** (`tools.PREVIEW`, for a film sent with `X-Preview: 1`): while Claude works,
 the film's page shows the film itself instead of a sheet of stills. After the narration is

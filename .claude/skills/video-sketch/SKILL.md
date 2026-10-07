@@ -71,7 +71,13 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    transition midpoint) with `--sheet`, then look at the sheet. Fix, re-still, repeat. A round
    of 18 stills costs ~9 s. Check text overlaps, off-frame content, elements hidden behind
    later-drawn ones (draw order is paint order), and emotional reads (a "sad" brow drawn the
-   wrong way reads as angry).
+   wrong way reads as angry). **Stills at chosen moments miss what breaks inside a second**
+   (a character through a wall, flipped through a sliver, in two places at once): before a
+   film is called done, `python studio/review.py --folder projects/<id>` lays the whole of
+   it out a frame a second (`outputs/review/film-NN.jpg`), reads the drawing code for those
+   moments and has a fresh Claude read both; `--machine` is the free half. A body goes into
+   a thing through its opening, whole; it turns with a hop or a pose change, never by
+   scaling through flat.
 7. **Sound.** Write `score.json` (tempo chosen so bar lines land on the story beats — compute
    `bar = 240 / bpm` and line the scene changes up) and `sfx.json` (a cue on every visual hit).
    `sketch-audio.py --levels`: the voice should sit 8-12 dB over the heard music. Every volume

@@ -949,3 +949,40 @@ test passed.
 that service, in the same commit. Check it the way the VM will: run the release's list
 (`studio/release.py`) with the new settings exported to a dead address
 (`STUDIO_R2_ENDPOINT=http://127.0.0.1:9/b`) before the first ship.
+
+### KI-059 · mitigated · studio · A film's author saw twelve frames of it, so what breaks for half a second shipped
+
+**Symptom.** 2026-10-07: three two-minute episodes of one series each went out with 4-8 glitches
+their owner found by watching. A cat went into her carrier through its side wall; a cat came out
+of one cut by a straight line in mid-air; one was turned round by being flipped through a sliver;
+the same cat was in two places for a third of a second; whiskers showed under the pot she hid
+behind; an empty hand hung in the air for ten seconds; a line was narrated and never shown; a
+colour was laid over the whole frame like a filter. Fixed by hand, twice, and the hand-fixed
+versions still carried a one-frame sliver and a caption under the meter.
+**Cause.** The author checks its film against what it meant to draw. It looked at 6-12 frames of
+120 seconds (`stills`), and `motion` reported only two things: 4 s of stillness, and cuts. Every
+glitch above lasts 0.1-1 s, at an entrance, an exit or a turn, between two review stills. The
+brief allowed two review rounds and none when time was short, and nothing but the author looked
+at the picture before the film was called done.
+**Mitigated** (`studio/motion.py`, `sketch/probe.js`, `studio/review.py`; measured on
+`studio/defects.py`'s bench of 27 known glitches in six film versions, with three fixed ones):
+- `motion` hands back the whole film a frame a second on sheets, each frame with its time and the
+  words being said, and a `strip` tool shows any moment 0.1 s apart.
+- `sketch-render.py --stills --probe` plays the film once more without painting and reports what
+  each cast call drew, where, under what transform and through what clip; `motion.events()` reads
+  it for a character on screen twice, cut by what it is inside, going into a thing, squashed
+  through flat, and a colour laid over the frame. It found every known glitch of the kinds it can
+  see (double, sliver, through, wash: 10 of 10 on the first 22), and points at 1-11 moments in a
+  clean film: pointers, never verdicts.
+- `review.py`: after the author's last turn a fresh Claude reads the sheets and close-ups against
+  a fixed list of glitch kinds; what must be fixed gets one bounded turn; a fix that breaks
+  something else is thrown away; a reader that fails leaves the film as it was. On the bench's
+  first 22 it found 21 (today's `motion`: 1), and in two films thought fixed it found four real
+  glitches nobody had seen.
+**Still open.** It cannot hear, and it judges a story only where the narration is specific ("she
+looks at the cushion" with no look was missed twice). A glitch drawn by a film's own local
+functions is invisible to the probe (only calls through `SK.cast` are named); the reader still
+sees it. Template films and films made in scenes are read less: see `studio/README.md`, "A second
+pair of eyes". **Never adopt a detector you have not measured:** two were dropped here after
+measuring -- a pixel finder for the wash (5 false alarms on shadows and set changes) and pixel
+stillness as "nothing happens" (a calm shot and an empty one look the same).

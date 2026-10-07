@@ -25,6 +25,10 @@ bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--look collage] [--unlis
 bash studio/deploy/ops.sh watch <film-id>...        # one or several, a line per change
 bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]  # finish a film the studio stopped
 bash studio/deploy/ops.sh resume <film-id> --finish --patched  # a DONE film changed by hand: re-mix, re-render, new URLs
+bash studio/deploy/ops.sh review <film-id> [--machine]  # read a finished film for glitches as the
+                                                    # studio reads one before it is done: what a
+                                                    # viewer would take for a mistake, with times;
+                                                    # changes nothing. --machine: no Claude call
 bash studio/deploy/ops.sh usage [--hours 24] [--at "HH:MM"] [--film ID]   # who used the CPU and
                                                     # memory: by hour, memory's low points, by film,
                                                     # by step ("can we downsize", "what ate 15 GB")
@@ -165,7 +169,11 @@ episodes 8 and 10); every step below cost time when it was skipped.
 6. **Render**: `ops.sh status` (wait while another film is rendering: the cores are shared), then
    `ops.sh resume <id> --finish --patched`. About ten minutes for two minutes of film; the page and
    link stay, the files get new names.
-7. **Check the real video** at every changed scene, then the rest of the record:
+7. **Check the real video** at every changed scene, and have it read: `ops.sh review <id>`
+   (or on the laptop copy before sending it back, `python studio/review.py --folder <copy>`).
+   On 2026-10-07 it found a one-frame sliver and a caption under the meter in two films a
+   person had just fixed by hand and looked through a frame a second. Then the rest of the
+   record:
    - YouTube, when it was already there: `npm run film -- youtube ... --description-file` files
      the new upload with the same title and time, and `--remove <old video>` takes the old one
      off once the new one is live (sketch-studio `scripts/film.mjs`).

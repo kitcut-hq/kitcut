@@ -279,10 +279,12 @@ async def read(view, ask, log=None):
     -> {findings, events, closer, calls, seconds, cost_usd}. Raises what its calls raise."""
     t0, cost = time.time(), 0.0
     say = log or (lambda s: None)
-    mat, events = view["mat"], view.get("events") or []
+    mat = view["mat"]
     sheets = await view["sheets"]()
     if not sheets:
         raise RuntimeError("no frames to read")
+    ev = view.get("events")  # a list, or how to get one once the frames are there
+    events = (await asyncio.to_thread(ev) if callable(ev) else ev) or []
     say("reading the whole film: %d sheet(s), %d machine note(s)" % (len(sheets), len(events)))
     d, c = await asyncio.wait_for(
         ask(first_text(mat, events, len(sheets)), [jpeg(p) for p in sheets]), CALL_S
