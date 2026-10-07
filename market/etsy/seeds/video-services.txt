@@ -1,0 +1,152 @@
+# Seed terms for "what video products could KitCut list on Etsy" (2026-10-07).
+# One term per line. `terms --file` fetches each; similar terms come back with them.
+
+# invitations: the format
+video invitation
+animated invitation
+digital invitation
+evite
+animated evite
+video evite
+custom video invitation
+canva video invitation
+
+# invitations: the occasion
+birthday invitation
+birthday video invitation
+animated birthday invitation
+kids birthday invitation
+first birthday invitation
+wedding invitation
+wedding video invitation
+animated wedding invitation
+save the date video
+animated save the date
+baby shower invitation
+baby shower video invitation
+gender reveal video
+bridal shower invitation
+graduation invitation
+quinceanera invitation
+housewarming invitation
+christmas party invitation
+halloween party invitation
+
+# drawn from a photo
+caricature invitation
+cartoon invitation
+custom cartoon portrait
+custom caricature
+cartoon video
+
+# personalised films
+personalized video
+video message
+personalized birthday video
+birthday video
+video greeting card
+animated greeting card
+santa video
+personalized santa video
+letter from santa
+elf video
+tooth fairy video
+
+# keepsake films
+photo slideshow
+memorial video
+anniversary video
+love story video
+custom animation
+animated video
+birth announcement video
+pregnancy announcement video
+
+# business
+logo animation
+intro video
+explainer video
+promo video
+real estate video
+instagram reel template
+product video
+
+# ---- round 2: what round 1's listings and suggestions pointed at ----
+
+# reveal and announcement films (made-to-order video already sells here)
+gender reveal
+gender reveal movie
+gender reveal announcement
+digital gender reveal
+pregnancy announcement
+digital pregnancy announcement
+baby announcement video
+trip reveal video
+surprise trip reveal
+vacation reveal
+engagement announcement
+
+# personalised films for a child or a person
+personalized halloween video
+personalized christmas video
+video from santa
+santa video message
+santa nice list
+elf on the shelf arrival
+happy birthday video
+birthday video message
+custom birthday video
+personalized kids video
+personalized bedtime story
+custom love story
+custom animated video
+custom cartoon video
+custom song
+
+# keepsake films: the buyer's word is slideshow
+slideshow video
+birthday slideshow
+graduation slideshow
+wedding slideshow
+memorial slideshow
+funeral slideshow
+celebration of life video
+photo montage
+video montage
+retirement video
+thank you video
+
+# invitations: the buyer's other words for "on a phone"
+video invite
+animated invite
+phone invitation
+text message invitation
+electronic invitation
+mobile invitation
+save the date
+digital save the date
+
+# invitations: occasions and seasons round 1 missed
+nikkah invitation
+indian wedding invitation
+sweet 16 invitation
+bar mitzvah invitation
+baptism invitation
+retirement party invitation
+surprise party invitation
+40th birthday invitation
+birthday dinner invitation
+pool party invitation
+sleepover invitation
+holiday party invitation
+friendsgiving invitation
+new years eve invitation
+ugly sweater party invitation
+
+# cards
+christmas ecard
+digital christmas card
+animated christmas card
+business christmas card
+birthday ecard
+ecard
