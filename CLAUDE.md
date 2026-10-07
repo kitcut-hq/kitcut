@@ -747,7 +747,11 @@ Each cost an hour or more in one session (2026-09-29/30). Check here first.
   `10000 Authentication error` for a token that can still manage rules and addresses,
   so `sketch-studio-mail/scripts/email-routing.mjs` reads it softly and carries on.
   Turning Email Routing on is a dashboard click (zone > Email > Email Routing), not an
-  API call. State: `hello@kitcut.ai` forwards to `info@instafill.ai`, verified. Check
+  API call. State (2026-10-07): Email Routing is on, and `hello@kitcut.ai` forwards to
+  `hello-kitcut@instafill.ai`, verified (it was `info@instafill.ai` before). A new
+  destination forwards nothing until its emailed link is clicked, and that email landed
+  in **spam**; the script (branch `email-routing-retarget`) re-points a rule only after
+  that, so the old inbox keeps the mail in between. Check
   public DNS (`Resolve-DnsName kitcut.ai -Type MX`) instead of fighting the token.
 - **A secret pasted into chat goes into a gitignored file** (`.env.local`) and is read
   with `node --env-file=`, never inlined in a command. Tell the user to rotate it.
