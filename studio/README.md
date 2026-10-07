@@ -501,11 +501,17 @@ is its fix turn.
 same way and prints what it finds, changing nothing; `--machine` prints only the drawing code's
 moments, with no Claude call.
 
-Measured (2026-10-07, `defects.py`): on the first 22 known glitches, `motion` as it was named 1;
-the drawing code 10, every one of the kinds it can see; the reader 21. In two of the three films
-believed fixed the reader found four real glitches nobody had seen (a one-frame sliver, a shout
-under the meter, a caption in red on a red door, twice), which became labels 23-27. A reading
-takes 2.5-4.5 minutes (two calls, 7-11 close-ups).
+Measured (2026-10-07, `defects.py`, 27 known glitches in six film versions and three fixed
+ones): `motion` as it was named 1; the drawing code 11, of the 12 that are of a kind it can see
+(it misses legs drawn over a box's front: a matter of draw order, not of a clip); the reader 25
+on its first run and 21 on its second, with the final wording. On the three fixed films the
+second run raised two must-fixes, both about framing (a crown on a name plate), the kinds that
+are now never a must (`review.SOFT`); under the final rules, none. Five of the 27 labels are the
+reader's own finds in two films a person had just fixed and believed clean (a one-frame sliver,
+legs over a box, a shout under the meter, a caption in red on a red door, twice). What it
+misses, run to run: a story point that is only implied ("she ignores the cushion"), and now
+and then one of several glitches in a crowded film. A reading takes 3-5 minutes on a quiet
+machine (two calls, 7-12 close-ups; 154-477 s on a busy laptop).
 
 **The live preview** (`tools.PREVIEW`, for a film sent with `X-Preview: 1`): while Claude works,
 the film's page shows the film itself instead of a sheet of stills. After the narration is

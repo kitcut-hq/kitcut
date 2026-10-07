@@ -971,14 +971,15 @@ at the picture before the film was called done.
 - `sketch-render.py --stills --probe` plays the film once more without painting and reports what
   each cast call drew, where, under what transform and through what clip; `motion.events()` reads
   it for a character on screen twice, cut by what it is inside, going into a thing, squashed
-  through flat, and a colour laid over the frame. It found every known glitch of the kinds it can
-  see (double, sliver, through, wash: 10 of 10 on the first 22), and points at 1-11 moments in a
-  clean film: pointers, never verdicts.
+  through flat, and a colour laid over the frame. It found 11 of the 12 known glitches of the
+  kinds it can see (double, sliver, through, wash), and points at 1-11 moments in a clean film:
+  pointers, never verdicts.
 - `review.py`: after the author's last turn a fresh Claude reads the sheets and close-ups against
   a fixed list of glitch kinds; what must be fixed gets one bounded turn; a fix that breaks
-  something else is thrown away; a reader that fails leaves the film as it was. On the bench's
-  first 22 it found 21 (today's `motion`: 1), and in two films thought fixed it found four real
-  glitches nobody had seen.
+  something else is thrown away; a reader that fails leaves the film as it was. Of the bench's
+  27 it found 25 on one run and 21 on the next (`motion` as it was: 1), with no false must-fix
+  on the three fixed films under its final rules; five of the 27 are its own finds in two films
+  a person had just fixed and believed clean.
 **Still open.** It cannot hear, and it judges a story only where the narration is specific ("she
 looks at the cushion" with no look was missed twice). A glitch drawn by a film's own local
 functions is invisible to the probe (only calls through `SK.cast` are named); the reader still
