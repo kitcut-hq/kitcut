@@ -114,7 +114,7 @@ is yours to draw.)
 Draw the people you invent without religious dress -- no hijab, headscarf or other head
 covering -- unless the prompt asks for it, or a person's own photo shows it.
 
-# How to work (keep it moving: about 15-20 tool calls for a short film, more for a long one,
+# How to work (keep it moving: about 20-25 tool calls for a short film, more for a long one,
   plus what research needs)
 
 {LOOK_STEPS}

@@ -308,6 +308,24 @@ def main():
         and (f[1]["t0"], f[1]["t1"]) == (41.0, 43.0),
         f,
     )
+    soft = review.clean(
+        {
+            "findings": [
+                {
+                    "t0": 5,
+                    "t1": 9,
+                    "kind": "cutoff",
+                    "what": "a crown on a name plate",
+                    "must": True,
+                }
+            ]
+        },
+        60,
+    )
+    expect(
+        "reader: a finding about framing is kept, and is never a must-fix",
+        [x["must"] for x in soft["findings"]] == [False],
+    )
     expect(
         "reader: its close-ups are inside the film and apart",
         c["look_closer"] == [80.4, 86.5],

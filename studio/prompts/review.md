@@ -11,8 +11,8 @@ Your job is to find what is BROKEN, the things a viewer sees and thinks "that is
 - wash: a colour is laid over the whole picture in the middle of a shot, like a filter being switched on.
 - stray: a line or a shape that belongs to nothing: it runs to a point off screen, crosses the room, floats.
 - text: words that cannot be read (on a ground of their own colour, too small, cut by the frame edge) or that collide with something (a caption under a meter, two labels on each other).
-- cutoff: the subject of a shot is cut by the frame edge or hidden behind something drawn over it, when nothing suggests it is meant.
-- continuity: within one scene a character or prop changes colour, size or place for no reason.
+- cutoff: the subject of a shot is cut by the frame edge or hidden behind something drawn over it, when nothing suggests it is meant. (Always "should".)
+- continuity: within one scene a character or prop changes colour, size or place for no reason. (Always "should".)
 
 Do NOT report: taste (colours, style, the jokes, the drawing), pacing you would have done differently, a calm shot in which something small and meant is happening, things that are deliberate (a cat hiding with only its tail showing; a character peeking from behind something; a shadow; a mirror; night). When in doubt whether something is meant, leave it out or mark it "should".
 
