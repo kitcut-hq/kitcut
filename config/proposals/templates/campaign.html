@@ -1,0 +1,328 @@
+<!doctype html>
+<!--
+  campaign -- a proposal for a lead, as a short landscape deck: what is already
+  made, the calendar up to their event, the options, how it runs.
+
+  Five sections, each one page, each optional: cover, ready, timeline, options,
+  process. A spec that leaves one out gets a shorter proposal; make-proposal.py
+  asserts one page per section, so a section that overflows fails the print
+  instead of quietly becoming two pages.
+
+  The page is 13.333in x 7.5in (16:9, 1280 x 720 CSS px): a proposal is read on
+  a screen, and a wide page is what holds a calendar of seven or eight weeks.
+  No type is smaller than 12 px, which is 9 pt on this page.
+
+  Colours: the brand's (ours) carry the document; `client.accent` and
+  `client.ink` mark only what is THEIRS on the calendar -- their dates, their
+  event days -- so the two calendars read apart at a glance.
+
+  Pictures: cover.images fill three slots (1 and 3 square, 2 is 16:9);
+  ready.items pictures are shown square. All are cropped to fill, so give
+  pictures of the right shape rather than trusting the crop.
+
+  The timeline's weeks, cells, dates and days-to-go are computed by the script.
+  This file only lays them out.
+-->
+<html lang="{{lang}}">
+<head>
+<meta charset="utf-8">
+<title>{{doc_title}}</title>
+{{#brand.font_css}}<link rel="stylesheet" href="{{{brand.font_css}}}">{{/brand.font_css}}
+<style>
+  @page { size: 13.333in 7.5in; margin: 0; }
+  {{#brand.font_body_file_url}}
+  @font-face { font-family: "BrandBody"; src: url("{{{brand.font_body_file_url}}}"); font-weight: 100 900; }
+  {{/brand.font_body_file_url}}
+  {{#brand.font_display_file_url}}
+  @font-face { font-family: "BrandDisplay"; src: url("{{{brand.font_display_file_url}}}"); font-weight: 400 700; }
+  {{/brand.font_display_file_url}}
+
+  :root {
+    --bg: {{brand.bg}};
+    --panel: {{brand.panel}};
+    --side: {{brand.side}};
+    --ink: {{brand.ink}};
+    --ink2: {{brand.ink_2}};
+    --ink3: {{brand.ink_3}};
+    --line: {{brand.line}};
+    --line2: {{brand.line_2}};
+    --accent: {{brand.accent}};
+    --accent2: {{brand.accent_2}};
+    --accent-soft: {{brand.accent_soft}};
+    --accent-ink: {{brand.accent_ink}};
+    --good: {{brand.good}};
+    --good-soft: {{brand.good_soft}};
+    --c-accent: {{client.accent}};
+    --c-ink: {{client.ink}};
+    --body: "BrandBody", "{{brand.font_body}}", "Segoe UI", Arial, sans-serif;
+    --display: "BrandDisplay", "{{brand.font_display}}", "Segoe Script", cursive;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--body);
+    color: var(--ink);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  a { color: inherit; text-decoration: none; }
+
+  .page {
+    /* min-height, not height: a section that does not fit grows into a second
+       sheet, and make-proposal.py fails the print on the page count. A fixed
+       height would clip it instead and nobody would know. */
+    width: 1280px; min-height: 720px;
+    padding: 34px 56px 36px;
+    background: var(--bg);
+    position: relative;
+    break-after: page;
+    display: flex; flex-direction: column;
+  }
+  .page:last-child { break-after: auto; }
+
+  /* running head: our mark on the left, whose plan and which page on the right */
+  .head { display: flex; align-items: center; justify-content: space-between; height: 34px; flex: none; }
+  .mark { display: flex; align-items: center; gap: 9px; }
+  .mark img { width: 30px; height: 30px; display: block; }
+  .mark b { font-family: var(--display); font-weight: 700; font-size: 31px; line-height: 1; letter-spacing: -0.5px; }
+  .where { font-size: 13px; color: var(--ink3); letter-spacing: 0.2px; }
+
+  h1 { font-size: 38px; line-height: 1.1; font-weight: 800; letter-spacing: -0.9px; margin: 22px 0 0; }
+  .lead { font-size: 18px; line-height: 1.45; color: var(--ink2); margin: 10px 0 0; max-width: 980px; }
+
+  /* ---------------------------------------------------------------- cover */
+  .cover { padding: 46px 64px 44px; flex-direction: row; height: 720px; overflow: hidden; }
+  .cover .left { width: 640px; display: flex; flex-direction: column; flex: none; }
+  .cover .mark img { width: 46px; height: 46px; }
+  .cover .mark b { font-size: 48px; }
+  .cover .mid { margin-top: auto; margin-bottom: auto; padding-top: 10px; }
+  .kicker { font-size: 13px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: var(--accent2); }
+  .cover h1 { font-size: 62px; line-height: 1.03; letter-spacing: -1.9px; margin: 16px 0 0; }
+  .cover .sub { font-size: 22px; line-height: 1.42; color: var(--ink2); margin: 22px 0 0; max-width: 560px; }
+  .cover .by { font-size: 14px; color: var(--ink3); line-height: 1.5; }
+  .cover .right { flex: 1; position: relative; }
+  .shot { position: absolute; object-fit: cover; border-radius: 18px; border: 6px solid #fff;
+          box-shadow: 0 18px 40px rgba(29, 26, 23, 0.20); display: block; }
+  .shot.n1 { width: 330px; height: 330px; right: 6px; top: 6px; transform: rotate(3deg); }
+  .shot.n2 { width: 420px; height: 236px; left: 14px; top: 250px; transform: rotate(-4deg); }
+  .shot.n3 { width: 290px; height: 290px; right: 22px; bottom: 0; transform: rotate(-2deg); }
+  .tape { position: absolute; left: 60px; top: 150px; font-family: var(--display); font-weight: 700;
+          font-size: 34px; color: var(--accent2); transform: rotate(-6deg); line-height: 1; }
+
+  /* ---------------------------------------------------------------- ready */
+  .cards { display: flex; gap: 26px; margin-top: 24px; }
+  .card { flex: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
+          display: flex; flex-direction: column; }
+  .card .pic { height: 318px; background: var(--side); display: block; position: relative; }
+  .card .pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card .pic .play { position: absolute; right: 14px; bottom: 14px; width: 46px; height: 46px; border-radius: 50%;
+          background: var(--accent); }
+  .card .pic .play::after { content: ""; position: absolute; left: 18px; top: 13px; border-style: solid;
+          border-width: 10px 0 10px 16px; border-color: transparent transparent transparent #fff; }
+  .card .body { padding: 16px 20px 18px; }
+  .card h3 { font-size: 19px; line-height: 1.25; margin: 0; font-weight: 700; letter-spacing: -0.2px; }
+  .card p { font-size: 14.5px; line-height: 1.45; color: var(--ink2); margin: 6px 0 0; }
+  .card .link { display: inline-block; margin-top: 10px; font-size: 14.5px; font-weight: 600; color: var(--accent2); }
+
+  /* ------------------------------------------------------------- timeline */
+  .tl-page h1 { font-size: 34px; margin-top: 16px; }
+  .tl-page .lead { font-size: 16px; margin-top: 6px; }
+  .tl { margin-top: 16px; display: grid; grid-template-columns: 132px repeat({{timeline.ncols}}, minmax(0, 1fr));
+        background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .tl > div { border-top: 1px solid var(--line); border-left: 1px solid var(--line); min-width: 0; }
+  .tl > .c0 { border-left: 0; }
+  .tl > .r0 { border-top: 0; }
+  .wk { padding: 9px 8px 8px; text-align: center; background: var(--side); }
+  .wk b { display: block; font-size: 14px; font-weight: 700; letter-spacing: -0.1px; }
+  .wk span { display: block; font-size: 12px; color: var(--ink3); margin-top: 2px; }
+  .wk.ev { background: var(--c-ink); }
+  .wk.ev b { color: #fff; }
+  .wk.ev span { color: var(--c-accent); font-weight: 600; }
+  .lane { padding: 10px 10px 10px 14px; display: flex; flex-direction: column; justify-content: center; }
+  .lane b { font-size: 14.5px; font-weight: 800; line-height: 1.2; letter-spacing: -0.2px; }
+  .lane span { font-size: 12px; color: var(--ink3); margin-top: 3px; line-height: 1.3; }
+  .cell { padding: 7px 6px; display: flex; flex-direction: column; gap: 6px; }
+  .cell.ev { background: color-mix(in srgb, var(--c-accent) 16%, #fff); }
+  .chip { border-radius: 9px; padding: 6px 8px 7px; border: 1px solid var(--line2); border-left: 4px solid var(--accent);
+          background: #fff; }
+  .chip i { display: block; font-style: normal; font-size: 12px; font-weight: 700; color: var(--ink3); line-height: 1.2; }
+  .chip span { display: block; font-size: 13px; font-weight: 600; line-height: 1.25; margin-top: 2px; letter-spacing: -0.1px; }
+  .chip.done { border-left-color: var(--good); background: var(--good-soft); border-color: transparent; border-left: 4px solid var(--good); }
+  .chip.done i { color: var(--good); }
+  .lane-client .chip { background: var(--c-accent); border: 0; padding: 6px 8px 7px; }
+  .lane-client .chip i { color: var(--c-ink); opacity: 0.72; }
+  .lane-client .chip span { color: var(--c-ink); font-weight: 700; }
+  .lane-client .chip.main { background: var(--c-ink); }
+  .lane-client .chip.main i { color: var(--c-accent); opacity: 1; }
+  .lane-client .chip.main span { color: #fff; }
+  .bands { grid-column: 2 / -1; display: grid; grid-template-columns: repeat({{timeline.ncols}}, minmax(0, 1fr));
+           grid-auto-flow: row dense; row-gap: 6px; padding: 8px 0; align-items: start; align-content: center; }
+  .band { margin: 0 6px; border-radius: 9px; padding: 6px 10px 7px; background: var(--accent-soft);
+          font-size: 13px; font-weight: 600; line-height: 1.25; color: var(--ink); letter-spacing: -0.1px; }
+  .band i { font-style: normal; font-weight: 700; color: var(--accent2); font-size: 12px; margin-right: 6px; }
+  .tl-note { margin-top: 12px; font-size: 13.5px; line-height: 1.45; color: var(--ink2); display: flex; gap: 22px; flex-wrap: wrap; }
+  .key { display: inline-flex; align-items: center; gap: 7px; }
+  .key u { width: 14px; height: 14px; border-radius: 4px; display: inline-block; text-decoration: none; }
+  .key .k-done { background: var(--good-soft); border-left: 4px solid var(--good); }
+  .key .k-client { background: var(--c-accent); }
+  .key .k-plan { background: #fff; border: 1px solid var(--line2); border-left: 4px solid var(--accent); }
+
+  /* -------------------------------------------------------------- options */
+  .opts { display: flex; gap: 24px; margin-top: 26px; flex: 1; min-height: 0; }
+  .opt { flex: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 24px 26px 24px;
+         display: flex; flex-direction: column; position: relative; }
+  .opt.rec { border: 3px solid var(--accent); padding: 22px 24px 22px; }
+  .opt .flag { position: absolute; right: 18px; top: -4px; background: var(--accent); color: var(--accent-ink);
+         font-family: var(--display); font-weight: 700; font-size: 25px; line-height: 1; padding: 9px 16px 11px;
+         border-radius: 0 0 12px 12px; }
+  .opt h3 { font-size: 22px; font-weight: 800; margin: 0; letter-spacing: -0.4px; }
+  .opt .tag { font-size: 14px; color: var(--ink3); margin-top: 4px; min-height: 20px; }
+  .opt .big { font-size: 46px; font-weight: 800; letter-spacing: -1.6px; line-height: 1; margin-top: 18px; }
+  .opt .cad { font-size: 15px; color: var(--ink2); margin-top: 6px; }
+  .opt ul { list-style: none; margin: 18px 0 0; padding: 16px 0 0; border-top: 1px solid var(--line); flex: 1; }
+  .opt li { font-size: 15px; line-height: 1.4; padding: 0 0 9px 22px; position: relative; }
+  .opt li::before { content: ""; position: absolute; left: 2px; top: 7px; width: 8px; height: 8px; border-radius: 50%;
+         background: var(--accent); }
+  .opt .price { font-size: 28px; font-weight: 800; letter-spacing: -0.8px; margin-top: 8px; }
+  .opt .price small { display: block; font-size: 13px; font-weight: 500; color: var(--ink3); letter-spacing: 0; margin-top: 3px; }
+
+  /* -------------------------------------------------------------- process */
+  .blocks { display: flex; gap: 22px; margin-top: 24px; flex: 1; margin-bottom: 24px; }
+  .block { flex: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 24px 26px 16px; }
+  .block h3 { font-size: 21px; font-weight: 800; margin: 0 0 16px; letter-spacing: -0.4px; }
+  .step { display: flex; gap: 14px; padding-bottom: 16px; font-size: 17px; line-height: 1.42; }
+  .step u { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent2);
+         font-weight: 800; font-size: 13px; text-decoration: none; display: flex; align-items: center; justify-content: center; }
+  .next { margin-top: auto; background: var(--ink); color: #fff; border-radius: 20px; padding: 22px 28px;
+         display: flex; align-items: center; gap: 28px; }
+  .next .lbl { font-family: var(--display); font-weight: 700; font-size: 32px; line-height: 1; color: var(--accent); flex: none; }
+  .next .txt { font-size: 19px; line-height: 1.4; font-weight: 600; flex: 1; letter-spacing: -0.2px; }
+  .next .who { font-size: 14px; line-height: 1.5; color: #cfc8bd; flex: none; text-align: right; }
+  .next .who b { color: #fff; font-size: 15px; }
+</style>
+</head>
+<body>
+
+{{#cover}}
+<section class="page cover">
+  <div class="left">
+    <div class="mark"><img src="{{{brand.logo_url}}}" alt=""><b>{{brand.name}}</b></div>
+    <div class="mid">
+      <div class="kicker">{{kicker}}</div>
+      <h1>{{headline}}</h1>
+      <p class="sub">{{sub}}</p>
+    </div>
+    <div class="by">{{prepared}}<br>{{contact}}</div>
+  </div>
+  <div class="right">
+    {{#images}}<img class="shot n{{n}}" src="{{{url}}}" alt="">{{/images}}
+  </div>
+</section>
+{{/cover}}
+
+{{#ready}}
+<section class="page">
+  <div class="head">
+    <div class="mark"><img src="{{{brand.logo_url}}}" alt=""><b>{{brand.name}}</b></div>
+    <div class="where">{{client.name}} &nbsp;·&nbsp; {{page_no}} / {{page_total}}</div>
+  </div>
+  <h1>{{title}}</h1>
+  <p class="lead">{{lead}}</p>
+  <div class="cards">
+    {{#items}}
+    <a class="card" href="{{{url}}}">
+      <span class="pic">{{#has_image}}<img src="{{{image_url}}}" alt="">{{/has_image}}<span class="play"></span></span>
+      <span class="body">
+        <h3>{{name}}</h3>
+        <p>{{note}}</p>
+        <span class="link">{{url_text}} &rarr;</span>
+      </span>
+    </a>
+    {{/items}}
+  </div>
+</section>
+{{/ready}}
+
+{{#timeline}}
+<section class="page tl-page">
+  <div class="head">
+    <div class="mark"><img src="{{{brand.logo_url}}}" alt=""><b>{{brand.name}}</b></div>
+    <div class="where">{{client.name}} &nbsp;·&nbsp; {{page_no}} / {{page_total}}</div>
+  </div>
+  <h1>{{title}}</h1>
+  <p class="lead">{{lead}}</p>
+  <div class="tl">
+    <div class="c0 r0"></div>
+    {{#weeks}}<div class="wk r0{{#is_event}} ev{{/is_event}}"><b>{{label}}</b><span>{{sub}}</span></div>{{/weeks}}
+    {{#lanes}}
+    <div class="lane c0"><b>{{label}}</b><span>{{tag}}</span></div>
+    {{#is_cells}}
+    {{#cells}}<div class="cell lane-{{kind}}{{#is_event}} ev{{/is_event}}">{{#items}}<div class="chip{{#done}} done{{/done}}{{#is_event_item}} main{{/is_event_item}}"><i>{{dlabel}}</i><span>{{label}}</span></div>{{/items}}</div>{{/cells}}
+    {{/is_cells}}
+    {{#is_bands}}
+    <div class="bands">{{#bands}}<div class="band" style="grid-column: {{col}} / span {{span}}"><i>{{dlabel}}</i>{{label}}</div>{{/bands}}</div>
+    {{/is_bands}}
+    {{/lanes}}
+  </div>
+  <div class="tl-note">
+    <span class="key"><u class="k-client"></u>{{key_client}}</span>
+    <span class="key"><u class="k-plan"></u>{{key_plan}}</span>
+    <span class="key"><u class="k-done"></u>{{key_done}}</span>
+    <span>{{note}}</span>
+  </div>
+</section>
+{{/timeline}}
+
+{{#options}}
+<section class="page">
+  <div class="head">
+    <div class="mark"><img src="{{{brand.logo_url}}}" alt=""><b>{{brand.name}}</b></div>
+    <div class="where">{{client.name}} &nbsp;·&nbsp; {{page_no}} / {{page_total}}</div>
+  </div>
+  <h1>{{title}}</h1>
+  <p class="lead">{{lead}}</p>
+  <div class="opts">
+    {{#items}}
+    <div class="opt{{#recommended}} rec{{/recommended}}">
+      {{#recommended}}<div class="flag">{{recommended_label}}</div>{{/recommended}}
+      <h3>{{name}}</h3>
+      <div class="tag">{{tag}}</div>
+      <div class="big">{{count}}</div>
+      <div class="cad">{{cadence}}</div>
+      <ul>{{#points}}<li>{{t}}</li>{{/points}}</ul>
+      <div class="price">{{price}}<small>{{price_note}}</small></div>
+    </div>
+    {{/items}}
+  </div>
+</section>
+{{/options}}
+
+{{#process}}
+<section class="page">
+  <div class="head">
+    <div class="mark"><img src="{{{brand.logo_url}}}" alt=""><b>{{brand.name}}</b></div>
+    <div class="where">{{client.name}} &nbsp;·&nbsp; {{page_no}} / {{page_total}}</div>
+  </div>
+  <h1>{{title}}</h1>
+  <p class="lead">{{lead}}</p>
+  <div class="blocks">
+    {{#blocks}}
+    <div class="block">
+      <h3>{{name}}</h3>
+      {{#points}}<div class="step"><u>{{n}}</u><div>{{t}}</div></div>{{/points}}
+    </div>
+    {{/blocks}}
+  </div>
+  {{#has_next}}
+  <div class="next">
+    <div class="lbl">{{next.label}}</div>
+    <div class="txt">{{next.text}}</div>
+    <div class="who"><b>{{next.who}}</b><br>{{next.contact}}</div>
+  </div>
+  {{/has_next}}
+</section>
+{{/process}}
+
+</body>
+</html>

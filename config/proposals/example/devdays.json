@@ -1,0 +1,135 @@
+{
+  "_comment": "A worked example for make-proposal.py: a made-up conference, so nothing here is a real lead's name or price. Copy it into the lead's own project folder (projects/<id>/proposals/, which stays local) and change the words. Every date on the calendar comes from event.start -- `days_before`, `days_after`, `event` -- or is named outright; move the event and --plan shows the whole calendar moved. Pictures (cover.images, ready.items[].image) are paths beside the spec; this example has none, so the cards show an empty panel. `out` is relative to the spec; here it points into the repo's temp/.",
+  "template": "campaign",
+  "brand": "kitcut",
+  "lang": "en",
+  "out": "../../../temp/proposals/devdays-video-plan.pdf",
+  "title": "A video campaign for DevDays 2027",
+  "client": {"name": "DevDays 2027", "accent": "#FFD84D", "ink": "#16203A"},
+  "event": {"name": "DevDays 2027", "start": "2027-06-10", "end": "2027-06-11"},
+
+  "cover": {
+    "kicker": "Proposal · April 26, 2027",
+    "headline": "A video campaign for DevDays 2027",
+    "sub": "Six weeks to June 10-11 in Amsterdam. Twelve videos in your look, each tied to a date you already have.",
+    "prepared": "Prepared by KitCut",
+    "contact": "hello@kitcut.ai · kitcut.ai"
+  },
+
+  "ready": {
+    "title": "Three kinds of video, one look",
+    "lead": "Each one is made from your site, your speakers' photos and your logo.",
+    "items": [
+      {"name": "Speaker line-up", "note": "Your announced speakers with the logos of where they work. 26 seconds.", "url": "https://kitcut.ai/templates/conference-speaker-promo"},
+      {"name": "Speaker card", "note": "One speaker, one card. 26 seconds, square, tall and wide.", "url": "https://kitcut.ai/templates/speaker-announcement"},
+      {"name": "Countdown", "note": "Days to go, what is waiting, and the ticket price. 26 seconds.", "url": "https://kitcut.ai/templates/event-countdown"}
+    ]
+  },
+
+  "timeline": {
+    "title": "The calendar to the conference",
+    "lead": "Every video hangs off one of your dates. Row A is the base; A and B together are two videos a week.",
+    "key_client": "your dates",
+    "key_plan": "a planned video",
+    "key_done": "already made",
+    "note": "On demand: a last-tickets video within a day, whenever a price tier is about to sell out.",
+    "lanes": [
+      {
+        "label": "DevDays dates",
+        "tag": "from your site",
+        "kind": "client",
+        "items": [
+          {"days_before": 30, "label": "30 days to go"},
+          {"date": "2027-05-24", "to": "2027-05-28", "label": "Agenda published"},
+          {"days_before": 7, "label": "7 days to go"},
+          {"event": true, "label": "DevDays 2027, Amsterdam"}
+        ]
+      },
+      {
+        "label": "A · Base",
+        "tag": "one video a week",
+        "items": [
+          {"date": "2027-05-04", "label": "Speaker line-up"},
+          {"days_before": 30, "label": "\"30 days to go\""},
+          {"date": "2027-05-18", "label": "Second wave of speakers"},
+          {"date": "2027-05-25", "label": "The agenda"},
+          {"days_before": 7, "label": "\"7 days to go\""},
+          {"days_before": 2, "label": "Know before you go"}
+        ]
+      },
+      {
+        "label": "B · Campaign",
+        "tag": "one more each week",
+        "items": [
+          {"date": "2027-05-06", "label": "Speaker card"},
+          {"date": "2027-05-13", "label": "Speaker card"},
+          {"date": "2027-05-20", "label": "Track announcement"},
+          {"days_before": 14, "label": "\"14 days to go\""},
+          {"date": "2027-06-01", "label": "Partner video"},
+          {"days_before": 1, "label": "\"See you tomorrow\""}
+        ]
+      },
+      {
+        "label": "C · Full",
+        "tag": "on top of B",
+        "kind": "bands",
+        "items": [
+          {"from": "2027-05-10", "to": "2027-06-04", "label": "A card for every speaker, with a post to go with it"},
+          {"from": "2027-05-24", "to": "2027-06-04", "label": "A video for every headline partner"},
+          {"from": "2027-06-10", "to": "2027-06-18", "label": "Day-one recap, the event in numbers"}
+        ]
+      }
+    ]
+  },
+
+  "options": {
+    "title": "Three sizes of one campaign",
+    "lead": "All three run to the conference on a calendar fixed at the start. They differ only in how much is made.",
+    "items": [
+      {
+        "name": "A. Base",
+        "tag": "the key moments",
+        "count": "6 videos",
+        "cadence": "one a week",
+        "points": ["Line-up and second wave", "Countdown: 30 and 7 days", "The agenda", "Know before you go"],
+        "price": "$600",
+        "price_note": "for the whole campaign"
+      },
+      {
+        "name": "B. Campaign",
+        "tag": "a rhythm people notice",
+        "count": "12 videos",
+        "cadence": "two a week",
+        "points": ["Everything in A", "A speaker card each week", "A track and a partner video", "Countdown: 30, 14, 7 days and \"tomorrow\""],
+        "price": "$1,100",
+        "price_note": "for the whole campaign",
+        "recommended": true
+      },
+      {
+        "name": "C. Full",
+        "tag": "your speakers' and partners' audiences",
+        "count": "50+ videos",
+        "cadence": "before and after the event",
+        "points": ["Everything in B", "A card for every speaker", "A video for every headline partner", "Day-one recap and the event in numbers"],
+        "price": "$3,500",
+        "price_note": "for the whole campaign"
+      }
+    ]
+  },
+
+  "process": {
+    "title": "How it runs",
+    "lead": "We make everything. Nothing goes out without your OK.",
+    "blocks": [
+      {"name": "Each week", "points": ["The calendar is fixed at the start.", "You send a fact or a link; the video is back within a day.", "You say OK, or what to change."]},
+      {"name": "From you at the start", "points": ["Your logo and your site.", "Who publishes on your side.", "New speakers as they are confirmed."]},
+      {"name": "What you keep", "points": ["Every video, in the shapes each network wants.", "The right to post them anywhere."]}
+    ],
+    "next": {
+      "label": "Next step",
+      "text": "Pick A, B or C by Friday, April 30. The first video goes out on Tuesday, May 4.",
+      "who": "KitCut",
+      "contact": "hello@kitcut.ai"
+    }
+  }
+}

@@ -2929,6 +2929,67 @@ document beside the same number in the filled form and have it actually match.
 That shot -- not the fill itself -- is what separates "it filled something in"
 from "it filled in the right thing".
 
+## A proposal on the lead's own calendar: `make-proposal.py`
+
+A lead who has seen a demo does not need the tool described again. They need to
+see what would be published and on which day, set against the dates they
+already live by: thirty days to go, the agenda going up, the week of the event.
+`make-proposal.py` prints that as a short landscape PDF -- a cover, what is
+already made, the calendar, the options, how it runs -- in our brand, with the
+lead's own colours marking only what is theirs on the calendar.
+
+* a **shape** -- a template under `config/proposals/templates/` (`campaign`),
+* a **look** -- a brand under `config/proposals/brands/` (`kitcut`),
+* and **words** -- a spec in the lead's own folder, `projects/<id>/proposals/`.
+
+```powershell
+python scripts/make-proposal.py --list
+python scripts/make-proposal.py --spec config/proposals/example/devdays.json --plan
+python scripts/make-proposal.py --spec projects/<id>/proposals/campaign.json --pdf --preview
+```
+
+**The calendar is computed, not typed.** An item names a date, a `from`/`to`,
+or hangs off the event: `days_before`, `days_after`, `event: true`. The script
+puts it in its week, names its weekday and counts the days to `event.start`,
+so a countdown video cannot sit on the wrong day and a moved event moves the
+plan. A lane is a row: `kind: "client"` for their dates (drawn in
+`client.accent` / `client.ink`), the default for dated videos (`done: true`
+marks one already made), `kind: "bands"` for work that spans weeks.
+
+**`--plan` is the free mode.** It prints every item with its resolved date,
+weekday and days to go, and the problems a rendered page hides: an item before
+the first week shown, a video on a weekend, two videos of one lane on one day,
+more weeks than a page holds. It exits 1 on any of them, and `--pdf` refuses to
+print a calendar that has one.
+
+**The spec owns every string**, so the language is the spec's. `lang` picks
+the plural rule for "days to go" (three forms for Ukrainian, Polish and the
+other Slavic languages, two otherwise) and `strings` carries the weekday names
+and the few labels the script writes itself.
+
+**The print is checked three ways.** One page per section: `.page` has a
+minimum height, not a fixed one, so a section that does not fit becomes a
+second sheet and fails the count, where a fixed height would clip it and say
+nothing. Every page must carry its own title. And no face but the brand's may
+be in the file: Chromium embeds a variable font as an unnamed Type 3 face, so
+any *named* font in the PDF is a fallback.
+
+**Both fonts are local files.** The first proposal came out in Segoe UI: the
+brand named a Google Fonts stylesheet, and the font had not arrived when
+Chromium printed. kitcut.ai's own `Inter.woff2` and `Caveat.woff2` are Latin
+subsets, so a proposal in Ukrainian needs the full `fonts/Inter-VF.ttf` and
+`fonts/Caveat-Cyrillic-VF.ttf` anyway.
+
+**Pictures are cropped to fill.** The cover has three slots (the first and
+third square, the second 16:9) and the cards of `ready` are square. A wide
+still in a square card loses its sides: pad it to a square in the film's own
+background colour first.
+
+**A lead's spec is not tooling.** Names, prices and the lead's stills stay in
+`projects/<id>/proposals/`, which git ignores for new projects; the committed
+example is a made-up conference. With `"project": "<id>"` in the spec the PDF
+is recorded in that project's `project.json` like any other deliverable.
+
 ## A KitCut film as an insert: `kitcut-clean.py`
 
 A film exported from kitcut.ai carries KitCut advertising that must never
