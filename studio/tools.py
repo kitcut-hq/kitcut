@@ -53,6 +53,10 @@ TIMEOUT = {
     "map": 600,
 }
 MAX_STILLS = 12
+# a close look at a moment (the strip tool): what happens inside one second. A cat went through
+# her carrier's wall in 0.4 s and was flipped through a sliver in 0.3 s; neither was on any of the
+# twelve review stills of its two-minute film (docs/known-issues.md, KI-059)
+STRIP_MAX, STRIP_N, STRIP_STEP = 6, 8, 0.1
 PEOPLE_WAIT_S = 420  # the longest a picture tool waits for the people to be drawn (agent.py)
 # what one film may bring in from the web (web-grab.py): pictures and page photographs together,
 # and font families -- each is inlined into the film's page, which a phone downloads whole
@@ -196,6 +200,30 @@ def voice_blocked(text):
                 "since": datetime.now().isoformat(timespec="seconds"),
             }
     return None
+
+
+def strip_times(t, lo, hi):
+    """The STRIP_N times of a close look at t: STRIP_STEP apart, t among the first of them (a
+    glitch is usually just after the cue that starts it), kept inside lo..hi."""
+    a = max(lo, min(t - 3 * STRIP_STEP, hi - (STRIP_N - 1) * STRIP_STEP))
+    return [round(a + i * STRIP_STEP, 2) for i in range(STRIP_N) if a + i * STRIP_STEP <= hi + 1e-6]
+
+
+def strips_of(frames_dir, out_dir, moments, groups, said, name="strip"):
+    """Tile each moment's frames (rendered into frames_dir as <t>.png) into out_dir/<name>-<n>.jpg.
+    -> [paths], one per moment."""
+    by_t = {round(t, 2): p for t, p in motion._frames(frames_dir)}
+    for old in os.listdir(out_dir) if os.path.isdir(out_dir) else []:
+        if old.startswith(name + "-") and old.endswith(".jpg"):
+            os.remove(os.path.join(out_dir, old))
+    out = []
+    for n, (t, g) in enumerate(zip(moments, groups), 1):
+        cells = [(x, by_t[x]) for x in g if x in by_t]
+        if cells:
+            out.append(
+                motion.strip(cells, os.path.join(out_dir, "%s-%d.jpg" % (name, n)), said=said, at=t)
+            )
+    return out
 
 
 def timeline_text(film, retake=None):
@@ -867,15 +895,16 @@ class Tools:
         _write_json(self.film.manifest, m)
         return "The film is called %r." % title
 
-    async def motion(self):
-        """The film a few times a second, for what a sheet of stills cannot show: its cuts, and
-        any stretch where nothing moves (studio/motion.py)."""
+    async def film_sheets(self):
+        """The film a few times a second (the whole of it, or a scene's own stretch), read by
+        studio/motion.py: (what it says in words, whether it wrote motion.png, the whole-film
+        sheets' paths as Claude names them). Claude's motion tool and the studio's own review
+        (review.py) both look at a film through this."""
         ts = motion.times(self.film.length)
         if self.span:  # a scene's pass: only its stretch
             ts = [t for t in ts if self.span[0] <= t <= self.span[1]]
         shutil.rmtree(self.film.path("temp", "motion"), ignore_errors=True)
         args = ["--stills", ",".join("%g" % t for t in ts), "--into", "temp/motion"]
-        told = await self.people_ready()
         async with self.lock:
             self.gate()
             await self._script(
@@ -890,10 +919,66 @@ class Tools:
             self.film.path("temp", "motion"),
             self.film.path("outputs", "review", "motion.png"),
         )
+        said = motion.spoken(self.film.path("audio", "vo", "timeline.json"))
+        made = await asyncio.to_thread(
+            motion.sheets,
+            self.film.path("temp", "motion"),
+            self.film.path("outputs", "review"),
+            said,
+            span=self.span,
+        )
+        return text, sheet, ["outputs/review/" + os.path.basename(p) for p in made]
+
+    async def motion(self):
+        """The film a few times a second, for what a sheet of stills cannot show: the whole of it
+        a frame a second, its cuts, and any stretch where nothing moves (studio/motion.py)."""
+        told = await self.people_ready()
+        text, sheet, sheets = await self.film_sheets()
         if sheet:
             self.sheet_v += 1
             self.emit({"type": "image", "path": "review/motion.png", "v": self.sheet_v})
+        if sheets:
+            text += (
+                "\n\nThe whole film, a frame a second, each with its time and the words being said"
+                " under it: Read %s. Read every one: what a film gets wrong between two review "
+                "stills is on these. Then `strip` the moments that need a closer look."
+                % ", ".join(sheets)
+            )
         return text + told
+
+    async def strip(self, times):
+        """A close look at up to STRIP_MAX moments: STRIP_N frames, STRIP_STEP s apart, round each
+        (an entrance, an exit, a turn: what happens inside one second)."""
+        try:
+            ts = [round(float(t), 2) for t in times]
+        except (TypeError, ValueError):
+            raise ToolError("times is a list of seconds, e.g. [12.4, 80.5]") from None
+        n = self.film.length
+        lo, hi = self.span or (0, n)
+        if not ts or len(ts) > STRIP_MAX or any(t < lo or t > hi for t in ts):
+            raise ToolError("give 1-%d moments between %g and %g seconds" % (STRIP_MAX, lo, hi))
+        groups = [strip_times(t, lo, min(hi, n - 0.02)) for t in ts]
+        every = sorted({x for g in groups for x in g})
+        shutil.rmtree(self.film.path("temp", "strip"), ignore_errors=True)
+        args = ["--stills", ",".join("%g" % t for t in every), "--into", "temp/strip"]
+        await self.people_ready()
+        async with self.lock:
+            self.gate()
+            await self._script("stills", "sketch-render.py", args, pools=[("browser", 1)])
+        said = motion.spoken(self.film.path("audio", "vo", "timeline.json"))
+        made = await asyncio.to_thread(
+            strips_of,
+            self.film.path("temp", "strip"),
+            self.film.path("outputs", "review"),
+            ts,
+            groups,
+            said,
+        )
+        return "Read %s: %d frames %g s apart round each moment, with the words being said." % (
+            ", ".join("outputs/review/" + os.path.basename(p) for p in made),
+            STRIP_N,
+            STRIP_STEP,
+        )
 
     async def _automation_if_needed(self):
         """The air cues follow the picture's motion, traced by a render pass."""
@@ -1091,11 +1176,24 @@ class Tools:
             )(wrap(lambda a: self.stills(a.get("times"), a.get("sheet", True)))),
             tool(
                 "motion",
-                "Render the film a few times a second and report its cuts and any stretch where "
-                "nothing moves for 4 s or more, with a sheet of the frames around each "
-                "(outputs/review/motion.png).",
+                "Render the film a few times a second: the whole film a frame a second on sheets "
+                "(outputs/review/film-01.jpg ...), each frame with its time and the words being "
+                "said; its cuts and any stretch where nothing moves for 4 s or more, with a sheet "
+                "of the frames around each (outputs/review/motion.png).",
                 {"type": "object", "properties": {}},
             )(wrap(lambda a: self.motion())),
+            tool(
+                "strip",
+                "A close look at up to %d moments (seconds): %d frames %g s apart round each, into "
+                "outputs/review/strip-1.jpg ... For what happens inside a second: an entrance, an "
+                "exit, a turn, a character going into, out of or behind something."
+                % (STRIP_MAX, STRIP_N, STRIP_STEP),
+                {
+                    "type": "object",
+                    "properties": {"times": {"type": "array", "items": {"type": "number"}}},
+                    "required": ["times"],
+                },
+            )(wrap(lambda a: self.strip(a.get("times")))),
             tool(
                 "template_pictures",
                 "A film made from a template: make a logo and people's photos the film's own -- the "

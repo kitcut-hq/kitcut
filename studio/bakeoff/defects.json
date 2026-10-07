@@ -1,0 +1,38 @@
+{
+ "_about": "Known motion glitches in films that shipped, for studio/defects.py. Windows are film seconds. kind: through (into or out of a thing across its wall, or cut by its edge), sliver (a body squashed or flipped through flat), double (the same character twice, or a jump with nothing shown), poke (a hidden character's parts showing where they should not), idle (a hand or a shot holding with nothing happening, a beat with only the narrator), untold (narrated, or needed by the story, and not shown), wash (a colour over the whole frame), stray (a line or shape that belongs to nothing), text (words colliding or unreadable). words: what the owner or the rework saw. Three two-minute episodes of one series, each as it first shipped (v1), as it stood between two rounds of fixes (ep8-v2) and as fixed (clean). The film folders are not in the repo.",
+ "films": {
+  "ep9-v1": {"clean": false, "defects": [
+   {"t0": 13.0, "t1": 19.0, "kind": "idle", "words": "six seconds of narration over a room where nothing happens"},
+   {"t0": 35.5, "t1": 39.5, "kind": "poke", "words": "whiskers stick out beside the plant pot while she hides"},
+   {"t0": 40.0, "t1": 49.5, "kind": "idle", "words": "ten seconds on a plant with two ears"},
+   {"t0": 49.7, "t1": 50.5, "kind": "double", "words": "her ears are still in the plant while she already sits in the portrait"},
+   {"t0": 51.6, "t1": 61.4, "kind": "idle", "words": "an empty fist hangs beside the portrait for ten seconds"},
+   {"t0": 80.1, "t1": 80.7, "kind": "through", "words": "she goes into the carrier through its side wall"},
+   {"t0": 86.1, "t1": 87.1, "kind": "sliver", "words": "she turns round by being flipped through a sliver"}
+  ]},
+  "ep9-v2": {"clean": true, "defects": []},
+  "ep8-v1": {"clean": false, "defects": [
+   {"t0": 26.5, "t1": 36.5, "kind": "through", "words": "the Queen comes out of her carrier cut by a vertical line in mid-air"},
+   {"t0": 37.0, "t1": 41.0, "kind": "untold", "words": "the velvet cushion: she is said to ignore it and never looks at it"},
+   {"t0": 58.0, "t1": 65.5, "kind": "idle", "words": "the red dot: nothing happens but the narration"},
+   {"t0": 97.5, "t1": 120.0, "kind": "wash", "words": "the whole screen changes colour like a filter"},
+   {"t0": 100.5, "t1": 103.5, "kind": "through", "words": "she is cut by the carrier going back in"}
+  ]},
+  "ep8-v2": {"clean": false, "defects": [
+   {"t0": 25.0, "t1": 30.0, "kind": "sliver", "words": "she lies squashed flat in the carrier before coming out"},
+   {"t0": 37.0, "t1": 41.0, "kind": "untold", "words": "the velvet cushion: she is said to ignore it and never looks at it"},
+   {"t0": 97.5, "t1": 120.0, "kind": "wash", "words": "the whole screen changes colour like a filter"},
+   {"t0": 100.5, "t1": 103.5, "kind": "sliver", "words": "going back in she shrinks in a strange awkward way"}
+  ]},
+  "ep8-v3": {"clean": true, "defects": []},
+  "ep10-v1": {"clean": false, "defects": [
+   {"t0": 16.5, "t1": 20.0, "kind": "untold", "words": "her dignity drops to nothing and nothing has happened to her"},
+   {"t0": 57.0, "t1": 62.5, "kind": "sliver", "words": "she spins and is squashed to a sliver"},
+   {"t0": 64.0, "t1": 72.0, "kind": "untold", "words": "the visitors are a dark doorway: nobody is seen"},
+   {"t0": 64.0, "t1": 65.5, "kind": "text", "words": "ding-dong in red on the red door"},
+   {"t0": 76.0, "t1": 84.0, "kind": "stray", "words": "the dog's lead is a red line across the room to nothing"},
+   {"t0": 89.0, "t1": 91.0, "kind": "untold", "words": "her dignity is back at 100% in one step"}
+  ]},
+  "ep10-v2": {"clean": true, "defects": []}
+ }
+}

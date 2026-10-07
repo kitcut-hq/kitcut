@@ -714,6 +714,10 @@ def _describe(name, inp, film):
             return "looking at the %s" % paint_words(film.caps)[1]
         if p.endswith("motion.png"):
             return "looking at the cuts"
+        if re.search(r"review/film-\d+\.jpg$", p):
+            return "looking at the whole film, a frame a second"
+        if re.search(r"review/strip-\d+\.jpg$", p):
+            return "looking at a moment closely"
         return "looking at the review sheet" if p.endswith("sheet.png") else "read %s" % p
     if name == "WebSearch":
         return "searching the web: %s" % str(inp.get("query", ""))[:120]
@@ -734,6 +738,8 @@ def _describe(name, inp, film):
         return "rendering the soundtrack"
     if tool == "motion":
         return "checking the cuts and the motion"
+    if tool == "strip":
+        return "rendering a close look at %d moment(s)" % len(inp.get("times") or [])
     if tool == "route":
         return "drawing the route on a real map"
     if tool == "map":

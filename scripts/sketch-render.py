@@ -330,6 +330,14 @@ def bundle(m, audio=True, preview=None):
             film = read_text(_sketch.rel(m, p)) + "\n;\n" + film
         for p in tail.get("scripts", []):  # a closing drawn after the film (it lengthens SK._film)
             film += "\n;\n" + read_text(_sketch.rel(m, p))
+        if m.get("_probe"):  # --probe: the kit's own sketch/probe.js, ahead of everything (it wraps
+            # the cast before the film takes its functions), never a copy in the film's folder
+            film = (
+                "window.__PROBE__ = %s;\n" % json.dumps({"step": float(m["_probe"])})
+                + read_text(os.path.join(SKETCH, "probe.js"))
+                + "\n;\n"
+                + film
+            )
     mp3 = preview["audio"] if preview else os.path.join(m["_audio"], "final.mp3")
     src = "data:audio/mpeg;base64," + b64(mp3) if audio and mp3 and os.path.exists(mp3) else ""
     extra = ""
@@ -957,6 +965,14 @@ def main():
         "--into", help="with --stills: the folder for them (relative to the manifest's)"
     )
     ap.add_argument(
+        "--probe",
+        type=float,
+        metavar="STEP",
+        help="with --stills: afterwards play the whole film once more every STEP seconds without "
+        "painting it, and save what each cast member drew, where and under what transform, as "
+        "report.json beside the stills (sketch/probe.js; studio/motion.py reads it)",
+    )
+    ap.add_argument(
         "--sheet",
         action="store_true",
         help="with --stills: also tile them into outputs/review/sheet.png",
@@ -1131,7 +1147,10 @@ def main():
             ) as f:
                 f.write(artifact_flavour(page))
             print("  %s (%.1f MB)" % (os.path.relpath(out_html, _env.ROOT), len(page) / 1e6))
+        if args.stills and args.probe:  # only the page the stills are drawn in, never the player
+            m["_probe"] = args.probe
         light = bundle(m, audio=False)  # the renderer needs no soundtrack inside the page
+        m.pop("_probe", None)
 
         if args.stills:
             with st("stills"):
