@@ -302,7 +302,7 @@
     const v = SK.view, c = SK.ctx(), mw = W * .84, k = tall ? 1.4 : wide ? 1.12 : 1.06, s = (n) => n * U * k;
     SK.alpha(a * .96, () => { c.fillStyle = K.white; c.fillRect(v.x0 - 40, v.y0 - 40, v.x1 - v.x0 + 80, v.y1 - v.y0 + 80); });
     const t0 = T.bring - .2, p = (i) => ent(t, t0 + i * (AG ? .15 : .2), .55), im = SK.IMG[FACTS.logo];
-    const lw = Math.min(W * .44, s(520)), lh = im ? Math.min(lw * im.height / im.width, s(AG ? 116 : 150)) : 0;
+    const lw = Math.min(W * .44, s(520)), lh = im ? Math.min(lw * im.height / im.width, s(AG && !tall ? 100 : AG ? 116 : 150)) : 0;
     // the agent: a photo beside the name, what they are and the number to call, set as one block about the centre;
     // in the tall frame the photo stands over them instead (the right edge there is under an app's buttons)
     const AGS = (() => {
@@ -313,7 +313,7 @@
       const rows = [[nsz * 1.16, AG.name, { ...ns, size: nsz, col: K.ink }], AG.role ? [rsz * 1.5, AG.role, { ...rs, size: rsz, col: K.soft }] : null].filter(Boolean);
       const th = rows.reduce((q, r) => q + r[0], 0) + (AG.phone ? psz * 2.1 : 0);
       const tw = Math.max(SK.measure(AG.name, { ...ns, size: nsz }), AG.role ? SK.measure(AG.role, { ...rs, size: rsz }) : 0, AG.phone ? SK.measure(AG.phone, { size: psz, font: FB, wt: 700 }) + 2 * psz * .8 : 0);
-      return { f, up, d, gap, room, rows, th, tw, psz, h: (up ? d + gap + th : Math.max(d, th)) + s(28) };
+      return { f, up, d, gap, room, rows, th, tw, psz, h: (up ? d + gap + th : Math.max(d, th)) + s(up ? 28 : 10) };
     })();
     const agentRow = (y, a) => {
       const { f, up, d, gap, room, rows, th, tw, psz } = AGS, side = f && !up, x0 = side ? -(d + gap + tw) / 2 : 0;
@@ -336,7 +336,7 @@
       !one && FACTS.street ? [s(48), (y, i) => text(FACTS.street, 0, y, mw, { size: s(42), font: FB, wt: FACTS.venue ? 400 : 600, col: FACTS.venue ? K.soft : K.ink, p: p(i) })] : null,
       !one && FACTS.cityZip ? [s(44), (y, i) => text(FACTS.cityZip, 0, y, mw, { size: s(38), font: FB, wt: 400, col: K.soft, p: p(i) })] : null,
       AG ? [AGS.h, (y, i) => agentRow(y + s(6), p(i))] : FACTS.contact ? [s(96), (y) => { const size = Math.min(s(40), fit(FACTS.contact, mw - s(80), { size: s(40), font: FB, wt: 700 })); pill(FACTS.contact, 0, y + s(14), { size, fill: K.blue, col: K.white, wt: 700, align: 'center', in: { t: t0 + 1.4, type: 'rise' } }); }] : null,
-    ], -H * .01, s(tall ? 40 : AG ? 24 : 30));
+    ], -H * (AG && !tall ? .035 : .01), s(tall ? 40 : AG ? 20 : 30)); // with the agent's block last, the stack sits a little higher: a player's bar and the captions take the frame's foot
   }
 
   const camera = SK.breath(SK.camera([[0, [0, 0, 1.02]], [T.day, [0, 0, 1]], [T.bring - .4, [0, 0, 1.01]], [30, [0, 0, 1.06], E.sine]]), { amp: 8, zoom: .015, period: 10 });
