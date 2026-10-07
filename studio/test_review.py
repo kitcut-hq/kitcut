@@ -416,6 +416,67 @@ def main():
         w,
     )
 
+    # ---- the fix, judged: what is kept of the film before it, and what changed besides
+    class Stub:  # a film's folder, as review.snapshot and review.restore use one
+        def __init__(self, d):
+            self.dir = d
+
+        def path(self, *parts):
+            return os.path.join(self.dir, *parts)
+
+    fd = os.path.join(HOME, "fixed-film")
+    os.makedirs(os.path.join(fd, "cast"))
+    for name, text in (
+        ("film.js", "v1"),
+        ("vo.json", "{}"),
+        ("sfx.json", "[]"),
+        ("cast/cat.js", "c1"),
+    ):
+        with open(os.path.join(fd, *name.split("/")), "w", encoding="utf-8") as f:
+            f.write(text)
+    stub = Stub(fd)
+    before = review.snapshot(stub)
+    for name, text in (
+        ("film.js", "v2"),
+        ("vo.json", '{"moved": 1}'),
+        ("cast/cat.js", "c2"),
+        ("cast/dog.js", "d"),
+    ):
+        with open(os.path.join(fd, *name.split("/")), "w", encoding="utf-8") as f:
+            f.write(text)
+    review.restore(stub, before, only=("vo.json",))
+    read = lambda n: open(os.path.join(fd, *n.split("/")), encoding="utf-8").read()  # noqa: E731, SIM115
+    expect(
+        "fix: the narration's words are put back on their own; the picture's change stays",
+        read("vo.json") == "{}" and read("film.js") == "v2" and review._dirs_differ(stub, before),
+    )
+    review.restore(stub, before)
+    expect(
+        "fix: a fix that broke something is thrown away whole, a new cast file with it",
+        read("film.js") == "v1"
+        and read("cast/cat.js") == "c1"
+        and not os.path.exists(os.path.join(fd, "cast", "dog.js"))
+        and not review._dirs_differ(stub, before),
+    )
+    a_dir, b_dir = os.path.join(HOME, "was"), os.path.join(HOME, "now")
+    os.makedirs(a_dir)
+    os.makedirs(b_dir)
+    for t in range(12):
+        for d2, moved in ((a_dir, False), (b_dir, t in (4, 9))):  # the fix at 4 s also changed 9 s
+            im = Image.new("RGB", (480, 270), "#f7f2e7")
+            ImageDraw.Draw(im).rectangle(
+                (40, 60, 240, 220) if not moved else (240, 60, 440, 220), fill="#c2592a"
+            )
+            im.save(os.path.join(d2, "%06.2f.png" % t))
+    moved = review.changed_frames(a_dir, b_dir, [(3.5, 4.5)])
+    expect(
+        "fix: a frame that changed away from every finding is found; one beside a finding is expected to",
+        [t for t, _, _ in moved] == [9.0],
+        [t for t, _, _ in moved],
+    )
+    sheet = review.pairs_sheet(moved, os.path.join(HOME, "fix-check.jpg"))
+    expect("fix: ... and shown as it was beside as it is", os.path.getsize(sheet) > 5000)
+
     print("\n%s" % ("ALL OK" if not bad else "FAILED: " + ", ".join(bad)))
     sys.exit(1 if bad else 0)
 
