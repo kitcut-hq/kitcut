@@ -79,6 +79,16 @@ generated on demand), so 58 terms is about 20 minutes whatever the pacing.
 `trend` answers for three terms a request, with monthly points for 365 days and
 daily points for 30.
 
+**There is no category total.** The tool's category calls were tried on
+2026-10-07 and are not worth wiring in: `/api/v3/ajax/shop/<id>/marketplace-insights/trending-categories`
+lists the 14 top-level categories (Paper & Party Supplies is taxonomy 1250), and
+`.../bespoke/shop/<id>/marketplace-insights/trending-search-terms-v2?taxonomy_id=<n>`
+answers with four trending terms and their searches, nothing more. Etsy's
+investor filings stop at the six largest top-level categories as one sum
+(about $8.9 billion, 85% of marketplace sales in 2025); a per-category share
+appears only on quarterly slides. Size a product from `data/families.csv`
+instead, and say that it is a floor.
+
 ## Reading the numbers
 
 - **searches** is Etsy's own count for the last 30 days, not an estimate.
