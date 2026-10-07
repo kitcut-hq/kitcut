@@ -2933,10 +2933,9 @@ from "it filled in the right thing".
 
 A lead who has seen a demo does not need the tool described again. They need to
 see what would be published and on which day, set against the dates they
-already live by: thirty days to go, the agenda going up, the week of the event.
-`make-proposal.py` prints that as a short landscape PDF -- a cover, what is
-already made, the calendar, the options, how it runs -- in our brand, with the
-lead's own colours marking only what is theirs on the calendar.
+already live by, and what it would bring them. `make-proposal.py` prints that as
+a short PDF in our brand, with the lead's own colours marking only what is
+theirs on the calendar.
 
 * a **shape** -- a template under `config/proposals/templates/` (`campaign`),
 * a **look** -- a brand under `config/proposals/brands/` (`kitcut`),
@@ -2945,29 +2944,62 @@ lead's own colours marking only what is theirs on the calendar.
 ```powershell
 python scripts/make-proposal.py --list
 python scripts/make-proposal.py --spec config/proposals/example/devdays.json --plan
+python scripts/make-proposal.py --spec projects/<id>/proposals/campaign.json --html-out projects/<id>/proposals/plan.html
 python scripts/make-proposal.py --spec projects/<id>/proposals/campaign.json --pdf --preview
 ```
 
-**The calendar is computed, not typed.** An item names a date, a `from`/`to`,
-or hangs off the event: `days_before`, `days_after`, `event: true`. The script
-puts it in its week, names its weekday and counts the days to `event.start`,
-so a countdown video cannot sit on the wrong day and a moved event moves the
-plan. A lane is a row: `kind: "client"` for their dates (drawn in
-`client.accent` / `client.ink`), the default for dated videos (`done: true`
-marks one already made), `kind: "bands"` for work that spans weeks.
+**Show the HTML first.** Without `--pdf` the script writes one HTML page, the
+sheets stacked with a gap between them; open it in a browser and let the owner
+look before anything is printed. The first proposal went straight to PDF and
+its calendar had to be thrown away.
 
-**`--plan` is the free mode.** It prints every item with its resolved date,
-weekday and days to go, and the problems a rendered page hides: an item before
-the first week shown, a video on a weekend, two videos of one lane on one day,
-more weeks than a page holds. It exits 1 on any of them, and `--pdf` refuses to
-print a calendar that has one.
+**Eight kinds of page, each optional, printed in the order the spec lists
+them:** `cover`, `ready` (what is already made), `audience` (their numbers),
+`loop` (the wheel: a video about someone, they post it, their audience sees the
+event), `options` (the sizes of the campaign), `channels` (place, shape, what
+goes there, impressions per video), `timeline`, `process`.
+
+**The calendar runs from top to bottom: a row for every date, a column for
+every plan.** `timeline.plans` are the columns, `timeline.posts` the videos,
+`timeline.marks` the lead's own dates. A post is `{"date": ...}` or hangs off
+the event (`days_before`, `days_after`), and `in` names the smallest plan that
+has it; every bigger plan has it too, because the plans are sizes of one
+campaign. The page shows a dot in each plan's column on the days that plan
+publishes, so "what do I get in B that A does not have" is answered by looking
+across a row. Empty dates are drawn on purpose: the gaps are what a rhythm
+looks like. A first version ran the weeks left to right with a row per plan,
+and nobody could read off it which plan to take.
+
+**That page is as tall as its rows.** Every other sheet is 13.333in x 7.5in;
+the calendar is the same width and one sheet long, because a calendar that
+reads downward should not be cut where a screen happens to end. Chromium takes
+a second page size through a named `@page`, and the script computes the height
+from the rows (`ROW` in the script, which the template reads back as CSS
+variables so the two cannot disagree).
+
+**`--plan` is the free mode.** Every post with its resolved date, weekday, days
+to go and plans, the number of posts each plan adds up to, and the problems a
+rendered page hides: a post outside the dates shown, a post on a weekend, two
+posts of one plan on one day, a plan with nothing on the calendar. It exits 1
+on any of them, and `--pdf` refuses to print a calendar that has one.
 
 **The spec owns every string**, so the language is the spec's. `lang` picks
 the plural rule for "days to go" (three forms for Ukrainian, Polish and the
 other Slavic languages, two otherwise) and `strings` carries the weekday names
 and the few labels the script writes itself.
 
-**The print is checked three ways.** One page per section: `.page` has a
+**Numbers on the `audience` and `channels` pages are read, not recalled.**
+Follower counts come off the public pages on the day (a plain `curl` with a
+browser user agent reads LinkedIn company pages and most profiles; Instagram
+gives its count only to a crawler user agent), and each per-video estimate
+names the published study it is a median from. The bars of `audience` are
+drawn to scale: when their page is a five-hundredth of their partners'
+audience, the sliver is the finding. Tickets and sponsors are not forecast --
+honest inputs give a small direct number that the first weekly report would
+contradict -- so the page says each video gets its own link and the numbers
+are checked weekly.
+
+**The print is checked three ways.** One sheet per section: `.page` has a
 minimum height, not a fixed one, so a section that does not fit becomes a
 second sheet and fails the count, where a fixed height would clip it and say
 nothing. Every page must carry its own title. And no face but the brand's may
@@ -2981,14 +3013,27 @@ subsets, so a proposal in Ukrainian needs the full `fonts/Inter-VF.ttf` and
 `fonts/Caveat-Cyrillic-VF.ttf` anyway.
 
 **Pictures are cropped to fill.** The cover has three slots (the first and
-third square, the second 16:9) and the cards of `ready` are square. A wide
-still in a square card loses its sides: pad it to a square in the film's own
-background colour first.
+third square, the second 16:9), the cards of `ready` are square and the
+examples of `loop` are 16:9. A wide still in a square card loses its sides:
+pad it to a square in the film's own background colour first. Do not let one
+person be the face of every still.
 
-**A lead's spec is not tooling.** Names, prices and the lead's stills stay in
+**A multi-day date is a band, not a bar.** A mark with `to` says its name and
+range on the first day and tints its days in that column. Short stubs of a bar
+under the tag, tried first, were read as a rendering fault.
+
+**No prices by default.** An option card prints `price` only if the spec gives
+one; the owner took prices out of the first proposal.
+
+**A lead's spec is not tooling.** Names and the lead's stills stay in
 `projects/<id>/proposals/`, which git ignores for new projects; the committed
 example is a made-up conference. With `"project": "<id>"` in the spec the PDF
 is recorded in that project's `project.json` like any other deliverable.
+
+**Example films for a proposal** are free-form films with the facts on top:
+`ops.sh film "<prompt>" --seconds 35 --unlisted --attach photo.png --attach
+logo.png` uploads the pictures first, and they reach the film as `upload1..N`
+in the order given, so the prompt names them by number.
 
 ## A KitCut film as an insert: `kitcut-clean.py`
 

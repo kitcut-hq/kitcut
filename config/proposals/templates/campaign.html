@@ -1,35 +1,42 @@
 <!doctype html>
 <!--
-  campaign -- a proposal for a lead, as a short landscape deck: what is already
-  made, the calendar up to their event, the options, how it runs.
+  campaign -- a proposal for a lead: what is already made, the sizes of the
+  campaign, the calendar up to their event, how it runs.
 
-  Five sections, each one page, each optional: cover, ready, timeline, options,
-  process. A spec that leaves one out gets a shorter proposal; make-proposal.py
-  asserts one page per section, so a section that overflows fails the print
-  instead of quietly becoming two pages.
+  Five kinds of page -- cover, ready, options, timeline, process -- each
+  optional, printed in the order the spec lists them. make-proposal.py asserts
+  one sheet per section, so a section that overflows fails the print instead
+  of quietly becoming two.
 
-  The page is 13.333in x 7.5in (16:9, 1280 x 720 CSS px): a proposal is read on
-  a screen, and a wide page is what holds a calendar of seven or eight weeks.
-  No type is smaller than 12 px, which is 9 pt on this page.
+  A sheet is 13.333in x 7.5in (16:9, 1280 x 720 CSS px): a proposal is read on
+  a screen. The calendar is the exception: it is one sheet of the same width
+  and as tall as its rows, because a calendar that runs from top to bottom
+  should not be cut where a screen happens to end. No type is under 12 px.
+
+  The calendar is a comparison table: a row for every date, the empty ones
+  too, and a column for every plan with a dot where that plan publishes. The
+  recommended plan's column is tinted all the way down.
 
   Colours: the brand's (ours) carry the document; `client.accent` and
   `client.ink` mark only what is THEIRS on the calendar -- their dates, their
-  event days -- so the two calendars read apart at a glance.
+  event days.
 
   Pictures: cover.images fill three slots (1 and 3 square, 2 is 16:9);
   ready.items pictures are shown square. All are cropped to fill, so give
   pictures of the right shape rather than trusting the crop.
 
-  The timeline's weeks, cells, dates and days-to-go are computed by the script.
-  This file only lays them out.
+  Opened in a browser the sheets are stacked with a gap between them, which is
+  how a proposal is looked at before it is printed.
 -->
 <html lang="{{lang}}">
 <head>
 <meta charset="utf-8">
 <title>{{doc_title}}</title>
-{{#brand.font_css}}<link rel="stylesheet" href="{{{brand.font_css}}}">{{/brand.font_css}}
 <style>
   @page { size: 13.333in 7.5in; margin: 0; }
+  {{#timeline}}
+  @page tall { size: {{page_w_in}}in {{page_h_in}}in; margin: 0; }
+  {{/timeline}}
   {{#brand.font_body_file_url}}
   @font-face { font-family: "BrandBody"; src: url("{{{brand.font_body_file_url}}}"); font-weight: 100 900; }
   {{/brand.font_body_file_url}}
@@ -80,6 +87,10 @@
     display: flex; flex-direction: column;
   }
   .page:last-child { break-after: auto; }
+  @media screen {
+    body { background: #cfc9bf; padding: 28px 0; }
+    .page { margin: 0 auto 28px; box-shadow: 0 6px 30px rgba(29, 26, 23, 0.22); }
+  }
 
   /* running head: our mark on the left, whose plan and which page on the right */
   .head { display: flex; align-items: center; justify-content: space-between; height: 34px; flex: none; }
@@ -89,7 +100,7 @@
   .where { font-size: 13px; color: var(--ink3); letter-spacing: 0.2px; }
 
   h1 { font-size: 38px; line-height: 1.1; font-weight: 800; letter-spacing: -0.9px; margin: 22px 0 0; }
-  .lead { font-size: 18px; line-height: 1.45; color: var(--ink2); margin: 10px 0 0; max-width: 980px; }
+  .lead { font-size: 18px; line-height: 1.45; color: var(--ink2); margin: 10px 0 0; max-width: 1040px; }
 
   /* ---------------------------------------------------------------- cover */
   .cover { padding: 46px 64px 44px; flex-direction: row; height: 720px; overflow: hidden; }
@@ -107,8 +118,6 @@
   .shot.n1 { width: 330px; height: 330px; right: 6px; top: 6px; transform: rotate(3deg); }
   .shot.n2 { width: 420px; height: 236px; left: 14px; top: 250px; transform: rotate(-4deg); }
   .shot.n3 { width: 290px; height: 290px; right: 22px; bottom: 0; transform: rotate(-2deg); }
-  .tape { position: absolute; left: 60px; top: 150px; font-family: var(--display); font-weight: 700;
-          font-size: 34px; color: var(--accent2); transform: rotate(-6deg); line-height: 1; }
 
   /* ---------------------------------------------------------------- ready */
   .cards { display: flex; gap: 26px; margin-top: 24px; }
@@ -125,73 +134,175 @@
   .card p { font-size: 14.5px; line-height: 1.45; color: var(--ink2); margin: 6px 0 0; }
   .card .link { display: inline-block; margin-top: 10px; font-size: 14.5px; font-weight: 600; color: var(--accent2); }
 
-  /* ------------------------------------------------------------- timeline */
-  .tl-page h1 { font-size: 34px; margin-top: 16px; }
-  .tl-page .lead { font-size: 16px; margin-top: 6px; }
-  .tl { margin-top: 16px; display: grid; grid-template-columns: 132px repeat({{timeline.ncols}}, minmax(0, 1fr));
-        background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
-  .tl > div { border-top: 1px solid var(--line); border-left: 1px solid var(--line); min-width: 0; }
-  .tl > .c0 { border-left: 0; }
-  .tl > .r0 { border-top: 0; }
-  .wk { padding: 9px 8px 8px; text-align: center; background: var(--side); }
-  .wk b { display: block; font-size: 14px; font-weight: 700; letter-spacing: -0.1px; }
-  .wk span { display: block; font-size: 12px; color: var(--ink3); margin-top: 2px; }
-  .wk.ev { background: var(--c-ink); }
-  .wk.ev b { color: #fff; }
-  .wk.ev span { color: var(--c-accent); font-weight: 600; }
-  .lane { padding: 10px 10px 10px 14px; display: flex; flex-direction: column; justify-content: center; }
-  .lane b { font-size: 14.5px; font-weight: 800; line-height: 1.2; letter-spacing: -0.2px; }
-  .lane span { font-size: 12px; color: var(--ink3); margin-top: 3px; line-height: 1.3; }
-  .cell { padding: 7px 6px; display: flex; flex-direction: column; gap: 6px; }
-  .cell.ev { background: color-mix(in srgb, var(--c-accent) 16%, #fff); }
-  .chip { border-radius: 9px; padding: 6px 8px 7px; border: 1px solid var(--line2); border-left: 4px solid var(--accent);
-          background: #fff; }
-  .chip i { display: block; font-style: normal; font-size: 12px; font-weight: 700; color: var(--ink3); line-height: 1.2; }
-  .chip span { display: block; font-size: 13px; font-weight: 600; line-height: 1.25; margin-top: 2px; letter-spacing: -0.1px; }
-  .chip.done { border-left-color: var(--good); background: var(--good-soft); border-color: transparent; border-left: 4px solid var(--good); }
-  .chip.done i { color: var(--good); }
-  .lane-client .chip { background: var(--c-accent); border: 0; padding: 6px 8px 7px; }
-  .lane-client .chip i { color: var(--c-ink); opacity: 0.72; }
-  .lane-client .chip span { color: var(--c-ink); font-weight: 700; }
-  .lane-client .chip.main { background: var(--c-ink); }
-  .lane-client .chip.main i { color: var(--c-accent); opacity: 1; }
-  .lane-client .chip.main span { color: #fff; }
-  .bands { grid-column: 2 / -1; display: grid; grid-template-columns: repeat({{timeline.ncols}}, minmax(0, 1fr));
-           grid-auto-flow: row dense; row-gap: 6px; padding: 8px 0; align-items: start; align-content: center; }
-  .band { margin: 0 6px; border-radius: 9px; padding: 6px 10px 7px; background: var(--accent-soft);
-          font-size: 13px; font-weight: 600; line-height: 1.25; color: var(--ink); letter-spacing: -0.1px; }
-  .band i { font-style: normal; font-weight: 700; color: var(--accent2); font-size: 12px; margin-right: 6px; }
-  .tl-note { margin-top: 12px; font-size: 13.5px; line-height: 1.45; color: var(--ink2); display: flex; gap: 22px; flex-wrap: wrap; }
-  .key { display: inline-flex; align-items: center; gap: 7px; }
-  .key u { width: 14px; height: 14px; border-radius: 4px; display: inline-block; text-decoration: none; }
-  .key .k-done { background: var(--good-soft); border-left: 4px solid var(--good); }
-  .key .k-client { background: var(--c-accent); }
-  .key .k-plan { background: #fff; border: 1px solid var(--line2); border-left: 4px solid var(--accent); }
+  /* ----------------------------------------------------------------- loop */
+  .loop { display: flex; gap: 30px; margin-top: 18px; flex: 1; min-height: 0; align-items: stretch; }
+  .wheel { flex: none; width: 600px; height: 452px; position: relative; }
+  .wheel svg { position: absolute; left: 180px; top: 106px; width: 240px; height: 240px; overflow: visible; }
+  .wheel .hub { position: absolute; left: 230px; top: 196px; width: 140px; height: 60px; display: flex; align-items: center;
+         justify-content: center; text-align: center; font-family: var(--display); font-weight: 700; font-size: 26px;
+         line-height: 1; color: var(--accent2); }
+  .wheel .st { position: absolute; width: 230px; }
+  .wheel .st u { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%;
+         background: var(--accent); color: var(--accent-ink); font-size: 17px; font-weight: 800; text-decoration: none;
+         position: absolute; }
+  .wheel .st b { display: block; font-size: 16.5px; font-weight: 800; line-height: 1.25; letter-spacing: -0.2px; }
+  .wheel .st span { display: block; font-size: 13.5px; line-height: 1.4; color: var(--ink2); margin-top: 4px; }
+  /* the discs sit on the ring at 12, 3, 6 and 9 o'clock; each label hangs off its disc */
+  .wheel .s1 { left: 185px; top: 0; text-align: center; }
+  .wheel .s1 u { left: 96px; top: 107px; }
+  .wheel .s2 { left: 448px; top: 176px; width: 152px; }
+  .wheel .s2 u { left: -67px; top: 31px; }
+  .wheel .s3 { left: 185px; top: 352px; text-align: center; }
+  .wheel .s3 u { left: 96px; top: -45px; }
+  .wheel .s4 { left: 0; top: 176px; width: 152px; text-align: right; }
+  .wheel .s4 u { right: -67px; top: 31px; }
+  .loop .ex { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .loop .ex .cards { margin-top: 12px; gap: 20px; }
+  .loop .ex .card .pic { height: auto; aspect-ratio: 16 / 9; }
+  .loop .ex .card h3 { font-size: 17px; }
+  .loop .ex .card p { font-size: 13.5px; }
+  .loop .ex .card .body { padding: 14px 16px 16px; }
+
+  /* ------------------------------------------------------------- audience */
+  .aud { display: flex; gap: 26px; margin-top: 22px; flex: 1; min-height: 0; }
+  .aud .col { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px 26px 20px;
+         display: flex; flex-direction: column; }
+  .aud .col.wide { flex: 1.25; }
+  .aud .col.narrow { flex: 1; }
+  .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--ink3); }
+  .eyebrow small { display: block; text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 13px; margin-top: 3px; }
+  /* one series, one hue: the label and the number carry identity, in ink */
+  .bar { margin-top: 18px; }
+  .bar .top { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+  .bar .top b { font-size: 16px; font-weight: 700; letter-spacing: -0.2px; }
+  .bar .top i { font-style: normal; font-size: 30px; font-weight: 800; letter-spacing: -1px; line-height: 1; flex: none; }
+  .bar .track { height: 12px; margin-top: 8px; background: var(--side); border-radius: 4px; }
+  .bar .track u { display: block; height: 12px; border-radius: 4px; background: var(--accent); }
+  .bar .note { font-size: 12.5px; line-height: 1.45; color: var(--ink3); margin-top: 7px; }
+  .bar.small .top i { font-size: 22px; letter-spacing: -0.5px; }
+  .bar.small .track, .bar.small .track u { height: 10px; }
+  .take { margin-top: auto; padding-top: 16px; }
+  .take b { display: block; font-family: var(--display); font-weight: 700; font-size: 34px; line-height: 1.05; color: var(--accent2); }
+  .take span { display: block; font-size: 15.5px; line-height: 1.45; margin-top: 8px; }
+  .src { font-size: 12px; line-height: 1.4; color: var(--ink3); margin-top: 12px; }
+
+  /* ------------------------------------------------------------- channels */
+  .chan { margin-top: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+  .chan .r { display: grid; grid-template-columns: 270px 135px minmax(0, 1fr) 310px; border-top: 1px solid var(--line); }
+  .chan .r > div { padding: 7px 14px; font-size: 14.5px; line-height: 1.35; display: flex; flex-direction: column; justify-content: center; }
+  .chan .r.h { border-top: 0; background: var(--side); }
+  .chan .r.h > div { font-size: 12.5px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--ink3); }
+  .chan .nm b { font-size: 15px; font-weight: 700; letter-spacing: -0.15px; }
+  .chan .nm span { font-size: 12.5px; color: var(--ink3); margin-top: 1px; }
+  .chan .fm { font-weight: 600; }
+  .chan .es b { font-size: 19px; font-weight: 800; letter-spacing: -0.4px; line-height: 1.1; }
+  .chan .es span { font-size: 12px; color: var(--ink3); margin-top: 2px; line-height: 1.3; }
+  .tots { display: flex; gap: 16px; margin-top: 12px; align-items: stretch; }
+  .tots .lbl { flex: none; width: 170px; font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+         color: var(--ink3); display: flex; align-items: center; line-height: 1.4; }
+  .tot { flex: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 18px;
+         display: flex; align-items: center; gap: 14px; }
+  .tot.rec { border: 3px solid var(--accent); background: var(--accent-soft); padding: 10px 16px; }
+  .tot b { font-size: 28px; font-weight: 800; letter-spacing: -1px; line-height: 1; flex: none; }
+  .tot span { font-size: 13px; line-height: 1.35; color: var(--ink2); }
+  .tot span i { font-style: normal; font-weight: 800; color: var(--ink); margin-right: 5px; }
+  .chan-note { font-size: 13px; line-height: 1.45; color: var(--ink2); margin-top: 10px; }
 
   /* -------------------------------------------------------------- options */
-  .opts { display: flex; gap: 24px; margin-top: 26px; flex: 1; min-height: 0; }
-  .opt { flex: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 24px 26px 24px;
+  .opts { display: flex; gap: 24px; margin-top: 26px; }
+  .opt { flex: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 26px 28px 22px;
          display: flex; flex-direction: column; position: relative; }
-  .opt.rec { border: 3px solid var(--accent); padding: 22px 24px 22px; }
+  .opt.rec { border: 3px solid var(--accent); padding: 24px 26px 20px; }
   .opt .flag { position: absolute; right: 18px; top: -4px; background: var(--accent); color: var(--accent-ink);
          font-family: var(--display); font-weight: 700; font-size: 25px; line-height: 1; padding: 9px 16px 11px;
          border-radius: 0 0 12px 12px; }
   .opt h3 { font-size: 22px; font-weight: 800; margin: 0; letter-spacing: -0.4px; }
   .opt .tag { font-size: 14px; color: var(--ink3); margin-top: 4px; min-height: 20px; }
-  .opt .big { font-size: 46px; font-weight: 800; letter-spacing: -1.6px; line-height: 1; margin-top: 18px; }
+  .opt .big { font-size: 46px; font-weight: 800; letter-spacing: -1.6px; line-height: 1; margin-top: 14px; }
   .opt .cad { font-size: 15px; color: var(--ink2); margin-top: 6px; }
   .opt ul { list-style: none; margin: 18px 0 0; padding: 16px 0 0; border-top: 1px solid var(--line); flex: 1; }
-  .opt li { font-size: 15px; line-height: 1.4; padding: 0 0 9px 22px; position: relative; }
-  .opt li::before { content: ""; position: absolute; left: 2px; top: 7px; width: 8px; height: 8px; border-radius: 50%;
+  .opt li { font-size: 15.5px; line-height: 1.4; padding: 0 0 8px 22px; position: relative; }
+  .opt li::before { content: ""; position: absolute; left: 2px; top: 8px; width: 8px; height: 8px; border-radius: 50%;
          background: var(--accent); }
   .opt .price { font-size: 28px; font-weight: 800; letter-spacing: -0.8px; margin-top: 8px; }
   .opt .price small { display: block; font-size: 13px; font-weight: 500; color: var(--ink3); letter-spacing: 0; margin-top: 3px; }
+  .advice { margin-top: 18px; background: var(--accent-soft); border-radius: 18px; padding: 14px 24px;
+         display: flex; align-items: center; gap: 20px; }
+  .advice b { font-family: var(--display); font-weight: 700; font-size: 30px; line-height: 1; color: var(--accent2); flex: none; }
+  .advice span { font-size: 16px; line-height: 1.42; font-weight: 500; }
+
+  /* ------------------------------------------------------------- timeline */
+  .tl-page { page: tall; }
+  .cal { margin-top: 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; overflow: clip;
+         --cols: 104px 250px minmax(0, 1fr) repeat({{timeline.nplans}}, 124px); }
+  .cal-head, .wk, .dy { display: grid; grid-template-columns: var(--cols); }
+  .cal-head { background: var(--panel); border-bottom: 2px solid var(--ink); position: sticky; top: 0; z-index: 3; }
+  .cal-head > div { padding: 14px 12px 12px; font-size: 13px; font-weight: 700; color: var(--ink3);
+         text-transform: uppercase; letter-spacing: 0.8px; display: flex; align-items: flex-end; }
+  .cal-head > div { padding-left: 0; }
+  .cal-head > div:first-child { padding-left: 14px; }
+  .cal-head > div:nth-child(2) { padding-left: 8px; }
+  .cal-head .pl { flex-direction: column; align-items: center; text-align: center; text-transform: none; letter-spacing: 0;
+         color: var(--ink); padding: 16px 6px 12px; border-left: 1px solid var(--line); }
+  .cal-head .pl b { font-size: 26px; font-weight: 800; line-height: 1; letter-spacing: -0.5px; }
+  .cal-head .pl span { font-size: 13px; font-weight: 700; margin-top: 4px; }
+  .cal-head .pl i { font-style: normal; font-size: 12px; font-weight: 500; color: var(--ink3); margin-top: 2px; }
+  .cal-head .pl em { font-style: normal; font-family: var(--display); font-weight: 700; font-size: 19px; line-height: 1;
+         color: var(--accent2); margin-top: 4px; }
+  .pl.rec, .p-cell.rec { background: var(--accent-soft); }
+
+  .wk { min-height: var(--h-week); background: var(--side); border-top: 1px solid var(--line2); align-items: center; }
+  .wk .w-label { grid-column: 1 / 4; padding: 0 12px 0 14px; font-size: 14px; font-weight: 800; letter-spacing: -0.1px; }
+  .wk .w-label span { font-weight: 500; color: var(--ink3); margin-left: 10px; }
+  .wk .w-pl { align-self: stretch; border-left: 1px solid var(--line2); }
+  .wk .w-pl.rec { background: color-mix(in srgb, var(--accent-soft) 70%, var(--side)); }
+  .wk.ev { background: var(--c-ink); }
+  .wk.ev .w-label { color: #fff; }
+  .wk.ev .w-label span { color: var(--c-accent); font-weight: 700; }
+  .wk.ev .w-pl { background: transparent; border-left-color: transparent; }
+
+  .dy { min-height: var(--h-day); border-top: 1px solid var(--line); }
+  .dy .d-date { padding: 0 8px 0 14px; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; }
+  .dy .d-date i { font-style: normal; font-weight: 500; color: var(--ink3); width: 32px; flex: none; }
+  .dy .d-mark { padding: 4px 8px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  /* a date of theirs that lasts several days tints its days in this column:
+     one band from the tag down. Stubs of a bar under the tag, tried first,
+     read as a rendering fault. */
+  .dy .d-mark.span { background: color-mix(in srgb, var(--c-accent) 26%, #fff); }
+  .dy .d-posts { grid-column: 3 / -1; display: flex; flex-direction: column; }
+  .line { display: grid; grid-template-columns: minmax(0, 1fr) repeat({{timeline.nplans}}, 124px); flex: 1; }
+  .dy.has .line { min-height: var(--h-post); }
+  .line + .line { border-top: 1px dashed var(--line); }
+  .p-title { display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 0; font-size: 15.5px; font-weight: 600;
+         line-height: 1.3; letter-spacing: -0.15px; }
+  .p-title em { font-style: normal; flex: none; font-size: 12px; font-weight: 700; color: var(--good);
+         background: var(--good-soft); border-radius: 999px; padding: 3px 9px 4px; letter-spacing: 0; }
+  .p-cell { display: flex; align-items: center; justify-content: center; border-left: 1px solid var(--line); }
+  .p-cell u { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); display: block; text-decoration: none; }
+  .dy.we { background: color-mix(in srgb, var(--side) 55%, #fff); }
+  .dy.we .d-date { color: var(--ink3); font-weight: 500; }
+  .tag-m { display: inline-block; background: var(--c-accent); color: var(--c-ink); font-size: 13px; font-weight: 700;
+         line-height: 1.25; border-radius: 8px; padding: 4px 9px 5px; }
+  .tag-m small { font-size: 12px; font-weight: 600; opacity: 0.75; margin-left: 6px; }
+  .tag-m.main { background: var(--c-ink); color: #fff; }
+  .dy.ev { background: color-mix(in srgb, var(--c-accent) 20%, #fff); }
+  .dy.ev .d-date { color: var(--c-ink); }
+  /* the plan columns keep their own colours through the event rows: their
+     accent beside the recommended column's tint read as a hole in the row */
+  .dy.ev .p-cell { background: var(--panel); }
+  .dy.ev .p-cell.rec { background: var(--accent-soft); }
+  .cal-note { margin-top: 14px; font-size: 14px; line-height: 1.45; color: var(--ink2); display: flex; gap: 24px; flex-wrap: wrap; align-items: center; }
+  .key { display: inline-flex; align-items: center; gap: 8px; }
+  .key u { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); display: inline-block; text-decoration: none; }
+  .key .k-client { border-radius: 4px; background: var(--c-accent); }
+  .key .k-done { border-radius: 999px; width: auto; height: auto; background: var(--good-soft); color: var(--good);
+         font-size: 12px; font-weight: 700; padding: 2px 8px 3px; }
 
   /* -------------------------------------------------------------- process */
   .blocks { display: flex; gap: 22px; margin-top: 24px; flex: 1; margin-bottom: 24px; }
   .block { flex: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 24px 26px 16px; }
   .block h3 { font-size: 21px; font-weight: 800; margin: 0 0 16px; letter-spacing: -0.4px; }
-  .step { display: flex; gap: 14px; padding-bottom: 16px; font-size: 17px; line-height: 1.42; }
+  .step { display: flex; gap: 14px; padding-bottom: 14px; font-size: 17px; line-height: 1.42; }
   .step u { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent2);
          font-weight: 800; font-size: 13px; text-decoration: none; display: flex; align-items: center; justify-content: center; }
   .next { margin-top: auto; background: var(--ink); color: #fff; border-radius: 20px; padding: 22px 28px;
@@ -203,8 +314,9 @@
 </style>
 </head>
 <body>
+{{#pages}}
 
-{{#cover}}
+{{#is_cover}}{{#cover}}
 <section class="page cover">
   <div class="left">
     <div class="mark"><img src="{{{brand.logo_url}}}" alt=""><b>{{brand.name}}</b></div>
@@ -219,9 +331,9 @@
     {{#images}}<img class="shot n{{n}}" src="{{{url}}}" alt="">{{/images}}
   </div>
 </section>
-{{/cover}}
+{{/cover}}{{/is_cover}}
 
-{{#ready}}
+{{#is_ready}}{{#ready}}
 <section class="page">
   <div class="head">
     <div class="mark"><img src="{{{brand.logo_url}}}" alt=""><b>{{brand.name}}</b></div>
@@ -242,39 +354,120 @@
     {{/items}}
   </div>
 </section>
-{{/ready}}
+{{/ready}}{{/is_ready}}
 
-{{#timeline}}
-<section class="page tl-page">
+{{#is_loop}}{{#loop}}
+<section class="page">
   <div class="head">
     <div class="mark"><img src="{{{brand.logo_url}}}" alt=""><b>{{brand.name}}</b></div>
     <div class="where">{{client.name}} &nbsp;·&nbsp; {{page_no}} / {{page_total}}</div>
   </div>
   <h1>{{title}}</h1>
   <p class="lead">{{lead}}</p>
-  <div class="tl">
-    <div class="c0 r0"></div>
-    {{#weeks}}<div class="wk r0{{#is_event}} ev{{/is_event}}"><b>{{label}}</b><span>{{sub}}</span></div>{{/weeks}}
-    {{#lanes}}
-    <div class="lane c0"><b>{{label}}</b><span>{{tag}}</span></div>
-    {{#is_cells}}
-    {{#cells}}<div class="cell lane-{{kind}}{{#is_event}} ev{{/is_event}}">{{#items}}<div class="chip{{#done}} done{{/done}}{{#is_event_item}} main{{/is_event_item}}"><i>{{dlabel}}</i><span>{{label}}</span></div>{{/items}}</div>{{/cells}}
-    {{/is_cells}}
-    {{#is_bands}}
-    <div class="bands">{{#bands}}<div class="band" style="grid-column: {{col}} / span {{span}}"><i>{{dlabel}}</i>{{label}}</div>{{/bands}}</div>
-    {{/is_bands}}
-    {{/lanes}}
-  </div>
-  <div class="tl-note">
-    <span class="key"><u class="k-client"></u>{{key_client}}</span>
-    <span class="key"><u class="k-plan"></u>{{key_plan}}</span>
-    <span class="key"><u class="k-done"></u>{{key_done}}</span>
-    <span>{{note}}</span>
+  <div class="loop">
+    <div class="wheel">
+      <!-- a ring of four arcs, each ending in an arrowhead just short of the next disc -->
+      <svg viewBox="-120 -120 240 240" aria-hidden="true">
+        <g fill="none" stroke="var(--accent)" stroke-width="5" stroke-linecap="round">
+          <path d="M 36.2 -93.2 A 100 100 0 0 1 93.2 -36.2"/>
+          <path d="M 93.2 36.2 A 100 100 0 0 1 36.2 93.2"/>
+          <path d="M -36.2 93.2 A 100 100 0 0 1 -93.2 36.2"/>
+          <path d="M -93.2 -36.2 A 100 100 0 0 1 -36.2 -93.2"/>
+        </g>
+        <g fill="var(--accent)">
+          <path d="M 0 -10 L 16 0 L 0 10 Z" transform="translate(93.2 -36.2) rotate(68.8)"/>
+          <path d="M 0 -10 L 16 0 L 0 10 Z" transform="translate(36.2 93.2) rotate(158.8)"/>
+          <path d="M 0 -10 L 16 0 L 0 10 Z" transform="translate(-93.2 36.2) rotate(248.8)"/>
+          <path d="M 0 -10 L 16 0 L 0 10 Z" transform="translate(-36.2 -93.2) rotate(338.8)"/>
+        </g>
+      </svg>
+      <div class="hub">{{hub}}</div>
+      {{#steps}}<div class="st s{{n}}"><u>{{n}}</u><b>{{name}}</b><span>{{note}}</span></div>{{/steps}}
+    </div>
+    <div class="ex">
+      <div class="eyebrow">{{examples_label}}<small>{{examples_lead}}</small></div>
+      <div class="cards">
+        {{#examples}}
+        <a class="card" href="{{{url}}}">
+          <span class="pic">{{#has_image}}<img src="{{{image_url}}}" alt="">{{/has_image}}<span class="play"></span></span>
+          <span class="body">
+            <h3>{{name}}</h3>
+            <p>{{note}}</p>
+            <span class="link">{{url_text}} &rarr;</span>
+          </span>
+        </a>
+        {{/examples}}
+      </div>
+    </div>
   </div>
 </section>
-{{/timeline}}
+{{/loop}}{{/is_loop}}
 
-{{#options}}
+{{#is_audience}}{{#audience}}
+<section class="page">
+  <div class="head">
+    <div class="mark"><img src="{{{brand.logo_url}}}" alt=""><b>{{brand.name}}</b></div>
+    <div class="where">{{client.name}} &nbsp;·&nbsp; {{page_no}} / {{page_total}}</div>
+  </div>
+  <h1>{{title}}</h1>
+  <p class="lead">{{lead}}</p>
+  <div class="aud">
+    <div class="col wide">
+      <div class="eyebrow">{{bars_label}}</div>
+      {{#bars}}
+      <div class="bar">
+        <div class="top"><b>{{label}}</b><i>{{text}}</i></div>
+        <div class="track"><u style="width: {{pct}}%"></u></div>
+        <div class="note">{{note}}</div>
+      </div>
+      {{/bars}}
+    </div>
+    <div class="col narrow">
+      <div class="eyebrow">{{proof_label}}<small>{{proof_lead}}</small></div>
+      {{#proof}}
+      <div class="bar small">
+        <div class="top"><b>{{label}}</b><i>{{text}}</i></div>
+        <div class="track"><u style="width: {{pct}}%"></u></div>
+        <div class="note">{{note}}</div>
+      </div>
+      {{/proof}}
+      <div class="take"><b>{{takeaway}}</b><span>{{takeaway_note}}</span></div>
+    </div>
+  </div>
+  <div class="src">{{sources}}</div>
+</section>
+{{/audience}}{{/is_audience}}
+
+{{#is_channels}}{{#channels}}
+<section class="page">
+  <div class="head">
+    <div class="mark"><img src="{{{brand.logo_url}}}" alt=""><b>{{brand.name}}</b></div>
+    <div class="where">{{client.name}} &nbsp;·&nbsp; {{page_no}} / {{page_total}}</div>
+  </div>
+  <h1>{{title}}</h1>
+  <p class="lead">{{lead}}</p>
+  <div class="chan">
+    <div class="r h"><div>{{head_name}}</div><div>{{head_format}}</div><div>{{head_what}}</div><div>{{head_est}}</div></div>
+    {{#rows}}
+    <div class="r">
+      <div class="nm"><b>{{name}}</b><span>{{size}}</span></div>
+      <div class="fm">{{format}}</div>
+      <div>{{what}}</div>
+      <div class="es"><b>{{est}}</b><span>{{src}}</span></div>
+    </div>
+    {{/rows}}
+  </div>
+  {{#has_totals}}
+  <div class="tots">
+    <div class="lbl">{{totals_label}}</div>
+    {{#totals}}<div class="tot{{#recommended}} rec{{/recommended}}"><b>{{value}}</b><span><i>{{name}}</i>{{note}}</span></div>{{/totals}}
+  </div>
+  {{/has_totals}}
+  <div class="chan-note">{{note}}</div>
+</section>
+{{/channels}}{{/is_channels}}
+
+{{#is_options}}{{#options}}
 <section class="page">
   <div class="head">
     <div class="mark"><img src="{{{brand.logo_url}}}" alt=""><b>{{brand.name}}</b></div>
@@ -291,14 +484,56 @@
       <div class="big">{{count}}</div>
       <div class="cad">{{cadence}}</div>
       <ul>{{#points}}<li>{{t}}</li>{{/points}}</ul>
-      <div class="price">{{price}}<small>{{price_note}}</small></div>
+      {{#price}}<div class="price">{{price}}<small>{{price_note}}</small></div>{{/price}}
     </div>
     {{/items}}
   </div>
+  {{#advice}}<div class="advice"><b>{{advice_label}}</b><span>{{advice}}</span></div>{{/advice}}
 </section>
-{{/options}}
+{{/options}}{{/is_options}}
 
-{{#process}}
+{{#is_timeline}}{{#timeline}}
+<section class="page tl-page" style="min-height: {{page_h}}px; --h-week: {{h_week}}px; --h-day: {{h_day}}px; --h-post: {{h_post}}px">
+  <div class="head">
+    <div class="mark"><img src="{{{brand.logo_url}}}" alt=""><b>{{brand.name}}</b></div>
+    <div class="where">{{client.name}} &nbsp;·&nbsp; {{page_no}} / {{page_total}}</div>
+  </div>
+  <h1>{{title}}</h1>
+  <p class="lead">{{lead}}</p>
+  <div class="cal">
+    <div class="cal-head">
+      <div>{{head_date}}</div>
+      <div>{{head_mark}}</div>
+      <div>{{head_post}}</div>
+      {{#plans}}<div class="pl{{#recommended}} rec{{/recommended}}"><b>{{letter}}</b><span>{{name}}</span><i>{{count}}</i>{{#recommended}}<em>{{flag}}</em>{{/recommended}}</div>{{/plans}}
+    </div>
+    {{#weeks}}
+    <div class="wk{{#is_event}} ev{{/is_event}}">
+      <div class="w-label">{{label}}<span>{{sub}}</span></div>
+      {{#blank}}<div class="w-pl{{#rec}} rec{{/rec}}"></div>{{/blank}}
+    </div>
+    {{#days}}
+    <div class="dy{{#weekend}} we{{/weekend}}{{#is_event}} ev{{/is_event}}{{#has_posts}} has{{/has_posts}}">
+      <div class="d-date"><i>{{wd}}</i>{{dm}}</div>
+      <div class="d-mark{{#mark_span}} span{{/mark_span}}">{{#marks}}<span class="tag-m{{#main}} main{{/main}}">{{label}}{{#range}}<small>{{range}}</small>{{/range}}</span>{{/marks}}</div>
+      <div class="d-posts">
+        {{#posts}}<div class="line"><div class="p-title">{{label}}{{#done}}<em>{{done_label}}</em>{{/done}}</div>{{#cells}}<div class="p-cell{{#rec}} rec{{/rec}}">{{#on}}<u></u>{{/on}}</div>{{/cells}}</div>{{/posts}}
+        {{^has_posts}}<div class="line"><div class="p-title"></div>{{#blank}}<div class="p-cell{{#rec}} rec{{/rec}}"></div>{{/blank}}</div>{{/has_posts}}
+      </div>
+    </div>
+    {{/days}}
+    {{/weeks}}
+  </div>
+  <div class="cal-note">
+    <span class="key"><u></u>{{key_post}}</span>
+    <span class="key"><u class="k-client"></u>{{key_client}}</span>
+    {{#key_done}}<span class="key"><u class="k-done">{{key_done_tag}}</u>{{key_done}}</span>{{/key_done}}
+    <span>{{note}}</span>
+  </div>
+</section>
+{{/timeline}}{{/is_timeline}}
+
+{{#is_process}}{{#process}}
 <section class="page">
   <div class="head">
     <div class="mark"><img src="{{{brand.logo_url}}}" alt=""><b>{{brand.name}}</b></div>
@@ -322,7 +557,8 @@
   </div>
   {{/has_next}}
 </section>
-{{/process}}
+{{/process}}{{/is_process}}
 
+{{/pages}}
 </body>
 </html>

@@ -1,5 +1,5 @@
 {
-  "_comment": "A worked example for make-proposal.py: a made-up conference, so nothing here is a real lead's name or price. Copy it into the lead's own project folder (projects/<id>/proposals/, which stays local) and change the words. Every date on the calendar comes from event.start -- `days_before`, `days_after`, `event` -- or is named outright; move the event and --plan shows the whole calendar moved. Pictures (cover.images, ready.items[].image) are paths beside the spec; this example has none, so the cards show an empty panel. `out` is relative to the spec; here it points into the repo's temp/.",
+  "_comment": "A worked example for make-proposal.py: a made-up conference, so no name or number here is a real lead's. Copy it into the lead's own project folder (projects/<id>/proposals/, which stays local) and change the words. The pages print in the order they are listed here. Every date on the calendar is named outright or counted from event.start (`days_before`, `days_after`, `event`); move the event and --plan shows the calendar moved. `in` on a post names the smallest plan that has it. Pictures (cover.images, ready.items[].image, loop.examples[].image) are paths beside the spec; this example has none, so the cards show an empty panel. No prices: the owner keeps them out of the document (an option card takes `price` and `price_note` if one is ever wanted). `out` is relative to the spec; here it points into the repo's temp/.",
   "template": "campaign",
   "brand": "kitcut",
   "lang": "en",
@@ -11,7 +11,7 @@
   "cover": {
     "kicker": "Proposal · April 26, 2027",
     "headline": "A video campaign for DevDays 2027",
-    "sub": "Six weeks to June 10-11 in Amsterdam. Twelve videos in your look, each tied to a date you already have.",
+    "sub": "Six weeks to June 10-11 in Amsterdam. Videos in your look, each tied to a date you already have.",
     "prepared": "Prepared by KitCut",
     "contact": "hello@kitcut.ai · kitcut.ai"
   },
@@ -26,94 +26,128 @@
     ]
   },
 
-  "timeline": {
-    "title": "The calendar to the conference",
-    "lead": "Every video hangs off one of your dates. Row A is the base; A and B together are two videos a week.",
-    "key_client": "your dates",
-    "key_plan": "a planned video",
-    "key_done": "already made",
-    "note": "On demand: a last-tickets video within a day, whenever a price tier is about to sell out.",
-    "lanes": [
-      {
-        "label": "DevDays dates",
-        "tag": "from your site",
-        "kind": "client",
-        "items": [
-          {"days_before": 30, "label": "30 days to go"},
-          {"date": "2027-05-24", "to": "2027-05-28", "label": "Agenda published"},
-          {"days_before": 7, "label": "7 days to go"},
-          {"event": true, "label": "DevDays 2027, Amsterdam"}
-        ]
-      },
-      {
-        "label": "A · Base",
-        "tag": "one video a week",
-        "items": [
-          {"date": "2027-05-04", "label": "Speaker line-up"},
-          {"days_before": 30, "label": "\"30 days to go\""},
-          {"date": "2027-05-18", "label": "Second wave of speakers"},
-          {"date": "2027-05-25", "label": "The agenda"},
-          {"days_before": 7, "label": "\"7 days to go\""},
-          {"days_before": 2, "label": "Know before you go"}
-        ]
-      },
-      {
-        "label": "B · Campaign",
-        "tag": "one more each week",
-        "items": [
-          {"date": "2027-05-06", "label": "Speaker card"},
-          {"date": "2027-05-13", "label": "Speaker card"},
-          {"date": "2027-05-20", "label": "Track announcement"},
-          {"days_before": 14, "label": "\"14 days to go\""},
-          {"date": "2027-06-01", "label": "Partner video"},
-          {"days_before": 1, "label": "\"See you tomorrow\""}
-        ]
-      },
-      {
-        "label": "C · Full",
-        "tag": "on top of B",
-        "kind": "bands",
-        "items": [
-          {"from": "2027-05-10", "to": "2027-06-04", "label": "A card for every speaker, with a post to go with it"},
-          {"from": "2027-05-24", "to": "2027-06-04", "label": "A video for every headline partner"},
-          {"from": "2027-06-10", "to": "2027-06-18", "label": "Day-one recap, the event in numbers"}
-        ]
-      }
+  "audience": {
+    "title": "Where your audience is",
+    "lead": "Followers on LinkedIn, read off public pages. Your own page is the smallest audience you have.",
+    "bars_label": "Followers on LinkedIn",
+    "bars": [
+      {"label": "The DevDays page", "value": 3100, "text": "3,100", "note": "Plus 1,400 on Instagram."},
+      {"label": "Six of your speakers", "value": 96000, "text": "96,000", "note": "Read from their public profiles."},
+      {"label": "Five of your partners", "value": 640000, "text": "640,000", "note": "Read from their company pages."}
+    ],
+    "proof_label": "What your own page already shows",
+    "proof_lead": "Your last ten posts",
+    "proof": [
+      {"label": "Your announcements", "value": 11, "text": "2-11 reactions"},
+      {"label": "Attendees' own posts you reshared", "value": 54, "text": "15-54 reactions"}
+    ],
+    "takeaway": "What people post works.",
+    "takeaway_note": "So the heart of the campaign is a video each speaker and partner will want to post themselves.",
+    "sources": "Sources: public LinkedIn and Instagram pages on the day of this proposal."
+  },
+
+  "loop": {
+    "title": "The wheel that grows the conference",
+    "lead": "People share an announcement about themselves: for a speaker and for a partner it is their own news.",
+    "hub": "DevDays 2027",
+    "steps": [
+      {"name": "A video about a speaker or a partner", "note": "Facts worth reading, not a photo on a card."},
+      {"name": "They post it themselves", "note": "It is their news, and they want it seen."},
+      {"name": "Their audience sees DevDays", "note": "96,000 followers across six speakers."},
+      {"name": "New attendees and partners arrive", "note": "And bring reasons for the next videos."}
+    ],
+    "examples_label": "Two examples",
+    "examples_lead": "Each is facts about a person or a company, not a logo on a slate.",
+    "examples": [
+      {"name": "A speaker", "note": "Who they are and what they built. 35 seconds.", "url": "https://kitcut.ai/templates/speaker-announcement"},
+      {"name": "A partner", "note": "The company in numbers and why it is here. 35 seconds.", "url": "https://kitcut.ai/templates"}
     ]
   },
 
   "options": {
     "title": "Three sizes of one campaign",
-    "lead": "All three run to the conference on a calendar fixed at the start. They differ only in how much is made.",
+    "lead": "All three run to the conference on a calendar fixed at the start. Each one includes the one before.",
+    "advice_label": "Recommended: B",
+    "advice": "Twelve videos on the calendar and a card for every speaker: the card is what reaches the speakers' audiences. A if few hands can publish. C to give partners a video too.",
     "items": [
       {
         "name": "A. Base",
         "tag": "the key moments",
         "count": "6 videos",
         "cadence": "one a week",
-        "points": ["Line-up and second wave", "Countdown: 30 and 7 days", "The agenda", "Know before you go"],
-        "price": "$600",
-        "price_note": "for the whole campaign"
+        "points": ["Line-up and second wave", "Countdown: 30 and 7 days", "The agenda", "Know before you go"]
       },
       {
         "name": "B. Campaign",
-        "tag": "a rhythm people notice",
+        "tag": "your channels and your speakers' audiences",
         "count": "12 videos",
-        "cadence": "two a week",
-        "points": ["Everything in A", "A speaker card each week", "A track and a partner video", "Countdown: 30, 14, 7 days and \"tomorrow\""],
-        "price": "$1,100",
-        "price_note": "for the whole campaign",
+        "cadence": "two a week + a card for every speaker",
+        "points": ["Everything in A", "A card for every speaker, with a post", "A track and a partner video", "Countdown: 30, 14, 7 days and \"tomorrow\""],
         "recommended": true
       },
       {
         "name": "C. Full",
-        "tag": "your speakers' and partners' audiences",
-        "count": "50+ videos",
-        "cadence": "before and after the event",
-        "points": ["Everything in B", "A card for every speaker", "A video for every headline partner", "Day-one recap and the event in numbers"],
-        "price": "$3,500",
-        "price_note": "for the whole campaign"
+        "tag": "partners and the event itself",
+        "count": "20 videos",
+        "cadence": "+ speaker cards · before and after the event",
+        "points": ["Everything in B", "A video for every headline partner", "Day-one recap that evening", "The event in numbers"]
       }
+    ]
+  },
+
+  "channels": {
+    "title": "Where it runs and what it brings",
+    "lead": "One video comes in three shapes, one for each place it goes.",
+    "head_name": "Place", "head_format": "Shape", "head_what": "What goes there", "head_est": "Impressions per video",
+    "rows": [
+      {"name": "LinkedIn · your page", "size": "3,100 followers", "format": "Square 1:1", "what": "Every video on the calendar", "est": "~ 730", "src": "Willow 2026: pages of 2.5-5K"},
+      {"name": "LinkedIn · speakers' profiles", "size": "96,000 across six speakers", "format": "Square 1:1", "what": "The card each speaker posts, with a ready text", "est": "800+", "src": "Willow 2026: accounts of 5-10K"},
+      {"name": "Instagram Reels", "size": "1,400 followers", "format": "Tall 9:16", "what": "Speaker cards and the countdown", "est": "~ 140", "src": "Socialinsider 2026: Reels reach 9.8%"},
+      {"name": "Screens at the venue", "size": "2,000 attendees", "format": "Wide 16:9", "what": "Track bumpers and partner videos", "est": "-", "src": "partners see themselves on stage"}
+    ],
+    "totals_label": "Estimated impressions for the campaign",
+    "totals": [
+      {"name": "A", "value": "~ 5K", "note": "6 videos on your channels"},
+      {"name": "B", "value": "~ 26K", "note": "12 videos + 20 speakers post their card", "recommended": true},
+      {"name": "C", "value": "~ 33K", "note": "+ partner videos and the event"}
+    ],
+    "note": "An estimate from published medians, not a promise. Each video gets its own link, and the numbers are checked every week."
+  },
+
+  "timeline": {
+    "title": "The calendar to the conference",
+    "lead": "Each row is a date. A dot in a column means that plan publishes a video that day.",
+    "head_date": "Date", "head_mark": "DevDays dates", "head_post": "What we publish",
+    "key_post": "a video goes out in this plan",
+    "key_client": "your dates",
+    "note": "On demand in B and C: a last-tickets video within a day, whenever a price tier is about to sell out.",
+    "plans": [
+      {"id": "a", "letter": "A", "name": "Base", "count": "6 videos"},
+      {"id": "b", "letter": "B", "name": "Campaign", "count": "12 videos + cards", "recommended": true},
+      {"id": "c", "letter": "C", "name": "Full", "count": "20 videos + cards"}
+    ],
+    "marks": [
+      {"days_before": 30, "label": "30 days to go"},
+      {"date": "2027-05-24", "to": "2027-05-28", "label": "Agenda published"},
+      {"days_before": 7, "label": "7 days to go"},
+      {"event": true, "label": "DevDays 2027, Amsterdam"}
+    ],
+    "posts": [
+      {"date": "2027-05-04", "label": "Speaker line-up", "in": "a"},
+      {"date": "2027-05-06", "label": "Speaker cards, first batch", "in": "b"},
+      {"days_before": 30, "label": "\"30 days to go\"", "in": "a"},
+      {"date": "2027-05-13", "label": "Speaker cards, second batch", "in": "b"},
+      {"date": "2027-05-18", "label": "Second wave of speakers", "in": "a"},
+      {"date": "2027-05-20", "label": "Track announcement", "in": "b"},
+      {"date": "2027-05-25", "label": "The agenda", "in": "a"},
+      {"date": "2027-05-26", "label": "Videos for the headline partners", "in": "c"},
+      {"days_before": 14, "label": "\"14 days to go\"", "in": "b"},
+      {"date": "2027-06-01", "label": "Partner video", "in": "b"},
+      {"days_before": 7, "label": "\"7 days to go\"", "in": "a"},
+      {"days_before": 2, "label": "Know before you go", "in": "a"},
+      {"days_before": 1, "label": "\"See you tomorrow\"", "in": "b"},
+      {"date": "2027-06-10", "label": "Day-one recap, that evening", "in": "c"},
+      {"date": "2027-06-15", "label": "DevDays 2027 in numbers", "in": "c"}
     ]
   },
 
@@ -123,7 +157,7 @@
     "blocks": [
       {"name": "Each week", "points": ["The calendar is fixed at the start.", "You send a fact or a link; the video is back within a day.", "You say OK, or what to change."]},
       {"name": "From you at the start", "points": ["Your logo and your site.", "Who publishes on your side.", "New speakers as they are confirmed."]},
-      {"name": "What you keep", "points": ["Every video, in the shapes each network wants.", "The right to post them anywhere."]}
+      {"name": "What you keep", "points": ["Every video, in the shapes each place wants.", "The right to post them anywhere."]}
     ],
     "next": {
       "label": "Next step",

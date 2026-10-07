@@ -49,6 +49,8 @@
 #                                                    a film made on the VM itself
 #                                                     (on the Claude login unless --api), followed;
 #                                                     --no-watch prints its id and returns
+#                                                     --attach file ...: photos and logos it may use,
+#                                                     named upload1..N in the prompt, in that order
 #                                                     --person "Name=photo.jpg" (up to 4), --style felt:
 #                                                     people drawn into it as characters who talk
 #   bash studio/deploy/ops.sh watch <film-id>...      follow films to the end (one line per change)
@@ -410,7 +412,7 @@ EOF
     ;;
 
   film)
-    use="film \"<idea>\" [--seconds N] [--look L] [--unlisted] [--api] [--no-watch] [--person Name=photo ...] [--style S] | film \"<what you want>\" --template t-x [--attach file ...] [--frame F]"
+    use="film \"<idea>\" [--seconds N] [--look L] [--unlisted] [--api] [--no-watch] [--attach file ...] [--person Name=photo ...] [--style S] | film \"<what you want>\" --template t-x [--attach file ...] [--frame F]"
     idea=""; [[ "${1:-}" == --* ]] || { idea="${1:?$use}"; shift; }
     secs=30; auth=""; look=drawn; listed=1; follow=1; people=(); style=auto
     tpl=""; attach=(); frame=""
@@ -422,20 +424,22 @@ EOF
       shift
     done
     [ -n "$idea" ] || [ -n "$tpl" ] || die "$use"
+    # --attach files (pictures, .md/.txt notes), each uploaded to the VM's studio first, as the
+    # site does: a template's pictures, or the photos and logos a plain film is told to use. They
+    # reach the film as upload1..N in the order given, so the prompt names them by number
+    ids="[]"
+    for f in ${attach[@]+"${attach[@]}"}; do
+      [ -f "$f" ] || die "no file: $f"
+      case "$f" in *.png|*.PNG) ct=image/png ;; *.webp|*.WEBP) ct=image/webp ;;
+        *.md|*.MD) ct=text/markdown ;; *.txt|*.TXT) ct=text/plain ;; *) ct=image/jpeg ;; esac
+      if [ "$DRY" = 1 ]; then up="up-dryrun"; echo "  would upload $f ($ct)"
+      else
+        up="$(on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/uploads -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: $ct' --data-binary @-" < "$f" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("id") or sys.exit(json.dumps(d)))')" || exit 1
+      fi
+      ids="$(python -c 'import json,sys; l=json.loads(sys.argv[1]); l.append(sys.argv[2]); print(json.dumps(l))' "$ids" "$up")"
+    done
     if [ -n "$tpl" ]; then
-      # a template's film (studio/templates.py): what you want in your own words, and --attach
-      # files (pictures, .md/.txt notes), each uploaded to the VM's studio first, as the site does
-      ids="[]"
-      for f in "${attach[@]}"; do
-        [ -f "$f" ] || die "no file: $f"
-        case "$f" in *.png|*.PNG) ct=image/png ;; *.webp|*.WEBP) ct=image/webp ;;
-          *.md|*.MD) ct=text/markdown ;; *.txt|*.TXT) ct=text/plain ;; *) ct=image/jpeg ;; esac
-        if [ "$DRY" = 1 ]; then up="up-dryrun"; echo "  would upload $f ($ct)"
-        else
-          up="$(on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/uploads -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: $ct' --data-binary @-" < "$f" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("id") or sys.exit(json.dumps(d)))')" || exit 1
-        fi
-        ids="$(python -c 'import json,sys; l=json.loads(sys.argv[1]); l.append(sys.argv[2]); print(json.dumps(l))' "$ids" "$up")"
-      done
+      # a template's film (studio/templates.py): what you want in your own words
       body="$(python -c '
 import json, sys
 tid, _, ver = sys.argv[1].partition(":")
@@ -466,7 +470,7 @@ print(json.dumps(body))  # ASCII on the wire: a letter outside it (a dash, an ac
       ppl="$(python -c 'import json,sys; l=json.loads(sys.argv[1]); l.append({"upload": sys.argv[2], "name": sys.argv[3]}); print(json.dumps(l))' "$ppl" "$up" "$name")"
     done
     # --look: drawn, painted, collage (the studio refuses one it does not have); --unlisted: link-only
-    body="$(python -c 'import json,sys; ppl=json.loads(sys.argv[5]); print(json.dumps({"prompt": sys.argv[1], "seconds": int(sys.argv[2]), "look": sys.argv[3], "listed": sys.argv[4] == "1", **({"people": ppl, "character_style": sys.argv[6]} if ppl else {})}))' "$idea" "$secs" "$look" "$listed" "$ppl" "$style")"
+    body="$(python -c 'import json,sys; ppl=json.loads(sys.argv[5]); att=json.loads(sys.argv[7]); print(json.dumps({"prompt": sys.argv[1], "seconds": int(sys.argv[2]), "look": sys.argv[3], "listed": sys.argv[4] == "1", **({"attachments": att} if att else {}), **({"people": ppl, "character_style": sys.argv[6]} if ppl else {})}))' "$idea" "$secs" "$look" "$listed" "$ppl" "$style" "$ids")"
     body="${body%\}}$auth}"
     [ "$DRY" = 1 ] && { echo "  would POST $body to the VM's studio"; exit 0; }
     id="$(printf '%s' "$body" | on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/films -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' --data-binary @-" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("id") or sys.exit(json.dumps(d)))')"
