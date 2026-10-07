@@ -113,3 +113,7 @@ projects/*/cards/*.png
 
 # talking-head rigs (head-rig.py builds them from the photos beside them)
 config/sketch/*/rigs/
+
+# Market research tools (market/<place>/): the signed-in session and what it returns stay local
+market/*/local/
+market/*/data/
