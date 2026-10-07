@@ -20,8 +20,7 @@ within PAD seconds of its own. Because a check that flags the whole film finds e
 table also says how much of each film a part flagged, and what it raised on the clean versions.
 
     parts   motion   what tools.motion() says today (still stretches, cuts): the baseline
-            pixels   motion.findings(): a line said over a still picture, a wash, long holds
-            probe    the drawing code as it runs (sketch/probe.js): appears, vanishes, twice, jumps, sliver
+            probe    the drawing code as it runs (sketch/probe.js): twice, cut, into, sliver, wash, jumps, pops
             review   the reviewer (review.read): a fresh Claude reading the sheets and strips
 """
 
@@ -41,7 +40,7 @@ import motion  # noqa: E402
 
 LABELS = os.path.join(HERE, "bakeoff", "defects.json")
 PAD = 1.0  # seconds: a finding this near a known glitch's window has found it
-PARTS = ("motion", "pixels", "probe", "review")
+PARTS = ("motion", "probe", "review")
 
 
 def labels():
@@ -163,11 +162,11 @@ def findings(part, d):
 CAN = {
     "still": {"idle"},
     "quiet": {"idle", "untold"},
-    "wash": {"wash"},
     "double": {"double"},
     "jump": {"double"},
     "pop": {"double"},
     "cut": {"through", "poke"},
+    "wash": {"wash"},
     "into": {"through"},
     "sliver": {"sliver"},
     "squash": {"sliver"},

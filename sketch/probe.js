@@ -16,7 +16,7 @@
    reported. No convention is asked of a film: which functions are a character's poses is worked out
    afterwards from how they come and go.
 
-   report: { step, w, h, keys: ["duchess.sit", ...], frames: [ { t, cam: [scale, tx, ty] | null,
+   report: { step, w, h, keys: ["duchess.sit", ...], frames: [ { t, cam: [scale, tx, ty] | null, v,
      s: [ [key index, x0, y0, x1, y1, ops, anMax, anMin, cut, clipped, alpha, overlay, parent], ... ] } ],
      ms, cut_short? }
    x0..y1: the box of everything the call drew, in thousandths of the frame (it may run outside 0..1000);
@@ -26,7 +26,9 @@
    that was in force when it was called (0..1: the opening of a box it is inside; clips made during the call,
    the engine's own, do not count); clipped: 1 when it was called inside a clip; alpha: the most opaque it was
    drawn; overlay: 1 when drawn in the film's overlay (screen space: a meter, a caption); parent: the
-   key index of the cast call it was made inside, or -1. */
+   key index of the cast call it was made inside, or -1. v: how much colour the film laid over the whole
+   frame in that frame (the opacities of its translucent or blended fills that cover the frame, added up:
+   a textured background gives the same figure all film long; an evening tint fading in makes it climb). */
 (function () {
   'use strict';
   const SK = window.SK;
@@ -35,7 +37,7 @@
   const STEP = CFG.step > 0 ? CFG.step : 0.1, DEADLINE = CFG.deadline_ms || 30000;
   const P = CanvasRenderingContext2D.prototype;
 
-  let on = false, main = null, W = 1, H = 1, inOverlay = false, frame = null;
+  let on = false, main = null, W = 1, H = 1, inOverlay = false, inFilm = false, veiled = 0, frame = null;
   const stack = [], keys = [], keyIx = new Map();
   const ix = (k) => { let i = keyIx.get(k); if (i === undefined) { i = keys.length; keys.push(k); keyIx.set(k, i); } return i; };
 
@@ -103,6 +105,15 @@
     s.area += va;
     if (s.clip0) s.cutA += va - area(meet(vis, s.clip0));
   }
+  // a colour laid over the whole frame by the film itself (not the engine's grain, vignette or fades,
+  // which come after the film's own drawing): a fill that covers the frame and lets it show through
+  function veil(c, box) {
+    if (c !== main || !inFilm || !box) return;
+    const a = c.globalAlpha, op = c.globalCompositeOperation;
+    if (!(a > 0.02) || (a >= 0.9 && op === 'source-over')) return;
+    if (area(onFrame(box)) < 0.9 * W * H) return;
+    veiled += a;
+  }
   const boxOf = (c, fn) => { const S = st(c), keep = S.path; S.path = null; fn(); const b = S.path; S.path = keep; return b; };
   const HOOK = {
     save() { NAT.save.call(this); const s = st(this); s.saved.push(s.clip); },
@@ -125,9 +136,9 @@
     rect(x, y, w, h) { corners(this, x, y, w, h); },
     roundRect(x, y, w, h) { corners(this, x, y, w, h); },
     clip() { const s = st(this); if (s.path) s.clip = meet(s.clip, s.path.slice()); },
-    fill() { count(this, st(this).path); },
+    fill() { const b = st(this).path; veil(this, b); count(this, b); },
     stroke() { count(this, st(this).path); },
-    fillRect(x, y, w, h) { count(this, boxOf(this, () => corners(this, x, y, w, h))); },
+    fillRect(x, y, w, h) { const b = boxOf(this, () => corners(this, x, y, w, h)); veil(this, b); count(this, b); },
     strokeRect(x, y, w, h) { count(this, boxOf(this, () => corners(this, x, y, w, h))); },
     clearRect() {},
     putImageData() {},
@@ -152,13 +163,13 @@
     main = SK.ctx(); W = main.canvas.width; H = main.canvas.height; out.w = W; out.h = H;
     const draw = F.draw, overlay = F.overlay;
     let cam = null;
-    F.draw = function (...a) { const m = NAT.getTransform.call(main); cam = [r3(Math.hypot(m.a, m.b)), Math.round(m.e), Math.round(m.f)]; return draw.apply(this, a); };
-    if (overlay) F.overlay = function (...a) { inOverlay = true; try { return overlay.apply(this, a); } finally { inOverlay = false; } };
+    F.draw = function (...a) { const m = NAT.getTransform.call(main); cam = [r3(Math.hypot(m.a, m.b)), Math.round(m.e), Math.round(m.f)]; inFilm = true; try { return draw.apply(this, a); } finally { inFilm = false; } };
+    if (overlay) F.overlay = function (...a) { inOverlay = true; inFilm = true; try { return overlay.apply(this, a); } finally { inOverlay = false; inFilm = false; } };
     wrapCast(); // whatever the film added to the cast itself
     install(); on = true;
     try {
       const one = (t) => {
-        frame = []; cam = null; stack.length = 0;
+        frame = []; cam = null; stack.length = 0; veiled = 0;
         states.delete(main); // a frame starts from a clean state (SK.render sets the transform itself)
         try { SK.render(t); } catch (e) { if (!out.error) out.error = t + ': ' + String(e && e.message || e); }
       };
@@ -177,7 +188,7 @@
           if (performance.now() - t0 > DEADLINE * 1.25) { whole = false; break; }
           const t = Math.round(i * STEP * 1000) / 1000;
           one(t);
-          part.push([i, { t, cam, s: frame.map((s) => {
+          part.push([i, { t, cam, v: r3(veiled), s: frame.map((s) => {
             const b = s.box;
             return [s.k, Math.round(b[0] / W * 1000), Math.round(b[1] / H * 1000), Math.round(b[2] / W * 1000), Math.round(b[3] / H * 1000),
               s.ops, r3(s.anMax), r3(s.anMin), s.area > 0 ? r3(s.cutA / s.area) : 0, s.clip0 ? 1 : 0, r3(s.alpha), s.ov, s.parent];

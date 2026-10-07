@@ -292,8 +292,13 @@ JUMP = 0.3  # of the view's width, in one step with no cut: a jump
 # of a body, hidden by the clip it was drawn through, for this long. Measured on the bench: a cat
 # inside her carrier loses 25% of her box to its opening and looks right; one too big for the
 # opening she is coming out of loses 49-60%; the same scene with a taller carrier, 0%.
-CUT, CUT_S = 0.3, 0.3
-KINDS = ("double", "cut", "into", "sliver", "jump", "squash", "pop")  # most telling first
+HIDDEN, HIDDEN_S = 0.3, 0.3
+# a colour laid over the whole frame, and coming or going: its opacity moving this much within
+# this long. An evening tint multiplied over a living room rose from 0 to 0.34 in two seconds
+# ("the screen all changes the color like a filter is applied", said its owner). A textured
+# background is a translucent fill over the frame too, but the same one all film long.
+VEIL, VEIL_S = 0.08, 2.0
+KINDS = ("double", "cut", "into", "sliver", "wash", "jump", "squash", "pop")  # most telling first
 
 
 def _clock2(t):
@@ -502,16 +507,43 @@ def events(report, step=None):
                         )
             prev = cur
 
+    # ---- wash: the film lays a colour over the whole frame, and it comes or goes mid-shot
+    veil = [float(f.get("v") or 0) for f in report["frames"]]
+    k = max(1, round(VEIL_S / step))
+    moved = [
+        i
+        for i in range(k, n)
+        if abs(veil[i] - veil[i - k]) >= VEIL
+        and not any(j in cuts for j in range(i - k + 1, i + 1))
+    ]
+    for i0, i1 in _index_runs(moved):
+        a, b = veil[max(0, i0 - k)], veil[i1]
+        add(
+            "wash",
+            max(0, i0 - k),
+            i1,
+            "the film",
+            "a colour is laid over the whole frame from %s to %s (its strength goes from %d%% to "
+            "%d%%): it reads as a filter being switched %s"
+            % (
+                _clock2(t_of[max(0, i0 - k)]),
+                _clock2(t_of[i1]),
+                round(100 * a),
+                round(100 * b),
+                "on" if b > a else "off",
+            ),
+        )
+
     # ---- cut: a body drawn through a clip that hides a good part of it (the opening of a carrier
     # too small for the cat coming out of it: she stands half out, sliced by a line in mid-air)
     hid = {}
     for i, ss in enumerate(on):
         for s in ss:
-            if s["key"] in body and s["clipped"] and s["cut"] >= CUT:
+            if s["key"] in body and s["clipped"] and s["cut"] >= HIDDEN:
                 hid.setdefault(s["key"], {})[i] = max(s["cut"], hid.get(s["key"], {}).get(i, 0))
     for k, at in hid.items():
         for i0, i1 in _index_runs(at):
-            if (i1 - i0 + 1) * step < CUT_S:
+            if (i1 - i0 + 1) * step < HIDDEN_S:
                 continue
             add(
                 "cut",
