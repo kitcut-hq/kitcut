@@ -47,6 +47,9 @@ from PIL import Image, ImageChops, ImageStat  # noqa: E402
 
 os.environ.pop("STUDIO_MEDIA_BASE", None)
 procs.SECRETS.pop("STUDIO_MEDIA_SAS", None)
+os.environ.pop("STUDIO_R2_ENDPOINT", None)  # nor to R2, whatever the .env says
+procs.SECRETS.pop("STUDIO_R2_KEY_ID", None)
+procs.SECRETS.pop("STUDIO_R2_SECRET", None)
 TOKEN = "test-token"
 SAS = "sv=2023-11-03&sr=c&sp=cwd&sig=test"
 BLOBS = {}
@@ -475,6 +478,9 @@ async def main():
         thumbs.make = fake_make
         os.environ.pop("STUDIO_MEDIA_BASE", None)
         procs.SECRETS.pop("STUDIO_MEDIA_SAS", None)
+        os.environ.pop("STUDIO_R2_ENDPOINT", None)  # nor to R2, whatever the .env says
+        procs.SECRETS.pop("STUDIO_R2_KEY_ID", None)
+        procs.SECRETS.pop("STUDIO_R2_SECRET", None)
         g3 = fixture_film()
         answers[:] = [good()]
         sh = await share.run(g3, "api", log=lambda s: None)

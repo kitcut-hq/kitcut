@@ -210,6 +210,9 @@ async def main():
     try:
         os.environ.pop("STUDIO_MEDIA_BASE", None)
         procs.SECRETS.pop("STUDIO_MEDIA_SAS", None)
+        os.environ.pop("STUDIO_R2_ENDPOINT", None)  # nor to R2, whatever the .env says
+        procs.SECRETS.pop("STUDIO_R2_KEY_ID", None)
+        procs.SECRETS.pop("STUDIO_R2_SECRET", None)
         f = films.Film.create("a film for the copy", 5, "drawn", client="u:m")
         out = f.path("outputs")
         os.makedirs(out)

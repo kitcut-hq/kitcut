@@ -48,6 +48,9 @@ import aiohttp  # noqa: E402
 # no copy online: a checkout with the studio's .env would upload the stub films (test_server.py)
 os.environ.pop("STUDIO_MEDIA_BASE", None)
 server.procs.SECRETS.pop("STUDIO_MEDIA_SAS", None)
+os.environ.pop("STUDIO_R2_ENDPOINT", None)  # nor to R2, whatever the .env says
+server.procs.SECRETS.pop("STUDIO_R2_KEY_ID", None)
+server.procs.SECRETS.pop("STUDIO_R2_SECRET", None)
 
 HERE = os.path.abspath(__file__)
 TOKEN = "test-token"

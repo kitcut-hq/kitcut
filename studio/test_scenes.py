@@ -33,6 +33,9 @@ from sched import Sched  # noqa: E402
 
 os.environ.pop("STUDIO_MEDIA_BASE", None)
 agent.procs.SECRETS.pop("STUDIO_MEDIA_SAS", None)
+os.environ.pop("STUDIO_R2_ENDPOINT", None)  # nor to R2, whatever the .env says
+agent.procs.SECRETS.pop("STUDIO_R2_KEY_ID", None)
+agent.procs.SECRETS.pop("STUDIO_R2_SECRET", None)
 EX = os.path.join(films.KIT, "config", "sketch", "example")
 USAGE = {"input_tokens": 100, "output_tokens": 200, "cache_read_input_tokens": 1000}
 
@@ -284,7 +287,9 @@ async def main():
     first = scenes.scene_file(scenes.spans(g)[0][0])
     os.makedirs(os.path.dirname(g.path(*first.split("/"))), exist_ok=True)
     with open(g.path(*first.split("/")), "w", encoding="utf-8") as fh:
-        fh.write("// a medal on a ribbon\nSK.look.medal = (x, y, o = {}) => {};\nSK.look.size = 3;\n")
+        fh.write(
+            "// a medal on a ribbon\nSK.look.medal = (x, y, o = {}) => {};\nSK.look.size = 3;\n"
+        )
     shared = scenes.scene_message(g, 1)
     check(
         "SK.look.medal(x, y, o = {})" in shared

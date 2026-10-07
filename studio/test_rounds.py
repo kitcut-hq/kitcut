@@ -44,6 +44,9 @@ os.environ.pop("STUDIO_MEDIA_BASE", None)  # no copy online (test_media.py has i
 os.environ["STUDIO_SHARE"] = "0"
 server.thumbs.premake = lambda film: None
 server.procs.SECRETS.pop("STUDIO_MEDIA_SAS", None)
+os.environ.pop("STUDIO_R2_ENDPOINT", None)  # nor to R2, whatever the .env says
+server.procs.SECRETS.pop("STUDIO_R2_KEY_ID", None)
+server.procs.SECRETS.pop("STUDIO_R2_SECRET", None)
 
 TOKEN = "test-token"
 USAGE = {"input_tokens": 1000, "output_tokens": 2000, "cache_read_input_tokens": 100000}
