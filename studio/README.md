@@ -227,7 +227,9 @@ The copies can go to Cloudflare R2 instead, which charges nothing for downloads:
 the SAS. Records keep the URLs they were given, so earlier films play from Azure until they are
 moved: `media.py --move-from <old base> --blobs <names>` copies the files (again and again:
 what is already there at the same size is skipped), then `--move-records <old base>` points
-every record at the new place; both take `--dry-run`.
+every record at the new place, the ones only the database still has included; both take
+`--dry-run`. While the old place is kept, `STUDIO_MEDIA_OLD_BASE` names it: nothing is written
+there, but a film deleted for good is removed there too, so its old address stops playing.
 
 **Publishing to YouTube** (`youtube.py`). The public site holds each person's channel grants and
 opens a resumable upload session with YouTube for the film. The studio gets only that session's
