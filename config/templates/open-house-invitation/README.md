@@ -25,7 +25,8 @@ and pictures live only with the working project, `projects/open-house-invitation
 
     python studio/template_from_film.py make --slug open-house-invitation --push --publish
 
-v6 (2026-10-07): the agent is in it, because people buy from people. `content.agent` {name, role, phone,
+v7 (2026-10-07): in the vertical frame the agent's photo stands over the name on the end card (side by side, the
+name ran under the buttons Reels and TikTok lay over the right edge). v6 (2026-10-07): the agent is in it, because people buy from people. `content.agent` {name, role, phone,
 photo {img, fx, fy, zoom}}: a rider hangs under the yard sign with the photo, the name and the number,
 and the end card sets the photo beside the name, what they are and the number to call, in place of the
 plain contact pill. The photo is the agent's own headshot (an attachment, or the one the listing's own

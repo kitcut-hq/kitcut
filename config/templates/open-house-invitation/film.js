@@ -303,16 +303,23 @@
     SK.alpha(a * .96, () => { c.fillStyle = K.white; c.fillRect(v.x0 - 40, v.y0 - 40, v.x1 - v.x0 + 80, v.y1 - v.y0 + 80); });
     const t0 = T.bring - .2, p = (i) => ent(t, t0 + i * (AG ? .15 : .2), .55), im = SK.IMG[FACTS.logo];
     const lw = Math.min(W * .44, s(520)), lh = im ? Math.min(lw * im.height / im.width, s(AG ? 116 : 150)) : 0;
-    // the agent: a photo beside the name, what they are and the number to call, set as one block about the centre
+    // the agent: a photo beside the name, what they are and the number to call, set as one block about the centre;
+    // in the tall frame the photo stands over them instead (the right edge there is under an app's buttons)
+    const AGS = (() => {
+      if (!AG) return null;
+      const f = agentPhoto(), up = tall, d = f ? s(up ? 190 : 172) : 0, gap = f ? s(up ? 26 : 36) : 0, room = up ? mw * .8 : mw - d - gap;
+      const ns = { size: s(52), font: FB, wt: 700 }, rs = { size: s(30), font: FB, wt: 400 }, psz = s(36);
+      const nsz = Math.min(ns.size, fit(AG.name, room, ns)), rsz = AG.role ? Math.min(rs.size, fit(AG.role, room, rs)) : 0;
+      const rows = [[nsz * 1.16, AG.name, { ...ns, size: nsz, col: K.ink }], AG.role ? [rsz * 1.5, AG.role, { ...rs, size: rsz, col: K.soft }] : null].filter(Boolean);
+      const th = rows.reduce((q, r) => q + r[0], 0) + (AG.phone ? psz * 2.1 : 0);
+      const tw = Math.max(SK.measure(AG.name, { ...ns, size: nsz }), AG.role ? SK.measure(AG.role, { ...rs, size: rsz }) : 0, AG.phone ? SK.measure(AG.phone, { size: psz, font: FB, wt: 700 }) + 2 * psz * .8 : 0);
+      return { f, up, d, gap, room, rows, th, tw, psz, h: (up ? d + gap + th : Math.max(d, th)) + s(28) };
+    })();
     const agentRow = (y, a) => {
-      const f = agentPhoto(), d = f ? s(172) : 0, gap = f ? s(36) : 0, room = mw - d - gap, ns = { size: s(52), font: FB, wt: 700 }, rs = { size: s(30), font: FB, wt: 400 };
-      const nsz = Math.min(ns.size, fit(AG.name, room, ns)), rsz = AG.role ? Math.min(rs.size, fit(AG.role, room, rs)) : 0, psz = s(36);
-      const pw0 = AG.phone ? SK.measure(AG.phone, { size: psz, font: FB, wt: 700 }) + 2 * psz * .8 : 0;
-      const tw = Math.max(SK.measure(AG.name, { ...ns, size: nsz }), AG.role ? SK.measure(AG.role, { ...rs, size: rsz }) : 0, pw0), x0 = -(d + gap + tw) / 2, tx = x0 + d + gap;
-      const al = f ? 'left' : 'center', ax = f ? tx : 0, rows = [[nsz * 1.16, AG.name, { ...ns, size: nsz, col: K.ink }], AG.role ? [rsz * 1.5, AG.role, { ...rs, size: rsz, col: K.soft }] : null].filter(Boolean);
-      const th = rows.reduce((q, r) => q + r[0], 0) + (AG.phone ? psz * 2.1 : 0); let ty = y - th / 2;
+      const { f, up, d, gap, room, rows, th, tw, psz } = AGS, side = f && !up, x0 = side ? -(d + gap + tw) / 2 : 0;
+      const al = side ? 'left' : 'center', ax = side ? x0 + d + gap : 0, top = up ? y - (d + gap + th) / 2 : y - th / 2; let ty = up ? top + d + gap : top;
       SK.alpha(a, () => {
-        if (f) face(f, x0 + d / 2, y + (1 - a) * 24 * U, d / 2);
+        if (f) face(f, side ? x0 + d / 2 : 0, (up ? top + d / 2 : y) + (1 - a) * 24 * U, d / 2);
         for (const [h, str, o] of rows) { text(str, ax, ty + h / 2, room, { ...o, align: al, one: true }); ty += h; }
         if (AG.phone) pill(AG.phone, ax, ty + psz * 1.2, { size: psz, fill: K.blue, col: K.white, wt: 700, align: al });
       });
@@ -328,7 +335,7 @@
       one ? [s(46), (y, i) => text(PLACE.join(', '), 0, y, mw, { size: s(40), font: FB, wt: FACTS.venue ? 400 : 600, col: FACTS.venue ? K.soft : K.ink, p: p(i) })] : null,
       !one && FACTS.street ? [s(48), (y, i) => text(FACTS.street, 0, y, mw, { size: s(42), font: FB, wt: FACTS.venue ? 400 : 600, col: FACTS.venue ? K.soft : K.ink, p: p(i) })] : null,
       !one && FACTS.cityZip ? [s(44), (y, i) => text(FACTS.cityZip, 0, y, mw, { size: s(38), font: FB, wt: 400, col: K.soft, p: p(i) })] : null,
-      AG ? [s(204), (y, i) => agentRow(y + s(8), p(i))] : FACTS.contact ? [s(96), (y) => { const size = Math.min(s(40), fit(FACTS.contact, mw - s(80), { size: s(40), font: FB, wt: 700 })); pill(FACTS.contact, 0, y + s(14), { size, fill: K.blue, col: K.white, wt: 700, align: 'center', in: { t: t0 + 1.4, type: 'rise' } }); }] : null,
+      AG ? [AGS.h, (y, i) => agentRow(y + s(6), p(i))] : FACTS.contact ? [s(96), (y) => { const size = Math.min(s(40), fit(FACTS.contact, mw - s(80), { size: s(40), font: FB, wt: 700 })); pill(FACTS.contact, 0, y + s(14), { size, fill: K.blue, col: K.white, wt: 700, align: 'center', in: { t: t0 + 1.4, type: 'rise' } }); }] : null,
     ], -H * .01, s(tall ? 40 : AG ? 24 : 30));
   }
 
