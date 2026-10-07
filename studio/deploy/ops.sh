@@ -442,7 +442,7 @@ tid, _, ver = sys.argv[1].partition(":")
 body = {"template": {"id": tid, **({"version": int(ver)} if ver else {})}, "prompt": sys.argv[2], "attachments": json.loads(sys.argv[3]), "listed": sys.argv[4] == "1"}
 if sys.argv[5]:
     body["frame"] = sys.argv[5]
-print(json.dumps(body, ensure_ascii=False))
+print(json.dumps(body))  # ASCII on the wire: a letter outside it (a dash, an accent) reached the studio broken from a Windows shell
 ' "$tpl" "$idea" "$ids" "$listed" "$frame")"
       body="${body%\}}$auth}"
       [ "$DRY" = 1 ] && { echo "  would POST a template film ($tpl) to the VM's studio"; exit 0; }

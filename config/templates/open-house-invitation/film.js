@@ -24,6 +24,9 @@
   const WHEN = [FACTS.dayShort, FACTS.hours].filter(Boolean).join('  ·  ');
   const PLACE = [FACTS.street, FACTS.cityZip].filter(Boolean);
   const TOP = FACTS.street || FACTS.home || ''; // the caption's first line
+  /* who hosts it: the agent, by name, with their own photo when there is one (people buy from people) */
+  const AG = FACTS.agent && FACTS.agent.name ? FACTS.agent : null;
+  const agentPhoto = () => (AG && AG.photo && SK.IMG[AG.photo.img] ? AG.photo : null);
 
   // ---------------------------------------------------------------- the one card: a picture over a caption strip
   const CW = W * .9, SH = (tall ? 380 : wide ? 200 : 220) * U, PH = (tall ? .7 : .86) * H - SH;
@@ -92,17 +95,29 @@
     const c = SK.ctx(); c.save(); if (f.lift) c.filter = `brightness(${f.lift}) contrast(1.06) saturate(1.1)`;
     c.drawImage(im, cx + (cw - sw) * (fx ?? .5), cy + (ch - sh) * (f.fy ?? .5), sw, sh, x, y, w, h); c.restore();
   }
+  /* a headshot in a circle: cropped to cover it, the face chosen by fx, fy (0 top .. 1 bottom) and zoom; a white rim and a thin ring */
+  function face(f, cx, cy, r) {
+    const im = SK.IMG[f.img], c = SK.ctx(), k = Math.max(2 * r / im.width, 2 * r / im.height) * (f.zoom ?? 1), sw = 2 * r / k;
+    c.save(); c.beginPath(); c.arc(cx, cy, r, 0, SK.TAU); c.clip();
+    c.drawImage(im, (im.width - sw) * (f.fx ?? .5), (im.height - sw) * (f.fy ?? .25), sw, sw, cx - r, cy - r, 2 * r, 2 * r);
+    c.restore();
+    c.lineWidth = r * .09; c.strokeStyle = K.white; c.beginPath(); c.arc(cx, cy, r, 0, SK.TAU); c.stroke();
+    c.lineWidth = r * .04; c.strokeStyle = K.blue; c.beginPath(); c.arc(cx, cy, r + r * .075, 0, SK.TAU); c.stroke();
+  }
   const pill = (str, x, y, o = {}) => SK.pill(str, x, y, { size: 34 * U, font: FB, fill: o.fill ?? K.white, col: o.col ?? K.ink, r: 30 * U, padX: 26 * U, align: o.align ?? 'left', ...o });
 
   /* beat 1: the yard sign swings in on its hooks, planted beside the words */
   const SG = (() => {
-    const pw = wide ? Math.min(W * .36, H * .64) : tall ? W * .64 : W * .44, dated = !!(FACTS.day || FACTS.hours);
-    const ph = pw * (dated ? .9 : .6), armY = wide ? -(ph + 150 * U) / 2 - 10 * U : tall ? -H * .37 : -H * .44;
-    const cx = wide ? -W * .22 : 30 * U, foot = armY + 34 * U + ph + (wide ? 150 : 76) * U;
-    return { pw, ph, armY, cx, foot, dated };
+    const dated = !!(FACTS.day || FACTS.hours);
+    // the agent's rider hangs under the board: the board gives up a little of its size for it where the frame is short
+    const pw = wide ? Math.min(W * (AG ? .33 : .36), H * (AG ? .58 : .64)) : tall ? W * .64 : W * (AG ? .4 : .44);
+    const rh = AG ? pw * .27 : 0, hang = AG ? rh + 16 * U : 0, below = wide ? Math.max(150 * U, hang + 56 * U) : 76 * U + hang;
+    const ph = pw * (dated ? .9 : .6), armY = wide ? -(ph + below) / 2 - 10 * U : tall ? -H * .37 : -H * .44;
+    const cx = wide ? -W * .22 : 30 * U, foot = armY + 34 * U + ph + below;
+    return { pw, ph, armY, cx, foot, dated, rh };
   })();
   function sign(t) {
-    const { pw, ph, armY, cx, foot, dated } = SG, px = cx - pw / 2 - 64 * U, c = SK.ctx();
+    const { pw, ph, armY, cx, foot, dated, rh } = SG, px = cx - pw / 2 - 64 * U, c = SK.ctx();
     const swing = .34 * Math.exp(-1.3 * t) * Math.cos(4.2 * t) + .015 * Math.sin(t * 1.4);
     c.fillStyle = 'rgba(29,58,99,.13)'; c.beginPath(); c.ellipse(px + 10 * U, foot, 120 * U, 13 * U, 0, 0, SK.TAU); c.fill();
     c.fillStyle = K.navy;
@@ -124,6 +139,17 @@
         SK.logo(FACTS.logo, 0, y0 + ph * .23, { w: pw * .66, h: ph * .36, pad: 0 });
         c.fillStyle = K.blue; c.fillRect(x0, y0 + ph * .46, pw, ph * .42);
         text(FACTS.kicker.toUpperCase(), 0, y0 + ph * .67, pw * .86, { size: 50 * U * k, font: FB, wt: 700, col: K.white, ls: 3 * U });
+      }
+      if (AG) { // the rider: the agent's photo, name and number, hung from the board on two links
+        const ry = y0 + ph + 16 * U, f = agentPhoto(), r = rh * .39, pad = rh * .13;
+        c.strokeStyle = K.navy; c.lineWidth = 4 * U;
+        for (const sx of [-.36, .36]) { c.beginPath(); c.moveTo(sx * pw, y0 + ph - 2 * U); c.lineTo(sx * pw, ry + 2 * U); c.stroke(); }
+        SK.card(x0, ry, pw, rh, { r: 8 * U, fill: K.white, shadow: { blur: 24, y: 14, col: 'rgba(29,58,99,.2)' } });
+        const cy = ry + rh / 2, tx = f ? x0 + pad + 2 * r + pad : 0, tw = f ? pw - (tx - x0) - pad : pw * .86, al = f ? 'left' : 'center';
+        if (f) face(f, x0 + pad + r, cy, r);
+        const two = !!AG.phone;
+        text(AG.name, tx, cy - (two ? rh * .17 : 0), tw, { size: rh * .28, font: FB, wt: 700, col: K.ink, align: al, one: true });
+        if (two) text(AG.phone, tx, cy + rh * .2, tw, { size: rh * .25, font: FB, wt: 500, col: K.blue, align: al, one: true });
       }
     });
   }
@@ -275,8 +301,22 @@
     const a = ent(t, T.bring - .4, .6); if (a <= 0) return;
     const v = SK.view, c = SK.ctx(), mw = W * .84, k = tall ? 1.4 : wide ? 1.12 : 1.06, s = (n) => n * U * k;
     SK.alpha(a * .96, () => { c.fillStyle = K.white; c.fillRect(v.x0 - 40, v.y0 - 40, v.x1 - v.x0 + 80, v.y1 - v.y0 + 80); });
-    const t0 = T.bring - .2, p = (i) => ent(t, t0 + i * .2, .55), im = SK.IMG[FACTS.logo];
-    const lw = Math.min(W * .44, s(520)), lh = im ? Math.min(lw * im.height / im.width, s(150)) : 0;
+    const t0 = T.bring - .2, p = (i) => ent(t, t0 + i * (AG ? .15 : .2), .55), im = SK.IMG[FACTS.logo];
+    const lw = Math.min(W * .44, s(520)), lh = im ? Math.min(lw * im.height / im.width, s(AG ? 116 : 150)) : 0;
+    // the agent: a photo beside the name, what they are and the number to call, set as one block about the centre
+    const agentRow = (y, a) => {
+      const f = agentPhoto(), d = f ? s(172) : 0, gap = f ? s(36) : 0, room = mw - d - gap, ns = { size: s(52), font: FB, wt: 700 }, rs = { size: s(30), font: FB, wt: 400 };
+      const nsz = Math.min(ns.size, fit(AG.name, room, ns)), rsz = AG.role ? Math.min(rs.size, fit(AG.role, room, rs)) : 0, psz = s(36);
+      const pw0 = AG.phone ? SK.measure(AG.phone, { size: psz, font: FB, wt: 700 }) + 2 * psz * .8 : 0;
+      const tw = Math.max(SK.measure(AG.name, { ...ns, size: nsz }), AG.role ? SK.measure(AG.role, { ...rs, size: rsz }) : 0, pw0), x0 = -(d + gap + tw) / 2, tx = x0 + d + gap;
+      const al = f ? 'left' : 'center', ax = f ? tx : 0, rows = [[nsz * 1.16, AG.name, { ...ns, size: nsz, col: K.ink }], AG.role ? [rsz * 1.5, AG.role, { ...rs, size: rsz, col: K.soft }] : null].filter(Boolean);
+      const th = rows.reduce((q, r) => q + r[0], 0) + (AG.phone ? psz * 2.1 : 0); let ty = y - th / 2;
+      SK.alpha(a, () => {
+        if (f) face(f, x0 + d / 2, y + (1 - a) * 24 * U, d / 2);
+        for (const [h, str, o] of rows) { text(str, ax, ty + h / 2, room, { ...o, align: al, one: true }); ty += h; }
+        if (AG.phone) pill(AG.phone, ax, ty + psz * 1.2, { size: psz, fill: K.blue, col: K.white, wt: 700, align: al });
+      });
+    };
     const one = wide && PLACE.join(', ').length < 60;
     stack([
       im ? [lh, (y, i) => SK.alpha(p(i), () => SK.image(FACTS.logo, 0, y, null, lh))] : null,
@@ -288,8 +328,8 @@
       one ? [s(46), (y, i) => text(PLACE.join(', '), 0, y, mw, { size: s(40), font: FB, wt: FACTS.venue ? 400 : 600, col: FACTS.venue ? K.soft : K.ink, p: p(i) })] : null,
       !one && FACTS.street ? [s(48), (y, i) => text(FACTS.street, 0, y, mw, { size: s(42), font: FB, wt: FACTS.venue ? 400 : 600, col: FACTS.venue ? K.soft : K.ink, p: p(i) })] : null,
       !one && FACTS.cityZip ? [s(44), (y, i) => text(FACTS.cityZip, 0, y, mw, { size: s(38), font: FB, wt: 400, col: K.soft, p: p(i) })] : null,
-      FACTS.contact ? [s(96), (y) => { const size = Math.min(s(40), fit(FACTS.contact, mw - s(80), { size: s(40), font: FB, wt: 700 })); pill(FACTS.contact, 0, y + s(14), { size, fill: K.blue, col: K.white, wt: 700, align: 'center', in: { t: t0 + 1.4, type: 'rise' } }); }] : null,
-    ], -H * .01, s(tall ? 40 : 30));
+      AG ? [s(204), (y, i) => agentRow(y + s(8), p(i))] : FACTS.contact ? [s(96), (y) => { const size = Math.min(s(40), fit(FACTS.contact, mw - s(80), { size: s(40), font: FB, wt: 700 })); pill(FACTS.contact, 0, y + s(14), { size, fill: K.blue, col: K.white, wt: 700, align: 'center', in: { t: t0 + 1.4, type: 'rise' } }); }] : null,
+    ], -H * .01, s(tall ? 40 : AG ? 24 : 30));
   }
 
   const camera = SK.breath(SK.camera([[0, [0, 0, 1.02]], [T.day, [0, 0, 1]], [T.bring - .4, [0, 0, 1.01]], [30, [0, 0, 1.06], E.sine]]), { amp: 8, zoom: .015, period: 10 });

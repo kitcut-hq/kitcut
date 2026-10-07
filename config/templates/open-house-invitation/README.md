@@ -25,6 +25,16 @@ and pictures live only with the working project, `projects/open-house-invitation
 
     python studio/template_from_film.py make --slug open-house-invitation --push --publish
 
+v6 (2026-10-07): the agent is in it, because people buy from people. `content.agent` {name, role, phone,
+photo {img, fx, fy, zoom}}: a rider hangs under the yard sign with the photo, the name and the number,
+and the end card sets the photo beside the name, what they are and the number to call, in place of the
+plain contact pill. The photo is the agent's own headshot (an attachment, or the one the listing's own
+page shows for that agent), cropped to a circle by `face()`. With no photo the name stands alone; with
+no agent the film is as it was (`contact`). The sample's is the listing team's leader, from the
+brokerage's page. The three showcase films were made again on the studio VM from the changed files
+(`ops.sh resume <id> --finish --patched`), not on a laptop. v5: the street's name beside the pin when
+its street leaves no clear spot.
+
 v4 (2026-10-06): the map is real. v3 drew a ruled grid with two green ovals and lit one of its lines
 as "the host's street"; nothing on it existed. Now the map tool makes the street map of the address
 from OpenStreetMap and the film draws that: the sample's shows Coral Ridge's own streets, its houses,
