@@ -132,6 +132,49 @@ the film's log, so the log, review images and source files go with the video; th
 its person, project, prompt and cost. Check a figure the new film states against the page text
 it read (`web/<name>.txt`) before replacing: the person's name is on it.
 
+## Reworking a finished film by hand
+
+When the owner reviews a finished film and wants scenes fixed ("she is cut off coming out of the
+carrier", "nothing happens here but the narration"), the film's own files are changed and it is
+rendered again on the same page (`resume --finish --patched`). Done twice on 2026-10-07 (Duchess
+episodes 8 and 10); every step below cost time when it was skipped.
+
+1. **Read what its maker said first**: `claude_said` in the film's `studio.json` often names the
+   very spots worth a look. Then look at the film itself one frame a second, and closer at every
+   entrance, exit and pose change: the review sheet is twelve frames of a two-minute film.
+2. **Work on a copy on the laptop.** From `projects/<id>/` on the VM take `film.js cast/ engine/
+   sketch.json vo.json sfx.json score.json sounds.json audio/vo/timeline.json` (tar over
+   `vm.sh ssh`), and preview with `python scripts/sketch-render.py --manifest <copy>/sketch.json
+   --stills 26,27.5,29 --into review --sheet`: five seconds, and it matches the real render.
+   Preview the whole film at one frame a second before sending anything back.
+3. **What reads as broken** (the owner's words, not a style guide): a character cut off by a clip
+   line in the open air; a character squashed, shrunk or flattened to fit somewhere (make the prop
+   bigger instead); a colour laid over the whole frame for a time of day (show it in the window);
+   a beat where only the narrator works; a caption on a ground of its own colour or behind the
+   meter. A plot step is shown, not told: she looks at the cushion before she ignores it.
+4. **Send it back**: copy the originals to `temp/before-fix/` in the film's folder, then the
+   changed files (tar through `vm.sh ssh ... 'tar -xf -'`).
+5. **Narration.** A changed line records again by itself; run `scripts/sketch-vo.py --manifest
+   <film>/sketch.json` on the VM with the server's environment (`STUDIO_HOME STUDIO_REPO
+   STUDIO_ENV_FILE HF_HOME=/srv/kitcut/hf`: without `HF_HOME` the word timing fails offline).
+   **A line added in the middle renumbers the rest, and a take's file name starts with its line
+   number** (`L07_T0_<hash>`): rename the existing takes to their new numbers first, highest first,
+   or every later line is recorded again and its timing moves. Lines keep their `start`, so give a
+   new line its own and check it ends before the next begins. `score.json` counts in beats (two a
+   second at 120 bpm); `sfx.json` in seconds.
+6. **Render**: `ops.sh status` (wait while another film is rendering: the cores are shared), then
+   `ops.sh resume <id> --finish --patched`. About ten minutes for two minutes of film; the page and
+   link stay, the files get new names.
+7. **Check the real video** at every changed scene, then the rest of the record:
+   - YouTube, when it was already there: `npm run film -- youtube ... --description-file` files
+     the new upload with the same title and time, and `--remove <old video>` takes the old one
+     off once the new one is live (sketch-studio `scripts/film.mjs`).
+   - its summary: set `claude_said` to what the film now is (`Film.update` and `agent.save`), then
+     `studio/canon.py --film <id>` rewrites its entry in the series' episode log, so later episodes
+     do not build on the first cut.
+   - a cast member that changed: `ops.sh library-put <project> --replace cast/<name>.js`, its notes
+     saying what was learned, so the next episode does not repeat it.
+
 ## When something is wrong
 
 1. `ops.sh status` -- is the studio answering, is studio.kitcut.ai the same release, any errors?
