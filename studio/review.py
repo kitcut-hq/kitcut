@@ -20,6 +20,9 @@ wrong, so nothing here can fail a film: a reader that breaks or runs out of time
 as its author finished it.
 
 Measured on the bench of known glitches (studio/defects.py --part review): see the README.
+
+    python studio/review.py --film <id>          read a finished film and print what it finds
+    python studio/review.py --folder <dir> --machine   only what the drawing code shows (free)
 """
 
 import io
@@ -31,6 +34,7 @@ import time
 import shutil
 import asyncio
 import contextlib
+import subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -644,3 +648,168 @@ async def gate(film, emit, meter, tools, auth, overtime=False):
             film.update(review=note)
             await agent.save(film.id, {"review": note})
         return None
+
+
+# ------------------------------------------------------------------ a film's folder, read by hand
+# python studio/review.py --film <id>   (ops.sh review <id> on the VM): the same reading, of a film
+# that is already finished, printed. It changes nothing of the film: no record, no fix.
+KIT = os.path.dirname(HERE)
+PROBE_STEP = 0.1
+
+
+def render_stills(d, times, into, extra=()):
+    """sketch-render.py --stills over a film's folder (its own sketch.json); raises with the
+    script's last lines."""
+    argv = [sys.executable, "-X", "utf8", os.path.join(KIT, "scripts", "sketch-render.py")]
+    argv += ["--manifest", os.path.join(d, "sketch.json")]
+    argv += ["--stills", ",".join("%g" % t for t in times), "--into", into, *extra]
+    r = subprocess.run(
+        argv, cwd=d, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False
+    )
+    if r.returncode != 0:
+        raise RuntimeError((r.stdout + r.stderr)[-1500:])
+    return r.stdout
+
+
+def folder_length(d):
+    with open(os.path.join(d, "sketch.json"), encoding="utf-8") as f:
+        return float(json.load(f)["duration"])
+
+
+def folder_frames(d, force=False):
+    """The film's frames at motion's own rate and the probe's report, in <film>/temp/motion (kept
+    while film.js is older). -> (the folder, whether it rendered them now)."""
+    out = os.path.join(d, "temp", "motion")
+    src = max(os.path.getmtime(os.path.join(d, f)) for f in ("film.js", "sketch.json"))
+    have = os.listdir(out) if os.path.isdir(out) else []
+    fresh = have and min(os.path.getmtime(os.path.join(out, f)) for f in have) > src
+    if fresh and not force and "report.json" in have:
+        return out, False
+    for f in have:
+        os.remove(os.path.join(out, f))
+    render_stills(
+        d,
+        motion.times(folder_length(d)),
+        os.path.join("temp", "motion"),
+        ["--probe", "%g" % PROBE_STEP],
+    )
+    return out, True
+
+
+def folder_events(d, force=False):
+    """What the drawing code shows (motion.events over the probe's report), kept to what the
+    frames show too (motion.shown)."""
+    fr, _ = folder_frames(d, force)
+    try:
+        with open(os.path.join(fr, "report.json"), encoding="utf-8") as f:
+            rep = json.load(f).get("probe") or {}
+    except (OSError, ValueError):
+        rep = {}
+    return motion.shown(motion.events(rep), fr)
+
+
+def folder_view(d, title=""):
+    """A film's folder as read() takes one: its facts, and how to lay it out and look closer."""
+    import tools  # noqa: PLC0415
+
+    said = motion.spoken(os.path.join(d, "audio", "vo", "timeline.json"))
+    out_dir = os.path.join(d, "outputs", "review")
+
+    async def sheets():
+        fr, _ = await asyncio.to_thread(folder_frames, d)
+        return await asyncio.to_thread(motion.sheets, fr, out_dir, said)
+
+    async def strips(want):
+        n = folder_length(d)
+        groups = [tools.strip_times(t, 0, n - 0.02) for t, _ in want]
+        into = os.path.join(d, "temp", "strip")
+        shutil.rmtree(into, ignore_errors=True)
+        await asyncio.to_thread(
+            render_stills, d, sorted({x for g in groups for x in g}), os.path.join("temp", "strip")
+        )
+        return await asyncio.to_thread(
+            tools.strips_of, into, out_dir, [t for t, _ in want], groups, said, "look"
+        )
+
+    return {
+        "mat": material(d, title=title),
+        "sheets": sheets,
+        "events": lambda: folder_events(d),
+        "strips": strips,
+    }
+
+
+def main():
+    import argparse  # noqa: PLC0415
+
+    ap = argparse.ArgumentParser(
+        description="Read a finished film for glitches, as the studio does before a film is called "
+        "done: the whole of it a frame a second, then the moments worth a closer look. Prints what "
+        "it finds; changes nothing of the film."
+    )
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--film", help="a film's id (its folder under the studio's projects)")
+    g.add_argument(
+        "--folder", help="a film's folder anywhere (sketch.json, film.js, cast/, audio/)"
+    )
+    ap.add_argument("--auth", choices=("login", "api"), help="default: what the film was made on")
+    ap.add_argument(
+        "--machine",
+        action="store_true",
+        help="only what the drawing code shows: no Claude call, free",
+    )
+    ap.add_argument("--json", action="store_true", help="print the whole result as JSON")
+    a = ap.parse_args()
+
+    import agent  # noqa: PLC0415, F401 -- imports _env first
+    import ytdraft  # noqa: PLC0415
+
+    film, title, auth = None, "", a.auth or "login"
+    if a.film:
+        import share  # noqa: PLC0415
+        from film import Film  # noqa: PLC0415
+
+        film = Film.open(a.film)
+        if film is None:
+            sys.exit("no such film: %s" % a.film)
+        d, title = film.dir, str(film.record().get("title") or "")
+        auth = a.auth or share.auth_of(film)
+    else:
+        d = os.path.abspath(a.folder)
+    if a.machine:
+        ev = folder_events(d)
+        print("%d moment(s) the drawing code points at:" % len(ev))
+        for e in ev:
+            print("- %s" % e["text"])
+        return
+
+    async def ask(text, images):
+        return await ytdraft.ask_json(
+            text, images, auth, film, ytdraft.MODEL, EFFORT, system(), "review"
+        )
+
+    r = asyncio.run(read(folder_view(d, title), ask, log=lambda s: print("  " + s, flush=True)))
+    with open(os.path.join(d, "temp", "review-last.json"), "w", encoding="utf-8") as f:
+        json.dump(r, f, indent=1, ensure_ascii=False)
+    if a.json:
+        print(json.dumps(r, indent=1, ensure_ascii=False))
+        return
+    musts = [f for f in r["findings"] if f["must"]]
+    print(
+        "\n%d thing(s) a viewer would take for a mistake, %d that could be better "
+        "(%d call(s), %.0f s, $%.2f on %s):"
+        % (
+            len(musts),
+            len(r["findings"]) - len(musts),
+            r["calls"],
+            r["seconds"],
+            r["cost_usd"],
+            auth,
+        )
+    )
+    print(words(r["findings"]) or "- nothing: a clean film")
+    print("\nIts sheets and close-ups: %s" % os.path.join(d, "outputs", "review"))
+
+
+if __name__ == "__main__":
+    main()

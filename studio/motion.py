@@ -298,7 +298,34 @@ HIDDEN, HIDDEN_S = 0.3, 0.3
 # ("the screen all changes the color like a filter is applied", said its owner). A textured
 # background is a translucent fill over the frame too, but the same one all film long.
 VEIL, VEIL_S = 0.08, 2.0
+# ... and showing: the tint above moved the median pixel by 17-25 of 255; a veil nobody could
+# see (a film's flash glow building up off the frame) by 0
+VEIL_SEEN = 6
 KINDS = ("double", "cut", "into", "sliver", "wash", "jump", "squash", "pop")  # most telling first
+
+
+def shown(events, d):
+    """The events a viewer could see: a wash is kept only when the frames in folder d (as
+    tools.motion() renders them) change colour with it -- the median pixel moves by
+    VEIL_SEEN or more of 255 between its start and its end. The drawing code also lays
+    translucent colour over the frame that changes nothing on screen (a glow whose bright
+    middle is off the frame): told as a filter being switched on, it sent a reader looking
+    for a tint that was not there. Other kinds pass as they are."""
+    fs = _frames(d)
+    if not fs:
+        return events
+    near = lambda t: min(fs, key=lambda f: abs(f[0] - t))[1]  # noqa: E731
+    small = lambda p: np.asarray(  # noqa: E731
+        Image.open(p).convert("RGB").resize((96, 54), Image.BILINEAR), dtype=np.int16
+    ).reshape(-1, 3)
+    out = []
+    for e in events:
+        if e["kind"] == "wash":
+            a, b = near(e["t0"]), near(e["t1"])
+            if a == b or float(np.max(np.abs(np.median(small(b) - small(a), axis=0)))) < VEIL_SEEN:
+                continue
+        out.append(e)
+    return out
 
 
 def _clock2(t):

@@ -34,6 +34,13 @@
 #   bash studio/deploy/ops.sh share <film-id> --frame <seconds>|off   the film's own frame as its
 #                                                     page's thumbnail, or the drawn one back; the
 #                                                     words and the link preview stay, no cost
+#   bash studio/deploy/ops.sh review <film-id> [--machine] [--api]   read a finished film for
+#                                                     glitches as the studio reads one before it
+#                                                     is done (studio/review.py): the whole of it
+#                                                     a frame a second, then the moments worth a
+#                                                     closer look. Prints what it finds; changes
+#                                                     nothing. --machine: only what the drawing
+#                                                     code shows, no Claude call
 #   bash studio/deploy/ops.sh canon <p-id> [--show | --dry-run | --force]   a project's episode
 #                                                     log (studio/canon.py): write the entries it
 #                                                     lacks, oldest first; --show prints it
@@ -381,6 +388,27 @@ EOF
     unit="kitcut-share-$(date +%Y%m%d-%H%M%S)"
     # capped, and behind the films: an uncapped --missing grew to 15 GB of the VM's 16 on
     # 2026-09-29 and the films being made could not start Claude (KI-045)
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=2G -p MemoryMax=3G -p Nice=10 $UNIT_ENV $py"
+    [ "$DRY" = 1 ] && exit 0
+    follow "$unit"
+    ;;
+
+  review)
+    # a finished film read for glitches (studio/review.py): its frames and the probe are rendered
+    # beside the server, so in a capped unit like canon's, and not while a film records its voice
+    use="review <film-id> [--machine] [--api]"
+    id="${1:?$use}"; shift
+    [[ "$id" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $id"
+    args="--film $id"
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --machine) args="$args --machine" ;; --api) args="$args --auth api" ;;
+        *) die "$use" ;;
+      esac
+      shift
+    done
+    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/review.py $args"
+    unit="kitcut-review-$(date +%Y%m%d-%H%M%S)"
     change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=2G -p MemoryMax=3G -p Nice=10 $UNIT_ENV $py"
     [ "$DRY" = 1 ] && exit 0
     follow "$unit"

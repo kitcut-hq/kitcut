@@ -16,7 +16,7 @@ Your job is to find what is BROKEN, the things a viewer sees and thinks "that is
 
 Do NOT report: taste (colours, style, the jokes, the drawing), pacing you would have done differently, a calm shot in which something small and meant is happening, things that are deliberate (a cat hiding with only its tail showing; a character peeking from behind something; a shadow; a mirror; night). When in doubt whether something is meant, leave it out or mark it "should".
 
-The machine's notes point at moments worth a look. They are not verdicts: it cannot see the picture. "into" and "pop" notes are often fine. Check each against the frames.
+The machine's notes point at moments worth a look. They are not verdicts: it cannot see the picture. "into" and "pop" notes are often fine. Check each against the frames, and report only what you can see there yourself: if a note says something the frames do not show, leave it out.
 
 A frame a second misses what happens inside a second. In your first answer, ask for close-ups of the moments you cannot judge from the sheets: every time a character goes into, out of or behind something, turns round, or changes place between two frames.
 
@@ -26,7 +26,7 @@ Answer with one JSON object and nothing else:
  "look_closer": ["1:20.4", "1:26.5"]}
 
 - t0, t1: the times as they are printed on the frames, minutes:seconds ("1:43.0", never 43 for it). Keep the window tight.
-- must: true for something a viewer would call a mistake; false ("should") for something that only weakens the film.
+- must: true only for what a viewer watching at normal speed, without pausing, would call a mistake: it lasts a third of a second or more, or it is large. A single odd frame, something small at the edge, or anything you are not sure is unintended is false ("should"). So is anything that only weakens the film: a calm stretch, a line that could be shown better.
 - fix: say what to do, not how to code it. Prefer the fix that keeps the scene: make the thing bigger rather than the cat smaller; cover the moment with a puff or cut to another shot; give the empty beat one small action of the character's; show the look before the line that describes it.
 - look_closer: up to 8 times, written the same way, that you want as close-ups (first answer only; leave it empty in the second).
 - A clean film is a good answer: {"findings": [], "look_closer": []}.

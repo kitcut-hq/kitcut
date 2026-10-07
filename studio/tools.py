@@ -944,7 +944,7 @@ class Tools:
         try:
             with open(self.film.path("temp", "motion", "report.json"), encoding="utf-8") as f:
                 rep = json.load(f).get("probe") or {}
-            ev = motion.events(rep)
+            ev = motion.shown(motion.events(rep), self.film.path("temp", "motion"))
         except Exception as e:  # noqa: BLE001 -- a pointer the film can do without, never a failure
             self.emit({"type": "log", "text": "the drawing code could not be read: %s" % e})
             return []

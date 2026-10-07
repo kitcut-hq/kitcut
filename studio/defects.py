@@ -29,7 +29,6 @@ import re
 import sys
 import json
 import argparse
-import subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 KIT = os.path.dirname(HERE)
@@ -66,39 +65,12 @@ def films(home, only=None):
 
 
 def length(d):
-    with open(os.path.join(d, "sketch.json"), encoding="utf-8") as f:
-        return float(json.load(f)["duration"])
-
-
-def render(d, times, into, extra=()):
-    """sketch-render.py --stills over a film folder; raises with the script's last lines."""
-    argv = [sys.executable, "-X", "utf8", os.path.join(KIT, "scripts", "sketch-render.py")]
-    argv += [
-        "--manifest",
-        os.path.join(d, "sketch.json"),
-        "--stills",
-        ",".join("%g" % t for t in times),
-    ]
-    argv += ["--into", into, *extra]
-    r = subprocess.run(
-        argv, cwd=d, capture_output=True, text=True, encoding="utf-8", errors="replace"
-    )
-    if r.returncode != 0:
-        raise RuntimeError((r.stdout + r.stderr)[-1500:])
-    return r.stdout
+    return review.folder_length(d)
 
 
 def frames(d, force=False):
-    """The film's frames at motion's own rate, in <film>/temp/motion (kept while film.js is older)."""
-    out = os.path.join(d, "temp", "motion")
-    src = max(os.path.getmtime(os.path.join(d, f)) for f in ("film.js", "sketch.json"))
-    have = [f for f in os.listdir(out)] if os.path.isdir(out) else []
-    if have and not force and min(os.path.getmtime(os.path.join(out, f)) for f in have) > src:
-        return out, False
-    for f in have:
-        os.remove(os.path.join(out, f))
-    render(d, motion.times(length(d)), os.path.join("temp", "motion"))
-    return out, True
+    """The film's frames at motion's own rate (review.folder_frames)."""
+    return review.folder_frames(d, force)
 
 
 def said(d):
@@ -118,55 +90,9 @@ def part_motion(d):
     return out
 
 
-PROBE_STEP = 0.1
-
-
-def probe(d, force=False):
-    """sketch/probe.js's report for a film (kept in <film>/temp/probe while film.js is older)."""
-    p = os.path.join(d, "temp", "probe", "report.json")
-    src = max(os.path.getmtime(os.path.join(d, f)) for f in ("film.js", "sketch.json"))
-    if force or not os.path.isfile(p) or os.path.getmtime(p) < src:
-        render(d, [0], os.path.join("temp", "probe"), ["--probe", "%g" % PROBE_STEP])
-    with open(p, encoding="utf-8") as f:
-        return json.load(f).get("probe") or {}
-
-
 def part_probe(d):
     """The drawing code as it runs: motion.events() over sketch/probe.js's report."""
-    return motion.events(probe(d, force=True))
-
-
-def view_of(d):
-    """A bench film as review.read() takes one: its facts, and how to lay it out and look closer."""
-    import asyncio  # noqa: PLC0415
-
-    import tools  # noqa: PLC0415
-
-    words = said(d)
-    out_dir = os.path.join(d, "outputs", "review")
-
-    async def sheets():
-        fr, _ = await asyncio.to_thread(frames, d)
-        return await asyncio.to_thread(motion.sheets, fr, out_dir, words)
-
-    async def strips(want):
-        n = length(d)
-        groups = [tools.strip_times(t, 0, n - 0.02) for t, _ in want]
-        every = sorted({x for g in groups for x in g})
-        into = os.path.join(d, "temp", "strip")
-        for f in os.listdir(into) if os.path.isdir(into) else []:
-            os.remove(os.path.join(into, f))
-        await asyncio.to_thread(render, d, every, os.path.join("temp", "strip"))
-        return await asyncio.to_thread(
-            tools.strips_of, into, out_dir, [t for t, _ in want], groups, words
-        )
-
-    return {
-        "mat": review.material(d),
-        "sheets": sheets,
-        "events": motion.events(probe(d)),
-        "strips": strips,
-    }
+    return review.folder_events(d)
 
 
 def part_review(d, auth="login"):
@@ -180,7 +106,9 @@ def part_review(d, auth="login"):
             text, images, auth, None, ytdraft.MODEL, review.EFFORT, review.system(), "review"
         )
 
-    r = asyncio.run(review.read(view_of(d), ask, log=lambda s: print("    " + s, flush=True)))
+    r = asyncio.run(
+        review.read(review.folder_view(d), ask, log=lambda s: print("    " + s, flush=True))
+    )
     with open(os.path.join(d, "temp", "review-last.json"), "w", encoding="utf-8") as f:
         json.dump(r, f, indent=1, ensure_ascii=False)
     print(
