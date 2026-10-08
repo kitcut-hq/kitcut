@@ -528,15 +528,6 @@ def main():
     )
     two = np.concatenate([tone(0.6), np.zeros(int(0.3 * SR)), tone(0.5)])
     check("stray: a breath inside a line is not a cut", vo_mod.cut_stray(two, 1.4)[1] is None)
-    long_ = np.concatenate([tone(1.0), np.zeros(int(0.8 * SR)), tone(2.0)])
-    check(
-        "stray: no word heard after the pause, and too long for a blip: kept",
-        vo_mod.cut_stray(long_, 1.0, words=False)[1] is None
-        and vo_mod.cut_stray(
-            np.concatenate([tone(1.0), np.zeros(SR), tone(0.2)]), 1.0, words=False
-        )[1]
-        is not None,
-    )
     digits = [("bought", 0.0, 0.4), ("it", 0.4, 0.5), ("for", 0.5, 0.7), ("$12", 0.7, 1.0)]
     digits += [("billion.", 1.0, 1.4)]
     span = vo_mod.line_span("bought it for twelve billion dollars.", digits)

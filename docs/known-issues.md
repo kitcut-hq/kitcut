@@ -1011,6 +1011,7 @@ off (the timeline line's `cut` says what was cut); words added with no pause to 
 recorded again twice, the second time without the direction; what still remains is in the line's
 `stray`, printed in full, ranked below any take without it, and told to the author as words that
 are in the film. On that film: all 16 lines cut clean, the 37 others untouched. The brief now
-keeps `style` to how the voice sounds. **Not covered:** a sound with no words in it (a laugh, a
-hum) longer than 0.5 s stays, because Whisper can time a line's last words early and a cut there
-would take real words; ElevenLabs and edge takes are timed by their own service and not checked.
+keeps `style` to how the voice sounds. Sound after the pause that the listener heard no word in
+(a local Whisper left that film's "Chapter One. Finding Balance." out of the transcript
+altogether) is listened to on its own: the script's own last words said late are kept, anything
+else is cut. **Not covered:** ElevenLabs and edge takes are timed by their own service and not checked.

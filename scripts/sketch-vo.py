@@ -805,16 +805,18 @@ def added(script, words):
     return out
 
 
-# what follows the pause with no word heard in it is cut only when it is this short (a click, a
-# breath): Whisper can time a line's last words early, and a cut there would take real words
+# What follows the pause when the listener heard no word there: up to STRAY_BLIP of it is a click
+# or a breath and is cut. Longer, it is listened to on its own (settle): the same film's line 52
+# had 4.8 s of "Chapter One. Finding Balance." there that a local Whisper left out of the take's
+# transcript altogether, and a listener can also time a line's real last words early -- so only
+# what is not the script's own words is cut.
 STRAY_BLIP = 0.5
 
 
-def cut_stray(x, end, words=True):
+def cut_stray(x, end):
     """The take cut where the voice went on after its line: at the first pause of STRAY_PAUSE
     after the last scripted word (end, seconds) that sound follows. Returns (samples, cut at
-    seconds) or (x, None) when nothing follows such a pause. words: were words heard after the
-    line (when not, only a blip is cut: STRAY_BLIP)."""
+    seconds) or (x, None) when nothing follows such a pause."""
     hop = int(0.02 * SR)
     n = len(x) // hop
     if not n:
@@ -830,8 +832,6 @@ def cut_stray(x, end, words=True):
         while j < n and not loud[j]:
             j += 1
         if j - i >= need and j < n:  # a real pause, and the voice comes back after it
-            if not words and (n - j) * 0.02 > STRAY_BLIP:
-                return x, None
             stop = min(len(x), i * hop + int(STRAY_KEEP * SR))
             y = x[:stop].copy()
             f = min(len(y), int(0.02 * SR))
@@ -1428,11 +1428,28 @@ def main():
                 text, ws = lines[i]["text"], list(got[2])
                 _, end, before, after = line_span(text, ws)
                 if end is not None:
-                    y, at = cut_stray(_sketch.decode(c["file"]), end, bool(after))
+                    x = _sketch.decode(c["file"])
+                    y, at = cut_stray(x, end)
+                    rest = [w for w, a, b in ws if at is not None and (a + b) / 2 >= at]
+                    if at is not None and not rest and len(x) / SR - at > STRAY_BLIP:
+                        # sound the listener heard no word in: what does it say, alone?
+                        part = c["base"] + "_rest.wav"
+                        _sketch.write_wav(part, x[int(at * SR) :])
+                        rest = cached_score(
+                            c["base"] + "_rest",
+                            part,
+                            text,
+                            vo.get("hotwords", []),
+                            _sketch.language(m),
+                            vo.get("whisper"),
+                        )[1].split()
+                        os.remove(part)
+                        if rest and not added(text, rest):
+                            at = None  # the line's own words, said after a pause: kept
                     if at is not None:
                         _sketch.write_wav(c["file"], y)
                         # by a word's middle: Whisper starts a word that follows a pause early
-                        c["cut"] = " ".join(w for w, a, b in ws if (a + b) / 2 >= at)
+                        c["cut"] = " ".join(rest)
                         ws = [w for w in ws if (w[1] + w[2]) / 2 < at]
                         c["dur"], c["heard"] = len(y) / SR, " ".join(w for w, _, _ in ws)
                         c["acc"] = accuracy(text, c["heard"])
