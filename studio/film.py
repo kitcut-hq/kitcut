@@ -199,7 +199,13 @@ CAPS["template"] = {}
 # routes: a real map and a route on it (the route tool: scripts/route-map.py --film), for a film
 # that replays a ride, a run or a hike on its real roads
 CAPS["routes"] = {}
-# the frames a film can have ("16:9" unless a template offers another), as the manifest's "frame"
+# captions: the narration's words drawn into the picture, a card at a time (sketch/captions.js),
+# for a film that goes where a soft subtitle track is not shown (a YouTube Short). Not part of any
+# look's recipe and it brings no reference: a film asked for with them gets it on top of its
+# look's (Film.create), and every prompt stays byte for byte what it was
+CAPS["captions"] = {"modules": ("captions",)}
+# the frames a film can have ("16:9" unless it is asked for in another, or a template offers
+# another), as the manifest's "frame"
 FRAMES = {"16:9": [1920, 1080], "1:1": [1080, 1080], "9:16": [1080, 1920]}
 MAX_PEOPLE = 4
 PERSON_NAME_MAX = 40  # characters of a person's name the studio keeps
@@ -356,6 +362,78 @@ def mark_note(film):
         "-- your stills will not show it. Put nothing there that has to be read (no timer, "
         "counter, caption, label or logo); the picture itself may run under it." % (x0, x1, y0, y1)
     )
+
+
+# What a phone's own buttons cover of a 9:16 film (a YouTube Short), as fractions of the frame:
+# the title, the channel and the sound along the bottom, and the like/comment/share column down
+# the right of the lower half. The picture runs under them; nothing that must be read does.
+TALL_COVERED = {"bottom": 0.2, "right": 0.16}
+
+
+def caption_band(w, h):
+    """The band the burned captions stay inside, (x0, y0, x1, y1) in screen pixels: two lines of
+    type and their card. sketch/captions.js GEOMETRY and LOOK, worked out the same way
+    (SK.captionBox) -- change one and change the other; studio/test_shorts.py holds them equal."""
+    if h > w:
+        y, size, width = h * 0.745, w * 0.061, w * 0.74
+    elif h == w:
+        y, size, width = h * 0.86, w * 0.05, w * 0.8
+    else:
+        y, size, width = h * 0.885, h * 0.046, w * 0.7
+    bh, bw = 2 * size * 1.2 + 2 * size * 0.26, width + 2 * size * 0.42
+    return (_round(w / 2 - bw / 2), _round(y - bh / 2), _round(w / 2 + bw / 2), _round(y + bh / 2))
+
+
+def _round(v):
+    """Half up, as JavaScript's Math.round does (Python's rounds half to even)."""
+    return int(v + 0.5)
+
+
+def frame_note(film):
+    """For a film that is not 16:9, or carries burned captions: the frame it is drawn in and what
+    is taken in it. The system prompt and its example films are 16:9 (and stay so, to keep every
+    other film's prompt as it was), so the first message says what replaces that."""
+    rec = film.record()
+    if rec.get("template"):
+        return ""
+    w, h = FRAMES.get(rec.get("frame") or "16:9", FRAMES["16:9"])
+    text = ""
+    if (w, h) != (1920, 1080):
+        shape = "vertical (9:16), made to be watched on a phone" if h > w else "square (1:1)"
+        text += (
+            "\n\nThe frame is %s: the canvas is %dx%d world units at zoom 1 (SK.W x SK.H), origin "
+            "at the centre, so it runs x %d to %d and y %d to %d. This replaces the 1920x1080 in the "
+            "rules below, and the reference films are wide: compose for this frame from the start "
+            "-- never a wide layout shrunk or cropped into it. Keep what matters inside about "
+            "+-%d x +-%d of the camera centre."
+            % (shape, w, h, -w // 2, w // 2, -h // 2, h // 2, w // 2 - 70, h // 2 - 110)
+        )
+        if h > w:
+            by, rx = (
+                h // 2 - int(h * TALL_COVERED["bottom"]),
+                w // 2 - int(w * TALL_COVERED["right"]),
+            )
+            text += (
+                " Stack the picture top to bottom, one idea on screen at a time, and set type for "
+                "a phone held at arm's length: a headline 90 px or more, nothing that must be read "
+                "under 44. The phone's own buttons lie over the film: at zoom 1 with the camera "
+                "at the centre, everything below y %d (the title and channel name) and the strip "
+                "right of x %d from y 0 down (like, comment, share). The picture runs under them; "
+                "nothing that must be read goes there." % (by, rx)
+            )
+    if "captions" in (rec.get("caps") or ()):
+        x0, y0, x1, y1 = caption_band(w, h)
+        text += (
+            "\n\nThe studio writes the captions into the picture itself: the words being spoken "
+            "appear a few at a time on a dark card inside the band x %d to %d, y %d to %d (zoom 1, "
+            "camera at the centre; the card stays there whatever the camera does), from the "
+            "narration's own word times. Your stills, strips and motion sheets show them. Keep that "
+            "band free of anything that must be read or that matters -- the picture's ground may "
+            "run under it -- and draw no captions or subtitles of your own: on-screen type is for "
+            "names, numbers and labels, never the narration's sentence again."
+            % (x0 - w // 2, x1 - w // 2, y0 - h // 2, y1 - h // 2)
+        )
+    return text
 
 
 def paint_kinds(caps):
@@ -732,6 +810,7 @@ class Film:
         narrator=None,
         template=None,
         frame=None,
+        captions=False,
     ):
         """A new film's folder: the manifest (its length set), the engine copy, an empty
         narration, an empty list of paintings for a painted film, and its record.
@@ -740,6 +819,10 @@ class Film:
         length, its capabilities and its frozen engine, a manifest made from its own, no
         narration; templates.seed() then lays in its code and the person's content. frame: one of
         the template's frames ("16:9", "1:1"...).
+
+        frame, for a film made from an idea: "16:9" unless it is asked for in another of FRAMES
+        ("9:16": a YouTube Short). captions: the narration's words drawn into the picture
+        (CAPS "captions"); the first message says where they sit (frame_note).
 
         attachments: what the visitor attached (uploads.take), each meta with its file as "src",
         copied into inputs/. A picture becomes upload1.jpg... and joins the manifest's images
@@ -775,6 +858,9 @@ class Film:
             # has no kit.js there, and its code never calls one
             if not os.path.exists(os.path.join(template["_dir"], "engine", "kit.js")):
                 caps = tuple(c for c in caps if c != "kit")
+        elif captions:
+            caps += ("captions",)
+        frame = frame if frame in FRAMES else None
         style = people_style(character_style, look) if people else None
         projects = os.path.join(HOME, "projects")
         os.makedirs(projects, exist_ok=True)
@@ -812,6 +898,8 @@ class Film:
                 m.pop("captions", None)
             m["data"] = {"content": "content.json"}
             m["frame"] = FRAMES.get(frame) or FRAMES[template["frames"][0]]
+        elif frame and frame != "16:9":  # a film from an idea, in its own frame (frame_note)
+            m["frame"] = FRAMES[frame]
         words = re.sub(r"\s+", " ", prompt).strip()
         m["title"] = (words[:60] + "...") if len(words) > 60 else words
         attached = []
@@ -941,7 +1029,8 @@ class Film:
                         **({} if template.get("narration") else {"narration": False}),
                     }
                     if template
-                    else {}
+                    # a film from an idea in a frame of its own (a Short); none is 16:9, as ever
+                    else ({"frame": frame} if frame and frame != "16:9" else {})
                 ),
             },
         )

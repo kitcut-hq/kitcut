@@ -1237,6 +1237,17 @@ async def create(req):
         return web.json_response(
             {"error": "look must be one of %s" % ", ".join(films.LOOKS)}, status=400
         )
+    # a film from an idea in a frame of its own ("9:16": a YouTube Short), and with the
+    # narration's words drawn into the picture ("captions": true), which a Short needs: a video
+    # site shows no soft subtitle track. A template's film takes its template's (template_of).
+    captions = False
+    if not tpl:
+        frame = body.get("frame") or "16:9"
+        if frame not in films.FRAMES:
+            return web.json_response(
+                {"error": "frame must be one of %s" % ", ".join(films.FRAMES)}, status=400
+            )
+        captions = body.get("captions") is True
     # the site's project the film is an episode of: {id, name, brief, from_account_cast}. The
     # site checks it is the person's (trusted like X-Client-Ip); its library is theirs anyway
     project = body.get("project")
@@ -1349,6 +1360,7 @@ async def create(req):
             narrator=narrator,
             template=tpl,
             frame=frame,
+            captions=captions,
         )
         if preview:
             f.update(preview=True)

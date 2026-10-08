@@ -191,6 +191,21 @@ with the instruction to look at each and say what it took it to be; a film nobod
 gets its title from Claude (`name_film`). Pictures film.js never draws leave the manifest before
 the final render, so they never reach the film's files.
 
+**A Short** (`film.FRAMES`, `film.CAPS["captions"]`, 2026-10-08). `"frame": "9:16"` (or
+`"1:1"`; `"16:9"` is the default and is never recorded) makes a film from an idea in that frame:
+the manifest's `frame`, the record's `frame`, and a paragraph in the first message
+(`film.frame_note`) that replaces the brief's 1920x1080 -- the canvas, the box to keep to, and for
+a tall film what a phone's own buttons cover (`film.TALL_COVERED`: the bottom fifth and a strip
+down the right of the lower half). The system prompt is not touched, so every 16:9 film's prompt
+is byte for byte what it was. `"captions": true` adds the `captions` capability: the engine
+module `sketch/captions.js` draws the narration's words into the picture a card at a time, from
+the voice timeline, in a band that depends on the frame's shape (`film.caption_band`, which
+`studio/test_shorts.py` holds equal to the module's own `SK.captionBox`); the first message tells
+Claude to keep that band clear and to draw no captions of its own. Claude's stills, strips and
+motion sheets show the cards, and so does the review. A YouTube Short needs both: YouTube shows
+no soft subtitle track. From this machine: `python studio/agent.py "..." --frame 9:16 --captions`;
+from the site: `npm run film -- make ... --short`. Not yet on the site's idea box.
+
 **People** (`film.CAPS["people"]`). `"people": [{"upload": id, "name": "Alex"}]` (up to
 `film.MAX_PEOPLE`, image uploads, one photo per person) and `"character_style"` (`"auto"` or a
 style in `config/heads/looks.json` `"studio"`) put real people in the film as drawn characters

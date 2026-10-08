@@ -68,6 +68,7 @@ from film import (  # noqa: E402
     Film,
     direction_fields,
     fills,
+    frame_note,
     limits,
     mark_note,
     paint_kinds,
@@ -350,6 +351,7 @@ def ask(film, recent=()):
     )
     if n > LONG_S and film.mode != "scenes":  # a scenes film is written in passes anyway
         text += LONG_FILM
+    text += frame_note(film)
     text += attached_note(film) + people_note(film) + mark_note(film) + voice_note(film)
     mine = library.note(film)  # the project, or the person's own cast and earlier films
     project = bool(film.record().get("project"))
@@ -2143,8 +2145,11 @@ def first_record(film, source, client):
                 "frame": rec.get("frame"),
             }
             if rec.get("template")
-            else {}
+            # a film from an idea in a frame of its own (a Short): the site shapes its page by it
+            else ({"frame": rec["frame"]} if rec.get("frame") else {})
         ),
+        # the narration's words drawn into the picture (film.CAPS "captions")
+        **({"captions": "burned"} if "captions" in (rec.get("caps") or ()) else {}),
         "state": "queued",
         "cost_usd": 0.0,
     }
@@ -2388,7 +2393,15 @@ def main():
         metavar="FILE",
         help="a picture or a short document the person attached (repeatable)",
     )
-    ap.add_argument("--frame", help="with --template: one of its frames (16:9, 1:1...)")
+    ap.add_argument(
+        "--frame",
+        help="16:9 (as ever), 1:1 or 9:16 (a YouTube Short); with --template, one of its frames",
+    )
+    ap.add_argument(
+        "--captions",
+        action="store_true",
+        help="draw the narration's words into the picture (sketch/captions.js)",
+    )
     ap.add_argument(
         "--unlisted", action="store_true", help="keep the film out of every gallery (link-only)"
     )
@@ -2444,6 +2457,8 @@ def main():
             client="local",
             source="cli",
             listed=not args.unlisted,
+            frame=args.frame,
+            captions=args.captions,
         )
     print("  film    %s" % film.dir)
 
