@@ -901,7 +901,31 @@ class Tools:
         _write_json(self.film.manifest, m)
         return "The film is called %r." % title
 
-    async def film_sheets(self):
+    def _motion_fresh(self, ts):
+        """Whether temp/motion already holds these frames and the probe's report, rendered after
+        the last change to anything the picture is made of. A frame is a pure function of the
+        film's code and its time, so such frames are the film as it stands (the author's own
+        motion check, a minute before the studio reads the film: about 60-90 s of rendering)."""
+        d = self.film.path("temp", "motion")
+        try:
+            have = {round(t, 3) for t, _ in motion._frames(d)}
+            if not have >= {round(t, 3) for t in ts} or not os.path.isfile(
+                os.path.join(d, "report.json")
+            ):
+                return False
+            oldest = min(os.path.getmtime(os.path.join(d, n)) for n in os.listdir(d))
+            made_of = [
+                self.film.path(n) for n in ("film.js", "sketch.json", "content.json", "paint.json")
+            ]
+            made_of.append(self.film.path("audio", "vo", "timeline.json"))
+            for sub in ("cast", "scenes", "engine", "images", "web", "rigs"):
+                for base, _, names in os.walk(self.film.path(sub)):
+                    made_of += [os.path.join(base, n) for n in names]
+            return all(not os.path.exists(p) or os.path.getmtime(p) < oldest for p in made_of)
+        except (OSError, ValueError):
+            return False
+
+    async def film_sheets(self, reuse=False):
         """The film a few times a second (the whole of it, or a scene's own stretch), read by
         studio/motion.py: (what it says in words, whether it wrote motion.png, the whole-film
         sheets' paths as Claude names them, what the drawing code shows -- motion.events). The
@@ -910,18 +934,26 @@ class Tools:
         ts = motion.times(self.film.length)
         if self.span:  # a scene's pass: only its stretch
             ts = [t for t in ts if self.span[0] <= t <= self.span[1]]
-        shutil.rmtree(self.film.path("temp", "motion"), ignore_errors=True)
-        args = ["--stills", ",".join("%g" % t for t in ts), "--into", "temp/motion"]
-        args += ["--probe", "%g" % PROBE_STEP]
-        async with self.lock:
-            self.gate()
-            await self._script(
-                "stills",
-                "sketch-render.py",
-                args,
-                pools=[("browser", 1)],
-                timeout=120 + 2 * len(ts) + PROBE_S,
+        if reuse and await asyncio.to_thread(self._motion_fresh, ts):
+            self.emit(
+                {
+                    "type": "log",
+                    "text": "the frames of the last motion check are the film as it stands",
+                }
             )
+        else:
+            shutil.rmtree(self.film.path("temp", "motion"), ignore_errors=True)
+            args = ["--stills", ",".join("%g" % t for t in ts), "--into", "temp/motion"]
+            args += ["--probe", "%g" % PROBE_STEP]
+            async with self.lock:
+                self.gate()
+                await self._script(
+                    "stills",
+                    "sketch-render.py",
+                    args,
+                    pools=[("browser", 1)],
+                    timeout=120 + 2 * len(ts) + PROBE_S,
+                )
         events = await asyncio.to_thread(self._events)
         text, sheet = await asyncio.to_thread(
             motion.analyse,

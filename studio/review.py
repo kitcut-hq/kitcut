@@ -401,7 +401,7 @@ def view_of(film, tools):
     box = {"events": []}
 
     async def sheets():
-        _, _, names, box["events"] = await tools.film_sheets()
+        _, _, names, box["events"] = await tools.film_sheets(reuse=True)
         return [film.path(*n.split("/")) for n in names]
 
     async def strips(want):

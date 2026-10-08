@@ -264,3 +264,39 @@ six films (studio.json `claude`), voice recordings, kit calls in the code, and t
 
 So it ships for the narration (clear), and for the kit at no cost in quality, with the speed claim
 held to what was measured. A bigger set is what would show the total.
+
+## What the second pair of eyes costs (2026-10-07)
+
+The studio now reads every finished film for what breaks inside a second (studio/README.md, "A
+second pair of eyes"; docs/known-issues.md, KI-059): the author gets the whole film a frame a
+second and a `strip` tool, and after its last turn a fresh Claude reads the film and may hand back
+one bounded fix turn. Measured on the VM (4 vCPU, the Claude login) with the same three 60-second
+prompts of `studio/bakeoff/motion.json`, made by the release before (7d5a0c8) and the releases
+with it (c628f07, then d2352eb), two or three films at once:
+
+| prompt | before | with it | change | Claude's own part | the studio's reading |
+|---|---|---|---|---|---|
+| a kitten in a suitcase | 31.1 min | 34.5 min | +11% | 1,623 s -> 1,357 s | 400 s (read while another film rendered) |
+| a dog too big for his house | 23.2 min | 28.8 min; 31.2 min on the second release | +24%; +34% | 1,090 s -> 1,177 s; 1,409 s | 228 s with a fix turn of about a minute; 176 s |
+| a hamster and a parcel | 22.7 min | 27.3 min | +20% | 1,085 s -> 1,257 s | 140 s |
+
+About a fifth longer: 3 to 6 minutes on a film of 23 to 31. The reading itself is 2-3 minutes for
+a minute of film when the machine is free (two calls of 40-60 s each and about 70 stills), 3-5 for
+two minutes; the rest is the author reading its own sheets and strips (three sheets and one or two
+strips for a 60 s film). A reading costs $0.24-0.38 at list price for 60 s ($0.60-0.89 for 120 s),
+recorded on the film (`review_cost_usd`) and billed only on a film made on the key; a fix turn
+$1.37. The reading reuses the frames of the author's last `motion` when nothing changed since
+(`Tools._motion_fresh`), which saves about a minute when it applies.
+
+What it bought, on six films read afterwards by a reader that had not seen them: the three made
+before each carried a glitch a viewer would call a mistake in two of three (a kitten with two
+tails for a second and a half; a dog's head going into the wall beside his door). Of the films
+made with it, the kitten's and the hamster's were clean; the dog's first one had one glitch found
+and fixed (a leg showing through a wall) and two of the same through-the-wall kind found but rated
+"could be better", so left -- which is why that kind is now a must-fix whatever it is called
+(`review.HARD`); the dog's second film, on that release, was clean. Three pairs are not a
+measurement of a rate: they show the path works end to end, what it costs, and one way it failed.
+
+Not built, and where the next minute is: the 2-fps frames are full-size PNG (the same #6 as
+above: JPEG stills, 123 -> 54 ms a still); the reader's two calls could be one when the first
+finds nothing and the drawing code points at nothing.
