@@ -9,6 +9,8 @@ version -- the same film, the same page, the same link.
 
     python studio/rounds.py <film-id> --notes notes.json [--plan]     a round by hand, beside the
                                                  server (on the VM: ops.sh notes <film-id> <file>)
+    python studio/rounds.py <film-id> --where    its version and what that version is made of
+                                                 (digest), for files taken to be changed by hand
 
 A note points at a moment, a spot in the picture, a stretch, a line of the narration (described,
 or rewritten) or the whole film. Claude gets them all at once, each with the frame it points at
@@ -35,6 +37,16 @@ the master YouTube is sent is always the version on the page.
 The film's record keeps `state: "done"` throughout. The round has its own document in
 kitcut.studio_runs (`_id` rid, `kind: "round"`), which is what the site settles its credits on:
 done, failed, cancelled, interrupted, or unchanged (Claude changed no file: no version).
+
+Files changed by hand are a round too (`hand` in the POST, from this machine only: ops.sh take
+and put). They are laid over the same copy, with no Claude, and become the next version by the
+same swap -- so a hand's fix can be gone back from like any other, and never replaces a film it
+was not made from. Two things hold that: the files say what they were taken from (the film's
+digest then), and it must be what the film is when they come back; and no round, a hand's or
+Claude's, swaps its copy in when the film's own files are not what its copy was made from. Until
+2026-10-08 a hand wrote into the film's folder and rendered it there (resume.py --patched), and a
+copy taken at version 1 erased its maker's version 2 while the page went on saying "version 2"
+(KI-061).
 
 A round lives in the memory of the server running it, as a redraw does (unbrand.py): the film's
 record names that server in `round`, and a small file in <home>/rounds/_asked/ marks every film
@@ -64,6 +76,7 @@ import youtube
 
 ROOT = os.path.join(films.HOME, "rounds")  # <rid>/: the copy a round works on
 MARKS = os.path.join(ROOT, "_asked")  # <film id>.json: a round asked for, not yet over
+HAND = os.path.join(ROOT, "_hand")  # <film id>/: files changed by hand, sent to be a version
 KEPT = "versions"  # in the film: v<n>/, the files of a version that is not the film now
 SWAP = ".swap.json"  # in versions/: a swap under way, for heal()
 # what is the film's own whatever version it shows: never copied for a round, never swapped
@@ -88,6 +101,15 @@ NOTE_MAX = 500  # characters of a note, and of a line as it should be said
 PER_DAY = int(os.environ.get("STUDIO_ROUNDS_PER_DAY") or 5)  # rounds a film may have in a day
 TRIES = 2  # how often a round is started again after its server went away
 KEEP = 3  # versions whose files are kept beside the film's own; older ones stay watchable online
+SUMMARY_MAX = 600  # characters of what a hand says its files change
+STALE = (
+    "The film is not what these files were taken from: it has changed since (it is at version "
+    "%d). Take it again and put your changes on top of it."
+)
+MOVED = (
+    "The film's own files changed while this version was being made, so it was not put in "
+    "their place. The film is as it was found; make the version again from it."
+)
 EFFORT = "high"  # a round changes a film that exists: it reads more than it invents
 STRIP = (24, 160)  # the filmstrip: tiles in a row, and a tile's width in px
 STRIP_FILE = "strip.jpg"
@@ -579,6 +601,81 @@ def digest(film):
     return h.hexdigest()
 
 
+def where(film):
+    """Where a film stands, for whoever takes its files to change by hand: the version it is
+    at, and what that version is made of."""
+    rec = film.record()
+    r = rec.get("round") or {}
+    return {
+        "film": film.id,
+        "state": rec.get("state"),
+        "version": version_of(rec),
+        "digest": digest(film),
+        "round": r.get("state") if r.get("state") in ACTIVE else None,
+    }
+
+
+# ------------------------------------------------------------------ files changed by hand
+def _hand_files(d):
+    """The files under `d`, as paths from it with forward slashes."""
+    out = []
+    for root, _dirs, names in os.walk(d):
+        rel = os.path.relpath(root, d).replace(os.sep, "/")
+        out += [n if rel == "." else rel + "/" + n for n in names]
+    return sorted(out)
+
+
+def clean_hand(film, hand):
+    """Files changed by hand, checked before they may be a round: {dir, base, summary, files}.
+    `dir` is a folder of this studio's (HAND) holding the changed files as they lie in a film;
+    `base` is the film's digest when they were taken, and must be the film's now -- the
+    comparison is of what the film is made of, not of a version's number, so a film rendered
+    again in place is caught as one changed from notes is. Raises RoundError."""
+    if not isinstance(hand, dict):
+        raise RoundError(400, 'hand is {"dir", "base", "summary"}.')
+    d = os.path.realpath(str(hand.get("dir") or ""))
+    if os.path.dirname(d) != os.path.realpath(HAND) or not os.path.isdir(d):
+        raise RoundError(400, "The changed files are not where the studio keeps them.")
+    files = _hand_files(d)
+    if not files:
+        raise RoundError(400, "No changed files were sent.")
+    own = sorted({n.split("/")[0] for n in files} & (set(OWN) | {"outputs"}))
+    if own:
+        raise RoundError(
+            400,
+            "Not a version's to change: %s (the film's own, whatever it shows)." % ", ".join(own),
+        )
+    summary = " ".join(str(hand.get("summary") or "").split())[:SUMMARY_MAX]
+    if not summary:
+        raise RoundError(400, "Say what is different in this version: its maker reads it.")
+    base = str(hand.get("base") or "")
+    if base != digest(film):
+        raise RoundError(409, STALE % version_of(film.record()), "stale")
+    return {"dir": d, "base": base, "summary": summary, "files": files}
+
+
+def overlay(work, d):
+    """The hand's files laid over the round's copy of the film, each where it lies."""
+    for name in _hand_files(d):
+        dst = work.path(*name.split("/"))
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copyfile(os.path.join(d, *name.split("/")), dst)
+    _ours(work.dir)
+
+
+def _said_differently(film, work):
+    """Whether the copy's narration script is not the film's: its lines are recorded again."""
+
+    def read(f):
+        try:
+            with open(f.path("vo.json"), "rb") as fh:
+                return fh.read()
+        except OSError:
+            return b""
+
+    return read(film) != read(work)
+
+
 # ------------------------------------------------------------------ the notes, for Claude
 def _where(x, y):
     col = "left" if x < 0.33 else "right" if x > 0.66 else "centre"
@@ -844,11 +941,22 @@ async def pack(work, t, notes):
 
 # ------------------------------------------------------------------ asking
 def start(
-    film, sched, notes, key=None, client="local", member=None, priority=0, auth="api", src=None
+    film,
+    sched,
+    notes,
+    key=None,
+    client="local",
+    member=None,
+    priority=0,
+    auth="api",
+    src=None,
+    hand=None,
 ):
     """Make this finished film's next version from these notes; the round's job. Asked again
     with the same key, the round already asked for. Raises RoundError for what cannot be one.
-    `src`: the version the notes were written on (it must be the film now)."""
+    `src`: the version the notes were written on (it must be the film now). `hand`: files
+    changed by hand instead of notes (clean_hand), which are not one of its maker's rounds of
+    the day."""
     rec = film.record()
     if rec.get("state") != "done" or not rec.get("ok"):
         raise RoundError(409, "This film is not finished.", "state")
@@ -871,6 +979,10 @@ def start(
         raise RoundError(
             409, "The film has moved on to version %d since these notes." % cur, "stale"
         )
+    if hand is not None:
+        return _begin(
+            film, sched, [], key, client, member, priority, auth, hand=clean_hand(film, hand)
+        )
     if rounds_today(rec) >= PER_DAY:
         raise RoundError(
             429, "This film has had its %d rounds of changes for today." % PER_DAY, "rounds"
@@ -879,7 +991,20 @@ def start(
     return _begin(film, sched, notes, key, client, member, priority, auth)
 
 
-def _begin(film, sched, notes, key, client, member, priority, auth, tries=1, asked=None, k=None):
+def _begin(
+    film,
+    sched,
+    notes,
+    key,
+    client,
+    member,
+    priority,
+    auth,
+    tries=1,
+    asked=None,
+    k=None,
+    hand=None,
+):
     rec = film.record()
     k = k or (rec.get("rounds") or 0) + 1
     rid, n = (
@@ -887,7 +1012,9 @@ def _begin(film, sched, notes, key, client, member, priority, auth, tries=1, ask
         max([version_of(rec)] + [v.get("n", 0) for v in rec.get("versions") or []]) + 1,
     )
     asked = asked or _now()
-    days = list(rec.get("round_days") or [])[-20:] + ([asked] if tries == 1 else [])
+    days = list(rec.get("round_days") or [])[-20:] + (
+        [asked] if tries == 1 and hand is None else []
+    )
     film.update(
         rounds=k,
         round_days=days,
@@ -905,6 +1032,7 @@ def _begin(film, sched, notes, key, client, member, priority, auth, tries=1, ask
             "tries": tries,
             "notes": notes,
             "now": "Waiting for a free studio",
+            **({"hand": hand} if hand else {}),
         },
     )
     _set_mark(film.id)
@@ -960,6 +1088,7 @@ def resume(film, sched):
         tries=(r.get("tries") or 0) + 1,
         asked=r.get("asked"),
         k=rec.get("rounds"),
+        hand=r.get("hand"),
     )
 
 
@@ -1038,7 +1167,8 @@ async def _run(job, film, sched):
 
     fid, rid, n = film.id, job["rid"], job["n"]
     r0 = film.record().get("round") or {}
-    notes, auth = r0.get("notes") or [], r0.get("auth") or "api"
+    notes, auth, hand = r0.get("notes") or [], r0.get("auth") or "api", r0.get("hand")
+    first = "Taking the changed files" if hand else "Reading your notes"
     lim = limits(film.length, len(notes))
     log = film.path(KEPT, "r%s.events.jsonl" % rid.rsplit(".r", 1)[-1])
     os.makedirs(os.path.dirname(log), exist_ok=True)
@@ -1147,6 +1277,7 @@ async def _run(job, film, sched):
             "client": r0.get("client"),
             **({"member": r0["member"]} if r0.get("member") else {}),
             "key": r0.get("key"),
+            **({"by": "hand"} if hand else {}),
             "host": store.HOST,
             "model": agent.MODEL,
             "effort": EFFORT,
@@ -1163,91 +1294,117 @@ async def _run(job, film, sched):
     watch = asyncio.get_running_loop().create_task(_watch(job, fid))
     try:
         peers.hold_own()
-        async with sched["claude"].hold(1, rid, on_wait, priority=r0.get("priority", 0)):
+        # a hand's files take no turn with Claude: they wait only for the machine, as a render does
+        turn = (
+            contextlib.nullcontext()
+            if hand
+            else sched["claude"].hold(1, rid, on_wait, priority=r0.get("priority", 0))
+        )
+        async with turn:
             clock.t0, clock.paused = time.time(), 0.0  # the queue was not Claude's time
-            _set(film, job, "running", started=_now(), started_at=_now(), now="Reading your notes")
+            _set(film, job, "running", started=_now(), started_at=_now(), now=first)
             await _tell(
                 agent,
                 film,
                 rid,
-                {"state": "running", "started_at": store.now(), "now": "Reading your notes"},
+                {"state": "running", "started_at": store.now(), "now": first},
             )
-            emit({"type": "stage", "name": "claude", "text": "Reading your notes"})
+            emit({"type": "stage", "name": "hand" if hand else "claude", "text": first})
             before = await asyncio.to_thread(digest, film)
+            if hand and before != hand["base"]:  # it changed between the asking and its turn
+                raise RoundError(409, STALE % version_of(film.record()), "stale")
             work = await asyncio.to_thread(copy_of, film, rid, notes)
+            # the copy as it starts, not the film: a copy differs from its film where the studio
+            # itself made it differ (the Free plan's closing is taken off its manifest)
+            fresh = await asyncio.to_thread(digest, work)
             t = toolbox.Tools(work, sched, emit, clock)
             t.priority, t.round, t.pulse = r0.get("priority", 0), state, agent.Pulse()
-            try:
-                await t.check()  # a film from before today's studio may not run on it
-                frames = await pack(work, t, notes)
-            except toolbox.ToolError as e:
-                raise RoundError(
-                    409, "This film cannot be changed here: %s" % str(e)[:300]
-                ) from None
-            say = {
-                "prompt": ask(work, notes, frames, lim),
-                "system": agent.system_prompt(work.look, work.caps),
-                "effort": EFFORT,
-                "budget_usd": lim["budget_usd"],
-            }
-            res = None
-            for attempt in (1, 2):
+            if hand:
+                await asyncio.to_thread(overlay, work, hand["dir"])
+                state.summary = hand["summary"]
                 try:
-                    res = await agent._within(
-                        agent.run_claude(work, emit, meter, t, auth, **say), clock, lim, t.pulse
-                    )
-                    break
-                except (agent.SignInError, agent.PlanLimit) as e:
-                    # this machine's Claude plan is gone or spent: the round starts over on the key
-                    if auth != "login" or attempt == 2:
-                        raise RuntimeError("Claude could not be reached: %s" % e) from None
-                    auth = "api"
-                    job["reserve"] = reserve(film, len(notes), auth)
-                    emit({"type": "fallback", "from": "login", "to": "api", "why": str(e)})
-                except agent.Stalled:
-                    if attempt == 2 or not t.session:
-                        raise RuntimeError("Claude stopped answering") from None
-                    left = max(180, lim["claude_s"] - clock.active())
-                    say = {
-                        "prompt": agent.STALLED % (agent.STALL_S // 60, round(left / 60)),
+                    await t.check()  # the changed film.js runs, on today's studio
+                    if await asyncio.to_thread(_said_differently, film, work):
+                        emit({"type": "stage", "name": "voice", "text": "Recording the new words"})
+                        await t.voice()
+                except toolbox.ToolError as e:
+                    raise RoundError(
+                        409, "These files do not make a film: %s" % str(e)[:300]
+                    ) from None
+            else:
+                try:
+                    await t.check()  # a film from before today's studio may not run on it
+                    frames = await pack(work, t, notes)
+                except toolbox.ToolError as e:
+                    raise RoundError(
+                        409, "This film cannot be changed here: %s" % str(e)[:300]
+                    ) from None
+                say = {
+                    "prompt": ask(work, notes, frames, lim),
+                    "system": agent.system_prompt(work.look, work.caps),
+                    "effort": EFFORT,
+                    "budget_usd": lim["budget_usd"],
+                }
+                res = None
+                for attempt in (1, 2):
+                    try:
+                        res = await agent._within(
+                            agent.run_claude(work, emit, meter, t, auth, **say), clock, lim, t.pulse
+                        )
+                        break
+                    except (agent.SignInError, agent.PlanLimit) as e:
+                        # this machine's Claude plan is gone or spent: the round starts over on the key
+                        if auth != "login" or attempt == 2:
+                            raise RuntimeError("Claude could not be reached: %s" % e) from None
+                        auth = "api"
+                        job["reserve"] = reserve(film, len(notes), auth)
+                        emit({"type": "fallback", "from": "login", "to": "api", "why": str(e)})
+                    except agent.Stalled:
+                        if attempt == 2 or not t.session:
+                            raise RuntimeError("Claude stopped answering") from None
+                        left = max(180, lim["claude_s"] - clock.active())
+                        say = {
+                            "prompt": agent.STALLED % (agent.STALL_S // 60, round(left / 60)),
+                            "resume": t.session,
+                            "effort": EFFORT,
+                            "system": say["system"],
+                            "budget_usd": max(1.0, lim["budget_usd"] - meter.usd()),
+                        }
+                    except TimeoutError:
+                        break  # past its time: what it changed and answered so far is judged below
+                if res is not None and res.is_error:
+                    raise RuntimeError("Claude stopped early: %s" % (res.result or res.subtype))
+                if state.missing() and t.session:  # one short turn for the notes left unanswered
+                    last = {
+                        "prompt": ANSWER % ", ".join(map(str, state.missing())),
                         "resume": t.session,
-                        "effort": EFFORT,
+                        "effort": "low",
                         "system": say["system"],
-                        "budget_usd": max(1.0, lim["budget_usd"] - meter.usd()),
+                        "budget_usd": 1.0,
                     }
-                except TimeoutError:
-                    break  # past its time: what it changed and answered so far is judged below
-            if res is not None and res.is_error:
-                raise RuntimeError("Claude stopped early: %s" % (res.result or res.subtype))
-            if state.missing() and t.session:  # one short turn for the notes left unanswered
-                last = {
-                    "prompt": ANSWER % ", ".join(map(str, state.missing())),
-                    "resume": t.session,
-                    "effort": "low",
-                    "system": say["system"],
-                    "budget_usd": 1.0,
-                }
-                with contextlib.suppress(Exception):
-                    await agent._within(
-                        agent.run_claude(work, emit, meter, t, auth, **last),
-                        Clock(),
-                        {"claude_s": 180, "wall_s": 600},
-                        None,
-                    )
-            for i in state.missing():
-                state.verdicts[notes[i - 1]["id"]] = {
-                    "state": "cannot",
-                    "reply": "Claude ran out of time before it reached this note.",
-                }
+                    with contextlib.suppress(Exception):
+                        await agent._within(
+                            agent.run_claude(work, emit, meter, t, auth, **last),
+                            Clock(),
+                            {"claude_s": 180, "wall_s": 600},
+                            None,
+                        )
+                for i in state.missing():
+                    state.verdicts[notes[i - 1]["id"]] = {
+                        "state": "cannot",
+                        "reply": "Claude ran out of time before it reached this note.",
+                    }
             after = await asyncio.to_thread(digest, work)
-        if after == before:
+        if after == fresh:
             await over(
                 "unchanged",
-                "Claude read the notes and changed nothing in the film.",
+                "The files sent are the film's own: nothing is different."
+                if hand
+                else "Claude read the notes and changed nothing in the film.",
                 summary=state.summary,
             )
             return
-        if not any(v["state"] == "done" for v in state.verdicts.values()):
+        if not hand and not any(v["state"] == "done" for v in state.verdicts.values()):
             await over(
                 "unchanged",
                 "Claude could not make any of the changes asked for.",
@@ -1274,6 +1431,8 @@ async def _run(job, film, sched):
             agent.brand(work)
         else:
             agent.debrand(work)
+        if await asyncio.to_thread(digest, film) != before:  # before the minutes of drawing
+            raise RuntimeError(MOVED)
         emit({"type": "stage", "name": "sound", "text": "Mixing the soundtrack"})
         await t.sound(log=True)
         emit({"type": "stage", "name": "render", "text": "Drawing version %d" % n})
@@ -1302,7 +1461,13 @@ async def _run(job, film, sched):
             urls["strip"] = strip
         await unbrand._sends_over(fid)
         bill = cost()  # read from the copy, which the swap is about to make the film
+        # the film must still be what this copy was made from: whatever wrote into its folder
+        # meanwhile would be swapped out under a version that never saw it (KI-061)
+        if await asyncio.to_thread(digest, film) != before:
+            raise RuntimeError(MOVED)
         entry = await asyncio.to_thread(commit, film, work, urls, rev, n, state.summary, rid)
+        if hand:
+            await asyncio.to_thread(shutil.rmtree, hand["dir"], True)
         work = None  # its files are the film's now
         _set(
             film,
@@ -1654,12 +1819,24 @@ def main():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("film", help="the film's id (studio-YYYYMMDD-HHMMSS-xxxxxx)")
-    ap.add_argument("--notes", required=True, help='a JSON file: [{"kind", "t", "text", ...}]')
+    ap.add_argument("--notes", help='a JSON file: [{"kind", "t", "text", ...}]')
+    ap.add_argument(
+        "--where", action="store_true", help="print the film's version and digest, as JSON"
+    )
     ap.add_argument("--plan", action="store_true", help="say what it would do; spend nothing")
     ap.add_argument(
         "--auth", choices=("api", "login"), default="api", help="how Claude is paid for"
     )
-    asyncio.run(_by_hand(ap.parse_args()))
+    args = ap.parse_args()
+    if args.where:
+        film = films.Film.open(args.film)
+        if film is None:
+            sys.exit("no film %s in %s" % (args.film, films.HOME))
+        print(json.dumps(where(film)))
+        return
+    if not args.notes:
+        ap.error("--notes <file>, or --where")
+    asyncio.run(_by_hand(args))
 
 
 if __name__ == "__main__":

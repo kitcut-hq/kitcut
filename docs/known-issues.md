@@ -1016,21 +1016,34 @@ keeps `style` to how the voice sounds. Sound after the pause that the listener h
 altogether) is listened to on its own: the script's own last words said late are kept, anything
 else is cut. **Not covered:** ElevenLabs and edge takes are timed by their own service and not checked.
 
-### KI-061 · mitigated · studio · A hand fix sent back over a version made from notes erased it, and the page still said "version 2"
+### KI-061 · fixed · studio · A hand fix sent back over a version made from notes erased it, and the page still said "version 2"
 
 **Symptom.** 2026-10-07, studio-20261007-091710-nwhzxq (Duchess, episode 10). Its maker asked for
 four changes on the film's page; the round answered three "Done" (a witch on a broom in the window
 and in the doorway, the lamp on with shadows), rendered them and made version 2 at 14:05. The page
 said version 2 from then on and never showed one of them.
-**Cause.** A hand rework of the same film (the studio-vm skill's procedure) was under way on a
-laptop copy taken at version 1. Its `film.js` went back at 14:59 and `resume --finish --patched`
-rendered it at 15:14: version 1 plus six changed lines, under new names (`r3`). `--patched`
-renders whatever is in the folder and knew nothing of versions, so the record kept `version: 2`
-and the round's answers while the film was another one. Nothing was lost by luck: the procedure's
-own backup (`temp/before-fix-2/film.js`) was the round's file, and its video stayed online at `r2`.
-**Mitigated** (`studio/resume.py stale`, `studio/test_resume.py` in the release gate).
-`--patched` refuses a film past version 1 unless `--over N` names the version it is at, and
-refuses any film whose notes are being worked on; the procedure now reads the version and
-compares `film.js` before sending anything back. **Not covered:** the files are copied by hand
-before the render is asked for, so the folder can still be overwritten (the backup is the way
-back), and `--over` is the operator's word, not a comparison.
+**Cause.** A finished film had two ways to change and only one of them was a version. Its maker's
+notes worked on a copy and were swapped in as version 2 (`rounds.py`). A hand rework wrote
+`film.js` into the film's own folder and rendered it there (`resume.py --patched`): from a laptop
+copy taken at version 1, sent back at 14:59, an hour after version 2. Nothing compared what the
+hand's files had started from with what the film was, so the film became version 1 plus six
+changed lines under new file names (`r3`) while its record kept `version: 2` and the round's
+answers. The round's own swap had the same hole the other way: it never looked at the film again
+between copying it and replacing it. Nothing was lost by luck: the procedure's backup
+(`temp/before-fix-2/film.js`) was the round's file. It was the only film this happened to (three
+films had versions; the other two were never rendered in place).
+**Fixed** (`studio/rounds.py`: `clean_hand`, `overlay`, `where`, the two `digest` checks in `_run`;
+`studio/deploy/ops.sh take`, `put`; `studio/deploy/hand.py`; `studio/resume.py IN_PLACE`).
+- Files changed by hand are a round: laid over a copy, rendered there, swapped in as the next
+  version with the one before kept. `take` stamps them with the film's digest (what the version is
+  made of); `put` is refused unless that is still the film's digest, so the comparison is of
+  content, not of a version number or of anyone's word.
+- No round, a hand's or Claude's, swaps its copy in when the film's files are no longer what the
+  copy was made from; it fails and the film keeps its place.
+- `resume --patched` refuses every film a round can change. It is left for films made in scenes
+  (which rounds refuse), where it asks for `--over N` past version 1 and waits out a round.
+- `studio/test_rounds.py` (in the release gate) makes a version by hand, sends stale files, and
+  writes into a film while its version is made; `studio/test_resume.py` holds the refusals.
+**Not covered:** a film made in scenes is still changed in place. Someone with a shell on the VM
+can still write into a film's folder; the next round of that film then fails rather than hiding
+it, and nothing is said until then.

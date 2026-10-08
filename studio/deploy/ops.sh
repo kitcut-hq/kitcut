@@ -71,6 +71,11 @@
 #                                                     file made into its next version; followed to the end.
 #                                                     notes.json: [{"kind": "moment|spot|stretch|line|film",
 #                                                     "t", "t2", "x", "y", "line", "words", "text"}, ...]
+#   bash studio/deploy/ops.sh take <film-id> <dir>   a finished film's files, to change by hand
+#                                                     here; stamped with what they were taken from
+#   bash studio/deploy/ops.sh put <film-id> <dir> --summary "..." [--no-watch]   what changed since
+#                                                     take, made the film's next version as a round
+#                                                     is; refused if the film changed meanwhile
 #   bash studio/deploy/ops.sh versions <film-id>      a film's versions, and how its last round ended
 #   bash studio/deploy/ops.sh version <film-id> <n>   version n is the film again (nothing is rendered)
 #   bash studio/deploy/ops.sh library-get <project> <dir>   a project's library to work on here:
@@ -152,6 +157,18 @@ deliver() {
   change git -C "$REPO_LOCAL" tag -f studio-stable "$sha"
   change git -C "$REPO_LOCAL" push -q -f origin refs/tags/studio-stable
   if [ "$DRY" = 1 ]; then echo "  would run: push.sh $VM studio-poc $sha"; else bash "$HERE/push.sh" "$VM" studio-poc "$sha"; fi
+}
+# Follow a film's round of changes (its maker's notes, or files put by hand) to its end, then
+# say how it ended and what each note was answered.
+watch_round() {
+  local id="$1"
+  on "$TOKEN_SH; last=''; while :; do
+    d=\$(curl -s 'http://127.0.0.1:$PORT/api/films/$id/versions' -H \"Authorization: Bearer \$TOKEN\")
+    s=\$(printf '%s' \"\$d\" | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get(\"round\") or {}; l=d.get(\"last\") or {}; print(r.get(\"state\") or l.get(\"state\"), \"-\", r.get(\"now\") or \"\")' 2>/dev/null) || s='unreadable'
+    [ \"\$s\" != \"\$last\" ] && echo \"\$(date +%T)  \$s\"; last=\$s
+    case \"\$s\" in queued*|running*|finishing*) sleep 5 ;; *) break ;; esac
+  done
+  printf '%s' \"\$d\" | python3 -c 'import json,sys; d=json.load(sys.stdin); l=d.get(\"last\") or {}; print(json.dumps({\"version\": d.get(\"version\"), \"round\": {k: l.get(k) for k in (\"id\",\"state\",\"error\",\"summary\")}, \"answers\": l.get(\"answers\")}, indent=1, ensure_ascii=False))'"
 }
 # Follow a transient unit on the VM to its end (Ctrl+C stops the following, not the unit).
 follow() {
@@ -710,13 +727,62 @@ PY
     ) || die "$file is not a list of notes"
     change_on "$TOKEN_SH; echo $body | base64 -d | curl -s -X POST http://127.0.0.1:$PORT/api/films/$id/versions -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' --data-binary @-; echo"
     if [ "$DRY" = 1 ] || [ "$watch" = 0 ]; then exit 0; fi
-    on "$TOKEN_SH; last=''; while :; do
-      d=\$(curl -s 'http://127.0.0.1:$PORT/api/films/$id/versions' -H \"Authorization: Bearer \$TOKEN\")
-      s=\$(printf '%s' \"\$d\" | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get(\"round\") or {}; l=d.get(\"last\") or {}; print(r.get(\"state\") or l.get(\"state\"), \"-\", r.get(\"now\") or \"\")' 2>/dev/null) || s='unreadable'
-      [ \"\$s\" != \"\$last\" ] && echo \"\$(date +%T)  \$s\"; last=\$s
-      case \"\$s\" in queued*|running*|finishing*) sleep 5 ;; *) break ;; esac
+    watch_round "$id"
+    ;;
+
+  take)
+    # a finished film's files, to change by hand on this laptop: everything a version is made of
+    # (not its videos, its record or its log), stamped with the version it was at and what that
+    # version is made of. put sends back what changed, and the studio takes it only while the film
+    # is still what the stamp says -- so a film its maker changed meanwhile is never replaced by
+    # files that did not start from it (KI-061).
+    id="${1:?take <film-id> <dir>}"; dir="${2:?take <film-id> <dir>}"
+    [[ "$id" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $id"
+    [ -e "$dir" ] && [ -n "$(ls -A "$dir" 2>/dev/null)" ] && die "$dir is not empty: take into a new folder"
+    at=$(on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env $REMOTE/.venv/bin/python -X utf8 studio/rounds.py $id --where" | grep '^{' | tail -1)
+    [ -n "$at" ] || die "no film $id on $VM"
+    mkdir -p "$dir"
+    skip=""; for n in studio.json events.jsonl temp notes versions library share youtube project.json journal.md outputs; do skip="$skip --exclude=./$n"; done
+    on "cd $HOME_DIR/projects/$id && tar -cf - $skip ." | tar -xf - -C "$dir" || die "the files did not come over"
+    python "$HERE/hand.py" stamp "$dir" "$at" || { rm -f "$dir/.kitcut-take.json"; exit 1; }
+    echo "change them there, preview (scripts/sketch-render.py --manifest $dir/sketch.json --stills ...), then:"
+    echo "  bash studio/deploy/ops.sh put $id $dir --summary \"what is different\""
+    ;;
+
+  put)
+    # the files changed since take, made the film's next version: laid over a copy of the film,
+    # mixed, rendered, put online and swapped in as a round is (studio/rounds.py) -- the film plays
+    # as it is until then, the version before is kept, and one that fails leaves it untouched.
+    # Refused when the film is no longer what was taken: take it again and put the changes on top.
+    use="put <film-id> <dir> --summary \"what is different\" [--no-watch]"
+    id="${1:?$use}"; dir="${2:?$use}"; shift 2
+    [[ "$id" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $id"
+    summary=""; watch=1
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --summary) summary="${2:-}"; shift ;; --no-watch) watch=0 ;;
+        *) die "$use" ;;
+      esac
+      shift
     done
-    printf '%s' \"\$d\" | python3 -c 'import json,sys; d=json.load(sys.stdin); l=d.get(\"last\") or {}; print(json.dumps({\"version\": d.get(\"version\"), \"round\": {k: l.get(k) for k in (\"id\",\"state\",\"error\",\"summary\")}, \"answers\": l.get(\"answers\")}, indent=1, ensure_ascii=False))'"
+    [ -n "$summary" ] || die "--summary: one or two sentences of what is different (the film's maker reads it)"
+    list=$(python "$HERE/hand.py" changed "$dir" "$id") || exit 1
+    at=$(printf '%s\n' "$list" | head -1); names=$(printf '%s\n' "$list" | tail -n +2)
+    echo "changed since it was taken:"; printf '%s\n' "$names" | sed 's/^/  /'
+    stage="$HOME_DIR/rounds/_hand/$id"
+    body=$(SUMMARY="$summary" AT="$at" STAGE="$stage" python - <<'PY'
+import base64, json, os, time
+at = json.loads(os.environ["AT"])
+hand = {"dir": os.environ["STAGE"], "base": at["digest"], "summary": os.environ["SUMMARY"]}
+print(base64.b64encode(json.dumps({"key": "ops-hand-%d" % time.time(), "hand": hand}).encode()).decode())
+PY
+    ) || die "could not write the request"
+    if [ "$DRY" = 1 ]; then echo "  would send them to $VM:$stage and ask for the next version"; exit 0; fi
+    printf '%s\n' "$names" | tr -d '\r' | tar -C "$dir" -cf - -T - | on "rm -rf $stage && mkdir -p $stage && tar -xf - -C $stage" || die "the files did not go over"
+    on "$TOKEN_SH; echo $body | base64 -d | curl -s -X POST http://127.0.0.1:$PORT/api/films/$id/versions -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' --data-binary @-; echo"
+    [ "$watch" = 0 ] && exit 0
+    watch_round "$id"
+    echo "the film has moved on: take it again before changing more"
     ;;
 
   versions)

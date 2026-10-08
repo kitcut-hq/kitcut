@@ -24,8 +24,9 @@ bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--look collage] [--unlis
                                                     # on the Claude login unless --api
 bash studio/deploy/ops.sh watch <film-id>...        # one or several, a line per change
 bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]  # finish a film the studio stopped
-bash studio/deploy/ops.sh resume <film-id> --finish --patched  # a DONE film changed by hand: re-mix, re-render, new URLs
-bash studio/deploy/ops.sh resume <film-id> --finish --patched --over N  # the same, past version 1: N = the version your files started from
+bash studio/deploy/ops.sh take <film-id> <dir>         # a DONE film's files, to change by hand here (stamped with what they were taken from)
+bash studio/deploy/ops.sh put <film-id> <dir> --summary "..."  # what changed, made the film's next version; refused if the film changed meanwhile
+bash studio/deploy/ops.sh resume <film-id> --finish --patched [--over N]  # only a film MADE IN SCENES: re-mix and re-render in its own folder
 bash studio/deploy/ops.sh review <film-id> [--machine] [--api]  # read a finished film for glitches as the
                                                     # studio reads one before it is done: what a
                                                     # viewer would take for a mistake, with times;
@@ -142,46 +143,53 @@ it read (`web/<name>.txt`) before replacing: the person's name is on it.
 ## Reworking a finished film by hand
 
 When the owner reviews a finished film and wants scenes fixed ("she is cut off coming out of the
-carrier", "nothing happens here but the narration"), the film's own files are changed and it is
-rendered again on the same page (`resume --finish --patched`). Done twice on 2026-10-07 (Duchess
-episodes 8 and 10); every step below cost time when it was skipped.
+carrier", "nothing happens here but the narration"), its files are changed on the laptop and go
+back as the film's **next version** (`ops.sh take`, `ops.sh put`): same page, same link, the
+version before kept and one click away. Done twice on 2026-10-07 (Duchess episodes 8 and 10);
+every step below cost time when it was skipped.
+
+**Never write into a film's folder on the VM.** That is how episode 10's hand fix, made from a copy
+taken at version 1, erased the version 2 its maker had just made from notes, while the page went on
+saying "version 2" (KI-061). `put` works on a copy, as a round of notes does, and the studio takes
+the files only while the film is still what they were taken from (it compares what the film is made
+of, not a version number). `resume --finish --patched` is refused for any film a round can change;
+it is left for films made in scenes.
 
 1. **Read what its maker said first**: `claude_said` in the film's `studio.json` often names the
    very spots worth a look. Then look at the film itself one frame a second, and closer at every
    entrance, exit and pose change: the review sheet is twelve frames of a two-minute film.
-2. **Work on a copy on the laptop, and note its version.** `ops.sh versions <id>` first: the
-   film's maker can change it from notes at any minute (Change something on its page), and a
-   version made after your copy was taken is not in it. Keep the `film.js` you took untouched
-   beside the one you change. From `projects/<id>/` on the VM take `film.js cast/ engine/
-   sketch.json vo.json sfx.json score.json sounds.json audio/vo/timeline.json` (tar over
-   `vm.sh ssh`), and preview with `python scripts/sketch-render.py --manifest <copy>/sketch.json
-   --stills 26,27.5,29 --into review --sheet`: five seconds, and it matches the real render.
-   Preview the whole film at one frame a second before sending anything back.
+2. **Take the film**: `ops.sh take <id> <new folder>` copies everything a version is made of
+   (`film.js cast/ engine/ sketch.json vo.json sfx.json score.json sounds.json audio/ ...`) and
+   stamps the folder (`.kitcut-take.json`) with the version and what it is made of. Refused while
+   a version is being made from notes. Preview with `python scripts/sketch-render.py --manifest
+   <folder>/sketch.json --stills 26,27.5,29 --into review --sheet`: five seconds, and it matches
+   the real render (`review*/` and `outputs/` in the folder are never sent back). Preview the whole
+   film at one frame a second before sending anything back.
 3. **What reads as broken** (the owner's words, not a style guide): a character cut off by a clip
    line in the open air; a character squashed, shrunk or flattened to fit somewhere (make the prop
    bigger instead); a colour laid over the whole frame for a time of day (show it in the window);
    a beat where only the narrator works; a caption on a ground of its own colour or behind the
    meter. A plot step is shown, not told: she looks at the cushion before she ignores it.
-4. **Send it back**: `ops.sh versions <id>` again, and compare the VM's `film.js` with the one
-   you took (`sha256sum`). A higher version, or a different file, means the film moved on under
-   you: take its files again and put your changes on top (`git merge-file <theirs> <the one you
-   took> <yours>`), then preview again. Only then copy the originals to `temp/before-fix/` in the
-   film's folder, then the changed files (tar through `vm.sh ssh ... 'tar -xf -'`). On 2026-10-07
-   episode 10's hand fix went back an hour after its maker's version 2 and erased it: the page
-   said "version 2" and showed none of what was asked for (KI-061).
-5. **Narration.** A changed line records again by itself; run `scripts/sketch-vo.py --manifest
-   <film>/sketch.json` on the VM with the server's environment (`STUDIO_HOME STUDIO_REPO
-   STUDIO_ENV_FILE HF_HOME=/srv/kitcut/hf`: without `HF_HOME` the word timing fails offline).
-   **A line added in the middle renumbers the rest, and a take's file name starts with its line
-   number** (`L07_T0_<hash>`): rename the existing takes to their new numbers first, highest first,
-   or every later line is recorded again and its timing moves. Lines keep their `start`, so give a
-   new line its own and check it ends before the next begins. `score.json` counts in beats (two a
-   second at 120 bpm); `sfx.json` in seconds.
-6. **Render**: `ops.sh status` (wait while another film is rendering: the cores are shared), then
-   `ops.sh resume <id> --finish --patched`. About ten minutes for two minutes of film; the page and
-   link stay, the files get new names. A film past version 1 is refused until you say which
-   version your files started from (`--over N`, the version it is at), and any film is refused
-   while its notes are being worked on.
+4. **Narration.** Change the line in `vo.json`; `put` records what changed in the copy. **A line
+   added in the middle renumbers the rest, and a take's file name starts with its line number**
+   (`L07_T0_<hash>`): rename the existing takes in your folder's `audio/vo/` to their new numbers
+   first, highest first, or every later line is recorded again and its timing moves. Lines keep
+   their `start`, so give a new line its own and check it ends before the next begins.
+   `score.json` counts in beats (two a second at 120 bpm); `sfx.json` in seconds.
+5. **Put it back**: `ops.sh status` (wait while another film is rendering: the cores are shared),
+   then `ops.sh put <id> <folder> --summary "what is different"`. It lists the files that differ
+   from what was taken, sends only those, and follows the version to its end: about ten minutes
+   for two minutes of film. The summary is what the film's maker reads beside the version. The
+   film plays as it is until the new version is in; a version that fails leaves it untouched and
+   says why.
+6. **Refused as "not what these files were taken from"** means the film changed after your take
+   (its maker's notes, usually). Nothing was touched. `take` it again into a new folder and put
+   your changes on top of it, file by file: `git merge-file <new>/film.js <as taken>/film.js
+   <yours>/film.js` writes the merge into the new folder's file (`<as taken>` is an untouched copy
+   of your first take: copy the folder aside before changing anything, outside it, since every
+   new file inside a taken folder is sent). Preview, then `put` from the new folder. A version
+   that ends "changed while this version was being made" is the same thing happening during the
+   render: take and put again.
 7. **Check the real video** at every changed scene, and have it read: `ops.sh review <id>`
    (or on the laptop copy before sending it back, `python studio/review.py --folder <copy>`).
    On 2026-10-07 it found a one-frame sliver and a caption under the meter in two films a

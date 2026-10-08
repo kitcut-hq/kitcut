@@ -743,6 +743,170 @@ async def main():
             "only the last %d: an older one's files go, and it says so" % rounds.KEEP,
         )
 
+        # ------------------------------------------------ files changed by hand: a version too
+        def by_hand(text, base, summary="The label is nudged, by hand.", name="film.js"):
+            """The film's film.js with a line added, where ops.sh put leaves a hand's files."""
+            d = os.path.join(rounds.HAND, fid)
+            shutil.rmtree(d, ignore_errors=True)
+            os.makedirs(d)
+            with open(f.path("film.js"), encoding="utf-8") as fh:
+                src = fh.read()
+            with open(os.path.join(d, name), "w", encoding="utf-8") as fh:
+                fh.write(src + text)
+            return {"dir": d, "base": base, "summary": summary}
+
+        at = rounds.where(f)
+        n0, asked, days = at["version"], len(SEEN), rounds.rounds_today(f.record())
+        check(
+            at["digest"] == rounds.digest(f)
+            and at["round"] is None
+            and n0 == f.record()["version"],
+            "where a film stands: its version and what that is made of",
+        )
+        r = await c.post(
+            url, json={"key": "h0", "hand": by_hand("\n// h\n", at["digest"])}, headers=me
+        )
+        check(r.status == 403, "the site cannot send files by hand (%d)" % r.status)
+        for i, (more, why) in enumerate(
+            (
+                ({"summary": " "}, "nothing said of what changed"),
+                ({"name": "studio.json"}, "the film's own record"),
+                ({"dir": f.dir}, "a folder that is not the studio's"),
+            )
+        ):  # each folder made as it is sent: the next one's replaces it
+            body = by_hand(
+                "\n// h\n", at["digest"], **{k: v for k, v in more.items() if k != "dir"}
+            )
+            body |= {k: v for k, v in more.items() if k == "dir"}
+            r = await c.post(url, json={"key": "h0-%d" % i, "hand": body}, headers=auth)
+            check(r.status == 400, "refused by hand: %s (%d)" % (why, r.status))
+        before = tree(f)
+        r = await c.post(
+            url, json={"key": "h1", "hand": by_hand("\n// by hand 1\n", at["digest"])}, headers=auth
+        )
+        b = await r.json()
+        hid = (b.get("round") or {}).get("id")
+        check(
+            r.status == 202 and b["round"]["n"] == max(v["n"] for v in f.record()["versions"]) + 1,
+            "files changed by hand are accepted as the next version (%s %s)" % (r.status, b),
+        )
+        rec, states = await wait_round(f)
+        rd, new = rec.get("round") or {}, rec.get("version")
+        with open(f.path("film.js"), encoding="utf-8") as fh:
+            now_js = fh.read()
+        with open(f.path("versions", "v%d" % n0, "film.js"), encoding="utf-8") as fh:
+            old_js = fh.read()
+        entry = next((v for v in rec.get("versions") or [] if v.get("n") == new), {})
+        check(
+            rd.get("state") == "done" and states == {"done"} and new == b["round"]["n"],
+            "it is made, the film done all the while (%s: %s)" % (rd.get("state"), rd.get("error")),
+        )
+        check(
+            "// by hand 1" in now_js and "// by hand 1" not in old_js,
+            "the film is the hand's files, and the version before is kept as it was",
+        )
+        check(
+            entry.get("summary") == "The label is nudged, by hand." and entry.get("round") == hid,
+            "the version says what the hand changed (%s)" % entry.get("summary"),
+        )
+        doc = mem.docs.get(hid) or {}
+        check(
+            doc.get("by") == "hand"
+            and doc.get("state") == "done"
+            and doc.get("client") != "u:maker",
+            "its record is the studio's own round, not its maker's (%s, %s)"
+            % (doc.get("by"), doc.get("client")),
+        )
+        check(
+            len(SEEN) == asked and rounds.rounds_today(f.record()) == days,
+            "Claude was not asked, and it is not one of its maker's rounds of the day",
+        )
+        check(not os.path.isdir(os.path.join(rounds.HAND, fid)), "the files sent are cleared away")
+
+        # ---- files taken before the film changed: refused, by what the film is made of
+        before = tree(f)
+        r = await c.post(
+            url, json={"key": "h2", "hand": by_hand("\n// stale\n", at["digest"])}, headers=auth
+        )
+        check(
+            r.status == 409 and (await r.json()).get("reason") == "stale" and tree(f) == before,
+            "files taken from the version before are refused, the film as it was (%d)" % r.status,
+        )
+        with open(f.path("film.js"), "a", encoding="utf-8") as fh:  # written into in place
+            fh.write("\n// in place\n")
+        r = await c.post(
+            url,
+            json={
+                "key": "h3",
+                "hand": by_hand("\n// stale 2\n", rounds.where(f)["digest"])
+                | {"base": rounds.digest(f) + "x"},
+            },
+            headers=auth,
+        )
+        at2 = rounds.where(f)
+        check(
+            r.status == 409 and at2["version"] == new and at2["digest"] != at["digest"],
+            "and so are files taken before a change made in place, which no version number shows",
+        )
+
+        # ---- the same files: no version
+        d = os.path.join(rounds.HAND, fid)
+        shutil.rmtree(d, ignore_errors=True)
+        os.makedirs(d)
+        shutil.copyfile(f.path("film.js"), os.path.join(d, "film.js"))
+        r = await c.post(
+            url,
+            json={"key": "h4", "hand": {"dir": d, "base": at2["digest"], "summary": "Nothing."}},
+            headers=auth,
+        )
+        rec, _ = await wait_round(f)
+        check(
+            r.status == 202
+            and (rec.get("round") or {}).get("state") == "unchanged"
+            and rec.get("version") == new,
+            "files that are the film's own make no version (%s)"
+            % (rec.get("round") or {}).get("state"),
+        )
+
+        # ---- the film written into while a version is made: that version is not swapped in
+        lay = rounds.overlay
+
+        def lay_and_meddle(work, d):
+            lay(work, d)
+            with open(f.path("film.js"), "a", encoding="utf-8") as fh:
+                fh.write("\n// meanwhile\n")
+
+        rounds.overlay = lay_and_meddle
+        try:
+            r = await c.post(
+                url,
+                json={"key": "h5", "hand": by_hand("\n// by hand 2\n", at2["digest"])},
+                headers=auth,
+            )
+            rec, states = await wait_round(f)
+        finally:
+            rounds.overlay = lay
+        rd = rec.get("round") or {}
+        with open(f.path("film.js"), encoding="utf-8") as fh:
+            now_js = fh.read()
+        check(
+            r.status == 202
+            and rd.get("state") == "failed"
+            and "changed while this version was being made" in (rd.get("error") or "")
+            and rec.get("version") == new
+            and states == {"done"},
+            "a film written into while its next version is made keeps its place (%s: %s)"
+            % (rd.get("state"), rd.get("error")),
+        )
+        check(
+            "// meanwhile" in now_js and "// by hand 2" not in now_js,
+            "what was written into it is still there, not swapped out unseen",
+        )
+        check(
+            os.path.isdir(os.path.join(rounds.HAND, fid)),
+            "and the hand's files are kept, to be put on top of the film as it is now",
+        )
+
     rounds._ours(HOME)  # the films here carry read-only files, which Windows will not remove
     shutil.rmtree(HOME, ignore_errors=True)
     print("\n%s" % ("ALL OK" if not bad else "%d FAILED:\n  - %s" % (len(bad), "\n  - ".join(bad))))

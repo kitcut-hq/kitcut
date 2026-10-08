@@ -2197,8 +2197,12 @@ async def versions_make(req):
             },
             status=409,
         )
+    # files changed by hand, sent to be the next version (ops.sh put): this machine's only
+    hand = body.get("hand")
+    if hand is not None and not from_this_machine(req):
+        return web.json_response({"error": "not from here"}, status=403)
     try:
-        notes = rounds.clean_notes(f, body.get("notes"))
+        notes = [] if hand is not None else rounds.clean_notes(f, body.get("notes"))
     except rounds.RoundError as e:
         return _round_error(e)
     if not await leading():
@@ -2230,11 +2234,14 @@ async def versions_make(req):
                 SCHED,
                 notes,
                 key=key,
-                client=rec.get("client") or client,
+                # a hand's version is the studio's own work: not its maker's round to pay for,
+                # to be mailed about as theirs, or to wait behind the film they are making
+                client=client if hand is not None else rec.get("client") or client,
                 member=req.headers.get("X-Member", "").strip() or None,
                 priority=1 if req.headers.get("X-Priority", "").strip() == "1" else 0,
                 auth=auth,
                 src=body.get("from"),
+                hand=hand,
             )
         except rounds.RoundError as e:
             return _round_error(e)

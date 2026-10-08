@@ -3849,8 +3849,10 @@ narrator sound like two; a series that wants one voice says so in its brief.
 **Re-voicing a finished film.** `python scripts/vo-retime.py --manifest <sketch.json> --before <old
 timeline.json> --write` moves every sfx.json cue with the words around it after the narration was
 recorded again (the picture follows the words by itself; sound cues are in seconds). Re-voicing the
-eight Leo episodes moved words by up to 5 s. Then `ops.sh resume <id> --finish --patched` mixes and
-renders it again on the same page.
+eight Leo episodes moved words by up to 5 s. On the studio the re-voiced film goes back as its next
+version: `ops.sh take <id> <dir>`, re-voice and re-time there, `ops.sh put <id> <dir> --summary
+"..."` (the studio-vm skill, "Reworking a finished film by hand"). A film's folder on the VM is
+never written into (KI-061).
 
 
 Per line: N takes (cached by a fingerprint of text + voice + model + settings, so an edit

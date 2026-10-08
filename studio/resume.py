@@ -6,14 +6,13 @@ the soundtrack and the video as usual, into the same film (its page and link sta
     python studio/resume.py <film-id>             pick it up (make_film resume=True)
     python studio/resume.py <film-id> --minutes N  with N minutes of Claude's working time
     python studio/resume.py <film-id> --finish    Claude's part is whole: mix and render only
-    python studio/resume.py <film-id> --finish --patched
-                                                  a FINISHED film whose files were changed by hand
-                                                  (film.js, a re-voiced line): mixed, rendered and
-                                                  put online again under new names, same page
-    python studio/resume.py <film-id> --finish --patched --over N
-                                                  the same, for a film its maker has changed from
-                                                  notes: N is the version the changed files started
-                                                  from, and it must be the version the film is at
+    python studio/resume.py <film-id> --finish --patched [--over N]
+                                                  a FINISHED film MADE IN SCENES whose files were
+                                                  changed by hand in its own folder: mixed, rendered
+                                                  and put online again under new names, same page.
+                                                  Any other film's hand changes are its next
+                                                  version, made on a copy: ops.sh take / put
+                                                  (rounds.py). --over N past version 1
 
 For a film the studio stopped under it -- a restart while Claude was still working records it
 cancelled (before 2026-09-29) or interrupted -- not for one its person stopped. The Claude session
@@ -83,6 +82,16 @@ def plan(film, minutes=None):
     }
 
 
+# Rendering in the film's own folder is how a hand's fix erased its maker's version (KI-061):
+# nothing there can tell files that started from the film as it is from files that did not.
+IN_PLACE = (
+    "files changed by hand become the film's next version, made on a copy and swapped in as a "
+    "round is: `ops.sh take <film-id> <dir>`, change them, `ops.sh put <film-id> <dir> --summary "
+    '"..."`. --patched renders in the film\'s own folder and is left for a film made in scenes, '
+    "which a round cannot change yet"
+)
+
+
 def stale(rec, over=None):
     """Why files changed by hand may not become this film, or None. A film its maker changed from
     notes (rounds.py) is at a version the hand's copy may never have seen: on 2026-10-07 a copy
@@ -117,6 +126,8 @@ def refuse(film, finish, patched=False, over=None):
             )
         if film.state != "done":
             return "%s is %s; --patched is for a finished film" % (film.id, film.state)
+        if film.mode != "scenes":
+            return IN_PLACE
         why = stale(film.record(), over)
         if why:
             return why

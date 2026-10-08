@@ -2,10 +2,11 @@
 """A finished film changed by hand may not be rendered over a version it never saw:
 python studio/test_resume.py
 
-resume.py --finish --patched renders whatever files are in the film's folder. A film its maker
-has changed from notes (rounds.py) is at a version a hand's copy may predate, so the hand names
-the version it started from (--over N) and a film whose notes are being worked on is left alone
-(KI-061). No Claude, no render: only what is refused, and why.
+resume.py --finish --patched renders whatever files are in the film's folder, so it is refused
+for any film a round can change: a hand's files are that film's next version, made on a copy
+(rounds.py, ops.sh take / put; test_rounds.py has those cases). It is left for a film made in
+scenes, where the hand names the version it started from (--over N) and a film whose notes are
+being worked on is left alone (KI-061). No Claude, no render: only what is refused, and why.
 """
 
 import os
@@ -21,10 +22,9 @@ class Stub:
     """As much of a Film as refuse() reads."""
 
     id = "studio-20260101-000000-abcdef"
-    mode = "film"
 
-    def __init__(self, state="done", **rec):
-        self.state, self.rec = state, rec
+    def __init__(self, state="done", mode="scenes", **rec):
+        self.state, self.mode, self.rec = state, mode, rec
 
     def record(self):
         return self.rec
@@ -45,6 +45,18 @@ def main():
         return resume.refuse(film, True, True, over)
 
     v2 = [{"n": 1, "at": "2026-10-07T12:43:28"}, {"n": 2, "at": "2026-10-07T14:05:54"}]
+    for film in (Stub(mode="film"), Stub(mode="film", version=2, versions=v2)):
+        got = why(film, film.rec.get("version"))
+        check(
+            got is not None and "ops.sh take" in got and "ops.sh put" in got,
+            "a film a round can change is never rendered in place (version %s): take and put"
+            % (film.rec.get("version") or 1),
+            got,
+        )
+    check(
+        "finished film" in (why(Stub("failed", mode="film")) or ""),
+        "one that is not finished is told that first",
+    )
     first = Stub()
     check(why(first) is None, "a film nobody changed from notes is rendered as before", why(first))
     check(why(first, 1) is None, "and with --over 1", why(first, 1))
@@ -77,7 +89,7 @@ def main():
         "finished film" in (resume.refuse(Stub("failed", version=2), True, True, 2) or ""),
         "a film that is not finished is still refused first",
     )
-    stopped = Stub("interrupted", version=2, versions=v2)
+    stopped = Stub("interrupted", mode="film", version=2, versions=v2)
     check(
         resume.refuse(stopped, True) is None,
         "picking up a stopped film (no --patched) asks for no version",
