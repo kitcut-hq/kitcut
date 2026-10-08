@@ -460,11 +460,11 @@ div.stage { background: var(--panel); border: 1px solid var(--line); border-radi
 .faq details p { margin: 8px 0 2px; color: var(--ink-2); font-size: 14.5px; max-width: 80ch; }
 /* the gallery: the Studio's cards, a picture and two lines under it */
 .films { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px 16px; }
-.film { display: grid; gap: 8px; align-content: start; text-decoration: none; color: inherit; cursor: pointer; }
+.film { display: grid; gap: 8px; align-content: start; text-decoration: none; color: inherit; cursor: pointer; min-width: 0; }  /* min-width: a pasted link in the prompt is one long word, and it widened the card over its neighbours */
 .film img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; border-radius: 12px; border: 1px solid var(--line); background: var(--sunk); transition: box-shadow .15s, transform .15s; }
 .film:hover img { box-shadow: var(--lift); transform: translateY(-1px); }
-.film div { padding: 0 2px; font-size: 13px; }
-.film p { margin: 0 0 2px; font-size: 14px; font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.film div { padding: 0 2px; font-size: 13px; min-width: 0; }
+.film p { margin: 0 0 2px; font-size: 14px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .film small { color: var(--ink-3); font-variant-numeric: tabular-nums; }
 /* the page's own dialog: signing in (publishing to YouTube is publish.js's, with publish.css) */
 #signin { padding: 22px 24px 24px; }
@@ -999,7 +999,7 @@ async function recent() {
     $('films').innerHTML = list.map((f, i) => `
       <a class="film" href="/film/${esc(f.id)}" data-i="${i}">
         <img src="${esc(f.poster_url)}" alt="" loading="lazy">
-        <div><p>${esc(f.prompt || f.title || 'A film from pictures and a voice note')}</p><small>${dur(f.length || 5)} ${{ painted: 'painted', collage: 'collage' }[f.look] || 'drawn'} film · made in ${mmss(f.seconds || 0)}${f.cost_usd != null ? ' · $' + f.cost_usd.toFixed(2) : ''}</small></div>
+        <div><p dir="auto">${esc(f.prompt || f.title || 'A film from pictures and a voice note')}</p><small>${dur(f.length || 5)} ${{ painted: 'painted', collage: 'collage' }[f.look] || 'drawn'} film · made in ${mmss(f.seconds || 0)}${f.cost_usd != null ? ' · $' + f.cost_usd.toFixed(2) : ''}</small></div>
       </a>`).join('');
     for (const b of $('films').querySelectorAll('.film')) {
       const f = list[+b.dataset.i];
@@ -1367,6 +1367,7 @@ const SIGNIN_ERRORS = {
   link: 'That sign-in link is invalid or has expired. Request a fresh one.',
   google: "Google sign-in didn't complete. Try again, or use the email link.",
   noemail: "Google didn't hand back a verified email address. Try the email link instead.",
+  throwaway: 'Use an email address you keep: KitCut does not make accounts for temporary inboxes.',
 };
 // the idea typed before signing in, kept in this browser until the visitor is back
 const draft = {
@@ -1468,7 +1469,9 @@ function paintLength() {
   c.hidden = !CREDITS;
   if (CREDITS) {
     c.classList.toggle('short', short);
-    c.innerHTML = `${costOf(v)} credits${costOf(v) > v ? ' (the least a film uses)' : ''} · you have ${mmss(CREDITS.balance)} left · renews ${renews()}` +
+    // a second account of one person has no free film to renew (lib/sameperson.js): its account page says why
+    c.innerHTML = `${costOf(v)} credits${costOf(v) > v ? ' (the least a film uses)' : ''} · you have ${mmss(CREDITS.balance)} left` +
+      (CREDITS.second ? ' · <a href="/account#second">no free film on a second account</a>' : ` · renews ${renews()}`) +
       ' · <a href="/pricing">Get more film</a>' + (short ? ', or <a href="/account#invite">invite a friend for free film</a>' : '');
   }
 }
@@ -2356,7 +2359,7 @@ $('form').addEventListener('submit', async (e) => {
       finish(); screen('<div class="idle">Your film appears here.</div>');
       if (CREDITS) { CREDITS.balance = body.have; paintLength(); }
       $('status').textContent = `This film needs ${mmss(body.need)} of credit and you have ${mmss(body.have)}.` +
-        (body.renews_at ? ` Credits renew on ${new Date(body.renews_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.` : '');
+        (body.renews_at && !(CREDITS && CREDITS.second) ? ` Credits renew on ${new Date(body.renews_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.` : '');
       return;
     }
     if (r.status === 429) {  // films already being made, a full queue, or the day's limit: say which, and where to look
