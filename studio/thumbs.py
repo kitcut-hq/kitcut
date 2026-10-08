@@ -135,15 +135,32 @@ def saved(film, channel, key=None):
     return rec
 
 
+def wide(film):
+    """Whether the film is 16:9, the only frame an option is composed for: _thumb lays a 1280x720
+    poster out of the film's own pieces, and on a tall film it came out as one corner of a poster
+    (the first Short, wwxftc, 2026-10-08: "DEEPNAS / NEVER / PLAYED" cut by the frame's edge). A
+    square or a tall film gets no options: YouTube shows a Short by a frame of its own, and the
+    film's page shows its card (share.py leaves the picture out when none was made)."""
+    try:
+        with open(film.manifest, encoding="utf-8") as f:
+            w, h = (json.load(f).get("frame") or [1920, 1080])[:2]
+    except (OSError, ValueError, TypeError):
+        return True
+    return w * 9 == h * 16
+
+
 def make_now(film, channel, draft, want=4):
     """The `want` options for a draft -- four for YouTube (blocking: stills, layout, one browser
-    shot, checks). Fewer concepts than that are made up from the film; more are cut."""
+    shot, checks). Fewer concepts than that are made up from the film; more are cut. None for a
+    film that is not 16:9 (wide)."""
     t0 = time.time()
     concepts = (draft.get("thumbnails") or [])[:want]
-    if len(concepts) < want:
-        concepts = _thumb.fill_concepts(concepts, moments(film), length(film), n=want)
-    d = out_dir(film, channel)
-    opts = _thumb.make_options(film.dir, concepts, d, log=lambda *_: None)
+    opts = []
+    if wide(film):
+        if len(concepts) < want:
+            concepts = _thumb.fill_concepts(concepts, moments(film), length(film), n=want)
+        d = out_dir(film, channel)
+        opts = _thumb.make_options(film.dir, concepts, d, log=lambda *_: None)
     rec = {
         "key": draft.get("key"),
         "design": _thumb.DESIGN,

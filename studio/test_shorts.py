@@ -10,7 +10,8 @@ engine folder and both in its record; a film asked for as ever is byte for byte 
 (no frame, no module, no note); the first message names the frame and the caption band; the band
 film.py tells the writer about is the one captions.js draws in, for every frame; and the cards it
 cuts a narration into never hold more words than the frame allows, never leave a last word alone,
-and never overlap in time.
+and never overlap in time; and a film that is not 16:9 gets no thumbnail options, since those are
+posters composed for 1280x720 (thumbs.wide).
 """
 
 import os
@@ -28,6 +29,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(HERE), "scripts"))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 import agent  # noqa: E402
 import film as films  # noqa: E402
+import thumbs  # noqa: E402
 
 FAILED = []
 
@@ -124,6 +126,18 @@ def main():
     expect(
         "the look's prompt is the same with captions as without",
         agent.system_prompt("collage", short.caps) == agent.system_prompt("collage", wide.caps),
+    )
+
+    print("thumbnails")
+    expect("a 16:9 film is one a thumbnail is composed for", thumbs.wide(wide))
+    expect("a tall one is not", not thumbs.wide(short))
+    rec = thumbs.make_now(short, "UCtest", {"key": "k1", "thumbnails": [{"at": 1.0}]})
+    expect("so it gets no options (and no browser is started)", rec.get("options") == [], rec)
+    expect(
+        "which the site is told as a finished draft with none",
+        thumbs.public(thumbs.saved(short, "UCtest", "k1"))
+        == {"state": "done", "v": "k1-%s" % rec["design"], "options": []},
+        thumbs.public(thumbs.saved(short, "UCtest", "k1")),
     )
 
     print("the caption module")
