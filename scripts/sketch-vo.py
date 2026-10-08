@@ -47,6 +47,14 @@ default global); the 3.8 models through the Gemini API (generativelanguage.googl
 must be enabled in the service account's project. The timeline records each line's tokens and
 what they cost.
 
+A Gemini voice sometimes goes on after its line -- a pause, then words nobody wrote, most often
+ones its "style" names (a style ending "...after each numbered chapter title" gave "Chapter 1"
+after 16 of a film's 54 lines). So every Whisper-timed take is checked against the script: what
+follows a pause after the line's last word is cut off (the timeline line's "cut" says what),
+added words with no pause to cut in are recorded again, the last time without the style, and
+what still remains is named in the line's "stray" and printed. Keep "style" to how the voice
+sounds; never name a part of the script in it.
+
 Invoke as:
     python scripts/sketch-vo.py --manifest projects/<id>/sketch.json --plan
     python scripts/sketch-vo.py --manifest projects/<id>/sketch.json
@@ -720,6 +728,119 @@ def align_words(script, heard):
     ]
 
 
+# A Gemini voice now and then goes on after its line: a pause, then words nobody wrote. The film
+# studio-20261007-223612-ysk76f (2026-10-07) had "Chapter 1" after 16 of its 54 lines, some with a
+# made-up title ("Chapter 1. The Crystal Ball Debate"): its voice direction ended "...a real pause
+# after each numbered chapter title", and the model spoke what the direction named. Two added
+# words on a 15-word line still score 0.93, so nothing asked for a retake, and the three lines
+# retaken for other reasons came back with the same words. Measured on that film's 54 takes: every
+# one of the 16 has 1.1-2.9 s of silence between the line's last word and the added ones, and no
+# clean take has 0.3 s of it there. So a line ends at the first pause of STRAY_PAUSE after its
+# last scripted word when sound follows (cut_stray); added words with no pause to cut in, or said
+# before the line, are recorded again STRAY_TRIES times, the last without the direction.
+STRAY_PAUSE, STRAY_DB, STRAY_KEEP, STRAY_TRIES = 0.5, -45.0, 0.15, 2
+
+
+def _covers(want, part):
+    """Do these heard words say these script words? Spelled as one word or as several
+    ("a.m.", a compound split in two), or a number in digits (_credit)."""
+    return bool(part) and (
+        _same_word("".join(want), "".join(part)) or _credit(want, part)[0] == len(want)
+    )
+
+
+def line_span(script, heard):
+    """Where the script's own words sit in what was heard. heard: [(text, start, end)].
+    Returns (start, end, before, after): the times of the first and last scripted word, and the
+    words heard before and after them, which the script does not have. end is None when the
+    line's last words cannot be found (a garbled ending: nothing to say about what follows)."""
+    ref, hyp = words_of(script), ["".join(words_of(w)) for w, _, _ in heard]
+    blocks = [
+        b
+        for b in difflib.SequenceMatcher(None, ref, hyp, autojunk=False).get_matching_blocks()
+        if b.size
+    ]
+    if not blocks:
+        return None, None, [], []
+    a, b = blocks[0], blocks[-1]
+    lo, hi = a.b, b.b + b.size  # heard[lo:hi] are the script's words
+    # scripted words before the first match or after the last one, heard another way ("forty
+    # eight" as "48", "twelve billion dollars" as "$12 billion"): the fewest heard words that
+    # say them belong to the line, and so does any number beside them
+    if a.a:
+        k = next((k for k in range(1, lo + 1) if _covers(ref[: a.a], hyp[lo - k : lo])), lo)
+        lo -= k
+        while lo and DIGIT.search(hyp[lo - 1]):
+            lo -= 1
+    end = True
+    if b.a + b.size < len(ref):
+        want, left = ref[b.a + b.size :], len(hyp) - hi
+        k = next((k for k in range(1, left + 1) if _covers(want, hyp[hi : hi + k])), None)
+        end = k is not None or not left  # nothing heard after them: the hearing's end is theirs
+        hi = hi + k if k else len(hyp)
+        while hi < len(hyp) and DIGIT.search(hyp[hi]):
+            hi += 1
+    return (
+        heard[lo][1],
+        heard[hi - 1][2] if end else None,
+        [w for w, _, _ in heard[:lo]],
+        [w for w, _, _ in heard[hi:]],
+    )
+
+
+def added(script, words):
+    """Of the words heard outside the line, the ones the script really does not have: not a
+    number in digits, not a script word spelled another way or heard in two halves (measured on
+    1,754 lines of 149 films: "a.m.", a Persian compound split in two, "64" were 12 of the 21
+    lines left with "added" words)."""
+    ref = words_of(script)
+    whole = "".join(ref)
+    out = []
+    for w in words:
+        k = "".join(words_of(w))
+        if not k or DIGIT.search(k) or (len(k) > 1 and k in whole):
+            continue
+        if not any(_same_word(k, r) for r in ref):
+            out.append(w)
+    return out
+
+
+# what follows the pause with no word heard in it is cut only when it is this short (a click, a
+# breath): Whisper can time a line's last words early, and a cut there would take real words
+STRAY_BLIP = 0.5
+
+
+def cut_stray(x, end, words=True):
+    """The take cut where the voice went on after its line: at the first pause of STRAY_PAUSE
+    after the last scripted word (end, seconds) that sound follows. Returns (samples, cut at
+    seconds) or (x, None) when nothing follows such a pause. words: were words heard after the
+    line (when not, only a blip is cut: STRAY_BLIP)."""
+    hop = int(0.02 * SR)
+    n = len(x) // hop
+    if not n:
+        return x, None
+    rms = np.sqrt(np.mean(x[: n * hop].reshape(n, hop) ** 2, axis=1))
+    loud = rms > 10 ** (STRAY_DB / 20)
+    i, need = max(0, int((end - 0.3) / 0.02)), int(round(STRAY_PAUSE / 0.02))
+    while i < n:
+        if loud[i]:
+            i += 1
+            continue
+        j = i
+        while j < n and not loud[j]:
+            j += 1
+        if j - i >= need and j < n:  # a real pause, and the voice comes back after it
+            if not words and (n - j) * 0.02 > STRAY_BLIP:
+                return x, None
+            stop = min(len(x), i * hop + int(STRAY_KEEP * SR))
+            y = x[:stop].copy()
+            f = min(len(y), int(0.02 * SR))
+            y[-f:] *= np.linspace(1, 0, f)
+            return y, stop / SR
+        i = j
+    return x, None
+
+
 # ------------------------------------------------------------------ cutting the tail off
 def cut_at_tail(x, align, tail):
     """Samples of the line alone, cut in the silence before the tail word. Returns (y, lead, ok)."""
@@ -1146,12 +1267,15 @@ def main():
                         todo.append((i, k, base))
                 results[i] = fp
 
-            def synth(job):
+            def synth(job, plain=False):
                 """One take, written to base.{mp3|wav,json}; returns what to print about it.
-                The .json goes last, so a take is only ever cached whole."""
+                The .json goes last, so a take is only ever cached whole. plain: without the
+                voice direction (a take recorded again for the words the voice added)."""
                 i, k, base = job
                 ln = lines[i]
                 lvo = line_vo(vo, ln)  # the speaker's voice, when the line names one
+                if plain:
+                    lvo = {**lvo, "style": ""}
                 lvoice = lvo.get("voice") or voice
                 note = "  line %d take %d" % (i, k)
                 if tts == "elevenlabs":
@@ -1238,41 +1362,45 @@ def main():
                         blocked(e)
                     raise
         cand = {}
+
+        def trimmed(k, base):
+            """One take's line cut out of its recording (base_line.wav): a candidate."""
+            with open(base + ".json", encoding="utf-8") as f:
+                align = json.load(f)
+            src = base + (".mp3" if os.path.exists(base + ".mp3") else ".wav")
+            x = _sketch.decode(src)
+            if "words" in align:  # edge: already a clean line, times in seconds
+                y, lead, ok, words = x, 0.0, True, align["words"]
+            elif "gemini" in align or "approved" in align:
+                # a clean line (an approved one was once a take like this); the words
+                # come from Whisper below
+                y, lead = trim_silence(x)
+                ok, words = True, None
+            else:
+                y, lead, ok = cut_at_tail(x, align, tail)
+                words = word_times(align, lead, tail)
+            out = base + "_line.wav"
+            _sketch.write_wav(out, y)
+            gem = align.get("gemini") or {}
+            return {
+                "take": k,
+                "base": base,
+                "file": out,
+                "dur": len(y) / SR,
+                "clean": ok,
+                "words": words,
+                "tts": align.get("gemini") if base in fresh else None,
+                "backup": gem.get("voice") if gem.get("backup") else None,
+                "approved": align.get("approved"),
+                # a Gemini take may be recorded again for words the voice added, once
+                "again": "gemini" in align and not gem.get("backup") and "again" not in gem,
+            }
+
         with st("trim"):
             for i, fp in results.items():
                 for k in range(1 if i in given else takes):
                     base = os.path.join(vdir, "L%02d_T%d_%s" % (i, k, fp))
-                    with open(base + ".json", encoding="utf-8") as f:
-                        align = json.load(f)
-                    src = base + (".mp3" if os.path.exists(base + ".mp3") else ".wav")
-                    x = _sketch.decode(src)
-                    if "words" in align:  # edge: already a clean line, times in seconds
-                        y, lead, ok, words = x, 0.0, True, align["words"]
-                    elif "gemini" in align or "approved" in align:
-                        # a clean line (an approved one was once a take like this); the words
-                        # come from Whisper below
-                        y, lead = trim_silence(x)
-                        ok, words = True, None
-                    else:
-                        y, lead, ok = cut_at_tail(x, align, tail)
-                        words = word_times(align, lead, tail)
-                    out = base + "_line.wav"
-                    _sketch.write_wav(out, y)
-                    cand.setdefault(i, []).append(
-                        {
-                            "take": k,
-                            "base": base,
-                            "file": out,
-                            "dur": len(y) / SR,
-                            "clean": ok,
-                            "words": words,
-                            "tts": align.get("gemini") if base in fresh else None,
-                            "backup": (align.get("gemini") or {}).get("voice")
-                            if (align.get("gemini") or {}).get("backup")
-                            else None,
-                            "approved": align.get("approved"),
-                        }
-                    )
+                    cand.setdefault(i, []).append(trimmed(k, base))
         with st("score"):
             # a scoring service answers several takes at once (--jobs, as the voice does); the
             # local model has the CPU to itself, one take at a time
@@ -1290,17 +1418,81 @@ def main():
                     words=c["words"] is None,
                 )
 
+            def settle(i, c, got):
+                """The score of a take, and for a take Whisper timed (Gemini's, or an approved
+                line) the words the voice added: what follows a pause after the line is cut
+                off, anything else is left in c["stray"] (see STRAY_PAUSE)."""
+                c["acc"], c["heard"], c["stray"] = got[0], got[1], ""
+                if c["words"] is not None:
+                    return
+                text, ws = lines[i]["text"], list(got[2])
+                _, end, before, after = line_span(text, ws)
+                if end is not None:
+                    y, at = cut_stray(_sketch.decode(c["file"]), end, bool(after))
+                    if at is not None:
+                        _sketch.write_wav(c["file"], y)
+                        # by a word's middle: Whisper starts a word that follows a pause early
+                        c["cut"] = " ".join(w for w, a, b in ws if (a + b) / 2 >= at)
+                        ws = [w for w in ws if (w[1] + w[2]) / 2 < at]
+                        c["dur"], c["heard"] = len(y) / SR, " ".join(w for w, _, _ in ws)
+                        c["acc"] = accuracy(text, c["heard"])
+                        _, _, before, after = line_span(text, ws)
+                c["stray"] = " ".join(added(text, before + after))
+                c["words"] = align_words(text, ws)  # the script's words, timed by Whisper
+
+            def again(job):
+                """A take with words the voice added that no cut removes, recorded again
+                (STRAY_TRIES, the last without the direction): the first clean one takes its
+                place. Returns what to print about it."""
+                i, c = job
+                new, spent, note, c2 = c["base"] + "_again", [], "", None
+                for n in range(STRAY_TRIES):
+                    note += synth((i, c["take"], new), plain=n == STRAY_TRIES - 1) + "\n"
+                    fresh.add(new)
+                    c2 = trimmed(c["take"], new)
+                    settle(i, c2, score((i, c2)))
+                    spent.append(c2["tts"])
+                    if not c2["stray"] and c2["acc"] >= c["acc"] - 0.05:
+                        break
+                    c2 = None
+                for ext in (".wav", ".json", ".score.json", "_line.wav"):
+                    if c2:
+                        os.replace(new + ext, c["base"] + ext)
+                    elif os.path.exists(new + ext):
+                        os.remove(new + ext)
+                with open(c["base"] + ".json", encoding="utf-8") as f:
+                    align = json.load(f)
+                align["gemini"]["again"] = len(spent)  # a later run does not ask again
+                with open(c["base"] + ".json", "w", encoding="utf-8") as f:
+                    json.dump(align, f)
+                if c2:
+                    note += "  line %d: the voice added %r; recorded again" % (i, c["stray"])
+                    spent, was = spent[:-1], c.get("tts")
+                    c.update({**c2, "base": c["base"], "file": c["base"] + "_line.wav"})
+                    spent += [was] if was else []
+                else:
+                    note += "  line %d: the voice adds %r every time" % (i, c["stray"])
+                c["also"] = [t for t in spent if t]  # paid for in this run, and not kept
+                return note
+
             n_jobs = jobs if remote(scorer(vo.get("whisper"))) else 1
             with ThreadPoolExecutor(max_workers=max(1, min(n_jobs, len(flat) or 1))) as pool:
                 for (i, c), got in zip(flat, pool.map(score, flat)):
-                    c["acc"], c["heard"] = got[0], got[1]
-                    if c["words"] is None:  # gemini: the script's words, timed by Whisper
-                        c["words"] = align_words(lines[i]["text"], got[2])
+                    settle(i, c, got)
+                redo = [(i, c) for i, c in flat if c["stray"] and c["again"]]
+                for note in pool.map(again, redo):
+                    print(note, flush=True)
             for i, cs in cand.items():
                 med = float(np.median([c["dur"] for c in cs]))
                 for c in cs:
-                    # accuracy first, then a clean cut, then the take nearest the median length
-                    c["rank"] = (round(c["acc"], 2), c["clean"], -abs(c["dur"] - med))
+                    # nothing added first, then accuracy, a clean cut, and the take nearest
+                    # the median length
+                    c["rank"] = (
+                        not c["stray"],
+                        round(c["acc"], 2),
+                        c["clean"],
+                        -abs(c["dur"] - med),
+                    )
                 pick = lines[i].get("pick")
                 # a pick that names no take (an approved line has only its one) is no pick
                 best = next((c for c in cs if c["take"] == pick), None) or max(
@@ -1319,6 +1511,13 @@ def main():
                             c["heard"][:70],
                         )
                     )
+                    if c.get("cut"):
+                        print("      cut off after the line: %r" % c["cut"])
+                    if c["stray"]:
+                        print(
+                            "      NOT IN THE SCRIPT, and still in the take: %r (heard: %r)"
+                            % (c["stray"], c["heard"])
+                        )
                 results[i] = best
         with st("place"):
             t = vo.get("lead", 0.6)
@@ -1339,7 +1538,12 @@ def main():
                         L["approved"] = b["approved"]
                     if b.get("backup"):  # Gemini refused it: the backup voice read it
                         L["backup_voice"] = b["backup"]
+                    if b.get("cut"):  # what the voice said after the line, cut off
+                        L["cut"] = b["cut"]
+                    if b["stray"]:  # words the voice added that are still in the recording
+                        L["stray"] = b["stray"]
                     spent = [c["tts"] for c in cand.get(i, []) if c.get("tts")]
+                    spent += [t for c in cand.get(i, []) for t in c.get("also", [])]
                     if spent:
                         # what this line cost in this run: every take rendered, not only the pick
                         L["tts_cost_usd"] = round(sum(t["cost_usd"] for t in spent), 6)

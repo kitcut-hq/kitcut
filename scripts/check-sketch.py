@@ -514,6 +514,49 @@ def main():
         "character_start_times_seconds": starts,
         "character_end_times_seconds": ends,
     }
+    # ---- words the voice adds after its line (studio-20261007-223612-ysk76f: "Chapter 1")
+    said_ = [("By", 0.0, 0.2), ("November,", 0.2, 0.7), ("it", 0.7, 0.8), ("was", 0.8, 0.9)]
+    said_ += [("gone.", 0.9, 1.1), ("Chapter", 2.2, 2.5), ("1", 2.5, 2.7)]
+    span = vo_mod.line_span("By November, it was gone.", said_)
+    check("stray: the line ends at its last word", span[1] == 1.1 and span[3] == ["Chapter", "1"])
+    take = np.concatenate([tone(1.1), np.zeros(int(1.1 * SR)), tone(0.5)])
+    y, at = vo_mod.cut_stray(take, 1.1)
+    check("stray: cut in the pause", at is not None and 1.1 < len(y) / SR < 1.5, str(at))
+    check(
+        "stray: a line with nothing after it is left whole",
+        vo_mod.cut_stray(tone(2.0), 1.9)[1] is None,
+    )
+    two = np.concatenate([tone(0.6), np.zeros(int(0.3 * SR)), tone(0.5)])
+    check("stray: a breath inside a line is not a cut", vo_mod.cut_stray(two, 1.4)[1] is None)
+    long_ = np.concatenate([tone(1.0), np.zeros(int(0.8 * SR)), tone(2.0)])
+    check(
+        "stray: no word heard after the pause, and too long for a blip: kept",
+        vo_mod.cut_stray(long_, 1.0, words=False)[1] is None
+        and vo_mod.cut_stray(
+            np.concatenate([tone(1.0), np.zeros(SR), tone(0.2)]), 1.0, words=False
+        )[1]
+        is not None,
+    )
+    digits = [("bought", 0.0, 0.4), ("it", 0.4, 0.5), ("for", 0.5, 0.7), ("$12", 0.7, 1.0)]
+    digits += [("billion.", 1.0, 1.4)]
+    span = vo_mod.line_span("bought it for twelve billion dollars.", digits)
+    check(
+        "stray: a number heard in digits ends the line", span[1] == 1.4 and not span[3], str(span)
+    )
+    span = vo_mod.line_span(
+        "lost seventy-eight percent.",
+        [("lost", 0, 0.3), ("78%.", 0.3, 0.9), ("Chapter", 2, 2.3), ("1", 2.3, 2.5)],
+    )
+    check(
+        "stray: found after a number too", span[1] == 0.9 and span[3] == ["Chapter", "1"], str(span)
+    )
+    check(
+        "stray: a script word heard another way is not an added word",
+        vo_mod.added("Tonight. Three a.m.", ["a.m."]) == []
+        and vo_mod.added("minus twenty is sixty four", ["64."]) == []
+        and vo_mod.added("it was gone.", ["Chapter", "1"]) == ["Chapter"],
+    )
+
     y, lead, ok = vo_mod.cut_at_tail(x, align, "Alright.")
     check("tail: cut found a clean gap", ok)
     check("tail: tail removed, line kept", 0.95 < len(y) / SR < 1.3, "%.2fs" % (len(y) / SR))

@@ -987,3 +987,30 @@ sees it. Template films and films made in scenes are read less: see `studio/READ
 pair of eyes". **Never adopt a detector you have not measured:** two were dropped here after
 measuring -- a pixel finder for the wash (5 false alarms on shadows and set changes) and pixel
 stillness as "nothing happens" (a calm shot and an empty one look the same).
+
+### KI-060 · fixed · films · The narrator said "Chapter 1" after sixteen lines nobody wrote it in
+
+**Symptom.** 2026-10-07, studio-20261007-223612-ysk76f (6.5 minutes, 54 lines, Gemini voice
+Charon): 16 lines ended with a pause of 1-3 s and then "Chapter 1", five of them with a made-up
+title ("Chapter 1. The Crystal Ball Debate"). The owner heard it on the finished film. The
+author had seen "a few seconds of extra audio after the last word" on some lines, could not
+listen, and said so in its closing note; three of the lines were recorded again for other
+reasons and came back with the same words.
+**Cause.** Three things in a row. (1) The voice direction named a part of the script: `style`
+ended "...with a real pause after each numbered chapter title", and for the Vertex models the
+direction is the start of the prompt (`"<style>: <line>"`), so the voice spoke what the direction
+named. (2) Nothing looked for words after a line: two added words on a 15-word line score 0.93,
+`stretched` wants twice the line's length, and the take's printed transcript stopped at 70
+characters, before the added words. (3) A retake used the same direction and got the same words.
+It was not one film: the same check over the chosen takes of the 149 most recent films (1,754
+lines) finds 18 more such lines in six films, among them a direction read aloud ("And a burst of
+joy at the end.") and a line said twice.
+**Fixed** (`scripts/sketch-vo.py`: `line_span`, `cut_stray`, `added`). Every take Whisper times
+is compared with its script line. What follows a pause of 0.5 s after the line's last word is cut
+off (the timeline line's `cut` says what was cut); words added with no pause to cut in are
+recorded again twice, the second time without the direction; what still remains is in the line's
+`stray`, printed in full, ranked below any take without it, and told to the author as words that
+are in the film. On that film: all 16 lines cut clean, the 37 others untouched. The brief now
+keeps `style` to how the voice sounds. **Not covered:** a sound with no words in it (a laugh, a
+hum) longer than 0.5 s stays, because Whisper can time a line's last words early and a cut there
+would take real words; ElevenLabs and edge takes are timed by their own service and not checked.

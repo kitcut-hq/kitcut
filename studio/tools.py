@@ -263,6 +263,12 @@ def timeline_text(film, retake=None):
                 "line %d  %.2f-%.2f s  acc %.2f  %r"
                 % (L["i"], L["start"], L["end"], L.get("acc", 0), L["text"][:60])
             )
+        if L.get("stray"):
+            out.append(
+                "  NOTE: the voice said words that are not in the script here (%r), and recording"
+                " it again did not help. They are IN the film as it stands: reword the line, or"
+                " take what they echo out of `style`, and record it again." % L["stray"]
+            )
         if L.get("backup_voice"):
             out.append(
                 "  (Gemini would not read this line; the backup voice %s read it, so it sounds a"
