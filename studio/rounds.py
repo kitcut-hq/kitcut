@@ -627,18 +627,16 @@ def _hand_files(d):
 
 def clean_hand(film, hand):
     """Files changed by hand, checked before they may be a round: {dir, base, summary, files}.
-    `dir` is a folder of this studio's (HAND) holding the changed files as they lie in a film;
-    `base` is the film's digest when they were taken, and must be the film's now -- the
+    The files are where ops.sh put leaves them, HAND/<film id>/, as they lie in a film (the
+    place is the studio's to name: no path is taken from the request); `base` is the film's digest when they were taken, and must be the film's now -- the
     comparison is of what the film is made of, not of a version's number, so a film rendered
     again in place is caught as one changed from notes is. Raises RoundError."""
     if not isinstance(hand, dict):
-        raise RoundError(400, 'hand is {"dir", "base", "summary"}.')
-    d = os.path.realpath(str(hand.get("dir") or ""))
-    if os.path.dirname(d) != os.path.realpath(HAND) or not os.path.isdir(d):
-        raise RoundError(400, "The changed files are not where the studio keeps them.")
-    files = _hand_files(d)
+        raise RoundError(400, 'hand is {"base", "summary"}.')
+    d = os.path.join(HAND, film.id)
+    files = _hand_files(d) if os.path.isdir(d) else []
     if not files:
-        raise RoundError(400, "No changed files were sent.")
+        raise RoundError(400, "No changed files were sent (%s is empty)." % d)
     own = sorted({n.split("/")[0] for n in files} & (set(OWN) | {"outputs"}))
     if own:
         raise RoundError(

@@ -770,19 +770,23 @@ PY
     at=$(printf '%s\n' "$list" | head -1); names=$(printf '%s\n' "$list" | tail -n +2)
     echo "changed since it was taken:"; printf '%s\n' "$names" | sed 's/^/  /'
     stage="$HOME_DIR/rounds/_hand/$id"
-    body=$(SUMMARY="$summary" AT="$at" STAGE="$stage" python - <<'PY'
+    # no path of the VM's goes through this shell (Git Bash rewrites one that starts with /): the
+    # studio knows where a film's files by hand are
+    body=$(SUMMARY="$summary" AT="$at" python - <<'PY'
 import base64, json, os, time
 at = json.loads(os.environ["AT"])
-hand = {"dir": os.environ["STAGE"], "base": at["digest"], "summary": os.environ["SUMMARY"]}
+hand = {"base": at["digest"], "summary": os.environ["SUMMARY"]}
 print(base64.b64encode(json.dumps({"key": "ops-hand-%d" % time.time(), "hand": hand}).encode()).decode())
 PY
     ) || die "could not write the request"
     if [ "$DRY" = 1 ]; then echo "  would send them to $VM:$stage and ask for the next version"; exit 0; fi
     printf '%s\n' "$names" | tr -d '\r' | tar -C "$dir" -cf - -T - | on "rm -rf $stage && mkdir -p $stage && tar -xf - -C $stage" || die "the files did not go over"
-    on "$TOKEN_SH; echo $body | base64 -d | curl -s -X POST http://127.0.0.1:$PORT/api/films/$id/versions -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' --data-binary @-; echo"
+    said=$(on "$TOKEN_SH; echo $body | base64 -d | curl -s -X POST http://127.0.0.1:$PORT/api/films/$id/versions -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' --data-binary @-; echo")
+    echo "$said"
+    case "$said" in *'"round"'*) ;; *) die "not taken: the film is as it was" ;; esac
     [ "$watch" = 0 ] && exit 0
     watch_round "$id"
-    echo "the film has moved on: take it again before changing more"
+    echo "if that made a version, the film has moved on: take it again before changing more"
     ;;
 
   versions)

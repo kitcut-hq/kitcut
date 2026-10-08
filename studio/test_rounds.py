@@ -753,7 +753,7 @@ async def main():
                 src = fh.read()
             with open(os.path.join(d, name), "w", encoding="utf-8") as fh:
                 fh.write(src + text)
-            return {"dir": d, "base": base, "summary": summary}
+            return {"base": base, "summary": summary}
 
         at = rounds.where(f)
         n0, asked, days = at["version"], len(SEEN), rounds.rounds_today(f.record())
@@ -771,15 +771,16 @@ async def main():
             (
                 ({"summary": " "}, "nothing said of what changed"),
                 ({"name": "studio.json"}, "the film's own record"),
-                ({"dir": f.dir}, "a folder that is not the studio's"),
             )
         ):  # each folder made as it is sent: the next one's replaces it
-            body = by_hand(
-                "\n// h\n", at["digest"], **{k: v for k, v in more.items() if k != "dir"}
-            )
-            body |= {k: v for k, v in more.items() if k == "dir"}
+            body = by_hand("\n// h\n", at["digest"], **more)
             r = await c.post(url, json={"key": "h0-%d" % i, "hand": body}, headers=auth)
             check(r.status == 400, "refused by hand: %s (%d)" % (why, r.status))
+        shutil.rmtree(os.path.join(rounds.HAND, fid))
+        r = await c.post(
+            url, json={"key": "h0-2", "hand": {"base": at["digest"], "summary": "x"}}, headers=auth
+        )
+        check(r.status == 400, "refused by hand: no files sent (%d)" % r.status)
         before = tree(f)
         r = await c.post(
             url, json={"key": "h1", "hand": by_hand("\n// by hand 1\n", at["digest"])}, headers=auth
@@ -856,7 +857,7 @@ async def main():
         shutil.copyfile(f.path("film.js"), os.path.join(d, "film.js"))
         r = await c.post(
             url,
-            json={"key": "h4", "hand": {"dir": d, "base": at2["digest"], "summary": "Nothing."}},
+            json={"key": "h4", "hand": {"base": at2["digest"], "summary": "Nothing."}},
             headers=auth,
         )
         rec, _ = await wait_round(f)
