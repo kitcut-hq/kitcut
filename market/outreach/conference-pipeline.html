@@ -78,6 +78,14 @@ ul.soc a{font-family:var(--mono);font-size:13px;overflow-wrap:anywhere}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--card)}
 select,textarea{font:inherit;font-size:14px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
 textarea{width:100%;min-height:70px;resize:vertical}
+.notes{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:10px 16px}
+.notes summary{cursor:pointer;font-weight:600}
+.notes summary small{font-weight:400;color:var(--muted);margin-left:8px}
+#notesBody{display:flex;flex-direction:column;gap:14px;padding-block:12px 6px;max-width:75ch}
+.note h4{margin:0 0 3px;font-size:14.5px;font-weight:600}
+.note h4 time{font-family:var(--mono);font-size:12px;font-weight:400;color:var(--muted);margin-left:8px}
+.note ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+.note li{overflow-wrap:anywhere}
 .empty{padding:36px 20px;text-align:center;color:var(--muted)}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:8px 14px;border-radius:8px;font-size:13.5px}
 @media (max-width:720px){
@@ -94,6 +102,7 @@ textarea{width:100%;min-height:70px;resize:vertical}
     <p>Every conference we are approaching with a film made for it. Claude keeps this page current. Open an event to watch its film, read the email, and say Approve, Hold or Skip; Claude reads your call and your note before each step.</p>
     <div class="tally" id="tally"></div>
   </header>
+  <details class="notes" id="notes" hidden><summary id="notesSum">Campaign notes</summary><div id="notesBody"></div></details>
   <div class="bar" id="bar"></div>
   <div class="ledger" id="ledger"><div class="empty" id="empty">Loading the pipeline…</div></div>
 </div>
@@ -189,6 +198,12 @@ function render(){renderBar();renderList();}
 (async()=>{
   db=window.claude&&window.claude.use?await window.claude.use("db"):null;
   if(!db){state.loaded=true;$("ledger").replaceChildren(h("div",{class:"empty"},"Open this page signed in on claude.ai to load the pipeline."));return;}
+  db.doc("meta/campaign").onSnapshot(snap=>{
+    const notes=snap.exists&&Array.isArray(snap.data().notes)?snap.data().notes:[];
+    $("notes").hidden=!notes.length;
+    $("notesSum").replaceChildren("Campaign notes",h("small",null,notes.length+(notes.length===1?" entry":" entries")));
+    $("notesBody").replaceChildren(...notes.slice().reverse().map(n=>h("div",{class:"note"},h("h4",null,str(n&&n.title),h("time",null,day(n&&n.at))),h("ul",null,(Array.isArray(n&&n.points)?n.points:[]).map(p=>h("li",null,str(p)))))));
+  },()=>{});
   db.collection("leads").onSnapshot(snap=>{state.loaded=true;state.leads=snap.docs.map(d=>({...d.data(),id:d.id}));render();},
     ()=>{$("ledger").replaceChildren(h("div",{class:"empty"},"The pipeline could not be loaded. Reload the page."));});
 })();

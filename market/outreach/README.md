@@ -46,6 +46,10 @@ the Artifact tool's database actions, always with the version it last read.
 | `next_step`, `next_date`, `log` | the session | `log` is `[{at, text}]`, oldest first |
 | `decision`, `owner_note` | **the owner, on the page** | `approved`, `hold` or `skip`, and a note. Read both before every step on a lead |
 
+What is true of the whole campaign rather than of one event (what a list held, what was
+sent, what a lookup found) goes in one more document, `meta/campaign`: `notes` is
+`[{at, title, points: [...]}]`, and the page shows it as "Campaign notes", newest first.
+
 Nothing is sent to an organiser without `decision: approved` on that lead or the
 owner's word in the session.
 
