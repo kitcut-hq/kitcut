@@ -825,7 +825,12 @@ def main():
     g.add_argument(
         "--folder", help="a film's folder anywhere (sketch.json, film.js, cast/, audio/)"
     )
-    ap.add_argument("--auth", choices=("login", "api"), help="default: what the film was made on")
+    ap.add_argument(
+        "--auth",
+        choices=("login", "api"),
+        help="default: login, this machine's Claude login -- a reading by hand is nobody's film to "
+        "bill (the studio's own reading of a film it is making is on what that film is made on)",
+    )
     ap.add_argument(
         "--machine",
         action="store_true",
@@ -839,14 +844,12 @@ def main():
 
     film, title, auth = None, "", a.auth or "login"
     if a.film:
-        import share  # noqa: PLC0415
         from film import Film  # noqa: PLC0415
 
         film = Film.open(a.film)
         if film is None:
             sys.exit("no such film: %s" % a.film)
         d, title = film.dir, str(film.record().get("title") or "")
-        auth = a.auth or share.auth_of(film)
     else:
         d = os.path.abspath(a.folder)
     if a.machine:

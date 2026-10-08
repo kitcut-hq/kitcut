@@ -25,10 +25,12 @@ bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--look collage] [--unlis
 bash studio/deploy/ops.sh watch <film-id>...        # one or several, a line per change
 bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]  # finish a film the studio stopped
 bash studio/deploy/ops.sh resume <film-id> --finish --patched  # a DONE film changed by hand: re-mix, re-render, new URLs
-bash studio/deploy/ops.sh review <film-id> [--machine]  # read a finished film for glitches as the
+bash studio/deploy/ops.sh review <film-id> [--machine] [--api]  # read a finished film for glitches as the
                                                     # studio reads one before it is done: what a
                                                     # viewer would take for a mistake, with times;
-                                                    # changes nothing. --machine: no Claude call
+                                                    # changes nothing. --machine: no Claude call.
+                                                    # On the Claude login unless --api (a film made
+                                                    # on the key was once read on the key: $0.31)
 bash studio/deploy/ops.sh usage [--hours 24] [--at "HH:MM"] [--film ID]   # who used the CPU and
                                                     # memory: by hour, memory's low points, by film,
                                                     # by step ("can we downsize", "what ate 15 GB")

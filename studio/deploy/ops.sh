@@ -399,15 +399,15 @@ EOF
     use="review <film-id> [--machine] [--api]"
     id="${1:?$use}"; shift
     [[ "$id" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $id"
-    args="--film $id"
+    args="--film $id"; auth="--auth login"  # the login unless --api: a reading by hand bills no film
     while [ $# -gt 0 ]; do
       case "$1" in
-        --machine) args="$args --machine" ;; --api) args="$args --auth api" ;;
+        --machine) args="$args --machine" ;; --api) auth="--auth api" ;;
         *) die "$use" ;;
       esac
       shift
     done
-    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/review.py $args"
+    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/review.py $args $auth"
     unit="kitcut-review-$(date +%Y%m%d-%H%M%S)"
     change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=2G -p MemoryMax=3G -p Nice=10 $UNIT_ENV $py"
     [ "$DRY" = 1 ] && exit 0
