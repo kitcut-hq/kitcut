@@ -12,7 +12,8 @@ only, run with any Python 3.10+.
 |---|---|
 | `conference-pipeline.html` | the pipeline page: every event, its stage, who to write to, its film, its email, what happened, and the owner's Approve / Hold / Skip and note. Published as a private Artifact with a database (`capabilities: {db: {}}`) |
 | `leads_from_csv.py` | a contact list (CSV) -> one lead record per event, and the database batches that put them on the page |
-| `local/` | the contact lists. Gitignored: other people's addresses |
+| `find_socials.py` | each lead's X, Threads, LinkedIn, Instagram, YouTube and Facebook accounts, read off the organiser's own pages, and the batches that put them on the page |
+| `local/` | the contact lists, each lead's website (`sites.json`) and the accounts settled by hand (`socials-fixed.json`). Gitignored: other people's addresses |
 | `data/` | the lead records and batches made from them. Gitignored |
 
 ```powershell
@@ -39,6 +40,7 @@ the Artifact tool's database actions, always with the version it last read.
 | `event`, `org`, `org_key`, `when`, `date_sort`, `emails`, `audience`, `access_note` | the tool | the list's row; `access_note` is the way in when there is no address |
 | `stage` | the session (the owner may change it) | `new`, `blocked` (no address), `research`, `filming`, `review`, `sent`, `replied`, `talking`, `won`, `lost` |
 | `contact_name`, `contact_role` | the session | the person found for this event |
+| `socials`, `socials_note` | `find_socials.py` | `{x, threads, linkedin, instagram, youtube, facebook}`, each a profile link, and one line on where they came from and what is missing |
 | `template`, `film_id`, `film_url`, `film_minutes`, `film_note` | the session | `film_url` is the film's share page, which opens without signing in |
 | `email_subject`, `email_body`, `sent_at`, `sent_to`, `sent_from`, `gmail_thread` | the session | the email as sent |
 | `next_step`, `next_date`, `log` | the session | `log` is `[{at, text}]`, oldest first |
@@ -46,6 +48,38 @@ the Artifact tool's database actions, always with the version it last read.
 
 Nothing is sent to an organiser without `decision: approved` on that lead or the
 owner's word in the session.
+
+## Where they post
+
+A post that tags an organiser has to tag the organiser, so an account counts
+only when their own website links it.
+
+```powershell
+python market/outreach/find_socials.py --plan                    # the pages it would read
+python market/outreach/find_socials.py                           # -> data/socials.json
+python market/outreach/find_socials.py --render --only <lead-id> # a site built by scripts
+python market/outreach/find_socials.py --threads                 # whose Threads profiles those names are
+python market/outreach/find_socials.py --writes --versions data/versions.json
+```
+
+Each lead's pages come from `local/sites.json` (`{"<lead id>": ["https://..."]}`;
+without an entry, the domain of the lead's first address). Name the event's own
+site as well as the organiser's when they differ: an event often has its own
+accounts. Every link to a network is counted and the one named most wins; the
+rest stay under `candidates` for a person to choose from. A site that refuses
+the request is left alone and the lead says so.
+
+**Threads is the exception.** Few organisers link it, so `--threads` opens
+`threads.com/@<name>` for the Instagram and X names already found and records
+whose profile that is. It never writes the result by itself: of the ten
+profiles found on the first list, two belonged to somebody else (an
+association's X name was a private person's Threads). Read the titles, and put the ones that
+are theirs in `local/socials-fixed.json`, which wins over the pages from then
+on and can carry a `note` for the page.
+
+On the first list (52 events): X for 41, Threads for 11 (two linked on the
+organiser's site, nine under their Instagram name), nothing at all for six,
+two of those because the site refused to be read.
 
 ## Working one lead
 

@@ -66,6 +66,12 @@ a{color:var(--accent)}
 .subj{font-weight:600}
 ul.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:13.5px}
 ul.log time{font-family:var(--mono);font-size:12px;color:var(--muted);margin-right:8px}
+ul.soc{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 12px;font-size:14px}
+ul.soc li{display:contents}
+ul.soc .net{color:var(--muted);font-size:13px}
+ul.soc a{font-family:var(--mono);font-size:13px;overflow-wrap:anywhere}
+.marks{display:inline-flex;gap:5px;margin-left:8px;vertical-align:1px}
+.mark{font-family:var(--mono);font-size:10.5px;font-weight:500;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px}
 .acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .btn{font:inherit;font-size:13.5px;font-weight:500;padding:7px 13px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
 .btn.on{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
@@ -104,6 +110,8 @@ function h(tag,attrs,...kids){const e=document.createElement(tag);for(const k in
 const str=v=>typeof v==="string"?v:"";
 const day=v=>{const d=new Date(str(v));return isNaN(d)?"":d.toLocaleDateString(undefined,{month:"short",day:"numeric"})+" "+d.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"});};
 const safeUrl=v=>/^https:\/\/(kitcut\.ai|youtu\.be|www\.youtube\.com)\//.test(str(v))?v:null;
+const NETS=[["x","X",/^https:\/\/x\.com\//],["threads","Threads",/^https:\/\/www\.threads\.com\//],["linkedin","LinkedIn",/^https:\/\/www\.linkedin\.com\//],["instagram","Instagram",/^https:\/\/www\.instagram\.com\//],["youtube","YouTube",/^https:\/\/www\.youtube\.com\//],["facebook","Facebook",/^https:\/\/www\.facebook\.com\//]];
+const socialsOf=l=>{const s=l.socials&&typeof l.socials==="object"?l.socials:{};return NETS.filter(n=>n[2].test(str(s[n[0]]))).map(n=>({key:n[0],label:n[1],url:s[n[0]],name:(n[0]==="x"||n[0]==="instagram"?"@":"")+decodeURIComponent(s[n[0]].replace(n[2],"")).replace(/\/$/,"")}));};
 let toastT;function toast(m){const t=$("toast");t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2400);}
 
 async function save(id,patch,msg){
@@ -115,7 +123,7 @@ async function save(id,patch,msg){
 function stageOf(l){return LABEL[l.stage]?l.stage:"new";}
 function visible(){
   const q=state.q.trim().toLowerCase();
-  return state.leads.filter(l=>(state.filter==="all"||stageOf(l)===state.filter)&&(!q||[l.event,l.org,l.audience,l.when,(l.emails||[]).join(" ")].join(" ").toLowerCase().includes(q)))
+  return state.leads.filter(l=>(state.filter==="all"||stageOf(l)===state.filter)&&(!q||[l.event,l.org,l.audience,l.when,(l.emails||[]).join(" "),socialsOf(l).map(s=>s.name).join(" ")].join(" ").toLowerCase().includes(q)))
     .sort((a,b)=>RANK[stageOf(a)]-RANK[stageOf(b)]||str(a.date_sort||"9").localeCompare(str(b.date_sort||"9"))||str(a.event).localeCompare(str(b.event)));
 }
 
@@ -139,6 +147,9 @@ function leadBody(l){
         l.contact_name&&h("p",null,l.contact_name,l.contact_role&&h("span",{class:"quiet"}," · "+l.contact_role)),
         emails.length?emails.map(e=>h("p",{class:"mono"},e)):h("p",{class:"quiet"},"No public address."),
         l.access_note&&h("p",{class:"quiet"},l.access_note)),
+      h("section",null,h("h3",null,"Where they post"),
+        socialsOf(l).length?h("ul",{class:"soc"},socialsOf(l).map(s=>h("li",null,h("span",{class:"net"},s.label),h("a",{href:s.url,target:"_blank",rel:"noopener"},s.name)))):h("p",{class:"quiet"},"Not looked up yet."),
+        l.socials_note&&h("p",{class:"quiet"},str(l.socials_note))),
       h("section",null,h("h3",null,"Film"),
         film?h("p",null,h("a",{href:film,target:"_blank",rel:"noopener"},"Watch the film")):h("p",{class:"quiet"},str(l.film_state)||"Not made yet."),
         (l.template||l.film_minutes)&&h("p",{class:"quiet"},[l.template,l.film_minutes&&"made in "+l.film_minutes+" min"].filter(Boolean).join(" · ")),
@@ -165,7 +176,7 @@ function renderList(){
     const open=state.open.has(l.id),st=stageOf(l);
     return h("article",{class:"lead"},
       h("button",{class:"row",type:"button",id:"row-"+l.id,"aria-expanded":String(open),onclick:()=>{open?state.open.delete(l.id):state.open.add(l.id);renderList();}},
-        h("span",{class:"ev"},h("b",null,str(l.event)),h("small",null,[l.org,l.audience].filter(Boolean).join(" · "))),
+        h("span",{class:"ev"},h("b",null,str(l.event),h("span",{class:"marks"},socialsOf(l).filter(s=>s.key==="x"||s.key==="threads").map(s=>h("span",{class:"mark",title:s.label+" "+s.name},s.key==="x"?"X":"Th")))),h("small",null,[l.org,l.audience].filter(Boolean).join(" · "))),
         h("span",{class:"when"},str(l.when)),
         h("span",null,h("span",{class:"pill "+TONE[st]},LABEL[st]),l.decision&&h("span",{class:"flag "+l.decision},l.decision==="approved"?"Approved":l.decision==="hold"?"On hold":"Skipped")),
         h("span",{class:"next"},str(l.next_step))),
