@@ -221,6 +221,33 @@ Check the whip, the turns and every transition frame by frame from a `--draft` r
 (`ffmpeg ... -vf "fps=30,scale=216:216,tile=6x5"`), not only from stills: an empty frame between two
 scenes only shows in motion.
 
+## A YouTube Short (9:16, the words in the picture)
+
+A narrated film for a phone feed: `"frame": [1080, 1920]`, `"fps": 30` and `"modules": [...,
+"captions"]` in the manifest. `sketch/captions.js` draws the narration a card at a time from the
+voice timeline -- white on a dark card, the word being said in yellow -- so the words are in the
+pixels: YouTube shows no subtitle track on a Short. On kitcut.ai it is one flag, `npm run film --
+make ... --short` (the studio's `"frame": "9:16", "captions": true`), and the film's first message
+tells its writer the canvas and what is taken.
+
+- **Compose for the tall frame**, never a wide layout shrunk into it: stacked top to bottom, one
+  idea on screen at a time, a headline of 90 px or more, nothing to be read under 44.
+- **Three things lie over the film.** The caption band (`SK.captionBox()`: about y 1330-1530 of
+  1920); below it the phone's title and channel name (the bottom fifth); and the like/comment/share
+  column down the right of the lower half. The picture runs under all three; nothing that must be
+  read goes there. A thing that moves (a hand that presses a button low in the frame) wanders in:
+  bring it in from the side.
+- **The first frame is the hook**, on screen at 0.0 s. A feed shows that frame before anything
+  plays.
+- **No thumbnail.** The thumbnail options are 1280x720 posters and come out cropped on a tall
+  film, so the studio makes none (`thumbs.wide`); YouTube shows a Short by a frame of its own.
+  The film's cover on kitcut.ai is a frame of it: `ops.sh share <id> --frame 0.3`.
+- **Check the words against the source, not against the prompt.** Two of the first five Shorts
+  (2026-10-08) said what the prompt had invented: a list item the policy never names, and "the
+  reason" for a rule whose announcement gives none. Open the primary source once more with the
+  finished narration beside it; a line that is wrong is re-recorded by itself (studio-vm skill,
+  "Reworking a finished film by hand").
+
 ## A pin, an address, "find us here": the real map
 
 A film that shows where a real place is draws the real map of it -- never a made-up street plan.
