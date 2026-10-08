@@ -336,14 +336,15 @@ EOF
     ;;
 
   resume)
-    id="${1:?resume <film-id> [--plan] [--finish [--patched]] [--minutes N]}"; shift
+    id="${1:?resume <film-id> [--plan] [--finish [--patched [--over N]]] [--minutes N]}"; shift
     [[ "$id" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $id"
     plan=0; how=""
     while [ $# -gt 0 ]; do
       case "$1" in
         --plan) plan=1 ;; --finish) how="$how --finish" ;; --patched) how="$how --patched" ;;
         --minutes) [[ "${2:-}" =~ ^[0-9]+$ ]] || die "--minutes needs a number"; how="$how --minutes $2"; shift ;;
-        *) die "resume <film-id> [--plan] [--finish [--patched]] [--minutes N]" ;;
+        --over) [[ "${2:-}" =~ ^[0-9]+$ ]] || die "--over needs a version number"; how="$how --over $2"; shift ;;
+        *) die "resume <film-id> [--plan] [--finish [--patched [--over N]]] [--minutes N]" ;;
       esac
       shift
     done

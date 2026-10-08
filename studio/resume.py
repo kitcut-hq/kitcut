@@ -10,6 +10,10 @@ the soundtrack and the video as usual, into the same film (its page and link sta
                                                   a FINISHED film whose files were changed by hand
                                                   (film.js, a re-voiced line): mixed, rendered and
                                                   put online again under new names, same page
+    python studio/resume.py <film-id> --finish --patched --over N
+                                                  the same, for a film its maker has changed from
+                                                  notes: N is the version the changed files started
+                                                  from, and it must be the version the film is at
 
 For a film the studio stopped under it -- a restart while Claude was still working records it
 cancelled (before 2026-09-29) or interrupted -- not for one its person stopped. The Claude session
@@ -79,7 +83,32 @@ def plan(film, minutes=None):
     }
 
 
-def refuse(film, finish, patched=False):
+def stale(rec, over=None):
+    """Why files changed by hand may not become this film, or None. A film its maker changed from
+    notes (rounds.py) is at a version the hand's copy may never have seen: on 2026-10-07 a copy
+    taken at version 1 was sent back an hour after version 2 was made, and the film stayed
+    "version 2" without one change its maker had asked for (KI-061). So the hand says which
+    version it started from, and it must be the one the film is at."""
+    r = rec.get("round") or {}
+    if r.get("state") in ("queued", "running", "finishing"):
+        return (
+            "version %s is being made from its maker's notes (%s): wait for it, then take the "
+            "film's files again" % (r.get("n"), r.get("id"))
+        )
+    cur = int(rec.get("version") or 1)
+    if cur > 1 and over != cur:
+        made = next((v for v in rec.get("versions") or [] if v.get("n") == cur), {})
+        return (
+            "the film is at version %d, made from its maker's notes%s. Files changed by hand must "
+            "start from that version's (take them again and compare film.js), then say so: --over %d"
+            % (cur, " at %s" % made["at"] if made.get("at") else "", cur)
+        )
+    if over is not None and over != cur:
+        return "--over %d, but the film is at version %d" % (over, cur)
+    return None
+
+
+def refuse(film, finish, patched=False, over=None):
     """Why this film may not be picked up here, or None."""
     if patched:
         if not finish:
@@ -88,6 +117,9 @@ def refuse(film, finish, patched=False):
             )
         if film.state != "done":
             return "%s is %s; --patched is for a finished film" % (film.id, film.state)
+        why = stale(film.record(), over)
+        if why:
+            return why
     elif film.state not in STOPPED:
         return "%s is %s, not stopped (only %s films are picked up)" % (
             film.id,
@@ -143,6 +175,12 @@ def main():
         help="with --finish: a finished film changed by hand, rendered and put online again",
     )
     ap.add_argument(
+        "--over",
+        type=int,
+        metavar="N",
+        help="with --patched: the version the changed files started from (needed past version 1)",
+    )
+    ap.add_argument(
         "--minutes",
         type=int,
         help="Claude's working time (default: what the film's limit has left, at least 5)",
@@ -153,7 +191,7 @@ def main():
         sys.exit("no film %s in %s" % (args.film, agent.HOME))
     p = plan(film, args.minutes)
     print(json.dumps(p, indent=2))
-    why = refuse(film, args.finish, args.patched)
+    why = refuse(film, args.finish, args.patched, args.over)
     if why:
         sys.exit("not picking it up: " + why)
     if args.plan:

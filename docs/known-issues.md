@@ -1015,3 +1015,22 @@ keeps `style` to how the voice sounds. Sound after the pause that the listener h
 (a local Whisper left that film's "Chapter One. Finding Balance." out of the transcript
 altogether) is listened to on its own: the script's own last words said late are kept, anything
 else is cut. **Not covered:** ElevenLabs and edge takes are timed by their own service and not checked.
+
+### KI-061 · mitigated · studio · A hand fix sent back over a version made from notes erased it, and the page still said "version 2"
+
+**Symptom.** 2026-10-07, studio-20261007-091710-nwhzxq (Duchess, episode 10). Its maker asked for
+four changes on the film's page; the round answered three "Done" (a witch on a broom in the window
+and in the doorway, the lamp on with shadows), rendered them and made version 2 at 14:05. The page
+said version 2 from then on and never showed one of them.
+**Cause.** A hand rework of the same film (the studio-vm skill's procedure) was under way on a
+laptop copy taken at version 1. Its `film.js` went back at 14:59 and `resume --finish --patched`
+rendered it at 15:14: version 1 plus six changed lines, under new names (`r3`). `--patched`
+renders whatever is in the folder and knew nothing of versions, so the record kept `version: 2`
+and the round's answers while the film was another one. Nothing was lost by luck: the procedure's
+own backup (`temp/before-fix-2/film.js`) was the round's file, and its video stayed online at `r2`.
+**Mitigated** (`studio/resume.py stale`, `studio/test_resume.py` in the release gate).
+`--patched` refuses a film past version 1 unless `--over N` names the version it is at, and
+refuses any film whose notes are being worked on; the procedure now reads the version and
+compares `film.js` before sending anything back. **Not covered:** the files are copied by hand
+before the render is asked for, so the folder can still be overwritten (the backup is the way
+back), and `--over` is the operator's word, not a comparison.

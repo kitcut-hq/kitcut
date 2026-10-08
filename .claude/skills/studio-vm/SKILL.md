@@ -25,6 +25,7 @@ bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--look collage] [--unlis
 bash studio/deploy/ops.sh watch <film-id>...        # one or several, a line per change
 bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]  # finish a film the studio stopped
 bash studio/deploy/ops.sh resume <film-id> --finish --patched  # a DONE film changed by hand: re-mix, re-render, new URLs
+bash studio/deploy/ops.sh resume <film-id> --finish --patched --over N  # the same, past version 1: N = the version your files started from
 bash studio/deploy/ops.sh review <film-id> [--machine] [--api]  # read a finished film for glitches as the
                                                     # studio reads one before it is done: what a
                                                     # viewer would take for a mistake, with times;
@@ -148,7 +149,10 @@ episodes 8 and 10); every step below cost time when it was skipped.
 1. **Read what its maker said first**: `claude_said` in the film's `studio.json` often names the
    very spots worth a look. Then look at the film itself one frame a second, and closer at every
    entrance, exit and pose change: the review sheet is twelve frames of a two-minute film.
-2. **Work on a copy on the laptop.** From `projects/<id>/` on the VM take `film.js cast/ engine/
+2. **Work on a copy on the laptop, and note its version.** `ops.sh versions <id>` first: the
+   film's maker can change it from notes at any minute (Change something on its page), and a
+   version made after your copy was taken is not in it. Keep the `film.js` you took untouched
+   beside the one you change. From `projects/<id>/` on the VM take `film.js cast/ engine/
    sketch.json vo.json sfx.json score.json sounds.json audio/vo/timeline.json` (tar over
    `vm.sh ssh`), and preview with `python scripts/sketch-render.py --manifest <copy>/sketch.json
    --stills 26,27.5,29 --into review --sheet`: five seconds, and it matches the real render.
@@ -158,8 +162,13 @@ episodes 8 and 10); every step below cost time when it was skipped.
    bigger instead); a colour laid over the whole frame for a time of day (show it in the window);
    a beat where only the narrator works; a caption on a ground of its own colour or behind the
    meter. A plot step is shown, not told: she looks at the cushion before she ignores it.
-4. **Send it back**: copy the originals to `temp/before-fix/` in the film's folder, then the
-   changed files (tar through `vm.sh ssh ... 'tar -xf -'`).
+4. **Send it back**: `ops.sh versions <id>` again, and compare the VM's `film.js` with the one
+   you took (`sha256sum`). A higher version, or a different file, means the film moved on under
+   you: take its files again and put your changes on top (`git merge-file <theirs> <the one you
+   took> <yours>`), then preview again. Only then copy the originals to `temp/before-fix/` in the
+   film's folder, then the changed files (tar through `vm.sh ssh ... 'tar -xf -'`). On 2026-10-07
+   episode 10's hand fix went back an hour after its maker's version 2 and erased it: the page
+   said "version 2" and showed none of what was asked for (KI-061).
 5. **Narration.** A changed line records again by itself; run `scripts/sketch-vo.py --manifest
    <film>/sketch.json` on the VM with the server's environment (`STUDIO_HOME STUDIO_REPO
    STUDIO_ENV_FILE HF_HOME=/srv/kitcut/hf`: without `HF_HOME` the word timing fails offline).
@@ -170,7 +179,9 @@ episodes 8 and 10); every step below cost time when it was skipped.
    second at 120 bpm); `sfx.json` in seconds.
 6. **Render**: `ops.sh status` (wait while another film is rendering: the cores are shared), then
    `ops.sh resume <id> --finish --patched`. About ten minutes for two minutes of film; the page and
-   link stay, the files get new names.
+   link stay, the files get new names. A film past version 1 is refused until you say which
+   version your files started from (`--over N`, the version it is at), and any film is refused
+   while its notes are being worked on.
 7. **Check the real video** at every changed scene, and have it read: `ops.sh review <id>`
    (or on the laptop copy before sending it back, `python studio/review.py --folder <copy>`).
    On 2026-10-07 it found a one-frame sliver and a caption under the meter in two films a
