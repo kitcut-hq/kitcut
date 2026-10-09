@@ -111,6 +111,7 @@ MOVED = (
     "their place. The film is as it was found; make the version again from it."
 )
 EFFORT = "high"  # a round changes a film that exists: it reads more than it invents
+WHOLE_S = 6 * 60  # working time a note on the whole film adds to the minute every note has
 STRIP = (24, 160)  # the filmstrip: tiles in a row, and a tile's width in px
 STRIP_FILE = "strip.jpg"
 RING = (217, 115, 63)  # the colour a note's spot is ringed in on its frame
@@ -166,10 +167,20 @@ def _mmss(t):
 
 
 # ------------------------------------------------------------------ what a round may spend
-def limits(length, notes):
-    """A round's allowance: Claude's working time by its notes, half the film's budget."""
+def wide(notes):
+    """How many of the notes are about the whole film: each is a change to every shot it
+    touches, and every one of those shots has to be looked at again."""
+    return sum(1 for n in notes if n.get("kind") == "film")
+
+
+def limits(length, notes, whole=0):
+    """A round's allowance: Claude's working time by its notes, half the film's budget. A note on
+    the whole film (`whole` of them) is not one change but one in every shot: 12 minutes for four
+    notes, one of them "keep Dad out of the wide views and do not jump between close and far",
+    reframed a 210-second film and stopped before the last shots were looked at; the version
+    went out with a character blinking out of one of them (fhkoaw.r1, 2026-10-09)."""
     lim = films.limits(length)
-    work = min(25 * 60, 8 * 60 + 60 * notes)
+    work = min((25 + (10 if whole else 0)) * 60, 8 * 60 + 60 * notes + WHOLE_S * whole)
     return lim | {
         "claude_s": work,
         "wall_s": work + 20 * 60,
@@ -792,11 +803,33 @@ The notes (also in notes/notes.md):
 %(notes)s
 
 How to work:
+- Read every note before you change anything, and decide the order: the words first (they are \
+the scarce part), then one note at a time. Finish a note, look at it, answer it, and only then \
+start the next -- when your time runs out, the film must hold only whole, looked-at changes.
 - Look at each note's frame first (Read it), then find in film.js what draws what the note \
 points at, by its time and what is on the frame.
 - Change only what a note asks for. Around it, the same scenes, timing, words and music.
+- A note is done whole. What a note takes out of the picture goes out of the words too, and \
+out of every other shot it is in; what it takes out of the words goes out of the picture. If \
+you cannot finish one half (no recording left, no room for the line), put the other half back \
+as it was and answer the note with done false: never leave the narration naming something the \
+picture no longer shows, or the picture showing what the words no longer say.
 - After changing the picture: `check`, then `stills` at the notes' moments, and look: is it \
 what was asked, and is everything near it still right?
+- A note about the camera, the framing, or where somebody stands changes every shot it \
+touches, not one moment. After it, `stills` of EVERY shot you changed (several calls: the \
+start, the middle and the end of each), and look at each for what such a change breaks:
+  - somebody or something now in front of a character, a face or the thing the words are \
+about, that was clear before;
+  - somebody missing from a shot who is in the shot before and the shot after. A character \
+who should not be in a view is out of it for the whole shot, or walks out of it: nobody blinks \
+out and back;
+  - a character cut by the frame's edge, or grown or shrunk against the others;
+  - two shots in a row that differ in closeness by more than about double, where the story \
+does not ask for the jump. When the note is about jumps between close and wide, write down \
+each shot's zoom in order first, change the ones that jump, and read the list again after.
+  Fix what you find before you answer the note. A change you have not looked at is not done: \
+put it back, or say in its `note` which shots you did not see again.
 %(voice)s- After changing score.json, sfx.json or the narration: `sound`.
 - Each note gets exactly one `note` call when you are done with it: its number, whether it is \
 done, and one plain sentence for the maker saying what you changed (no file names, no code \
@@ -811,6 +844,12 @@ VOICE = (
     "(never add, remove or reorder lines), keep it about as long as it was, then `voice` with "
     "retake_line. Cues placed on words follow the new recording; look at any cue on a word you "
     "changed.\n"
+    "- This round has %(runs)d recordings, and every `voice` call is one. Before the first, count "
+    "the lines the notes need said differently -- a note that removes or renames something "
+    "needs every line that names it -- and keep a recording for each of them. A line fits its "
+    "place when it has about as many words as the line it replaces: words the maker wrote that "
+    "are much longer than the old line are shortened BEFORE recording, keeping their meaning "
+    "(say so in the `note`), never recorded to find out.\n"
 )
 NO_VOICE = (
     "- The narration stays as recorded: this film's words cannot be changed in a round, and "
@@ -829,7 +868,7 @@ def ask(work, notes, frames, lim):
         "length": work.length,
         "minutes": lim["claude_s"] // 60,
         "notes": notes_text(notes, timeline(work), frames),
-        "voice": VOICE if words(work.record())["can"] else NO_VOICE,
+        "voice": (VOICE % {"runs": lim["voice_runs"]}) if words(work.record())["can"] else NO_VOICE,
     }
 
 
@@ -1167,7 +1206,7 @@ async def _run(job, film, sched):
     r0 = film.record().get("round") or {}
     notes, auth, hand = r0.get("notes") or [], r0.get("auth") or "api", r0.get("hand")
     first = "Taking the changed files" if hand else "Reading your notes"
-    lim = limits(film.length, len(notes))
+    lim = limits(film.length, len(notes), wide(notes))
     log = film.path(KEPT, "r%s.events.jsonl" % rid.rsplit(".r", 1)[-1])
     os.makedirs(os.path.dirname(log), exist_ok=True)
     t0, meter, clock = time.time(), agent.Meter(), Clock()
@@ -1776,7 +1815,7 @@ async def _by_hand(args):
     for i, n in enumerate(notes, 1):
         n.setdefault("id", "n%d" % i)
     rec = film.record()
-    lim = limits(film.length, len(notes))
+    lim = limits(film.length, len(notes), wide(notes))
     plan = {
         "film": film.id,
         "version": version_of(rec),
