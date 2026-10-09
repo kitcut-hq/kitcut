@@ -300,6 +300,31 @@ async def main():
         lim["claude_s"] == 11 * 60 and lim["budget_usd"] < films.limits(30)["budget_usd"],
         "a round's allowance: minutes by its notes, less than a film's budget",
     )
+    whole = [{"kind": "film"}, {"kind": "line"}, {"kind": "line"}, {"kind": "moment"}]
+    check(
+        rounds.wide(whole) == 1
+        and rounds.limits(210, 4, rounds.wide(whole))["claude_s"] == 18 * 60
+        and rounds.limits(210, 4)["claude_s"] == 12 * 60
+        and rounds.limits(210, 20, 2)["claude_s"] == 35 * 60,
+        "a note on the whole film adds the time to look at every shot it changes (fhkoaw.r1)",
+    )
+    told = rounds.ASK % {
+        "extra": "",
+        "length": 210,
+        "minutes": 18,
+        "notes": "1. [the whole film]",
+        "voice": rounds.VOICE % {"runs": rounds.limits(210, 4)["voice_runs"]},
+    }
+    check(
+        "A note is done whole" in told
+        and "never leave the narration naming something the picture no longer shows" in told
+        and "`stills` of EVERY shot you changed" in told
+        and "nobody blinks out and back" in told
+        and "This round has 7 recordings" in told
+        and "shortened BEFORE recording" in told,
+        "a round is told: a note whole or not at all, every changed shot looked at, the "
+        "recordings it has and what they are kept for",
+    )
 
     async with TestClient(TestServer(server.make_app(TOKEN))) as c:
         auth = {"Authorization": "Bearer " + TOKEN}
