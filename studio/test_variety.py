@@ -10,6 +10,7 @@ python studio/test_variety.py
     what is told   the colours a film set its ground to and how its narration opens are read
                    from its own files (Film.direction), for films made before they were too
     the tally      "what recent films chose" yields to a series' episodes, not a collection's
+    measured       variety.py counts what a set of films chose (its frames need ffmpeg: not here)
 
 A second or two.
 """
@@ -261,6 +262,28 @@ def main():
             "opening" not in dirs["A coffee machine sent a terabyte"],
             "a series is given the film's record as it was",
         )
+
+        # ---------------------------------------------------- measuring it (variety.py)
+        import variety
+
+        check(
+            [variety.colour_name(c) for c in ("#e8e4da", "#191715", "#e2392b", "#888", "")]
+            == ["light", "dark", "red", "grey", ""],
+            "a colour is named roughly, so two near-white papers count as one",
+        )
+        rows = [variety.axes(x.direction(), 40) for x in (one, two, one)]
+        t = variety.tally(rows)
+        check(
+            t["voice"]["distinct"] == 1
+            and t["voice"]["share"] == 1
+            and t["ground"]["values"] == {"light": 2, "dark": 1}
+            and t["type"]["top"] == "Anton"
+            and round(t["accent"]["share"], 2) == 0.67,
+            "a set of films is counted choice by choice",
+            t,
+        )
+        same = variety.sameness(variety.tally([rows[0], rows[0]]))
+        check(same == 1 and variety.sameness(t) < 1, "and one number says how alike it is")
     finally:
         shutil.rmtree(HOME, ignore_errors=True)
     print("\n%s" % ("all passed" if not bad else "%d FAILED: %s" % (len(bad), "; ".join(bad))))

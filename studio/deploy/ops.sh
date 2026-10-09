@@ -61,7 +61,8 @@
 #                                                     --person "Name=photo.jpg" (up to 4), --style felt:
 #                                                     people drawn into it as characters who talk
 #   bash studio/deploy/ops.sh watch <film-id>...      follow films to the end (one line per change)
-#   bash studio/deploy/ops.sh pull <film-id> [dest] [--all]   its outputs (or the whole folder) here
+#   bash studio/deploy/ops.sh pull <film-id> [dest] [--all | --light]   its outputs (or the whole folder,
+#                                          or --light: what it chose and its small video) here
 #   bash studio/deploy/ops.sh hide|show <film-id>     out of / back into the public gallery
 #   bash studio/deploy/ops.sh unbrand <film-id> [--no-watch]   a finished Free-plan film drawn again
 #                                                     without its mark and closing (studio/unbrand.py):
@@ -556,9 +557,12 @@ print(json.dumps(body))  # ASCII on the wire: a letter outside it (a dash, an ac
     ;;
 
   pull)
-    id="${1:?pull <film-id> [dest] [--all]}"; dest="${2:-$REPO_LOCAL/temp/vm-films}"
+    id="${1:?pull <film-id> [dest] [--all | --light]}"; dest="${2:-$REPO_LOCAL/temp/vm-films}"
     what=outputs; [ "${3:-${2:-}}" = "--all" ] && what="." && dest="${dest%--all}"
-    [ "$dest" = "--all" ] || [ -z "$dest" ] && dest="$REPO_LOCAL/temp/vm-films"
+    # --light: what a film chose and its small video, a few MB (studio/variety.py reads these)
+    light="sketch.json studio.json film.js vo.json score.json sfx.json paint.json outputs/film_web.mp4"
+    [ "${3:-${2:-}}" = "--light" ] && what="--ignore-failed-read $light" && dest="${dest%--light}"
+    [ "$dest" = "--all" ] || [ "$dest" = "--light" ] || [ -z "$dest" ] && dest="$REPO_LOCAL/temp/vm-films"
     mkdir -p "$dest/$id"
     on "cd $HOME_DIR/projects/$id && tar -cf - $what" | tar -xf - -C "$dest/$id"
     echo "$(du -sh "$dest/$id" | cut -f1)  $dest/$id"

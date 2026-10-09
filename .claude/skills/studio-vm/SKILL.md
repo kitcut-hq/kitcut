@@ -38,7 +38,7 @@ bash studio/deploy/ops.sh usage [--hours 24] [--at "HH:MM"] [--film ID]   # who 
                                                     # by step ("can we downsize", "what ate 15 GB")
 bash studio/deploy/ops.sh drafts [--days 7]          # YouTube drafts: seconds to the words, picks,
                                                     # pictures, and cost -- "why is publishing slow"
-bash studio/deploy/ops.sh pull <film-id> [dest] [--all]
+bash studio/deploy/ops.sh pull <film-id> [dest] [--all | --light]   # --light: its choices and small video, for studio/variety.py
 bash studio/deploy/ops.sh hide|show <film-id>       # public gallery
 bash studio/deploy/ops.sh unbrand <film-id>         # a finished Free-plan film drawn again without its mark and closing (a render, no Claude)
 bash studio/deploy/ops.sh replace <film-id> <folder>   # a remade film takes its place: same id

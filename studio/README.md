@@ -705,6 +705,11 @@ its films, next to `projects\`, never in git:
   needs (`paper`, `accent`, `opening`, `lines`, `words`), read from an older film's files when
   its record has none. A project with no `keep` hears byte for byte what it heard before
   (`test_variety.py`). The system prompt is unchanged: all of it is the first message.
+  `studio/variety.py` measures a set of films: per choice, how many different values it has and
+  how much of the set the commonest takes, and how far apart the films' frames are
+  (`ops.sh pull <id> <dest> --light` fetches what it reads). The ten Shorts made as a series
+  are the baseline: sameness 0.71 -- one look, one narrator in all ten, one ensemble at one
+  tempo in nine, a red accent in seven, Anton in seven; frames 0.348 apart on average.
 - **Kept sounds** (2026-10-02). An episode's `sounds.json` (named sound effects and themes,
   played by name from sfx.json and score.json: `docs/reference.md`, "Kept sounds") is kept like a
   member: seeded into the next episode, its new and changed entries saved after an ok film, only
