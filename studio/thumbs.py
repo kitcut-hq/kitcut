@@ -14,7 +14,10 @@ side and the words large on the other. Both are checked to be legible at YouTube
 in contrast, and clear of its duration stamp. An option that fails a check falls back (a poster's
 words onto strips of the film's paper, then a frame; a glow of the film's paper, one of its cards,
 the frame alone) before anyone sees it. Options saved under an older design (_thumb.DESIGN) are
-made again.
+made again. The first two of the four (config title.options) are the video's title itself, in
+a box of the film's accent on a whole frame of the film at their moments (_thumb.layout_title) --
+the title as the draft wrote it, cut at its colon, what follows small beside it; a title too long
+to read on a thumbnail leaves those options as their moments' own words.
 
     outputs/youtube/<channel>/thumb-<n>.jpg   the options (served by /files, token or signed)
     youtube/thumbs-<channel>.json             what they are, keyed by the draft they came from
@@ -159,6 +162,8 @@ def make_now(film, channel, draft, want=4):
     if wide(film):
         if len(concepts) < want:
             concepts = _thumb.fill_concepts(concepts, moments(film), length(film), n=want)
+        if want == 4:  # YouTube's four: some are the video's title in a box (config title.options)
+            concepts = _thumb.title_concepts(concepts, draft.get("title") or "")
         d = out_dir(film, channel)
         opts = _thumb.make_options(film.dir, concepts, d, log=lambda *_: None)
     rec = {

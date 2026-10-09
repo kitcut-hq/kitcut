@@ -377,5 +377,58 @@
     "min_words_px": 34,
     "empty_detail": 0.012,
     "_why": "The film's own titles, labels, stamps and marker arrows are left out of the picture under the thumbnail's words: a thumbnail carries one message, and the first ones set a card reading 'Від чого залежить зарплата?' over the film's own heading saying the same (2026-09-30). Text under min_words_px (an app's own screen, a progress bar's labels) stays as texture: it is unreadable at feed size and hiding it would empty the screens it sits on. Matches thumb.js minWords. What the words sat on goes with them when it would show empty: a burst or disc with no picture on it, a card with no picture or card on it whose inside is flatter than empty_detail on the clean picture (a ground scores 0.002-0.015; an app screen's rows far more)."
+  },
+  "title": {
+    "options": [
+      1,
+      2
+    ],
+    "_options": "Which of the four options are the video's title in a box on a whole frame of the film (the others are made as before). The owner sent a thumbnail of this kind as the format to offer -- a full painted frame, 'PADEL TACTICS' in white capitals on a red box top left with a hard black shadow, 'EVERYTHING, IN 6 MINUTES' small beside it -- and asked for the text to be, or be very close to, the video's name (2026-10-09). Two of four, so the person picking sees this look on two moments beside the film's own.",
+    "upper": true,
+    "ink": "#FFFFFF",
+    "fill": "#E0201F",
+    "shadow": "#141414",
+    "shadow_max_lum": 0.05,
+    "chroma_min": 0.35,
+    "ground_tol": 40,
+    "ground_max": 0.4,
+    "_ground": "A frame whose pixels are within ground_tol of its median colour over all but ground_max of it is drawn on a flat ground: the box goes where it hides the least of what is not ground. Any other frame (painted) is read by saliency.",
+    "fill_margin": 1.2,
+    "_colours": "White capitals on the film's own accent (the more saturated of its two), darkened until white reads on it with the same margin every layout keeps; a film whose accent is nearly grey (chroma under chroma_min) gets the reference's red. The shadow is the film's darkest ink when that is near black, else near black.",
+    "max_chars": 44,
+    "join_max_chars": 28,
+    "kicker_max_chars": 40,
+    "max_lines": 3,
+    "line_gap": 0.2,
+    "cap_max": 170,
+    "cap_min": 100,
+    "cap_step": 10,
+    "_cap": "The reference sets two words at a cap height of 0.133 of the frame's height (144 px at 1080) in a box 43% of its width. 170 down to 100 px: 100 px is 8.75 px at 168 px wide, over the feed's 8 px floor. A title of up to max_chars characters sets in three lines at that floor inside max_w_frac; a longer one is not set this way and the option is made from its moment's own words.",
+    "max_w_frac": 0.56,
+    "max_h_frac": 0.6,
+    "pad_frac": [
+      0.42,
+      0.38
+    ],
+    "margin_frac": 0.04,
+    "r": 6,
+    "shadow_frac": 0.07,
+    "corners": [
+      "top-left",
+      "top-right",
+      "bottom-left"
+    ],
+    "corner_bias": 0.02,
+    "busy_weight": 4.0,
+    "cover_max": 0.08,
+    "_corners": "The corner where the box hides the least of the frame's subject, top left first (where the reference has it, and where a feed is read from); never bottom right, under YouTube's duration stamp. The largest capitals whose box hides no more than cover_max of the subject.",
+    "kicker_cap_frac": 0.3,
+    "kicker_cap_min": 40,
+    "kicker_pad_frac": [
+      0.5,
+      0.42
+    ],
+    "kicker_gap_frac": 0.2,
+    "kicker_drop_frac": 0.22
   }
 }

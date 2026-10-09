@@ -298,7 +298,9 @@ large on the other, drawn by the film itself in its own look (its title type and
 labels and logo, read off it by `sketch/thumb.js`) in one browser run; options 1 and 3 carry its
 logo. Then checks (legible at 168 px wide, 4.5:1 contrast, clear of YouTube's duration stamp). An
 option that fails falls back (a glow of the film's paper, one of its cards, the frame alone) before
-anyone sees it; options saved under an older design (`_thumb.DESIGN`) are made again. The draft's
+anyone sees it; options saved under an older design (`_thumb.DESIGN`) are made again. The first two of the four are the
+video's title in a box of the film's accent on a whole frame of the film (`layout_title`, config
+`title.options`); a title too long to read on a thumbnail leaves them as their moments' own words. The draft's
 answer carries them:
 
 ```bash

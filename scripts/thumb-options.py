@@ -15,7 +15,10 @@ config/thumbnails/thumbnails.json, and for looking at what a film would be offer
   --auto            no concepts: the picture alone at 25/50/75% of the film -- about what
                     YouTube offers when it picks for itself (the baseline)
   --moments         only the labelled sheet of moments a writer chooses from
-  --title TEXT      the video's title (words that repeat it are refused)
+  --title TEXT      the video's title
+  --title-box WHICH that title in a box on a whole frame of the film (layout "title"), as
+                    kitcut.ai offers it: on the options config title.options names (config),
+                    or on every one (all), to see it on four moments
   --ocr             also read the words back with OCR at each feed width (slower)
   --list            print the moments, the settled frames, the layouts and every check;
                     writes stills and working files to the film's temp/ only
@@ -52,6 +55,11 @@ def main():
         default="config",
         help="which options carry the film's logo (config: logo.options)",
     )
+    ap.add_argument(
+        "--title-box",
+        choices=("config", "all"),
+        help="the title in a box on a whole frame: config title.options, or every option",
+    )
     ap.add_argument("--list", action="store_true", help="print everything; write no options")
     a = ap.parse_args()
 
@@ -85,6 +93,11 @@ def main():
         for p in problems:
             print("  PROBLEM: %s" % p["text"])
         concepts = _thumb.fill_concepts(concepts, moments, length)
+        if a.title_box:
+            every = list(range(1, len(concepts) + 1))
+            concepts = _thumb.title_concepts(
+                concepts, a.title, every if a.title_box == "all" else None
+            )
 
     opts = _thumb.make_options(film, concepts, out, logo=a.logo)
     for o in opts:

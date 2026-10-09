@@ -229,8 +229,8 @@ def main():
         heads,
     )
     check(
-        [o["layout"] for o in opts] == ["headline", "card", "panel", "still"],
-        "each in its layout (an old draft's slab is a card)",
+        [o["layout"] for o in opts] == ["title", "title", "panel", "still"],
+        "the first two the video's title in a box, the others in their layouts",
         [(o["layout"], o["notes"]) for o in opts],
     )
     check([o["n"] for o in opts] == [1, 2, 3, 4], "four options", [o["n"] for o in opts])
@@ -254,9 +254,9 @@ def main():
             )
         check(red(img) < 0.05, "option %d carries no tail" % o["n"])
     check(
-        opts[0]["words"] == "Still waiting?",
-        "the words as the site shows them, stars gone",
-        opts[0]["words"],
+        opts[0]["words"] == "Pass It On" and opts[2]["words"] == "A friend can use it",
+        "the words as the site shows them: the title up to its colon; a moment's own, stars gone",
+        [o["words"] for o in opts],
     )
 
     # ---------------------------------------------------------------- kept, keyed, told
@@ -279,14 +279,20 @@ def main():
     check(thumbs.public(None) == {"state": "none"}, "or that there are none")
 
     # ---------------------------------------------------------------- words that cannot be set
-    draft2 = dict(draft, key="draft-2")
+    # a title too long to read on a thumbnail: the options are their moments' own words
+    draft2 = dict(draft, key="draft-2", title="The invite you never used and why it is still worth sending on today")  # fmt: skip
     draft2["thumbnails"] = [dict(draft["thumbnails"][0], words="Pneumonoultramicroscopicsilicovolcanoconiosis")] + draft["thumbnails"][1:]  # fmt: skip
     rec2 = thumbs.make_now(f, "UCtest", draft2)
     o = rec2["options"][0]
     check(
-        o["layout"] != "headline" and o["notes"],
+        o["layout"] not in ("headline", "title") and o["notes"],
         "a word too long to read at feed size falls back",
         o,
+    )
+    check(
+        rec2["options"][1]["layout"] == "card" and rec2["options"][1]["words"] == "Send it on",
+        "a title too long for a box leaves the options as their moments' own words",
+        rec2["options"][1],
     )
 
     # ---------------------------------------------------------------- a film with pictures

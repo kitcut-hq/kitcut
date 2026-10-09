@@ -610,6 +610,79 @@ def posters():
     shutil.rmtree(home, ignore_errors=True)
 
 
+def titles():
+    """The video's title in a box on a whole frame (layout "title"): how a title is cut, the
+    box's colours, its corner, and that it gives way when the title cannot be read."""
+    print("\nthe title in a box")
+    W, H = _thumb.size()
+    safe, badge = _thumb.safe_rects()
+    parts = _thumb.title_parts
+    check("a title is cut at its colon: the first part large, the rest small beside it",
+          parts("Padel Tactics: Everything, in 6 Minutes") == ("Padel Tactics", "Everything, in 6 Minutes"))  # fmt: skip
+    check("a first part of one word takes the next with it",
+          parts("Padel: Tactics and Tricks (Racket sports: tactics and tricks)")
+          == ("Padel Tactics and Tricks", "Racket sports: tactics and tricks"))  # fmt: skip
+    check("a title with no break is set whole", parts("Duchess and the Sour Cream") == ("Duchess and the Sour Cream", ""))  # fmt: skip
+    check("a question keeps its mark", parts("Can a cat do taxes? We tried it")[0] == "Can a cat do taxes?")  # fmt: skip
+    check("a time is not a break", parts("Up at 5:30 every day")[0] == "Up at 5:30 every day")
+    long = "A title that runs on far past what anybody could read on a thumbnail at all"
+    check("a title too long to read on a thumbnail is not set this way", parts(long) == (None, ""))
+    c4 = [{"at": float(i), "words": "w%d" % i, "layout": "headline"} for i in range(1, 5)]
+    got = _thumb.title_concepts(c4, "Padel Tactics: Everything, in 6 Minutes")
+    want = _thumb.cfg()["title"]["options"]
+    check("the options the config names become the title, at their own moments",
+          [i for i, c in enumerate(got, 1) if c["layout"] == "title"] == want
+          and [c["at"] for c in got] == [c["at"] for c in c4], got)  # fmt: skip
+    check("and none of them when the title cannot be set", _thumb.title_concepts(c4, long) == c4)
+
+    st = style()
+    lay = _thumb.layout_title(frame(busy_right=True), "Padel Tactics: Everything, in 6 Minutes", st)
+    box, cards, lines = lay["box"], lay["spec"]["cards"], lay["spec"]["lines"]
+    check("the box in the top left corner when the subject is on the right",
+          lay["corner"] == "top-left" and box[2] < W / 2, (lay["corner"], box))  # fmt: skip
+    check("capitals in the film's own title type, at a size that reads at 168 px",
+          lines[0]["family"] == "Anton" and lines[0]["runs"][0]["text"].isupper()
+          and lay["cap"] * 168 / W >= 8, (lines[0], lay["cap"]))  # fmt: skip
+    fill = _thumb.hex_rgb(cards[1]["fill"])
+    ink = _thumb.hex_rgb(lines[0]["runs"][0]["col"])
+    check("the letters that read better on the film's accent, the accent moved only as far as they need",
+          ink == (255, 255, 255) and 6.5 <= _thumb._reads(ink, fill) < 7.2
+          and _thumb._chroma(fill) > 0.35, (fill, ink))  # fmt: skip
+    check("a hard dark shadow under the box, down and to the right",
+          cards[0]["x"] > cards[1]["x"] and cards[0]["y"] > cards[1]["y"]
+          and cards[0]["w"] == cards[1]["w"] and not cards[0]["shadow"], cards[:2])  # fmt: skip
+    check("what follows the colon small, on a dark strip of its own",
+          lay["kicker"] == "Everything, in 6 Minutes" and len(cards) == 3
+          and lines[-1]["size"] < 0.5 * lines[0]["size"], (lay["kicker"], cards[2:]))  # fmt: skip
+    inside = all(L["x"] >= safe[0] - 1 and L["x"] + L["w"] <= safe[2] + 1 for L in lines)
+    check("every letter inside YouTube's margins, nothing under its duration stamp",
+          inside and not any(c["x"] + c["w"] > badge[0] and c["y"] + c["h"] > badge[1] for c in cards),
+          [(L["x"], L["w"]) for L in lines])  # fmt: skip
+    paper = Image.new("RGB", (W, H), (240, 234, 220))
+    ImageDraw.Draw(paper).rectangle([1150, 150, 1750, 900], outline=(40, 36, 32), width=10)
+    m = _thumb.drawn_map(paper)
+    check("on a flat ground, what a box would hide is the drawing, not the paper",
+          abs(float(m.sum()) - 1) < 1e-3 and float(m[:, : W // 16].sum()) == 0, float(m[:, : W // 16].sum()))  # fmt: skip
+    lay = _thumb.layout_title(frame(busy_right=False), "Padel Tactics", st)
+    check("the subject on the left: the box top right", lay["corner"] == "top-right", lay["corner"])
+    lime = style(accent=(238, 247, 124), accent_fill=(228, 240, 74), paper=(19, 34, 56),
+                 text=(247, 241, 227))  # fmt: skip
+    lay = _thumb.layout_title(frame(), "Padel Tactics", lime)
+    check("a light accent keeps its colour and takes the film's dark letters (not white on olive)",
+          _thumb.hex_rgb(lay["spec"]["cards"][1]["fill"]) == (228, 240, 74)
+          and _thumb.hex_rgb(lay["spec"]["lines"][0]["runs"][0]["col"]) == (19, 34, 56),
+          lay["spec"]["cards"][1])  # fmt: skip
+    grey = style(accent=(90, 90, 96), accent_fill=(120, 120, 126))
+    lay = _thumb.layout_title(frame(), "Padel Tactics", grey)
+    red = _thumb.hex_rgb(lay["spec"]["cards"][1]["fill"])
+    check("a film with no colour to give gets a red box with white letters",
+          red[0] > 150 and red[1] < 60
+          and lay["spec"]["lines"][0]["runs"][0]["col"] == "#FFFFFF", red)  # fmt: skip
+    check("a title too long gives no layout (the option falls to its moment's own words)",
+          _thumb.layout_title(frame(), long, st) is None
+          and _thumb.FALLBACK["title"][0] == "headline")  # fmt: skip
+
+
 def collage_fixture(home):
     """The collage example in a throwaway folder: its 17 cut-outs stood in for by paper shapes
     with a transparent ground (the real ones are painted by an image model), and a voice
@@ -797,6 +870,7 @@ def main():
     a = ap.parse_args()
     rules()
     posters()
+    titles()
     if not a.rules_only:
         live()
         live_posters()

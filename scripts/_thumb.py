@@ -79,8 +79,11 @@ DECLUTTER = 4000  # a still's time + this: the film with its own words left out 
 # yt-3: a film that shows pictures gets posters composed from them -- its own cut-outs large on
 # its own page, its words in its title type or on its label strips -- not frames of it
 # (2026-10-05: the frames read as slides with a caption; see docs/reference.md).
-DESIGN = "yt-3"
-LAYOUTS = ("poster", "headline", "card", "panel", "still")
+# yt-5: the options config title.options names are the video's title in a box on a whole frame
+# of the film (layout_title; the owner's own reference, 2026-10-09). yt-4 was a look round that
+# was never offered (branch yt-thumbs-v4).
+DESIGN = "yt-5"
+LAYOUTS = ("poster", "headline", "card", "panel", "title", "still")
 RENAMED = {"slab": "card"}  # a writer (or an older draft) may still say slab
 WORD = re.compile(r"[\w'’-]+", re.UNICODE)
 STOP = {
@@ -1960,6 +1963,189 @@ def layout_panel(img, words, st, side=None, logo=None, subject=None):
     }
 
 
+TITLE_CUT = re.compile(
+    r":\s+|\s+[-\u2013\u2014|]\s+|\s+\(|(?<=[?!])\s+|(?<=[a-z\u0430-\u044f\u0456\u0457\u0454]{3})\.\s+"
+)
+
+
+def title_parts(title):
+    """A video's title as a title thumbnail sets it: (head, kicker). The head is the title -- up
+    to its first break (a colon, a dash, a bracket, the end of a sentence) when it has one, and
+    through its second when the first part is only a word or two; the
+    kicker is what follows the break, when that is short enough for one small line, else
+    nothing. (None, "") for a title, or a first part, too long to be read on a thumbnail."""
+    k = cfg()["title"]
+    t = " ".join(str(title or "").replace("*", "").split())
+    m = TITLE_CUT.search(t)
+    head, rest = (t[: m.start()], t[m.end() :]) if m else (t, "")
+    # a first part of a word or two ("Padel: Tactics and Tricks (...)") takes the next with it
+    m2 = TITLE_CUT.search(rest)
+    nxt = rest[: m2.start()] if m2 else rest
+    if nxt and len(head.split()) < 3 and len(head) + 1 + len(nxt) <= k["join_max_chars"]:
+        head, rest = head.rstrip(" :") + " " + nxt, rest[m2.end() :] if m2 else ""
+    head = head.strip(" .,;:-\u2013\u2014|(")
+    rest = rest.strip(" .;:-\u2013\u2014|()")
+    if not head or len(head) > k["max_chars"]:
+        return None, ""
+    return head, rest if len(rest) <= k["kicker_max_chars"] else ""
+
+
+def drawn_map(img):
+    """What a box in a corner would hide, on the detail map's grid, summing to 1. A film drawn on
+    a flat ground (paper, a plain colour): everything that is not the ground -- its characters,
+    its desk. Saliency reads such a frame's paper grain as much as its drawing (an empty left
+    half scored 0.067 against 0.030 for the corner with the laptop in it, 2026-10-09). A painted
+    frame has no ground to tell from: there, subject_map."""
+    k = cfg()["title"]
+    W, H = size()
+    a = np.asarray(img.convert("RGB").resize((W // 8, H // 8), Image.BILINEAR), dtype="float32")
+    ground = np.median(a.reshape(-1, 3), axis=0)
+    ink = (np.abs(a - ground).max(axis=2) > k["ground_tol"]).astype("float32")
+    if not 0 < ink.mean() <= k["ground_max"]:
+        return subject_map(img)
+    return ink / float(ink.sum())
+
+
+def title_concepts(concepts, title, options=None):
+    """The concepts with the ones `options` numbers (config title.options) turned into title
+    thumbnails: the same moment, the video's title in a box on it. Left as they are when the
+    title cannot be set that way (title_parts)."""
+    options = cfg()["title"]["options"] if options is None else options
+    if not title_parts(title)[0]:
+        return concepts
+    return [
+        dict(c, layout="title", title=title) if i in options else c
+        for i, c in enumerate(concepts, 1)
+    ]
+
+
+def layout_title(img, title, st):
+    """The video's title in a box on a whole frame of the film: heavy capitals in the film's
+    title type on a box of the film's accent -- white where white reads on it, else the film's
+    darkest colour (a lime box takes navy letters; darkening it for white made it olive,
+    2026-10-09), and a red box when the film has no colour to give -- a hard dark shadow under
+    the box, in the corner where it hides the least and cuts through none of the frame's own
+    words -- and what follows the title's colon, small, on a dark strip beside it. The picture is
+    the frame with the film's own words left out and nothing pushed: the scene as the film drew
+    it."""
+    k, c = cfg()["title"], cfg()
+    W, H = size()
+    words, kick = title_parts(title)
+    if not words:
+        return None
+    head = pick_head(st, words + " " + kick) if kick else None
+    if head is None:
+        head, kick = pick_head(st, words), ""
+    if head is None:
+        return None
+    font = dict(_font(head), upper=True) if k["upper"] else _font(head)
+    need = c["contrast_min"] + c["ink_margin"]
+    light = hex_rgb(k["ink"])
+    fill = max((st["accent_fill"], st["accent"]), key=_chroma)
+    if _chroma(fill) < k["chroma_min"]:
+        fill = hex_rgb(k["fill"])
+    dark = min((st["ink"], st["text"], st["paper"]), key=luminance)
+    if luminance(dark) > k["shadow_max_lum"]:
+        dark = hex_rgb(k["shadow"])
+    # the letters that read better on the accent as it is, and the accent then moved away
+    # from them only as far as they need: thin letters measure under their colours' ratio
+    # once drawn (a hand type's white on rust, 5.3:1 as colours, read 4.45:1; 2026-10-09)
+    ink = max((light, dark), key=lambda v: _reads(v, fill))
+    fill = fit_contrast(fill, ink, need + k["fill_margin"])
+    avoid = text_boxes(img, min_h=c["text"]["headline_min_h_px"])
+    safe, badge = safe_rects()
+    sm, dm = drawn_map(img), detail_map(img)
+    toks = tokens(words)
+
+    def under(m, x, y, w, h):
+        a = m[int(max(0, y) // 8) : int(min(H, y + h) // 8) + 1, int(max(0, x) // 8) : int(min(W, x + w) // 8) + 1]  # fmt: skip
+        return a
+
+    chosen = None
+    for cap in range(k["cap_max"], k["cap_min"] - 1, -k["cap_step"]):
+        px_, py_ = k["pad_frac"][0] * cap, k["pad_frac"][1] * cap
+        b = block_at(toks, font, cap, W * k["max_w_frac"] - 2 * px_, H * k["max_h_frac"] - 2 * py_,
+                     k["max_lines"], k["line_gap"])  # fmt: skip
+        if not b:
+            continue
+        bw, bh = b["w"] + 2 * px_, b["h"] + 2 * py_
+        off = round(k["shadow_frac"] * cap)
+        # the box near the frame's edge, its letters inside YouTube's margins
+        mx = max(k["margin_frac"] * H, safe[0] - px_ + 2)
+        my = max(k["margin_frac"] * H, safe[1] - py_ + 2)
+        best = None
+        for i, name in enumerate(k["corners"]):
+            x = mx if "left" in name else W - mx - bw - off
+            y = my if "top" in name else min(H - my - bh - off, safe[3] - bh + py_ - 2)
+            if _hits((x, y, x + bw + off, y + bh + off), badge):
+                continue
+            # one of the frame's own words may be under the box whole, never cut by its edge
+            if any(_hits((x, y, x + bw + off, y + bh + off), t)
+                   and not (x <= t[0] and y <= t[1] and x + bw >= t[2] and y + bh >= t[3])
+                   for t in avoid):  # fmt: skip
+                continue
+            cover = float(under(sm, x, y, bw, bh).sum())
+            busy = float(under(dm, x, y, bw, bh).mean())
+            score = cover + k["corner_bias"] * i + k["busy_weight"] * busy
+            if best is None or score < best[0]:
+                best = (score, cover, busy, name, x, y, b, px_, py_, bw, bh, off)
+        if best is None:
+            continue
+        if chosen is None or best[1] < chosen[1]:
+            chosen = best
+        if best[1] <= k["cover_max"]:
+            chosen = best
+            break
+    if chosen is None:
+        return None
+    _, cover, busy, name, x, y, b, px_, py_, bw, bh, off = chosen
+    cap = b["cap"]
+
+    def flat(x, y, w, h, col):
+        return {"x": round(x, 1), "y": round(y, 1), "w": round(w, 1), "h": round(h, 1), "r": k["r"],
+                "fill": rgb_hex(col), "stroke": None, "strokeW": 0, "shadow": False,
+                "sketch": False, "rot": 0.0}  # fmt: skip
+
+    cards = [flat(x + off, y + off, bw, bh, dark), flat(x, y, bw, bh, fill)]
+    lines = _lines(b, x + px_, y + py_, "start", head, ink, ink)
+    if kick:
+        kcap = max(k["kicker_cap_min"], round(k["kicker_cap_frac"] * cap))
+        kb = block_at(tokens(kick), font, kcap, W, H, 1, 0.0)
+        kx_, ky_ = k["kicker_pad_frac"][0] * kcap, k["kicker_pad_frac"][1] * kcap
+        kw, kh = kb["w"] + 2 * kx_, kb["h"] + 2 * ky_
+        gap = k["kicker_gap_frac"] * cap
+        left, top = "left" in name, "top" in name
+        # beside the box, near its top; else under it (over it, for a box at the bottom)
+        spots = [
+            (x + bw + off + gap if left else x - gap - kw, y + k["kicker_drop_frac"] * cap),
+            (max(x, safe[0] - kx_) if left else min(x + bw + off, safe[2] + kx_) - kw,
+             y + bh + off + gap if top else y - gap - kh),
+        ]  # fmt: skip
+        for kx, ky in spots:
+            inside = (kx + kx_ >= safe[0] and kx + kw - kx_ <= safe[2]
+                      and ky + ky_ >= safe[1] and ky + kh - ky_ <= safe[3])  # fmt: skip
+            clear = not any(_hits((kx, ky, kx + kw, ky + kh), t) for t in avoid)
+            if inside and clear and not _hits((kx, ky, kx + kw, ky + kh), badge):
+                cards.append(flat(kx, ky, kw, kh, dark))
+                lines += _lines(kb, kx + kx_, ky + ky_, "start", head, light, light)
+                break
+        else:
+            kick = ""
+    return {
+        "layout": "title",
+        "words": words,
+        "kicker": kick,
+        "head": head,
+        "cap": cap,
+        "px": b["px"],
+        "box": (round(x), round(y), round(x + bw + off), round(y + bh + off)),
+        "busy": round(busy, 4),
+        "cover": round(cover, 3),
+        "corner": name,
+        "spec": {"cards": cards, "lines": lines},
+    }
+
+
 def layout_still(img):
     """The picture alone -- the film's camera pushed in a little toward its subjects, but only
     when the push keeps them, and the film's own words, whole."""
@@ -2036,7 +2222,7 @@ def covered_text(o, foot):
     a = np.asarray(foot) > 127
     shift = ((o.get("spec") or {}).get("camera") or {}).get("shift") or 0
     W, H = size()
-    whole_ok = o["layout"] in ("card", "panel") or bool(o.get("glow"))
+    whole_ok = o["layout"] in ("card", "panel", "title") or bool(o.get("glow"))
     n = 0
     for x0, y0, x1, y1 in text_boxes(o["img"], min_h=cfg()["text"]["headline_min_h_px"]):
         x0, x1 = int(max(0, x0 + shift)), int(min(W, x1 + shift))
@@ -2087,7 +2273,7 @@ def checks(o, final, mask, foot=None):
     safe, badge = safe_rects()
     tol = 0.25 * o["cap"]  # a hand font's glyphs overhang their origin
     x0, y0, x1, y1 = o["box"]
-    if o["layout"] != "card" and (
+    if o["layout"] not in ("card", "title") and (
         ink[0] < x0 - tol or ink[1] < y0 - tol or ink[2] > x1 + tol or ink[3] > y1 + tol
     ):
         fails.append("the letters ran outside their box %s: %s" % (o["box"], ink))
@@ -2699,8 +2885,9 @@ def layout_poster(words, st, pcs, hero, extras, pages, v, seed, n, logo=None, st
 
 # ------------------------------------------------------------------ the whole thing
 DROP = ("spec", "box", "head", "cap", "px", "busy", "cover", "glow", "shift", "stroke_px",
-        "strips", "template", "alt")  # fmt: skip
+        "strips", "template", "alt", "kicker", "corner")  # fmt: skip
 FALLBACK = {
+    "title": ["headline", "headline+glow", "card", "still"],
     "poster": ["poster+alt", "headline", "headline+glow", "card", "still"],
     "headline": ["headline+glow", "card", "still"],
     "card": ["still"],
@@ -2712,6 +2899,17 @@ def _lay(o, kind, st):
     """One layout for the option: on the picture compose() made (the film's own words left out,
     the camera pushed in on its subject), in the side it gave the words -- or, for the still, the
     frame as the film drew it."""
+    if kind == "title":
+        # the whole frame, the film's own words left out of it, nothing pushed
+        lay = layout_title(o["clean"], o["title"], st)
+        if lay is not None:
+            o["img"] = o["clean"]
+            lay["spec"]["declutter"] = True
+            if o["comp"].get("hide"):
+                lay["spec"]["hide"] = o["comp"]["hide"]
+        return lay
+    if o["requested"] == "title":  # a title that could not be set: the moment's own words
+        o["words"] = o["own_words"]
     if kind == "still" or not o["words"]:
         return layout_still(o["film"])
     if kind in ("poster", "poster+alt"):
@@ -2854,19 +3052,20 @@ def make_options(film_dir, concepts, out_dir, env=None, log=print, logo=None):
         t = settled[i - 1]
         kind = RENAMED.get(cpt["layout"], cpt["layout"])
         o = {"n": i, "at": cpt["at"], "t": t, "requested": kind, "words": cpt["words"],
-             "place": cpt.get("place"), "notes": [], "tried": []}  # fmt: skip
+             "place": cpt.get("place"), "notes": [], "tried": [],
+             "title": cpt.get("title"), "own_words": cpt["words"]}  # fmt: skip
         if abs(t - cpt["at"]) > 0.01:
             o["notes"].append("settled at %.2f s (asked %.2f s)" % (t, cpt["at"]))
         o["film"] = load_still(stills[t])
         sides = ("left", "right") if kind == "panel" else SIDES
         frac = cfg()["panel"]["w_fracs"][0] if kind == "panel" else None
-        comp = compose(load_still(stills[round(DECLUTTER + t, 2)]),
-                       boxes_at(stills_dir(film_dir), t), o["place"], sides, frac)  # fmt: skip
+        o["clean"] = load_still(stills[round(DECLUTTER + t, 2)])
+        comp = compose(o["clean"], boxes_at(stills_dir(film_dir), t), o["place"], sides, frac)
         o["comp"], o["img"] = comp, comp["img"]
         # the film's own logo already in the picture: it is not added a second time
         o["logo"] = st["logo"] if st["logo"] and wants_logo(i, logo) and not comp["logo"] else None
         hero, extras = heroes[i - 1]
-        if hero and kind != "still" and o["words"]:
+        if hero and kind not in ("still", "title") and o["words"]:
             # composed from the film's own pieces, on its own page: not a frame of it
             pages = stage_at(stills_dir(film_dir), t)
             v = poster_variant(seed, i)
@@ -2878,11 +3077,14 @@ def make_options(film_dir, concepts, out_dir, env=None, log=print, logo=None):
                 "logo": st["logo"] if st["logo"] and wants_logo(i, logo) else None,
             }  # fmt: skip
             kind = o["requested"] = "poster"
-        else:
+        elif kind != "title":
             o["notes"].append(
                 "words %s, subject by %s, push %.2fx" % (comp["side"], comp["how"], comp["zoom"])
             )
         o.update(first_layout(o, kind, st))
+        if o["layout"] == "title":
+            o["notes"].append("title box %s%s" % (
+                o["corner"], ", with %r beside it" % o["kicker"] if o["kicker"] else ""))  # fmt: skip
         if o["layout"] == "poster":
             o["notes"].append(poster_note(o))
         opts.append(o)

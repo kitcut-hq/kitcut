@@ -97,7 +97,7 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    thumbnail, make four from the film itself: `python studio/ytdraft.py --film <folder>
    --thumbs` (Claude picks the moments, the words and -- for a film with pictures -- which of
    them each is built on, the first the video's main message; ~$0.06) or
-   `python scripts/thumb-options.py --film <folder> --concepts c.json [--logo all|none]` (your
+   `python scripts/thumb-options.py --film <folder> --concepts c.json [--logo all|none]` (add `--title "..." --title-box all` for the video's title in a box on a whole frame, the look kitcut.ai offers as options 1 and 2) (your
    own), then look at `feed.jpg` -- the options at YouTube's feed sizes -- and pass the one you
    pick to `yt-upload.py --thumbnail`. A film with pictures (cut-outs, photographs) gets posters
    composed from them: one large on the film's own page (somebody from the waist up, an object

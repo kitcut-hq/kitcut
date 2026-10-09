@@ -3420,6 +3420,45 @@ the template could be dynamic, slightly modified each time."
   from, so a picture nobody described is an object (KI-057); a print whose own edges fade keeps a
   smoky rim; on a Windows laptop joined scripts are measured unjoined and set smaller (KI-056).
 
+### The title in a box (`layout_title`, design yt-5)
+
+Two of the four options (config `title.options`, 1 and 2) are **the video's own title on a whole
+frame of the film**: heavy capitals in the film's title type, in a box of the film's accent with a
+hard dark shadow, in a top corner. The owner sent a thumbnail of this kind as the format to offer
+(a painted padel court, "PADEL TACTICS" on a red box top left, "EVERYTHING, IN 6 MINUTES" small
+beside it) and asked for the text to be the video's name or very close to it (2026-10-09).
+
+- **The words** are the title as the draft wrote it, cut by `title_parts`: up to its first break
+  (a colon, a dash, a bracket, the end of a sentence), and through the second when the first part
+  is a word or two ("Padel: Tactics and Tricks (Racket sports...)" sets "PADEL TACTICS AND
+  TRICKS"). What follows the break goes small on a dark strip beside the box, or under it, when it
+  is 40 characters or fewer and a place clear of the frame's own words exists; else it is left
+  out. A title, or first part, over 44 characters is not set this way: the option is made from its
+  moment's own words, as before (`FALLBACK["title"]`).
+- **The picture** is the frame at the option's moment with the film's own words left out and
+  nothing pushed in: the scene as the film drew it.
+- **The colours** are the film's: the more saturated of its two accents for the box, and whichever
+  of white and the film's darkest colour reads better on it for the letters; the accent is then
+  moved away from the letters until they read at 6.5:1 as colours. Thin hand type measures under
+  its colours' ratio once drawn (white on rust, 5.3:1 as colours, read 4.45:1), and darkening a
+  lime accent until white read on it made it olive, so a lime box takes navy letters. A film whose
+  accent is nearly grey gets the reference's red with white letters.
+- **The corner** is the one where the box hides the least, top left first, never bottom right
+  (YouTube's duration stamp), at the largest capitals (170 down to 100 px) whose box hides no more
+  than 8% of the frame's subject and cuts through none of the frame's own words (one may lie
+  under it whole). On a frame drawn on a flat ground "the subject" is everything that is not
+  ground (`drawn_map`); saliency read an empty half of paper as busier than the half with the
+  laptop in it. A painted frame is read by saliency.
+- **Checks** are the ones every option passes: cap height at 168 px, contrast as drawn, the
+  margins, the stamp, the film's own words.
+
+Measured 2026-10-09 on two films, eight options: the painted padel film (words drawn in ways the
+declutter pass does not find, so chips and source lines stay in the frame) set the title on three
+moments of four and fell back on the fourth, a frame crowded with labels; the hand-drawn example
+set all four. `thumb-options.py --title "..." --title-box all` draws it on every option of any
+film; `--title-box config` as the site offers it. Known weak: a frame with its subject in the
+middle has no empty corner, and the box then covers part of it at the largest size that fits.
+
 ## Share title and image
 
 Every finished film on kitcut.ai gets a public page of its own (`kitcut.ai/v/<short>/<slug>`),
