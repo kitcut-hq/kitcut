@@ -1,0 +1,35 @@
+{
+ "about": "What does the author's thinking buy? The four prompts of the models set (a launch, a real company's explainer, a 60 s collage piece, a bedtime story), made by one tree on Opus 5.5 at effort xhigh (today's) and at high, on the same day and at the same time, then read blind. Asked 2026-10-09: the author is three quarters of a film's wait.",
+ "seconds": 30,
+ "prompts": [
+  {
+   "id": "launch",
+   "look": "drawn",
+   "audience": "adults: owners of small businesses, a product launch",
+   "prompt": "A 30-second launch video for Brightfold, a new app for small businesses: snap a photo of a receipt and Brightfold files it, matches it to the right line on the bank statement, and closes your books at the end of the month. The audience is owners of businesses with 5 to 50 people, who dread month-end and the shoebox of receipts. Make it look like a polished product launch from a top software company: the app's screens, the receipts flying into place, the month closing itself. End on the name Brightfold and the line \"Close your month in minutes.\" Brightfold is a made-up company for a showcase: no prices, customer names or statistics.",
+   "seconds": 30
+  },
+  {
+   "id": "cloudflare",
+   "look": "drawn",
+   "seconds": 45,
+   "audience": "adults: a general audience, a company's product",
+   "prompt": "A short explainer about Cloudflare's 1.1.1.1 DNS resolver: what it is, why it is fast and private, and how to switch to it."
+  },
+  {
+   "id": "icecream",
+   "seconds": 60,
+   "audience": "adults: a portfolio piece for social video",
+   "prompt": "Create a 60 second motion graphic explainer video about the history of ice cream from the inception, to present day. The art style should be newspaper cutout / mixed media aesthetic with a high degree of polish. This piece is for your portfolio, so make sure to make it great.",
+   "look": "collage"
+  },
+  {
+   "id": "lighthouse",
+   "look": "painted",
+   "seconds": 30,
+   "audience": "children at bedtime",
+   "prompt": "A bedtime story about a lighthouse keeper's cat who is afraid of the dark, until one stormy night."
+  }
+ ],
+ "findings": "2026-10-09, studio d91eb92 + STUDIO_EFFORT, --auth login, both arms at once on the laptop (overloaded: four of eight final renders failed, whole-film times unusable). Claude's own time a film, from its sessions: xhigh 12.4 min, high 5.8 min (launch 16.2/7.7, cloudflare 14.3/5.5, icecream 12.7/6.0, lighthouse 6.5/3.9); first write of the picture 7.6/2.8 min; output tokens 74.3k/33.9k; Claude at list price $3.74/$2.37. Blind grade from stills (--grade --stills): fits 5, professional 4 on all eight. By eye, eight frames a film: level. Not shown: motion glitches (no film watched moving; the reader could not read four films). Next: short films on the VM, both efforts, read and watched. docs/studio-speed.md has the tables."
+}

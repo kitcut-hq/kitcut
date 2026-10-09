@@ -44,6 +44,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "scripts"))
 import agent  # noqa: E402 -- imports _env first
 import film as films  # noqa: E402
+import llm  # noqa: E402
 import thumbs  # noqa: E402
 import _thumb  # noqa: E402
 import _ytchapters  # noqa: E402
@@ -566,6 +567,8 @@ async def ask_json(text, sheet, auth, film, model, effort, system, session):
 
     content = [{"type": "text", "text": text}]
     sheets = [sheet] if isinstance(sheet, (bytes, bytearray)) else list(sheet or [])
+    if llm.routed(model):  # a model that is not Claude Code's: one request, off Claude's plan
+        return await asyncio.to_thread(llm.ask_json, text, sheets, model, effort, system)
     for n, one in enumerate(sheets):
         img = base64.b64encode(one).decode("ascii")
         content.insert(

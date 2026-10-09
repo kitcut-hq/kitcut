@@ -101,8 +101,9 @@ ROOT = KIT
 # Opus only: the drawing is the product, and a smaller model's films are not worth the saving
 MODEL = "claude-opus-5-5"
 # how hard it thinks: adaptive thinking at this effort (the CLI's --effort). Pinned here, so a CLI
-# update that moves the default cannot change the films unnoticed
-EFFORT = "xhigh"
+# update that moves the default cannot change the films unnoticed. STUDIO_EFFORT exists for one
+# caller, bakeoff.py --effort, which measures what the thinking buys; the served studio never sets it
+EFFORT = os.environ.get("STUDIO_EFFORT") or "xhigh"
 # how long Claude may work on a film, and what it may spend, grow with the film's length:
 # film.limits() (20 min of working time for up to 15 s; waiting for the machine does not count)
 

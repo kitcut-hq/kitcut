@@ -300,3 +300,88 @@ measurement of a rate: they show the path works end to end, what it costs, and o
 Not built, and where the next minute is: the 2-fps frames are full-size PNG (the same #6 as
 above: JPEG stills, 123 -> 54 ms a still); the reader's two calls could be one when the first
 finds nothing and the drawing code points at nothing.
+
+## Smaller models for the small steps, and how hard the author thinks (2026-10-09)
+
+Asked: keep Opus as the author, and hand the simple steps (the checks, the reviews) to a simpler
+model -- for speed, and to take load off Claude's limits. Measured before anything was switched;
+nothing is switched.
+
+**Where the time and the Claude usage are.** The 139 films finished on the VM on 2026-10-05..09
+(studio.json `stages`, and each step's cost at list price):
+
+| | seconds | share |
+|---|---|---|
+| the author (Claude writing, and its tools running) | 83,313 | 76% |
+| the final render | 15,352 | 14% |
+| putting it online | 5,022 | 5% |
+| the second reader (review.py; 27 films had one) | 4,287 | 4% (11% of a film that has it) |
+| the soundtrack | 1,096 | 1% |
+
+Claude at list price: $409 in all, of which the reader $14.84, the share words $6.80 and the
+episode log $2.06 -- **the small steps together are 5.8% of Claude's usage.** Handing every one of
+them to another model frees a twentieth of the plan. The pool that fills is the author's: 3 of 3
+Claude slots taken and a film waiting, at the moment this was read.
+
+**The second reader** (`studio/defects.py --part review --model <id>`, the bench of 27 known
+glitches in nine two-minute films):
+
+| reader | known glitches found | on the clean films | the model's own time a film |
+|---|---|---|---|
+| Opus 5.5, high (today) | 20 of 27 | 15 findings, 2 must-fix, 3 films | median 163 s (111-186) |
+| GPT-6 Luna, high | 2 of 16 (Opus: 12 of the same 16) | 0 findings, 1 film | median 95 s (82-103) |
+
+Luna is 40% quicker and finds an eighth of what Opus finds: not a reader. Sonnet 5.5, Haiku 5.5,
+GPT-6.1 Sol and Gemini 3.8 Flash were not read: the bench was stopped (below).
+
+**The share words and the episode log** (`studio/stepbench.py`: 14 finished films, the same
+material to every model, then each answer read blind by Opus beside the Opus baseline's; the
+second Opus row is the same model again, which is the judge's own noise):
+
+| writer | share: median s | sent back | blind vs Opus (better / same / worse) | log: median s | blind vs Opus |
+|---|---|---|---|---|---|
+| Opus 5.5 again, Claude Code | 10.4 | 2 | 4 / 3 / 7 | 18.6 | 4 / 4 / 6 |
+| Sonnet 5.5, Claude Code | 13.6 | 1 | 4 / 2 / 8 | 14.0 | 2 / 1 / 11 |
+| Haiku 5.5, Claude Code | 15.3 | 4 | 3 / 1 / 10 | 14.2 | 1 / 0 / 13 |
+| GPT-6.1 Sol, one request | 11.3 | 2 | 4 / 1 / 9 | 5.5 | 5 / 1 / 8 |
+| GPT-6 Luna, one request | 15.1 | 0 | 3 / 0 / 11 | 4.5 | 1 / 0 / 13 |
+| Gemini 3.8 Flash, one request | 13.8 | 0 | 1 / 0 / 13 | 3.5 | 0 / 0 / 14 (invented on 9 films; Opus 4) |
+| Opus 5.5, one request | 10.1 | 0 | -- | 5.1 | -- |
+| Haiku 5.5, one request | 3.3 | 6 | -- | 2.8 | -- |
+
+- No smaller model is faster at these than Opus asked the same way, but Haiku; and Haiku, Luna
+  and Flash write words the blind read prefers Opus's to 10-14 times of 14 (the same Opus again:
+  6-7). Sonnet on the share and Sol on both are inside the noise; neither is quicker.
+- **What is slow is the way the question is asked.** The same Opus, the same question: 12-19 s
+  through a Claude Code process, 5 s as one request (the log). And the process costs: $0.08-0.12
+  a share on Claude Code's own count against $0.03 as one request. A plain request cannot use the
+  login's plan, only a key. These steps run after the film is finished; nobody waits for them.
+
+`studio/llm.py` is the route for a model named with its provider (through OpenRouter), and
+`ytdraft.ask_json` takes it; the studio's own steps all still name Opus.
+
+**How hard the author thinks** (`studio/bakeoff.py --set effort --effort high`: four prompts of
+30-60 s, Opus 5.5 at effort xhigh -- today's -- and at high, made at the same time; Claude's own
+time is read from its sessions, reply by reply, as harvest.py does):
+
+| | xhigh (today) | high |
+|---|---|---|
+| Claude's own time a film | 12.4 min | **5.8 min** |
+| ... of it, the first write of the picture | 7.6 min | 2.8 min |
+| output tokens a film | 74,300 | 33,900 |
+| Claude at list price a film | $3.74 | $2.37 |
+| replies a film | 16-28 | 16-22 |
+| blind grade (fits the subject / professional, 1-5) | 5 / 4 on all four | 5 / 4 on all four |
+
+Per film, xhigh to high: launch 16.2 to 7.7 min, the Cloudflare explainer 14.3 to 5.5, the ice
+cream collage 12.7 to 6.0, the bedtime story 6.5 to 3.9. Two runs of the same code differ by 11%
+(the kit bake-off above); this is 53%. Read by eye, eight frames a film, the pairs are level: no
+arm's film is the weaker one.
+
+**What this does not show yet.** Motion glitches: the films were made on the laptop, with two
+other tests running on it, and it was overloaded (killing a headless browser took over 10 s:
+four of the eight final renders failed, and the reader could not read four films). So the films'
+whole times here mean nothing, no film was watched moving, and four prompts are four prompts. The
+proof still owed before the studio's author thinks at high: short films on the VM, both efforts,
+each read by the second reader and watched. A long load belongs on the VM, a film at a time.
+

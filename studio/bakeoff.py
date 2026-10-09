@@ -195,6 +195,8 @@ def worker(spec_path):
     )
     if spec.get("templates"):  # the templates the films are made from (templates.root)
         os.environ["STUDIO_TEMPLATES"] = spec["templates"]
+    if spec.get("effort"):  # how hard the arm's author thinks (agent.EFFORT reads it)
+        os.environ["STUDIO_EFFORT"] = spec["effort"]
     sys.path.insert(0, os.path.join(tree, "studio"))
     import asyncio
 
@@ -268,6 +270,8 @@ def worker(spec_path):
             "dirty": spec["dirty"],
             "film": film.dir,
             "look": spec["look"],
+            "effort": agent.EFFORT,
+            "stages": rec.get("stages"),
             "ok": bool(rec.get("ok")),
             "error": rec.get("error"),
             "minutes": round((time.time() - t0) / 60, 1),
@@ -374,6 +378,7 @@ def run_arm(args, s, root, repo):
             "commit": commit,
             "dirty": dirty,
             "mode": args.mode,
+            **({"effort": args.effort} if args.effort else {}),
             **({"templates": os.path.abspath(args.templates)} if args.templates else {}),
         }
 
@@ -490,16 +495,36 @@ def plan(args, s, root):
 
 
 # ------------------------------------------------------------------ the blind read
-def frames_sheet(film_dir, seconds, out):
-    """FRAMES frames spread over the finished film.mp4, tiled 4 x 2 into out."""
+def frames_sheet(film_dir, seconds, out, stills=False):
+    """FRAMES frames spread over the finished film.mp4, tiled 4 x 2 into out. stills: drawn from
+    the film's own code instead (sketch-render.py --stills), the same for every arm -- a set
+    whose renders did not all finish is still read, and nothing is rendered in full."""
     from PIL import Image
 
     mp4 = os.path.join(film_dir, "outputs", "film.mp4")
     tmp = os.path.join(os.path.dirname(out), "frames")
     os.makedirs(tmp, exist_ok=True)
+    times = [(i + 0.5) * seconds / FRAMES for i in range(FRAMES)]
     tiles = []
-    for i in range(FRAMES):
-        t = (i + 0.5) * seconds / FRAMES
+    if stills:
+        into = os.path.join(film_dir, "temp", "grade")
+        subprocess.run(
+            [sys.executable, "-X", "utf8", os.path.join(KIT, "scripts", "sketch-render.py")]
+            + ["--manifest", os.path.join(film_dir, "sketch.json")]
+            + [
+                "--stills",
+                ",".join("%g" % t for t in times),
+                "--into",
+                os.path.join("temp", "grade"),
+            ],
+            cwd=film_dir,
+            check=True,
+            capture_output=True,
+        )
+        for f in sorted(os.listdir(into)):
+            im = Image.open(os.path.join(into, f)).convert("RGB")
+            tiles.append(im.resize((640, round(im.height * 640 / im.width)), Image.LANCZOS))
+    for i, t in enumerate(times if not stills else []):
         png = os.path.join(tmp, "%02d.png" % i)
         subprocess.run(
             ["ffmpeg", "-v", "error", "-y", "-ss", "%.3f" % t, "-i", mp4, "-frames:v", "1"]
@@ -626,7 +651,8 @@ def grade(args, s, root):
     for a in arms(root, args.set):
         for p in chosen(s, args.only):
             r = result(root, args.set, a, p["id"])
-            if not (r and r.get("ok")):
+            whole = r and r.get("film") and os.path.isfile(os.path.join(r["film"], "film.js"))
+            if not (r and (r.get("ok") or (args.stills and whole))):
                 continue
             d = os.path.join(root, args.set, a, p["id"], "grade")
             if os.path.isfile(os.path.join(d, "grade.json")) and not args.redo:
@@ -635,7 +661,9 @@ def grade(args, s, root):
     print("grading %d film(s) blind" % len(todo))
     for a, p, r, d in todo:
         sheet = os.path.join(d, "sheet.png")
-        frames_sheet(r["film"], r.get("length") or p.get("seconds") or s["seconds"], sheet)
+        frames_sheet(
+            r["film"], r.get("length") or p.get("seconds") or s["seconds"], sheet, args.stills
+        )
         g = asyncio.run(ask_blind(sheet, grade_ask(s)))
         if "fidelity" in s.get("grade_extra", []) and r.get("mode") == "template":
             pairs = os.path.join(d, "pairs.png")
@@ -876,6 +904,12 @@ def main():
     )
     ap.add_argument("--grade", action="store_true", help="read every finished film blind")
     ap.add_argument("--compare", nargs=2, metavar=("A", "B"), help="two arms side by side")
+    ap.add_argument(
+        "--stills",
+        action="store_true",
+        help="with --grade: read frames drawn from each film's code, not its video -- also the "
+        "films whose final render failed",
+    )
     ap.add_argument("--only", help="some of the set's prompt ids, comma-separated")
     ap.add_argument("--jobs", type=int, default=3, help="films made at once (default 3)")
     ap.add_argument("--auth", default="login", choices=("login", "api"))
@@ -887,6 +921,11 @@ def main():
         help="for a set with template forms: remake the template, or the same content as a prompt",
     )
     ap.add_argument("--templates", help="the templates folder the films are made from")
+    ap.add_argument(
+        "--effort",
+        choices=("low", "medium", "high", "xhigh"),
+        help="how hard the arm's author thinks (else the tree's agent.EFFORT): one tree, two efforts",
+    )
     args = ap.parse_args()
     s = load_set(args.set)
     repo = main_checkout()

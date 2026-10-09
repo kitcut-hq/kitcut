@@ -95,35 +95,60 @@ def part_probe(d):
     return review.folder_events(d)
 
 
-def part_review(d, auth="login"):
-    """The reviewer: review.read() on this machine's Claude login. Its findings carry `what`."""
+def part_review(d, auth="login", model=None, effort=None, tag=""):
+    """The reviewer: review.read() on this machine's Claude login, or -- a model named with its
+    provider (llm.routed) -- through OpenRouter. Its findings carry `what`. Each call's own
+    seconds are kept apart from the read's (which also renders the close-ups)."""
     import asyncio  # noqa: PLC0415
+    import time  # noqa: PLC0415
 
+    import llm  # noqa: PLC0415
     import ytdraft  # noqa: PLC0415
 
-    async def ask(text, images):
-        return await ytdraft.ask_json(
-            text, images, auth, None, ytdraft.MODEL, review.EFFORT, review.system(), "review"
-        )
+    model, effort, calls = model or ytdraft.MODEL, effort or review.EFFORT, []
 
+    async def ask(text, images):
+        t = time.time()
+        if llm.routed(model):
+            got = await asyncio.to_thread(
+                llm.ask_json, text, images, model, effort, review.system()
+            )
+        else:
+            got = await ytdraft.ask_json(
+                text, images, auth, None, model, effort, review.system(), "review"
+            )
+        calls.append(round(time.time() - t, 1))
+        return got
+
+    name = os.path.basename(d)
     r = asyncio.run(
-        review.read(review.folder_view(d), ask, log=lambda s: print("    " + s, flush=True))
+        review.read(
+            review.folder_view(d), ask, log=lambda s: print("    %s: %s" % (name, s), flush=True)
+        )
     )
-    with open(os.path.join(d, "temp", "review-last.json"), "w", encoding="utf-8") as f:
+    r |= {"model": model, "effort": effort, "call_s": calls}
+    with open(os.path.join(d, "temp", "review-last%s.json" % tag), "w", encoding="utf-8") as f:
         json.dump(r, f, indent=1, ensure_ascii=False)
     print(
-        "    %d call(s), %.0f s, $%.2f, %d close-up(s)"
-        % (r["calls"], r["seconds"], r["cost_usd"], len(r["closer"])),
+        "    %s: %d call(s) of %s s, %.0f s in all, $%.2f, %d close-up(s)"
+        % (
+            name,
+            r["calls"],
+            "+".join("%g" % c for c in calls),
+            r["seconds"],
+            r["cost_usd"],
+            len(r["closer"]),
+        ),
         flush=True,
     )
     return [dict(f, text=f["what"]) for f in r["findings"]]
 
 
-def run_part(part, d, tag=""):
+def run_part(part, d, tag="", **kw):
     fn = globals().get("part_" + part)
     if fn is None:
         sys.exit("the %s part is not built yet" % part)
-    found = fn(d)
+    found = fn(d, tag=tag, **kw) if part == "review" else fn(d)
     part += tag
     p = os.path.join(d, "temp", "findings-%s.json" % part)
     os.makedirs(os.path.dirname(p), exist_ok=True)
@@ -193,6 +218,16 @@ def kept(home, only=None):
     )
 
 
+def _last(part, d):
+    """What a reviewer run kept about itself (its model, each call's seconds, the cost)."""
+    try:
+        p = os.path.join(d, "temp", "review-last%s.json" % part[len("review") :])
+        with open(p, encoding="utf-8") as f:
+            return json.load(f) if part.startswith("review") else {}
+    except (OSError, ValueError):
+        return {}
+
+
 def score(home, parts=None, only=None):
     """{part: {found, known, by_kind, clean_alarms, clean_musts, clean_films, films: {...}}}."""
     lab, out = labels(), {}
@@ -222,6 +257,11 @@ def score(home, parts=None, only=None):
                 s["clean_films"] += 1
                 s["clean_alarms"] += len(found)
                 s["clean_musts"] += sum(1 for f in found if f.get("must"))
+            last = _last(part, d)
+            if last.get("call_s"):
+                s.setdefault("call_s", []).append(sum(last["call_s"]))
+                s["cost_usd"] = s.get("cost_usd", 0.0) + (last.get("cost_usd") or 0.0)
+                s["model"] = "%s, %s" % (last.get("model"), last.get("effort"))
             s["films"][name] = {
                 "found": sum(got),
                 "known": len(known),
@@ -242,6 +282,12 @@ def table(sc):
             "%-8s found %d of %d known glitches; on %d clean film(s): %d finding(s), %d must-fix"
             % (part, s["found"], s["known"], s["clean_films"], s["clean_alarms"], s["clean_musts"])
         )
+        if s.get("call_s"):
+            c = sorted(s["call_s"])
+            lines.append(
+                "        %s: the model's own time a film: median %.0f s (%.0f-%.0f); $%.2f over %d film(s)"
+                % (s["model"], c[len(c) // 2], c[0], c[-1], s["cost_usd"], len(c))
+            )
         lines.append(
             "        by kind: "
             + ", ".join("%s %d/%d" % (k, a, b) for k, (a, b) in sorted(s["by_kind"].items()))
@@ -285,6 +331,15 @@ def main():
         help="what is on the bench, and what a run would do; runs nothing",
     )
     ap.add_argument("--force", action="store_true", help="render frames again")
+    ap.add_argument(
+        "--model",
+        help="with --part review: who reads (default the studio's; a name with its provider, "
+        "e.g. openai/gpt-6-luna, is asked through OpenRouter)",
+    )
+    ap.add_argument("--effort", help="with --part review: how hard it thinks (default review's)")
+    ap.add_argument(
+        "--jobs", type=int, default=1, help="with --part: this many bench films at a time"
+    )
     a = ap.parse_args()
     home, only = home_of(a.home), set(a.only.split(",")) if a.only else None
     bench = films(home, only)
@@ -317,11 +372,20 @@ def main():
                 "%s: %d sheet(s) in %s" % (name, len(got), os.path.join(d, "outputs", "review")),
                 flush=True,
             )
-        if a.part:
-            print(
-                "%s: %s -> %d finding(s)" % (name, a.part, len(run_part(a.part, d, a.tag))),
-                flush=True,
-            )
+    if a.part:
+        from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+
+        kw = {"model": a.model, "effort": a.effort} if a.part == "review" else {}
+
+        def one(nd):
+            try:
+                n = len(run_part(a.part, nd[1], a.tag, **kw))
+                print("%s: %s -> %d finding(s)" % (nd[0], a.part, n), flush=True)
+            except Exception as e:  # noqa: BLE001 -- one film's failure is a row, not the bench's end
+                print("%s: %s FAILED: %s" % (nd[0], a.part, str(e)[:300]), flush=True)
+
+        with ThreadPoolExecutor(max(1, a.jobs)) as ex:
+            list(ex.map(one, bench))
     if a.score:
         print(table(score(home, only=only)))
 
