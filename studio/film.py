@@ -260,6 +260,17 @@ TTS_MODEL = "gemini-3.8-flash-tts"
 # voice, a low or a high one to go with the film's own narration (scripts/sketch-vo.py)
 VO_BACKUP = {"tts": "elevenlabs", "model": "eleven_v3", "voices": {"low": "brian", "high": "sarah"}}
 VO_PINNED = {"tts": "gemini", "takes": 1, "lead": 0.5, "gap": 0.35, "backup": VO_BACKUP}
+# A vertical film (a YouTube Short) speaks at once: a feed shows its first frame and the viewer
+# decides in a second. All 25 high-view news and explainer Shorts measured 2026-10-09 have a voice
+# inside 0.3 s (docs/shorts-guidebook.md); half a second of picture alone is a wide film's breath.
+TALL_LEAD = 0.1
+
+
+def vo_lead(frame):
+    """How long a film in this frame waits before its first word (vo.json "lead")."""
+    return TALL_LEAD if frame == "9:16" else VO_PINNED["lead"]
+
+
 # waiting: paused for its person (their own ElevenLabs account would not speak: tools.voice);
 # nobody is making it, and Continue (server.continue_film) picks it up again
 STATES = ("queued", "claude", "finishing", "done", "error", "cancelled", "interrupted", "waiting")
@@ -372,6 +383,9 @@ def mark_note(film):
 # the title, the channel and the sound along the bottom, and the like/comment/share column down
 # the right of the lower half. The picture runs under them; nothing that must be read does.
 TALL_COVERED = {"bottom": 0.2, "right": 0.16}
+# the pitched cues a film with no music may not play either: scripts/_sketchaudio.py TONAL_FX,
+# which is what drops them (test_shorts holds the two lists together)
+TONAL_FX = ("sample", "chime")
 
 
 def caption_band(w, h):
@@ -425,6 +439,21 @@ def frame_note(film):
                 "right of x %d from y 0 down (like, comment, share). The picture runs under them; "
                 "nothing that must be read goes there." % (by, rx)
             )
+        if (
+            h > w
+        ):  # a Short: what its first frame and first word are (vo_lead, the manifest's cover)
+            text += (
+                " The narration's first word comes %g s in and the video's first frame is the "
+                "film's own frame 0 -- a feed shows that frame before the film plays -- so draw "
+                "frame 0 complete: nothing builds in ahead of the first word." % TALL_LEAD
+            )
+    if rec.get("music") == "none":
+        text += (
+            '\n\nThis film has no music. Leave score.json\'s "events" empty (the studio plays '
+            "none of them), and write no pitched sound among the cues: no chime, no sampled note "
+            "(the studio drops %s). Short, quiet, unpitched sounds on the cuts are welcome."
+            % " and ".join('"%s"' % n for n in TONAL_FX)
+        )
     if "captions" in (rec.get("caps") or ()):
         x0, y0, x1, y1 = caption_band(w, h)
         text += (
@@ -455,7 +484,7 @@ def fills(caps):
     return {k: v for c in caps for k, v in CAPS[c].get("fills", {}).items()}
 
 
-def _own_pins(n):
+def _own_pins(n, frame=None):
     """vo.json for a person's own ElevenLabs narrator: their voice in the model the site chose,
     one take a line (their characters), recorded as many at once as their plan allows. No
     backup voice: a line it refuses pauses the film instead (tools.voice)."""
@@ -465,7 +494,7 @@ def _own_pins(n):
         "voice": n["voice"],
         "takes": 1,
         "jobs": int(n.get("jobs") or 2),
-        "lead": VO_PINNED["lead"],
+        "lead": vo_lead(frame),
         "gap": VO_PINNED["gap"],
     }
 
@@ -733,9 +762,10 @@ class Film:
         if isinstance(frozen, dict) and frozen:  # a round's copy (rounds.copy_of): the film's own
             return frozen
         n = self.record().get("narrator") or {}
+        frame = self.record().get("frame")  # a film from an idea's; a template's keeps its own
         if n.get("source") == "elevenlabs":
-            return _own_pins(n)
-        pins = {**VO_PINNED, "model": tts_model()}
+            return _own_pins(n, frame)
+        pins = {**VO_PINNED, "model": tts_model(), "lead": vo_lead(frame)}
         if n.get("source") == "kitcut" and n.get("voice"):
             pins["voice"] = n["voice"]
         return pins
@@ -848,6 +878,7 @@ class Film:
         template=None,
         frame=None,
         captions=False,
+        music=True,
     ):
         """A new film's folder: the manifest (its length set), the engine copy, an empty
         narration, an empty list of paintings for a painted film, and its record.
@@ -859,7 +890,13 @@ class Film:
 
         frame, for a film made from an idea: "16:9" unless it is asked for in another of FRAMES
         ("9:16": a YouTube Short). captions: the narration's words drawn into the picture
-        (CAPS "captions"); the first message says where they sit (frame_note).
+        (CAPS "captions"); the first message says where they sit (frame_note). music: False for
+        a film with no music at all -- the manifest's audio.music, which sketch-audio.py obeys
+        whatever the score holds, and the first message says so.
+
+        A 9:16 film from an idea speaks at once (vo_lead) and keeps its own opening as the
+        video's first frame (the manifest's cover: false): a Shorts feed shows frame 0 before
+        the film plays, and a cover frame there is the film's ending.
 
         attachments: what the visitor attached (uploads.take), each meta with its file as "src",
         copied into inputs/. A picture becomes upload1.jpg... and joins the manifest's images
@@ -937,6 +974,12 @@ class Film:
             m["frame"] = FRAMES.get(frame) or FRAMES[template["frames"][0]]
         elif frame and frame != "16:9":  # a film from an idea, in its own frame (frame_note)
             m["frame"] = FRAMES[frame]
+            if frame == "9:16":
+                m["cover"] = False
+        tall = frame if not template else None  # whose first word comes at once (vo_lead)
+        quiet = music is False and not template
+        if quiet:
+            m["audio"] = {**(m.get("audio") or {}), "music": False}
         words = re.sub(r"\s+", " ", prompt).strip()
         m["title"] = (words[:60] + "...") if len(words) > 60 else words
         attached = []
@@ -996,13 +1039,14 @@ class Film:
         )
         vo = {
             **VO_PINNED,
+            "lead": vo_lead(tall),
             "model": tts_model(),
             "voice": picked or "Kore",
             "style": "",
             "language": "en",
         }
         if (narrator or {}).get("source") == "elevenlabs":
-            vo = {**_own_pins(narrator), "language": "en"}
+            vo = {**_own_pins(narrator, tall), "language": "en"}
         if not template or template.get("narration"):  # else the music carries it
             _write_json(film.path("vo.json"), vo | {"lines": []})  # a template's: seed() fills it
         if (narrator or {}).get("grant"):  # the film's pass to the relay: for the voice step only
@@ -1049,6 +1093,8 @@ class Film:
                 "listed": bool(listed),
                 # the assistant it was asked for through (source "mcp"), e.g. "Claude"
                 **({"app": str(app)[:40]} if app else {}),
+                # asked for with no music at all (frame_note; the manifest's audio.music)
+                **({"music": "none"} if quiet else {}),
                 "release": RELEASE,
                 "state": "queued",
                 "created": datetime.now().isoformat(timespec="seconds"),

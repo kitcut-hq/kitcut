@@ -24,6 +24,9 @@ synthesised -- how a film loses its closing and keeps its sound (the studio's un
 
 Manifest keys (audio block), all optional except score:
     score, sfx, automation ("temp/automation.json"), vo_timeline ("audio/vo/timeline.json")
+    music: false -- a film with no music: the score's events are not played, whatever it holds,
+          and neither are the pitched cues (_sketchaudio.TONAL_FX: a sampled note, a chime);
+          the voice and the unpitched sounds are mixed and mastered as ever
     mix: {music_db: 6, sfx_db: 3, vo_db: -17, duck: .62, reverb_sec: 2.3, music_reverb: .9,
           sfx_reverb: .8, fade_out: .6, voice_margin_db: 8 (null: no voice gate)}
     master: {lufs: -14, tp: -1.5}
@@ -119,6 +122,9 @@ def main():
     bad = A.check_score(score)
     if bad:
         sys.exit("%s: volumes that cannot be right\n  %s" % (score_p, "\n  ".join(bad)))
+    quiet = None
+    if au.get("music") is False:  # a film with no music: said once, in the manifest
+        score, cues, quiet = A.no_music(score, cues)
     autom, _ = load_json(m, "automation", "temp/automation.json")
     tl_path = _sketch.rel(m, au.get("vo_timeline", "audio/vo/timeline.json"))
     timeline = None
@@ -156,6 +162,15 @@ def main():
             else "none"
         )
     )
+    if quiet is not None:
+        print(
+            "  no music (audio.music: false): %d score events and %d pitched cues not played%s"
+            % (
+                quiet["events"],
+                len(quiet["cues"]),
+                " (%s)" % ", ".join(quiet["cues"]) if quiet["cues"] else "",
+            )
+        )
     print("  samples: %d needed, %d to fetch into %s" % (len(need), len(missing), A.SOUNDFONT))
     print("  master: %s LUFS, %s dBTP" % (master["lufs"], master["tp"]))
     if args.plan:

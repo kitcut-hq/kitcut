@@ -206,6 +206,19 @@ motion sheets show the cards, and so does the review. A YouTube Short needs both
 no soft subtitle track. From this machine: `python studio/agent.py "..." --frame 9:16 --captions`;
 from the site: `npm run film -- make ... --short`. Not yet on the site's idea box.
 
+A 9:16 film from an idea also opens as a feed needs it to (2026-10-09; `docs/shorts-guidebook.md`
+is the rulebook and says why). Its first word comes 0.1 s in, not 0.5 (`film.vo_lead`,
+`film.TALL_LEAD`: the lead in `vo.json` and in the pins `guard.pin_vo` puts back, so a film made
+before this gets it with its next version). And the video's first frame is the film's own frame 0:
+`Film.create` writes `"cover": false` into the manifest, because the renderer's cover frame is the
+film's ending and a Shorts feed shows frame 0 before anything plays. The first message says both.
+
+**No music** (`"music": false`; `agent.py --no-music`; the site's `npm run film -- make ...
+--no-music`). The manifest gets `audio.music: false`, which `sketch-audio.py` obeys whatever the
+score holds: no score event is played, and no pitched cue either (`_sketchaudio.TONAL_FX`: a
+sampled note, a chime). The record says `"music": "none"` and the first message tells Claude to
+leave the score empty. For a film from an idea in any frame; a template keeps its own sound.
+
 **People** (`film.CAPS["people"]`). `"people": [{"upload": id, "name": "Alex"}]` (up to
 `film.MAX_PEOPLE`, image uploads, one photo per person) and `"character_style"` (`"auto"` or a
 style in `config/heads/looks.json` `"studio"`) put real people in the film as drawn characters

@@ -1242,7 +1242,8 @@ async def create(req):
     # a film from an idea in a frame of its own ("9:16": a YouTube Short), and with the
     # narration's words drawn into the picture ("captions": true), which a Short needs: a video
     # site shows no soft subtitle track. A template's film takes its template's (template_of).
-    captions = False
+    # "music": false is a film with no music at all (film.create).
+    captions, music = False, True
     if not tpl:
         frame = body.get("frame") or "16:9"
         if frame not in films.FRAMES:
@@ -1250,6 +1251,7 @@ async def create(req):
                 {"error": "frame must be one of %s" % ", ".join(films.FRAMES)}, status=400
             )
         captions = body.get("captions") is True
+        music = body.get("music") is not False
     # the site's project the film is an episode of: {id, name, brief, from_account_cast}. The
     # site checks it is the person's (trusted like X-Client-Ip); its library is theirs anyway
     project = body.get("project")
@@ -1369,6 +1371,7 @@ async def create(req):
             template=tpl,
             frame=frame,
             captions=captions,
+            music=music,
         )
         if preview:
             f.update(preview=True)

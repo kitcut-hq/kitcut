@@ -2159,6 +2159,8 @@ def first_record(film, source, client):
         ),
         # the narration's words drawn into the picture (film.CAPS "captions")
         **({"captions": "burned"} if "captions" in (rec.get("caps") or ()) else {}),
+        # asked for with no music at all (film.create)
+        **({"music": "none"} if rec.get("music") == "none" else {}),
         "state": "queued",
         "cost_usd": 0.0,
     }
@@ -2412,6 +2414,11 @@ def main():
         help="draw the narration's words into the picture (sketch/captions.js)",
     )
     ap.add_argument(
+        "--no-music",
+        action="store_true",
+        help="a film with no music at all: voice and unpitched sounds only",
+    )
+    ap.add_argument(
         "--unlisted", action="store_true", help="keep the film out of every gallery (link-only)"
     )
     ap.add_argument(
@@ -2468,6 +2475,7 @@ def main():
             listed=not args.unlisted,
             frame=args.frame,
             captions=args.captions,
+            music=not args.no_music,
         )
     print("  film    %s" % film.dir)
 

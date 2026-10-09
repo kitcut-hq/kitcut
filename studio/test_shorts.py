@@ -7,7 +7,10 @@ network, no browser; node runs the caption module against a stub when it is inst
 
 Covers: a film asked for in 9:16 with captions gets the frame in its manifest, the module in its
 engine folder and both in its record; a film asked for as ever is byte for byte the film it was
-(no frame, no module, no note); the first message names the frame and the caption band; the band
+(no frame, no module, no note, half a second before its first word); a Short speaks at once, keeps
+its own opening as the video's first frame, and can be asked for with no music at all (the
+manifest's audio.music, the record, the first message, and the pitched cues the mix leaves out);
+the first message names the frame and the caption band; the band
 film.py tells the writer about is the one captions.js draws in, for every frame; and the cards it
 cuts a narration into never hold more words than the frame allows, never leave a last word alone,
 and never overlap in time; and a film that is not 16:9 gets no thumbnail options, since those are
@@ -27,6 +30,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "scripts"))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _sketchaudio as A  # noqa: E402
 import agent  # noqa: E402
 import film as films  # noqa: E402
 import thumbs  # noqa: E402
@@ -112,6 +116,44 @@ def main():
         "the band is clear of what a phone covers", y1 < 1920 * (1 - 0.2) and x1 < 1080, (y1, x1)
     )
     expect("and the whole of it is in the first message", note in agent.ask(short))
+    with open(short.path("vo.json"), encoding="utf-8") as f:
+        lead = json.load(f).get("lead")
+    expect("it speaks at once", lead == films.TALL_LEAD, lead)
+    expect("and its pins keep it so", short.vo_pins().get("lead") == films.TALL_LEAD)
+    expect("its own opening is the video's first frame", m.get("cover") is False, m.get("cover"))
+    expect(
+        "the first message says both",
+        "%g s in" % films.TALL_LEAD in note and "frame 0" in note,
+        note[:900],
+    )
+    expect(
+        "and it has music, nobody having said otherwise",
+        "music" not in rec and "music" not in m["audio"] and "no music" not in note,
+    )
+
+    print("a Short with no music")
+    quiet = films.Film.create(
+        "the week in AI", 30, "collage", client="t", frame="9:16", captions=True, music=False
+    )
+    with open(quiet.manifest, encoding="utf-8") as f:
+        qa = json.load(f)["audio"]
+    expect(
+        "its manifest says so, and keeps the rest of its sound",
+        qa.get("music") is False and qa.get("score") == m["audio"].get("score"),
+        qa,
+    )
+    expect(
+        "so do its record and the run the site reads",
+        quiet.record().get("music") == "none"
+        and agent.first_record(quiet, "web", "t").get("music") == "none",
+    )
+    expect("and the first message", "This film has no music" in films.frame_note(quiet))
+    expect(
+        "the pitched cues it names are the ones the mix leaves out",
+        films.TONAL_FX == A.TONAL_FX
+        and all('"%s"' % n in films.frame_note(quiet) for n in A.TONAL_FX),
+        (films.TONAL_FX, A.TONAL_FX),
+    )
 
     print("a film asked for as ever")
     wide = films.Film.create("the week in AI", 30, "collage", client="t")
@@ -121,6 +163,14 @@ def main():
     expect("no captions module", "captions" not in (m.get("modules") or []), m.get("modules"))
     expect("no frame in its record", "frame" not in wide.record(), wide.record().get("frame"))
     expect("and no note", films.frame_note(wide) == "")
+    with open(wide.path("vo.json"), encoding="utf-8") as f:
+        lead = json.load(f).get("lead")
+    expect(
+        "it waits half a second before its first word, as ever",
+        lead == films.VO_PINNED["lead"] == wide.vo_pins().get("lead"),
+        lead,
+    )
+    expect("and its cover is the renderer's to choose", "cover" not in m, m.get("cover"))
     odd = films.Film.create("the week in AI", 30, "drawn", client="t", frame="4:3")
     expect("a frame the studio does not make is 16:9", "frame" not in odd.record())
     expect(

@@ -331,6 +331,22 @@ def kept_sounds():
     check(
         "sounds: a film without sounds.json is unchanged", same[0]["events"][0]["inst"] == "celesta"
     )
+    # a film with no music (audio.music: false): after its kept sounds are spelled out, so a kept
+    # bell is a chime here and goes too
+    q_score, q_cues, left = A.no_music(s2, c2 + [{"t": 6, "fx": "sample", "inst": "celesta"}])
+    check(
+        "no music: the score plays nothing", A.score_events(q_score) == [] and q_score["bpm"] == 120
+    )
+    check(
+        "no music: pitched cues go, the rest stay", q_cues == [{"t": 4, "fx": "pop"}], str(q_cues)
+    )
+    check(
+        "no music: and it says what it left out",
+        left == {"events": len(s2["events"]), "cues": ["chime", "sample"]},
+        str(left),
+    )
+    dry, _wet, _ = A.render_score(q_score, 2.0)
+    check("no music: an empty score renders as silence", float(abs(dry).max()) == 0.0)
 
 
 def inputs_join():

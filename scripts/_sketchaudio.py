@@ -221,6 +221,24 @@ def expand_sounds(score, cues, kit):
     return {**score, "events": events}, out
 
 
+# what a film with no music may not play either: a pitched note is music by another name
+TONAL_FX = ("sample", "chime")
+
+
+def no_music(score, cues):
+    """A film with no music (the manifest's audio.music: false): the score with no events, and
+    the cues without the pitched ones (TONAL_FX). -> (score, cues, what was left out), the last
+    as {"events": n, "cues": [fx names]} for the caller to print. Unpitched sounds stay."""
+    kept = [c for c in cues or [] if not (isinstance(c, dict) and c.get("fx") in TONAL_FX)]
+    out = {
+        "events": len((score or {}).get("events") or []),
+        "cues": sorted(
+            c["fx"] for c in cues or [] if isinstance(c, dict) and c.get("fx") in TONAL_FX
+        ),
+    }
+    return {**(score or {}), "events": []}, kept, out
+
+
 # the loudest any volume in a score may be: across 33 scores the largest was 0.95
 GAIN_MAX = 1.5
 

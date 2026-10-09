@@ -230,6 +230,23 @@ pixels: YouTube shows no subtitle track on a Short. On kitcut.ai it is one flag,
 make ... --short` (the studio's `"frame": "9:16", "captions": true`), and the film's first message
 tells its writer the canvas and what is taken.
 
+**`docs/shorts-guidebook.md` is the rulebook: read it before writing a Short's prompt and hold the
+finished file to it.** Thirty-two rules, each checkable, each with what it rests on (YouTube's own
+statements, 25 high-view Shorts measured, and the owner's calls). The ones that cost a day when
+they were missed:
+
+- **The news is the first frame and the first sentence.** A headline of eight words or fewer on
+  frame 0, the voice inside 0.3 s, the first sentence saying who did what. Never a clue first.
+- **A news Short is a bulletin** (strap, headline, a lower band naming the source on screen), with
+  **real screenshots of the source sites' own headlines**, masthead to date, one page at a time.
+- **No music** (`--no-music`), and a narrator who is fast and confident but steady: neither a flat
+  anchor nor an alarmed one. The owner picks the voice by ear from an audition page.
+- **A 20-second pilot before a batch** in a new format; the batch after the owner's yes.
+
+The studio does its part for a 9:16 film: the first word 0.1 s in, and the film's own frame 0 as
+the video's first frame (`"cover": false`). By hand, set both: `"lead": 0.1` in `vo.json` and
+`"cover": false` in the manifest; for no music, `"audio": {"music": false}`.
+
 - **Compose for the tall frame**, never a wide layout shrunk into it: stacked top to bottom, one
   idea on screen at a time, a headline of 90 px or more, nothing to be read under 44.
 - **Three things lie over the film.** The caption band (`SK.captionBox()`: about y 1330-1530 of

@@ -3984,6 +3984,14 @@ voice RMS per 2 s, which is how the balance is judged without listening; `--stem
 out. Every run also writes `audio/balance.json` (the same table, and what the voice gate did),
 which is what Sketch Studio's `sound` tool shows Claude.
 
+**A film with no music: `"audio": {"music": false}`.** Said once in the manifest and obeyed
+whatever the score holds: no score event is played and no pitched cue either
+(`_sketchaudio.TONAL_FX`: a sampled note, a chime), since a pitched note is music by another
+name. The voice and the unpitched sounds are mixed and mastered as ever, and `--plan` prints what
+was left out. It runs after a series' kept sounds are spelled out, so a kept bell goes too. A
+score file is still required; an empty `"events": []` is a valid one. Why it exists, and the
+rest of what a YouTube Short needs: `docs/shorts-guidebook.md`.
+
 **The voice gate** is the backstop the ducker is not: the ducker follows the voice but trusts
 the score's own level, so a score written too loud buries the narration however well it
 ducks. The gate measures, in 1 s windows, the music over the whole window against the voice
