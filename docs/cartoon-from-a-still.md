@@ -12,16 +12,14 @@ where it said no.
 
 ## The input
 
-<a href="cartoon-from-a-still/youtube-still.jpg"><img align="right" width="250" src="cartoon-from-a-still/youtube-still-top.jpg" alt="The episode paused at 1:41 in the YouTube app on a phone"></a>
-
 I paused "Swimming with Peppa" on YouTube at 1:41. One frame: three pigs in a pool, three
 rabbits on the deck. No model sheets, no layers, no second angle.
+
+<p align="center"><a href="cartoon-from-a-still/youtube-still.jpg"><img width="320" src="cartoon-from-a-still/youtube-still-top.jpg" alt="The episode paused at 1:41 in the YouTube app on a phone"></a></p>
 
 I asked Claude Code to redraw that frame with KitCut's sketch engine. The engine is the
 JavaScript in this repo's [`sketch/`](../sketch) folder: a canvas where every frame is a pure
 function of `t`. The model does not paint pixels. It writes the code that paints them.
-
-<br clear="right">
 
 ## Round one: it gave me bears
 
