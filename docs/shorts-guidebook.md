@@ -49,6 +49,7 @@ For any Short made from a news story.
 | 17 | **A new picture every three to five seconds.** | Sample: median shot 3.2 s |
 | 18 | **Something on screen shows how far along the film is:** a count, numbered facts, a timeline. | Hoyos's "mechanism" (MEDIUM) |
 | 19 | **Long enough to explain, 90 seconds to 3 minutes, and a stranger can follow it.** YouTube names no ideal length and adjusts for duration. | OWNER 2026-10-08; YouTube (STRONG) |
+| 33 | **Nothing stands still.** The picture is frozen for no more than 5% of the running time and never drifts without real movement for longer than 3 seconds. A diagram a wide film would hold while the narrator explains it is moved in a Short: the camera follows the action, a picture is studied part by part on the narrator's words, a number counts up. `python scripts/short-stillness.py <mp4> --check` measures it on the finished file. | OWNER 2026-10-09 ("it's still for seconds. the image doesnt move at all"), of five padel Shorts cut from a wide film; measured, their picture stood still for 49 to 65% of the time, and 0% after they were rebuilt, with no slow stretch over 2 s |
 
 ## 4. Voice and sound
 
@@ -92,7 +93,8 @@ For any Short made from a news story.
 5. **Make it:** `npm run film -- make ... --short --no-music` (the site), or
    `python studio/agent.py "..." --frame 9:16 --captions --no-music`.
 6. **Check the finished file** against sections 1 to 6: frame 0, the first word's time, the first
-   sentence, each screenshot, the narration against the source, the last second.
+   sentence, each screenshot, the narration against the source, the last second, and
+   `python scripts/short-stillness.py <mp4> --check` (rule 33).
 7. **Publish**, then at 48 hours read "viewed vs. swiped away" beside the opening line. A film
    below the channel's own median has a hook problem.
 
@@ -118,3 +120,8 @@ For any Short made from a news story.
   gives a Short, or for where its buttons cover an ordinary Short in pixels.
 - Our sample is 25 successful Shorts picked by hand; it shows what winners share, not what causes
   a win.
+- Rule 33's limits (5% still, 3 s slow) are where five rebuilt Shorts of our own landed, not a
+  figure anyone publishes. Neither the 25-Short sample nor the studio's own news Shorts have been
+  run through `short-stillness.py` yet, so the limits may be loose or tight for footage and
+  screenshots.
+- Rule 33 is numbered out of order on purpose: rules 20 to 32 are cited by number elsewhere.

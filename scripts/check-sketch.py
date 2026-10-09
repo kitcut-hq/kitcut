@@ -373,6 +373,49 @@ def inputs_join():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def stillness():
+    """short-stillness.py on pictures made here, no video: a frozen picture is still, a drifting
+    background alone is slow and not still (the reason there are two bars), a picture that keeps
+    changing is neither, and --check's bar fails the first two."""
+    st = import_module("short-stillness")
+    rng = np.random.default_rng(7)
+    rows, n = 140, 200  # 40 s at 5 frames a second
+    base = rng.integers(40, 200, (rows, st.W)).astype(np.int16)
+    frozen = np.repeat(base[None], n, axis=0)
+    r = st.measure(frozen)
+    check("stillness: a frozen picture is all still", r["still"] == 1 and not r["ok"], str(r))
+    # the same picture with one thin band changing each frame: under the slow bar, over the still one
+    drift = frozen.copy()
+    for i in range(n):
+        drift[i, (i * 2) % rows : (i * 2) % rows + 2, :] = rng.integers(40, 200, (2, st.W))
+    r = st.measure(drift)
+    check(
+        "stillness: a drift alone is slow, not still, and misses the bar",
+        r["still"] == 0 and r["slow"] == 1 and not r["ok"] and r["runs"][0][1] > 39,
+        str(r),
+    )
+    moving = rng.integers(40, 200, (n, rows, st.W)).astype(np.int16)
+    moving[100:109] = moving[
+        100
+    ]  # 1.6 s held inside 40 s of movement: under both of --check's limits
+    r = st.measure(moving)
+    check(
+        "stillness: a moving picture with a short hold passes, and the hold is named",
+        r["ok"]
+        and len(r["runs"]) == 1
+        and abs(r["runs"][0][0] - 20.0) < 0.01
+        and r["still"] < 0.06,
+        str(r),
+    )
+    moving[100:120] = moving[100]  # 3.8 s: one slow stretch over the limit
+    check("stillness: a hold over 3 s fails", not st.measure(moving)["ok"])
+    check(
+        "stillness: stretches() drops runs under 1.5 s",
+        st.stretches([1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0]) == [(0.8, 1.6)],
+        str(st.stretches([1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0])),
+    )
+
+
 def main():
     argparse.ArgumentParser(description=__doc__.split("\n")[0]).parse_args()
     # ---- notes and the score notation
@@ -1093,6 +1136,7 @@ def main():
     heads()
     kept_sounds()
     inputs_join()
+    stillness()
 
     # ---- the bundler, against the committed example
     ex = os.path.join(_env.ROOT, "config", "sketch", "example")

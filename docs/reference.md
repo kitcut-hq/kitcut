@@ -3992,6 +3992,20 @@ was left out. It runs after a series' kept sounds are spelled out, so a kept bel
 score file is still required; an empty `"events": []` is a valid one. Why it exists, and the
 rest of what a YouTube Short needs: `docs/shorts-guidebook.md`.
 
+**Does a Short's picture stand still: `short-stillness.py`.** A wide film may hold a diagram
+while the narrator explains it; a Short may not (the guidebook's rule 33). The script reads a
+finished file at five frames a second, looks only at the picture's band (`--box top,bottom` as
+shares of the height; the default, 0.08 to 0.66, is everything above the caption band, because the
+caption cards change with every word and would hide a frozen picture behind them), and counts the
+share of that band's pixels that moved by six grey levels or more since the frame before. Two
+bars: **still**, under 0.4% changed, and **slow**, under 3%. The second exists because a slowly
+drifting background passes the first on its own, with nothing a viewer would call movement on
+screen (the case `check-sketch.py` builds in memory). `--check` exits 1 over 5% still or a slow stretch
+longer than 3 s. Measured on the five padel Shorts it was written for (`--box 0.19,0.68`, a title
+block above the picture left out): 49 to 65% still and 72 to 80% slow as first cut from the wide
+film, 0% and 1 to 7% once rebuilt. It is read at 135 x 240 so that grain and compression are
+not counted as movement. `check-sketch.py` holds the arithmetic on pictures made in memory.
+
 **The voice gate** is the backstop the ducker is not: the ducker follows the voice but trusts
 the score's own level, so a score written too loud buries the narration however well it
 ducks. The gate measures, in 1 s windows, the music over the whole window against the voice

@@ -231,7 +231,7 @@ make ... --short` (the studio's `"frame": "9:16", "captions": true`), and the fi
 tells its writer the canvas and what is taken.
 
 **`docs/shorts-guidebook.md` is the rulebook: read it before writing a Short's prompt and hold the
-finished file to it.** Thirty-two rules, each checkable, each with what it rests on (YouTube's own
+finished file to it.** Thirty-three rules, each checkable, each with what it rests on (YouTube's own
 statements, 25 high-view Shorts measured, and the owner's calls). The ones that cost a day when
 they were missed:
 
@@ -242,6 +242,12 @@ they were missed:
 - **No music** (`--no-music`), and a narrator who is fast and confident but steady: neither a flat
   anchor nor an alarmed one. The owner picks the voice by ear from an audition page.
 - **A 20-second pilot before a batch** in a new format; the batch after the owner's yes.
+- **Nothing stands still.** A diagram a wide film would hold is moved in a Short: the camera
+  follows the action, a picture is studied part by part on the narrator's words, a number counts
+  up. Run `python scripts/short-stillness.py <mp4> --check` on the finished file before showing
+  it: over 5% of the time frozen, or a drift longer than 3 s with nothing moving, fails. A Short
+  cut from a wide film fails it by default (49 to 65% frozen on the first five), so each scene is
+  laid out again for the tall frame, not scaled into it.
 
 The studio does its part for a 9:16 film: the first word 0.1 s in, and the film's own frame 0 as
 the video's first frame (`"cover": false`). By hand, set both: `"lead": 0.1` in `vo.json` and
