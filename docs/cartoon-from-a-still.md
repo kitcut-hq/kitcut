@@ -15,7 +15,7 @@ where it said no.
 I paused "Swimming with Peppa" on YouTube at 1:41. One frame: three pigs in a pool, three
 rabbits on the deck. No model sheets, no layers, no second angle.
 
-<p align="center"><a href="cartoon-from-a-still/youtube-still.jpg"><img width="320" src="cartoon-from-a-still/youtube-still-top.jpg" alt="The episode paused at 1:41 in the YouTube app on a phone"></a></p>
+<p align="center"><a href="cartoon-from-a-still/youtube-still.jpg"><img width="320" src="cartoon-from-a-still/youtube-still.jpg" alt="The whole phone screenshot: the episode paused at 1:41 in the YouTube app"></a></p>
 
 I asked Claude Code to redraw that frame with KitCut's sketch engine. The engine is the
 JavaScript in this repo's [`sketch/`](../sketch) folder: a canvas where every frame is a pure
