@@ -41,6 +41,7 @@ TESTS = (
     "test_isolation.py",
     "test_direction.py",
     "test_library.py",
+    "test_variety.py",  # a series hears what it always did; a collection's films are told to differ
     "test_youtube.py",
     "test_ytdraft.py",
     "test_share.py",  # a finished film's share page: title, description, picture (stubbed)
