@@ -2,9 +2,9 @@
 
 *Claude Opus 5.5 in Claude Code. Four prompts, roughly an hour and a half. No image model, no video model.*
 
-![The 13-second film: rabbits wave, jump into the pool, a splash covers the lens, and the four children splash each other](cartoon-from-a-still/pool.gif)
+[![The 13-second film: rabbits wave, jump into the pool, a splash covers the lens, and the four children splash each other](cartoon-from-a-still/pool.gif)](https://cdn.jsdelivr.net/gh/kitcut-hq/kitcut@main/docs/cartoon-from-a-still/pool.mp4)
 
-**[Watch it with sound (MP4, 13 s)](cartoon-from-a-still/pool.mp4)** · [the 645 lines of JavaScript that draw it](cartoon-from-a-still/film.js)
+**[Watch it with sound (13 s)](https://cdn.jsdelivr.net/gh/kitcut-hq/kitcut@main/docs/cartoon-from-a-still/pool.mp4)** · [download the MP4](cartoon-from-a-still/pool.mp4) · [the 645 lines of JavaScript that draw it](cartoon-from-a-still/film.js)
 
 Nothing in that clip is a generated image. Every frame is drawn by a program the model wrote:
 the pigs, the rabbits, the splashes, even the tune. This is how it went, including the part
@@ -12,7 +12,7 @@ where it said no.
 
 ## The input
 
-<img align="right" width="250" src="cartoon-from-a-still/youtube-still.jpg" alt="The episode paused at 1:41 on a phone">
+<a href="cartoon-from-a-still/youtube-still.jpg"><img align="right" width="250" src="cartoon-from-a-still/youtube-still-top.jpg" alt="The episode paused at 1:41 in the YouTube app on a phone"></a>
 
 I paused "Swimming with Peppa" on YouTube at 1:41. One frame: three pigs in a pool, three
 rabbits on the deck. No model sheets, no layers, no second angle.
@@ -20,6 +20,8 @@ rabbits on the deck. No model sheets, no layers, no second angle.
 I asked Claude Code to redraw that frame with KitCut's sketch engine. The engine is the
 JavaScript in this repo's [`sketch/`](../sketch) folder: a canvas where every frame is a pure
 function of `t`. The model does not paint pixels. It writes the code that paints them.
+
+<br clear="right">
 
 ## Round one: it gave me bears
 
