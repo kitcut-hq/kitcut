@@ -354,8 +354,14 @@ def ask(film, recent=()):
     text += frame_note(film)
     text += attached_note(film) + people_note(film) + mark_note(film) + voice_note(film)
     mine = library.note(film)  # the project, or the person's own cast and earlier films
-    project = bool(film.record().get("project"))
-    note = recent_note(film.look, recent, series=bool(mine), project=project)
+    of = film.record().get("project")
+    note = recent_note(
+        film.look,
+        recent,
+        series=bool(mine),
+        project=bool(of),
+        collection=library.is_collection(of),
+    )
     return text + "".join("\n\n" + x for x in (mine, note) if x)
 
 
@@ -648,11 +654,12 @@ def recent_films(film, n=8):
     return out
 
 
-def recent_note(look, dirs, series=False, project=False):
+def recent_note(look, dirs, series=False, project=False, collection=False):
     """What recent films chose, counted: 'grounds: paper x5, night'. Only the choices from the
     menus: never what a film was asked, nor its cast (a person's own). series: the person has
     films of their own (library.note), which a continuation keeps to; project: the film is an
-    episode, and its project's brief and episodes come first."""
+    episode, and its project's brief and episodes come first; collection: the project's films
+    are each their own (library.is_collection), so only its brief does."""
     if not dirs:
         return ""
 
@@ -692,7 +699,9 @@ def recent_note(look, dirs, series=False, project=False):
         "Recent films made here, by everyone, chose (choose freshly for this prompt; repeat one "
         "only when it clearly calls for it%s):\n"
         % (
-            ", or when the project's brief or its earlier episodes above do"
+            ", or when the project's brief does"
+            if collection
+            else ", or when the project's brief or its earlier episodes above do"
             if project
             else ", or when it continues one of this person's films above"
             if series

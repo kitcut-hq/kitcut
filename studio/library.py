@@ -63,7 +63,7 @@ import subprocess
 import brandkit
 import clients
 import locks
-from film import CAST_USE, HOME, PROJECT_ID, VO_PINNED, Film, _write_json
+from film import CAST_USE, HOME, PROJECT_ID, PROJECT_KEEPS, VO_PINNED, Film, _write_json
 
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
@@ -344,6 +344,10 @@ def seed(film):
             "look": rec.get("look"),
             "direction": rec.get("direction") or f.direction(),
         }
+        if is_collection(film.record().get("project")) and "words" not in about["direction"]:
+            # a collection tells its films apart by more than a series keeps: what a film made
+            # before those were recorded chose is read from its own files
+            about["direction"] = f.direction() | about["direction"]
         _write_json(os.path.join(out, "about.json"), about)
         memory.append({"dir": "library/films/" + sub, "poster": bool(poster)} | about)
     got = {"cast": cast, "films": memory}
@@ -446,9 +450,10 @@ def _keep_sounds(film, lib, now):
 
 def sounds_note(film):
     """How an episode plays its series' sounds by name, and which it has: for the first message
-    and the editor of a film made in scenes. "" for a film that is not an episode."""
+    and the editor of a film made in scenes. "" for a film that is not an episode, and for one
+    of a collection that does not keep its music (keeps)."""
     rec = film.record()
-    if not rec.get("project"):
+    if "music" not in keeps(rec.get("project")):
         return ""
     got = (rec.get("library") or {}).get("sounds") or {}
     kit = _film_sounds(film)
@@ -497,12 +502,91 @@ def _seed_pictures(film, lib, idx):
     return out
 
 
+def keeps(project):
+    """What a project's films share, of film.PROJECT_KEEPS: all of it for a series -- every project that
+    does not say (no "keep" in it) -- and what it names for a collection, whose films are each
+    their own in the rest. () for no project."""
+    if not project:
+        return ()
+    if not isinstance(project.get("keep"), list):
+        return PROJECT_KEEPS
+    return tuple(k for k in PROJECT_KEEPS if k in project["keep"])
+
+
+def is_collection(project):
+    """A project whose films are each their own in something: it keeps less than a series."""
+    return bool(project) and len(keeps(project)) < len(PROJECT_KEEPS)
+
+
+KEPT = {"cast": "its cast", "look": "its look", "voice": "its voice", "music": "its music"}
+# what a collection's film is asked to choose for itself, by what the project does not keep
+OWN = {
+    "look": "the look of it -- the ground and its colours, the type, the way its pictures are "
+    "made, how the frame is laid out",
+    "voice": "the narrator and how they speak",
+    "music": "the instruments and the tempo, or no music at all",
+}
+
+
+def _used(m):
+    """One earlier film of a collection, as what it chose: for the next to differ from."""
+    dr = m.get("direction") or {}
+    words = dr.get("words")
+    bits = [
+        "%s s, %s" % (m.get("length"), m.get("look")),
+        "ground %s" % dr["ground"] if dr.get("ground") else None,
+        "paper %s" % dr["paper"] if dr.get("paper") else None,
+        "accent %s" % dr["accent"] if dr.get("accent") else None,
+        "type %s" % ", ".join(dr["faces"]) if dr.get("faces") else None,
+        "painted as %s" % dr["paint_style"] if dr.get("paint_style") else None,
+        "voice %s%s" % (dr["voice"], ' "%s"' % dr["voice_style"] if dr.get("voice_style") else "")
+        if dr.get("voice")
+        else None,
+        "%s at %s bpm" % (", ".join(dr.get("instruments") or []), dr.get("bpm"))
+        if dr.get("instruments")
+        else None,
+        "%d narration lines, %d words" % (dr.get("lines") or 0, words) if words else None,
+        'opens "%s"' % dr["opening"] if dr.get("opening") else None,
+    ]
+    return '- %s: "%s" (%s)' % (m["dir"], m.get("title"), "; ".join(b for b in bits if b))
+
+
+def _own_note(kept, memory):
+    """A collection's last word: what its films share, and that the rest is this film's own."""
+    share = [KEPT[k] for k in kept]
+    own = [OWN[k] for k in ("look", "voice", "music") if k not in kept]
+    own.append("the pace, how it opens, the order it tells things in and how it ends")
+    if share:
+        both = ", ".join(share[:-1]) + " and " + share[-1] if len(share) > 1 else share[0]
+        head = (
+            "This project is a collection, not a series: its films share %s, and what its "
+            "brief asks for." % both
+        )
+    else:
+        head = (
+            "This project is a collection, not a series: its films share only what its brief "
+            "asks for."
+        )
+    if not memory:
+        return head + " Everything else is each film's own: choose it for this prompt alone."
+    return (
+        head + " Everything else is this film's own, and the films above are listed so that "
+        "it does not repeat them. Choose for this prompt: %s. Where the films above agree with "
+        "each other, do not make it one more of the same: someone who saw them side by side, or "
+        "heard them one after another, should take this one for a different film. Keep to one "
+        "of their choices only where the brief or this prompt asks for it." % "; ".join(own)
+    )
+
+
 def note(film):
     """What the film has from its library, for the first message ("" when nothing). An
-    episode also hears its project's name and brief, in its person's words."""
+    episode also hears its project's name and brief, in its person's words. A project that
+    keeps less than a series does (keeps) is a collection: its film hears what the earlier ones
+    chose so as to differ from them, not to match."""
     rec = film.record()
     got = rec.get("library") or {}
     project = rec.get("project") or {}
+    kept, collection = keeps(project), is_collection(project)
     cast, memory = got.get("cast") or [], got.get("films") or []
     pics = got.get("pictures") or []
     voice = got.get("voice") or []
@@ -510,7 +594,10 @@ def note(film):
         return ""
     out = []
     if project:
-        out.append('This film is an episode of the project "%s".' % project.get("name"))
+        out.append(
+            'This film is %s the project "%s".'
+            % ("one of the films of" if collection else "an episode of", project.get("name"))
+        )
         if (project.get("brief") or "").strip():
             out.append("Its brief, from the person who runs it:\n" + project["brief"].strip())
     if project and (got.get("brand") or {}).get("name"):
@@ -542,11 +629,15 @@ def note(film):
         out += [
             "" if out else None,
             "This %s (already loaded from cast/: use any as SK.cast.<name>, change it, or leave "
-            "it out; Read library/cast.png to see them):"
+            "it out; Read library/cast.png to see them)%s:"
             % (
                 "project's cast, from its earlier episodes"
                 if project
-                else "person's cast, from their earlier films"
+                else "person's cast, from their earlier films",
+                "; a collection's films do not share a cast, so bring one back only when this "
+                "film is about that very thing"
+                if collection and "cast" not in kept
+                else "",
             ),
         ]
         for c in cast:
@@ -561,7 +652,15 @@ def note(film):
                     seen,
                 )
             )
-    if memory:
+    if memory and collection:
+        out += [
+            "" if out else None,
+            "The project's earlier films, newest first, and what each chose (Read "
+            "<folder>/poster.jpg to see one; they are here to be told apart from, not to be "
+            "followed):",
+        ]
+        out += [_used(m) for m in memory]
+    elif memory:
         out += [
             "" if out else None,
             "%s, newest first (Read <folder>/about.json, film.js, vo.json, score.json or "
@@ -587,12 +686,14 @@ def note(film):
                 '- %s: "%s" (%s)' % (m["dir"], m.get("title"), "; ".join(b for b in bits if b))
             )
     lib = lib_of(rec)
-    log = canon_note(canon_of(lib)) if project and lib else ""
+    log = canon_note(canon_of(lib), collection) if project and lib else ""
     if log:
         out += ["", log]
-    if project and lib:
+    if project and lib and "music" in kept:  # kept sounds are what a series sounds like
         out += ["", sounds_note(film)]
-    if project and memory:
+    if collection:
+        out += ["", _own_note(kept, memory)]
+    elif project and memory:
         out += [
             "",
             "An episode belongs with the others: keep what makes them one series (the cast, the "
@@ -663,9 +764,10 @@ def _canon_line(i, e, short=False):
     return head + "".join("\n   %s" % b for b in bits if b)
 
 
-def canon_note(entries):
+def canon_note(entries, collection=False):
     """The log as an episode reads it: every episode, oldest first. Past CANON_NOTE_MAX the
-    oldest shrink to their story and catchphrases, so a long series still fits."""
+    oldest shrink to their story and catchphrases, so a long series still fits. collection: the
+    films are not one story (is_collection), so the log only says what has been told."""
     if not entries:
         return ""
     lines = [_canon_line(i, e) for i, e in enumerate(entries, 1)]
@@ -688,6 +790,12 @@ def canon_note(entries):
         gone += 1
     if gone:
         lines.insert(0, "(episodes 1-%d: too many to list)" % gone)
+    if collection:
+        return (
+            "What the project's films have told so far, in order (its log), so that this one "
+            "does not tell one of them again; a fact one of them stated may be stated here:\n"
+            + "\n".join(lines)
+        )
     return (
         "The series so far, every episode in order (the project's episode log). Keep to what "
         "happened: don't reuse a twist, a fact or an episode's own catchphrase unless the brief "

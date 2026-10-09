@@ -68,5 +68,19 @@ What breaks at scale:
     brand books and a made-up one. Still open: a brand dropped on one film's prompt, "use the brand
     from another project", and the MCP tools (an assistant cannot see or set a brand yet).
 
+11. **A project says what it keeps** (asked 2026-10-08, after ten AI news Shorts made in one
+    project looked like one film: "All videos look the same... without hurting when movies
+    actually need to follow a style book like the one for Duchess"). A project is a series, and
+    everything above makes its episodes alike on purpose. A news feed, a run of promos or a
+    channel of one-offs is a collection: its films share a subject and a few rules, and should
+    not be mistaken for each other. So a project has `keep`, any of cast, look, voice, music;
+    not set, it keeps all four and nothing changes for it. With fewer, the studio turns the same
+    record round: what the earlier films chose is listed as what to differ from
+    (`studio/README.md`, "A series, or a collection"). *Built 2026-10-08* (studio
+    `library.keeps`, the site's `lib/projects.js` `keep`, `film.mjs update --keep none`). Still
+    open: the choice on the project's Settings page and in the MCP project tools (it is set from
+    the command line today), and the same turn-round for a series in what its style book does
+    not cover (how an episode opens, its pace).
+
 Open question for the content, not the system: Duchess is "she" in every film so far; the owner
 says "he" (Ukrainian кіт is masculine). The bible settles it.

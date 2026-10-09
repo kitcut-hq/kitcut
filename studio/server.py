@@ -38,7 +38,9 @@ the day's budget still holds.
                                  "preview" events, a signed review/preview.html to watch while it
                                  is made (tools.py PREVIEW).
                                  "project": {id, name, brief, from_account_cast}: an episode of
-                                 the site's project, with the project's library (library.py)
+                                 the site's project, with the project's library (library.py);
+                                 its "keep", a list from cast, look, voice, music, is what its
+                                 films share: without one it is a series and keeps them all
     GET  /api/library            the asker's cast and films; ?project=<id>: that project's, and
                                  its pictures and voice lines. Also GET /api/library/{name}/
                                  thumb.png, DELETE /api/library/{name} (a cast member), each
@@ -1259,6 +1261,12 @@ async def create(req):
             "name": " ".join(str(project.get("name") or "").split())[:80] or "Untitled",
             "brief": str(project.get("brief") or "").strip()[: films.BRIEF_MAX],
             "from_account_cast": project.get("from_account_cast") is True,
+            # what its films share (film.PROJECT_KEEPS). Not given: a series, which keeps it all
+            **(
+                {"keep": [k for k in films.PROJECT_KEEPS if k in project["keep"]]}
+                if isinstance(project.get("keep"), list)
+                else {}
+            ),
         }
     # the narrator the person picked (the site's voice setting, kitcut.ai lib/narrator.js):
     # {"source": "kitcut", "voice": <a Gemini voice>} pins that voice (film.vo_pins); none, or

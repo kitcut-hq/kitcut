@@ -691,6 +691,20 @@ its films, next to `projects\`, never in git:
   Every next episode's note carries the whole log (`library.canon_note`, ~16k characters at most:
   the newest eight whole, older ones shrinking to their story, then their title).
   `ops.sh canon <p-id> [--show | --dry-run | --force]` back-fills a series made before it.
+- **A series, or a collection** (2026-10-08). A project is a series unless it says what it
+  keeps: every episode sees its last five and is told to keep their cast, look, voice and music,
+  and the "recent films chose" tally yields to them. That is right for a show and wrong for a
+  news feed: ten Shorts made in one project came out as one film ten times (same paper, same
+  type, same narrator, same pulse). A project's `keep` (the site's `lib/projects.js`, sent with
+  the film: a list from `film.PROJECT_KEEPS`, cast, look, voice, music) names what its films
+  share; fewer than all four makes it a collection (`library.keeps`, `is_collection`). A
+  collection's film hears what each earlier film chose -- ground colours, type, painting style,
+  voice, instruments and tempo, how much narration and how it opens -- as what to differ from,
+  is not sent to their code, is not told to keep the series, gets no kept sounds unless it keeps
+  its music, and its log says only what has been told. `Film.direction()` records what that
+  needs (`paper`, `accent`, `opening`, `lines`, `words`), read from an older film's files when
+  its record has none. A project with no `keep` hears byte for byte what it heard before
+  (`test_variety.py`). The system prompt is unchanged: all of it is the first message.
 - **Kept sounds** (2026-10-02). An episode's `sounds.json` (named sound effects and themes,
   played by name from sfx.json and score.json: `docs/reference.md`, "Kept sounds") is kept like a
   member: seeded into the next episode, its new and changed entries saved after an ok film, only

@@ -268,6 +268,10 @@ ID = re.compile(r"^studio-\d{8}-\d{6}(-[a-z2-7]{6})?$")
 # a project on the site (a series, a channel): its id, and how long its brief may be
 PROJECT_ID = re.compile(r"^p-[a-z2-7]{10}$")
 BRIEF_MAX = 10000  # a series bible: its household, places, running gags (docs/series-plan.md)
+# what a project's films can share. A series keeps them all, and that is every project that does
+# not say otherwise; a collection (a news feed, a run of promos) names fewer or none, and its
+# films are asked to differ in the rest (library.keeps, library.note)
+PROJECT_KEEPS = ("cast", "look", "voice", "music")
 _B32 = "abcdefghijklmnopqrstuvwxyz234567"
 
 
@@ -464,6 +468,26 @@ def _own_pins(n):
         "lead": VO_PINNED["lead"],
         "gap": VO_PINNED["gap"],
     }
+
+
+_HEX = r"#[0-9a-fA-F]{3,8}"
+_HEX_CONST = re.compile(r"\b([A-Za-z_]\w*)\s*=\s*['\"](%s)['\"]" % _HEX)
+
+
+def ground_colours(js):
+    """{"paper", "accent"}: the two colours a film's code set its ground to (SK.setGround's own
+    object), each as it was written or through a constant it names; {} for a film that kept a
+    ground's own colours."""
+    at = js.find("setGround(")
+    if at < 0:
+        return {}
+    part, consts, out = js[at : at + 900], dict(_HEX_CONST.findall(js)), {}
+    for key in ("paper", "accent"):
+        m = re.search(r"\b%s\s*:\s*(?:['\"](%s)['\"]|([A-Za-z_]\w*))" % (key, _HEX), part)
+        colour = (m.group(1) or consts.get(m.group(2))) if m else None
+        if colour:
+            out[key] = colour.lower()
+    return out
 
 
 def direction_fields(caps):
@@ -784,6 +808,19 @@ class Film:
         cast = sorted({a or b for a, b in CAST_USE.findall(js)})
         if cast:
             d["cast"] = cast
+        # what tells two films apart at a glance and in their first second: the colours it set
+        # its ground to, and how its narration opens and how much of it there is
+        d |= ground_colours(js)
+        lines = vo.get("lines") if isinstance(vo, dict) else None
+        said = [
+            " ".join(str(x.get("text") or "").split())
+            for x in (lines if isinstance(lines, list) else [])
+            if isinstance(x, dict)
+        ]
+        said = [x for x in said if x]
+        if said:
+            d["opening"] = said[0][:90]
+            d["lines"], d["words"] = len(said), sum(len(x.split()) for x in said)
         return d
 
     # ---------------------------------------------------------------- making and finding films
