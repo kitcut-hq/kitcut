@@ -566,6 +566,16 @@ it moves, so nothing above was looking for it. Three additions:
   "could be better" findings of the kinds `text`, `float` and `stray`, each one local change. It
   gets two minutes more for each thing past the second, to fifteen (`fix_s`). Episode 11 had three
   such findings on its list and no fix turn.
+- **A measured gap stands by itself** (`review.measured`). The reader sees frames at a fifth of
+  their size: the head, 12 px off the shoulders on a 1080 px frame, is under three pixels there,
+  and the reader left it out with the machine's note and a close-up in front of it. An `apart`
+  measured for 3 s or more that the reader did not report goes to the fix turn as a must, said
+  as a measurement ("look at a still at full size; join them, or leave them if they are meant").
+
+Episode 11 as it went out, read again with all of this (2026-10-09, one reading): two musts (the
+phone hanging under the hand, the message nobody can read) and the measured head, where the
+reading that shipped had none. Still not found: the city on the sea, which a reader takes for a
+far shore. What stands where is the brief's to get right, not the reader's to catch.
 
 It never fails a film: a reader that raises or runs out of time (`CALL_S`, 5 minutes a call)
 leaves the film as it was. It does not run on a film that was

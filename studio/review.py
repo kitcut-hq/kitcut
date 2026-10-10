@@ -517,6 +517,41 @@ def fix_s(todo):
     return min(FIX_MAX_S, FIX_S + FIX_MORE_S * max(0, len(todo) - 2))
 
 
+# A gap the drawing code measured stands by itself. The reader sees a frame at a fifth of its size:
+# a boy's head 12 px off his shoulders on a 1080 px frame (Leo episode 11, 17 s of it) is under
+# three pixels there, and a reader told to report only what it can see left it out, with the
+# machine's note and its close-up in front of it. So an `apart` the machine measured for MEASURED_S
+# or more that the reader did not report goes to the fix turn as it is, said as a measurement.
+MEASURED_S, MAX_MEASURED = 3.0, 2
+
+
+def measured(findings, events):
+    """The machine's own findings to add to the reader's: a figure in two pieces for MEASURED_S or
+    more, where the reader reported no `apart` in that stretch."""
+    out = []
+    for e in events or ():
+        if e.get("kind") != "apart" or e["t1"] - e["t0"] < MEASURED_S:
+            continue
+        if any(
+            f["kind"] == "apart" and f["t0"] <= e["t1"] and f["t1"] >= e["t0"] for f in findings
+        ):
+            continue
+        out.append(
+            {
+                "t0": round(e["t0"], 1),
+                "t1": round(e["t1"], 1),
+                "kind": "apart",
+                "what": "Measured in the drawing code, not seen by the reader: " + e["text"] + ".",
+                "fix": "Look at a still of that moment at full size. If the two parts belong to "
+                "one body, join them: draw the neck, or bring the upper part down until it "
+                "overlaps the body. If they are meant to be apart, leave them.",
+                "must": True,
+                "measured": True,
+            }
+        )
+    return out[:MAX_MEASURED]
+
+
 def to_fix(findings):
     """What the fix turn is given, in the film's order: what must be fixed (MAX_MUST at most),
     then the small things of an EASY kind that could be better (MAX_EASY at most)."""
@@ -706,6 +741,10 @@ async def gate(film, emit, meter, tools, auth, overtime=False):
             }
         )
         r = await read(view_of(film, tools), ask, log=lambda s: emit({"type": "log", "text": s}))
+        r["findings"] = sorted(
+            r["findings"] + measured(r["findings"], r["events"]),
+            key=lambda f: (not f["must"], f["t0"]),
+        )
         musts = to_fix(r["findings"])  # what the fix turn takes: the musts, then the small things
         out = {
             "findings": r["findings"],
@@ -896,6 +935,10 @@ def main():
         )
 
     r = asyncio.run(read(folder_view(d, title), ask, log=lambda s: print("  " + s, flush=True)))
+    r["findings"] = sorted(
+        r["findings"] + measured(r["findings"], r["events"]),
+        key=lambda f: (not f["must"], f["t0"]),
+    )
     with open(os.path.join(d, "temp", "review-last.json"), "w", encoding="utf-8") as f:
         json.dump(r, f, indent=1, ensure_ascii=False)
     if a.json:

@@ -263,6 +263,20 @@ def main():
         and review.fix_s([1] * 40) == review.FIX_MAX_S,
     )
 
+    ev = [
+        {"t0": 74.0, "t1": 82.5, "kind": "apart", "who": "a figure", "text": "a figure is in two"},
+        {"t0": 90.0, "t1": 91.5, "kind": "apart", "who": "a figure", "text": "briefly"},
+        {"t0": 10.0, "t1": 30.0, "kind": "small", "who": "x", "text": "small words"},
+    ]
+    got = review.measured([], ev)
+    expect(
+        "the gate: a gap the code measured for seconds is a must the reader need not have seen",
+        [(f["t0"], f["kind"], f["must"]) for f in got] == [(74.0, "apart", True)]
+        and got[0]["what"].startswith("Measured in the drawing code")
+        and review.measured([{"kind": "apart", "t0": 75, "t1": 76}], ev) == [],
+        got,
+    )
+
     # ---- the probe, in a real browser
     d = os.path.join(HOME, "probed")
     os.makedirs(os.path.join(d, "cast"))

@@ -1083,6 +1083,10 @@ _small`; `studio/review.py EASY, to_fix, fix_s`; `studio/prompts/review.md`; `st
 - The reader has `apart` (always a must when it lasts) and `float`; words the story needs are a
   must; its fix turn also takes up to three small things (`text`, `float`, `stray`) and gets two
   minutes for each thing past the second. A film whose author ran out of time is read too.
+  A gap the code measured for 3 s or more goes to the fix turn even when the reader did not
+  report it (`review.measured`): at the size the reader sees frames, the head's 12 px gap is
+  under three pixels. Episode 11 read again with all of this: two musts (the phone, the message)
+  and the measured head, where the reading that shipped had none.
 - The brief names, for every look: a body is one piece from every side; everything stands on what
   holds it; light shows what is there; a place has what belongs in it; the picture gets room; the
   last word is heard; words the story needs are a thirtieth of the frame high.
@@ -1092,4 +1096,5 @@ the reader now catch a gap, not a badly drawn back. And a long film is still wri
 every place from nothing: the brief asks for more, nothing makes it so. The split-figure measure
 works on boxes of whole paths, so it finds a clean gap and misses a near one; it reads what is
 drawn through the cast or inside one `SK.at` group, nothing else. The reader's verdicts still
-differ run to run (KI-059).
+differ run to run (KI-059), and the one reading made after the change still took the city on
+the sea for a far shore: what stands where is the brief's to get right.
