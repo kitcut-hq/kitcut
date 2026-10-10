@@ -248,6 +248,9 @@ they were missed:
   it: over 5% of the time frozen, or a drift longer than 3 s with nothing moving, fails. A Short
   cut from a wide film fails it by default (49 to 65% frozen on the first five), so each scene is
   laid out again for the tall frame, not scaled into it.
+- **A channel's own Short ends with a spoken ask to subscribe**, four to five seconds after the
+  payoff line: one sentence naming the channel over a card with its picture, its name and a
+  button pressed as the sentence ends (rule 28; the owner's call on the Padel Tactics Shorts).
 
 The studio does its part for a 9:16 film: the first word 0.1 s in, and the film's own frame 0 as
 the video's first frame (`"cover": false`). By hand, set both: `"lead": 0.1` in `vo.json` and

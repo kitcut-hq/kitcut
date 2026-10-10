@@ -73,7 +73,7 @@ For any Short made from a news story.
 
 | # | Rule | Rests on |
 |---|---|---|
-| 28 | **End on the payoff line.** A small "Made with KitCut" may sit over the last held picture; never an outro card after it. | None of the 25 has an outro card or a logo sting |
+| 28 | **End on the payoff line.** A small "Made with KitCut" may sit over the last held picture; never an outro card after it. **A channel's own Short ends with a spoken ask to subscribe, four to five seconds, after the payoff line:** one sentence naming the channel, over a card with the channel's picture, its name and a subscribe button that is pressed as the sentence ends. It keeps moving (rule 33) and it is the last thing in the film. | None of the 25 has an outro card or a logo sting; 9 of them end with one spoken request. OWNER 2026-10-09, of the Padel Tactics Shorts, after seeing them end on the payoff line with a small "full film on the channel" line: "extend each video with a 4-5 sec extension asking to subscribe to learn more about the channel". The owner's call stands where the two differ; whether it holds for a news Short on KitCut's own channel has not been asked |
 | 29 | **The title names the subject and puts the news in the first 40 characters.** Three hashtags at most. | Sample median 41 characters; YouTube (STRONG) for hashtags |
 | 30 | **A news Short goes out as soon as it is right, at any hour. A flop is never deleted and re-uploaded.** | YouTube's Shorts lead (STRONG) |
 | 31 | **Over 60 seconds, every sound is our own:** a copyright claim of any kind blocks the film worldwide. | YouTube Help (STRONG) |
