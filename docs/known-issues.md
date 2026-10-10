@@ -1090,6 +1090,10 @@ _small`; `studio/review.py EASY, to_fix, fix_s`; `studio/prompts/review.md`; `st
 - The brief names, for every look: a body is one piece from every side; everything stands on what
   holds it; light shows what is there; a place has what belongs in it; the picture gets room; the
   last word is heard; words the story needs are a thirtieth of the frame high.
+- A prompt longer than the studio read was cut at 12,000 characters without a word: the remake's
+  script (20,338) reached its author ending in the middle of part 5 of 11, and the film was
+  finished from the first make's story. `server.PROMPT_MAX` is 30,000 and a longer prompt is
+  refused with a reason (`studio/test_server.py`).
 **Not covered.** The root of two of the four is untouched. A cast member still has only the views
 it was first drawn in, so a film that needs another one still draws it on the spot: the probe and
 the reader now catch a gap, not a badly drawn back. And a long film is still written in one pass,

@@ -169,7 +169,12 @@ ADMIT = asyncio.Lock()  # one admission at a time: the limits are checked and ta
 DRAINING = False
 TOKEN = ""
 MAX_QUEUE = int(os.environ.get("STUDIO_MAX_QUEUE") or 5)
-PROMPT_MAX = 12000  # characters of a prompt: a long pasted brief with its narration fits (the page caps it too)
+# Characters of a prompt. It was 12,000, and a longer one was cut there without a word: the
+# script of Leo episode 11's remake (20,338 characters, sent by scripts/film.mjs, which did not
+# check) reached Claude ending in the middle of part 5 of 11, and the film was finished from the
+# first make's story (2026-10-09). A five-minute script with its art direction runs to 20,000;
+# one longer than this is refused, never trimmed (the page caps it too: lib/projects.js).
+PROMPT_MAX = 30000
 # the public site makes this reachable by anyone: a day's spend, and each client's films, are
 # capped. It must hold at least one film of the longest length's reserve (8 minutes: ~$29,
 # film.limits)
@@ -1193,7 +1198,18 @@ async def create(req):
         body = await req.json()
     except ValueError:
         return web.json_response({"error": 'send JSON: {"prompt": "..."}'}, status=400)
-    prompt = str(body.get("prompt", "")).strip()[:PROMPT_MAX]
+    prompt = str(body.get("prompt", "")).strip()
+    if (
+        len(prompt) > PROMPT_MAX
+    ):  # said, not cut: a film made from half its script is the wrong film
+        return web.json_response(
+            {
+                "error": "That prompt is %d characters; the studio reads up to %d. Shorten it."
+                % (len(prompt), PROMPT_MAX),
+                "reason": "prompt",
+            },
+            status=400,
+        )
     tpl = frame = None
     if body.get("template") is not None:  # a remake of a template, as asked (templates.py)
         tpl, frame, err = template_of(body, from_this_machine(req))

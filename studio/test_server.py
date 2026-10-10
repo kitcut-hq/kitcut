@@ -725,6 +725,16 @@ async def main():
         check(TOKEN not in page, "the page relayed by the tunnel does not")
         r = await c.post("/api/films", json={"prompt": "x" * 10, "seconds": 7}, headers=auth)
         check(r.status == 400 and "seconds" in (await r.json())["error"], "a length off the list")
+        r = await c.post(
+            "/api/films",
+            json={"prompt": "x" * (server.PROMPT_MAX + 1), "seconds": 15},
+            headers=auth,
+        )
+        said = await r.json()
+        check(
+            r.status == 400 and said.get("reason") == "prompt" and "Shorten" in said["error"],
+            "a prompt longer than the studio reads is refused, not cut (it was cut at 12,000)",
+        )
 
         # ------------------------------------------------ three films at once, three clients
         ids = []

@@ -171,7 +171,7 @@ curl -s $BASE/api/health                                      # running, queued,
 
 **Poll the status, every 2-5 s.** There is no push, because quick tunnels do not carry
 server-sent events. A 10 s film takes about 8-12 minutes, a minute-long one about half an hour,
-most of it Claude (the site's `estimateMinutes`). The prompt is capped at 12000 characters.
+most of it Claude (the site's `estimateMinutes`). A prompt may be up to 30,000 characters (`server.PROMPT_MAX`; it was 12,000 until 2026-10-09); a longer one is refused, never trimmed.
 `GET /api/limits` (no token) lists the limits a person can meet, with no money in it: the
 site's docs (kitcut.ai/docs) are built from it, so a change to a limit here means rebuilding
 them (`npm run docs` in sketch-studio).
