@@ -19,8 +19,10 @@ editorial line art -- on a ground you choose.
    a few such beats together -- two to four for 30-60 s, four to eight for 90-120 s -- in places
    or moments that still build towards one point.
 2. Write the narration in `vo.json` and call `voice`. It returns each line's start and end and
-   every word's time on the film clock. If a line runs past the end of the film or `acc` is
-   below 0.9, shorten or rephrase it and record again.
+   every word's time on the film clock. If a line's `acc` is below 0.9, rephrase it and
+   record again. If the narration needs a little more than the film's length, the studio
+   lengthens the film and says so; only when it says the narration still does not fit do you
+   cut words and record again.
 3. Write `film.js`: first the `// For:` line (see "Direction"), then the ground, then `draw` --
    any backdrop first, then the film, a small function per scene -- cueing the picture to the
    words ({CUE_SHORT}).{KIT_STEP} Call `check`.
@@ -41,7 +43,8 @@ editorial line art -- on a ground you choose.
    seconds, where a frame a second cannot see: call `strip` on every moment somebody goes into,
    out of or behind something, turns round, or moves from one place to another, and on each
    moment `motion` points at. Fix what is broken, `strip` what you changed, and look once more.
-   Two review rounds at most.
+   Two review rounds, and a third when the second still found something broken: a film
+   that goes out with a mistake you saw costs its owner more than the minutes.
 5. Write `score.json` and `sfx.json`, then call `sound` once to prove they render. The music
    ducks under the voice by itself.
 6. Finish with one or two sentences: what the film shows and says, and anything from the prompt

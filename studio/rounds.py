@@ -795,7 +795,8 @@ score.json, sfx.json%(extra)s, and the recording's timeline in audio/vo/timeline
 copy of the engine is in engine/ (when it differs from the reference above, the film's copy is \
 what runs). Read film.js first.
 
-Length: %(length)d seconds, fixed: the film still ends where it ends. Your working time: about \
+Length: %(length)d seconds: the film still ends where it ends (if a line you change needs a \
+little more, the studio lengthens the film and says so). Your working time: about \
 %(minutes)d minutes (waiting for the machine is not counted).
 
 The notes (also in notes/notes.md):

@@ -87,7 +87,31 @@ def main():
         )
         expect(
             "%s: the review reads the whole film and looks inside the seconds" % look,
-            "film-NN.jpg" in p and "`strip`" in p and "Two review rounds at most" in p,
+            "film-NN.jpg" in p and "`strip`" in p and "Two review rounds, and a third" in p,
+        )
+        # 2026-10-09, after Leo episode 11 came back from its owner: the faults it was sent back
+        # for are named for every look, and the length is a target the narration may run past
+        expect(
+            "%s: what an owner sends a film back for is named" % look,
+            all(
+                x in p
+                for x in (
+                    "A body is one piece from every side",
+                    "Everything stands on what holds it",
+                    "Light shows what is there",
+                    "A place has what belongs in it",
+                    "The picture gets room",
+                    "The last word is heard",
+                    "thirtieth of its height",
+                )
+            ),
+        )
+        expect(
+            "%s: the length is a target, and a line may ask for quiet before it" % look,
+            "a target, not a wall" in p
+            and '"pause": 1.5' in p
+            and "lengthens the film and says so" in p
+            and "is fixed, whatever" not in p,
         )
     expect(
         "drawn: what a viewer takes for a mistake is named",

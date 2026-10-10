@@ -301,7 +301,8 @@ VEIL, VEIL_S = 0.08, 2.0
 # ... and showing: the tint above moved the median pixel by 17-25 of 255; a veil nobody could
 # see (a film's flash glow building up off the frame) by 0
 VEIL_SEEN = 6
-KINDS = ("double", "cut", "into", "sliver", "wash", "jump", "squash", "pop")  # most telling first
+# most telling first
+KINDS = ("double", "cut", "apart", "into", "sliver", "wash", "jump", "squash", "small", "pop")
 
 
 def shown(events, d):
@@ -393,6 +394,89 @@ def _index_runs(idx):
             runs.append((a, i))
             a = None
     return runs
+
+
+# A figure in two pieces (probe.js `g`), and words set small (`x`). Both are measured, not judged:
+# Leo episode 11 (odoais, 2026-10-09) showed a boy from behind with his head and cap floating over
+# his shoulders for 17 s and a phone message 14 px tall, went through a reader who was not asked
+# about either, and came back from its owner ("Mickey's head is disconnected", "Mom's call is
+# unclear if it's a call or text").
+APART_S = 1.5  # a figure split for this long is seen (a boiling line opens a gap for a moment)
+SMALL = 0.030  # of the frame's height: type smaller than this on the finished frame (32 px of 1080)
+SMALL_S = 1.5  # ... shown this long is there to be read
+SMALL_MAX = 6  # the smallest ones are told; a chart's twenty labels are one finding, not twenty
+
+
+def _where(x0, y0, x1, y1):
+    cx, cy = (x0 + x1) / 2000, (y0 + y1) / 2000
+    col = "left" if cx < 0.36 else "right" if cx > 0.64 else "middle"
+    row = "top" if cy < 0.36 else "bottom" if cy > 0.64 else "middle"
+    return "the middle" if (col, row) == ("middle", "middle") else "the %s %s" % (row, col)
+
+
+def _apart(report, t_of, step):
+    """Events for figures drawn in two pieces, one above the other with nothing between."""
+    keys, out = report.get("keys") or [], []
+    at = {}  # who -> {frame index: (gap, box)}
+    for i, f in enumerate(report["frames"]):
+        for x0, y0, x1, y1, gap, k in f.get("g") or ():
+            who = keys[k].partition(".")[0] if 0 <= k < len(keys) else "a figure"
+            if gap > at.setdefault(who, {}).get(i, (0, None))[0]:
+                at[who][i] = (gap, (x0, y0, x1, y1))
+    for who, fr in at.items():
+        for i0, i1 in _index_runs(fr):
+            if (i1 - i0 + 1) * step < APART_S:
+                continue
+            gap, box = max((fr[i] for i in range(i0, i1 + 1)), key=lambda v: v[0])
+            out.append(
+                {
+                    "t0": round(t_of[i0], 2),
+                    "t1": round(t_of[i1], 2),
+                    "kind": "apart",
+                    "who": who,
+                    "text": "%s is drawn in two pieces from %s to %s, in %s of the frame: its upper "
+                    "part sits above the rest with a gap of %d%% of its height between them (a "
+                    "head or a hat that is not joined to its body?)"
+                    % (who, _clock2(t_of[i0]), _clock2(t_of[i1]), _where(*box), round(gap / 10)),
+                }
+            )
+    return out
+
+
+def _small(report, t_of, step):
+    """Events for words set too small to read on the finished frame, the smallest first."""
+    H, at = report.get("h") or 1080, {}  # text -> {frame index: height in thousandths}
+    for i, f in enumerate(report["frames"]):
+        for _x0, _y0, _x1, _y1, hgt, text in f.get("x") or ():
+            if hgt < SMALL * 1000:
+                at.setdefault(text, {})[i] = min(hgt, at.get(text, {}).get(i, 1000))
+    out = []
+    for text, fr in at.items():
+        for i0, i1 in _index_runs(fr):
+            if (i1 - i0 + 1) * step < SMALL_S:
+                continue
+            hgt = min(fr[i] for i in range(i0, i1 + 1))
+            out.append(
+                {
+                    "t0": round(t_of[i0], 2),
+                    "t1": round(t_of[i1], 2),
+                    "kind": "small",
+                    "who": text,
+                    "size": hgt,
+                    "text": "the words %r are set %d px tall on a %d px frame from %s to %s: too "
+                    "small to read at normal speed (words the story needs want %d px or more)"
+                    % (
+                        text,
+                        round(hgt * H / 1000),
+                        H,
+                        _clock2(t_of[i0]),
+                        _clock2(t_of[i1]),
+                        round(H / 30),
+                    ),
+                }
+            )
+    out.sort(key=lambda e: (e["size"], e["t0"]))
+    return [{k: v for k, v in e.items() if k != "size"} for e in out[:SMALL_MAX]]
 
 
 def events(report, step=None):
@@ -628,6 +712,7 @@ def events(report, step=None):
                     " (flipped or spun through flat)" if kind == "sliver" else "",
                 ),
             )
+    out += _apart(report, t_of, step) + _small(report, t_of, step)
     # one event for one thing: a spin that passes through flat five times is one spin
     out.sort(key=lambda e: (e["kind"], e["who"], e["t0"]))
     merged = []

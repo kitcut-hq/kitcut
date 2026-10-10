@@ -665,6 +665,10 @@
    * film that goes from day to night); otherwise the one SK.setGround chose holds throughout.
    */
   SK.film = function (def) {
+    // A film is as long as its manifest says (SK.LENGTH, set by the page before the film's code).
+    // Sketch Studio lengthens a film whose narration needs a little more than was asked for, after
+    // film.js wrote its own figure: the fade-out and the last scene follow the real end.
+    if (typeof SK.LENGTH === 'number' && SK.LENGTH > 0) def.duration = SK.LENGTH;
     // a film made in scenes (below) has no draw() of its own: it draws the scene covering t, with
     // that scene's camera when it has one. Set here, not in render, so anything that wraps the
     // film (Sketch Studio's closing, studio/outro.js) wraps this too.

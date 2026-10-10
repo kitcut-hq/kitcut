@@ -202,6 +202,67 @@ def main():
         ev,
     )
 
+    # ---- a figure in two pieces, and words set small (probe.js's `g` and `x`)
+    def marked(g=None, x=None, n=60):
+        r = film(still, n=n)
+        for i, f in enumerate(r["frames"]):
+            if g and g(i):
+                f["g"] = g(i)
+            if x and x(i):
+                f["x"] = x(i)
+        return r
+
+    split = [[400, 500, 480, 800, 40, -1]]
+    ev = motion.events(marked(g=lambda i: split if 10 <= i < 40 else None))
+    expect(
+        "events: a figure drawn in two pieces for three seconds is apart, and where",
+        kinds(ev) == ["apart"]
+        and ev[0]["t0"] == 1.0
+        and ev[0]["who"] == "a figure"
+        and "two pieces" in ev[0]["text"]
+        and "gap of 4%" in ev[0]["text"],
+        ev,
+    )
+    expect(
+        "events: ... for half a second it is a boiling line, and nobody's glitch",
+        motion.events(marked(g=lambda i: split if 10 <= i < 15 else None)) == [],
+    )
+    ev = motion.events(marked(g=lambda i: [[400, 500, 480, 800, 40, 1]] if i >= 10 else None))
+    expect("events: a cast member in two pieces is named", [e["who"] for e in ev] == ["cat"], ev)
+    words = [
+        [100, 100, 400, 130, 26, "Why are you not home yet?"],
+        [100, 200, 400, 250, 41, "Where are you?"],
+    ]
+    ev = motion.events(marked(x=lambda i: words if i >= 20 else None))
+    expect(
+        "events: words under a thirtieth of the frame for seconds are small; bigger ones are not",
+        kinds(ev) == ["small"] and ev[0]["who"].startswith("Why are") and "28 px" in ev[0]["text"],
+        ev,
+    )
+    expect(
+        "events: ... and words that flash by are not there to be read",
+        motion.events(marked(x=lambda i: words if 20 <= i < 30 else None)) == [],
+    )
+    expect(
+        "the gate: the fix turn takes the musts, then three of the small things, in order",
+        [
+            f["what"]
+            for f in review.to_fix(
+                [
+                    {"t0": 9, "kind": "text", "must": False, "what": "c"},
+                    {"t0": 5, "kind": "apart", "must": True, "what": "a"},
+                    {"t0": 7, "kind": "idle", "must": False, "what": "x"},
+                    {"t0": 6, "kind": "float", "must": False, "what": "b"},
+                    {"t0": 8, "kind": "cutoff", "must": False, "what": "y"},
+                ]
+            )
+        ]
+        == ["a", "b", "c"]
+        and review.fix_s([1]) == review.FIX_S
+        and review.fix_s([1] * 4) == review.FIX_S + 2 * review.FIX_MORE_S
+        and review.fix_s([1] * 40) == review.FIX_MAX_S,
+    )
+
     # ---- the probe, in a real browser
     d = os.path.join(HOME, "probed")
     os.makedirs(os.path.join(d, "cast"))

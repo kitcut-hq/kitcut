@@ -290,6 +290,27 @@ def tts_model():
     return os.environ.get("STUDIO_TTS_MODEL", "").strip() or TTS_MODEL
 
 
+# A film's length is what was asked for, and a target: when its narration needs a little more, the
+# film runs longer instead of losing its last words. Until 2026-10-09 the length was a wall: Leo
+# episode 11 (odoais, 240 s) recorded a last line that ended at 240.58 s, had no recording left to
+# shorten it, and went out with "We're at the car." faded out under its last word. Its owner: "the
+# end is cut too, the phrase is cut ... we need to soften the hard stop. It's okay if we go beyond
+# the 4 min or any other set timer."
+GROW = 0.25  # of the length asked for ...
+GROW_MIN_S = 10  # ... and at least this, so a 15 s film may finish its sentence too
+TAIL_S = 1.5  # what a film keeps after its last word: the word rings, the picture and music close
+SHORT_MAX_S = 180  # YouTube takes a vertical film up to three minutes as a Short
+
+
+def may_run_to(asked, frame=None):
+    """The longest a film asked for at `asked` seconds may run (whole seconds). A vertical film
+    that was asked for inside YouTube's Short limit stays inside it."""
+    top = int(asked + max(GROW_MIN_S, GROW * asked))
+    if frame == "9:16" and asked <= SHORT_MAX_S:
+        top = min(top, SHORT_MAX_S)
+    return max(int(asked), top)
+
+
 def limits(length):
     """What one film may take, by its length in seconds. The 5-15 s figures are measured; past
     that they grow with the length (a minute of film is more work, not four times the thinking).
@@ -313,7 +334,10 @@ def limits(length):
         "render_s": int(slow * (300 + 15 * length)),
         "sound_s": int(slow * max(300, 120 + 5 * length)),
         "voice_s": int(slow * max(300, 180 + 5 * length)),
-        "lines": 6 if length <= 15 else max(12, -(-length // 5)),  # narration sentences
+        # narration sentences: one for every 3 s (it was every 5: a film with dialogue, whose lines
+        # are a few words each, had to merge them, and a merged line cannot pause for its gag --
+        # odoais merged 59 lines into 48 and ran with no pause from start to end)
+        "lines": 6 if length <= 15 else max(12, -(-length // 3)),
         "tts_usd": max(0.30, 0.005 * length),  # what the narration may cost, retakes included
         # recordings (voice runs), retakes included: 6 was plenty up to a minute; an 8-minute film
         # has ~96 lines, and a line the voice model refuses costs a run too
@@ -685,6 +709,36 @@ class Film:
     def length(self):
         with open(self.manifest, encoding="utf-8") as f:
             return round(float(json.load(f)["duration"]))
+
+    @property
+    def asked(self):
+        """The length it was asked for: what its record says, whatever it has grown to since."""
+        try:
+            return int(self.record().get("length") or 0) or self.length
+        except (OSError, ValueError, TypeError):
+            return self.length
+
+    def run_to(self, seconds):
+        """Make the film this long (whole seconds), in its manifest: what its narration is laid
+        out on, its sound mixed to and its picture rendered to. The record's `length` stays what
+        was asked for; `runs` says what it became when that is longer."""
+        seconds = int(seconds)
+        with open(self.manifest, encoding="utf-8") as f:
+            m = json.load(f)
+        was = float(m["duration"])
+        if seconds == round(was):
+            return
+        # the poster is the film's last picture unless something chose another (a template's own)
+        at = m.get("poster_t")
+        if at is None or at == round(was - 0.4, 2) or at > seconds - 0.2:
+            m["poster_t"] = round(seconds - 0.4, 2)
+        m["duration"] = float(seconds)
+        tmp = self.manifest + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(m, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, self.manifest)
+        asked = self.asked
+        self.update(runs=seconds if seconds != asked else None)
 
     # ---------------------------------------------------------------- what Claude may touch
     def editable(self):

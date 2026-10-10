@@ -468,6 +468,24 @@ docs/studio-scenes-plan.md.
    finished anyway (`overtime` on its record); one whose picture is written gets one short last
    turn in the same session to write what is missing (`wrap_up`, 4 minutes); only then does it
    fail.
+   **The length is a target, not a wall** (`film.may_run_to`, `tools.fit_length`, 2026-10-09).
+   The film is written to the length asked for, and the narration's word budget is unchanged
+   (`agent.narration_words`). But after every recording, and once more before the final mix, the
+   studio makes the film as long as its narration needs: a last word that ends within 0.8 s of
+   the end (under the closing fade) or past it lengthens the film to 1.5 s after that word
+   (`TAIL_S`), up to a quarter over what was asked and ten seconds at least (`GROW`,
+   `GROW_MIN_S`; a vertical film asked for inside YouTube's three minutes stays inside them). A
+   narration recorded shorter again brings the film back; it never goes below what was asked.
+   Only past that allowance is Claude told to cut words. The manifest's `duration` is what
+   changes; the record keeps `length` (what was asked: credits, limits) and gets `runs` (what it
+   became). `SK.film` plays to the manifest's length whatever `duration` film.js names
+   (`SK.LENGTH`, set by the page: `sketch/engine.js`), so the fade-out follows the real end. A
+   template's film keeps its template's length. A line may ask for quiet before it
+   (`{"text": ..., "pause": 1.5}`: `sketch-vo.py`, `validate.MAX_PAUSE_S`), which is how a gag
+   gets a beat without words, and a film may have a narration line for every 3 s (it was every
+   5: `film.limits`). Before this, the length was fixed: Leo episode 11 (odoais) went out with
+   its last line faded under its last word and 59 lines merged into 48 with no pause anywhere
+   (docs/known-issues.md, KI-062).
 4. The studio reads the finished film once more itself, and Claude gets one bounded turn to fix
    what must be fixed ("A second pair of eyes" below).
 5. The studio then mixes the soundtrack and renders the video (three browsers at once), and the
@@ -507,7 +525,7 @@ folders stay out of the repo).
 - **The reader** (`review.py`). After the author's last turn the studio lays the film out the
   same way and a fresh Claude, with no tools and nothing of the author's conversation, reads it
   against a fixed list of glitch kinds (`prompts/review.md`: through, squash, double, poke, idle,
-  untold, wash, stray, text, cutoff, continuity -- never taste). Two calls: the whole film, with
+  untold, wash, stray, text, apart, float, cutoff, continuity -- never taste). Two calls: the whole film, with
   the narration's times and the machine's notes; then close-ups of the moments it and the machine
   asked for. A finding is a `must` only when a viewer would call it a mistake at normal speed;
   one about framing or continuity never is (`SOFT`), and a body through a wall, squashed or twice
@@ -522,8 +540,35 @@ folders stay out of the repo).
   `review` on the film's record (`outcome`: clean, fixed, or kept as it was and why), its cost in
   `review_cost_usd`, its time in `stages.review`.
 
+**What its owner sent a film back for (2026-10-09, KI-062).** Leo episode 11 was read "clean" and
+came back the same evening: a boy seen from behind with his head floating over his shoulders, a
+city drawn on the sea, a phone message too small to read, a phone hanging under a hand. None of
+it moves, so nothing above was looking for it. Three additions:
+
+- **Two more measurements in the probe.** `g`: a figure drawn in two pieces. A figure is what one
+  cast call draws (not a place) or one `SK.at(...)` group of the film's own code; the boxes of
+  the solid marks drawn inside it (each cut to the clip in force, so a wash's texture counts as
+  its shape) are projected on the vertical, and a band of nothing that leaves an upper and a
+  lower piece, each of four marks or more and 12% of the figure's height or more, one above the
+  other, is a gap. `motion.events` tells it as `apart` when it lasts 1.5 s (`APART_S`: a boiling
+  line opens a gap for a moment; a sun's rays did, for 0.75 s at a time). `x`: words set small.
+  `SK.txt` is wrapped (it draws a string a character at a time), and the type size is taken as it
+  lands on the frame, under the camera's zoom; under 3% of the frame's height (`SMALL`, 32 px of
+  1080) for 1.5 s it is told as `small`, the six smallest. On episode 11 as it went out: the head
+  (1:14 to 1:22 and 1:30) and the message ("Why are you not home yet?", 28 px beside 44 px
+  lines). Both are measurements that point; they are in the author's `motion` and in the
+  reader's notes, and `apart` gets a close-up.
+- **Two more kinds for the reader** (`prompts/review.md`): `apart` (a body in pieces: always a
+  must when it lasts, `HARD`) and `float` (what should stand on the ground or be held does not:
+  buildings on water, a post through the road, a phone beside a hand). Words the story needs
+  that cannot be read are a must.
+- **The fix turn takes small things too** (`review.to_fix`, `EASY`): after the musts, up to three
+  "could be better" findings of the kinds `text`, `float` and `stray`, each one local change. It
+  gets two minutes more for each thing past the second, to fifteen (`fix_s`). Episode 11 had three
+  such findings on its list and no fix turn.
+
 It never fails a film: a reader that raises or runs out of time (`CALL_S`, 5 minutes a call)
-leaves the film as it was. It does not run when Claude's time was already up, on a film that was
+leaves the film as it was. It does not run on a film that was
 read before (one carried on after a restart), on a film remade from a template (a remake of a film
 a person approved, whose flips and wipes are meant: not measured yet), or when Claude is stood in
 for by a test. A film made in scenes has no one session to fix it in once it is whole, so it is

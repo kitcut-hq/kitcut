@@ -2527,7 +2527,9 @@ async def files(req):
     if req.match_info["path"] == "card.jpg" and not os.path.isfile(p):
         if os.path.isfile(os.path.join(d, "film_poster.png")):
             f = film_of(req.match_info["id"])
-            await asyncio.to_thread(media.make_card, d, f.record().get("length") or f.length)
+            await asyncio.to_thread(
+                media.make_card, d, f.record().get("runs") or f.record().get("length") or f.length
+            )
     if not os.path.isfile(p):
         raise web.HTTPNotFound()
     headers = {"Cache-Control": "no-cache"}

@@ -1452,6 +1452,59 @@ async def main():
             and "keep the narration you have" in tools_mod.recording_refused(late_film, runs),
             "a narration that fits has the film's limit, no more",
         )
+        # ...and the length is a target, not a wall (2026-10-09): a narration that ends under the
+        # closing fade, or a little past the end, lengthens the film instead of losing its words
+        check(
+            (films.may_run_to(240), films.may_run_to(15), films.may_run_to(60, "9:16"))
+            == (300, 25, 75)
+            and films.may_run_to(170, "9:16") == 180
+            and films.may_run_to(170) == 212,
+            "a film may run a quarter over what was asked (ten seconds at least), a Short to 180 s",
+        )
+        lay((1, 50), (50.5, 58))
+        check(tools_mod.fit_length(late_film) is None, "a narration that fits changes nothing")
+        lay((1, 50), (50.5, 60.58))
+        got = tools_mod.fit_length(late_film)
+        with open(late_film.path("audio", "vo", "timeline.json"), encoding="utf-8") as f:
+            grown_tl = json.load(f)
+        check(
+            got == {"was": 60, "now": 63, "asked": 60, "ends": 60.58, "top": 75}
+            and late_film.length == 63
+            and late_film.asked == 60
+            and late_film.record().get("length") == 60
+            and late_film.record().get("runs") == 63
+            and grown_tl["duration"] == 63
+            and tools_mod.narration_over(late_film) is None
+            and "the film is now 63 s long" in tools_mod.grown_note(got),
+            "a last line past the end makes the film longer, and says so: %r" % (got,),
+        )
+        lay((1, 50), (50.5, 59.5))
+        check(
+            tools_mod.fit_length(late_film)["now"] == 61 and late_film.length == 61,
+            "a last word under the closing fade gets its second and a half too",
+        )
+        lay((1, 50), (50.5, 58))
+        back = tools_mod.fit_length(late_film)
+        check(
+            back["now"] == 60
+            and late_film.length == 60
+            and not late_film.record().get("runs")
+            and "60 s long again" in tools_mod.grown_note(back),
+            "a narration recorded shorter brings the film back to what was asked",
+        )
+        lay((1, 50), (50.5, 70), (71, 90))
+        far = tools_mod.fit_length(late_film)
+        over = tools_mod.narration_over(late_film)
+        check(
+            far["now"] == 75
+            and late_film.length == 75
+            and over["ends"] == 90
+            and over["length"] == 75
+            and "asked for at 60 s may run" in tools_mod.fit_advice(late_film, 0),
+            "past what a film may run to, it is as long as it may be and the words are cut back",
+        )
+        lay((1, 50), (50.5, 58))
+        tools_mod.fit_length(late_film)
 
         # ------------------------------------------------ the server stops: interrupted, not cancelled
         r = await c.post(

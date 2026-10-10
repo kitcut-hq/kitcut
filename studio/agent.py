@@ -70,6 +70,7 @@ from film import (  # noqa: E402
     fills,
     frame_note,
     limits,
+    may_run_to,
     mark_note,
     paint_kinds,
     paint_words,
@@ -335,13 +336,16 @@ def ask(film, recent=()):
     look (and so stays cached). A remake of a template gets the template's own (templates.ask)."""
     if film.record().get("template"):
         return templates.ask(film) + mark_note(film)
-    n = film.length
+    n = film.asked
     text = (
-        "Make the film.\n\nLength: %d seconds (fixed). Narration: about %d words, ending by "
+        "Make the film.\n\nLength: %d seconds: what was asked for, and what to write to. If the "
+        "narration as recorded needs a little more, the studio lengthens the film to fit it (to "
+        "%d s at most) rather than cut its last words. Narration: about %d words, ending by "
         "about %d s. Your working time: about %d minutes (waiting for the machine is not "
         "counted); keep the last few for the music, the cues and the sound check.\n\nPrompt: %s"
         % (
             n,
+            may_run_to(n, film.record().get("frame")),
             narration_words(n),
             n - closing_s(n),
             limits(n)["claude_s"] // 60,
@@ -1272,7 +1276,9 @@ async def make_film(
     if film.record().get("server") != peers.SERVER_ID:
         film.update(server=peers.SERVER_ID)
     rec = film.record()
-    prompt, length, look = rec.get("prompt", ""), film.length, film.look
+    # the length asked for: a film may have grown past it (film.may_run_to), and a film picked up
+    # again must not take what it grew to for what was asked
+    prompt, length, look = rec.get("prompt", ""), film.asked, film.look
     # an earlier attempt's Claude part, costed by the server that ran it: carried, not replaced
     carry = rec if (finish_only or resume) else {}
     prior_calls = None  # finish_only: the record's per-call detail is left as it is
@@ -1737,6 +1743,9 @@ async def make_film(
         else:
             debrand(film)
 
+        # once more before the mix: whatever was recorded last, the film ends after its last word
+        await asyncio.to_thread(tools_mod.fit_length, film)
+
         s = time.time()
         emit({"type": "stage", "name": "sound", "text": "Mixing the soundtrack"})
         wav = film.path("audio", "final.wav")
@@ -1749,7 +1758,11 @@ async def make_film(
 
         s = time.time()
         emit(
-            {"type": "stage", "name": "render", "text": "Rendering %d frames" % round(length * fps)}
+            {
+                "type": "stage",
+                "name": "render",
+                "text": "Rendering %d frames" % round(film.length * fps),
+            }
         )
         await tools.render()
         stages["render"] = time.time() - s

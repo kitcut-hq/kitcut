@@ -1156,6 +1156,7 @@ def main():
                 "__FILM__",
                 "__FONTFACES__",
                 "__VO__",
+                "__LENGTH__",
                 "__IMAGES__",
                 "__PREVIEW__",
             )

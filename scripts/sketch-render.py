@@ -372,6 +372,8 @@ def bundle(m, audio=True, preview=None):
         "__SCENES__": "" if bare else scene_scripts(m),
         "__AUDIO__": src,
         "__VO__": json.dumps(vo_timeline(m)),
+        # the film's length as the manifest has it: SK.film takes it over film.js's own figure
+        "__LENGTH__": json.dumps(float(m["duration"])),
         "__DATA__": json.dumps(film_data(m), ensure_ascii=False),
         "__IMAGES__": json.dumps(
             {

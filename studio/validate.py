@@ -37,7 +37,8 @@ MAX_SCENE_JS = 64 * 1024  # one scene of a film made in scenes: 12-75 s, not a w
 # writes must be here, or the guard puts it back and this refuses it on every check
 VO_KEYS = set(VO_PINNED) | {"model", "voice", "style", "language", "lines", "cast", "jobs", "say"}
 # "who": the person (film.CAPS "people") who speaks a line; "cast" gives each their voice
-VO_LINE_KEYS = {"text", "start", "who"}
+VO_LINE_KEYS = {"text", "start", "who", "pause"}
+MAX_PAUSE_S = 15  # the quiet a line may ask for before it: a gag's beat, a sunset without words
 MAX_LINE_CHARS = 300  # and at most film.limits()["lines"] lines
 PAINT_KEYS = set(PAINT_PINNED) | {"style", "images", "cutouts"}
 # a cut-out (film.CAPS "cutouts") is painted on a canvas of its own shape
@@ -139,7 +140,9 @@ def _vo(d, max_lines, length=60, people=()):
         if len(ln["text"]) > MAX_LINE_CHARS:
             out.append("vo.json: line %d is over %d characters" % (i, MAX_LINE_CHARS))
         if set(ln) - VO_LINE_KEYS:
-            out.append("vo.json: line %d may only have text (and start, who)" % i)
+            out.append("vo.json: line %d may only have text (and pause, start, who)" % i)
+        if "pause" in ln and not _num(ln["pause"], 0, MAX_PAUSE_S):
+            out.append("vo.json: line %d pause is seconds, 0-%d" % (i, MAX_PAUSE_S))
         if "who" in ln and not own and (ln["who"] not in people or ln["who"] not in cast):
             out.append(
                 "vo.json: line %d who %r must be one of this film's people with a voice in cast"

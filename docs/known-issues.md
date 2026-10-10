@@ -1047,3 +1047,49 @@ films had versions; the other two were never rendered in place).
 **Not covered:** a film made in scenes is still changed in place. Someone with a shell on the VM
 can still write into a film's folder; the next round of that film then fails rather than hiding
 it, and nothing is said until then.
+
+### KI-062 · mitigated · studio · A film went out read "clean" with a head off its shoulders, a city on the sea and its last line cut
+
+**Symptom.** 2026-10-09, studio-20261009-160711-odoais (Leo, episode 11, "The Big Hike", 240 s).
+Its owner, the same evening: "There are glitches in this video. Why you didn't catch them. Houses
+were flying in the water and air. Mickey's head is disconnected. Mom's call is unclear if it's
+called or text. The scenes backgrounds are poor too. We could show more details on a hike. The end
+is cut too, the phrase is cut." All of it was plain on a one-frame-a-second sheet.
+**Cause.** Four separate things, none of them motion, which is all the gate of KI-059 looked for.
+- *The length was a wall.* A film's length was fixed, and the narration had to be cut to it. The
+  script asked for 59 short lines; a 240 s film may have 48 (one per 5 s), so lines were merged,
+  the voice tool laid them 0.35 s apart from the first second to the last, and the last line ended
+  at 240.58 s with every recording spent. It was faded out under its last word. The author had no
+  way to ask for a pause either: a line's `start` was allowed and never mentioned.
+- *The reader had no word for what was wrong.* Its kinds were about moving bodies. It read the
+  film in six minutes, found seven things that "could be better" (a message too small to read, a
+  phone hanging under a hand, a lamp post through the road among them), no must, and called it
+  clean; nothing that could be better was ever given to the fix turn.
+- *A character had one view.* Mikey's cast member is drawn from the front. The film needed him
+  from behind and drew that in its own code, with a gap of sky between his hair and his shoulders,
+  for 17 seconds. The probe only names what is drawn through the cast.
+- *One pass draws every place.* Ten places in four minutes, written in one sitting to a clock:
+  one flat hill for the whole climb. The brief had nothing to say about that.
+**Fixed** (`studio/film.py may_run_to, Film.run_to`; `studio/tools.py fit_length`; `sketch/engine.js
+SK.LENGTH`; `scripts/sketch-vo.py "pause"`; `sketch/probe.js g, x`; `studio/motion.py _apart,
+_small`; `studio/review.py EASY, to_fix, fix_s`; `studio/prompts/review.md`; `studio/prompt.md`).
+- The length is a target: the film grows to fit its narration, to a quarter over what was asked
+  (ten seconds at least), 1.5 s after the last word; the record keeps what was asked. A line may
+  ask for quiet before it (`pause`), and a film may have a line for every 3 s.
+- The probe measures two more things, a figure in two pieces and words set small, and says them
+  to the author and to the reader. On episode 11 as it went out they find the head (1:14 to 1:22)
+  and the message (28 px beside 44 px lines), and one sun whose rays open a gap for under a
+  second, which the 1.5 s rule drops.
+- The reader has `apart` (always a must when it lasts) and `float`; words the story needs are a
+  must; its fix turn also takes up to three small things (`text`, `float`, `stray`) and gets two
+  minutes for each thing past the second. A film whose author ran out of time is read too.
+- The brief names, for every look: a body is one piece from every side; everything stands on what
+  holds it; light shows what is there; a place has what belongs in it; the picture gets room; the
+  last word is heard; words the story needs are a thirtieth of the frame high.
+**Not covered.** The root of two of the four is untouched. A cast member still has only the views
+it was first drawn in, so a film that needs another one still draws it on the spot: the probe and
+the reader now catch a gap, not a badly drawn back. And a long film is still written in one pass,
+every place from nothing: the brief asks for more, nothing makes it so. The split-figure measure
+works on boxes of whole paths, so it finds a clean gap and misses a near one; it reads what is
+drawn through the cast or inside one `SK.at` group, nothing else. The reader's verdicts still
+differ run to run (KI-059).

@@ -21,6 +21,7 @@ asks for them together. What a tool returns is short: the problem to fix, or wha
 
 import os
 import json
+import math
 import time
 import shutil
 import asyncio
@@ -32,7 +33,17 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 import motion
 import procs
 import validate
-from film import HOME, KIT, REPO, _write_json, limits, paint_kinds, paint_words
+from film import (
+    HOME,
+    KIT,
+    REPO,
+    TAIL_S,
+    _write_json,
+    limits,
+    may_run_to,
+    paint_kinds,
+    paint_words,
+)
 from guard import pin_paint, pin_vo
 from sched import waiting_text
 
@@ -61,7 +72,20 @@ STRIP_MAX, STRIP_N, STRIP_STEP = 6, 8, 0.1
 # (sketch/probe.js): every PROBE_STEP seconds, and what it may add to that step's time
 PROBE_STEP, PROBE_S = 0.1, 60
 # which of its moments the author is told (a thing that pops up is nearly always meant), and how many
-EVENTS_TOLD, EVENTS_MAX = ("double", "cut", "into", "sliver", "wash", "jump", "squash"), 10
+EVENTS_TOLD, EVENTS_MAX = (
+    (
+        "double",
+        "cut",
+        "apart",
+        "into",
+        "sliver",
+        "wash",
+        "jump",
+        "squash",
+        "small",
+    ),
+    12,
+)
 PEOPLE_WAIT_S = 420  # the longest a picture tool waits for the people to be drawn (agent.py)
 # what one film may bring in from the web (web-grab.py): pictures and page photographs together,
 # and font families -- each is inlined into the film's page, which a phone downloads whole
@@ -120,6 +144,64 @@ def approved_line(film, i):
         return False
 
 
+def fit_length(film):
+    """After a recording: make the film as long as its narration needs, up to what a film may
+    run to (film.may_run_to), and never shorter than it was asked for. A narration that would end
+    under the film's closing fade lengthens the film to TAIL_S past its last word; one recorded
+    shorter again brings the film back. -> None when nothing changed, else {"was", "now",
+    "asked", "ends", "top"}. A template's remake keeps its template's length: its picture is
+    timed to it."""
+    p = film.path("audio", "vo", "timeline.json")
+    try:
+        with open(p, encoding="utf-8") as f:
+            tl = json.load(f)
+    except (OSError, ValueError):
+        return None
+    lines = tl.get("lines") or []
+    rec = film.record()
+    if not lines or rec.get("template"):
+        return None
+    asked, now = film.asked, film.length
+    ends = max(float(L.get("end") or 0) for L in lines)
+    top = may_run_to(asked, rec.get("frame"))
+    # under the fade: the mix's own (0.6 s) and the picture's take the last word with them
+    need = asked if ends <= asked - FADE_S else math.ceil(ends + TAIL_S)
+    to = min(max(asked, need), top)
+    if to == now and float(tl.get("duration") or now) == float(now):
+        return None
+    film.run_to(to)
+    tl["duration"] = float(to)
+    tmp = p + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(tl, f, ensure_ascii=False)
+    os.replace(tmp, p)
+    if to == now:
+        return None
+    return {"was": now, "now": to, "asked": asked, "ends": ends, "top": top}
+
+
+FADE_S = 0.8  # a last word that ends this near the end is under the closing fade
+
+
+def grown_note(got):
+    """What Claude is told when a recording changed the film's length."""
+    if not got:
+        return ""
+    if got["now"] > got["was"]:
+        return (
+            "\n\nThe narration ends at %.2f s, so the film is now %d s long (it was asked for at"
+            " %d s; a film runs a little longer rather than lose its last words, up to %d s). The"
+            " picture, the music and the cues run to %d s: SK.film plays to the film's real"
+            " length whatever `duration` film.js names, so look at the last seconds (`stills`)"
+            " and let the ending end there."
+            % (got["ends"], got["now"], got["asked"], got["top"], got["now"])
+        )
+    return (
+        "\n\nThe narration now ends at %.2f s, so the film is %d s long again (it had grown to"
+        " %d s)." % (got["ends"], got["now"], got["was"])
+    )
+
+
 # Recordings past a film's limit, allowed only while its narration runs past the film's end. The
 # mix cannot place a line that starts after the end, so such a film fails at its finish; with no
 # recording left Claude could only watch it fail (ewwd6b, 2026-09-30: all 6 recordings spent, 4 on
@@ -154,7 +236,7 @@ def recording_refused(film, done):
     if over:
         return (
             "That is %d recordings, the limit for one film, and the narration still ends at"
-            " %.2f s, after the film's %g s." % (done, over["ends"], over["length"])
+            " %.2f s, after the %g s this film may run to." % (done, over["ends"], over["length"])
         )
     return "That is %d recordings, the limit for one film: keep the narration you have." % done
 
@@ -164,9 +246,10 @@ def fit_advice(film, done):
     it (the film's limit plus FIT_RUNS)."""
     left = max(0, limits(film.length)["voice_runs"] + FIT_RUNS - done)
     return (
-        "Cut words or whole lines in vo.json and record the narration again (%d recording%s left,"
+        "The film has already been lengthened as far as a film asked for at %d s may run. Cut"
+        " words or whole lines in vo.json and record the narration again (%d recording%s left,"
         " retakes included); retaking a line makes it shorter only when it has fewer words."
-        % (left, "" if left == 1 else "s")
+        % (film.asked, left, "" if left == 1 else "s")
     )
 
 
@@ -247,9 +330,9 @@ def timeline_text(film, retake=None):
     end, over = tl.get("duration"), max((L["end"] for L in lines), default=0)
     if end and over > end:
         out.append(
-            "NOTE: the narration ends at %.2f s, after the film's %g s: every word after %g s is"
-            " cut and never heard. Shorten or drop lines, or close the gaps, and record again."
-            % (over, end, end)
+            "NOTE: the narration ends at %.2f s, after the %g s this film may run to: every word"
+            " after %g s is cut and never heard. Shorten or drop lines, or close the gaps, and"
+            " record again." % (over, end, end)
         )
     for L in lines:
         if every or L["i"] == retake:
@@ -484,6 +567,9 @@ class Tools:
                     "sound", "vo-retime.py", ["--before", before, *by_line, "--write"]
                 )
                 moved = next((x for x in reversed(tail) if " cues move" in x), "")
+            # the film is as long as its narration needs (within what it may run to), before
+            # anything reads its length: the timeline text, the mix, the stills
+            grown = await asyncio.to_thread(fit_length, self.film)
         if not self.sheet_v and self.wants_preview():
             self._bg = asyncio.ensure_future(self._narration_preview())
         text = timeline_text(self.film, retake_line)
@@ -497,6 +583,7 @@ class Tools:
         return (
             "Recorded. The timeline (also in audio/vo/timeline.json), times on the film clock:\n"
             + text
+            + grown_note(grown)
             + (
                 "\n\nThe narration does not fit the film yet. "
                 + fit_advice(self.film, self.voice_runs)

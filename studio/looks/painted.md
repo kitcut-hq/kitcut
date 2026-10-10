@@ -21,8 +21,10 @@ and hand-drawn marks on top.
 1. Decide the idea and the direction (above): one clear point, told in the film's length, in one
    to three paintings (a few more for a long film, within the limit).
 2. Write the narration in `vo.json` and call `voice`. It returns each line's start and end, and
-   every word's time on the film clock. If a line runs past the end of the film or `acc` is
-   below 0.9, shorten or rephrase it and record again.
+   every word's time on the film clock. If a line's `acc` is below 0.9, rephrase it and
+   record again. If the narration needs a little more than the film's length, the studio
+   lengthens the film and says so; only when it says the narration still does not fit do you
+   cut words and record again.
 3. Write `paint.json` (see "The paintings") and call `paint`. Read `images/sheet.jpg`. Repaint
    an image that is wrong -- lettering in it, the wrong subject, a character who does not match
    -- at most twice in all.
@@ -44,7 +46,8 @@ and hand-drawn marks on top.
    seconds, where a frame a second cannot see: call `strip` on every moment somebody goes into,
    out of or behind something, turns round, or moves from one place to another, and on each
    moment `motion` points at. Fix what is broken, `strip` what you changed, and look once more.
-   Two review rounds at most.
+   Two review rounds, and a third when the second still found something broken: a film
+   that goes out with a mistake you saw costs its owner more than the minutes.
 6. Write `score.json` and `sfx.json`, then call `sound` once to prove they render. The music
    ducks under the voice by itself.
 7. Finish with one or two sentences: what the film shows and says, and anything from the prompt

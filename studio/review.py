@@ -52,6 +52,8 @@ KINDS = (
     "wash",
     "stray",
     "text",
+    "apart",
+    "float",
     "cutoff",
     "continuity",
 )
@@ -64,14 +66,22 @@ SOFT = ("cutoff", "continuity")
 # (0.7 s, twice in one film) as "could be better", so the one fix turn did not touch it; a
 # second reading of the finished film called both a mistake. These three are what an owner
 # sees first. On the bench the rule adds one must to three clean films.
-HARD, HARD_S = ("through", "squash", "double"), 0.3
+# "apart" joined them on 2026-10-09: a boy seen from behind with his head and cap floating over
+# his shoulders for 17 s (Leo episode 11) was the first thing its owner named.
+HARD, HARD_S = ("through", "squash", "double", "apart"), 0.3
+# Kinds whose "could be better" findings the fix turn takes as well, after the musts: each is one
+# small, local change (set the words bigger, put the hand on the phone, give the post a base), and
+# left alone they are what an owner sends a film back for. Leo episode 11 was read "clean" with
+# three of them on its list -- a message too small to read, a phone floating under a hand, a lamp
+# post through the road -- and its owner found all three.
+EASY, MAX_EASY = ("text", "float", "stray"), 3
 MAX_FINDINGS = 14
 MAX_CLOSER = 8  # close-ups the reader may ask for
 MAX_STRIPS = 12  # ... and all the studio renders: its own moments first come first
 SHEET_W = 1568  # what a sheet is sent at: the model sees no more of a wider one
 # which of the machine's moments get a close-up, most telling first (a wash shows on the sheets;
 # a pop is usually a thing meant: a character coming out from behind something)
-STRIP_KINDS = ("double", "cut", "into", "sliver", "jump", "squash")
+STRIP_KINDS = ("double", "cut", "apart", "into", "sliver", "jump", "squash")
 
 
 def system():
@@ -350,7 +360,11 @@ def words(findings, must_only=False):
 
 
 # ------------------------------------------------------------------ the studio's step
-FIX_S = 360  # the author's working time to fix what must be fixed
+FIX_S = 360  # the author's working time to fix what must be fixed ...
+FIX_MORE_S, FIX_MAX_S = (
+    120,
+    900,
+)  # ... and for each thing past the second, up to a quarter of an hour
 FIX_BUDGET_USD = 2.0
 MAX_MUST = 5  # more than a turn can fix: the first five, in the film's order
 FIX_TOOLS = (
@@ -369,7 +383,7 @@ FIX = (
     "else: no new ideas and no restyling. The narration is recorded: its words and their times "
     "must not move, so leave vo.json alone and keep every cue on its word. For each: make the "
     "change, `check`, `strip` the moment and look at it. Prefer the fix that keeps the scene. You "
-    "have about six minutes; when the last one is looked at, stop with one sentence saying what "
+    "have about %d minutes; when the last one is looked at, stop with one sentence saying what "
     "you changed."
 )
 GUARD = (
@@ -498,6 +512,21 @@ def pairs_sheet(pairs, path):
     return path
 
 
+def fix_s(todo):
+    """The fix turn's working time, by how many things it has to fix."""
+    return min(FIX_MAX_S, FIX_S + FIX_MORE_S * max(0, len(todo) - 2))
+
+
+def to_fix(findings):
+    """What the fix turn is given, in the film's order: what must be fixed (MAX_MUST at most),
+    then the small things of an EASY kind that could be better (MAX_EASY at most)."""
+    musts = sorted([f for f in findings if f["must"]], key=lambda f: f["t0"])[:MAX_MUST]
+    easy = sorted(
+        [f for f in findings if not f["must"] and f["kind"] in EASY], key=lambda f: f["t0"]
+    )[:MAX_EASY]
+    return musts + easy
+
+
 async def fix(film, emit, meter, tools, auth, musts, ask):
     """One bounded turn for the author to fix what must be fixed, then the fix judged: the film
     must still be whole, and what it changed away from the findings must not have broken anything.
@@ -521,13 +550,13 @@ async def fix(film, emit, meter, tools, auth, musts, ask):
                     meter,
                     tools,
                     auth,
-                    prompt=FIX % (len(musts), words(musts)),
+                    prompt=FIX % (len(musts), words(musts), fix_s(musts) // 60),
                     resume=sid,
                     budget_usd=FIX_BUDGET_USD,
                     effort="high",
                 ),
                 agent.Clock(),
-                {"claude_s": FIX_S, "wall_s": FIX_S + 180},
+                {"claude_s": fix_s(musts), "wall_s": fix_s(musts) + 180},
             )
             said = (getattr(res, "result", "") or "")[:600]
     finally:
@@ -656,8 +685,10 @@ async def gate(film, emit, meter, tools, auth, overtime=False):
     t0 = time.time()
     try:
         rec = film.record()
-        if not enabled() or overtime or rec.get("review") or tools.span or rec.get("template"):
-            # stood in for; out of time already; read before (a film carried on); a scene's own
+        del overtime  # a film whose author ran out of time is read like any other (2026-10-09:
+        # "it's okay if we go beyond ... any set timer"); it used to go out unread
+        if not enabled() or rec.get("review") or tools.span or rec.get("template"):
+            # stood in for; read before (a film carried on); a scene's own
             # pass; a template's film (a remake of one a person approved, whose flips and wipes
             # are meant: not measured yet, so it keeps the path it had)
             return None
@@ -675,7 +706,7 @@ async def gate(film, emit, meter, tools, auth, overtime=False):
             }
         )
         r = await read(view_of(film, tools), ask, log=lambda s: emit({"type": "log", "text": s}))
-        musts = sorted([f for f in r["findings"] if f["must"]], key=lambda f: f["t0"])[:MAX_MUST]
+        musts = to_fix(r["findings"])  # what the fix turn takes: the musts, then the small things
         out = {
             "findings": r["findings"],
             "events": len(r["events"]),

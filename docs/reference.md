@@ -3898,7 +3898,10 @@ Per line: N takes (cached by a fingerprint of text + voice + model + settings, s
 re-renders only that line), each cut at the silence before a throwaway tail word, scored by
 Whisper against the script, the best one picked (accuracy, then a clean cut, then the take
 nearest the median length) unless the line names `"pick"`. Lines are placed at their `start`
-or after the previous line plus `gap`; word times come from the ElevenLabs character
+or after the previous line plus `gap`, plus the line's own `"pause"` when it has one (seconds of
+quiet before it: the beat a gag or a view needs without words; it costs no recording, and on the
+studio the film grows to fit, `studio/README.md` "The length is a target"); word times come from
+the ElevenLabs character
 alignment, minus `[audio tags]` and the tail. Writes `audio/vo/timeline.json` and
 `outputs/<slug>.srt/.vtt`.
 

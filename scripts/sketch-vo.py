@@ -12,7 +12,7 @@ Reads the `vo` block of `projects/<id>/sketch.json`:
 Per line it: renders N takes (cached by text fingerprint, so an edit re-renders only that line),
 cuts each take at the silence before a throwaway TAIL word, scores every take with Whisper
 against the script, picks the best (or the manifest's "pick"), and places the line on the
-film clock (its "start", else lead + gaps). It writes audio/vo/timeline.json (lines, files,
+film clock (its "start", else lead + gaps, plus its own "pause": quiet before the line). It writes audio/vo/timeline.json (lines, files,
 word times from the ElevenLabs character alignment) and the captions next to it.
 
 A film in another language sets "language" (ISO 639-1, e.g. "uk") and a TAIL in that language
@@ -1214,7 +1214,7 @@ def main():
     )
     for i, ln in enumerate(lines):
         est = len(words_of(ln["text"])) / WPS
-        st = ln.get("start", t)
+        st = ln["start"] if "start" in ln else t + float(ln.get("pause") or 0)
         who = (
             ("%s (%s): " % (ln["who"], line_vo(vo, ln).get("voice") or voice))
             if ln.get("who")
@@ -1580,7 +1580,9 @@ def main():
                     ]
                 else:
                     sys.exit("line %d has no take yet -- run without --only first" % i)
-                start = float(ln.get("start", t))
+                # "pause": quiet before this line, on top of the usual gap -- room for the
+                # picture to play a gag or a look without words; "start" places it outright
+                start = float(ln["start"]) if "start" in ln else t + float(ln.get("pause") or 0)
                 if i and start < t - vo.get("gap", 0.35) + 0.15:
                     print(
                         "  line %d: start %.2fs overlaps line %d; moved to %.2fs"
