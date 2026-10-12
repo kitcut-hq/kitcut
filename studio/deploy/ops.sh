@@ -237,6 +237,14 @@ for i in h.get("instances") or []:
 PY
 public=$(curl -s --max-time 8 https://studio.kitcut.ai/api/health | python3 -c 'import json,sys; print(json.load(sys.stdin)["release"])' 2>/dev/null || echo "NOT REACHABLE")
 echo "studio.kitcut.ai: $public"
+# the one way in besides the VPN, for Claude cloud sessions (ssh-tunnel.sh). Its lock is a
+# Cloudflare firewall rule (ssh-lock.mjs): asked without the secret header it must refuse
+ssh_code=$(curl -s -o /dev/null --max-time 8 -w '%{http_code}' https://ssh.kitcut.ai/ || true)
+case "$ssh_code" in
+  403) echo "ssh.kitcut.ai: locked (refuses without its header), tunnel $(systemctl is-active kitcut-ssh-tunnel)" ;;
+  000) echo "ssh.kitcut.ai: not set up" ;;
+  *) echo "ssh.kitcut.ai: NOT LOCKED (answered $ssh_code without the header): ssh-lock.mjs --out, or ssh-tunnel.sh down" ;;
+esac
 echo "units: $(for u in kitcut-tunnel kitcut-studio-boot kitcut-login-check.timer kitcut-usage kitcut-prune.timer kitcut-backup.timer kitcut-backup-full.timer; do printf '%s=%s ' $u $(systemctl is-active $u); done)"
 # the copy off the machine (studio/backup.py): when it last went through, and STALE when it has not
 STUDIO_HOME=$HOME_DIR STUDIO_REPO=/srv/kitcut/repo python3 /srv/kitcut/repo/studio/backup.py --status 2>&1 | sed 's/^/mirror: /'

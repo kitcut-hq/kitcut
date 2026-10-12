@@ -10,6 +10,13 @@ down from D8ads_v5 the same evening -- Ubuntu) since 2026-09-28 -- not on the la
 (10.0.13.4). Nobody logs in by hand; everything below runs from the laptop's checkout.
 `studio/deploy/README.md` is the runbook and holds the measurements.
 
+**In a Claude cloud session** (claude.ai/code, `CLAUDE_CODE_REMOTE=true`) there is no VPN and no
+`az`. The same commands work there through `ssh.kitcut.ai`, a locked Cloudflare address, when
+the session's environment carries the setup script from `studio/deploy/cloud-env.sh`: check with
+`ssh kitcut-studio-1 hostname`. `ops.sh status` prints `?` for the two Azure lines and the rest
+as usual. The README's "SSH for Claude cloud sessions" has the pieces, the order they are made
+in, and how to take the access away.
+
 ```bash
 bash studio/deploy/ops.sh status                    # start here: health, the servers and their films,
                                                     # disks, login check, errors in the last day

@@ -20,6 +20,11 @@
 # SSH from this laptop's address only: throwaway benchmark boxes (KITCUT_RG=kitcut-bench, which
 # then goes in one `az group delete`).
 #
+# The one other way in is for Claude cloud sessions, which cannot join a VPN: ssh.kitcut.ai, a
+# second Cloudflare tunnel to this machine's sshd, locked at Cloudflare and usable with one key
+# (README, "SSH for Claude cloud sessions"; ssh-lock.mjs, ssh-tunnel.sh, cloud-env.sh). `ssh` and
+# everything built on it here work unchanged in such a session; the az actions do not.
+#
 # Region and group sit beside the films' blob account (kitcutst, kitcut-PROD, southcentralus), so
 # the upload of a finished film never leaves the region. Disks are Standard HDD (a decision:
 # measured 100 MB/s, and a film writes ~1.5 MB/s; `az disk update --sku Premium_LRS` changes it
@@ -46,16 +51,28 @@ DRY=0
 die() { echo "vm.sh: $*" >&2; exit 1; }
 run() { if [ "$DRY" = 1 ]; then echo "  would run: $*"; else "$@"; fi; }
 myip() { curl -fsS https://ifconfig.me; }
+# A Claude cloud session has no VPN, no az and no route to the VM's address. There the VM is its
+# own name, an SSH host alias that the environment's setup script wrote (cloud-env.sh): it leads
+# through ssh.kitcut.ai and brings its own key and host key, under the same file names as here.
+in_cloud() { [ "${CLAUDE_CODE_REMOTE:-}" = true ]; }
 vmip() {
   local ip
+  if in_cloud; then
+    ssh -G "$1" 2>/dev/null | grep -qi '^proxycommand ' ||
+      die "this cloud session has no SSH route to $1: its environment needs the setup script from studio/deploy/cloud-env.sh (see /var/log/kitcut-setup.log)"
+    echo "$1"
+    return
+  fi
   ip="$(az vm show -d -g "$RG" -n "$1" --query publicIps -o tsv)"
   [ -n "$ip" ] || ip="$(az vm show -d -g "$RG" -n "$1" --query privateIps -o tsv)"
   echo "$ip"
 }
 sshto() {
-  local name="$1"; shift
+  local name="$1" host; shift
+  host="$(vmip "$name")"  # on its own line: inside the ssh command a failure here would be lost
+  [ -n "$host" ] || die "no address for $name"
   ssh -i "$KEY" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ConnectTimeout=15 \
-    -o UserKnownHostsFile="$HOME/.ssh/known_hosts.kitcut" "$ADMIN@$(vmip "$name")" "$@"
+    -o UserKnownHostsFile="$HOME/.ssh/known_hosts.kitcut" "$ADMIN@$host" "$@"
 }
 subnet_id() {
   az network vnet subnet show -g "$VPN_RG" --vnet-name "$VPN_VNET" -n "$SUBNET" --query id -o tsv

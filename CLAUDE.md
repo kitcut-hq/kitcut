@@ -725,9 +725,16 @@ model, no deepfake. Start from
 
 Each cost an hour or more in one session (2026-09-29/30). Check here first.
 
-- **This session is the owner's Windows laptop**, not a cloud container, whatever the
-  environment banner says: cwd `C:\instafill\kitcut`, PowerShell 5.1 and Git Bash.
+- **A session whose cwd is `C:\instafill\kitcut` is the owner's Windows laptop**, not a
+  cloud container, whatever the environment banner says: PowerShell 5.1 and Git Bash.
   Do not tell the user "this remote environment can't do X" without testing it.
+- **A Claude cloud session (claude.ai/code: Linux, `CLAUDE_CODE_REMOTE=true`) is a real
+  cloud container**: no VPN, no `az`, no Windows paths, and it opens HTTPS only. It reaches
+  the studio VM as `ssh kitcut-studio-1 '<command>'`, so `vm.sh ssh` and `ops.sh` work,
+  when its environment carries the setup script from `studio/deploy/cloud-env.sh`
+  (`studio/deploy/README.md`, "SSH for Claude cloud sessions"). If that fails, read
+  `/var/log/kitcut-setup.log` and say so. Do not try port 22, port 443 or the proxy's
+  `CONNECT`: all three were measured dead on 2026-10-12.
 - **PowerShell 5.1 has no `&&` or `||`.** Use `;` or `if ($?) { ... }`. A `&&` fails
   the whole call as a parse error, before anything runs.
 - **Git Bash rewrites any argument starting with `/`** into a Windows path.

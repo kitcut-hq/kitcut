@@ -13,7 +13,7 @@ laptop, through the scripts in this folder.
 | code | `/srv/kitcut/repo`, pushed from the laptop (`push.sh`); the VM holds no GitHub credentials |
 | films | `/srv/kitcut/studio` (`STUDIO_HOME`) |
 | copies online | Cloudflare R2 bucket `kitcut-media`, public at `https://media.kitcut.ai/films/<id>/<file>`, since 2026-10-07 (downloads are free there; Azure billed them per GB). The `.env` holds `STUDIO_MEDIA_BASE` and the three `STUDIO_R2_` settings; `.env.bak-before-r2` is the file from before. Azure's `kitcutst/films` still holds the films copied before the move (`STUDIO_MEDIA_OLD_BASE`: a deleted film goes from there too); take that setting out when the container is removed |
-| reach | SSH from the VPN only (no public IP); the studio leaves through the Cloudflare named tunnel (outbound), `studio.kitcut.ai`; `vm.sh network` also denies outbound to the VNet (`no-network-outbound`: films fetch from the web) |
+| reach | SSH from the VPN only (no public IP), plus one locked address for Claude cloud sessions, `ssh.kitcut.ai` ("SSH for Claude cloud sessions"); the studio leaves through the Cloudflare named tunnel (outbound), `studio.kitcut.ai`; `vm.sh network` also denies outbound to the VNet (`no-network-outbound`: films fetch from the web) |
 | cost | ~$180/month for the VM on D4ads_v5 ($361 on D8) + ~$22 the data disk (list prices, 2026-09-28) |
 
 ```bash
@@ -420,6 +420,93 @@ that needs an organisation of its own (never `kitcut-hq`: the machine runs peopl
 must hold no key that reaches the product's code) and a key limited to it. Working on a film by
 hand through git (clone, change, push a branch, the studio renders it as the next version) is
 the step after that; until then it is `ops.sh take` / `put`.
+
+## SSH for Claude cloud sessions
+
+A Claude cloud session (claude.ai/code) cannot join the VPN, so it has one address of its own,
+`ssh.kitcut.ai`. In a session whose environment carries the setup script below,
+`ssh kitcut-studio-1 '<command>'` works, and with it `vm.sh ssh`, `push.sh` and everything in
+`ops.sh` that is not an `az` call (`vm.sh` returns the VM's name as its address when
+`CLAUDE_CODE_REMOTE=true`, and says so when the session has no route).
+
+What a cloud session's network lets out, measured 2026-10-12 in a session with Full access:
+
+| tried | result |
+|---|---|
+| SSH on port 22 | the connection never opens |
+| SSH on port 443 | intercepted: the server's reply never comes back |
+| SSH through the session's proxy (`CONNECT`) | `200`, then reset. The proxy decrypts TLS and drops anything else |
+| UDP | DNS to 1.1.1.1 passes; no other port was tried, so a VPN client is unproven |
+| a WebSocket over HTTPS | works: 64 KB binary frames intact, one connection held 180 s |
+| `cloudflared` | downloads from GitHub's releases; its request reaches Cloudflare |
+| an `ssh` client | not in the image (`apt-get install openssh-client` in the setup script) |
+
+So SSH rides inside a WebSocket: `cloudflared access ssh` on the session's side, a second
+Cloudflare tunnel on the VM's. Four pieces, each with its script:
+
+| piece | what it is | made by |
+|---|---|---|
+| the lock | a firewall rule on the `kitcut.ai` zone, first in the list: a request for `ssh.kitcut.ai` without the header `x-kitcut-gate: <secret>` is blocked at Cloudflare (403) and never reaches the VM | `ssh-lock.mjs` |
+| the tunnel | the unit `kitcut-ssh-tunnel` (256 MB cap), tunnel `kitcut-ssh`, everything it owns in `/srv/kitcut/ssh-tunnel/`: `ssh.kitcut.ai` -> `ssh://127.0.0.1:22` | `ssh-tunnel.sh` |
+| the key | the cloud's own ed25519 key, in `authorized_keys` with `from="127.0.0.1,::1"`: it works only for a connection that arrives through the tunnel, never from the VPN | `cloud-env.sh`, `ssh-tunnel.sh key` |
+| the session's side | a setup script for the environment's dialog: the ssh client, `cloudflared`, the key, the VM's host key pinned, the host alias `kitcut-studio-1` | `cloud-env.sh` |
+
+The order is the safety: **lock, closed, probe, key, up.** An address with a tunnel and no lock
+is the VM's SSH port on the internet.
+
+```bash
+P=~/Documents/kitcut-access-cloud       # the private folder: the secret, the key pair, the script
+node --env-file=<file with CLOUDFLARE_API_TOKEN> studio/deploy/ssh-lock.mjs --out $P     # the lock
+bash studio/deploy/vm.sh ssh kitcut-studio-1 'bash -s -- closed' < studio/deploy/ssh-tunnel.sh
+node --env-file=<...> studio/deploy/ssh-lock.mjs --probe --out $P    # 403 without, 404 with: go on
+bash studio/deploy/vm.sh ssh kitcut-studio-1 "bash -s -- key \"$(bash studio/deploy/cloud-env.sh $P --pub)\"" < studio/deploy/ssh-tunnel.sh
+bash studio/deploy/vm.sh ssh kitcut-studio-1 'bash -s -- up' < studio/deploy/ssh-tunnel.sh
+bash studio/deploy/cloud-env.sh $P --test    # a real connection through Cloudflare, from here
+bash studio/deploy/cloud-env.sh $P           # $P/setup-script.sh: paste into the environment
+```
+
+The setup script goes into the environment's **Setup script** field at claude.ai/code (the
+environment's network access on Full, or Custom with `ssh.kitcut.ai` and GitHub's release hosts).
+It runs once as root, the result is kept as a snapshot, and every later session starts from it;
+Anthropic rebuilds the snapshot when the script changes and about every seven days. A setup
+script that fails stops the session from starting, so this one always exits 0 and leaves
+`/var/log/kitcut-setup.log`.
+
+Checked on 2026-10-12, from the laptop through Cloudflare (not the VPN):
+
+| | |
+|---|---|
+| the address without the header, and with a wrong value | 403 |
+| the address with the header, tunnel closed | 404 |
+| the cloud's key through the tunnel | in, as `kitcut`, from 127.0.0.1 |
+| the cloud's key over the VPN | refused |
+| through Cloudflare without the header | refused before sshd (`websocket: bad handshake`) |
+| through Cloudflare with the header and another key | refused by sshd |
+| `vm.sh ssh`, `ops.sh status`, `git ls-remote` on the VM's repo as a cloud session runs them | work |
+
+What that does not cover is the session's own proxy carrying `cloudflared`'s WebSocket all the
+way: the table of measurements says it should, and the first thing to ask a new session is
+`ssh kitcut-studio-1 hostname`.
+
+Things to know:
+
+- **It is the `kitcut` login**: a session that has it can ship, restart and read the `.env`.
+  Anyone who can use the environment can read its setup script, key and secret included, so the
+  environment stays personal, never shared.
+- **`ops.sh status` watches the lock**: it asks the address without the header and prints
+  `NOT LOCKED` on anything but a refusal. The rule lives in Cloudflare's dashboard (Security,
+  WAF, Custom rules), where somebody can delete it.
+- **Taking the access away**: `ssh-tunnel.sh down` closes the address at once; deleting the
+  `claude-cloud@kitcut-studio` line from `~/.ssh/authorized_keys` ends the key. A new secret:
+  delete `gate.env`, `ssh-lock.mjs --out`, `cloud-env.sh`, paste the new script.
+- **After a rebuild of the VM** the tunnel's credentials are still on the data disk, but the unit,
+  the key's line and the machine's host key are new: `ssh-tunnel.sh up`, `ssh-tunnel.sh key`,
+  delete `host-key.pub`, `cloud-env.sh`, paste the new script.
+- **Never a `config.yml` in `~/.cloudflared`**: the studio's own tunnel (`run-tunnel.sh`) would
+  read it at its next start. This tunnel's config is passed with `--config`.
+- **Why a firewall rule and not Cloudflare Access**: Access with a service token is the stronger
+  lock (it expires, and it keeps a log), but it needs an API token with Zero Trust permissions;
+  ours answered `403` on creating the application. The rule needs "Zone WAF: Edit", which it has.
 
 ## Building it again
 
