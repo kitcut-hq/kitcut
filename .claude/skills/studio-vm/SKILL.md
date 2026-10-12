@@ -45,6 +45,10 @@ bash studio/deploy/ops.sh replace <film-id> <folder>   # a remade film takes its
                                                     # and page, old one to backups/, new URLs
 bash studio/deploy/ops.sh forward [8765]            # the VM's studio on this laptop's 127.0.0.1:8765
 bash studio/deploy/ops.sh snapshot [--keep 7]       # data disk: films, checkout, .env, models
+bash studio/deploy/ops.sh prune [--plan]            # finished films' working pictures removed (the
+                                                    # frames the review read, thumbnail stills): what
+                                                    # would go is printed first; an hourly timer does
+                                                    # the same. "the disk is filling up" starts here
 bash studio/deploy/ops.sh library-get <project> <dir>   # a series' library here (cast/<name>.js, cast.png)
 bash studio/deploy/ops.sh library-put <project> [--dry-run] [--replace] <cast/x.js>...   # back into
                                                     # it as the next version (thumbnail, sheet)

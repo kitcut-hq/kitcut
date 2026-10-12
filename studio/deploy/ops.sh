@@ -93,6 +93,11 @@
 #                                                     is kept. --dry-run says what would go
 #   bash studio/deploy/ops.sh forward [port]          the VM's studio on this laptop's 127.0.0.1:port
 #                                                     (default 8765), as if it ran here
+#   bash studio/deploy/ops.sh prune [--plan] [--older-than H] [--film <id>]   finished films'
+#                                                     working pictures removed (studio/prune.py):
+#                                                     what would go is printed first, and --plan
+#                                                     stops there. An hourly timer does the same
+#   bash studio/deploy/ops.sh prune install           install and start that timer
 #   bash studio/deploy/ops.sh snapshot [--keep N]     an incremental snapshot of the data disk
 #                                                     (films, checkout, .env), keep the newest N (7)
 #   bash studio/deploy/ops.sh snapshots               list them
@@ -207,7 +212,7 @@ for i in h.get("instances") or []:
 PY
 public=$(curl -s --max-time 8 https://studio.kitcut.ai/api/health | python3 -c 'import json,sys; print(json.load(sys.stdin)["release"])' 2>/dev/null || echo "NOT REACHABLE")
 echo "studio.kitcut.ai: $public"
-echo "units: $(for u in kitcut-tunnel kitcut-studio-boot kitcut-login-check.timer kitcut-usage; do printf '%s=%s ' $u $(systemctl is-active $u); done)"
+echo "units: $(for u in kitcut-tunnel kitcut-studio-boot kitcut-login-check.timer kitcut-usage kitcut-prune.timer; do printf '%s=%s ' $u $(systemctl is-active $u); done)"
 systemctl list-units --all --no-legend --plain 'kitcut-studio@*' kitcut-studio.service | awk '{ printf "  %s %s/%s\n", $1, $3, $4 }'
 python3 - <<'PY'
 import glob, json, os
@@ -228,6 +233,11 @@ res=$(systemctl show kitcut-login-check.service -p Result --value)
 next=$(systemctl show kitcut-login-check.timer -p NextElapseUSecRealtime --value)
 if [ -n "$at" ]; then echo "login check: $res at $at (next $next)"; else echo "login check: not run yet (first $next)"; fi
 echo "disks: $(df -h / | awk 'NR==2{print "system "$3"/"$2}')  $(df -h /srv/kitcut | awk 'NR==2{print "data "$3"/"$2}')   load $(cut -d' ' -f1-3 /proc/loadavg)   mem free $(free -g | awk '/Mem:/{print $7}') GB"
+# a full data disk stops every film (KI-063): say so while there is still room to act
+used=$(df --output=pcent /srv/kitcut | tail -1 | tr -dc 0-9)
+if [ "${used:-0}" -ge 80 ]; then
+  echo "WARNING: the data disk is $used% full -- ops.sh prune --plan says what can go (KI-063)"
+fi
 # below 2 GB a film's Claude may not start at all ("Control request timeout: initialize", KI-045):
 # say so loudly, and name what holds the memory
 avail=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)
@@ -813,6 +823,33 @@ PY
     echo "the VM's studio on http://127.0.0.1:$p (Ctrl+C to stop). Requests arrive from the VM's own"
     echo "loopback, so they count as 'this machine': films on the Claude login, admin routes allowed."
     exec bash "$HERE/vm.sh" ssh "$VM" -N -L "$p:127.0.0.1:$PORT"
+    ;;
+
+  prune)
+    # finished films' working pictures (studio/prune.py): what would go first, always -- it
+    # removes nothing -- then the removal in a capped unit on idle I/O, beside the films
+    use="prune [--plan] [--older-than H] [--film <id>] | prune install"
+    if [ "${1:-}" = install ]; then
+      change_on "bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR && sudo systemctl enable -q --now kitcut-prune.timer && systemctl is-active kitcut-prune.timer"
+      exit 0
+    fi
+    args=""; only_plan=0
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --plan) only_plan=1 ;;
+        --older-than) [[ "${2:-}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || die "--older-than needs hours"; args="$args --older-than $2"; shift ;;
+        --film) [[ "${2:-}" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: ${2:-}"; args="$args --film $2"; shift ;;
+        *) die "$use" ;;
+      esac
+      shift
+    done
+    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/prune.py$args"
+    on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE $py --plan" || exit 1
+    [ "$only_plan" = 1 ] && exit 0
+    unit="kitcut-prune-$(date +%Y%m%d-%H%M%S)"
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=256M -p MemoryMax=512M -p Nice=10 -p IOSchedulingClass=idle $UNIT_ENV $py"
+    [ "$DRY" = 1 ] && exit 0
+    follow "$unit"
     ;;
 
   snapshot)

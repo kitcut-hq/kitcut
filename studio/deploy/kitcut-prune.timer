@@ -1,0 +1,13 @@
+# Every hour, finished films' working pictures are removed (kitcut-prune.service). Persistent: a
+# run missed while the machine was off happens when it is back. Enabled by `ops.sh prune install`:
+#   sudo systemctl enable --now kitcut-prune.timer
+[Unit]
+Description=KitCut studio: remove finished films' working pictures every hour
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

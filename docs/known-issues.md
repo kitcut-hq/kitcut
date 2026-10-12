@@ -1102,3 +1102,40 @@ works on boxes of whole paths, so it finds a clean gap and misses a near one; it
 drawn through the cast or inside one `SK.at` group, nothing else. The reader's verdicts still
 differ run to run (KI-059), and the one reading made after the change still took the city on
 the sea for a far shore: what stands where is the brief's to get right.
+
+### KI-063 · fixed · studio · Every film left its check pictures behind, and the studio's disk was two days from full
+
+**Symptom.** 2026-10-12, found while asking what would be lost if the studio's machine died: its
+512 GB data disk held 399 GB and had 79 GB free. Films made up to 6 October took 3-7 GB a day;
+from 7 October, 43, 56, 90, 22 and 72 GB a day. Nothing warned: `ops.sh status` printed the
+figure and no more, and a full disk stops every film on the machine at once.
+**Cause.** The review that reads a film before it is called done went live on 2026-10-07
+(KI-059, KI-062). It renders the film a few times a second as full-size PNGs of about 3 MB
+(`temp/motion`), copies them before a fix (`temp/motion-before`), renders them again after it
+(`temp/motion-after`), and renders close looks (`temp/strip`); the thumbnails keep their stills
+(`temp/thumbs`), and the render keeps the film without its sound (`temp/film_silent.mp4`). Each
+is a cache or a scratch copy and each was left for good: 222 GB in 61,659 files over 489 films,
+an eight-minute film alone 9 GB. Nothing in the studio ever removed anything from a finished
+film's `temp/`.
+**Fixed** (`studio/prune.py`, `studio/deploy/kitcut-prune.timer`, `ops.sh prune`,
+`studio/test_prune.py`). Every hour, films that are over lose those pieces once nothing has
+written to them for six hours; `ops.sh prune --plan` prices a run first. The four frame folders go
+whole, in one rename, because a `temp/motion` holding its report and no frames is read by
+`review.folder_frames` as a film in which nothing is drawn. The first plan on the VM:
+
+    motion              362    30037    114.4 GB
+    motion-before        30    11752     42.3
+    thumbs              128     8901     31.8
+    strip               108     5453     21.8
+    motion-after         25     4399     15.7
+    silent              127      147     15.6      241.8 GB from 373 films
+
+`ops.sh status` now warns when the data disk passes 80 %.
+**Not covered.** What a film is made of still grows the disk and is never removed: its master,
+its web copy, its narration takes, the last three versions (about 0.3-0.8 GB a film; 136 GB on
+that day). At 30 films a day the disk fills again in weeks. The way out is for old films' large
+files to live only in storage and come back when the film is opened for work, which needs the
+mirror of the studio's home that does not exist yet (`studio/deploy/README.md`, "The data disk").
+**Lesson.** A step that writes scratch files inside a film says, in the same change, who removes
+them; and a number that can stop production (disk, memory: KI-045) gets a threshold and a
+warning the day it is first printed.

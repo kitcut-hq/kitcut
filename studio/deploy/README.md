@@ -305,6 +305,39 @@ First reading, 2026-10-01 12:40: two films rendering at once (one a `resume`, wh
 its own -- KI-043) ran 4 browsers each on the 4 cores, CPU pressure 90 %: each waited for a CPU
 almost all the time.
 
+## The data disk, and what fills it
+
+```bash
+bash studio/deploy/ops.sh prune --plan             # what would go, by kind; removes nothing
+bash studio/deploy/ops.sh prune                    # the plan, then the removal (capped, idle I/O)
+bash studio/deploy/ops.sh prune --older-than 0 --film <id>   # one film's, however new
+bash studio/deploy/ops.sh prune install            # install and start the hourly timer
+```
+
+A film is read a frame or two a second before it is called done, and its thumbnails are cut from
+stills of it. Those frames are full-size PNGs of about 3 MB and nothing removed them: on
+2026-10-12 they were 222 GB of the 399 on the disk, in 61,659 files, and had grown 48 GB a day
+since the review went live on 2026-10-07 -- two days from a full disk, and a full disk stops every
+film (KI-063). `studio/prune.py` removes them from films that are over, every hour
+(`kitcut-prune.timer`), once nothing has written to them for six hours:
+
+| in the film's `temp/` | what it is | when it is needed again |
+|---|---|---|
+| `motion/` | the film a few times a second, and the probe's report | `ops.sh review` and a resumed film render it again |
+| `motion-before/`, `motion-after/` | the review's fix: the frames before and after | never: read only inside that one fix |
+| `strip/` | a close look's frames | never: every call renders its own |
+| `thumbs/**/*.png` | the thumbnail stills | the missing ones are rendered when options are made (~0.1 s each) |
+| `*_silent.mp4`, `*_silent_segments/` | the render before its sound | never: the film is `outputs/film.mp4` |
+
+Never touched: `temp/brand/` (the Free plan's closing, which the film's manifest loads),
+`temp/record.lock`, `temp/lines/`, the thumbnails' moments sheet and recorded look
+(`style.json`, `boxes.json`), and a film that is being made, waiting for its voice, changed by a
+round or drawn again. A round never takes `temp/` into a version (`rounds.OWN`), so nothing a
+later version needs can go. `ops.sh status` warns when the data disk passes 80 %.
+
+What still grows after this: each film's master, web copy and narration takes (about 0.3-0.8 GB
+a film). At 30 films a day that is weeks, not months, on 512 GB.
+
 ## Building it again
 
 ```bash

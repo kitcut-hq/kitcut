@@ -1,0 +1,27 @@
+# Finished films' working pictures removed (studio/prune.py): the frames the review read, the
+# thumbnail stills, the render before its sound. Without it they stay for good -- 222 GB of the
+# data disk's 399 on 2026-10-12, 48 GB more a day (KI-063). Started every hour by
+# kitcut-prune.timer; `ops.sh prune --plan` says what a run would remove. Installed by install.sh
+# with the @...@ paths filled in; enabled by `ops.sh prune install`.
+#
+# Capped, niced and on idle I/O: it runs beside films being made and must never be what slows one.
+[Unit]
+Description=KitCut studio: remove finished films' working pictures (studio/prune.py)
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+Environment=STUDIO_HOME=@HOME@
+Environment=STUDIO_REPO=@REPO@
+Environment=TZ=America/Los_Angeles
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=@REPO@
+ExecStart=@REPO@/.venv/bin/python -X utf8 @REPO@/studio/prune.py
+Nice=10
+CPUWeight=10
+IOSchedulingClass=idle
+MemoryHigh=256M
+MemoryMax=512M
+TimeoutStartSec=3600
