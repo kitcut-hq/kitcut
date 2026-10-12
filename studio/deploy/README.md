@@ -504,7 +504,10 @@ pass `--attach` again or copy the restored disk into one of that name (`az disk 
 
 With no Azure Backup to restore from, leave `--attach` out: the machine gets an empty disk and
 `ops.sh restore --all` brings the whole home (about 165 GB) and `models/` from the mirror. The
-`.env` then comes from the key vault.
+`.env` then comes from the key vault. **Restore before `serve.sh release`**: a release's tests
+refuse to go current without every ensemble's instrument samples, and only the mirror (or the old
+disk) has them all -- `provision.sh` copies the laptop's cache, which held 11 of the 24 on the
+first rehearsal (2026-10-12), and that release stopped at `test_direction`.
 
 **C. Azure itself.** The mirror and the database export are on Cloudflare; the code is on
 GitHub. Any Ubuntu 24.04 machine with 4 cores, 16 GB and 500 GB will do:
