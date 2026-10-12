@@ -518,6 +518,24 @@ login with `claude setup-token`), and the vault key that seals the site's YouTub
 ElevenLabs keys, without which each owner connects again. The site's own settings live in Vercel
 and are not affected. The database, if Atlas lost it too: `studio/dbdump.py --restore`.
 
+**What the first rehearsal measured** (2026-10-12, `kitcut-studio-2`, D4ads_v5, built with
+`provision.sh --drill` and the mirror alone, about a fifth of the home in it at the time):
+
+| step | took | note |
+|---|---|---|
+| the machine from nothing: VM, disk, checkout, toolchain, `.env`, units | 12 min | `provision.sh`, one command |
+| the home back from the mirror | 579 s for 9,163 files, 20.5 GB: 35 MB/s | so about 80 minutes for the whole home (165 GB) |
+| one film restored and compared with production's | 48 files, one checksum over all of them, equal; file times kept | `ops.sh restore --film` |
+| the release built and its 29 tests | 10.5 min | `serve.sh release`, after the restore |
+| a new film on it, 10 s, narrated | 631 s; video, a voice take with its word times, subtitles | on the Claude login; nothing left the machine |
+| a restart of the machine | serving again by itself 80 s later | the boot unit, the data disk by its label |
+
+It found three faults before they were needed, all fixed: the instrument samples came from the
+laptop's cache (11 of 29; a release's tests refuse), the machine was built from the branch's head
+while the release was the older tag (its tests could not start), and the rebuild would have
+pushed this clone's stale branch. Production's own restart the same afternoon (KI-066) then took
+26 seconds from boot to a studio that answered.
+
 **Never build a second machine from the mirror and start it as it is.** A server on a restored
 home adopts every film that was being made when the home was mirrored, and writes that into the
 live database: their makers are refunded and emailed. A machine made only to prove the mirror is
