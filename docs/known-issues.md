@@ -1199,10 +1199,21 @@ The kernel had killed a 12.5 GB python in `step-...-w564nf-sketch-vo-jobs` at 11
 like it at 11:42:10. Two films were being made, both 30 seconds long, from two accounts made
 sixteen minutes apart, with the same 4,511-character prompt asking for a Hindi voice-over
 written in Roman letters; each film's narration step ran away 3.5 and 7 minutes after it started.
-**Cause, as far as it is known.** Two things, and only the second is understood.
-- *Why `sketch-vo.py` grows to 12 GB on that input is not known.* The narration code did not
-  change that day and a film recorded normally an hour earlier. The film's `vo.json` and the
-  step's log could not be read while the machine was down.
+**Cause.** Three things in a row; the first two were found the same afternoon, on the laptop,
+with film w564nf's own `vo.json` and five takes.
+- *The studio's OpenRouter key was at its own limit.* The key has a $50 limit set on it and had
+  used $50.05 ("Key limit exceeded (total limit) ... does not reset", HTTP 403; the VM's key is
+  the same one, read from `openrouter.ai/api/v1/key` on the VM). From that moment the service
+  that listens to every narration take (`studio/procs.py` `SCORER`) refused every call, in any
+  language, and `sketch-vo.py` scored every take on the machine instead, as it is meant to. Nothing
+  said so: the line that reports it was printed unflushed and died with the step.
+- *The fallback built a Whisper per thread.* With a service listening, the score stage runs
+  `--jobs` threads (the studio: 8). Each thread whose call failed went to `_whisper()`, which
+  tested `_WHISPER is None` with no lock: five takes, five threads, five models, all decoding at
+  once. For English that is five `small.en` and nobody noticed. For any other language it is five
+  `large-v3`: measured on the laptop with the film's takes, five models built in the same second
+  and 13.7 GB in 54 s (the VM's step: 12.5 GB in about 45 s, then the kill). It is not the Hindi,
+  and not the prompt: any narration that is not English would have done it once the key was out.
 - *A step's cap was 12 GB on a 16 GB machine.* `procs.Job` gives every step `STUDIO_FILM_MEM_GB`
   (default 12), set when the VM had 32 GB and never lowered at the move to 16 (KI-032 added the
   cap; the downsize of 2026-09-28 changed pools and timeouts, not this). A step that runs away
@@ -1218,21 +1229,33 @@ written in Roman letters; each film's narration step ran away 3.5 and 7 minutes 
 **What the site did.** `lib/studiowatch.js`, live for an hour by then, emailed the owner at 12:05
 ("The studio has not answered for 5 minutes") and put the two films down for their makers,
 credits back, once the studio had been away fifteen minutes.
-**Done so far.** A step's cap is read off the machine (`procs.step_mem_gb`: 12 GB, never more
+**Done so far.** `sketch-vo.py` holds one local model and sends one take through it at a time,
+whoever asks (`_LOAD`, `_LOCAL`); a service that refuses the key (401, 402, 403:
+`ScorerRefused`) is asked once in a run and says so once, flushed. The same five takes: one
+model, one take at a time, 3.3 GB, 72 s. `check-sketch.py` holds all of it with eight threads and
+a stand-in model. `ops.sh status` prints what the key has left and a WARNING when it is at its
+limit. A step's cap is read off the machine (`procs.step_mem_gb`: 12 GB, never more
 than two fifths of its memory -- 6.2 GB on this VM), so a resize cannot leave it behind again;
 `studio/test_memory.py` holds it. It is live with the first release shipped after this entry.
 The mirror's passes yield too: three transfers on idle I/O, and a pass does nothing when under
 3 GB is available (`backup.short_of_memory`).
 **Open.**
-1. The machine was still frozen when this was written; it needs a restart from Azure.
+1. Done: restarted from Azure at 12:26 PDT on the owner's word (a graceful restart of a machine
+   that far gone took twelve minutes); the studio and its tunnel answered again at 12:38.
 2. Ship the release that carries the cap, and check 6.2 GB against the step peaks in
    `STUDIO_HOME/usage/steps-*.jsonl`: a real step that needs more must be found before a
    customer's film is.
-3. Find the line in `sketch-vo.py` that grows on that prompt: `ops.sh usage --at "11:59"` and
-   the film's `events.jsonl` and `vo.json`; make it again on a machine that is not production,
-   with the cap in place. Until then the same prompt will fail its film at the cap each time.
+3. **The key's limit has to be raised by the owner** (openrouter.ai, Keys): until then every
+   take is scored on the machine (a long film's narration is minutes slower, KI-043), and what
+   else uses the key fails outright: people drawn from photos (`head-rig.py`), pictures painted
+   through OpenRouter, voice notes.
 4. The mirror's first upload was stopped part-way by the freeze (it resumes where it was) and
    its timers are not installed; release e3496e8 is built on the VM and not current.
+5. A Hindi script written in Roman letters cannot be checked: Whisper writes Hindi in
+   Devanagari, so the five takes scored 0.00 to 0.28 against their own lines though they were
+   read correctly. Such a film is made, with takes re-recorded for "added words" that were not
+   added and word times that are guesses. It wants the transcript put into Roman letters before
+   the comparison; not built.
 **Lesson.** A cap protects a machine only if the caps that can be in force at once add up to less
 than the machine. Before starting a bulk job or a ship on the studio's VM, look at what else is
 capped to how much (`ops.sh usage`, `systemctl list-units 'kitcut-*' 'sports-*'`), and do one

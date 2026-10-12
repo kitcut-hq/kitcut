@@ -911,11 +911,27 @@ def word_times(align, lead, tail):
 # ------------------------------------------------------------------ scoring
 _WHISPER = None
 _GPU = [None]  # the machine-wide GPU lock, held while large-v3 is loaded on the card
+# One local model in the process, and one take through it at a time, whoever asks. The score stage
+# runs a thread per take when a service does the listening, and every take that service fails is
+# scored here: on 2026-10-12 its key's limit was used up, five threads each found _WHISPER empty and
+# each built a large-v3 for a five-line Hindi film -- 12.5 GB on a 16 GB machine, and the studio's VM
+# stopped answering (KI-066; the same five takes on the laptop: five models, 13.7 GB in 54 s).
+_LOAD = threading.Lock()
+_LOCAL = threading.Lock()
+# a scoring service that refused outright (its key's limit, a key it does not know): why. The answer
+# is the same for every take, so it is asked once in a run and said once
+_REFUSED = {}
 
 
 def _whisper(lang, name):
     """English scores on small.en (CPU, measured fast enough); any other language needs a
-    multilingual model -- large-v3 on the GPU by default, CPU if CUDA will not load."""
+    multilingual model -- large-v3 on the GPU by default, CPU if CUDA will not load. Built once,
+    whatever the number of threads that ask at the same moment (_LOAD)."""
+    with _LOAD:
+        return _whisper_once(lang, name)
+
+
+def _whisper_once(lang, name):
     global _WHISPER
     if _WHISPER is None:
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
@@ -954,6 +970,14 @@ def _whisper(lang, name):
 
 OPENROUTER_STT = "https://openrouter.ai/api/v1/audio/transcriptions"
 FALLBACK = True  # a take the service fails is scored locally; a benchmark turns this off
+# the service will not serve this key at all: not signed in, out of credit, over the key's own limit
+# ("Key limit exceeded (total limit) ... $50.05 of $50.00 used; does not reset", HTTP 403)
+REFUSED = frozenset({401, 402, 403})
+
+
+class ScorerRefused(RuntimeError):
+    """The scoring service refused the key, not this take: asking again for the next take gets
+    the same answer."""
 
 
 def scorer(model=None):
@@ -1027,6 +1051,8 @@ def openrouter_heard(path, lang, model, hotwords=()):
             % (model, why if r is None else r.status_code, wait)
         )
         time.sleep(wait)
+    if r is not None and r.status_code in REFUSED:
+        raise ScorerRefused("%s %s: %s" % (model, r.status_code, r.text[:300]))
     if r is None or r.status_code != 200:
         raise RuntimeError("%s %s: %s" % (model, r and r.status_code, r and r.text[:300]))
     j = r.json()
@@ -1046,6 +1072,8 @@ def whisper_score(path, text, hotwords, lang="en", model=None, words=False):
     """(accuracy against the script, what was heard) -- plus, with words=True, Whisper's word
     timestamps [(text, start, end)] for a backend that gives none (Gemini)."""
     model = scorer(model)
+    if remote(model) and model in _REFUSED and FALLBACK:
+        model = None  # it refused the key earlier in this run: not asked again
     if remote(model):
         try:
             heard, ws = openrouter_heard(path, lang, model, hotwords)
@@ -1054,15 +1082,32 @@ def whisper_score(path, text, hotwords, lang="en", model=None, words=False):
         except (RuntimeError, ValueError, KeyError) as e:  # the service is down: slower, same job
             if not FALLBACK:
                 raise
-            print("  %s failed (%s); scoring this take here" % (model, str(e)[:120]))
+            if isinstance(e, ScorerRefused):
+                with _LOAD:
+                    first = model not in _REFUSED
+                    _REFUSED[model] = str(e)
+                if first:  # flushed: a step killed later must still have said why it was slow
+                    print(
+                        "  %s refuses this key (%s): every take of this run is scored here, "
+                        "one at a time -- slower, same job. Its limit or its credit needs raising."
+                        % (model, str(e)[:160]),
+                        flush=True,
+                    )
+            else:
+                print(
+                    "  %s failed (%s); scoring this take here" % (model, str(e)[:120]), flush=True
+                )
             model = None
-    segs, _ = _whisper(lang, model).transcribe(
-        path,
-        language=lang,
-        initial_prompt=", ".join(hotwords) if hotwords else None,
-        word_timestamps=words,
-    )
-    segs = list(segs)
+    # one take at a time through the one local model: the threads of a service's score stage
+    # queue here (_LOCAL), they do not each decode -- or each load a model -- at once
+    with _LOCAL:
+        segs, _ = _whisper(lang, model).transcribe(
+            path,
+            language=lang,
+            initial_prompt=", ".join(hotwords) if hotwords else None,
+            word_timestamps=words,
+        )
+        segs = list(segs)  # the decoding happens as the segments are read
     heard = " ".join(s.text for s in segs)
     acc = accuracy(text, heard)
     if not words:

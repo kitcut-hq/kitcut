@@ -3926,7 +3926,11 @@ audio, the line, the hotwords, the language and the scorer), so a re-recording s
 what changed. `SKETCH_SCORER` (the machine) or `vo.whisper` (the film) picks who listens:
 a local faster-whisper model, or `openrouter:<model>` -- a transcription model OpenRouter
 serves, scored `--jobs` at a time, needing `OPENROUTER_API_KEY`, and falling back to local
-Whisper for a take the service fails. The studio uses `openrouter:openai/whisper-large-v3`
+Whisper for a take the service fails. The fallback is one model in the process and one take
+through it at a time, however many threads fall back at once, and a service that refuses the
+key itself (HTTP 401, 402, 403: out of credit, over the key's own limit) is asked once in a
+run, not once a take (KI-066: five threads each built a `large-v3`, 12.5 GB, and the studio's
+VM froze). The studio uses `openrouter:openai/whisper-large-v3`
 (Groq). OpenRouter drops a transcription prompt, so the hotwords reach only Azure's
 `microsoft/mai-transcribe-2`, as a phrase list. Compare scorers on a finished film with
 `scripts/vo-scorer-bench.py --reference large-v3`: agreeing with the film's own scorer proves

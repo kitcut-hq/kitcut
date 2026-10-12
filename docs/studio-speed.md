@@ -147,7 +147,8 @@ Two fixes, both in `scripts/sketch-vo.py`:
   lines for 180-225 s when only a few had changed; now they score only those.
 - **The studio scores on a service** (`SKETCH_SCORER`, set by `studio/procs.py` `SCORER`;
   `STUDIO_SCORER=local` puts Whisper back): **Whisper large-v3 on Groq, through OpenRouter.**
-  A failed call scores that take locally, so the service being down costs time, not the film.
+  A failed call scores that take locally, so the service being down costs time, not the film:
+  one local model, one take at a time (KI-066), and `ops.sh status` says what the key has left.
 
 How it was chosen, with `scripts/vo-scorer-bench.py`. Agreeing with small.en proves nothing
 about quality, so every candidate is held to a **referee**: Whisper large-v3, run locally on the

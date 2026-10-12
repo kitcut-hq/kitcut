@@ -272,6 +272,28 @@ if [ "$avail" -lt 2048 ]; then
   echo "WARNING: only $avail MB of memory available -- films may fail to start Claude (KI-045). Biggest:"
   ps -eo pid,rss,etime,args --sort=-rss | head -4 | cut -c1-160
 fi
+# the key the studio's outside services answer to: the service that listens to every narration
+# take, the image model that draws people, pictures painted through OpenRouter, voice notes. A key
+# at its own spending limit is refused on every call (HTTP 403) and nothing else says so: on
+# 2026-10-12 that sent every take to the machine's own Whisper, and the studio froze (KI-066)
+key=$(sed -n 's/^OPENROUTER_API_KEY=//p' /srv/kitcut/repo/.env | tr -d '"\r' | head -1)
+if [ -n "$key" ]; then
+  curl -s --max-time 8 -H "Authorization: Bearer $key" https://openrouter.ai/api/v1/key | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)["data"]
+except Exception:
+    print("openrouter key: could not be read (no answer from openrouter.ai)")
+    sys.exit()
+lim, used, left = d.get("limit"), d.get("usage") or 0, d.get("limit_remaining")
+if lim is None:
+    print("openrouter key: $%.2f used, no limit on the key" % used)
+else:
+    print("openrouter key: $%.2f of its $%.2f limit used, $%.2f left" % (used, lim, left or 0))
+    if (left or 0) < max(2.0, 0.1 * lim):
+        print("WARNING: the OpenRouter key is at its limit -- narration takes are scored on this machine (slower), and people drawn from photos, pictures painted through OpenRouter and voice notes fail. Raise the limit: openrouter.ai, Keys (KI-066)")
+'
+fi
 n=$(journalctl -u 'kitcut-studio@*' -u kitcut-studio -u kitcut-tunnel --since -24h -p err --no-pager -q | wc -l)
 echo "errors in the last 24 h: $n"
 [ "$n" = 0 ] || journalctl -u 'kitcut-studio@*' -u kitcut-studio -u kitcut-tunnel --since -24h -p err --no-pager -q | tail -5 | cut -c1-200

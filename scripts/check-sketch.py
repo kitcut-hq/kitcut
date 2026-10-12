@@ -14,14 +14,20 @@ anything under sketch/, run it.
 Invoke as:  python scripts/check-sketch.py
 """
 
+import io
 import sys
 import os
 import re
 import json
+import time
+import types
 import shutil
 import difflib
 import argparse
 import tempfile
+import threading
+import contextlib
+from concurrent.futures import ThreadPoolExecutor
 from importlib import import_module
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -780,6 +786,99 @@ def main():
     finally:
         vo_mod.whisper_score = real
         shutil.rmtree(vdir, ignore_errors=True)
+    # ---- a scoring service that refuses the key: one local model, one take at a time (KI-066).
+    # Eight takes scored by eight threads, as the score stage does when a service listens; the
+    # service answers 403 as OpenRouter did when the key's limit was used up. The model here is a
+    # stand-in that takes a moment to build and to decode, so threads that are let through together
+    # are seen together.
+    seen = {"built": 0, "live": 0, "most": 0, "asked": 0}
+    tally = threading.Lock()
+
+    class Seg:
+        text, words = "hello", []
+
+    class StandIn:
+        def __init__(self, name, **kw):
+            with tally:
+                seen["built"] += 1
+            time.sleep(0.05)
+
+        def transcribe(self, path, **kw):
+            with tally:
+                seen["live"] += 1
+                seen["most"] = max(seen["most"], seen["live"])
+            time.sleep(0.02)
+            with tally:
+                seen["live"] -= 1
+            return iter([Seg()]), None
+
+    def refuses(path, lang, model, hotwords=()):
+        with tally:
+            seen["asked"] += 1
+        time.sleep(0.02)  # the threads are all in the call before the first answer comes back
+        raise vo_mod.ScorerRefused("%s 403: Key limit exceeded (total limit)" % model)
+
+    kept = (vo_mod._WHISPER, vo_mod.openrouter_heard, sys.modules.get("faster_whisper"))
+    env = {k: os.environ.get(k) for k in ("SKETCH_SCORER", "SKETCH_WHISPER_DEVICE")}
+    try:
+        vo_mod._WHISPER = None
+        vo_mod._REFUSED.clear()
+        vo_mod.openrouter_heard = refuses
+        sys.modules["faster_whisper"] = types.SimpleNamespace(WhisperModel=StandIn)
+        os.environ["SKETCH_SCORER"] = "openrouter:openai/whisper-large-v3"
+        os.environ["SKETCH_WHISPER_DEVICE"] = "cpu"
+        with contextlib.redirect_stdout(io.StringIO()) as said_out:
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                got = list(
+                    pool.map(lambda i: vo_mod.whisper_score("x.wav", "hello", [], "hi"), range(8))
+                )
+            late = vo_mod.whisper_score("x.wav", "hello", [], "hi")
+        check(
+            "scorer refused: eight threads build ONE local model",
+            seen["built"] == 1,
+            "%d built" % seen["built"],
+        )
+        check(
+            "scorer refused: one take through it at a time",
+            seen["most"] == 1,
+            "%d at once" % seen["most"],
+        )
+        check(
+            "scorer refused: every take is still scored",
+            len(got) == 8 and all(g[1] == "hello" for g in got) and late[1] == "hello",
+        )
+        check(
+            "scorer refused: not asked again once it has refused, and said once",
+            seen["asked"] <= 8 and said_out.getvalue().count("refuses this key") == 1,
+            "asked %d times, said %d"
+            % (seen["asked"], said_out.getvalue().count("refuses this key")),
+        )
+        asked = seen["asked"]
+        with contextlib.redirect_stdout(io.StringIO()):
+            vo_mod.whisper_score("x.wav", "hello", [], "hi")
+        check("scorer refused: a later take does not ask it at all", seen["asked"] == asked)
+        # a benchmark (FALLBACK off) must see the refusal, not the local model in its place
+        vo_mod.FALLBACK = False
+        try:
+            vo_mod.whisper_score("x.wav", "hello", [], "hi")
+            raised = False
+        except vo_mod.ScorerRefused:
+            raised = True
+        finally:
+            vo_mod.FALLBACK = True
+        check("scorer refused: with the fallback off it is an error", raised)
+    finally:
+        vo_mod._WHISPER, vo_mod.openrouter_heard = kept[0], kept[1]
+        vo_mod._REFUSED.clear()
+        if kept[2] is None:
+            sys.modules.pop("faster_whisper", None)
+        else:
+            sys.modules["faster_whisper"] = kept[2]
+        for k, v in env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
     # ---- the voice track: a line that runs over is cut at the end; one that starts after the end
     # is named, not a numpy broadcast error (film ewwd6b)
@@ -810,9 +909,7 @@ def main():
     # ---- a person's own ElevenLabs voice, through kitcut.ai's relay: the film's grant goes up,
     # never a key; a refusal of the person's account is a reason the studio pauses on, and
     # ElevenLabs' own words are never repeated
-    import io
     import base64
-    import contextlib
 
     import httpx
 
@@ -1059,8 +1156,6 @@ def main():
     check("cover: no stand-ins, the poster", _sketch.pick_cover([(59.6, 0)]) == 59.6)
 
     # ---- cut-outs (sketch-paint.py): a collage's pictures, made without a single paid call
-    import io
-
     from PIL import Image
 
     paint = import_module("sketch-paint")
