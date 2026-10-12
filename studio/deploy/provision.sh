@@ -114,10 +114,15 @@ step "3. timezone"
 on 'sudo timedatectl set-timezone America/Los_Angeles && timedatectl | grep "Time zone"'
 
 step "4. the checkout"
-# what the team can see (origin's branch), not this clone's own: in a worktree, or a clone that has
-# not pulled, the local branch is an older commit and the machine would be built from it (KI-065)
-git -C "$REPO_LOCAL" fetch -q origin
-REV="$(git -C "$REPO_LOCAL" rev-parse --verify "origin/$BRANCH^{commit}")"
+# What production last ran: origin's studio-stable tag (ops.sh ship moves it), else origin's branch.
+# Not this clone's own branch -- in a worktree, or a clone that has not pulled, that is an older
+# commit (KI-065). And not the branch's head when the tag is behind it: the checkout's release.py
+# then lists tests the tagged release does not have, and `serve.sh release` stops on the first
+# (the first rehearsal, 2026-10-12: "can't open file .../test_restore.py").
+git -C "$REPO_LOCAL" fetch -q --force --tags origin
+REV="$(git -C "$REPO_LOCAL" ls-remote --tags origin refs/tags/studio-stable | cut -f1)"
+[ -n "$REV" ] && git -C "$REPO_LOCAL" tag -f studio-stable "$REV" >/dev/null ||
+  REV="$(git -C "$REPO_LOCAL" rev-parse --verify "origin/$BRANCH^{commit}")"
 if [ "$DRY" = 1 ]; then echo "  would run: push.sh $VM $BRANCH ${REV:0:12}"; else bash "$HERE/push.sh" "$VM" "$BRANCH" "$REV"; fi
 
 step "5. the toolchain"
