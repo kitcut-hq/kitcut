@@ -1,0 +1,45 @@
+# What of the studio's home (STUDIO_HOME) is mirrored off the machine, to the R2 bucket
+# kitcut-backup under home/ (studio/backup.py, every 15 minutes). These are rclone's filter
+# rules: for each path the first rule that matches decides -- "+" mirrors it, "-" leaves it out --
+# and a path no rule matches is mirrored. So a folder nobody thought about is kept, not lost.
+#
+# Every folder and file the studio makes at the top of its home is named below, one way or the
+# other: studio/test_backup.py fails the release when the code names one that this file does not.
+# Left out is only what this machine can make again, or what is this machine's own.
+
+# A film's temp/ is caches and scratch frames (studio/prune.py removes most of them). Kept from
+# it: the Free plan's closing, which the film's manifest loads, and the small records beside it.
++ /projects/*/temp/brand/**
++ /projects/*/temp/*.json
++ /projects/*/temp/*.md
+- /projects/*/temp/**
+# A round's working copy is a film in the making, with a temp/ of its own.
+- /rounds/*/temp/**
+
+# Built from git by release.py; rebuilt by `serve.sh release`.
+- /releases/**
+# Which servers are alive on this machine, their heartbeats, and locks: this machine's own.
+- /servers/**
+- /deploy.lock
+- *.lock
+# Caches and staging.
+- /cache/**
+- /tmp/**
+- /scratch/**
+# The usage log is appended to every 15 seconds: it goes by itself, to usage/, without the
+# history every other changed file gets (backup.py), or each pass would file another copy.
+- /usage/**
+# What the last pass did: written by the pass itself.
+- /backup.json
+
+# Everything a person made or paid for, and what the studio needs to work on it again.
++ /projects/**
++ /library/**
++ /templates/**
++ /uploads/**
++ /claude/**
++ /rounds/**
++ /unbrand/**
++ /backups/**
++ /git/**
++ /outbox.jsonl

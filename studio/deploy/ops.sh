@@ -98,6 +98,14 @@
 #                                                     what would go is printed first, and --plan
 #                                                     stops there. An hourly timer does the same
 #   bash studio/deploy/ops.sh prune install           install and start that timer
+#   bash studio/deploy/ops.sh backup [--plan | --full]   one pass of the mirror of the studio's
+#                                                     home to R2 (studio/backup.py); --plan says
+#                                                     what it would send and sends nothing; --full
+#                                                     compares every file by checksum
+#   bash studio/deploy/ops.sh backup status|verify    the last pass and the timers | every mirrored
+#                                                     file checked against the bucket
+#   bash studio/deploy/ops.sh backup db [--plan]      the site's database exported into the bucket
+#   bash studio/deploy/ops.sh backup install          install and start the mirror's two timers
 #   bash studio/deploy/ops.sh snapshot [--keep N]     an incremental snapshot of the data disk
 #                                                     (films, checkout, .env), keep the newest N (7)
 #   bash studio/deploy/ops.sh snapshots               list them
@@ -109,6 +117,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_LOCAL="$(cd "$HERE/../.." && pwd)"
 VM="${KITCUT_VM:-kitcut-studio-1}"
 RG="${KITCUT_RG:-kitcut-PROD}"
+BACKUP_RG="${KITCUT_BACKUP_RG:-kitcut-backup}"
+BACKUP_VAULT="${KITCUT_BACKUP_VAULT:-kitcut-backup-rsv}"
 PORT=8765
 REMOTE=/srv/kitcut/repo
 HOME_DIR=/srv/kitcut/studio
@@ -195,6 +205,8 @@ UNIT_ENV="$UNIT_ENV --setenv=PATH=\$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin
 case "$cmd" in
   status)
     printf 'VM %s: %s\n' "$VM" "$(az_ vm show -d -g "$RG" -n "$VM" --query powerState -o tsv 2>/dev/null || echo '?')"
+    # Azure's own nightly copy of the whole machine (vault kitcut-backup-rsv, 30 days kept)
+    printf 'azure backup: %s\n' "$(az_ backup job list -g "$BACKUP_RG" -v "$BACKUP_VAULT" --query "[0].join(' ', [properties.operation, properties.status, properties.startTime])" -o tsv 2>/dev/null || echo '?')"
     on "HOME_DIR=$HOME_DIR bash -s" <<'EOF'
 h=$(curl -s --max-time 5 http://127.0.0.1:8765/api/health || true)
 python3 - "$h" <<'PY'
@@ -212,7 +224,9 @@ for i in h.get("instances") or []:
 PY
 public=$(curl -s --max-time 8 https://studio.kitcut.ai/api/health | python3 -c 'import json,sys; print(json.load(sys.stdin)["release"])' 2>/dev/null || echo "NOT REACHABLE")
 echo "studio.kitcut.ai: $public"
-echo "units: $(for u in kitcut-tunnel kitcut-studio-boot kitcut-login-check.timer kitcut-usage kitcut-prune.timer; do printf '%s=%s ' $u $(systemctl is-active $u); done)"
+echo "units: $(for u in kitcut-tunnel kitcut-studio-boot kitcut-login-check.timer kitcut-usage kitcut-prune.timer kitcut-backup.timer kitcut-backup-full.timer; do printf '%s=%s ' $u $(systemctl is-active $u); done)"
+# the copy off the machine (studio/backup.py): when it last went through, and STALE when it has not
+STUDIO_HOME=$HOME_DIR STUDIO_REPO=/srv/kitcut/repo python3 /srv/kitcut/repo/studio/backup.py --status 2>&1 | sed 's/^/mirror: /'
 systemctl list-units --all --no-legend --plain 'kitcut-studio@*' kitcut-studio.service | awk '{ printf "  %s %s/%s\n", $1, $3, $4 }'
 python3 - <<'PY'
 import glob, json, os
@@ -848,6 +862,38 @@ PY
     [ "$only_plan" = 1 ] && exit 0
     unit="kitcut-prune-$(date +%Y%m%d-%H%M%S)"
     change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=256M -p MemoryMax=512M -p Nice=10 -p IOSchedulingClass=idle $UNIT_ENV $py"
+    [ "$DRY" = 1 ] && exit 0
+    follow "$unit"
+    ;;
+
+  backup)
+    # the mirror of the studio's home on R2 (studio/backup.py) and the database's nightly export
+    # (studio/dbdump.py): a plan sends nothing; a pass runs in a capped unit, beside the films
+    use="backup [--plan | --full] | backup status | backup verify | backup db [--plan] | backup install"
+    envs="STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env"
+    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/backup.py"
+    case "${1:-}" in
+      install)
+        change_on "command -v rclone >/dev/null || { echo 'rclone is not installed: bash scripts/setup-linux.sh --studio' >&2; exit 1; }
+          bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR && sudo systemctl enable -q --now kitcut-backup.timer kitcut-backup-full.timer && systemctl is-active kitcut-backup.timer kitcut-backup-full.timer"
+        exit 0 ;;
+      status)
+        on "cd $REMOTE && $envs $py --status; rc=\$?; systemctl list-timers --no-pager 'kitcut-backup*' | sed -n 1,3p; exit \$rc"
+        exit $? ;;
+      --plan)
+        on "cd $REMOTE && $envs nice -n 10 $py --plan"
+        exit $? ;;
+      verify) py="$py --verify" ;;
+      db)
+        py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/dbdump.py"
+        if [ "${2:-}" = "--plan" ]; then on "cd $REMOTE && $envs $py --plan"; exit $?; fi
+        py="$py --upload" ;;
+      --full) py="$py --full" ;;
+      "") ;;
+      *) die "$use" ;;
+    esac
+    unit="kitcut-backup-$(date +%Y%m%d-%H%M%S)"
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=768M -p MemoryMax=1G -p Nice=10 $UNIT_ENV $py"
     [ "$DRY" = 1 ] && exit 0
     follow "$unit"
     ;;

@@ -1,0 +1,30 @@
+# One pass of the studio's mirror (studio/backup.py): the studio's home -- films, library,
+# templates, uploads, sessions -- to the R2 bucket kitcut-backup, by the rules in
+# deploy/backup-filter.txt. Started every 15 minutes by kitcut-backup.timer; a pass that finds
+# another one running (the nightly full pass) does nothing. Installed by install.sh with the
+# @...@ paths filled in; enabled by `ops.sh backup install`. Needs rclone (scripts/setup-linux.sh).
+#
+# Capped and behind the films: it reads the disk and uses the network beside films being made.
+[Unit]
+Description=KitCut studio: mirror the studio's home to R2 (studio/backup.py)
+After=network-online.target local-fs.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+Environment=STUDIO_HOME=@HOME@
+Environment=STUDIO_REPO=@REPO@
+Environment=STUDIO_ENV_FILE=@REPO@/.env
+Environment=TZ=America/Los_Angeles
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=@REPO@
+ExecStart=@REPO@/.venv/bin/python -X utf8 @REPO@/studio/backup.py
+Nice=10
+CPUWeight=20
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+MemoryHigh=768M
+MemoryMax=1G
+TimeoutStartSec=6h

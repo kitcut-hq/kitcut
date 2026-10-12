@@ -36,6 +36,8 @@ done
 FFMPEG_TAG="n8.1"   # BtbN release line; bump deliberately, then run check-encode.py
 FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-${FFMPEG_TAG}-latest-linux64-gpl-${FFMPEG_TAG#n}.tar.xz"
 WHISPER_MODELS="small.en large-v3 large-v3-turbo"
+RCLONE_VERSION="1.75.2"   # bump deliberately, with its checksum (downloads.rclone.org/v<N>/SHA256SUMS)
+RCLONE_SHA256="efbfe852181f7191eb3c9043ed1ab49c9b2d0ba045c61c926a5da111c939ec5c"
 
 step() { printf '\n== %s ==\n' "$*"; }
 run() { if [ "$DRY" = 1 ]; then echo "  would run: $*"; else "$@"; fi; }
@@ -82,6 +84,21 @@ if [ "$STUDIO" = 1 ]; then
     run bash -c 'echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" | sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null'
     run sudo apt-get update -qq
     run sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq cloudflared
+  fi
+fi
+
+if [ "$STUDIO" = 1 ]; then
+  # the mirror of the studio's home (studio/backup.py). Pinned and checked: apt's is years old,
+  # and a tool that deletes from the mirror is not one to take at whatever version is newest
+  step "4a. rclone $RCLONE_VERSION"
+  if command -v rclone >/dev/null 2>&1 && rclone version | head -1 | grep -q "v$RCLONE_VERSION"; then
+    echo "  present: $(rclone version | head -1)"
+  else
+    tmp="$(mktemp -d)"
+    run curl -fsSL -o "$tmp/rclone.deb" "https://downloads.rclone.org/v$RCLONE_VERSION/rclone-v$RCLONE_VERSION-linux-amd64.deb"
+    run bash -c "echo '$RCLONE_SHA256  $tmp/rclone.deb' | sha256sum -c --quiet"
+    run sudo dpkg -i "$tmp/rclone.deb"
+    rm -rf "$tmp"
   fi
 fi
 

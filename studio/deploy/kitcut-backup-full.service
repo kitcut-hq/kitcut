@@ -1,0 +1,28 @@
+# The nightly half of the studio's mirror: the site's database exported into the bucket
+# (studio/dbdump.py --upload, db/<day>/), then a pass that compares every mirrored file with the
+# bucket by checksum (studio/backup.py --full) -- the one that sees a file put back with an old
+# time and the same size. Started by kitcut-backup-full.timer. The database goes first: it is
+# small, and a full pass that fails must not keep it from being exported ("-": carry on).
+[Unit]
+Description=KitCut studio: export the database and check the whole mirror (dbdump.py, backup.py --full)
+After=network-online.target local-fs.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+Environment=STUDIO_HOME=@HOME@
+Environment=STUDIO_REPO=@REPO@
+Environment=STUDIO_ENV_FILE=@REPO@/.env
+Environment=TZ=America/Los_Angeles
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=@REPO@
+ExecStart=-@REPO@/.venv/bin/python -X utf8 @REPO@/studio/dbdump.py --upload
+ExecStart=@REPO@/.venv/bin/python -X utf8 @REPO@/studio/backup.py --full
+Nice=10
+CPUWeight=20
+IOSchedulingClass=idle
+MemoryHigh=768M
+MemoryMax=1G
+TimeoutStartSec=12h

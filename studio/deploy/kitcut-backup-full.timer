@@ -1,0 +1,14 @@
+# Once a night, the database is exported and the whole mirror is checked
+# (kitcut-backup-full.service). 02:10 Pacific: the quietest hour, and before Azure's own nightly
+# copy of the machine at 03:00. Persistent: a night missed while the machine was off runs when it
+# is back. Enabled by `ops.sh backup install`.
+[Unit]
+Description=KitCut studio: export the database and check the whole mirror every night
+
+[Timer]
+OnCalendar=*-*-* 02:10:00 America/Los_Angeles
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

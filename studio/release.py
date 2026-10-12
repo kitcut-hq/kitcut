@@ -54,6 +54,7 @@ TESTS = (
     "test_bluegreen.py",  # an old server handing over to a new one, end to end
     "test_memory.py",  # the still cache stays capped; every job beside the server is (KI-045)
     "test_prune.py",  # a finished film loses its working pictures and nothing else (KI-063)
+    "test_backup.py",  # what is mirrored off the machine, and that every folder of the home is named
     "test_usage.py",  # who uses the machine: each step's bill, the sampler, the report
     "test_scenes.py",  # a film made in scenes: SK.scene on real stills, the passes, carrying on
     "test_people.py",  # people drawn as talking characters: the request, brief, voices, drawing
