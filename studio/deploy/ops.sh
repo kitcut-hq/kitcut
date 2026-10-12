@@ -111,9 +111,11 @@
 #                                                     repositories (studio/filmgit.py): commit
 #                                                     what is new, forget deleted films; a film's
 #                                                     versions as commits; the hourly timer
-#   bash studio/deploy/ops.sh secrets push|check      the machine's .env and tunnel credentials
-#                                                     stored in the key vault | compared with it
-#                                                     (names only; a value is never printed)
+#   bash studio/deploy/ops.sh secrets seal|check|names   the machine's .env and tunnel credential
+#                                                     sealed for the key vault alone to open
+#                                                     (studio/sealenv.py) | opened through the
+#                                                     vault and compared with the machine's, by
+#                                                     name | what the sealed file holds
 #   bash studio/deploy/ops.sh restore --plan          what the mirror holds, folder by folder
 #   bash studio/deploy/ops.sh restore --all | --film <id> [--from-history YYYY-MM-DD]
 #                                                     the home, or one film, back from the mirror
@@ -131,7 +133,6 @@ VM="${KITCUT_VM:-kitcut-studio-1}"
 RG="${KITCUT_RG:-kitcut-PROD}"
 BACKUP_RG="${KITCUT_BACKUP_RG:-kitcut-backup}"
 BACKUP_VAULT="${KITCUT_BACKUP_VAULT:-kitcut-backup-rsv}"
-VAULT="${KITCUT_VAULT:-kitcut-kv-prod}"
 PORT=8765
 REMOTE=/srv/kitcut/repo
 HOME_DIR=/srv/kitcut/studio
@@ -971,44 +972,54 @@ PY
     ;;
 
   secrets)
-    # the machine's .env and its tunnel credentials, kept in the key vault as well: the .env is
-    # the only file holding every key the studio uses, and it was on one disk (KI-065). A value
-    # passes through a private folder on this laptop that is removed at once, and is never printed
-    use="secrets push | secrets check"
+    # The machine's .env and its tunnel credential, sealed so that only the key vault can open
+    # them (studio/sealenv.py): the .env is the only file holding every key the studio uses, and
+    # it was on one disk (KI-064, KI-065). The sealed file sits in the studio's home, so the
+    # mirror carries it, and a pass of the mirror seals again whenever the .env changed. Opening
+    # (deploy/unseal.sh) asks the vault to unwrap the file's key; what is opened goes from process
+    # to process, is never written on this laptop and never printed.
+    use="secrets seal | secrets check [--sealed FILE] | secrets names [--sealed FILE]"
+    sealed_on_vm="$HOME_DIR/sealed/studio-secrets.json"
     tmp="$(mktemp -d)"; chmod 700 "$tmp"; trap 'rm -rf "$tmp"' EXIT
-    on "cat $REMOTE/.env" > "$tmp/vm.env" || die "cannot read $VM's .env"
-    [ "$(grep -c = "$tmp/vm.env")" -ge 8 ] || die "$VM's .env came back empty or too short"
+    # the sealed file itself may travel and be kept anywhere: it opens for the vault alone
+    fetch_sealed() {
+      if [ "${1:-}" = "--sealed" ]; then cp "${2:?--sealed needs a file}" "$tmp/sealed.json"
+      else on "cat $sealed_on_vm" > "$tmp/sealed.json"; fi
+      [ -s "$tmp/sealed.json" ] || die "no sealed file: ops.sh secrets seal makes it"
+    }
     case "${1:-}" in
-      push)
-        name="$(on 'basename "$(ls ~/.cloudflared/*.json | head -1)"')"
-        [[ "$name" =~ ^[0-9a-f-]{36}\.json$ ]] || die "no tunnel credentials on $VM (~/.cloudflared/<uuid>.json)"
-        on "cat ~/.cloudflared/$name" > "$tmp/tunnel.json"
-        on 'cat ~/.cloudflared/cert.pem' > "$tmp/cert.pem"
-        change az_ keyvault secret set --vault-name "$VAULT" --name studio-env --file "$tmp/vm.env" --encoding utf-8 --tags from="$VM" --output none
-        change az_ keyvault secret set --vault-name "$VAULT" --name studio-tunnel-credentials --file "$tmp/tunnel.json" --encoding utf-8 --tags file="$name" --output none
-        change az_ keyvault secret set --vault-name "$VAULT" --name studio-tunnel-cert --file "$tmp/cert.pem" --encoding utf-8 --output none
-        [ "$DRY" = 1 ] || echo "stored in $VAULT: studio-env ($(grep -c = "$tmp/vm.env") settings), studio-tunnel-credentials ($name), studio-tunnel-cert"
+      seal)
+        change_on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env .venv/bin/python -X utf8 studio/sealenv.py"
+        ;;
+      names)
+        fetch_sealed "${2:-}" "${3:-}"
+        python "$REPO_LOCAL/studio/sealenv.py" --names "$tmp/sealed.json"
         ;;
       check)
-        az_ keyvault secret download --vault-name "$VAULT" --name studio-env --file "$tmp/kv.env" --encoding utf-8 >/dev/null ||
-          die "cannot read studio-env in $VAULT (never pushed, or this account may not read its secrets)"
-        python - "$tmp/vm.env" "$tmp/kv.env" "$VM" "$VAULT" <<'PY'
-import hashlib, sys
-def read(p):
-    out = {}
-    for line in open(p, encoding="utf-8-sig", newline="").read().replace("\r", "").splitlines():
-        k, eq, v = line.partition("=")
-        if eq and not k.lstrip().startswith("#"):
-            out[k.strip()] = hashlib.sha256(v.strip().encode()).hexdigest()
-    return out
-vm, kv = read(sys.argv[1]), read(sys.argv[2])
-only_vm, only_kv = sorted(set(vm) - set(kv)), sorted(set(kv) - set(vm))
-differ = sorted(k for k in set(vm) & set(kv) if vm[k] != kv[k])
-if not (only_vm or only_kv or differ):
-    print("secrets: %s's .env and the vault's copy are the same (%d settings)" % (sys.argv[3], len(vm)))
+        # does the sealed file open, and is it the machine's .env as it is now? Compared setting
+        # by setting as checksums: the machine sends only those, and what is opened here is
+        # hashed in the same breath
+        fetch_sealed "${2:-}" "${3:-}"
+        python "$REPO_LOCAL/studio/sealenv.py" --names "$tmp/sealed.json"
+        hashes='import hashlib, sys
+for line in sys.stdin.read().replace("\r", "").splitlines():
+    k, eq, v = line.partition("=")
+    if eq and not k.lstrip().startswith("#"):
+        print(k.strip(), hashlib.sha256(v.strip().encode()).hexdigest())'
+        bash "$HERE/unseal.sh" "$tmp/sealed.json" | python -c "$hashes" | sort > "$tmp/sealed.sums" || true
+        [ -s "$tmp/sealed.sums" ] || die "the sealed file did not open (is this Azure sign-in allowed to use the key?)"
+        on "python3 -c '$hashes' < $REMOTE/.env" | sort > "$tmp/vm.sums" || die "cannot read $VM's .env"
+        python - "$tmp/vm.sums" "$tmp/sealed.sums" "$VM" <<'PY'
+import sys
+read = lambda p: dict(line.split() for line in open(p, encoding="utf-8") if line.strip())
+vm, sealed = read(sys.argv[1]), read(sys.argv[2])
+only_vm, only_sealed = sorted(set(vm) - set(sealed)), sorted(set(sealed) - set(vm))
+differ = sorted(k for k in set(vm) & set(sealed) if vm[k] != sealed[k])
+if not (only_vm or only_sealed or differ):
+    print("secrets: the sealed file opens through the vault and is %s's .env as it is now (%d settings)" % (sys.argv[3], len(vm)))
     sys.exit(0)
-print("secrets: %s's .env and %s's copy DIFFER -- ops.sh secrets push stores the machine's" % (sys.argv[3], sys.argv[4]))
-for what, names in (("only on the machine", only_vm), ("only in the vault", only_kv), ("another value", differ)):
+print("secrets: the sealed file opens, but is NOT %s's .env as it is now -- ops.sh secrets seal" % sys.argv[3])
+for what, names in (("only on the machine", only_vm), ("only in the sealed file", only_sealed), ("another value", differ)):
     if names:
         print("  %s: %s" % (what, ", ".join(names)))
 sys.exit(1)

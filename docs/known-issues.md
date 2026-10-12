@@ -1181,10 +1181,11 @@ tunnel: kitcut.ai would not have found the studio.
 never run again as the VM's `.env` took on settings of its own (the Claude login, the tunnel,
 R2). Each later change added one name to a keep-list instead of asking which file is the truth.
 **Fixed** (`studio/deploy/provision.sh`, `ops.sh secrets`). The machine's own `.env` is kept as
-it is; a machine with none gets it from the key vault (`ops.sh secrets push` stores it, `secrets
-check` compares by name), or from a file or another VM named on the command line, and an empty
-or short one is refused rather than written. The tunnel credential comes from the VM, the vault,
-or the laptop wherever under `~/.cloudflared` it sits. A machine built again at the old address
+it is; a machine with none gets it from the sealed file of the machine's keys in the mirror,
+which only the key vault opens (`studio/sealenv.py`, `deploy/unseal.sh`; `ops.sh secrets check`
+proves it opens and is current), or from a file or another VM named on the command line, and an
+empty or short one is refused rather than written. The tunnel credential comes from the VM, the
+same sealed file, or the laptop wherever under `~/.cloudflared` it sits. A machine built again at the old address
 has its old host key forgotten first.
 **Lesson.** A rebuild script that is only ever read is a guess. The rehearsal
 (`provision.sh --drill`) is how it gets run without waiting for the day it is needed.

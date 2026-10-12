@@ -361,6 +361,9 @@ bash studio/deploy/ops.sh backup --full            # the nightly pass now: every
 bash studio/deploy/ops.sh backup verify            # every mirrored file against the bucket
 bash studio/deploy/ops.sh backup db --plan         # the database's collections and sizes
 bash studio/deploy/ops.sh backup install           # install and start the two timers
+bash studio/deploy/ops.sh secrets check            # the machine's sealed keys: do they open through
+                                                   # the key vault, and are they the .env as it is now
+bash studio/deploy/ops.sh secrets seal | names     # seal now | what the sealed file holds
 bash studio/deploy/ops.sh snapshot                 # before a risky change: the data disk, now
 ```
 
@@ -368,8 +371,27 @@ bash studio/deploy/ops.sh snapshot                 # before a risky change: the 
 a path decides, and a path no rule matches is mirrored, so a folder nobody thought about is kept.
 `studio/test_backup.py` fails a release when the code makes a folder in the home that no rule
 decides. Left out: a film's `temp/` (but not `temp/brand/`), `releases/`, `servers/`, `cache/`,
-`tmp/`, locks. Not in the mirror at all: the machine's `.env` (secrets are not put in a bucket in
-the clear; Azure Backup has them).
+`tmp/`, locks. Not in the mirror at all: the machine's `.env` in the clear.
+
+**The machine's keys are in the mirror sealed.** The `.env` is the one file that holds every key
+the studio uses, and with the tunnel's credential it was on one disk. `studio/sealenv.py` packs
+the `.env`, `~/.cloudflared/<uuid>.json` and `cert.pem`, encrypts them under a key made for that
+one sealing (AES-256-GCM), and wraps that key with the public half of an RSA key that lives in
+Azure Key Vault (`kitcut-kv-prod`, `studio-env-kek`, wrap and unwrap only; its public half and
+its name are `deploy/studio-env-kek.pub.pem` and `.json`). The result,
+`STUDIO_HOME/sealed/studio-secrets.json`, is written before every pass of the mirror when one of
+the files changed, so the copy is never older than the last pass and nobody has to remember to
+push it. Nothing on the machine, in this repository or in the bucket can open it: opening asks
+the vault to unwrap the key (`deploy/unseal.sh`), which takes an Azure sign-in allowed to use
+that key. `ops.sh secrets check` does exactly that and compares what opens with the machine's
+`.env`, setting by setting, as checksums -- a value never crosses the wire or the screen. First
+sealed and checked 2026-10-12: 30 settings, the same; and the copy fetched from the bucket with
+the laptop's Cloudflare sign-in (`wrangler r2 object get`) opened the same way.
+
+Why sealed and not stored as key vault secrets: that needs a role on the vault given by hand in
+the portal, a copy somebody must remember to refresh after every change of the `.env`, and it
+would sit beside the machine in Azure. Sealing needs only the right to use one key, is always
+current, and puts the copy on Cloudflare while the key that opens it stays in Azure.
 
 **How a pass compares.** S3 keeps a file's own time in metadata that only a request per object
 returns: 85,000 requests a pass, 96 passes a day. So a pass compares names and sizes from one
@@ -521,11 +543,11 @@ tunnel's credentials and the systemd units. Three rules it follows since 2026-10
 
 - **The machine's own `.env` is kept.** It is the one file that holds every key the studio uses,
   and writing it again from a laptop would have dropped the films' storage keys. Only a machine
-  with none gets one: from the key vault (`kitcut-kv-prod`, secret `studio-env`;
-  `ops.sh secrets push` keeps it current and `ops.sh secrets check` compares, by name), or
-  `--env-file <path>`, or `--env-from-vm <another studio VM>`.
-- **The tunnel's credentials** come from the VM itself when it has them, else the key vault
-  (`studio-tunnel-credentials`, `studio-tunnel-cert`), else this laptop's copy wherever under
+  with none gets one: from the sealed file of the machine's keys -- the mirror's, fetched with
+  this laptop's Cloudflare sign-in, or `--sealed <file>` -- opened by the key vault
+  (`deploy/unseal.sh`); or `--env-file <path>`, or `--env-from-vm <another studio VM>`.
+- **The tunnel's credentials** come from the VM itself when it has them, else the same sealed
+  file, else this laptop's copy wherever under
   `~/.cloudflared` it sits (since the move: `backup-20260928-moved-to-vm/`).
 - **What is safe on any machine is enabled** (the usage sampler, the cleanup, the login check).
   The tunnel, the boot unit and the mirror's timers are the cutover's, never before: the tunnel
@@ -591,7 +613,8 @@ pass `--attach` again or copy the restored disk into one of that name (`az disk 
 
 With no Azure Backup to restore from, leave `--attach` out: the machine gets an empty disk and
 `ops.sh restore --all` brings the whole home (about 165 GB) and `models/` from the mirror. The
-`.env` then comes from the key vault. **Restore before `serve.sh release`**: a release's tests
+`.env` and the tunnel's credential then come from the sealed file in the mirror, opened by the
+key vault. **Restore before `serve.sh release`**: a release's tests
 refuse to go current without every ensemble's instrument samples, and only the mirror (or the old
 disk) has them all -- `provision.sh` copies the laptop's cache, which held 11 of the 24 on the
 first rehearsal (2026-10-12), and that release stopped at `test_direction`.

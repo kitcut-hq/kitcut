@@ -263,8 +263,11 @@ commands for each. What to know before opening it:
 - **Never start a second machine built from the mirror as it is**: it adopts the films that
   were being made and writes that into the live database. A machine to prove the mirror is a
   rehearsal (`provision.sh --drill`, `ops.sh restore --all --drill`, `restore --settle`).
-- **The machine's `.env` is the truth about its keys.** After changing it on the VM: `ops.sh
-  secrets push` (the key vault's copy), and `ops.sh secrets check` any time.
+- **The machine's `.env` is the truth about its keys**, and a sealed copy of it and of the
+  tunnel's credential rides the mirror (`studio/sealenv.py`: only the key vault can open it;
+  sealed again by itself before a pass when the `.env` changed). `ops.sh secrets check` opens
+  it through the vault and says whether it is the `.env` as it is now, by name; run it after
+  changing the `.env`, with `ops.sh secrets seal` first if no pass has run since.
 - **The disk filling** is `ops.sh prune --plan`; `ops.sh status` warns past 80 %.
 - **Do not edit `ops.sh` in the worktree a ship or a followed job is running from.** bash reads a
   script as it goes: the ship of 2026-10-12 ended with `lder: command not found` because the file

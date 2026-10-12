@@ -3,7 +3,7 @@
 # half-finished run is finished by running it again.
 #
 #   bash studio/deploy/provision.sh <vm> <size> [--data-gb 512] [--attach <disk>] [--drill]
-#                                   [--env-file <path> | --env-from-vm <vm>] [--dry-run]
+#                                   [--sealed <file> | --env-file <path> | --env-from-vm <vm>] [--dry-run]
 #   e.g. bash studio/deploy/provision.sh kitcut-studio-1 Standard_D4ads_v5
 #        bash studio/deploy/provision.sh kitcut-studio-2 Standard_D4ads_v5 --drill --env-from-vm kitcut-studio-1
 #
@@ -19,10 +19,11 @@
 #    and models/ from the mirror when there is one (the instrument samples), else this laptop's
 # 6. the studio's .env. The one on the data disk is KEPT as it is: it is the only file that holds
 #    every key the machine uses, and writing it again from a laptop once dropped the films'
-#    storage keys (KI-065). Only a machine with none gets one: from the key vault
-#    (kitcut-kv-prod, secret studio-env: `ops.sh secrets push` keeps it current), or --env-file,
+#    storage keys (KI-065). Only a machine with none gets one: from the sealed file of the
+#    machine's keys (studio/sealenv.py: in the mirror, or --sealed <file>), which the key vault
+#    opens (deploy/unseal.sh; `ops.sh secrets check` proves it does), or --env-file,
 #    or --env-from-vm (another studio VM's, piped through this laptop, never written here)
-# 7. the tunnel's credentials (~/.cloudflared): the VM's own are kept; else the key vault's, else
+# 7. the tunnel's credentials (~/.cloudflared): the VM's own are kept; else the sealed file's, else
 #    this laptop's copy, wherever under ~/.cloudflared it sits. Then the systemd units, and the
 #    ones that are safe on any machine enabled: the login check, the usage sampler, the cleanup
 #
@@ -45,12 +46,14 @@ DRILL=0
 ATTACH=""
 ENV_FILE=""
 ENV_VM=""
+SEALED=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --data-gb) DATA_GB="$2"; shift ;;
     --attach) ATTACH="$2"; shift ;;
     --drill) DRILL=1 ;;
     --env-file) ENV_FILE="$2"; shift ;;
+    --sealed) SEALED="$2"; shift ;;
     --env-from-vm) ENV_VM="$2"; shift ;;
     --dry-run) DRY=1 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -58,9 +61,10 @@ while [ $# -gt 0 ]; do
   shift
 done
 [ -z "$ENV_FILE" ] || [ -f "$ENV_FILE" ] || { echo "no such file: $ENV_FILE" >&2; exit 2; }
+[ -z "$SEALED" ] || [ -f "$SEALED" ] || { echo "no such file: $SEALED" >&2; exit 2; }
 [ "$ENV_VM" != "$VM" ] || { echo "--env-from-vm names this very machine" >&2; exit 2; }
 BRANCH="${KITCUT_BRANCH:-studio-poc}"
-VAULT="${KITCUT_VAULT:-kitcut-kv-prod}"
+BUCKET="${KITCUT_BACKUP_BUCKET:-kitcut-backup}"
 # what a rehearsal's .env must not have (restore.not_a_drill checks the same): the live database,
 # the announcement, the tunnel, the site's token, the films' bucket and where they are published
 DRILL_DROP="MONGODB_URI STUDIO_ANNOUNCE STUDIO_TUNNEL STUDIO_TUNNEL_HOST KITCUT_SITE_TOKEN STUDIO_MEDIA_BASE STUDIO_MEDIA_OLD_BASE STUDIO_MEDIA_SAS STUDIO_OWN_VOICE"
@@ -161,18 +165,30 @@ if drill:
 print("\n".join(out))
 ' "$DRILL" "$DRILL_DROP"
 }
+# The sealed file of the machine's keys (studio/sealenv.py): --sealed FILE, else the mirror's,
+# fetched with this laptop's Cloudflare sign-in (wrangler, run in a folder of its own: it leaves
+# a cache where it runs). Fetched once, into a private folder removed at the end. It opens only
+# through the key vault (deploy/unseal.sh).
+SEALTMP="$(mktemp -d)"; chmod 700 "$SEALTMP"; trap 'rm -rf "$SEALTMP"' EXIT
+sealed_file() {
+  [ -s "$SEALTMP/sealed.json" ] && return 0
+  if [ -n "$SEALED" ]; then cp "$SEALED" "$SEALTMP/sealed.json"
+  else
+    (cd "$SEALTMP" && npx --yes wrangler r2 object get "$BUCKET/home/sealed/studio-secrets.json" \
+      --remote --file "$SEALTMP/sealed.json" >/dev/null 2>&1) || true
+    rm -rf "$SEALTMP/.wrangler"
+  fi
+  [ -s "$SEALTMP/sealed.json" ]
+}
 env_source() {
   if [ -n "$ENV_FILE" ]; then cat "$ENV_FILE"
   elif [ -n "$ENV_VM" ]; then vm ssh "$ENV_VM" 'cat /srv/kitcut/repo/.env'
-  else
-    # the key vault's copy (ops.sh secrets push), through a private folder that is removed at once
-    local tmp; tmp="$(mktemp -d)"; chmod 700 "$tmp"
-    az_ keyvault secret download --vault-name "$VAULT" --name studio-env --file "$tmp/env" --encoding utf-8 >/dev/null &&
-      cat "$tmp/env"
-    local rc=$?; rm -rf "$tmp"; return $rc
+  else sealed_file && bash "$HERE/unseal.sh" "$SEALTMP/sealed.json"
   fi
 }
-if [ -n "$ENV_FILE" ]; then from="$ENV_FILE"; elif [ -n "$ENV_VM" ]; then from="$ENV_VM's own"; else from="the key vault ($VAULT, studio-env)"; fi
+if [ -n "$ENV_FILE" ]; then from="$ENV_FILE"; elif [ -n "$ENV_VM" ]; then from="$ENV_VM's own"
+elif [ -n "$SEALED" ]; then from="the sealed file $SEALED, opened by the key vault"
+else from="the mirror's sealed file ($BUCKET), opened by the key vault"; fi
 if [ "$DRY" = 1 ]; then
   echo "  would keep $VM's own .env when it has one (unless --drill), else write it from $from"
 elif [ "$DRILL" = 0 ] && vm ssh "$VM" 'test -s /srv/kitcut/repo/.env'; then
@@ -184,36 +200,29 @@ else
     # with a hollow one that starts a studio missing its keys
     [ "$(grep -c = .env.new)" -ge 8 ] || { rm -f .env.new; echo "  the .env that arrived is empty or too short: not written" >&2; exit 1; }
     mv .env.new .env && grep -c = .env | sed "s/^/  settings: /"' ||
-    { echo "provision.sh: no .env from $from. Give one with --env-file or --env-from-vm, or store it first: ops.sh secrets push" >&2; exit 1; }
+    { echo "provision.sh: no .env from $from. Give one with --sealed, --env-file or --env-from-vm (ops.sh secrets check says whether the sealed one opens)" >&2; exit 1; }
 fi
 
 step "7. tunnel credentials and the units"
 if [ "$DRILL" = 1 ]; then
   echo "  a rehearsal: no tunnel credentials (two connectors would split the films between two disks)"
 elif [ "$DRY" = 1 ]; then
-  echo "  would give $VM the tunnel credentials when it has none: the key vault's, else this laptop's"
+  echo "  would give $VM the tunnel credentials when it has none: the sealed file's, else this laptop's"
 elif vm ssh "$VM" 'ls ~/.cloudflared/*.json >/dev/null 2>&1'; then
   echo "  the VM already holds the tunnel credentials"
+elif sealed_file && bash "$HERE/unseal.sh" "$SEALTMP/sealed.json" --tar |
+  vm ssh "$VM" 'mkdir -p ~/.cloudflared && chmod 700 ~/.cloudflared && tar -xf - -C ~/.cloudflared --strip-components=1 --wildcards "cloudflared/*" && chmod 600 ~/.cloudflared/* && ls ~/.cloudflared/*.json >/dev/null'; then
+  echo "  tunnel credentials: from the sealed file, opened by the key vault"
 else
-  tmp="$(mktemp -d)"; chmod 700 "$tmp"
-  name="$(az_ keyvault secret show --vault-name "$VAULT" --name studio-tunnel-credentials --query tags.file -o tsv 2>/dev/null || true)"
-  if [ -n "$name" ] &&
-    az_ keyvault secret download --vault-name "$VAULT" --name studio-tunnel-credentials --file "$tmp/$name" --encoding utf-8 >/dev/null 2>&1 &&
-    az_ keyvault secret download --vault-name "$VAULT" --name studio-tunnel-cert --file "$tmp/cert.pem" --encoding utf-8 >/dev/null 2>&1; then
-    echo "  tunnel credentials: from the key vault"
-    src="$tmp"
-  else
-    # this laptop's copy. Since the move it sits in ~/.cloudflared/backup-*/, so that the laptop
-    # cannot start a second connector -- and a version of this script that left those folders
-    # out would have rebuilt the machine without its tunnel (KI-065)
-    src="$(for d in "$HOME/.cloudflared" "$HOME"/.cloudflared/backup-*/; do
-      ls "$d"/*.json >/dev/null 2>&1 && echo "${d%/}"; done | tail -1)"
-    [ -n "$src" ] || { rm -rf "$tmp"; echo "provision.sh: no tunnel credentials in the key vault nor under ~/.cloudflared" >&2; exit 1; }
-    echo "  tunnel credentials: from this laptop ($src)"
-  fi
+  # this laptop's copy. Since the move it sits in ~/.cloudflared/backup-*/, so that the laptop
+  # cannot start a second connector -- and a version of this script that left those folders
+  # out would have rebuilt the machine without its tunnel (KI-065)
+  src="$(for d in "$HOME/.cloudflared" "$HOME"/.cloudflared/backup-*/; do
+    ls "$d"/*.json >/dev/null 2>&1 && echo "${d%/}"; done | tail -1)"
+  [ -n "$src" ] || { echo "provision.sh: no tunnel credentials in the sealed file nor under ~/.cloudflared" >&2; exit 1; }
+  echo "  tunnel credentials: from this laptop ($src)"
   tar -C "$src" -cf - --exclude='backup-*' . |
     vm ssh "$VM" 'mkdir -p ~/.cloudflared && chmod 700 ~/.cloudflared && tar -xf - -C ~/.cloudflared && chmod 600 ~/.cloudflared/*'
-  rm -rf "$tmp"
 fi
 on 'bash /srv/kitcut/repo/studio/deploy/install.sh --home /srv/kitcut/studio'
 # what is safe on any machine: who uses it, and the removal of finished films' working pictures.

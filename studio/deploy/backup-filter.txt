@@ -43,3 +43,6 @@
 + /backups/**
 + /git/**
 + /outbox.jsonl
+# The machine's keys, sealed (studio/sealenv.py): the .env and the tunnel's credential, which
+# only the key vault can open. The .env itself is outside the home and never mirrored.
++ /sealed/**
