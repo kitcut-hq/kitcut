@@ -11,7 +11,8 @@ environment variables.
 Lifetime. On Windows every step runs in a Job Object of its own: killing it (a timeout, a
 cancelled film) takes down the step and everything it started -- browsers, ffmpeg -- in one call,
 and since the job is set to die with its last handle, a server that is killed outright takes all
-of them with it. A step may use at most STUDIO_FILM_MEM_GB (12) of memory. On Linux under
+of them with it. A step may use at most STUDIO_FILM_MEM_GB of memory (when it is not set: 12 GB,
+and never more than two fifths of the machine's -- step_mem_gb, KI-066). On Linux under
 systemd (the Azure VM: studio/deploy/kitcut-studio@.service, Delegate=yes) the same is a cgroup v2
 per step: memory.max is the cap, cgroup.kill the one call, and stopping the service takes every
 step's cgroup with it. Anywhere else the step leads a process group of its own and the group is
@@ -333,12 +334,35 @@ def record_step(film, step, wall, usage, code):
         print("procs: step not recorded (%s)" % e, file=sys.stderr)
 
 
+STEP_MEM_MAX_GB = 12.0  # what a step may take on a machine big enough for it
+STEP_MEM_SHARE = 0.4  # ... and never more than this much of the machine it runs on
+
+
+def step_mem_gb(total_gb=None):
+    """What one step of a film may take when STUDIO_FILM_MEM_GB does not say: 12 GB, but no more
+    than two fifths of the machine's memory -- so two films' steps at once still leave room for
+    the server, sshd and the tunnel. The cap was a flat 12 from when the studio's VM had 32 GB; it
+    stayed 12 when the VM went to 16 (nobody carries a setting across a resize), and on 2026-10-12
+    a narration step that ran away to 12.5 GB froze the whole machine before the cap could kill
+    it (KI-066). A cap that depends on the machine is read off the machine."""
+    if total_gb is None:
+        try:
+            total_gb = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1 << 30)
+        except (
+            AttributeError,
+            ValueError,
+            OSError,
+        ):  # Windows: the laptop, where nothing is capped
+            return STEP_MEM_MAX_GB
+    return max(1.0, min(STEP_MEM_MAX_GB, round(total_gb * STEP_MEM_SHARE, 1)))
+
+
 class Job:
     """A step's process and everything it starts, killed as one."""
 
     def __init__(self, mem_gb=None, label=None):
         self.h, self.pids, self.cg = None, [], None
-        mem = mem_gb or float(os.environ.get("STUDIO_FILM_MEM_GB") or 12)
+        mem = mem_gb or float(os.environ.get("STUDIO_FILM_MEM_GB") or step_mem_gb())
         if os.name != "nt":
             root = cgroup_root()
             if root:

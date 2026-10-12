@@ -93,8 +93,31 @@ def jobs_are_capped():
     check(seen >= 3, "the deploy scripts' jobs were found (share, resume, migrate)", seen)
 
 
+def a_step_fits_its_machine():
+    """KI-066: a step's cap was a flat 12 GB, set on a 32 GB machine and still 12 on the 16 GB
+    one, where a narration step that ran away froze the whole studio before the cap killed it."""
+    sys.path.insert(0, HERE)
+    import procs  # noqa: PLC0415 -- the stdlib only
+
+    check(
+        procs.step_mem_gb(32) == 12.0,
+        "on a 32 GB machine a step may take 12 GB",
+        procs.step_mem_gb(32),
+    )
+    check(procs.step_mem_gb(64) == 12.0, "and no more on a bigger one", procs.step_mem_gb(64))
+    on16 = procs.step_mem_gb(16)
+    check(on16 == 6.4, "on a 16 GB machine, 6.4", on16)
+    check(
+        2 * on16 <= 16 - 3, "so two films' steps at once leave 3 GB for the server and sshd", on16
+    )
+    check(procs.step_mem_gb(2) == 1.0, "and never under 1 GB, however small the machine")
+    here = procs.step_mem_gb()
+    check(1.0 <= here <= 12.0, "read off this machine it is between the two", here)
+
+
 if __name__ == "__main__":
     stills_stay_capped()
     jobs_are_capped()
+    a_step_fits_its_machine()
     print("\n%d failed" % len(bad) if bad else "\nall passed")
     sys.exit(1 if bad else 0)

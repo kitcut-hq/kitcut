@@ -1218,13 +1218,16 @@ written in Roman letters; each film's narration step ran away 3.5 and 7 minutes 
 **What the site did.** `lib/studiowatch.js`, live for an hour by then, emailed the owner at 12:05
 ("The studio has not answered for 5 minutes") and put the two films down for their makers,
 credits back, once the studio had been away fifteen minutes.
-**Done so far.** `STUDIO_FILM_MEM_GB=6` in `studio/deploy/machine.env`, with the reason. It
-takes effect on a machine built from it; the live VM's `.env` needs the same line and a
-`serve.sh restart`.
+**Done so far.** A step's cap is read off the machine (`procs.step_mem_gb`: 12 GB, never more
+than two fifths of its memory -- 6.2 GB on this VM), so a resize cannot leave it behind again;
+`studio/test_memory.py` holds it. It is live with the first release shipped after this entry.
+The mirror's passes yield too: three transfers on idle I/O, and a pass does nothing when under
+3 GB is available (`backup.short_of_memory`).
 **Open.**
 1. The machine was still frozen when this was written; it needs a restart from Azure.
-2. Put `STUDIO_FILM_MEM_GB=6` in the live `.env`, restart the server, and check the number
-   against the step peaks in `STUDIO_HOME/usage/steps-*.jsonl`.
+2. Ship the release that carries the cap, and check 6.2 GB against the step peaks in
+   `STUDIO_HOME/usage/steps-*.jsonl`: a real step that needs more must be found before a
+   customer's film is.
 3. Find the line in `sketch-vo.py` that grows on that prompt: `ops.sh usage --at "11:59"` and
    the film's `events.jsonl` and `vo.json`; make it again on a machine that is not production,
    with the cap in place. Until then the same prompt will fail its film at the cap each time.
