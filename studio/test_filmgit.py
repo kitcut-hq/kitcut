@@ -24,6 +24,8 @@ HOME = tempfile.mkdtemp(prefix="studio-filmgit-test-")
 os.environ["STUDIO_HOME"] = HOME
 os.environ["STUDIO_REPO"] = os.path.join(HOME, "repo")
 os.environ["STUDIO_ENV_FILE"] = os.path.join(HOME, "repo", ".env")
+# the machine's own keys for its repositories live under the home of whoever runs it
+os.environ["HOME"] = os.environ["USERPROFILE"] = os.path.join(HOME, "user")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import film as films  # noqa: E402
 import filmgit  # noqa: E402
@@ -222,6 +224,88 @@ def where_a_film_goes():
         shutil.rmtree(x.dir)
 
 
+def to_github(f):
+    """A repository's copy elsewhere, here a bare repository standing in for GitHub's."""
+    name = "p-abcdefghij"
+    repo = filmgit.repo_of(name)
+    p = filmgit.push()
+    check(
+        name in p["unpublished"] and not p["pushed"],
+        "a repository with no copy set up is named, not pushed",
+        p,
+    )
+
+    pub = filmgit.key_of(name)
+    check(
+        pub.startswith("ssh-ed25519 ") and os.path.isfile(filmgit.key_path(name)),
+        "it gets a key of its own",
+        pub[:20],
+    )
+    check(filmgit.key_of(name) == pub, "the same one when asked again")
+    other_key = filmgit.key_of("w-other")
+    check(other_key != pub, "and every repository another")
+    url = filmgit.set_remote(name)
+    check(
+        url == "git@github.com:kitcut-films/p-abcdefghij.git",
+        "its copy is in the films' own organisation",
+        url,
+    )
+    ssh = filmgit.git(repo, "config", "core.sshCommand")
+    check(
+        filmgit.key_path(name) in ssh and "IdentitiesOnly=yes" in ssh,
+        "pushed with that key and no other",
+        ssh,
+    )
+    check(
+        filmgit.published(name) and not filmgit.published("w-other"),
+        "it counts as published; one with a key and no copy does not",
+    )
+
+    there = os.path.join(HOME, "github", name + ".git")
+    subprocess.run(
+        ["git", "init", "-q", "--bare", "--initial-branch=main", there],
+        check=True,
+        capture_output=True,
+    )
+    filmgit.git(
+        repo, "remote", "set-url", filmgit.REMOTE, there
+    )  # the stand-in, reached without ssh
+    p = filmgit.push()
+    check(name in p["pushed"] and not p["failed"], "a published repository is pushed", p)
+    check("films/%s/film.js" % f.id in tree(there), "its copy holds the film")
+    check(tags(there) == tags(repo), "and every version's tag", tags(there))
+    check(
+        filmgit.push(only="w-other")["unpublished"] == ["w-other"],
+        "the others wait to be published",
+    )
+
+    put(os.path.dirname(os.environ["STUDIO_ENV_FILE"]), ".env", "STUDIO_DRILL=1" + chr(10))
+    drill = filmgit.push()
+    os.remove(os.environ["STUDIO_ENV_FILE"])
+    check(not drill["pushed"] and not drill["unpublished"], "a rehearsal pushes nothing", drill)
+    for rn in ("p-abcdefghij", "w-other", "w-" + "0" * 20):
+        check(filmgit.NAME.match(rn), "%s is a repository's name" % rn)
+    check(
+        not filmgit.NAME.match("../x") and not filmgit.NAME.match("p-short"), "and nothing else is"
+    )
+    return there
+
+
+def a_deleted_film_goes_from_github_too(f, there):
+    p = filmgit.push()
+    check(
+        "p-abcdefghij" in p["pushed"],
+        "after a film was forgotten the repository is pushed again",
+        p,
+    )
+    every = filmgit.git(there, "rev-list", "--all").split()
+    held = " ".join(filmgit.git(there, "ls-tree", "-r", "--name-only", c) for c in every)
+    check(
+        f.id not in held and not [t for t in tags(there) if t.startswith(f.id)],
+        "and its copy no longer holds the film, nor its tags",
+    )
+
+
 def a_deleted_film(f, other, kept):
     repo = filmgit.repo_of("p-abcdefghij")
     secret = "version two"
@@ -297,7 +381,9 @@ if __name__ == "__main__":
         a_new_version(f, other, repo)
         kept = versions_on_disk_go_in_first()
         where_a_film_goes()
+        there = to_github(f)
         a_deleted_film(f, other, kept)
+        a_deleted_film_goes_from_github_too(f, there)
         too_many_missing_is_refused()
     finally:
         shutil.rmtree(HOME, ignore_errors=True)

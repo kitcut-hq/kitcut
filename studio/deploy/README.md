@@ -418,6 +418,8 @@ bash studio/deploy/ops.sh filmgit --plan           # what a sync would commit an
 bash studio/deploy/ops.sh filmgit                  # the sync now (hourly by kitcut-filmgit.timer)
 bash studio/deploy/ops.sh filmgit --log <film-id>  # a film's versions, as commits
 bash studio/deploy/ops.sh filmgit install          # install and start the hourly timer
+bash studio/deploy/ops.sh filmgit publish          # the repositories GitHub does not have yet:
+                                                   # made there, each with a key of its own
 ```
 
 A film is code, and `studio/filmgit.py` keeps each project's films in one bare git repository,
@@ -437,11 +439,20 @@ versions made within the hour are one commit. A film that was deleted is rewritt
 repository by the next sync -- its folder, its tags, the bytes -- and that is refused on a home
 that is not whole and past 20 films at once.
 
-The repositories ride the mirror with the rest of the home. Nothing is pushed to GitHub yet:
-that needs an organisation of its own (never `kitcut-hq`: the machine runs people's prompts and
-must hold no key that reaches the product's code) and a key limited to it. Working on a film by
-hand through git (clone, change, push a branch, the studio renders it as the next version) is
-the step after that; until then it is `ops.sh take` / `put`.
+The repositories ride the mirror with the rest of the home, and each has a copy on GitHub:
+private, in an organisation of its own, `github.com/kitcut-films` (never `kitcut-hq`: the
+machine runs people's prompts and must hold no key that reaches the product's code). The
+machine holds no key to that organisation either. Every repository is pushed with a key made
+for it alone (`~/.ssh/filmgit/<name>` on the VM), registered on GitHub as a deploy key that may
+write that one repository and nothing else. Making a repository there and registering its key
+takes a GitHub sign-in that may do so, which is this laptop's: `ops.sh filmgit publish` does it
+for every repository GitHub does not have yet (a new project waits for the next time it is
+run). From then on each hourly sync pushes with `--mirror`, so a film forgotten here goes from
+there too, and GitHub being down is tried again an hour later. A machine built again has new
+keys: `filmgit publish` registers them (the old ones stay on GitHub until removed there).
+
+Working on a film by hand through git (clone, change, push a branch, the studio renders it as
+the next version) is the step after that; until then it is `ops.sh take` / `put`.
 
 ## SSH for Claude cloud sessions
 

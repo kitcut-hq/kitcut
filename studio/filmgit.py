@@ -6,7 +6,10 @@
                                                     its repository as it stands, and forget the
                                                     films that are gone (hourly, kitcut-filmgit.timer)
     python studio/filmgit.py --log <id>             a film's history: its versions, as commits
-    (on the VM: ops.sh filmgit [--plan | --log <id>])
+    python studio/filmgit.py --push                 push the published repositories to GitHub
+    python studio/filmgit.py --unpublished          name and public key of each one not there yet
+    python studio/filmgit.py --set-remote NAME...   these are there now: point at them
+    (on the VM: ops.sh filmgit [--plan | --log <id> | publish])
 
 Why: a film is code -- film.js, its cast, its score -- and the studio kept each film's code as
 loose files, the last three versions beside it (rounds.KEEP). A hand fix sent back over a newer
@@ -37,8 +40,13 @@ repository and no such film on the machine rewrites that repository without it, 
 That is refused on a machine whose home is not whole (backup.there), on a rehearsal, and past
 MAX_FORGET films in one run -- a disk that did not mount must not read as "every film was deleted".
 
-Nothing is pushed anywhere from here yet (the mirror carries the repositories with the rest of
-the home). Needs git on PATH.
+Their copy on GitHub: private repositories in an organisation of their own (kitcut-films, never
+the one the product's code is in). Each repository is pushed with a key of its own, registered
+there as a deploy key that may write that one repository and nothing else -- so the machine,
+which runs people's prompts, holds no key to the organisation. Making a repository there and
+registering its key is done from the laptop (`ops.sh filmgit publish`, with a GitHub sign-in);
+from then on every sync pushes it (--mirror: what was forgotten here goes from there too), and
+GitHub being down is tried again at the next sync. Needs git and ssh-keygen on PATH.
 """
 
 import os
@@ -80,6 +88,9 @@ NOT_ASSETS = (
 )
 DONE = "done"
 MAX_FORGET = 20
+REMOTE = "github"  # a repository's copy on GitHub: private, in an organisation of its own
+ORG = os.environ.get("STUDIO_FILMS_ORG") or "kitcut-films"
+NAME = re.compile(r"^(p-[a-z2-7]{10}|w-[0-9a-f]{20}|w-other)$")  # what repo_name gives
 FILM_PATH = re.compile(r"^films/(studio-\d{8}-\d{6}(?:-[a-z2-7]{6})?)$")
 
 
@@ -417,6 +428,95 @@ def sync(only=None, plan=False):
     return out
 
 
+def names():
+    """Every repository here, by name."""
+    return sorted(
+        n[:-4] for n in (os.listdir(ROOT) if os.path.isdir(ROOT) else []) if n.endswith(".git")
+    )
+
+
+def key_path(name):
+    return os.path.join(os.path.expanduser("~"), ".ssh", "filmgit", name)
+
+
+def published(name):
+    """Whether this repository has its copy on GitHub set up: the remote, and its own key here."""
+    return bool(git(repo_of(name), "remote", "get-url", REMOTE, check=False)) and os.path.isfile(
+        key_path(name)
+    )
+
+
+def key_of(name):
+    """The public half of this repository's own key, made when there is none. One key per
+    repository: on GitHub it is a deploy key that may write that one repository and nothing
+    else, so the machine never holds a key to the whole organisation."""
+    p = key_path(name)
+    if not os.path.isfile(p):
+        os.makedirs(os.path.dirname(p), mode=0o700, exist_ok=True)
+        cmd = [
+            "ssh-keygen",
+            "-q",
+            "-t",
+            "ed25519",
+            "-N",
+            "",
+            "-C",
+            "kitcut-studio film repository %s" % name,
+            "-f",
+            p,
+        ]
+        subprocess.run(cmd, check=True, capture_output=True)
+    with open(p + ".pub", encoding="ascii") as f:
+        return f.read().strip()
+
+
+def set_remote(name, org=None):
+    """Point this repository at its GitHub copy, to be pushed with its own key."""
+    repo, url = repo_of(name), "git@github.com:%s/%s.git" % (org or ORG, name)
+    if git(repo, "remote", "get-url", REMOTE, check=False):
+        git(repo, "remote", "set-url", REMOTE, url)
+    else:
+        git(repo, "remote", "add", REMOTE, url)
+    ssh = (
+        "ssh -i %s -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
+        % key_path(name)
+    )
+    git(repo, "config", "core.sshCommand", ssh)
+    return url
+
+
+def push(only=None):
+    """Every published repository to GitHub, exactly as it is here (--mirror: a film that was
+    forgotten here goes from there too). -> {"pushed": [names], "failed": [(name, why)],
+    "unpublished": [names]}. GitHub being down is never an error of the studio's: it is tried
+    again at the next sync."""
+    out = {"pushed": [], "failed": [], "unpublished": []}
+    if backup.setting("STUDIO_DRILL") == "1":  # a rehearsal's copy of the repositories stays there
+        return out
+    for name in names():
+        if only and name != only:
+            continue
+        repo = repo_of(name)
+        if not head(repo):
+            continue
+        if not published(name):
+            out["unpublished"].append(name)
+            continue
+        e = dict(os.environ, GIT_DIR=repo)
+        r = subprocess.run(
+            ["git", "push", "--mirror", "--quiet", REMOTE],
+            env=e,
+            capture_output=True,
+            check=False,
+            timeout=600,
+        )
+        if r.returncode == 0:
+            out["pushed"].append(name)
+        else:
+            out["failed"].append((name, r.stderr.decode("utf-8", "replace").strip()[-200:]))
+    return out
+
+
 def log(fid):
     f = films.Film.open(fid)
     if f is None:
@@ -445,12 +545,55 @@ if __name__ == "__main__":
     g.add_argument("--plan", action="store_true", help="what a sync would do; writes nothing")
     g.add_argument("--sync", action="store_true", help="commit what is new, forget what is gone")
     g.add_argument("--log", metavar="ID", help="a film's history")
+    g.add_argument("--push", action="store_true", help="push the published repositories to GitHub")
+    g.add_argument(
+        "--unpublished",
+        action="store_true",
+        help="name<TAB>public key of each repository not on GitHub yet (makes its key)",
+    )
+    g.add_argument(
+        "--set-remote",
+        metavar="NAME",
+        nargs="+",
+        help="these repositories are on GitHub now: point at them",
+    )
     ap.add_argument("--film", help="--plan/--sync: only this film")
     a = ap.parse_args()
     if a.log:
         log(a.log)
         sys.exit(0)
+    if a.unpublished:
+        for name in names():
+            if head(repo_of(name)) and not published(name):
+                print("%s\t%s" % (name, key_of(name)))
+        sys.exit(0)
+    if a.set_remote:
+        for name in a.set_remote:
+            if not NAME.match(name) or not os.path.isdir(repo_of(name)):
+                sys.exit("no such repository here: %s" % name)
+            print("%s -> %s" % (name, set_remote(name)))
+        sys.exit(0)
+    if a.push:
+        p = push()
+        print(
+            "pushed %d to GitHub; %d failed; %d not there yet (ops.sh filmgit publish)"
+            % (len(p["pushed"]), len(p["failed"]), len(p["unpublished"]))
+        )
+        for name, why in p["failed"][:10]:
+            print("FAILED %s: %s" % (name, why))
+        sys.exit(0)
     res = sync(a.film, a.plan)
+    if (
+        not a.plan and not a.film
+    ):  # then to GitHub: after the sync, so that what is forgotten goes too
+        p = push()
+        if p["pushed"] or p["failed"] or p["unpublished"]:
+            print(
+                "GitHub: pushed %d, %d failed, %d not there yet (ops.sh filmgit publish)"
+                % (len(p["pushed"]), len(p["failed"]), len(p["unpublished"]))
+            )
+        for name, why in p["failed"][:5]:
+            print("  push failed, tried again next time: %s: %s" % (name, why))
     word = "would commit" if a.plan else "committed"
     for fid, n, c in res["films"][:40]:
         print("  %s v%d %s" % (fid, n, c[:12]))

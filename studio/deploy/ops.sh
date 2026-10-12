@@ -111,6 +111,10 @@
 #                                                     repositories (studio/filmgit.py): commit
 #                                                     what is new, forget deleted films; a film's
 #                                                     versions as commits; the hourly timer
+#   bash studio/deploy/ops.sh filmgit publish         the repositories GitHub does not have yet:
+#                                                     made there, private (github.com/kitcut-films),
+#                                                     each with a key of its own that may write
+#                                                     only it; every sync then pushes them
 #   bash studio/deploy/ops.sh secrets seal|check|names   the machine's .env and tunnel credential
 #                                                     sealed for the key vault alone to open
 #                                                     (studio/sealenv.py) | opened through the
@@ -945,11 +949,41 @@ PY
   filmgit)
     # films' code in their projects' git repositories (studio/filmgit.py): a plan writes nothing;
     # a sync commits what is new and forgets the films that were deleted, in a capped unit
-    use="filmgit [--plan] [--film <id>] | filmgit --log <film-id> | filmgit install"
+    use="filmgit [--plan] [--film <id>] | filmgit --log <film-id> | filmgit install | filmgit publish"
     envs="STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env"
     py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/filmgit.py"
     if [ "${1:-}" = install ]; then
       change_on "bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR && sudo systemctl enable -q --now kitcut-filmgit.timer && systemctl is-active kitcut-filmgit.timer"
+      exit 0
+    fi
+    if [ "${1:-}" = publish ]; then
+      # Each repository the machine has and GitHub has not: made there, private, in the films'
+      # own organisation; the machine's own key for it registered as a deploy key that may write
+      # that one repository and nothing else; and the machine pointed at it. Done from this
+      # laptop because it takes a GitHub sign-in that may make repositories there -- the machine
+      # runs people's prompts and holds no such thing. From then on every sync pushes it.
+      org="${KITCUT_FILMS_ORG:-kitcut-films}"
+      list="$(on "cd $REMOTE && $envs $py --unpublished")" || die "cannot list $VM's repositories"
+      [ -n "$list" ] || { echo "every film repository on $VM is on GitHub already"; exit 0; }
+      made=""; n=0
+      while IFS=$'\t' read -r name key; do
+        [[ "$name" =~ ^(p-[a-z2-7]{10}|w-[0-9a-f]{20}|w-other)$ && "$key" == ssh-ed25519\ * ]] || continue
+        if [ "$DRY" = 1 ]; then echo "  would publish $org/$name"; n=$((n + 1)); continue; fi
+        gh api "repos/$org/$name" --silent 2>/dev/null ||
+          gh api -X POST "orgs/$org/repos" -f name="$name" -F private=true -F has_issues=false \
+            -F has_wiki=false -F has_projects=false --silent \
+            -f description="Film code kept by the KitCut studio (studio/filmgit.py). Pictures and sound are not here." ||
+          { echo "  could not make $org/$name" >&2; continue; }
+        # GitHub refuses a key it already has for this repository: then it is there, which is the point
+        gh api -X POST "repos/$org/$name/keys" -f title="$VM" -f key="$key" -F read_only=false --silent 2>/dev/null ||
+          gh api "repos/$org/$name/keys" --jq '.[].key' 2>/dev/null | grep -qF "$(printf '%s' "$key" | cut -d' ' -f2)" ||
+          { echo "  could not register $VM's key for $org/$name" >&2; continue; }
+        made="$made $name"; n=$((n + 1))
+        sleep 0.5
+      done <<< "$list"
+      if [ "$DRY" = 1 ]; then echo "would publish $n repositories to github.com/$org"; exit 0; fi
+      [ -z "$made" ] || on "cd $REMOTE && $envs $py --set-remote$made >/dev/null && $envs nice -n 10 $py --push"
+      echo "published $n of $(printf '%s\n' "$list" | grep -c .) to github.com/$org (private)"
       exit 0
     fi
     mode="--sync"; args=""

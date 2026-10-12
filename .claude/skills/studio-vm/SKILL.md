@@ -59,6 +59,9 @@ bash studio/deploy/ops.sh backup [--plan | --full | status | verify | db]   # th
 bash studio/deploy/ops.sh filmgit [--plan] | --log <film-id>   # films' code in their projects' git
                                                     # repositories (hourly by a timer): a film's
                                                     # versions as commits; "what did version 1 look like"
+bash studio/deploy/ops.sh filmgit publish           # new film repositories made on GitHub (private,
+                                                    # github.com/kitcut-films), each with its own key;
+                                                    # run it now and then: a new project waits for it
 bash studio/deploy/ops.sh prune [--plan]            # finished films' working pictures removed (the
                                                     # frames the review read, thumbnail stills): what
                                                     # would go is printed first; an hourly timer does
