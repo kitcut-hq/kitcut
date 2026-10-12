@@ -114,7 +114,11 @@ step "3. timezone"
 on 'sudo timedatectl set-timezone America/Los_Angeles && timedatectl | grep "Time zone"'
 
 step "4. the checkout"
-if [ "$DRY" = 1 ]; then echo "  would run: push.sh $VM $BRANCH"; else bash "$HERE/push.sh" "$VM" "$BRANCH"; fi
+# what the team can see (origin's branch), not this clone's own: in a worktree, or a clone that has
+# not pulled, the local branch is an older commit and the machine would be built from it (KI-065)
+git -C "$REPO_LOCAL" fetch -q origin
+REV="$(git -C "$REPO_LOCAL" rev-parse --verify "origin/$BRANCH^{commit}")"
+if [ "$DRY" = 1 ]; then echo "  would run: push.sh $VM $BRANCH ${REV:0:12}"; else bash "$HERE/push.sh" "$VM" "$BRANCH" "$REV"; fi
 
 step "5. the toolchain"
 on 'cd /srv/kitcut/repo && HF_HOME=/srv/kitcut/hf bash scripts/setup-linux.sh --studio 2>&1 | tail -4'
