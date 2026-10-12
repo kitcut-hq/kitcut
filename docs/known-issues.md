@@ -1188,3 +1188,50 @@ or the laptop wherever under `~/.cloudflared` it sits. A machine built again at 
 has its old host key forgotten first.
 **Lesson.** A rebuild script that is only ever read is a guess. The rehearsal
 (`provision.sh --drill`) is how it gets run without waiting for the day it is needed.
+
+### KI-066 · open · studio · One film's narration step took 12.5 GB of the machine's 16 and the whole studio froze
+
+**Symptom.** 2026-10-12, from 12:01 PDT: kitcut-studio-1 stopped answering. SSH timed out at the
+banner, studio.kitcut.ai returned Cloudflare 1033 and 502, Azure said "VM running" with its agent
+not ready, the load average was 96 on 4 cores, and Azure's own metric for available memory read
+8.6, 1.8, 0.1, 0.0, 0.0 GB in five-minute steps while the OS disk's queue went from 2 to 302.
+The kernel had killed a 12.5 GB python in `step-...-w564nf-sketch-vo-jobs` at 11:59:50, and one
+like it at 11:42:10. Two films were being made, both 30 seconds long, from two accounts made
+sixteen minutes apart, with the same 4,511-character prompt asking for a Hindi voice-over
+written in Roman letters; each film's narration step ran away 3.5 and 7 minutes after it started.
+**Cause, as far as it is known.** Two things, and only the second is understood.
+- *Why `sketch-vo.py` grows to 12 GB on that input is not known.* The narration code did not
+  change that day and a film recorded normally an hour earlier. The film's `vo.json` and the
+  step's log could not be read while the machine was down.
+- *A step's cap was 12 GB on a 16 GB machine.* `procs.Job` gives every step `STUDIO_FILM_MEM_GB`
+  (default 12), set when the VM had 32 GB and never lowered at the move to 16 (KI-032 added the
+  cap; the downsize of 2026-09-28 changed pools and timeouts, not this). A step that runs away
+  is meant to be killed and to fail its own film. At 12 of 16 GB, with no swap, the machine is
+  out of memory before the cap is reached: everything else is paged out to a hard disk, and the
+  server, sshd and the tunnel stop answering minutes before the kill. Two such steps cannot fit
+  at all.
+- *What was running beside it made it worse.* A first upload of the studio's home to R2
+  (rclone, capped at 1 GB, reading 160 GB through the page cache, since 11:02), the release
+  tests of a ship started at 11:41 (real browsers), and another session's render (three
+  browsers, capped at 6 GB). Each was capped or niced by itself; nobody added the caps up: 12 +
+  6 + 1 and a release's tests on a 16 GB machine.
+**What the site did.** `lib/studiowatch.js`, live for an hour by then, emailed the owner at 12:05
+("The studio has not answered for 5 minutes") and put the two films down for their makers,
+credits back, once the studio had been away fifteen minutes.
+**Done so far.** `STUDIO_FILM_MEM_GB=6` in `studio/deploy/machine.env`, with the reason. It
+takes effect on a machine built from it; the live VM's `.env` needs the same line and a
+`serve.sh restart`.
+**Open.**
+1. The machine was still frozen when this was written; it needs a restart from Azure.
+2. Put `STUDIO_FILM_MEM_GB=6` in the live `.env`, restart the server, and check the number
+   against the step peaks in `STUDIO_HOME/usage/steps-*.jsonl`.
+3. Find the line in `sketch-vo.py` that grows on that prompt: `ops.sh usage --at "11:59"` and
+   the film's `events.jsonl` and `vo.json`; make it again on a machine that is not production,
+   with the cap in place. Until then the same prompt will fail its film at the cap each time.
+4. The mirror's first upload was stopped part-way by the freeze (it resumes where it was) and
+   its timers are not installed; release e3496e8 is built on the VM and not current.
+**Lesson.** A cap protects a machine only if the caps that can be in force at once add up to less
+than the machine. Before starting a bulk job or a ship on the studio's VM, look at what else is
+capped to how much (`ops.sh usage`, `systemctl list-units 'kitcut-*' 'sports-*'`), and do one
+heavy thing at a time: a release's tests and a 160 GB upload were both started because each was
+"capped and niced".
