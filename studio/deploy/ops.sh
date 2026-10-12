@@ -906,7 +906,7 @@ PY
       *) die "$use" ;;
     esac
     unit="kitcut-backup-$(date +%Y%m%d-%H%M%S)"
-    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=768M -p MemoryMax=1G -p Nice=10 $UNIT_ENV $py"
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=768M -p MemoryMax=1G -p Nice=10 -p CPUWeight=20 -p IOSchedulingClass=idle $UNIT_ENV $py"
     [ "$DRY" = 1 ] && exit 0
     follow "$unit"
     ;;

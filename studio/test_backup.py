@@ -271,6 +271,27 @@ def staleness():
     )
 
 
+def a_machine_short_of_memory():
+    check(backup.short_of_memory(floor_mb=0) is None, "with memory to spare a pass runs")
+    huge = backup.short_of_memory(floor_mb=10**9)
+    check(
+        huge is None or huge > 0,
+        "under the floor it says how little there is (None where /proc is not: a laptop)",
+        huge,
+    )
+    if huge is not None:
+        os.environ["STUDIO_BACKUP_MIN_FREE_MB"] = str(10**9)
+        try:
+            res = backup.run()
+        finally:
+            del os.environ["STUDIO_BACKUP_MIN_FREE_MB"]
+        check(
+            res.get("skipped") and res["ok"] and not res.get("parts"),
+            "and the pass waits for the next turn instead of running",
+            res,
+        )
+
+
 def the_machines_note():
     import machine_note  # noqa: PLC0415 -- pymongo only when it writes, which this never does
 
@@ -295,6 +316,7 @@ if __name__ == "__main__":
         a_pass()
         no_home_no_pass()
         staleness()
+        a_machine_short_of_memory()
         the_machines_note()
     finally:
         shutil.rmtree(HOME, ignore_errors=True)

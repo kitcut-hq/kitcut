@@ -119,6 +119,25 @@ def there():
     return None
 
 
+def short_of_memory(floor_mb=None):
+    """Megabytes the machine has available when that is under the floor, else None. A pass reads
+    the films' disk through the page cache; on a machine already short of memory that is what
+    pushes it over (KI-066: the studio froze with a first upload running beside a runaway step).
+    The mirror being a quarter of an hour later is the cheaper of the two."""
+    floor = (
+        float(os.environ.get("STUDIO_BACKUP_MIN_FREE_MB") or 3000) if floor_mb is None else floor_mb
+    )
+    try:
+        with open("/proc/meminfo", encoding="ascii") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    mb = int(line.split()[1]) / 1024
+                    return mb if mb < floor else None
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def lock():
     """This pass's hold on the mirror, or None when another pass has it (the nightly full pass
     runs for a while, and the quarter-hourly one must not start beside it). An open file: the
@@ -137,7 +156,8 @@ def lock():
 
 
 def common(dry=False):
-    out = ["--fast-list", "--transfers", "6", "--checkers", "12", "--retries", "2"]
+    # few at once: it reads the films' disk beside films being made (KI-066)
+    out = ["--fast-list", "--transfers", "3", "--checkers", "6", "--retries", "2"]
     # the home's only links are Claude Code's logs/latest pointers: nothing to mirror
     out += ["--s3-upload-cutoff", CUTOFF, "--s3-no-check-bucket", "--skip-links"]
     out += [
@@ -213,6 +233,10 @@ def run(full=False, dry=False):
     held = None if why else lock()
     if not why and held is None:
         return dict(res, ok=True, skipped="another pass is running", seconds=0)
+    short = None if why or dry else short_of_memory()
+    if short is not None:
+        said = "the machine has %d MB of memory available: the pass waits for the next turn" % short
+        return dict(res, ok=True, skipped=said, seconds=0)
     if why:
         res["errors"].append(why)
     elif not shutil.which("rclone"):
