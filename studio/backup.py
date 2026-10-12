@@ -108,7 +108,9 @@ def account():
 
 def there():
     """Why the home cannot be mirrored now, or None: a pass on an empty folder would file the
-    whole mirror as deleted."""
+    whole mirror as deleted, and a rehearsal's copy of the home (restore.py) is not the studio's."""
+    if setting("STUDIO_DRILL") == "1":
+        return "this machine is a rehearsal (STUDIO_DRILL=1): it never writes the mirror"
     projects = os.path.join(HOME, "projects")
     if not os.path.isdir(projects):
         return "%s is not there (is the data disk mounted?)" % projects
@@ -136,7 +138,8 @@ def lock():
 
 def common(dry=False):
     out = ["--fast-list", "--transfers", "6", "--checkers", "12", "--retries", "2"]
-    out += ["--s3-upload-cutoff", CUTOFF, "--s3-no-check-bucket"]
+    # the home's only links are Claude Code's logs/latest pointers: nothing to mirror
+    out += ["--s3-upload-cutoff", CUTOFF, "--s3-no-check-bucket", "--skip-links"]
     out += [
         "--use-json-log",
         "--log-level",

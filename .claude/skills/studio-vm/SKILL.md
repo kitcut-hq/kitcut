@@ -45,6 +45,10 @@ bash studio/deploy/ops.sh replace <film-id> <folder>   # a remade film takes its
                                                     # and page, old one to backups/, new URLs
 bash studio/deploy/ops.sh forward [8765]            # the VM's studio on this laptop's 127.0.0.1:8765
 bash studio/deploy/ops.sh snapshot [--keep 7]       # data disk: films, checkout, .env, models
+bash studio/deploy/ops.sh backup [--plan | --full | status | verify | db]   # the mirror of the
+                                                    # studio's home on R2 (every 15 min by a timer)
+                                                    # and the database's nightly export; `status`
+                                                    # also shows Azure Backup's last nightly job
 bash studio/deploy/ops.sh prune [--plan]            # finished films' working pictures removed (the
                                                     # frames the review read, thumbnail stills): what
                                                     # would go is printed first; an hourly timer does
@@ -230,7 +234,31 @@ it is left for films made in scenes.
    .venv/bin/python ...`) -- every release shares that venv, the films being made included -- but
    add it to the requirements too.
 5. The machine itself: `vm.sh` (resize, stop/start); rebuild with `provision.sh` (idempotent,
-   reattaches the data disk).
+   reattaches the data disk, keeps the machine's own `.env`).
+
+## The machine is gone, or something on it is
+
+`studio/deploy/README.md`, "If the machine is gone", has a row for each way it can go and the
+commands for each. What to know before opening it:
+
+- **Three copies.** Azure Backup nightly (the whole machine, 30 days; `ops.sh status` prints its
+  last job), the home mirrored to the R2 bucket `kitcut-backup` every 15 minutes (`ops.sh backup
+  status`; what a pass replaced or removed is kept 30 days under `_history/<day>/`), the site's
+  database exported nightly into the same bucket (`db/<day>/`).
+- **One film back** (deleted, or spoiled by a hand fix): `ops.sh restore --film <id>`; what a
+  pass replaced on a given day: `--from-history YYYY-MM-DD` (lands beside the home, to look at).
+- **The site already coped.** It emails the owner after 5 minutes without an answer and puts
+  down the films the studio left after 15, credits back (sketch-studio `lib/studiowatch.js`). So
+  the rebuild is not a race against anyone's credits.
+- **Never start a second machine built from the mirror as it is**: it adopts the films that
+  were being made and writes that into the live database. A machine to prove the mirror is a
+  rehearsal (`provision.sh --drill`, `ops.sh restore --all --drill`, `restore --settle`).
+- **The machine's `.env` is the truth about its keys.** After changing it on the VM: `ops.sh
+  secrets push` (the key vault's copy), and `ops.sh secrets check` any time.
+- **The disk filling** is `ops.sh prune --plan`; `ops.sh status` warns past 80 %.
+- **Do not edit `ops.sh` in the worktree a ship or a followed job is running from.** bash reads a
+  script as it goes: the ship of 2026-10-12 ended with `lder: command not found` because the file
+  grew under it (it had finished its work by then). Edit in another worktree, or wait.
 
 ## Resizing
 

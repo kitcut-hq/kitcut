@@ -271,6 +271,23 @@ def staleness():
     )
 
 
+def the_machines_note():
+    import machine_note  # noqa: PLC0415 -- pymongo only when it writes, which this never does
+
+    n = machine_note.note()
+    check(
+        isinstance(n["disk"].get("pct"), int) and 0 <= n["disk"]["pct"] <= 100,
+        "the machine's note says how full the disk is",
+        n,
+    )
+    check(
+        isinstance(n["mirror"].get("stale"), list) and "last_quick" in n["mirror"],
+        "and where the mirror stands, with why it is behind",
+        n,
+    )
+    check(json.dumps(n) and True, "and is plain enough to go into the database", n)
+
+
 if __name__ == "__main__":
     try:
         the_rules()
@@ -278,6 +295,7 @@ if __name__ == "__main__":
         a_pass()
         no_home_no_pass()
         staleness()
+        the_machines_note()
     finally:
         shutil.rmtree(HOME, ignore_errors=True)
     print("\n%d failed" % len(bad) if bad else "\nall passed")

@@ -21,6 +21,9 @@ Environment=TZ=America/Los_Angeles
 Environment=PYTHONUNBUFFERED=1
 WorkingDirectory=@REPO@
 ExecStart=@REPO@/.venv/bin/python -X utf8 @REPO@/studio/backup.py
+# and what the machine says about itself -- its disk, this mirror -- where the site's watch reads
+# it and emails the owner (machine_note.py). After a pass that failed too ("-"): that is the news
+ExecStopPost=-@REPO@/.venv/bin/python -X utf8 @REPO@/studio/machine_note.py
 Nice=10
 CPUWeight=20
 IOSchedulingClass=best-effort

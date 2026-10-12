@@ -8,7 +8,8 @@ laptop, through the scripts in this folder.
 |---|---|
 | VM | `kitcut-studio-1`, Standard_D4ads_v5 (4 vCPU AMD EPYC, 16 GB) since 2026-09-28 16:05 (D8ads_v5 before), Ubuntu 24.04 |
 | where | resource group `kitcut-PROD`, southcentralus -- beside the films' blob account `kitcutst` |
-| disks | 128 GB OS + 512 GB data at `/srv/kitcut`, both Standard HDD (disk speed is not the bottleneck) |
+| disks | 32 GB OS + 512 GB data at `/srv/kitcut`, both Standard HDD (disk speed is not the bottleneck). The OS disk goes with the machine; the data disk is kept, and carries a delete-lock |
+| copies | Azure Backup nightly (the whole machine, 30 days), the home mirrored to R2 every 15 minutes, the database exported nightly: "Where the copies are". The machine gone: "If the machine is gone" |
 | code | `/srv/kitcut/repo`, pushed from the laptop (`push.sh`); the VM holds no GitHub credentials |
 | films | `/srv/kitcut/studio` (`STUDIO_HOME`) |
 | copies online | Cloudflare R2 bucket `kitcut-media`, public at `https://media.kitcut.ai/films/<id>/<file>`, since 2026-10-07 (downloads are free there; Azure billed them per GB). The `.env` holds `STUDIO_MEDIA_BASE` and the three `STUDIO_R2_` settings; `.env.bak-before-r2` is the file from before. Azure's `kitcutst/films` still holds the films copied before the move (`STUDIO_MEDIA_OLD_BASE`: a deleted film goes from there too); take that setting out when the container is removed |
@@ -338,20 +339,157 @@ later version needs can go. `ops.sh status` warns when the data disk passes 80 %
 What still grows after this: each film's master, web copy and narration takes (about 0.3-0.8 GB
 a film). At 30 films a day that is weeks, not months, on 512 GB.
 
+## Where the copies are
+
+Until 2026-10-12 everything needed to work on a film again -- its code, its narration takes, its
+maker's uploads, the project's cast and voice lines, the templates -- was on the data disk and
+nowhere else, with one snapshot fourteen days old (KI-064). Finished films as they play were
+already on R2, and records in MongoDB. Now there are three copies, each for a different failure:
+
+| copy | what | how often | kept | survives |
+|---|---|---|---|---|
+| **Azure Backup** (vault `kitcut-backup-rsv`, resource group `kitcut-backup`, policy `kitcut-daily-30`) | the whole machine, both disks | nightly, 03:00 Pacific | 30 days | a lost or spoiled disk, a wrong delete, a bad release, a break-in on the machine (it holds no Azure identity and cannot touch the vault) |
+| **The mirror** (R2 bucket `kitcut-backup`, private) | the studio's home by `deploy/backup-filter.txt`, `models/`, the usage logs | every 15 minutes; by checksum nightly | what a pass replaced or removed: 30 days, under `_history/<day>/` | the Azure account, region or resource group going |
+| **The database export** (same bucket, `db/<day>/`) | every collection of `kitcut`, as mongodump writes them | nightly, 02:10 Pacific | 30 days | Atlas losing or spoiling the database |
+
+```bash
+bash studio/deploy/ops.sh status                   # "azure backup:" its last job; "mirror:" the
+                                                   # last pass, and STALE when it is behind
+bash studio/deploy/ops.sh backup --plan            # what a pass would send and remove; sends nothing
+bash studio/deploy/ops.sh backup                   # a pass now (capped, beside the films)
+bash studio/deploy/ops.sh backup --full            # the nightly pass now: every file by checksum
+bash studio/deploy/ops.sh backup verify            # every mirrored file against the bucket
+bash studio/deploy/ops.sh backup db --plan         # the database's collections and sizes
+bash studio/deploy/ops.sh backup install           # install and start the two timers
+bash studio/deploy/ops.sh snapshot                 # before a risky change: the data disk, now
+```
+
+**What is mirrored is one file**, `studio/deploy/backup-filter.txt`: the first rule that matches
+a path decides, and a path no rule matches is mirrored, so a folder nobody thought about is kept.
+`studio/test_backup.py` fails a release when the code makes a folder in the home that no rule
+decides. Left out: a film's `temp/` (but not `temp/brand/`), `releases/`, `servers/`, `cache/`,
+`tmp/`, locks. Not in the mirror at all: the machine's `.env` (secrets are not put in a bucket in
+the clear; Azure Backup has them).
+
+**How a pass compares.** S3 keeps a file's own time in metadata that only a request per object
+returns: 85,000 requests a pass, 96 passes a day. So a pass compares names and sizes from one
+listing (new, resized, removed), then asks about the files changed in the last six hours one by
+one; the nightly pass compares checksums, which a listing also gives because nothing is uploaded
+in parts (`--s3-upload-cutoff 4G`). Only the nightly pass sees a file put back with an old time
+and the very same size.
+
+**Three guards**, because a mirror that follows the disk faithfully also follows a mistake: what
+a pass replaces or removes moves to `_history/<day>/` in the bucket instead of going; a pass
+refuses a home with no `projects/` or no film in it (a data disk that did not mount would read as
+"everything was deleted"); and it stops at 5,000 removals (`backup.MAX_DELETE`).
+
+The key is the films' own R2 key until `STUDIO_BACKUP_R2_KEY_ID` / `_SECRET` are in the VM's
+`.env`: a key allowed to write `kitcut-backup` and nothing else. Delete-locks (`kitcut-keep`) sit
+on the data disk, the key vault and the backup vault: removing one of those is two deliberate
+steps. The locks are on the resources, not the resource group, or `ops.sh snapshot` could not
+prune its old snapshots.
+
 ## Building it again
 
 ```bash
-bash studio/deploy/provision.sh kitcut-studio-1 Standard_D8ads_v5 --dry-run   # what it would do
-bash studio/deploy/provision.sh kitcut-studio-1 Standard_D8ads_v5              # idempotent
+bash studio/deploy/provision.sh kitcut-studio-1 Standard_D4ads_v5 --dry-run   # what it would do
+bash studio/deploy/provision.sh kitcut-studio-1 Standard_D4ads_v5              # idempotent
 ```
 
 The VM, the data disk, the timezone (America/Los_Angeles: the studio's daily caps count local
-days, as on the laptop), the checkout, `scripts/setup-linux.sh --studio`, a `.env` holding only
-the keys the studio reads plus `machine.env`, the tunnel's credentials, and the systemd units --
-the server template, the boot unit, the tunnel, the login check (and `tcp_migrate_req`) --
-installed, not enabled. The units are enabled at the move, never before: the tunnel may run on
-one machine only, and a studio that came up at boot would announce itself. On a rebuild the data
-disk still holds `servers/current`, so `serve.sh start` brings back the instance that served.
+days, as on the laptop), the checkout, `scripts/setup-linux.sh --studio`, the `.env`, the
+tunnel's credentials and the systemd units. Three rules it follows since 2026-10-12 (KI-065):
+
+- **The machine's own `.env` is kept.** It is the one file that holds every key the studio uses,
+  and writing it again from a laptop would have dropped the films' storage keys. Only a machine
+  with none gets one: from the key vault (`kitcut-kv-prod`, secret `studio-env`;
+  `ops.sh secrets push` keeps it current and `ops.sh secrets check` compares, by name), or
+  `--env-file <path>`, or `--env-from-vm <another studio VM>`.
+- **The tunnel's credentials** come from the VM itself when it has them, else the key vault
+  (`studio-tunnel-credentials`, `studio-tunnel-cert`), else this laptop's copy wherever under
+  `~/.cloudflared` it sits (since the move: `backup-20260928-moved-to-vm/`).
+- **What is safe on any machine is enabled** (the usage sampler, the cleanup, the login check).
+  The tunnel, the boot unit and the mirror's timers are the cutover's, never before: the tunnel
+  may run on one machine only, a studio that came up at boot would announce itself, and a
+  machine whose home is not whole yet would mirror its gaps.
+
+`--attach <disk>` takes a data disk restored from Azure Backup. With neither that nor a disk
+named `<vm>-data`, the machine gets a new empty one and its home comes from the mirror.
+
+## If the machine is gone
+
+What is where is in "Where the copies are". Finished films play throughout: they are on R2 and
+the site answers a film's page from its record (`lib/films.js`). The site emails the owner after
+five minutes without an answer and puts down the films the studio left after fifteen
+(sketch-studio `lib/studiowatch.js`), so nobody's credits wait on the rebuild.
+
+| what happened | what is lost | do |
+|---|---|---|
+| The machine is gone or will not boot; the data disk is whole | nothing | **A** |
+| The data disk is lost, spoiled, or something was deleted from it | at most the last 15 minutes | **B** |
+| One film was deleted or spoiled | nothing | `ops.sh restore --film <id>`; or `--from-history <day>` for what a pass replaced that day |
+| Azure itself is gone (account, region, resource group) | at most 15 minutes; YouTube and ElevenLabs connections must be made again by their owners (their key is in the vault) | **C** |
+| The laptop is gone | nothing | any machine with `az`, the repo and a VPN peer; a new SSH key goes in with `az vm user update -g kitcut-PROD -n kitcut-studio-1 -u kitcut --ssh-key-value "$(cat new.pub)"` |
+| The VPN machine (`wg-vm`, `tarta-wireguard`) is gone | nothing; the studio keeps working, only SSH is cut | `az vm run-command invoke -g kitcut-PROD -n kitcut-studio-1 --command-id RunShellScript --scripts "<command>"` runs anything without the VPN |
+| The disk is filling | nothing yet | `ops.sh prune --plan`, "The data disk, and what fills it" |
+
+**A. The machine, with its disk.** About 45 minutes, most of it the toolchain.
+
+```bash
+bash studio/deploy/vm.sh delete kitcut-studio-1          # only if a broken one is still there; the data disk is kept
+bash studio/deploy/provision.sh kitcut-studio-1 Standard_D4ads_v5
+bash studio/deploy/vm.sh ssh kitcut-studio-1 "cd /srv/kitcut/repo && STUDIO_HOME=/srv/kitcut/studio bash studio/serve.sh start"
+bash studio/deploy/ops.sh status                         # the studio answers, studio.kitcut.ai the same release
+bash studio/deploy/ops.sh backup --plan                  # little to send, nothing to remove
+bash studio/deploy/ops.sh backup install                 # the mirror's timers again
+```
+
+The data disk still holds `servers/current`, so `serve.sh start` brings back the server that
+served; the films it was making are adopted by it (queued ones start again, one Claude was writing
+is marked interrupted -- the site has already put those down). Then make one short film and
+check it has a voice (`ops.sh film "..." --seconds 10`), and start Remote Control again if it is
+wanted (it does not survive a reboot).
+
+**B. The disk.** Two sources, used together: last night's Azure Backup brings the whole disk
+back fast, the mirror brings what was made since.
+
+```bash
+C="iaasvmcontainerv2;kitcut-prod;kitcut-studio-1"
+MSYS_NO_PATHCONV=1 az backup recoverypoint list -g kitcut-backup -v kitcut-backup-rsv -c "$C" -i kitcut-studio-1 \
+  --query "[].{name:name, at:properties.recoveryPointTime, kind:properties.recoveryPointType}" -o table
+MSYS_NO_PATHCONV=1 az backup restore restore-disks -g kitcut-backup -v kitcut-backup-rsv -c "$C" -i kitcut-studio-1 \
+  --rp-name <name> --storage-account kitcutst --target-resource-group kitcut-PROD   # managed disks, named by Azure
+az disk list -g kitcut-PROD --query "[?diskSizeGb>=\`500\`].{name:name, state:diskState}" -o table
+bash studio/deploy/vm.sh delete kitcut-studio-1                         # if it is still there
+bash studio/deploy/provision.sh kitcut-studio-1 Standard_D4ads_v5 --attach <the restored 512 GB disk>
+bash studio/deploy/ops.sh restore --all                  # what the mirror has that is newer: minutes
+```
+
+then `serve.sh start`, `status`, `backup --plan`, `backup install` as in A. The old disk
+`kitcut-studio-1-data` carries a delete-lock (`kitcut-keep`): keep it until the new one has
+served for a day. `provision.sh` looks for a disk named `<vm>-data` first, so from then on either
+pass `--attach` again or copy the restored disk into one of that name (`az disk create --source`).
+
+With no Azure Backup to restore from, leave `--attach` out: the machine gets an empty disk and
+`ops.sh restore --all` brings the whole home (about 165 GB) and `models/` from the mirror. The
+`.env` then comes from the key vault.
+
+**C. Azure itself.** The mirror and the database export are on Cloudflare; the code is on
+GitHub. Any Ubuntu 24.04 machine with 4 cores, 16 GB and 500 GB will do:
+`scripts/setup-linux.sh --studio`, `studio/deploy/install.sh`, a `.env`, `studio/restore.py
+--all`, `studio/serve.sh release` and `start`. What Azure held and must be made again: the
+`.env` (each key from the service that issued it -- the names are `procs.py`'s; the Claude
+login with `claude setup-token`), and the vault key that seals the site's YouTube grants and
+ElevenLabs keys, without which each owner connects again. The site's own settings live in Vercel
+and are not affected. The database, if Atlas lost it too: `studio/dbdump.py --restore`.
+
+**Never build a second machine from the mirror and start it as it is.** A server on a restored
+home adopts every film that was being made when the home was mirrored, and writes that into the
+live database: their makers are refunded and emailed. A machine made only to prove the mirror is
+a rehearsal: `provision.sh <vm> <size> --drill --env-from-vm kitcut-studio-1`, then
+`KITCUT_VM=<vm> ops.sh restore --all --drill` and `restore --settle`. Its `.env` has no
+database, no announcement, no tunnel and no key to the films' bucket (`restore.py
+--check-drill` names what is still there), and `backup.py` refuses to write the mirror from it.
 
 ## The move (cutover), and back
 

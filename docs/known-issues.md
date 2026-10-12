@@ -1139,3 +1139,52 @@ mirror of the studio's home that does not exist yet (`studio/deploy/README.md`, 
 **Lesson.** A step that writes scratch files inside a film says, in the same change, who removes
 them; and a number that can stop production (disk, memory: KI-045) gets a threshold and a
 warning the day it is first printed.
+
+### KI-064 · fixed · studio · Everything needed to work on a film again was on one disk, with one snapshot fourteen days old
+
+**Symptom.** None yet: found on 2026-10-12 by asking what would be lost if the studio's machine
+died. Finished films would have kept playing (their copies are on R2) and no account, credit or
+record would have gone (MongoDB). But each film's code and narration takes, its maker's uploaded
+pictures and voice notes, every project's cast, approved voice lines and brand kit, the built
+templates, older versions' sources and the Claude sessions were on the data disk and nowhere
+else: no "Change something", no going back a version, no publishing an older film to YouTube, no
+next episode with the same cast. The one snapshot of that disk was from 2026-09-28.
+**Cause.** `ops.sh snapshot` existed and nothing ran it; the runbook's rebuild assumed the disk
+survives ("a rebuild reattaches the existing data disk") and had no step that restores one. The
+films' move to R2 (2026-10-07) covered what a viewer plays, and read as "the films are backed
+up". Nothing listed what a film is made of beside what it plays as.
+**Fixed.** Three copies, each for another failure (`studio/deploy/README.md`, "Where the copies
+are"): Azure Backup of the whole machine nightly, 30 days, in a vault the machine cannot reach;
+the studio's home mirrored to a private R2 bucket every 15 minutes with 30 days of what each pass
+replaced (`studio/backup.py`, rules in `deploy/backup-filter.txt`); the site's database exported
+nightly (`studio/dbdump.py`). `studio/restore.py` brings the home or one film back, and
+"If the machine is gone" is the procedure for each way it can go. Delete-locks on the data disk,
+the key vault and the backup vault. The first mirror pass: 87,212 files, 162.8 GB.
+**Not covered.** A film's pictures and sound are mirrored as they are now; of an older version
+only what the film itself keeps (the last three). The laptop's own project folders are not part
+of this. If Azure itself is lost, the key that seals the site's YouTube grants and ElevenLabs
+keys goes with it and each owner connects again.
+**Lesson.** "Backed up" is a claim about a restore: say what would be opened again, by which
+command, and how old it would be -- and run that command once before believing it.
+
+### KI-065 · fixed · studio · Rebuilding the machine by its own script would have dropped the films' storage keys and left it without its tunnel
+
+**Symptom.** None yet: read off `studio/deploy/provision.sh` on 2026-10-12, before it was ever
+needed. Run against the surviving data disk it would have (1) written the machine's `.env` again
+from the laptop's, keeping four settings of the VM's own -- and the films' R2 keys were not
+among them, nor in the laptop's file, so new films would have gone back to Azure storage or
+nowhere; and (2) copied `~/.cloudflared` "except `backup-*`", while the laptop's only copy of the
+tunnel credential had been moved into `backup-20260928-moved-to-vm/` at the cutover, on purpose,
+so the laptop could not start a second connector. A rebuilt machine with no credential has no
+tunnel: kitcut.ai would not have found the studio.
+**Cause.** The script was written for the first build, when the laptop held every key, and was
+never run again as the VM's `.env` took on settings of its own (the Claude login, the tunnel,
+R2). Each later change added one name to a keep-list instead of asking which file is the truth.
+**Fixed** (`studio/deploy/provision.sh`, `ops.sh secrets`). The machine's own `.env` is kept as
+it is; a machine with none gets it from the key vault (`ops.sh secrets push` stores it, `secrets
+check` compares by name), or from a file or another VM named on the command line, and an empty
+or short one is refused rather than written. The tunnel credential comes from the VM, the vault,
+or the laptop wherever under `~/.cloudflared` it sits. A machine built again at the old address
+has its old host key forgotten first.
+**Lesson.** A rebuild script that is only ever read is a guess. The rehearsal
+(`provision.sh --drill`) is how it gets run without waiting for the day it is needed.

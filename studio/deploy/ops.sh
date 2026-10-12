@@ -106,6 +106,13 @@
 #                                                     file checked against the bucket
 #   bash studio/deploy/ops.sh backup db [--plan]      the site's database exported into the bucket
 #   bash studio/deploy/ops.sh backup install          install and start the mirror's two timers
+#   bash studio/deploy/ops.sh secrets push|check      the machine's .env and tunnel credentials
+#                                                     stored in the key vault | compared with it
+#                                                     (names only; a value is never printed)
+#   bash studio/deploy/ops.sh restore --plan          what the mirror holds, folder by folder
+#   bash studio/deploy/ops.sh restore --all | --film <id> [--from-history YYYY-MM-DD]
+#                                                     the home, or one film, back from the mirror
+#                                                     (studio/restore.py): it only adds
 #   bash studio/deploy/ops.sh snapshot [--keep N]     an incremental snapshot of the data disk
 #                                                     (films, checkout, .env), keep the newest N (7)
 #   bash studio/deploy/ops.sh snapshots               list them
@@ -119,6 +126,7 @@ VM="${KITCUT_VM:-kitcut-studio-1}"
 RG="${KITCUT_RG:-kitcut-PROD}"
 BACKUP_RG="${KITCUT_BACKUP_RG:-kitcut-backup}"
 BACKUP_VAULT="${KITCUT_BACKUP_VAULT:-kitcut-backup-rsv}"
+VAULT="${KITCUT_VAULT:-kitcut-kv-prod}"
 PORT=8765
 REMOTE=/srv/kitcut/repo
 HOME_DIR=/srv/kitcut/studio
@@ -894,6 +902,79 @@ PY
     esac
     unit="kitcut-backup-$(date +%Y%m%d-%H%M%S)"
     change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=768M -p MemoryMax=1G -p Nice=10 $UNIT_ENV $py"
+    [ "$DRY" = 1 ] && exit 0
+    follow "$unit"
+    ;;
+
+  secrets)
+    # the machine's .env and its tunnel credentials, kept in the key vault as well: the .env is
+    # the only file holding every key the studio uses, and it was on one disk (KI-065). A value
+    # passes through a private folder on this laptop that is removed at once, and is never printed
+    use="secrets push | secrets check"
+    tmp="$(mktemp -d)"; chmod 700 "$tmp"; trap 'rm -rf "$tmp"' EXIT
+    on "cat $REMOTE/.env" > "$tmp/vm.env" || die "cannot read $VM's .env"
+    [ "$(grep -c = "$tmp/vm.env")" -ge 8 ] || die "$VM's .env came back empty or too short"
+    case "${1:-}" in
+      push)
+        name="$(on 'basename "$(ls ~/.cloudflared/*.json | head -1)"')"
+        [[ "$name" =~ ^[0-9a-f-]{36}\.json$ ]] || die "no tunnel credentials on $VM (~/.cloudflared/<uuid>.json)"
+        on "cat ~/.cloudflared/$name" > "$tmp/tunnel.json"
+        on 'cat ~/.cloudflared/cert.pem' > "$tmp/cert.pem"
+        change az_ keyvault secret set --vault-name "$VAULT" --name studio-env --file "$tmp/vm.env" --encoding utf-8 --tags from="$VM" --output none
+        change az_ keyvault secret set --vault-name "$VAULT" --name studio-tunnel-credentials --file "$tmp/tunnel.json" --encoding utf-8 --tags file="$name" --output none
+        change az_ keyvault secret set --vault-name "$VAULT" --name studio-tunnel-cert --file "$tmp/cert.pem" --encoding utf-8 --output none
+        [ "$DRY" = 1 ] || echo "stored in $VAULT: studio-env ($(grep -c = "$tmp/vm.env") settings), studio-tunnel-credentials ($name), studio-tunnel-cert"
+        ;;
+      check)
+        az_ keyvault secret download --vault-name "$VAULT" --name studio-env --file "$tmp/kv.env" --encoding utf-8 >/dev/null ||
+          die "cannot read studio-env in $VAULT (never pushed, or this account may not read its secrets)"
+        python - "$tmp/vm.env" "$tmp/kv.env" "$VM" "$VAULT" <<'PY'
+import hashlib, sys
+def read(p):
+    out = {}
+    for line in open(p, encoding="utf-8-sig", newline="").read().replace("\r", "").splitlines():
+        k, eq, v = line.partition("=")
+        if eq and not k.lstrip().startswith("#"):
+            out[k.strip()] = hashlib.sha256(v.strip().encode()).hexdigest()
+    return out
+vm, kv = read(sys.argv[1]), read(sys.argv[2])
+only_vm, only_kv = sorted(set(vm) - set(kv)), sorted(set(kv) - set(vm))
+differ = sorted(k for k in set(vm) & set(kv) if vm[k] != kv[k])
+if not (only_vm or only_kv or differ):
+    print("secrets: %s's .env and the vault's copy are the same (%d settings)" % (sys.argv[3], len(vm)))
+    sys.exit(0)
+print("secrets: %s's .env and %s's copy DIFFER -- ops.sh secrets push stores the machine's" % (sys.argv[3], sys.argv[4]))
+for what, names in (("only on the machine", only_vm), ("only in the vault", only_kv), ("another value", differ)):
+    if names:
+        print("  %s: %s" % (what, ", ".join(names)))
+sys.exit(1)
+PY
+        ;;
+      *) die "$use" ;;
+    esac
+    ;;
+
+  restore)
+    # the studio's home back from its mirror (studio/restore.py): it only adds -- a file that is
+    # here and newer stays, nothing is removed. --plan reads the bucket and changes nothing
+    use="restore --plan | restore --all [--drill] | restore --film <id> [--from-history YYYY-MM-DD] | restore --check-drill | restore --settle"
+    envs="STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env"
+    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/restore.py"
+    case "${1:-}" in
+      --plan|--check-drill) on "cd $REMOTE && $envs $py $1"; exit $? ;;
+      --settle) change_on "cd $REMOTE && $envs $py --settle"; exit $? ;;
+      --all) args="--all"; [ "${2:-}" = "--drill" ] && args="$args --drill" ;;
+      --film)
+        [[ "${2:-}" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: ${2:-}"
+        args="--film $2"
+        if [ "${3:-}" = "--from-history" ]; then
+          [[ "${4:-}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || die "--from-history needs a day, YYYY-MM-DD"
+          args="$args --from-history $4"
+        fi ;;
+      *) die "$use" ;;
+    esac
+    unit="kitcut-restore-$(date +%Y%m%d-%H%M%S)"
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=768M -p MemoryMax=1G -p Nice=10 $UNIT_ENV $py $args"
     [ "$DRY" = 1 ] && exit 0
     follow "$unit"
     ;;

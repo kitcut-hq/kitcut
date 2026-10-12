@@ -175,6 +175,18 @@ class MongoStore:
             upsert=True,
         )
 
+    def note_machine(self, note):
+        """What the studio's machine says about itself (machine_note.py, every 15 minutes): its
+        data disk and the mirror of its home. Beside where the site finds the studio --
+        kitcut.studio_hosts, document "studio", field "machine" -- because the site's watch
+        (sketch-studio lib/studiowatch.js) tells the owner from it, and must be able to read it
+        while the tunnel is down."""
+        self.col().database["studio_hosts"].update_one(
+            {"_id": "studio"},
+            {"$set": {"machine": dict(note, host=HOST, at=now())}},
+            upsert=True,
+        )
+
     def _rows(self):
         """The outbox's rows as written, one string each (none when there is no outbox)."""
         try:
