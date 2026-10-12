@@ -1,0 +1,27 @@
+# Films' code kept under version control (studio/filmgit.py --sync): every finished film whose
+# code is not in its project's repository as it stands is committed, tagged with its version, and
+# a film that was deleted is rewritten out of its repository. Started every hour by
+# kitcut-filmgit.timer. Installed by install.sh with the @...@ paths filled in; enabled by
+# `ops.sh filmgit install`. Nothing in the making of a film calls this: it looks, so it cannot
+# fail one.
+[Unit]
+Description=KitCut studio: films' code into their projects' git repositories (studio/filmgit.py)
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+Environment=STUDIO_HOME=@HOME@
+Environment=STUDIO_REPO=@REPO@
+Environment=STUDIO_ENV_FILE=@REPO@/.env
+Environment=TZ=America/Los_Angeles
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=@REPO@
+ExecStart=@REPO@/.venv/bin/python -X utf8 @REPO@/studio/filmgit.py --sync
+Nice=10
+CPUWeight=10
+IOSchedulingClass=idle
+MemoryHigh=384M
+MemoryMax=512M
+TimeoutStartSec=3600

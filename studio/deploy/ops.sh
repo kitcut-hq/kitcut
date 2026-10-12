@@ -106,6 +106,11 @@
 #                                                     file checked against the bucket
 #   bash studio/deploy/ops.sh backup db [--plan]      the site's database exported into the bucket
 #   bash studio/deploy/ops.sh backup install          install and start the mirror's two timers
+#   bash studio/deploy/ops.sh filmgit [--plan] [--film <id>] | --log <id> | install
+#                                                     films' code in their projects' git
+#                                                     repositories (studio/filmgit.py): commit
+#                                                     what is new, forget deleted films; a film's
+#                                                     versions as commits; the hourly timer
 #   bash studio/deploy/ops.sh secrets push|check      the machine's .env and tunnel credentials
 #                                                     stored in the key vault | compared with it
 #                                                     (names only; a value is never printed)
@@ -902,6 +907,35 @@ PY
     esac
     unit="kitcut-backup-$(date +%Y%m%d-%H%M%S)"
     change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=768M -p MemoryMax=1G -p Nice=10 $UNIT_ENV $py"
+    [ "$DRY" = 1 ] && exit 0
+    follow "$unit"
+    ;;
+
+  filmgit)
+    # films' code in their projects' git repositories (studio/filmgit.py): a plan writes nothing;
+    # a sync commits what is new and forgets the films that were deleted, in a capped unit
+    use="filmgit [--plan] [--film <id>] | filmgit --log <film-id> | filmgit install"
+    envs="STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env"
+    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/filmgit.py"
+    if [ "${1:-}" = install ]; then
+      change_on "bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR && sudo systemctl enable -q --now kitcut-filmgit.timer && systemctl is-active kitcut-filmgit.timer"
+      exit 0
+    fi
+    mode="--sync"; args=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --plan) mode="--plan" ;;
+        --log|--film)
+          [[ "${2:-}" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: ${2:-}"
+          if [ "$1" = "--log" ]; then mode="--log $2"; else args=" --film $2"; fi
+          shift ;;
+        *) die "$use" ;;
+      esac
+      shift
+    done
+    if [ "$mode" != "--sync" ]; then on "cd $REMOTE && $envs nice -n 10 $py $mode$args"; exit $?; fi
+    unit="kitcut-filmgit-$(date +%Y%m%d-%H%M%S)"
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=384M -p MemoryMax=512M -p Nice=10 $UNIT_ENV $py --sync$args"
     [ "$DRY" = 1 ] && exit 0
     follow "$unit"
     ;;

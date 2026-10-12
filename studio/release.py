@@ -56,6 +56,7 @@ TESTS = (
     "test_prune.py",  # a finished film loses its working pictures and nothing else (KI-063)
     "test_backup.py",  # what is mirrored off the machine, and that every folder of the home is named
     "test_restore.py",  # a rehearsal built from the mirror cannot act as the studio
+    "test_filmgit.py",  # films' code in their projects' git repositories; a deleted film forgotten
     "test_usage.py",  # who uses the machine: each step's bill, the sampler, the report
     "test_scenes.py",  # a film made in scenes: SK.scene on real stills, the passes, carrying on
     "test_people.py",  # people drawn as talking characters: the request, brief, voices, drawing

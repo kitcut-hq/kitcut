@@ -1,0 +1,12 @@
+# Every hour, films' code goes into their projects' git repositories (kitcut-filmgit.service).
+# Half past: the cleanup runs on the hour. Enabled by `ops.sh filmgit install`.
+[Unit]
+Description=KitCut studio: films' code into their projects' git repositories every hour
+
+[Timer]
+OnCalendar=*-*-* *:30:00
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

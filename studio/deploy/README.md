@@ -389,6 +389,38 @@ on the data disk, the key vault and the backup vault: removing one of those is t
 steps. The locks are on the resources, not the resource group, or `ops.sh snapshot` could not
 prune its old snapshots.
 
+## Films' code in git
+
+```bash
+bash studio/deploy/ops.sh filmgit --plan           # what a sync would commit and forget; writes nothing
+bash studio/deploy/ops.sh filmgit                  # the sync now (hourly by kitcut-filmgit.timer)
+bash studio/deploy/ops.sh filmgit --log <film-id>  # a film's versions, as commits
+bash studio/deploy/ops.sh filmgit install          # install and start the hourly timer
+```
+
+A film is code, and `studio/filmgit.py` keeps each project's films in one bare git repository,
+`STUDIO_HOME/git/<project>.git` (a film outside a project: its workspace's, `w-<name>.git`; one
+with no signed-in maker: `w-other.git`). On `main`, `films/<film id>/` holds the film's code
+(`film.js`, `cast/`, `scenes/`, `engine/`, the `*.json` it is made of), `film.json` (what it is)
+and `assets.json` (every file of the film that is not code, with its size: what a checkout
+fetches from the mirror); `library/` holds the project's cast and episode log. A version is a
+commit, tagged `<film id>/v<n>`. Measured 2026-10-12: all 490 films' code is 110 MB, 80 MB of it
+32 engine files copied 1,440 times, which git stores once; the pictures, takes, uploads and
+masters (136 GB) are not in git and never will be.
+
+It is kept by looking, not by being told: a sync compares every finished film with what its
+repository holds and commits the difference, so nothing in the making of a film can fail on it,
+and the first sync is the back-fill (versions still on disk go in first, in order). Two
+versions made within the hour are one commit. A film that was deleted is rewritten out of its
+repository by the next sync -- its folder, its tags, the bytes -- and that is refused on a home
+that is not whole and past 20 films at once.
+
+The repositories ride the mirror with the rest of the home. Nothing is pushed to GitHub yet:
+that needs an organisation of its own (never `kitcut-hq`: the machine runs people's prompts and
+must hold no key that reaches the product's code) and a key limited to it. Working on a film by
+hand through git (clone, change, push a branch, the studio renders it as the next version) is
+the step after that; until then it is `ops.sh take` / `put`.
+
 ## Building it again
 
 ```bash

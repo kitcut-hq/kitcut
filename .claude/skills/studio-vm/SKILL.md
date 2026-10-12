@@ -49,6 +49,9 @@ bash studio/deploy/ops.sh backup [--plan | --full | status | verify | db]   # th
                                                     # studio's home on R2 (every 15 min by a timer)
                                                     # and the database's nightly export; `status`
                                                     # also shows Azure Backup's last nightly job
+bash studio/deploy/ops.sh filmgit [--plan] | --log <film-id>   # films' code in their projects' git
+                                                    # repositories (hourly by a timer): a film's
+                                                    # versions as commits; "what did version 1 look like"
 bash studio/deploy/ops.sh prune [--plan]            # finished films' working pictures removed (the
                                                     # frames the review read, thumbnail stills): what
                                                     # would go is printed first; an hourly timer does
