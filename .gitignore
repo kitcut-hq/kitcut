@@ -117,3 +117,6 @@ config/sketch/*/rigs/
 # Market research tools (market/<place>/): the signed-in session and what it returns stay local
 market/*/local/
 market/*/data/
+
+# the Cloudflare CLI's local cache (account id): written wherever wrangler is run
+.wrangler/
