@@ -215,10 +215,19 @@ How to write it:
      published film, a re-recorded line) goes to the owner as a question, with the reviewer's
      reason. Say in the next brief that it is out of scope, or every round will ask again.
 4. New pack, **new** reviewer, the same brief, no history.
-5. Stop when a fresh reviewer says `SHOW IT` with no blockers. Four rounds at most in one
-   direction; count the blockers each round (the night this was written: 4, 3, 1), and if they
-   are not falling, or the whole opening keeps failing rather than a few seconds of it, stop
-   polishing, draw three different ideas as one picture, and let the owner choose.
+5. **Know the reviewer's floor before you chase it.** Once per series, have a fresh reviewer read
+   the last film the owner approved, with the same brief (and a copy of the review sheet that
+   does not say it was approved). The night this was written the approved episode came back
+   `FIX FIRST` with two blockers and scores of 4, 4, 4, 3, 3, 4, 4: a demanding reviewer finds
+   about two things in anything, in a new place each round (that night: 4, 3, 1, 2, 2, 2 over
+   six rounds, never `SHOW IT`). So the loop does not run to zero. It ends when:
+   - a fresh reviewer says `SHOW IT`; or
+   - the candidate reviews no worse than the approved film (as few blockers, no score lower, and
+     "would have left: nowhere"), and its blockers are not the ones of the round before; or
+   - four rounds have gone in one direction. If by then the same seconds keep failing, or the
+     blockers are not falling, the direction is wrong: draw three different ideas as one picture
+     and let the owner choose.
+   Write the floor into the project's review sheet, so that the next film starts from it.
 6. Then the owner. Send the clip and, in three lines, what the last review said and what it could
    not judge. A reviewer's pass is not approval.
 7. Write the owner's verdict into the project's review sheet the same day, in their words. That
