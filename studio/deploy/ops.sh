@@ -120,6 +120,12 @@
 #                                                     (studio/sealenv.py) | opened through the
 #                                                     vault and compared with the machine's, by
 #                                                     name | what the sealed file holds
+#   bash studio/deploy/ops.sh rc                      Remote Control (claude rc) on the machine: at
+#                                                     boot or not, who is signed in, its screen
+#   bash studio/deploy/ops.sh rc login | code <code> | install | stop
+#                                                     the sign-in a person finishes in a browser
+#                                                     (its link, then the code the page shows);
+#                                                     start it now and with the machine; take it off
 #   bash studio/deploy/ops.sh restore --plan          what the mirror holds, folder by folder
 #   bash studio/deploy/ops.sh restore --all | --film <id> [--from-history YYYY-MM-DD]
 #                                                     the home, or one film, back from the mirror
@@ -334,6 +340,45 @@ EOF
     else
       on "STUDIO_HOME=$HOME_DIR python3 $REMOTE/studio/deploy/usage.py report$(printf ' %q' "$@")"
     fi
+    ;;
+
+  rc)
+    # Remote Control on the machine: `claude rc` kept in tmux by kitcut-claude-rc.service, so it
+    # starts with the machine (deploy/README.md, "Remote Control"). The sign-in is its own tmux
+    # (claude-login): the service's tmux server must be the one systemd started.
+    rc_tm="tmux -L claude-rc"
+    rc_in="tmux -L claude-login"
+    # never the films' token: it is inference-only, Remote Control refuses it
+    rc_cl="env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY \$HOME/.local/bin/claude"
+    rc_shown="grep -v '^[[:space:]]*\$' | tail"
+    case "${1:-}" in
+      "")
+        on "echo \"at boot: \$(systemctl is-enabled kitcut-claude-rc.service 2>/dev/null || echo not installed)   now: \$(systemctl is-active kitcut-claude-rc.service 2>/dev/null)\"
+          $rc_cl auth status 2>/dev/null | grep -E '\"(loggedIn|email|orgName|subscriptionType)\"' || echo 'not signed in: ops.sh rc login'
+          $rc_tm capture-pane -p -J -t rc 2>/dev/null | $rc_shown -15 || true"
+        ;;
+      login)
+        change_on "$rc_in kill-server 2>/dev/null
+          $rc_in new-session -d -s login -x 250 -y 50 '$rc_cl auth login; echo; echo THE SIGN-IN ENDED; sleep 900' && sleep 7 &&
+          $rc_in capture-pane -p -J -t login | $rc_shown -5"
+        echo "open that link in the browser signed in to the account that should see $VM, press Authorize,"
+        echo "then within a few minutes: ops.sh rc code <the code the page shows>"
+        ;;
+      code)
+        [[ "${2:-}" =~ ^[A-Za-z0-9_#.-]+$ ]] || die "rc code <the code the sign-in page shows>"
+        change_on "$rc_in send-keys -t login -l '$2' && $rc_in send-keys -t login Enter && sleep 7 &&
+          $rc_in capture-pane -p -J -t login | $rc_shown -4
+          $rc_cl auth status 2>/dev/null | grep -E '\"(loggedIn|email)\"'"
+        ;;
+      install)
+        change_on "$rc_cl auth status 2>/dev/null | grep -q '\"loggedIn\": true' || { echo 'nobody is signed in on $VM: ops.sh rc login' >&2; exit 1; }
+          bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR && { $rc_in kill-server 2>/dev/null; true; } &&
+          sudo systemctl enable -q kitcut-claude-rc.service && sudo systemctl restart kitcut-claude-rc.service && sleep 10 &&
+          systemctl is-active kitcut-claude-rc.service && $rc_tm capture-pane -p -J -t rc | $rc_shown -12"
+        ;;
+      stop) change_on "sudo systemctl disable -q --now kitcut-claude-rc.service; systemctl is-active kitcut-claude-rc.service || true" ;;
+      *) die "rc | rc login | rc code <code> | rc install | rc stop" ;;
+    esac
     ;;
 
   ship)

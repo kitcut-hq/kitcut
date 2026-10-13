@@ -1,0 +1,40 @@
+# Remote Control for this machine: `claude rc` kept running in a tmux session, so the machine is
+# listed at claude.ai/code and a Claude session can be started on it from a phone or a browser.
+# Installed by install.sh with the @...@ paths filled in; enabled by `ops.sh rc install`, never by
+# a ship -- a machine is given Remote Control on purpose (deploy/README.md, "Remote Control").
+#
+# It needs a full sign-in first, once per machine and by a person: `claude auth login` as @USER@
+# (`ops.sh rc login` shows the link). The films' CLAUDE_CODE_OAUTH_TOKEN is an inference-only
+# token and Remote Control refuses it, so neither it nor an API key may be in this unit's
+# environment; films keep their own token and are not billed to the account that signed in here.
+#
+# tmux is the service: `claude rc` needs a terminal, and `ops.sh rc` reads its screen. Every
+# session started through Remote Control runs inside this unit, so the cap below is on all of
+# them together (KI-045: a job beside a live studio gets its cap before it starts). It is a share
+# of the machine: 3.2 GB of the VM's 16, 6.4 of a 32 GB machine. Heavy work still goes through
+# ops.sh, whose jobs are their own units with their own caps.
+[Unit]
+Description=KitCut studio: Claude Code Remote Control (claude rc, in tmux -L claude-rc)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=forking
+User=@USER@
+Group=@USER@
+WorkingDirectory=@REPO@
+Environment=PATH=/home/@USER@/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=TERM=xterm-256color
+Environment=TZ=America/Los_Angeles
+UnsetEnvironment=CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY
+ExecStart=/usr/bin/tmux -L claude-rc new-session -d -s rc -x 200 -y 50 -c @REPO@ "claude rc"
+ExecStop=/usr/bin/tmux -L claude-rc kill-server
+# when `claude rc` ends (the network at boot, an update) the tmux server ends with it: start again
+Restart=always
+RestartSec=60
+MemoryHigh=15%
+MemoryMax=20%
+
+[Install]
+WantedBy=multi-user.target

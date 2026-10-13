@@ -4,8 +4,9 @@
 # boot, the tunnel, the daily Claude login check (a service and its timer), the usage sampler
 # (kitcut-usage.service: who uses the CPU and memory), the hourly removal of finished films'
 # working pictures (kitcut-prune, a service and its timer) and the mirror of the studio's home to
-# R2 (kitcut-backup every 15 minutes, kitcut-backup-full nightly) -- plus the one kernel setting
-# two servers on one port need.
+# R2 (kitcut-backup every 15 minutes, kitcut-backup-full nightly) and Remote Control
+# (kitcut-claude-rc: `claude rc` in tmux, enabled only by `ops.sh rc install`) -- plus the one
+# kernel setting two servers on one port need.
 #
 #   bash studio/deploy/install.sh [--home /srv/kitcut/studio] [--dry-run]
 #
@@ -46,7 +47,8 @@ run chmod +x "$REPO"/studio/deploy/*.sh "$REPO"/studio/serve.sh
 for unit in kitcut-studio@.service kitcut-studio-boot.service kitcut-tunnel.service \
   kitcut-login-check.service kitcut-login-check.timer kitcut-usage.service \
   kitcut-prune.service kitcut-prune.timer kitcut-backup.service kitcut-backup.timer \
-  kitcut-backup-full.service kitcut-backup-full.timer kitcut-filmgit.service kitcut-filmgit.timer; do
+  kitcut-backup-full.service kitcut-backup-full.timer kitcut-filmgit.service kitcut-filmgit.timer \
+  kitcut-claude-rc.service; do
   body="$(sed -e "s#@REPO@#$REPO#g" -e "s#@HOME@#$HOME_DIR#g" -e "s#@USER@#$USER_NAME#g" \
     "$REPO/studio/deploy/$unit")"
   put "/etc/systemd/system/$unit" "$body"

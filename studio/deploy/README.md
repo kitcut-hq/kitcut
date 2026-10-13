@@ -541,6 +541,34 @@ Things to know:
   lock (it expires, and it keeps a log), but it needs an API token with Zero Trust permissions;
   ours answered `403` on creating the application. The rule needs "Zone WAF: Edit", which it has.
 
+## Remote Control
+
+`claude rc` on the machine lists it at claude.ai/code, so a Claude session can be started on it
+from a phone or a browser. It is a service, `kitcut-claude-rc.service`: `claude rc` in a tmux
+session (`tmux -L claude-rc`, session `rc`, folder `/srv/kitcut/repo`), started with the machine
+and again a minute after it ends. `install.sh` installs it; nothing enables it but the command
+below -- a machine is given Remote Control on purpose.
+
+```bash
+bash studio/deploy/ops.sh rc                  # at boot or not, who is signed in, its screen
+bash studio/deploy/ops.sh rc login            # starts the sign-in and prints its link
+bash studio/deploy/ops.sh rc code <code>      # the code the page shows after Authorize
+bash studio/deploy/ops.sh rc install          # start it now and with the machine
+bash studio/deploy/ops.sh rc stop             # take it off
+```
+
+- **The sign-in is a person's, once per machine.** The films' `CLAUDE_CODE_OAUTH_TOKEN` is an
+  inference-only token and Remote Control refuses it, so the machine's user gets a full
+  `claude auth login`. The account is whichever one the browser that opens the link is signed in
+  to, and the machine shows only under that account: on 2026-10-12 a first sign-in on the VM
+  landed on the films' account, where the owner could not see it. Films keep their own token
+  (the unit unsets it and any API key), so nothing a film costs moves to that account.
+- **Its cap is a share of the machine** (`MemoryMax=20%`: 3.2 GB of the VM's 16, 6.4 of 32),
+  on every session started through it together. Heavy work still goes through `ops.sh`, whose
+  jobs are units of their own.
+- `claude rc --help` over ssh without a terminal hangs; run `claude rc` only inside tmux.
+- Until 2026-10-12 it was started by hand in a scope on the VM and did not survive a reboot.
+
 ## Building it again
 
 ```bash
@@ -615,8 +643,9 @@ bash studio/deploy/ops.sh backup install                 # the mirror's timers a
 The data disk still holds `servers/current`, so `serve.sh start` brings back the server that
 served; the films it was making are adopted by it (queued ones start again, one Claude was writing
 is marked interrupted -- the site has already put those down). Then make one short film and
-check it has a voice (`ops.sh film "..." --seconds 10`), and start Remote Control again if it is
-wanted (it does not survive a reboot).
+check it has a voice (`ops.sh film "..." --seconds 10`), and give it Remote Control again if it is
+wanted (`ops.sh rc login`, `rc install`: the sign-in lives in the machine's user folder, which a
+rebuilt machine does not have).
 
 **B. The disk.** Two sources, used together: last night's Azure Backup brings the whole disk
 back fast, the mirror brings what was made since.
