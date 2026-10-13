@@ -316,8 +316,11 @@ def main():
         tiles = []
         for dt in (-0.2, -0.1, 0.0, 0.1, 0.2, 0.4):
             tmp = os.path.join(out, "_cut.jpg")
-            still_frame(path, c + dt, tmp, 640)
-            tiles.append((np.asarray(Image.open(tmp).convert("RGB")), clock(c + dt), ""))
+            at = min(
+                c + dt, p["seconds"] - 0.1
+            )  # a cut found at the very end has no frame after it
+            still_frame(path, at, tmp, 640)
+            tiles.append((np.asarray(Image.open(tmp).convert("RGB")), clock(at), ""))
             os.remove(tmp)
         made.append(os.path.join(out, "cut-%02d.jpg" % n))
         sheet(tiles, (3, 2), 640, made[-1])
