@@ -3999,6 +3999,21 @@ was left out. It runs after a series' kept sounds are spelled out, so a kept bel
 score file is still required; an empty `"events": []` is a valid one. Why it exists, and the
 rest of what a YouTube Short needs: `docs/shorts-guidebook.md`.
 
+**A video laid out for a reviewer: `review-pack.py`, and the `video-review` skill.** The studio's
+reader (`studio/review.py`) finds what is broken and is told never to judge taste. Whether a film
+is good is a second review, done by a fresh agent following `.claude/skills/video-review/`, and
+`review-pack.py` is what that agent reads: the first 30 s four frames a second with the narrator's
+words under each frame (`--lines <film>/audio/vo/timeline.json`), the whole video a frame a second,
+each hard cut of the opening as six frames, the file's first frame, and `pack.md` with the cuts and
+the shots between them, the slow and still stretches (short-stillness's bars, on the whole frame),
+loudness second by second and the narration's pauses. `--list` prints the counts and writes no
+pictures. It came out of 2026-10-12: a reviewer reading one frame a second passed an opening its
+owner rejected on sight. Three things about its numbers: two cuts under 0.4 s apart are one (type
+slamming in after a cut reads as a second cut); a dissolve is not a cut; and stillness is not a
+verdict on a wide film (the most watched tactics explainer measured is still for 83% of its
+opening, because it draws on a plain page). `benchmarks.md` in the skill holds six reference
+openings measured with it.
+
 **Does a Short's picture stand still: `short-stillness.py`.** A wide film may hold a diagram
 while the narrator explains it; a Short may not (the guidebook's rule 33). The script reads a
 finished file at five frames a second, looks only at the picture's band (`--box top,bottom` as
