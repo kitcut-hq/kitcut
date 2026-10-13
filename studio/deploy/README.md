@@ -690,6 +690,64 @@ credentials were moved to `~/.cloudflared/backup-20260928-moved-to-vm`, so a lap
 Back: `serve.sh stop` on the VM, restore those three lines on the laptop, `serve.ps1`, and copy
 back what the VM made.
 
+### From one Linux machine to another (the VM to a machine of our own)
+
+The steps above are from before the machine had anything that writes somewhere else. Since
+2026-10-12 it has four: the mirror (`kitcut-backup.timer`, `kitcut-backup-full.timer`), the
+films' code (`kitcut-filmgit.timer`, a `git push --mirror` to GitHub), the cleanup
+(`kitcut-prune.timer`) and the boot unit. Two machines running them is worse than two tunnel
+connectors: every mirror pass of one moves what the other made into `_history/`, and every push
+of one rewinds GitHub to its own repositories. And `serve.sh stop` stops the servers and the
+tunnel but leaves both **enabled**, so the old machine's next boot would bring a second studio
+back. So the old machine is silenced before the new one writes anything, in this order:
+
+1. **The new machine, privately.** `provision.sh`, then the home from the mirror
+   (`KITCUT_VM=<new> ops.sh restore --all`; the mirror must have a completed pass first --
+   `ops.sh status` says STALE when it has not), then `serve.sh release` **on that machine**: its
+   tests draw every template, and a machine with a graphics card has not been shown to draw them
+   as the VM does. A film made there before the move is a rehearsal's (`--drill`, see "Never
+   build a second machine from the mirror and start it as it is" above): its server must not see
+   the database or the tunnel.
+2. **A quiet window**: `ops.sh status` on the old machine shows no film and nothing queued.
+3. **Old machine**: `serve.sh stop` (drains, stops the servers and the tunnel, says offline).
+4. **Old machine, its last copies**: `ops.sh backup` (one pass, followed to its end) and
+   `ops.sh filmgit` (commits and pushes what is left).
+5. **Old machine, for good**: `sudo systemctl disable --now kitcut-backup.timer
+   kitcut-backup-full.timer kitcut-filmgit.timer kitcut-prune.timer kitcut-login-check.timer
+   kitcut-studio-boot.service kitcut-tunnel.service` -- or `vm.sh stop <old>`, which is the same
+   and surer: a deallocated VM runs nothing, costs its disks only, keeps its Azure Backup points
+   for their 30 days, and is the way back for as long as it is kept.
+6. **New machine**: `KITCUT_VM=<new> ops.sh restore --all` again (what step 4 sent: minutes), the
+   real `.env` and the tunnel's credential (the sealed file, `ops.sh secrets check`).
+7. **New machine**: `serve.sh start` (the tunnel, the server, and both at every boot). It adopts
+   what the old one left, which is wanted now.
+8. **New machine, its own copies**: `ops.sh backup --plan` -- little to send and nothing to
+   remove; thousands to remove means its home is not whole: stop and find out why -- then
+   `ops.sh backup install`. `ops.sh filmgit publish`, then `ops.sh filmgit install`: a
+   repository's GitHub key never leaves the machine it was made on (`~/.ssh/filmgit/`, not in the
+   mirror), so the new machine makes its own and `publish` registers them; until then its sync
+   says "N not there yet". The old machine's keys stay on GitHub under its name until removed.
+9. One short narrated film (`ops.sh film "..." --seconds 10`), one old film opened and changed.
+
+What came over in the `.env` that is the old machine's measurement, not the new one's:
+`STUDIO_FILM_MEM_GB`, `STUDIO_RENDER_JOBS`, `STUDIO_MACHINE_SLOWDOWN`, `VIDEDIT_WEBCODECS`
+(`deploy/machine.env` says how each was measured). They are safe to start with and wrong to keep.
+
+**What a machine at home does not have**, each of which the VM was relied on for:
+
+- **No second whole copy.** Azure Backup covered the VM's disks nightly; at home the mirror is
+  the only one, so a STALE mirror there is an emergency, not a warning.
+- **Nobody to force a restart.** The freeze of 2026-10-12 (KI-066) was ended by Azure restarting
+  a guest that answered nothing. At home that is a hand on the power button, unless the machine
+  restarts itself (a hardware watchdog) and comes back after a power cut (a firmware setting).
+- **No way in from outside the house.** The VM was reached over the VPN from anywhere; a home
+  address answers on the home network only. `ssh.kitcut.ai` ("SSH for Claude cloud sessions",
+  above) is the one route that would work from elsewhere, and it has to be moved with the studio.
+- **No network of its own.** The VM sat alone in a subnet that let in SSH from the VPN and
+  nothing else. The studio runs what people's prompts and uploads lead Claude to run; at home it
+  shares a network with the household's devices unless the machine's firewall, or the router,
+  keeps it apart.
+
 ## Known differences
 
 - A Claude session transcript from the laptop records Windows paths, so resuming a timed-out
