@@ -82,7 +82,12 @@ vm() { bash "$HERE/vm.sh" "$@"; }
 on() { if [ "$DRY" = 1 ]; then echo "  would run on $VM: $*"; else vm ssh "$VM" "$@"; fi; }
 
 step "1. the VM"
-if az vm show -g "${KITCUT_RG:-kitcut-PROD}" -n "$VM" >/dev/null 2>&1; then
+OWN=0
+vm own "$VM" && OWN=1
+if [ "$OWN" = 1 ]; then
+  # a machine of our own (vm.sh, ~/.ssh/kitcut-hosts): Ubuntu is on it already, and <size> is not read
+  echo "  our own machine: $VM ($(vm ip "$VM"))"
+elif az vm show -g "${KITCUT_RG:-kitcut-PROD}" -n "$VM" >/dev/null 2>&1; then
   echo "  exists: $VM ($(vm ip "$VM"))"
 else
   # the data disk outlives the machine: a rebuild reattaches it, films, checkout and .env included
@@ -102,8 +107,10 @@ else
 fi
 
 step "2. data disk at /srv/kitcut"
+# on a machine of our own /srv/kitcut is a folder on its one disk
+[ "$OWN" = 0 ] || on 'sudo mkdir -p /srv/kitcut'
 on 'set -e
-if ! mountpoint -q /srv/kitcut; then
+if ! mountpoint -q /srv/kitcut && [ "'"$OWN"'" = 0 ]; then
   dev=$(lsblk -dpno NAME,SIZE,TYPE | awk -v s="'"$DATA_GB"'G" '"'"'$2==s && $3=="disk"{print $1}'"'"' | head -1)
   [ -n "$dev" ] || { echo "no '"$DATA_GB"' GB disk found" >&2; lsblk; exit 1; }
   sudo blkid "$dev" >/dev/null || sudo mkfs.ext4 -q -L kitcut "$dev"

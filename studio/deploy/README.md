@@ -568,6 +568,22 @@ tunnel's credentials and the systemd units. Three rules it follows since 2026-10
 `--attach <disk>` takes a data disk restored from Azure Backup. With neither that nor a disk
 named `<vm>-data`, the machine gets a new empty one and its home comes from the mirror.
 
+**A machine of our own** (the PC at home, `kc-local`, 2026-10-12: i7-12700, 32 GB,
+RTX 3070, Ubuntu Server 24.04) is built by the same command. `vm.sh` takes its address from
+`~/.ssh/kitcut-hosts` on the laptop -- `<name> <address>` a line, never committed -- and from
+there on `vm.sh ssh`, `push.sh`, `serve.sh` and `ops.sh` treat it as they treat a VM: same key,
+same `kitcut` user (with passwordless sudo), same `/srv/kitcut`, which on such a machine is a
+folder on its one disk and not a data disk.
+
+```bash
+printf 'kc-local 192.168.5.45\n' > ~/.ssh/kitcut-hosts
+bash studio/deploy/provision.sh kc-local own --dry-run    # <size> is not read
+```
+
+What az does to a VM -- create, resize, stop, start, delete -- is refused for it, and nothing
+of Azure's stands behind it: no Azure Backup, no boot diagnostics, no forced restart of a frozen
+guest. A home address changes with the router and is reachable from the home network only.
+
 ## If the machine is gone
 
 What is where is in "Where the copies are". Finished films play throughout: they are on R2 and
