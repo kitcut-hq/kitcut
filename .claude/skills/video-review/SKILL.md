@@ -20,10 +20,11 @@ had no record of what this owner likes. Each of the three is fixed below.
 
 **Never the maker, and never someone the maker has briefed about the changes.**
 
-- You made the film: start a fresh agent. Give it this skill's path, the pack's folder, the
-  project's review sheet, the narration with its times, and the packs of the references. Give it
-  nothing about the film's history: not what was changed, not what was tried, not what an earlier
-  reviewer said. A reviewer who knows what was fixed checks the fixes and stops watching the film.
+- You made the film: start a fresh agent with the words of `brief.md` beside this file. It names
+  this skill, the pack, the project's review sheet, the references' packs, and what the film has
+  to work with (so the changes asked for can be made). It says nothing about the film's history:
+  not what was changed, not what was tried, not what an earlier reviewer said. A reviewer who
+  knows what was fixed checks the fixes and stops watching the film.
 - You are asked to review something you did not make: you are the reviewer. Read on.
 - Every round gets a **new** reviewer with the same brief. One who saw the last version reviews
   its own notes.
@@ -168,7 +169,9 @@ A project's own verdicts go in its review sheet (below), where they outrank thes
 
 Under 500 words, in this order.
 
-1. **Verdict,** one line: `SHOW IT`, `FIX FIRST` or `CHANGE DIRECTION`.
+1. **Verdict,** one line: `SHOW IT`, `FIX FIRST` or `CHANGE DIRECTION`. When the piece has parts
+   (an opening and the hand-off into what follows), say which part each blocker is in: "the
+   opening has no blocker; both are in the hand-off" tells the maker what is finished.
 2. **Cold notes,** as written in step 2.
 3. **What the owner will say,** up to three lines, in their voice. If you cannot imagine them
    saying anything, you have not found the film's weakest second yet.
@@ -198,9 +201,23 @@ How to write it:
    reviewer's claims that night were about scenes the owner had already approved: those go back to
    the owner as questions, not into the film.
 3. Fix the blockers. Do the improvements that are cheap. Rebuild.
+   - **Two rounds will ask for opposite things in the same seconds** (one: open on the ball and
+     tilt down to the players; the next: open on the players and tilt up to the ball). Neither is
+     the instruction. Find what both are complaining about (there: a held frame, a small subject,
+     a ball that left the picture) and fix that.
+   - **A blocker in the same seconds two rounds running** means the idea for those seconds is
+     wrong, however it was polished between. Replace the idea there, do not tune it. And when the
+     picture has been replaced and the seconds still fail, read the words: four reviewers in a row
+     marked one stretch as a repeat under cards, then a solo shot, then a split screen, because
+     the narrator's line there named what the intro had just shown. No picture under a repeated
+     line is new. The line was cut and the blocker went with it.
+   - **What a reviewer asks for that is not yours to decide** (a logo on every scene of a
+     published film, a re-recorded line) goes to the owner as a question, with the reviewer's
+     reason. Say in the next brief that it is out of scope, or every round will ask again.
 4. New pack, **new** reviewer, the same brief, no history.
 5. Stop when a fresh reviewer says `SHOW IT` with no blockers. Four rounds at most in one
-   direction. Blockers in the same seconds two rounds running mean the idea is wrong: stop
+   direction; count the blockers each round (the night this was written: 4, 3, 1), and if they
+   are not falling, or the whole opening keeps failing rather than a few seconds of it, stop
    polishing, draw three different ideas as one picture, and let the owner choose.
 6. Then the owner. Send the clip and, in three lines, what the last review said and what it could
    not judge. A reviewer's pass is not approval.
