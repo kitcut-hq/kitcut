@@ -4002,13 +4002,21 @@ rest of what a YouTube Short needs: `docs/shorts-guidebook.md`.
 **A video laid out for a reviewer: `review-pack.py`, and the `video-review` skill.** The studio's
 reader (`studio/review.py`) finds what is broken and is told never to judge taste. Whether a film
 is good is a second review, done by a fresh agent following `.claude/skills/video-review/`, and
-`review-pack.py` is what that agent reads: the first 30 s four frames a second with the narrator's
-words under each frame (`--lines <film>/audio/vo/timeline.json`), the whole video a frame a second,
-each hard cut of the opening as six frames, the file's first frame, and `pack.md` with the cuts and
-the shots between them, the slow and still stretches (short-stillness's bars, on the whole frame),
-loudness second by second and the narration's pauses. `--list` prints the counts and writes no
-pictures. It came out of 2026-10-12: a reviewer reading one frame a second passed an opening its
-owner rejected on sight. Three things about its numbers: two cuts under 0.4 s apart are one (type
+`review-pack.py` is what that agent reads. `story.jpg` comes first: the opening as one picture, a
+frame every two seconds with everything said in those two seconds under it (`--lines
+<film>/audio/vo/timeline.json`), so that the reviewer judges the whole before any part, and can
+lay it beside the same sheet of a film the owner has named as a model. The rest is for looking
+into a doubt: the first 30 s four frames a second, the whole video a frame a second, each hard cut
+of the opening as six frames, the file's first frame, and `pack.md` with the cuts and the shots
+between them, the slow and still stretches (short-stillness's bars, on the whole frame), loudness
+second by second and the narration's pauses. `--list` prints the counts and writes no pictures.
+The skill's review is a verdict on the whole (show it, not yet, wrong idea), at most three changes
+each big enough for a viewer to notice, and plain mistakes; no scores and no list of small fixes.
+It was written twice. On 2026-10-12 a reviewer reading one frame a second passed an opening its
+owner rejected on sight. On 2026-10-13 six reviewers armed with four frames a second and a bar of
+numbers each returned two small timed fixes and none asked whether the opening was the right one;
+the owner asked for a reviewer with common sense that sees the entire picture, and said that a
+film they had approved was never an ideal to measure against. Three things about the numbers: two cuts under 0.4 s apart are one (type
 slamming in after a cut reads as a second cut); a dissolve is not a cut; and stillness is not a
 verdict on a wide film (the most watched tactics explainer measured is still for 83% of its
 opening, because it draws on a plain page). `benchmarks.md` in the skill holds six reference

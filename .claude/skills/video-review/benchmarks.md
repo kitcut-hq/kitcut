@@ -2,8 +2,9 @@
 
 The first 45 seconds of six videos, each among the most watched of a channel that is good at what
 our films try to do, put through `scripts/review-pack.py` and read frame by frame. Third-party
-video is never committed; this is what was measured and seen. Six is a small sample: use it as a
-floor under an opinion, never as a recipe. Add a row when a new kind of film needs one.
+video is never committed; this is what was measured and seen. Six is a small sample: background
+for an opinion, never a rule and never an ideal (a film is not wrong for being unlike them). Add
+a row when a new kind of film needs one.
 
 | Video (channel, views when measured) | Kind | Frame 0 | Sound in second 1 | Name or title on screen | What the first 15 s do | Hard cuts in 30 s |
 |---|---|---|---|---|---|---|

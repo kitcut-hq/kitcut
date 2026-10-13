@@ -1,12 +1,15 @@
 #!/usr/bin/env python
 """A video laid out for a reviewer who cannot play it: pictures to read, and what can be counted.
 
-A reader of contact sheets a frame a second passes an opening that a person switches off: on
-2026-10-12 a reviewer said "ship it" to the first 25 seconds of a padel film that was one painting
-standing still, and its owner's answer after watching was "I don't like what I saw". A second in
-an opening is long. This puts the opening in front of the reviewer four frames a second, with the
-words being spoken under each frame, and measures the things an eye misjudges from stills:
+A reviewer judges the whole piece first, so the first picture here is the whole opening on one
+sheet. The close sheets and the counts are for looking into a doubt afterwards: a reviewer who
+starts from four frames a second answers with a list of small fixes and never asks whether the
+opening is the right one (six rounds of that on one padel opening, 2026-10-13, ended with its
+owner asking for a different opening altogether).
 
+    story.jpg       the opening as ONE picture: a frame every two seconds, large, with everything
+                    said in those two seconds under it. Read this first, and lay it beside the
+                    story.jpg of whatever the piece is being held against
     opening-NN.jpg  the first --opening seconds, four frames a second, twelve to a sheet, each
                     frame with its time and (with --lines) the narrator's words of that quarter
     film-NN.jpg     the whole video, a frame a second, thirty-five to a sheet
@@ -16,7 +19,7 @@ words being spoken under each frame, and measures the things an eye misjudges fr
     pack.md         the count: length, frame rate, the cuts and the shots between them, the
                     stretches where the picture is slow or still (the bars of short-stillness.py),
                     loudness second by second with the quiet seconds marked, the narration's
-                    first word and its pauses
+                    first word and its pauses. Evidence for a judgement, never the judgement
 
 Nothing here judges. The video-review skill is the judge; this is what it reads.
 
@@ -39,6 +42,7 @@ import os
 import re
 import subprocess
 import sys
+import textwrap
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402, F401 -- re-execs into .venv; before any 3rd-party import
@@ -48,6 +52,7 @@ from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
 stillness = importlib.import_module("short-stillness")  # its bars, so both tools mean the same
 
+STORY_STEP, STORY_TILE, STORY_COLS = 2.0, 640, 3  # the opening at a glance: seconds a tile, width
 OPEN_FPS, OPEN_TILE, OPEN_GRID = 4, 480, (4, 3)  # the opening: frames a second, tile width, sheet
 FILM_TILE, FILM_GRID = 384, (7, 5)  # the whole video, a frame a second
 CUT_FPS, CUT_W, CUT_H = 10, 160, 90  # what cuts are found at
@@ -155,8 +160,8 @@ def said_in(lines, t0, t1):
     return " ".join(w["text"] for ln in lines for w in ln.get("words", []) if t0 <= w["s"] < t1)
 
 
-def sheet(tiles, grid, tile, out, strip=0):
-    """tiles: [(RGB array, stamp, words)] -> one picture; `strip` px under each for the words."""
+def sheet(tiles, grid, tile, out, strip=0, rows=1):
+    """tiles: [(RGB array, stamp, words)] -> one picture; `strip` px under each, words on `rows`."""
     th = tiles[0][0].shape[0]
     im = Image.new("RGB", (grid[0] * tile, grid[1] * (th + strip)), (16, 16, 16))
     d, f, small = ImageDraw.Draw(im), font(15), font(max(11, tile // 34))
@@ -166,7 +171,9 @@ def sheet(tiles, grid, tile, out, strip=0):
         d.rectangle([x, y, x + 10 + 8 * len(stamp), y + 19], fill=(0, 0, 0))
         d.text((x + 4, y + 2), stamp, fill=(255, 255, 255), font=f)
         if strip and words:
-            d.text((x + 6, y + th + 4), words[: tile // 7], fill=(235, 225, 150), font=small)
+            for r, part in enumerate(textwrap.wrap(words, tile // 7)[:rows]):
+                at = (x + 6, y + th + 4 + r * (strip - 4) // rows)
+                d.text(at, part, fill=(235, 225, 150), font=small)
     im.save(out, quality=88)
 
 
@@ -183,6 +190,20 @@ def sheets(path, out, name, fps, tile, grid, seconds, src_h, lines):
         files.append(os.path.join(out, "%s-%02d.jpg" % (name, n // per + 1)))
         sheet(part, grid, tile, files[-1], strip)
     return files
+
+
+def story(path, out, seconds, lines):
+    """The opening as one picture: a frame per STORY_STEP seconds with what is said; -> the file."""
+    tiles, tmp, n = [], os.path.join(out, "_story.jpg"), int(-(-seconds // STORY_STEP))
+    for k in range(n):
+        t0, t1 = k * STORY_STEP, min((k + 1) * STORY_STEP, seconds)
+        still_frame(path, (t0 + t1) / 2, tmp, STORY_TILE)
+        stamp = "%s to %s" % (clock(t0), clock(t1))
+        tiles.append((np.asarray(Image.open(tmp).convert("RGB")), stamp, said_in(lines, t0, t1)))
+    os.remove(tmp)
+    file = os.path.join(out, "story.jpg")
+    sheet(tiles, (STORY_COLS, -(-n // STORY_COLS)), STORY_TILE, file, 52 if lines else 0, rows=2)
+    return file
 
 
 def still_frame(path, t, out, width=None):
@@ -288,7 +309,8 @@ def main():
     out = _env.resolve(out, base=_env.workspace())
     os.makedirs(out, exist_ok=True)
     ratio = p["h"] / p["w"]
-    made = sheets(path, out, "opening", OPEN_FPS, OPEN_TILE, OPEN_GRID, opening, ratio, lines)
+    made = [story(path, out, opening, lines)]
+    made += sheets(path, out, "opening", OPEN_FPS, OPEN_TILE, OPEN_GRID, opening, ratio, lines)
     made += sheets(path, out, "film", 1, FILM_TILE, FILM_GRID, None, ratio, lines)
     for n, c in enumerate([c for c in cuts if c <= opening][:16], 1):
         tiles = []

@@ -1,33 +1,50 @@
 ---
 name: video-review
-description: Judge a video the way a demanding editor with the owner's taste would, before the owner sees it. Builds a review pack (the opening four frames a second with the words spoken, the cuts, stillness, loudness), watches it cold, holds it against measured reference openings and the project's review sheet, and answers with a verdict and a short list of timed, specific changes. Use on any film, opening or test before it is shown to anyone, and in a loop (fix, then a fresh reviewer) until it passes. It is the taste half of review; the studio's glitch reader is the other half and never judges taste.
+description: Judge a video the way a sensible viewer with good taste would, before its owner sees it. The whole piece first (what it is for, whether it does that, whether it is what the owner asked for), then at most three changes, each big enough that a viewer would notice it. Never a list of small fixes. Builds a review pack whose first picture is the whole opening on one sheet. Use on any film, opening or test before it is shown to anyone. It is the taste half of review; the studio's glitch reader is the other half and never judges taste.
 ---
 
 # Reviewing a video for taste
 
 A film can be free of glitches and still be one its owner switches off. The studio already has a
-reader for what is **broken** (`studio/review.py`, `studio/prompts/review.md`: a cat through a
-wall, a hand left hanging), and that reader is told never to judge taste. This skill is the other
-half: whether the film is **good**, and exactly what to change.
+reader for what is **broken** (`studio/review.py`, `studio/prompts/review.md`), and that reader
+is told never to judge taste. This skill is the other half: whether the piece is **right**, seen
+whole.
 
-It exists because of one night. On 2026-10-12 the maker of a padel film rebuilt its opening and
-had a reviewer read it three times; the reviewer ended on "ship it". The owner watched and wrote:
-"still not perfect. can u do something completely different as opening. i dont like what i saw".
-The reviewer had read one frame a second, had been told by the maker what had been changed, and
-had no record of what this owner likes. Each of the three is fixed below.
+It was written twice, and the second time is why it reads as it does.
+
+- **2026-10-12.** The maker of a padel film rebuilt its opening and had a reviewer read it three
+  times. The reviewer, briefed by the maker on what had changed and reading one frame a second,
+  ended on "ship it". The owner: "still not perfect. can u do something completely different as
+  opening. i dont like what i saw".
+- **2026-10-13.** The first version of this skill sent six fresh reviewers at the next opening.
+  It armed them with four frames a second, a bar of numbers and seven scores, and each came back
+  with about two timed fixes: a label, a held frame, a ball out of shot. Every one was made. None
+  of the six asked whether it was the right opening. The maker then measured the reviewer against
+  a film the owner had approved and made that the level to reach. The owner: "i don't want you to
+  consider the approved one an ideal. i never said it should be. instead i want the reviewer to
+  have common sense. its goal not to provide feedback that require micro changes but see the
+  entire picture", and asked for the kind of opening the channel's first film has. One look at
+  the two openings side by side would have said that in round one.
+
+So: the whole first, common sense over rulers, nothing treated as the ideal, and a review that is
+allowed to say "it works".
+
+## The one question
+
+Would the owner, and a viewer who came for this subject, be glad that this is the opening (or the
+film, or the test)? Everything below is a way of answering that about the whole piece.
 
 ## Who reviews
 
 **Never the maker, and never someone the maker has briefed about the changes.**
 
 - You made the film: start a fresh agent with the words of `brief.md` beside this file. It names
-  this skill, the pack, the project's review sheet, the references' packs, and what the film has
-  to work with (so the changes asked for can be made). It says nothing about the film's history:
-  not what was changed, not what was tried, not what an earlier reviewer said. A reviewer who
-  knows what was fixed checks the fixes and stops watching the film.
+  this skill, the pack, the project's review sheet, what the film has to work with, and **what
+  the owner asked for, in the owner's own words**. It says nothing about the film's history: not
+  what was changed, not what was tried, not what an earlier reviewer said. A reviewer who knows
+  what was fixed checks the fixes and stops watching the film.
 - You are asked to review something you did not make: you are the reviewer. Read on.
-- Every round gets a **new** reviewer with the same brief. One who saw the last version reviews
-  its own notes.
+- Every round gets a **new** reviewer with the same brief.
 
 ## 1. Make the pack
 
@@ -36,216 +53,170 @@ python scripts/review-pack.py <video> --out <folder> [--opening 30] [--lines <fi
 python scripts/review-pack.py <video> --list        # the counts only, no pictures
 ```
 
-It writes `opening-NN.jpg` (the first 30 s, four frames a second, twelve to a sheet, each frame
-with its time and the narrator's words of that quarter second), `film-NN.jpg` (the whole video a
-frame a second), `cut-NN.jpg` (each hard cut of the opening as six frames), `first.jpg` (the
-file's first frame at full size) and `pack.md` (cuts and the shots between them, slow and still
-stretches, loudness second by second, the narration's first word and pauses). `--at 2.4,6.1`
-adds any moment at full size.
+`story.jpg` is the one that matters: the opening as **one picture**, a frame every two seconds,
+large, with everything said in those two seconds under it. `first.jpg` is the file's first frame.
+The rest is for looking closer when the whole raises a doubt: `opening-NN.jpg` (four frames a
+second), `film-NN.jpg` (the whole video a frame a second), `cut-NN.jpg` (each hard cut as six
+frames), `pack.md` (cuts, stillness, loudness, the narration's pauses), `--at 2.4,6.1` for any
+moment at full size.
 
-Make a pack of the references too: the series' last approved episode, and whatever the project's
-review sheet names. A reviewer who has only the candidate in front of them has nothing to hold it
-against.
+If the owner has pointed at another film ("like the first one"), make its pack too. The two
+`story.jpg` sheets side by side are the comparison.
 
-## 2. Watch it cold, before you read a single number
+## 2. See the whole first
 
-Open `first.jpg`, then the opening sheets in order, at reading pace, once. Then write the cold
-notes, which go into the report unedited:
+Open `story.jpg` and `first.jpg`. Open nothing else yet. Then write, in plain words:
 
-- **Frame 0:** what it is, and whether it works as the picture a player shows before it starts.
-- **At 1 s, 3 s, 5 s, 10 s, 20 s, 30 s:** what a stranger has seen so far, what they know about
-  what this video will give them, what has moved, and whether they are still watching. One line
-  each.
-- **The second you would have left,** if there is one, and why.
+- **What it is.** In two sentences, what happens from the first second to the last, as you would
+  tell a friend: "the name over a painting, then the claim, then three cards, then the lesson".
+- **What it is for, and whether it does it.** An opening has three jobs: say what the film is,
+  make this viewer want it, and hand over to the lesson. A chapter has one: leave the viewer
+  knowing one thing they did not. Which jobs does this piece do?
+- **How it feels.** Calm or rushed, clear or busy, one idea or several, sure of itself or
+  anxious. Is that the right feeling for this channel and for someone who came to learn this?
+- **Whether it is what the owner asked for.** Their request is in the brief and their earlier
+  verdicts are in the project's review sheet. When they named a model, compare the shapes: what
+  comes first, what follows, how long each part holds, how much is on screen at once. Shape and
+  feel, never detail.
+- **Whether you would keep watching.** If not, at which part, and why.
 
-Do this before `pack.md`. Once you know the numbers you stop seeing the film.
+That paragraph is most of the review. If it says the piece works, the review is nearly done.
 
-## 3. Then look closely
+## 3. Common sense
 
-- `pack.md`, against `benchmarks.md` beside this file.
-- Every piece of text in the opening at full size (`--at`, or
-  `ffmpeg -ss <t> -i <video> -frames:v 1 <out>.jpg`): can it be read in the time it is up (three
-  words a second), does it touch anything.
-- Every cut strip: does the eye know where to look in the first frame after the cut, does
-  anything jump that should carry across.
-- Motion that matters, as frames a tenth of a second apart: an entrance, a swing, a camera move.
-  Four frames a second still hides what happens inside a quarter second.
-- The body at a frame a second, for what a viewer feels (a stretch that drags, a picture that
-  comes back, a chapter that looks like the last). Leave glitches to the glitch reader unless one
-  is in your way.
+What a sensible person checks without a ruler:
 
-## 4. The bar
+- Does the picture show what the words are saying at that moment?
+- Is there one thing to look at at a time, and is it big enough to see on a phone?
+- Can the words on screen be read in the time they are up?
+- Is anything plainly wrong to someone who knows the subject? The project's review sheet lists
+  what a picture can get wrong (a court's lines, a racket in every hand, where players stand).
+- Does it look like the same channel as its other films?
+- Is any part there twice, or there for no reason?
+- Is anything dead: a stretch where nothing arrives and nobody speaks?
 
-Each line is a question to answer with a time and a frame. The numbers are from six openings
-measured on 2026-10-13 (`benchmarks.md`): a small sample, a floor and not a recipe.
+Use the close sheets, `pack.md` and `benchmarks.md` only to settle a doubt the whole raised ("the
+middle felt slow: was it?"). Never read them through looking for things to report. That is how a
+review turns into a list.
 
-**The first frame and the first three seconds**
-- Frame 0 is a picture someone would press play on: the subject large, or the title. Never an
-  empty ground, a fade up from black, a logo alone, or a frame left over from another chapter.
-- By 3 s something has moved and the viewer knows the subject: which sport, which shot, which
-  question.
-- There is sound in the first second. All six references have it. Music counts, silence does not.
-  A voice that starts later than two seconds in needs pictures that carry the wait (a title cut to
-  music); say how long the wait is and whether they do.
+## 4. What does not go in a review
 
-**The promise and the name**
-- By 10 s the viewer knows what they will get, said or written. The references do it in 4 to 14 s.
-- The film's name is on screen once, large, readable for two seconds or more, in the series'
-  type, by 15 s. A cold open may push it later only if every second before it is action.
-- The channel is named once in the opening, small.
+- Anything a viewer watching once, at speed, on a phone would not notice, or would notice and
+  not mind: a label a little to one side, two rings at one height, a hold of 1.3 s that could be
+  1.0, a single frame.
+- A change the maker could make in ten minutes that no viewer would describe afterwards.
+- A choice between two things that both work.
+- Anything the brief says cannot change, or is the owner's to decide.
+- A finding for the sake of having findings. **"It works. Show it." is a complete review.**
 
-**The subject is big**
-- In a shot about a person or a figure, the figure is at least a third of the frame's height. The
-  references' first shots: 45 to 90 per cent.
-- A diagram fills the frame. A court or pitch that is a strip a third of the frame high, with
-  figures under a tenth of it, is a diagram seen from too far.
-- One thing to look at in each shot. If the eye has two places to go, it is two shots.
-- The thing the shot is about (the ball, the hand, the number) is found in half a second on a
-  phone: 1.5 per cent of the frame's width or more, or marked.
+The test for a finding: *is this something the owner would say in a one-line reaction?* Theirs,
+on record, are about the whole ("no intro at all", "i dont like what i saw", "it seems a bit too
+long", "more like the first one") and, now and then, a plain mistake seen at a glance ("people
+with no rackets"). A review speaks at those two sizes and no smaller.
 
-**It moves, and every second earns its place**
-- In the opening there is a new picture or a plain change within every five seconds. The edited
-  references cut every 0.5 to 6.8 s; the one-take references have a person moving and talking
-  throughout. A painting under a slow push is one picture however long the push lasts.
-- Nothing comes twice: not the same picture, not the same words on screen and in the voice, not
-  the same move. A list shown and then shown again as a list is a repeat.
-- Words on screen are the two to five words the viewer should keep, not the narrator's sentence.
-- Nothing waits. A pause in the voice has a picture that needs the pause.
+## 5. Nothing is the ideal
 
-**It is true**
-- People, places and things are what the subject's own people would recognise at a glance. The
-  project's review sheet lists what a picture can get wrong (a court's lines, a racket in every
-  hand, how many players, where they stand).
-- The picture shows what is being said at that moment. "At the net" is drawn at the net.
-
-**Type and layout**
-- No text over a face, a ball, a racket, another text, or a line that runs through it. Nothing cut
-  by an edge.
-- Text meant to be read is at least 1/36 of the frame's height (30 px at 1080).
-- A source line, a chapter mark and a label never sit on each other.
-
-**Sound, by measurement only**
-- You cannot hear. Say so in the report. What can be checked: about -14 LUFS integrated, a true
-  peak at or under -1 dBFS, no second of the opening more than 10 LU under the rest unless the
-  silence is meant, and the music under the voice where the film's mix reports it
-  (`audio/balance.json`).
-
-**One series**
-- Hold it against the series' last approved episode: the same type, the same colours, the same
-  kind of opening. Someone who saw the last one knows this one within two seconds.
-
-## 5. What this owner has said
-
-A reviewer's taste is worth what it predicts. These are the owner's own verdicts, each on
-something a careful maker had thought finished. Predict the next one.
-
-- **2026-10-09, a tall cut made from a wide film's scenes:** "it's still for seconds. the image
-  doesnt move at all." A held diagram is not a picture.
-- **2026-10-12, a 3:22 technique film:** "Now it seems a bit too long. Can you do a fresh look at
-  the timing, pacing and repeating." Length is felt as repeats: cut the second showing.
-- **2026-10-12, the same film with no opening:** "there is no intro. the video immediiately starts
-  showing the technic ... keep it short, dynamic, not boring", and "we need to reuse assets and
-  styles from previous videos to make it work like a series."
-- **2026-10-12, a film that began with the narrator over a small diagram:** "dont you think the
-  opening is bad? we immediately from 0:1 start pitching. no intro at all."
-- **2026-10-13, that opening rebuilt as a slow-motion diagram under a headline, passed by a
-  reviewer:** "still not perfect. can u do something completely different as opening. i dont like
-  what i saw." Shown three different ideas as one picture, they chose the one with large painted
-  people cut to music, then asked for the title first, and noticed that two painted players held
-  no rackets.
-
-What that adds up to:
-1. An opening introduces: the name early, what the film is, then the lesson. Not a lecture from
-   second one, and not a long logo either.
-2. People, large and painted, before diagrams. A diagram is never the first picture.
-3. Short and moving. A repeat is the first thing to cut.
-4. The details of the subject are noticed. One wrong prop is remembered longer than ten right
-   scenes.
-5. When they reject something, they want a different idea, not the same one polished.
-
-A project's own verdicts go in its review sheet (below), where they outrank these.
+- **An approved film is one the owner let through.** It is not their ideal and nobody said it
+  was. Do not hold a new piece to it, score against it or copy it, and never run a reviewer on it
+  to find a level to reach.
+- **The openings in `benchmarks.md`** are how six well-watched videos happen to open. They are
+  background for an opinion. A film is not wrong for being unlike them.
+- **The only model is one the owner names,** for the piece in hand, in their own words. It is a
+  model of shape and feel, and it stands until they say otherwise.
+- **Numbers are evidence for something you already felt.** A count of cuts or a share of still
+  frames never makes a finding by itself: the channel's most watched film holds one painting for
+  eighteen seconds.
 
 ## 6. The report
 
-Under 500 words, in this order.
+Under 300 words, in this order.
 
-1. **Verdict,** one line: `SHOW IT`, `FIX FIRST` or `CHANGE DIRECTION`. When the piece has parts
-   (an opening and the hand-off into what follows), say which part each blocker is in: "the
-   opening has no blocker; both are in the hand-off" tells the maker what is finished.
-2. **Cold notes,** as written in step 2.
-3. **What the owner will say,** up to three lines, in their voice. If you cannot imagine them
-   saying anything, you have not found the film's weakest second yet.
-4. **Blockers,** up to five, most costly first: what a stranger leaves over, or the owner sends
-   back. Each one has the time, what is seen (name the frame file), what it costs the viewer, and
-   the change as an instruction: what, where, for how long. The change must be possible with what
-   the film has; if it needs something new (a painting, a re-recorded line), say that.
-5. **Improvements,** up to five, in the same form: worth doing if cheap.
-6. **Keep:** what works and must not be touched.
-7. **Scores,** 1 to 5 each: first three seconds, promise and name, subject size, movement and
-   pacing, truth, type, series. Below 4 on any of the first three is `FIX FIRST`.
-8. **Not judged:** the sound by ear, anything the frames could not show.
+1. **Verdict,** one line.
+   - `SHOW IT`: the whole works and is what was asked for. Small things may remain.
+   - `NOT YET`: the idea is right, and one to three big things stand between it and working.
+   - `WRONG IDEA`: no fix reaches it. Say what the idea is and why it is wrong for this owner and
+     this viewer, then three other ideas, a line each.
+2. **The whole,** one paragraph: what it is, what it does, how it feels, whether it is what was
+   asked for.
+3. **The big things,** at most three, biggest first, and none if there are none. Each is about a
+   part of the piece, not a frame: an order, a length, a picture, a tone, a part that should go.
+   Say what is wrong with the whole because of it and what to do instead. A range of seconds,
+   not a timestamp.
+4. **Plain mistakes,** at most three, a line each: things that are simply wrong and that a viewer
+   would see (a missing racket, a word cut by the edge, a number that is not true). No taste
+   here, and nothing a viewer would miss.
+5. **Keep:** the one or two things that make it work.
+6. **Could not judge:** the sound by ear, anything the stills could not show.
 
-How to write it:
-- Every finding has a time and a frame. No adjective without a number.
-- Never "consider" or "could". Say the change.
-- If you cannot name the change, it is not a finding.
-- `CHANGE DIRECTION` when the trouble is the idea and not its execution: the cold watch says "I
-  would have left" for a reason no fix reaches. Then give three different directions, a line
-  each, with what each one needs.
-- A clean film is a good answer. Do not invent findings to fill the list.
+No scores. No list of improvements. No "consider". Plain words a person would say out loud.
 
 ## 7. The loop, for the maker
 
-1. Build, make the pack, hand it to a fresh reviewer who knows nothing of the history.
-2. Check each finding by a number or a frame before changing anything. A third of the first
-   reviewer's claims that night were about scenes the owner had already approved: those go back to
-   the owner as questions, not into the film.
-3. Fix the blockers. Do the improvements that are cheap. Rebuild.
-   - **Two rounds will ask for opposite things in the same seconds** (one: open on the ball and
-     tilt down to the players; the next: open on the players and tilt up to the ball). Neither is
-     the instruction. Find what both are complaining about (there: a held frame, a small subject,
-     a ball that left the picture) and fix that.
-   - **A blocker in the same seconds two rounds running** means the idea for those seconds is
-     wrong, however it was polished between. Replace the idea there, do not tune it. And when the
-     picture has been replaced and the seconds still fail, read the words: four reviewers in a row
-     marked one stretch as a repeat under cards, then a solo shot, then a split screen, because
-     the narrator's line there named what the intro had just shown. No picture under a repeated
-     line is new. The line was cut and the blocker went with it.
-   - **What a reviewer asks for that is not yours to decide** (a logo on every scene of a
-     published film, a re-recorded line) goes to the owner as a question, with the reviewer's
-     reason. Say in the next brief that it is out of scope, or every round will ask again.
-4. New pack, **new** reviewer, the same brief, no history.
-5. **Know the reviewer's floor before you chase it.** Once per series, have a fresh reviewer read
-   the last film the owner approved, with the same brief (and a copy of the review sheet that
-   does not say it was approved). The night this was written the approved episode came back
-   `FIX FIRST` with two blockers and scores of 4, 4, 4, 3, 3, 4, 4: a demanding reviewer finds
-   about two things in anything, in a new place each round (that night: 4, 3, 1, 2, 2, 2 over
-   six rounds, never `SHOW IT`). So the loop does not run to zero. It ends when:
-   - a fresh reviewer says `SHOW IT`; or
-   - the candidate reviews no worse than the approved film (as few blockers, no score lower, and
-     "would have left: nowhere"), and its blockers are not the ones of the round before; or
-   - four rounds have gone in one direction. If by then the same seconds keep failing, or the
-     blockers are not falling, the direction is wrong: draw three different ideas as one picture
-     and let the owner choose.
-   Write the floor into the project's review sheet, so that the next film starts from it.
-6. Then the owner. Send the clip and, in three lines, what the last review said and what it could
-   not judge. A reviewer's pass is not approval.
-7. Write the owner's verdict into the project's review sheet the same day, in their words. That
-   file is how the next review gets better.
+1. **Before building,** write one sentence: what the piece is, and why this owner would want it.
+   Check it against their words. If you cannot write it, you are about to build the wrong thing.
+   The maker's own common sense is the first review, and the cheapest.
+2. Build, make the pack, look at `story.jpg` yourself, then hand it to a fresh reviewer.
+3. **`SHOW IT`:** fix the plain mistakes and show the owner, with what the review said in two
+   lines. No further round to confirm a small fix.
+4. **`NOT YET`:** do the big things, then one more round with a new reviewer. Three rounds at
+   most. A third `NOT YET` means the idea is wrong.
+5. **`WRONG IDEA`:** stop polishing. Make a different idea, or draw three as one picture and let
+   the owner choose.
+6. **Never** polish through rounds of small fixes, measure a reviewer on an approved film, or
+   chase a score. Rounds that each find "about two things, somewhere new" are not converging on
+   anything: they are the sign that nobody is looking at the whole.
+7. Two reviewers will ask for opposite things. Neither is the instruction: find what both are
+   complaining about. What is not yours to decide (a line re-recorded, a look for the whole
+   film) goes to the owner as a question, and into the next brief as out of scope.
+8. A reviewer's pass is not approval. The owner's eyes are the last review, and their verdict
+   goes into the project's review sheet the same day, in their words.
 
 ## 8. The project's review sheet
 
 `REVIEW.md` at the root of the channel, series or project. It holds what this skill cannot know:
 
-- **The series:** its approved episodes (where their files are), its type, colours and furniture,
-  and how its openings go.
+- **The series:** its films and where their files are, its type, colours and furniture.
 - **What must be true:** the facts of the subject that a picture can get wrong.
-- **The owner's verdicts on this project,** dated, in their words, with what they were shown.
+- **The owner's verdicts on this project,** dated, in their words, with what they were shown, and
+  any model they have named.
 
 If there is none, write it from the brief and the owner's messages before the first review, and
-give it to every reviewer.
+give it to every reviewer. It outranks everything in this file.
+
+## What this owner has said
+
+A reviewer's taste is worth what it predicts. These are the owner's own reactions, each to
+something a careful maker had thought finished.
+
+- **A tall cut made from a wide film's scenes:** "it's still for seconds. the image doesnt move
+  at all."
+- **A 3:22 technique film:** "Now it seems a bit too long. Can you do a fresh look at the timing,
+  pacing and repeating."
+- **The same film with no opening:** "there is no intro. the video immediiately starts showing
+  the technic ... keep it short, dynamic, not boring", and "we need to reuse assets and styles
+  from previous videos to make it work like a series."
+- **A film that began with the narrator over a small diagram:** "dont you think the opening is
+  bad? we immediately from 0:1 start pitching. no intro at all."
+- **That opening rebuilt and passed by a reviewer:** "still not perfect. can u do something
+  completely different as opening. i dont like what i saw."
+- **The next one, after six rounds of reviewed small fixes:** "its goal not to provide feedback
+  that require micro changes but see the entire picture ... make it more like the first one we
+  made with a similar intro."
+
+What that adds up to:
+
+1. They judge the whole, in one line. A list of small fixes does not turn an opening they
+   dislike into one they like.
+2. An opening introduces: the film's name, what it is about, what it will cover, then the
+   lesson. Not a lecture from second one.
+3. People, large and painted, before diagrams.
+4. A repeat is the first thing to cut, and a held diagram is not a picture.
+5. A plain mistake is seen at once: one wrong prop is remembered longer than ten right scenes.
+6. When they reject something they want a different idea, and they will often point at one they
+   liked. Ask what they liked about it before building, or go and look.
+7. Something they approved is not something they called ideal.
 
 ## What it cannot do
 
-It reads pictures and counts. It cannot hear a voice, feel a rhythm at speed, or know that a
-joke lands. The owner's eyes are the last review, every time.
+It reads pictures and counts. It cannot hear a voice, feel a rhythm at speed, or know that a joke
+lands. The owner's eyes are the last review, every time.
