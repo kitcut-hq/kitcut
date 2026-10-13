@@ -353,7 +353,7 @@ EOF
     rc_shown="grep -v '^[[:space:]]*\$' | tail"
     case "${1:-}" in
       "")
-        on "echo \"at boot: \$(systemctl is-enabled kitcut-claude-rc.service 2>/dev/null || echo not installed)   now: \$(systemctl is-active kitcut-claude-rc.service 2>/dev/null)\"
+        on "e=\$(systemctl is-enabled kitcut-claude-rc.service 2>/dev/null); echo \"at boot: \${e:-not installed}   now: \$(systemctl is-active kitcut-claude-rc.service 2>/dev/null)\"
           $rc_cl auth status 2>/dev/null | grep -E '\"(loggedIn|email|orgName|subscriptionType)\"' || echo 'not signed in: ops.sh rc login'
           $rc_tm capture-pane -p -J -t rc 2>/dev/null | $rc_shown -15 || true"
         ;;
