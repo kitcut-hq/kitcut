@@ -4469,6 +4469,30 @@ the precision rules, the right-town rule, the sea, the names and one whole map o
 asking nobody; a few seconds. Map data (c) OpenStreetMap contributors (ODbL): a film that shows
 the map credits OpenStreetMap on it.
 
+### Every place of one kind in a city: `dot-map.py`
+
+"Look how many coffee shops there are" needs proof, and a search proves nothing: Google Maps
+shows twenty pins at a time. `dot-map.py` asks OpenStreetMap for every place carrying a tag
+(`amenity=cafe`, `amenity=pharmacy`, `shop=bakery`) inside a city's real boundary and draws each
+as a dot over the city's land, water and main roads, so the city's shape comes out of the places.
+
+```powershell
+python scripts/dot-map.py --area "Kyiv" --tag amenity=cafe --list        # match, count, busiest names; draws nothing
+python scripts/dot-map.py --manifest projects/<id>/<name>.json           # area (name or relation id), tags, px, tone, out
+```
+
+It writes `<name>-base.jpg` (the city with no dots), `<name>.jpg` (every dot drawn) and
+`<name>.json` (the count, the busiest brand-or-name values, the OSM data's timestamp, and every
+dot as `[u, v]` fractions of the picture, nearest the centre first), so a film can show the bare
+city and let the dots arrive in its own time. Style: `config/maps/dots.json` (light and dark
+tones, road widths, dot size), sizes in pixels at 1920 wide. Measured 2026-10-13 for the
+Ocheretyne coffee-shop episode: Kyiv (relation 421866) has 2,136 places marked `amenity=cafe`;
+Aroma Kava is the most frequent name (31). That is what volunteers have mapped, not a census
+(Pro-Consulting counted about 2,500 coffee shops in 2024), so a film says "marked on
+OpenStreetMap". Water and roads are queried for the whole picture, not only the city, and a
+busy Overpass retries several times on a city this size (about a minute the first time,
+cached after).
+
 ### How long a film takes
 
 Machine time for the 60 s film, from its run logs (`--timings` prints them):
