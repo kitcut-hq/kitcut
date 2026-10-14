@@ -4493,6 +4493,30 @@ OpenStreetMap". Water and roads are queried for the whole picture, not only the 
 busy Overpass retries several times on a city this size (about a minute the first time,
 cached after).
 
+### More pictures than a film may carry: `picture-sheets.py`
+
+A kitcut.ai film takes six pictures (`studio/uploads.py MAX_IMAGES`); a research episode wants
+twenty -- source pages, posts, logos. `picture-sheets.py` packs them into sheets, each picture
+cropped (optionally) and scaled to a width and laid in shelves, and writes `sheets.md`: every
+picture's key and its rectangle `[x, y, w, h]` in its sheet, plus a six-line `SK.part(sheet, rect,
+cx, cy, width)` helper the prompt hands the film word for word (it is `ctx.drawImage` with a source
+rectangle; `SK.image` draws only whole pictures).
+
+```powershell
+python scripts/picture-sheets.py --spec projects/<id>/<name>-sheets.json --list   # sizes and each picture's scale
+python scripts/picture-sheets.py --spec projects/<id>/<name>-sheets.json          # the sheets, sheets.md, sheets.json
+```
+
+A sheet is JPEG (stepped down to fit 4 MB, under the site's 4.4 MB upload limit) or, with
+`"png": true`, a transparent PNG for logos. `--list` flags a picture shrunk below 0.6 of its width:
+small type in a screenshot stops being readable. First use: the Ocheretyne coffee-shop episode, 23
+pictures in five sheets (`projects/ocheretyne-economics/episodes/research-coffee/coffee-sheets.json`).
+
+Two things that cost time there. Wikimedia Commons' `Okko Logo.svg` is the Russian streaming
+service, not Ukraine's OKKO petrol stations (`Logo OKKO.jpg`, filed under "Logos of companies of
+Ukraine"): check a logo's categories before using it. And a news page's crop must leave out its
+side columns and language links, which carry unrelated headlines.
+
 ### How long a film takes
 
 Machine time for the 60 s film, from its run logs (`--timings` prints them):
