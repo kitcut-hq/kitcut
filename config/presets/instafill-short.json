@@ -1,0 +1,88 @@
+{
+  "_comment": "Captions for an Instafill vertical Short built from phone screenshots (1080x1920): the phone's screen fills the frame, so the card is an opaque navy slab over the lower part of it, above the title and buttons YouTube draws on a Short. White words, the email's #78A7FF on the word being spoken.",
+  "canvas": {
+    "play_res_x": 1080,
+    "play_res_y": 1920
+  },
+  "font": {
+    "family": "Montserrat",
+    "file": "fonts/Montserrat-Bold.ttf",
+    "spacing": 0,
+    "fudge": 1.0,
+    "bold": 1,
+    "fontsdir": "fonts",
+    "cap_height_px": 52
+  },
+  "text": {
+    "uppercase": false,
+    "apostrophe": "’",
+    "strip_trailing": "",
+    "word_gap_ratio": 1.0,
+    "outline_px": 0,
+    "outline_colour": "#000000",
+    "shadow_px": 0,
+    "shadow_colour": "#000000"
+  },
+  "card": {
+    "colour": "#0B1730",
+    "alpha": 0,
+    "corner_radius_px": 22,
+    "pad_x_px": 34,
+    "pad_y_px": 20,
+    "collision_gap_px": 16,
+    "enabled": true
+  },
+  "layout": {
+    "anchor_x": 540,
+    "bottom_margin_px": 330,
+    "max_line_width_px": 780,
+    "max_lines": 2,
+    "line_height_px": 78
+  },
+  "states": {
+    "base": {
+      "colour": "#FFFFFF"
+    },
+    "active": {
+      "colour": "#78A7FF"
+    },
+    "spoken": {
+      "colour": "#FFFFFF"
+    }
+  },
+  "grouping": {
+    "max_words": 3,
+    "gap_break_s": 0.4,
+    "break_on_sentence_end": true,
+    "max_group_duration_s": 3.4
+  },
+  "timing": {
+    "lead_in_ms": 60,
+    "hold_out_ms": 200,
+    "min_active_ms": 80,
+    "min_gap_between_groups_ms": 40,
+    "active_extends_to_next_word": true,
+    "fade_ms": 90
+  },
+  "pop": {
+    "enabled": false,
+    "scale": 112,
+    "rise_ms": 70,
+    "settle_ms": 110
+  },
+  "render": {
+    "speed": 5,
+    "cq": 20,
+    "maxrate": "12M",
+    "bufsize": "24M",
+    "aq_strength": 8
+  },
+  "overlays": {
+    "auto": false,
+    "_note": "Colour of the SOURCE video's own lower-third graphics to dodge, not the colour of this card. A screencast has none, so there is nothing to dodge."
+  },
+  "_geometry": {
+    "target": "projects/agent-batch-filling-short: the screen fills y 150..1920; film.js keeps what the voice names above y 1400",
+    "why_bottom_margin_330": "a two-line card spans about y 1400..1590: under the action, above the Shorts title and description (from about y 1630), and at most 780 wide so it stays clear of the like/comment column on the right"
+  }
+}

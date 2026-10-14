@@ -3940,6 +3940,58 @@ resolved to 10.x (DNS rebinding) is refused when it connects, not when it was ch
 `file:` never reach it (the opener has only http and https). `studio/test_web.py` covers it
 offline, including a "public" server redirecting to 127.0.0.1.
 
+### A film from screenshots, not from a screen recording (`config/sketch/screens-example`)
+
+A product walkthrough does not need a screen recording. A handful of sharp screenshots of the same
+window, a moving camera, a drawn cursor and a ring on whatever the voice names read as the product
+being used, and none of a recording's problems come along: no dead air to cut, no stutter, nothing
+to blur, and a re-recorded line moves its picture with it. `config/sketch/screens-example/` is the
+pattern at ten seconds (two stills of a made-up app, free on edge-tts); copy it into
+`projects/<id>/` and swap the pictures.
+
+```powershell
+python scripts/sketch-vo.py     --manifest projects/<id>/sketch.json
+python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 0.05,2.7,4.9,7.6 --sheet
+```
+
+How the film.js does it:
+
+- **Positions are screenshot pixels.** `px()`/`py()` map them to the world, so a coordinate read
+  off the picture goes into the code unchanged, and a ring, a cover and a cursor key all agree.
+- **The app "working" is covers coming off.** The LATER screenshot is shown from the start with its
+  new parts painted over in the page's own colour (`cover()`); a file chip appears when its cover
+  is dropped on the cue, and a cover wiped along a line types the prompt. Two screenshots of one
+  state change are enough for a scene.
+- **Crossfade between screenshots where the layout moves** (a list that grew, a new page); the eye
+  reads it as the app scrolling.
+- **A scroll needs a strip.** One short recording of the scroll, stitched by matching each frame's
+  offset against the one before, gives a tall picture the film can slide under a clip; a fixed
+  overlay in the recording (a chat bubble) is avoided by taking every pixel from a frame where the
+  overlay is not over it.
+
+What it cost a re-render to learn (a product film and its Short, 2026-10-07):
+
+- **Sharpness is zoom times scale.** A 1917 px screenshot laid 1760 wide goes soft past a camera
+  zoom of about 1.4. Shoot at a device pixel ratio of 2 (DevTools device toolbar) for close-ups.
+- **A phone screenshot fills a vertical frame; it is not put in a window.** Its own side margins
+  are 30-40 px, so it cannot be zoomed at all (z = 1.03 already cuts text): show the page as shot,
+  drift it, and put the captions over its lower part on an opaque card
+  (`config/presets/instafill-short.json`). Crop the browser bar and the system buttons by never
+  letting the view reach them.
+- **A logo PNG is rarely centred in its own canvas.** The one used here had 53 px of empty space
+  above the ink and none below, so it sat low on every plate for several videos. Crop it to its
+  ink (`Image.crop(im.getbbox())`) before it goes on a plate.
+- **Inserts are laid in afterwards.** The engine draws stills, not video: the film leaves a window
+  of bare colour (the insert's own background, so the cut is into the same room) and `edl-cut.py`
+  lays the clip over it, adds the music and, for a Short, burns the captions. Frame 0 of a
+  `sketch-render` MP4 is the film's COVER, not t = 0, so the EDL starts that source one frame in.
+- **Derive the cut from the voice timeline.** A new take changes every line's length; a small
+  script beside the manifest that reads `audio/vo/timeline.json` and writes the line starts, the
+  sound cues and the EDL keeps picture, sound and inserts together.
+- **`videos.update` without `publishAt` does not unschedule a video.** Switching it to unlisted and
+  back to private does. Two uploads of one Short on one schedule both go public.
+- **A YouTube chapter under 10 s disables all of them.** Merge it into its neighbour.
+
 ### A real map and a real route: `route-map.py`
 
 A film that replays a ride the way a cycling app does -- a dot running along the road, the line

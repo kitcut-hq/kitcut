@@ -664,6 +664,8 @@ python scripts/sketch-render.py --manifest projects/<id>/sketch.json --timings
 ```
 
 Start from `config/sketch/example/` (copied into the project; it runs free on edge-tts).
+A product walkthrough starts from `config/sketch/screens-example/` instead: sharp screenshots under a
+moving camera with a drawn cursor, no screen recording (`docs/reference.md`, "A film from screenshots").
 Two rules carry the design: **every frame is a pure function of t** (the browser plays it
 live and the renderer exports any frame on its own), and **cues hang off words**
 (`SK.w(line, "word")` reads the voice timeline the bundler injects), so a re-recorded line

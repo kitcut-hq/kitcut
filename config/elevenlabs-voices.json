@@ -38,6 +38,12 @@
       "verified": true,
       "note": "default for dubbing -- young, conversational"
     },
+    "will": {
+      "voice_id": "bIHbv24MWmeRgasZH58o",
+      "gender": "Male",
+      "verified": true,
+      "note": "Will - Relaxed Optimist (ElevenLabs premade). Chosen by the owner for the Instafill agent films, 2026-10-07."
+    },
     "sarah": {
       "voice_id": "EXAVITQu4vr4xnSDxMaL",
       "gender": "Female",

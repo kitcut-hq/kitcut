@@ -1,0 +1,31 @@
+{
+  "title": "Screens example",
+  "description": "A 10-second example of a film made from SCREENSHOTS instead of a screen recording: two stills of a made-up app under a moving camera, a drawn cursor, rings on what the voice names, files that appear and a prompt that types itself. Copy the folder into projects/<id>/ and swap the pictures.",
+  "slug": "screens-example",
+  "duration": 9.5,
+  "fps": 30,
+  "film": "film.js",
+  "poster_t": 6.2,
+  "modules": ["kit"],
+  "fonts": [
+    {"file": "fonts/Inter.woff2", "family": "Inter", "weight": "100 900", "load": "400 500 600 700 800"}
+  ],
+  "images": {
+    "a1": "screens/app-1.png",
+    "a2": "screens/app-2.png"
+  },
+  "player": {"accent": "#2563eb", "paper": "#eef2f7", "ink": "#0b1730", "hint": "screens example · 10s", "hint_font": "'Inter', sans-serif"},
+  "vo": {
+    "tts": "edge",
+    "voice": "ava",
+    "lead": 0.8,
+    "gap": 0.6,
+    "lines": [
+      {"text": "Open the assistant and drop in your two files."},
+      {"text": "Then say what you need, in plain words."},
+      {"text": "And press send."}
+    ]
+  },
+  "captions": {"max_words": 9},
+  "render": {"cq": 18, "preset": "p5", "audio_bitrate": "192k"}
+}
