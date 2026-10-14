@@ -924,6 +924,27 @@ def loudnorm(src, dst, lufs=-14.0, tp=-1.5, lra=11):
         text=True,
     )
     j = json.loads(r.stderr[r.stderr.rindex("{") : r.stderr.rindex("}") + 1])
+    if "inf" in str(j["input_i"]):
+        # A silent film (no voice, no score, no cues: a loop for a GIF). There is no loudness to
+        # measure -- input_i is -inf, target_offset inf -- and the second pass dies on those
+        # numbers (exit 222). Silence at any level is silence: write it out as it is.
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-y",
+                "-i",
+                src,
+                "-af",
+                f"aresample={SR}",
+                "-c:a",
+                "pcm_s24le",
+                dst,
+            ],
+            check=True,
+        )
+        return j
     af = (
         "loudnorm=I=%s:TP=%s:LRA=%s:measured_I=%s:measured_TP=%s:measured_LRA=%s:measured_thresh=%s:offset=%s:linear=true,aresample=%d"
         % (
