@@ -89,10 +89,10 @@ def fixture_film(client="u:alice", length=15):
 
 
 THUMBS = [
-    {"at": 3.5, "layout": "headline", "words": "*Faster* forms", "place": "top"},
-    {"at": 8.6, "layout": "card", "words": "Nothing to change", "place": "left"},
-    {"at": 12.6, "layout": "panel", "words": "Right fields, first time", "place": "right"},
-    {"at": 6.0, "layout": "headline", "words": "Forms come back *sooner*", "place": "left"},
+    {"at": 3.5, "layout": "headline", "words": "Why *faster* forms?", "place": "top"},
+    {"at": 8.6, "layout": "card", "words": "\u201cNothing to *change*\u201d", "place": "left"},
+    {"at": 12.6, "layout": "panel", "words": "\u201cThe right fields\u201d", "place": "right"},
+    {"at": 6.0, "layout": "headline", "words": "Forms back *sooner*?", "place": "left"},
 ]
 
 
@@ -183,7 +183,7 @@ async def main():
         "with their places; the first and the fourth headlines",
         cs,
     )
-    msg = [dict(THUMBS[0], words="Acme runs new engine"), *THUMBS[1:]]
+    msg = [dict(THUMBS[0], words="Acme's *new* engine?"), *THUMBS[1:]]
     _, _, probs = ytdraft.check_thumbs(good(thumbnails=msg), mat, title)
     check(not probs, "the title's message on the picture is allowed", probs)
     bad_thumbs = [dict(THUMBS[0], words="one two three four five"), *THUMBS[1:]]
@@ -333,7 +333,7 @@ async def main():
         )
         check(sheets == [f.id], "the moments sheet is made for the call", sheets)
         check(
-            len(d["thumbnails"]) == 4 and d["thumbnails"][0]["words"] == "*Faster* forms",
+            len(d["thumbnails"]) == 4 and d["thumbnails"][0]["words"] == "Why *faster* forms?",
             "the draft keeps its thumbnails",
             d["thumbnails"],
         )
@@ -341,7 +341,19 @@ async def main():
         again = await ytdraft.write(f, CHANNEL, recent, "api")
         check(len(calls) == n and again["key"] == d["key"], "asked again: the kept draft")
         with open(f.path("audio", "vo", "timeline.json"), "w", encoding="utf-8") as fh:
-            json.dump({"lines": [{"i": 0, "start": 0.5, "end": 3, "text": "A new line."}]}, fh)
+            json.dump(
+                {
+                    "lines": [
+                        {
+                            "i": 0,
+                            "start": 0.5,
+                            "end": 3,
+                            "text": "A new line: nothing to change, the right fields.",
+                        }
+                    ]
+                },
+                fh,
+            )
         answers[:] = [good(title="Rewritten")]
         d2 = await ytdraft.write(f, CHANNEL, recent, "api")
         check(d2["title"] == "Rewritten", "a changed film is written again")
@@ -354,7 +366,9 @@ async def main():
             "thumbnails that break the rules are asked again, and told why",
             tcalls[-1],
         )
-        check(d3["thumbnails"][0]["words"] == "*Faster* forms", "and the second answer is kept")
+        check(
+            d3["thumbnails"][0]["words"] == "Why *faster* forms?", "and the second answer is kept"
+        )
         answers[:] = [good(title="Twice")]
         picked[:] = [{"thumbnails": bad_thumbs}] * 2
         d4 = await ytdraft.write(f, dict(CHANNEL, id="UCfourth"), recent, "api")

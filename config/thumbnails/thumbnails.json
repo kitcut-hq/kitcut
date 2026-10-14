@@ -120,6 +120,8 @@
     ],
     "probe": 0.2,
     "min_detail_frac": 0.6,
+    "still_motion": 0.008,
+    "_still_motion": "Frames that move no more than this (or than the stillest one) all count as still, and the most drawn of them is taken: a drawing that pauses half done and then goes on is taken finished (the owner, 2026-10-14: some thumbnails were not fully drawn). 0.008 sits between the settled frames' median movement and the moving ones' 0.03 in the bake-off below; not measured on its own.",
     "_why": "A frame is settled when the film looks the same 0.2 s either side of it: a crossfade, a line still drawing itself or a camera move all differ there. Among the settled ones, a thin frame (a scene not drawn in yet, a fade) loses to a fuller one.",
     "_measured": "Same bake-off: YouTube-like frames at 25/50/75% of the film caught it moving (mean difference over +-0.2 s above 0.03) 10 times in 24; the settled frames 6 in 32, median movement 0.0149 -> 0.0054."
   },
@@ -383,6 +385,7 @@
       1,
       2
     ],
+    "_options_2026_10_14": "The box now carries the option's own question or quote (the owner: every thumbnail a short catchy question or quote), the video's title only when the option's words are neither.",
     "_options": "Which of the four options are the video's title in a box on a whole frame of the film (the others are made as before). The owner sent a thumbnail of this kind as the format to offer -- a full painted frame, 'PADEL TACTICS' in white capitals on a red box top left with a hard black shadow, 'EVERYTHING, IN 6 MINUTES' small beside it -- and asked for the text to be, or be very close to, the video's name (2026-10-09). Two of four, so the person picking sees this look on two moments beside the film's own.",
     "upper": true,
     "ink": "#FFFFFF",

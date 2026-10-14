@@ -64,8 +64,8 @@ LINES = [
     (9.4, 13.0, "Nothing to change. Just upload your next form."),
 ]
 THUMBS = [
-    {"at": 3.5, "layout": "headline", "words": "*Faster* forms", "place": "top"},
-    {"at": 8.6, "layout": "card", "words": "Nothing to change", "place": "left"},
+    {"at": 3.5, "layout": "headline", "words": "Why *faster* forms?", "place": "top"},
+    {"at": 8.6, "layout": "card", "words": "\u201cNothing to *change*\u201d", "place": "left"},
 ]
 
 
@@ -233,7 +233,7 @@ async def main():
         good(thumbnails=THUMBS + [dict(THUMBS[0], at=12.0)]), mat, title, 2, share.LAYOUTS
     )
     check(any("exactly two" in p["text"] for p in probs), "three are too many", probs)
-    rep = [dict(THUMBS[0], words="Acme moves every account"), THUMBS[1]]
+    rep = [dict(THUMBS[0], words="Every account *moved*?"), THUMBS[1]]
     _, _, probs = ytdraft.check_thumbs(good(thumbnails=rep), mat, title, 2, share.LAYOUTS)
     check(not probs, "the title's message on the picture is allowed", probs)
     fixed, _ = ytdraft.repair(cs[:1], [{"n": 1, "text": "x"}], mat, n=2)

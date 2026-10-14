@@ -101,13 +101,16 @@ film, its subject pushed in large on one side, and a few big words on the other 
 words on the picture (the film's own titles and labels are left out of it), set in the film's \
 own title type and colours:
 - "at": the moment, in seconds, from the sheet of its moments (the time is printed on every \
-frame) -- one where the film's subject is on screen, large and fully drawn: a character, an \
-object, a chart. Two different moments.
+frame) -- one where the film's subject is on screen, large and finished: every line and colour \
+of it drawn in, not still appearing, not half off the frame -- and is what its words are about: \
+a character, an object, a chart. Two different moments.
 - "layout": one each of "headline" (the words large over the picture) and "card" (the words on \
 the film's own label or card).
 - "words": at most 4 words and 32 characters, in the film's language: the film's main message, \
-the title's question or promise in fewer words, that makes the right person want to watch, held \
-to the film like everything above. Star one word to colour it (write it as *word*).
+that makes the right person want to watch, held to the film like everything above -- one as a \
+short catchy question the film answers, ending with "?", the other as a short quote, words said \
+in the film's narration word for word, in \u201cquotation marks\u201d. Star one word to colour it \
+(write it as *word*).
 - "place": the side the words go on, so they leave the subject clear: left, right, top or bottom.
 Put first the one you would choose yourself.
 

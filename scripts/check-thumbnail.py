@@ -258,6 +258,70 @@ def rules():
     long = [dict(good[0], words="a b c d e"), *good[1:]]
     _, _, probs = _thumb.check_concepts(long, 20)
     check("five words are too many", any("too long" in p["text"] for p in probs), probs)
+    # since 2026-10-14 each worded thumbnail is a question or a quote of the narration, both kinds
+    said = "Little Hedgehog could not sleep. Count three stars, said Olga. His eyes grew heavy."
+    asked = [
+        dict(good[0], words="Why can't he *sleep*?"),
+        dict(good[1], words="\u201cCount three *stars*\u201d"),
+        dict(good[2], words="\u201cHis eyes grew heavy\u201d"),
+        dict(good[3], words="Will it *work*?"),
+    ]
+    _, _, probs = _thumb.check_concepts(asked, 20, "Little Hedgehog Could Not Sleep", said=said)
+    check("questions and quotes of the narration pass", not probs, probs)
+    _, _, probs = _thumb.check_concepts(good, 20, "Little Hedgehog Could Not Sleep", said=said)
+    check(
+        "plain words are asked again as a question or a quote",
+        sum("neither a question nor a quote" in p["text"] for p in probs) == 4,
+        probs,
+    )
+    made_up = [*asked[:2], dict(asked[2], words="\u201cSleep came *fast*\u201d"), asked[3]]
+    _, _, probs = _thumb.check_concepts(made_up, 20, said=said)
+    check(
+        "a quote the film does not say is a problem",
+        any(p["n"] == 3 and "does not say" in p["text"] for p in probs),
+        probs,
+    )
+    only_q = [dict(c, words="Why *%d*?" % i) for i, c in enumerate(good, 1)]
+    _, _, probs = _thumb.check_concepts(only_q, 20, said=said)
+    check(
+        "four questions are asked to mix in a quote",
+        any("mix them" in p["text"] for p in probs),
+        probs,
+    )
+    _, _, probs = _thumb.check_concepts(only_q, 20, said="")
+    check("a film that says nothing may have questions alone", not probs, probs)
+    check(
+        "what words are: a question, a quote (the film's own marks), neither",
+        [
+            _thumb.line_kind(w)
+            for w in (
+                "Can't *sleep*?",
+                "\u201cGo on\u201d",
+                "\u00abДавай\u00bb",
+                "'Go on'",
+                "Go on",
+            )
+        ]
+        == ["question", "quote", "quote", None, None],
+    )
+    check(
+        "a title box sets a question whole, its mark kept",
+        _thumb.title_parts("Why can't he sleep?") == ("Why can't he sleep?", ""),
+    )
+    tc = _thumb.title_concepts(
+        asked[:2] + good[2:], "Little Hedgehog: Could Not Sleep", options=[1, 2, 3]
+    )
+    check(
+        "a title box carries its own question or quote, else the video's title",
+        [c.get("title") for c in tc]
+        == [
+            "Why can't he sleep?",
+            "\u201cCount three stars\u201d",
+            "Little Hedgehog: Could Not Sleep",
+            None,
+        ],
+        [c.get("title") for c in tc],
+    )
     edge = [dict(good[0], at=19.9), *good[1:]]
     cs, notes, probs = _thumb.check_concepts(edge, 20)
     check("a moment in the fade-out is moved inside", cs[0]["at"] <= 19.5 and notes, (cs[0], notes))
@@ -391,6 +455,33 @@ def rules():
         stills[round(t, 2)] = p
     t, rows = _thumb.settle(2.0, stills, 30)
     check("the settled frame, not the one mid-crossfade", t >= 2.6, rows)
+    shutil.rmtree(tmp, ignore_errors=True)
+
+    # a drawing that pauses half done (1.4-2.0 s) and is still again finished (from 2.4 s): the
+    # finished frame, though the half-done one is as still and nearer the moment asked for
+    # -- the finished frames boil a little (a crayon line redrawn: never quite still), the
+    # half-done ones hold dead still, so the stillest frame alone would be the half-done one
+    def drawn(k, wobble=0):
+        W, H = _thumb.size()
+        im = Image.new("RGB", (W, H), (40, 60, 110))
+        d = ImageDraw.Draw(im)
+        rng = np.random.default_rng(7)
+        for _ in range(k):
+            x, y = rng.integers(1060, 1820), rng.integers(200, 1000)
+            r = int(rng.integers(6, 30))
+            d.ellipse(
+                [x - r + wobble, y - r, x + r + wobble, y + r], outline=(230, 230, 230), width=3
+            )
+        return im
+
+    stills, tmp = {}, tempfile.mkdtemp(prefix="check-thumb-")
+    for i, t in enumerate((1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8)):
+        img = drawn(650) if t <= 2.0 else drawn(900, wobble=2 * (i % 3))
+        p = os.path.join(tmp, "%06.2f.png" % t)
+        img.save(p)
+        stills[round(t, 2)] = p
+    t, rows = _thumb.settle(1.8, stills, 30)
+    check("the finished drawing, not the pause half way", t >= 2.4, rows)
     shutil.rmtree(tmp, ignore_errors=True)
 
 

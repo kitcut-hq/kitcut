@@ -343,6 +343,32 @@ def word_count(words):
     return len(WORD.findall(plain(words)))
 
 
+# What a thumbnail's words say (2026-10-14, the owner: "always a short catchy question or quote"):
+# a question the film answers, ending in its question mark, or words said in the film, in
+# quotation marks. Single quotes are not taken: they are apostrophes as often.
+QUOTE_OPEN, QUOTE_CLOSE = '"\u201c\u00ab\u201e', '"\u201d\u00bb\u201c'
+
+
+def line_kind(words):
+    """'question', 'quote' or None: what a thumbnail's words are."""
+    t = plain(words).strip()
+    if t.endswith(("?", "\uff1f", "\u061f")):
+        return "question"
+    if len(t) > 2 and t[0] in QUOTE_OPEN and t[-1] in QUOTE_CLOSE:
+        return "quote"
+    return None
+
+
+def _said_words(s):
+    return " ".join(w.lower().replace("\u2019", "'") for w in WORD.findall(s or ""))
+
+
+def quoted(words, said):
+    """Whether a quote's words are said in the film, in that order (case and punctuation aside)."""
+    q = _said_words(plain(words))
+    return bool(q) and (" %s " % q) in (" %s " % _said_words(said))
+
+
 def title_overlap(words, title):
     """Share of the thumbnail's content words that the title already says."""
     w = [x.lower() for x in WORD.findall(plain(words)) if x.lower() not in STOP]
@@ -356,13 +382,17 @@ def title_overlap(words, title):
 NUMBER = {1: "one", 2: "two", 3: "three", 4: "four"}
 
 
-def check_concepts(raw, length, title="", n=4, layouts=None, pieces=None):
+def check_concepts(raw, length, title="", n=4, layouts=None, pieces=None, said=None):
     """Four {at, words, layout} held to the rules: (concepts, notes, problems). `n` and `layouts`
     ask for another number of them, from fewer layouts (the share image: two, headline or card).
     A concept may name the pictures its poster is built on ("hero", "with": names from `pieces`,
     the film's own); a name the film has no picture for is dropped, and the poster then takes the
     pieces of its moment's frame. A poster's writer gives no layout: one is kept in hand for a
     concept that cannot be made as a poster.
+
+    `said` is the film's narration as one text: given, every worded thumbnail must be a question
+    or a quote of it (line_kind, quoted), and when the film says anything, both kinds are among
+    them. None (a hand-written concept) holds the words to their length alone.
 
     `notes` are what was put right here; `problems` ({n, text}; n is the thumbnail, None for
     all of them) are what only the writer can fix -- words that are too long or repeat the
@@ -450,6 +480,24 @@ def check_concepts(raw, length, title="", n=4, layouts=None, pieces=None):
         if ov > w["title_overlap_max"]:
             problems.append({"n": i, "text": "thumbnail %d's words %r repeat the title: say what the title does not"
                              % (i, plain(o["words"]))})  # fmt: skip
+        kind = line_kind(o["words"]) if said is not None and n else None
+        if said is not None and n and kind is None:
+            problems.append({"n": i, "text": "thumbnail %d's words %r are neither a question nor a quote: ask a short "
+                             "question the film answers, ending with ?, or quote words said in it, in \u201cquotation marks\u201d"
+                             % (i, plain(o["words"]))})  # fmt: skip
+        elif kind == "quote" and not quoted(o["words"], said):
+            problems.append({"n": i, "text": "thumbnail %d quotes %r, which the film does not say: quote its narration "
+                             "word for word" % (i, plain(o["words"]))})  # fmt: skip
+    kinds = {line_kind(o["words"]) for o in out if o["words"]}
+    if (
+        said
+        and len([o for o in out if o["words"]]) > 1
+        and len(kinds - {None}) == 1
+        and None not in kinds
+    ):
+        problems.append(
+            {"n": None, "text": "mix them: at least one question and at least one quote"}
+        )
     ats = sorted(o["at"] for o in out)
     gap = c["concepts"]["min_gap"]
     if any(b - a < gap for a, b in zip(ats, ats[1:])):
@@ -860,7 +908,13 @@ def settle(at, stills, length):
         raise RuntimeError("no stills rendered near %.2f s" % at)
     full = max(r["detail"] for r in rows)
     ok = [r for r in rows if r["detail"] >= s["min_detail_frac"] * full] or rows
-    best = min(ok, key=lambda r: (round(r["motion"], 4), -r["detail"], abs(r["t"] - at)))
+    # among the frames that hold still, the most drawn: a picture that pauses half drawn and then
+    # goes on drawing is taken once it is finished (2026-10-14: "not fully drawn")
+    calm = min(r["motion"] for r in ok)
+    still = [r for r in ok if r["motion"] <= max(s["still_motion"], calm)]
+    best = max(
+        still, key=lambda r: (round(r["detail"], 3), -round(r["motion"], 4), -abs(r["t"] - at))
+    )
     return best["t"], rows
 
 
@@ -1976,6 +2030,8 @@ def title_parts(title):
     nothing. (None, "") for a title, or a first part, too long to be read on a thumbnail."""
     k = cfg()["title"]
     t = " ".join(str(title or "").replace("*", "").split())
+    if line_kind(t):  # a thumbnail's question or quote is set whole, its mark kept
+        return (t, "") if len(t) <= k["max_chars"] else (None, "")
     m = TITLE_CUT.search(t)
     head, rest = (t[: m.start()], t[m.end() :]) if m else (t, "")
     # a first part of a word or two ("Padel: Tactics and Tricks (...)") takes the next with it
@@ -2008,15 +2064,17 @@ def drawn_map(img):
 
 def title_concepts(concepts, title, options=None):
     """The concepts with the ones `options` numbers (config title.options) turned into title
-    thumbnails: the same moment, the video's title in a box on it. Left as they are when the
-    title cannot be set that way (title_parts)."""
+    thumbnails: the same moment, in a box on it the concept's own question or quote (since
+    2026-10-14), else the video's title. Left as they are when that cannot be set that way
+    (title_parts)."""
     options = cfg()["title"]["options"] if options is None else options
-    if not title_parts(title)[0]:
-        return concepts
-    return [
-        dict(c, layout="title", title=title) if i in options else c
-        for i, c in enumerate(concepts, 1)
-    ]
+    out = []
+    for i, c in enumerate(concepts, 1):
+        text = plain(c.get("words")) if line_kind(c.get("words")) else title
+        out.append(
+            dict(c, layout="title", title=text) if i in options and title_parts(text)[0] else c
+        )
+    return out
 
 
 def layout_title(img, title, st):

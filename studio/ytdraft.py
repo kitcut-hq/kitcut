@@ -101,16 +101,19 @@ moment of the film, its subject pushed in large on one side, and a few big words
 the only words on the picture (the film's own titles and labels are left out of it), set in the \
 film's own title type and colours, with its logo:
 - "at": the moment, in seconds, from the sheet of its moments (the time is printed on every \
-frame) -- one where the film's subject is on screen, large and fully drawn: a character, an \
-object, a chart. Four different moments.
+frame) -- one where the film's subject is on screen, large and finished: every line and colour \
+of it drawn in, not still appearing, not half off the frame -- and is what its words are about: \
+a character, an object, a chart. Four different moments.
 - "layout": "headline" (the words large over the picture) for the first and the fourth, "card" \
 (the words on the film's own label or card) and "panel" (the picture on one side, the words on a \
 panel of the film's colour on the other) for the second and third.
 - "words": at most 4 words and 32 characters, in the film's language ({language}). The first \
 thumbnail says the video's main message -- {main}, in fewer words; the others each say one of \
-the film's main points. Words a viewer reads at a glance and wants to click on, and \
-they hold to the film -- no number or claim it does not show or say. \
-Star one word to colour it (write it as *word*).
+the film's main points. Each is either a short catchy question the film answers, ending \
+with "?", or a short quote -- words said in the film's narration, word for word, in \
+\u201cquotation marks\u201d. Both kinds among the four: at least one question and one quote. \
+Words a viewer reads at a glance and wants to click on, and they hold to the film -- no number \
+or claim it does not show or say. Star one word to colour it (write it as *word*).
 - "place": the side the words go on, so they leave the subject clear: left, right, top or \
 bottom.
 Put first the one you would choose yourself.
@@ -125,7 +128,8 @@ Choose four thumbnails for this film's video on YouTube. Each is a poster compos
 film's own pictures -- not a frame of it: one picture set large (somebody from the waist up, or \
 an object whole) on the film's own coloured ground, at most one more tucked in beside it, and a \
 few big words -- the only words on the picture -- in the film's own title type, with its logo:
-- "hero": the picture the poster is built on, by its name from the list below. A face is what \
+- "hero": the picture the poster is built on, by its name from the list below -- one that shows \
+what its words are about. A face is what \
 a viewer looks at first: when the film has characters, a character is the hero of at least \
 three of the four -- the one whose face and pose show what the words say (worried, delighted, \
 saying stop) -- and an object is the hero only where no character fits the words. Four \
@@ -138,9 +142,12 @@ every frame), where that hero is on screen: the poster takes that moment's groun
 Four different moments.
 - "words": at most 4 words and 32 characters, in the film's language ({language}); fewer and \
 shorter words are set larger. The first thumbnail says the video's main message -- {main}, in \
-fewer words; the others each say one of the film's main points. Words a viewer reads at a \
-glance and wants to click on, and they hold to the film -- no number or claim it does not show \
-or say. Star one word to colour it (write it as *word*).
+fewer words; the others each say one of the film's main points. Each is either a short catchy \
+question the film answers, ending with "?", or a short quote -- words said in the film's \
+narration, word for word, in \u201cquotation marks\u201d. Both kinds among the four: at least one \
+question and one quote. Words a viewer reads at a glance and wants to click on, and they hold to \
+the film -- no number or claim it does not show or say. Star one word to colour it (write it as \
+*word*).
 Put first the one you would choose yourself.
 
 The film's pictures (name: what it shows):
@@ -510,8 +517,9 @@ def check_thumbs(d, mat, title, n=4, layouts=None):
     """The draft's four thumbnails (or `n`, of `layouts`) held to _thumb's rules: (concepts,
     notes, problems). A problem is something only the writer can put right; it is asked once,
     then repair() decides."""
+    said = " ".join(text for _, _, text in mat.get("narration") or [])
     return _thumb.check_concepts(
-        d.get("thumbnails"), mat["length"] or 0, title, n, layouts, mat.get("piece_names")
+        d.get("thumbnails"), mat["length"] or 0, title, n, layouts, mat.get("piece_names"), said
     )
 
 

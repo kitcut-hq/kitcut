@@ -3420,6 +3420,35 @@ the template could be dynamic, slightly modified each time."
   from, so a picture nobody described is an object (KI-057); a print whose own edges fade keeps a
   smoky rim; on a Windows laptop joined scripts are measured unjoined and set smaller (KI-056).
 
+### A question or a quote (2026-10-14)
+
+The owner asked for every thumbnail to carry "a short catchy question or quote" -- the short,
+one-word-coloured text kept as it was, only its meaning changed -- and for the picture to show its
+subject finished: some were picked mid-draw, or showed a hero that did not fit the words.
+
+- **The words** (`ASK_THUMBS`, `ASK_POSTERS`, and share.py's two) are each a short question the
+  film answers, ending in its question mark, or a short quote of the narration, word for word, in
+  quotation marks (\u201c\u201d, \u00ab\u00bb, \u201e\u201c or straight double quotes; single ones are
+  apostrophes too often). Still at most 4 words and 32 characters, one starred.
+- **Held to it** by `check_concepts(..., said=)` (`ytdraft.check_thumbs` passes the narration):
+  words that are neither, a quote the narration does not say (`quoted`: its words in order, case
+  and punctuation aside), or worded thumbnails all of one kind when the film says anything, are
+  problems the writer is asked once more about; what still breaks the rules is put right from the
+  film as before (`repair`). A film with no narration may have questions alone. A hand-written
+  concept (`thumb-options.py`, `said=None`) is held to its length only.
+- **The title box** (below) carries the option's own question or quote, set whole with its mark
+  (`title_parts`), and the video's title only when the option's words are neither.
+- **The moment:** the writer is told to pick one where the subject is finished (every line and
+  colour drawn in, not appearing, not half off the frame) and is what its words are about; a
+  poster's hero is one that shows what its words are about. `settle` then counts every candidate
+  moving no more than `settle.still_motion` (0.008, or the stillest one) as still and takes the
+  most drawn of them, where it took the stillest: a crayon line boils, so a finished drawing never
+  scores 0 while a pause half way through can (`check-thumbnail.py`: "the finished drawing, not
+  the pause half way"). The threshold sits between the settled frames' median movement (0.0054)
+  and the moving ones' (0.03) in the bake-off; it was not measured on its own.
+- Drafts written before keep their picks: the draft key names the words' ask, not the
+  thumbnails', so nothing is rewritten (or paid for) until a film's draft is next written.
+
 ### The title in a box (`layout_title`, design yt-5)
 
 Two of the four options (config `title.options`, 1 and 2) are **the video's own title on a whole

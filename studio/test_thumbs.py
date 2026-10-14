@@ -230,7 +230,7 @@ def main():
     )
     check(
         [o["layout"] for o in opts] == ["title", "title", "panel", "still"],
-        "the first two the video's title in a box, the others in their layouts",
+        "the first two in a title box, the others in their layouts",
         [(o["layout"], o["notes"]) for o in opts],
     )
     check([o["n"] for o in opts] == [1, 2, 3, 4], "four options", [o["n"] for o in opts])
@@ -254,8 +254,11 @@ def main():
             )
         check(red(img) < 0.05, "option %d carries no tail" % o["n"])
     check(
-        opts[0]["words"] == "Pass It On" and opts[2]["words"] == "A friend can use it",
-        "the words as the site shows them: the title up to its colon; a moment's own, stars gone",
+        opts[0]["words"] == "Still waiting?"
+        and opts[1]["words"] == "Pass It On"
+        and opts[2]["words"] == "A friend can use it",
+        "the words as the site shows them: a title box carries its question whole, else the title "
+        "up to its colon; a moment's own, stars gone",
         [o["words"] for o in opts],
     )
 

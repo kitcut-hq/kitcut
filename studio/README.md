@@ -313,7 +313,10 @@ logo. Then checks (legible at 168 px wide, 4.5:1 contrast, clear of YouTube's du
 option that fails falls back (a glow of the film's paper, one of its cards, the frame alone) before
 anyone sees it; options saved under an older design (`_thumb.DESIGN`) are made again. The first two of the four are the
 video's title in a box of the film's accent on a whole frame of the film (`layout_title`, config
-`title.options`); a title too long to read on a thumbnail leaves them as their moments' own words. The draft's
+`title.options`); a title too long to read on a thumbnail leaves them as their moments' own words. Every
+option's words are a short question the film answers or a short quote of its narration, both kinds
+among them, and a title box carries its option's own question or quote (`docs/reference.md` "A
+question or a quote"). The draft's
 answer carries them:
 
 ```bash
