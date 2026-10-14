@@ -1247,7 +1247,10 @@ async def create(req):
         seconds = 0
     if seconds not in films.LENGTHS and not tpl:  # a template's own length may be any
         return web.json_response(
-            {"error": "seconds must be one of %s" % ", ".join(map(str, films.LENGTHS))},
+            {
+                "error": "seconds must be a multiple of 5 from %d to %d"
+                % (films.LENGTHS[0], films.LENGTHS[-1])
+            },
             status=400,
         )
     look = body.get("look") or films.LOOKS[0]

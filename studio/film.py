@@ -65,8 +65,9 @@ REPO = os.path.abspath(os.environ.get("STUDIO_REPO") or KIT)
 LEGACY = os.path.join(REPO, "projects")
 
 # seconds a visitor may ask for: the site sells them by the second, and decides who may have
-# what (films over a minute are for its Pro plan, up to 8 minutes)
-LENGTHS = tuple(range(5, 485, 5))
+# what (films over a minute are for its Pro plan, up to 8 minutes; an account the site gives its
+# own longest film, users.film_max, up to 30)
+LENGTHS = tuple(range(5, 1805, 5))
 # drawn: everything drawn in code; painted: an image model paints the scenes, the code animates;
 # collage: an image model paints single objects cut out of paper, the code builds pages round them.
 # The person's choice; each is a recipe of capabilities (RECIPES, below)
