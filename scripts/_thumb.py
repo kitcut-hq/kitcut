@@ -2077,7 +2077,7 @@ def title_concepts(concepts, title, options=None):
     return out
 
 
-def layout_title(img, title, st):
+def layout_title(img, title, st, *, deep=False):
     """The video's title in a box on a whole frame of the film: heavy capitals in the film's
     title type on a box of the film's accent -- white where white reads on it, else the film's
     darkest colour (a lime box takes navy letters; darkening it for white made it olive,
@@ -2085,7 +2085,8 @@ def layout_title(img, title, st):
     the box, in the corner where it hides the least and cuts through none of the frame's own
     words -- and what follows the title's colon, small, on a dark strip beside it. The picture is
     the frame with the film's own words left out and nothing pushed: the scene as the film drew
-    it."""
+    it. `deep` moves the box further from its letters (title.deep_margin): the retry for a box
+    whose letters measured just under the bar once drawn."""
     k, c = cfg()["title"], cfg()
     W, H = size()
     words, kick = title_parts(title)
@@ -2109,7 +2110,7 @@ def layout_title(img, title, st):
     # from them only as far as they need: thin letters measure under their colours' ratio
     # once drawn (a hand type's white on rust, 5.3:1 as colours, read 4.45:1; 2026-10-09)
     ink = max((light, dark), key=lambda v: _reads(v, fill))
-    fill = fit_contrast(fill, ink, need + k["fill_margin"])
+    fill = fit_contrast(fill, ink, need + k["fill_margin"] + (k["deep_margin"] if deep else 0))
     avoid = text_boxes(img, min_h=c["text"]["headline_min_h_px"])
     safe, badge = safe_rects()
     sm, dm = drawn_map(img), detail_map(img)
@@ -2191,6 +2192,7 @@ def layout_title(img, title, st):
             kick = ""
     return {
         "layout": "title",
+        "deep": deep,
         "words": words,
         "kicker": kick,
         "head": head,
@@ -2943,9 +2945,9 @@ def layout_poster(words, st, pcs, hero, extras, pages, v, seed, n, logo=None, st
 
 # ------------------------------------------------------------------ the whole thing
 DROP = ("spec", "box", "head", "cap", "px", "busy", "cover", "glow", "shift", "stroke_px",
-        "strips", "template", "alt", "kicker", "corner")  # fmt: skip
+        "strips", "template", "alt", "kicker", "corner", "deep")  # fmt: skip
 FALLBACK = {
-    "title": ["headline", "headline+glow", "card", "still"],
+    "title": ["title+deep", "headline", "headline+glow", "card", "still"],
     "poster": ["poster+alt", "headline", "headline+glow", "card", "still"],
     "headline": ["headline+glow", "card", "still"],
     "card": ["still"],
@@ -2957,9 +2959,9 @@ def _lay(o, kind, st):
     """One layout for the option: on the picture compose() made (the film's own words left out,
     the camera pushed in on its subject), in the side it gave the words -- or, for the still, the
     frame as the film drew it."""
-    if kind == "title":
+    if kind in ("title", "title+deep"):
         # the whole frame, the film's own words left out of it, nothing pushed
-        lay = layout_title(o["clean"], o["title"], st)
+        lay = layout_title(o["clean"], o["title"], st, deep=kind == "title+deep")
         if lay is not None:
             o["img"] = o["clean"]
             lay["spec"]["declutter"] = True
@@ -3159,7 +3161,15 @@ def make_options(film_dir, concepts, out_dir, env=None, log=print, logo=None):
             if not fails:
                 o["final"] = final
                 continue
-            tag = o["layout"] + ("+glow" if o.get("glow") else "+alt" if o.get("alt") else "")
+            tag = o["layout"] + (
+                "+glow"
+                if o.get("glow")
+                else "+alt"
+                if o.get("alt")
+                else "+deep"
+                if o.get("deep")
+                else ""
+            )
             o["notes"].append("%s failed: %s" % (tag, "; ".join(fails)))
             o["tried"].append(tag)
             lay = first_layout(o, _next(o), st)

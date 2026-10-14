@@ -3479,7 +3479,10 @@ beside it) and asked for the text to be the video's name or very close to it (20
   ground (`drawn_map`); saliency read an empty half of paper as busier than the half with the
   laptop in it. A painted frame is read by saliency.
 - **Checks** are the ones every option passes: cap height at 168 px, contrast as drawn, the
-  margins, the stamp, the film's own words.
+  margins, the stamp, the film's own words. A box whose letters miss the contrast bar once drawn
+  is tried once more as `title+deep` (its fill moved `title.deep_margin`, 1.5, further from them)
+  before the option gives the box up: "STILL WAITING?" in Caveat read 4.49:1 on kc-local's Linux
+  Chromium and over 4.5 on Windows (2026-10-14), a near miss from rasterising.
 
 Measured 2026-10-09 on two films, eight options: the painted padel film (words drawn in ways the
 declutter pass does not find, so chips and source lines stay in the frame) set the title on three

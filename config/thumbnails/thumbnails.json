@@ -397,6 +397,8 @@
     "ground_max": 0.4,
     "_ground": "A frame whose pixels are within ground_tol of its median colour over all but ground_max of it is drawn on a flat ground: the box goes where it hides the least of what is not ground. Any other frame (painted) is read by saliency.",
     "fill_margin": 1.2,
+    "deep_margin": 1.5,
+    "_deep_margin": "A title box whose letters measure under contrast_min once drawn is tried once more with its fill moved this much further from them before the option gives the box up. On kc-local (Linux Chromium) the test film's 'STILL WAITING?' in Caveat read 4.49:1 where the same box read over 4.5 on Windows (2026-10-14): a near miss from rasterising, not a box that cannot be read.",
     "_colours": "White capitals on the film's own accent (the more saturated of its two), darkened until white reads on it with the same margin every layout keeps; a film whose accent is nearly grey (chroma under chroma_min) gets the reference's red. The shadow is the film's darkest ink when that is near black, else near black.",
     "max_chars": 44,
     "join_max_chars": 28,

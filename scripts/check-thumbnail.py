@@ -771,7 +771,18 @@ def titles():
           and lay["spec"]["lines"][0]["runs"][0]["col"] == "#FFFFFF", red)  # fmt: skip
     check("a title too long gives no layout (the option falls to its moment's own words)",
           _thumb.layout_title(frame(), long, st) is None
-          and _thumb.FALLBACK["title"][0] == "headline")  # fmt: skip
+          and [k for k in _thumb.FALLBACK["title"] if not k.startswith("title")][0] == "headline")  # fmt: skip
+    # a box whose letters read just under the bar once drawn is tried once more, deeper: the
+    # same box, its fill further from its letters (Caveat's "?" read 4.49:1 on Linux, 2026-10-14)
+    lay, deep = (_thumb.layout_title(frame(), "Still waiting?", st, deep=d) for d in (False, True))
+    ratio = [
+        _thumb._reads(_thumb.hex_rgb(x["spec"]["lines"][0]["runs"][0]["col"]),
+                      _thumb.hex_rgb(x["spec"]["cards"][1]["fill"]))
+        for x in (lay, deep)
+    ]  # fmt: skip
+    check("a failed title box is tried once deeper, its letters further from its fill",
+          _thumb.FALLBACK["title"][0] == "title+deep" and deep["deep"]
+          and ratio[1] >= ratio[0] + 1, ratio)  # fmt: skip
 
 
 def collage_fixture(home):
