@@ -1,6 +1,6 @@
 ---
 name: video-sketch
-description: Make an animated explainer film with no footage — a hand-drawn/whimsical, a clean editorial, or a mixed-media paper-collage animation (cut-out pictures from an image model animated with type, tape labels, rubber stamps and torn paper, the "newspaper cutout" motion-design look) written as JavaScript, with an AI voice-over, an original score on sampled instruments and synthesised sound effects, rendered to MP4 and to a self-contained HTML player. It also makes real people talk from their photos -- bobble-heads, puppet cut-outs, a newspaper photo or a painting where only the mouth moves -- each with their own voice. Use when asked for an animation, an animated explainer or promo, a motion-graphics or motion-design video, a "whimsical hand-drawn" video, a collage / mixed-media / cut-out / scrapbook / newspaper-style video, a product or feature explainer, a 30-60 second ad, talking heads or bobble-heads made from photos, or anything that should be illustrated rather than filmed. Also for a square or vertical social promo in 3D motion-design style with real people in it -- a conference speaker announcement, a line-up, an event teaser with a speaker carousel, a ticket and a poster, music only, no narration.
+description: Make an animated explainer film with no footage — a hand-drawn/whimsical, a clean editorial, or a mixed-media paper-collage animation (cut-out pictures from an image model animated with type, tape labels, rubber stamps and torn paper, the "newspaper cutout" motion-design look) written as JavaScript, with an AI voice-over, an original score on sampled instruments and synthesised sound effects, rendered to MP4 and to a self-contained HTML player. It also makes real people talk from their photos -- bobble-heads, puppet cut-outs, a newspaper photo or a painting where only the mouth moves -- each with their own voice. Use when asked for an animation, an animated explainer or promo, a motion-graphics or motion-design video, a "whimsical hand-drawn" video, a collage / mixed-media / cut-out / scrapbook / newspaper-style video, a product or feature explainer, a 30-60 second ad, talking heads or bobble-heads made from photos, or anything that should be illustrated rather than filmed. Also for a square or vertical social promo in 3D motion-design style with real people in it -- a conference speaker announcement, a line-up, an event teaser with a speaker carousel, a ticket and a poster, music only, no narration. Also for a vertical short drama (a micro-drama: characters who speak in their own voices, a hook, a reversal and a twist in about 60 seconds), one film or a set in different looks.
 ---
 
 # A sketch film: an explainer written as code
@@ -273,6 +273,48 @@ the video's first frame (`"cover": false`). By hand, set both: `"lead": 0.1` in 
   reason" for a rule whose announcement gives none. Open the primary source once more with the
   finished narration beside it; a line that is wrong is re-recorded by itself (studio-vm skill,
   "Reworking a finished film by hand").
+
+## A vertical short drama (characters who speak, a twist, 60 s)
+
+A complete story in about a minute, 9:16, told in dialogue: the micro-drama format of ReelShort,
+DramaBox and TikTok, as one standalone film rather than episode 1 of 80. Ten were made on
+kitcut.ai on 2026-10-15 in ten looks (project "Vertical dramas", p-344ollfpug; prompts, brief,
+review sheet and journal in `projects/vertical-drama/`, local). **The rulebook is
+`docs/market-vertical-drama-2026.md`, "Rules for a 60-second standalone vertical drama"**: frame 0
+is the conflict, the setup done by 0:10, the first reversal by 0:25, the final twist at 0:48-0:56
+turning something planted by 0:12, a held last image, 90-150 spoken words.
+
+How one is made on kitcut.ai:
+
+- **Voices come only with People.** The studio gives a character their own voice (`vo.json`
+  `cast` + a line's `who`) only for a person made from a photo; everyone else is read by the one
+  narrator voice. For fictional characters, generate a casting portrait each with
+  `scripts/sketch-paint.py` (a manifest whose `paint` block uses `"backend": "openrouter"`,
+  `"model": "openai/gpt-image-2.5-flare"`, a "photorealistic casting headshot of a fictional
+  character, front view, head and shoulders, plain light grey background" style line and one
+  image per role; about $0.01 and 10 s each), then `npm run film -- make ... --short
+  --person "Name=portrait.jpg" ... --style <people-style> --people-consent`. A fifth speaker is the
+  film's narrator voice: write "his one line is in the narrator voice" in the prompt.
+- **Write the prompt as a screenplay**: the look in detail (as if one named kind of artist made
+  it, plus how captions should look via `SK.CAPTIONS`), the cast with a Gemini voice and a
+  one-line manner each, then every line timed and attributed, the plant marked "(the plant: show
+  it clearly, once)", the sound. 100-110 spoken words for 60 s; 120+ ran 68-74 s.
+- **Put the format's rules in the project brief**, not in each prompt (`projects/vertical-drama/
+  brief.md` is a worked one, and a project that keeps nothing so films do not copy each other).
+- **The people-style is a gamble; test it before the film** (`head-rig.py` on one portrait with
+  the look, $0.11). Felt, crayon, sticker, woodcut and pop art drew real drawings; courtroom and
+  paper cut-out drew photographs with a stylised edge until studio-poc d7768a6; watercolour and
+  wooden peg still draw a near-photo face. When the style fails, tell the film to paint the
+  characters itself and not show the talking heads: one look beats a moving mouth.
+- **A talking head has one expression.** The face that has to fall, the scream, the cold smile
+  are painted pictures of that character, cut to on the beat; in the drawn look (no painter) the
+  characters are drawn in code so their faces can change.
+- **Expect one notes round per film** (`ops.sh notes <id> notes.json`, about 10 min). The first
+  cut's recurring faults, in order of how often: a reaction carried by an unchanging portrait;
+  the key action told by heads and a prop on a card instead of a painted two-shot; a character
+  who becomes another person between paintings (the painted look's painter takes no reference
+  picture, so paste one fixed description into every prompt); 8-14 s too long. A fresh reviewer
+  (video-review skill) found each in 2-4 minutes.
 
 ## A pin, an address, "find us here": the real map
 

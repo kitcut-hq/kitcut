@@ -5520,6 +5520,28 @@ left, a voice gone, a plan that cannot use it, a blocked account.
 - Tests: `check-sketch.py` (the relay's headers, the classification with no body leaked, exit 75,
   the per-take rows), `test_server.py` (`paused()`: waiting, not final, Continue, cancel, expiry).
 
+#### Vertical short dramas: what ten of them measured (2026-10-15)
+
+Ten standalone 60-second 9:16 dramas, each in its own look, made on the production studio from a
+screenplay prompt with generated casting portraits as People (procedure: the video-sketch skill,
+"A vertical short drama"; industry rules: `docs/market-vertical-drama-2026.md`).
+
+| | |
+|---|---|
+| Making a film | 17-26 min (median 21), one at a time on kc-local |
+| A notes round | 8-10 min each; all ten got one after a fresh review (film 8 only for one plain mistake), none needed a second |
+| The studio's recorded cost of a film (run on the Claude login) | $0.38-0.74 |
+| Portraits | gpt-image-2.5-flare via `sketch-paint.py`, about $0.01 a role |
+| Length | 68, 74 and 72 s from 119-138 spoken words with "slow" voice directions; 60-65 s from 86-111 words once the brief asked for a brisk delivery |
+
+What the people-styles did (`config/heads/looks.json`, measured on these portraits): felt, crayon,
+sticker, woodcut and pop art drew the person in the medium; courtroom and paper cut-out kept a
+photographic face under a stylised edge (fixed in studio-poc d7768a6 by one sentence: the face is
+drawn in the medium too, with no photographic skin or light); watercolour and wooden peg still
+draw a near-photo face. A rig has one expression, so every reaction a drama turns on is a painted
+picture, and the painted look's painter (muse) takes no reference picture: a character painted
+twice drifts unless one fixed description is pasted into every prompt.
+
 ## Projects: one folder and two files per video
 
 Everything about one video lives in `projects/<id>/`: the manifests that drive
