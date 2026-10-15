@@ -53,6 +53,12 @@ the day's budget still holds.
                                  next episodes play that recording for the same words and voice
                                  (docs/studio-voice-lines.md); GET .../voice/{key}.mp3 and
                                  DELETE .../voice/{key}, with ?project=
+    GET  /api/library/style      ?project=: the project's style (stylekit.py), as the Style tab
+                                 shows it; PATCH (the card's fields and picks), DELETE, POST
+                                 .../style/read {"project", "look", "brief"}, .../style/proof
+                                 {"project", "subject"?}, files in parts as the brand's
+                                 (.../style/files...), GET .../style/{kind}/{name}. X-Team: 1 (the
+                                 site's KITCUT_TEAM) is what lets the asker paint and pick Gemini
     GET  /api/films/{id}/lines   the asker's finished film's narration lines, each with its key
                                  and whether its project has it approved; .../lines/{i}.mp3
     GET  /api/films/{id}         ?since=N  ->  {"status": queued|running|done|error|cancelled,
@@ -156,6 +162,7 @@ import unbrand  # noqa: E402
 import share  # noqa: E402
 import canon  # noqa: E402
 import brandkit  # noqa: E402
+import stylekit  # noqa: E402
 import delete_film  # noqa: E402
 from film import Film  # noqa: E402
 from sched import Sched  # noqa: E402
@@ -513,6 +520,7 @@ def idle():
         and not share.in_flight()
         and not canon.in_flight()
         and not brandkit.in_flight()
+        and not stylekit.in_flight()
         and not unbrand.in_flight()
         and not rounds.in_flight()
         and not transcribing()
@@ -1887,6 +1895,139 @@ async def brand_asset(req):
     )
 
 
+# ------------------------------------------------------------------ a project's style (stylekit.py)
+async def _style_dir(req, body=None):
+    """The asker's project's style folder, from ?project= or the body's "project"."""
+    p = (body or {}).get("project") if isinstance(body, dict) else None
+    p = str(p or req.query.get("project") or "")
+    lib = library.owner(client_of(req), p) if films.PROJECT_ID.match(p) else None
+    if not lib:
+        raise web.HTTPNotFound(
+            text='{"error": "No such project."}', content_type="application/json"
+        )
+    return stylekit.dir_of(lib)
+
+
+def _team(req):
+    """The site says the asker is on the KitCut team (its KITCUT_TEAM): Gemini is theirs."""
+    return req.headers.get("X-Team", "").strip() == "1"
+
+
+def _style_error(e):
+    return web.json_response({"error": e.text}, status=e.status)
+
+
+async def style_get(req):
+    d = await _style_dir(req)
+    return web.json_response(await asyncio.to_thread(stylekit.public, d, _team(req)))
+
+
+async def style_file_add(req):
+    """Start a file: ?project=&name=&size= -> {id, ...}; its bytes follow in parts."""
+    d = await _style_dir(req)
+    try:
+        size = int(req.query.get("size") or 0)
+        m = await asyncio.to_thread(stylekit.add_file, d, req.query.get("name"), size)
+    except ValueError:
+        return web.json_response({"error": "Say how big the file is."}, status=400)
+    except stylekit.StyleError as e:
+        return _style_error(e)
+    return web.json_response(m, status=201)
+
+
+async def style_file_part(req):
+    """One part of a file, the raw body (at most stylekit.PART): ?project=&offset=."""
+    d = await _style_dir(req)
+    buf, n = bytearray(), 0
+    async for chunk in req.content.iter_chunked(256 * 1024):
+        n += len(chunk)
+        if n > stylekit.PART:
+            return web.json_response({"error": "A part is at most 4 MB."}, status=413)
+        buf += chunk
+    try:
+        offset = int(req.query.get("offset") or 0)
+        m = await asyncio.to_thread(stylekit.put_part, d, req.match_info["sid"], offset, bytes(buf))
+    except ValueError:
+        return web.json_response({"error": "Say where the part goes."}, status=400)
+    except stylekit.StyleError as e:
+        return _style_error(e)
+    return web.json_response({"id": m["id"], "got": m["got"], "size": m["size"]})
+
+
+async def style_file_done(req):
+    d = await _style_dir(req)
+    try:
+        m = await asyncio.to_thread(stylekit.finish, d, req.match_info["sid"])
+    except stylekit.StyleError as e:
+        return _style_error(e)
+    return web.json_response(m)
+
+
+async def style_file_delete(req):
+    d = await _style_dir(req)
+    if not await asyncio.to_thread(stylekit.remove_file, d, req.match_info["sid"]):
+        return web.json_response({"error": "No such file."}, status=404)
+    return web.json_response({"deleted": True})
+
+
+async def style_read(req):
+    """Read the pictures (again) in the background: {"project", "look", "brief"}."""
+    body = await _json(req)
+    d = await _style_dir(req, body)
+    try:
+        st = stylekit.start(
+            d,
+            site_auth(),
+            str(body.get("look") or "painted"),
+            str(body.get("brief") or "")[:4000],
+            _team(req),
+        )
+    except stylekit.StyleError as e:
+        return _style_error(e)
+    return web.json_response(st, status=202)
+
+
+async def style_proof(req):
+    """Paint the proof again: {"project", "subject"?}."""
+    body = await _json(req)
+    d = await _style_dir(req, body)
+    subject = body.get("subject")
+    try:
+        st = stylekit.proof_again(d, _team(req), str(subject) if subject is not None else None)
+    except stylekit.StyleError as e:
+        return _style_error(e)
+    return web.json_response(st, status=202)
+
+
+async def style_edit(req):
+    """The person's corrections and picks: {"project", ...fields}."""
+    body = await _json(req)
+    d = await _style_dir(req, body)
+    try:
+        card = await asyncio.to_thread(stylekit.edit, d, body, _team(req))
+    except stylekit.StyleError as e:
+        return _style_error(e)
+    return web.json_response({"card": card})
+
+
+async def style_delete(req):
+    d = await _style_dir(req)
+    await asyncio.to_thread(stylekit.remove, d)
+    return web.json_response({"deleted": True})
+
+
+async def style_asset(req):
+    """A picture, a thumbnail, a line of lettering or a face set in its words, or a proof."""
+    d = await _style_dir(req)
+    got = stylekit.asset(d, req.match_info["kind"], req.match_info["name"])
+    if not got:
+        return web.json_response({"error": "not found"}, status=404)
+    path, ctype = got
+    return web.FileResponse(
+        path, headers={"Content-Type": ctype, "Cache-Control": "private, max-age=60"}
+    )
+
+
 async def picture_add(req):
     """Put one of the asker's uploads into their project as a picture its episodes get:
     {"project": id, "upload": "up-...", "name": "logo"}. The upload goes; the picture stays. The
@@ -2628,6 +2769,16 @@ def make_app(token):
             web.post("/api/library/voice", voice_add),
             web.get("/api/library/voice/{key}.mp3", voice_audio),
             web.delete("/api/library/voice/{key}", voice_delete),
+            web.get("/api/library/style", style_get),
+            web.patch("/api/library/style", style_edit),
+            web.delete("/api/library/style", style_delete),
+            web.post("/api/library/style/read", style_read),
+            web.post("/api/library/style/proof", style_proof),
+            web.post("/api/library/style/files", style_file_add),
+            web.put("/api/library/style/files/{sid}", style_file_part),
+            web.post("/api/library/style/files/{sid}/done", style_file_done),
+            web.delete("/api/library/style/files/{sid}", style_file_delete),
+            web.get("/api/library/style/{kind}/{name}", style_asset),
             web.get("/api/library/brand", brand_get),
             web.patch("/api/library/brand", brand_edit),
             web.delete("/api/library/brand", brand_delete),

@@ -42,6 +42,12 @@ way to keep a character the same from scene to scene. "quality" (low/medium/high
 models that have the setting (OpenAI's). scripts/paint-compare.py paints one paint block with
 several models side by side, to choose between them.
 
+"style_ref" (a path beside the manifest: a project's style picture, studio/stylekit.py) goes in
+with EVERY picture, first, as a reference for the style alone -- medium, palette, texture, line,
+light, how much space -- never for its layout, objects, people or words; an image's own "ref"
+follows it as the second picture, for the characters. A model that takes no reference (Muse)
+paints from the words alone, so a style picture is for the OpenRouter models that take one.
+
 Images are cached by a fingerprint of backend, model, style, prompt and reference, so a rerun
 paints only what changed. Each image painted appends its cost to images/spend.jsonl, and a run
 refuses to paint past max_images for the film (the cap a caller such as Sketch Studio sets).
@@ -77,6 +83,17 @@ OPENROUTER = "https://openrouter.ai/api/v1"
 # what the muse backend always sent, for a model OpenRouter's catalogue does not describe
 UNLISTED = {"resolution": "2K", "aspect_ratio": "16:9", "output_format": "png"}
 KEEP_REF = "Keep the characters, their clothes and the drawing style exactly as in this picture. "
+# a style picture's lead (style_ref): measured on six style pictures, 2026-10-15 -- told only
+# "keep the style", the models copied the reference's moon, frame, text boxes and layout
+STYLE_REF = (
+    "Use the first attached picture only as a style reference: match its medium, palette, "
+    "texture, line, lighting and how much empty space it leaves. Never copy its layout, its "
+    "objects, its people, its frame or any of its text. "
+)
+STYLE_AND_REF = (
+    "The second attached picture shows the characters: keep them, their clothes and their "
+    "proportions exactly as they are there, drawn in the first picture's style. "
+)
 # the suffix sprinkles learned to send: any lettering, border or torn edge is a defect
 NO_TEXT = (
     "Do not render any text in the image at all: no captions, signs, labels, packaging, "
@@ -115,10 +132,21 @@ def cut_spec(spec, im):
     return out
 
 
-def fingerprint(spec, im, ref_fp=None):
+def file_fp(path):
+    """A file's content fingerprint ("" when there is none)."""
+    try:
+        with open(path, "rb") as f:
+            return hashlib.sha1(f.read(), usedforsecurity=False).hexdigest()[:10]
+    except OSError:
+        return ""
+
+
+def fingerprint(spec, im, ref_fp=None, style_fp=None):
     parts = [spec.get("backend"), spec.get("model"), spec.get("style"), im["prompt"], ref_fp]
     if spec.get("quality"):  # only when set, so every painting made before it keeps its key
         parts.append(spec["quality"])
+    if style_fp:  # likewise: a style picture's own content, so a new one paints afresh
+        parts.append(["style_ref", style_fp])
     cs = cut_spec(spec, im)
     if cs:  # only for cut-outs, so every scene painted before them keeps its key
         parts.append([cs, im.get("aspect")])
@@ -200,10 +228,26 @@ def takes_refs(caps):
     return refs.get("max", 0) >= 1
 
 
-def paint_openrouter(prompt, model, ref=None, quality=None, aspect="16:9", transparent=False):
+def data_url(path):
+    kind = {".png": "png", ".webp": "webp"}.get(os.path.splitext(path)[1].lower(), "jpeg")
+    with open(path, "rb") as f:
+        return "data:image/%s;base64," % kind + base64.b64encode(f.read()).decode()
+
+
+def ref_lead(ref=None, style_ref=None):
+    """(the pictures to send, what the prompt says of them first)."""
+    if style_ref:
+        return [style_ref] + ([ref] if ref else []), STYLE_REF + (STYLE_AND_REF if ref else "")
+    return ([ref], KEEP_REF) if ref else ([], "")
+
+
+def paint_openrouter(
+    prompt, model, ref=None, quality=None, aspect="16:9", transparent=False, style_ref=None
+):
     """One picture from an OpenRouter image model; `ref` (a JPEG, PNG or WebP path) goes in as a
     reference picture when the model takes one, and is dropped (as Muse always dropped it) when
-    not. `transparent` asks for a transparent background (sent only where the model has it)."""
+    not; `style_ref`, a style picture, goes in before it (ref_lead). `transparent` asks for a
+    transparent background (sent only where the model has it)."""
     import httpx
 
     key = os.environ.get("OPENROUTER_API_KEY", "").strip()
@@ -211,12 +255,12 @@ def paint_openrouter(prompt, model, ref=None, quality=None, aspect="16:9", trans
         raise RuntimeError("OPENROUTER_API_KEY is not set (put it in .env)")
     caps = model_caps(model)
     body = {"model": model, "prompt": prompt, **pick_params(caps, quality, aspect, transparent)}
-    if ref and takes_refs(caps):
-        kind = {".png": "png", ".webp": "webp"}.get(os.path.splitext(ref)[1].lower(), "jpeg")
-        with open(ref, "rb") as f:
-            url = "data:image/%s;base64," % kind + base64.b64encode(f.read()).decode()
-        body["input_references"] = [{"type": "image_url", "image_url": {"url": url}}]
-        body["prompt"] = KEEP_REF + prompt
+    pics, lead = ref_lead(ref, style_ref)
+    if pics and takes_refs(caps):
+        body["input_references"] = [
+            {"type": "image_url", "image_url": {"url": data_url(p)}} for p in pics
+        ]
+        body["prompt"] = lead + prompt
     r = httpx.post(
         OPENROUTER + "/images",
         headers={"Authorization": "Bearer " + key, "X-Title": "kitcut"},
@@ -418,6 +462,13 @@ def main():
         sys.exit("paint.backend must be one of %s" % ", ".join(MODELS))
     model = spec.get("model") or MODELS[backend]
     spec["model"] = model
+    style_ref = None
+    if spec.get("style_ref"):  # the project's style picture: beside the manifest, nowhere else
+        base = os.path.realpath(m["_dir"])
+        style_ref = os.path.realpath(os.path.join(base, str(spec["style_ref"])))
+        if not style_ref.startswith(base + os.sep) or not os.path.isfile(style_ref):
+            sys.exit("paint.style_ref %r is not a picture beside the manifest" % spec["style_ref"])
+    style_fp = file_fp(style_ref) if style_ref else None
     only = set(args.only.split(",")) if args.only else set(names)
     idir = os.path.join(m["_dir"], "images")
     os.makedirs(idir, exist_ok=True)
@@ -434,7 +485,7 @@ def main():
         ref = im.get("ref")
         if ref and ref not in by_name:
             sys.exit("image %s: ref %r is not one of the images" % (im["name"], ref))
-        fps[im["name"]] = fingerprint(spec, im, fps.get(ref) if ref else None)
+        fps[im["name"]] = fingerprint(spec, im, fps.get(ref) if ref else None, style_fp)
         cached = os.path.join(idir, "%s_%s%s" % (im["name"], fps[im["name"]], ext(spec, im)))
         retake = im["name"] in only and args.retake and os.path.exists(cached)
         if retake:
@@ -477,12 +528,14 @@ def main():
                         if cs:  # a cut-out: its own model, square unless told, alpha if it has it
                             shape = im.get("aspect", "1:1")
                             data, meta = paint_openrouter(
-                                prompt, cs["model"], ref, cs["quality"], shape, alpha
+                                prompt, cs["model"], ref, cs["quality"], shape, alpha, style_ref
                             )
                         elif backend == "gemini":
                             data, meta = paint_gemini(prompt, model, ref)
                         else:
-                            data, meta = paint_openrouter(prompt, model, ref, spec.get("quality"))
+                            data, meta = paint_openrouter(
+                                prompt, model, ref, spec.get("quality"), style_ref=style_ref
+                            )
                         break
                     except Exception as e:  # noqa: BLE001 -- image services drop requests; retry
                         err = e

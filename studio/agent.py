@@ -2143,6 +2143,14 @@ def first_record(film, source, client):
         "branding": bool(rec.get("branding")),
         "listed": rec.get("listed") is not False,  # false: link-only (no gallery, no sitemap)
         **({"app": rec["app"]} if rec.get("app") else {}),
+        # its project's style painted its pictures this way (stylekit.py): gpt, words or gemini --
+        # the site marks a Gemini episode, which costs more, wherever it shows it. A drawn film
+        # paints nothing, so it names no route
+        **(
+            {"paint_route": rec["paint_route"]["route"]}
+            if (rec.get("paint_route") or {}).get("route") and paint_kinds(film.caps)
+            else {}
+        ),
         # people drawn as talking characters: how many and the style (never their photos)
         **(
             {"people": len(rec["people"]), "character_style": rec.get("character_style")}

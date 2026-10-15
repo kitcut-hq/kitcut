@@ -63,6 +63,7 @@ import subprocess
 import brandkit
 import clients
 import locks
+import stylekit
 from film import CAST_USE, HOME, PROJECT_ID, PROJECT_KEEPS, VO_PINNED, Film, _write_json
 
 sys.path.insert(
@@ -359,6 +360,12 @@ def seed(film):
         except Exception as e:  # noqa: BLE001 -- an episode is made without it rather than not
             print("film %s: brand not seeded: %s" % (film.id, e), file=sys.stderr, flush=True)
             got["brand"] = None
+        # after the brand: style.js goes in front of brand.js, so the brand wins where both speak
+        try:  # the project's style (stylekit.py): its picture, faces, style.js, paint route
+            got["style"] = stylekit.seed(film, lib)
+        except Exception as e:  # noqa: BLE001 -- an episode is made without it rather than not
+            print("film %s: style not seeded: %s" % (film.id, e), file=sys.stderr, flush=True)
+            got["style"] = None
         got["sounds"] = _seed_sounds(film, lib)
     film.update(library=got)
     return got
@@ -604,6 +611,10 @@ def note(film):
         mark = brandkit.note(film, lib_of(rec))
         if mark:
             out += ["", mark]
+    if project and got.get("style"):
+        look = stylekit.note(film, lib_of(rec))
+        if look:
+            out += ["", look]
     if pics:
         out += [
             "" if out else None,

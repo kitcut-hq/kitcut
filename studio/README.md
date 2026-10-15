@@ -822,6 +822,29 @@ its films, next to `projects\`, never in git:
   `/api/library/brand[...]` (`server.py`); the site's are `/api/projects/<id>/brand[...]`.
   Measured on two public brand books and a made-up one: 21-30 pages read in 1-10 s, the card in
   16-30 s at $0.15-0.41 on the key. `test_brandkit.py` covers it without Claude.
+- **A project's style** (`stylekit.py`, 2026-10-15). A brand is who is speaking; a style is how
+  the pictures look, from one to three pictures the person gives (the site's Style tab;
+  `specs/features/style-tab.md` in the site's repo has the plan and what six style pictures
+  measured). Pictures (JPEG, PNG, WebP, AVIF, a GIF's first frame; a HEIC refused with what to do)
+  and font files go up in parts as a brand's do, into `<project library>/style/`, each picture a
+  JPEG of 2048 px on arrival. A read: the colours measured by k-means (the same each time), ONE
+  Claude call with no tools that writes the card -- a style line that names no thing in the
+  pictures (a noun there gets painted: a bust by a bridge, bottles in a bakery; one that slips in
+  is asked for again), the things it saw, the layout, the look that suits it, each line of
+  lettering with its box and 2-3 Google Fonts that come close, and a subject from the brief --
+  then each line cut out and set in each face (`brandkit.standin` fetches them), then the proof:
+  the subject painted each way (`film.STYLE_ROUTES`: GPT Image given the picture, Muse from the
+  line; Gemini too for the team, `X-Team: 1` from the site's `KITCUT_TEAM`) as a step of its own
+  (`stylekit.py --proof <dir>`, handed only OpenRouter's key: the server's environment has none).
+  The person picks a route on the card; only the team may pick Gemini, and anyone else's edit moves
+  a Gemini style to GPT Image and says so. An episode gets it at seed after the brand
+  (`stylekit.seed`: `style/` in the film, its faces in the manifest, `style.js` -- `SK.STYLE` --
+  ahead of `brand.js`, so the brand wins) and the record's `paint_route`, from which
+  `film.paint_pins` sets the painter, `style_ref` (the main picture, sent with every painting by
+  `sketch-paint.py`) or the style line, which the guard holds and a round keeps; the run's
+  document says `paint_route`, and the site marks a Gemini episode. Measured on KitCut's own collage
+  still: the read in ~40 s, the card ~$0.05 on the key, a proof $0.03 (GPT Image + Muse) or $0.13
+  with Gemini. `test_stylekit.py` covers it with Claude and the painters stood in for.
 - **Back-fill by hand.** A set a series drew in its episodes' film.js never reached the library:
   write it as a cast file and `ops.sh library-put <project> [--dry-run] <cast/x.js>...`
   (`studio/library_put.py`) makes it the next version, thumbnail and sheet included, as keep()

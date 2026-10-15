@@ -108,6 +108,21 @@ CUTOUTS_PINNED = {
     "border": 12,
     "cut": "scissor",
 }
+# a project's style picture (stylekit.py): how its episodes' pictures are painted. With a picture
+# route the style picture goes in with every painting (sketch-paint.py style_ref) and Claude's
+# prompts say only what to draw; "words" is Muse with the style line, which Claude may not
+# change. Gemini is the team's alone (the site says who: X-Team) and costs about seven times
+# Muse a picture; GPT Image about one and a half.
+STYLE_ROUTES = {
+    "gpt": {"backend": "openrouter", "model": "openai/gpt-image-2.5-flare", "picture": True},
+    "words": {"backend": "muse", "model": "meta/muse-image", "picture": False},
+    "gemini": {
+        "backend": "openrouter",
+        "model": "google/gemini-3.1-flash-image",
+        "picture": True,
+        "team": True,
+    },
+}
 # the print faces a collage film's pieces use (sketch/collage.js), on top of the template's
 COLLAGE_FONTS = [
     {"file": "fonts/AbrilFatface-Regular.ttf", "family": "Abril Fatface", "weight": "400"},
@@ -557,15 +572,27 @@ def paint_words(caps):
     return "painting the pictures", "pictures"
 
 
-def paint_pins(length, caps):
+def paint_pins(length, caps, route=None):
     """What the studio sets in the paint.json of a film with these capabilities: the painter,
     each kind's own settings, and the cap on pictures (repaints included), its kinds' caps
-    added up."""
+    added up. `route` is the film record's paint_route (its project's style, stylekit.seed):
+    the painter it names and the style picture or the style line, the studio's too."""
     kinds = paint_kinds(caps)
     pins = dict(PAINT_PINNED)
     for kind in kinds:
         pins |= kind["pins"]
-    return pins | {"max_images": sum(limits(length)[kind["cap"]] for kind in kinds)}
+    pins |= {"max_images": sum(limits(length)[kind["cap"]] for kind in kinds)}
+    r = STYLE_ROUTES.get((route or {}).get("route"))
+    if not r or not kinds:
+        return pins
+    pins |= {"backend": r["backend"], "model": r["model"]}
+    if r["picture"] and route.get("ref"):
+        pins |= {"style": "", "style_ref": route["ref"]}
+    else:
+        pins["style"] = str(route.get("line") or "")[:400]
+    if "cutouts" in pins and r["picture"]:  # the cut-outs from the same painter
+        pins["cutouts"] = dict(pins["cutouts"], model=r["model"])
+    return pins
 
 
 def _release():

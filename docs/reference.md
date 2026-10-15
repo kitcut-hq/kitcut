@@ -4131,13 +4131,24 @@ in the manifest's `fonts` (`brand/fonts/...`) and its logos in `images`. `_thumb
 and the cast sheet keep a film's own head scripts ahead of theirs, so a film reading `SK.BRAND`
 draws in its thumbnails too.
 
+**A project's style** (`SK.STYLE`). An episode of a project with a style (`studio/stylekit.py`,
+`studio/README.md` "A project's style") has `style/style.js` first in its manifest's
+`head.scripts`, ahead of a brand's `brand/brand.js`: `SK.STYLE = {line, layout, palette, colors:
+{ground, ink, accent, other}, fonts: {title, body, accent, titleWeight, ...}}` and `SK.KIT.font` set
+to its body face (a brand's `brand.js`, loaded after it, wins). Its faces are in the manifest's
+`fonts` (`style/fonts/...`). Its main picture is `style/style.jpg`, which `paint.json`'s
+`style_ref` names when the project paints from it (below).
+
 ### The paintings: `sketch-paint.py`, and choosing a painter with `paint-compare.py`
 
 A painted film animates pictures made by an image model. The manifest's `paint` block (inline,
 or `"paint": "paint.json"`) lists them as `{"name", "prompt", "ref"?}`, with one `style` line
 in front of every prompt and a no-lettering, no-border suffix behind it. Each becomes
 `images/<name>.jpg` and joins the manifest's `images`, so `film.js` draws it with
-`SK.image(name, x, y, w)`. Paintings are cached by a fingerprint of backend, model, style,
+`SK.image(name, x, y, w)`. A `style_ref` (a project's style picture beside the manifest) goes in with every painting and
+cut-out, first, told to set the style alone (never the layout, objects, people or words), and an
+image's `ref` follows it as the second picture; the studio sets it, with the painter, from the
+film's `paint_route` (`film.paint_pins`). Paintings are cached by a fingerprint of backend, model, style,
 prompt and reference; `max_images` caps a film's total (Sketch Studio sets 8).
 
 Pictures a person gave the film (`inputs/upload1.png`, `inputs/pic_logo.png`, …) join `images`
