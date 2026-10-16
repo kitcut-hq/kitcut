@@ -31,6 +31,9 @@ the day's budget still holds.
                                  queue. X-At-Once: N (from the site, for a plan that allows it):
                                  the account may have N films in the making instead of one.
                                  "listed": false keeps it out of the gallery (link-only).
+                                 "auto_length": true (from the site, paid plans): Claude picks
+                                 the length, "seconds" the longest it may be; the record's
+                                 "length" is the length picked once it is (agent.pick_length).
                                  X-Source: mcp and X-App: <name> (from the site): it was asked for
                                  through an assistant. {"auth": "login"} (this machine only):
                                  Claude runs on its Claude Code login. X-Preview: 1 (from the
@@ -1279,6 +1282,9 @@ async def create(req):
             )
         captions = body.get("captions") is True
         music = body.get("music") is not False
+    # Claude picks the length, `seconds` the longest it may be (kitcut.ai: paid plans; agent.
+    # pick_length). Never a template's: it keeps its own
+    auto_length = body.get("auto_length") is True and not tpl
     # the site's project the film is an episode of: {id, name, brief, from_account_cast}. The
     # site checks it is the person's (trusted like X-Client-Ip); its library is theirs anyway
     project = body.get("project")
@@ -1399,6 +1405,7 @@ async def create(req):
             frame=frame,
             captions=captions,
             music=music,
+            auto_length=auto_length,
         )
         if preview:
             f.update(preview=True)
@@ -2598,7 +2605,7 @@ async def status(req):
             out["position"] = said["ahead"] + 1
         if said["cost"] is not None:
             out["cost_usd"] = said["cost"]  # so far
-        r = {k: r.get(k) for k in ("prompt", "title", "look", "length", "listed")}
+        r = {k: r.get(k) for k in ("prompt", "title", "look", "length", "listed", "auto_length")}
     # over, made before this server started, or since replaced by a remade film (ops.sh
     # replace): what is on disk is all there is
     elif J is None or (J["status"] == "done" and r.get("replaced")):
@@ -2633,7 +2640,9 @@ async def status(req):
         if J.get("cost_usd") is not None:
             out["cost_usd"] = J["cost_usd"]  # so far; the final figure replaces it below
         if J["status"] not in ("done", "error", "cancelled"):
-            r = {k: r.get(k) for k in ("prompt", "title", "look", "length", "listed")}
+            r = {
+                k: r.get(k) for k in ("prompt", "title", "look", "length", "listed", "auto_length")
+            }
     if out["status"] == "waiting":  # paused for its person's voice: why and since when, in words
         w = f.record().get("waiting") or {}
         out["waiting"] = {
@@ -2657,6 +2666,7 @@ async def status(req):
         "title",
         "look",
         "length",
+        "auto_length",  # its length was Claude's to choose (kitcut.ai's Try again keeps that)
         "image_cost_usd",
         "images",
         "seconds",

@@ -369,6 +369,127 @@ def ask(film, recent=()):
     return text + "".join("\n\n" + x for x in (mine, note) if x)
 
 
+# A film whose length Claude picks (kitcut.ai's "Let Claude choose the length", paid plans): the
+# site holds the longest it may be and sends that as `seconds`, with auto_length (its README,
+# "Claude picks the length"). Before anything is written, one short turn of Claude reads the idea
+# and what came with it and says how long the film should be; the film is laid out again at that
+# (film.relength), and the record's length tells the site what to give back. No answer:
+# PICK_FALLBACK_S, or the longest when that is less.
+PICK_SYSTEM = (
+    "You decide how long a short animated film should be, for KitCut, which makes films from a "
+    "person's idea: Claude writes, draws, narrates and scores each one. Every second costs the "
+    "person one credit, and a film uses at least 30 credits however short it is. Pick the length "
+    "the idea needs to be told well, never the longest for its own sake. Reply with the number of "
+    "seconds and nothing else."
+)
+PICK_GUIDE = (
+    "A single joke, moment or announcement: 15-30 s. One idea explained, a product shown: 30-90 s. "
+    "A story with several beats, a how-to with steps, an episode of a series: 1-4 minutes. Longer "
+    "only when what was given needs it: a long script to narrate, many steps, many people to "
+    "introduce. Narration runs at about 2.5 words a second."
+)
+PICK_FALLBACK_S = 60
+PICK_TIMEOUT_S = 180
+PICK_CONTEXT_MAX = 12000  # characters of what came with the idea the pick reads
+
+
+def pick_ask(film):
+    """The pick's one message: the idea, its look and frame, what came with it, the project it is
+    an episode of, and the range."""
+    rec = film.record()
+    top = int(rec.get("length_max") or rec.get("length") or LENGTHS[-1])
+    project = rec.get("project") or {}
+    extra = (attached_note(film) + people_note(film)).strip()
+    parts = [
+        "Choose this film's length.",
+        "Idea: %s"
+        % (rec.get("prompt", "").strip() or "(nothing typed: the idea is in what is attached)"),
+        "Look: %s. Frame: %s." % (film.look, rec.get("frame") or "16:9"),
+    ]
+    if extra:
+        parts.append(extra[:PICK_CONTEXT_MAX])
+    if project:
+        parts.append(
+            "An episode of the series %s. Its brief: %s"
+            % (json.dumps(project.get("name") or ""), (project.get("brief") or "")[:4000])
+        )
+    parts.append(
+        "%s\n\nThe length is a multiple of 5 seconds, from %d to %d. Reply with the number of "
+        "seconds only." % (PICK_GUIDE, LENGTHS[0], top)
+    )
+    return "\n\n".join(parts)
+
+
+def picked_from(text, top):
+    """The length in a reply ("95", "95 seconds", "1:35"), on a 5 s step in [5, top], or None."""
+    t = str(text or "").strip()
+    m = re.search(r"\b(\d{1,2}):([0-5]\d)\b", t)
+    if m:
+        s = int(m.group(1)) * 60 + int(m.group(2))
+    else:
+        m = re.search(r"\d+", t)
+        if not m:
+            return None
+        s = int(m.group(0))
+        if re.search(r"\bmin", t[m.end() : m.end() + 12], re.I):
+            s *= 60
+    s = round(s / 5) * 5
+    return max(LENGTHS[0], min(int(top), s))
+
+
+async def _pick_query(prompt, opts):
+    """The pick's reply and its cost: the SDK's query, one turn, no tools (tests replace it)."""
+    said, usd = "", 0.0
+    async for m in query(prompt=prompt, options=opts):
+        if isinstance(m, ResultMessage):
+            if m.is_error:
+                raise RuntimeError(m.result or m.subtype)
+            said, usd = m.result or "", m.total_cost_usd or 0.0
+    return said, usd
+
+
+async def pick_length(film, emit, auth="api"):
+    """The length Claude picks for a film whose length is left to it, the film laid out again at
+    it (film.relength). (seconds, what the pick cost); a failed pick gives PICK_FALLBACK_S."""
+    rec = film.record()
+    top = int(rec.get("length_max") or rec.get("length") or LENGTHS[-1])
+    emit({"type": "stage", "name": "claude", "text": "Claude is choosing the film's length"})
+    seconds, usd, why = None, 0.0, None
+    try:
+        opts = ClaudeAgentOptions(
+            model=MODEL,
+            effort="low",
+            cwd=film.dir,
+            system_prompt=PICK_SYSTEM,
+            tools=[],
+            strict_mcp_config=True,
+            setting_sources=[],
+            max_turns=1,
+            env=claude_env(film, auth),
+            cli_path=claude_cli() if auth == "login" else None,
+        )
+        said, usd = await asyncio.wait_for(_pick_query(pick_ask(film), opts), PICK_TIMEOUT_S)
+        seconds = picked_from(said, top)
+        why = None if seconds else "no length in %r" % said[:80]
+    except Exception as e:  # noqa: BLE001 -- the film goes on at the fallback length
+        why = "%s: %s" % (type(e).__name__, e)
+    if not seconds:
+        seconds = min(PICK_FALLBACK_S, top)
+        print("film %s: no length picked (%s); %d s" % (film.id, why, seconds), file=sys.stderr)
+    seconds = film.relength(seconds)
+    await save(film.id, {"length": seconds, "length_picked": True})  # the site gives the rest back
+    emit(
+        {
+            "type": "say",
+            "text": "Length: %s, the length Claude chose for this idea (up to %s)."
+            % (_mmss(seconds), _mmss(top))
+            if not why
+            else "Length: %s (Claude did not choose one in time)." % _mmss(seconds),
+        }
+    )
+    return seconds, round(usd, 6)
+
+
 def people_note(film):
     """The people the person added (film.CAPS "people"): who they are, the style they are being
     drawn in, and how to make them speak. They are drawn while Claude plans (draw_people)."""
@@ -1278,6 +1399,11 @@ async def make_film(
     if film.record().get("server") != peers.SERVER_ID:
         film.update(server=peers.SERVER_ID)
     rec = film.record()
+    # its length left to Claude: picked first, so everything below is made for the length picked
+    pick_usd = 0.0
+    if rec.get("auto_length") and not rec.get("length_picked") and not (finish_only or resume):
+        _, pick_usd = await pick_length(film, emit, auth)
+        rec = film.record()
     # the length asked for: a film may have grown past it (film.may_run_to), and a film picked up
     # again must not take what it grew to for what was asked
     prompt, length, look = rec.get("prompt", ""), film.asked, film.look
@@ -1346,6 +1472,10 @@ async def make_film(
             metered = round(metered + (carry.get("cost_metered_usd") or 0), 4)
             for k, v in (carry.get("tokens") or {}).items():
                 tokens[k] = tokens.get(k, 0) + v
+        if pick_usd:  # choosing its length (pick_length), a turn of its own
+            claude = round(claude + pick_usd, 4)
+            metered = round(metered + pick_usd, 4)
+            summary["length_pick_usd"] = pick_usd
         summary.update(
             # everything this film cost: Claude + the voice + the paintings
             # on the key after the plan ran out (to_key): only what it spent from there
@@ -2138,6 +2268,8 @@ def first_record(film, source, client):
         "effort": EFFORT,
         "job": film.id,
         "length": rec.get("length"),
+        # its length is Claude's to choose (pick_length): `length` is the longest until it has
+        **({"auto_length": True} if rec.get("auto_length") else {}),
         "look": rec.get("look"),
         "release": RELEASE,
         "priority": rec.get("priority", 0),

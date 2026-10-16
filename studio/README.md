@@ -489,6 +489,17 @@ docs/studio-scenes-plan.md.
    5: `film.limits`). Before this, the length was fixed: Leo episode 11 (odoais) went out with
    its last line faded under its last word and 59 lines merged into 48 with no pause anywhere
    (docs/known-issues.md, KI-062).
+   **A length left to Claude** (`"auto_length": true`, kitcut.ai's "Let Claude choose the
+   length" on paid plans; 2026-10-16): `seconds` is then the longest the film may be, which the
+   site holds in credits. The film is laid out at that and recorded with `auto_length` and
+   `length_max`; the first thing `make_film` does is one short turn of Claude, with no tools
+   (`agent.pick_length`: the idea, what came with it, the project's brief, the range), that
+   answers with a length. `Film.relength` lays the film out again at it (the manifest, the
+   paintings' cap, scenes past `STUDIO_SCENES_OVER_S`), the record's and the run's `length`
+   become it (`length_picked`), and the site gives back the rest of what it held at once. No
+   answer in `PICK_TIMEOUT_S`: `PICK_FALLBACK_S`, or the longest when that is less. Everything
+   after is made for the length picked, as for one the person chose; the turn's cost goes into
+   Claude's (`length_pick_usd`). `python studio/test_autolength.py` covers it.
 4. The studio reads the finished film once more itself, and Claude gets one bounded turn to fix
    what must be fixed ("A second pair of eyes" below).
 5. The studio then mixes the soundtrack and renders the video (three browsers at once), and the

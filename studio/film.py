@@ -768,6 +768,33 @@ class Film:
         asked = self.asked
         self.update(runs=seconds if seconds != asked else None)
 
+    def relength(self, seconds):
+        """A film whose length Claude picks (its record's auto_length), laid out again at the length
+        picked, before any of it is written: its manifest's duration and poster, its paintings'
+        cap, whether it is made in scenes, and its record's length -- which kitcut.ai reads to give
+        back what it held for the longest. Within LENGTHS, and never past length_max. The length."""
+        rec = self.record()
+        top = int(rec.get("length_max") or rec.get("length") or LENGTHS[-1])
+        seconds = max(LENGTHS[0], min(top, int(seconds) // 5 * 5))
+        with open(self.manifest, encoding="utf-8") as f:
+            m = json.load(f)
+        m["duration"], m["poster_t"] = float(seconds), round(seconds - 0.4, 2)
+        over = scenes_over_s()
+        mode = "scenes" if over and seconds > over else "single"
+        if mode == "scenes":
+            m["scenes"] = "scenes"
+            os.makedirs(self.path("scenes"), exist_ok=True)
+        else:
+            m.pop("scenes", None)
+        _write_json(self.manifest, m)
+        if paint_kinds(self.caps) and os.path.exists(self.path("paint.json")):
+            with open(self.path("paint.json"), encoding="utf-8") as f:
+                p = json.load(f)
+            p["max_images"] = sum(limits(seconds)[k["cap"]] for k in paint_kinds(self.caps))
+            _write_json(self.path("paint.json"), p)
+        self.update(length=seconds, mode=mode, length_picked=True)
+        return seconds
+
     # ---------------------------------------------------------------- what Claude may touch
     def editable(self):
         rec = self.record()
@@ -961,6 +988,7 @@ class Film:
         frame=None,
         captions=False,
         music=True,
+        auto_length=False,
     ):
         """A new film's folder: the manifest (its length set), the engine copy, an empty
         narration, an empty list of paintings for a painted film, and its record.
@@ -998,7 +1026,11 @@ class Film:
         caller): {"source": "kitcut", "voice": <a Gemini voice>}, or {"source": "elevenlabs",
         "voice", "model", "jobs", "chars", "grant"} -- their own voice, spoken through the
         site's relay; the grant is kept apart (temp/voice.json, own_voice), never in the
-        record. None, and Claude picks."""
+        record. None, and Claude picks.
+
+        auto_length: Claude picks the film's length, `seconds` the longest it may be (kitcut.ai's
+        "Let Claude choose the length"). It is laid out at that until agent.pick_length has
+        picked, then again at the length picked (relength); never for a template."""
         if template:  # its own length (26 s is no multiple of 5), look and capabilities
             seconds = int(template["seconds"])
             look = template.get("look") if template.get("look") in LOOKS else LOOKS[0]
@@ -1103,7 +1135,10 @@ class Film:
         m["cast"] = "cast"  # every cast/*.js loads before film.js (sketch-render)
         # a long film is made a scene at a time (studio/scenes.py): scenes/*.js load after film.js
         over = scenes_over_s()
-        mode = mode or ("scenes" if over and seconds > over and not template else "single")
+        auto = bool(auto_length) and not template
+        # a film whose length Claude picks is made in scenes only if the length picked asks for it
+        long = over and seconds > over and not template and not auto
+        mode = mode or ("scenes" if long else "single")
         if mode == "scenes":
             m["scenes"] = "scenes"
             os.makedirs(film.path("scenes"))
@@ -1145,6 +1180,8 @@ class Film:
                 "look": look,
                 "caps": list(caps),  # what its look was made of when it was made (CAPS)
                 "length": seconds,  # the film's; "seconds" is later how long making it took
+                # Claude picks the length, up to length_max (agent.pick_length, relength)
+                **({"auto_length": True, "length_max": seconds} if auto else {}),
                 "client": client,
                 # who asked: a member of the client's workspace (clients.py; the site's X-Member)
                 **({"member": member} if member else {}),

@@ -500,6 +500,13 @@ a.google { width: 100%; margin-top: 14px; }
 #lenHint a, .credit a, #status a { color: var(--accent-2); }
 .credit { margin: 4px 0 0; }
 .credit.short { color: var(--bad); }
+/* "Let Claude choose the length" (paid plans): the slider rests while it is ticked */
+.autolen { margin-top: 4px; align-items: center; font-size: 13px; color: var(--ink-2); }
+.autolen input { margin: 0; width: 16px; height: 16px; flex: none; }
+.autolen input:disabled + span { color: var(--ink-3); }
+.autolen a { color: var(--accent-2); }
+.len.auto .lentrack, .len.auto .ticks { opacity: .4; }
+.len.auto #length { cursor: default; }
 /* publishing to YouTube: a button under a finished film of your own (the dialog is publish.js's) */
 .ytmark { width: 20px; height: 14px; flex: none; display: block; }
 .dlmark { width: 15px; height: 15px; flex: none; display: block; }
@@ -702,6 +709,7 @@ if (/^\/film\/studio-/.test(location.pathname)) document.documentElement.dataset
           <button type="button" class="locked" id="lenLocked" title="Longer films are on Pro" aria-label="Longer films are on Pro"></button>
         </div>
         <div class="ticks" id="ticks" aria-hidden="true"></div>
+        <label class="check autolen" id="autoRow" hidden><input type="checkbox" id="autoLen"><span>Let Claude choose the length<span id="autoPlan" hidden> · on the paid plans. <a href="/pricing">See plans</a></span></span></label>
         <p class="note credit" id="credit" hidden></p>
       </div>
       <button class="btn primary go" id="go" type="submit">Make the film</button>
@@ -1109,7 +1117,8 @@ function closeForm() { $('form').classList.remove('open'); sayForm(''); }
 function makeAgain(label) {
   if (!FILM) return;
   if (FILM.prompt) { $('prompt').value = FILM.prompt; countPrompt(); }
-  if (FILM.length) { $('length').value = String(FILM.length); paintLength(); }
+  if (FILM.length) { $('length').value = String(FILM.length); }
+  setAuto(FILM.auto);  // Claude picked its length: it picks again
   if (FILM.look) setLook(FILM.look);
   openForm(label);
 }
@@ -1209,7 +1218,7 @@ async function follow(since = 0, misses = 0) {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const s = await r.json();
     if (since === 0) {  // first look: what the film is, and a clock that carries on from the run's start
-      FILM = { prompt: s.prompt || '', look: s.look || null, length: s.length || null };
+      FILM = { prompt: s.prompt || '', look: s.look || null, length: s.length || null, auto: s.auto_length === true };
       filmHead(s);
       if (s.status === 'queued' || s.status === 'running') {
         startClock(s.elapsed_s);
@@ -1362,7 +1371,7 @@ $('ntVer').addEventListener('click', ntOpen);
 // ---- the sign-up wall, on the public site only. /api/me exists where the site has accounts
 // (Vercel, api/auth.js); on the laptop and through the bare tunnel it is not found, AUTH stays
 // false, and the page works as it always has. Watching films needs no account; making one does.
-let AUTH = false, USER = null, GOOGLE = false, CREDITS = null;
+let AUTH = false, USER = null, GOOGLE = false, CREDITS = null, GATES = {};
 const SIGNIN_ERRORS = {
   link: 'That sign-in link is invalid or has expired. Request a fresh one.',
   google: "Google sign-in didn't complete. Try again, or use the email link.",
@@ -1371,7 +1380,7 @@ const SIGNIN_ERRORS = {
 };
 // the idea typed before signing in, kept in this browser until the visitor is back
 const draft = {
-  save() { try { localStorage.setItem('studioDraft', JSON.stringify({ prompt: $('prompt').value, look: lookOf(), length: $('length').value })); } catch (e) { /* private window */ } },
+  save() { try { localStorage.setItem('studioDraft', JSON.stringify({ prompt: $('prompt').value, look: lookOf(), length: $('length').value, auto: autoOn() })); } catch (e) { /* private window */ } },
   take() {
     try {
       const d = JSON.parse(localStorage.getItem('studioDraft') || 'null');
@@ -1432,6 +1441,19 @@ const renews = () => new Date(CREDITS.renews_at).toLocaleDateString(undefined, {
 // a film uses a credit a second, and at least min_credits (the site's lib/plans.js)
 const costOf = (v) => Math.max(v, (CREDITS && CREDITS.min_credits) || 0);
 const shortOf = (v) => !!(CREDITS && costOf(v) > CREDITS.balance);
+// "Let Claude choose the length" (paid plans; the AUTO_LENGTH switch): the slider rests, the longest
+// film the balance and the plan allow is held, and the film uses only the length Claude gives it
+// (the site's lib/plans.js autoCap, lib/credits.js trim). The tick is remembered in this browser.
+const autoOn = () => !$('autoRow').hidden && !$('autoLen').disabled && $('autoLen').checked;
+const capOf = () => Math.max(CREDITS.min_credits || 0, Math.floor(Math.min(CREDITS.balance, CREDITS.max_length || 60) / 5) * 5);
+const lengthAsked = () => (autoOn() ? capOf() : +$('length').value);
+function setAuto(on) { $('autoLen').checked = !!on; paintLength(); }
+function paintAuto() {
+  $('autoRow').hidden = !(CREDITS && GATES.auto_length);
+  const free = !!CREDITS && CREDITS.plan === 'free';
+  $('autoLen').disabled = free;
+  $('autoPlan').hidden = !free;
+}
 // The usable range is the plan's longest film (the laptop: 1:00); the track carries on, locked,
 // to 8:00 (Pro's longest, lib/plans.js SLIDER_MAX). The usable part takes 70% of the width up to
 // 1:00, 80% beyond, and all of it when the plan reaches the end.
@@ -1456,11 +1478,15 @@ function paintLength() {
   const el = $('length');
   const max = (CREDITS && CREDITS.max_length) || 60;
   if (max !== drawnMax) drawTrack(max);
-  const v = +el.value;
+  paintAuto();
+  const auto = autoOn();
+  el.disabled = auto;
+  el.closest('.len').classList.toggle('auto', auto);
+  const v = +el.value, ask = lengthAsked();
   el.style.setProperty('--p', (v - +el.min) / (+el.max - +el.min));
   el.setAttribute('aria-valuetext', `${v} seconds`);
-  $('lenOut').textContent = mmss(v);
-  const short = shortOf(v);
+  $('lenOut').textContent = auto ? `up to ${mmss(ask)}` : mmss(v);
+  const short = shortOf(ask);
   el.style.setProperty('--fill-color', short ? 'var(--bad)' : 'var(--accent)');
   $('go').textContent = short ? 'Not enough credits' : 'Make the film';
   $('go').classList.toggle('short', short);
@@ -1470,12 +1496,17 @@ function paintLength() {
   if (CREDITS) {
     c.classList.toggle('short', short);
     // a second account of one person has no free film to renew (lib/sameperson.js): its account page says why
-    c.innerHTML = `${costOf(v)} credits${costOf(v) > v ? ' (the least a film uses)' : ''} · you have ${mmss(CREDITS.balance)} left` +
+    c.innerHTML = (auto ? `Up to ${costOf(ask)} credits: the film uses only the length Claude gives it`
+      : `${costOf(v)} credits${costOf(v) > v ? ' (the least a film uses)' : ''}`) + ` · you have ${mmss(CREDITS.balance)} left` +
       (CREDITS.second ? ' · <a href="/account#second">no free film on a second account</a>' : CREDITS.refills === false ? '' : ` · renews ${renews()}`) +
       ' · <a href="/pricing">Get more film</a>' + (short ? ', or <a href="/account#invite">invite a friend for free film</a>' : '');
   }
 }
 $('length').addEventListener('input', paintLength);
+$('autoLen').addEventListener('change', () => {
+  try { localStorage.setItem('autoLength', $('autoLen').checked ? '1' : ''); } catch (e) { /* private window */ }
+  paintLength();
+});
 let hintTimer = null;
 $('lenLocked').addEventListener('click', () => {
   $('lenHint').innerHTML = !AUTH ? 'Longer films are made on Pro, at kitcut.ai.'
@@ -1497,8 +1528,9 @@ async function whoami() {
     const r = await fetch('/api/me', { headers: { Accept: 'application/json' } });
     const me = r.ok ? await r.json() : null;
     if (!me || !me.auth) return;  // no accounts here, or not answered: the remembered bar stays
-    AUTH = true; USER = me.user; GOOGLE = !!me.google; CREDITS = me.credits || null; YT = !!me.youtube;
+    AUTH = true; USER = me.user; GOOGLE = !!me.google; CREDITS = me.credits || null; YT = !!me.youtube; GATES = me.gates || {};
   } catch (e) { return; }
+  try { $('autoLen').checked = localStorage.getItem('autoLength') === '1'; } catch (e) { /* private window */ }
   renderAccount(); paintLength();
   if (currentId && timer && studioUp && canAnother()) $('go').disabled = false;  // opened before the plan was known
   $('footNav').hidden = false;
@@ -1521,7 +1553,8 @@ async function whoami() {
   if (d) {
     if (d.prompt) { $('prompt').value = d.prompt; countPrompt(); }
     if (d.look) setLook(d.look);
-    if (d.length) { $('length').value = d.length; paintLength(); }
+    if (d.length) { $('length').value = d.length; }
+    setAuto(d.auto);
     sayForm('Signed in. Your idea is back in the box: press "Make the film".');
     if (FILM_PATH.test(location.pathname)) openForm('Your idea');
   }
@@ -2321,8 +2354,8 @@ $('form').addEventListener('submit', async (e) => {
   const cant = PPL.check();  // the permission tick, or a photo that failed
   if (cant) { sayForm(esc(cant)); return; }
   if (AUTH && !USER) { draft.save(); shelf.save(); return askSignIn(); }
-  if (shortOf(+$('length').value)) {
-    sayForm(`This film needs ${mmss(costOf(+$('length').value))} of credit and you have ${mmss(CREDITS.balance)}. ` +
+  if (shortOf(lengthAsked())) {
+    sayForm(`This film needs ${mmss(costOf(lengthAsked()))} of credit and you have ${mmss(CREDITS.balance)}. ` +
       `Credits renew on ${renews()}, or <a href="/pricing">get more film</a>.`);
     return;
   }
@@ -2336,7 +2369,7 @@ $('form').addEventListener('submit', async (e) => {
     const ids = await attachmentIds(show);
     await PPL.ready(show);
     const send = (attachments) => api('/api/films', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, seconds: +$('length').value, look: lookOf(), ...(attachments.length ? { attachments } : {}), ...PPL.body() }) });
+      body: JSON.stringify({ prompt, seconds: +$('length').value, ...(autoOn() ? { auto_length: true } : {}), look: lookOf(), ...(attachments.length ? { attachments } : {}), ...PPL.body() }) });
     let r = await send(ids);
     if (r.status === 409) {  // an attachment the studio no longer has (a day old): send it again, once
       const why = await r.clone().json().catch(() => ({}));
