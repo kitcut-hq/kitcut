@@ -5,8 +5,10 @@
 # is restarted, so a ship never stops a film (docs/known-issues.md KI-031).
 #
 #   bash studio/serve.sh status                  health, the servers (their heartbeats), the units
-#   bash studio/serve.sh release [--ref REF]     snapshot REF (default studio-stable), test it, and
-#                                                switch to it
+#   bash studio/serve.sh release [--ref REF] [--no-test]   snapshot REF (default studio-stable),
+#                                                test it, and switch to it. --no-test switches
+#                                                first: the caller tests it after (autoship.py,
+#                                                which switches back when the tests fail)
 #   bash studio/serve.sh switch <sha12>          start a server of a built release, make it current,
 #                                                return once it serves and leads
 #   bash studio/serve.sh use <sha12>             the same, for a rollback (any release still built)
@@ -36,10 +38,12 @@ if [ "${1:-}" = "--dry-run" ]; then DRY=1; shift; fi
 cmd="${1:-status}"; shift || true
 REF="studio-stable"
 ARG=""
+NOTEST=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --ref) REF="${2:?--ref needs a value}"; shift ;;
     --dry-run) DRY=1 ;;
+    --no-test) NOTEST="--no-test" ;;
     *) ARG="$1" ;;
   esac
   shift
@@ -362,12 +366,13 @@ case "$cmd" in
     want="${want:0:12}"
     if [ "$(leader_release)" = "$want" ]; then echo "release $want already leads: nothing to do"; exit 0; fi
     echo "building $REF ($want) into $STUDIO_HOME/releases"
-    run "$REPO/.venv/bin/python" -X utf8 "$REPO/studio/release.py" --ref "$REF"
+    run "$REPO/.venv/bin/python" -X utf8 "$REPO/studio/release.py" --ref "$REF" $NOTEST
     if [ "$DRY" = 1 ] && [ ! -f "$STUDIO_HOME/releases/$want/studio/server.py" ]; then
       echo "  would then switch to $want (start kitcut-studio@$want-<now>, return once it leads)"
       exit 0
     fi
-    # the new server runs what was just built and tested, or nothing changes
+    # the new server runs what was just built and tested (or, --no-test, is tested after), or
+    # nothing changes
     [ "$DRY" = 1 ] || [ "$(current_release)" = "$want" ] ||
       die "$STUDIO_HOME/releases/current is '$(current_release)', not $want -- not switching"
     switch "$want"

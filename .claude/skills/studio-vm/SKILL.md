@@ -84,12 +84,12 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
   from its `.env` on purpose; `serve.ps1 -Dev` is for local development only.
 - **A push ships itself.** GitHub's push hook (studio.kitcut.ai/hooks/github: Cloudflare lets
   only GitHub's addresses reach it, and the studio checks GitHub's signature) starts a look at
-  once, and a poll every 15 minutes catches a missed hook. A look ships a new head the same way
-  `ops.sh ship` does (tests first,
-  films hand off): merging and pushing *is* deploying. Check it with `ops.sh autoship` rather than
+  once, and a poll every 15 minutes catches a missed hook. A look ships a new head **live first,
+  tested after** (films hand off; failing tests switch back to the release before):
+  merging and pushing *is* deploying, live about 30 s after the push. Check it with `ops.sh autoship` rather than
   shipping again. It waits while the sound machine is busy (KI-043) or a deploy holds the lock,
   skips docs-only commits, and **holds** a requirements change, **refuses** a rewritten branch and
-  marks a commit whose tests fail **failed** (not retried): those three reach the owner by email
+  marks a commit whose tests fail **failed** and switched back (not retried): those three reach the owner by email
   through the machine's note. `ops.sh rollback` pauses it; `ops.sh autoship on` lifts the pause.
   `studio/deploy/README.md`, "A push to GitHub ships itself".
 - **Ship only what is on origin/studio-poc.** `ops.sh ship` refuses anything else. It tags

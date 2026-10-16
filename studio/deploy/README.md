@@ -156,8 +156,18 @@ to the real handler. A replayed delivery can only ask for a look that finds noth
 
 A look ships exactly what step 1 above would put there, and the same way: GitHub's head, a
 fast-forward of the bare repo's branch (`update-ref` with the old value), the `studio-stable` tag
-there, the checkout moved as `push.sh` moves it, then `serve.sh release` -- built, tested, a
-server of its own -- and `/api/health` asked which release leads. The decisions, each tested by
+there, the checkout moved as `push.sh` moves it, then `serve.sh release --no-test` -- built, a
+server of its own -- and `/api/health` asked which release leads.
+
+**Live first, tested after** (the owner's choice, 2026-10-16). A push is live about 30 s after
+GitHub has it; the release's own tests (`release.py --test`, about 6 minutes: `test_rounds` 79 s,
+`test_thumbs` 42 s, `test_library` 30 s, `test_bluegreen` 26 s and the template redraws lead,
+each printed in the ship's log) then run against the release that serves. When they fail, it
+switches back to the release that led before (`serve.sh use`), and the commit is **failed** and
+emailed. Films that started on the bad release in those minutes finish on it. `ops.sh ship` from
+a laptop still tests first.
+
+The decisions, each tested by
 `studio/test_autoship.py` against local repositories and a stub studio. Each wait is looked at
 again every 30 s by the same run (for at most 45 minutes, then the poll), and a hook that arrived
 while a look was shipping gets one more look before it stops:
@@ -171,7 +181,7 @@ while a look was shipping gets one more look before it stops:
 | only `docs/`, `projects/`, `market/`, `.github/` or the root's `*.md` changed | skips; the next real commit takes them. The studio's own prompts (`studio/*.md`) and the skills do ship |
 | a `requirements*.txt` changed | **holds**: the venv is shared (above), so a person ships it at a quiet moment with `ops.sh ship` |
 | GitHub's branch rewritten (not a fast-forward) | **refuses** |
-| a release that fails its tests | **failed**, once per commit: the next commit is tried, or `now --retry` |
+| a release that fails its tests (after going live) | switched back to the release before; **failed**, once per commit: the next commit is tried, or `now --retry` |
 
 The three in bold are written into the machine's note at once (`machine_note.py`, field
 `autoship`), and the site's watch emails the owner from it (sketch-studio `lib/studiowatch.js`), so

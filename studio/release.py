@@ -186,6 +186,11 @@ def main():
     ap.add_argument("--ref", default="studio-stable", help="the commit to ship (a tag, a sha)")
     ap.add_argument("--list", action="store_true", help="the releases built, and the current one")
     ap.add_argument("--no-test", action="store_true", help="make it current without testing it")
+    ap.add_argument(
+        "--test",
+        action="store_true",
+        help="test a release already built (--ref); change nothing (autoship, after it switched)",
+    )
     args = ap.parse_args()
     if args.list:
         cur = current()
@@ -197,6 +202,8 @@ def main():
                 print("%s %s  %s  %s" % ("*" if n == cur else " ", n, r["built"], r["ref"]))
         return
     dest = build(args.ref)
+    if args.test:  # it already runs: only whether it passes
+        sys.exit(0 if test(dest) else "the release's tests failed")
     if not args.no_test and not test(dest):
         sys.exit("the release's tests failed: it is built but NOT current")
     os.makedirs(RELEASES, exist_ok=True)

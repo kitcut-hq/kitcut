@@ -133,15 +133,24 @@ def end_to_end(autoship):
     git("init", "-q", "--bare", gh)
     git("clone", "-q", gh, work)
     os.makedirs(os.path.join(work, "studio"))
-    # the stub serve.sh: "builds" the checkout's studio-stable and makes it lead, or fails
+    # the stub serve.sh: `release --no-test` makes the checkout's studio-stable lead; `use X`
+    # makes X lead (the switch back after failed tests)
+    lead = os.path.join(T, "leader").replace("\\", "/")
     with open(os.path.join(work, "studio", "serve.sh"), "w", newline="\n") as f:
         f.write(
-            'set -e\n[ ! -f studio/FAIL ] || { echo "a test failed"; exit 1; }\n'
-            "git rev-parse --short=12 studio-stable > %s/leader\n" % T.replace("\\", "/")
+            'set -e\nif [ "$1" = use ]; then echo "$2" > %s; exit 0; fi\n'
+            "git rev-parse --short=12 studio-stable > %s\n" % (lead, lead)
         )
     first = commit(work, "studio/server.py", "1")
     git("clone", "-q", "--bare", gh, os.environ["STUDIO_GIT"])
     git("clone", "-q", os.environ["STUDIO_GIT"], os.environ["STUDIO_REPO"])
+    # the stub test runner (the checkout's .venv python, given release.py --test): it fails while
+    # studio/FAIL is in the checkout
+    py = os.path.join(os.environ["STUDIO_REPO"], ".venv", "bin", "python")
+    os.makedirs(os.path.dirname(py))
+    with open(py, "w", newline="\n") as f:
+        f.write('#!/bin/sh\n[ ! -f studio/FAIL ] || { echo "a test failed"; exit 1; }\n')
+    os.chmod(py, 0o755)
     os.makedirs(os.environ["STUDIO_HOME"])
     Stub.release = first[:12]
 
@@ -167,6 +176,12 @@ def end_to_end(autoship):
     third = commit(work, "studio/FAIL", "x")
     code, st = look()
     check(code == 1 and st.get("state") == "failed", "a release that fails its tests: failed", st)
+    with open(lead, encoding="utf-8") as f:
+        now_leads = f.read().strip()
+    check(now_leads == second[:12], "and the release before it leads again", now_leads)
+    with open(st.get("log") or os.devnull, encoding="utf-8") as f:
+        log = f.read()
+    check("live: %s" % third[:12] in log, "it went live before its tests ran", log[-300:])
     check(st.get("failed") == third, "and remembered", st.get("failed"))
     code, st = look()
     check(st.get("state") == "failed", "the next look does not try it again", st)

@@ -21,8 +21,13 @@ again by itself).
 
 A look ships only what `ops.sh ship` would, the same way: GitHub's studio-poc head, a fast-forward
 of what the machine has, into the bare repo (/srv/kitcut/git) and the checkout as push.sh moves
-them, then `serve.sh release` -- built, tested, a server of its own beside the running one, the
-old one finishing its films. Then it asks the studio (and studio.kitcut.ai) which release leads.
+them, then `serve.sh release --no-test` -- built, a server of its own beside the running one,
+the old one finishing its films -- and it asks the studio (and studio.kitcut.ai) which release
+leads. **Live first, tested after** (the owner's choice, 2026-10-16: a push is live about 30 s
+after GitHub has it, not 7 minutes): the release's own tests then run against the release that
+serves (release.py --test), and when they fail it switches back to the release that led before
+(serve.sh use) and is marked failed, which the owner is emailed. Films that started on it in
+those minutes finish on it.
 It waits, and looks again every 30 s (for at most LOOK_FOR, 45 min; then the poll), when:
 
   - the head is younger than SETTLE (30 s): pushes in a row are one ship, not three;
@@ -38,7 +43,8 @@ It does not ship, and says so in the note the site emails the owner from (machin
   - requirements*.txt changed: every release shares one venv, so installing them changes the
     films still being made on the old server -- ship that by hand at a quiet moment;
   - GitHub's head is not a fast-forward of the machine's (a rewritten branch);
-  - the head already failed its release's tests: once per commit, never again by itself. A new
+  - the head already failed its release's tests (and was switched back): once per commit,
+    never again by itself. A new
     commit is tried as usual; `--forget` (ops.sh autoship now --retry) lets the same one be tried
     again;
   - autoship is paused (STUDIO_HOME/autoship.paused): `ops.sh rollback` pauses it, or the next
@@ -246,7 +252,15 @@ def note():
         )
 
 
-def ship(head, log):
+class Failed(RuntimeError):
+    """The release went live and failed its tests (and was switched back, or says why not)."""
+
+
+def ship(head, prev, log, live=lambda pub: None):
+    """Live first, tested after: built and switched (serve.sh release --no-test), then the
+    release's own tests, run while it serves. Failing them switches back to `prev`, the release
+    that led before (serve.sh use), and raises Failed."""
+
     def step(*cmd, cwd=None):
         log.write("$ %s\n" % " ".join(cmd))
         log.flush()
@@ -264,13 +278,43 @@ def ship(head, log):
     got = sh("git", "rev-parse", "HEAD", cwd=REPO)
     if got != head:
         raise RuntimeError("the checkout is at %s, not %s" % (got[:12], head[:12]))
-    step("bash", os.path.join(REPO, "studio", "serve.sh"), "release", cwd=REPO)
+    serve = os.path.join(REPO, "studio", "serve.sh")
+    step("bash", serve, "release", "--no-test", cwd=REPO)
     h = health("http://127.0.0.1:%d/api/health" % PORT) or {}
     if h.get("release") != head[:12]:
         raise RuntimeError("the studio reports %s, expected %s" % (h.get("release"), head[:12]))
     pub = (health(PUBLIC) or {}).get("release")
     log.write("live: %s   studio.kitcut.ai: %s\n" % (h["release"], pub or "NOT REACHABLE"))
+    live(pub)
+    py = os.path.join(REPO, ".venv", "bin", "python")
+    try:
+        step(
+            py,
+            "-X",
+            "utf8",
+            os.path.join(REPO, "studio", "release.py"),
+            "--test",
+            "--ref",
+            head,
+            cwd=REPO,
+        )
+    except RuntimeError:
+        log.write("the tests failed: switching back to %s\n" % prev)
+        try:
+            step("bash", serve, "use", prev, cwd=REPO)
+        except RuntimeError as e:
+            raise Failed(
+                "failed its tests; switching back to %s failed too (%s)" % (prev, e)
+            ) from e
+        raise Failed("failed its tests after going live; %s leads again" % prev) from None
     return pub
+
+
+def testing(st, f):
+    """Saved while the tests run: the release serves, and is not proved yet."""
+    st.update(state="testing", why="%s is live; its tests are running" % f["head"][:12])
+    st["at"] = int(time.time())
+    save(st)
 
 
 def look(plan=False):
@@ -304,7 +348,7 @@ def look(plan=False):
             log.write("autoship %s: %s\n" % (time.strftime("%F %T"), why))
             log.write("%s\n" % sh("git", "-C", BARE, "log", "--format=%h %s", "-1", f["head"]))
             log.flush()
-            pub = ship(f["head"], log)
+            pub = ship(f["head"], f["leader"], log, live=lambda pub: testing(st, f))
         st.update(
             state="shipped",
             why="%s leads%s"
