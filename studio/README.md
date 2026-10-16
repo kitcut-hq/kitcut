@@ -845,6 +845,12 @@ its films, next to `projects\`, never in git:
   document says `paint_route`, and the site marks a Gemini episode. Measured on KitCut's own collage
   still: the read in ~40 s, the card ~$0.05 on the key, a proof $0.03 (GPT Image + Muse) or $0.13
   with Gemini. `test_stylekit.py` covers it with Claude and the painters stood in for.
+  **A style is its project's alone:** nothing of it reaches another project, a film outside
+  projects or an episode made before it (nor that episode's next versions). The paths that read
+  across films leave a styled film (its record's `paint_route`) out: `agent.recent_films` (the
+  "recent films chose" note), `harvest.py`'s kit candidates, and `template_from_film.py`
+  (refused without `--with-style`). The looks' briefs say nothing of it, so every other film's
+  prompt is unchanged; `stylekit.note` tells a styled episode its painter is given the picture.
 - **Back-fill by hand.** A set a series drew in its episodes' film.js never reached the library:
   write it as a cast file and `ops.sh library-put <project> [--dry-run] <cast/x.js>...`
   (`studio/library_put.py`) makes it the next version, thumbnail and sheet included, as keep()

@@ -67,9 +67,7 @@ The studio has set `backend`, `model` and `max_images`; leave them. You set:
 - `images`: `[{"name": "kitchen", "prompt": "..."}, ...]` -- names of lowercase letters, digits,
   `-` and `_`. Describe each picture fully: who, doing what, where, the framing (wide,
   close-up), the light. Never ask for words, letters or signs in a picture. The painter works
-  from the words alone: it takes no reference picture, so `ref` changes nothing -- unless the
-  project has a style picture: then the studio sets the painter, `style` and `style_ref`, and
-  its note about the style says how to write the prompts.
+  from the words alone: it takes no reference picture, so `ref` changes nothing.
 
 Each painting comes back 1920x1280 (a little taller than the 1920x1080 frame: room to move).
 

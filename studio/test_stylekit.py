@@ -425,6 +425,89 @@ def main():
         paint,
     )
 
+    # ---- a style is its project's alone: no other project, no film outside projects, no film
+    # made before it, and nothing that reads across films sees any of it
+    other = dict(PROJECT, id="p-styleother", name="Other")
+    b_ep = Film.create("Other project", 10, "painted", client="u:alice", project=other)
+    library.seed(b_ep)
+    b_paint = json.load(open(b_ep.path("paint.json"), encoding="utf-8"))
+    check(
+        not os.path.exists(b_ep.path("style"))
+        and "paint_route" not in b_ep.record()
+        and b_paint.get("model") == "meta/muse-image"
+        and b_paint.get("style") == ""
+        and "style_ref" not in b_paint
+        and stylekit.public(stylekit.dir_of(("u:alice", "p-styleother")))["state"] == "empty",
+        "another project of the same account gets nothing of the style",
+        b_paint,
+    )
+    check(
+        "This project has a style" not in library.note(b_ep)
+        and "style/style.js" not in json.dumps(json.load(open(b_ep.manifest, encoding="utf-8"))),
+        "and is told nothing of it",
+    )
+    early = dict(PROJECT, id="p-styleearly", name="Early")
+    e0 = Film.create("Made before the style", 10, "painted", client="u:alice", project=early)
+    library.seed(e0)
+    shutil.copytree(d, stylekit.dir_of(("u:alice", "p-styleearly")))  # its style arrives later
+    guard.pin_paint(e0)
+    e0_paint = json.load(open(e0.path("paint.json"), encoding="utf-8"))
+    check(
+        "paint_route" not in e0.record()
+        and e0_paint["model"] == "meta/muse-image"
+        and "style_ref" not in e0_paint
+        and rounds._pins(e0, e0.record())["paint"]["model"] == "meta/muse-image",  # noqa: SLF001
+        "an episode made before the style keeps its own painter, and so does its next version",
+        e0_paint,
+    )
+    e1 = Film.create("Made after", 10, "painted", client="u:alice", project=early)
+    library.seed(e1)
+    check(e1.record().get("paint_route"), "while the project's next episode takes the style")
+    for f_ in (ep, ep2, b_ep):
+        f_.update(state="done")
+    newcomer = Film.create("Someone else", 10, "painted", client="u:bob")
+    recent = agent.recent_films(newcomer)
+    told = agent.recent_note("painted", recent)
+    seen = json.dumps(recent)
+    check(
+        card["style"][:40] not in seen
+        and card["style"][:40] not in told
+        and len(recent) == 1
+        and recent[0].get("look") == "painted",
+        "films made under a style never reach another film's note of recent choices",
+        (len(recent), told[:300]),
+    )
+    looks_dir = os.path.join(KIT, "studio", "looks")
+    check(
+        all(
+            "style_ref" not in open(os.path.join(looks_dir, n_), encoding="utf-8").read()
+            for n_ in os.listdir(looks_dir)
+        ),
+        "the looks' own instructions are what every other film reads, unchanged",
+    )
+
+    import argparse  # noqa: PLC0415
+    import template_from_film as tff  # noqa: PLC0415
+
+    tff.PULLED = os.path.join(HOME, "pulled")
+    fid = "studio-20261015-120000-styled"
+    os.makedirs(os.path.join(tff.PULLED, fid))
+    json.dump({"duration": 10}, open(os.path.join(tff.PULLED, fid, "sketch.json"), "w"))
+    json.dump(
+        {"state": "done", "paint_route": {"route": "gpt"}},
+        open(os.path.join(tff.PULLED, fid, "studio.json"), "w"),
+    )
+    a_ = argparse.Namespace(film=fid, slug="styled-test", plan=False, force=True, with_style=False)
+    try:
+        tff.stage_pull(a_)
+        refused_tpl = False
+    except tff.Stop as e:
+        refused_tpl = "project's style" in str(e)
+    check(
+        refused_tpl and not os.path.exists(tff.project("styled-test")),
+        "a styled film is never made into a template by accident",
+    )
+
     # ---- the painter: the style picture first, the character second
     pics_, lead = SP.ref_lead("char.jpg", "style.jpg")
     check(

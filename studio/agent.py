@@ -648,12 +648,14 @@ def drop_unused_uploads(film):
 
 def recent_films(film, n=8):
     """The directions of the last n finished films made here, other than this one, newest
-    first: what they chose, never what they were asked."""
+    first: what they chose, never what they were asked. A film made under its project's style
+    (stylekit.py: its record's paint_route) is left out: its painting style, colours and faces
+    are that project's, and nothing of a project's style may reach any other film."""
     out = []
     for f in Film.all():
         if len(out) >= n:
             break
-        if f.id != film.id and f.state == "done":
+        if f.id != film.id and f.state == "done" and not f.record().get("paint_route"):
             out.append(f.record().get("direction") or f.direction())
     return out
 

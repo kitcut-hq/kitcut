@@ -249,6 +249,12 @@ def stage_pull(a):
     rec = read_json(os.path.join(src, "studio.json"), {})
     if rec.get("state") not in (None, "done"):
         raise Stop("%s is %s, not done" % (a.film, rec.get("state")))
+    if rec.get("paint_route") and not a.with_style:
+        raise Stop(
+            "%s was made under its project's style (stylekit.py): a template of it would carry "
+            "that project's pictures, colours and fonts into everyone's films. --with-style if "
+            "that is meant (the project's owner agreed)" % a.film
+        )
     shutil.rmtree(dst, ignore_errors=True)
     os.makedirs(dst)
     for name in ("film.js", "score.json", "sfx.json"):
@@ -758,6 +764,11 @@ def main():
         "--facts", help="pull: the name of film.js's facts object (default: FACTS, EVENT...)"
     )
     ap.add_argument("--force", action="store_true", help="pull: make the project again")
+    ap.add_argument(
+        "--with-style",
+        action="store_true",
+        help="pull: a film made under its project's style (refused without this)",
+    )
     ap.add_argument("--times", help="prove/alt: comma list of moments (default: the film's review)")
     ap.add_argument("--content", help="alt: another content file")
     ap.add_argument(

@@ -1155,7 +1155,9 @@ def note(film, lib):
         if pr.get("ref"):
             lines.append(
                 "- Its pictures are painted FROM the style picture: the studio gives it to the "
-                "painter with every picture (paint.json's style and style_ref are the studio's). "
+                "painter with every picture (paint.json's painter, style and style_ref are the "
+                "studio's; this overrides the look's words that the painter works from words alone "
+                "and that a ref changes nothing). "
                 "So each image's prompt says ONLY what to draw -- the subject, the framing, the "
                 "moment -- with no medium, style, palette or colour words: a colour word beats "
                 'the picture ("pink roses" came back pink from a black-ink style). A `ref` '
