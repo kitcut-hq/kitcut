@@ -616,17 +616,19 @@ html[data-view=film] .work.done .screen { width: min(100%, calc(max(100svh - 230
 </style>
 <script>
 // Where this visitor came from, for the sign-up to record (lib/attribution.js): the link's utm_*
-// tags (or ?ref=), the site that sent them, and the first page seen, in the kc_src cookie for 90
-// days. A later tagged link replaces it; an untagged visit never does.
+// tags (or ?ref=), a Google ad's click id, the site that sent them, and the first page seen, in the
+// kc_src cookie for 90 days. A later tagged link or ad click replaces it; an untagged visit never does.
 (() => { try {
   const q = new URLSearchParams(location.search), tag = (k) => (q.get(k) || '').slice(0, 80);
-  const tagged = ['utm_source', 'utm_medium', 'utm_campaign', 'ref'].some((k) => q.get(k));
+  const click = { g: q.get('gclid'), gb: q.get('gbraid'), wb: q.get('wbraid') }, ad = Object.values(click).some(Boolean);
+  const tagged = ad || ['utm_source', 'utm_medium', 'utm_campaign', 'ref'].some((k) => q.get(k));
   if (!tagged && document.cookie.split('; ').some((c) => c.startsWith('kc_src='))) return;
   let r = '';
   try { r = new URL(document.referrer).hostname.replace(/^www\./, ''); } catch (e) { /* no referrer */ }
   if (r === location.hostname || /(^|\.)kitcut\.ai$|^(accounts\.google\.com|checkout\.stripe\.com|billing\.stripe\.com)$/.test(r)) r = '';
-  const v = { s: tag('utm_source') || tag('ref'), m: tag('utm_medium'), c: tag('utm_campaign'), t: tag('utm_term'),
-              n: tag('utm_content'), r, l: location.pathname.slice(0, 120), at: Date.now() };
+  const v = { s: tag('utm_source') || tag('ref') || (ad ? 'google' : ''), m: tag('utm_medium') || (ad ? 'cpc' : ''), c: tag('utm_campaign'),
+              t: tag('utm_term'), n: tag('utm_content'), r, l: location.pathname.slice(0, 120), at: Date.now() };
+  for (const [k, id] of Object.entries(click)) if (id) v[k] = id.slice(0, 300);
   document.cookie = `kc_src=${encodeURIComponent(JSON.stringify(v))}; Path=/; Max-Age=7776000; SameSite=Lax` +
     (location.protocol === 'https:' ? '; Secure' : '');
 } catch (e) { /* never worth breaking the page for */ } })();
