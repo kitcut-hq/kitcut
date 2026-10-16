@@ -114,30 +114,58 @@ waits on a film or stops one.
 ### A push to GitHub ships itself (autoship)
 
 ```bash
-bash studio/deploy/ops.sh autoship on        # install and start the timer (lifts a pause)
+bash studio/deploy/ops.sh autoship on        # install and start the hook's path unit and the poll (lifts a pause)
 bash studio/deploy/ops.sh autoship           # its last decision, and the last ship's log
 bash studio/deploy/ops.sh autoship --plan    # what a look would do now; changes nothing
 bash studio/deploy/ops.sh autoship now [--retry]   # one look now, followed (--retry: a failed head)
 bash studio/deploy/ops.sh autoship off       # stop it; ops.sh ship still works as before
+bash studio/deploy/ops.sh autoship hook      # the hook's secret (machine .env) and GitHub's webhook
+bash studio/deploy/ops.sh autoship hook --check   # the webhook's last deliveries, and the lock probed
+node --env-file=<CLOUDFLARE_API_TOKEN file> studio/deploy/hook-lock.mjs [--check]   # the Cloudflare lock
 ```
 
-`kitcut-autoship.timer` looks every 2 minutes (`studio/deploy/autoship.py`): when GitHub's
-`studio-poc` has moved past the release that leads, the machine ships it, and a push needs nobody
-at a laptop. **The machine pulls; nothing pushes in.** kc-local is at home with no address anyone
-can reach, and kitcut-hq/kitcut is public, so `git ls-remote https://github.com/...` needs no key:
-the machine still holds no GitHub credentials. A runner that GitHub drives was the other way, and
-it would run a public repository's code on the studio's machine.
+When GitHub's `studio-poc` moves past the release that leads, the machine ships it
+(`studio/deploy/autoship.py`), and a push needs nobody at a laptop. **GitHub's push hook starts a
+look at once**; a poll every 15 minutes (`kitcut-autoship.timer`) catches a push whose hook did
+not arrive, since GitHub does not send one again by itself. **The machine still pulls the code**:
+kitcut-hq/kitcut is public, so `git ls-remote https://github.com/...` needs no key, and the
+machine holds no GitHub credentials. The hook carries no code and decides nothing -- it says
+"look now".
+
+**Only GitHub can call the hook**, `https://studio.kitcut.ai/hooks/github`, and it is locked
+twice:
+
+1. **At Cloudflare** (`hook-lock.mjs`): one firewall rule blocks any path of studio.kitcut.ai
+   containing `/hooks`, in any case, from every address outside GitHub's published webhook ranges
+   (`api.github.com/meta`, `hooks`). Nothing else reaches the machine; `ops.sh autoship hook
+   --check` POSTs from the laptop and expects 403. GitHub says it changes the ranges rarely;
+   `hook-lock.mjs --check` says STALE when it has, and until the rule is made again a hook is
+   blocked and the poll ships the push.
+2. **On the machine** (`server.py github_hook`): GitHub signs every delivery with
+   `X-Hub-Signature-256`, an HMAC-SHA256 of the body under a secret only GitHub and the machine's
+   `.env` hold (`AUTOSHIP_HOOK_SECRET`, made on the machine by `ops.sh autoship hook` and piped
+   straight into GitHub's API, never printed or saved on a laptop). Checked in constant time over
+   the whole body (at most 4 MB, read past the app's 64 KB cap); unsigned, wrongly signed or too
+   large is refused (401/413) and logged with the caller's address. No secret, no hook (404). It
+   sits outside `/api/`, so the studio token does not guard it: GitHub cannot send that token.
+
+A signed request does one thing: for a `push` to `refs/heads/studio-poc` it writes
+`STUDIO_HOME/autoship.poke`, and `kitcut-autoship.path` starts a look. A ping is answered; any
+other branch, tag or event is acknowledged and ignored. `studio/test_hook.py` holds each of these
+to the real handler. A replayed delivery can only ask for a look that finds nothing new.
 
 A look ships exactly what step 1 above would put there, and the same way: GitHub's head, a
 fast-forward of the bare repo's branch (`update-ref` with the old value), the `studio-stable` tag
 there, the checkout moved as `push.sh` moves it, then `serve.sh release` -- built, tested, a
 server of its own -- and `/api/health` asked which release leads. The decisions, each tested by
-`studio/test_autoship.py` against local repositories and a stub studio:
+`studio/test_autoship.py` against local repositories and a stub studio. Each wait is looked at
+again every 30 s by the same run (for at most 45 minutes, then the poll), and a hook that arrived
+while a look was shipping gets one more look before it stops:
 
 | it finds | it does |
 |---|---|
 | the head leads already, or `autoship.paused` exists | nothing |
-| a head under 2 minutes old | waits: a burst of pushes is one ship |
+| a head under 30 s old | waits: pushes in a row are one ship |
 | the `cpu` pool busy (a voice being recorded, a film's sound) | waits, at most 40 min from the head's first look, then ships: a ship's tests take the cores those steps time words on (KI-043), and a ship slows a film but never stops one |
 | `deploy.lock` held (a ship from the laptop), or the studio not answering | waits |
 | only `docs/`, `projects/`, `market/`, `.github/` or the root's `*.md` changed | skips; the next real commit takes them. The studio's own prompts (`studio/*.md`) and the skills do ship |

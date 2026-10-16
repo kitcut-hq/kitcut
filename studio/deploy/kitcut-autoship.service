@@ -1,7 +1,8 @@
 # One look at GitHub's studio-poc (studio/deploy/autoship.py): when it has moved on, and nothing
 # says wait, the studio is shipped the way `ops.sh ship` ships it -- built, tested, a server of its
-# own beside the running one. Started every 2 minutes by kitcut-autoship.timer; a look while the
-# last one still ships never starts (a oneshot that is active is not started again). Installed by
+# own beside the running one. Started by GitHub's push hook (kitcut-autoship.path) and every 15
+# minutes by kitcut-autoship.timer; a start while it runs starts nothing (a oneshot that is active
+# is not started again), and it looks once more itself when a hook came meanwhile. Installed by
 # install.sh with the @...@ paths filled in; enabled by `ops.sh autoship on`.
 #
 # The system python3, not the venv: it moves the checkout it runs from. The release's build and

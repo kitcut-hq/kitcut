@@ -1,24 +1,31 @@
 #!/usr/bin/env python3
 """Ship the studio by itself when studio-poc moves on GitHub: the machine pulls, nothing pushes in.
 
-    python3 studio/deploy/autoship.py            one look (kitcut-autoship.service, every 2 min)
+    python3 studio/deploy/autoship.py            look, and look again while there is a reason to
+                                                 wait (kitcut-autoship.service: GitHub's hook, and
+                                                 a poll every 15 min)
     python3 studio/deploy/autoship.py --plan     what a look would do now; changes nothing
     python3 studio/deploy/autoship.py --status   the last decision, and the log of the last ship
     python3 studio/deploy/autoship.py --forget   forget that the head failed: the next look tries it
     bash studio/deploy/ops.sh autoship ...       the same, from the laptop (and on, off, now)
 
-Why the machine pulls: kc-local is at home with no address anyone can reach, and kitcut-hq/kitcut
-is public, so `git ls-remote https://github.com/...` needs no key at all. The machine still holds
-no GitHub credentials (push.sh); it reads, as anyone can. A runner GitHub drives would put a
-public repository's code on the studio's machine, and a push from GitHub would need a way in.
+Why the machine pulls: kitcut-hq/kitcut is public, so `git ls-remote https://github.com/...`
+needs no key at all, and the machine still holds no GitHub credentials (push.sh); it reads, as
+anyone can. What starts a look is GitHub's push hook: studio.kitcut.ai/hooks/github (server.py
+github_hook) checks GitHub's signature and writes STUDIO_HOME/autoship.poke, and
+kitcut-autoship.path starts this. Only GitHub can reach that path: Cloudflare blocks every other
+address (deploy/hook-lock.mjs). The hook carries no code and no decision -- it says "look now";
+everything below is decided from GitHub and the studio as they are. A poll every 15 minutes
+(kitcut-autoship.timer) catches a push whose hook did not arrive (GitHub does not send one
+again by itself).
 
 A look ships only what `ops.sh ship` would, the same way: GitHub's studio-poc head, a fast-forward
 of what the machine has, into the bare repo (/srv/kitcut/git) and the checkout as push.sh moves
 them, then `serve.sh release` -- built, tested, a server of its own beside the running one, the
 old one finishing its films. Then it asks the studio (and studio.kitcut.ai) which release leads.
-It waits, and ships at the next look, when:
+It waits, and looks again every 30 s (for at most LOOK_FOR, 45 min; then the poll), when:
 
-  - the head is younger than SETTLE (2 min): a burst of pushes is one ship, not five;
+  - the head is younger than SETTLE (30 s): pushes in a row are one ship, not three;
   - the studio's sound machine is busy (the `cpu` pool: a voice being recorded, a film's sound):
     a ship's build and tests take the cores those steps time words on (KI-043). At most MAX_WAIT
     (40 min) after it first saw the head; then it ships anyway, since a ship slows a film, never
@@ -31,7 +38,7 @@ It does not ship, and says so in the note the site emails the owner from (machin
   - requirements*.txt changed: every release shares one venv, so installing them changes the
     films still being made on the old server -- ship that by hand at a quiet moment;
   - GitHub's head is not a fast-forward of the machine's (a rewritten branch);
-  - the head already failed its release's tests: once per commit, not every two minutes. A new
+  - the head already failed its release's tests: once per commit, never again by itself. A new
     commit is tried as usual; `--forget` (ops.sh autoship now --retry) lets the same one be tried
     again;
   - autoship is paused (STUDIO_HOME/autoship.paused): `ops.sh rollback` pauses it, or the next
@@ -64,7 +71,10 @@ STATE = os.path.join(HOME, "autoship.json")
 PAUSED = os.path.join(HOME, "autoship.paused")
 LOGS = os.path.join(HOME, "autoship")
 LOCK = os.path.join(HOME, "deploy.lock")
-SETTLE = int(os.environ.get("AUTOSHIP_SETTLE_S", "120"))
+POKE = os.path.join(HOME, "autoship.poke")  # written by the hook (server.py github_hook)
+SETTLE = int(os.environ.get("AUTOSHIP_SETTLE_S", "30"))
+LOOK_AGAIN = 30  # seconds between looks while it waits
+LOOK_FOR = int(os.environ.get("AUTOSHIP_LOOK_FOR_S", str(45 * 60)))
 MAX_WAIT = int(os.environ.get("AUTOSHIP_MAX_WAIT_S", str(40 * 60)))
 KEEP_LOGS = 30
 # the states a person has to act on: the note carries them, and the site emails the owner
@@ -277,14 +287,14 @@ def look(plan=False):
                 {k: v for k, v in f.items() if k != "changed"} | {"changed": len(f["changed"])}
             )
         )
-        return 0
+        return action, 0
     before = (st.get("state"), st.get("why"))
     st.update(state=action, why=why, at=now, head=f["head"], leader=f["leader"])
     if action != "ship":
         save(st)
         if action in PROBLEMS and before != (action, why):
             note()
-        return 0
+        return action, 0
     os.makedirs(LOGS, exist_ok=True)
     path = os.path.join(LOGS, "%s-%s.log" % (f["head"][:12], time.strftime("%Y%m%d-%H%M%S")))
     st.update(state="shipping", log=path)
@@ -315,7 +325,28 @@ def look(plan=False):
     for old in logs[:-KEEP_LOGS]:
         os.remove(os.path.join(LOGS, old))
     note()
-    return code
+    return st["state"], code
+
+
+def poked():
+    try:
+        return os.path.getmtime(POKE)
+    except OSError:
+        return 0
+
+
+def run(sleep=time.sleep):
+    """Look until there is nothing to wait for. The hook arrives the moment GitHub has the push,
+    so the settle (and the sound machine, and the lock) is waited out here rather than until the
+    next poll; and a hook that came while this was shipping is looked at before it stops (the
+    path unit cannot start a unit that is already running)."""
+    end = time.time() + LOOK_FOR
+    while True:
+        seen = poked()  # not compared with a clock: the kernel stamps files a little coarsely
+        action, code = look()
+        if time.time() > end or (action != "wait" and poked() == seen):
+            return code
+        sleep(LOOK_AGAIN if action == "wait" else 1)
 
 
 def status():
@@ -327,6 +358,11 @@ def status():
     print(
         "autoship: %s at %s: %s%s"
         % (st.get("state"), when, st.get("why"), "  (PAUSED: %s)" % paused() if paused() else "")
+    )
+    p = poked()
+    print(
+        "last hook from GitHub: %s"
+        % (time.strftime("%F %T", time.localtime(p)) if p else "none yet")
     )
     if st.get("log") and os.path.exists(st["log"]):
         print("last ship's log: %s" % st["log"])
@@ -356,4 +392,6 @@ if __name__ == "__main__":
         st.pop("failed", None)
         save(st)
         sys.exit(0)
-    sys.exit(status() if a.status else look(plan=a.plan))
+    if a.plan:
+        sys.exit(look(plan=True)[1])
+    sys.exit(status() if a.status else run())

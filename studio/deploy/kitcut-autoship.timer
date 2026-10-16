@@ -1,12 +1,14 @@
-# Every 2 minutes after the last look ended, GitHub's studio-poc is looked at and shipped when it
-# moved (kitcut-autoship.service). Enabled by `ops.sh autoship on`, stopped by `ops.sh autoship off`:
+# Every 15 minutes after the last look ended, GitHub's studio-poc is looked at and shipped when it
+# moved (kitcut-autoship.service): the catch for a push whose hook did not arrive (the studio was
+# switching, the tunnel was down; GitHub does not send a hook again by itself). The hook itself
+# starts a look at once (kitcut-autoship.path). Enabled by `ops.sh autoship on`, stopped by `ops.sh autoship off`:
 #   sudo systemctl enable --now kitcut-autoship.timer
 [Unit]
-Description=KitCut studio: look at GitHub's studio-poc every 2 minutes, ship it when it moved
+Description=KitCut studio: look at GitHub's studio-poc every 15 minutes, in case a hook was missed
 
 [Timer]
 OnBootSec=5min
-OnUnitInactiveSec=2min
+OnUnitInactiveSec=15min
 
 [Install]
 WantedBy=timers.target

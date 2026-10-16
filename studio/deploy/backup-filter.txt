@@ -24,6 +24,7 @@
 # The ship that follows GitHub (deploy/autoship.py): its last decision, its logs and its pause.
 - /autoship.json
 - /autoship.paused
+- /autoship.poke
 - /autoship/**
 - *.lock
 # Caches and staging.

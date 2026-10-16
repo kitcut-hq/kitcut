@@ -146,7 +146,7 @@ def end_to_end(autoship):
     Stub.release = first[:12]
 
     def look():
-        return autoship.look(), autoship.load()
+        return autoship.look()[1], autoship.load()
 
     code, st = look()
     check(st.get("state") == "idle", "the head leads already: idle", st)
@@ -188,12 +188,54 @@ def end_to_end(autoship):
     srv.shutdown()
 
 
+def looks_again(autoship):
+    """run(): a hook arrives while the head is settling, so the wait is looked at again here
+    rather than at the next poll; and a hook that came during a ship gets one more look."""
+    seq, slept = [], []
+
+    def fake(actions):
+        it = iter(actions)
+
+        def look():
+            a = next(it)
+            seq.append(a)
+            if a == "ship-poked":  # a hook lands while this look ships
+                with open(autoship.POKE, "w") as f:
+                    f.write("x")
+                return "shipped", 0
+            return a, 1 if a == "failed" else 0
+
+        return look
+
+    real = autoship.look
+    try:
+        autoship.look = fake(["wait", "wait", "shipped"])
+        code = autoship.run(sleep=slept.append)
+        check(seq == ["wait", "wait", "shipped"] and code == 0, "waits are looked at again", seq)
+        check(slept == [autoship.LOOK_AGAIN] * 2, "every LOOK_AGAIN seconds", slept)
+        seq.clear()
+        autoship.look = fake(["ship-poked", "idle"])
+        autoship.run(sleep=slept.append)
+        check(seq == ["ship-poked", "idle"], "a hook during a ship: one more look", seq)
+        seq.clear()
+        autoship.look = fake(["failed"])
+        check(autoship.run(sleep=slept.append) == 1 and seq == ["failed"], "a failure ends it")
+        seq.clear()
+        autoship.LOOK_FOR = -1
+        autoship.look = fake(["wait"])
+        autoship.run(sleep=slept.append)
+        check(seq == ["wait"], "never past LOOK_FOR: then the poll takes over", seq)
+    finally:
+        autoship.look = real
+
+
 if __name__ == "__main__":
     try:
         import autoship  # noqa: E402
 
         decisions(autoship)
         end_to_end(autoship)
+        looks_again(autoship)
     finally:
         shutil.rmtree(T, ignore_errors=True)
     print("%s" % ("all passed" if not bad else "%d FAILED: %s" % (len(bad), "; ".join(bad))))

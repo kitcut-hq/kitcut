@@ -53,7 +53,8 @@ TESTS = (
     "test_shared.py",  # the files two servers share, raced by real processes (locks.py)
     "test_bluegreen.py",  # an old server handing over to a new one, end to end
     "test_memory.py",  # the still cache stays capped; every job beside the server is (KI-045)
-    "test_autoship.py",  # the ship that follows GitHub: what it waits for, refuses, ships (stub studio)
+    "test_autoship.py",
+    "test_hook.py",  # GitHub's push hook: only a request signed with the machine's secret nudges  # the ship that follows GitHub: what it waits for, refuses, ships (stub studio)
     "test_prune.py",  # a finished film loses its working pictures and nothing else (KI-063)
     "test_backup.py",  # what is mirrored off the machine, and that every folder of the home is named
     "test_restore.py",  # a rehearsal built from the mirror cannot act as the studio

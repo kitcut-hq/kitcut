@@ -13,11 +13,14 @@
 #   bash studio/deploy/ops.sh rollback <sha12>        back to a release already built (no rebuild):
 #                                                     a switch like a ship, nothing is stopped;
 #                                                     it pauses autoship, or that ships back
-#   bash studio/deploy/ops.sh autoship [status|--plan|on|off|now [--retry]]   the ship that follows
-#                                                     GitHub's studio-poc by itself (every 2 min,
+#   bash studio/deploy/ops.sh autoship [status|--plan|on|off|now [--retry]|hook]   the ship that
+#                                                     follows GitHub's studio-poc by itself (its
+#                                                     push hook, and a poll every 15 min:
 #                                                     deploy/autoship.py): its last decision and
 #                                                     ship log | what it would do now | start (and
-#                                                     lift a pause) | stop | one look, followed
+#                                                     lift a pause) | stop | one look, followed |
+#                                                     the hook's secret and GitHub's webhook, made
+#                                                     or checked
 #   bash studio/deploy/ops.sh migrate [<commit>]      ONCE: from the legacy one-server unit to one
 #                                                     server per release (deploy/README.md); waits,
 #                                                     on the VM, for the running films to finish
@@ -267,7 +270,7 @@ echo "units: $(for u in kitcut-tunnel kitcut-studio-boot kitcut-login-check.time
 STUDIO_HOME=$HOME_DIR STUDIO_REPO=/srv/kitcut/repo python3 /srv/kitcut/repo/studio/backup.py --status 2>&1 | sed 's/^/mirror: /'
 # the ship that follows GitHub (deploy/autoship.py): whether it is on, and what it last decided
 [ -f /srv/kitcut/repo/studio/deploy/autoship.py ] &&
-  echo "$(STUDIO_HOME=$HOME_DIR python3 /srv/kitcut/repo/studio/deploy/autoship.py --status 2>&1 | head -1)  (timer $(systemctl is-active kitcut-autoship.timer))"
+  echo "$(STUDIO_HOME=$HOME_DIR python3 /srv/kitcut/repo/studio/deploy/autoship.py --status 2>&1 | head -1)  (hook $(systemctl is-active kitcut-autoship.path), poll $(systemctl is-active kitcut-autoship.timer))"
 systemctl list-units --all --no-legend --plain 'kitcut-studio@*' kitcut-studio.service | awk '{ printf "  %s %s/%s\n", $1, $3, $4 }'
 python3 - <<'PY'
 import glob, json, os
@@ -468,19 +471,46 @@ EOF
     ;;
 
   autoship)
-    # the ship that follows GitHub's studio-poc (deploy/autoship.py, kitcut-autoship.timer)
-    use="autoship [status | --plan | on | off | now [--retry]]"
+    # the ship that follows GitHub's studio-poc (deploy/autoship.py): its push hook starts it
+    # (kitcut-autoship.path), and a poll every 15 minutes (kitcut-autoship.timer)
+    use="autoship [status | --plan | on | off | now [--retry] | hook [--check]]"
     envs="STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE"
     py="/usr/bin/python3 $REMOTE/studio/deploy/autoship.py"
     case "${1:-status}" in
       status)
-        on "$envs $py --status; rc=\$?; systemctl list-timers --no-pager kitcut-autoship.timer | sed -n 1,2p; exit \$rc"
+        on "$envs $py --status; rc=\$?; systemctl list-timers --no-pager kitcut-autoship.timer | sed -n 1,2p; echo \"hook: \$(systemctl is-active kitcut-autoship.path)\"; exit \$rc"
         exit $? ;;
       --plan) on "$envs $py --plan"; exit $? ;;
       on)
-        change_on "bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR && rm -f $HOME_DIR/autoship.paused && sudo systemctl enable -q --now kitcut-autoship.timer && systemctl is-active kitcut-autoship.timer"
+        change_on "bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR && rm -f $HOME_DIR/autoship.paused && sudo systemctl enable -q --now kitcut-autoship.timer kitcut-autoship.path && systemctl is-active kitcut-autoship.timer kitcut-autoship.path"
         exit $? ;;
-      off) change_on "sudo systemctl disable -q --now kitcut-autoship.timer; systemctl is-active kitcut-autoship.timer || true"; exit 0 ;;
+      off) change_on "sudo systemctl disable -q --now kitcut-autoship.timer kitcut-autoship.path; systemctl is-active kitcut-autoship.timer kitcut-autoship.path || true"; exit 0 ;;
+      hook)
+        # GitHub's push hook (server.py github_hook): the secret, made once on the machine and kept
+        # in its .env -- never printed, never on this laptop's disk -- and the webhook on
+        # kitcut-hq/kitcut made or put back to send that secret, push events only, to the one URL.
+        # The Cloudflare half (only GitHub's addresses reach the path) is deploy/hook-lock.mjs.
+        hook_url="https://studio.kitcut.ai/hooks/github"
+        hook_repo="kitcut-hq/kitcut"
+        id="$(gh api "repos/$hook_repo/hooks" --jq ".[] | select(.config.url == \"$hook_url\") | .id" | head -1)"
+        if [ "${2:-}" = --check ]; then
+          [ -n "$id" ] || die "no webhook on $hook_repo for $hook_url: ops.sh autoship hook"
+          gh api "repos/$hook_repo/hooks/$id" --jq '"webhook \(.id): active \(.active), events \(.events | join(",")), content \(.config.content_type), last \(.last_response.code) \(.last_response.message // "")"'
+          gh api "repos/$hook_repo/hooks/$id/deliveries?per_page=5" --jq '.[] | "  \(.delivered_at)  \(.event)  \(.status_code) \(.status)"'
+          on "grep -q '^AUTOSHIP_HOOK_SECRET=.' $REMOTE/.env && echo 'secret: in the machine .env' || echo 'secret: NOT in the machine .env'"
+          code="$(curl -s -o /dev/null -w '%{http_code}' -X POST --max-time 10 "$hook_url" -d '{}')"
+          echo "a POST from this laptop: $code ($( [ "$code" = 403 ] && echo 'blocked at Cloudflare, as it should be' || echo 'NOT blocked at Cloudflare: node --env-file=<token> studio/deploy/hook-lock.mjs'))"
+          exit 0
+        fi
+        [ "$DRY" = 1 ] && { echo "  would make the secret on $VM if missing, then ${id:+update webhook $id}${id:-make a webhook} for $hook_url on $hook_repo"; exit 0; }
+        # the secret: 32 random bytes, appended once; the servers read it per request
+        on "grep -q '^AUTOSHIP_HOOK_SECRET=.' $REMOTE/.env || { printf '\n# GitHub push hook (server.py github_hook; ops.sh autoship hook)\nAUTOSHIP_HOOK_SECRET=%s\n' \"\$(python3 -c 'import secrets; print(secrets.token_hex(32))')\" >> $REMOTE/.env; echo 'made the hook secret'; }"
+        # straight from the machine into GitHub's API, through a pipe: it is never printed
+        on "sed -n 's/^AUTOSHIP_HOOK_SECRET=//p' $REMOTE/.env | tail -1 | tr -d '\"\r'" |
+          python -c 'import json, sys; s = sys.stdin.read().strip(); print(json.dumps({"name": "web", "active": True, "events": ["push"], "config": {"url": sys.argv[1], "content_type": "json", "insecure_ssl": "0", "secret": s}}))' "$hook_url" |
+          if [ -n "$id" ]; then gh api -X PATCH "repos/$hook_repo/hooks/$id" --input - --jq '"updated webhook \(.id)"'
+          else gh api -X POST "repos/$hook_repo/hooks" --input - --jq '"made webhook \(.id): GitHub sends it a ping now"'; fi
+        exit $? ;;
       now)
         # a look of its own, as the timer's would be: the same unit, so never beside one (and
         # systemctl start waits for it); --retry first forgets that the head failed

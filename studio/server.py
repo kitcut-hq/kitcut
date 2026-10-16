@@ -133,6 +133,7 @@ import re
 import sys
 import hmac
 import json
+import hashlib
 import time
 import errno
 import signal
@@ -2713,6 +2714,68 @@ async def files(req):
     return web.FileResponse(p, headers=headers)
 
 
+# ------------------------------------------------------------------ the GitHub hook
+# A push to kitcut's studio-poc tells the machine to look now, instead of at the next poll
+# (deploy/autoship.py; studio/deploy/README.md, "A push to GitHub ships itself"). Two locks, so
+# only GitHub gets through: Cloudflare blocks the path for every address outside GitHub's hook
+# ranges (deploy/hook-lock.mjs), and this checks GitHub's signature (an HMAC of the body with the
+# secret only GitHub and the machine's .env hold). What it lets through is only a nudge: it writes
+# STUDIO_HOME/autoship.poke and nothing of the payload is used beyond the branch's name --
+# autoship still reads GitHub itself and decides as it always does.
+HOOK_PATH = "/hooks/github"
+HOOK_MAX = 4 * 1024 * 1024  # a push of many commits is a few hundred KB; GitHub caps it at 25 MB
+HOOK_BRANCH = "refs/heads/studio-poc"
+
+
+def hook_secret():
+    """AUTOSHIP_HOOK_SECRET from the machine's .env, read per call: set or changed without a
+    restart, and "" (the hook does not exist) until it is."""
+    path = os.environ.get("STUDIO_ENV_FILE") or os.path.join(films.REPO, ".env")
+    out = ""
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            for line in f:
+                k, eq, v = line.partition("=")
+                if eq and k.strip() == "AUTOSHIP_HOOK_SECRET":
+                    out = v.strip().strip("\"'")
+    except OSError:
+        pass
+    return out
+
+
+async def github_hook(req):
+    secret = hook_secret()
+    if not secret:
+        raise web.HTTPNotFound()
+    sig = req.headers.get("X-Hub-Signature-256", "")
+    if not sig.startswith("sha256=") or (req.content_length or 0) > HOOK_MAX:
+        return web.json_response({"error": "not signed"}, status=401)
+    body = bytearray()  # read here, not by req.read(): the app's cap is 64 KB
+    async for chunk in req.content.iter_chunked(65536):
+        body += chunk
+        if len(body) > HOOK_MAX:
+            return web.json_response({"error": "too large"}, status=413)
+    want = "sha256=" + hmac.new(secret.encode(), bytes(body), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig.encode(), want.encode()):
+        who = req.headers.get("CF-Connecting-IP", req.remote)
+        print("hook: a request with a wrong signature, from %s" % who)
+        return web.json_response({"error": "not signed"}, status=401)
+    event = req.headers.get("X-GitHub-Event", "")
+    if event == "ping":
+        return web.json_response({"ok": True, "pong": True})
+    try:
+        ref = json.loads(body).get("ref") if event == "push" else None
+    except (ValueError, AttributeError):  # not JSON, or not an object
+        ref = None
+    if ref != HOOK_BRANCH:
+        return web.json_response({"ok": True, "ignored": "%s %s" % (event, ref or "")}, status=202)
+    poke = os.path.join(films.HOME, "autoship.poke")
+    with open(poke + ".tmp", "w", encoding="utf-8") as f:
+        f.write("%s %s\n" % (time.strftime("%F %T"), req.headers.get("X-GitHub-Delivery", "")))
+    os.replace(poke + ".tmp", poke)  # kitcut-autoship.path starts a look
+    return web.json_response({"ok": True, "looking": True}, status=202)
+
+
 async def costs(req):
     """The spend, from kitcut.studio_runs: totals, and the latest runs (?last=N, default 50)."""
     try:
@@ -2820,6 +2883,7 @@ def make_app(token):
             web.post("/api/admin/drain", drain),
             web.post("/api/admin/films/{id}/hidden", hide),
             web.get("/files/{id}/{path:.+}", files),
+            web.post(HOOK_PATH, github_hook),
         ]
     )
     app.on_startup.append(on_start)

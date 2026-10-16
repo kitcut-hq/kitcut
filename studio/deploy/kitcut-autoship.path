@@ -1,0 +1,13 @@
+# GitHub's push hook arrives (server.py github_hook writes STUDIO_HOME/autoship.poke, after the
+# signature checked out) and this starts a look at once (kitcut-autoship.service). A hook that
+# comes while a look is running is taken by that look before it stops (autoship.py run()).
+# Installed by install.sh with the @...@ paths filled in; enabled by `ops.sh autoship on`.
+[Unit]
+Description=KitCut studio: look at GitHub's studio-poc when its push hook arrives
+
+[Path]
+PathModified=@HOME@/autoship.poke
+Unit=kitcut-autoship.service
+
+[Install]
+WantedBy=paths.target
