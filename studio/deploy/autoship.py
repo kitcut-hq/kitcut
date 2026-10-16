@@ -135,8 +135,10 @@ def sh(*cmd, cwd=None, check=True):
 
 
 def health(url):
+    # Cloudflare answers Python's own User-Agent with 403 (the first autoship, 2026-10-16)
+    req = urllib.request.Request(url, headers={"User-Agent": "kitcut-autoship/1"})
     try:
-        with urllib.request.urlopen(url, timeout=8) as r:
+        with urllib.request.urlopen(req, timeout=8) as r:
             return json.load(r)
     except (OSError, ValueError):
         return None
