@@ -21,6 +21,7 @@ import io
 import os
 import sys
 import json
+import time
 import stat
 import shutil
 import tarfile
@@ -53,8 +54,8 @@ TESTS = (
     "test_shared.py",  # the files two servers share, raced by real processes (locks.py)
     "test_bluegreen.py",  # an old server handing over to a new one, end to end
     "test_memory.py",  # the still cache stays capped; every job beside the server is (KI-045)
-    "test_autoship.py",
-    "test_hook.py",  # GitHub's push hook: only a request signed with the machine's secret nudges  # the ship that follows GitHub: what it waits for, refuses, ships (stub studio)
+    "test_autoship.py",  # the ship that follows GitHub: what it waits for, refuses, ships
+    "test_hook.py",  # GitHub's push hook: only a request signed with the machine's secret
     "test_prune.py",  # a finished film loses its working pictures and nothing else (KI-063)
     "test_backup.py",  # what is mirrored off the machine, and that every folder of the home is named
     "test_restore.py",  # a rehearsal built from the mirror cannot act as the studio
@@ -145,7 +146,10 @@ def test(dest):
     """The studio's quick tests, run from inside the snapshot."""
     env = dict(os.environ, STUDIO_REPO=REPO, STUDIO_ENV_FILE=os.path.join(REPO, ".env"))
     env.pop("STUDIO_HOME", None)  # each test makes its own throwaway home
+    # seconds per test, printed: a ship is mostly these, and which ones cost is measured here
+    t_all = time.time()
     for t in TESTS:
+        t0 = time.time()
         r = subprocess.run(
             [sys.executable, "-X", "utf8", os.path.join(dest, "studio", t)],
             env=env,
@@ -154,12 +158,13 @@ def test(dest):
             encoding="utf-8",
         )
         last = (r.stdout.strip().splitlines() or ["(no output)"])[-1]
-        print("  %-18s %s" % (t, last))
+        print("  %-18s %4.0fs  %s" % (t, time.time() - t0, last))
         if r.returncode:
             print(r.stdout[-3000:] + r.stderr[-2000:])
             return False
     # every live template drawn again by this release (templates.py check): an engine or renderer
     # change that would draw someone's template differently stops the ship
+    t0 = time.time()
     r = subprocess.run(
         [sys.executable, "-X", "utf8", os.path.join(dest, "studio", "templates.py"), "check"],
         env=dict(env, STUDIO_HOME=films.HOME),
@@ -168,7 +173,8 @@ def test(dest):
         encoding="utf-8",
     )
     last = (r.stdout.strip().splitlines() or ["(no output)"])[-1]
-    print("  %-18s %s" % ("templates", last))
+    print("  %-18s %4.0fs  %s" % ("templates", time.time() - t0, last))
+    print("  %-18s %4.0fs" % ("all the tests", time.time() - t_all))
     if r.returncode:
         print(r.stdout[-3000:] + r.stderr[-2000:])
         return False
