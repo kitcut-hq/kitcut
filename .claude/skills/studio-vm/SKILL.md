@@ -25,6 +25,9 @@ bash studio/deploy/ops.sh --dry-run ship [<commit>] # what a ship would do
 bash studio/deploy/ops.sh ship [<commit>]           # default: origin/studio-poc's head
 bash studio/deploy/ops.sh releases                  # built releases, the leader's marked *
 bash studio/deploy/ops.sh rollback <sha12>          # back to one already built, no rebuild
+bash studio/deploy/ops.sh autoship [--plan|on|off|now [--retry]]   # a push to GitHub's studio-poc
+                                                    # ships itself (every 2 min): its last decision,
+                                                    # what it would do now, start, stop, one look
 bash studio/deploy/ops.sh migrate [<commit>]        # ONCE per machine (see the rules)
 bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--look collage] [--unlisted] [--api] [--no-watch] [--attach photo.png ...]
                                                     # [--person "Alex=alex.jpg" ...] [--style felt]: people drawn into it
@@ -77,6 +80,14 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
 - **Never start the tunnel on the laptop.** cloudflared load-balances every connector of a tunnel,
   so a second one sends half the films to the other disk. The laptop's tunnel settings are gone
   from its `.env` on purpose; `serve.ps1 -Dev` is for local development only.
+- **A push ships itself.** Once `ops.sh autoship on` has run, the machine looks at GitHub's
+  studio-poc every 2 minutes and ships a new head the same way `ops.sh ship` does (tests first,
+  films hand off): merging and pushing *is* deploying. Check it with `ops.sh autoship` rather than
+  shipping again. It waits while the sound machine is busy (KI-043) or a deploy holds the lock,
+  skips docs-only commits, and **holds** a requirements change, **refuses** a rewritten branch and
+  marks a commit whose tests fail **failed** (not retried): those three reach the owner by email
+  through the machine's note. `ops.sh rollback` pauses it; `ops.sh autoship on` lifts the pause.
+  `studio/deploy/README.md`, "A push to GitHub ships itself".
 - **Ship only what is on origin/studio-poc.** `ops.sh ship` refuses anything else. It tags
   `studio-stable`, pushes the code to the VM (`push.sh`: the VM holds no GitHub credentials),
   builds and tests the release there, starts the release's own server beside the running one and
