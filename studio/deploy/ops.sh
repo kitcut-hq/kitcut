@@ -11,7 +11,13 @@
 #                                                     made carry on: the old server finishes them
 #   bash studio/deploy/ops.sh releases                what is built there, and which one leads
 #   bash studio/deploy/ops.sh rollback <sha12>        back to a release already built (no rebuild):
-#                                                     a switch like a ship, nothing is stopped
+#                                                     a switch like a ship, nothing is stopped;
+#                                                     it pauses autoship, or that ships back
+#   bash studio/deploy/ops.sh autoship [status|--plan|on|off|now [--retry]]   the ship that follows
+#                                                     GitHub's studio-poc by itself (every 2 min,
+#                                                     deploy/autoship.py): its last decision and
+#                                                     ship log | what it would do now | start (and
+#                                                     lift a pause) | stop | one look, followed
 #   bash studio/deploy/ops.sh migrate [<commit>]      ONCE: from the legacy one-server unit to one
 #                                                     server per release (deploy/README.md); waits,
 #                                                     on the VM, for the running films to finish
@@ -259,6 +265,9 @@ esac
 echo "units: $(for u in kitcut-tunnel kitcut-studio-boot kitcut-login-check.timer kitcut-usage kitcut-prune.timer kitcut-backup.timer kitcut-backup-full.timer; do printf '%s=%s ' $u $(systemctl is-active $u); done)"
 # the copy off the machine (studio/backup.py): when it last went through, and STALE when it has not
 STUDIO_HOME=$HOME_DIR STUDIO_REPO=/srv/kitcut/repo python3 /srv/kitcut/repo/studio/backup.py --status 2>&1 | sed 's/^/mirror: /'
+# the ship that follows GitHub (deploy/autoship.py): whether it is on, and what it last decided
+[ -f /srv/kitcut/repo/studio/deploy/autoship.py ] &&
+  echo "$(STUDIO_HOME=$HOME_DIR python3 /srv/kitcut/repo/studio/deploy/autoship.py --status 2>&1 | head -1)  (timer $(systemctl is-active kitcut-autoship.timer))"
 systemctl list-units --all --no-legend --plain 'kitcut-studio@*' kitcut-studio.service | awk '{ printf "  %s %s/%s\n", $1, $3, $4 }'
 python3 - <<'PY'
 import glob, json, os
@@ -452,7 +461,34 @@ EOF
     rel="${1:?rollback <sha12> (see: ops.sh releases)}"
     [[ "$rel" =~ ^[0-9a-f]{12}$ ]] || die "not a release: $rel"
     on "test -f $HOME_DIR/releases/$rel/studio/server.py" || die "no release $rel built on $VM"
+    # autoship would see GitHub's head ahead of the release and ship it straight back
+    change_on "echo 'ops.sh rollback to $rel at $(date '+%F %T')' > $HOME_DIR/autoship.paused"
     change_on "cd $REMOTE && STUDIO_HOME=$HOME_DIR bash studio/serve.sh use $rel"
+    echo "autoship is paused (it would ship GitHub's head back): ops.sh autoship on, once fixed"
+    ;;
+
+  autoship)
+    # the ship that follows GitHub's studio-poc (deploy/autoship.py, kitcut-autoship.timer)
+    use="autoship [status | --plan | on | off | now [--retry]]"
+    envs="STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE"
+    py="/usr/bin/python3 $REMOTE/studio/deploy/autoship.py"
+    case "${1:-status}" in
+      status)
+        on "$envs $py --status; rc=\$?; systemctl list-timers --no-pager kitcut-autoship.timer | sed -n 1,2p; exit \$rc"
+        exit $? ;;
+      --plan) on "$envs $py --plan"; exit $? ;;
+      on)
+        change_on "bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR && rm -f $HOME_DIR/autoship.paused && sudo systemctl enable -q --now kitcut-autoship.timer && systemctl is-active kitcut-autoship.timer"
+        exit $? ;;
+      off) change_on "sudo systemctl disable -q --now kitcut-autoship.timer; systemctl is-active kitcut-autoship.timer || true"; exit 0 ;;
+      now)
+        # a look of its own, as the timer's would be: the same unit, so never beside one (and
+        # systemctl start waits for it); --retry first forgets that the head failed
+        retry=""; [ "${2:-}" = --retry ] && retry="$envs $py --forget && "
+        change_on "${retry}sudo systemctl start kitcut-autoship.service; $envs $py --status"
+        exit $? ;;
+      *) die "$use" ;;
+    esac
     ;;
 
   claude-log)

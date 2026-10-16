@@ -1,0 +1,33 @@
+# One look at GitHub's studio-poc (studio/deploy/autoship.py): when it has moved on, and nothing
+# says wait, the studio is shipped the way `ops.sh ship` ships it -- built, tested, a server of its
+# own beside the running one. Started every 2 minutes by kitcut-autoship.timer; a look while the
+# last one still ships never starts (a oneshot that is active is not started again). Installed by
+# install.sh with the @...@ paths filled in; enabled by `ops.sh autoship on`.
+#
+# The system python3, not the venv: it moves the checkout it runs from. The release's build and
+# tests run inside this unit (the servers it starts are units of their own), so the cap is the
+# tests': the template check draws every live template in a browser.
+[Unit]
+Description=KitCut studio: ship studio-poc when it moves on GitHub (studio/deploy/autoship.py)
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor=@HOME@ @REPO@
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+Environment=STUDIO_HOME=@HOME@
+Environment=STUDIO_REPO=@REPO@
+Environment=STUDIO_ENV_FILE=@REPO@/.env
+Environment=TZ=America/Los_Angeles
+Environment=PYTHONUNBUFFERED=1
+Environment=HF_HOME=@REPO@/../hf
+Environment=PATH=/home/@USER@/.local/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=@REPO@
+ExecStart=/usr/bin/python3 @REPO@/studio/deploy/autoship.py
+Nice=5
+CPUWeight=50
+MemoryHigh=5G
+MemoryMax=6G
+TimeoutStartSec=90min

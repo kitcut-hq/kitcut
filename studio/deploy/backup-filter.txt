@@ -21,6 +21,10 @@
 # Which servers are alive on this machine, their heartbeats, and locks: this machine's own.
 - /servers/**
 - /deploy.lock
+# The ship that follows GitHub (deploy/autoship.py): its last decision, its logs and its pause.
+- /autoship.json
+- /autoship.paused
+- /autoship/**
 - *.lock
 # Caches and staging.
 - /cache/**

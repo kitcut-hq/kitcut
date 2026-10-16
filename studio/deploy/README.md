@@ -111,6 +111,55 @@ restart killed it -- recorded *cancelled* -- and, the release having been built 
 *interrupted* record came that night; one server per release is the end of it: a ship no longer
 waits on a film or stops one.
 
+### A push to GitHub ships itself (autoship)
+
+```bash
+bash studio/deploy/ops.sh autoship on        # install and start the timer (lifts a pause)
+bash studio/deploy/ops.sh autoship           # its last decision, and the last ship's log
+bash studio/deploy/ops.sh autoship --plan    # what a look would do now; changes nothing
+bash studio/deploy/ops.sh autoship now [--retry]   # one look now, followed (--retry: a failed head)
+bash studio/deploy/ops.sh autoship off       # stop it; ops.sh ship still works as before
+```
+
+`kitcut-autoship.timer` looks every 2 minutes (`studio/deploy/autoship.py`): when GitHub's
+`studio-poc` has moved past the release that leads, the machine ships it, and a push needs nobody
+at a laptop. **The machine pulls; nothing pushes in.** kc-local is at home with no address anyone
+can reach, and kitcut-hq/kitcut is public, so `git ls-remote https://github.com/...` needs no key:
+the machine still holds no GitHub credentials. A runner that GitHub drives was the other way, and
+it would run a public repository's code on the studio's machine.
+
+A look ships exactly what step 1 above would put there, and the same way: GitHub's head, a
+fast-forward of the bare repo's branch (`update-ref` with the old value), the `studio-stable` tag
+there, the checkout moved as `push.sh` moves it, then `serve.sh release` -- built, tested, a
+server of its own -- and `/api/health` asked which release leads. The decisions, each tested by
+`studio/test_autoship.py` against local repositories and a stub studio:
+
+| it finds | it does |
+|---|---|
+| the head leads already, or `autoship.paused` exists | nothing |
+| a head under 2 minutes old | waits: a burst of pushes is one ship |
+| the `cpu` pool busy (a voice being recorded, a film's sound) | waits, at most 40 min from the head's first look, then ships: a ship's tests take the cores those steps time words on (KI-043), and a ship slows a film but never stops one |
+| `deploy.lock` held (a ship from the laptop), or the studio not answering | waits |
+| only `docs/`, `projects/`, `market/`, `.github/` or the root's `*.md` changed | skips; the next real commit takes them. The studio's own prompts (`studio/*.md`) and the skills do ship |
+| a `requirements*.txt` changed | **holds**: the venv is shared (above), so a person ships it at a quiet moment with `ops.sh ship` |
+| GitHub's branch rewritten (not a fast-forward) | **refuses** |
+| a release that fails its tests | **failed**, once per commit: the next commit is tried, or `now --retry` |
+
+The three in bold are written into the machine's note at once (`machine_note.py`, field
+`autoship`), and the site's watch emails the owner from it (sketch-studio `lib/studiowatch.js`), so
+a push that did not go live is not found days later. `ops.sh status` prints the last decision on
+its own line. Each ship's log is `STUDIO_HOME/autoship/<sha12>-<time>.log` (the last 30).
+
+- **`ops.sh rollback` pauses it** (`STUDIO_HOME/autoship.paused`): otherwise the next look would
+  ship GitHub's head straight back. `ops.sh autoship on` lifts the pause once the fix is pushed.
+- **`ops.sh ship` from a laptop still works**, and both take the same `deploy.lock`. A hand ship
+  is also how a requirements change goes out.
+- **GitHub's `studio-stable` tag** moves only when a laptop ships; the machine's own tag is the
+  truth. `provision.sh` reads GitHub's tag when building a machine again, so a new machine may
+  start one release behind -- and its first look ships the head.
+- **The script is Python on the system `python3`**, not bash in the venv: it moves the checkout
+  it was started from, and bash goes on reading a script as it changes (ops.sh, 2026-10-12).
+
 ### The migration, once per machine
 
 The legacy unit does not set `SO_REUSEPORT` and restarts on every ship, so the first move to one
