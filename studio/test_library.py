@@ -443,6 +443,8 @@ def projects(check):
     check(e["w"] == 800 and e["h"] == 400, "a picture joins the project")
     check(library.picture_thumb("u:alice", P1, "logo"), "with a thumbnail")
     check(library.picture_thumb("u:bob", P1, "logo") is None, "which only its person sees")
+    once = library.add_picture("u:alice", P1, "flash", logo, "png", once=True)
+    check(once.get("once") is True, "a picture added for this episode only is marked once")
     for bad, status in (("Logo", 400), ("1x", 400)):
         try:
             library.add_picture("u:alice", P1, bad, logo, "png")
@@ -465,9 +467,10 @@ def projects(check):
         "and gone",
     )
     check(
-        [p["name"] for p in library.listing("u:alice", P1)["pictures"]] == ["logo"]
+        {p["name"]: p["once"] for p in library.listing("u:alice", P1)["pictures"]}
+        == {"logo": False, "flash": True}
         and "pictures" not in library.listing("u:alice"),
-        "a project's listing has its pictures; the person's own has none",
+        "a project's listing has its pictures, each saying whether it is once-only",
     )
 
     # ------------------------------------------------ the first episode, bringing the person's cast
@@ -479,12 +482,20 @@ def projects(check):
     )
     check(
         os.path.exists(E1.path("inputs", "pic_logo.png"))
+        and os.path.exists(E1.path("inputs", "pic_flash.png"))
         and got["pictures"]
-        == [{"name": "pic_logo", "file": "inputs/pic_logo.png", "w": 800, "h": 400}],
-        "and its pictures, in inputs/",
+        == [
+            {"name": "pic_flash", "file": "inputs/pic_flash.png", "w": 800, "h": 400},
+            {"name": "pic_logo", "file": "inputs/pic_logo.png", "w": 800, "h": 400},
+        ],
+        "and its pictures, in inputs/, including the once-only one for this episode",
     )
     with open(E1.manifest, encoding="utf-8") as f:
         check(json.load(f)["images"].get("pic_logo") == "inputs/pic_logo.png", "in the manifest")
+    check(
+        [p["name"] for p in library.listing("u:alice", P1)["pictures"]] == ["logo"],
+        "the once-only picture left the project the moment it seeded its episode",
+    )
     note = library.note(E1)
     check(
         'episode of the project "Olga\'s Forest"' in note
