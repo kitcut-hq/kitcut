@@ -48,8 +48,10 @@ the day's budget still holds.
                                  its pictures and voice lines. Also GET /api/library/{name}/
                                  thumb.png, DELETE /api/library/{name} (a cast member), each
                                  with ?project=
-    POST /api/library/pictures   {"project", "upload", "name"}: an upload becomes a picture every
-                                 episode of the project gets; GET .../pictures/{name}/thumb.png
+    POST /api/library/pictures   {"project", "upload", "name", "once"}: an upload becomes a
+                                 picture; every future episode of the project gets it, unless
+                                 "once" is true, in which case only the project's next episode
+                                 does, and it is then removed. GET .../pictures/{name}/thumb.png
                                  and DELETE .../pictures/{name}, with ?project=
     POST /api/library/voice      {"project", "film", "line"}: approve line i of one of the
                                  asker's finished episodes as the project's voice line: the
@@ -2038,8 +2040,10 @@ async def style_asset(req):
 
 async def picture_add(req):
     """Put one of the asker's uploads into their project as a picture its episodes get:
-    {"project": id, "upload": "up-...", "name": "logo"}. The upload goes; the picture stays. The
-    upload is the person's (uploader_of: X-Member), the project the workspace's (the client)."""
+    {"project": id, "upload": "up-...", "name": "logo", "once": false}. The upload goes; the
+    picture stays, for every future episode unless "once" is true, in which case only the next
+    one gets it. The upload is the person's (uploader_of: X-Member), the project the workspace's
+    (the client)."""
     try:
         body = await req.json()
     except ValueError:
@@ -2066,6 +2070,7 @@ async def picture_add(req):
             str(body.get("name") or ""),
             uploads.file_of(uploader, meta),
             meta["ext"],
+            bool(body.get("once")),
         )
     except library.PictureError as e:
         return web.json_response({"error": e.text}, status=e.status)

@@ -34,7 +34,10 @@ A project on the site (a series, a channel) has a library of its own, inside its
         index.json cast\\ cast.png films\\      as above, for the project's episodes only
         pictures\\<name>.png|jpg|webp           what the person put in the project: a logo,
         pictures\\<name>.thumb.png              character art... every episode gets them as
-                                               inputs/pic_<name>.*, SK.image('pic_<name>')
+                                               inputs/pic_<name>.*, SK.image('pic_<name>'), unless
+                                               the person chose "this episode only" at upload: that
+                                               one seeds its next episode and is then gone, so a
+                                               later episode needs a picture of its own (once)
         voice\\<key>.wav|mp3                    approved voice lines: recordings of narration
                                                lines its person approved by ear; every episode
                                                gets them in audio/vo/approved/, and a line with
@@ -79,7 +82,7 @@ MEMORY = 5  # earlier films a film may look at
 LISTED = 20  # film ids the index remembers
 MAX_BYTES = 64 * 1024  # one member's code
 FILES = ("film.js", "vo.json", "score.json", "sfx.json", "sounds.json", "paint.json")
-PICTURES = 6  # a project's pictures: every review render carries them all
+PICTURES = 9  # a project's pictures: every review render carries them all
 PICTURE_EXT = ("png", "jpg", "webp")
 VOICE_LINES = 12  # a project's approved voice lines: every episode carries them all
 VOICE_KEY = re.compile(r"^[0-9a-f]{12}$")
@@ -491,8 +494,11 @@ def sounds_note(film):
 
 def _seed_pictures(film, lib, idx):
     """A project's pictures into the film's inputs/, each in the manifest's images as
-    pic_<name> (never a painted scene's name, nor an upload's). [{name, file, w, h}]"""
+    pic_<name> (never a painted scene's name, nor an upload's). [{name, file, w, h}]. A picture
+    added "once" seeds this film and then leaves the project's library, so it never reaches a
+    later episode (the person adds a fresh one for that)."""
     out = []
+    once = []
     for n, e in sorted(idx["pictures"].items()):
         src = os.path.join(dir_of(lib), "pictures", "%s.%s" % (n, e["ext"]))
         if not os.path.exists(src):
@@ -501,11 +507,22 @@ def _seed_pictures(film, lib, idx):
         rel = "inputs/pic_%s.%s" % (n, e["ext"])
         shutil.copyfile(src, film.path(*rel.split("/")))
         out.append({"name": "pic_" + n, "file": rel, "w": e.get("w"), "h": e.get("h")})
+        if e.get("once"):
+            once.append(n)
     if out:
         with open(film.manifest, encoding="utf-8") as f:
             m = json.load(f)
         m.setdefault("images", {}).update({p["name"]: p["file"] for p in out})
         _write_json(film.manifest, m)
+    if once:
+        with _lock(lib):
+            idx2 = load(lib)
+            d = os.path.join(dir_of(lib), "pictures")
+            for n in once:
+                if idx2["pictures"].get(n, {}).get("once"):
+                    del idx2["pictures"][n]
+                    _remove_picture(d, n)
+            _save(lib, idx2)
     return out
 
 
@@ -1086,7 +1103,7 @@ def listing(client, project=None):
     out = {"cast": cast, "films": idx["films"]}
     if project:
         out["pictures"] = [
-            {"name": n} | {k: e.get(k) for k in ("w", "h", "added")}
+            {"name": n, "once": bool(e.get("once"))} | {k: e.get(k) for k in ("w", "h", "added")}
             for n, e in sorted(idx["pictures"].items())
         ]
         out["voice"] = [
@@ -1132,9 +1149,11 @@ class PictureError(Exception):
         self.status, self.text = status, text
 
 
-def add_picture(client, project, name, src, ext):
+def add_picture(client, project, name, src, ext, once=False):
     """Put a picture (an upload's file, checked by uploads.receive) into a project, under a name
-    (the film's SK.image('pic_<name>')); the same name again replaces it. Returns its entry."""
+    (the film's SK.image('pic_<name>')); the same name again replaces it. once=True: this picture
+    seeds only the project's next episode, then is removed on its own (see _seed_pictures) -- the
+    person adds a fresh one for the episode after that. Returns its entry."""
     lib = owner(client, project)
     if not lib or not project:
         raise PictureError(404, "No such project.")
@@ -1167,6 +1186,7 @@ def add_picture(client, project, name, src, ext):
             "w": w,
             "h": h,
             "added": datetime.now().isoformat(timespec="seconds"),
+            **({"once": True} if once else {}),
         }
         _save(lib, idx)
         return {"name": name} | idx["pictures"][name]

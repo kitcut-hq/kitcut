@@ -913,10 +913,12 @@ film it vouches is the person's. That film is an episode:
   the person's. It seeds from there and keeps into there, never into the person's own, and a film
   outside projects never sees a project's. A project made with "bring in my characters" starts
   with a copy of the person's own cast, once.
-- **Pictures.** A project holds up to six (`pictures\<name>.*`), made from uploads with `POST
-  /api/library/pictures`. Every episode gets them as `inputs\pic_<name>.*`, in the manifest as
-  `pic_<name>`; the ones neither film.js nor the cast draws leave before the final render, like
-  unused attachments.
+- **Pictures.** A project holds up to nine (`pictures\<name>.*`), made from uploads with `POST
+  /api/library/pictures {project, upload, name, once}`. Every episode gets them as
+  `inputs\pic_<name>.*`, in the manifest as `pic_<name>`; the ones neither film.js nor the cast
+  draws leave before the final render, like unused attachments. `once: true` seeds only the
+  project's next episode: `_seed_pictures` removes it from the project's library right after, so
+  a later episode needs a picture of its own.
 - **Voice lines.** Recordings of narration lines the person approved by ear, up to twelve
   (`voice\<key>.wav|mp3`), filed under `_sketch.voice_line_key` (the words, the TTS, the voice,
   the model; not the style). Approved from a finished episode's own lines (`POST
