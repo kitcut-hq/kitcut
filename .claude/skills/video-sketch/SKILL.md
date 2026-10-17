@@ -168,6 +168,34 @@ Whose face it is, and whether they agreed to be animated saying these words, is 
 call: ask before putting words in a real person's mouth unless the user is that person or
 has said so.
 
+## Actors: a character an image model draws, animated by swapping
+
+When a film needs a recurring character with a designed look -- a historical figure as a cartoon,
+a mascot, a host -- and nobody's photo, make it an actor (`docs/reference.md`, "Actors"). The
+owner chose this road on 2026-10-17 ("we'll be using this approach in the future").
+
+1. Write a spec beside the project (`actors/<name>.json`): `name`, `describe` (the outfit, the
+   colours, which hand holds what), and `look`, `faces`, `talk`, `poses` only where the defaults
+   (`config/actors/defaults.json`) do not fit. Say in a pose which hand moves if the character
+   holds something. `--plan` prices it (about $1.10 for 45 pieces on the default model).
+2. Run it: three candidates come back in `design/sheet.jpg`. Pick the one with the biggest,
+   clearest face (it is what talks), set `"pick"`, run again. Never pick for the user when they
+   asked to choose; otherwise pick and say which, and that a re-pick redraws the rest (~$1).
+3. Look at `check.jpg` before using the pack: every face, mouth, blink and pose put together, with
+   its drift. Anything over its gate was already redrawn; `--retake <id>` redraws one you dislike.
+   A pose the model barely turned is still marked "turned" if its head was not found: fine.
+4. In the manifest, `"actors": {"<name>": "actors/<name>"}`; give the character's lines `"who"`
+   and a voice in `vo.cast`. In film.js, `SK.actor(name, x, y, h, {face, pose})` with the feet on
+   the ground at x, y; cue faces and poses on words (`SK.w`), and give each change a small squash
+   (`squash`) so the swap reads as acting, not a cut. Faces without mouths (laugh, shocked) hold
+   while the character speaks: put them between lines.
+5. Review stills at 1.5-2x on the face (the atlas is drawn for it) and at mid-word moments; check
+   that a line that is not the actor's leaves its mouth shut.
+
+Traps already paid for: redraws asked for on a transparent background come back with a cloudy
+halo half the time (the script asks for white); muse-image takes no reference and draws a
+stranger every time; a spec that does not say which hand holds a prop gets poses that swap it.
+
 ## A motion-design promo (square, 3D pieces, real people, music only)
 
 The worked example is `projects/websummit-speakers/` (local; docs/reference.md "Motion-design

@@ -697,6 +697,18 @@ options" has the bake-off. After touching any of it, run `python scripts/check-t
 (the rules, then the example film drawn; ~40 s) and `python studio/test_thumbs.py` (end to end,
 ~35 s).
 
+**Actors** are characters an image model designs, animated by swapping pieces: `actor-pack.py`
+reads a spec (`describe`, `look`, `faces`, `talk`, `poses`; defaults and every prompt in
+`config/actors/defaults.json`), has the model draw the figure, then redraw that picture once per
+face, mouth shape, blink and pose, lays every redraw back on its source (shift or affine on the
+body) and redraws any that strayed outside the head (the drift gate), and packs it all into one
+atlas + `pack.json`. A film names it in `"actors"` and draws `SK.actor(name, x, y, h, {face,
+pose})` (`sketch/actors.js`), the mouth moved by its own lines (`who`) like a talking head's.
+Redraws are asked for on white, never transparent: transparent ones came back with a cloudy halo
+half the time. Enrique (padel-tactics) is 45 pieces, $1.13, four minutes; seven models were
+measured for it and gpt-image-2.5-sunburst is the default. After touching any of it, run
+`python scripts/check-actors.py` (no API, seconds).
+
 **Talking heads** are real people from their photos, speaking in any of the looks: a manifest's
 `"heads"` names the photos, `head-rig.py` measures each once on the CPU (MediaPipe landmarks and
 segmentation, kept in `models/heads/`), `vo.cast` + a line's `who` give each speaker a voice, and
@@ -827,6 +839,7 @@ which cannot encode the glyphs at all.
 | `sketch/` | the sketch-film engine (`engine.js`), cast (`props.js`), collage pieces (`collage.js`) and player page (`player.html`); `scripts/_sketch.py` and `_sketchaudio.py` are the Python half, `check-sketch.py` their test |
 | `config/sketch/example/` | a 12 s sketch film to copy into a new project: manifest, `film.js`, score, cues |
 | `config/sketch/heads-example/` | a 9.5 s talking-heads film: two public-domain photos on a 1903 front page, one voice each; `scripts/head-rig.py` makes the rigs, `sketch/heads.js` draws them |
+| `scripts/actor-pack.py` | an image model's character cut into an actor pack (faces, mouths, blinks, poses on one atlas) that `sketch/actors.js` animates; `_actor.py` measures, cuts and packs, `config/actors/defaults.json` holds every prompt, `check-actors.py` is its test |
 | `scripts/resolve-export.py` | the cut as an OTIO/EDL/FCP7 XML timeline plus an SRT, for DaVinci Resolve (free edition); `check-resolve.py` is its test, `docs/davinci-resolve.md` the research behind it |
 | `scripts/route-map.py` | a real map for a film and the route on it as data: paper-relief terrain (OSM streets, real elevation, no labels, no orange) at two zooms that line up, and a GPX/OSM/routed ride as `[u, v, ft, mi, s]` rows a kitcut.ai film can copy; style `config/maps/`, example `config/maps/example-route-map.json` |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
