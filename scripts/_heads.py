@@ -168,11 +168,11 @@ def line_mouth(m, path):
 
 
 def voice_lines(m, timeline):
-    """The page's SK.VO lines for a film with heads: each with its speaker and its mouth. The
-    speaker is the timeline line's `who` (sketch-vo copies it from the script), else the script
-    line's, else the only head when there is one."""
+    """The page's SK.VO lines for a film with heads or actors: each with its speaker and its
+    mouth. The speaker is the timeline line's `who` (sketch-vo copies it from the script), else the
+    script line's, else the only head or actor when there is one."""
     vo_lines = (m.get("vo") or {}).get("lines") or []
-    only = list(m.get("heads") or {})
+    only = list(m.get("heads") or {}) + list(m.get("actors") or {})
     out = []
     for L in timeline["lines"]:
         i = L.get("i", len(out))

@@ -711,6 +711,18 @@ options" has the bake-offs. After touching any of it, run `python scripts/check-
 (the rules, then the example film and the collage example's posters drawn; ~90 s) and
 `python studio/test_thumbs.py` (end to end, ~35 s).
 
+**Actors** are characters an image model designs, animated by swapping pieces: `actor-pack.py`
+reads a spec (`describe`, `look`, `faces`, `talk`, `poses`; defaults and every prompt in
+`config/actors/defaults.json`), has the model draw the figure, then redraw that picture once per
+face, mouth shape, blink and pose, lays every redraw back on its source (shift or affine on the
+body) and redraws any that strayed outside the head (the drift gate), and packs it all into one
+atlas + `pack.json`. A film names it in `"actors"` and draws `SK.actor(name, x, y, h, {face,
+pose})` (`sketch/actors.js`), the mouth moved by its own lines (`who`) like a talking head's.
+Redraws are asked for on white, never transparent: transparent ones came back with a cloudy halo
+half the time. Enrique (padel-tactics) is 45 pieces, $1.13, four minutes; seven models were
+measured for it and gpt-image-2.5-sunburst is the default. After touching any of it, run
+`python scripts/check-actors.py` (no API, seconds).
+
 **Talking heads** are real people from their photos, speaking in any of the looks: a manifest's
 `"heads"` names the photos, `head-rig.py` measures each once on the CPU (MediaPipe landmarks and
 segmentation, kept in `models/heads/`), `vo.cast` + a line's `who` give each speaker a voice, and
@@ -855,6 +867,7 @@ which cannot encode the glyphs at all.
 | `config/sketch/example/` | a 12 s sketch film to copy into a new project: manifest, `film.js`, score, cues |
 | `config/sketch/heads-example/` | a 9.5 s talking-heads film: two public-domain photos on a 1903 front page, one voice each; `scripts/head-rig.py` makes the rigs, `sketch/heads.js` draws them |
 | `studio/template_from_film.py` | a kitcut.ai film into a live template, one command a stage (find, pull, prove, alt, check, spec, make, site, test -- a graded film from one sentence); the `film-to-template` skill walks it |
+| `scripts/actor-pack.py` | an image model's character cut into an actor pack (faces, mouths, blinks, poses on one atlas) that `sketch/actors.js` animates; `_actor.py` measures, cuts and packs, `config/actors/defaults.json` holds every prompt, `check-actors.py` is its test |
 | `scripts/resolve-export.py` | the cut as an OTIO/EDL/FCP7 XML timeline plus an SRT, for DaVinci Resolve (free edition); `check-resolve.py` is its test, `docs/davinci-resolve.md` the research behind it |
 | `scripts/route-map.py` | a real map for a film and the route on it as data: paper-relief terrain (OSM streets, real elevation, no labels, no orange) at two zooms that line up, and a GPX/OSM/routed ride as `[u, v, ft, mi, s]` rows a kitcut.ai film can copy; style `config/maps/`, example `config/maps/example-route-map.json` |
 | `scripts/place-map.py` | the real street map of one address for a film (OpenStreetMap streets, buildings, parks, water, coast; no lettering, no pin) and where the address is on it: the pin, its own street, real street names with a spot each; says how exactly the address was found and refuses a street no map has; style `config/maps/street.json`, example `config/maps/example-place-map.json`; `_map.py` is what it shares with `route-map.py`, `check-map.py` their test |

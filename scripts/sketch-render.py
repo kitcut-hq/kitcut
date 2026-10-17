@@ -83,6 +83,7 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
 import _encode  # noqa: E402
 import _heads  # noqa: E402
+import _actor  # noqa: E402
 import _project  # noqa: E402
 import _sketch  # noqa: E402
 
@@ -131,7 +132,7 @@ def vo_timeline(m):
         return {"lines": []}
     with open(p, encoding="utf-8") as f:
         tl = json.load(f)
-    if m.get("heads"):  # talking heads: each line's speaker and the mouth its audio moves
+    if m.get("heads") or m.get("actors"):  # each line's speaker and the mouth its audio moves
         return {"lines": _heads.voice_lines(m, tl)}
     return {
         "lines": [{"start": L["start"], "end": L["end"], "words": L["words"]} for L in tl["lines"]]
@@ -185,6 +186,9 @@ def module_scripts(m):
     names = list(m.get("modules") or [])
     if m.get("heads") and "heads" not in names:  # rigs need the module that draws them
         names.append("heads")
+    for need in ("heads", "actors") if m.get("actors") else ():  # actors talk with heads' SK.talk
+        if need not in names:
+            names.append(need)
     for name in names:
         _sketch.safe_name(name, "module")
         for d in (m["_engine"], SKETCH):
@@ -198,6 +202,9 @@ def module_scripts(m):
     rigs = _heads.rigs_script(m)  # the talking heads' rigs; nothing for a film without
     if rigs:
         out.append(rigs)
+    packs = _actor.film_script(m, _sketch.rel)  # the actors' packs (actor-pack.py)
+    if packs:
+        out.append(packs)
     return "\n".join(out)
 
 
@@ -382,6 +389,7 @@ def bundle(m, audio=True, preview=None):
                     **m.get("images", {}),
                     **tail.get("images", {}),
                     **(_heads.images(m) if m.get("heads") else {}),
+                    **(_actor.film_images(m, _sketch.rel) if m.get("actors") else {}),
                 }.items()
             }
             if not bare
@@ -543,6 +551,9 @@ class Session:
             "--user-data-dir=" + prof,
             "--window-size=%d,%d" % self.size,
         ]
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            # Chromium will not start as root with its sandbox on (a cloud container, a CI box)
+            cmd.append("--no-sandbox")
         if os.environ.get("SKETCH_RENDER_OFFLINE") == "1":
             # no network at all: every request that is not to this page's own loopback server
             # goes to a proxy that is not there, names never resolve, and WebRTC stays off
