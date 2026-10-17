@@ -9,7 +9,8 @@ makes again -- read here by a small matcher for the part of rclone's patterns th
 folder the studio's code makes at the top of its home is named in that file, so a new one cannot
 be added without deciding. A pass never carries the key on its command line, files what it
 replaces under the day's history, stops at a limit of removals, and refuses a home that is not
-there. The status says "stale" for a pass too old, a nightly pass too old, and a pass that failed.
+there. The status says "stale" for a pass too old and a nightly pass too old; a failed pass
+only adds why.
 """
 
 import os
@@ -244,10 +245,14 @@ def staleness():
     check(any("min ago" in s for s in backup.stale(late, now)), "two hours without a pass is")
     old = dict(good, last_full="2026-10-10T03:30:00")
     check(any("full pass" in s for s in backup.stale(old, now)), "two days without a full pass is")
-    failed = dict(good, ok=False, errors=["home: AccessDenied"])
+    failed = dict(good, ok=False, errors=["recent: md5 hashes differ"])
+    check(
+        backup.stale(failed, now) == [], "one failed pass, ten minutes after a good one: not stale"
+    )
+    failed = dict(late, ok=False, errors=["home: AccessDenied"])
     check(
         any("AccessDenied" in s for s in backup.stale(failed, now)),
-        "a pass that failed says why",
+        "a mirror behind by age after a failed pass says why",
         backup.stale(failed, now),
     )
     log = "\n".join(

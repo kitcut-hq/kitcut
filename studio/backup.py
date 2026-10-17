@@ -305,7 +305,10 @@ def stale(st, now=None):
         out.append("no full pass has gone through yet")
     elif f > FULL_MAX_H * 60:
         out.append("the last full pass was %d h ago" % (f / 60))
-    if st and not st.get("ok"):
+    # one failed pass is not news: a file a film is still writing changes under the upload
+    # ("md5 hashes differ") and the next pass sends it. A failure only counts once the mirror
+    # is behind by age, and then it says why.
+    if out and st and not st.get("ok"):
         out.append("the last pass failed: %s" % "; ".join(st.get("errors") or ["?"])[:300])
     return out
 
