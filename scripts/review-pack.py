@@ -197,6 +197,8 @@ def story(path, out, seconds, lines):
     tiles, tmp, n = [], os.path.join(out, "_story.jpg"), int(-(-seconds // STORY_STEP))
     for k in range(n):
         t0, t1 = k * STORY_STEP, min((k + 1) * STORY_STEP, seconds)
+        if tiles and t1 - t0 < 0.5:  # a sliver at the very end (18.005 s of film): no frame to show there
+            break
         still_frame(path, (t0 + t1) / 2, tmp, STORY_TILE)
         stamp = "%s to %s" % (clock(t0), clock(t1))
         tiles.append((np.asarray(Image.open(tmp).convert("RGB")), stamp, said_in(lines, t0, t1)))
