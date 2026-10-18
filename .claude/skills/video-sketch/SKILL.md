@@ -203,6 +203,11 @@ owner chose this road on 2026-10-17 ("we'll be using this approach in the future
    while the character speaks: put them between lines.
 5. Review stills at 1.5-2x on the face (the atlas is drawn for it) and at mid-word moments; check
    that a line that is not the actor's leaves its mouth shut.
+6. **For kitcut.ai films**, put the pack into the channel's project, once: `bash
+   studio/deploy/ops.sh actor-put <p-id> <pack folder> --dry-run`, then without `--dry-run`
+   (`ops.sh actors <p-id>` lists them). Every next episode of that project gets it, and its Claude
+   is told who it is, its faces and poses, and how to make it speak. Name the actor in the
+   episode's idea when it should be in it ("Enrique tells how he built the first court").
 
 Traps already paid for: redraws asked for on a transparent background come back with a cloudy
 halo half the time (the script asks for white); muse-image takes no reference and draws a

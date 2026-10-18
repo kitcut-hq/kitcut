@@ -721,7 +721,10 @@ pose})` (`sketch/actors.js`), the mouth moved by its own lines (`who`) like a ta
 Redraws are asked for on white, never transparent: transparent ones came back with a cloudy halo
 half the time. Enrique (padel-tactics) is 45 pieces, $1.13, four minutes; seven models were
 measured for it and gpt-image-2.5-sunburst is the default. After touching any of it, run
-`python scripts/check-actors.py` (no API, seconds).
+`python scripts/check-actors.py` (no API, seconds). On kitcut.ai an actor belongs to a project:
+`ops.sh actor-put <p-id> <pack>` puts it in, and every next episode gets it
+(`studio/actor_put.py`, `library._seed_actors`, `studio/actors.md`; after touching any of it run
+`python studio/test_actors.py`).
 
 **Talking heads** are real people from their photos, speaking in any of the looks: a manifest's
 `"heads"` names the photos, `head-rig.py` measures each once on the CPU (MediaPipe landmarks and

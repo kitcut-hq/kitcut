@@ -190,7 +190,7 @@ What a viewer takes for a mistake, in any look, and what its owner sends a film 
 
 {LOOK_RULES}
 
-{PEOPLE}# Rules the engine depends on
+{PEOPLE}{ACTORS}# Rules the engine depends on
 
 - Every frame is a pure function of `t`. No state kept between frames, no `Math.random`
   (use `SK.rnd(seed)`), no timers, no DOM, no network (the renderer is offline).

@@ -509,7 +509,10 @@ def projects(check):
     check(note in text and "the project's brief" in text, "and is in ask()")
     write(E1, "cast/owl.js", OWL)
     write(E1, "film.js", scene("SK.cast.owl.draw(0, 0); SK.image('pic_logo', 0, 0, 200);"))
-    check(agent.drop_unused_uploads(E1) == [], "a picture film.js draws stays")
+    check(
+        agent.drop_unused_uploads(E1) == ["pic_flash"],
+        "a picture film.js draws stays; the once-only one it never drew leaves the manifest",
+    )
     kept = finish(E1)
     check(kept["saved"] == ["owl"], "the episode's new member is kept (%s)" % kept)
     pidx = library.load(("u:alice", P1))

@@ -5343,7 +5343,10 @@ its drift: look at it before using a pack. `state.json` keeps what each picture 
 **In a film**: `"actors": {"enrique": "actors/enrique"}` in the manifest (the pack's folder).
 sketch-render inlines `SK.ACTORS` and the atlas pages (`SK.IMG['actor:<name>:<n>']`), loads
 `sketch/heads.js` (for `SK.talk`) and `sketch/actors.js`, and gives every voice line its speaker
-and mouth track exactly as for talking heads (a line's `who`, `vo.cast`). Then
+and mouth track as for talking heads (a line's `who`, `vo.cast`) -- with one difference: a line
+with no `who` is never given to a film's only actor, as it is to its only head. An actor is a
+character in a narrated film, and the first test film moved Enrique's mouth on the narrator's line
+because of that fallback (2026-10-18). Then
 `SK.actor(name, x, y, h, {face, pose, mouth, who, blink, flip, tilt, squash, steps, alpha})`
 draws it standing on x, y, the figure h tall; it returns its box and its head's box.
 The mouth is chosen on twos from the voice: shut under 0.15 open, round when the voice is
@@ -5353,9 +5356,31 @@ its speaker talks: cue it between lines. `padel-tactics/films/05-history/actor-t
 18-second example (five lines, a narrator's line that leaves his mouth shut, a face and a pose on
 each cue word): 61 s to render on a CPU.
 
-**Not yet**: Sketch Studio does not attach a pack to a film it makes (a studio film would need
-`Film.create` to copy the pack and set `actors`, the way people's rigs are attached), and
-`sketch/thumb.js` does not see actors when it looks for a thumbnail's pictures.
+`pack.json` carries `about` (the spec's `describe`) and each pose's own words, for whoever writes
+the film -- the studio hands them to Claude.
+
+**In the studio (kitcut.ai)**: an actor belongs to a **project**, like its pictures, and is put
+in by hand -- no film makes one, and the site has no button for it yet:
+
+```bash
+bash studio/deploy/ops.sh actor-put <p-id> <pack folder> [--dry-run] [--replace] [--name N] [--about TEXT]
+bash studio/deploy/ops.sh actors <p-id> [--remove <name>]
+```
+
+`studio/actor_put.py` (what those run on the VM) takes `pack.json`, the atlas pages and
+`check.jpg` -- never the raw pictures or the spend log -- after `library.read_pack` has checked
+that every piece its faces and poses name is on a page it holds, that its pages are its own, and
+that the whole is under 32 MB (a project holds 4). It finds the project's library off one of its
+episodes, so a project needs one finished episode first. Each next episode
+(`library._seed_actors`) gets the pack in `actors/<name>/`, the manifest's `"actors"`, the
+`actors` capability (`film.CAPS`: `heads.js` and `actors.js` in its engine copy), a line per
+actor in the first message (who it is, its sheet, its faces, which it speaks in, its poses and
+which are turned) and `studio/actors.md` in its system prompt -- which only a film with actors
+carries, so every other film's prompt is byte for byte what it was. Claude may Read the pack and
+never write it. `studio/test_actors.py` holds all of it, a render included.
+
+**Not yet**: `sketch/thumb.js` does not see actors when it looks for a thumbnail's pictures, and a
+person cannot add an actor from the site or the MCP (only an operator can, above).
 
 ### Sketch Studio: a prompt box that makes a short film (`studio/`)
 

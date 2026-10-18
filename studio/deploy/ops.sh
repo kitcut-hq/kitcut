@@ -95,6 +95,11 @@
 #                                                     a back-fill: cast files (places a series
 #                                                     drew in film.js) into its library as the
 #                                                     next versions (studio/library_put.py)
+#   bash studio/deploy/ops.sh actor-put <project> [--dry-run] [--replace] [--name N] <pack dir>
+#                                                     an actor pack (scripts/actor-pack.py) into a
+#                                                     project: each next episode gets it as
+#                                                     SK.actor('<name>') (studio/actor_put.py)
+#   bash studio/deploy/ops.sh actors <project> [--remove <name>]   its actors, or one taken out
 #   bash studio/deploy/ops.sh replace <film-id> <folder>   a remade film takes its place (same id
 #                                                     and page; the old one to backups/)
 #   bash studio/deploy/ops.sh delete <film-id>        a film deleted for good: its copy online, its
@@ -814,6 +819,44 @@ with tarfile.open(fileobj=sys.stdout.buffer, mode='w|') as t:
     for f in "${files[@]}"; do on "cat > $stage/cast/$(basename "$f")" < "$f"; done
     names=$(for f in "${files[@]}"; do printf ' %s/cast/%s' "$stage" "$(basename "$f")"; done)
     on "sudo systemd-run --wait --pipe --quiet --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=2G -p MemoryMax=3G -p Nice=10 $UNIT_ENV $REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/library_put.py --project $project$flags$names; rc=\$?; rm -rf $stage; exit \$rc"
+    ;;
+
+  actor-put)
+    # an actor pack (the folder scripts/actor-pack.py wrote: pack.json, atlas pages, check.jpg)
+    # into a project's library: each next episode gets it (studio/actor_put.py checks it first)
+    use="actor-put <project> [--dry-run] [--replace] [--name N] [--about TEXT] <pack dir>"
+    project="${1:?$use}"; shift
+    [[ "$project" =~ ^p-[a-z0-9]+$ ]] || die "not a project id: $project"
+    args=(); src=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --dry-run|--replace) args+=("$1") ;;
+        --name|--about) args+=("$1" "${2:?$use}"); shift ;;
+        *) [ -f "$1/pack.json" ] || die "$1 has no pack.json (python scripts/actor-pack.py --spec ...)"; src="$1" ;;
+      esac
+      shift
+    done
+    [ -n "$src" ] || die "$use"
+    [ "$DRY" = 1 ] && args+=(--dry-run)
+    stage="$HOME_DIR/tmp/actor-put-$(date +%Y%m%d-%H%M%S)"
+    on "mkdir -p $stage/pack"
+    for f in "$src"/pack.json "$src"/atlas-*.webp "$src"/atlas-*.png "$src"/check.jpg; do
+      if [ -f "$f" ]; then on "cat > $stage/pack/$(basename "$f")" < "$f"; fi
+    done
+    q=""; for a in "${args[@]}"; do q="$q $(printf %q "$a")"; done
+    on "sudo systemd-run --wait --pipe --quiet --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=1G -p MemoryMax=2G -p Nice=10 $UNIT_ENV $REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/actor_put.py --project $project$q $stage/pack; rc=\$?; rm -rf $stage; exit \$rc"
+    ;;
+
+  actors)
+    # a project's actors (actor-put puts them in), or --remove <name>: its next episodes go without
+    project="${1:?actors <project> [--remove <name>]}"; shift
+    [[ "$project" =~ ^p-[a-z0-9]+$ ]] || die "not a project id: $project"
+    flags="--list"
+    if [ "${1:-}" = "--remove" ]; then
+      [[ "${2:-}" =~ ^[a-z][a-z0-9_]{0,30}$ ]] || die "actors $project --remove <name>"
+      flags="--remove $2"; [ "$DRY" = 1 ] && flags="$flags --dry-run"
+    fi
+    on "sudo systemd-run --wait --pipe --quiet --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=1G -p MemoryMax=2G -p Nice=10 $UNIT_ENV $REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/actor_put.py --project $project $flags"
     ;;
 
   replace)

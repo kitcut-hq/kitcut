@@ -42,6 +42,10 @@ A project on the site (a series, a channel) has a library of its own, inside its
                                                lines its person approved by ear; every episode
                                                gets them in audio/vo/approved/, and a line with
                                                the same words and voice plays one (sketch-vo.py)
+        actors\\<name>\\pack.json atlas-0.webp   actor packs (scripts/actor-pack.py), put in by hand
+            check.jpg                          (studio/actor_put.py): every episode gets each in
+                                               actors/<name>/, the manifest's "actors" and the
+                                               "actors" capability (_seed_actors)
         canon.json                              the episode log, one entry per finished episode
                                                (studio/canon.py): every episode reads the whole
                                                of it (canon_note), not only the last MEMORY
@@ -67,7 +71,17 @@ import brandkit
 import clients
 import locks
 import stylekit
-from film import CAST_USE, HOME, PROJECT_ID, PROJECT_KEEPS, VO_PINNED, Film, _write_json
+from film import (
+    CAST_USE,
+    HOME,
+    KIT,
+    PROJECT_ID,
+    PROJECT_KEEPS,
+    VO_PINNED,
+    Film,
+    _write_json,
+    modules,
+)
 
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
@@ -191,6 +205,7 @@ def load(lib):
     idx.setdefault("cast", {})
     idx.setdefault("pictures", {})
     idx.setdefault("voice", {})
+    idx.setdefault("actors", {})
     if "films" not in idx:
         idx["films"] = []
         for f in [] if project else Film.all():
@@ -370,6 +385,11 @@ def seed(film):
             print("film %s: style not seeded: %s" % (film.id, e), file=sys.stderr, flush=True)
             got["style"] = None
         got["sounds"] = _seed_sounds(film, lib)
+        try:  # the project's actors (actor packs): the film is made without them rather than not
+            got["actors"] = _seed_actors(film, lib, idx)
+        except Exception as e:  # noqa: BLE001
+            print("film %s: actors not seeded: %s" % (film.id, e), file=sys.stderr, flush=True)
+            got["actors"] = []
     film.update(library=got)
     return got
 
@@ -638,6 +658,8 @@ def note(film):
             "The project's pictures (Read one to see it; on screen: SK.image('<name>', x, y, w)):",
         ]
         out += ["- %s (%sx%s): %s" % (p["name"], p.get("w"), p.get("h"), p["file"]) for p in pics]
+    if got.get("actors"):
+        out += ["" if out else None, actors_note(got["actors"])]
     if voice:
         out += [
             "" if out else None,
@@ -1110,6 +1132,10 @@ def listing(client, project=None):
             {"key": k} | e
             for k, e in sorted(idx["voice"].items(), key=lambda x: x[1].get("added") or "")
         ]
+        out["actors"] = [
+            {"name": n} | {k: e.get(k) for k in ("about", "faces", "poses", "added")}
+            for n, e in sorted(idx["actors"].items())
+        ]
     return out
 
 
@@ -1416,3 +1442,219 @@ def _seed_voice(film, lib, idx):
     if index:
         _write_json(os.path.join(d, "index.json"), index)
     return out
+
+
+# ---------------------------------------------------------------- a project's actors
+# Characters an image model drew, cut into packs by scripts/actor-pack.py: the figure, a patch for
+# each face, mouth shape and blink, and whole-figure poses, on atlas pages (sketch/actors.js draws
+# them; docs/reference.md, "Actors"). A pack is put into a project by hand (studio/actor_put.py,
+# `ops.sh actor-put`), never by a film, and every episode gets each one: actors/<name>/ in its
+# folder, the manifest's "actors", and the "actors" capability -- heads.js and actors.js in its
+# engine copy, studio/actors.md in its prompt.
+ACTORS = 4  # a project's actors: every episode carries them all (an atlas page is ~1.5 MB)
+ACTOR_PAGE = re.compile(r"^atlas-\d{1,2}\.(webp|png)$")
+ACTOR_BYTES = 32 * 1024 * 1024  # one pack's files, all told
+ACTOR_SHEET = "check.jpg"  # every piece laid out and named (actor-pack.py): what Claude Reads
+
+
+class ActorError(PictureError):
+    """Why a pack was not taken: a status, and words for whoever put it."""
+
+
+def _pack_pieces(P):
+    """Every piece a pack's faces and poses name."""
+    yield "base"
+    for group in (P["faces"], P["poses"]):
+        for e in group.values():
+            if e.get("piece"):
+                yield e["piece"]
+            for m in (e.get("mouths") or {}).values():
+                yield m["piece"]
+            if e.get("blink"):
+                yield e["blink"]["piece"]
+
+
+def read_pack(src):
+    """The pack actor-pack.py wrote in folder src, checked: (pack, the files that make it).
+    Raises ActorError for a folder that is not one, or one too big for every episode to carry."""
+    try:
+        with open(os.path.join(src, "pack.json"), encoding="utf-8") as f:
+            P = json.load(f)
+    except (OSError, ValueError) as e:
+        raise ActorError(400, "%s: no pack.json (scripts/actor-pack.py makes one)" % src) from e
+    if not isinstance(P, dict) or P.get("v") != 1:
+        raise ActorError(400, "%s: pack.json is not an actor pack (v1)" % src)
+    try:
+        pages, pieces = P["pages"], P["pieces"]
+        ok = (
+            isinstance(P["figure"]["height"], (int, float))
+            and isinstance(P["faces"], dict)
+            and isinstance(P["poses"], dict)
+            and pages
+            and all(isinstance(p, str) and ACTOR_PAGE.match(p) for p in pages)
+        )
+        missing = [n for n in _pack_pieces(P) if n not in pieces]
+        ok = ok and all(0 <= int(pc["p"]) < len(pages) for pc in pieces.values())
+    except (KeyError, TypeError, ValueError, AttributeError) as e:
+        raise ActorError(400, "%s: pack.json is not a whole actor pack: %s" % (src, e)) from e
+    if not ok:
+        raise ActorError(400, "%s: pack.json's pages or pieces are not an actor pack's" % src)
+    if missing:
+        raise ActorError(400, "%s: pack.json names pieces it does not hold: %s" % (src, missing))
+    files = ["pack.json", *pages] + (
+        [ACTOR_SHEET] if os.path.isfile(os.path.join(src, ACTOR_SHEET)) else []
+    )
+    gone = [f for f in files if not os.path.isfile(os.path.join(src, f))]
+    if gone:
+        raise ActorError(400, "%s: missing %s" % (src, ", ".join(gone)))
+    size = sum(os.path.getsize(os.path.join(src, f)) for f in files)
+    if size > ACTOR_BYTES:
+        raise ActorError(
+            400, "%s: %.1f MB, over %d MB" % (src, size / 1e6, ACTOR_BYTES // (1024 * 1024))
+        )
+    return P, files
+
+
+def _talks(P):
+    """The faces of a pack that have mouths of their own: the ones it can speak in."""
+    return [f for f, e in P["faces"].items() if e.get("mouths")]
+
+
+def put_actor(lib, src, name=None, replace=False, about=None):
+    """Put the pack in folder src into the project library lib as actor `name` (the pack's own
+    name by default): its next episodes get it. A name the project already has is refused unless
+    replace. about: who it is, for the episodes' Claude (default: the pack's own, from its spec's
+    describe). Returns its entry."""
+    if not (isinstance(lib, tuple) and lib[1]):
+        raise ActorError(400, "actors belong to a project")
+    P, files = read_pack(src)
+    name = name or str(P.get("name") or "")
+    if not NAME.match(name):
+        raise ActorError(
+            400,
+            "an actor's name is lowercase letters, digits and _, starting with a letter: %r" % name,
+        )
+    with _lock(lib):
+        idx = load(lib)
+        if name in idx["actors"] and not replace:
+            raise ActorError(409, "the project already has an actor %r (replace it?)" % name)
+        if name not in idx["actors"] and len(idx["actors"]) >= ACTORS:
+            raise ActorError(409, "a project holds up to %d actors" % ACTORS)
+        d = os.path.join(dir_of(lib), "actors", name)
+        new = d + ".new"
+        shutil.rmtree(new, ignore_errors=True)
+        os.makedirs(new)
+        for f in files:
+            shutil.copyfile(os.path.join(src, f), os.path.join(new, f))
+        shutil.rmtree(d, ignore_errors=True)
+        os.rename(new, d)
+        with open(os.path.join(d, "pack.json"), "rb") as f:
+            digest = hashlib.sha256(f.read()).hexdigest()[:16]
+        idx["actors"][name] = {
+            "about": " ".join(str(about if about is not None else P.get("about") or "").split())[
+                :600
+            ],
+            "faces": list(P["faces"]),
+            "talk": _talks(P),
+            "poses": list(P["poses"]),
+            "pages": len(P["pages"]),
+            "bytes": sum(os.path.getsize(os.path.join(d, f)) for f in files),
+            "hash": digest,
+            "built": P.get("built_utc"),
+            "added": datetime.now().isoformat(timespec="seconds"),
+        }
+        _save(lib, idx)
+        return {"name": name} | idx["actors"][name]
+
+
+def delete_actor(lib, name):
+    """Take an actor out of a project, files and all. False when there is no such actor."""
+    if not (isinstance(lib, tuple) and lib[1]) or not NAME.match(name or ""):
+        return False
+    with _lock(lib):
+        idx = load(lib)
+        if name not in idx["actors"]:
+            return False
+        del idx["actors"][name]
+        shutil.rmtree(os.path.join(dir_of(lib), "actors", name), ignore_errors=True)
+        _save(lib, idx)
+    return True
+
+
+def _seed_actors(film, lib, idx):
+    """A project's actors into the film: actors/<name>/ (the pack, its pages, its sheet), the
+    manifest's "actors", and the "actors" capability in its record, with the modules it brings
+    copied into its engine (agent.system_prompt reads the caps when Claude starts, and gives the
+    film studio/actors.md). The packs are copied under the library's lock, so a pack being
+    replaced (put_actor) reaches the film whole, old or new. [{name, about, faces, talk, poses,
+    turned, sheet}]"""
+    out, packs = [], {}
+    if not idx["actors"]:
+        return []
+    with _lock(lib):
+        now = load(lib)["actors"]
+        for n in sorted(now):
+            src = os.path.join(dir_of(lib), "actors", n)
+            try:
+                P, files = read_pack(src)
+            except ActorError as e:
+                print("film %s: actor %s not seeded: %s" % (film.id, n, e.text), file=sys.stderr)
+                continue
+            dst = film.path("actors", n)
+            os.makedirs(dst, exist_ok=True)
+            for f in files:
+                shutil.copyfile(os.path.join(src, f), os.path.join(dst, f))
+            packs[n] = "actors/" + n
+            out.append(
+                {
+                    "name": n,
+                    "about": now[n].get("about") or "",
+                    "faces": list(P["faces"]),
+                    "talk": _talks(P),
+                    "poses": list(P["poses"]),
+                    # a pose that has turned from the picture: no faces on it, mouths of its own
+                    "turned": [p for p, e in P["poses"].items() if not e.get("face_at")],
+                    "sheet": "actors/%s/%s" % (n, ACTOR_SHEET) if ACTOR_SHEET in files else None,
+                }
+            )
+    if not out:
+        return []
+    caps = film.caps + (() if "actors" in film.caps else ("actors",))
+    for name in modules(caps):  # its own engine copy, as Film.create makes one
+        if not os.path.exists(film.path("engine", name + ".js")):
+            shutil.copyfile(
+                os.path.join(KIT, "sketch", name + ".js"), film.path("engine", name + ".js")
+            )
+    with open(film.manifest, encoding="utf-8") as f:
+        m = json.load(f)
+    m.setdefault("actors", {}).update(packs)
+    have = list(m.get("modules") or [])
+    m["modules"] = have + [x for x in modules(caps) if x not in have]
+    _write_json(film.manifest, m)
+    film.update(caps=list(caps))
+    return out
+
+
+def actors_note(actors):
+    """The project's actors, for the first message ("" for none): who each is, what it holds."""
+    if not actors:
+        return ""
+    out = [
+        "The project's actors (see \"The actors\"), in actors/: Read each one's sheet to see "
+        "every face and pose before you use it."
+    ]
+    for a in actors:
+        turned = set(a.get("turned") or ())
+        poses = ", ".join(p + (" (turned)" if p in turned else "") for p in a["poses"])
+        out.append(
+            "- %s%s%s. Faces: %s (it speaks in %s). Poses: %s."
+            % (
+                a["name"],
+                ": " + a["about"] if a.get("about") else "",
+                " Sheet: " + a["sheet"] if a.get("sheet") else "",
+                ", ".join(a["faces"]),
+                ", ".join(a.get("talk") or []) or "none: its mouth never moves",
+                poses or "none",
+            )
+        )
+    return "\n".join(out)
