@@ -280,6 +280,10 @@ def spec_and_pack(tmp):
         json.dumps(P["report"].get("pose:wave")),
     )
     check(
+        "pack.json says who it is and what each pose is, in the spec's words",
+        P.get("about") == "A tester." and P["poses"]["wave"].get("about") == a["poses"]["wave"],
+    )
+    check(
         "the atlas pages and the check sheet are written",
         all(os.path.exists(os.path.join(out, n)) for n in P["pages"])
         and os.path.exists(os.path.join(out, "check.jpg")),
@@ -302,6 +306,26 @@ def bundle(tmp, pack_dir):
         and "sourceURL=sketch/actors.js" in page
         and '"actor:tester:0": "data:image/webp' in page
         and "sourceURL=sketch/heads.js" in page,
+    )
+    odd = os.path.join(tmp, "odd")
+    shutil.copytree(pack_dir, odd)
+    P = json.load(open(os.path.join(odd, "pack.json"), encoding="utf-8"))
+    json.dump(
+        dict(P, about="a </script><b>bold</b> tester"), open(os.path.join(odd, "pack.json"), "w")
+    )
+    tag = _actor.film_script({"actors": {"odd": odd}}, lambda m, p: p)
+    check(
+        "an about that says </script> cannot close the page's script",
+        tag.count("</script>") == 1 and tag.endswith("</script>"),
+    )
+    import _heads  # noqa: PLC0415
+
+    tl = {"lines": [{"i": i, "start": i, "end": i + 0.8, "words": []} for i in range(3)]}
+    m = {"actors": {"tester": "x"}, "vo": {"lines": [{"who": "tester"}, {}, {"who": "tester"}]}}
+    check(
+        "a narrator's line never moves the only actor's mouth (it would a lone head's)",
+        [L["who"] for L in _heads.voice_lines(m, tl)] == ["tester", "", "tester"]
+        and [L["who"] for L in _heads.voice_lines({"heads": {"p1": {}}}, tl)] == ["p1"] * 3,
     )
 
 

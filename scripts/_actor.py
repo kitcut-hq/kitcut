@@ -328,7 +328,9 @@ def film_script(m, rel):
     body = {n: P for n, (P, _) in film_actors(m, rel).items()}
     if not body:
         return ""
-    return "<script>\nSK.ACTORS = %s;\n</script>" % json.dumps(body, separators=(",", ":"))
+    # "</" never reaches the page as written: an about's words could otherwise close the script
+    text = json.dumps(body, separators=(",", ":")).replace("</", "<\\/")
+    return "<script>\nSK.ACTORS = %s;\n</script>" % text
 
 
 def film_images(m, rel):

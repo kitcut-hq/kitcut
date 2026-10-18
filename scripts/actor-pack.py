@@ -419,6 +419,8 @@ def pack(a, book):
         "model": a["model"],
         "built_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "scale": round(k, 4),
+        # who it is, for a film's writer (the studio tells an episode's Claude: library.note)
+        "about": a.get("describe") or "",
     }
     P["figure"] = {
         "w": sc(bx1 - bx0),
@@ -542,6 +544,8 @@ def pack(a, book):
                 "  WARNING pose %s: colours unlike the base (%.2f): is it still the same character?"
                 % (p, same)
             )
+        if isinstance(a["poses"].get(p), str):  # what the pose is, in the spec's words
+            entry["about"] = a["poses"][p]
         poses[p] = entry
     pages, where = _actor.pack_atlas(pieces, a["pack"]["page"])
     from PIL import Image  # noqa: PLC0415 -- pillow only for the WebP pages
