@@ -895,8 +895,12 @@ def _describe(name, inp, film):
     return name
 
 
+# Claude Code itself will not fetch some sites ("unable to fetch from www.reddit.com"), and x.com
+# answers 402; the page tool's browser reads both
 REFUSED = re.compile(
-    r"HTTP (?:401|403|429|451)\b|\bForbidden\b|access denied|bot protection", re.IGNORECASE
+    r"HTTP (?:401|402|403|429|451)\b|\bForbidden\b|access denied|bot protection"
+    r"|unable to fetch from",
+    re.IGNORECASE,
 )
 
 

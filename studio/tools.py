@@ -1293,8 +1293,9 @@ class Tools:
             )(wrap(lambda a: self.picture(a.get("url"), a.get("name"), a.get("width")))),
             tool(
                 "page",
-                "Open a web page in a real browser (it also reads pages WebFetch is refused) and "
-                "photograph it (width x height px, 1920x1080 unless given; a taller one takes "
+                "Open a web page in a real browser (it also reads pages WebFetch is refused, such "
+                "as Reddit and X) and photograph it (width x height px, 1920x1080 unless "
+                "given; a taller one takes "
                 "more of the page) into web/<name>.jpg, shown with SK.image('web_<name>', x, y, "
                 "w). Reports what the page is made of, measured in it: the fonts that set its "
                 "headings, text and buttons, the web fonts it loaded, its text and painted "
