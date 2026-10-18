@@ -5268,6 +5268,120 @@ python scripts/speaker-loops.py --page <film>.html --video <film>.mp4 --outdir <
     --cycle cycle --trim-in 0.2 --only crayon,papercut,news,woodcut,watercolour,popart,courtroom,chalk,sticker,felt,knit,peg,sock
 ```
 
+### Actors: characters an image model draws, animated by swapping pieces (`actor-pack.py`, `sketch/actors.js`)
+
+A character designed by an image model, played in a sketch film like a paper cut-out puppet: the
+model draws the figure once and then redraws *that picture* with one change at a time -- each face
+it pulls, each mouth shape on the faces that talk, a blink, each pose -- and the film swaps those
+pieces, its mouth moved by its own voice. The look is the model's own (texture, shading,
+painting); what it cannot do is anything nobody drew (a walk cycle, a new angle), so the pack
+draws the moves a film keeps needing up front. A character drawn in code (`sketch/props.js`, a
+film's `cast/*.js`) is the other road: any pose, at the price of a simpler look.
+
+```powershell
+python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json --plan        # what it needs, what it costs
+python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json               # 3 candidates -> design/sheet.jpg, then stops
+#   set "pick": 1 in the spec (the one to keep), then:
+python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json --cap 3 --jobs 6
+python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json --retake face:angry
+python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json --pack-only   # re-cut, free
+python scripts/check-actors.py                                                      # the self-test
+```
+
+**The spec** names the character (`name`, `describe`) and overrides any default in
+`config/actors/defaults.json`, where every prompt lives: the look (`look`: explainer, storybook,
+editorial, papercut; or `style`), the model, the faces, which faces talk, the mouth shapes, the
+poses, the gates. `faces`, `talk` and `poses` take default names or `{name: "the change"}` for
+new ones (Enrique's poses say which hand holds the paddle). `design` starts from a picture already
+made instead of drawing candidates. The pack is written beside the spec in `<name>/`.
+
+**What it draws** (Enrique, 2026-10-17: 45 pieces, 4 min 19 s, $1.13 with the three design
+candidates, at $0.023 a picture): the base; 8 faces; 4 mouths (small, open, round, wide) and a
+blink on each of the 4 talking faces; 10 poses; and for each pose whose head has turned, mouths
+and a blink of its own. A face or a mouth is redrawn from the picture it changes (a happy mouth
+from the happy face), so the pieces stack: base, then face patch, then mouth patch, then blink.
+
+**The gate.** Every redraw is laid back on its source -- a phase-correlation shift, and an ECC
+affine refined from it on everything but the head (MAI's redraws come back 2.5 % larger and moved
+16 px, Grok's ~1 % larger) -- and whichever fit leaves less change outside the head is kept.
+*Drift* is that change outside the head as a share of the figure's area; the head is the top 30 %
+of the figure (`head`), found from the base alone so a redraw cannot widen its own allowance.
+Over the gate (2.5 % for a face, 1.5 % for a mouth, 1.2 % for a blink) the redraw is drawn again,
+up to `retakes` times, and the steadiest kept. Enrique's 35 gated redraws all came back at
+0.0-0.3 % on the first try.
+
+**Redraws are asked for on white, never transparent.** Only the base is drawn on a transparent
+background (where the model has one). Measured on gpt-image-2.5-sunburst: half the transparent
+*redraws* came back with a cloudy half-transparent halo round the figure (drift 40-160 %, every
+retake wasted), while the same redraws on white, from the base laid on white, keyed off cleanly at
+0.0-0.3 %. Changes are compared on white for the same reason: the base's alpha is the model's and a
+redraw's is keyed, and comparing those counts antialiasing as change.
+
+**Poses** keep their own feet and are scaled so the head matches the base's (template matching
+over 0.8-1.25x). Where the base's head is found in a pose with a score of 0.8 or more, the pose
+looks out of the picture and the front faces, mouths and blinks are laid on it (`face_at`);
+otherwise it is "turned" and gets `pose_mouths` (open, round) and a blink drawn from it. A pose
+whose colours are unlike the base's (`same` < 0.6) is warned about: the model drew somebody else.
+
+**Which model** (padel-tactics `films/05-history/character/ai/README.md`, the same brief through
+seven models, drift on face edits): gemini-3-pro-image 0.4-0.9 % at $0.136 a picture (no
+transparency), gpt-image-2.5-sunburst 0.4-1.8 % at $0.019 (real alpha: the default),
+mai-image-2.6 0.2-1.7 % once fitted, grok-imagine-image-2.0 0.2-1.2 % once fitted but 57 s a
+picture, gpt-image-2.5-flare 0.9-3.5 %, gemini-3.1-flash-image 1.5-3.4 %, muse-image unusable
+(it takes no reference: a different character every picture). FLUX 3, Seedream 5, Qwen Image 3
+and Recraft 4.1 were refused by that OpenRouter account's allowed providers.
+
+**The pack** (`pack.json`, `PACK_VERSION` 1, and `atlas-<n>.webp`, 4096 px pages, WebP q92 with
+alpha: Enrique is one 4085x3594 page, 1.4 MB): `figure` {w, h, feet, height, head} in pack pixels
+(the figure is scaled to `pack.height`, 1400 px, enough for a 2x close-up at 1080p); `pieces`
+{id: page, sx, sy, w, h}; `faces` {name: piece, x, y, mouths {shape: piece, x, y}, blink};
+`poses` {name: piece, w, h, feet, face_at | mouths, blink}; `report` (each piece's drift and fit).
+`check.jpg` puts every face, mouth, blink and pose together the way the player will, labelled with
+its drift: look at it before using a pack. `state.json` keeps what each picture was drawn from
+(model, prompt, reference), so a rerun draws only what changed and `--retake` draws one again.
+
+**In a film**: `"actors": {"enrique": "actors/enrique"}` in the manifest (the pack's folder).
+sketch-render inlines `SK.ACTORS` and the atlas pages (`SK.IMG['actor:<name>:<n>']`), loads
+`sketch/heads.js` (for `SK.talk`) and `sketch/actors.js`, and gives every voice line its speaker
+and mouth track as for talking heads (a line's `who`, `vo.cast`) -- with one difference: a line
+with no `who` is never given to a film's only actor, as it is to its only head. An actor is a
+character in a narrated film, and the first test film moved Enrique's mouth on the narrator's line
+because of that fallback (2026-10-18). Then
+`SK.actor(name, x, y, h, {face, pose, mouth, who, blink, flip, tilt, squash, steps, alpha})`
+draws it standing on x, y, the figure h tall; it returns its box and its head's box.
+The mouth is chosen on twos from the voice: shut under 0.15 open, round when the voice is
+puckered (`wide` < -0.3), wide when it is spread and open, small under half open, else open. The
+blink runs on a clock seeded by the name. A face that has no mouths (laugh, shocked) holds while
+its speaker talks: cue it between lines. `padel-tactics/films/05-history/actor-test/` is an
+18-second example (five lines, a narrator's line that leaves his mouth shut, a face and a pose on
+each cue word): 61 s to render on a CPU.
+
+`pack.json` carries `about` (the spec's `describe`) and each pose's own words, for whoever writes
+the film -- the studio hands them to Claude.
+
+**In the studio (kitcut.ai)**: an actor belongs to a **project**, like its pictures, and is put
+in by hand -- no film makes one, and the site has no button for it yet:
+
+```bash
+bash studio/deploy/ops.sh actor-put <p-id> <pack folder> [--dry-run] [--replace] [--name N] [--about TEXT]
+bash studio/deploy/ops.sh actors <p-id> [--remove <name>]
+```
+
+`studio/actor_put.py` (what those run on the VM) takes `pack.json`, the atlas pages and
+`check.jpg` -- never the raw pictures or the spend log -- after `library.read_pack` has checked
+that every piece its faces and poses name is on a page it holds, that its pages are its own, and
+that the whole is under 32 MB (a project holds 4). It finds the project's library off one of its
+episodes, so a project needs one finished episode first. Each next episode
+(`library._seed_actors`) gets the pack in `actors/<name>/`, the manifest's `"actors"`, the
+`actors` capability (`film.CAPS`: `heads.js` and `actors.js` in its engine copy), a line per
+actor in the first message (who it is, its sheet, its faces, which it speaks in, its poses and
+which are turned) and `studio/actors.md` in its system prompt -- which only a film with actors
+carries, so every other film's prompt is byte for byte what it was. Claude may Read the pack and
+never write it. `studio/test_actors.py` holds all of it, a render included.
+
+**Not yet**: `sketch/thumb.js` does not see actors when it looks for a thumbnail's pictures, and a
+person cannot add an actor from the site or the MCP (only an operator can, above).
+
 ### Sketch Studio: a prompt box that makes a short film (`studio/`)
 
 A prompt-to-film web app on this engine, set up with `pip install -r requirements-studio.txt`:

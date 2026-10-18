@@ -273,6 +273,8 @@ def system_prompt(look, caps=None):
     # the people (film.CAPS "people"): only a film given people carries the section, so every
     # other film's prompt stays byte for byte what it was
     fill["PEOPLE"] = _read("studio", "people.md") if "people" in (caps or ()) else ""
+    # the project's actors (film.CAPS "actors", library._seed_actors): the same, for a film given them
+    fill["ACTORS"] = _read("studio", "actors.md") if "actors" in (caps or ()) else ""
     # a capability's own references, read only for the looks made of it (film.CAPS "fills")
     fill.update({k: _reference(*parts) for k, parts in fills(caps or RECIPES[look]).items()})
     # the kit's section, for the films made with it (a template's film made before it has none)

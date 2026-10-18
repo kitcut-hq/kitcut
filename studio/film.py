@@ -220,6 +220,12 @@ CAPS["routes"] = {}
 # look's recipe and it brings no reference: a film asked for with them gets it on top of its
 # look's (Film.create), and every prompt stays byte for byte what it was
 CAPS["captions"] = {"modules": ("captions",)}
+# actors: characters an image model drew and scripts/actor-pack.py cut into packs, put into a
+# project's library by hand (studio/actor_put.py) and given to each of its episodes
+# (library._seed_actors, which adds this to the film's caps). sketch/actors.js draws them;
+# heads.js's SK.talk moves their mouths. Like people, on top of the look's recipe: a film with
+# no actors keeps its prompt byte for byte
+CAPS["actors"] = {"modules": ("heads", "actors")}
 # the frames a film can have ("16:9" unless it is asked for in another, or a template offers
 # another), as the manifest's "frame"
 FRAMES = {"16:9": [1920, 1080], "1:1": [1080, 1080], "9:16": [1080, 1920]}
@@ -373,8 +379,9 @@ def limits(length):
 
 
 def modules(caps):
-    """The engine modules these capabilities bring (sketch/<name>.js)."""
-    return tuple(m for c in caps for m in CAPS[c].get("modules", ()))
+    """The engine modules these capabilities bring (sketch/<name>.js), each once: people and
+    actors both bring heads.js."""
+    return tuple(dict.fromkeys(m for c in caps for m in CAPS[c].get("modules", ())))
 
 
 def fonts(caps):
