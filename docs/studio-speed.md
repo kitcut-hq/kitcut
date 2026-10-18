@@ -229,8 +229,16 @@ under the voice itself, then asks Claude to lower the score anyway: 10 of 19 nar
 extra sound runs per 25 films -- whether the automatic duck is good enough is a listening decision);
 a default camera breath on holds (`SK.breath` exists; the motion check's 4 s rule drew hand-written
 drift in 10-14 of 30 films); scene passes that cannot share helpers (10 of the 8-minute bike film's
-12 scene sessions pasted the same 1.7 KB renderer); a series pack (episodes re-read the last
-episode's film.js in 8-10 films); stills over 12 times refused (3-5 films).
+12 scene sessions pasted the same 1.7 KB renderer); stills over 12 times refused (3-5 films).
+
+**Built, to be measured: a series' episode starts from its last one's code** (2026-10-18,
+`studio/episode.py`, off until `STUDIO_EPISODE_CARRY` names a project or says `all`). Episodes
+re-read the last episode's film.js in 8-10 films and then wrote their own from nothing; a
+template's remake, which starts from finished code, takes a median 5.6 minutes of Claude against
+13.7. The measure, before it is on for every series: on for Leo, Ocheretyne, S&P 500 Explained and
+Racket sports, at least five episodes each, against each series' last five made without it --
+`stages.claude`, `claude_cost_usd`, the review's fixes, and the owner's word on whether the
+episodes still differ. `bakeoff.py` cannot run it (its films have no library).
 
 ### The kit bakeoff (2026-10-01)
 

@@ -109,6 +109,27 @@ def finish(film, names=None):
     return library.keep(film, items, pictures)
 
 
+def finish_merging(film):
+    """What agent.keep_cast does: a member another episode changed meanwhile merged first
+    (library.merges), drawn as merged, and put back when it draws nothing."""
+    own = library.changes(film)
+    items, _ = library.merges(film, own)
+    pictures = {}
+    if items:
+        names = [it["name"] for it in items]
+        man, times = library.sheet(film, names, items)
+        r = render(man, times, "stills")
+        if r.returncode:
+            raise RuntimeError(r.stdout[-800:] + r.stderr[-800:])
+        pictures = library.thumbs(film, names)
+    items = [
+        mine if it.get("merged_from") and it["name"] not in pictures else it
+        for it, mine in zip(items, own, strict=True)
+    ]
+    film.update(state="done")
+    return library.keep(film, items, pictures)
+
+
 def main():
     bad = []
 
@@ -288,6 +309,7 @@ def main():
         check(len(got["films"]) == 1 and got["cast"] == [], "and are remembered")
 
         projects(check)
+        merged(check)
         workspaces(check)
     finally:
         shutil.rmtree(HOME, ignore_errors=True)
@@ -501,9 +523,14 @@ def projects(check):
         'episode of the project "Olga\'s Forest"' in note
         and "Calm narrator, soft piano." in note
         and "- pic_logo (800x400): inputs/pic_logo.png" in note
-        and "project's cast" in note
+        and "Brought in from the person's films outside projects" in note
         and "first episode" in note,
         "the note names the project, its brief, pictures and cast",
+    )
+    check(
+        "project's cast, from its earlier episodes" not in note
+        and all(c.get("brought") for c in got["cast"]),
+        "a member brought in and not drawn by an episode yet is not called the series' own",
     )
     text = agent.ask(E1, [{"look": "drawn", "ground": "paper", "voice": "Kore"}])
     check(note in text and "the project's brief" in text, "and is in ask()")
@@ -662,6 +689,137 @@ def projects(check):
         library.load("u:dave")["films"] == [dave.id], "a person's earlier films leave out episodes"
     )
     check(library.load(("u:dave", P1))["films"] == [], "and a project starts from nothing")
+
+
+OLGA = """// Olga the owl
+SK.cast.owl = {
+  about: 'Olga, a wise grey owl',
+  draw(x, y, o = {}) {
+    SK.wash(SK.S.ellC(x, y - 60, 50, 60), '#888');
+    SK.ink(SK.S.ellC(x, y - 60, 50, 60), { w: 4 });
+  },
+};
+"""
+HAT = OLGA.replace("a wise grey owl", "a wise grey owl in a hat")
+WAVE = OLGA.replace(
+    "{ w: 4 });\n  },",
+    "{ w: 4 });\n    if (o.wave) SK.ink(SK.S.ellC(x + 60, y - 90, 10, 10), { w: 4 });\n  },",
+)
+
+
+def merged(check):
+    """Two episodes of one project change one member at once (two at once on Pro): changes that
+    do not touch the same lines are merged; ones that do are kept beside the series' version,
+    the next episodes are told, and the copy goes once one of them saves the member. A merge
+    that draws nothing is a clash too; a kept sound two episodes changed is reported."""
+    P3, who = "p-dddddddddd", "u:gina"
+    lib = (who, P3)
+
+    def owl():
+        e = library.load(lib)["cast"]["owl"]
+        p = os.path.join(library.dir_of(lib), "cast", "owl", "v%d.js" % e["version"])
+        return e, open(p, encoding="utf-8").read()
+
+    def two(a, b):
+        f1, f2 = episode("one", project=P3, client=who), episode("two", project=P3, client=who)
+        library.seed(f1)
+        library.seed(f2)
+        for f, code in ((f1, a), (f2, b)):
+            write(f, "cast/owl.js", code)
+            write(f, "film.js", scene("SK.cast.owl.draw(0, 0);"))
+        return f1, f2
+
+    first = episode("Olga", project=P3, client=who)
+    library.seed(first)
+    write(first, "cast/owl.js", OLGA)
+    write(first, "film.js", scene("SK.cast.owl.draw(0, 0);"))
+    finish(first)
+    v = owl()[0]["version"]
+
+    a1, a2 = two(HAT, WAVE)
+    k1, k2 = finish_merging(a1), finish_merging(a2)
+    e, code = owl()
+    check(
+        k1["saved"] == ["owl"] and k2.get("merged") == ["owl"],
+        "changes to different lines of one member merge (%s)" % k2,
+    )
+    check(
+        e["version"] == v + 2 and "in a hat" in code and "o.wave" in code and e.get("thumb"),
+        "the library's next version has both, and a picture of it",
+    )
+    again = finish_merging(a1)  # finished again: what it changed is in the library already
+    check(
+        not again["saved"] and not again.get("clashed") and owl()[0]["version"] == v + 2,
+        "an episode finished again whose change is in already: no new version, no clash (%s)"
+        % again,
+    )
+
+    b1, b2 = two(HAT.replace("#888", "#a00"), HAT.replace("#888", "#00a"))
+    finish_merging(b1)
+    k = finish_merging(b2)
+    clash = os.path.join(library.dir_of(lib), library.CLASHED, "owl", b2.id + ".js")
+    check(
+        k.get("clashed") == ["owl"] and "#a00" in owl()[1],
+        "changes to the same line do not: the first to finish leads",
+    )
+    check(
+        os.path.exists(clash) and "#00a" in open(clash, encoding="utf-8").read(),
+        "the other's copy is kept beside it",
+    )
+    check(
+        library.listing(who, P3)["clashed"] == [{"name": "owl", "film": b2.id}],
+        "and listed for the Cast tab",
+    )
+    c = episode("three", project=P3, client=who)
+    got = library.seed(c)
+    rel = "library/clashed/owl-%s.js" % b2.id
+    check(
+        got["clashed"] == [{"name": "owl", "film": b2.id, "file": rel}]
+        and os.path.exists(c.path(*rel.split("/"))),
+        "the next episode gets it to read",
+    )
+    check(
+        rel in library.note(c) and "did not merge" in library.note(c), "and is told to fold it in"
+    )
+    write(c, "cast/owl.js", owl()[1].replace("{ w: 4 });\n  },", "{ w: 4 });\n    // folded\n  },"))
+    write(c, "film.js", scene("SK.cast.owl.draw(0, 0);"))
+    finish_merging(c)
+    check(
+        not os.path.exists(clash) and library.listing(who, P3)["clashed"] == [],
+        "once it saves the owl, the copy goes",
+    )
+
+    d1, d2 = two(
+        owl()[1].replace("a wise", "a very wise"),
+        owl()[1].replace("draw(x, y, o = {}) {\n", "draw(x, y, o = {}) {\n    nowhere(x);\n"),
+    )
+    finish_merging(d1)
+    k = finish_merging(d2)
+    check(
+        k.get("clashed") == ["owl"] and "nowhere" not in owl()[1],
+        "a merge that draws nothing is a clash, not a version",
+    )
+
+    s1, s2 = (episode("bells %d" % i, project=P3, client=who) for i in (1, 2))
+    for f, vol in ((s1, 0.5), (s2, 0.9)):
+        library.seed(f)
+        write(
+            f,
+            "sounds.json",
+            json.dumps(
+                {
+                    "sounds": {"bell": {"about": "the bell", "cue": {"sound": "bell", "vol": vol}}},
+                    "themes": {},
+                }
+            ),
+        )
+        write(f, "film.js", scene(""))
+    finish(s1)
+    k = finish(s2)
+    check(
+        k.get("sounds_clashed") == ["bell"],
+        "a kept sound two episodes changed at once is reported (%s)" % k,
+    )
 
 
 def workspaces(check):

@@ -57,6 +57,7 @@ import store  # noqa: E402
 import scenes  # noqa: E402
 import templates  # noqa: E402
 import validate  # noqa: E402
+import episode  # noqa: E402
 from film import (  # noqa: E402
     HOME,
     KIT,
@@ -355,20 +356,27 @@ def ask(film, recent=()):
             or "(nothing typed: the idea is in what is attached)",
         )
     )
+    # an episode that starts from its series' last one's code (episode.py)
+    carried = episode.note(film)
     if n > LONG_S and film.mode != "scenes":  # a scenes film is written in passes anyway
-        text += LONG_FILM
+        text += episode.LONG if carried else LONG_FILM
     text += frame_note(film)
     text += attached_note(film) + people_note(film) + mark_note(film) + voice_note(film)
     mine = library.note(film)  # the project, or the person's own cast and earlier films
     of = film.record().get("project")
-    note = recent_note(
-        film.look,
-        recent,
-        series=bool(mine),
-        project=bool(of),
-        collection=library.is_collection(of),
+    # what recent films chose, to choose freshly: not for an episode that keeps its series' look
+    note = (
+        ""
+        if carried
+        else recent_note(
+            film.look,
+            recent,
+            series=bool(mine),
+            project=bool(of),
+            collection=library.is_collection(of),
+        )
     )
-    return text + "".join("\n\n" + x for x in (mine, note) if x)
+    return text + "".join("\n\n" + x for x in (mine, carried, note) if x)
 
 
 # A film whose length Claude picks (kitcut.ai's "Let Claude choose the length", paid plans): the
@@ -551,6 +559,33 @@ async def no_leftovers(film, emit, meter, tools, auth):
         left = await asyncio.to_thread(templates.leftovers, film)
     if left:
         raise RuntimeError("the film still shows the template's own words: %s" % ", ".join(left))
+
+
+async def episode_leftovers(film, emit, meter, tools, auth):
+    """An episode that started from its last one's code (episode.py) with words of that one's
+    story still in film.js: one short turn to take them out. Never fails the film: the words are
+    the same series' and the same person's, and some are the series' own."""
+    left = await asyncio.to_thread(episode.leftovers, film)
+    sid = film.record().get("claude_session")
+    if not left or not sid:
+        return
+    emit(
+        {"type": "stage", "name": "claude", "text": "Claude is taking out the last episode's words"}
+    )
+    with contextlib.suppress(TimeoutError):
+        await _within(
+            run_claude(
+                film,
+                emit,
+                meter,
+                tools,
+                auth,
+                prompt=episode.LEFTOVERS % ", ".join('"%s"' % s for s in left),
+                resume=sid,
+            ),
+            Clock(),
+            {"claude_s": WRAP_UP_S, "wall_s": WRAP_UP_S + 120},
+        )
 
 
 # ------------------------------------------------------------------ drawing the people
@@ -1406,6 +1441,13 @@ async def make_film(
     if rec.get("auto_length") and not rec.get("length_picked") and not (finish_only or resume):
         _, pick_usd = await pick_length(film, emit, auth)
         rec = film.record()
+    # a series' next episode starts from its last episode's code: after the pick, which can make
+    # a film one made in scenes; once (its record's `carried`), so a requeued film keeps its own
+    if not (finish_only or resume):
+        got = await asyncio.to_thread(episode.carry, film)
+        if got and not got.get("skipped"):
+            emit({"type": "say", "text": 'Starting from the last episode, "%s".' % got["title"]})
+        rec = film.record()
     # the length asked for: a film may have grown past it (film.may_run_to), and a film picked up
     # again must not take what it grew to for what was asked
     prompt, length, look = rec.get("prompt", ""), film.asked, film.look
@@ -1842,10 +1884,14 @@ async def make_film(
             missing = [f for f in MADE if not os.path.exists(film.path(f))]
             if missing:
                 raise RuntimeError("Claude finished without writing %s" % ", ".join(missing))
+            if episode.untouched(film):  # the last episode again, under this one's name
+                raise RuntimeError("Claude finished without changing the last episode's film.js")
             if unvoiced(film):  # its lines are written but were never spoken: not a silent film
                 raise RuntimeError("Claude finished without recording the narration")
             if film.record().get("template"):
                 await no_leftovers(film, emit, meter, tools, auth)
+            elif episode.carried(film):
+                await episode_leftovers(film, emit, meter, tools, auth)
             # a second pair of eyes on the whole film, and one bounded turn to fix what it must
             # (review.py). It never fails a film: one it could not read goes on as it is.
             s = time.time()
@@ -2014,6 +2060,8 @@ async def make_film(
                 "engine_changed": summary.get("engine_changed"),
                 "direction": summary.get("direction"),
                 "cast": summary.get("cast"),  # what the person's library took in (library.py)
+                # the episode whose code it started from, or why it did not (episode.py)
+                "carried": film.record().get("carried"),
                 # again here: the first record is not retried if the database was away
                 "project_id": (film.record().get("project") or {}).get("id"),
                 # again here, like project_id: a template's films are counted by it
@@ -2097,6 +2145,8 @@ async def written(film, tools):
     and files that pass the gate and the syntax check."""
     await own_sound(film, tools)
     if any(not os.path.exists(film.path(f)) for f in MADE):
+        return False
+    if episode.untouched(film):  # started from the last episode's code and never changed it
         return False
     narrated = film.record().get("narration") is not False  # a template's film is music only
     if narrated and not os.path.exists(film.path("audio", "vo", "timeline.json")):
@@ -2228,24 +2278,33 @@ async def keep_cast(film, tools, emit):
     if not library.lib_of(film.record()):
         return None
     try:
-        items = library.changes(film)
+        own = library.changes(film)
+        # a member another episode changed meanwhile, merged onto the library's (library.merges)
+        items, _ = await asyncio.to_thread(library.merges, film, own)
         pictures = {}
         if items:
             names = [it["name"] for it in items]
             emit({"type": "stage", "name": "cast", "text": "Keeping the cast for the next films"})
-            man, times = library.sheet(film, names)
+            man, times = library.sheet(film, names, items)
             try:
                 await tools.cast_sheet(man, times)
                 pictures = await asyncio.to_thread(library.thumbs, film, names)
             except ToolError as e:  # kept all the same, without a picture
                 print("film %s: no cast pictures: %s" % (film.id, e), file=sys.stderr, flush=True)
+        # a merge that draws nothing is not one: the film's own copy, kept as a clash
+        items = [
+            mine if it.get("merged_from") and it["name"] not in pictures else it
+            for it, mine in zip(items, own, strict=True)
+        ]
         kept = await asyncio.to_thread(library.keep, film, items, pictures)
-        if kept and kept.get(
-            "clashed"
-        ):  # its copy stays in its own cast/; the library's newer one leads
+        if kept and (kept.get("clashed") or kept.get("sounds_clashed")):
+            # its copy stays in its own cast/ (and the project's clashed/); the newer one leads
             print(
-                "film %s: cast not saved over a newer version: %s"
-                % (film.id, ", ".join(kept["clashed"])),
+                "film %s: not saved over a newer version: %s"
+                % (
+                    film.id,
+                    ", ".join((kept.get("clashed") or []) + (kept.get("sounds_clashed") or [])),
+                ),
                 file=sys.stderr,
                 flush=True,
             )

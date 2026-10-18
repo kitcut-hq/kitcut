@@ -167,6 +167,7 @@ import rounds  # noqa: E402
 import unbrand  # noqa: E402
 import share  # noqa: E402
 import canon  # noqa: E402
+import filmgit  # noqa: E402
 import brandkit  # noqa: E402
 import stylekit  # noqa: E402
 import delete_film  # noqa: E402
@@ -616,6 +617,7 @@ def start(film, finish_only=False, resume=None):
                 thumbs.premake(film)
                 share.premake(film)  # its share page's title and picture (never raises)
                 canon.premake(film)  # an episode's entry in its project's log (never raises)
+                filmgit.on_finish(film)  # its code into its repository, and to GitHub (ditto)
         except asyncio.CancelledError:
             c = J["control"]  # drain() requeued it; shutdown() stopped it; else its person did
             J["status"] = (

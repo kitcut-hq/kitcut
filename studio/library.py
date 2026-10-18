@@ -49,6 +49,10 @@ A project on the site (a series, a channel) has a library of its own, inside its
         canon.json                              the episode log, one entry per finished episode
                                                (studio/canon.py): every episode reads the whole
                                                of it (canon_note), not only the last MEMORY
+        clashed\\<name>\\<film id>.js              an episode's copy of a member another episode
+                                               changed while it was made, which did not merge
+                                               (_keep): the next episodes are told to fold it in,
+                                               and it goes once one that was told saves <name>
 
 An episode seeds from and keeps into its project's library, never the person's own; a film outside
 projects, the other way round. A library is named (client, project), project None for the
@@ -100,6 +104,7 @@ PICTURES = 9  # a project's pictures: every review render carries them all
 PICTURE_EXT = ("png", "jpg", "webp")
 VOICE_LINES = 12  # a project's approved voice lines: every episode carries them all
 VOICE_KEY = re.compile(r"^[0-9a-f]{12}$")
+CLASHED = "clashed"  # a project library's members that did not merge: <name>/<film id>.js
 _LOCKS = {}  # a library's folder -> the lock its index is changed under
 _LOCKS_LOCK = threading.Lock()
 
@@ -331,6 +336,9 @@ def seed(film):
                 "hash": e["hash"],
                 "films": len(e.get("films") or []),
                 "last_used": e.get("last_used") or e.get("updated"),
+                # brought in from the person's own cast and not drawn by an episode yet: not the
+                # series' own, whatever note() would otherwise call it
+                **({"brought": True} if e.get("brought") and not e.get("films") else {}),
             }
         )
     into = film.path("library")
@@ -390,8 +398,37 @@ def seed(film):
         except Exception as e:  # noqa: BLE001
             print("film %s: actors not seeded: %s" % (film.id, e), file=sys.stderr, flush=True)
             got["actors"] = []
+        got["clashed"] = _seed_clashed(film, lib, idx)
     film.update(library=got)
     return got
+
+
+def clashed_of(lib, idx=None):
+    """A project's members that two episodes changed at once and that did not merge, for a live
+    member: [{name, film, path}], oldest first."""
+    idx = idx or load(lib)
+    d = os.path.join(dir_of(lib), CLASHED)
+    out = []
+    for name in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        e = idx["cast"].get(name)
+        if not NAME.match(name) or not e or e.get("deleted"):
+            continue
+        for fn in sorted(os.listdir(os.path.join(d, name))):
+            if fn.endswith(".js"):
+                out.append({"name": name, "film": fn[:-3], "path": os.path.join(d, name, fn)})
+    return out
+
+
+def _seed_clashed(film, lib, idx):
+    """Each clashed copy into the episode's library/clashed/<name>-<film>.js, to read and fold
+    into its cast/<name>.js. [{name, film, file}]."""
+    out = []
+    for c in clashed_of(lib, idx):
+        rel = "library/clashed/%s-%s.js" % (c["name"], c["film"])
+        os.makedirs(film.path("library", "clashed"), exist_ok=True)
+        shutil.copyfile(c["path"], film.path(*rel.split("/")))
+        out.append({"name": c["name"], "film": c["film"], "file": rel})
+    return out
 
 
 # ---------------------------------------------------------------- a series' sounds
@@ -447,12 +484,13 @@ def _seed_sounds(film, lib):
 
 def _keep_sounds(film, lib, now):
     """The episode's new and changed sounds and themes into its project's: a sound saved only
-    over the one the film started from, as a cast member is (_keep). Returns the names saved."""
+    over the one the film started from, as a cast member is (_keep). Returns (the names saved,
+    the names left as the library had them because another episode changed them meanwhile)."""
     if not os.path.exists(film.path(SOUNDS)):
-        return []
+        return [], []
     had = (film.record().get("library") or {}).get("sounds") or {}
     mine, kept = _film_sounds(film), sounds_of(lib)
-    saved = []
+    saved, clashed = [], []
     for k in SOUND_KINDS:
         for n, e in mine[k].items():
             if not NAME.match(n):
@@ -464,7 +502,8 @@ def _keep_sounds(film, lib, now):
                 ]
                 continue
             if old and old.get("hash") != (had.get(k) or {}).get(n):
-                continue  # moved on in the library since this film got it: the newer stays
+                clashed.append(n)  # moved on in the library since this film got it: the newer
+                continue  # stays, and the film's summary says so
             kept[k][n] = {
                 **{x: e[x] for x in ("about", "cue", "events") if x in e},
                 "hash": h,
@@ -475,7 +514,7 @@ def _keep_sounds(film, lib, now):
             }
             saved.append(n)
     _write_json(os.path.join(dir_of(lib), SOUNDS), kept)
-    return saved
+    return saved, clashed
 
 
 def sounds_note(film):
@@ -675,7 +714,20 @@ def note(film):
             % (v["text"], v.get("voice"), v.get("model"), v.get("dur") or 0)
             for v in voice
         ]
-    if cast:
+
+    def member(c):
+        n = c.get("films") or 0
+        seen = "in %d film%s" % (n, "" if n == 1 else "s") if n else "not used yet"
+        return "- %s%s: %s (%s)" % (
+            c["name"],
+            " (a place)" if c.get("kind") == "place" else "",
+            c.get("about") or "no description",
+            seen,
+        )
+
+    own = [c for c in cast if not (project and c.get("brought"))]
+    brought = [c for c in cast if project and c.get("brought")]
+    if own:
         out += [
             "" if out else None,
             "This %s (already loaded from cast/: use any as SK.cast.<name>, change it, or leave "
@@ -690,18 +742,25 @@ def note(film):
                 else "",
             ),
         ]
-        for c in cast:
-            n = c.get("films") or 0
-            seen = "in %d film%s" % (n, "" if n == 1 else "s") if n else "not used yet"
-            out.append(
-                "- %s%s: %s (%s)"
-                % (
-                    c["name"],
-                    " (a place)" if c.get("kind") == "place" else "",
-                    c.get("about") or "no description",
-                    seen,
-                )
-            )
+        out += [member(c) for c in own]
+    if brought:
+        out += [
+            "" if out else None,
+            "Brought in from the person's films outside projects when the project was made "
+            "(also in cast/; no episode has drawn them yet). They come from other films of "
+            "theirs, not from this series, so use one only when this episode is about it:",
+        ]
+        out += [member(c) for c in brought]
+    clashed = got.get("clashed") or []
+    if clashed:
+        out += [
+            "" if out else None,
+            "Two episodes changed these members at the same time, and the changes did not merge: "
+            "cast/ has the series' version, and the other episode's copy is beside it, to read. "
+            "If this episode uses the member, fold what that copy added (a pose, an option) into "
+            "cast/<name>.js, keeping what the series' version has:",
+        ]
+        out += ["- %s: %s" % (c["name"], c["file"]) for c in clashed]
     if memory and collection:
         out += [
             "" if out else None,
@@ -899,7 +958,7 @@ def changes(film):
     return out
 
 
-def sheet(film, names):
+def sheet(film, names, items=()):
     """A small film that draws each member alone, for its thumbnail: nothing at i + 0.25 s, the
     member at i + 0.75 s. Written into the film's temp/; returns (manifest, times). A place is
     drawn at its origin through the camera it names (camera: [x, y, zoom]), so its thumbnail is
@@ -907,6 +966,14 @@ def sheet(film, names):
     d = film.path("temp", "castsheet")
     shutil.rmtree(d, ignore_errors=True)
     os.makedirs(d)
+    cast = film.path("cast")
+    if any(it.get("merged_from") for it in items):  # a merge (merges) is drawn as merged
+        cast = os.path.join(d, "cast")
+        shutil.copytree(film.path("cast"), cast)
+        for it in items:
+            if it.get("merged_from"):
+                with open(os.path.join(cast, it["name"] + ".js"), "w", encoding="utf-8") as f:
+                    f.write(it["code"])
     with open(film.manifest, encoding="utf-8") as f:
         m = json.load(f)
     js = (
@@ -938,7 +1005,7 @@ def sheet(film, names):
             else f
             for f in m.get("fonts", [])
         ],
-        "cast": film.path("cast"),
+        "cast": cast,
         # a member may draw with its film's modules (a collage film's pieces)
         **({"modules": m["modules"]} if m.get("modules") else {}),
         # and read what its head scripts set (a project's brand.js: SK.BRAND)
@@ -1022,6 +1089,106 @@ def _contact(lib, idx):
     sheet.save(p)
 
 
+def _version_with(d, name, e, h):
+    """The code of the kept version of a member whose hash is h (the last KEEP are kept), or
+    None."""
+    if not h:
+        return None
+    for v in range(int(e.get("version") or 0), 0, -1):
+        code = _read(os.path.join(d, "cast", name, "v%d.js" % v))
+        if code is not None and _hash(code) == h:
+            return code
+    return None
+
+
+def _merge3(base, ours, theirs, work):
+    """git merge-file of three texts: the merged text, or None when it does not merge cleanly
+    (or git is not there). ours: the library's version, theirs: the episode's."""
+    os.makedirs(work, exist_ok=True)
+    paths = []
+    for name, text in (("ours", ours), ("base", base), ("theirs", theirs)):
+        p = os.path.join(work, name + ".js")
+        with open(p, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+        paths.append(p)
+    try:
+        r = subprocess.run(["git", "merge-file", "-p", *paths], capture_output=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return r.stdout.decode("utf-8", "replace") if r.returncode == 0 else None
+
+
+def _parses(code, path):
+    node = shutil.which("node")
+    if not node:
+        return False  # no way to tell: kept as a clash, as before
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        f.write(code)
+    try:
+        return (
+            subprocess.run([node, "--check", path], capture_output=True, timeout=60).returncode == 0
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def merges(film, items):
+    """A finished film's members (changes()) whose library version moved on while it was made
+    -- another episode changed them, the Pro plan's two at once -- each merged three ways: base,
+    the version this film started from (one of the KEEP kept), onto the library's as it is now.
+    A clean merge that parses replaces the item's code, with merged_from (the library's hash it
+    went onto), for keep() to save while that is still the library's; keep_cast draws it first,
+    and one that draws nothing is put back. Anything else is left as it was: keep() keeps it as a
+    clash. -> (items, [names merged])."""
+    lib = lib_of(film.record())
+    if not lib or not items:
+        return items, []
+    idx, d = load(lib), dir_of(lib)
+    had = {c["name"]: c["hash"] for c in (film.record().get("library") or {}).get("cast") or []}
+    work = film.path("temp", "castmerge")
+    out, merged = [], []
+    for it in items:
+        n, e = it["name"], idx["cast"].get(it["name"])
+        if not e or e.get("deleted") or e.get("hash") in (had.get(n), it["hash"]):
+            out.append(it)
+            continue
+        base = _version_with(d, n, e, had.get(n))
+        ours = _read(os.path.join(d, "cast", n, "v%d.js" % e["version"]))
+        code = (
+            _merge3(base, ours, it["code"], os.path.join(work, n))
+            if base is not None and ours is not None
+            else None
+        )
+        if code is not None and code == ours:  # what it changed is in the library's already
+            out.append(it | {"code": ours, "hash": e["hash"]})  # nothing to save, and no clash
+            continue
+        if not code or not _parses(code, os.path.join(work, n, "merged.js")):
+            out.append(it)
+            continue
+        out.append(
+            it
+            | {
+                "code": code,
+                "hash": _hash(code),
+                "about": _about(code) or it["about"],
+                "kind": _kind(code),
+                "merged_from": e["hash"],
+            }
+        )
+        merged.append(n)
+    shutil.rmtree(work, ignore_errors=True)
+    return out, merged
+
+
+def _clash(d, name, film):
+    """The film's own copy of a member that did not go into the library, kept beside it."""
+    src = film.path("cast", name + ".js")
+    if not os.path.exists(src):
+        return
+    os.makedirs(os.path.join(d, CLASHED, name), exist_ok=True)
+    shutil.copyfile(src, os.path.join(d, CLASHED, name, film.id + ".js"))
+
+
 def keep(film, items, pictures=None):
     """Take in what a finished film made: its new and changed members (changes()) as new
     versions, with their thumbnails (thumbs()); the film joins the members it used and the
@@ -1045,13 +1212,18 @@ def _keep(film, lib, items, pictures):
     d = dir_of(lib)
     now = datetime.now().isoformat(timespec="seconds")
     had = {c["name"]: c["hash"] for c in (film.record().get("library") or {}).get("cast") or []}
-    saved, clashed = [], []
+    told = {c["name"] for c in (film.record().get("library") or {}).get("clashed") or []}
+    saved, clashed, merged = [], [], []
     for it in items:
         n = it["name"]
         e = idx["cast"].get(n)
-        if e and e.get("hash") != had.get(n):  # changed since this film got it, or made elsewhere
+        if it.get("merged_from") and e and e.get("hash") == it["merged_from"]:
+            merged.append(n)  # merged onto what the library holds still (merges): saved over it
+        elif e and e.get("hash") != had.get(n):  # changed since this film got it, or made elsewhere
             if e.get("hash") != it["hash"]:
                 clashed.append(n)
+                if lib[1]:  # a project's: kept beside it, for the next episodes to fold in
+                    _clash(d, n, film)
             continue
         e = e or {"version": 0, "films": [], "created": now, "from_film": film.id}
         v = e["version"] + 1
@@ -1082,6 +1254,8 @@ def _keep(film, lib, items, pictures):
         e.pop("deleted", None)  # changed after it was deleted: the person's film brought it back
         idx["cast"][n] = e
         saved.append(n)
+        if n in told:  # this film was given the clashed copies to fold in, and saved its own
+            shutil.rmtree(os.path.join(d, CLASHED, n), ignore_errors=True)
     names = used(film)
     for n in names:
         e = idx["cast"].get(n)
@@ -1090,15 +1264,19 @@ def _keep(film, lib, items, pictures):
             e["last_used"] = now
     idx["films"] = ([film.id] + [x for x in idx["films"] if x != film.id])[:LISTED]
     _save(lib, idx)
-    sounds = _keep_sounds(film, lib, now) if lib[1] else []
+    sounds, sounds_clashed = _keep_sounds(film, lib, now) if lib[1] else ([], [])
     if saved:
         _contact(lib, idx)
     _poster(lib, film)
     out = {"saved": saved, "used": [n for n in names if n in idx["cast"]]}
+    if merged:
+        out["merged"] = merged
     if clashed:
         out["clashed"] = clashed
     if sounds:
         out["sounds"] = sounds
+    if sounds_clashed:
+        out["sounds_clashed"] = sounds_clashed
     return out
 
 
@@ -1136,6 +1314,7 @@ def listing(client, project=None):
             {"name": n} | {k: e.get(k) for k in ("about", "faces", "poses", "added")}
             for n, e in sorted(idx["actors"].items())
         ]
+        out["clashed"] = [{"name": c["name"], "film": c["film"]} for c in clashed_of(lib, idx)]
     return out
 
 
