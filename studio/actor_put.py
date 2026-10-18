@@ -103,7 +103,10 @@ def main():
     try:
         e = library.put_actor(lib, a.pack, name=name, replace=a.replace, about=a.about)
     except library.ActorError as err:
-        sys.exit(err.text)
+        sys.exit(
+            err.text
+            + (" (--replace puts this pack in its place)" if err.status == 409 and there else "")
+        )
     show(e.pop("name"), e)
     print("in %s: its next episodes get it as SK.actor('%s', ...)" % (a.project, name))
 

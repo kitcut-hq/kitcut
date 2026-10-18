@@ -1537,7 +1537,7 @@ def put_actor(lib, src, name=None, replace=False, about=None):
     with _lock(lib):
         idx = load(lib)
         if name in idx["actors"] and not replace:
-            raise ActorError(409, "the project already has an actor %r (replace it?)" % name)
+            raise ActorError(409, "the project already has an actor %r" % name)
         if name not in idx["actors"] and len(idx["actors"]) >= ACTORS:
             raise ActorError(409, "a project holds up to %d actors" % ACTORS)
         d = os.path.join(dir_of(lib), "actors", name)
