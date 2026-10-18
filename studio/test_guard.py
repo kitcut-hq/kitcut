@@ -356,7 +356,11 @@ def main():
         note = agent.refused_note(refused)
         expect("WebFetch refused -> the page tool", "page tool" in note, True)
         expect("WebFetch fine -> nothing", agent.refused_note("# GPT-6 Sol. OpenAI said..."), "")
-        n = len(cases) + 43
+        reddit = "Claude Code is unable to fetch from www.reddit.com"
+        expect("Reddit refused -> the page tool", "page tool" in agent.refused_note(reddit), True)
+        x = "The server returned HTTP 402 Payment Required."
+        expect("x.com's 402 -> the page tool", "page tool" in agent.refused_note(x), True)
+        n = len(cases) + 45
     finally:
         shutil.rmtree(HOME, ignore_errors=True)
     print("%d cases, %d failed" % (n, len(bad)))
