@@ -5473,10 +5473,13 @@ bends at the elbow (coming down from a cheer with straight arms passed through a
 lags 0.05 s, the hand 0.1 s, the head 0.06 s; a held gesture drifts; breath, a slow weight shift
 and the head's own life run underneath; the free hand beats with the voice. A face changes whole,
 halfway through a blink (dissolved over 0.12 s, a laugh's shut eyes showed over wide ones as
-goggles, and two mouths at once: the owner's note at 0:14 of the second scene); hand shapes
-dissolve over 0.08 s. **Placed hands** (`think`, `me`, `shade`, `catch`: an IK target each) are
+goggles, and two mouths at once: the owner's note at 0:14 of the second scene); a hand changes
+shape whole too, halfway into its gesture while it moves fastest (dissolved, a shading hand
+leaving the brow left a see-through fist over his eye for three frames). **Placed hands** (`think`, `me`, `shade`, `catch`: an IK target each) are
 solved at each place with the **elbow out** and blended by joint angle, the upper arm always
-swinging **by the outside of the body** and the elbow folding while the hand travels, eased
+swinging **by the outside of the body** and the elbow folding while the hand travels between rest
+and a place (not between two places: there the hand is up already, and folding brought it down
+over the face), eased
 without a wind-up, the forearm not lagging. Three versions failed first, on the second scene's
 close shot: blended by angle with no such care, shade into catch swung the arm up and round and
 a wind-up dropped the hand across the face; blended as wrist positions, the hand rising from the
@@ -5484,8 +5487,9 @@ hip to the brow went straight through the shoulder and the arm folded flat acros
 his mouth (the elbow at 190 degrees); solved along the way, the elbow flipped sides in one frame.
 A white sleeve across a white shirt disappears, so a forearm crossing the body reads as one
 growing out of it: keep a hand that rises or falls outside the figure. `check-actors.py` holds the
-rise from rest to the brow to the catch outside the body, the elbow under 150 degrees and no jump
-(the old engine: 152 degrees and 0.028 inside). The body: the feet are IK targets (steps lift them
+rise from rest to the brow to the catch outside the body, the elbow under 150 degrees, no jump,
+and the hand leaving the brow never nearer the head (the old engine: 152 degrees and 0.028 inside;
+the fold between places: 0.069 from the head where the brow is 0.165). The body: the feet are IK targets (steps lift them
 in an arc and the pelvis follows), `sink` bends the knees, `hop` lifts the whole figure with a
 crouch before and a squash after, `sag` drops the shoulders and the head. Facing us, a bent knee
 mostly shortens the leg instead of going out (a crouch with the knees out alone read as bow legs).

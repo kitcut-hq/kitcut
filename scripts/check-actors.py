@@ -538,16 +538,18 @@ out.turn_jump = Math.max(d(at(turn, 0.999).wrist_r, now.wrist_r), d(at(turn, 0.9
 out.turn_settled = d(at(turn, 1.6).wrist_r, at(front, 1.6).wrist_r);
 const hand = { acts: [[0.5, 'shade', { side: 'l', dur: 0.5, out: 0.3 }], [1, 'catch', { side: 'l', dur: 1 }]] };
 // from rest up to the brow, then up for a ball: the hand's way, each 0.01 s
-let flat = 0, inside = 1, jump = 0, path = 0, prev = null;
+let flat = 0, inside = 1, jump = 0, path = 0, prev = null, near = 9;
 const head = at(hand, 0.4).head[0], ends = [at(hand, 0.4).hand_l[0], at(hand, 1).hand_l[0]];
 for (let t = 0.4; t <= 1.3; t += 0.01) {
   const a = at(hand, t), lo = SK.puppetAct('tester', hand, t).pose.arm_l_lo.r;
   flat = Math.max(flat, Math.abs(lo));
   if (t < 1) inside = Math.min(inside, (a.hand_l[0] - head) - Math.min(ends[0], ends[1]) + head);
+  else near = Math.min(near, d(a.wrist_l, a.head));  // brow to catch: never in towards the face
   if (prev) { const st = d(prev, a.wrist_l); jump = Math.max(jump, st); path += st; }
   prev = a.wrist_l;
 }
 out.hand_flat = flat; out.hand_inside = inside; out.hand_jump = jump; out.hand_path = path;
+out.hand_near = near; out.hand_near0 = d(at(hand, 1).wrist_l, at(hand, 1).head);
 const face = { faces: [[0, 'neutral'], [1, 'happy']] };
 const f1 = SK.puppetAct('tester', face, 1.02), f2 = SK.puppetAct('tester', face, 1.08);
 out.face = [f1.face, f1.prevFace, f1.blink, f2.face];
@@ -582,9 +584,18 @@ def acting(node, d):
         "a placed hand travels by the outside of the body, its elbow never folded flat, in no jumps",
         m["hand_flat"] < 150
         and m["hand_inside"] > -0.01
-        and m["hand_jump"] < 0.12 * m["hand_path"],
-        "elbow at most %.0f deg; %.3f inside its ends; largest step %.3f of a %.3f path"
-        % (m["hand_flat"], -m["hand_inside"], m["hand_jump"], m["hand_path"]),
+        and m["hand_jump"] < 0.12 * m["hand_path"]
+        and m["hand_near"] > m["hand_near0"] - 0.005,
+        "elbow at most %.0f deg; %.3f inside its ends; largest step %.3f of a %.3f path; "
+        "leaving the brow, %.3f from the head (%.3f at the brow)"
+        % (
+            m["hand_flat"],
+            -m["hand_inside"],
+            m["hand_jump"],
+            m["hand_path"],
+            m["hand_near"],
+            m["hand_near0"],
+        ),
     )
     check(
         "a face changes whole, halfway through a blink: never two faces at once",

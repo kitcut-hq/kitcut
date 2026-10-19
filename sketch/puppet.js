@@ -329,11 +329,14 @@
     cheer: { S: 'fist', O: 'fist' }, think: { S: 'fist' }, me: { S: 'palm' }, swing: { S: 'grip' }, forehand: { S: 'grip' }, pump: { S: 'fist' }, lob: { S: 'grip' }, catch: { S: 'fist' } };
   SK.PUPPET_SHAPES = SHAPES;
   function handShapes(plan, t) {
-    const out = {}, HF = 0.08;  // a hand changes shape in a short dissolve, while it moves
+    // a hand changes shape whole, halfway through its move, where it is moving fastest: dissolved,
+    // two hands showed through each other, and a shading hand leaving the brow left a see-through
+    // fist over his eye (0:15 of the second scene)
+    const out = {};
     for (const s of ['r', 'l']) {
       const rest = ((plan.hold || {})[s] || {}).shape || 'open';
       if (rest === 'grip') { out[s] = { shape: 'grip' }; continue; }
-      const win = [];  // [from, to, shape]: each gesture's hand, from early in its arrival to late in its leaving
+      const win = [];  // [from, to, shape, gesture's start, gesture's end]: each gesture's hand, from halfway into it to halfway out
       for (const a of plan.acts || []) {
         const o = a[2] || {}, side = o.side || 'l', sh = o.shape ? { S: o.shape } : SHAPES[a[1]];  // a hand holding something keeps closed
         if (!sh) continue;
@@ -341,16 +344,19 @@
         for (const [k, shape] of Object.entries(sh)) {
           if (o.one && k === 'O') continue;
           if ((k === 'S' ? side : (side === 'r' ? 'l' : 'r')) !== s) continue;
-          win.push([a[0] + 0.3 * rin, a[0] + dur + 0.6 * rout, shape]);
+          win.push([a[0] + 0.5 * rin, a[0] + dur + 0.5 * rout, shape, a[0], a[0] + dur + rout]);
         }
       }
-      // the newest gesture under way has the hand; one ending does not open it while another holds
-      // it (a fist that caught a ball opened as it was carried to the chest)
-      const at = (u) => { let b = null; for (const w of win) if (w[0] <= u && u < w[1] && (!b || w[0] >= b[0])) b = w; return b ? b[2] : rest; };
-      const shape = at(t), marks = win.flatMap((w) => [w[0], w[1]]).filter((u) => u <= t).sort((x, y) => y - x);
-      let prev = null, since = 99;
-      for (const u of marks) { const was = at(u - 1e-6); if (was !== at(u)) { prev = was; since = t - u; break; } }
-      out[s] = since < HF ? { shape, prev, mix: smooth(since / HF) } : { shape };
+      // the newest gesture under way has the hand; between two that overlap it keeps the last one's
+      // shape, and goes back to rest only when none is under way (a fist that caught a ball opened as
+      // it was carried to the chest)
+      let b = null, last = null;
+      for (const w of win) {
+        if (w[0] <= t && t < w[1] && (!b || w[0] >= b[0])) b = w;
+        if (w[1] <= t && (!last || w[1] >= last[1])) last = w;
+      }
+      const busy = win.some((w) => w !== last && w[3] <= t && t < w[4]);  // another one, not the one leaving
+      out[s] = { shape: b ? b[2] : busy && last ? last[2] : rest };
     }
     return out;
   }
@@ -579,9 +585,10 @@
       let w = 0, du = 0, dl = 0;
       for (const [e, tg] of L) { const q = placeArm(R, s, tg); w += e; du += e * swingOut(R, s, up0, q.up); dl += e * wrap(q.lo - lo0); }
       const W = L.length > 1 ? Math.min(1, w) : w;
-      let top = 1 - W;
-      for (const [e] of L) top = Math.max(top, (e * W) / w);  // how evenly the hand is shared between places
-      const travel = Math.abs((W * du) / w), fold = Math.min(1, 2 * (1 - top));
+      // the elbow folds on the way from rest to a place and back, most when halfway; not between two
+      // places: the hand is up already, and folding brought it down over the face (the brow to the
+      // catch, 0:15 of the second scene)
+      const travel = Math.abs((W * du) / w), fold = Math.min(1, 2 * Math.min(W, 1 - W));
       out[kU] = up0 + (W * du) / w;
       out[kL] = lo0 + (W * dl) / w + SIGN[s] * Math.min(45, 0.4 * travel) * fold;
       placed[s] = smooth(Math.min(1, W / 0.2));
