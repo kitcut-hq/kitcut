@@ -5402,11 +5402,15 @@ python scripts/check-actors.py                                                  
 **Why a rig** (padel-tactics `films/05-history/puppet-test`, 2026-10-19). The same 18.5-second
 script and voice, played by the swapped actor and by the puppet, measured with
 `character-motion.py` on probe renders (the character alone on white): the swapped Enrique had
-12 pops carrying 83 % of everything optical flow could not explain, and stood still 20 % of the
-time; the puppet 8 pops carrying 28 %, and never stood still. A fresh reviewer then said the
+12 pops carrying 81 % of everything optical flow could not explain, and stood still 20 % of the
+time; the puppet's finished scene 10 pops carrying 14 % -- its turns between views and the
+take-offs of its hops -- 27 frames of swing too fast for flow, and never stood still. A fresh
+reviewer then said the
 puppet "moves better but acts less": one arm doing everything, feet planted, the body square to
-the camera. The body layer and the views below are the answer to that review, and they are what
-made the difference on screen.
+the camera. The body layer and the views below are the answer to that review. The next fresh
+reviewer said that from the moment he moved with his whole body he was "the character the owner
+asked for", and that the puppet "is not the dead end; the way the first part is staged is" --
+which is the paragraph on sets below.
 
 **The cut** (`_puppet.segment`). MediaPipe's PoseLandmarker (heavy, `models/heads/`) finds the
 joints on the drawing, tried in several framings and kept only when `sane()` (hips under the
@@ -5432,7 +5436,10 @@ faces, mouths, blink and hands -- a turned face cannot borrow the front's patche
 the same way, in `<pack>/views/<name>/`. The cutter reads which way a figure faces off its nose
 (Enrique's q view: 0.14 of the shoulders' width off their middle; his front view 0.01); a turned
 puppet draws its far arm behind its body and bends both knees the way it faces. Enrique's q view:
-21 redraws, $0.51, drift 0.1-0.4 %, and the cut needed nothing by hand. The front `puppet.json`
+21 redraws, $0.51, drift 0.1-0.4 %, and the cut needed nothing by hand; his `q_left`, $0.56 with
+three candidates to pick from. A view's near arm is the one on the side it faces: in `q_left` the
+paddle hand is the far one, so his forehands are played facing right and `q_left` is for watching
+and pointing with the free hand. The front `puppet.json`
 names its views, so a film that loads the actor gets them all (`SK.PUPPETS['enrique@q']`).
 
 **In a film**: `"puppets": {"enrique": "actors/enrique"}` in the manifest; give its lines `who`
@@ -5473,9 +5480,23 @@ or a fast move.
 drawing: the example's ball leaves the paddle from it and comes back to it, and both contacts
 land on the paddle to the frame.
 
+**Sets: one place, painted to match.** Behind an actor drawn by an image model, sets drawn in code
+read as "flat placeholder clip-art" and the actor as pasted on; a story told standing in one spot
+while the set illustrates it reads as a presenter. The puppet test's garden is a painting by the
+same model, with Enrique's base picture as `style_ref` and the series' palette in the style line
+(1536x864, $0.05, `sketch-paint.py`), and the court that is built in it is a second painting made
+as an edit of the first ("this exact picture ... one change only"): outside the court the two
+agree to 0.05 px, so what differs is exactly what is built, cut into a floor and walls
+(`tools/plates.py` there). The floor's four corners give the painting's ground -- its vanishing
+point, its horizon and its metres -- so the film places him, the chalk lines of the tennis court
+that will not fit and the ball in metres (`proj(X, Z, h)` in its film.js), and his height follows
+his depth. At 1.7x (the close shot) the 1536-pixel painting still holds up at 1080p.
+
 **Measuring**: a **probe** is the film with `"data": {"probe": "probe.json"}` in a copy of its
 manifest, whose film.js draws only the character, a fixed camera, on white.
-`character-motion.py` reads it: pops (frames over 3 % of the figure unexplained by flow), the share
+`character-motion.py` reads it: pops (frames over 3 % of the figure unexplained by flow that stand
+out from the frames either side), fast frames (a run over 3 %: a swing faster than flow follows),
+the share
 of unexplained change they carry, stillness over a tenth of a second, and moving frames. A talking
 character never scores zero pops: a mouth or a blink is a small one, and a turn is one by design.
 

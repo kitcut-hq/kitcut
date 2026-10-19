@@ -233,10 +233,31 @@ whole body and could turn, so plan the acting, not just the arms:
    (`free`), and the busy one keep what it holds (`hold`).
 4. Anything that leaves or meets the character (a ball, a handshake) is placed with
    `SK.puppetAt(name, ..., t)` at that moment, never by eye.
-5. Stage the payoff big: the reviewer's other note on the first test was that its payoff (the ball
-   coming back off the wall) was "a dot near the horizon". Cut to a closer shot for it.
-6. Check with stills at the contact frames and around each turn, then a probe render scored by
-   `character-motion.py` against the last version; then a fresh review (`video-review`).
+5. **Act the story in one place, painted to match the actor.** Code-drawn sets behind an image-model
+   actor read as "flat placeholder clip-art" and make him look pasted on; a story told in one
+   spot while the sets illustrate it reads as a presenter, not a character. Paint the place with
+   the actor's own model and his base picture as `style_ref` (`sketch-paint.py`), stand him on its
+   ground at the size its perspective gives (measure it off a shape in the painting whose size you
+   know), and let him do what the words say there. A set that changes (walls going up) is a second
+   painting made as an edit of the first: the difference between the two is exactly what moves
+   (padel-tactics `films/05-history/puppet-test/tools/plates.py`). Stage the payoff close: on the
+   first test the ball coming back off the wall was "a dot near the horizon".
+6. **Shoot it so the acting can be seen.** What nine fresh reviews of the first puppet scene asked
+   for, each round: close (knees up, a closer painting of the place) whenever the character acts
+   a line, wide only for what the place itself shows -- and then with the character large in the
+   foreground, walking, not a speck at the edge; a cut between shots, never a fast zoom (the
+   review pack's cut list counts a whip-zoom as two cuts); one steady shot for the payoff; end on
+   its last line, not on a held pose or a fade to paper. Fewer faces, held longer: a random blink
+   just after an expression change, or a mouth shape that is a face of its own (the sad face's
+   wide mouth was a grimace), read as "seven faces in three seconds" -- the player now blinks on a
+   change and not again for 0.8 s, and `plan.mouths` limits a face's mouths. Put the cover
+   (`"cover"` in the manifest) on an opening moment: frame 0 showing the ending gives it away.
+7. Get the subject right: in padel the ball bounces on the floor before the wall, a return clears
+   the net, and a net that hides the far half of the court reads as half a court -- a low eye
+   height in a painting can do that to a true 0.88 m net.
+8. Check with stills at the contact frames and around each turn, then a probe render scored by
+   `character-motion.py` against the last version (a probe cancels the character's walks: it
+   measures how it moves, not where it goes); then a fresh review (`video-review`).
 
 ## A motion-design promo (square, 3D pieces, real people, music only)
 

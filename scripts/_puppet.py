@@ -33,7 +33,10 @@ def film_puppets(m, rel):
                 with open(vp, encoding="utf-8") as f:
                     out[name + "@" + vn] = (json.load(f), os.path.join(d, v["dir"]))
             else:
-                print("  WARNING puppet %r: its view %r is missing (%s)" % (name, vn, vp), file=sys.stderr)
+                print(
+                    "  WARNING puppet %r: its view %r is missing (%s)" % (name, vn, vp),
+                    file=sys.stderr,
+                )
     return out
 
 

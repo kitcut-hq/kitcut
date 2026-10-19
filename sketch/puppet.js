@@ -111,8 +111,9 @@
   }
 
   // ------------------------------------------------------------------ the voice and the blink
-  function mouthFor(mouths, v) {
+  function mouthFor(mouths, v, only) {
     if (!mouths || v.open < 0.15) return null;
+    if (only) mouths = Object.fromEntries(Object.entries(mouths).filter(([k]) => only.includes(k)));
     if (mouths.round && v.wide < -0.3) return 'round';
     if (mouths.wide && v.wide > 0.35 && v.open >= 0.3) return 'wide';
     if (mouths.small && v.open < 0.5) return 'small';
@@ -168,7 +169,7 @@
     const v = talk(o.who || name, t);
     let mouth = null;
     if (o.mouth && o.mouth !== 'auto') mouth = o.mouth === 'none' ? null : o.mouth;
-    else { const st = o.steps ?? 12, tt = st ? Math.floor(t * st) / st : t; mouth = mouthFor(F.mouths, talk(o.who || name, tt)); }
+    else { const st = o.steps ?? 12, tt = st ? Math.floor(t * st) / st : t; mouth = mouthFor(F.mouths, talk(o.who || name, tt), o.mouths && o.mouths[face]); }
     const blink = o.blink === false ? 0 : typeof o.blink === 'number' ? o.blink : (o.blinkNow ? 1 : blinkAt(o.who || name, t));
     // a figure turned to one side has a far arm, drawn behind its body and head
     const facing = (P.facing || 0) * (o.flip ? -1 : 1), far = P.facing === 1 ? 'l' : P.facing === -1 ? 'r' : null;
@@ -255,6 +256,7 @@
     cheer: (lt) => ({ arm_S_up: 128 + 5 * Math.sin(lt * 8), arm_O_up: 126 + 5 * Math.sin(lt * 8 + 1), arm_S_lo: -8, arm_O_lo: -8, hand_S: 4, hand_O: 4, lean: -2, bounce: 1 }),
     think: () => ({ ik_S: 'chin', hand_S: 40, head: 6, lean: 1.5 }),
     me: () => ({ ik_S: 'chest', hand_S: 20, head: -3 }),  // a hand on the chest: "I", "me"
+    pump: (lt) => { const k = Math.abs(Math.sin(lt * Math.PI * 2.4)); return { arm_S_up: 55 + 25 * k, arm_S_lo: -95 - 20 * k, head: 3 * k, bounce: 0.6 }; },  // a fist pumped, again and again
     nod: (lt) => ({ head: 5 * Math.sin(lt * 2 * Math.PI * 1.6) }),
     lean_in: () => ({ lean: 4, head: 2 }),
   };
@@ -304,13 +306,13 @@
     return { sink: 1.4 * k, squash: 0.7 * k * k };
   };
   // dejected: shoulders and head down, the knees giving a little
-  GESTURES.sag = (lt) => ({ sag: 1, head: 5 + 1.5 * Math.sin(lt * 1.7) });
+  GESTURES.sag = (lt, o) => ({ sag: o.amount ?? 1, head: (5 + 1.5 * Math.sin(lt * 1.7)) * (o.amount ?? 1) });
   // ready: knees bent, feet a little wider, as before a ball
   GESTURES.ready = (lt) => ({ sink: 1 + 0.15 * Math.sin(lt * 5), stance: 1 });
   const KEYED = new Set(['swing', 'forehand']);
   // the hand each gesture uses (S: its side, O: the other); a hand that holds something keeps its grip
   const SHAPES = { wave: { S: 'palm' }, present: { S: 'palm' }, point: { S: 'point' }, shrug: { S: 'palm', O: 'palm' },
-    cheer: { S: 'fist', O: 'fist' }, think: { S: 'fist' }, me: { S: 'palm' }, swing: { S: 'grip' }, forehand: { S: 'grip' } };
+    cheer: { S: 'fist', O: 'fist' }, think: { S: 'fist' }, me: { S: 'palm' }, swing: { S: 'grip' }, forehand: { S: 'grip' }, pump: { S: 'fist' } };
   SK.PUPPET_SHAPES = SHAPES;
   function handShapes(plan, t) {
     const out = {}, HF = 0.08;  // a hand changes shape in a short dissolve, while it moves
@@ -414,18 +416,18 @@
   // body narrowing through it so the eye reads a turn rather than a cut
   const TURN = 0.1;
   function viewAt(name, plan, t) {
-    let v = null, near = 99;
-    for (const [tv, vn] of plan.views || []) { if (tv <= t) v = vn; near = Math.min(near, Math.abs(t - tv)); }
+    let v = null, near = 99, since = 99;
+    for (const [tv, vn] of plan.views || []) { if (tv <= t) { v = vn; since = t - tv; } near = Math.min(near, Math.abs(t - tv)); }
     const full = !v || v === 'front' ? name : name + '@' + v;
     if (!SK.PUPPETS[full]) throw new Error('SK.puppet: no view ' + JSON.stringify(full) + ' (puppets: ' + Object.keys(SK.PUPPETS).join(', ') + ')');
-    return { name: full, turn: near < TURN ? 1 - near / TURN : 0 };
+    return { name: full, turn: near < TURN ? 1 - near / TURN : 0, since };
   }
 
   // how long a gesture takes to arrive and to leave: a bigger move takes longer (an arm thrown up
   // in 0.38 s was too fast for the eye to follow: measured, motion.py's pops at every big gesture)
   const RAMP = { swing: [0.12, 0.55], wave: [0.55, 0.42], present: [0.45, 0.45], point: [0.42, 0.42], shrug: [0.4, 0.42],
     think: [0.6, 0.45], cheer: [0.62, 0.45], nod: [0.12, 0.2], lean_in: [0.5, 0.5], forehand: [0.1, 0.5],
-    hop: [0.04, 0.08], sag: [0.45, 0.5], ready: [0.35, 0.4], me: [0.45, 0.4] };
+    hop: [0.04, 0.08], sag: [0.45, 0.5], ready: [0.35, 0.4], me: [0.45, 0.4], pump: [0.3, 0.4] };
   // how far through a ramp in or out t is (0..1), or -1 outside both: an arm travelling bends at
   // the elbow and straightens again, so a big move goes in an arc (coming down from a cheer with
   // straight arms passed through a T, as a review said)
@@ -559,7 +561,11 @@
     let face = 'neutral', prev = null, since = 99;
     for (const f of plan.faces || []) if (f[0] <= t) { prev = face; face = f[1]; since = t - f[0]; }
     const FADE = 0.12;  // an expression dissolves into the next: a swap read as a jump (motion.py)
-    return { view: view.name, pose: q, face, prevFace: since < FADE ? prev : null, faceMix: since < FADE ? smooth(since / FADE) : 1, blinkNow: since < 0.1 && since > 0.0, hands: handShapes(plan, t), propsBack: ex.prop_back > 0.5 };
+    // the change blinks; no other blink for a while after it: a blink of its own straight after read
+    // as another face (a reviewer counted seven in three seconds)
+    const changed = Math.min(since, view.since);  // a turn blinks too: it hides the swap
+    const blink = changed < 0.1 && changed > 0.0 ? 1 : changed < 0.8 ? 0 : undefined;
+    return { view: view.name, pose: q, face, prevFace: since < FADE ? prev : null, faceMix: since < FADE ? smooth(since / FADE) : 1, blink, hands: handShapes(plan, t), propsBack: ex.prop_back > 0.5, mouths: plan.mouths };
   };
 
   // where its parts are at t, on the page, without drawing it: {hand_r, hand_l, head, feet, props:
@@ -585,6 +591,6 @@
   SK.puppetPlay = function (name, x, y, h, plan, o = {}) {
     const t = o.t ?? SK.T;
     const a = SK.puppetAct(name, plan, t);
-    return SK.puppet(a.view, x, y, h, Object.assign({ pose: a.pose, face: a.face, prevFace: a.prevFace, faceMix: a.faceMix, blinkNow: a.blinkNow, hands: a.hands, propsBack: a.propsBack, who: plan.who || name }, o));
+    return SK.puppet(a.view, x, y, h, Object.assign({ pose: a.pose, face: a.face, prevFace: a.prevFace, faceMix: a.faceMix, blink: a.blink, hands: a.hands, propsBack: a.propsBack, mouths: a.mouths, who: plan.who || name }, o));
   };
 })();

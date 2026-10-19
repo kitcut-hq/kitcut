@@ -730,10 +730,11 @@ measured for it and gpt-image-2.5-sunburst is the default. After touching any of
 drawn once in an A-pose, cut on a skeleton found by MediaPipe (`scripts/_puppet.py`) and bent at
 its joints by `sketch/puppet.js` -- a plan of gestures, steps, hops and turns, every frame a
 function of t. `"views": {"q": {}}` draws it again turned three-quarters, rigged the same way,
-so it can face a court and hit a forehand. On the same script the swapped Enrique popped 12 times
-and stood still 20 % of the time, the puppet 8 and never (`scripts/character-motion.py`, on
-probe renders); a fresh reviewer still called it weak until it used its whole body and could
-turn. `docs/reference.md`, "Puppets"; after touching any of it, `python scripts/check-actors.py`.
+so it can face a court and hit a forehand. The swapped Enrique popped 12 times and stood still a
+fifth of the time; the puppet's scene popped only where it turns or hops and never stood still
+(`scripts/character-motion.py`, on probe renders). Nine fresh reviews took it from "still weak"
+to "show it": the rig was never the problem, the staging was -- one painted place, close on
+him while he acts, his whole body on every line. `docs/reference.md`, "Puppets"; after touching any of it, `python scripts/check-actors.py`.
 
 **Talking heads** are real people from their photos, speaking in any of the looks: a manifest's
 `"heads"` names the photos, `head-rig.py` measures each once on the CPU (MediaPipe landmarks and
