@@ -510,9 +510,88 @@ def puppet_page(tmp):
         and sorted(imgs) == ["puppet:tester:0", "puppet:tester@q:0"]
         and '"tester@q"' in _puppet.film_script(m, lambda m, p: p),
     )
+    return d
 
 
-def js():
+# what puppet.js does with a plan, run in node on the rig above: each line a measurement in figure
+# heights (h = 1), printed as JSON for the checks in js()
+ACTING_JS = r"""
+const fs = require('fs'), vm = require('vm');
+const [pj, src] = process.argv.slice(2);
+const P = JSON.parse(fs.readFileSync(pj, 'utf8')), H = P.figure.height;
+// the turned drawing: the same rig with its right arm drawn further in (a place the other
+// drawing's arm can reach: one drawn further out than an outstretched arm is long cannot be met)
+const Q = JSON.parse(JSON.stringify(P));
+for (const b of ['arm_r_up', 'arm_r_lo', 'hand_r']) { Q.bones[b].pivot[0] += 0.03 * H; Q.bones[b].end[0] += 0.03 * H; }
+const SK = { PUPPETS: { tester: P, 'tester@q': Q } };
+const ctx = { window: { SK }, Math, console, Float32Array, Int16Array, Uint32Array, Map, Set, Object, Array, JSON, Error };
+vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(src, 'utf8'), ctx);
+const at = (plan, t) => SK.puppetAt('tester', 0, 0, 1, plan, t);
+const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+const out = {};
+const turn = { views: [[0, 'q'], [1, 'front']], acts: [[0.2, 'present', { side: 'r', dur: 2 }]] };
+const front = { views: [[0, 'front']], acts: turn.acts };
+const was = at({ ...turn, views: [[0, 'q']] }, 1), now = at(turn, 1.001);
+out.raw_jump = d(was.wrist_r, at(front, 1).wrist_r);
+out.turn_jump = Math.max(d(at(turn, 0.999).wrist_r, now.wrist_r), d(at(turn, 0.999).head, now.head));
+out.turn_settled = d(at(turn, 1.6).wrist_r, at(front, 1.6).wrist_r);
+const hand = { acts: [[0, 'shade', { side: 'l', dur: 1, out: 0.3 }], [1, 'catch', { side: 'l', dur: 1 }]] };
+const p0 = at(hand, 1).wrist_l, p1 = at(hand, 1.3).wrist_l, L = d(p0, p1);
+let off = 0;
+for (let t = 1; t <= 1.3; t += 0.01) {
+  const p = at(hand, t).wrist_l;
+  off = Math.max(off, Math.abs((p1[0] - p0[0]) * (p0[1] - p[1]) - (p0[0] - p[0]) * (p1[1] - p0[1])) / L);
+}
+out.handover_len = L; out.handover_off = off;
+const face = { faces: [[0, 'neutral'], [1, 'happy']] };
+const f1 = SK.puppetAct('tester', face, 1.02), f2 = SK.puppetAct('tester', face, 1.08);
+out.face = [f1.face, f1.prevFace, f1.blink, f2.face];
+const held = { acts: [[0, 'catch', { side: 'l', dur: 0.4 }], [0.42, 'me', { side: 'l', dur: 1, shape: 'fist' }]] };
+const shapes = new Set();
+for (let t = 0.15; t <= 1.3; t += 0.02) shapes.add(SK.puppetAct('tester', held, t).hands.l.shape);
+out.held = [...shapes];
+console.log(JSON.stringify(out));
+"""
+
+
+def acting(node, d):
+    js_file = os.path.join(d, "acting.js")
+    open(js_file, "w").write(ACTING_JS)
+    r = subprocess.run(
+        [node, js_file, os.path.join(d, "puppet.json"), _env.resolve("sketch/puppet.js")],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if r.returncode:
+        check("puppet.js acts a plan in node", False, r.stderr.strip()[-300:])
+        return
+    m = json.loads(r.stdout)
+    check(
+        "a turn carries the body over: no jump at the swap, the new drawing's own pose 0.6 s on",
+        m["raw_jump"] > 0.02 and m["turn_jump"] < 0.004 and m["turn_settled"] < 0.002,
+        "drawings %.3f apart; at the swap %.4f; after %.4f"
+        % (m["raw_jump"], m["turn_jump"], m["turn_settled"]),
+    )
+    check(
+        "a hand going from one place to the next goes straight (shade into catch)",
+        m["handover_len"] > 0.05 and m["handover_off"] < 0.1 * m["handover_len"],
+        "%.3f off a %.3f path" % (m["handover_off"], m["handover_len"]),
+    )
+    check(
+        "a face changes whole, halfway through a blink: never two faces at once",
+        m["face"] == ["neutral", None, 1, "happy"],
+        m["face"],
+    )
+    check(
+        "a hand that caught something stays closed while another gesture carries it",
+        m["held"] == ["fist"],
+        m["held"],
+    )
+
+
+def js(d=None):
     node = shutil.which("node")
     if not node:
         print("  --    sketch/actors.js syntax (no node here)")
@@ -531,6 +610,8 @@ def js():
         check=False,
     )
     check("sketch/puppet.js parses", r.returncode == 0, r.stderr.strip()[:200])
+    if d:
+        acting(node, d)
 
 
 def main():
@@ -544,8 +625,7 @@ def main():
         print("[check-actors] the page")
         bundle(tmp, pack_dir)
         print("[check-actors] a rig")
-        puppet_page(tmp)
-        js()
+        js(puppet_page(tmp))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("\n%d failed" % len(FAILS) if FAILS else "\nall passed")

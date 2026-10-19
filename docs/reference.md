@@ -5461,24 +5461,42 @@ const at = SK.puppetAt('enrique', x, groundY, height, plan, HIT);   // where its
 
 Every frame is a pure function of t. The gestures (`SK.PUPPET_GESTURES`): `wave`, `present`,
 `point`, `shrug` (`one: true` for one hand), `cheer`, `think` (hand to chin, by IK), `me` (hand on
-chest), `nod`, `lean_in`, `swing` (a front-view forehand), `forehand` (a turned view's, contact at
-0.45 of its `dur`), `hop`, `sag`, `ready`. `fwd: true` sends an arm the other way -- in a turned
+chest), `shade` (a hand flat at the brim, fingers across the brow), `catch` (a hand up and out:
+follow it with `me` and `shape: 'fist'` to bring a ball in), `nod`, `lean_in`, `swing` (a
+front-view forehand), `forehand` and `lob` (a turned view's, contact at 0.45 and 0.4 of their
+`dur`), `hop`, `sag`, `ready`. `shape` on any gesture overrides its hand: the newest gesture under
+way has the hand, so a fist that caught a ball stays closed while `me` carries it in. `fwd: true` sends an arm the other way -- in a turned
 view "out" for the near arm is behind. What the acting layer adds, each from a measured fault:
 gestures arrive with a little anticipation and overshoot (`easeInOutBack`; the first ease left at
 4.4x linear speed and every gesture leapt); a bigger move takes longer (`RAMP`); an arm travelling
 bends at the elbow (coming down from a cheer with straight arms passed through a T); the forearm
 lags 0.05 s, the hand 0.1 s, the head 0.06 s; a held gesture drifts; breath, a slow weight shift
-and the head's own life run underneath; the free hand beats with the voice. Faces dissolve over
-0.12 s behind a blink, hand shapes over 0.08 s. The body: the feet are IK targets (steps lift them
+and the head's own life run underneath; the free hand beats with the voice. A face changes whole,
+halfway through a blink (dissolved over 0.12 s, a laugh's shut eyes showed over wide ones as
+goggles, and two mouths at once: the owner's note at 0:14 of the second scene); hand shapes
+dissolve over 0.08 s. **Placed hands** (`think`, `me`, `shade`, `catch`: an IK target each) are
+blended by where the wrist is, not by angle, and solved once: from one place to the next, and from
+rest and back, the wrist goes in a straight line, eased without a wind-up, and its forearm does
+not lag (blended by angle, shade into catch swung the arm up and round and dropped the hand across
+the face; `check-actors.py` holds the path to 0.001 of a 0.104 figure-height move). The body: the feet are IK targets (steps lift them
 in an arc and the pelvis follows), `sink` bends the knees, `hop` lifts the whole figure with a
 crouch before and a squash after, `sag` drops the shoulders and the head. Facing us, a bent knee
 mostly shortens the leg instead of going out (a crouch with the knees out alone read as bow legs).
-A turn is a swap, as in cut-out animation, with the body narrowing through it: put it on a blink
-or a fast move.
+A turn is a swap, as in cut-out animation, with the body narrowing through it, on a blink, and it
+**carries the body over**: for 0.4 s the new drawing's hips (across only), wrists and ankles start
+where the old one had them and ease into its own pose. Two drawings of one man stand differently
+-- turned, the paddle hangs in front of the thigh; facing us, beside it -- and swapped at rest it
+all moved in one frame, which the owner saw as "the body changes position awkwardly" (0:02 of the
+second scene). Carried, the wrist moves 0.0001 figure heights at the swap where the drawings put
+it 0.03 apart (`check-actors.py`). Carrying the hips' height bent both knees into a squat, and
+lifting the feet as steps did the same: the feet slide, as a pivot does. Still put a turn where
+the body is quiet or on a fast move; `character-motion.py` counts the swap of drawings as a pop
+whatever the body does.
 
-`SK.puppetAt` gives the hands, the head, the feet and each prop's head on the page at any t without
-drawing: the example's ball leaves the paddle from it and comes back to it, and both contacts
-land on the paddle to the frame.
+`SK.puppetAt` gives the hands (their tips), the wrists, the head, the feet and each prop's head on
+the page at any t without drawing: the example's ball leaves the paddle from it and comes back to
+it, and both contacts land on the paddle to the frame. A ball held in a fist sits between the
+wrist and the tip (at the tip alone it floated above the fist).
 
 **Sets: one place, painted to match.** Behind an actor drawn by an image model, sets drawn in code
 read as "flat placeholder clip-art" and the actor as pasted on; a story told standing in one spot

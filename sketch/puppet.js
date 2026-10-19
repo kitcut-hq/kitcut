@@ -194,6 +194,9 @@
     const patch = (pid, px, py, al = 1) => { const rect = P.rects[pid]; if (rect && al > 0.004) quad(runFor(rect.p), head, rect, px, py, rect.w, rect.h, null, al); };
     const mix = o.faceMix ?? 1, F0 = o.prevFace && P.faces[o.prevFace];
     if (F0 && mix < 1 && F0.piece) patch(F0.piece, F0.x, F0.y, F.piece ? 1 : 1 - mix);
+    // and its eyes shut under the new one: dissolved open, the old eyes showed through the new face
+    // (a laugh's closed eyes over wide ones read as goggles: the owner's 0:14 of the second scene)
+    if (F0 && mix < 1 && F0.blink) patch(F0.blink.piece, F0.blink.x, F0.blink.y, F.piece || !F0.piece ? 1 : 1 - mix);
     if (face !== 'neutral' && F.piece) patch(F.piece, F.x, F.y, F0 && mix < 1 ? mix : 1);
     if (mouth && F.mouths && F.mouths[mouth]) patch(F.mouths[mouth].piece, F.mouths[mouth].x, F.mouths[mouth].y); else mouth = null;
     if (blink > 0.5 && F.blink) patch(F.blink.piece, F.blink.x, F.blink.y);
@@ -256,6 +259,8 @@
     cheer: (lt) => ({ arm_S_up: 128 + 5 * Math.sin(lt * 8), arm_O_up: 126 + 5 * Math.sin(lt * 8 + 1), arm_S_lo: -8, arm_O_lo: -8, hand_S: 4, hand_O: 4, lean: -2, bounce: 1 }),
     think: () => ({ ik_S: 'chin', hand_S: 40, head: 6, lean: 1.5 }),
     me: () => ({ ik_S: 'chest', hand_S: 20, head: -3 }),  // a hand on the chest: "I", "me"
+    shade: (lt) => ({ ik_S: 'brow', hand_S: 80, head: -7 + Math.sin(lt * 1.3), lean: -1 }),  // a hand flat at the brim, fingers across the brow, looking far off
+    catch: () => ({ ik_S: 'reach', hand_S: 6, head: -5 }),  // a hand up and out for it (follow with 'me' to bring it in to the chest)
     pump: (lt) => { const k = Math.abs(Math.sin(lt * Math.PI * 2.4)); return { arm_S_up: 55 + 25 * k, arm_S_lo: -95 - 20 * k, head: 3 * k, bounce: 0.6 }; },  // a fist pumped, again and again
     nod: (lt) => ({ head: 5 * Math.sin(lt * 2 * Math.PI * 1.6) }),
     lean_in: () => ({ lean: 4, head: 2 }),
@@ -291,6 +296,15 @@
     [0.64, { arm_S_up: -118, arm_S_lo: -64, hand_S: -18, sink: 0.6, shift: 1.1, head: 2, squash: -0.1 }],
     [1, { arm_S_up: -70, arm_S_lo: -46, hand_S: -10, sink: 0.8, shift: 0.6, head: 1 }],
   ]);
+  // a lob from a turned view: the racket drops low behind, comes up through the ball (u = 0.4) and
+  // finishes high over the head, the head tipped back after the ball
+  GESTURES.lob = keyed([
+    [0, { arm_S_up: -6, arm_S_lo: 0, hand_S: 0 }],
+    [0.25, { arm_S_up: 42, arm_S_lo: 22, hand_S: 30, sink: 1.4, shift: -0.8, head: -3 }],
+    [0.4, { arm_S_up: -30, arm_S_lo: -10, hand_S: -10, sink: 1.0, shift: 0.3, head: -6 }],
+    [0.62, { arm_S_up: -150, arm_S_lo: -28, hand_S: -25, sink: 0.2, shift: 0.9, head: -12, squash: -0.15 }],
+    [1, { arm_S_up: -125, arm_S_lo: -40, hand_S: -15, sink: 0.4, shift: 0.6, head: -10 }],
+  ]);
   // a hop: down into the knees, up off both feet (stretched), the legs tucked in the air, and
   // down into the knees again (squashed). o.height in figure heights (0.12)
   GESTURES.hop = (lt, o) => {
@@ -309,30 +323,33 @@
   GESTURES.sag = (lt, o) => ({ sag: o.amount ?? 1, head: (5 + 1.5 * Math.sin(lt * 1.7)) * (o.amount ?? 1) });
   // ready: knees bent, feet a little wider, as before a ball
   GESTURES.ready = (lt) => ({ sink: 1 + 0.15 * Math.sin(lt * 5), stance: 1 });
-  const KEYED = new Set(['swing', 'forehand']);
+  const KEYED = new Set(['swing', 'forehand', 'lob']);
   // the hand each gesture uses (S: its side, O: the other); a hand that holds something keeps its grip
   const SHAPES = { wave: { S: 'palm' }, present: { S: 'palm' }, point: { S: 'point' }, shrug: { S: 'palm', O: 'palm' },
-    cheer: { S: 'fist', O: 'fist' }, think: { S: 'fist' }, me: { S: 'palm' }, swing: { S: 'grip' }, forehand: { S: 'grip' }, pump: { S: 'fist' } };
+    cheer: { S: 'fist', O: 'fist' }, think: { S: 'fist' }, me: { S: 'palm' }, swing: { S: 'grip' }, forehand: { S: 'grip' }, pump: { S: 'fist' }, lob: { S: 'grip' }, catch: { S: 'fist' } };
   SK.PUPPET_SHAPES = SHAPES;
   function handShapes(plan, t) {
     const out = {}, HF = 0.08;  // a hand changes shape in a short dissolve, while it moves
     for (const s of ['r', 'l']) {
       const rest = ((plan.hold || {})[s] || {}).shape || 'open';
       if (rest === 'grip') { out[s] = { shape: 'grip' }; continue; }
-      const ch = [];
+      const win = [];  // [from, to, shape]: each gesture's hand, from early in its arrival to late in its leaving
       for (const a of plan.acts || []) {
-        const o = a[2] || {}, side = o.side || 'l', sh = SHAPES[a[1]];
+        const o = a[2] || {}, side = o.side || 'l', sh = o.shape ? { S: o.shape } : SHAPES[a[1]];  // a hand holding something keeps closed
         if (!sh) continue;
         const r = RAMP[a[1]] || [0.45, 0.5], rin = o.in ?? r[0], rout = o.out ?? r[1], dur = o.dur ?? 2;
         for (const [k, shape] of Object.entries(sh)) {
           if (o.one && k === 'O') continue;
           if ((k === 'S' ? side : (side === 'r' ? 'l' : 'r')) !== s) continue;
-          ch.push([a[0] + 0.3 * rin, shape], [a[0] + dur + 0.6 * rout, rest]);
+          win.push([a[0] + 0.3 * rin, a[0] + dur + 0.6 * rout, shape]);
         }
       }
-      ch.sort((x, y) => x[0] - y[0]);
-      let shape = rest, prev = null, since = 99;
-      for (const [tc, sh] of ch) if (tc <= t) { prev = shape; shape = sh; since = t - tc; }
+      // the newest gesture under way has the hand; one ending does not open it while another holds
+      // it (a fist that caught a ball opened as it was carried to the chest)
+      const at = (u) => { let b = null; for (const w of win) if (w[0] <= u && u < w[1] && (!b || w[0] >= b[0])) b = w; return b ? b[2] : rest; };
+      const shape = at(t), marks = win.flatMap((w) => [w[0], w[1]]).filter((u) => u <= t).sort((x, y) => y - x);
+      let prev = null, since = 99;
+      for (const u of marks) { const was = at(u - 1e-6); if (was !== at(u)) { prev = was; since = t - u; break; } }
       out[s] = since < HF ? { shape, prev, mix: smooth(since / HF) } : { shape };
     }
     return out;
@@ -416,18 +433,46 @@
   // body narrowing through it so the eye reads a turn rather than a cut
   const TURN = 0.1;
   function viewAt(name, plan, t) {
-    let v = null, near = 99, since = 99;
-    for (const [tv, vn] of plan.views || []) { if (tv <= t) { v = vn; since = t - tv; } near = Math.min(near, Math.abs(t - tv)); }
-    const full = !v || v === 'front' ? name : name + '@' + v;
-    if (!SK.PUPPETS[full]) throw new Error('SK.puppet: no view ' + JSON.stringify(full) + ' (puppets: ' + Object.keys(SK.PUPPETS).join(', ') + ')');
-    return { name: full, turn: near < TURN ? 1 - near / TURN : 0, since };
+    let v = null, near = 99, since = 99, prev = null, at = null;
+    for (const [tv, vn] of plan.views || []) { if (tv <= t) { prev = v; v = vn; since = t - tv; at = tv; } near = Math.min(near, Math.abs(t - tv)); }
+    const full = (x) => (!x || x === 'front' ? name : name + '@' + x);
+    if (!SK.PUPPETS[full(v)]) throw new Error('SK.puppet: no view ' + JSON.stringify(full(v)) + ' (puppets: ' + Object.keys(SK.PUPPETS).join(', ') + ')');
+    return { name: full(v), turn: near < TURN ? 1 - near / TURN : 0, since, at, prev: at > 0 && full(prev) !== full(v) ? full(prev) : null };
+  }
+
+  // a turn carries the body over: the new drawing starts with its hips, wrists and ankles where the
+  // old one had them and eases into its own pose. The two drawings stand differently (a turned one
+  // a little to one side, its paddle in front of the thigh rather than beside it), and swapped at
+  // rest all of it moved in one frame: "the body changes position awkwardly" (the owner, at 0:02
+  // of the second scene)
+  const CARRY = 0.4;
+  function spots(R, q) {  // hips, wrists, ankles in figure heights from the feet
+    const M = matrices(R, q), P = R.P, B = P.bones, H = P.figure.height, f = P.figure.feet;
+    const at = (b) => { const w = ap(M[R.idx[b]], B[b].pivot[0], B[b].pivot[1]); return [(w[0] - f[0]) / H, (w[1] - f[1]) / H]; };
+    return { pelvis: at('pelvis'), hand_r: at('hand_r'), hand_l: at('hand_l'), foot_r: at('foot_r'), foot_l: at('foot_l') };
+  }
+  function carryOf(name, plan, view) {
+    if (!view.prev || view.since >= CARRY) return null;
+    const was = SK.puppetAct(name, plan, view.at - 1e-4, true), now = SK.puppetAct(name, plan, view.at, true);
+    const A = spots(prep(was.view), was.pose), B = spots(prep(now.view), now.pose), d = {};
+    for (const k of Object.keys(A)) d[k] = [A[k][0] - B[k][0], A[k][1] - B[k][1]];
+    return { d, k: 1 - smooth(view.since / CARRY) };
+  }
+  // where an arm's wrist is in rest space for these angles (ik2's inverse)
+  function wristAt(R, s, up, lo) {
+    const B = R.P.bones, S = B['arm_' + s + '_up'].pivot, E = B['arm_' + s + '_lo'].pivot, W = B['hand_' + s].pivot;
+    const L1 = Math.hypot(E[0] - S[0], E[1] - S[1]), L2 = Math.hypot(W[0] - E[0], W[1] - E[1]);
+    const a1 = (up + ang([E[0] - S[0], E[1] - S[1]])) * D2R, a2 = (lo + up + ang([W[0] - E[0], W[1] - E[1]])) * D2R;
+    const Ew = [S[0] + L1 * Math.cos(a1), S[1] + L1 * Math.sin(a1)];
+    return [Ew[0] + L2 * Math.cos(a2), Ew[1] + L2 * Math.sin(a2)];
   }
 
   // how long a gesture takes to arrive and to leave: a bigger move takes longer (an arm thrown up
   // in 0.38 s was too fast for the eye to follow: measured, motion.py's pops at every big gesture)
   const RAMP = { swing: [0.12, 0.55], wave: [0.55, 0.42], present: [0.45, 0.45], point: [0.42, 0.42], shrug: [0.4, 0.42],
     think: [0.6, 0.45], cheer: [0.62, 0.45], nod: [0.12, 0.2], lean_in: [0.5, 0.5], forehand: [0.1, 0.5],
-    hop: [0.04, 0.08], sag: [0.45, 0.5], ready: [0.35, 0.4], me: [0.45, 0.4], pump: [0.3, 0.4] };
+    hop: [0.04, 0.08], sag: [0.45, 0.5], ready: [0.35, 0.4], me: [0.45, 0.4], pump: [0.3, 0.4], lob: [0.1, 0.5],
+    shade: [0.45, 0.4], catch: [0.3, 0.45] };
   // how far through a ramp in or out t is (0..1), or -1 outside both: an arm travelling bends at
   // the elbow and straightens again, so a big move goes in an arc (coming down from a cheer with
   // straight arms passed through a T, as a review said)
@@ -438,11 +483,11 @@
     if (t > t0 + dur && t < t0 + dur + rout) return (t - t0 - dur) / rout;
     return -1;
   }
-  function env(t, a) {
+  function env(t, a, plain) {
     const t0 = a[0], o = a[2] || {}, dur = o.dur ?? 2, r = RAMP[a[1]] || [0.45, 0.5];
     const rin = o.in ?? r[0], rout = o.out ?? r[1];
     if (t < t0 || t > t0 + dur + rout) return 0;
-    if (t < t0 + rin) return (o.snap === false ? smooth : arrive)((t - t0) / rin);
+    if (t < t0 + rin) return (o.snap === false || plain ? smooth : arrive)((t - t0) / rin);
     if (t <= t0 + dur) return 1;
     return 1 - smooth((t - t0 - dur) / rout);
   }
@@ -457,22 +502,26 @@
     const extra = { head: 0, lean: 0, raise: 0, bounce: 0, twist: 0, shift: 0, sink: 0, prop_back: 0, hop: 0, tuck: 0, squash: 0, sag: 0, stance: 0 };
     const hold = plan.hold || {};
     for (const s of ['r', 'l']) if (hold[s]) Object.entries(hold[s]).forEach(([b, v]) => { if (typeof v === 'number') set(b.replace('S', s), SIGN[s] * v); });
+    const reach = { r: [], l: [] }, placed = { r: 0, l: 0 };  // [weight, target] per arm: placed hands, solved once below
     for (const a of plan.acts || []) {
-      const e = env(t, a); if (e <= 0) continue;
+      // a placed hand is eased plainly (ep): a wind-up before it (e below 0) let the hand leaving
+      // drop towards rest across the face
+      const e = env(t, a), ep = env(t, a, true); if (e <= 0 && ep <= 0) continue;
       const G = GESTURES[a[1]]; if (!G) continue;
       const o = a[2] || {}, s = o.side || 'l', os = s === 'r' ? 'l' : 'r';
       const lt = Math.max(0, t - a[0]);
       const g = G(lt, o);
       for (const [k, v] of Object.entries(g)) {
         if (o.one && k.includes('_O')) continue;  // one-handed: the other hand is busy (holding something)
+        if (e <= 0 && k !== 'ik_S') continue;
         if (k in extra) { extra[k] += e * v; continue; }
         if (k === 'ik_S') {
-          const P = R.P, H = P.figure.height, sd = s === 'r' ? -1 : 1;
+          const P = R.P, H = P.figure.height, sd = s === 'r' ? -1 : 1, S = P.bones['arm_' + s + '_up'].pivot;
           const tg = v === 'chin' ? [P.chin[0] + sd * (o.tx ?? 0.05) * H, P.chin[1] + (o.ty ?? 0.075) * H]
-            : v === 'chest' ? [P.chin[0] + sd * (o.tx ?? 0.02) * H, P.chin[1] + (o.ty ?? 0.12) * H] : v;
-          const q = ik2(R, s, tg, s === 'r' ? 1 : -1);  // the elbow down, under the hand
-          out['arm_' + s + '_up'] = out['arm_' + s + '_up'] + e * (q.up - out['arm_' + s + '_up']);
-          out['arm_' + s + '_lo'] = out['arm_' + s + '_lo'] + e * (q.lo - out['arm_' + s + '_lo']);
+            : v === 'chest' ? [P.chin[0] + sd * (o.tx ?? 0.02) * H, P.chin[1] + (o.ty ?? 0.12) * H]
+            : v === 'brow' ? [P.chin[0] + sd * (o.tx ?? 0.11) * H, P.chin[1] - (o.ty ?? 0.2) * H]
+            : v === 'reach' ? [S[0] + sd * (o.tx ?? 0.12) * H, S[1] - (o.ty ?? 0.2) * H] : v;
+          reach[s].push([ep, tg]);
           continue;
         }
         const b = k.replace('_S', '_' + s).replace('_O', '_' + os);
@@ -482,7 +531,7 @@
         const cv = SIGN[side] * ((o.fwd && /^(arm|hand)_/.test(b) ? -v : v) + drift);
         out[b] = (out[b] ?? 0) + e * (cv - (out[b] ?? 0));
       }
-      const ph = rampPhase(t, a);  // the arc: the elbow folds while the arm travels
+      const ph = e > 0 ? rampPhase(t, a) : -1;  // the arc: the elbow folds while the arm travels
       if (ph >= 0 && !KEYED.has(a[1])) {
         for (const [k, v] of Object.entries(g)) {
           if (!/^arm_[SO]_up$/.test(k) || (o.one && k.includes('_O'))) continue;
@@ -491,19 +540,42 @@
         }
       }
     }
-    return { q: out, extra };
+    // a hand placed (on the chin, the chest, the brow, up for a ball) goes from one place to the next
+    // in a straight line: each pose solved alone and blended by angle swung the arm up and round
+    // between them (shade into catch, a glitch the owner saw at 0:14 of the second scene)
+    for (const s of ['r', 'l']) {
+      const L = reach[s]; if (!L.length) continue;
+      let w = 0, x = 0, y = 0;
+      for (const [e, tg] of L) { w += e; x += e * tg[0]; y += e * tg[1]; }
+      // coming and going too: the wrist travels from where the arm's other pose has it to the place
+      const W = L.length > 1 ? Math.min(1, w) : w, up0 = out['arm_' + s + '_up'], lo0 = out['arm_' + s + '_lo'];
+      const b = wristAt(R, s, up0, lo0), tg = [b[0] + W * (x / w - b[0]), b[1] + W * (y / w - b[1])];
+      const q = ik2(R, s, tg, s === 'r' ? 1 : -1), c = smooth(Math.min(1, W / 0.2));  // the elbow down, under the hand
+      placed[s] = c;
+      out['arm_' + s + '_up'] = up0 + c * wrap(q.up - up0);
+      out['arm_' + s + '_lo'] = lo0 + c * wrap(q.lo - lo0);
+    }
+    return { q: out, extra, placed };
   }
 
   const LAG = { arm_r_lo: 0.05, arm_l_lo: 0.05, hand_r: 0.1, hand_l: 0.1, head: 0.06 };
 
-  SK.puppetAct = function (name, plan, t) {
+  SK.puppetAct = function (name, plan, t, alone) {
     const view = viewAt(name, plan, t);
     const R = prep(view.name), P = R.P, H = P.figure.height, facing = P.facing || 0;
-    const now = rawPose(R, plan, t);
+    const carry = alone ? null : carryOf(name, plan, view);
+    const now = rawPose(R, plan, t), back = {};
     const q = {};
     for (const b of Object.keys(now.q)) {
       const lag = LAG[b] || 0;
-      const v = lag ? rawPose(R, plan, t - lag).q[b] : now.q[b];
+      let v = now.q[b];
+      if (lag) {
+        const w = (back[lag] = back[lag] || rawPose(R, plan, t - lag)).q[b], arm = /^arm_([rl])_lo$/.exec(b);
+        // a placed hand's forearm does not trail: the upper arm turning without it took the wrist
+        // off its path (over the eyes, leaving the brow for a catch)
+        const k = arm ? now.placed[arm[1]] : 0;
+        v = w + k * wrap(v - w);
+      }
       q[b] = { r: v };
     }
     const ex = now.extra, idle = plan.idle ?? 1;
@@ -522,6 +594,7 @@
       dx: idle * 0.010 * H * shift + mid * H + ex.shift * 0.022 * H * (facing || 1),
       dy: idle * 0.004 * H * Math.abs(shift) - ex.bounce * 0.012 * H * Math.abs(Math.sin(t * 9)) + sink * 0.018 * H - 0.012 * H * lifted,
     };
+    if (carry) q.pelvis.dx += carry.k * carry.d.pelvis[0] * H;  // across only: each drawing has its own hip height, and carried it bent the knees into a squat
     q.chest = { r: idle * (-0.9 * shift + 0.4 * noise(seed, t * 0.5)) + ex.lean, sy: (1 + idle * 0.013 * br) * (1 - 0.03 * ex.sag), sx: (1 + idle * 0.004 * br) * (1 - 0.07 * Math.abs(ex.twist)) };
     q.head = { r: (q.head ? q.head.r : 0) + idle * (1.0 * noise(seed + 5, t * 0.4) + 0.4 * shift) + ex.head + 2.2 * beat * Math.sin(t * 7.3), dy: -0.004 * H * beat + 0.012 * H * ex.sag };
     const free = plan.free || 'l';  // the hand that talks along (the other may hold something)
@@ -541,8 +614,11 @@
     const B = P.bones;
     for (const s of ['r', 'l']) {
       const A = B['foot_' + s].pivot, out = (s === 'r' ? -1 : 1) * ex.stance * 0.03 * H;
+      // a turn pivots on the feet: they slide to the new drawing's stance (lifted as a step, both
+      // feet bent both knees into a squat)
+      const fc = carry ? carry.d['foot_' + s][0] : 0;
       const lift = 0.045 * H * ft.lift[s] + 0.07 * H * ex.tuck;
-      const tg = [A[0] + ft.off[s] * H + out, A[1] - lift];
+      const tg = [A[0] + ft.off[s] * H + out + (carry ? carry.k * fc * H : 0), A[1] - lift];
       // facing us, a bent knee comes towards the camera: most of the bend shows as a shorter leg,
       // the rest as the knee going out (a crouch drawn with the knees out alone read as bow legs)
       let sy = 1;
@@ -557,15 +633,35 @@
       // the foot stays level with the ground and its own size; a lifted one points its toe down
       q['foot_' + s] = { r: -(q.pelvis.r + lg.up + lg.lo) + 16 * facing * Math.max(ft.lift[s], 0.6 * ex.tuck), sy: 1 / sy };
     }
+    // the wrists start where the old drawing had them: the wrist's own place now (less what the
+    // hips' carry moved it), plus what is left of the difference, taken into the arm's own frame
+    // (the turn narrows the body as it swaps, and the chest leans)
+    if (carry) {
+      const B = P.bones, M = matrices(R, q), dx = carry.k * carry.d.pelvis[0] * H;
+      const M0 = matrices(R, { ...q, pelvis: { ...q.pelvis, dx: q.pelvis.dx - dx } });
+      const pp = B.pelvis.pivot, p1 = ap(M[R.idx.pelvis], pp[0], pp[1]), p0 = ap(M0[R.idx.pelvis], pp[0], pp[1]);
+      for (const s of ['r', 'l']) {
+        const W = B['hand_' + s].pivot, now = ap(M[R.idx['hand_' + s]], W[0], W[1]), dd = carry.d['hand_' + s];
+        const want = [now[0] - (p1[0] - p0[0]) + carry.k * dd[0] * H, now[1] - (p1[1] - p0[1]) + carry.k * dd[1] * H];
+        const tg = ap(inv(M[R.idx[B['arm_' + s + '_up'].parent]]), want[0], want[1]);
+        tg[1] -= q['arm_' + s + '_up'].dy || 0;
+        const lo = q['arm_' + s + '_lo'].r, a = ik2(R, s, tg, 1), b = ik2(R, s, tg, -1);
+        const pick = Math.abs(wrap(a.lo - lo)) <= Math.abs(wrap(b.lo - lo)) ? a : b;  // the elbow keeps its side
+        q['arm_' + s + '_up'].r = pick.up; q['arm_' + s + '_lo'].r = pick.lo;
+      }
+    }
     // the face: the last one asked for; a change happens behind a blink
     let face = 'neutral', prev = null, since = 99;
     for (const f of plan.faces || []) if (f[0] <= t) { prev = face; face = f[1]; since = t - f[0]; }
-    const FADE = 0.12;  // an expression dissolves into the next: a swap read as a jump (motion.py)
-    // the change blinks; no other blink for a while after it: a blink of its own straight after read
-    // as another face (a reviewer counted seven in three seconds)
+    // the change blinks, and the face is swapped halfway through the blink, whole: dissolved, two
+    // faces showed at once (wide eyes through a laugh's shut ones, two mouths: the owner's 0:14 of
+    // the second scene). No other blink for a while after it: a blink of its own straight after
+    // read as another face (a reviewer counted seven in three seconds)
+    const SWAP = 0.05;
+    if (since < SWAP && prev) face = prev;
     const changed = Math.min(since, view.since);  // a turn blinks too: it hides the swap
     const blink = changed < 0.1 && changed > 0.0 ? 1 : changed < 0.8 ? 0 : undefined;
-    return { view: view.name, pose: q, face, prevFace: since < FADE ? prev : null, faceMix: since < FADE ? smooth(since / FADE) : 1, blink, hands: handShapes(plan, t), propsBack: ex.prop_back > 0.5, mouths: plan.mouths };
+    return { view: view.name, pose: q, face, prevFace: null, faceMix: 1, blink, hands: handShapes(plan, t), propsBack: ex.prop_back > 0.5, mouths: plan.mouths };
   };
 
   // where its parts are at t, on the page, without drawing it: {hand_r, hand_l, head, feet, props:
@@ -577,6 +673,7 @@
     const B = P.bones, tip = (b) => page(M[R.idx[b]], B[b].end[0], B[b].end[1]);
     const out = {
       view: a.view, hand_r: tip('hand_r'), hand_l: tip('hand_l'),
+      wrist_r: page(M[R.idx.hand_r], B.hand_r.pivot[0], B.hand_r.pivot[1]), wrist_l: page(M[R.idx.hand_l], B.hand_l.pivot[0], B.hand_l.pivot[1]),
       head: page(M[R.idx.head], B.head.pivot[0], B.head.pivot[1] - 0.12 * P.figure.height),
       feet: page(M[R.idx.root], f[0] + 0, f[1]), foot_r: tip('foot_r'), foot_l: tip('foot_l'), props: {},
     };
