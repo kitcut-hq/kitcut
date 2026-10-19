@@ -376,6 +376,32 @@
     return { up: rUp, lo: rLo };
   }
 
+  // a placed hand's elbow goes out from the body and below the line to the hand. "Down, under the
+  // hand" folded the arm flat up the front of the body as a hand rose past the hip: the shade at
+  // 0:14 of the second scene swept the hand across his stomach and his mouth on its way to the brim
+  function placeArm(R, s, tg) {
+    const B = R.P.bones, S = B['arm_' + s + '_up'].pivot, E = B['arm_' + s + '_lo'].pivot;
+    const L1 = Math.hypot(E[0] - S[0], E[1] - S[1]), rest = ang([E[0] - S[0], E[1] - S[1]]), out = s === 'r' ? -1 : 1;
+    let best = null, score = -Infinity;
+    for (const bend of [1, -1]) {
+      const q = ik2(R, s, tg, bend), a = (q.up + rest) * D2R;
+      const sc = out * L1 * Math.cos(a) + 0.5 * L1 * Math.sin(a);  // out, and a little down
+      if (sc > score) { score = sc; best = q; }
+    }
+    return best;
+  }
+
+  // how far an upper arm turns from one angle to another, going by the outside of the body: the
+  // short way round, unless that passes across the body (straight in, at the height of the shoulder)
+  function swingOut(R, s, from, to) {
+    const B = R.P.bones, S = B['arm_' + s + '_up'].pivot, E = B['arm_' + s + '_lo'].pivot;
+    const rest = ang([E[0] - S[0], E[1] - S[1]]), inward = s === 'r' ? 0 : 180;
+    let d = wrap(to - from);
+    const a0 = from + rest, k = wrap(inward - a0);  // how far round, from where it starts, "in" lies
+    if (d > 0 ? k > 0 && k < d : k < 0 && k > d) d -= 360 * Math.sign(d);
+    return d;
+  }
+
   function legTarget(R, s, M, target) {  // a target in the root's frame, in the pelvis' own
     const w = ap(M[R.idx.root], target[0], target[1]);
     return ap(inv(M[R.idx.pelvis]), w[0], w[1]);
@@ -540,20 +566,25 @@
         }
       }
     }
-    // a hand placed (on the chin, the chest, the brow, up for a ball) goes from one place to the next
-    // in a straight line: each pose solved alone and blended by angle swung the arm up and round
-    // between them (shade into catch, a glitch the owner saw at 0:14 of the second scene)
+    // a hand placed (on the chin, the chest, the brow, up for a ball) is solved at each place with its
+    // elbow out (placeArm), and the places are blended by joint angle, the upper arm always swinging
+    // by the outside of the body and the elbow folding while the hand travels. Blended as positions,
+    // a hand rising from the hip to the brow went through the shoulder and folded the arm flat
+    // across his stomach and his mouth; solved along the way, the elbow flipped sides in one frame.
+    // Blended by angle with no such care, shade into catch swung the arm up and round (the owner's
+    // 0:14 of the second scene)
     for (const s of ['r', 'l']) {
       const L = reach[s]; if (!L.length) continue;
-      let w = 0, x = 0, y = 0;
-      for (const [e, tg] of L) { w += e; x += e * tg[0]; y += e * tg[1]; }
-      // coming and going too: the wrist travels from where the arm's other pose has it to the place
-      const W = L.length > 1 ? Math.min(1, w) : w, up0 = out['arm_' + s + '_up'], lo0 = out['arm_' + s + '_lo'];
-      const b = wristAt(R, s, up0, lo0), tg = [b[0] + W * (x / w - b[0]), b[1] + W * (y / w - b[1])];
-      const q = ik2(R, s, tg, s === 'r' ? 1 : -1), c = smooth(Math.min(1, W / 0.2));  // the elbow down, under the hand
-      placed[s] = c;
-      out['arm_' + s + '_up'] = up0 + c * wrap(q.up - up0);
-      out['arm_' + s + '_lo'] = lo0 + c * wrap(q.lo - lo0);
+      const kU = 'arm_' + s + '_up', kL = 'arm_' + s + '_lo', up0 = out[kU], lo0 = out[kL];
+      let w = 0, du = 0, dl = 0;
+      for (const [e, tg] of L) { const q = placeArm(R, s, tg); w += e; du += e * swingOut(R, s, up0, q.up); dl += e * wrap(q.lo - lo0); }
+      const W = L.length > 1 ? Math.min(1, w) : w;
+      let top = 1 - W;
+      for (const [e] of L) top = Math.max(top, (e * W) / w);  // how evenly the hand is shared between places
+      const travel = Math.abs((W * du) / w), fold = Math.min(1, 2 * (1 - top));
+      out[kU] = up0 + (W * du) / w;
+      out[kL] = lo0 + (W * dl) / w + SIGN[s] * Math.min(45, 0.4 * travel) * fold;
+      placed[s] = smooth(Math.min(1, W / 0.2));
     }
     return { q: out, extra, placed };
   }

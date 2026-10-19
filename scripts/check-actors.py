@@ -536,14 +536,18 @@ const was = at({ ...turn, views: [[0, 'q']] }, 1), now = at(turn, 1.001);
 out.raw_jump = d(was.wrist_r, at(front, 1).wrist_r);
 out.turn_jump = Math.max(d(at(turn, 0.999).wrist_r, now.wrist_r), d(at(turn, 0.999).head, now.head));
 out.turn_settled = d(at(turn, 1.6).wrist_r, at(front, 1.6).wrist_r);
-const hand = { acts: [[0, 'shade', { side: 'l', dur: 1, out: 0.3 }], [1, 'catch', { side: 'l', dur: 1 }]] };
-const p0 = at(hand, 1).wrist_l, p1 = at(hand, 1.3).wrist_l, L = d(p0, p1);
-let off = 0;
-for (let t = 1; t <= 1.3; t += 0.01) {
-  const p = at(hand, t).wrist_l;
-  off = Math.max(off, Math.abs((p1[0] - p0[0]) * (p0[1] - p[1]) - (p0[0] - p[0]) * (p1[1] - p0[1])) / L);
+const hand = { acts: [[0.5, 'shade', { side: 'l', dur: 0.5, out: 0.3 }], [1, 'catch', { side: 'l', dur: 1 }]] };
+// from rest up to the brow, then up for a ball: the hand's way, each 0.01 s
+let flat = 0, inside = 1, jump = 0, path = 0, prev = null;
+const head = at(hand, 0.4).head[0], ends = [at(hand, 0.4).hand_l[0], at(hand, 1).hand_l[0]];
+for (let t = 0.4; t <= 1.3; t += 0.01) {
+  const a = at(hand, t), lo = SK.puppetAct('tester', hand, t).pose.arm_l_lo.r;
+  flat = Math.max(flat, Math.abs(lo));
+  if (t < 1) inside = Math.min(inside, (a.hand_l[0] - head) - Math.min(ends[0], ends[1]) + head);
+  if (prev) { const st = d(prev, a.wrist_l); jump = Math.max(jump, st); path += st; }
+  prev = a.wrist_l;
 }
-out.handover_len = L; out.handover_off = off;
+out.hand_flat = flat; out.hand_inside = inside; out.hand_jump = jump; out.hand_path = path;
 const face = { faces: [[0, 'neutral'], [1, 'happy']] };
 const f1 = SK.puppetAct('tester', face, 1.02), f2 = SK.puppetAct('tester', face, 1.08);
 out.face = [f1.face, f1.prevFace, f1.blink, f2.face];
@@ -575,9 +579,12 @@ def acting(node, d):
         % (m["raw_jump"], m["turn_jump"], m["turn_settled"]),
     )
     check(
-        "a hand going from one place to the next goes straight (shade into catch)",
-        m["handover_len"] > 0.05 and m["handover_off"] < 0.1 * m["handover_len"],
-        "%.3f off a %.3f path" % (m["handover_off"], m["handover_len"]),
+        "a placed hand travels by the outside of the body, its elbow never folded flat, in no jumps",
+        m["hand_flat"] < 150
+        and m["hand_inside"] > -0.01
+        and m["hand_jump"] < 0.12 * m["hand_path"],
+        "elbow at most %.0f deg; %.3f inside its ends; largest step %.3f of a %.3f path"
+        % (m["hand_flat"], -m["hand_inside"], m["hand_jump"], m["hand_path"]),
     )
     check(
         "a face changes whole, halfway through a blink: never two faces at once",

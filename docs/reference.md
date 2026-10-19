@@ -5475,10 +5475,17 @@ and the head's own life run underneath; the free hand beats with the voice. A fa
 halfway through a blink (dissolved over 0.12 s, a laugh's shut eyes showed over wide ones as
 goggles, and two mouths at once: the owner's note at 0:14 of the second scene); hand shapes
 dissolve over 0.08 s. **Placed hands** (`think`, `me`, `shade`, `catch`: an IK target each) are
-blended by where the wrist is, not by angle, and solved once: from one place to the next, and from
-rest and back, the wrist goes in a straight line, eased without a wind-up, and its forearm does
-not lag (blended by angle, shade into catch swung the arm up and round and dropped the hand across
-the face; `check-actors.py` holds the path to 0.001 of a 0.104 figure-height move). The body: the feet are IK targets (steps lift them
+solved at each place with the **elbow out** and blended by joint angle, the upper arm always
+swinging **by the outside of the body** and the elbow folding while the hand travels, eased
+without a wind-up, the forearm not lagging. Three versions failed first, on the second scene's
+close shot: blended by angle with no such care, shade into catch swung the arm up and round and
+a wind-up dropped the hand across the face; blended as wrist positions, the hand rising from the
+hip to the brow went straight through the shoulder and the arm folded flat across his stomach and
+his mouth (the elbow at 190 degrees); solved along the way, the elbow flipped sides in one frame.
+A white sleeve across a white shirt disappears, so a forearm crossing the body reads as one
+growing out of it: keep a hand that rises or falls outside the figure. `check-actors.py` holds the
+rise from rest to the brow to the catch outside the body, the elbow under 150 degrees and no jump
+(the old engine: 152 degrees and 0.028 inside). The body: the feet are IK targets (steps lift them
 in an arc and the pelvis follows), `sink` bends the knees, `hop` lifts the whole figure with a
 crouch before and a squash after, `sag` drops the shoulders and the head. Facing us, a bent knee
 mostly shortens the leg instead of going out (a crouch with the knees out alone read as bow legs).
