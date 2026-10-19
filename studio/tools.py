@@ -519,9 +519,16 @@ class Tools:
                     out.append("%s:\n%s" % (rel, "\n".join(tail[-12:])))
         if out:
             raise ToolError("\n\n".join(out))
-        return (
+        said = (
             "film.js, the engine and the cast parse." if cast else "film.js and the engine parse."
         )
+        misses = validate.cue_misses(self.film)
+        if misses:  # they parse, and would happen at 0 s
+            said += (
+                " These SK.w cues name a word their narration line does not say, so they fall "
+                "back to 0 s: %s. Hang each on a word its line says." % "; ".join(misses)
+            )
+        return said
 
     async def voice(self, retake_line=None):
         refused = recording_refused(self.film, self.voice_runs)

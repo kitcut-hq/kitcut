@@ -47,12 +47,19 @@ which runs people's prompts, holds no key to the organisation. Making a reposito
 registering its key is done from the laptop (`ops.sh filmgit publish`, with a GitHub sign-in);
 from then on every sync pushes it (--mirror: what was forgotten here goes from there too), and
 GitHub being down is tried again at the next sync. Needs git and ssh-keygen on PATH.
+
+As a film finishes, the server runs `--sync --film <id> --and-push` for it (on_finish, where
+STUDIO_FILMGIT_ON_FINISH=1), so its repository and GitHub are minutes behind it, not an hour. An
+episode that started from an earlier one's code (episode.py) says which in film.json
+(carried_from) and in its commit ("Started-from: <film>/v<n>"): versions are named by tag, never
+by commit, because forgetting a film rewrites a repository's history.
 """
 
 import os
 import re
 import sys
 import json
+import asyncio
 import hashlib
 import argparse
 import subprocess
@@ -89,6 +96,7 @@ NOT_ASSETS = (
 DONE = "done"
 MAX_FORGET = 20
 REMOTE = "github"  # a repository's copy on GitHub: private, in an organisation of its own
+PUSH_S = 600  # one repository's push; one that hangs past it is tried again at the next sync
 ORG = os.environ.get("STUDIO_FILMS_ORG") or "kitcut-films"
 NAME = re.compile(r"^(p-[a-z2-7]{10}|w-[0-9a-f]{20}|w-other)$")  # what repo_name gives
 FILM_PATH = re.compile(r"^films/(studio-\d{8}-\d{6}(?:-[a-z2-7]{6})?)$")
@@ -181,12 +189,22 @@ def assets_of(d, code):
 
 
 def about(rec, fid, version):
-    keep = ("title", "prompt", "look", "length", "frame", "lang", "created", "template")
+    keep = ("title", "prompt", "look", "length", "frame", "lang", "created", "template", "release")
     out = {"id": fid, "version": version}
     out.update({k: rec[k] for k in keep if rec.get(k) is not None})
     if (rec.get("project") or {}).get("id"):
         out["project"] = {k: rec["project"].get(k) for k in ("id", "name") if rec["project"].get(k)}
+    if started_from(rec):
+        out["carried_from"] = started_from(rec)
     return out
+
+
+def started_from(rec):
+    """The tag of the episode whose code this one started from (episode.py), or None."""
+    c = rec.get("carried") or {}
+    if not c.get("film") or c.get("skipped"):
+        return None
+    return "%s/v%d" % (c["film"], int(c.get("version") or 1))
 
 
 def _tree(repo, base, prefix, files, extra):
@@ -314,7 +332,13 @@ def sync_film(f, plan=False):
             prefix,
             code,
             extra,
-            "%s: version %d\n\n%s" % (title, n, f.id),
+            "%s: version %d\n\n%s%s"
+            % (
+                title,
+                n,
+                f.id,
+                "\n\nStarted-from: %s" % started_from(rec) if started_from(rec) else "",
+            ),
             _when(rec, d),
             tag,
             plan,
@@ -503,18 +527,68 @@ def push(only=None):
             out["unpublished"].append(name)
             continue
         e = dict(os.environ, GIT_DIR=repo)
-        r = subprocess.run(
-            ["git", "push", "--mirror", "--quiet", REMOTE],
-            env=e,
-            capture_output=True,
-            check=False,
-            timeout=600,
-        )
+        try:
+            r = subprocess.run(
+                ["git", "push", "--mirror", "--quiet", REMOTE],
+                env=e,
+                capture_output=True,
+                check=False,
+                timeout=PUSH_S,
+            )
+        except subprocess.TimeoutExpired:  # GitHub hanging: this one waits for the next sync,
+            out["failed"].append((name, "no answer in %d s" % PUSH_S))  # the rest go now
+            continue
         if r.returncode == 0:
             out["pushed"].append(name)
         else:
             out["failed"].append((name, r.stderr.decode("utf-8", "replace").strip()[-200:]))
     return out
+
+
+TASKS = set()  # on_finish's, held so they are not collected while they run
+ON_FINISH = "STUDIO_FILMGIT_ON_FINISH"
+
+
+def on_finish(film):
+    """Commit a film that has just finished into its repository and push that one, in a process
+    of its own (server.py, as a film is done), so the repository and GitHub are minutes behind
+    it rather than up to an hour; the hourly sync stays the backstop. Only where the studio's .env
+    says STUDIO_FILMGIT_ON_FINISH=1 (the VM's machine.env). Never raises, and nothing waits for
+    it: a film is done whatever happens here."""
+    try:
+        on = backup.setting(ON_FINISH) or os.environ.get(ON_FINISH, "")  # the .env's, as it is now
+        if on.strip() != "1":
+            return None
+        t = asyncio.get_running_loop().create_task(_on_finish(film.id))
+    except RuntimeError:  # no loop (a script): the hourly sync takes it
+        return None
+    except Exception as e:  # noqa: BLE001
+        print("FILMGIT %s not started: %s" % (film.id, e), flush=True)
+        return None
+    TASKS.add(t)
+    t.add_done_callback(TASKS.discard)
+    return t
+
+
+async def _on_finish(fid):
+    try:
+        p = await asyncio.create_subprocess_exec(
+            sys.executable,
+            os.path.abspath(__file__),
+            "--sync",
+            "--film",
+            fid,
+            "--and-push",
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        out, _ = await asyncio.wait_for(p.communicate(), PUSH_S + 120)
+        if p.returncode:
+            said = out.decode("utf-8", "replace").strip()[-300:]
+            print("FILMGIT %s: exit %s: %s" % (fid, p.returncode, said), flush=True)
+    except Exception as e:  # noqa: BLE001 -- the hourly sync takes it
+        print("FILMGIT %s: %s" % (fid, e), flush=True)
 
 
 def log(fid):
@@ -558,6 +632,11 @@ if __name__ == "__main__":
         help="these repositories are on GitHub now: point at them",
     )
     ap.add_argument("--film", help="--plan/--sync: only this film")
+    ap.add_argument(
+        "--and-push",
+        action="store_true",
+        help="--sync --film: then push that film's repository (the studio, as a film finishes)",
+    )
     a = ap.parse_args()
     if a.log:
         log(a.log)
@@ -594,6 +673,11 @@ if __name__ == "__main__":
             )
         for name, why in p["failed"][:5]:
             print("  push failed, tried again next time: %s: %s" % (name, why))
+    elif a.film and a.and_push and not a.plan and res["films"]:
+        f = films.Film.open(a.film)
+        p = push(repo_name(f.record())) if f else {"failed": []}
+        for name, why in p["failed"]:
+            print("  push failed, tried again at the next sync: %s: %s" % (name, why))
     word = "would commit" if a.plan else "committed"
     for fid, n, c in res["films"][:40]:
         print("  %s v%d %s" % (fid, n, c[:12]))

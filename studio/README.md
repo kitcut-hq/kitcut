@@ -741,7 +741,7 @@ film. The log itself stays the studio's (`events.jsonl`).
 
 **A series: the person's cast and memory** (`library.py`). A signed-in person's workspace (the
 site's `o:<id>` client; `u:<id>` before workspaces, the same owner) has a library that outlives
-its films, next to `projects\`, never in git:
+its films, next to `projects\` (its text is in its project's git repository too: `filmgit.py`):
 - **What is kept.** Their cast is characters, places or things as small modules
   (`SK.cast.<name> = {about, draw(x, y, o)}`), plus the films they made.
 - **What a new film gets.** Before Claude starts, a new film gets:
@@ -763,6 +763,17 @@ its films, next to `projects\`, never in git:
   says `clashed`. On 2026-10-01 four Leo episodes were finished again, oldest first, and the
   first wrote its night-before Leo over the series' newest: rain boots, bike helmet and sitting
   poses gone until a later one happened to put them back.
+- **Two episodes at once** (2026-10-18; the Pro plan makes two). Before that rule refuses, a
+  member another episode changed meanwhile is merged (`library.merges`, from `agent.keep_cast`):
+  `git merge-file` with the version this episode started from as the base (one of the five kept),
+  the library's as it is now, and the episode's. A clean merge that parses is drawn on the cast
+  sheet like any member, and saved as the next version only if it draws (and only while the
+  library still holds what it merged onto); its summary says `merged`. One that touches the same
+  lines, does not parse or draws nothing is a clash as before, and in a project the episode's
+  copy is kept beside the series' version (`<project library>\clashed\<name>\<film>.js`,
+  listed by `/api/library` as `clashed`): the next episodes get it in `library\clashed\`, are
+  told to fold in what it added, and it goes once one of them saves the member. A kept sound two
+  episodes changed at once is reported (`sounds_clashed`), not dropped in silence.
 - **Places.** A set the films return to (a room, a yard) is a member with `kind: 'place'` and
   `camera: [x, y, zoom]`: the sheet draws it at its origin through that camera, the note and
   `/api/library` mark it a place. Its header comment is its manual: floor line, camera, options,
@@ -799,6 +810,47 @@ its films, next to `projects\`, never in git:
   member: seeded into the next episode, its new and changed entries saved after an ok film, only
   over the version the film started from. `sounds_note` tells the episode (and a scenes film's
   editor, who writes the music) what the series has and how to play it.
+- **Starting from the last episode** (`episode.py`, 2026-10-18; on while `STUDIO_EPISODE_CARRY`
+  says so: `all`, or project ids). An episode wrote its film.js from nothing, with its earlier
+  episodes only to read, and the first write of a film's picture is 47% of Claude's time; a
+  template's remake, which starts from finished code, takes a median 5.6 minutes of Claude against
+  13.7 for a 30 s film from scratch (`docs/studio-speed.md`). Now, after its length is picked and
+  before Claude starts (`agent.make_film`), a series' episode is given the last one's -- the one
+  made last (`created`), not finished last -- as its own to edit:
+  - **film.js and score.json** as they finished; **vo.json** with the series' voice, style,
+    language and character voices and no lines (the narration is new, and recorded anew; the
+    person's narrator still wins, `pin_vo`); **paint.json** with the series' style and no
+    pictures; the faces the last episode fetched; cast members a round changed after it (rounds
+    never reach the library), unless another episode has changed them since.
+  - **Never** sfx.json (its cues are seconds on the old narration), scenes, pictures or a spend log.
+  - **The engine:** core fixes reach every series because every film still gets this release's
+    engine (`Film.create`). When the last episode changed its own copy, each changed file is
+    merged three ways onto this release's (`git merge-file`, base = the engine that episode started
+    from: `Film.engine_base`, its release's `sketch\` under `releases\` or in the checkout); the
+    same release is its copy exactly. A file that does not merge, or does not parse once merged,
+    leaves this release's engine and the old changes in `library\start\engine.diff`, which the
+    first message names. `engine_diff` measures every film against the engine it started from
+    (`engine_from`), so what an episode carried is not counted as its own change.
+  - **library\start\**: the last episode as it was, read-only (film.js, vo.json with its
+    narration, score.json, sfx.json, paint.json, about.json).
+  - **The first message** (`episode.note`, after the library's) says it starts from that code:
+    keep the series' frame -- the look and its helpers, the ground and palette, the type, the
+    camera's habits, how the characters are drawn, the opening and end card, the music -- and
+    replace the story, with Edit, part by part. A long one is told to change it a few scenes at a
+    time (`episode.LONG`); the "recent films chose" tally is left out.
+  - **Guards:** a film.js still exactly the last episode's fails the film (`episode.untouched`, in
+    `written` and after Claude); words of the last story still on screen -- strings of a few words
+    in its film.js that fewer than two of the earlier episodes share -- get one short turn to go
+    (`agent.episode_leftovers`), never a failure. `check` names any `SK.w` cue on a word its line
+    does not say (`validate.cue_misses`, every film): the engine falls back to 0 s there, silently.
+  - **When not:** a collection, another look, frame, captions or music-or-none, people from photos,
+    a film made in scenes, music only, or no earlier episode: it starts empty and its record's
+    `carried` says why (`{"skipped": ...}`). Once: a requeued film keeps what it has. A carry that
+    fails half-way puts every file back and the film starts empty.
+  - The record's `carried` (`{film, version, release, title, length, hashes, cast, fonts,
+    engine}`) goes to `studio_runs` and into the film's repository (`filmgit.py`: film.json's
+    `carried_from`, the commit's `Started-from: <film>/v<n>`). `python studio/episode.py --plan
+    <id>` says what a film would start from. `test_episode.py`.
 - **A project's brand** (`brandkit.py`, 2026-10-02). Pictures are things to show; a brand is how
   every frame looks and sounds. The person sends anything (a zip of the brand folder, PDF
   guidelines, logos, fonts, slides) in parts of up to 4 MB (the site's functions take 4.5 MB), into

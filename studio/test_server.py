@@ -29,6 +29,7 @@ os.environ["STUDIO_HOME"] = HOME
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import server  # noqa: E402 -- imports agent, which imports _env first
 import agent  # noqa: E402
+import episode  # noqa: E402
 import film as films  # noqa: E402
 import store  # noqa: E402
 import validate  # noqa: E402
@@ -125,6 +126,10 @@ async def fake_claude(
         with open(film.path("audio", "vo", "timeline.json"), "w", encoding="utf-8") as f:
             json.dump({"lines": []}, f)
         await asyncio.sleep(60)
+        return
+    if "keeps the last film.js" in prompt:  # an episode that started from the last one's
+        for f in ("score.json", "sfx.json"):  # code (episode.py) and never changed its picture
+            shutil.copy(os.path.join(ex, f), film.dir)
         return
     for f in films.MADE:
         shutil.copy(os.path.join(ex, f), film.dir)
@@ -356,6 +361,35 @@ async def projects(c, auth, mem, check):
         "the project's library has the episode's cast (%s)" % lib,
     )
     check(own["cast"] == [] and own["films"] == [], "and the person's own does not")
+    # while the setting names the project, its next episode starts from this one's code
+    os.environ[episode.SETTING] = P
+    try:
+        r = await c.post(
+            "/api/films", json={"prompt": "episode two", "project": project}, headers=me
+        )
+        ep2 = (await r.json())["id"]
+        st = await wait_for(c, auth, ep2)
+        f2 = films.Film.open(ep2)
+        check(
+            st.get("status") == "done"
+            and (f2.record().get("carried") or {}).get("film") == ep
+            and (mem.docs[ep2].get("carried") or {}).get("film") == ep
+            and os.path.exists(f2.path("library", "start", "film.js")),
+            "the next episode starts from the last one's code, and its run record says so",
+        )
+        r = await c.post(
+            "/api/films",
+            json={"prompt": "episode three keeps the last film.js", "project": project},
+            headers=me,
+        )
+        ep3 = (await r.json())["id"]
+        st = await wait_for(c, auth, ep3)
+        check(
+            st.get("status") == "error" and "the last episode" in (st.get("error") or ""),
+            "one that leaves the last episode's film.js as it was fails (%s)" % st.get("error"),
+        )
+    finally:
+        del os.environ[episode.SETTING]
     r = await c.get("/api/library?project=p-bad", headers=me)
     check(r.status == 404, "a library route with a bad project")
     r = await c.delete("/api/library/pictures/logo?project=" + P, headers=other)

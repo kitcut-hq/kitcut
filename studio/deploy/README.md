@@ -538,6 +538,17 @@ run). From then on each hourly sync pushes with `--mirror`, so a film forgotten 
 there too, and GitHub being down is tried again an hour later. A machine built again has new
 keys: `filmgit publish` registers them (the old ones stay on GitHub until removed there).
 
+As a film finishes, the server also runs `filmgit.py --sync --film <id> --and-push` for that film
+alone (`filmgit.on_finish`, where the studio's `.env` says `STUDIO_FILMGIT_ON_FINISH=1`, read
+each time: `machine.env` sets it), so its repository and GitHub are minutes behind it rather than
+up to an hour; it never waits, never fails a film, and the hourly sync stays the backstop. A push
+that hangs past `PUSH_S` (600 s) is that repository's failure, and the others still go. Each
+`film.json` names the `release` that made it, and an episode that started from an earlier one's
+code (`studio/episode.py`) names that one by tag (`carried_from`, and `Started-from: <film>/v<n>`
+in its commit) -- by tag, never by commit, because forgetting a film rewrites a repository's
+history. Nothing that makes a film reads these repositories: an episode starts from the last
+one's folder on this machine, so GitHub being away never stops one.
+
 Working on a film by hand through git (clone, change, push a branch, the studio renders it as
 the next version) is the step after that; until then it is `ops.sh take` / `put`.
 

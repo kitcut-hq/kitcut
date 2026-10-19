@@ -643,6 +643,21 @@ def _norm(p):
     return os.path.normcase(os.path.realpath(p))
 
 
+def _read_text(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def home_rel(path):
+    """A path as a record keeps it: relative to STUDIO_HOME when inside it, so a home moved to
+    another machine (or drive) still finds it; else as it is."""
+    rel = os.path.relpath(os.path.abspath(path), HOME)
+    return path if rel.startswith("..") or os.path.isabs(rel) else rel.replace(os.sep, "/")
+
+
 class Film:
     def __init__(self, d):
         self.dir = os.path.abspath(d)
@@ -848,15 +863,45 @@ class Film:
         return parent == _norm(self.path("engine")) and name in self.engine_files()
 
     # ---------------------------------------------------------------- the engine copy
+    def engine_base(self, name):
+        """The engine file this film started from, as text, or None: the copy its record's
+        engine_from names (a template's frozen engine, or what episode.py carried from its series'
+        last episode), else the sketch/ of the release it was made on -- its folder in
+        releases\\, or that commit in the checkout -- else the code this studio runs. A film made
+        on one release and finished on the next is measured against its own."""
+        rec = self.record()
+        src = rec.get("engine_from")
+        if isinstance(src, str) and src:
+            d = src if os.path.isabs(src) else os.path.join(HOME, src)
+            return _read_text(os.path.join(d, name))
+        made = str(rec.get("release") or "")
+        if made and made != RELEASE and not made.endswith("-dev"):
+            got = _read_text(os.path.join(HOME, "releases", made, "sketch", name))
+            if got is not None:
+                return got
+            try:
+                r = subprocess.run(
+                    ["git", "-C", REPO, "show", "%s:sketch/%s" % (made, name)],
+                    capture_output=True,
+                    timeout=10,
+                )
+                if r.returncode == 0:
+                    return r.stdout.decode("utf-8", "replace")
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        return _read_text(os.path.join(KIT, "sketch", name))
+
     def engine_diff(self):
-        """What Claude changed in its copy of the engine, as a unified diff against the code this
-        studio runs (the curator's raw material), written to outputs/engine.diff. Returns the
-        number of changed lines."""
+        """What Claude changed in its copy of the engine, as a unified diff against the engine it
+        started from (engine_base: the curator's raw material), written to outputs/engine.diff.
+        Returns the number of changed lines."""
         out, n = [], 0
         for name in self.engine_files():
+            base = self.engine_base(name)
             try:
-                with open(os.path.join(KIT, "sketch", name), encoding="utf-8") as f:
-                    a = f.read().splitlines(keepends=True)
+                if base is None:
+                    raise OSError(name)
+                a = base.splitlines(keepends=True)
                 with open(self.path("engine", name), encoding="utf-8") as f:
                     b = f.read().splitlines(keepends=True)
             except OSError:
@@ -1222,6 +1267,12 @@ class Film:
                 # asked for with no music at all (frame_note; the manifest's audio.music)
                 **({"music": "none"} if quiet else {}),
                 "release": RELEASE,
+                # the engine it started from, when it is not this release's sketch/ (engine_base)
+                **(
+                    {"engine_from": home_rel(os.path.join(template["_dir"], "engine"))}
+                    if template
+                    else {}
+                ),
                 "state": "queued",
                 "created": datetime.now().isoformat(timespec="seconds"),
                 # a remake of a template (templates.py): which one, in which frame; narrated or

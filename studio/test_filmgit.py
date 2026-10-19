@@ -375,6 +375,77 @@ def too_many_missing_is_refused():
     check(all(x.id in held for x in many), "and nothing is forgotten")
 
 
+def where_an_episode_started():
+    """film.json says which release made a film and which episode's code it started from
+    (episode.py), and the commit says so too -- by tag, which survives a forget's rewrite."""
+    prev = film(release="0123456789ab")
+    ep = film(release="0123456789ab", carried={"film": prev.id, "version": 2})
+    fresh = film(carried={"skipped": "a collection"})
+    filmgit.sync(ep.id)
+    filmgit.sync(fresh.id)
+    repo = filmgit.repo_of("p-abcdefghij")
+    a = json.loads(show(repo, "films/%s/film.json" % ep.id))
+    check(
+        a.get("release") == "0123456789ab" and a.get("carried_from") == "%s/v2" % prev.id,
+        "film.json names its release and the episode it started from",
+        a,
+    )
+    said = filmgit.git(repo, "log", "-1", "--format=%B", "refs/tags/%s/v1" % ep.id)
+    check("Started-from: %s/v2" % prev.id in said, "and so does its commit", said)
+    plain = json.loads(show(repo, "films/%s/film.json" % fresh.id))
+    check(
+        "carried_from" not in plain
+        and "Started-from" not in filmgit.git(repo, "log", "-1", "--format=%B", "refs/tags/%s/v1" % fresh.id),
+        "an episode that started from nothing says nothing",
+        plain,
+    )  # fmt: skip
+
+
+def a_push_that_hangs():
+    """GitHub not answering: that repository waits for the next sync, and the run goes on."""
+    real = subprocess.run
+
+    def hang(args, **kw):
+        if list(args[:2]) == ["git", "push"]:
+            raise subprocess.TimeoutExpired(args, filmgit.PUSH_S)
+        return real(args, **kw)
+
+    filmgit.subprocess.run = hang
+    try:
+        p = filmgit.push()
+    finally:
+        filmgit.subprocess.run = real
+    check(
+        not p["pushed"]
+        and [n for n, _ in p["failed"]] == ["p-abcdefghij"]
+        and "no answer" in p["failed"][0][1],
+        "a push that hangs is a failure of that repository's, not the end of the run",
+        p,
+    )
+
+
+def committed_as_it_finishes(there):
+    """The server's on_finish: off unless the studio's .env says so; on, the film is in its
+    repository and on GitHub as soon as it is done, without waiting for the hour."""
+    import asyncio
+
+    ep = film()
+    check(filmgit.on_finish(ep) is None, "off unless STUDIO_FILMGIT_ON_FINISH=1")
+    os.environ["STUDIO_FILMGIT_ON_FINISH"] = "1"
+    try:
+        check(filmgit.on_finish(ep) is None, "and nothing without a running loop (a script)")
+
+        async def finish():
+            await filmgit.on_finish(ep)
+
+        asyncio.run(finish())
+    finally:
+        del os.environ["STUDIO_FILMGIT_ON_FINISH"]
+    repo = filmgit.repo_of("p-abcdefghij")
+    check("%s/v1" % ep.id in tags(repo), "a finished film is committed as it finishes")
+    check("%s/v1" % ep.id in tags(there), "and pushed to its copy")
+
+
 if __name__ == "__main__":
     try:
         f, other, repo = a_finished_film()
@@ -385,6 +456,9 @@ if __name__ == "__main__":
         a_deleted_film(f, other, kept)
         a_deleted_film_goes_from_github_too(f, there)
         too_many_missing_is_refused()
+        where_an_episode_started()
+        a_push_that_hangs()
+        committed_as_it_finishes(there)
     finally:
         shutil.rmtree(HOME, ignore_errors=True)
     print("\n%d failed" % len(bad) if bad else "\nall passed")

@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import json
+import contextlib
 from importlib import import_module
 
 sys.path.insert(
@@ -480,3 +481,50 @@ def gate(film):
     for name in names:
         out += problems(film, name)
     return out
+
+
+# a cue on a word of a narration line, as film code writes it: SK.w(3, 'bus')
+CUE = re.compile(r"""\bSK\.w\(\s*(\d+)\s*,\s*(['"])((?:(?!\2)[^\\\n]){1,60})\2""")
+
+
+def _word(s):
+    """A word as the engine matches it (sketch/engine.js SK.w): lower case, no apostrophes,
+    letters, digits and $ only."""
+    s = str(s).lower().replace("’", "").replace("'", "")
+    return "".join(ch for ch in s if ch.isalnum() or ch == "$")
+
+
+def cue_misses(film):
+    """Cues that name a word their line does not say: the engine gives them its fallback (0 s
+    unless one is passed), so what hangs on them happens at the start -- silently. Read off
+    film.js and the scenes against vo.json's lines; an episode that started from the last one's
+    code (episode.py) keeps that one's cues until they are moved. ["line 3: 'bus'"], at most 20."""
+    try:
+        with open(film.path("vo.json"), encoding="utf-8") as f:
+            lines = json.load(f).get("lines") or []
+    except (OSError, ValueError, AttributeError):
+        return []
+    if not lines:
+        return []
+    said = [{_word(w) for w in str((ln or {}).get("text") or "").split()} for ln in lines]
+    code = []
+    for rel in ["film.js"] + [
+        "scenes/" + n
+        for n in (
+            sorted(os.listdir(film.path("scenes"))) if os.path.isdir(film.path("scenes")) else []
+        )
+        if n.endswith(".js")
+    ]:
+        with (
+            contextlib.suppress(OSError, UnicodeDecodeError),
+            open(film.path(*rel.split("/")), encoding="utf-8") as f,
+        ):
+            code.append(f.read())
+    out = []
+    for m in CUE.finditer("\n".join(code)):
+        li, w = int(m.group(1)), m.group(3)
+        if li >= len(said) or _word(w) not in said[li]:
+            miss = "line %d: '%s'" % (li, w) + ("" if li < len(said) else " (no such line)")
+            if miss not in out:
+                out.append(miss)
+    return out[:20]
