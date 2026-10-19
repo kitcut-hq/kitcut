@@ -13,8 +13,12 @@
     "papercut": "A character made of layered cut paper: flat shapes of coloured card with crisp scissor edges and a thin shadow between layers, simple rounded features."
   },
   "base": "{describe} Full body, standing, front view, facing the viewer, arms relaxed at the sides, a friendly neutral expression with the mouth closed and the eyes open. The whole figure in frame from the top of the head to the soles of the shoes, with a margin all round. One character alone on a plain background: no ground, no cast shadow, no text, no logos.",
+  "rig_base": "{describe} Full body, standing in a relaxed A-pose for a cut-out puppet, front view, facing the viewer: both arms held straight down and a little away from the body (about 25 degrees), not touching the body anywhere, the elbows very slightly bent, both hands open and relaxed with the fingers together, holding nothing; the feet a little apart, the legs not touching each other. A friendly neutral expression with the mouth closed and the eyes open, looking at the viewer. The whole figure in frame from the top of the head to the soles of the shoes, with a margin all round. One character alone on a plain background: no ground, no cast shadow, no text, no logos.",
   "edit": "This exact picture, identical in every way: the same character, design, proportions, outline, pose, framing, size, position and colours, on the same plain white background. One change only: {change}. Nothing else moves or changes: the head's outline, the hair and anything worn on the head, the body, the hands, the clothes and anything held stay exactly as they are, line for line.",
   "pose": "The same character as in this picture: identical design, colours, outfit, proportions and size, drawn at the same scale with the feet at the same place, now {change}. A neutral friendly face with the mouth closed. One character alone on a plain white background: no ground, no cast shadow, no text.",
+  "prop": "Only {prop}, alone: upright, seen from the front, in exactly the same drawing style, outline and colours as in this picture. Nothing else: no hand, no person, no shadow, no text, on a plain white background.",
+  "hand": "This exact picture, identical in every way: the same character, design, proportions, outline, pose, framing, size, position and colours, on the same plain white background. One change only: his {side} hand (the one on the {where} of the picture) is now {shape}, at the end of the same arm in the same place. Nothing else moves or changes: the arm, the other hand, the head, the body and the clothes stay exactly as they are, line for line.",
+  "view": "The same character as in this picture: identical design, colours, outfit, proportions, line weight and size, drawn at the same scale with the feet at the same height. Now {turn}. Still standing in a relaxed A-pose for a cut-out puppet: both arms held straight down and a little away from the body, not touching the body anywhere, both hands open and relaxed, holding nothing; the feet a little apart, the legs not touching. A friendly neutral face with the mouth closed. The whole figure in frame from the top of the head to the soles of the shoes. One character alone on a plain white background: no ground, no cast shadow, no text.",
   "faces": {
     "happy": "a warm happy smile with the mouth closed, the eyes a little narrowed by the smile",
     "laugh": "laughing out loud: the eyes squeezed shut in happy arcs, the eyebrows raised, the mouth wide open",
@@ -45,6 +49,13 @@
     "turn_left": "turned in a three-quarter view towards the left of the picture, arms relaxed"
   },
   "pose_mouths": ["open", "round"],
+  "hands": {
+    "_": "a rig's hand shapes, drawn on each hand at the end of the A-pose arm and cut off at the wrist: a gesture picks one (sketch/puppet.js). The hand as drawn in the A-pose is \"open\".",
+    "grip": "closed round a short round handle, as if holding the handle of a racket, the fingers wrapped round it and the thumb over them",
+    "point": "pointing: the index finger straight out along the arm, the other fingers curled into the palm",
+    "fist": "closed in a relaxed fist",
+    "palm": "still hanging down at the end of the straight arm, exactly where it was, but turned so the open palm faces the viewer, the fingers spread apart and pointing down (the arm is not raised)"
+  },
   "gate": {
     "_": "the most a redraw may change outside the head, as a share of the figure; over it the redraw is drawn again (up to `retakes` times) and the best kept",
     "face": 0.025,
@@ -52,12 +63,19 @@
     "blink": 0.012,
     "retakes": 2,
     "front": 0.8,
-    "same": 0.6
+    "same": 0.6,
+    "hand": 0.02
   },
   "pack": {
     "height": 1400,
     "page": 4096,
     "format": "webp",
     "quality": 92
-  }
+  },
+  "_rig": "A spec with \"rig\": true is drawn in an A-pose (rig_base) and becomes a puppet: one drawing cut into parts on a skeleton and moved by its joints (scripts/_puppet.py, sketch/puppet.js), its faces and mouths the redraws below. No poses are drawn for it unless the spec asks: the rig poses it. \"props\": {\"paddle\": {\"describe\": \"the round wooden paddle in his hand\", \"hand\": \"r\", \"length\": 0.19, \"grip\": 0.18, \"angle\": 180}} draws each prop alone (prop) and puts it in that hand: length of the figure's height, grip from the handle's end, angle 180 = hanging head down.",
+  "views": {
+    "q": "turned three-quarters to the character's own left, so the body and the face are angled towards the RIGHT side of the picture (a classic three-quarter view: the shoulder on the left of the picture nearer to us, the other partly turned away, the nose and the eyes turned to the right)",
+    "q_left": "turned three-quarters to the character's own right, so the body and the face are angled towards the LEFT side of the picture (a classic three-quarter view: the shoulder on the right of the picture nearer to us, the other partly turned away, the nose and the eyes turned to the left)"
+  },
+  "_views": "A rig actor's \"views\": {\"q\": {}} draws it again turned (view, from the base on white, `candidates` of them, then \"pick\" as for the design) and makes each its own puppet in <pack>/views/<name>/, with its own faces, mouths, blink and hands: \"faces\" (default the actor's talking faces and laugh), \"talk\" (default the actor's, where the view has the face), \"hands\", \"pick\", \"design\" (a picture already made) and \"turn\" (the words; default views.<name>). A film plays them as one actor: plan.views [[t, 'q'], ...] in sketch/puppet.js. Enrique's q view, 2026-10-19: 21 redraws, $0.51, drift 0.1-0.4 % (one hand retake), and the cutter found its far arm (facing 1) by itself."
 }

@@ -84,6 +84,7 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 import _encode  # noqa: E402
 import _heads  # noqa: E402
 import _actor  # noqa: E402
+import _puppet  # noqa: E402
 import _project  # noqa: E402
 import _sketch  # noqa: E402
 
@@ -132,7 +133,7 @@ def vo_timeline(m):
         return {"lines": []}
     with open(p, encoding="utf-8") as f:
         tl = json.load(f)
-    if m.get("heads") or m.get("actors"):  # each line's speaker and the mouth its audio moves
+    if m.get("heads") or m.get("actors") or m.get("puppets"):  # each line's speaker, its mouth
         return {"lines": _heads.voice_lines(m, tl)}
     return {
         "lines": [{"start": L["start"], "end": L["end"], "words": L["words"]} for L in tl["lines"]]
@@ -189,6 +190,9 @@ def module_scripts(m):
     for need in ("heads", "actors") if m.get("actors") else ():  # actors talk with heads' SK.talk
         if need not in names:
             names.append(need)
+    for need in ("heads", "puppet") if m.get("puppets") else ():  # and so do puppets
+        if need not in names:
+            names.append(need)
     for name in names:
         _sketch.safe_name(name, "module")
         for d in (m["_engine"], SKETCH):
@@ -205,6 +209,9 @@ def module_scripts(m):
     packs = _actor.film_script(m, _sketch.rel)  # the actors' packs (actor-pack.py)
     if packs:
         out.append(packs)
+    rigs = _puppet.film_script(m, _sketch.rel)  # the puppets (actor-pack.py "rig")
+    if rigs:
+        out.append(rigs)
     return "\n".join(out)
 
 
@@ -390,6 +397,7 @@ def bundle(m, audio=True, preview=None):
                     **tail.get("images", {}),
                     **(_heads.images(m) if m.get("heads") else {}),
                     **(_actor.film_images(m, _sketch.rel) if m.get("actors") else {}),
+                    **(_puppet.film_images(m, _sketch.rel) if m.get("puppets") else {}),
                 }.items()
             }
             if not bare

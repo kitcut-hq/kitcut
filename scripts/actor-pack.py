@@ -105,16 +105,46 @@ def load_spec(path):
     a["faces"] = pick(s.get("faces", list(d["faces"])), d["faces"], "face")
     a["talk"] = [f for f in s.get("talk", d["talk"]) if f == "neutral" or f in a["faces"]]
     a["mouths"] = pick(s.get("mouths", list(d["mouths"])), d["mouths"], "mouth")
-    a["poses"] = pick(s.get("poses", list(d["poses"])), d["poses"], "pose")
+    a["rig"] = s.get("rig") or False  # true, or {RIG overrides}: a puppet (scripts/_puppet.py)
+    a["poses"] = pick(s.get("poses", [] if a["rig"] else list(d["poses"])), d["poses"], "pose")
+    a["props"] = s.get("props") or {}
+    shapes = [k for k in d["hands"] if not k.startswith("_")]
+    a["hands"] = (s.get("hands") or {"r": shapes, "l": shapes}) if a["rig"] else {}
+    a["hand_shapes"] = {k: v for k, v in d["hands"].items() if not k.startswith("_")}
     a["pose_mouths"] = [m for m in s.get("pose_mouths", d["pose_mouths"]) if m in a["mouths"]]
     a["blink"] = s.get("blink", d["blink"])
     a["gate"] = {**d["gate"], **(s.get("gate") or {})}
     a["pack"] = {**d["pack"], **(s.get("pack") or {})}
-    a["prompts"] = {k: d[k] for k in ("base", "edit", "pose")}
+    a["prompts"] = {k: d[k] for k in ("base", "rig_base", "edit", "pose", "prop", "hand", "view")}
     a["pick"], a["design"] = s.get("pick"), s.get("design")
     a["out"] = _env.resolve(s.get("out") or os.path.join(os.path.dirname(path), s["name"]))
     a["project"] = _project.project_id(s, path)
+    a["views"] = {}
+    for vn, v in (s.get("views") or {}).items() if a["rig"] else {}.items():
+        vs = v if isinstance(v, dict) else {}
+        if not vs.get("turn") and vn not in d["views"]:
+            sys.exit(
+                '%s: view %r needs its "turn" (the defaults have %s)'
+                % (path, vn, ", ".join(d["views"]))
+            )
+        a["views"][vn] = view_spec(a, vn, {**vs, "turn": vs.get("turn") or d["views"][vn]}, d)
     return a
+
+
+def view_spec(a, name, v, d):
+    """A rig actor's view: the same actor drawn turned, its own puppet in <out>/views/<name>/. It is
+    drawn from the base on white (`view`), then given its own faces, mouths, blink and hands, as the
+    front one is: a turned face cannot borrow the front's patches."""
+    av = dict(a, views={}, poses={}, view=name, turn=v["turn"], pick=v.get("pick"))
+    av["design"] = v.get("design")
+    want = v.get("faces") or [f for f in a["talk"] if f != "neutral"] + (
+        ["laugh"] if "laugh" in d["faces"] else []
+    )
+    av["faces"] = pick(want, {**d["faces"], **a["faces"]}, "face")
+    av["talk"] = [f for f in v.get("talk", a["talk"]) if f == "neutral" or f in av["faces"]]
+    av["hands"] = v.get("hands") or a["hands"]
+    av["out"] = os.path.join(a["out"], "views", name)
+    return av
 
 
 # ---------------------------------------------------------------------------- what to draw
@@ -133,6 +163,14 @@ def jobs(a, front=None):
             out.append(("mouth:%s:%s" % (f, m), ref, edit(ch), "mouth"))
         if a["blink"]:
             out.append(("blink:" + f, ref, edit(a["blink"]), "blink"))
+    for side, shapes in a["hands"].items():  # a rig's hands: each shape drawn on its own hand
+        for sh in shapes:
+            prompt = P["hand"].format(
+                side="right" if side == "r" else "left",
+                where="left" if side == "r" else "right",
+                shape=a["hand_shapes"][sh],
+            )
+            out.append(("hand:%s:%s" % (side, sh), "base", prompt, "hand"))
     for p, ch in a["poses"].items():
         out.append(("pose:" + p, "base", a["style"] + " " + P["pose"].format(change=ch), None))
     for p in a["poses"]:
@@ -145,7 +183,8 @@ def jobs(a, front=None):
 
 
 def base_prompt(a):
-    return a["style"] + " " + a["prompts"]["base"].format(describe=a["describe"])
+    key = "rig_base" if a["rig"] else "base"  # a puppet is drawn in an A-pose, to be cut up
+    return a["style"] + " " + a["prompts"][key].format(describe=a["describe"])
 
 
 def fname(i):
@@ -291,8 +330,15 @@ def design(a, book, est):
         }
         book.save()
         return True
-    prompt = base_prompt(a)
-    fp = fingerprint(a, prompt, None)
+    if a.get("view"):  # a view: the actor's own base, redrawn turned
+        prompt = a["prompts"]["view"].format(turn=a["turn"])
+        ref = os.path.join(os.path.dirname(os.path.dirname(a["out"])), "raw", "base.white.png")
+        if not os.path.exists(ref):
+            sys.exit("view %s: the actor's base is not drawn yet (%s)" % (a["view"], ref))
+        ref_fp = hashlib.sha1(open(ref, "rb").read(), usedforsecurity=False).hexdigest()[:12]
+    else:
+        prompt, ref, ref_fp = base_prompt(a), None, None
+    fp = fingerprint(a, prompt, ref_fp)
     have = book.s.get("design") or {}
     files = list(have.get("files", [])) if have.get("fp") == fp else []
     need = a["candidates"] - len(files)
@@ -306,10 +352,10 @@ def design(a, book, est):
                 a,
                 book,
                 prompt,
-                None,
+                ref,
                 os.path.join(a["out"], rel),
                 "design %d" % n,
-                transparent=True,
+                transparent=ref is None,
             )
         except Exception as ex:  # noqa: BLE001
             print("  design %d FAILED: %s" % (n, str(ex)[:160]))
@@ -617,6 +663,129 @@ def check_sheet(a, P, pieces):
     sheet(items, os.path.join(a["out"], "check.jpg"), h=420, cols=8)
 
 
+# ---------------------------------------------------------------------------- the rig
+def draw_props(a, book, est):
+    """Each prop alone (the "prop" prompt), redrawn from the base so it is in the same hand: raw/
+    prop__<name>.png. Drawn again only when its words or the base change."""
+    ref = book.s["base"]
+    for name, spec in a["props"].items():
+        pid = "prop:" + name
+        if spec.get("image"):  # a picture already made
+            src = _env.resolve(spec["image"])
+            book.s[pid] = {
+                "fp": "image-" + fingerprint(a, src, None),
+                "file": os.path.relpath(src, a["out"]),
+            }
+            continue
+        prompt = a["prompts"]["prop"].format(prop=spec.get("describe") or name)
+        fp = fingerprint(a, prompt, ref.get("fp"))
+        e = book.s.get(pid) or {}
+        if e.get("fp") == fp and os.path.exists(os.path.join(a["out"], e["file"])):
+            continue
+        if book.over(est):
+            print("  %-26s skipped: the $%.2f cap" % (pid, book.cap))
+            continue
+        rel = "raw/%s.png" % fname(pid)
+        draw_one(
+            a,
+            book,
+            prompt,
+            os.path.join(a["out"], ref.get("white") or ref["file"]),
+            os.path.join(a["out"], rel),
+            pid,
+        )
+        book.s[pid] = {"fp": fp, "file": rel}
+        book.save()
+        print("  %-26s drawn" % pid)
+
+
+def base_joints(a, book):
+    """MediaPipe's pose on the drawn base (raw/base.png), once per base: {name: [x, y, vis]}."""
+    import _puppet  # noqa: PLC0415
+
+    fp = book.s["base"]["fp"]
+    have = book.s.get("pose_joints") or {}
+    if have.get("fp") != fp or not _puppet.sane(have["J"]):
+        base = _actor.load_rgba(os.path.join(a["out"], book.s["base"]["file"]))
+        book.s["pose_joints"] = {"fp": fp, "J": _puppet.joints(base)}
+        book.save()
+    return book.s["pose_joints"]["J"]
+
+
+def hand_box(J, side):
+    """A box round a hand and its wrist, in the base's pixels: what a hand's redraw may change."""
+    wr, el = np.array(J[side + "_wr"][:2]), np.array(J[side + "_el"][:2])
+    c = wr + 0.35 * (wr - el)
+    r = 0.62 * np.linalg.norm(wr - el)
+    return [int(c[0] - r), int(c[1] - r), int(c[0] + r), int(c[1] + r)]
+
+
+def rig(a, book, P):
+    """The puppet: the pack's base cut into parts on a skeleton (scripts/_puppet.py), its faces,
+    mouths and blinks laid on the head, its props in their hands. Writes puppet.json,
+    puppet-<n>.webp and rig.jpg (the cuts and the joints, for a look). Free: nothing is drawn."""
+    from PIL import Image  # noqa: PLC0415
+
+    import _puppet  # noqa: PLC0415
+
+    pages = [cv2.imread(os.path.join(a["out"], pg), cv2.IMREAD_UNCHANGED) for pg in P["pages"]]
+
+    def piece(pid):
+        pc = P["pieces"][pid]
+        return pages[pc["p"]][pc["sy"] : pc["sy"] + pc["h"], pc["sx"] : pc["sx"] + pc["w"]].copy()
+
+    base = piece("base")
+    raw = _actor.load_rgba(os.path.join(a["out"], book.s["base"]["file"]))
+    fig = _actor.figure(raw[..., 3], a["head"])
+    bx0, by0, k = fig["box"][0], fig["box"][1], P["scale"]
+    to_piece = lambda x, y: [(x - bx0) * k, (y - by0) * k]  # noqa: E731 -- the pack's own crop
+    Jr = base_joints(a, book)
+    J = {n: to_piece(v[0], v[1]) + [v[2]] for n, v in Jr.items()}
+    hands = {}
+    for side, shapes in a["hands"].items():  # each drawn hand, laid on the base as faces are
+        for sh in shapes:
+            e = book.s.get("hand:%s:%s" % (side, sh))
+            if not e or not os.path.exists(os.path.join(a["out"], e["file"])):
+                continue
+            pic = _actor.load_rgba(os.path.join(a["out"], e["file"]))
+            im, _, _ = _actor.register(raw, pic, hand_box(Jr, side), fig["area"])
+            im = im[fig["box"][1] : fig["box"][3], fig["box"][0] : fig["box"][2]]
+            if k < 1:
+                im = cv2.resize(im, (base.shape[1], base.shape[0]), interpolation=cv2.INTER_AREA)
+            hands.setdefault(side, {})[sh] = im
+    patches = {k: piece(k) for k in P["pieces"] if k.startswith(("face:", "mouth:", "blink:"))}
+    props = {}
+    for name, spec in a["props"].items():
+        e = book.s.get("prop:" + name) or {}
+        f = (
+            _env.resolve(spec["image"])
+            if spec.get("image")
+            else os.path.join(a["out"], e.get("file", "-"))
+        )
+        if os.path.exists(f):
+            props[name] = (_actor.load_rgba(f), spec)
+        else:
+            print("  WARNING prop %s is not drawn yet: the puppet goes without it" % name)
+    opt = a["rig"] if isinstance(a["rig"], dict) else {}
+    puppet, pieces, over = _puppet.build(base, J, P["faces"], patches, props, opt, hands)
+    atlas, where = _actor.pack_atlas(pieces, a["pack"]["page"], gap=8)
+    names = []
+    for n, pg in enumerate(atlas):
+        name = "puppet-%d.webp" % n
+        img = Image.fromarray(cv2.cvtColor(pg, cv2.COLOR_BGRA2RGBA))
+        img.save(os.path.join(a["out"], name), "WEBP", quality=a["pack"]["quality"], method=6)
+        names.append(name)
+    out = _puppet.finish(puppet, where, [(pg.shape[1], pg.shape[0]) for pg in atlas])
+    out.update(
+        name=a["name"], about=a.get("describe") or "", model=a["model"], pages=names,
+        built_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    )  # fmt: skip
+    with open(os.path.join(a["out"], "puppet.json"), "w", encoding="utf-8") as f:
+        json.dump(out, f, separators=(",", ":"))
+    cv2.imwrite(os.path.join(a["out"], "rig.jpg"), over, [cv2.IMWRITE_JPEG_QUALITY, 88])
+    return out
+
+
 # ---------------------------------------------------------------------------- main
 def price(a):
     est = PC.estimate(a["model"], True, a["quality"]) or 0.04
@@ -624,73 +793,23 @@ def price(a):
     return first, est
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--spec", required=True)
-    ap.add_argument(
-        "--plan", action="store_true", help="what the pack needs and what it costs; draws nothing"
-    )
-    ap.add_argument(
-        "--cap", type=float, default=None, help="stop starting pictures past this spend (USD)"
-    )
-    ap.add_argument("--jobs", type=int, default=None)
-    ap.add_argument(
-        "--retake",
-        default="",
-        help="comma-separated ids to draw again (face:angry, pose:wave, ...)",
-    )
-    ap.add_argument(
-        "--pack-only", action="store_true", help="re-cut and re-pack what is drawn: free"
-    )
-    args = ap.parse_args()
-    a = load_spec(args.spec)
-    if args.jobs:
-        a["jobs"] = args.jobs
-    first, est = price(a)
-    J = jobs(a, {p: False for p in a["poses"]})
-    n_design = 0 if a["design"] else a["candidates"]
-    n_main = len(jobs(a)) - 1
-    n_pose = len(J) - len(jobs(a))
-    print("[actor-pack] %s  %s  look: %s" % (a["name"], a["model"], a["style"][:60] + "..."))
-    print(
-        "  %d design candidates, %d faces, %d talking faces x %d mouths%s, %d poses (+ up to %d mouths for turned ones)"
-        % (
-            n_design,
-            len(a["faces"]),
-            len(a["talk"]),
-            len(a["mouths"]),
-            " + blink" if a["blink"] else "",
-            len(a["poses"]),
-            n_pose,
-        )
-    )
-    lo = n_design * first + n_main * est
-    print(
-        "  about $%.2f (%d pictures), up to $%.2f with every turned pose and %d retakes on a quarter of the redraws"
-        % (
-            lo,
-            n_design + n_main,
-            lo + n_pose * est + 0.25 * n_main * a["gate"]["retakes"] * est,
-            a["gate"]["retakes"],
-        )
-    )
-    if args.plan:
-        print("  --plan: nothing drawn")
-        return
+def make(a, args, book, est, retake):
+    """Draw what the pack (or one of its views) still needs, pack it, and rig it when it is a rig:
+    pack.json's dict, or None when a design is waiting for its pick."""
     for d in ("raw", "design"):
         os.makedirs(os.path.join(a["out"], d), exist_ok=True)
-    book = Book(a, args.cap)
-    retake = {x.strip() for x in args.retake.split(",") if x.strip()}
-    t0 = time.time()
     if not args.pack_only:
         if (book.s.get("base") is None or a["design"] or a["pick"]) and not design(a, book, est):
-            return
+            return None
         base = _actor.load_rgba(os.path.join(a["out"], book.s["base"]["file"]))
         fig = _actor.figure(base[..., 3], a["head"])
         if fig is None:
             sys.exit("the base picture has no figure in it")
         aligned = {"base": base}
+        draw_props(a, book, est)
+        J0 = base_joints(a, book) if a["hands"] else None
         stages = [
+            ("hands", lambda j: j[0].startswith("hand:")),
             ("faces", lambda j: j[0].startswith("face:")),
             ("mouths", lambda j: j[0].startswith(("mouth:", "blink:"))),
             ("poses", lambda j: j[0].startswith("pose:")),
@@ -713,7 +832,17 @@ def main():
             with ThreadPoolExecutor(max_workers=a["jobs"]) as ex:
                 list(
                     ex.map(
-                        lambda j: run_job(a, book, est, j, fig, aligned, retake),
+                        lambda j: run_job(
+                            a,
+                            book,
+                            est,
+                            j,
+                            dict(fig, head=hand_box(J0, j[0].split(":")[1]))
+                            if j[0].startswith("hand:")
+                            else fig,
+                            aligned,
+                            retake,
+                        ),
                         [j for j in todo if j[1] in aligned or j[1] == "base"],
                     )
                 )
@@ -774,6 +903,151 @@ def main():
     )
     print("  most drift: %s" % ", ".join("%s %.1f%%" % (k, 100 * d) for d, k in worst))
     print("  %s" % os.path.relpath(os.path.join(a["out"], "check.jpg")))
+    if a["rig"]:
+        print("[actor-pack] rig ...")
+        R = rig(a, book, P)
+        print(
+            "  puppet: %d parts, %d props; %s"
+            % (len(R["parts"]), len(R["props"]), os.path.relpath(os.path.join(a["out"], "rig.jpg")))
+        )
+    return P
+
+
+def link_views(a):
+    """The front puppet.json names its views, so a film that loads the actor gets them all."""
+    path = os.path.join(a["out"], "puppet.json")
+    with open(path, encoding="utf-8") as f:
+        P = json.load(f)
+    P["views"] = {}
+    for vn, av in a["views"].items():
+        vp = os.path.join(av["out"], "puppet.json")
+        if os.path.exists(vp):
+            with open(vp, encoding="utf-8") as f:
+                P["views"][vn] = {"dir": "views/" + vn, "facing": json.load(f).get("facing", 0)}
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(P, f, separators=(",", ":"))
+    return P["views"]
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--spec", required=True)
+    ap.add_argument(
+        "--plan", action="store_true", help="what the pack needs and what it costs; draws nothing"
+    )
+    ap.add_argument(
+        "--cap", type=float, default=None, help="stop starting pictures past this spend (USD)"
+    )
+    ap.add_argument("--jobs", type=int, default=None)
+    ap.add_argument(
+        "--retake",
+        default="",
+        help="comma-separated ids to draw again (face:angry, pose:wave, ...)",
+    )
+    ap.add_argument(
+        "--pack-only", action="store_true", help="re-cut and re-pack what is drawn: free"
+    )
+    ap.add_argument(
+        "--rig-only", action="store_true", help='a "rig" actor: build the puppet again, free'
+    )
+    ap.add_argument(
+        "--fetch-models", action="store_true", help="the pose model and MediaPipe, for a rig"
+    )
+    args = ap.parse_args()
+    if args.fetch_models:
+        import _puppet  # noqa: PLC0415
+
+        import_module("head-rig").fetch_runtime()
+        print("  %s" % os.path.relpath(_puppet.fetch_pose_model(), _env.ROOT))
+        return
+    a = load_spec(args.spec)
+    if args.rig_only:
+        if not a["rig"]:
+            sys.exit('%s: not a rig ("rig": true in the spec)' % args.spec)
+        for x in [a] + list(a["views"].values()):
+            if not os.path.exists(os.path.join(x["out"], "pack.json")):
+                print("  %s: not packed yet" % (x.get("view") or "front"))
+                continue
+            with open(os.path.join(x["out"], "pack.json"), encoding="utf-8") as f:
+                R = rig(x, Book(x, None), json.load(f))
+            print(
+                "[actor-pack] %s puppet: %d parts, props %s, %s, facing %+d"
+                % (
+                    x.get("view") or "front",
+                    len(R["parts"]),
+                    list(R["props"]),
+                    ", ".join(R["pages"]),
+                    R["facing"],
+                )
+            )
+        if a["views"]:
+            link_views(a)
+        return
+    if args.jobs:
+        a["jobs"] = args.jobs
+    first, est = price(a)
+    J = jobs(a, {p: False for p in a["poses"]})
+    n_design = (0 if a["design"] else a["candidates"]) + sum(
+        1 for p in a["props"].values() if not p.get("image")
+    )
+    n_main = (
+        len(jobs(a))
+        - 1
+        + sum(
+            (0 if av["design"] else av["candidates"]) + len(jobs(av)) - 1
+            for av in a["views"].values()
+        )
+    )
+    n_pose = len(J) - len(jobs(a))
+    print("[actor-pack] %s  %s  look: %s" % (a["name"], a["model"], a["style"][:60] + "..."))
+    for vn, av in a["views"].items():
+        print(
+            "  view %s: %d faces, %d talking, %d hands (in what follows)"
+            % (vn, len(av["faces"]), len(av["talk"]), sum(len(v) for v in av["hands"].values()))
+        )
+    print(
+        "  %d design candidates, %d faces, %d talking faces x %d mouths%s, %d poses (+ up to %d mouths for turned ones)"
+        % (
+            n_design,
+            len(a["faces"]),
+            len(a["talk"]),
+            len(a["mouths"]),
+            " + blink" if a["blink"] else "",
+            len(a["poses"]),
+            n_pose,
+        )
+    )
+    lo = n_design * first + n_main * est
+    print(
+        "  about $%.2f (%d pictures), up to $%.2f with every turned pose and %d retakes on a quarter of the redraws"
+        % (
+            lo,
+            n_design + n_main,
+            lo + n_pose * est + 0.25 * n_main * a["gate"]["retakes"] * est,
+            a["gate"]["retakes"],
+        )
+    )
+    if args.plan:
+        print("  --plan: nothing drawn")
+        return
+    book = Book(a, args.cap)
+    retake = {x.strip() for x in args.retake.split(",") if x.strip()}
+    t0 = time.time()
+    P = make(a, args, book, est, retake)
+    if P is None:
+        return
+    for vn, av in a["views"].items():
+        print("[actor-pack] view %s ..." % vn)
+        vb = Book(av, None if args.cap is None else max(0.0, args.cap - book.spent))
+        done = make(av, args, vb, est, retake)
+        book.spent += vb.spent
+        if done is None:
+            return
+    if a["views"]:
+        print(
+            "  views: %s"
+            % ", ".join("%s (facing %+d)" % (k, v["facing"]) for k, v in link_views(a).items())
+        )
     print("[actor-pack] ran in %.0fs" % (time.time() - t0))
     _project.record(
         a["project"],
@@ -786,6 +1060,11 @@ def main():
         sidecars={
             **{"atlas-%d" % n: os.path.join(a["out"], pg) for n, pg in enumerate(P["pages"])},
             "check": os.path.join(a["out"], "check.jpg"),
+            **({"puppet": os.path.join(a["out"], "puppet.json")} if a["rig"] else {}),
+            **{
+                "view-" + vn: os.path.join(av["out"], "puppet.json")
+                for vn, av in a["views"].items()
+            },
         },
     )
 

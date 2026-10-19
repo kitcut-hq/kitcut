@@ -726,6 +726,15 @@ measured for it and gpt-image-2.5-sunburst is the default. After touching any of
 (`studio/actor_put.py`, `library._seed_actors`, `studio/actors.md`; after touching any of it run
 `python studio/test_actors.py`).
 
+**A character that acts is a puppet**, not a swapped actor: the same spec with `"rig": true` is
+drawn once in an A-pose, cut on a skeleton found by MediaPipe (`scripts/_puppet.py`) and bent at
+its joints by `sketch/puppet.js` -- a plan of gestures, steps, hops and turns, every frame a
+function of t. `"views": {"q": {}}` draws it again turned three-quarters, rigged the same way,
+so it can face a court and hit a forehand. On the same script the swapped Enrique popped 12 times
+and stood still 20 % of the time, the puppet 8 and never (`scripts/character-motion.py`, on
+probe renders); a fresh reviewer still called it weak until it used its whole body and could
+turn. `docs/reference.md`, "Puppets"; after touching any of it, `python scripts/check-actors.py`.
+
 **Talking heads** are real people from their photos, speaking in any of the looks: a manifest's
 `"heads"` names the photos, `head-rig.py` measures each once on the CPU (MediaPipe landmarks and
 segmentation, kept in `models/heads/`), `vo.cast` + a line's `who` give each speaker a voice, and
@@ -871,6 +880,8 @@ which cannot encode the glyphs at all.
 | `config/sketch/heads-example/` | a 9.5 s talking-heads film: two public-domain photos on a 1903 front page, one voice each; `scripts/head-rig.py` makes the rigs, `sketch/heads.js` draws them |
 | `studio/template_from_film.py` | a kitcut.ai film into a live template, one command a stage (find, pull, prove, alt, check, spec, make, site, test -- a graded film from one sentence); the `film-to-template` skill walks it |
 | `scripts/actor-pack.py` | an image model's character cut into an actor pack (faces, mouths, blinks, poses on one atlas) that `sketch/actors.js` animates; `_actor.py` measures, cuts and packs, `config/actors/defaults.json` holds every prompt, `check-actors.py` is its test |
+| `scripts/_puppet.py` | an actor with `"rig": true` cut into a puppet: joints (MediaPipe), the cut, meshes and skin weights, hands and props, its turned views; `sketch/puppet.js` plays it (gestures, steps, hops, turns), `check-actors.py` tests both |
+| `scripts/character-motion.py` | how a character moves, read off a probe render: pops a viewer reads as swaps, stillness, motion; puts two versions side by side |
 | `scripts/resolve-export.py` | the cut as an OTIO/EDL/FCP7 XML timeline plus an SRT, for DaVinci Resolve (free edition); `check-resolve.py` is its test, `docs/davinci-resolve.md` the research behind it |
 | `scripts/route-map.py` | a real map for a film and the route on it as data: paper-relief terrain (OSM streets, real elevation, no labels, no orange) at two zooms that line up, and a GPX/OSM/routed ride as `[u, v, ft, mi, s]` rows a kitcut.ai film can copy; style `config/maps/`, example `config/maps/example-route-map.json` |
 | `scripts/place-map.py` | the real street map of one address for a film (OpenStreetMap streets, buildings, parks, water, coast; no lettering, no pin) and where the address is on it: the pin, its own street, real street names with a spot each; says how exactly the address was found and refuses a street no map has; style `config/maps/street.json`, example `config/maps/example-place-map.json`; `_map.py` is what it shares with `route-map.py`, `check-map.py` their test |

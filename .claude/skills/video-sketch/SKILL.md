@@ -213,6 +213,31 @@ Traps already paid for: redraws asked for on a transparent background come back 
 halo half the time (the script asks for white); muse-image takes no reference and draws a
 stranger every time; a spec that does not say which hand holds a prop gets poses that swap it.
 
+### A character that acts: make it a puppet
+
+A swapped actor holds the poses somebody drew and jumps between them; for a character that has to
+*act* -- gesture on its words, take a step, hit a ball, hop for joy -- make it a puppet
+(`docs/reference.md`, "Puppets"): the same spec with `"rig": true`, drawn once in an A-pose and
+bent at its joints. Its first test was judged "moves better but acts less" until it used its
+whole body and could turn, so plan the acting, not just the arms:
+
+1. In the spec: `"rig": true`, `props` for anything held (with the hand), and `"views": {"q": {}}`
+   when it must face anything but the camera (a court, another character). `--plan` prices it
+   (Enrique: ~$1.30 front, $0.51 a view). Look at `rig.jpg` (the cuts) and each `check.jpg`.
+2. In the manifest, `"puppets": {"<name>": "actors/<name>"}` (its views come with it); lines with
+   `who`, a voice in `vo.cast`.
+3. In film.js, a **plan** per character and `SK.puppetPlay(name, x, y, h, plan)` each frame. Give
+   every line a whole-body beat, not just an arm: `sag` on a disappointment, `hop` on a cheer,
+   `SK.puppetWalk` towards what it talks about, a turn (`views`) to face what it acts on, `ready`
+   before it plays. Put a turn on a blink or a fast move. Let the free hand talk along
+   (`free`), and the busy one keep what it holds (`hold`).
+4. Anything that leaves or meets the character (a ball, a handshake) is placed with
+   `SK.puppetAt(name, ..., t)` at that moment, never by eye.
+5. Stage the payoff big: the reviewer's other note on the first test was that its payoff (the ball
+   coming back off the wall) was "a dot near the horizon". Cut to a closer shot for it.
+6. Check with stills at the contact frames and around each turn, then a probe render scored by
+   `character-motion.py` against the last version; then a fresh review (`video-review`).
+
 ## A motion-design promo (square, 3D pieces, real people, music only)
 
 The worked example is `projects/websummit-speakers/` (local; docs/reference.md "Motion-design

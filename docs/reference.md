@@ -5382,6 +5382,114 @@ never write it. `studio/test_actors.py` holds all of it, a render included.
 **Not yet**: `sketch/thumb.js` does not see actors when it looks for a thumbnail's pictures, and a
 person cannot add an actor from the site or the MCP (only an operator can, above).
 
+### Puppets: an actor rigged to move (`actor-pack.py` `"rig"`, `_puppet.py`, `sketch/puppet.js`)
+
+An actor that swaps drawn pieces can only hold the poses somebody drew: its arms jump from one
+to the next and stand frozen in between. A **puppet** is the same character drawn once in an
+A-pose and cut into parts on a skeleton, so a film bends it at the joints: the arm travels to a
+gesture, the knees take the weight, it hops, steps, sags and turns. Same spec, same voice, same
+faces and mouths; `"rig": true` is the difference.
+
+```powershell
+python scripts/actor-pack.py --fetch-models                                           # the pose model, once
+python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json --plan          # rig, views, what it costs
+python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json --cap 3 --jobs 6
+python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json --rig-only      # re-cut the rig, free
+python scripts/character-motion.py <probe-old.mp4> <probe-new.mp4> --label swapped --label rigged
+python scripts/check-actors.py                                                        # the self-test
+```
+
+**Why a rig** (padel-tactics `films/05-history/puppet-test`, 2026-10-19). The same 18.5-second
+script and voice, played by the swapped actor and by the puppet, measured with
+`character-motion.py` on probe renders (the character alone on white): the swapped Enrique had
+12 pops carrying 83 % of everything optical flow could not explain, and stood still 20 % of the
+time; the puppet 8 pops carrying 28 %, and never stood still. A fresh reviewer then said the
+puppet "moves better but acts less": one arm doing everything, feet planted, the body square to
+the camera. The body layer and the views below are the answer to that review, and they are what
+made the difference on screen.
+
+**The cut** (`_puppet.segment`). MediaPipe's PoseLandmarker (heavy, `models/heads/`) finds the
+joints on the drawing, tried in several framings and kept only when `sane()` (hips under the
+shoulders, knees under the hips...). The neck is the narrowest run between the nose and the
+shoulders; each armhole runs from the armpit up the drawing's own sleeve seam (the darkest line
+within 22 degrees of the guess) and **stops at the neck line**: in a three-quarter view the near
+seam leans in, and a cut run to the silhouette's edge went on through the head and gave half of it
+to the torso. The legs part at the crotch. Each part is a grid mesh (2 % of the height) with
+linear-blend weights (bands at the elbow, wrist, knee, ankle, waist), skinned on the CPU and drawn
+with WebGL2. The numbers behind each rule are in the comment over `RIG` in `_puppet.py`.
+
+**Hands and props.** A rig draws each hand shape as a redraw of the whole figure with only that
+hand changed (`hands`: grip, point, fist, palm -- `config/actors/defaults.json`), laid back on the
+base and cut at the wrist; the drift gate for a hand is 2 %. The palm prompt says the arm stays
+down: the first one raised it. A prop (`props`: `{"paddle": {"image": ..., "hand": "r", "length":
+0.19, "grip": -0.04, "angle": 180}}`) hangs in its hand; a grip redraw's own stick is recoloured
+to the prop's handle and the prop is socketed at its wrist end.
+
+**Views** (`"views": {"q": {...}}`). A front view cannot turn its shoulders or hit a forehand. A
+view is the actor drawn again turned (the `view` prompt, from the base on white; `q` faces the
+right of the picture, `q_left` the left, or give `turn` in your own words), then given its own
+faces, mouths, blink and hands -- a turned face cannot borrow the front's patches -- and rigged
+the same way, in `<pack>/views/<name>/`. The cutter reads which way a figure faces off its nose
+(Enrique's q view: 0.14 of the shoulders' width off their middle; his front view 0.01); a turned
+puppet draws its far arm behind its body and bends both knees the way it faces. Enrique's q view:
+21 redraws, $0.51, drift 0.1-0.4 %, and the cut needed nothing by hand. The front `puppet.json`
+names its views, so a film that loads the actor gets them all (`SK.PUPPETS['enrique@q']`).
+
+**In a film**: `"puppets": {"enrique": "actors/enrique"}` in the manifest; give its lines `who`
+and a voice in `vo.cast`, as for an actor. Then one call a frame:
+
+```js
+const plan = {
+  who: 'enrique', free: 'l',                       // whose voice moves the mouth; the hand that talks along
+  hold: { r: { arm_S_up: -6, shape: 'grip' } },    // the right hand carries the paddle all film
+  views: [[T.built - 0.15, 'q'], [T.vamos - 0.12, 'front']],
+  steps: SK.puppetWalk(T.built, 0.16, 2),          // two steps, 0.16 figure heights to the right
+  acts: [[T.hola - 0.12, 'wave', { side: 'l', dur: 1.1 }], [HIT - 0.43, 'forehand', { side: 'r', dur: 0.95 }],
+         [T.vamos - 0.4, 'hop', { dur: 0.95, height: 0.11 }], [T.vamos - 0.22, 'cheer', { dur: 1.55 }]],
+  faces: [[0, 'happy'], [T.but - 0.1, 'sad'], [T.vamos - 0.12, 'laugh']],
+};
+SK.puppetPlay('enrique', x, groundY, height, plan);
+const at = SK.puppetAt('enrique', x, groundY, height, plan, HIT);   // where its paddle is at the hit
+```
+
+Every frame is a pure function of t. The gestures (`SK.PUPPET_GESTURES`): `wave`, `present`,
+`point`, `shrug` (`one: true` for one hand), `cheer`, `think` (hand to chin, by IK), `me` (hand on
+chest), `nod`, `lean_in`, `swing` (a front-view forehand), `forehand` (a turned view's, contact at
+0.45 of its `dur`), `hop`, `sag`, `ready`. `fwd: true` sends an arm the other way -- in a turned
+view "out" for the near arm is behind. What the acting layer adds, each from a measured fault:
+gestures arrive with a little anticipation and overshoot (`easeInOutBack`; the first ease left at
+4.4x linear speed and every gesture leapt); a bigger move takes longer (`RAMP`); an arm travelling
+bends at the elbow (coming down from a cheer with straight arms passed through a T); the forearm
+lags 0.05 s, the hand 0.1 s, the head 0.06 s; a held gesture drifts; breath, a slow weight shift
+and the head's own life run underneath; the free hand beats with the voice. Faces dissolve over
+0.12 s behind a blink, hand shapes over 0.08 s. The body: the feet are IK targets (steps lift them
+in an arc and the pelvis follows), `sink` bends the knees, `hop` lifts the whole figure with a
+crouch before and a squash after, `sag` drops the shoulders and the head. Facing us, a bent knee
+mostly shortens the leg instead of going out (a crouch with the knees out alone read as bow legs).
+A turn is a swap, as in cut-out animation, with the body narrowing through it: put it on a blink
+or a fast move.
+
+`SK.puppetAt` gives the hands, the head, the feet and each prop's head on the page at any t without
+drawing: the example's ball leaves the paddle from it and comes back to it, and both contacts
+land on the paddle to the frame.
+
+**Measuring**: a **probe** is the film with `"data": {"probe": "probe.json"}` in a copy of its
+manifest, whose film.js draws only the character, a fixed camera, on white.
+`character-motion.py` reads it: pops (frames over 3 % of the figure unexplained by flow), the share
+of unexplained change they carry, stillness over a tenth of a second, and moving frames. A talking
+character never scores zero pops: a mouth or a blink is a small one, and a turn is one by design.
+
+**Cost and speed.** Enrique's front rig: 9 faces, 5 talking faces' mouths and blinks, 8 hands --
+about $1.30 at $0.023 a picture; his q view $0.51. A 20-second draft renders at about 4 frames a
+second on a 4-core container (WebGL readback dominates): 2 minutes 40 for the film, the same for
+its probe.
+
+**Not yet**: the studio takes actor packs, not puppets (`library.read_pack` reads `pack.json`);
+no profile or back view has been tried; steps are steps, not a walk cycle; `sketch/thumb.js` does
+not see puppets. A 3D route (picture -> 3D model -> auto-rig -> motion capture in three.js) would
+turn a figure through any angle, but needs a paid image-to-3D service: nothing reachable from here
+made one (2026-10-19: the TRELLIS space was down, OpenRouter has no 3D models).
+
 ### Sketch Studio: a prompt box that makes a short film (`studio/`)
 
 A prompt-to-film web app on this engine, set up with `pip install -r requirements-studio.txt`:

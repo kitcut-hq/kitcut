@@ -329,6 +329,189 @@ def bundle(tmp, pack_dir):
     )
 
 
+def a_pose():
+    """A cartoon figure in an A-pose (arms clear of the body, feet apart) and its joints, as
+    MediaPipe would give them: what a rig is cut from."""
+    W, H = 600, 1200
+    im = np.full((H, W, 3), 255, np.uint8)
+    J = {
+        "nose": (300, 150), "r_sh": (230, 300), "l_sh": (370, 300), "r_el": (170, 470),
+        "l_el": (430, 470), "r_wr": (130, 620), "l_wr": (470, 620), "r_hip": (255, 640),
+        "l_hip": (345, 640), "r_kn": (240, 850), "l_kn": (360, 850), "r_an": (232, 1050),
+        "l_an": (368, 1050), "r_toe": (200, 1110), "l_toe": (400, 1110),
+    }  # fmt: skip
+
+    def limb(a, b, w, col):
+        cv2.line(im, J[a], J[b], INK, w + 8)
+        cv2.line(im, J[a], J[b], col, w)
+
+    for s in ("r", "l"):  # legs, then the body over their tops, then the arms
+        limb(s + "_hip", s + "_kn", 46, SKIN)
+        limb(s + "_kn", s + "_an", 40, SKIN)
+        limb(s + "_an", s + "_toe", 34, SHORTS)
+    cv2.rectangle(im, (215, 285), (385, 700), INK, -1)
+    cv2.rectangle(im, (221, 291), (379, 694), SHIRT, -1)
+    cv2.rectangle(im, (285, 230), (315, 292), INK, -1)  # the neck
+    cv2.rectangle(im, (289, 230), (311, 292), SKIN, -1)
+    cv2.circle(im, (300, 150), 92, INK, -1)
+    cv2.circle(im, (300, 150), 86, SKIN, -1)
+    for s in ("r", "l"):
+        limb(s + "_sh", s + "_el", 40, SHIRT)
+        limb(s + "_el", s + "_wr", 34, SKIN)
+        tip = tuple(
+            int(v)
+            for v in np.array(J[s + "_wr"])
+            + 0.45 * (np.array(J[s + "_wr"]) - np.array(J[s + "_el"]))
+        )
+        cv2.line(im, J[s + "_wr"], tip, INK, 40)
+        cv2.line(im, J[s + "_wr"], tip, SKIN, 32)
+    return rgba(im), {k: [float(v[0]), float(v[1]), 1.0] for k, v in J.items()}
+
+
+def rig():
+    import _puppet  # noqa: PLC0415
+
+    base, J = a_pose()
+    check(
+        "a sane pose is sane, a hip above the shoulders is not",
+        _puppet.sane(J) and not _puppet.sane({**J, "l_hip": [345, 200, 1]}),
+    )
+    A = base[..., 3] > 8
+    masks, cuts, info = _puppet.segment(
+        A, J, cv2.cvtColor(_actor.on_white(base), cv2.COLOR_BGR2GRAY)
+    )
+    union = np.zeros_like(A)
+    for m in masks.values():
+        union |= m
+    check(
+        "the figure is cut into head, torso, two arms and two legs, and nothing is left over",
+        sorted(masks) == sorted(_puppet.ORDER)
+        and not (A & ~union).any()
+        and all(m.sum() > 500 for m in masks.values()),
+        {k: int(m.sum()) for k, m in masks.items()},
+    )
+    lean = {**J, "r_sh": [280.0, 300.0, 1.0]}  # a seam leaning in: before the fix, 0.82 of the head
+    m2, _, _ = _puppet.segment(A, lean, cv2.cvtColor(_actor.on_white(base), cv2.COLOR_BGR2GRAY))
+    disc = np.zeros_like(A)
+    cv2.circle(disc.view(np.uint8), (300, 150), 80, 1, -1)
+    check(
+        "an armhole's cut stops at the neck: a seam leaning in does not split the head",
+        (m2["head"] & disc).sum() > 0.97 * disc.sum(),
+        "%.3f of the head" % ((m2["head"] & disc).sum() / disc.sum()),
+    )
+    check(
+        "an arm keeps its whole sleeve and none of the body; a leg its own side",
+        masks["arm_r"][300:470, 150:215].sum() > 0.5 * A[300:470, 150:215].sum()
+        and not (masks["arm_r"] & masks["torso"])[400:700, 230:370].any()
+        and masks["leg_r"][900:1000].any()
+        and not masks["leg_r"][900:1000, 320:].any(),
+    )
+    sq = np.zeros((200, 160, 4), np.uint8)
+    cv2.rectangle(sq, (20, 10), (140, 150), (60, 90, 160, 255), -1)
+    cv2.rectangle(sq, (70, 150), (90, 195), (60, 90, 160, 255), -1)
+    puppet, pieces, _ = _puppet.build(
+        base,
+        J,
+        {"neutral": {"mouths": {}}},
+        {},
+        {"bat": (sq, {"hand": "r", "length": 0.15})},
+        None,
+        {},
+    )
+    check(
+        "the puppet: six skinned parts, an open hand each side cut at the wrist, the prop in its hand",
+        [p["name"] for p in puppet["parts"]] == _puppet.ORDER
+        and set(puppet["hands"]) == {"r", "l"}
+        and all("open" in h for h in puppet["hands"].values())
+        and puppet["props"]["bat"]["bone"] == "hand_r",
+    )
+    turned, _, _ = _puppet.build(
+        base, {**J, "nose": [335.0, 150.0, 1.0]}, {"neutral": {"mouths": {}}}, {}, None, None, {}
+    )
+    check(
+        "a figure facing us faces 0; one whose nose is off its shoulders' middle faces that way",
+        puppet["facing"] == 0 and turned["facing"] == 1,
+        "%r %r" % (puppet["facing"], turned["facing"]),
+    )
+    check(
+        "every vertex's weights sum to 1, on bones the skeleton has",
+        all(
+            abs(sum(w for _, w in row) - 1) < 1e-3 and all(b in puppet["bones"] for b, _ in row)
+            for p in puppet["parts"]
+            for row in p["W"]
+        ),
+    )
+    atlas, where = _actor.pack_atlas(pieces, 4096, gap=8)
+    out = _puppet.finish(puppet, where, [(pg.shape[1], pg.shape[0]) for pg in atlas])
+    uv = np.concatenate([np.array(p["uv"]) for p in out["parts"]])
+    check("every UV lands on its page", uv.min() >= 0 and uv.max() <= 1)
+    try:
+        json.dumps(out)
+        ok = True
+    except (TypeError, ValueError):
+        ok = False
+    check("puppet.json is plain JSON", ok)
+    return out, atlas
+
+
+def puppet_page(tmp):
+    import _puppet  # noqa: PLC0415
+
+    AP = import_module("actor-pack")
+    spec = {"name": "tester", "describe": "A tester.", "rig": True, "faces": ["happy", "laugh"],
+            "talk": ["neutral", "happy"], "views": {"q": {}, "back": {"turn": "seen from behind"}},
+            "project": "check-actors"}  # fmt: skip
+    sp = os.path.join(tmp, "rigger.json")
+    json.dump(spec, open(sp, "w"))
+    a = AP.load_spec(sp)
+    q = a["views"].get("q") or {}
+    check(
+        "a rig's views: its own folder, its talking faces and laugh, the default turn's words",
+        set(a["views"]) == {"q", "back"}
+        and q["out"].endswith(os.path.join("tester", "views", "q"))
+        and set(q["faces"]) == {"happy", "laugh"}
+        and q["talk"] == ["neutral", "happy"]
+        and "RIGHT side" in q["turn"]
+        and a["views"]["back"]["turn"] == "seen from behind"
+        and not q["views"],
+    )
+    json.dump({**spec, "views": {"sideways": {}}}, open(sp, "w"))
+    try:
+        AP.load_spec(sp)
+        refused = False
+    except SystemExit:
+        refused = True
+    check("a view with no words of its own and no default is refused", refused)
+    out, atlas = rig()
+    d = os.path.join(tmp, "rig")
+    os.makedirs(d, exist_ok=True)
+    out["pages"] = []
+    for n, pg in enumerate(atlas):
+        cv2.imwrite(os.path.join(d, "puppet-%d.png" % n), pg)
+        out["pages"].append("puppet-%d.png" % n)
+    json.dump(out, open(os.path.join(d, "puppet.json"), "w"))
+    m = {"puppets": {"tester": d}}
+    tag = _puppet.film_script(m, lambda m, p: p)
+    imgs = _puppet.film_images(m, lambda m, p: p)
+    check(
+        "a film's page gets the puppet and its atlas",
+        tag.startswith("<script>") and "SK.PUPPETS" in tag and list(imgs) == ["puppet:tester:0"],
+    )
+    os.makedirs(os.path.join(d, "views", "q"), exist_ok=True)
+    for n, pg in enumerate(atlas):
+        cv2.imwrite(os.path.join(d, "views", "q", "puppet-%d.png" % n), pg)
+    json.dump({**out, "facing": 1}, open(os.path.join(d, "views", "q", "puppet.json"), "w"))
+    a = {"out": d, "views": {"q": {"out": os.path.join(d, "views", "q")}}}
+    linked = AP.link_views(a)
+    imgs = _puppet.film_images(m, lambda m, p: p)
+    check(
+        "an actor's views travel with it: puppet.json names them, the page gets each as name@view",
+        linked == {"q": {"dir": "views/q", "facing": 1}}
+        and sorted(imgs) == ["puppet:tester:0", "puppet:tester@q:0"]
+        and '"tester@q"' in _puppet.film_script(m, lambda m, p: p),
+    )
+
+
 def js():
     node = shutil.which("node")
     if not node:
@@ -341,6 +524,13 @@ def js():
         check=False,
     )
     check("sketch/actors.js parses", r.returncode == 0, r.stderr.strip()[:200])
+    r = subprocess.run(
+        [node, "--check", _env.resolve("sketch/puppet.js")],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    check("sketch/puppet.js parses", r.returncode == 0, r.stderr.strip()[:200])
 
 
 def main():
@@ -353,6 +543,8 @@ def main():
         pack_dir = spec_and_pack(tmp)
         print("[check-actors] the page")
         bundle(tmp, pack_dir)
+        print("[check-actors] a rig")
+        puppet_page(tmp)
         js()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
