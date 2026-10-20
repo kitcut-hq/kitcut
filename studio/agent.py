@@ -1443,7 +1443,10 @@ async def make_film(
         rec = film.record()
     # a series' next episode starts from its last episode's code: after the pick, which can make
     # a film one made in scenes; once (its record's `carried`), so a requeued film keeps its own
-    if not (finish_only or resume):
+    # (asked first, without a thread hop: the answer to POST /api/films reads, a moment after the film
+    # starts, whether it holds a Claude slot yet -- an await before the slot answers "running" for a
+    # film that should wait)
+    if not (finish_only or resume) and episode.wanted(film):
         got = await asyncio.to_thread(episode.carry, film)
         if got and not got.get("skipped"):
             emit({"type": "say", "text": 'Starting from the last episode, "%s".' % got["title"]})

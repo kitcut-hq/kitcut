@@ -110,9 +110,11 @@ def main():
     e2 = finish(ep("Olga and the lost kite", created="2026-10-02T09:00:00"), FILM2)
     off = ep("Olga and the snow")
     check(episode.carry(off) is None and "carried" not in off.record(), "off: nothing carried")
+    check(not episode.wanted(off), "off: make_film does not even hop to a thread for it")
     check(not os.path.exists(off.path("film.js")), "and the episode starts empty")
     os.environ[ON] = OTHER
     check(episode.carry(off) is None, "on for another project only: nothing either")
+    check(not episode.wanted(off), "and not asked for")
 
     # ------------------------------------------------ on: the last episode made
     os.environ[ON] = "%s, %s" % (OTHER, P)

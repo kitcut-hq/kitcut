@@ -334,13 +334,22 @@ def _restore(film, got):
             f.write(got[rel])
 
 
+def wanted(film):
+    """Whether carry() has anything to do for this film: an episode of a project that has it on,
+    not done yet. Cheap and synchronous: make_film asks before it hops to a thread for the carry,
+    because every await ahead of a film's Claude slot is time in which POST /api/films reads that
+    the film has no slot yet and answers "running" for one that should wait."""
+    rec = film.record()
+    return "carried" not in rec and bool(rec.get("project")) and enabled(rec.get("project"))
+
+
 def carry(film):
     """Start this film from its series' last episode, once. -> its record's `carried`:
     {film, version, release, title, length, hashes, cast, fonts, engine} or {"skipped": why};
     None when it is not on for this film (not an episode, not on, already done). Never raises:
     a carry that fails half-way takes back what it copied, and the film starts as any film does."""
     rec = film.record()
-    if "carried" in rec or not rec.get("project") or not enabled(rec.get("project")):
+    if not wanted(film):
         return None
     before = _snapshot(film)
     try:
