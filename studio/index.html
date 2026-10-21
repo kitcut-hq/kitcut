@@ -1973,7 +1973,7 @@ document.addEventListener('kc:youtube', (e) => {
 // soon as the visitor is signed in (api/uploads.js), and a voice note comes back written out (its
 // words are the tile's tooltip). Everything waits in this browser (IndexedDB) until a film takes
 // it, so it survives the sign-in link and a reload.
-const MAX_PICS = 6, MAX_NOTES = 3, MAX_DOCS = 3, DOC_MAX_BYTES = 400 * 1024, REC_MAX = 180, REC_WARN = 165;
+const MAX_PICS = 9, MAX_NOTES = 3, MAX_DOCS = 3, DOC_MAX_BYTES = 400 * 1024, REC_MAX = 180, REC_WARN = 165;
 const ATT = [];  // {kind: 'image'|'audio'|'text', blob, url, w, h, secs, name, id, state, transcript, error}
 let known = false;  // whoami() has answered: uploads wait for it
 const canUpload = () => known && (!AUTH || !!USER);
@@ -2338,6 +2338,13 @@ shelf.load().then(async (saved) => {
   if (PPL.count()) { dropExample(); PPL.sync(); }
 });
 
+// An idea that speaks of attached pictures (a "reference", "the car images I attached") written with
+// nothing attached: the person thinks they went. projects.html carries the same function; test/attachhint.test.mjs
+function claimsPicture(text) {
+  const pic = '(?:pictures?|photos?|images?|pics?|screenshots?|refer+ences?)', att = '(?:attach(?:ed|ments?)?|upload(?:ed)?|enclosed)', gap = '(?:\\W+\\w+){0,6}?\\W+';
+  return new RegExp(`\\b${att}${gap}${pic}\\b|\\b${pic}${gap}${att}\\b`, 'i').test(String(text));
+}
+let hinted = '';  // the idea the warning was shown for: the second press goes on
 $('form').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (rec) await stopRec(true);  // pressed while recording: what was said is attached, not lost
@@ -2351,6 +2358,12 @@ $('form').addEventListener('submit', async (e) => {
   if (prompt.length > PROMPT_MAX) {
     countPrompt(); $('prompt').focus();
     sayForm(esc(`The idea is ${prompt.length.toLocaleString()} characters; the studio reads up to ${PROMPT_MAX.toLocaleString()}. Shorten it, then make the film.`));
+    return;
+  }
+  // "the car images I attached" with no picture in the tray: say so once, before any credit is held
+  if (claimsPicture(prompt) && !ATT.some((a) => a.kind === 'image') && !PPL.count() && hinted !== prompt) {
+    hinted = prompt;
+    sayForm('Your idea talks about pictures you attached, but none are attached. Add them with the + button, or press Make the film again to go on without.');
     return;
   }
   const cant = PPL.check();  // the permission tick, or a photo that failed

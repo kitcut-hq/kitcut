@@ -74,7 +74,7 @@ SPEC = {
     "frames": ["16:9", "1:1"],
     "caps": ["space", "portraits"],
     "moments": [1.0, 3.0],
-    "limits": {"images": 9},
+    "limits": {"images": 12},
     "keep": ["_about", "copy"],
     "generic": ["GET TICKETS"],
     "identity": ["event.name"],
@@ -332,7 +332,7 @@ async def main():
     pub = templates.public(t)
     check(
         pub.get("example") == SPEC["example"]
-        and pub.get("limits") == {"images": 9}
+        and pub.get("limits") == {"images": 12}
         and "fields" not in pub
         and "brief" not in pub,
         "a template shows an example of what to ask and its picture cap -- no form, no brief",
@@ -361,7 +361,7 @@ async def main():
             j,
         )
         logo = await up(png(600, 200, bg=(255, 255, 255, 255)))  # a dark logo on white, no alpha
-        photos = [await up(jpg(500, 600, (40 + i, 90, 120)), "image/jpeg") for i in range(7)]
+        photos = [await up(jpg(500, 600, (40 + i, 90, 120)), "image/jpeg") for i in range(9)]
         body = {
             "template": {"id": "t-test-promo", "version": 1},
             "prompt": "A promo for Nordic Build 2027 in Helsinki, nordic.example",
@@ -387,7 +387,7 @@ async def main():
         j = await r.json()
         check(
             r.status == 202 and j.get("template") == {"id": "t-test-promo", "version": 1},
-            "a film from a template, from a prompt and 8 pictures (over a plain film's 6)",
+            "a film from a template, from a prompt and 10 pictures (over a plain film's 9)",
             j,
         )
         f = Film.open(j.get("id"))
@@ -499,7 +499,7 @@ async def main():
         )
         tl = Tools(f, server.SCHED, lambda ev: None)
         check(
-            tl.web_limit() == max(tools.MAX_WEB_PICTURES, 9),
+            tl.web_limit() == max(tools.MAX_WEB_PICTURES, 12),
             "a template film may bring in its own number of pictures, never fewer than any film",
             tl.web_limit(),
         )
@@ -672,16 +672,16 @@ async def main():
             j,
         )
 
-        # ---- the pictures a plain film may take are still 6
-        fresh = [await up(jpg(300, 300, (i, 50, 50)), "image/jpeg") for i in range(7)]
+        # ---- the pictures a plain film may take are 9
+        fresh = [await up(jpg(300, 300, (i, 50, 50)), "image/jpeg") for i in range(10)]
         try:
             await uploads.take("u:alice", fresh)
             why = ""
         except uploads.UploadError as e:
             why = str(e.body())
-        check("Up to 6" in why, "a plain film still takes at most 6 pictures", why)
+        check("Up to 9" in why, "a plain film takes at most 9 pictures", why)
         try:
-            await uploads.take("u:alice", fresh, 9)
+            await uploads.take("u:alice", fresh, 10)
             took = True
         except uploads.UploadError:
             took = False
