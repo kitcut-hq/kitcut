@@ -72,6 +72,7 @@ TESTS = (
     "test_resume.py",  # a film changed by hand is not rendered over a version it never saw (KI-061)
     "test_review.py",  # the whole film a frame a second, the probe in a real browser, the reader (stubbed)
     "test_verbatim.py",  # a narration written word for word: vo.json held to the person's script
+    "test_research.py",  # a research film's documents and sources checked for an agent, no network
 )
 
 

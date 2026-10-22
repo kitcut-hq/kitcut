@@ -4043,6 +4043,41 @@ either end is said after the recording (`validate.verbatim_note`). A narration u
 words follow the script is another text (a translation) and is not held to it. The script's
 length sets the line cap (twice its lines). `studio/test_verbatim.py` covers it.
 
+### A research film's documents and sources, checked: `research-check.py`
+
+When an agent writes a research film's three documents unattended (`docs/autonomous-research-
+films.md`), nobody re-reads its pages; on film 31 that re-read found six wrong numbers. These checks
+use no AI; they find what does not add up, and the agent fixes it (`scripts/_research.py`):
+
+```powershell
+python scripts/research-check.py --fact doc1.md --chart doc2.md --script doc3.md
+python scripts/research-check.py --fact doc1.md --sources [--skip 20]
+```
+
+- **Every number the narration says is a number of the fact sheet.** Numbers are read as they are
+  said ("sixteen point three billion", "a hundred and eleven billion", "sixty-one and a half",
+  "2,061") and as they are written ("$16.3B", "~30x", "1.5 trillion"); years and the small counts of
+  speech are skipped; a hedged rounding ("about eight hundred thousand" for 810,000, within 3%) is
+  fine. It is coarse on purpose: it catches a number from nowhere, not one near another fact (film
+  31's "almost sixty times" passed beside a 61.5).
+- Every fact-sheet table row has a label, a source and, unless an ESTIMATE, a url and a quote; a
+  table without url and quote columns is named once. "The film must not say" bullets that begin with
+  a quoted phrase are searched for in the narration, however its numbers are said. Every chart value
+  is on the fact sheet (a "$ billion" column scales its cells; the first column names the row).
+- `--sources` reads each row with a url and a quote on its page, 20 a run: a plain fetch (the SEC
+  gets `_web.DECLARED_UA`), then the page tool's browser for a page that refuses it. found / close /
+  number (the quote is not there, its number is) / missing / unreadable. On four real rows: the 10-Q
+  quote found, an invented quote missing, a paraphrase "number", in 16 s.
+- On film 31's own documents (written before url and quote columns existed): one spoken number not
+  on the sheet (L63's "a hundred and forty billion", the sheet has the 129-141 band unscaled), ten
+  chart values the sheet lacks (the ranking's market values, two of our own estimates), and ten
+  tables without url and quote columns.
+
+The studio serves both to the MCP: `POST /api/research/check` `{fact, chart, script}` and `POST
+/api/research/sources` `{fact, skip}` or `{sources: [{url, quote, number}], skip}` (the token, two at
+a time, 110 s), which `check_research` and `check_sources` on kitcut.ai/mcp call.
+`studio/test_research.py` covers it with no network.
+
 ### The soundtrack: `sketch-audio.py`
 
 Stages: fetch any missing instrument notes (FluidR3 GM, MIT, into

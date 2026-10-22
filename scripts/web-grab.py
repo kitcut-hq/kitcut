@@ -641,7 +641,7 @@ class _CDP:
         return d.get("result") or {}
 
 
-async def _browse(url, size, keep=(), settle_s=2.5, load_s=30):
+async def _browse(url, size, keep=(), settle_s=2.5, load_s=30, text_max=30000):
     """Load `url` in headless Chromium at `size`, every request on the way checked against
     _web.public_url -- the page, its redirects and everything it loads: a request for an address
     that is not public fails. A cookie dialog is accepted (CONSENT_JS, UNVEIL_JS); `keep` (selectors
@@ -760,7 +760,7 @@ async def _browse(url, size, keep=(), settle_s=2.5, load_s=30):
                     more["missing"] = got.get("missing") or []
                     if got.get("box"):
                         clip = clip_of(got["box"], *got["doc"])
-                facts = await js(BRAND_JS) or {}
+                facts = await js(BRAND_JS.replace("slice(0, 30000)", "slice(0, %d)" % text_max)) or {}
                 more["clip"] = clip
                 more["blocks"] = (
                     await js(

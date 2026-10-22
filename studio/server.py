@@ -144,6 +144,7 @@ import asyncio
 import secrets
 import argparse
 import contextlib
+import tempfile
 from collections import OrderedDict
 from datetime import datetime
 
@@ -1514,6 +1515,71 @@ async def upload_list(req):
     return web.json_response({"uploads": uploads.listing(uploader_of(req))})
 
 
+# A research film's documents and sources, checked for an agent before it spends credits
+# (scripts/research-check.py, docs/autonomous-research-films.md): no AI, so no bill; the pages
+# are read on the public internet only. Two at a time: --sources may start a browser.
+RESEARCH_MAX_BYTES = 1_500_000
+RESEARCH_SLOTS = asyncio.Semaphore(2)
+
+
+async def research(req):
+    """POST /api/research/check {fact, chart, script} -> the findings; POST /api/research/sources
+    {sources: [{url, quote, number?, id?}]} -> each read on its page."""
+    what = req.match_info["what"]
+    if what not in ("check", "sources"):
+        raise web.HTTPNotFound()
+    body = bytearray()
+    async for chunk in req.content.iter_chunked(65536):
+        body += chunk
+        if len(body) > RESEARCH_MAX_BYTES:
+            return web.json_response({"error": "the request is over 1.5 MB"}, status=413)
+    try:
+        doc = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return web.json_response({"error": "send JSON"}, status=400)
+    if not isinstance(doc, dict):
+        return web.json_response({"error": "send a JSON object"}, status=400)
+    if what == "sources":
+        if isinstance(doc.get("fact"), str) and doc["fact"].strip():
+            doc = {"fact": doc["fact"], "skip": max(0, int(doc.get("skip") or 0))}
+        elif isinstance(doc.get("sources"), list) and doc["sources"]:
+            doc = {"sources": doc["sources"], "skip": max(0, int(doc.get("skip") or 0))}
+        else:
+            return web.json_response(
+                {"error": "send the fact sheet (fact), or sources: a list of {url, quote}"},
+                status=400,
+            )
+    else:
+        doc = {k: doc.get(k) or "" for k in ("fact", "chart", "script")}
+    work = os.path.join(films.HOME, "temp", "research")
+    os.makedirs(work, exist_ok=True)
+    fd, path = tempfile.mkstemp(suffix=".json", dir=work)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(doc, f)
+    env = {k: os.environ[k] for k in procs.BASICS if k in os.environ}
+    env.update(TEMP=work, TMP=work, TMPDIR=work, PYTHONIOENCODING="utf-8", KITCUT_DOTENV="0")
+    argv = [procs.python(), "-X", "utf8", os.path.join(films.KIT, "scripts", "research-check.py")]
+    try:
+        async with RESEARCH_SLOTS:
+            _, tail = await procs.run([*argv, "--input", path], work, env, 110)
+    except procs.StepTimeout:
+        return web.json_response(
+            {"error": "the check took too long: send fewer sources"}, status=504
+        )
+    finally:
+        with contextlib.suppress(OSError):
+            os.remove(path)
+    for line in reversed(tail):
+        if line.startswith("{"):
+            try:
+                return web.json_response(json.loads(line))
+            except ValueError:
+                break
+    return web.json_response(
+        {"error": "the check failed: %s" % " ".join(tail[-2:])[:300]}, status=500
+    )
+
+
 async def youtube_send(req):
     """Send a finished film into a YouTube upload session the site opened (youtube.py). The
     film's owner only; asking again with the same key answers the first send -- on whichever
@@ -2840,6 +2906,7 @@ def make_app(token):
             web.get("/api/costs", costs),
             web.post("/api/films", create),
             web.post("/api/uploads", upload),
+            web.post("/api/research/{what}", research),
             web.get("/api/uploads", upload_list),
             web.get("/api/uploads/{id}", upload_status),
             web.get("/api/library", library_list),
