@@ -22,6 +22,7 @@ from importlib import import_module
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 )
+import _narration as N  # noqa: E402
 import _sketch  # noqa: E402
 import _sketchaudio as A  # noqa: E402
 
@@ -365,7 +366,14 @@ def problems(film, name):
         return [] if isinstance(d, dict) else ["content.json must be one JSON object"]
     if name == "vo.json":
         people = [p["id"] for p in film.record().get("people") or []]
-        return _vo(d, limits(film.length)["lines"], film.length, people)
+        script = narration_script(film)
+        cap = limits(film.length)["lines"]
+        if script:  # the person's script sets how many lines: each may be split once, at the limit
+            cap = max(cap, 2 * len(script[1]))
+        out = _vo(d, cap, film.length, people)
+        if script and not out:
+            out = _verbatim(d, *script)
+        return out
     if name == "paint.json":
         return _paint(d, film.length, film.caps)
     if name in ("score.json", "sfx.json"):  # a kept sound or theme, played by name
@@ -383,6 +391,74 @@ def problems(film, name):
     if name == "scenes.json":
         return _scenes(d, film)
     return []
+
+
+# A narration the person wrote word for word (scripts/_narration.py): a research film's script,
+# every line checked against its sources. The studio's prompt used to tell Claude a script's words
+# "may be cut to fit", and the Anthropic IPO pilot (2026-10-21) dropped the line about the
+# valuation's history; so vo.json is held to such a script every time it is saved, and the tools
+# wait until it matches. Only the stretch vo.json covers is held to it (a pilot of L01 to L08
+# passes); what it leaves out at either end is said after the recording (verbatim_note).
+def narration_script(film):
+    """(label, [(id, words)]) of the first document the person attached that is a word-for-word
+    narration -- "Document 3", as attached_note numbers them -- or None."""
+    docs = [a for a in film.record().get("attachments") or [] if a.get("kind") == "text"]
+    for i, a in enumerate(docs, 1):
+        try:
+            with open(film.path(*a["file"].split("/")), encoding="utf-8") as f:
+                lines = N.script_lines(f.read(400 * 1024))
+        except (OSError, KeyError, ValueError):
+            continue
+        if lines:
+            return "Document %d" % i, lines
+    return None
+
+
+def _said(d):
+    return [ln.get("text", "") if isinstance(ln, dict) else "" for ln in d.get("lines") or []]
+
+
+def _verbatim(d, label, script):
+    found, span = N.check(script, _said(d), "vo.json line", 0)
+    if not found:
+        return []
+    head = "vo.json is not %s word for word (%s)" % (
+        label,
+        N.summary(script[span[0] : span[1] + 1]),
+    )
+    return ["%s: %s" % (head, x) for x in found]
+
+
+def verbatim_note(film):
+    """What the recorded narration says of the person's word-for-word script, for Claude: all of
+    it, or which lines it leaves out. "" when the film has none."""
+    script = narration_script(film)
+    d, _ = _load(film, "vo.json")
+    if not script or not isinstance(d, dict):
+        return ""
+    label, lines = script
+    span = N.covered(lines, _said(d))
+    if span is None:
+        return (
+            "\n\nNOTE: vo.json does not say %s, the narration the person wrote word for word "
+            "(%s). Unless the prompt asked for other words, say its lines."
+            % (label, N.summary(lines))
+        )
+    if span == (0, len(lines) - 1):
+        return "\n\n%s's narration: all %s, word for word." % (label, N.summary(lines))
+    left = [lines[i][0] for i in range(len(lines)) if not span[0] <= i <= span[1]]
+    return (
+        "\n\nNOTE: vo.json says %s to %s of %s's %d lines; %s %s not in this film. Unless the "
+        "prompt asked for fewer, add them: the film is as long as its lines take, never cut to fit."
+        % (
+            lines[span[0]][0],
+            lines[span[1]][0],
+            label,
+            len(lines),
+            ", ".join(left[:3]) + (" ... %s" % left[-1] if len(left) > 3 else ""),
+            "is" if len(left) == 1 else "are",
+        )
+    )
 
 
 # a film made in scenes (studio/scenes.py): its plan, scenes.json

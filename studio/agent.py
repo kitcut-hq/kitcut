@@ -730,6 +730,21 @@ def attached_note(film):
             "itself, but the film keeps its length: cut to what matters most rather than cram. "
             "Keep names, figures and quoted lines exactly as written.",
         ]
+    script = validate.narration_script(film) if docs else None
+    if script:
+        label, said = script
+        lines += [
+            "",
+            "%s is a narration written word for word: %s, each with what is on screen while it "
+            "is said. Unlike any other script, its words are the film's: vo.json says its lines "
+            "exactly and in order, all of them unless the typed prompt names fewer -- one vo line "
+            "for each (or several in a row for a line over %d characters, split at a sentence's "
+            "end), never two in one; nothing added, reworded or left out. Punctuation, pauses and "
+            "the say map are yours. The film is as long as these lines take to say: never shorten "
+            "or drop one to fit. vo.json is checked against it every time it is saved, and the "
+            "tools wait until it matches."
+            % (label, validate.N.summary(said), validate.MAX_LINE_CHARS),
+        ]
     for a in pics:
         lines.append(
             "- Picture %s (%sx%s): Read %s to see it. On screen: SK.image('%s', x, y, w)."

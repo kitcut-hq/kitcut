@@ -29,8 +29,11 @@ Do every step with numbers; a topic that fails one is dropped, and the report sa
 failed.
 
 1. **Read the channel first.** `get_youtube_views` (KitCut MCP) for the channel, 28 days: which
-   videos grew, and their traffic sources. Search-led views are the ones this skill is chasing.
-   For one video, `get_youtube_views` with `video`.
+   videos grew, their traffic sources, and `search_terms`: the top 25 things people typed into
+   YouTube before watching, with views and share (since 2026-10-22). Search-led views are the ones
+   this skill is chasing, and the terms are the next topics' seed list: the Yandex film's were
+   "yandex" (1,574 views), "yandex data center" (1,114), "russian bots" (599), "russian data
+   center hit" (578). For one video, `get_youtube_views` with `video`.
 2. **Candidates.** The last 72 hours: `WebSearch` (mode extended) for the day's tech digests,
    the war's strikes and announcements, outages, filings, fact-checks of viral claims; the
    channel's own beats (what grew in step 1, and its follow-ups). Google Trends' trending RSS
@@ -138,7 +141,18 @@ low was 4.9. So, before anything is written for the film:
 
 ### Pictures: capturing the real pages
 
-The screenshots skill's `shoot.mjs` (headless Edge) takes them; keep the raw shots in
+**The studio photographs pages itself now** (2026-10-22): its `page` tool takes `keep` (CSS
+selectors or `text=<words>`, cropped round all of them and photographed sharp at up to 2x), accepts
+cookie dialogs, takes X posts through their embed page, declares itself to the SEC, and writes where
+each heading and paragraph sits in the photograph (`web/<name>.json` "blocks"), which `SK.read`
+pushes the camera onto. So a research film can name its source pages in the prompt ("photograph
+<url> with keep [header, h1]") instead of spending its nine uploads, and needs no boards: up to one
+page per 30 s of film. `python scripts/web-grab.py --manifest <any sketch.json> --page <url> --name x
+--keep h1` runs the same tool on the laptop, to check a page photographs before the film asks for
+it. Attach a picture only when the page cannot be reached (a paywall, a login) and you have a
+screenshot you may show.
+
+By hand, the screenshots skill's `shoot.mjs` (headless Edge) takes them; keep the raw shots in
 `projects/<project>/logos/src/<n>/` and the finished pictures in `logos/`. What cost time on
 2026-10-21:
 
@@ -159,11 +173,18 @@ The screenshots skill's `shoot.mjs` (headless Edge) takes them; keep the raw sho
 - **Boards, not slides of tiny pages.** Several sources go on one board as real crops on paper,
   each with a credit line: `boards.py` here, from a JSON spec. Stack wide crops in rows; render at
   3840x2160 as JPEG so the film can zoom into one card and stay sharp.
-- **The studio takes 9 pictures and 3 text files a film**, each under 4.4 MB. Pictures are
+- **The studio takes 9 attached pictures and 3 text files a film**, each under 4.4 MB. Pictures are
   upload1..upload9 in the order attached; text files become doc1..doc3 in their order. A research
   film's picture budget usually goes: three opening pages, then one board per section.
 
 ## Part 3: hand it to the film
+
+**Make it in the "Research films" project** (`p-3nz7b3arw2`, kitcut.ai, since 2026-10-22). Its
+brief (`examples/project-brief.md`, the same text) carries the whole format: the RESEARCH strap,
+the tags, explainers, charts only from doc2, nothing static, readable always, the voice, the end.
+So a film's prompt is only its topic, its question, its pictures and pages, and what is particular
+to it; the Anthropic prompt (`examples/prompt.md`) was 9,442 characters because it had to override
+a vertical-Shorts brief. The project has no YouTube channel set: the owner picks it when publishing.
 
 The prompt that made the Yandex film is in its record (`get_film studio-20261011-203316-ijrecx`,
 `idea_full`); start from it. What carries over:
@@ -192,6 +213,10 @@ The prompt that made the Yandex film is in its record (`get_film studio-20261011
 - **Write the narration yourself, word for word,** as a third document (doc3: the running order,
   one line per spoken sentence, with what is on screen during it), and tell the studio to use it
   exactly. That is how every spoken number stays the checked one and the hooks land where planned.
+  The studio enforces it (2026-10-22): a document of `L01.` lines with the spoken words in quotes
+  is found among the attachments, and vo.json is held to it word for word on every save. Check a
+  finished film the same way: `python scripts/narration-check.py --script <doc3> --vtt
+  https://media.kitcut.ai/films/<id>/film.vtt` (film 31: all 72 lines, word for word).
   `examples/` here holds the whole set from the Anthropic IPO film (2026-10-21): `prompt.md`,
   `fact-sheet.md` (doc1), `chart-data.md` (doc2, with how each chart moves), `running-order.md`
   (doc3) and `board-spec.json`. Copy their shape, not their facts.
@@ -221,6 +246,7 @@ chosen. Publish timing matters more than polish for a news-led topic: say so whe
 - `trends.py [GEO ...]`: Google Trends' trending searches now, with traffic and the top news
   headline, for the given countries (default US GB CA AU).
 
+- `examples/project-brief.md`: the Research films project's brief, as it is on kitcut.ai.
 - `boards.py <spec.json>`: real screenshots laid out as a board, a credit line under each card
   (spec format in its docstring). Needs Pillow: run it with the repo's `.venv` Python.
 

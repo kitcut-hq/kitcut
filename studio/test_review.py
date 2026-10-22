@@ -243,6 +243,34 @@ def main():
         "events: ... and words that flash by are not there to be read",
         motion.events(marked(x=lambda i: words if 20 <= i < 30 else None)) == [],
     )
+
+    # ---- a page shown small (probe.js's `p`): the ranking card of the Anthropic pilot
+    def paged(p, n=60):
+        r = film(still, n=n)
+        r["pics"] = ["upload4", "upload5"]
+        for i, f in enumerate(r["frames"]):
+            if p(i):
+                f["p"] = p(i)
+        return r
+
+    ev = motion.events(paged(lambda i: [[330, 300, 670, 620, 0]] if i >= 10 else None))
+    expect(
+        "events: a page a third of the frame wide for seconds is small, and named",
+        kinds(ev) == ["small"]
+        and ev[0]["who"] == "upload4"
+        and "34% of the frame" in ev[0]["text"],
+        ev,
+    )
+    expect(
+        "events: ... a page that fills the frame is not",
+        motion.events(paged(lambda i: [[20, 80, 980, 900, 0]] if i >= 10 else None)) == [],
+    )
+    expect(
+        "events: ... nor one beside a bigger page, nor one that flashes by",
+        motion.events(paged(lambda i: [[0, 0, 300, 300, 1], [300, 50, 990, 950, 0]]))
+        == motion.events(paged(lambda i: [[330, 300, 670, 620, 0]] if 10 <= i < 25 else None))
+        == [],
+    )
     expect(
         "the gate: the fix turn takes the musts, then three of the small things, in order",
         [

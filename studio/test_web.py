@@ -168,6 +168,21 @@ def main():
     finally:
         _web.fetch = fetch
 
+    expect(
+        "an X post through its embed page",
+        grab.page_url("https://x.com/AndrewCurran_/status/2112641878147649911?s=20"),
+        (grab.X_EMBED % "2112641878147649911", ["article"]),
+    )
+    expect("a page as it is", grab.page_url("https://example.com/a"), ("https://example.com/a", []))
+    expect("the SEC hears who we are", _web.ua_for("www.sec.gov"), _web.DECLARED_UA)
+    expect("a lookalike does not", _web.ua_for("notsec.gov"), _web.UA)
+    c = grab.clip_of([100, 2000, 600, 80], 1920, 9000)
+    expect("a small part, photographed at 2x", (c["x"], c["y"], c["scale"]), (76, 1976, 2.0))
+    c = grab.clip_of([0, 0, 1920, 400], 1920, 9000)
+    expect("a wide part, at 1x and inside the page", (c["x"], c["width"], c["scale"]), (0, 1920, 1))
+    c = grab.clip_of([0, 0, 900, 9000], 1920, 9000)
+    expect("a tall part, cut at the tallest photograph", c["height"] * c["scale"] <= 6000, True)
+
     # ------------------------------------------------------------ a page in the browser
     # a local page (no network): its headline face, its button colour, a logo drawn inline, and
     # a picture it asks of a private address, which the browser must not be allowed to fetch
@@ -192,7 +207,7 @@ def main():
             import asyncio
 
             url = "file:///" + html.replace("\\", "/").lstrip("/")
-            png, facts, refused = asyncio.run(grab._browse(url, (1280, 800), settle_s=0.5))
+            png, facts, refused, _ = asyncio.run(grab._browse(url, (1280, 800), settle_s=0.5))
             roles = facts.get("fonts_by_role") or {}
             expect("page: the headline face", (roles.get("headings") or [[None]])[0][0], "Georgia")
             expect("page: the body face", (roles.get("text") or [[None]])[0][0], "Arial")
@@ -207,6 +222,35 @@ def main():
                 True,
             )
             expect("page: a picture came back", png[1:4] == b"PNG", True)
+
+            # a cookie dialog over the page, accepted; the photograph cropped to the headline,
+            # sharp; a header pinned over it hidden; where the headline is in the photograph
+            html2 = os.path.join(d, "consent.html")
+            with open(html2, "w", encoding="utf-8") as f:
+                f.write(
+                    "<html><body style='margin:0;font-family:Arial'>"
+                    "<div id='bar' style='position:fixed;top:0;left:0;right:0;height:90px;"
+                    "background:#000'>pinned</div><div style='height:1400px'></div>"
+                    "<h1 style='font-size:40px;width:600px'>Deep headline here</h1>"
+                    "<p>Body under it.</p>"
+                    "<div class='cookie-banner' style='position:fixed;inset:0;background:#fff'>"
+                    'We use cookies. <button onclick="this.parentNode.remove()">Accept all'
+                    "</button></div></body></html>"
+                )
+            url2 = "file:///" + html2.replace("\\", "/").lstrip("/")
+            png2, _, _, more = asyncio.run(
+                grab._browse(url2, (1280, 800), keep=["h1"], settle_s=0.5)
+            )
+            expect("page: the cookie dialog accepted", more["consent"], ['"Accept all"'])
+            clip = more["clip"]
+            expect(
+                "page: cropped round the headline", (clip["scale"], clip["y"] > 1300), (2.0, True)
+            )
+            shot = Image.open(io.BytesIO(png2)).convert("L")
+            expect("page: the crop is the headline's size", shot.size[1] < 200, True)
+            expect("page: nothing pinned over it", min(shot.getdata()) < 60, True)
+            heads = [b for b in more["blocks"] if b["tag"] == "h1"]
+            expect("page: the headline's place", bool(heads) and heads[0]["box"][1] < 100, True)
     else:
         print("skip  no browser: the page checks did not run")
 

@@ -38,7 +38,11 @@
    shoulders they belong to: Leo episode 11 drew a boy from behind that way for 17 s).
    x: words on screen -- [x0, y0, x1, y1, height, text] per piece of text smaller than SMALL_TEXT of the
    frame's height (height in thousandths of it): what the type size comes to on the finished frame,
-   under the camera's zoom. */
+   under the camera's zoom.
+   p: pictures on screen -- [x0, y0, x1, y1, picture index] per draw of one of the film's large pictures
+   (an attached or photographed page: upload1, web_site, pic_...; 900 px or more on a side; not a logo),
+   what shows of it on the frame, in thousandths; report.pics names them. A page meant to be read and
+   shown small in the middle of empty paper is a fault of research films (2026-10-21). */
 (function () {
   'use strict';
   const SK = window.SK;
@@ -52,7 +56,9 @@
   // figures: every open cast call (not a place) and SK.at group, each collecting the boxes of what is
   // drawn inside it; `split` and `texts` are what this frame found
   const figs = [], PARTS = 400, FIG_DEPTH = 8, SMALL_TEXT = 0.055;
-  let split = null, texts = null, inText = false;
+  let split = null, texts = null, inText = false, pics = null;
+  const picIx = new Map(), picNames = []; // the film's large pictures (p), by their image
+  const PIC = /^(upload\d+|web_[a-z0-9_]+|pic_[a-z0-9_]+|brand_pic_[a-z0-9_]+)$/;
   function openFig(k) { const f = { k, parts: [], over: false, skip: figs.length >= FIG_DEPTH }; if (!f.skip) figs.push(f); return f; }
   function closeFig(f) {
     if (f.skip) return;
@@ -262,7 +268,12 @@
       let x, y, w, h;
       if (a.length >= 8) [, , , , x, y, w, h] = a; else [x, y, w, h] = a;
       if (w === undefined) { w = im.width || 0; h = im.height || 0; }
-      count(this, boxOf(this, () => corners(this, x, y, w, h)));
+      const b = boxOf(this, () => corners(this, x, y, w, h));
+      count(this, b);
+      if (pics && b && this === main && inFilm && !inOverlay && picIx.has(im) && this.globalAlpha >= 0.6 && pics.length < 12) {
+        const cb = st(this).clip, v = onFrame(cb ? meet(b, cb) : b);
+        if (v[2] - v[0] > 2 && v[3] - v[1] > 2) pics.push([Math.round(v[0] / W * 1000), Math.round(v[1] / H * 1000), Math.round(v[2] / W * 1000), Math.round(v[3] / H * 1000), picIx.get(im)]);
+      }
     },
     fillText(t, x, y) { const w = NAT.measureText.call(this, String(t)).width; const b = boxOf(this, () => corners(this, x - w / 2, y - 20, w * 1.5, 30)); words(this, t, b); inText = true; try { count(this, b); } finally { inText = false; } },
     strokeText(t, x, y) { const w = NAT.measureText.call(this, String(t)).width; const b = boxOf(this, () => corners(this, x - w / 2, y - 20, w * 1.5, 30)); inText = true; try { count(this, b); } finally { inText = false; } },
@@ -275,8 +286,12 @@
   const r3 = (v) => Math.round(v * 1000) / 1000;
   function run() {
     const F = SK._film, D = F.duration, t0 = performance.now();
-    const out = { step: STEP, w: 0, h: 0, keys, frames: [] };
+    const out = { step: STEP, w: 0, h: 0, keys, frames: [], pics: picNames };
     main = SK.ctx(); W = main.canvas.width; H = main.canvas.height; out.w = W; out.h = H;
+    for (const [name, im] of Object.entries(SK.IMG || {})) {
+      if (!PIC.test(name) || /logo/.test(name) || !im || Math.max(im.width || 0, im.height || 0) < 900 || picIx.has(im)) continue;
+      picIx.set(im, picNames.length); picNames.push(name);
+    }
     const draw = F.draw, overlay = F.overlay;
     let cam = null;
     F.draw = function (...a) { const m = NAT.getTransform.call(main); cam = [r3(Math.hypot(m.a, m.b)), Math.round(m.e), Math.round(m.f)]; inFilm = true; try { return draw.apply(this, a); } finally { inFilm = false; } };
@@ -285,7 +300,7 @@
     install(); on = true;
     try {
       const one = (t) => {
-        frame = []; cam = null; stack.length = 0; veiled = 0; figs.length = 0; split = []; texts = [];
+        frame = []; cam = null; stack.length = 0; veiled = 0; figs.length = 0; split = []; texts = []; pics = [];
         states.delete(main); // a frame starts from a clean state (SK.render sets the transform itself)
         try { SK.render(t); } catch (e) { if (!out.error) out.error = t + ': ' + String(e && e.message || e); }
       };
@@ -311,6 +326,7 @@
           }) };
           if (split.length) row.g = split.map((g) => [Math.round(g[0] / W * 1000), Math.round(g[1] / H * 1000), Math.round(g[2] / W * 1000), Math.round(g[3] / H * 1000), Math.round(g[4] * 1000), g[5]]);
           if (texts.length) row.x = texts;
+          if (pics.length) row.p = pics;
           part.push([i, row]);
         }
         spent += performance.now() - p0; done += part.length;
@@ -322,7 +338,7 @@
       out.frame_ms = done ? r3(spent / done) : 0;
       out.frames = [...got.keys()].sort((a, b) => a - b).map((i) => got.get(i));
     } finally {
-      on = false; remove(); F.draw = draw; if (overlay) F.overlay = overlay; frame = null; split = null; texts = null; figs.length = 0;
+      on = false; remove(); F.draw = draw; if (overlay) F.overlay = overlay; frame = null; split = null; texts = null; pics = null; figs.length = 0;
     }
     out.ms = Math.round(performance.now() - t0);
     return out;

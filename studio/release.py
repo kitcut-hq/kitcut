@@ -71,6 +71,7 @@ TESTS = (
     "test_rounds.py",  # a finished film changed from its maker's notes: versions, the swap, the line
     "test_resume.py",  # a film changed by hand is not rendered over a version it never saw (KI-061)
     "test_review.py",  # the whole film a frame a second, the probe in a real browser, the reader (stubbed)
+    "test_verbatim.py",  # a narration written word for word: vo.json held to the person's script
 )
 
 

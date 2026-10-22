@@ -1,6 +1,6 @@
 // For: whoever changes sketch/kit.js; a plain reference sheet of every piece, clean then crayon
-/* Kit gallery: nine 3-second pages, each a group of kit pieces entering on its own clock. The
-   first 27 s are the clean look on the white ground, the next 27 s the same pages in crayon on
+/* Kit gallery: ten 3-second pages, each a group of kit pieces entering on its own clock. The
+   first 30 s are the clean look on the white ground, the next 30 s the same pages in crayon on
    paper. scripts/check-kit.py renders it and fails on any error the page reports. */
 SK.setStyle('clean');
 SK.setGround('white');
@@ -92,14 +92,20 @@ const PAGES = [
     const [px, py] = m.ll(37.7968, -122.3958); // a second place on the same map, by latitude and longitude
     SK.pill('by lat, lon', px, py, { size: 24, fill: '#14171f', col: '#ffffff', in: { t: t0 + 1.6, type: 'pop' } });
   },
+  // 9 -- reading a real page: the camera pushes onto the line being read, all of it in the window
+  (t, t0) => {
+    SK.read('doc_page', 0, 20, 1560, 900, { t: t0, in: { t: t0, type: 'slide', from: 'r' }, focus: [
+      { t: t0 + .5, t1: t0 + 2.6, at: [80, 418, 1290, 52], mark: 'underline' },
+    ] });
+  },
 ];
 
 SK.film({
-  duration: 54,
+  duration: 60,
   camera: SK.breath(SK.camera([[0, [0, 0, 1]]]), { amp: 6, zoom: .01 }),
   fadeOut: 0,
   draw(t) {
-    const crayon = t >= 27, k = Math.floor((t % 27) / P), t0 = t - pageT(t);
+    const half = PAGES.length * P, crayon = t >= half, k = Math.min(PAGES.length - 1, Math.floor((t % half) / P)), t0 = t - pageT(t);
     if (crayon) { SK.setStyle('crayon'); SK.setGround('paper'); } else { SK.setStyle('clean'); SK.setGround('white'); }
     SK.at(0, 0, 0, 1, () => PAGES[k](t, t0));
   },

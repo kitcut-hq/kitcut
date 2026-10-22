@@ -479,6 +479,49 @@ def _small(report, t_of, step):
     return [{k: v for k, v in e.items() if k != "size"} for e in out[:SMALL_MAX]]
 
 
+# A page shown small (probe.js `p`). Research films show real pages to be read, and the Anthropic IPO
+# pilot (2026-10-21) put a one-card ranking table in the middle of empty paper at a third of the
+# frame's width, and a montage of pages as thumbnails: readable to nobody on a phone. Measured, not
+# judged: a photograph of a person shown small is fine, so the reader decides.
+PIC_W, PIC_H = 0.42, 0.55  # the largest picture on screen narrower AND shorter than these shares
+PIC_S = 2.0  # ... for this long
+PIC_MAX = 4
+
+
+def _small_pictures(report, t_of, step):
+    """Events for a large picture (a page) that is the biggest on screen yet shown small."""
+    names, at = report.get("pics") or [], {}  # name -> {frame index: (w, h) in thousandths}
+    for i, f in enumerate(report["frames"]):
+        ps = f.get("p") or ()
+        if not ps:
+            continue
+        x0, y0, x1, y1, k = max(ps, key=lambda p: (p[2] - p[0]) * (p[3] - p[1]))
+        w, h = x1 - x0, y1 - y0
+        if w < PIC_W * 1000 and h < PIC_H * 1000 and 0 <= k < len(names):
+            at.setdefault(names[k], {})[i] = (w, h)
+    out = []
+    for name, fr in at.items():
+        for i0, i1 in _index_runs(fr):
+            if (i1 - i0 + 1) * step < PIC_S:
+                continue
+            w, h = max((fr[i] for i in range(i0, i1 + 1)), key=lambda v: v[0] * v[1])
+            out.append(
+                {
+                    "t0": round(t_of[i0], 2),
+                    "t1": round(t_of[i1], 2),
+                    "kind": "small",
+                    "who": name,
+                    "text": "the picture %s is the largest thing on screen from %s to %s but is "
+                    "shown at most %d%% of the frame wide and %d%% tall: if it is a page whose "
+                    "words are meant to be read, they cannot be on a phone (a page to read wants "
+                    "most of the frame's width)"
+                    % (name, _clock2(t_of[i0]), _clock2(t_of[i1]), round(w / 10), round(h / 10)),
+                }
+            )
+    out.sort(key=lambda e: e["t0"])
+    return out[:PIC_MAX]
+
+
 def events(report, step=None):
     """probe.js's report -> [{t0, t1, kind, who, text}], most telling first. kind: double (the same
     character twice for a moment), cut (it is cut by the edge of the thing it is in), into (it goes
@@ -713,6 +756,7 @@ def events(report, step=None):
                 ),
             )
     out += _apart(report, t_of, step) + _small(report, t_of, step)
+    out += _small_pictures(report, t_of, step)
     # one event for one thing: a spin that passes through flat five times is one spin
     out.sort(key=lambda e: (e["kind"], e["who"], e["t0"]))
     merged = []

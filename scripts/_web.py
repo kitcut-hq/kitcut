@@ -35,6 +35,17 @@ UA = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/140.0.0.0 Safari/537.36"
 )
+# Who we are, for the sites whose rules ask a robot to say so. The SEC answers a browser's own
+# User-Agent with "Undeclared Automated Tool" (its fair-access policy asks for a name and a contact
+# address): the Amazon 10-Q a research film showed (2026-10-21) could only be read this way.
+DECLARED_UA = "KitCut research hello@kitcut.ai"
+DECLARE_TO = ("sec.gov",)
+
+
+def ua_for(host):
+    """The User-Agent a request to `host` carries: UA, or DECLARED_UA where the site asks for one."""
+    host = (host or "").lower().rstrip(".")
+    return DECLARED_UA if any(host == d or host.endswith("." + d) for d in DECLARE_TO) else UA
 
 
 class NotPublic(Exception):

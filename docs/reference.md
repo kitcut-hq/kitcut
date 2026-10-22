@@ -4012,6 +4012,37 @@ slipped into Russian forms). Gemini through OpenRouter is the same model and the
 filter, so it is no backup. Voice cloning on OpenRouter (Mistral Voxtral, Fish Audio) was
 not reachable with the key's allowed providers; MAI 2 Flash has no cloning endpoint there.
 
+### A narration written word for word: `narration-check.py`
+
+A research film's script is written and checked against its sources before the film is made:
+every number in it was read on its source's page, and the film must say those lines, all of them,
+in order. Its form (`scripts/_narration.py`): an id at the start of a line -- `L01`, `- L01.`,
+`**L01**:` -- then the spoken words in double quotes, on that line or indented under it, up to the
+next id, heading or unindented paragraph; stage directions in `*italics*` are left out, quotes
+inside them included. Three such lines make a document a word-for-word script.
+
+```powershell
+python scripts/narration-check.py --script projects/<id>/facts/<film>-script.md --list
+python scripts/narration-check.py --script <doc.md> --vtt https://media.kitcut.ai/films/<id>/film.vtt
+python scripts/narration-check.py --script <doc.md> --vo <film>/vo.json     # or --timeline
+```
+
+It compares words, not punctuation: case, commas, dashes ("sixty-one" = "sixty one") and `[voice
+tags]` are the voice's. A script line said as several narration lines in a row passes (one over
+the voice's 300 characters has to be); one narration line holding two script lines does not, since
+the pause between them is lost. Measured on the Anthropic IPO film (2026-10-22): the full film's
+captions are its 72 lines word for word; its pilot's captions show L07 missing, the line the pilot
+dropped because the studio's prompt then said a script's words "may be cut to fit".
+
+**In the studio** a word-for-word document is found among a film's attachments
+(`validate.narration_script`), and `attached_note` tells Claude it is the narration, every line,
+the film as long as they take. `validate.problems(film, "vo.json")` holds vo.json to it on every
+save, so the tools wait while a line is missing, reworded, added or joined -- but only over the
+stretch vo.json covers (`_narration.check`): a pilot of L01 to L08 passes, and what is left out at
+either end is said after the recording (`validate.verbatim_note`). A narration under 30% of whose
+words follow the script is another text (a translation) and is not held to it. The script's
+length sets the line cap (twice its lines). `studio/test_verbatim.py` covers it.
+
 ### The soundtrack: `sketch-audio.py`
 
 Stages: fetch any missing instrument notes (FluidR3 GM, MIT, into
@@ -4347,6 +4378,40 @@ reads pages that refuse WebFetch: openai.com answered it 403 and gave the browse
 Sol announcement. **Every request the page makes is intercepted** (`Fetch.requestPaused`) and
 failed unless `_web.public_url` passes its host, so a page cannot make the browser reach a
 private address either; the final URL is checked again before anything is kept.
+
+**A source page, photographed the way a research film shows it** (2026-10-22, from the Anthropic
+IPO film, whose nine source pictures took a laptop, a hand-run browser and PIL crops to make):
+
+```powershell
+python scripts/web-grab.py --manifest <film>/sketch.json --page <article> --name yahoo --keep header --keep h1
+python scripts/web-grab.py --manifest <film>/sketch.json --page <filing> --name tenq --size 1000x1080 --keep "text=fair value of our"
+python scripts/web-grab.py --manifest <film>/sketch.json --page https://x.com/<who>/status/<id> --name post
+```
+
+- `--keep` crops to the parts named -- CSS selectors, or `text=<words on the page>` for the
+  smallest *block* holding them (a paragraph, a cell, a heading: the first version took the word's
+  own span and gave a 202x126 sliver of a 10-Q) -- the box round all of them plus 24 px, photographed
+  at up to 2x so it is about 1920 wide and stays sharp when a film zooms in, then trimmed of the
+  plain ground round it. Whatever is pinned to the window and lies over the kept parts (Gallup's
+  header, which shrinks and stays when the page scrolls, sat across its headline) is hidden for the
+  photograph unless it is one of them; the page is scrolled back to the top first.
+- A cookie or consent dialog is accepted as a reader would (the consent managers' own buttons, then
+  a button saying "Accept", "I agree", "Got it" inside something about cookies), and one it cannot
+  reach (drawn in a frame of its own) is hidden. Never a login, a paywall or a newsletter.
+- A post on X is photographed through `platform.twitter.com/embed/Tweet.html?id=<id>`, which shows
+  it whole and signed out, cropped to its `<article>`.
+- Requests to the SEC carry `_web.DECLARED_UA` ("KitCut research hello@kitcut.ai"): EDGAR answers a
+  browser's own User-Agent with "Undeclared Automated Tool". `_web.ua_for` is the list.
+- A filing reads better in a narrower window (`--size 1000x1080`): at 1920 its paragraphs are one
+  long line each.
+- `web/<name>.json` gains `clip` (what part, at what scale) and `blocks`: every heading and
+  paragraph in the photograph with its box in the photograph's px -- the boxes `SK.read` pushes
+  the camera onto, so a film never guesses a line's place from the picture.
+
+`studio/test_web.py` covers it offline (the X address, the declared User-Agent, the crop's
+arithmetic) and on a local page in the browser (a cookie dialog accepted, a pinned bar hidden, the
+headline's place). The studio's `page` tool takes `keep`, and a long film may take a page every
+30 s of its length (12 at least, 30 at most: `tools.web_limit`).
 
 **Only the public internet.** The fetching machine may sit on a private network, and in the
 studio the URL is chosen by a stranger's prompt. `_web.py` resolves the host and refuses any
@@ -4905,7 +4970,7 @@ and listed 1,476 hand-built components; the ones that recur across unrelated fil
 | screens | `window`, `phone`, `chat`, `cursor` + `cursorPath`, `ripple`, `button`, `field`, `toast`, `code`, `icon` (41 kinds) | cursors 29; four separate icon sets |
 | brand | `logo`, `endCard`, `palette`, `contrast`, `readable` | logo plates and end cards in 8+ |
 | light | `glow`, `particles`, `pulse`, `flash`, `dim`, `spotlight` | glows 21, particle systems 29 |
-| scenes, camera | `pages` (slide push wipe iris whip fade cut), `shots` (paintings under their own camera, kept inside the picture), `breath`, `screen`, `safe` | SK.scene used by none: every collage film rebuilt the same page carousel; every painted film the same shot list |
+| scenes, camera | `pages` (slide push wipe iris whip fade cut), `shots` (paintings under their own camera, kept inside the picture), `breath`, `read` (a real page read under its own camera), `screen`, `safe` | SK.scene used by none: every collage film rebuilt the same page carousel; every painted film the same shot list |
 | paths | `S.len`, `S.at`, `S.cut` | 5 films re-derived arc length |
 
 **Faces.** Crisp text defaults to Inter, which has no Cyrillic: the kit's font string falls back to
@@ -4921,6 +4986,27 @@ has no kit.js.
 
 **Proving it.** `studio/bakeoff/kit.json`: six real prompts of those days at 30 s, made by the
 studio before the kit and with it. Results are in `docs/studio-speed.md`.
+
+**`SK.read`: a real page, read** (2026-10-22). Research films show their sources -- a headline, a
+filing, a post -- and the narrator reads lines off them. Every such film had written its own page
+camera (the Starlink film's `pageCameras`, 50 lines), and the Anthropic IPO pilot still cut a
+headline at the frame's edge while it was read and left a one-card table small in empty paper.
+`SK.read(img, x, y, w, h, o)` is that camera once: at rest the page fills its window's width (94-97%,
+a slow push and drift, never past the window's sides; `fit: 'whole'` sits it whole), and each
+`focus` `{t, t1, at: [x, y, w, h], mark}` eases onto that box with all of it inside 86% of the
+window's width and 72% of its height -- zooming no closer than `z` (2.6x the rest) or `sharp` (1.6
+world units a picture px, where it would blur) -- marks it (underline, circle, highlighter box),
+holds with a slow pull and eases back. The window is centred on the page where the page is the
+bigger, so no edge of the page shows while it is read. The boxes come from the page tool's
+`blocks`. The gallery's tenth page reads a made-up page (`doc_page.png`).
+
+The glitch reader is told about it twice: probe.js now records the film's large pictures (`p`:
+upload*, web_*, pic_*, 900 px or more, not a logo, what shows of each on the frame), and
+`motion._small_pictures` notes the largest picture on screen when it is under 42% of the frame's
+width and 55% of its height for 2 s or more ("upload4 ... shown at most 34% of the frame wide");
+`studio/prompts/review.md` says a page shown to be read counts as words the story needs, so too
+small to read or its read line cut by the edge is a must, and that a photograph of a person shown
+small is not a fault.
 
 ### Harvest: reading the films back (`studio/harvest.py`)
 

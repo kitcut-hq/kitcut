@@ -60,6 +60,16 @@ PHOTO_SIDE = 1024  # an opaque picture larger than this is stored as a JPEG (the
 MIN_SIDE = 16
 FONTS_API = "https://fonts.googleapis.com/css2?family=%s"
 FONT_HOST = "fonts.gstatic.com"
+# A post on X is photographed through its embed page, which shows it whole and signed out (x.com
+# itself asks for a login); the post is that page's one <article>
+X_POST = re.compile(
+    r"^https?://(?:www\.|mobile\.)?(?:x|twitter)\.com/[A-Za-z0-9_]{1,15}/status(?:es)?/(\d{5,25})"
+)
+X_EMBED = "https://platform.twitter.com/embed/Tweet.html?id=%s&theme=light&dnt=true&lang=en"
+CLIP_MARGIN = 24  # page px kept round the parts asked for (--keep)
+CLIP_W = 1920  # a part is photographed at up to 2x, about this wide: sharp when the film zooms in
+MAX_TALL = 6000  # px: the tallest photograph
+MAX_BLOCKS = 200  # headings and paragraphs whose place in the photograph is written down
 
 
 class GrabError(Exception):
@@ -398,6 +408,206 @@ BRAND_JS = r"""
 """
 
 
+# A cookie or consent dialog over the page, accepted the way a reader would: the consent managers'
+# own accept buttons first, then a button saying "Accept" (or "I agree", "Got it" ...) inside
+# something that is about cookies or consent. Gallup's dialog covered the poll a research film
+# showed (2026-10-21). Never a login, a paywall or a newsletter: those stay as they are.
+CONSENT_JS = r"""
+(() => {
+  const done = [], shown = b => b && b.getClientRects().length > 0;
+  const OWN = ['#onetrust-accept-btn-handler', '#accept-recommended-btn-handler',
+    '#didomi-notice-agree-button', '.qc-cmp2-summary-buttons button[mode=primary]',
+    '#truste-consent-button', '.fc-cta-consent', 'button[data-testid="uc-accept-all-button"]',
+    '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
+    '#CybotCookiebotDialogBodyButtonAccept', '.cc-allow', '.cc-accept',
+    '[data-cookiebanner="accept_button"]', '#gdpr-consent-accept'];
+  for (const s of OWN) {
+    const b = document.querySelector(s);
+    if (shown(b)) { b.click(); done.push(s); }
+  }
+  if (done.length) return done;
+  const SAYS = new RegExp('^(accept( all)?( cookies)?|accept and (close|continue)|' +
+    'agree( and (close|continue))?|i agree|i accept|allow( all)?( cookies)?|got it|ok(ay)?|' +
+    'i understand|yes,? i agree)$', 'i');
+  const about = '[id*=cookie i],[class*=cookie i],[id*=consent i],[class*=consent i],' +
+    '[id*=gdpr i],[class*=gdpr i],[aria-label*=cookie i],[aria-label*=consent i],' +
+    '[role=dialog],[aria-modal=true]';
+  const buttons = 'button,a,[role=button],input[type=button],input[type=submit]';
+  for (const root of document.querySelectorAll(about)) {
+    if (root.matches('[role=dialog],[aria-modal=true]') &&
+        !/cookie|consent|privacy/i.test(root.textContent.slice(0, 3000))) continue;
+    for (const b of root.querySelectorAll(buttons)) {
+      const t = (b.innerText || b.value || '').trim().replace(/\s+/g, ' ');
+      if (t.length <= 40 && SAYS.test(t) && shown(b)) {
+        b.click(); done.push('"' + t + '"'); return done;
+      }
+    }
+  }
+  return done;
+})()
+"""
+
+# What is still over the page after that, when it is about cookies or consent (a consent manager
+# drawn in a frame of its own, which the page's script cannot reach): hidden, and the page scrolls
+# again. A full-window veil with no words of its own goes with it.
+UNVEIL_JS = r"""
+(() => {
+  const vw = innerWidth, vh = innerHeight, gone = [], veils = [];
+  const over = el => {
+    const r = el.getBoundingClientRect();
+    const w = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+    return w * Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0)) / (vw * vh);
+  };
+  const CMP = /cookie|consent|gdpr|cmp|sourcepoint|trustarc|didomi|onetrust|usercentrics/i;
+  for (const el of document.querySelectorAll('body *')) {
+    const cs = getComputedStyle(el);
+    if (cs.position !== 'fixed' && cs.position !== 'sticky' || cs.display === 'none') continue;
+    const a = over(el);
+    if (a < 0.12) continue;
+    const cls = typeof el.className === 'string' ? el.className : '';
+    const name = [el.id, cls, el.tagName === 'IFRAME' ? el.src : ''].join(' ');
+    if (CMP.test(name) || /cookie|consent/i.test((el.textContent || '').slice(0, 3000))) {
+      el.style.setProperty('display', 'none', 'important');
+      gone.push((el.id || el.tagName.toLowerCase()).slice(0, 40));
+    } else if (a > 0.85 && (el.innerText || '').trim().length < 20) veils.push(el);
+  }
+  if (gone.length) {
+    for (const el of veils) el.style.setProperty('display', 'none', 'important');
+    for (const e of [document.documentElement, document.body]) {
+      e.style.setProperty('overflow', 'visible', 'important');
+      if (getComputedStyle(e).position === 'fixed') {
+        e.style.setProperty('position', 'static', 'important');
+      }
+    }
+  }
+  return gone;
+})()
+"""
+
+# The parts of the page asked for (--keep): a CSS selector each, or "text=<words on the page>" for
+# the smallest block holding them. mode 'find' scrolls the first into view (its pictures load);
+# 'box' is the box round all of them, in the page's own px (x, y from the page's top-left).
+PICK_JS = r"""
+((sels, mode) => {
+  const seen = e => { const r = e.getBoundingClientRect(); return r.width > 1 && r.height > 1; };
+  // a header pinned to the window is drawn wherever the window is: never the part to keep
+  const pinned = e => {
+    for (let a = e; a && a !== document.body; a = a.parentElement) {
+      const p = getComputedStyle(a).position;
+      if (p === 'fixed' || p === 'sticky') return true;
+    }
+    return false;
+  };
+  const flat = s => (s || '').toLowerCase().replace(/\s+/g, ' ');
+  const pick = s => {
+    if (s.startsWith('text=')) {
+      // the smallest block holding the words (a paragraph, a cell, a heading), not a word's span
+      const want = flat(s.slice(5).trim());
+      let best = null, size = Infinity;
+      for (const el of document.querySelectorAll('body *')) {
+        if (!flat(el.textContent).includes(want) || !seen(el)) continue;
+        if (getComputedStyle(el).display.startsWith('inline') || pinned(el)) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width * r.height < size) { best = el; size = r.width * r.height; }
+      }
+      return best;
+    }
+    try { return [...document.querySelectorAll(s)].find(e => seen(e) && !pinned(e)) || null; }
+    catch (e) { return null; }
+  };
+  const els = sels.map(pick), got = els.filter(Boolean), missing = sels.filter((s, i) => !els[i]);
+  if (mode === 'find') {
+    if (got.length) got[0].scrollIntoView({ block: 'start' });
+    return { missing, n: got.length };
+  }
+  scrollTo(0, 0); // back to the top: a header pinned to the window is drawn there, over nothing
+  if (!got.length) return { missing };
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const e of got) {
+    const r = e.getBoundingClientRect();
+    x0 = Math.min(x0, r.left + scrollX); y0 = Math.min(y0, r.top + scrollY);
+    x1 = Math.max(x1, r.right + scrollX); y1 = Math.max(y1, r.bottom + scrollY);
+  }
+  // what is pinned to the window and lies over the kept parts (a header that shrank and stayed) is
+  // hidden for the photograph, unless it is one of them
+  for (const el of document.querySelectorAll('body *')) {
+    const p = getComputedStyle(el).position;
+    if (p !== 'fixed' && p !== 'sticky') continue;
+    if (got.some(k => k.contains(el) || el.contains(k))) continue;
+    const r = el.getBoundingClientRect();
+    if (r.right + scrollX > x0 && r.left + scrollX < x1 && r.bottom + scrollY > y0 &&
+        r.top + scrollY < y1) el.style.setProperty('visibility', 'hidden', 'important');
+  }
+  const d = document.documentElement;
+  const doc = [Math.max(d.scrollWidth, innerWidth), Math.max(d.scrollHeight, innerHeight)];
+  return { missing, box: [x0, y0, x1 - x0, y1 - y0], doc };
+})
+"""
+
+# Where the page's headings and paragraphs are in the photograph (its px): what a film needs to push
+# the camera onto the line it reads (SK.read's focus boxes) without guessing from the picture.
+BLOCKS_JS = r"""
+((cx, cy, cw, ch, s, most) => {
+  const out = [], kinds = 'h1,h2,h3,h4,p,li,blockquote,figcaption,td,th,time,dd,dt,pre';
+  for (const el of document.querySelectorAll(kinds)) {
+    const t = (el.innerText || '').trim().replace(/\s+/g, ' ');
+    if (t.length < 3 || el.querySelector('p,li,h1,h2,h3,h4,blockquote,td')) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) continue;
+    const x = r.left + scrollX - cx, y = r.top + scrollY - cy;
+    if (x + r.width <= 0 || y + r.height <= 0 || x >= cw || y >= ch) continue;
+    const box = [x, y, r.width, r.height].map(v => Math.round(v * s));
+    out.push({ tag: el.tagName.toLowerCase(), text: t.slice(0, 140), box });
+    if (out.length >= most) break;
+  }
+  return out;
+})
+"""
+
+
+def clip_of(box, doc_w, doc_h):
+    """The part of a page to photograph round `box` (x, y, w, h in the page's px): CLIP_MARGIN round
+    it, inside the page, at a scale that makes it about CLIP_W wide (1x-2x) and no larger than
+    MAX_SIDE x MAX_TALL. -> DevTools' clip {x, y, width, height, scale}."""
+    x, y, w, h = box
+    x0, y0 = max(0, x - CLIP_MARGIN), max(0, y - CLIP_MARGIN)
+    x1, y1 = min(doc_w, x + w + CLIP_MARGIN), min(doc_h, y + h + CLIP_MARGIN)
+    w, h = max(1, x1 - x0), max(1, y1 - y0)
+    s = min(max(1.0, min(2.0, CLIP_W / w)), MAX_SIDE / w)
+    h = min(h, MAX_TALL / s)
+    return {"x": round(x0), "y": round(y0), "width": round(w), "height": round(h), "scale": s}
+
+
+def trim(im, more, pad=16, tol=10):
+    """A crop with the page's plain ground cut from round it (an X post's empty card below its
+    replies): to what differs from the corner's colour, `pad` px kept. The blocks move with it."""
+    from PIL import ImageChops  # noqa: PLC0415
+
+    bg = Image.new("RGB", im.size, im.getpixel((0, 0)))
+    box = (
+        ImageChops.difference(im, bg).convert("L").point(lambda v: 255 if v > tol else 0).getbbox()
+    )
+    if not box:
+        return im
+    x0, y0 = max(0, box[0] - pad), max(0, box[1] - pad)
+    x1, y1 = min(im.width, box[2] + pad), min(im.height, box[3] + pad)
+    if (x1 - x0) * (y1 - y0) > 0.96 * im.width * im.height:
+        return im
+    for b in more.get("blocks") or []:
+        b["box"][0] -= x0
+        b["box"][1] -= y0
+    return im.crop((x0, y0, x1, y1))
+
+
+def page_url(url):
+    """The address a page is photographed at: an X post through its embed page (and its <article>
+    kept), anything else as it is. -> (url, keep)."""
+    m = X_POST.match(url)
+    if m:
+        return X_EMBED % m.group(1), ["article"]
+    return url, []
+
+
 class _CDP:
     """Just enough of the DevTools protocol over one WebSocket: calls, and a handler per event."""
 
@@ -431,10 +641,12 @@ class _CDP:
         return d.get("result") or {}
 
 
-async def _browse(url, size, settle_s=2.5, load_s=30):
+async def _browse(url, size, keep=(), settle_s=2.5, load_s=30):
     """Load `url` in headless Chromium at `size`, every request on the way checked against
     _web.public_url -- the page, its redirects and everything it loads: a request for an address
-    that is not public fails. Returns (png bytes, BRAND_JS's facts, the requests refused)."""
+    that is not public fails. A cookie dialog is accepted (CONSENT_JS, UNVEIL_JS); `keep` (selectors
+    or text=...) crops the photograph to those parts (clip_of). Returns (png bytes, BRAND_JS's
+    facts, the requests refused, {consent, hidden, missing, clip, blocks})."""
     import aiohttp
 
     exe, prof = browser(), _profile_dir()
@@ -489,9 +701,19 @@ async def _browse(url, size, settle_s=2.5, load_s=30):
                     ok = not u.startswith(("http:", "https:")) or await allowed(u)
                     if not ok:
                         refused.append(u)
+                    host = urllib.parse.urlsplit(u).hostname or ""
+                    say = {}
+                    if ok and _web.ua_for(host) != _web.UA:  # a site that asks robots to say so
+                        heads = {
+                            k: v
+                            for k, v in (p["request"].get("headers") or {}).items()
+                            if k.lower() != "user-agent"
+                        }
+                        heads["User-Agent"] = _web.ua_for(host)
+                        say = {"headers": [{"name": k, "value": v} for k, v in heads.items()]}
                     with contextlib.suppress(GrabError, asyncio.TimeoutError):
                         if ok:
-                            await cdp.call("Fetch.continueRequest", {"requestId": rid})
+                            await cdp.call("Fetch.continueRequest", {"requestId": rid, **say})
                         else:
                             await cdp.call(
                                 "Fetch.failRequest",
@@ -515,21 +737,53 @@ async def _browse(url, size, settle_s=2.5, load_s=30):
                     # a page that never finishes loading is photographed as it stands
                     await asyncio.wait_for(loaded.wait(), load_s)
                 await asyncio.sleep(settle_s)
-                got = await cdp.call(
-                    "Runtime.evaluate", {"expression": BRAND_JS, "returnByValue": True}
+
+                async def js(expr):
+                    got = await cdp.call(
+                        "Runtime.evaluate", {"expression": expr, "returnByValue": True}
+                    )
+                    return got.get("result", {}).get("value")
+
+                more = {"consent": await js(CONSENT_JS) or []}
+                if more["consent"]:
+                    await asyncio.sleep(1.5)  # the dialog closes, the page settles under it
+                more["hidden"] = await js(UNVEIL_JS) or []
+                sels = json.dumps(list(keep))
+                clip = {"x": 0, "y": 0, "width": size[0], "height": size[1], "scale": 1}
+                if keep:
+                    found = await js("%s(%s, 'find')" % (PICK_JS, sels)) or {}
+                    if found.get("n"):
+                        await asyncio.sleep(1.2)  # what scrolling into view started loading
+                    await js("%s(%s, 'box')" % (PICK_JS, sels))  # scrolls back to the top
+                    await asyncio.sleep(0.6)  # a header that shrank on the way down grows back
+                    got = await js("%s(%s, 'box')" % (PICK_JS, sels)) or {}
+                    more["missing"] = got.get("missing") or []
+                    if got.get("box"):
+                        clip = clip_of(got["box"], *got["doc"])
+                facts = await js(BRAND_JS) or {}
+                more["clip"] = clip
+                more["blocks"] = (
+                    await js(
+                        "%s(%s, %s, %s, %s, %s, %d)"
+                        % (
+                            BLOCKS_JS,
+                            clip["x"],
+                            clip["y"],
+                            clip["width"],
+                            clip["height"],
+                            clip["scale"],
+                            MAX_BLOCKS,
+                        )
+                    )
+                    or []
                 )
-                facts = got.get("result", {}).get("value") or {}
                 shot = await cdp.call(
                     "Page.captureScreenshot",
-                    {
-                        "format": "png",
-                        "clip": {"x": 0, "y": 0, "width": size[0], "height": size[1], "scale": 1},
-                        "captureBeyondViewport": True,
-                    },
+                    {"format": "png", "clip": clip, "captureBeyondViewport": True},
                     timeout=60,
                 )
                 pump.cancel()
-        return base64.b64decode(shot["data"]), facts, refused
+        return base64.b64decode(shot["data"]), facts, refused, more
     finally:
         proc.kill()
         with contextlib.suppress(Exception):
@@ -584,22 +838,32 @@ def brand_lines(facts):
     return lines
 
 
-def page(root, url, name, size=(1920, 1080), dry=False):
+def page(root, url, name, size=(1920, 1080), dry=False, keep=()):
     """The page as a browser sees it, into web/<name>.jpg (the manifest's web_<name>); what it is
-    made of into web/<name>.json and its words into web/<name>.txt."""
+    made of, and where its headings and paragraphs are in the photograph, into web/<name>.json and
+    its words into web/<name>.txt. keep: the parts to crop it to (selectors, or text=...)."""
+    asked = url
+    url, own = page_url(url)
+    keep = [str(k).strip() for k in keep or own if str(k).strip()][:8]
     ok, why = _web.public_url(url)
     if not ok:
         raise GrabError(why)
     if dry:
-        return {"would": "photograph %s at %dx%d into web/%s.jpg" % (url, size[0], size[1], name)}
+        return {
+            "would": "photograph %s at %dx%d into web/%s.jpg%s"
+            % (url, size[0], size[1], name, ", cropped to %s" % " + ".join(keep) if keep else "")
+        }
     try:
-        png, facts, refused = asyncio.run(_browse(url, size))
+        png, facts, refused, more = asyncio.run(_browse(url, size, keep))
     except (OSError, asyncio.TimeoutError, StopIteration) as e:
         raise GrabError("the browser could not photograph %s: %s" % (url, e)) from None
     final = facts.get("url") or url
     if not _web.public_url(final)[0]:
         raise GrabError("%s led to %s, which is not on the public internet" % (url, final))
     im = Image.open(io.BytesIO(png)).convert("RGB")
+    if keep:
+        im = trim(im, more)
+    im_size = im.size
     lo, hi = zip(*im.getextrema(), strict=True)
     if max(hi) - min(lo) < 8:
         raise GrabError("the page came out blank (%s): it may need a login or refuse robots" % url)
@@ -630,19 +894,60 @@ def page(root, url, name, size=(1920, 1080), dry=False):
         shutil.rmtree(work, ignore_errors=True)
     with open(os.path.join(d, name + ".txt"), "w", encoding="utf-8") as f:
         f.write(text)
+    blocks, clip = more.get("blocks") or [], more["clip"]
     with open(os.path.join(d, name + ".json"), "w", encoding="utf-8") as f:
-        json.dump(facts | {"refused": refused}, f, indent=2, ensure_ascii=False)
-    rel = "web/" + name + ".jpg"
+        json.dump(
+            facts | {"refused": refused, "clip": clip, "blocks": blocks},
+            f,
+            indent=2,
+            ensure_ascii=False,
+        )
+    rel, (w, h) = "web/" + name + ".jpg", im_size
     note_source(
-        root, "web_" + name, url=url, final=final, kind="page", file=rel, w=size[0], h=size[1]
+        root,
+        "web_" + name,
+        url=asked,
+        final=final,
+        kind="page",
+        file=rel,
+        w=w,
+        h=h,
+        **({"keep": keep} if keep else {}),
     )
+    told = []
+    if more.get("consent"):
+        told.append("a cookie dialog was accepted (%s)" % ", ".join(more["consent"][:2]))
+    if more.get("hidden"):
+        told.append("a cookie dialog it could not answer was hidden (%s)" % more["hidden"][0])
+    if keep and clip["scale"] == 1 and (clip["width"], clip["height"]) == tuple(size):
+        told.append(
+            "none of %s is on the page: this is the whole window; Read %s.txt for its words"
+            % (" + ".join(keep), rel.rsplit(".", 1)[0])
+        )
+    elif keep:
+        told.append(
+            "cropped to %s at %gx%s"
+            % (
+                " + ".join(k for k in keep if k not in (more.get("missing") or [])),
+                round(clip["scale"], 2),
+                " (not on the page: %s)" % ", ".join(more["missing"])
+                if more.get("missing")
+                else "",
+            )
+        )
+    if blocks:
+        told.append(
+            'where its %d headings and paragraphs are in the photograph (px): %s.json, "blocks" '
+            "-- the boxes SK.read's focus takes" % (len(blocks), rel.rsplit(".", 1)[0])
+        )
     return {
         "image": "web_" + name,
         "file": rel,
-        "w": size[0],
-        "h": size[1],
+        "w": w,
+        "h": h,
         "kind": "page",
         "final": final,
+        "told": told,
         "facts": brand_lines(facts)
         + (
             ["drawn inline in its header, saved as pictures: %s" % "; ".join(notes)]
@@ -728,6 +1033,14 @@ def main():
     ap.add_argument("--name", help="the picture's name (lowercase): SK.image('web_<name>')")
     ap.add_argument("--width", type=int, default=1600, help="an SVG's width in px (default 1600)")
     ap.add_argument("--size", type=size_arg, default=(1920, 1080), help="page: WxH (1920x1080)")
+    ap.add_argument(
+        "--keep",
+        action="append",
+        default=[],
+        metavar="SEL",
+        help="page: crop to this part (a CSS selector, or text=<words on the page>); repeatable: "
+        "the box round all of them (header + h1: the masthead down to the headline)",
+    )
     ap.add_argument("--weights", default="400,700", help="font weights (default 400,700)")
     ap.add_argument("--dry-run", action="store_true", help="say what would happen; fetch nothing")
     a = ap.parse_args()
@@ -767,7 +1080,7 @@ def main():
                     root, a.picture.strip(), a.name, max(64, min(a.width, 2560)), a.dry_run
                 )
             else:
-                out = page(root, a.page.strip(), a.name, a.size, a.dry_run)
+                out = page(root, a.page.strip(), a.name, a.size, a.dry_run, a.keep)
             if "image" in out:
                 m.setdefault("images", {})[out["image"]] = out["file"]
                 m["images"].update(out.get("extra") or {})
@@ -799,7 +1112,7 @@ def main():
                 out["file"].rsplit(".", 1)[0],
             )
         )
-        for line in out["facts"]:
+        for line in out["told"] + out["facts"]:
             print("  " + line)
         if out["refused"]:
             print("  (%d requests to addresses off the public internet refused)" % out["refused"])

@@ -90,6 +90,7 @@ PEOPLE_WAIT_S = 420  # the longest a picture tool waits for the people to be dra
 # what one film may bring in from the web (web-grab.py): pictures and page photographs together,
 # and font families -- each is inlined into the film's page, which a phone downloads whole
 MAX_WEB_PICTURES, MAX_WEB_FONTS = 12, 3
+MAX_WEB_PICTURES_LONG = 30  # the most a long film may take (web_limit)
 # portrait-cutout's time a photo, with room: 10.5 s on the laptop with every core, 54 s with two
 # threads (the first template film: 7 photos took 6 minutes before Claude could start)
 CUT_S_PER_PHOTO = 90
@@ -587,6 +588,7 @@ class Tools:
             )
         if moved:
             text += "\n\nsfx.json moved with the narration: %s." % moved.split(",")[0]
+        text += validate.verbatim_note(self.film)
         return (
             "Recorded. The timeline (also in audio/vo/timeline.json), times on the film clock:\n"
             + text
@@ -665,7 +667,8 @@ class Tools:
         line-up of speakers), else MAX_WEB_PICTURES."""
         t = self.film.record().get("template")
         if not t:
-            return MAX_WEB_PICTURES
+            # a long film that shows its sources (a research film) photographs one every 30 s or so
+            return max(MAX_WEB_PICTURES, min(MAX_WEB_PICTURES_LONG, self.film.length // 30))
         import templates  # noqa: PLC0415
 
         got = templates.load(t["id"], t["version"], ("live", "draft", "retired")) or {}
@@ -686,8 +689,9 @@ class Tools:
             tail = await self._script("web", "web-grab.py", args, pools=[("browser", 1)])
         return tail[-1] if tail else "saved"
 
-    async def page(self, url, name, width=None, height=None):
-        """A photograph of a web page into web/, as SK.image('web_<name>')."""
+    async def page(self, url, name, width=None, height=None, keep=None):
+        """A photograph of a web page into web/, as SK.image('web_<name>'); keep crops it to
+        those parts (CSS selectors, or text=<words on the page>)."""
         have = [k for k in self._manifest().get("images") or {} if k.startswith("web_")]
         if len(have) >= self.web_limit() and "web_%s" % name not in have:
             raise ToolError(
@@ -697,6 +701,8 @@ class Tools:
         args = ["--page", str(url or ""), "--name", str(name or "")]
         if width or height:
             args += ["--size", "%dx%d" % (int(width or 1920), int(height or 1080))]
+        for k in (keep if isinstance(keep, list) else [keep] if keep else [])[:8]:
+            args += ["--keep", str(k)[:200]]
         async with self.lock:
             tail = await self._script("web", "web-grab.py", args, pools=[("browser", 1)])
         # the photograph's line and what the page is made of, below it
@@ -1303,10 +1309,17 @@ class Tools:
                 "Open a web page in a real browser (it also reads pages WebFetch is refused) and "
                 "photograph it (width x height px, 1920x1080 unless given; a taller one takes "
                 "more of the page) into web/<name>.jpg, shown with SK.image('web_<name>', x, y, "
-                "w). Reports what the page is made of, measured in it: the fonts that set its "
-                "headings, text and buttons, the web fonts it loaded, its text and painted "
-                "colours, its logo and icon files; a logo it draws inline is saved as "
-                "web/<name>_logo1.png. Its words go to web/<name>.txt.",
+                "w). keep crops the photograph to those parts, sharp (photographed at up to 2x): "
+                "CSS selectors or text=<words on the page> (the paragraph or heading holding "
+                "them), the box round all of them -- e.g. ['header', 'h1'] for a masthead down "
+                "to its headline. A filing or a long document reads better in a narrower window "
+                "(width 1000). A cookie dialog is accepted; a post on X (x.com/<who>/status/<id>) "
+                "is photographed whole through its embed page. Reports what the page is made of, "
+                "measured in it: the fonts that set its headings, text and buttons, the web fonts "
+                "it loaded, its text and painted colours, its logo and icon files; a logo it "
+                "draws inline is saved as web/<name>_logo1.png. Its words go to web/<name>.txt, "
+                "and where its headings and paragraphs are in the photograph to web/<name>.json "
+                "(blocks: SK.read's focus boxes).",
                 {
                     "type": "object",
                     "properties": {
@@ -1314,13 +1327,19 @@ class Tools:
                         "name": {"type": "string", "description": "lowercase, e.g. site"},
                         "width": {"type": "integer"},
                         "height": {"type": "integer"},
+                        "keep": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "the parts to crop to, e.g. ['header', 'h1'] or "
+                            "['text=Revenue rose to']",
+                        },
                     },
                     "required": ["url", "name"],
                 },
             )(
                 wrap(
                     lambda a: self.page(
-                        a.get("url"), a.get("name"), a.get("width"), a.get("height")
+                        a.get("url"), a.get("name"), a.get("width"), a.get("height"), a.get("keep")
                     )
                 )
             ),

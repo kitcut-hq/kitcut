@@ -30,26 +30,7 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 KIT = os.path.join(_env.ROOT, "sketch", "kit.js")
 GALLERY = os.path.join(_env.ROOT, "config", "sketch", "kit-example", "sketch.json")
 # a page of each group (the gallery's 3 s pages), clean then crayon
-TIMES = [
-    2.6,
-    5.6,
-    8.6,
-    11.6,
-    14.6,
-    17.6,
-    20.6,
-    23.6,
-    26.6,
-    29.6,
-    32.6,
-    35.6,
-    38.6,
-    41.6,
-    44.6,
-    47.6,
-    50.6,
-    53.6,
-]
+TIMES = [2.6 + 3 * k for k in range(20)]
 
 fails = []
 

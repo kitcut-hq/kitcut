@@ -35,6 +35,12 @@
                                       kept inside the painting (no edge shows)
      SK.breath(camera, {amp: 26, zoom: .035, period: 11})   the camera, never quite still: holds
                                       keep moving (the motion check's 4 s rule) without a hand key
+     SK.read(img, x, y, w, h, o)      a real page (a screenshot, a filing, a post) READ in a w x h
+                                      window: it fills the window's width under a slow drift, and
+                                      o.focus [{t, t1, at: [x, y, w, h] picture px, mark: 'underline' |
+                                      'circle' | 'box'}] pushes onto the line being read, ALL of it in
+                                      the window, marks it, eases back. The page tool's web/<name>.json
+                                      "blocks" are those boxes. -> {s, at(u, v)}: a picture px in world
      SK.screen(fn)                    draw fn in screen space (origin at the frame's centre), over the
                                       camera: a HUD, a tracker, a lower third
      SK.safe(kind='16:9')             {x0, y0, x1, y1, w, h} of the title-safe box, or '9:16' -- the
@@ -750,6 +756,70 @@
         return [x + A * Math.sin(t * w + ph) / z, y + A * .6 * Math.sin(t * w * .77 + ph * 2) / z, z * (1 + Z * (.5 - .5 * Math.cos(t * w * .5 + ph)))];
       },
     };
+  };
+
+  /** A real page shown to be READ (a screenshot, a filing, a post: upload1, web_site) in a window
+   *  w x h centred on (x, y), under a camera of its own. At rest the page fills the window's width
+   *  (o.fit 'width') or sits whole in it ('whole'), its top showing (o.top: a picture px y), with a
+   *  slow push and drift: never still, never past the window's sides. o.focus: [{t, t1, at: [x, y,
+   *  w, h] in the picture's own px (a block of the page tool's web/<name>.json), mark: 'underline' |
+   *  'circle' | 'box' | 'none', col, z}]: from t the camera eases onto that part with ALL of it in
+   *  the window (a line being read is never cut at an edge), marks it as it is said, holds with a
+   *  slow pull, and from t1 (t + 3) eases back. It zooms no closer than o.z (2.6) times the rest,
+   *  nor past o.sharp (1.6) world units a picture px, where it would blur. Research films, 2026-10-21:
+   *  a headline cut at the frame's edge while it was read; one-card pictures small in empty paper.
+   *  o: t (the drift's clock), shadow (true), bg, col, period (16 s), in/out. -> {s, at(u, v)}: the
+   *  scale now, and where a picture px is in the world, to draw more marks on the page */
+  SK.read = function (name, x, y, w, h, o = {}) {
+    const im = SK.IMG[name];
+    if (!im) { warn(`SK.read: no picture '${name}' in the manifest`); return null; }
+    const iw = im.width, ih = im.height, t = SK.T, t0 = o.t ?? 0, ease = o.ease ?? .9;
+    const s0 = (o.fit ?? 'width') === 'whole' ? Math.min(w * .94 / iw, h * .94 / ih) : w * .94 / iw;
+    const ph = (o.seed ?? hash(name)) % 7, u = .5 - .5 * Math.cos(TAU * (t - t0) / (o.period ?? 16) + ph);
+    const inside = (cx, cy, s) => { // the window inside the page wherever the page is the bigger
+      const vw = w / s, vh = h / s;
+      return [iw > vw ? clamp(cx, vw / 2, iw - vw / 2) : iw / 2, ih > vh ? clamp(cy, vh / 2, ih - vh / 2) : ih / 2, s];
+    };
+    let cam;
+    { // at rest: .94 to .97 of the window's width, a drift of a hundredth of the page
+      const s = s0 * (1 + .03 * u), vh = h / s;
+      cam = [iw / 2 + (u - .5) * .012 * iw, ih * s <= h ? ih / 2 : Math.max(vh / 2, Math.min(ih - vh / 2, (o.top ?? 0) + vh / 2)), s];
+    }
+    let mark = null;
+    for (const f of o.focus || []) {
+      const a = f.at;
+      if (!a || a.length < 4 || !(a[2] > 0) || !(a[3] > 0)) { warn(`SK.read('${name}'): a focus needs at: [x, y, w, h] in the picture's px`); continue; }
+      const t1 = f.t1 ?? f.t + 3;
+      if (t < f.t || t > t1 + ease) continue;
+      const k = E.inOut(clamp((t - f.t) / ease)) * (1 - E.inOut(clamp((t - t1) / ease)));
+      const fit = Math.min(w * .86 / a[2], h * .72 / a[3]);
+      const zs = Math.min(fit, Math.max(s0, Math.min(s0 * (f.z ?? o.z ?? 2.6), o.sharp ?? 1.6)));
+      const hold = clamp((t - f.t - ease) / Math.max(.5, t1 - f.t - ease));
+      const [tx, ty, ts] = inside(a[0] + a[2] / 2, a[1] + a[3] / 2, zs * (1 - .03 * hold));
+      cam = [lerp(cam[0], tx, k), lerp(cam[1], ty, k), Math.exp(lerp(Math.log(cam[2]), Math.log(ts), k))];
+      mark = f;
+    }
+    const [cx, cy, s] = cam;
+    const view = (X, Y) => {
+      const c = ctx(), px = X - cx * s, py = Y - cy * s, pw = iw * s, phh = ih * s;
+      c.save(); c.beginPath(); c.rect(X - w / 2, Y - h / 2, w, h); c.clip();
+      if (o.bg) { c.fillStyle = o.bg; c.fillRect(X - w / 2, Y - h / 2, w, h); }
+      if (o.shadow !== false) { c.save(); c.shadowColor = 'rgba(0,0,0,.25)'; c.shadowBlur = 26; c.shadowOffsetY = 8; c.fillStyle = '#ffffff'; c.fillRect(px, py, pw, phh); c.restore(); }
+      c.drawImage(im, px, py, pw, phh);
+      if (mark && (mark.mark ?? 'underline') !== 'none') {
+        const [fx, fy, fw, fh] = mark.at, kind = mark.mark ?? 'underline', tm = mark.t + ease * .6;
+        const col = mark.col ?? o.col ?? (kind === 'box' ? '#ffd84a' : C().accent), gone = 1 - clamp((t - (mark.t1 ?? mark.t + 3)) / .4);
+        const L = px + fx * s, T = py + fy * s, R = L + fw * s, B = T + fh * s;
+        if (gone > 0) SK.alpha(gone, () => {
+          if (kind === 'underline') SK.underline(L, R, B + 8, { col, in: { t: tm, d: .6 }, nudge: 0 });
+          else if (kind === 'circle') SK.circle((L + R) / 2, (T + B) / 2, (R - L) * .58 + 14, (B - T) * .75 + 14, { col, in: { t: tm, d: .6 }, nudge: 0 });
+          else if (kind === 'box') { const p = E.out(clamp((t - tm) / .5)); c.save(); c.globalCompositeOperation = 'multiply'; c.fillStyle = alphaOf(isHex(col) ? col : '#ffd84a', .45); c.fillRect(L - 8, T - 4, (R - L + 16) * p, B - T + 8); c.restore(); }
+        });
+      }
+      c.restore();
+    };
+    if (o.in || o.out) at(o, x, y, w, h, () => view(0, 0)); else view(x, y);
+    return { s, at: (pu, pv) => [x - cx * s + pu * s, y - cy * s + pv * s] };
   };
 
   /* ================================================================ data */

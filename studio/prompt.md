@@ -69,7 +69,12 @@ web), and the studio's tools, which run the pipeline on your film:
   photographs it (1920x1080, or the width and height you give; a taller one takes in more of the
   page) into `web/<name>.jpg`, shown the same way. It reports what the page is made of, measured
   in it: the fonts of its headings, text and buttons, its colours, its logo files (a logo drawn
-  inline is saved as `web/<name>_logo1.png`); its words are in `web/<name>.txt`.
+  inline is saved as `web/<name>_logo1.png`); its words are in `web/<name>.txt`. `keep` crops it
+  to the parts that matter, sharp: CSS selectors or `text=<words on the page>`, the box round all
+  of them (`["header", "h1"]`: the masthead down to the headline). A cookie dialog is accepted; a
+  post on X is photographed whole through its embed page; a filing reads better at width 1000.
+  Where its headings and paragraphs sit in the photograph is in `web/<name>.json` ("blocks"):
+  the boxes `SK.read` pushes the camera onto as the narrator reads them.
 - `font` -- adds a Google Fonts family (`family`, `weights`) to the film, for
   `SK.txt(..., {font: '<family>', wt: <weight>})`.
 - `map` -- makes the real street map of a real address or place (OpenStreetMap) into
