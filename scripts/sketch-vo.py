@@ -739,6 +739,28 @@ def align_words(script, heard):
 # last scripted word when sound follows (cut_stray); added words with no pause to cut in, or said
 # before the line, are recorded again STRAY_TRIES times, the last without the direction.
 STRAY_PAUSE, STRAY_DB, STRAY_KEEP, STRAY_TRIES = 0.5, -45.0, 0.15, 2
+# Nor is a take that says its own line twice ("too short, and it gets smashed. Too short, and it
+# gets smashed."): the second time is the script's own words, so nothing in it is "added", and the
+# pause before it can be under STRAY_PAUSE. Padel film 7 (2026-10-21, gemini-2.5-flash-tts, one take
+# a line) kept 6 of 66 lines said twice, one with the voice direction read aloud ("at a brisk even
+# pace") and one missing half its words, each scored 0.5-0.75 and picked as the only take; its
+# owner heard the first at 3:03. So a take that says more than REPEAT_RATIO of its line's words, or
+# that the listener heard below LOW_ACC, counts as one with words the voice added: recorded again,
+# and the author told.
+REPEAT_RATIO, LOW_ACC = 1.3, 0.75
+
+
+def misread(script, heard, acc):
+    """What is wrong with a take besides added words ("" when nothing is).
+
+    Said twice, or heard too poorly: see REPEAT_RATIO.
+    """
+    want, said = len(re.findall(r"[\w']+", script)), len(re.findall(r"[\w']+", heard))
+    if said > want * REPEAT_RATIO + 1:
+        return "[said %d words for %d: the line twice?]" % (said, want)
+    if acc < LOW_ACC:
+        return "[heard as %r]" % heard[:60]
+    return ""
 
 
 def _covers(want, part):
@@ -1500,6 +1522,8 @@ def main():
                         c["acc"] = accuracy(text, c["heard"])
                         _, _, before, after = line_span(text, ws)
                 c["stray"] = " ".join(added(text, before + after))
+                bad = misread(text, c["heard"], c["acc"])
+                c["stray"] = (c["stray"] + " " + bad).strip() if bad else c["stray"]
                 c["words"] = align_words(text, ws)  # the script's words, timed by Whisper
 
             def again(job):
