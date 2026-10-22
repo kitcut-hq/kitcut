@@ -32,4 +32,10 @@ What the film has to work with, so that anything you ask for can be made:
 Rules for you: read-only. Change nothing outside your scratch folder (create it: [folder]). No
 network. To look closer use ffmpeg as the skill says.
 
+Before you write the verdict, go through every one of the owner's verdicts in the review sheet,
+oldest first, and ask of each: does this piece do what that verdict asked? A piece that breaks any
+of them is NOT YET, however well it does the rest; name the verdict, in the owner's words. (The
+owner, 2026-10-22, after two reviewers had passed a film that broke one: "remember my comments for
+the future i'm tired repeating them".)
+
 Answer with the report exactly as the skill's section 6 sets it out, under 300 words.
