@@ -3124,8 +3124,10 @@ page, another tucked in behind it, and at most four big words in the film's titl
 or on its label strips, with its logo on options 1 and 3 (see "A poster" below). A film that draws
 everything itself gets **a moment of the film**, made the way YouTube thumbnails are: the film's
 own titles and labels left out of the frame, its subject pushed in large on one side, and the words
-on the other. Either way the first option says the video's main message, and nothing is stock art
-or generated imagery: every pixel is the film's own drawing.
+on the other. Either way the first option is the video's punch line on a dark box over the frame
+the film drew ("The punch line" below, after the channel's best video), a Short's four are all
+punches at its own frame, and nothing is stock art or generated imagery: every pixel is the film's
+own drawing.
 The studio makes them (`studio/thumbs.py`, see `studio/README.md`); the machinery is
 `scripts/_thumb.py`, and this CLI runs it on any finished sketch film:
 
@@ -3451,8 +3453,8 @@ subject finished: some were picked mid-draw, or showed a hero that did not fit t
 
 ### The title in a box (`layout_title`, design yt-5)
 
-Two of the four options (config `title.options`, 1 and 2) are **the video's own title on a whole
-frame of the film**: heavy capitals in the film's title type, in a box of the film's accent with a
+One of the four options (config `title.options`: 2 since 2026-10-22, when option 1 became the
+punch line below; 1 and 2 before) is **the video's own title on a whole frame of the film**: heavy capitals in the film's title type, in a box of the film's accent with a
 hard dark shadow, in a top corner. The owner sent a thumbnail of this kind as the format to offer
 (a painted padel court, "PADEL TACTICS" on a red box top left, "EVERYTHING, IN 6 MINUTES" small
 beside it) and asked for the text to be the video's name or very close to it (2026-10-09).
@@ -3490,6 +3492,79 @@ moments of four and fell back on the fourth, a frame crowded with labels; the ha
 set all four. `thumb-options.py --title "..." --title-box all` draws it on every option of any
 film; `--title-box config` as the site offers it. Known weak: a frame with its subject in the
 middle has no empty corner, and the box then covers part of it at the largest size that fits.
+
+### The punch line on a dark box (`layout_punch`, design yt-6)
+
+Option 1 (config `punch.options`) is **the video's punch line, two to five words, very large on a
+dark box over the frame as the film drew it**. Every option of a film that is not 16:9 (a Short) is
+one, made at the film's own frame (1080x1920). The owner named the model on 2026-10-22: "thumbnails
+with text on top. short catchy title. as we did for https://youtu.be/yrfpNa2HCzU" -- the channel's
+best video (Yandex, 16k views, 95% from YouTube search).
+
+**What the reference is**, measured off it at 1280x720: "Yandex hit, / bots *quiet*", four words in
+two lines, sentence case in the film's heavy sans; caps 76 px (0.105 of the height, 10 px at 168 px
+wide); a box of the film's dark paper (#1E1C19) edged about 3 px in its amber (#FAC622), corners
+about 12 px, 52% of the width and 36% of the height, upper left; the words cream, the last one amber;
+under it the Cloudflare Radar chart with its drop, its source tag, the film's BREAKING bar and
+closing question, pushed in 1.2x. The box covers the chart's header and leaves its drop in view. The
+word that brought the views is the first one: "yandex" was the top search term (1,574 views).
+
+**It was an accident.** The studio's own record of that draft: option 1 was asked as a headline,
+could not be set as one, nor with a glow, and fell to the card layout at the smallest caps (110 px).
+The film's own card is its dark paper edged in its accent, so the card looked like that. Remade with
+the release of 2026-10-22 from a fresh draft, the same film got "Why did *bots* vanish?" (the
+question-or-quote rule, 2026-10-14, leaves no room for "Yandex hit"), again by fallback. On the
+Anthropic IPO research film (studio-20261021-224924-xcvyhz) the same release offered two options
+of four with no words at all and two headlines at the smallest size over half-erased charts. A
+Short got no options at all (since 2026-10-08).
+
+**What it does now:**
+- *The words* are a short title, `punch.min_words`-`max_words` (2-5) words and 32 characters, a
+  statement as a headline puts it or a question, never a quote, naming first who or what the film
+  is about -- the name a viewer types into search. The writer is asked for it as the first
+  thumbnail (`ASK_THUMBS`, `ASK_POSTERS`) and held to it by `check_concepts(..., punch=[1])`; the
+  other three keep the question-or-quote rule and its mix. An older draft keeps its words: its
+  first option's question or quote becomes the punch. Words with no star get one on their last word
+  that counts (`punch_parts`).
+- *The picture* is the frame as the film drew it: its own labels, sources and headings stay, as in
+  the reference (a research film's evidence is words, and the words-out pass left half-erased
+  charts behind). Nothing is pushed.
+- *The colours* are the film's (`punch_look`): the box its darkest colour (near black when it has
+  none that dark), the words its lightest, the starred word and the edge its most saturated accent
+  lifted until it reads on the box; the reference's amber for a film whose accent is grey. On the
+  reference film's palette this gives the reference's own colours.
+- *Where it goes* (`punch_map`, `layout_punch`): the largest caps (200 down to 110 px; 170 to 80 on
+  a Short) whose box hides no more than 15% of what must stay in view -- the frame's subject
+  (`drawn_map`) plus, weighted as much again, the marks the film drew to point at its evidence (its
+  circles and arrows: what the words-out pass leaves out that is no line of words). The first
+  version set its box straight over the amber ring round the chart's drop. The box may hide the
+  film's small print and labels, whole or cut like a sticker over a page (each cut line costs
+  `cut_cost`), never cuts a heading (an OCR line 60 px and up), stays out of YouTube's stamp, and
+  leans up and left, where a feed is read from (`top_bias`, `left_bias`).
+- *A Short*: letters between 12% and 76% of the height (`safe.tall_band`: a Short's tile is cut
+  nearer 2:3 in places and its title lies over a phone tile's foot), no stamp corner. YouTube began
+  taking a Short's own thumbnail in July 2026, Partner Program channels first; the API's support for
+  it was not documented when this was built. No share picture is made for a Short.
+- *Fallbacks*: a punch that cannot be set falls to its picture with the film's words out
+  (`punch+clean`), then a card. And every worded layout now tries a punch before it gives up its
+  words (`FALLBACK`): a picture with no words is not a thumbnail.
+- The title box moved to option 2 (`title.options`).
+
+**Measured** 2026-10-22 on kc-local, four films, fresh drafts with the new ask (16 options):
+- the Yandex film: option 1 "Yandex Bots Went *Quiet*" on the chart at its moment, box upper left
+  over the chart's header, the ring and the drop in view (caps 110, contrast 10.0:1) -- the
+  reference's picture, words and box, with its searched name back first;
+- the Anthropic research film: "Anthropic's *$2 trillion* IPO" (caps 120); options 3 and 4, which
+  had no words, now fall to punches; 4 of 4 options have words (2 of 4 before);
+- an S&P 500 Explained Short and a Padel Tactics Short: 8 of 8 punches at 1080x1920 (caps 80-140,
+  12.4-21.8 px at 168 px wide, contrast 5.4-11.8:1); before, none.
+- a set of options took 26-52 s on kc-local while another job held it at load 30-50.
+
+**Known weak:** the box is not pushed in with the camera, so the evidence under it is as small as
+the film framed it (the reference was pushed 1.2x by accident of the card layout's compose); on a
+dense chart the least-hiding place can still be the bars (the Anthropic film's option 1 hides 13%
+of the frame, most of it bars); a long first word in a wide sans leaves a Short's box at 100 px.
+`thumb-options.py --punch all` draws it on every option of any film.
 
 ## Share title and image
 

@@ -311,12 +311,16 @@ large on the other, drawn by the film itself in its own look (its title type and
 labels and logo, read off it by `sketch/thumb.js`) in one browser run; options 1 and 3 carry its
 logo. Then checks (legible at 168 px wide, 4.5:1 contrast, clear of YouTube's duration stamp). An
 option that fails falls back (a glow of the film's paper, one of its cards, the frame alone) before
-anyone sees it; options saved under an older design (`_thumb.DESIGN`) are made again. The first two of the four are the
-video's title in a box of the film's accent on a whole frame of the film (`layout_title`, config
-`title.options`); a title too long to read on a thumbnail leaves them as their moments' own words. Every
-option's words are a short question the film answers or a short quote of its narration, both kinds
-among them, and a title box carries its option's own question or quote (`docs/reference.md` "A
-question or a quote"). The draft's
+anyone sees it; options saved under an older design (`_thumb.DESIGN`) are made again. The first of
+the four is the video's punch line -- a short title of 2-5 words -- very large on a dark box of the
+film's colours over the frame as the film drew it (`layout_punch`, config `punch.options`; the
+Yandex video's thumbnail, `docs/reference.md` "The punch line"); every option of a Short is one, at
+its own 1080x1920 frame. The second is the video's title in a box of the film's accent on a whole
+frame of the film (`layout_title`, config `title.options`); a title too long to read on a thumbnail
+leaves it as its moment's own words. The other options' words are a short question the film answers
+or a short quote of its narration, both kinds among them, and a title box carries its option's own
+question or quote (`docs/reference.md` "A question or a quote"). Every worded layout tries a punch
+before it gives up its words. The draft's
 answer carries them:
 
 ```bash

@@ -13,8 +13,9 @@ manifest's audio.music, the record, the first message, and the pitched cues the 
 the first message names the frame and the caption band; the band
 film.py tells the writer about is the one captions.js draws in, for every frame; and the cards it
 cuts a narration into never hold more words than the frame allows, never leave a last word alone,
-and never overlap in time; and a film that is not 16:9 gets no thumbnail options, since those are
-posters composed for 1280x720 (thumbs.wide).
+and never overlap in time; and a film that is not 16:9 gets no share picture, since that is
+composed for 16:9 (thumbs.wide) -- its YouTube options are punches at its own frame, drawn by a
+browser, which studio/test_thumbs.py covers.
 """
 
 import os
@@ -181,13 +182,13 @@ def main():
     print("thumbnails")
     expect("a 16:9 film is one a thumbnail is composed for", thumbs.wide(wide))
     expect("a tall one is not", not thumbs.wide(short))
-    rec = thumbs.make_now(short, "UCtest", {"key": "k1", "thumbnails": [{"at": 1.0}]})
-    expect("so it gets no options (and no browser is started)", rec.get("options") == [], rec)
+    rec = thumbs.make_now(short, "share", {"key": "k1", "thumbnails": [{"at": 1.0}]}, want=2)
+    expect("so it gets no share picture (and no browser is started)", rec.get("options") == [], rec)
     expect(
-        "which the site is told as a finished draft with none",
-        thumbs.public(thumbs.saved(short, "UCtest", "k1"))
-        == {"state": "done", "v": "k1-%s" % rec["design"], "options": []},
-        thumbs.public(thumbs.saved(short, "UCtest", "k1")),
+        "which is told as a finished draft with none, at the film's own frame",
+        thumbs.public(thumbs.saved(short, "share", "k1"))
+        == {"state": "done", "v": "k1-%s" % rec["design"], "frame": [1080, 1920], "options": []},
+        thumbs.public(thumbs.saved(short, "share", "k1")),
     )
 
     print("the caption module")

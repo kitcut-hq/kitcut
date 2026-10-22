@@ -17,7 +17,12 @@
       0.15
     ],
     "bar_frac": 0.03,
-    "_source": "No official spec. Practitioner rules (thumix.com/blog/youtube-thumbnail-safe-zone, ytdetective.com): ~5% margins, keep text out of the bottom-right ~15% where the duration stamp sits, and the bottom ~3% where the watched-progress bar sits."
+    "_source": "No official spec. Practitioner rules (thumix.com/blog/youtube-thumbnail-safe-zone, ytdetective.com): ~5% margins, keep text out of the bottom-right ~15% where the duration stamp sits, and the bottom ~3% where the watched-progress bar sits.",
+    "tall_band": [
+      0.12,
+      0.76
+    ],
+    "_tall_band": "A Short's options are 1080x1920 at its own frame. YouTube shows a Short's thumbnail 9:16 in a shelf but nearer 2:3 (some say 3:2) on other surfaces, and lays the Short's title and views over the foot of a phone's tile (relevantaudience.com and ppc.land on the July 2026 rollout of custom Shorts thumbnails): the letters stay between 12% and 76% of the height. There is no duration stamp on a Short's tile."
   },
   "feed": {
     "smallest_w": 168,
@@ -382,7 +387,6 @@
   },
   "title": {
     "options": [
-      1,
       2
     ],
     "_options_2026_10_14": "The box now carries the option's own question or quote (the owner: every thumbnail a short catchy question or quote), the video's title only when the option's words are neither.",
@@ -434,6 +438,57 @@
       0.42
     ],
     "kicker_gap_frac": 0.2,
-    "kicker_drop_frac": 0.22
+    "kicker_drop_frac": 0.22,
+    "_options_2026_10_22": "Option 1 is the punch now (punch.options); the title box keeps option 2."
+  },
+  "punch": {
+    "_why": "The thumbnail of the channel's best video, the Yandex one (yrfpNa2HCzU, 16k views, 95% from YouTube search, 2026-10-12), which the owner named as the model on 2026-10-22: 'thumbnails with text on top, short catchy title'. It was option 1 of its draft, made by the card layout as a fallback of a fallback at the smallest size; this makes that look the first option of every film on purpose. Measured off it (1280x720): four words in two lines, 'Yandex hit, / bots *quiet*', sentence case in the film's own heavy sans; caps 76 px (0.105 of the height, 10 px at 168 px wide); a box of the film's dark paper (#1E1C19) edged in its amber (#FAC622) about 3 px, corners about 12 px, 52% of the width and 36% of the height, upper left; the words cream (#EFECEC), the last one amber; under it the frame the film drew at that moment -- the Cloudflare Radar chart with its drop, its source tag, the film's own BREAKING bar and question -- pushed in 1.2x; the box covers the chart's header and leaves its drop in view.",
+    "options": [
+      1
+    ],
+    "_options": "Which of the four options are a punch on a 16:9 film. Every option of a film that is not 16:9 is one (a Short's frame has room for nothing else that was composed for 16:9).",
+    "min_words": 2,
+    "max_words": 5,
+    "max_chars": 32,
+    "_words": "'2-5 words' is the owner's ask (2026-10-22); the reference has four. A title, not a quote: what the film is about, naming it first -- the reference's 'Yandex' is the word 1,574 of its search views typed.",
+    "cap_max": 200,
+    "cap_max_tall": 170,
+    "cap_min": 110,
+    "cap_min_tall": 80,
+    "cap_step": 10,
+    "_cap": "Larger than the reference's 110 px where the frame allows it: 200 px is 17.5 px at 168 px wide. On a Short (1080 wide) 110 px is 17 px at 168 px wide. A Short's caps go down to 80 px (12.4 px at 168 px wide): its frame is 1080 wide, and 'Cloudflare:' in a heavy sans did not fit it at 110 px (2026-10-22).",
+    "max_w_frac": 0.62,
+    "max_w_frac_tall": 0.88,
+    "max_h_frac": 0.6,
+    "max_lines": 3,
+    "line_gap": 0.16,
+    "pad_frac": [
+      0.34,
+      0.28
+    ],
+    "edge_frac": 0.025,
+    "step_px": 16,
+    "r_frac": 0.11,
+    "stroke_frac": 0.035,
+    "cover_max": 0.15,
+    "_cover_max": "The largest caps whose box hides no more than this share of the frame's subject (what is drawn on a flat ground, else saliency: drawn_map). Where no size does, the box that hides least for its size (small_cost per step down the size range).",
+    "small_cost": 0.15,
+    "protect_px": 60,
+    "_protect_px": "OCR line height (~1.3x the caps) from which the film's own words are a heading the box may hide whole but never cut. Below it -- chart labels, a screenshot's print, a source line -- the box may cut them like a sticker over a page, as the reference cuts 'Bot Traffic' (about 30 px tall at 1080p); each cut costs cut_cost.",
+    "cut_cost": 0.08,
+    "top_bias": 0.06,
+    "left_bias": 0.02,
+    "place_cost": 0.03,
+    "_bias": "Tie-breaks: higher and further left reads first in a feed (where the reference has it); in the writer's place when that costs little.",
+    "dark": "#1C1A17",
+    "light": "#F3EFE6",
+    "accent": "#FFC81E",
+    "dark_max_lum": 0.05,
+    "ink_margin": 0.8,
+    "_colours": "The box is the film's darkest colour when it is that dark (relative luminance <= dark_max_lum), else `dark`; the words its lightest, else `light`; the starred word and the edge its most saturated accent, else `accent` (the reference's amber) for a film whose accent is grey, lifted until it reads on the box with ink_margin more than every layout keeps.",
+    "mark_diff": 40,
+    "mark_min_cells": 20,
+    "mark_weight": 1.0,
+    "_marks": "punch_map: a cell is the film's mark when its words-out pass (4000+t) differs from the frame there by more than mark_diff (of 255) and no line of words lies there; with mark_min_cells of them, the marks weigh mark_weight as much as the whole subject."
   }
 }

@@ -19,6 +19,11 @@ config/thumbnails/thumbnails.json, and for looking at what a film would be offer
   --title-box WHICH that title in a box on a whole frame of the film (layout "title"), as
                     kitcut.ai offers it: on the options config title.options names (config),
                     or on every one (all), to see it on four moments
+  --punch WHICH     the option's words as the video's punch line, very large on a dark box of
+                    the film's colours over the frame as the film drew it (layout "punch"):
+                    on the options config punch.options names (config, as kitcut.ai offers
+                    it), on every one (all), or none. A film that is not 16:9 (a Short) gets
+                    every option as a punch at its own frame, whatever this says
   --ocr             also read the words back with OCR at each feed width (slower)
   --list            print the moments, the settled frames, the layouts and every check;
                     writes stills and working files to the film's temp/ only
@@ -60,6 +65,12 @@ def main():
         choices=("config", "all"),
         help="the title in a box on a whole frame: config title.options, or every option",
     )
+    ap.add_argument(
+        "--punch",
+        choices=("config", "all", "none"),
+        default="config",
+        help="the punch line on a dark box: config punch.options, every option, or none",
+    )
     ap.add_argument("--list", action="store_true", help="print everything; write no options")
     a = ap.parse_args()
 
@@ -87,17 +98,21 @@ def main():
         with open(a.concepts, encoding="utf-8") as f:
             raw = json.load(f)
         raw = raw.get("thumbnails") if isinstance(raw, dict) else raw
-        concepts, notes, problems = _thumb.check_concepts(raw, length, a.title)
+        every = list(range(1, len(raw or []) + 1))
+        wide = _thumb.wide_frame(film)
+        punch = {"config": _thumb.cfg()["punch"]["options"], "all": every, "none": []}[a.punch]
+        punch = punch if wide else every
+        concepts, notes, problems = _thumb.check_concepts(raw, length, a.title, punch=punch)
         for n in notes:
             print("  note: %s" % n)
         for p in problems:
             print("  PROBLEM: %s" % p["text"])
         concepts = _thumb.fill_concepts(concepts, moments, length)
-        if a.title_box:
-            every = list(range(1, len(concepts) + 1))
+        if a.title_box and wide:
             concepts = _thumb.title_concepts(
                 concepts, a.title, every if a.title_box == "all" else None
             )
+        concepts = _thumb.punch_concepts(concepts, punch)
 
     opts = _thumb.make_options(film, concepts, out, logo=a.logo)
     for o in opts:

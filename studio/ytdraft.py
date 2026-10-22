@@ -107,13 +107,18 @@ a character, an object, a chart. Four different moments.
 - "layout": "headline" (the words large over the picture) for the first and the fourth, "card" \
 (the words on the film's own label or card) and "panel" (the picture on one side, the words on a \
 panel of the film's colour on the other) for the second and third.
-- "words": at most 4 words and 32 characters, in the film's language ({language}). The first \
-thumbnail says the video's main message -- {main}, in fewer words; the others each say one of \
-the film's main points. Each is either a short catchy question the film answers, ending \
-with "?", or a short quote -- words said in the film's narration, word for word, in \
-\u201cquotation marks\u201d. Both kinds among the four: at least one question and one quote. \
-Words a viewer reads at a glance and wants to click on, and they hold to the film -- no number \
-or claim it does not show or say. Star one word to colour it (write it as *word*).
+- "words", in the film's language ({language}). The first thumbnail is the video's punch line, \
+set very large on a dark box over its moment as the film drew it: a short catchy title of 2 to 5 \
+words and at most 32 characters, the way a news headline or a big channel's thumbnail says it -- \
+{main}, in fewer words -- naming first who or what the film is about, by the name a viewer \
+would type into YouTube's search (not a quote). Its moment is the film's strongest evidence or \
+subject for it, large on screen: the chart, the photograph, the document, the person, the \
+product. The other three are at most 4 words and 32 characters, each one of the film's main \
+points: either a short catchy question the film answers, ending with "?", or a short quote -- \
+words said in the film's narration, word for word, in \u201cquotation marks\u201d. Both kinds \
+among those three: at least one question and one quote. Words a viewer reads at a glance and \
+wants to click on, and they hold to the film -- no number or claim it does not show or say. Star \
+one word in each to colour it (write it as *word*).
 - "place": the side the words go on, so they leave the subject clear: left, right, top or \
 bottom.
 Put first the one you would choose yourself.
@@ -140,14 +145,18 @@ about the two of them -- or [] for none.
 - "at": a moment of the film, in seconds, from the sheet of its moments (the time is printed on \
 every frame), where that hero is on screen: the poster takes that moment's ground and colours. \
 Four different moments.
-- "words": at most 4 words and 32 characters, in the film's language ({language}); fewer and \
-shorter words are set larger. The first thumbnail says the video's main message -- {main}, in \
-fewer words; the others each say one of the film's main points. Each is either a short catchy \
-question the film answers, ending with "?", or a short quote -- words said in the film's \
-narration, word for word, in \u201cquotation marks\u201d. Both kinds among the four: at least one \
-question and one quote. Words a viewer reads at a glance and wants to click on, and they hold to \
-the film -- no number or claim it does not show or say. Star one word to colour it (write it as \
-*word*).
+- "words", in the film's language ({language}); fewer and shorter words are set larger. The \
+first thumbnail is the video's punch line, set very large on a dark box over its moment as the \
+film drew it (its "at" picks the picture; its hero is not used): a short catchy title of 2 to 5 \
+words and at most 32 characters, the way a news headline or a big channel's thumbnail says it -- \
+{main}, in fewer words -- naming first who or what the film is about, by the name a viewer \
+would type into YouTube's search (not a quote); its moment the film's strongest picture of that. \
+The other three are at most 4 words and 32 characters, each one of the film's main points: \
+either a short catchy question the film answers, ending with "?", or a short quote -- words \
+said in the film's narration, word for word, in \u201cquotation marks\u201d. Both kinds among \
+those three: at least one question and one quote. Words a viewer reads at a glance and wants to \
+click on, and they hold to the film -- no number or claim it does not show or say. Star one word \
+in each to colour it (write it as *word*).
 Put first the one you would choose yourself.
 
 The film's pictures (name: what it shows):
@@ -518,8 +527,16 @@ def check_thumbs(d, mat, title, n=4, layouts=None):
     notes, problems). A problem is something only the writer can put right; it is asked once,
     then repair() decides."""
     said = " ".join(text for _, _, text in mat.get("narration") or [])
+    punch = _thumb.cfg()["punch"]["options"] if n == 4 else ()
     return _thumb.check_concepts(
-        d.get("thumbnails"), mat["length"] or 0, title, n, layouts, mat.get("piece_names"), said
+        d.get("thumbnails"),
+        mat["length"] or 0,
+        title,
+        n,
+        layouts,
+        mat.get("piece_names"),
+        said,
+        punch=punch,
     )
 
 

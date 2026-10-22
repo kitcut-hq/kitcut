@@ -18,7 +18,9 @@ nobody can read at feed size -- or one that does not look like the film it sells
           carry the logo, the subject read off the film's pictures (not its logo, not a painted
           scene, not a prop), the push and the side the words take, the film's frame border and a
           progress bar's labels cropped, the discs and cards that would show empty once the words
-          are left out, the fallback order, and a frame caught mid-crossfade against a settled one
+          are left out, the fallback order, a frame caught mid-crossfade against a settled one, and
+          the punch (its colours off the film, its words a short title, its box off the subject,
+          off the film's marks and never through a heading; a Short at its own frame)
   live    the repo's example film (a crayon film in Caveat) in a throwaway copy, drawn by headless
           Edge/Chrome as the studio draws it: the probe reads its look (hand-drawn, its Caveat,
           its palette), its uncluttered still leaves its title out, four options are made from
@@ -332,8 +334,16 @@ def rules():
         fill,
     )
     check(
-        "fallbacks: headline -> its glow -> a card -> the still",
-        _thumb.FALLBACK["headline"] == ["headline+glow", "card", "still"],
+        "fallbacks: headline -> its glow -> a card -> a punch -> the still",
+        _thumb.FALLBACK["headline"] == ["headline+glow", "card", "punch", "still"],
+    )
+    check(
+        "every worded layout tries a punch before it gives up its words",
+        all(
+            f[-2] == "punch" and f[-1] == "still"
+            for k, f in _thumb.FALLBACK.items()
+            if k != "punch"
+        ),
     )
     check("a panel falls to a card before the picture alone", _thumb.FALLBACK["panel"][0] == "card")
     check(
@@ -785,6 +795,140 @@ def titles():
           and ratio[1] >= ratio[0] + 1, ratio)  # fmt: skip
 
 
+def punches():
+    """The punch line on a dark box (layout "punch", design yt-6): its colours read off the film
+    (the reference's own when given the reference film's palette), its words held to a short
+    title, the box placed off the subject and off the marks the film drew to point at it, never
+    cutting a heading -- and a Short's frame with its own band."""
+    print("\nthe punch")
+    W, H = _thumb.size()
+    safe, badge = _thumb.safe_rects()
+    yandex = style(paper=(28, 26, 23), text=(243, 239, 230), ink=(42, 37, 33),
+                   accent=(255, 200, 30), accent_fill=(255, 200, 30))  # fmt: skip
+    fill, edge, ink, acc = _thumb.punch_look(yandex)
+    check("on the reference film's palette: its dark paper, its cream words, its amber as it is",
+          (fill, ink, acc) == ((28, 26, 23), (243, 239, 230), (255, 200, 30)) and edge == acc,
+          (fill, ink, acc))  # fmt: skip
+    fill, edge, ink, acc = _thumb.punch_look(style())
+    check("on a light film: a box of its darkest ink, its paper for the words, its accent lifted to read",
+          fill == (42, 37, 33) and ink == (247, 242, 231) and _thumb._reads(acc, fill) >= 6.1
+          and _thumb._chroma(acc) > 0.3, (fill, ink, acc))  # fmt: skip
+    fill, _, _, acc = _thumb.punch_look(style(paper=(200, 200, 200), text=(120, 120, 120),
+                                              ink=(110, 110, 110), accent=(90, 90, 96),
+                                              accent_fill=(120, 120, 126)))  # fmt: skip
+    check("a film with nothing dark and no colour: a near-black box, the reference's amber",
+          fill == _thumb.hex_rgb(_thumb.cfg()["punch"]["dark"]) and acc[0] > 200 and acc[2] < 120,
+          (fill, acc))  # fmt: skip
+    star = [[(t, a) for t, a in w] for w in _thumb.punch_parts("Yandex hit, bots quiet")]
+    check(
+        "words with no star get one on their last word that counts",
+        star[-1] == [("quiet", True)],
+        star,
+    )
+    star = _thumb.punch_parts("Why did bots vanish?")
+    check(
+        "...its question mark left in the ink", star[-1] == [("vanish", True), ("?", False)], star
+    )
+    star = _thumb.punch_parts("*Yandex* hit, bots quiet")
+    check(
+        "the writer's own star is kept",
+        star[0] == [("Yandex", True)] and star[-1] == [("quiet", False)],
+        star,
+    )
+
+    # where it goes: off the busy subject, the letters in YouTube's margins
+    lay = _thumb.layout_punch(frame(busy_right=True), "Yandex hit, bots *quiet*", yandex)
+    x0, y0, x1, y1 = lay["box"]
+    card, lines = lay["spec"]["cards"][0], lay["spec"]["lines"]
+    check(
+        "the box beside the subject, not on it", x1 < W * 0.62 and lay["cover"] <= 0.15, lay["box"]
+    )
+    check("large: caps from the config's range, 8 px or more at 168 px wide",
+          _thumb.cfg()["punch"]["cap_min"] <= lay["cap"] <= _thumb.cfg()["punch"]["cap_max"]
+          and lay["cap"] * 168 / W >= 8, lay["cap"])  # fmt: skip
+    check("a dark box edged in the accent, the starred word in it",
+          card["fill"] == "#1C1A17" and card["stroke"] == "#FFC81E" and card["strokeW"] >= 3
+          and any(r["col"] == "#FFC81E" for L in lines for r in L["runs"]), card)  # fmt: skip
+    inside = all(L["x"] >= safe[0] - 1 and L["x"] + L["w"] <= safe[2] + 1 for L in lines)
+    check("every letter inside YouTube's margins, the box clear of its stamp",
+          inside and not _thumb._hits(lay["box"], badge), lay["box"])  # fmt: skip
+
+    # the film's marks: a ring it drew round the evidence is not hidden
+    paper = Image.new("RGB", (W, H), (236, 230, 216))
+    ImageDraw.Draw(paper).rectangle([900, 300, 1700, 900], outline=(40, 36, 32), width=8)
+    ringed = paper.copy()
+    ImageDraw.Draw(ringed).ellipse([140, 140, 760, 560], outline=(250, 190, 30), width=16)
+    lay = _thumb.layout_punch(ringed, "Yandex hit, bots *quiet*", yandex, clean=paper)
+    bare = _thumb.layout_punch(paper, "Yandex hit, bots *quiet*", yandex)
+    check("on bare paper the box goes top left, where a feed is read from",
+          bare["box"][0] < W / 3 and bare["box"][1] < H / 3, bare["box"])  # fmt: skip
+    check("but not over a ring the film drew to point at something",
+          not _thumb._hits(lay["box"], (140, 140, 760, 560)), lay["box"])  # fmt: skip
+
+    # a heading is hidden whole or not at all; small print may be cut like a sticker over a page
+    page = paper.copy()
+    page.info.pop("_text", None)  # a copy carries the paper's OCR along with it
+    d = ImageDraw.Draw(page)
+    d.text((120, 120), "MEASURED: THE BOTS", font=_thumb.pil_font("fonts/Montserrat-Bold.ttf", 110),
+           fill=(30, 28, 25))  # fmt: skip
+    lay = _thumb.layout_punch(page, "Yandex hit, bots *quiet*", yandex)
+    heads = [b[:4] for b in _thumb._ocr_lines(page) if b[4] >= _thumb.cfg()["punch"]["protect_px"]]
+    cut = [h for h in heads if _thumb._hits(lay["box"], h)
+           and not (lay["box"][0] <= h[0] and lay["box"][1] <= h[1] and lay["box"][2] >= h[2] and lay["box"][3] >= h[3])]  # fmt: skip
+    check("a heading the film set is never cut by the box", heads and not cut, (heads, lay["box"]))
+
+    # the words: a short title, any kind but a quote; the others keep their rule
+    said = "Yandex was hit three times and its bots went quiet. How many were bots? Completely shut down."
+    raw = [{"at": 2.0, "words": "Yandex hit, bots *quiet*"}, {"at": 4.0, "words": "How many were *bots*?"},
+           {"at": 6.0, "words": "“Completely *shut* down”"}, {"at": 8.0, "words": "Why so *quiet*?"}]  # fmt: skip
+    _, _, probs = _thumb.check_concepts(raw, 10, "", said=said, punch=[1])
+    check("a punch may be a statement: no problem with a headline as option 1", not probs, probs)
+    long = [dict(raw[0], words="Yandex was hit and the bots went *quiet*")] + raw[1:]
+    _, _, probs = _thumb.check_concepts(long, 10, "", said=said, punch=[1])
+    check("...of five words at most", [p["n"] for p in probs] == [1], probs)
+    quote = [dict(raw[0], words="“Completely *shut* down”")] + raw[1:]
+    _, _, probs = _thumb.check_concepts(quote, 10, "", said=said, punch=[1])
+    check(
+        "...and not a quote (it names what the film is about)",
+        [p["n"] for p in probs] == [1],
+        probs,
+    )
+    _, _, probs = _thumb.check_concepts(raw, 10, "", said=said)
+    check(
+        "without the punch the same headline is asked for again",
+        [p["n"] for p in probs] == [1],
+        probs,
+    )
+    c4 = [{"at": float(i), "words": "w%d x" % i, "layout": "headline"} for i in range(1, 5)]
+    c4[3]["words"] = ""
+    got = _thumb.punch_concepts(c4)
+    check("the options punch.options names become punches; one with no words stays as it is",
+          [c["layout"] for c in got] == ["punch", "headline", "headline", "headline"]
+          and [c["layout"] for c in _thumb.punch_concepts(c4, [1, 2, 3, 4])][3] == "headline", got)  # fmt: skip
+    check("a punch that cannot be set falls back to its picture with the film's words out, then a card",
+          _thumb.FALLBACK["punch"][:2] == ["punch+clean", "card"])  # fmt: skip
+
+    # a Short: its own frame, the letters in the band its tile shows
+    tmp = tempfile.mkdtemp(prefix="punch-tall-")
+    with open(os.path.join(tmp, "sketch.json"), "w", encoding="utf-8") as fh:
+        json.dump({"frame": [1080, 1920]}, fh)
+    with _thumb.framed(tmp):
+        tsafe, tbadge = _thumb.safe_rects()
+        sz = _thumb.size()
+        tlay = _thumb.layout_punch(
+            frame(busy_right=True).resize((1080, 1920)), "Yandex hit, bots *quiet*", yandex
+        )
+    shutil.rmtree(tmp, ignore_errors=True)
+    band = _thumb.cfg()["safe"]["tall_band"]
+    check("a Short is made at its own frame, and back to 16:9 after",
+          sz == (1080, 1920) and _thumb.size() == (1920, 1080), sz)  # fmt: skip
+    check("its letters between %d%% and %d%% of the height, no stamp" % (100 * band[0], 100 * band[1]),
+          tsafe[1] == round(1920 * band[0]) and tsafe[3] == round(1920 * band[1]) and tbadge[0] == 1080, tsafe)  # fmt: skip
+    check("and the punch set there, inside the band, legible at a Short's tile size",
+          tlay and tlay["box"][1] >= tsafe[1] - tlay["cap"] and tlay["box"][3] <= tsafe[3] + tlay["cap"]
+          and tlay["cap"] * 168 / 1080 >= 8, tlay and tlay["box"])  # fmt: skip
+
+
 def collage_fixture(home):
     """The collage example in a throwaway folder: its 17 cut-outs stood in for by paper shapes
     with a transparent ground (the real ones are painted by an image model), and a voice
@@ -973,6 +1117,7 @@ def main():
     rules()
     posters()
     titles()
+    punches()
     if not a.rules_only:
         live()
         live_posters()

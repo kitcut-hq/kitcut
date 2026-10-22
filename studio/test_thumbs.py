@@ -10,8 +10,10 @@ are the film's own frames without anything added after it (a Free plan's closing
 for here by a tail that paints the whole frame red, which the film's own render shows and no still
 may); four options made from a draft's concepts, each a 1920x1080 JPEG under YouTube's 2 MB, each
 passing every check (legible at 168 px, in contrast, clear of the duration stamp, hiding none of
-the film's own words); words that cannot be set legibly fall back rather than ship; the options
-are kept, keyed by the draft, and told to the site without anything of the studio's.
+the film's own words); the first is the punch line on a dark box over the frame the film drew,
+the second the title in a box; words that cannot be set legibly fall back rather than ship; the
+options are kept, keyed by the draft, and told to the site without anything of the studio's; and a
+tall film (a Short) gets its four as punches at its own 1080x1920 frame.
 """
 
 import os
@@ -229,8 +231,8 @@ def main():
         heads,
     )
     check(
-        [o["layout"] for o in opts] == ["title", "title", "panel", "still"],
-        "the first two in a title box, the others in their layouts",
+        [o["layout"] for o in opts] == ["punch", "title", "panel", "still"],
+        "the first a punch, the second a title box, the others in their layouts",
         [(o["layout"], o["notes"]) for o in opts],
     )
     check([o["n"] for o in opts] == [1, 2, 3, 4], "four options", [o["n"] for o in opts])
@@ -257,8 +259,8 @@ def main():
         opts[0]["words"] == "Still waiting?"
         and opts[1]["words"] == "Pass It On"
         and opts[2]["words"] == "A friend can use it",
-        "the words as the site shows them: a title box carries its question whole, else the title "
-        "up to its colon; a moment's own, stars gone",
+        "the words as the site shows them: the punch its own words, a title box the title up to its "
+        "colon when the moment's words are neither a question nor a quote; a moment's own, stars gone",
         [o["words"] for o in opts],
     )
 
@@ -349,6 +351,48 @@ def main():
         "and the site is told so",
         thumbs.public(rec3),
     )
+
+    # ---------------------------------------------------------------- a Short
+    # the same film in a tall frame: four punches at 1080x1920, no share picture
+    t_dir = os.path.join(HOME, "projects", "studio-20261022-120000-tallth")
+    shutil.copytree(f.dir, t_dir, ignore=shutil.ignore_patterns("temp", "outputs", "youtube"))
+    os.makedirs(os.path.join(t_dir, "temp", "brand"), exist_ok=True)
+    shutil.copyfile(
+        f.path("temp", "brand", "red.js"), os.path.join(t_dir, "temp", "brand", "red.js")
+    )
+    with open(os.path.join(t_dir, "sketch.json"), encoding="utf-8") as fh:
+        tm = json.load(fh)
+    tm["frame"] = [1080, 1920]
+    with open(os.path.join(t_dir, "sketch.json"), "w", encoding="utf-8") as fh:
+        json.dump(tm, fh, indent=1)
+    tall = Film(t_dir)
+    rec4 = thumbs.make_now(tall, "UCtest", dict(draft, key="draft-4"))
+    opts4 = rec4["options"]
+    check(
+        [o["layout"] for o in opts4] == ["punch", "punch", "punch", "still"],
+        "a Short: every worded option a punch (a title box and a panel are composed for 16:9)",
+        [(o["layout"], o["notes"]) for o in opts4],
+    )
+    for o in opts4:
+        p = tall.path("outputs", o["path"])
+        ck = o["checks"]
+        ok = os.path.exists(p) and Image.open(p).size == (1080, 1920)
+        if o["layout"] == "punch":
+            ok = ok and ck.get("cap_168", 0) >= 8 and ck.get("contrast", 0) >= 4.5
+            ok = ok and ck.get("in_margin") == 0 and ck.get("hides_text") == 0
+        check(
+            ok,
+            "Short option %d: a 1080x1920 JPEG, legible, inside the tile's band" % o["n"],
+            (ck, o["notes"]),
+        )
+    check(
+        thumbs.public(rec4)["frame"] == [1080, 1920]
+        and thumbs.public(rec)["frame"] == [1920, 1080],
+        "and the site is told each picture's shape",
+        (thumbs.public(rec4).get("frame"), thumbs.public(rec).get("frame")),
+    )
+    share = thumbs.make_now(tall, "share", {"key": "s", "thumbnails": draft["thumbnails"]}, want=2)
+    check(share["options"] == [], "a Short gets no share picture (that is composed for 16:9)")
 
     shutil.rmtree(HOME, ignore_errors=True)
     print("\n%d failed" % len(bad) if bad else "\nall passed")

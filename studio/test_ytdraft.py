@@ -139,7 +139,7 @@ async def main():
     check("No uploads to learn from" in none, "a channel with no uploads says so")
     check('"thumbnails"' not in text, "the words are asked for alone")
     picks = ytdraft.ask_text(mat, CHANNEL, ytdraft.sample(RECENT), "thumbs", "Acme | New engine")
-    check('"thumbnails"' in picks and "main message" in picks, "the thumbnails are asked apart")
+    check('"thumbnails"' in picks and "punch line" in picks, "the thumbnails are asked apart")
     check("## How to fill out PDF forms" not in picks, "without the channel's uploads")
     check('its title, "Acme | New engine"' in picks, "and with the title, once it is known")
     check(mat["sheet"] is None and mat["moments"], "no sheet made here, but the moments", mat)
@@ -186,11 +186,12 @@ async def main():
     msg = [dict(THUMBS[0], words="Acme's *new* engine?"), *THUMBS[1:]]
     _, _, probs = ytdraft.check_thumbs(good(thumbnails=msg), mat, title)
     check(not probs, "the title's message on the picture is allowed", probs)
-    bad_thumbs = [dict(THUMBS[0], words="one two three four five"), *THUMBS[1:]]
+    # the first is the punch line: a short title of up to five words; six are too many
+    bad_thumbs = [dict(THUMBS[0], words="one two three four five six"), *THUMBS[1:]]
     cs, notes, probs = ytdraft.check_thumbs(good(thumbnails=bad_thumbs), mat, title)
     check(
-        any("too long" in p["text"] and p["n"] == 1 for p in probs),
-        "five words are too many",
+        any("short title" in p["text"] and p["n"] == 1 for p in probs),
+        "six words are too many for the punch line",
         probs,
     )
     old = [*THUMBS[:3], dict(THUMBS[3], layout="still", words="")]
