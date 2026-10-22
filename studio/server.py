@@ -1551,7 +1551,7 @@ async def research(req):
             )
     else:
         doc = {k: doc.get(k) or "" for k in ("fact", "chart", "script")}
-    work = os.path.join(films.HOME, "temp", "research")
+    work = os.path.join(films.HOME, "tmp", "research")  # backup-filter.txt leaves /tmp/ out
     os.makedirs(work, exist_ok=True)
     fd, path = tempfile.mkstemp(suffix=".json", dir=work)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
