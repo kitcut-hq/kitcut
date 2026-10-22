@@ -148,6 +148,7 @@ private rounds go, the bigger the paper loss. Amazon's 10-Q is the same notes se
 - What "adjusted" excludes beyond stock-based pay (reports conflict on training costs).
 - Whether the IPO price will be $2T, $1.5T or something else; how many shares it adds.
 - Who the two biggest customers are.
+- The draft's page count (a "261 pages, ~80 of risk factors" figure could not be confirmed on any page read).
 - The "$8.7B real loss" is commenters' subtraction (80.7 - 72), not a reported operating figure.
 
 ## Commonly misreported
@@ -174,3 +175,27 @@ Bloomberg, the Financial Times, Fortune, ABC News, The Register, Gallup, TrendFo
 SemiAnalysis, Simon Willison, Lawrence Berkeley National Laboratory, the SEC, Amazon, SpaceX, Google,
 Microsoft, Nvidia, Broadcom, Cisco, Cerebras, Figma, Meta, Tesla, Polymarket, Hacker News, Theo,
 Gary Marcus, Brad Gerstner, Jay Ritter, William Nordhaus, companiesmarketcap.com, the S&P 500.
+
+## Added for the full film: the explanations (each checked on its page)
+
+| number / fact | what | label | source |
+|---|---|---|---|
+| IPO; S-1 | an initial public offering is a private company's first sale of shares to the public; the S-1 is the prospectus filed with the SEC first (accounts, risks, deals) | definition | SEC |
+| June 1, 2026 | Anthropic confidentially submitted a draft S-1 (its own Rule 135 notice) | CLAIM | Anthropic, via Let's Data Science reprint; Yahoo Finance |
+| "resist shutdown" | the draft also flags possible "self-preserving behaviors", including attempts to "resist shutdown" | REPORTED | Reuters via Investing.com, 28 Sep 2026 |
+| ~15x | revenue, H1 2026 vs H1 2025 ($16.3B / $1.1B = 14.8) | ESTIMATE (our arithmetic) | WSJ figures |
+| "AI-induced shortage" | Tom's Hardware's own description of the memory price rise (article title) | REPORTED | Tom's Hardware, Oct 2026 |
+| 10,791 kWh | average yearly electricity use of a US home (2022) | MEASURED | EIA FAQ, updated Jan 8, 2024 |
+| ~810,000 | US homes one gigawatt can supply for a year (8.76 billion kWh / 10,791) | ESTIMATE (our arithmetic) | EIA |
+| 5 GW; at least 50 GW | "2GW and 5GW data centers will be needed to develop single advanced AI models for Anthropic in 2027 and 2028"; "the U.S. AI sector needs at least 50GW of electric capacity by 2028" | CLAIM | Anthropic, "Build AI in America", Jul 21, 2025 |
+| up to $42B | Broadcom financing for Anthropic, a convertible note covering about a third of a $125.2B five-year lease of Google's TPU chips | REPORTED | Reuters, Oct 1, 2026 (via The Star) |
+| "potential conflicts of interest" | the draft, on Broadcom being both hardware supplier and financing partner | REPORTED | same |
+| fair use / not fair use | Judge Alsup (June 23, 2025): training on books was fair use; downloading pirated copies to build a central library was not | FILED | Order on Fair Use, Bartz v. Anthropic, Dkt 231 |
+| supply-chain risk designation | it barred military contractors from "any commercial activity" with Anthropic; vacated Aug 27, 2026 (N.D. Cal.); a separate exclusion upheld 2-1 by the D.C. Circuit, Sep 25, 2026 | FILED / REPORTED | court orders; ABC News |
+| the trust | the Long-Term Benefit Trust, set up to align Anthropic's governance with its mission ("developing and maintaining advanced AI for the long-term benefit of humanity") | CLAIM | anthropic.com/news/the-long-term-benefit-trust |
+| 6 years | Amazon: from its 1997 IPO to its first full-year GAAP profit (2003) | MEASURED | SEC filings (research 31d) |
+| ~10% / ~12% a year | US stocks (S&P 500 with dividends), 1928-2025 / 1976-2025, compound | ESTIMATE (our arithmetic on Damodaran's NYU data, updated Jan 5, 2026) | pages.stern.nyu.edu/~adamodar, histretSP |
+| ~30x / ~28x | Microsoft / Nvidia price-earnings ratio, Oct 21, 2026 | ESTIMATE | companiesmarketcap, stockanalysis |
+| TAM | total addressable market: "the annual revenue a company could theoretically capture at 100% market share" | definition | TNW, citing WSJ, Aug 25, 2026 |
+| most of the value goes to others | Nordhaus: "innovators are able to capture about 2.2 percent of the total social surplus from innovation" | ESTIMATE (academic) | NBER w10433, p. 35 |
+| gross, not net | sales through Amazon's and Google's clouds are booked at full price, the platforms' cut as an expense; OpenAI has told investors this inflates Anthropic's revenue | REPORTED | Reuters, Sep 29, 2026 |

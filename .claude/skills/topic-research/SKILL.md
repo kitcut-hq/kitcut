@@ -196,6 +196,15 @@ The prompt that made the Yandex film is in its record (`get_film studio-20261011
   `fact-sheet.md` (doc1), `chart-data.md` (doc2, with how each chart moves), `running-order.md`
   (doc3) and `board-spec.json`. Copy their shape, not their facts.
 - A new format gets a 20-45 s pilot of its opening first (memory: raw-cut-before-full-production).
+  The Anthropic pilot (2026-10-21) taught four rules now written into every prompt: count the vo
+  lines against the script before rendering (it dropped one); a one-card picture fills the frame;
+  a push onto text keeps the whole line in frame; a montage shows each picture full frame, zoomed
+  into one readable part, never as a thumbnail.
+- **Explain, don't assume.** The owner, on the full film: "take time to explain what should be
+  explained". Every term a newcomer would stop at (an IPO, a valuation, a run-rate, price-to-sales,
+  a convertible note, GAAP vs adjusted, compute, a gigawatt, tokens, gross margin, a TAM) gets one
+  plain sentence and a small diagram the film draws itself, marked EXPLAINER in the running order.
+  Explanations that need a number get a checked one (a gigawatt in homes: EIA's household average).
 - Before the owner sees it: the `video-review` skill with a fresh agent, and every spoken line
   read against the fact sheet.
 
