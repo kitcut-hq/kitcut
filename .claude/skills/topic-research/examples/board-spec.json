@@ -1,0 +1,7 @@
+{"out": "test_social_board.jpg", "size": [3840, 2160], "cols": 2,
+ "cards": [
+  {"src": "x_theo.png", "crop": [0, 0, 1110, 1052], "caption": "Theo (t3.gg) on X · Oct 20, 2026"},
+  {"src": "x_marcus.png", "crop": [0, 0, 1110, 1012], "caption": "Gary Marcus on X · Sep 28, 2026"},
+  {"src": "x_gerstner.png", "crop": [0, 0, 1110, 1062], "caption": "Brad Gerstner (Altimeter) on X · Sep 12, 2026"},
+  {"src": "hn_tim333.png", "crop": [0, 0, 1800, 345], "caption": "Hacker News · Oct 20, 2026"}
+ ]}

@@ -1,0 +1,40 @@
+Anthropic wants to go public at up to $2 trillion. Its draft filing shows $16.3 billion of revenue in six months, an $80.7 billion loss (mostly not cash) and over $600 billion promised for computers. Can it ever earn that price? A research film with critical thinking: the evidence on screen, both sides, what the data does not show.
+
+A research film of about 7 minutes, 16:9 landscape (not vertical), in this project's look: the red strap and lower third, real pages, paper. It is made the way this project's Yandex bulletin was made, with these changes, all asked for by the channel's owner:
+
+1. THE WORDS. The narration is attached word for word (doc3, lines L01-L50). In vo.json use those lines exactly, in that order, one vo line per L-line, nothing added, nothing left out, nothing reworded. doc3 also says what is on screen during each line: follow it.
+
+2. THE VOICE. This overrides the project's voice line. In vo.json use the voice "Orus" with this style, word for word: "Confident and engaged, like a reporter walking a viewer through evidence: brisk, clear, firm emphasis on the key numbers, a steady voice. Not flat, not shouting, not alarmed". Never the voice "Charon". No music at all; only quiet paper sounds on the cuts.
+
+3. RESEARCH, NOT BREAKING NEWS. The strap label is "RESEARCH" and, at its right, "DATA AS OF OCT 21, 2026". The film's headline sits on its own band under the strap through the opening: "Anthropic wants $2 trillion. Can it earn it?" A section label at the top right changes at each heading of doc3 ("1 · THE PRICE", "2 · THE REVENUE" ... "11 · NOT IN THE DATA"). Every number the film sets large carries a small tag with its kind, from doc1: FILED, MEASURED, REPORTED, ESTIMATE or CLAIM, and a source line under it.
+
+4. NOTHING STATIC. This is a long film and it must never look like a slideshow. From frame 0 something is always moving:
+- every real page and board sits under a slow push in or pull out with a slight sideways drift for as long as it is on screen; when the narrator reads a line on a page, the camera pushes onto that line, underlines it as it is said, and eases back after;
+- every chart is built on screen as the narration reaches it (doc2 gives the data and how each moves): bars grow from zero one after another, lines draw left to right, figures count up to their value as they are said, a highlighted bar or label arrives on its word;
+- pages and cards slide in and settle; they do not slam, flash or bounce;
+- no hold longer than about two seconds without motion; change the picture or the framing at least every four seconds.
+Use the kit (SK.bars, SK.chart, SK.counter, SK.stat, SK.cues tied to words) for charts and cards; cues hang off the narration's words.
+
+5. THE OPENING HOLDS THE VIEWER (L01-L05, about 25 seconds). At 0.0 s the strap, the headline band and upload1 are already on screen, and the frame is already moving. upload2 slides in over it, slightly turned, at about 2 s, upload3 at about 4 s, each named in the lower third ("Yahoo Finance · Oct 21, 2026", "TNW, reporting the Wall Street Journal · Oct 21, 2026", "Polymarket on X · Oct 20, 2026"). The film's headline is never placed over a page's own headline. L03 is the hook: three large numbers side by side ($16.3B, $80.7B, $600B+) counting up; on "not what it looks like" the $80.7B card tilts; on "bigger than it looks" the $600B+ card grows. L04 is a half-second-a-picture montage of what is coming (upload5, upload4, upload9, upload6), ending on a card "What would have to be true?". Never open on a title card, a logo or a scene-setter.
+
+PURE FACTS. doc1 (the fact sheet) is the only source of facts and doc2 (the chart data) the only source of chart values: use their exact numbers, names and dates; read doc1's "Unconfirmed / not known", "Commonly misreported" and "The film must not say" before writing a line. No adjectives about anyone. Strictly non-partisan: no US politics, no politicians, no parties; the Pentagon dispute is only the two court results in L35. This project's brief forbids invented charts: for this film, the charts in doc2 are allowed and required, drawn from doc2's values only, each with its source line; no other chart, figure or number may be drawn.
+
+PICTURES. All nine are real and are shown exactly as they are: never redrawn, retyped, recoloured or cropped through their text. They may be moved, scaled, panned, zoomed into, turned a little, and marked with an underline or a circle. In the opening each new page may cover the one under it; after the opening a picture is shown alone. The boards (upload4 to upload9) are big: zoom into one card at a time, as doc3 says, so its text is readable on a phone, and pull back between cards.
+- upload1: Yahoo Finance, Oct 21, 2026: "Anthropic to publicly file for IPO as early as Friday, sources say"
+- upload2: TNW, Oct 21, 2026: "Anthropic could spend $750bn on compute, The Wall Street Journal reports", with the line "Revenue rose to $16.3bn in six months, but the S-1 draft also shows an $80.7bn loss, most of it an accounting charge."
+- upload3: Polymarket's post on X, Oct 20, 2026: "JUST IN: Anthropic recorded a staggering $80,000,000,000.00 net loss in the first half of 2026." (30.4K likes)
+- upload4: companiesmarketcap.com's ranking at the close of Oct 21, 2026, ranks 1 to 12 (Nvidia $5.359T ... SpaceX $2.098T, Meta $1.776T ... Tesla $1.526T, Berkshire $1.153T)
+- upload5: Amazon's 10-Q for the quarter to June 30, 2026, the two paragraphs on its Anthropic convertible notes ($8.0 billion invested; fair value $45.8 billion and $97.9 billion)
+- upload6: the build board: The Register, Oct 19, 2026, "Microsoft abandons UK AI supercomputer as grid struggles to keep up" (top); Gallup, May 13, 2026, "Americans Oppose AI Data Centers in Their Area" with "Seven in 10 Americans oppose constructing data centers..." (bottom)
+- upload7: the price board: Anthropic's API pricing table (left, Claude Opus 5.5 at $4 / $20 per million tokens); Anthropic's July 2025 statement quoted by Simon Willison, ending "one user consumed tens of thousands in model usage on a $200 plan" (top right); SemiAnalysis's chart "Claude Subscriptions take 42% of compute for 10% of revenue", rough estimates (bottom right)
+- upload8: the risks board: Fortune, Sep 29, 2026, "Anthropic's leaked IPO prospectus details steep losses, rapid growth, and a fear that AI could end humanity" (top); ABC News, Sep 25, 2026, "Federal appeals court upholds Pentagon designation of Anthropic as supply chain risk" (bottom)
+- upload9: the social board: Theo on X (top left), Gary Marcus on X (top right), Brad Gerstner on X (bottom left), the top reply on Hacker News (bottom right)
+- doc1: the fact sheet. doc2: the chart data (C1-C14). doc3: the running order and the narration.
+
+The lower third names the outlet and date of whatever page is on screen, and for a chart, its source line from doc2; when nothing else applies it reads "Reuters, WSJ · draft filing, Oct 2026".
+
+THE ENDING is L50 then L51, the open question, and nothing after it: the dashed Anthropic bar back among the real companies (chart C1) and the headline band changing to "The next Microsoft, or the next Cisco?". The last two seconds: the small "Made with KitCut" mark, as the project brief says.
+
+Never: say Anthropic "lost $80 billion" without the non-cash part in the same breath; call Anthropic profitable or unprofitable without "adjusted" or "GAAP"; say $750 billion is committed; say the IPO is priced or the filing is public; name or guess the two big customers; name a politician or a party; say AI will end humanity; draw a person, a building, a server, a chip, a robot, money or a logo of your own; flags or national colours as decoration; any number not in doc1 or doc2.
+
+Say "an-THROP-ick", "CLAWED" for Claude, "seh-REH-bruss" for Cerebras, "GURST-ner", "NORD-house", "SEM-ee-uh-NAL-uh-sis" for SemiAnalysis, "kuh-LOSS-us", "BROAD-com", "TNW" as "T-N-W", "S and P five hundred", "API" as "A-P-I", "IPO" as "I-P-O", "Q-three" not "Q3".
