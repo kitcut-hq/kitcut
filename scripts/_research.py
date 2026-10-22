@@ -139,6 +139,11 @@ def spoken_numbers(text):
                 dec, i = dec + str(_UNITS[tok[i]]), i + 1
         if dec:
             v = float("%d.%s" % (v, dec))
+        # "one dollar and seventy cents"
+        if i + 1 < len(tok) and tok[i] in ("dollar", "dollars") and tok[i + 1] == "and":
+            cents = _small(tok, i + 2)
+            if cents and cents[1] < len(tok) and tok[cents[1]] == "cents":
+                v, i = v + cents[0] / 100, cents[1] + 1
         if (
             i + 2 < len(tok)
             and tok[i] == "and"
