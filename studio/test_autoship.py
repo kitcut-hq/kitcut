@@ -90,7 +90,11 @@ def decisions(autoship):
         d(changed=["docs/x.md", "README.md", "projects/p/journal.md"]) == "skip", "docs alone: skip"
     )
     check(d(changed=["studio/brief.md"]) == "ship", "a prompt the studio reads (studio/*.md): ship")
-    check(d(changed=[".claude/skills/x/SKILL.md"]) == "ship", "a skill: ship")
+    check(d(changed=[".claude/skills/x/SKILL.md"]) == "skip", "a skill alone: skip")
+    check(
+        d(changed=[".claude/skills/x/SKILL.md", "sketch/kit.js"]) == "ship",
+        "a skill with the code it teaches: ship",
+    )
     check(not autoship.docs_only([]), "nothing changed is not 'docs only'")
 
 

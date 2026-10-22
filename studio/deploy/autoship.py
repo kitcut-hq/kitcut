@@ -85,8 +85,11 @@ MAX_WAIT = int(os.environ.get("AUTOSHIP_MAX_WAIT_S", str(40 * 60)))
 KEEP_LOGS = 30
 # the states a person has to act on: the note carries them, and the site emails the owner
 PROBLEMS = ("failed", "hold", "refuse")
-# paths whose change alone never changes the studio a release runs
-DOCS = ("docs/", "projects/", "market/", ".github/")
+# paths whose change alone never changes the studio a release runs. The skills (.claude/) are read
+# by people's Claude sessions, not by the studio: a skill-only push (topic-research, 2026-10-21)
+# cost a release and its six minutes of tests for nothing; they reach the machine with the next
+# real commit
+DOCS = ("docs/", "projects/", "market/", ".github/", ".claude/")
 
 
 def docs_only(paths):

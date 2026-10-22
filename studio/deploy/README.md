@@ -178,7 +178,7 @@ while a look was shipping gets one more look before it stops:
 | a head under 30 s old | waits: pushes in a row are one ship |
 | the `cpu` pool busy (a voice being recorded, a film's sound) | waits, at most 40 min from the head's first look, then ships: a ship's tests take the cores those steps time words on (KI-043), and a ship slows a film but never stops one |
 | `deploy.lock` held (a ship from the laptop), or the studio not answering | waits |
-| only `docs/`, `projects/`, `market/`, `.github/` or the root's `*.md` changed | skips; the next real commit takes them. The studio's own prompts (`studio/*.md`) and the skills do ship |
+| only `docs/`, `projects/`, `market/`, `.github/`, `.claude/` (the skills) or the root's `*.md` changed | skips; the next real commit takes them. The studio's own prompts (`studio/*.md`) do ship |
 | a `requirements*.txt` changed | **holds**: the venv is shared (above), so a person ships it at a quiet moment with `ops.sh ship` |
 | GitHub's branch rewritten (not a fast-forward) | **refuses** |
 | a release that fails its tests (after going live) | switched back to the release before; **failed**, once per commit: the next commit is tried, or `now --retry` |
