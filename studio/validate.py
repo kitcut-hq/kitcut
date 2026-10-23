@@ -37,7 +37,10 @@ MAX_JSON = 64 * 1024
 MAX_SCENE_JS = 64 * 1024  # one scene of a film made in scenes: 12-75 s, not a whole film
 # "jobs": pinned for a person's own ElevenLabs voice (film._own_pins); every key a pin set
 # writes must be here, or the guard puts it back and this refuses it on every check
-VO_KEYS = set(VO_PINNED) | {"model", "voice", "style", "language", "lines", "cast", "jobs", "say"}
+# "dry": a voice mixed with no room (_sketchaudio.vo_stereo)
+VO_KEYS = set(VO_PINNED) | {
+    "model", "voice", "style", "language", "lines", "cast", "jobs", "say", "dry",
+}
 # "who": the person (film.CAPS "people") who speaks a line; "cast" gives each their voice
 VO_LINE_KEYS = {"text", "start", "who", "pause"}
 MAX_PAUSE_S = 15  # the quiet a line may ask for before it: a gag's beat, a sunset without words
@@ -84,6 +87,8 @@ def _vo(d, max_lines, length=60, people=()):
         out.append('vo.json: language is an ISO 639-1 code such as "en" or "uk"')
     if not isinstance(d.get("style", ""), str) or len(d.get("style", "")) > 300:
         out.append("vo.json: style is one line of text (at most 300 characters)")
+    if "dry" in d and not isinstance(d["dry"], bool):
+        out.append("vo.json: dry is true (a voice with no room sound) or false")
     say = d.get("say", {})
     if (
         not isinstance(say, dict)

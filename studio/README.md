@@ -28,6 +28,7 @@ python studio/test_media.py                     # the copy online, against a sta
 python studio/test_delete_film.py               # a film deleted for good, against stand-ins: no network
 python studio/test_share.py                     # a film's share page words and picture, Claude stubbed
 python studio/test_outro.py                     # the Free plan's mark and closing, on a right-to-left film too
+python studio/test_voroom.py                    # the voice's room, and vo.json "dry": a voice with none
 ```
 
 `serve.ps1` writes the tunnel URL to `STUDIO_HOME\url.txt` and to MongoDB `kitcut.studio_hosts`.

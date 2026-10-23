@@ -644,7 +644,7 @@ def make(folder, tid, spec, owner="kitcut"):
     narrated = bool(spec.get("narration"))
     if narrated:  # the script and the word times only: no voice of the author's, no take files
         vo = _read(os.path.join(d, "vo.sample.json"), {})
-        keep = {"style", "language", "lines", "say"} | (
+        keep = {"style", "language", "lines", "say", "dry"} | (
             {"voice"} if vo.get("tts") == "gemini" else set()
         )
         _write_json(os.path.join(d, "vo.sample.json"), {k: vo[k] for k in vo if k in keep})

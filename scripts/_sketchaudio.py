@@ -503,6 +503,14 @@ def reverb(x, ir):
     return np.stack([signal.fftconvolve(x[c], ir[c])[: x.shape[1]] for c in range(2)])
 
 
+def vo_stereo(vo, ir, dry=False):
+    """The narration as the mix hears it: a touch of the music's room (ir, a 2.3 s hall by
+    default), or none at all for a film whose vo.json asks for a dry voice ("dry": true -- a
+    close, voice-message read, where that room was heard as an echo on a stage)."""
+    st = np.stack([vo, vo]) * 0.98
+    return st if dry else st + reverb(np.stack([vo, vo]) * 0.05, ir) * 0.6
+
+
 # ------------------------------------------------------------------ synth building blocks
 RNG = np.random.default_rng(7)
 
