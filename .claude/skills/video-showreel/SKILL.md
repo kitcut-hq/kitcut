@@ -40,3 +40,6 @@ description: Make a showreel (sizzle reel, montage, launch video, "what we made"
 - Render the full cuts on kc-local (`ssh` + `systemd-run` with `MemoryMax`, as ops.sh does):
   a copy of `scripts/`, `config/showreel/`, the logo, the font and the manifest, with `.venv`
   and `models` linked to `/srv/kitcut/repo`. Three 1-minute cuts took about 12 minutes there.
+- Fresh reviewers caught, on every option: a black first frame, a small end line, captions on
+  a film's own name plate, tall films as empty-looking strips in cells, and the product only
+  named at the end. All are manifest/look keys now (see the reference); check them first.

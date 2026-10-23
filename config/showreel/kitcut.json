@@ -52,8 +52,14 @@
  "tile": {
   "bg": "#e5894f",
   "ink": "#1a120c",
-  "logo_frac": 0.62,
-  "name_frac": 0.2
+  "logo_frac": 0.4,
+  "name_frac": 0.15,
+  "line": [
+   "One prompt in.",
+   "A finished film out."
+  ],
+  "line_frac": 0.11,
+  "line_weight": 760
  },
  "end": {
   "scale": 0.93,

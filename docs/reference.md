@@ -5909,6 +5909,15 @@ first full cuts). A hit event's `repeat: {every, until, decay}` strikes it again
 beats, each softer. `--remux` puts new music under an existing render with the picture
 stream-copied, so a sound-only fix costs seconds.
 
+**What the reviews of the launch reel taught** (three fresh reviewers, 2026-10-23): open on
+the picture, never a fade from black (a site may use frame 0 as the preview); say what the
+product is in the middle of the reel, not only on the end card (`tile.line` on the 3x3's logo
+tile) and keep the end card to about 4 s; place each solo caption where the film draws nothing
+(`caption_at`: top-left, top-right, bottom-left, bottom-right), since films carry their own
+name plates and subtitles; and never show a tall film as a strip in a small cell: `grid_fit:
+cover` with a `focus` fills the cell, `place_x` moves it off centre in its own solo shot so
+the caption has a clear side. An option may change how long its acts hold (`beats`).
+
 **Films keep playing as they move.** A clip's playhead runs while it is on screen; one that
 leaves full frame for a cell carries on where it was; `jump: {act: seconds}` sends it to
 another moment when that act starts forming (the reflow hides the cut); a film that would reach

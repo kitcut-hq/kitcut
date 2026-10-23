@@ -19,7 +19,11 @@
   },
   "cinema": {
    "music": "config/showreel/music/cinema.json",
-   "solo_transition": "zoom"
+   "solo_transition": "zoom",
+   "beats": {
+    "g8": 20,
+    "g16": 28
+   }
   }
  },
  "raw": {
@@ -85,7 +89,7 @@
   },
   "websummit": {
    "src": "https://media.kitcut.ai/films/studio-20260930-114530-nhdy7i/film.mp4",
-   "in": 4.6,
+   "in": 6.6,
    "film": "studio-20260930-114530-nhdy7i",
    "about": "Web Summit 2026 Lisbon: Meet the Speakers",
    "caption": [

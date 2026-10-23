@@ -17,7 +17,7 @@ and a film that would run out wraps to its `in`. Pieces of each film are cut fro
 
 Manifest (projects/<id>/showreel.json):
     frame [W, H], fps, style (look json), default option, options {name: {music, solo_transition,
-    bpm?}}, raw {frame, fps, beats {act: beats}}, clips {key: {src, in, caption [kicker, line],
+    bpm?, beats {act: beats}}}, raw {frame, fps, beats {act: beats}}, clips {key: {src, in, caption [kicker, line],
     fit cover|contain, grid_fit, place_x, focus [x, y], zoom, caption_at, jump {act: seconds}, loop}}, acts [{name, solo: key |
     grid: [[key | [keys switched on the beat] | @logo | null per row]...] | end: true, beats}]
 Look (config/showreel/*.json): background, gaps, corner radius, caption panel and type, the logo
@@ -144,6 +144,8 @@ def load(path, option, raw):
         m["_style"] = json.load(f)
     m["bpm"] = float(o.get("bpm") or m["_music"]["bpm"])
     m["solo_transition"] = o.get("solo_transition") or m.get("solo_transition", "cut")
+    for a in m["acts"]:  # an option may hold its grids for a different number of beats
+        a["beats"] = (o.get("beats") or {}).get(a["name"], a["beats"])
     if m["solo_transition"] not in SOLO_TRANSITIONS:
         sys.exit("solo_transition must be one of %s" % ", ".join(SOLO_TRANSITIONS))
     m["_raw"] = bool(raw)
@@ -720,7 +722,8 @@ def caption_layer(m, clip):
 
 
 def logo_tile(m, w, h):
-    """The centre cell of the 3x3: the logo and the name on the accent colour."""
+    """The centre cell of the 3x3: the logo and the name on the accent colour, and `tile.line`
+    under them -- what KitCut is, on screen for the whole 3x3 rather than only at the end."""
     st = m["_style"]
     t = st.get("tile", {})
     img = Image.new(
@@ -734,13 +737,28 @@ def logo_tile(m, w, h):
     nb = d.textbbox((0, 0), st.get("name", "KitCut"), font=f)
     total = logo.width + h * 0.06 + (nb[2] - nb[0])
     x = (w - total) / 2
-    img.alpha_composite(logo, (int(x), int((h - lh) / 2)))
+    lines = t.get("line") or []
+    lines = [lines] if isinstance(lines, str) else lines
+    lf = font(st, h * t.get("line_frac", 0.085), t.get("line_weight", 700)) if lines else None
+    lbs = [d.textbbox((0, 0), ln, font=lf) for ln in lines]
+    lead = lf.size * 1.18 if lines else 0
+    gap = h * 0.06 if lines else 0
+    block = lh + gap + lead * len(lines)
+    top = (h - block) / 2  # the logo lockup and, under it, the one line that says what it is
+    img.alpha_composite(logo, (int(x), int(top)))
     d.text(
-        (x + logo.width + h * 0.06, (h - (nb[3] + nb[1])) / 2),
+        (x + logo.width + h * 0.06, top + (lh - (nb[3] + nb[1])) / 2),
         st.get("name", "KitCut"),
         font=f,
         fill=hexrgb(t.get("ink", "#1a120c")) + (255,),
     )
+    for i, (ln, lb) in enumerate(zip(lines, lbs, strict=True)):
+        d.text(
+            ((w - (lb[2] - lb[0])) / 2 - lb[0], top + lh + gap + i * lead),
+            ln,
+            font=lf,
+            fill=hexrgb(t.get("ink", "#1a120c")) + (255,),
+        )
     return np.asarray(img)[:, :, [2, 1, 0]].copy()
 
 
@@ -962,10 +980,12 @@ class Painter:
         if op <= 0:
             return
         h, w = bgr.shape[:2]
-        x = mx - (1 - u_in) * 40 * k
-        y = H - my - h
-        if c.get("caption_at", cs.get("anchor", "bottom-left")) == "top-left":
-            y = my
+        at = c.get("caption_at", cs.get("anchor", "bottom-left"))
+        y = my if at.startswith("top") else H - my - h
+        if at.endswith("right"):
+            x = W - mx - w + (1 - u_in) * 40 * k
+        else:
+            x = mx - (1 - u_in) * 40 * k
         paste(canvas, bgr, al, x, y, op)
 
     def draw_end(self, canvas, t):
