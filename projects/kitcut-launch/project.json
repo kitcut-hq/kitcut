@@ -38,35 +38,53 @@
     },
     "projects/kitcut-launch/outputs/kitcut-launch-drive.mp4": {
       "status": "current",
-      "built_utc": "2026-10-23T16:51:24Z",
+      "built_utc": "2026-10-23T17:48:49Z",
       "kind": "video",
-      "script": "scripts/showreel.py",
+      "script": "scripts/yt-upload.py",
       "manifest": "projects/kitcut-launch/showreel.json",
       "sidecars": {
         "music": "projects/kitcut-launch/audio/showreel-drive.wav"
+      },
+      "published": {
+        "url": "https://youtu.be/3xSWysNOhGA",
+        "privacy": "unlisted",
+        "publish_at": null,
+        "sidecar": "projects/kitcut-launch/outputs/kitcut-launch-drive.youtube.json"
       }
     },
     "projects/kitcut-launch/outputs/kitcut-launch-pop.mp4": {
       "status": "current",
-      "built_utc": "2026-10-23T16:50:52Z",
+      "built_utc": "2026-10-23T17:48:57Z",
       "kind": "video",
-      "script": "scripts/showreel.py",
+      "script": "scripts/yt-upload.py",
       "manifest": "projects/kitcut-launch/showreel.json",
       "sidecars": {
         "music": "projects/kitcut-launch/audio/showreel-pop.wav"
+      },
+      "published": {
+        "url": "https://youtu.be/u-BAe0Zshjg",
+        "privacy": "unlisted",
+        "publish_at": null,
+        "sidecar": "projects/kitcut-launch/outputs/kitcut-launch-pop.youtube.json"
       }
     },
     "projects/kitcut-launch/outputs/kitcut-launch-cinema.mp4": {
       "status": "current",
-      "built_utc": "2026-10-23T16:51:04Z",
+      "built_utc": "2026-10-23T17:49:06Z",
       "kind": "video",
-      "script": "scripts/showreel.py",
+      "script": "scripts/yt-upload.py",
       "manifest": "projects/kitcut-launch/showreel.json",
       "sidecars": {
         "music": "projects/kitcut-launch/audio/showreel-cinema.wav"
+      },
+      "published": {
+        "url": "https://youtu.be/tlxlrs2z3ZY",
+        "privacy": "unlisted",
+        "publish_at": null,
+        "sidecar": "projects/kitcut-launch/outputs/kitcut-launch-cinema.youtube.json"
       }
     }
   },
   "notes": [],
-  "updated_utc": "2026-10-23T16:51:24Z"
+  "updated_utc": "2026-10-23T17:49:06Z"
 }

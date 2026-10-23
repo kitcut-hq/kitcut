@@ -101,10 +101,6 @@ def main():
     ap.add_argument(
         "--thumbnail", help="a JPEG/PNG (1280x720, under 2 MB) set as the custom thumbnail"
     )
-    ap.add_argument(
-        "--publish-at",
-        help="schedule: goes up private, public at this time (ISO; no offset = this machine's zone)",
-    )
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -148,22 +144,6 @@ def main():
                 "%s contains '<' or '>' (first on line %d) -- YouTube refuses both; "
                 "use an arrow character or words" % (field, line)
             )
-
-    publish_at = None
-    if args.publish_at:
-        from datetime import datetime, timezone
-
-        try:
-            when = datetime.fromisoformat(args.publish_at.replace("Z", "+00:00"))
-        except ValueError:
-            sys.exit("--publish-at: not an ISO time: %r" % args.publish_at)
-        if when.tzinfo is None:
-            sys.exit("--publish-at needs a time zone (Z or +hh:mm): %r" % args.publish_at)
-        if when <= datetime.now(timezone.utc):
-            sys.exit("--publish-at is in the past: %s" % args.publish_at)
-        # YouTube schedules only private videos: one asked public would be refused
-        args.privacy = "private"
-        publish_at = when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     body = {
         "snippet": {
