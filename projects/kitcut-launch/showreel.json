@@ -110,13 +110,6 @@
    "film": "studio-20260929-124153-46uy2s",
    "about": "The Box: How a Plain Steel Container Shrank the World"
   },
-  "heist": {
-   "src": "https://media.kitcut.ai/films/studio-20261015-011649-jsqylz/r1/film.mp4",
-   "in": 0.5,
-   "film": "studio-20261015-011649-jsqylz",
-   "about": "Sixty Seconds: A Wooden-Toy Heist Where Nothing Goes to Plan",
-   "fit": "contain"
-  },
   "open-house": {
    "src": "https://media.kitcut.ai/films/studio-20261006-100603-gko6xe/r2/film.mp4",
    "in": 0.5,
@@ -126,12 +119,6 @@
     "g16": 5.0,
     "end": 8.0
    }
-  },
-  "duchess": {
-   "src": "https://media.kitcut.ai/films/studio-20261007-091710-nwhzxq/r4/film.mp4",
-   "in": 10.0,
-   "film": "studio-20261007-091710-nwhzxq",
-   "about": "Duchess: The Costume – A Very Dignified Cat Becomes a Bee"
   },
   "economics": {
    "src": "https://media.kitcut.ai/films/studio-20261014-002833-nmeggj/r3/film.mp4",
@@ -188,11 +175,28 @@
     "end": 21.0
    }
   },
-  "donuts": {
-   "src": "https://media.kitcut.ai/films/studio-20261003-161908-i3lfpc/film.mp4",
-   "in": 6.0,
-   "film": "studio-20261003-161908-i3lfpc",
-   "about": "Can 50 Donuts Feed 8 Hungry Monsters?"
+  "noir": {
+   "src": "https://media.kitcut.ai/films/studio-20261014-232340-6cubej/r1/film.mp4",
+   "in": 34.0,
+   "film": "studio-20261014-232340-6cubej",
+   "about": "Which Hand: A Dry-Eyed Widow Springs a Noir Trap at 3 A.M",
+   "fit": "contain",
+   "jump": {
+    "g16": 3.0
+   }
+  },
+  "bikes": {
+   "src": "https://media.kitcut.ai/films/studio-20260929-103129-i4d52n/film.mp4",
+   "in": 50.0,
+   "film": "studio-20260929-103129-i4d52n",
+   "about": "The Start Grid: 11 XC Bike Brands and the Secrets Behind Them"
+  },
+  "ipo-short": {
+   "src": "https://media.kitcut.ai/films/studio-20261022-123925-2xqki7/film.mp4",
+   "in": 41.0,
+   "film": "studio-20261022-123925-2xqki7",
+   "about": "Anthropic at $2 Trillion: Next Microsoft or Next Cisco?",
+   "fit": "contain"
   }
  },
  "acts": [
@@ -241,7 +245,7 @@
     [
      "cloudflare",
      "@logo",
-     "heist"
+     "noir"
     ],
     [
      "apollo",
@@ -268,9 +272,9 @@
       "economics",
       "pokemon"
      ],
-     "donuts",
-     "duchess",
-     "heist"
+     "bikes",
+     "ipo-short",
+     "noir"
     ],
     [
      "cloudflare",

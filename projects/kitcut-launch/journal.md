@@ -63,3 +63,5 @@ Ocheretyne collage (the Pokemon booster mountain). 18 films: two 4x4 tiles now s
 a bar line halfway (showreel.py: a grid cell may be a list of clips).
 
 The owner then said "skip Peppa": the rhyme (a customer's film) is out, the donuts maths film (studio-20261003-161908-i3lfpc, from 0:06) in. Full 1080p renders of all three options started on kc-local, no option picked yet.
+
+Owner, later: the toy heist read as a kids' cartoon ("bad choice for drama ... not kids animation"), go easy on kids' cartoons, remove the donuts. Now: noir drama "Which Hand" (6cubej, from 0:34) for the heist; the XC bikes collage (i4d52n, 0:50) for the donuts; the Anthropic IPO Short (2xqki7, 0:41, tall) for Duchess. Kids' films left: Leo (solo), the two Ocheretyne economics tiles, masala chai. Re-rendered on kc-local.
