@@ -294,7 +294,8 @@ def main():
                         % (r.get("cost_usd"), r.get("seconds"), r.get("width"), r.get("height")),
                     )
                     tiles.append((label, r.get("path")))
-                tall = SP._ratio(args.aspect) < 1
+                aw, ah = (int(x) for x in args.aspect.split(":"))
+                tall = ah > aw
                 by_prompt_sheet(n, tiles, os.path.join(bp, n + ".jpg"), tall)
             table = [rows[k] for k in sorted(rows)]
             cols = ["model", "image", "ref", "seconds", "cost_usd", "width", "height", "error"]
