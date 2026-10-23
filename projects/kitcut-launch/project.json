@@ -8,7 +8,7 @@
   "deliverables": {
     "projects/kitcut-launch/outputs/kitcut-launch-drive-raw.mp4": {
       "status": "current",
-      "built_utc": "2026-10-23T05:41:43Z",
+      "built_utc": "2026-10-23T06:16:41Z",
       "kind": "video",
       "script": "scripts/showreel.py",
       "manifest": "projects/kitcut-launch/showreel.json",
@@ -18,7 +18,7 @@
     },
     "projects/kitcut-launch/outputs/kitcut-launch-pop-raw.mp4": {
       "status": "current",
-      "built_utc": "2026-10-23T05:42:39Z",
+      "built_utc": "2026-10-23T06:18:08Z",
       "kind": "video",
       "script": "scripts/showreel.py",
       "manifest": "projects/kitcut-launch/showreel.json",
@@ -28,7 +28,7 @@
     },
     "projects/kitcut-launch/outputs/kitcut-launch-cinema-raw.mp4": {
       "status": "current",
-      "built_utc": "2026-10-23T05:43:51Z",
+      "built_utc": "2026-10-23T06:19:19Z",
       "kind": "video",
       "script": "scripts/showreel.py",
       "manifest": "projects/kitcut-launch/showreel.json",
@@ -38,5 +38,5 @@
     }
   },
   "notes": [],
-  "updated_utc": "2026-10-23T05:43:51Z"
+  "updated_utc": "2026-10-23T06:19:19Z"
 }

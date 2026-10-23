@@ -48,3 +48,16 @@ owner's pick. Captions are mine: change any line in `clips.<key>.caption`.
 - 05:41 showreel drive raw cut rendered (0:32.00, 8 acts, 120 bpm) scripts/showreel.py -> projects/kitcut-launch/outputs/kitcut-launch-drive-raw.mp4 (--manifest projects/kitcut-launch/showreel.json --option drive --raw) -- option drive: music config/showreel/music/drive.json, solo transitions cut
 - 05:42 showreel pop raw cut rendered (0:30.97, 8 acts, 124 bpm) scripts/showreel.py -> projects/kitcut-launch/outputs/kitcut-launch-pop-raw.mp4 (--manifest projects/kitcut-launch/showreel.json --option pop --raw) -- option pop: music config/showreel/music/pop.json, solo transitions whip
 - 05:43 showreel cinema raw cut rendered (0:38.40, 8 acts, 100 bpm) scripts/showreel.py -> projects/kitcut-launch/outputs/kitcut-launch-cinema-raw.mp4 (--manifest projects/kitcut-launch/showreel.json --option cinema --raw) -- option cinema: music config/showreel/music/cinema.json, solo transitions zoom
+- 06:10 showreel drive raw cut rendered (0:32.00, 8 acts, 120 bpm) scripts/showreel.py -> projects/kitcut-launch/outputs/kitcut-launch-drive-raw.mp4 (--manifest projects/kitcut-launch/showreel.json --option drive --raw -j 6) -- option drive: music config/showreel/music/drive.json, solo transitions cut
+- 06:11 showreel pop raw cut rendered (0:30.97, 8 acts, 124 bpm) scripts/showreel.py -> projects/kitcut-launch/outputs/kitcut-launch-pop-raw.mp4 (--manifest projects/kitcut-launch/showreel.json --option pop --raw -j 6) -- option pop: music config/showreel/music/pop.json, solo transitions whip
+- 06:13 showreel cinema raw cut rendered (0:38.40, 8 acts, 100 bpm) scripts/showreel.py -> projects/kitcut-launch/outputs/kitcut-launch-cinema-raw.mp4 (--manifest projects/kitcut-launch/showreel.json --option cinema --raw -j 6) -- option cinema: music config/showreel/music/cinema.json, solo transitions zoom
+- 06:16 showreel drive raw cut rendered (0:32.00, 8 acts, 120 bpm) scripts/showreel.py -> projects/kitcut-launch/outputs/kitcut-launch-drive-raw.mp4 (--manifest projects/kitcut-launch/showreel.json --option drive --raw) -- option drive: music config/showreel/music/drive.json, solo transitions cut
+- 06:18 showreel pop raw cut rendered (0:30.97, 8 acts, 124 bpm) scripts/showreel.py -> projects/kitcut-launch/outputs/kitcut-launch-pop-raw.mp4 (--manifest projects/kitcut-launch/showreel.json --option pop --raw) -- option pop: music config/showreel/music/pop.json, solo transitions whip
+- 06:19 showreel cinema raw cut rendered (0:38.40, 8 acts, 100 bpm) scripts/showreel.py -> projects/kitcut-launch/outputs/kitcut-launch-cinema-raw.mp4 (--manifest projects/kitcut-launch/showreel.json --option cinema --raw) -- option cinema: music config/showreel/music/cinema.json, solo transitions zoom
+
+Owner's changes the same evening: no Marisol, a micro drama instead (Gate 23, watercolour, beside
+the toy heist); no dragon, the "Peppa Pig" one instead (no Peppa film exists: used the pink-pig
+toddler rhyme "Hop, Plop, Splash!", studio-20261021-014254-bmgktx, made by a CUSTOMER account,
+public: confirm before launch); add the Yandex film with the X posts (from 1:23); more
+Ocheretyne collage (the Pokemon booster mountain). 18 films: two 4x4 tiles now switch films on
+a bar line halfway (showreel.py: a grid cell may be a list of clips).

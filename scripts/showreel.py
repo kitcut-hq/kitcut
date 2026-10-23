@@ -19,7 +19,7 @@ Manifest (projects/<id>/showreel.json):
     frame [W, H], fps, style (look json), default option, options {name: {music, solo_transition,
     bpm?}}, raw {frame, fps, beats {act: beats}}, clips {key: {src, in, caption [kicker, line],
     fit cover|contain, focus [x, y], zoom, caption_at, jump {act: seconds}, loop}}, acts [{name, solo: key |
-    grid: [[keys/@logo/null per row]...] | end: true, beats}]
+    grid: [[key | [keys switched on the beat] | @logo | null per row]...] | end: true, beats}]
 Look (config/showreel/*.json): background, gaps, corner radius, caption panel and type, the logo
 tile and the end card. Music (config/showreel/music/*.json): bpm, instruments, pattern layers,
 drums, hits on act starts, the gap before a drop, and the sound effects of each transition.
@@ -193,13 +193,20 @@ def timeline(m):
                 for c, key in enumerate(row):
                     if not key:
                         continue
-                    if key != "@logo" and key not in m["clips"]:
-                        sys.exit("act %s: no clip %r" % (a["name"], key))
+                    seq = key if isinstance(key, list) else [key]
+                    for k2 in seq:
+                        if k2 != "@logo" and k2 not in m["clips"]:
+                            sys.exit("act %s: no clip %r" % (a["name"], k2))
+                    key = seq[0]
+                    if len(seq) > 1:  # a cell that switches films on the beat
+                        a.setdefault("seq", {})[key] = seq
                     a["cells"][key] = (gap + c * (cw + gap), gap + r * (ch + gap), cw, ch)
         acts.append(a)
     for i, a in enumerate(acts):  # an end act keeps the grid before it, sunk behind the card
         if a["kind"] == "end":
             a["cells"] = dict(acts[i - 1]["cells"]) if i else {}
+            # the end keeps each switching cell on the film it switched to last
+            a["seq"] = {k: [v[-1]] for k, v in (acts[i - 1].get("seq") or {}).items()} if i else {}
     reflow = st.get("grid", {}).get("reflow_beats", 2) * beat
     for i, a in enumerate(acts):
         # how long before its start a grid begins to form, or the end begins to sink
@@ -243,7 +250,7 @@ def state(m, acts, beat, t):
         entering = [k for k in new if k not in old]
         for key, r1 in new.items():
             if key in old:
-                out.append((key, lerp_rect(old[key], r1, u), 1.0, {}))
+                out.append((showing(a, key, t, beat), lerp_rect(old[key], r1, u), 1.0, {}))
         for j, key in enumerate(entering):
             d = min(0.5, j * stagger / max(nxt["lead"], 1e-6))
             v = clamp((u_raw - d) / (1 - d))
@@ -254,7 +261,7 @@ def state(m, acts, beat, t):
                 out.append((key, scale_rect(r0, lerp(1, 0.6, u)), 1 - ease_out(u * 1.4), {}))
         return out
     if a["kind"] in ("grid", "end"):
-        return [(k, r, 1.0, {}) for k, r in a["cells"].items()]
+        return [(showing(a, k, t, beat), r, 1.0, {}) for k, r in a["cells"].items()]
     # a solo act, and the transition from the solo before it
     key = a["solo"]
     prev = acts[a["i"] - 1] if a["i"] else None
@@ -274,6 +281,17 @@ def state(m, acts, beat, t):
         s = 1 + punch * (1 - ease_out(t / 0.7))
         return [(key, scale_rect(full, s), 1.0, {})]
     return [(key, full, 1.0, {})]
+
+
+def showing(a, key, t, beat):
+    """Which film a grid cell shows at t: a cell listed as several clips splits its act into
+    equal parts, each switch on a whole bar."""
+    seq = (a.get("seq") or {}).get(key)
+    if not seq or len(seq) == 1:
+        return seq[0] if seq else key
+    bars = a["beats"] / 4.0
+    per = max(1.0, round(bars / len(seq))) * 4 * beat
+    return seq[min(len(seq) - 1, int(max(0.0, t - a["t0"]) // per))]
 
 
 def solo_pair(m, k0, k1, u, tr, full):

@@ -162,17 +162,30 @@
    "film": "studio-20261001-001309-lhcemr",
    "about": ""
   },
-  "marisol": {
-   "src": "https://media.kitcut.ai/films/studio-20260928-102317-awn3zx/film.mp4",
-   "in": 4.5,
-   "film": "studio-20260928-102317-awn3zx",
-   "about": "Marisol: From the Morning's Boats to the Fire by the Harbour"
+  "yandex": {
+   "src": "https://media.kitcut.ai/films/studio-20261011-172036-3hrdjw/film.mp4",
+   "in": 83.0,
+   "film": "studio-20261011-172036-3hrdjw",
+   "about": "Yandex Data Centers Hit Three Times. Then Its Bots Went Quiet"
   },
-  "dragon": {
-   "src": "https://media.kitcut.ai/films/studio-20260925-211808-ebqs2d/film.mp4",
-   "in": 40.0,
-   "film": "studio-20260925-211808-ebqs2d",
-   "about": "Pip's Winter Feast: A Little Dragon Learns a Gentle Flame"
+  "pokemon": {
+   "src": "https://media.kitcut.ai/films/studio-20261006-125437-2psjrv/film.mp4",
+   "in": 106.0,
+   "film": "studio-20261006-125437-2psjrv",
+   "about": "Одна картка Pokémon чи гора бустерів: що вигідніше?"
+  },
+  "gate23": {
+   "src": "https://media.kitcut.ai/films/studio-20261015-005329-lymj6r/r1/film.mp4",
+   "in": 39.0,
+   "film": "studio-20261015-005329-lymj6r",
+   "about": "Gate 23: She Couldn't Love a Man Who Was Afraid of Flying",
+   "fit": "contain"
+  },
+  "rhyme": {
+   "src": "https://media.kitcut.ai/films/studio-20261021-014254-bmgktx/film.mp4",
+   "in": 5.0,
+   "film": "studio-20261021-014254-bmgktx",
+   "about": "Hop, Plop, Splash! A Counting Rhyme for Toddlers (made by a customer account; public)"
   }
  },
  "acts": [
@@ -237,12 +250,18 @@
     [
      "padel",
      "the-box",
-     "openrouter",
+     [
+      "openrouter",
+      "yandex"
+     ],
      "leo"
     ],
     [
-     "economics",
-     "dragon",
+     [
+      "economics",
+      "pokemon"
+     ],
+     "rhyme",
      "duchess",
      "heist"
     ],
@@ -250,7 +269,7 @@
      "cloudflare",
      "agenda",
      "chai",
-     "marisol"
+     "gate23"
     ],
     [
      "apollo",
