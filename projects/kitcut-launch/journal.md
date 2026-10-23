@@ -61,3 +61,5 @@ toddler rhyme "Hop, Plop, Splash!", studio-20261021-014254-bmgktx, made by a CUS
 public: confirm before launch); add the Yandex film with the X posts (from 1:23); more
 Ocheretyne collage (the Pokemon booster mountain). 18 films: two 4x4 tiles now switch films on
 a bar line halfway (showreel.py: a grid cell may be a list of clips).
+
+The owner then said "skip Peppa": the rhyme (a customer's film) is out, the donuts maths film (studio-20261003-161908-i3lfpc, from 0:06) in. Full 1080p renders of all three options started on kc-local, no option picked yet.
