@@ -164,6 +164,9 @@ You set:
   name or a foreign word it gets wrong, in English-like spelling; the captions keep the word as
   written. One voice reads every line unless a line names someone in `cast`: the style directs that
   voice, it does not give characters voices of their own.
+- `dry` (optional): `true` when the brief or the prompt asks for a close, dry voice with no room
+  or echo (a voice message, one person talking to one person). The narration is then mixed with
+  none of the room the music has; leave it out otherwise.
 
 On-screen text is optional; when you use it, it must read at a glance and be in the
 narration's language. Words the story depends on -- a message on a phone, a sign, a price, a

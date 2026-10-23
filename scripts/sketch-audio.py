@@ -30,6 +30,7 @@ Manifest keys (audio block), all optional except score:
     mix: {music_db: 6, sfx_db: 3, vo_db: -17, duck: .62, reverb_sec: 2.3, music_reverb: .9,
           sfx_reverb: .8, fade_out: .6, voice_margin_db: 8 (null: no voice gate)}
     master: {lufs: -14, tp: -1.5}
+The voice takes a touch of the music's reverb, unless the film's vo.json says "dry": true.
 
 Invoke as:
     python scripts/sketch-audio.py --manifest projects/<id>/sketch.json --plan
@@ -192,7 +193,7 @@ def main():
         with st("voice"):
             if timeline:
                 vo = A.build_vo(timeline, dur, mix["vo_db"], base=m["_dir"])
-                vo_st = np.stack([vo, vo]) * 0.98 + A.reverb(np.stack([vo, vo]) * 0.05, ir) * 0.6
+                vo_st = A.vo_stereo(vo, ir, dry=(m.get("vo") or {}).get("dry") is True)
                 gain = A.duck_gain(vo, mix["duck"])
             else:
                 vo_st, gain = np.zeros((2, int(dur * SR))), np.ones(int(dur * SR))
