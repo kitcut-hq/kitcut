@@ -1,0 +1,68 @@
+{
+  "_comment": "Pop: bright and playful, C major (C G Am F), 124 bpm, for whip transitions. Marimba eighths and pizzicato offbeats over a slap bass, claps and shaker under the solo shots; a glockenspiel hook and a warm pad from the first grid, flute doubling it in the 4x4. Every grid lands on a pizzicato and marimba stab with a boom; the end rings a marimba sting.",
+  "bpm": 124,
+  "drum_gain": 0.6,
+  "gap_before": ["grid"],
+  "gap_beats": 1,
+  "instruments": {
+    "marimba": {"g": 0.3, "pan": -0.15, "send": 0.3, "rel": 0.5},
+    "pizzicato_strings": {"g": 0.22, "pan": 0.25, "send": 0.35, "rel": 0.3},
+    "slap_bass_1": {"g": 0.5, "pan": 0, "send": 0.05, "rel": 0.12},
+    "sub_bass": {"g": 0.38, "pan": 0, "send": 0, "rel": 0.06},
+    "glockenspiel": {"g": 0.2, "pan": 0.15, "send": 0.45, "rel": 1.0},
+    "pad_2_warm": {"g": 0.13, "pan": 0, "send": 0.55, "rel": 0.9},
+    "flute": {"g": 0.16, "pan": -0.25, "send": 0.45, "rel": 0.3}
+  },
+  "layers": [
+    {"name": "marimba", "inst": "marimba", "acts": ["solo", "grid"], "len": 16,
+     "notes": "0 C5 .45 .6; .5 G4 .45 .42; 1 E5 .45 .55; 1.5 G4 .45 .42; 2 C5 .45 .6; 2.5 G4 .45 .42; 3 E5 .45 .55; 3.5 G5 .45 .45; 4 B4 .45 .6; 4.5 G4 .45 .42; 5 D5 .45 .55; 5.5 G4 .45 .42; 6 B4 .45 .6; 6.5 G4 .45 .42; 7 D5 .45 .55; 7.5 G5 .45 .45; 8 C5 .45 .6; 8.5 A4 .45 .42; 9 E5 .45 .55; 9.5 A4 .45 .42; 10 C5 .45 .6; 10.5 A4 .45 .42; 11 E5 .45 .55; 11.5 A5 .45 .45; 12 C5 .45 .6; 12.5 A4 .45 .42; 13 F5 .45 .55; 13.5 A4 .45 .42; 14 C5 .45 .6; 14.5 A4 .45 .42; 15 F5 .45 .55; 15.5 G5 .45 .45"},
+    {"name": "pizz", "inst": "pizzicato_strings", "acts": ["s2", "s3", "s4", "grid"], "len": 16,
+     "notes": ".5 C4+E4+G4 .3 .45; 1.5 C4+E4+G4 .3 .45; 2.5 C4+E4+G4 .3 .45; 3.5 C4+E4+G4 .3 .45; 4.5 B3+D4+G4 .3 .45; 5.5 B3+D4+G4 .3 .45; 6.5 B3+D4+G4 .3 .45; 7.5 B3+D4+G4 .3 .45; 8.5 C4+E4+A4 .3 .45; 9.5 C4+E4+A4 .3 .45; 10.5 C4+E4+A4 .3 .45; 11.5 C4+E4+A4 .3 .45; 12.5 C4+F4+A4 .3 .45; 13.5 C4+F4+A4 .3 .45; 14.5 C4+F4+A4 .3 .45; 15.5 C4+F4+A4 .3 .45"},
+    {"name": "bass", "inst": "slap_bass_1", "acts": ["s3", "s4", "grid"], "len": 16,
+     "notes": "0 C2 .5 .8; .75 C2 .25 .5; 1.5 C3 .25 .6; 2 G1 .5 .7; 3 C2 .5 .7; 3.5 E2 .25 .5; 4 G1 .5 .8; 4.75 G1 .25 .5; 5.5 G2 .25 .6; 6 D2 .5 .7; 7 G1 .5 .7; 7.5 B1 .25 .5; 8 A1 .5 .8; 8.75 A1 .25 .5; 9.5 A2 .25 .6; 10 E2 .5 .7; 11 A1 .5 .7; 11.5 C2 .25 .5; 12 F1 .5 .8; 12.75 F1 .25 .5; 13.5 F2 .25 .6; 14 C2 .5 .7; 15 F1 .5 .7; 15.5 G1 .25 .55"},
+    {"name": "sub", "inst": "sub_bass", "acts": ["grid"], "len": 16,
+     "notes": "0 C2 1.8 .8; 2 C2 1.8 .7; 4 G1 1.8 .8; 6 G1 1.8 .7; 8 A1 1.8 .8; 10 A1 1.8 .7; 12 F1 1.8 .8; 14 F1 1.8 .7"},
+    {"name": "pad", "inst": "pad_2_warm", "acts": ["grid"], "len": 16, "gap": false,
+     "notes": "0 E4+G4+C5 4 .45; 4 D4+G4+B4 4 .45; 8 E4+A4+C5 4 .45; 12 F4+A4+C5 4 .45"},
+    {"name": "hook", "inst": "glockenspiel", "acts": ["grid"], "len": 16, "gain": {"g4": 0.8},
+     "notes": "0 E6 .5 .6; .5 G6 .5 .55; 1 E6 .5 .5; 2 C6 1 .55; 3 D6 1 .5; 4 D6 .5 .6; 4.5 G6 .5 .55; 5 D6 .5 .5; 6 B5 1 .55; 7 G5 1 .5; 8 C6 .5 .6; 8.5 E6 .5 .55; 9 C6 .5 .5; 10 A5 1 .55; 11 B5 1 .5; 12 C6 1.5 .6; 13.5 A5 .5 .5; 14 F5 1 .55; 15 G5 1 .5"},
+    {"name": "flute", "inst": "flute", "acts": ["g16"], "len": 16,
+     "notes": "0 E5 .5 .5; .5 G5 .5 .45; 1 E5 .5 .45; 2 C5 1 .5; 3 D5 1 .45; 4 D5 .5 .5; 4.5 G5 .5 .45; 5 D5 .5 .45; 6 B4 1 .5; 7 G4 1 .45; 8 C5 .5 .5; 8.5 E5 .5 .45; 9 C5 .5 .45; 10 A4 1 .5; 11 B4 1 .45; 12 C5 1.5 .5; 13.5 A4 .5 .45; 14 F4 1 .5; 15 G4 1 .45"}
+  ],
+  "drums": [
+    {"acts": ["s1"], "vel": 0.65, "kit": {"clap": "....x.......x...", "shaker": "oooooooooooooooo"}},
+    {"acts": ["s2", "s3", "s4"], "vel": 0.72, "kit": {"kick": "x.......x.......", "clap": "....x.......x...", "shaker": "oooooooooooooooo"}},
+    {"acts": ["g4", "g8"], "vel": 0.8, "kit": {"kick": "X...x...x...x...", "clap": "....x.......x...", "shaker": "oooooooooooooooo", "hat": "..x...x...x...x."}},
+    {"acts": ["g16"], "vel": 0.84, "kit": {"kick": "X...x...x...x.x.", "clap": "....x.......x...", "shaker": "oooooooooooooooo", "hat": "..x...x...x...x.", "openhat": "......x.......x."}}
+  ],
+  "hits": [
+    {"on": ["grid"], "events": [
+      {"inst": "pizzicato_strings", "vel": 0.6, "notes": "0 C3+G3+C4+E4+G4 1 .6"},
+      {"inst": "marimba", "vel": 0.6, "notes": "0 C4+G4+C5 1 .6"}
+    ]},
+    {"on": ["end"], "events": [
+      {"inst": "pad_2_warm", "vel": 0.5, "notes": "0 E4+G4+C5 10 .5"},
+      {"inst": "slap_bass_1", "vel": 0.8, "notes": "0 C2 2 .8"},
+      {"inst": "sub_bass", "vel": 0.8, "notes": "0 C2 5 .8"},
+      {"inst": "marimba", "vel": 0.55, "notes": "0 C5 .5 .55; .5 E5 .5 .55; 1 G5 .5 .6; 1.5 C6 3 .65"},
+      {"inst": "glockenspiel", "vel": 0.5, "notes": "1.5 C7 3 .45"}
+    ]}
+  ],
+  "sfx": {
+    "open": [{"fx": "pop", "db": -22}],
+    "whip": [{"fx": "whoosh", "dt": -0.17, "db": -17, "args": {"sec": 0.34, "f0": 400, "f1": 4800, "peak": 0.5, "curve": 1.0, "q": 1.2}}],
+    "grid": [
+      {"fx": "whoosh", "at": -4, "sec_beats": 4, "db": -17, "args": {"f0": 250, "f1": 6500, "peak": 0.97, "curve": 2.0, "q": 1.5}},
+      {"fx": "boom", "db": -14, "args": {"sec": 1.0}},
+      {"fx": "crash", "db": -22, "args": {"sec": 2.0}}
+    ],
+    "cell": [{"fx": "pop", "db": -28, "args": {"f0": 1400, "f1": 600, "sec": 0.06}}],
+    "end": [
+      {"fx": "whoosh", "at": -2, "sec_beats": 2, "db": -18, "args": {"f0": 300, "f1": 6000, "peak": 0.95, "curve": 2, "q": 1.4}},
+      {"fx": "boom", "db": -14, "args": {"sec": 1.2}},
+      {"fx": "chime", "at": 0.5, "db": -22}
+    ]
+  },
+  "mix": {"reverb_sec": 1.9, "music_reverb": 0.6, "sfx_reverb": 0.45, "sfx_db": 0, "fade_out": 1.4},
+  "master": {"lufs": -14, "tp": -1.0}
+}

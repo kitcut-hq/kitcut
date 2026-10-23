@@ -5863,6 +5863,65 @@ draw a near-photo face. A rig has one expression, so every reaction a drama turn
 picture, and the painted look's painter (muse) takes no reference picture: a character painted
 twice drifts unless one fixed description is pasted into every prompt.
 
+## A showreel out of finished films: `showreel.py`
+
+A reel that shows what was made: films one at a time, each with a one-line caption, then a 2x2,
+a 3x3 around the logo and a 4x4 of films all playing, then a card. Built for KitCut's launch
+(`projects/kitcut-launch/`), generic for any set of films: the films are addresses
+(`media.kitcut.ai/films/<id>/film.mp4` or a local path), the look is `config/showreel/*.json`,
+the music `config/showreel/music/*.json`.
+
+```powershell
+python scripts/showreel.py --manifest projects/<id>/showreel.json --option drive --raw --list
+python scripts/showreel.py --manifest projects/<id>/showreel.json --option drive --raw --fetch
+python scripts/showreel.py --manifest projects/<id>/showreel.json --option drive --frame 15
+python scripts/showreel.py --manifest projects/<id>/showreel.json --option drive --raw
+python scripts/showreel.py --manifest projects/<id>/showreel.json --option drive
+```
+
+**Everything is in beats.** An act is `solo` (one film full frame, its `caption`), `grid` (rows
+of clip keys; `@logo` is the brand tile) or `end`, each `beats` long at the option's bpm. A
+grid forms over `grid.reflow_beats` before its downbeat (cells shared with the act before move,
+new ones pop in staggered), so it LANDS on the beat. Solo-to-solo is `cut` (a punch-in),
+`whip` (a horizontal slide with motion blur) or `zoom` (push and dissolve), per option.
+
+**The music is arranged from the same acts**, which is why it cannot drift off the cut: a
+style's `layers` are note patterns (the `_sketchaudio` notation) laid over the acts they name
+(an act name or a kind: `solo`, `grid`, `end`), with per-act `gain`; a run of solo shots is one
+section, every grid restarts the progression on the tonic; `gap_before` silences drums and bass
+for `gap_beats` before each grid (the drop holds its breath); `hits` land on act starts (a stab,
+a timpani roll from `at: -2`); `sfx` places the transitions' sounds (`cut`/`whip`/`zoom`, a
+riser `at: -4` with `sec_beats: 4` into each `grid`, a `cell` pop per arriving film, the `end`).
+A raw cut changes the acts' lengths and the music follows. Three styles ship: `drive`
+(electronic, A minor, 120), `pop` (marimba and glockenspiel, C major, 124), `cinema` (piano,
+strings, horn, timpani, D minor, 100).
+
+**Mastering is a gain and a look-ahead limiter, not loudnorm.** loudnorm drops into its
+dynamic mode whenever the true-peak target binds (any kick), and that flattened an 8 dB build
+from the solo shots to the grids into 2 dB. A soft clipper instead came back from the AAC
+encoder 4 dB over full scale (its overtones). The limiter reduces gain ahead of each peak of
+the 4x-oversampled signal; measured on the three launch cuts: 0 clipped samples after AAC, the
+build kept (about -21 dB under the solos, -15 dB under the 4x4, per 2 s).
+
+**Films keep playing as they move.** A clip's playhead runs while it is on screen; one that
+leaves full frame for a cell carries on where it was; `jump: {act: seconds}` sends it to
+another moment when that act starts forming (the reflow hides the cut); a film that would reach
+its last second wraps to `loop` (default `in`), and `--list` prints every wrap so a jump can be
+added. Tall films take `fit: contain` (whole, on a blurred bed of themselves).
+
+**Pieces, not whole films.** `--fetch` cuts only the windows the plan plays (rounded to a
+quarter second, so a small retiming reuses them) at the reel's frame rate into
+`sources/showreel/`; the render reads them back at the smallest size each stage needs
+(1/4, 1/3, 1/2 or the full width), so a 4x4 decodes sixteen 480 px streams, not sixteen
+1080p ones. A 32 s raw cut at 960x540 renders in under a minute here; the frame is composited
+in numpy/OpenCV and piped to the encoder `_encode` picks.
+
+**Choosing the moments** (what the launch reel did): a contact sheet per candidate film (24
+frames), then a 4 fps strip with a motion number per frame of the windows that looked right,
+then `--frame` at each act. Mean absolute frame difference finds the still stretches but not
+the good ones: crayon films "boil" (5-10 every second) and the collage look moves on twos
+(1-2), so read the strip, not the number.
+
 ## Projects: one folder and two files per video
 
 Everything about one video lives in `projects/<id>/`: the manifests that drive
