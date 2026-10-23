@@ -123,7 +123,8 @@
    "film": "studio-20261006-100603-gko6xe",
    "about": "",
    "jump": {
-    "g16": 5.0
+    "g16": 5.0,
+    "end": 8.0
    }
   },
   "duchess": {
@@ -148,7 +149,10 @@
    "src": "https://media.kitcut.ai/films/studio-20261012-161651-5rn7dc/film.mp4",
    "in": 3.0,
    "film": "studio-20261012-161651-5rn7dc",
-   "about": "अदरक-इलायची वाली मसाला चाय: घर पर बनाने का आसान तरीका"
+   "about": "अदरक-इलायची वाली मसाला चाय: घर पर बनाने का आसान तरीका",
+   "jump": {
+    "end": 10.0
+   }
   },
   "ride": {
    "src": "https://media.kitcut.ai/films/studio-20261001-155215-24g3eg/film.mp4",
@@ -179,7 +183,10 @@
    "in": 39.0,
    "film": "studio-20261015-005329-lymj6r",
    "about": "Gate 23: She Couldn't Love a Man Who Was Afraid of Flying",
-   "fit": "contain"
+   "fit": "contain",
+   "jump": {
+    "end": 21.0
+   }
   },
   "donuts": {
    "src": "https://media.kitcut.ai/films/studio-20261003-161908-i3lfpc/film.mp4",
