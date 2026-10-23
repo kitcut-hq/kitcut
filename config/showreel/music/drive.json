@@ -219,7 +219,7 @@
      "notes": "0 A3+C4+E4+A4 6.5 .55",
      "repeat": {
       "every": 5,
-      "until": 16,
+      "until": 8,
       "decay": 0.8
      }
     },
@@ -229,7 +229,7 @@
      "notes": "0 A2+E3+A3 6.5 .5",
      "repeat": {
       "every": 5,
-      "until": 16,
+      "until": 8,
       "decay": 0.8
      }
     },
@@ -239,7 +239,7 @@
      "notes": "0 A1 6.5 .9",
      "repeat": {
       "every": 5,
-      "until": 16,
+      "until": 8,
       "decay": 0.8
      }
     },

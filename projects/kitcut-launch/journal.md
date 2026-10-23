@@ -71,3 +71,5 @@ Owner, later: the toy heist read as a kids' cartoon ("bad choice for drama ... n
 - 16:51 showreel drive: music replaced under the same picture scripts/showreel.py -> projects/kitcut-launch/outputs/kitcut-launch-drive.mp4 (--manifest projects/kitcut-launch/showreel.json --option drive --remux)
 
 2026-10-23: the three full cuts came back from kc-local (drive 0:58, pop 0:56, cinema 1:10). Checked at 2 fps: picture fine. Sound: each closing chord stopped ~2.5 s before the end (3.1 s samples); fixed with re-struck chords and put under the same picture with --remux. Peaks after AAC: 0.77 / 0.83 / 0.90, nothing clipped.
+
+2026-10-23, after three fresh reviews of the full cuts (drive SHOW IT, pop SHOW IT, cinema NOT YET) - fixed in all three: no black opening frames; end card 4 s with "One prompt in. A finished film out." large; first caption says Claude wrote it; Web Summit caption moved off its name plate; the noir drama is solo 2 (Leo becomes a tile: kids' cartoon no longer a headline); tall films fill their grid tiles (grid_fit cover) and sit right of centre in their solo (place_x). Piece cache key now includes the piece size.

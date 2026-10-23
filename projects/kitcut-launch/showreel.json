@@ -32,7 +32,7 @@
    "g4": 8,
    "g8": 8,
    "g16": 12,
-   "end": 8
+   "end": 6
   }
  },
  "clips": {
@@ -43,7 +43,7 @@
    "about": "",
    "caption": [
     "3D · three.js",
-    "A padel lesson in 3D, written as code"
+    "A padel lesson, written in code by Claude"
    ],
    "jump": {
     "g8": 243.0,
@@ -90,13 +90,14 @@
    "about": "Web Summit 2026 Lisbon: Meet the Speakers",
    "caption": [
     "Event promo",
-    "Real speakers, real brand, one prompt"
+    "Real speakers, real brand"
    ],
    "jump": {
     "g8": 7.0,
     "g16": 4.6,
     "end": 7.0
-   }
+   },
+   "caption_at": "top-left"
   },
   "cloudflare": {
    "src": "https://media.kitcut.ai/films/studio-20261016-222659-7l6vb6/film.mp4",
@@ -173,17 +174,33 @@
    "fit": "contain",
    "jump": {
     "end": 21.0
-   }
+   },
+   "grid_fit": "cover",
+   "focus": [
+    0.5,
+    0.36
+   ]
   },
   "noir": {
    "src": "https://media.kitcut.ai/films/studio-20261014-232340-6cubej/r1/film.mp4",
-   "in": 34.0,
+   "in": 23.0,
    "film": "studio-20261014-232340-6cubej",
    "about": "Which Hand: A Dry-Eyed Widow Springs a Noir Trap at 3 A.M",
    "fit": "contain",
    "jump": {
-    "g16": 3.0
-   }
+    "g8": 3.0,
+    "g16": 8.0
+   },
+   "caption": [
+    "Micro-drama · vertical",
+    "A noir thriller for Shorts"
+   ],
+   "grid_fit": "cover",
+   "focus": [
+    0.5,
+    0.36
+   ],
+   "place_x": 0.72
   },
   "bikes": {
    "src": "https://media.kitcut.ai/films/studio-20260929-103129-i4d52n/film.mp4",
@@ -196,7 +213,12 @@
    "in": 41.0,
    "film": "studio-20261022-123925-2xqki7",
    "about": "Anthropic at $2 Trillion: Next Microsoft or Next Cisco?",
-   "fit": "contain"
+   "fit": "contain",
+   "grid_fit": "cover",
+   "focus": [
+    0.5,
+    0.5
+   ]
   }
  },
  "acts": [
@@ -207,7 +229,7 @@
   },
   {
    "name": "s2",
-   "solo": "leo",
+   "solo": "noir",
    "beats": 6
   },
   {
@@ -225,7 +247,7 @@
    "grid": [
     [
      "padel",
-     "leo"
+     "noir"
     ],
     [
      "apollo",
@@ -240,12 +262,12 @@
     [
      "padel",
      "the-box",
-     "leo"
+     "noir"
     ],
     [
      "cloudflare",
      "@logo",
-     "noir"
+     "leo"
     ],
     [
      "apollo",
@@ -265,7 +287,7 @@
       "openrouter",
       "yandex"
      ],
-     "leo"
+     "noir"
     ],
     [
      [
@@ -274,7 +296,7 @@
      ],
      "bikes",
      "ipo-short",
-     "noir"
+     "leo"
     ],
     [
      "cloudflare",
@@ -294,7 +316,7 @@
   {
    "name": "end",
    "end": true,
-   "beats": 16
+   "beats": 8
   }
  ]
 }

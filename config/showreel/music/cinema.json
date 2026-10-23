@@ -261,7 +261,7 @@
      "notes": "0 D3+A3+D4+F4+A4 5.5 .5",
      "repeat": {
       "every": 4,
-      "until": 16,
+      "until": 8,
       "decay": 0.8
      }
     },
@@ -271,7 +271,7 @@
      "notes": "0 D2+A2+D3 5.5 .55",
      "repeat": {
       "every": 4,
-      "until": 16,
+      "until": 8,
       "decay": 0.8
      }
     },
@@ -281,7 +281,7 @@
      "notes": "0 D2 5.5 .7",
      "repeat": {
       "every": 4,
-      "until": 16,
+      "until": 8,
       "decay": 0.8
      }
     },

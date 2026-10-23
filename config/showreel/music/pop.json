@@ -205,7 +205,7 @@
      "notes": "0 E4+G4+C5 6.5 .5",
      "repeat": {
       "every": 5,
-      "until": 16,
+      "until": 8,
       "decay": 0.8
      }
     },
@@ -220,7 +220,7 @@
      "notes": "0 C2 6.5 .8",
      "repeat": {
       "every": 5,
-      "until": 16,
+      "until": 8,
       "decay": 0.8
      }
     },

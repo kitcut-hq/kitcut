@@ -18,7 +18,7 @@ and a film that would run out wraps to its `in`. Pieces of each film are cut fro
 Manifest (projects/<id>/showreel.json):
     frame [W, H], fps, style (look json), default option, options {name: {music, solo_transition,
     bpm?}}, raw {frame, fps, beats {act: beats}}, clips {key: {src, in, caption [kicker, line],
-    fit cover|contain, focus [x, y], zoom, caption_at, jump {act: seconds}, loop}}, acts [{name, solo: key |
+    fit cover|contain, grid_fit, place_x, focus [x, y], zoom, caption_at, jump {act: seconds}, loop}}, acts [{name, solo: key |
     grid: [[key | [keys switched on the beat] | @logo | null per row]...] | end: true, beats}]
 Look (config/showreel/*.json): background, gaps, corner radius, caption panel and type, the logo
 tile and the end card. Music (config/showreel/music/*.json): bpm, instruments, pattern layers,
@@ -453,7 +453,9 @@ def src_path(src):
 def piece_path(m, key, s0, s1):
     c = m["clips"][key]
     W, H = m["frame"]
-    tag = "%s|%.3f|%.3f|%s|%dx%d" % (c["src"], s0, s1, m["fps"], W, H)
+    # the piece's own size is in the key: a tall film's pieces changed size once, and a key
+    # without it handed the render the old, smaller pieces
+    tag = "%s|%.3f|%.3f|%s|%dx%d|%dx%d" % ((c["src"], s0, s1, m["fps"], W, H) + piece_size(m, key))
     h = hashlib.sha1(tag.encode()).hexdigest()[:10]
     d = os.path.join(m["_dir"], "sources", "showreel")
     return os.path.join(d, "%s-%.2f-%s.mp4" % (key, s0, h))
@@ -473,9 +475,8 @@ def pieces(m, windows):
 
 
 def piece_size(m, key):
-    """The size a piece is cut at: the reel's frame for a landscape film, its height for a tall
-    one (shown whole on a blurred bed of itself).
-    """
+    """The size a piece is cut at: the reel's height for a landscape film, its own width for a
+    tall one (capped at the reel's width)."""
     c = m["clips"][key]
     W, H = m["frame"]
     sw, sh = c["_w"], c["_h"]
@@ -483,11 +484,10 @@ def piece_size(m, key):
         h = H
         w = int(round(h * sw / sh / 2)) * 2
     else:
-        w = W
+        # a tall film: at its own width (never wider than the reel), so the same piece serves
+        # the solo shot (whole, on its bed) and a grid cell (cropped to fill it, `grid_fit`)
+        w = min(W, int(sw) // 2 * 2)
         h = int(round(w * sh / sw / 2)) * 2
-        if c["fit"] == "contain":
-            h = H
-            w = int(round(h * sw / sh / 2)) * 2
     return w, h
 
 
@@ -755,7 +755,7 @@ def end_layers(m):
     lh = int(e.get("logo_h", 300) * k)
     logo = logo.resize((int(logo.width * lh / logo.height), lh), Image.LANCZOS)
     fname = font(st, e.get("name_size", 132) * k, 800)
-    fline = font(st, e.get("line_size", 40) * k, 500)
+    fline = font(st, e.get("line_size", 40) * k, e.get("line_weight", 500))
     furl = font(st, e.get("url_size", 38) * k, 700)
     d = ImageDraw.Draw(Image.new("RGBA", (8, 8)))
     nb = d.textbbox((0, 0), st.get("name", "KitCut"), font=fname)
@@ -774,7 +774,10 @@ def end_layers(m):
     y = top + lh + gap * 1.2
     limg = Image.new("RGBA", (lb[2] + 4, lb[3] + 8), (0, 0, 0, 0))
     ImageDraw.Draw(limg).text(
-        (0, 0), st.get("line", ""), font=fline, fill=hexrgb(st.get("ink_2", "#b6aea3")) + (255,)
+        (0, 0),
+        st.get("line", ""),
+        font=fline,
+        fill=hexrgb(e.get("line_color", st.get("ink_2", "#b6aea3"))) + (255,),
     )
     out.append((limg, ((W - lb[2]) / 2, y), e.get("line_at", 1.0)))
     y += (lb[3] - lb[1]) + gap * 1.6
@@ -838,7 +841,8 @@ def fit_cell(m, key, img, w, h):
     """
     c = m["clips"][key]
     ih, iw = img.shape[:2]
-    if c["fit"] == "contain" and iw / ih < w / h * 0.8:
+    fit = c["fit"] if w >= m["frame"][0] * 0.98 else c.get("grid_fit", c["fit"])
+    if fit == "contain" and iw / ih < w / h * 0.8:
         s = max(w / iw, h / ih)
         bw, bh = int(iw * s / 8) + 1, int(ih * s / 8) + 1
         bed = cv2.resize(img, (bw, bh), interpolation=cv2.INTER_AREA)
@@ -849,7 +853,10 @@ def fit_cell(m, key, img, w, h):
         s2 = min(w / iw, h / ih)
         fw, fh = max(1, int(iw * s2)), max(1, int(ih * s2))
         fg = cv2.resize(img, (fw, fh), interpolation=cv2.INTER_AREA if s2 < 1 else cv2.INTER_LINEAR)
-        out[(h - fh) // 2 : (h - fh) // 2 + fh, (w - fw) // 2 : (w - fw) // 2 + fw] = fg
+        # full frame, a tall film may sit off centre (`place_x`) to leave its caption a clear side
+        px = c.get("place_x", 0.5) if w >= m["frame"][0] * 0.98 else 0.5
+        x0 = int(round((w - fw) * px))
+        out[(h - fh) // 2 : (h - fh) // 2 + fh, x0 : x0 + fw] = fg
         return out
     fx, fy = c.get("focus", [0.5, 0.5])
     a = w / h
@@ -928,8 +935,6 @@ class Painter:
             self.draw_end(canvas, t)
         if a["kind"] == "solo":
             self.draw_caption(canvas, t, a)
-        if t < 0.18:
-            canvas *= t / 0.18
         return np.clip(canvas, 0, 255).astype(np.uint8)
 
     def draw_caption(self, canvas, t, a):
