@@ -85,7 +85,8 @@ MODELS = {
     "gemini": "gemini-3.1-flash-image",
 }
 OPENROUTER = "https://openrouter.ai/api/v1"
-# what the muse backend always sent, for a model OpenRouter's catalogue does not describe
+# what the muse backend always sent, for a model OpenRouter's catalogue does not describe; the
+# aspect follows the film's frame (pick_params), 16:9 unless the frame is tall or square
 UNLISTED = {"resolution": "2K", "aspect_ratio": "16:9", "output_format": "png"}
 KEEP_REF = "Keep the characters, their clothes and the drawing style exactly as in this picture. "
 # a style picture's lead (style_ref): measured on six style pictures, 2026-10-15 -- told only
@@ -205,8 +206,8 @@ def pick_params(caps, quality=None, aspect="16:9", transparent=False):
     """The request's settings for a model: `aspect` (16:9, or the ratio nearest it), 2K (or the
     nearest below), jpeg where the model offers it (png for a transparent cut-out), and `quality`
     if the model has the setting. Anything the catalogue does not list is not sent."""
-    if caps is None:
-        return dict(UNLISTED)
+    if caps is None:  # Muse: what it always got, with the frame's aspect (the bake-off measures it)
+        return dict(UNLISTED, aspect_ratio=aspect)
     sp = caps.get("supported_parameters") or {}
     out = {}
     ars = [a for a in (sp.get("aspect_ratio") or {}).get("values") or [] if ":" in a]
