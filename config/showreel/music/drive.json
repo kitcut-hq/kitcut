@@ -216,17 +216,32 @@
     {
      "inst": "pad_3_polysynth",
      "vel": 0.55,
-     "notes": "0 A3+C4+E4+A4 10 .55"
+     "notes": "0 A3+C4+E4+A4 6.5 .55",
+     "repeat": {
+      "every": 5,
+      "until": 16,
+      "decay": 0.8
+     }
     },
     {
      "inst": "electric_piano_2",
      "vel": 0.5,
-     "notes": "0 A2+E3+A3 6 .5"
+     "notes": "0 A2+E3+A3 6.5 .5",
+     "repeat": {
+      "every": 5,
+      "until": 16,
+      "decay": 0.8
+     }
     },
     {
      "inst": "sub_bass",
      "vel": 0.9,
-     "notes": "0 A1 6 .9"
+     "notes": "0 A1 6.5 .9",
+     "repeat": {
+      "every": 5,
+      "until": 16,
+      "decay": 0.8
+     }
     },
     {
      "inst": "glockenspiel",
@@ -346,6 +361,6 @@
  },
  "master": {
   "lufs": -14,
-  "tp": -1.0
+  "tp": -2.0
  }
 }

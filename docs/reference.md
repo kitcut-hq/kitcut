@@ -5903,6 +5903,12 @@ encoder 4 dB over full scale (its overtones). The limiter reduces gain ahead of 
 the 4x-oversampled signal; measured on the three launch cuts: 0 clipped samples after AAC, the
 build kept (about -21 dB under the solos, -15 dB under the 4x4, per 2 s).
 
+**A held note lasts 3.1 s at most**: every FluidR3 GM sample here is that long, so a closing
+chord written for 16 beats stopped after three seconds and the end card held in silence (the
+first full cuts). A hit event's `repeat: {every, until, decay}` strikes it again every `every`
+beats, each softer. `--remux` puts new music under an existing render with the picture
+stream-copied, so a sound-only fix costs seconds.
+
 **Films keep playing as they move.** A clip's playhead runs while it is on screen; one that
 leaves full frame for a cell carries on where it was; `jump: {act: seconds}` sends it to
 another moment when that act starts forming (the reflow hides the cut); a film that would reach

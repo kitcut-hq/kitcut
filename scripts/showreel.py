@@ -32,6 +32,7 @@ Invoke as:
     python scripts/showreel.py --manifest projects/<id>/showreel.json --option drive --music
     python scripts/showreel.py --manifest projects/<id>/showreel.json --option drive --raw
     python scripts/showreel.py --manifest projects/<id>/showreel.json --option drive
+    python scripts/showreel.py --manifest projects/<id>/showreel.json --option drive --remux
 """
 
 import sys
@@ -1011,6 +1012,33 @@ def shifted(ev, beat0):
     return e
 
 
+def restrikes(ev):
+    """A held chord, struck again every `repeat.every` beats until `repeat.until`, each a little
+    softer (`repeat.decay`). Every GM sample here is 3.1 s long, so a note written longer than
+    that simply stops: the closing chords fell silent 2.5 s before the end card did."""
+    r = ev.get("repeat")
+    if not r or ev.get("type", "notes") != "notes":
+        return [ev]
+    out = []
+    every, until, decay = float(r["every"]), float(r["until"]), float(r.get("decay", 0.85))
+    k, b = 0, 0.0
+    while b < until - 1e-6:
+        e = {x: y for x, y in ev.items() if x != "repeat"}
+        e["shift"] = float(ev.get("shift", 0)) + b
+        e["vel"] = ev.get("vel", 0.5) * decay**k
+        notes = []
+        for part in ev["notes"].split(";"):
+            f = part.split()
+            if len(f) > 3:
+                f[3] = "%.3f" % (float(f[3]) * decay**k)
+            notes.append(" ".join(f))
+        e["notes"] = "; ".join(notes)
+        out.append(e)
+        k += 1
+        b += every
+    return out
+
+
 def arrange(m, acts, beat):
     """The score and the cues for these acts: (score, cues, report lines)."""
     mu = m["_music"]
@@ -1104,7 +1132,8 @@ def arrange(m, acts, beat):
                 continue
             if matches(h.get("on", []), a):
                 for ev in h["events"]:
-                    events.append(shifted(ev, a["b0"] + h.get("at", 0)))
+                    for e2 in restrikes(ev):
+                        events.append(shifted(e2, a["b0"] + h.get("at", 0)))
     score = {
         "bpm": m["bpm"],
         "instruments": mu.get("instruments", {}),
@@ -1315,6 +1344,11 @@ def main():
         "--frame", type=float, metavar="T", help="one frame at T seconds -> PNG in temp/"
     )
     ap.add_argument("--music", action="store_true", help="arrange and render the music only")
+    ap.add_argument(
+        "--remux",
+        action="store_true",
+        help="new music under the existing render, its picture stream-copied (a sound-only fix)",
+    )
     ap.add_argument("-j", "--jobs", type=int, default=4, help="pieces cut at once (default 4)")
     args = ap.parse_args()
 
@@ -1328,6 +1362,13 @@ def main():
         print("\n  music, arranged from these acts:")
         print("\n".join(report))
         return
+    if args.remux:  # the music only, under a render that already exists: no film is read
+        wav = os.path.join(
+            m["_dir"], "audio", "showreel-%s%s.wav" % (m["_option"], "-raw" if m["_raw"] else "")
+        )
+        os.makedirs(os.path.dirname(wav), exist_ok=True)
+        music(m, acts, beat, wav)
+        return remux(m, acts, wav)
     fetch(m, items, args.jobs)
     if args.fetch:
         return
@@ -1350,6 +1391,48 @@ def main():
     if args.music:
         return
     render(m, acts, beat, frames, items, wav, args)
+
+
+def remux(m, acts, wav):
+    """The render's picture, stream-copied, with this music under it: a change to the music
+    costs seconds, not a re-render of every frame."""
+    dst = out_path(m)
+    if not os.path.exists(dst):
+        sys.exit("--remux: no render at %s yet" % rel(dst))
+    cfg = _encode.resolve(dict(DEFAULT_RENDER, **(m.get("render") or {})))
+    tmp = dst + ".part.mp4"
+    cmd = (
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", dst, "-i", wav]
+        + ["-map", "0:v", "-map", "1:a", "-c:v", "copy", "-shortest"]
+        + _encode.audio_args(cfg)
+        + ["-movflags", "+faststart", "-y", tmp]
+    )
+    subprocess.run(cmd, check=True)
+    got = probe_duration(tmp)
+    if abs(got - acts[-1]["t1"]) > 0.25:
+        sys.exit("the remux is %.2f s, the reel %.2f s" % (got, acts[-1]["t1"]))
+    os.replace(tmp, dst)
+    print("  new music under %s (%.1f s)" % (dst, got))
+    _project.record(
+        m["_id"],
+        "showreel %s%s: music replaced under the same picture"
+        % (m["_option"], " raw cut" if m["_raw"] else ""),
+        out=dst,
+        script=__file__,
+        argv=sys.argv[1:],
+        kind="video",
+        manifest=m["_path"],
+        sidecars={"music": wav},
+    )
+
+
+def probe_duration(path):
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
+        capture_output=True,
+        text=True,
+    )
+    return float(r.stdout.strip() or 0)
 
 
 def render(m, acts, beat, frames, items, wav, args):

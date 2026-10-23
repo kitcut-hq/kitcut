@@ -1,74 +1,394 @@
 {
-  "_comment": "Cinema: a trailer build in D minor (Dm Bb F C), 100 bpm, for zoom dissolves. A piano ostinato and strings over the solo shots; a timpani roll into each grid, which lands on an orchestra hit and brass; low strings and taiko from the first grid, a french-horn theme from the 3x3, choir in the 4x4. The end is one held D-minor chord with a celesta rising through it.",
-  "bpm": 100,
-  "drum_gain": 0.5,
-  "gap_before": ["grid"],
-  "gap_beats": 1,
-  "instruments": {
-    "acoustic_grand_piano": {"g": 0.26, "pan": -0.1, "send": 0.45, "rel": 0.6},
-    "string_ensemble_1": {"g": 0.2, "pan": 0, "send": 0.55, "rel": 0.9},
-    "contrabass": {"g": 0.3, "pan": 0, "send": 0.25, "rel": 0.5},
-    "cello": {"g": 0.22, "pan": -0.15, "send": 0.35, "rel": 0.5},
-    "french_horn": {"g": 0.25, "pan": 0.15, "send": 0.5, "rel": 0.6},
-    "choir_aahs": {"g": 0.14, "pan": 0, "send": 0.6, "rel": 1.0, "soft_attack": true},
-    "taiko_drum": {"g": 0.45, "pan": 0, "send": 0.3, "rel": 0.5},
-    "timpani": {"g": 0.4, "pan": 0, "send": 0.4, "rel": 0.8},
-    "orchestra_hit": {"g": 0.3, "pan": 0, "send": 0.5, "rel": 0.6},
-    "brass_section": {"g": 0.22, "pan": 0.05, "send": 0.45, "rel": 0.6},
-    "celesta": {"g": 0.26, "pan": 0.25, "send": 0.5, "rel": 1.0},
-    "sub_bass": {"g": 0.35, "pan": 0, "send": 0, "rel": 0.2}
+ "_comment": "Cinema: a trailer build in D minor (Dm Bb F C), 100 bpm, for zoom dissolves. A piano ostinato and strings over the solo shots; a timpani roll into each grid, which lands on an orchestra hit and brass; low strings and taiko from the first grid, a french-horn theme from the 3x3, choir in the 4x4. The end is one held D-minor chord with a celesta rising through it.",
+ "bpm": 100,
+ "drum_gain": 0.5,
+ "gap_before": [
+  "grid"
+ ],
+ "gap_beats": 1,
+ "instruments": {
+  "acoustic_grand_piano": {
+   "g": 0.26,
+   "pan": -0.1,
+   "send": 0.45,
+   "rel": 0.6
   },
-  "layers": [
-    {"name": "piano", "inst": "acoustic_grand_piano", "acts": ["solo", "grid"], "len": 16, "gain": {"s1": 0.85},
-     "notes": "0 D4 .5 .55; .5 A4 .5 .42; 1 F4 .5 .48; 1.5 A4 .5 .42; 2 D4 .5 .55; 2.5 A4 .5 .42; 3 F4 .5 .48; 3.5 A4 .5 .42; 4 D4 .5 .55; 4.5 Bb4 .5 .42; 5 F4 .5 .48; 5.5 Bb4 .5 .42; 6 D4 .5 .55; 6.5 Bb4 .5 .42; 7 F4 .5 .48; 7.5 Bb4 .5 .42; 8 C4 .5 .55; 8.5 A4 .5 .42; 9 F4 .5 .48; 9.5 A4 .5 .42; 10 C4 .5 .55; 10.5 A4 .5 .42; 11 F4 .5 .48; 11.5 A4 .5 .42; 12 C4 .5 .55; 12.5 G4 .5 .42; 13 E4 .5 .48; 13.5 G4 .5 .42; 14 C4 .5 .55; 14.5 G4 .5 .42; 15 E4 .5 .48; 15.5 G4 .5 .42"},
-    {"name": "strings", "inst": "string_ensemble_1", "acts": ["s2", "s3", "s4", "grid"], "len": 16, "gap": false, "gain": {"solo": 0.7},
-     "notes": "0 D3+A3+D4+F4 4 .45; 4 D3+Bb3+D4+F4 4 .45; 8 C3+A3+C4+F4 4 .45; 12 C3+G3+C4+E4 4 .45"},
-    {"name": "cello", "inst": "cello", "acts": ["s3", "s4"], "len": 16,
-     "notes": "0 D3 2 .5; 2 D3 2 .45; 4 Bb2 2 .5; 6 Bb2 2 .45; 8 F2 2 .5; 10 F2 2 .45; 12 C3 2 .5; 14 C3 2 .45"},
-    {"name": "low strings", "inst": "contrabass", "acts": ["grid"], "len": 16,
-     "notes": "0 D2 1 .7; 1 D2 .5 .5; 1.5 D2 .5 .5; 2 D2 1 .65; 3 D2 1 .55; 4 Bb1 1 .7; 5 Bb1 .5 .5; 5.5 Bb1 .5 .5; 6 Bb1 1 .65; 7 Bb1 1 .55; 8 F2 1 .7; 9 F2 .5 .5; 9.5 F2 .5 .5; 10 F2 1 .65; 11 F2 1 .55; 12 C2 1 .7; 13 C2 .5 .5; 13.5 C2 .5 .5; 14 C2 1 .65; 15 C2 1 .55"},
-    {"name": "sub", "inst": "sub_bass", "acts": ["grid"], "len": 16,
-     "notes": "0 D2 3.8 .7; 4 Bb1 3.8 .7; 8 F1 3.8 .7; 12 C2 3.8 .7"},
-    {"name": "taiko", "inst": "taiko_drum", "acts": ["grid"], "len": 4, "gain": {"g4": 0.8},
-     "notes": "0 C2 1 .8; 1.5 C2 .5 .45; 2 C2 1 .65; 3 C2 .5 .5; 3.5 C2 .5 .55"},
-    {"name": "horn", "inst": "french_horn", "acts": ["g8", "g16"], "len": 16,
-     "notes": "0 A4 2 .6; 2 F4 1 .55; 3 G4 1 .55; 4 F4 2 .6; 6 D4 2 .55; 8 C5 2 .65; 10 A4 2 .6; 12 G4 3 .6; 15 E4 1 .5"},
-    {"name": "choir", "inst": "choir_aahs", "acts": ["g16"], "len": 16, "gap": false,
-     "notes": "0 D4+F4+A4 4 .5; 4 D4+F4+Bb4 4 .5; 8 C4+F4+A4 4 .5; 12 C4+E4+G4 4 .5"}
-  ],
-  "drums": [
-    {"acts": ["g4", "g8"], "vel": 0.7, "kit": {"kick": "X.......x.....x.", "snare": "........x......."}},
-    {"acts": ["g16"], "vel": 0.75, "kit": {"kick": "X.......x.....x.", "snare": "....x.......x...", "shaker": "o.o.o.o.o.o.o.o."}}
-  ],
-  "hits": [
-    {"on": ["grid"], "at": -2, "events": [{"type": "roll", "inst": "timpani", "note": "D2", "from": 0, "to": 1.85, "step": 0.125, "v0": 0.12, "v1": 0.8}]},
-    {"on": ["grid"], "events": [
-      {"inst": "orchestra_hit", "vel": 0.6, "notes": "0 D3+A3+D4 1.5 .6"},
-      {"inst": "brass_section", "vel": 0.55, "notes": "0 D3+F3+A3+D4 2 .55"}
-    ]},
-    {"on": ["end"], "at": -2, "events": [{"type": "roll", "inst": "timpani", "note": "D2", "from": 0, "to": 1.85, "step": 0.125, "v0": 0.1, "v1": 0.7}]},
-    {"on": ["end"], "events": [
-      {"inst": "string_ensemble_1", "vel": 0.5, "notes": "0 D3+A3+D4+F4+A4 12 .5"},
-      {"inst": "acoustic_grand_piano", "vel": 0.55, "notes": "0 D2+A2+D3 6 .55"},
-      {"inst": "contrabass", "vel": 0.7, "notes": "0 D2 6 .7"},
-      {"inst": "brass_section", "vel": 0.5, "notes": "0 D3+F3+A3+D4 3 .5"},
-      {"inst": "celesta", "vel": 0.5, "notes": ".5 D5 1 .45; 1 F5 1 .45; 1.5 A5 1 .5; 2 D6 4 .55"}
-    ]}
-  ],
-  "sfx": {
-    "open": [{"fx": "boom", "db": -16, "args": {"sec": 1.5}}],
-    "zoom": [{"fx": "whoosh", "dt": -0.26, "db": -21, "args": {"sec": 0.55, "f0": 180, "f1": 2200, "peak": 0.55, "curve": 1.2, "q": 0.9}}],
-    "grid": [
-      {"fx": "whoosh", "at": -4, "sec_beats": 4, "db": -19, "args": {"f0": 120, "f1": 4500, "peak": 0.97, "curve": 2.4, "q": 1.4}},
-      {"fx": "boom", "db": -10, "args": {"sec": 1.8}},
-      {"fx": "crash", "db": -21, "args": {"sec": 3.0}}
-    ],
-    "cell": [{"fx": "swoosh_soft", "db": -32, "args": {"sec": 0.25}}],
-    "end": [
-      {"fx": "boom", "db": -10, "args": {"sec": 2.2}},
-      {"fx": "shimmer", "db": -22, "args": {"sec": 2.0, "f0": 2000, "f1": 8000}}
-    ]
+  "string_ensemble_1": {
+   "g": 0.2,
+   "pan": 0,
+   "send": 0.55,
+   "rel": 0.9
   },
-  "mix": {"reverb_sec": 2.8, "music_reverb": 0.9, "sfx_reverb": 0.6, "sfx_db": 0, "fade_out": 2.0},
-  "master": {"lufs": -14, "tp": -1.0}
+  "contrabass": {
+   "g": 0.3,
+   "pan": 0,
+   "send": 0.25,
+   "rel": 0.5
+  },
+  "cello": {
+   "g": 0.22,
+   "pan": -0.15,
+   "send": 0.35,
+   "rel": 0.5
+  },
+  "french_horn": {
+   "g": 0.25,
+   "pan": 0.15,
+   "send": 0.5,
+   "rel": 0.6
+  },
+  "choir_aahs": {
+   "g": 0.14,
+   "pan": 0,
+   "send": 0.6,
+   "rel": 1.0,
+   "soft_attack": true
+  },
+  "taiko_drum": {
+   "g": 0.45,
+   "pan": 0,
+   "send": 0.3,
+   "rel": 0.5
+  },
+  "timpani": {
+   "g": 0.4,
+   "pan": 0,
+   "send": 0.4,
+   "rel": 0.8
+  },
+  "orchestra_hit": {
+   "g": 0.3,
+   "pan": 0,
+   "send": 0.5,
+   "rel": 0.6
+  },
+  "brass_section": {
+   "g": 0.22,
+   "pan": 0.05,
+   "send": 0.45,
+   "rel": 0.6
+  },
+  "celesta": {
+   "g": 0.26,
+   "pan": 0.25,
+   "send": 0.5,
+   "rel": 1.0
+  },
+  "sub_bass": {
+   "g": 0.35,
+   "pan": 0,
+   "send": 0,
+   "rel": 0.2
+  }
+ },
+ "layers": [
+  {
+   "name": "piano",
+   "inst": "acoustic_grand_piano",
+   "acts": [
+    "solo",
+    "grid"
+   ],
+   "len": 16,
+   "gain": {
+    "s1": 0.85
+   },
+   "notes": "0 D4 .5 .55; .5 A4 .5 .42; 1 F4 .5 .48; 1.5 A4 .5 .42; 2 D4 .5 .55; 2.5 A4 .5 .42; 3 F4 .5 .48; 3.5 A4 .5 .42; 4 D4 .5 .55; 4.5 Bb4 .5 .42; 5 F4 .5 .48; 5.5 Bb4 .5 .42; 6 D4 .5 .55; 6.5 Bb4 .5 .42; 7 F4 .5 .48; 7.5 Bb4 .5 .42; 8 C4 .5 .55; 8.5 A4 .5 .42; 9 F4 .5 .48; 9.5 A4 .5 .42; 10 C4 .5 .55; 10.5 A4 .5 .42; 11 F4 .5 .48; 11.5 A4 .5 .42; 12 C4 .5 .55; 12.5 G4 .5 .42; 13 E4 .5 .48; 13.5 G4 .5 .42; 14 C4 .5 .55; 14.5 G4 .5 .42; 15 E4 .5 .48; 15.5 G4 .5 .42"
+  },
+  {
+   "name": "strings",
+   "inst": "string_ensemble_1",
+   "acts": [
+    "s2",
+    "s3",
+    "s4",
+    "grid"
+   ],
+   "len": 16,
+   "gap": false,
+   "gain": {
+    "solo": 0.7
+   },
+   "notes": "0 D3+A3+D4+F4 4 .45; 4 D3+Bb3+D4+F4 4 .45; 8 C3+A3+C4+F4 4 .45; 12 C3+G3+C4+E4 4 .45"
+  },
+  {
+   "name": "cello",
+   "inst": "cello",
+   "acts": [
+    "s3",
+    "s4"
+   ],
+   "len": 16,
+   "notes": "0 D3 2 .5; 2 D3 2 .45; 4 Bb2 2 .5; 6 Bb2 2 .45; 8 F2 2 .5; 10 F2 2 .45; 12 C3 2 .5; 14 C3 2 .45"
+  },
+  {
+   "name": "low strings",
+   "inst": "contrabass",
+   "acts": [
+    "grid"
+   ],
+   "len": 16,
+   "notes": "0 D2 1 .7; 1 D2 .5 .5; 1.5 D2 .5 .5; 2 D2 1 .65; 3 D2 1 .55; 4 Bb1 1 .7; 5 Bb1 .5 .5; 5.5 Bb1 .5 .5; 6 Bb1 1 .65; 7 Bb1 1 .55; 8 F2 1 .7; 9 F2 .5 .5; 9.5 F2 .5 .5; 10 F2 1 .65; 11 F2 1 .55; 12 C2 1 .7; 13 C2 .5 .5; 13.5 C2 .5 .5; 14 C2 1 .65; 15 C2 1 .55"
+  },
+  {
+   "name": "sub",
+   "inst": "sub_bass",
+   "acts": [
+    "grid"
+   ],
+   "len": 16,
+   "notes": "0 D2 3.8 .7; 4 Bb1 3.8 .7; 8 F1 3.8 .7; 12 C2 3.8 .7"
+  },
+  {
+   "name": "taiko",
+   "inst": "taiko_drum",
+   "acts": [
+    "grid"
+   ],
+   "len": 4,
+   "gain": {
+    "g4": 0.8
+   },
+   "notes": "0 C2 1 .8; 1.5 C2 .5 .45; 2 C2 1 .65; 3 C2 .5 .5; 3.5 C2 .5 .55"
+  },
+  {
+   "name": "horn",
+   "inst": "french_horn",
+   "acts": [
+    "g8",
+    "g16"
+   ],
+   "len": 16,
+   "notes": "0 A4 2 .6; 2 F4 1 .55; 3 G4 1 .55; 4 F4 2 .6; 6 D4 2 .55; 8 C5 2 .65; 10 A4 2 .6; 12 G4 3 .6; 15 E4 1 .5"
+  },
+  {
+   "name": "choir",
+   "inst": "choir_aahs",
+   "acts": [
+    "g16"
+   ],
+   "len": 16,
+   "gap": false,
+   "notes": "0 D4+F4+A4 4 .5; 4 D4+F4+Bb4 4 .5; 8 C4+F4+A4 4 .5; 12 C4+E4+G4 4 .5"
+  }
+ ],
+ "drums": [
+  {
+   "acts": [
+    "g4",
+    "g8"
+   ],
+   "vel": 0.7,
+   "kit": {
+    "kick": "X.......x.....x.",
+    "snare": "........x......."
+   }
+  },
+  {
+   "acts": [
+    "g16"
+   ],
+   "vel": 0.75,
+   "kit": {
+    "kick": "X.......x.....x.",
+    "snare": "....x.......x...",
+    "shaker": "o.o.o.o.o.o.o.o."
+   }
+  }
+ ],
+ "hits": [
+  {
+   "on": [
+    "grid"
+   ],
+   "at": -2,
+   "events": [
+    {
+     "type": "roll",
+     "inst": "timpani",
+     "note": "D2",
+     "from": 0,
+     "to": 1.85,
+     "step": 0.125,
+     "v0": 0.12,
+     "v1": 0.8
+    }
+   ]
+  },
+  {
+   "on": [
+    "grid"
+   ],
+   "events": [
+    {
+     "inst": "orchestra_hit",
+     "vel": 0.6,
+     "notes": "0 D3+A3+D4 1.5 .6"
+    },
+    {
+     "inst": "brass_section",
+     "vel": 0.55,
+     "notes": "0 D3+F3+A3+D4 2 .55"
+    }
+   ]
+  },
+  {
+   "on": [
+    "end"
+   ],
+   "at": -2,
+   "events": [
+    {
+     "type": "roll",
+     "inst": "timpani",
+     "note": "D2",
+     "from": 0,
+     "to": 1.85,
+     "step": 0.125,
+     "v0": 0.1,
+     "v1": 0.7
+    }
+   ]
+  },
+  {
+   "on": [
+    "end"
+   ],
+   "events": [
+    {
+     "inst": "string_ensemble_1",
+     "vel": 0.5,
+     "notes": "0 D3+A3+D4+F4+A4 5.5 .5",
+     "repeat": {
+      "every": 4,
+      "until": 16,
+      "decay": 0.8
+     }
+    },
+    {
+     "inst": "acoustic_grand_piano",
+     "vel": 0.55,
+     "notes": "0 D2+A2+D3 5.5 .55",
+     "repeat": {
+      "every": 4,
+      "until": 16,
+      "decay": 0.8
+     }
+    },
+    {
+     "inst": "contrabass",
+     "vel": 0.7,
+     "notes": "0 D2 5.5 .7",
+     "repeat": {
+      "every": 4,
+      "until": 16,
+      "decay": 0.8
+     }
+    },
+    {
+     "inst": "brass_section",
+     "vel": 0.5,
+     "notes": "0 D3+F3+A3+D4 3 .5"
+    },
+    {
+     "inst": "celesta",
+     "vel": 0.5,
+     "notes": ".5 D5 1 .45; 1 F5 1 .45; 1.5 A5 1 .5; 2 D6 4 .55"
+    }
+   ]
+  }
+ ],
+ "sfx": {
+  "open": [
+   {
+    "fx": "boom",
+    "db": -16,
+    "args": {
+     "sec": 1.5
+    }
+   }
+  ],
+  "zoom": [
+   {
+    "fx": "whoosh",
+    "dt": -0.26,
+    "db": -21,
+    "args": {
+     "sec": 0.55,
+     "f0": 180,
+     "f1": 2200,
+     "peak": 0.55,
+     "curve": 1.2,
+     "q": 0.9
+    }
+   }
+  ],
+  "grid": [
+   {
+    "fx": "whoosh",
+    "at": -4,
+    "sec_beats": 4,
+    "db": -19,
+    "args": {
+     "f0": 120,
+     "f1": 4500,
+     "peak": 0.97,
+     "curve": 2.4,
+     "q": 1.4
+    }
+   },
+   {
+    "fx": "boom",
+    "db": -10,
+    "args": {
+     "sec": 1.8
+    }
+   },
+   {
+    "fx": "crash",
+    "db": -21,
+    "args": {
+     "sec": 3.0
+    }
+   }
+  ],
+  "cell": [
+   {
+    "fx": "swoosh_soft",
+    "db": -32,
+    "args": {
+     "sec": 0.25
+    }
+   }
+  ],
+  "end": [
+   {
+    "fx": "boom",
+    "db": -10,
+    "args": {
+     "sec": 2.2
+    }
+   },
+   {
+    "fx": "shimmer",
+    "db": -22,
+    "args": {
+     "sec": 2.0,
+     "f0": 2000,
+     "f1": 8000
+    }
+   }
+  ]
+ },
+ "mix": {
+  "reverb_sec": 2.8,
+  "music_reverb": 0.9,
+  "sfx_reverb": 0.6,
+  "sfx_db": 0,
+  "fade_out": 2.0
+ },
+ "master": {
+  "lufs": -14,
+  "tp": -1.0
+ }
 }

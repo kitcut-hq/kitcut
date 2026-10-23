@@ -35,3 +35,8 @@ description: Make a showreel (sizzle reel, montage, launch video, "what we made"
   look-ahead limiter. A soft clipper clips after AAC.
 - The variable Inter needs its `Weight` axis set by name; the first axis is optical size.
 - Captions sit 104 px up: many films carry their own source line or subtitle along the bottom.
+- A GM sample is 3.1 s long: hold a closing chord with `repeat`, not a long duration, and
+  measure the last seconds of the sound. Fix the sound alone with `--remux`.
+- Render the full cuts on kc-local (`ssh` + `systemd-run` with `MemoryMax`, as ops.sh does):
+  a copy of `scripts/`, `config/showreel/`, the logo, the font and the manifest, with `.venv`
+  and `models` linked to `/srv/kitcut/repo`. Three 1-minute cuts took about 12 minutes there.

@@ -65,3 +65,9 @@ a bar line halfway (showreel.py: a grid cell may be a list of clips).
 The owner then said "skip Peppa": the rhyme (a customer's film) is out, the donuts maths film (studio-20261003-161908-i3lfpc, from 0:06) in. Full 1080p renders of all three options started on kc-local, no option picked yet.
 
 Owner, later: the toy heist read as a kids' cartoon ("bad choice for drama ... not kids animation"), go easy on kids' cartoons, remove the donuts. Now: noir drama "Which Hand" (6cubej, from 0:34) for the heist; the XC bikes collage (i4d52n, 0:50) for the donuts; the Anthropic IPO Short (2xqki7, 0:41, tall) for Duchess. Kids' films left: Leo (solo), the two Ocheretyne economics tiles, masala chai. Re-rendered on kc-local.
+- 16:50 showreel drive: music replaced under the same picture scripts/showreel.py -> projects/kitcut-launch/outputs/kitcut-launch-drive.mp4 (--manifest projects/kitcut-launch/showreel.json --option drive --remux)
+- 16:50 showreel pop: music replaced under the same picture scripts/showreel.py -> projects/kitcut-launch/outputs/kitcut-launch-pop.mp4 (--manifest projects/kitcut-launch/showreel.json --option pop --remux)
+- 16:51 showreel cinema: music replaced under the same picture scripts/showreel.py -> projects/kitcut-launch/outputs/kitcut-launch-cinema.mp4 (--manifest projects/kitcut-launch/showreel.json --option cinema --remux)
+- 16:51 showreel drive: music replaced under the same picture scripts/showreel.py -> projects/kitcut-launch/outputs/kitcut-launch-drive.mp4 (--manifest projects/kitcut-launch/showreel.json --option drive --remux)
+
+2026-10-23: the three full cuts came back from kc-local (drive 0:58, pop 0:56, cinema 1:10). Checked at 2 fps: picture fine. Sound: each closing chord stopped ~2.5 s before the end (3.1 s samples); fixed with re-struck chords and put under the same picture with --remux. Peaks after AAC: 0.77 / 0.83 / 0.90, nothing clipped.

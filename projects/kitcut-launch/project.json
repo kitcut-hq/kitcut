@@ -35,8 +35,38 @@
       "sidecars": {
         "music": "projects/kitcut-launch/audio/showreel-cinema-raw.wav"
       }
+    },
+    "projects/kitcut-launch/outputs/kitcut-launch-drive.mp4": {
+      "status": "current",
+      "built_utc": "2026-10-23T16:51:24Z",
+      "kind": "video",
+      "script": "scripts/showreel.py",
+      "manifest": "projects/kitcut-launch/showreel.json",
+      "sidecars": {
+        "music": "projects/kitcut-launch/audio/showreel-drive.wav"
+      }
+    },
+    "projects/kitcut-launch/outputs/kitcut-launch-pop.mp4": {
+      "status": "current",
+      "built_utc": "2026-10-23T16:50:52Z",
+      "kind": "video",
+      "script": "scripts/showreel.py",
+      "manifest": "projects/kitcut-launch/showreel.json",
+      "sidecars": {
+        "music": "projects/kitcut-launch/audio/showreel-pop.wav"
+      }
+    },
+    "projects/kitcut-launch/outputs/kitcut-launch-cinema.mp4": {
+      "status": "current",
+      "built_utc": "2026-10-23T16:51:04Z",
+      "kind": "video",
+      "script": "scripts/showreel.py",
+      "manifest": "projects/kitcut-launch/showreel.json",
+      "sidecars": {
+        "music": "projects/kitcut-launch/audio/showreel-cinema.wav"
+      }
     }
   },
   "notes": [],
-  "updated_utc": "2026-10-23T06:19:19Z"
+  "updated_utc": "2026-10-23T16:51:24Z"
 }
