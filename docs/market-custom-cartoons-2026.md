@@ -310,7 +310,14 @@ a consultation rather than a sale: Timepiece Media (since Jul 13, 2026, "Schedul
 consultation"), Creative Family Memories (since Mar 28, 2026, a lead form "Interested in
 recording a family interview?"), Johnson & Richter, Capital Media's "Story Chair".
 
-**Targeting.** US household-income targeting by ZIP-code averages still exists per Vaizle (Sep
+**Targeting, checked in Ads Manager on 2026-10-23** (a saved-audience dialog, not saved):
+"Household income: top 5% / top 10% / top 10–25% / top 25–50% of ZIP codes (US)" all exist
+(Demographics > Financial > Income; top 10% ~31–37M people, top 5% ~15–18M); "Parents (All)"
+and parents by child's age (up to 12 months, 1–2, 3–5, 6–8, 9–12, 13–17, adult children);
+"Anniversary within 30 days / 31–60 days / 61–90 days", "Newlywed (1 year)", "Friends of people
+with birthdays in a month", "National Grandparents Day" as an interest. Parent-segment sizes
+in the search list are worldwide; the US size shows once a location is combined. Earlier
+third-party note, kept for the record: US household-income targeting by ZIP-code averages still exists per Vaizle (Sep
 2025, third-party, not confirmed in Meta's own documents); ZIP targeting works for ordinary
 ads (barred only for housing, jobs and credit since 2019). Meta removed niche interests in March
 2024 and interest exclusions from March 31, 2025. Life events (newly engaged, newlywed,
