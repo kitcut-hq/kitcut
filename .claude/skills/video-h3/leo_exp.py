@@ -1,7 +1,10 @@
-"""Experiments on the Leo H3 pilot: one change each against a shot of the pilot, same seed unless the seed is the change.
+"""Experiments on the Leo H3 pilot: one change each against a pilot shot, same seed unless noted.
 
 python3 leo_exp.py plan   -> writes exp/<name>.json
 """
+
+# ruff: noqa: INP001, T201  (a helper beside a skill, not a package; printing is its output)
+
 import json
 from pathlib import Path
 
@@ -11,14 +14,15 @@ EXP = D / "exp"
 
 # name: (base shot, overrides, what it tests)
 RUNS = {
-    "S06_seed7": ("S06", {"seed": 7}, "yield: same shot, another seed"),
-    "S06_seed99": ("S06", {"seed": 99}, "yield: same shot, a third seed"),
-    "S06_5s": ("S06", {"video_length": "5.0s"}, "length: 5 s against 9.3 s"),
-    "S06_pdd": ("S06", {"model_type": "minimax_h3_ref2va_pruned_pdd"}, "model: Ref2VA PDD against FastH3"),
+    # yield on a shot whose staging works (v8 S01: the series' cabin), so a failed seed is the
+    # model, not the prompt
+    "S01_seed7": ("S01", {"seed": 7}, "yield: same shot, another seed"),
+    "S01_seed99": ("S01", {"seed": 99}, "yield: same shot, a third seed"),
 }
 
 
-def plan():
+def plan() -> None:
+    """Write one settings file per experiment from its base shot's settings."""
     EXP.mkdir(exist_ok=True)
     for name, (base, over, why) in RUNS.items():
         cfg = json.loads((SHOTS / f"{base}.json").read_text())

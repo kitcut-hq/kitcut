@@ -11,7 +11,7 @@ roughly what the prompt says and fills every gap with its own guesses. **Directi
 gaps,** and checking every shot, because no structural test can see a stranger wearing Dad's shorts.
 
 This skill was written on 2026-10-23 from the Leo ep. 12 pilot (the first minute re-shot as 11 shots). The
-experiment log is `temp/h3test/EXPERIMENTS.md`. The working shot builder is `leo_pilot.py` beside this
+experiment log is `pilot-log.md` beside this file (a copy of `temp/h3test/EXPERIMENTS.md`). The working shot builder is `leo_pilot.py` beside this
 file, and it becomes a `scripts/` tool once the approach is adopted.
 
 ## Where it runs and what it costs
@@ -63,8 +63,9 @@ non_diegetic_music:       N/A when the episode's own score is laid on later
 - **Cuts inside one clip work**: `[Shot 2] At 00:04.000, the shot cuts to ...`, strictly increasing and
   inside the clip's length. The model also cuts by itself when the action needs it (S07 went from the shop
   front to the shelf to a close-up).
-- **Visible text goes in "double quotes"**, exactly as it should read. Otherwise the model invents garbled
-  signs ("Los colae"). Give walls as "plain blank walls".
+- **Visible text goes in "double quotes"**, exactly as it should read, and it comes out clean: the count
+  shot's pop-up circles read "1" to "5" and a red "7", crisp, each appearing as the finger taps its car
+  (v8f S06). Text nobody specified comes out garbled ("Los colae"), so give walls as "plain blank walls".
 
 ## The rules, each with the defect that taught it
 
@@ -72,29 +73,78 @@ non_diegetic_music:       N/A when the episode's own score is laid on later
    shot's prompt explained how Dad may appear ("only his hands, or his legs in blue shorts"), so Dad's legs
    appeared in the back seat and walked through a street shot. Write "his feet are bare", not "no shoes,
    no socks".
-2. **A character's notes go only into the shots that character is in.**
+2. **A character's notes go only into the shots that character is in.** When a series never shows a
+   face (Leo's Dad: hands and legs only), shoot his shots **from his own point of view**, his hands
+   coming from the bottom of the frame. "Beyond the left edge of the frame" let a camera tilt bring his
+   face in (v7 S11).
 3. **A stranger gets their own, different clothes, stated.** S09's "other dad" wore Leo's Dad's blue
    shorts and sneakers, because Dad's description was in that prompt.
-4. **Every place is described in full in every shot.** The model has no memory between shots. Unstated,
+4. **Describe places as the series draws them; never invent them.** Render the set with the episode's own
+   code first and write from that picture. I wrote "light grey interior" for three rounds; the series'
+   cabin (`cabin(t, {leo: null})`) is a caramel-tan bench between solid dark pillars, and the model faithfully
+   drew my invention instead. **Every place is also described in full in every shot.** The model has no memory between shots. Unstated,
    the car's interior was yellow-brown in one shot and dark brown in another. After the interior was spelled
    out ("light grey seats, grey door panels, grey dashboard, Leo's blue car seat in the middle of the back
    seat"), S10 matched.
 5. **Light words change faces.** "Palm-tree shadows sliding across him" made Leo's face brown. Ask for
    "soft even daylight on his face".
-6. **References keep identity; KitCut frames keep KitCut.** Leo's picture (a crop from an episode frame)
-   and the car's picture held both across shots. A first and last frame taken from the KitCut episode gives
+6. **Give every place its picture too: the set drawn empty by the series' own code.** The cabin
+   (`cabin(t, {leo: null})` in the episode's film.js, its draw swapped in a copy) took the inside shots from
+   "a generic car with rear doors" to the series' own caramel bench and dark pillars. It also brought the
+   series' paper-and-crayon texture, and the model still chose the camera and the acting
+   (`S01_cabinref`). An environment reference keeps the world; a first or last frame would also fix the
+   action. **A reference only holds the angles it shows:** cutting to a side view of Leo's feet brought back
+   a generic door with a handle (v8 S03). Shoot from the reference's angle, or draw the new angle with the
+   engine too. **References keep identity; KitCut frames keep KitCut.** A picture of Leo and a picture of the car
+   kept both recognisable across shots. **Draw the references with the KitCut engine, never crop them from
+   an episode frame:** a crop carries its incidental details into every shot. v5's Leo wore his
+   car-seat harness in the shop, and a chocolate smudge from a later scene became "a brown button nose" in
+   every shot. Render the cast alone, large, on a plain ground, one character per picture
+   (`sheet_film.js` beside this file, rendered with `sketch-render.py --stills` on a copy of the episode).
+   **Draw the character as they are in the part of the episode being re-shot.** Leo's sunglasses are over
+   his eyes in ep. 12's first minute (the cast's default); `glasses: 'none', sunUp: true` pushes them up,
+   which is a later scene's state. Write the subject's description from the sheet, not from a scene. A first and last frame taken from the KitCut episode gives
    a clean clip that **looks exactly like KitCut**, which defeats the point. Use first/last frames only to
    bridge two existing shots.
-7. **A shot with no character in it gets no character picture** (`image_refs` empty). Otherwise the model
-   tends to put that character in. The style sentence alone kept the look in S09.
+7. **A shot with no character in it gets no character picture.** Otherwise the model tends to put that
+   character in. The style sentence alone kept a recognisable look (S04), but it drifted heavier in S09;
+   use the style-only reference of rule 14.
 8. **Label numbering follows picture order, and is checked.** `<Subject N>` is the Nth picture of that
    shot. Renumber in one pass: two sequential string replaces swapped a label twice. The builder's lint
    fails a prompt whose label sits next to another subject's words.
 9. **One narrator means no character voices.** Series rule (Leo): every line is the narrator's. The
    soundscape lists only physical sounds and ends "There is no speech and no vocal sound of any kind; a
-   narrator is added later." Check every shot's own audio for speech before mixing.
+   narrator is added later." It works: speech recognition found **0 words** in the model-only audio of
+   both pilot minutes. Check it with `transcribe-words.py <model-only wav> --model small --device cpu`,
+   and run the same command on the finished minute as a **positive control**: it must find the
+   narration (116 words here), or a "0 words" proves nothing.
 10. **Size the shot to the narration.** Each shot fills the time between line starts, from 4 to 15 s.
     Under 4 s, merge with a neighbour. The assembly trims or holds each shot to its exact slot.
+11. **The picture must tell the narration's joke at the moment it is said.** Read every shot against
+    its own lines, not just the episode's plot. v5 showed the chocolate shelf 6 s before the word
+    "Chocolate", took Leo out of the car he was queuing in, and kept rear doors beside him while the narrator
+    said he sits next to neither door. **Every object a joke rests on must be stated so the joke reads:**
+    a queue faces away (tail lights), and the other dad's car is a two-door whose seat visibly tips
+    forward. Otherwise "other dads fold the seat" shows a four-door car where nothing folds. A reveal belongs on its word: a cut timed inside the clip (`At
+    00:07.000`) puts it there.
+12. **Name the emotion, not the face.** "Puffs out his cheeks and narrows his eyes" read as a sulk;
+    "frowning with concentration" as worry. Write "a proud, confident smile" or "counts cheerfully".
+13. **Track each thing's state from shot to shot.** The car is dusty until it has been washed. One
+    "now clean and shiny" in a queueing shot broke continuity.
+14. **A shot with no character still gets a reference, a style-only one.** With no picture at all, S09
+    came out in a heavier crayon than its neighbours. Give it the series' world drawn alone (Leo's street
+    from `SK.cast.street`) as `<Subject 1> is the drawing style …`, marked `partially_preserved - only the
+    drawing style … are retained; the place shown is a different one`.
+15. **Have a fresh agent review the minute against the original's same minute** (the `video-review`
+    skill, both review packs). It found the story faults I had missed while checking each shot's
+    technique.
+16. **Show what a character sees from their own point of view, not over their shoulder.** Over Leo's
+    shoulder the queue he counted was visible, but the model split him from his car seat (the empty seat
+    beside him, Leo standing on the bench). Cut instead: him from the angle the set's picture covers, then
+    his point of view (his finger tapping each car from the bottom of the frame), then back to him.
+17. **Describe only what this camera can see.** In an outside shot, describing the car's cabin drew a
+    second, empty car seat in the front (v8 S08). The interior description belongs to inside shots; from
+    outside, say exactly what shows through the glass.
 
 ## Re-shooting an existing KitCut episode
 
@@ -145,7 +195,24 @@ non_diegetic_music:       N/A when the episode's own score is laid on later
 
 ## Open questions (update as they are answered)
 
-- Yield: of 3 seeds of one shot, how many are usable?
+- ~~Yield: of 3 seeds of one shot, how many are usable?~~ **3 of 3**, nearly identical (v8 S01, seeds 42, 7
+  and 99). With full references and a detailed prompt H3 is consistent; its failures are systematic, so fix
+  the prompt rather than re-rolling seeds. Budget one render per shot plus a fix pass for the shots the
+  review flags (3 of 11 in v8).
 - Do 9 s shots hold up as well as 5 s ones?
 - Does the full 350–500-word description beat ~250 words?
-- Does a shot's own audio ever contain speech despite the soundscape line?
+- ~~Does a shot's own audio ever contain speech despite the soundscape line?~~ No: 0 words in 143 s
+  across v1 and v5.
+
+## Where the pilot ended (v8, 2026-10-24)
+
+`temp/h3test/v8/leo-ep12-h3-v8.mp4` (side by side with KitCut, v1 and v5: `temp/h3test/leo-ep12-compare-grid.mp4`;
+the full log: `temp/h3test/EXPERIMENTS.md`). In order of effect: references drawn by the series' own code
+(above all the empty cabin), MiniMax's six-section format written in full, a fresh review against the
+original, and the right angle per beat. Cost: about 1.2–1.4 GPU-minutes per second of film at 768p, plus a fix
+pass of about 3 shots in 11.
+
+## What the format bought (v1 → v5, same 11 shots, same seed)
+
+Dad's legs: in 5 shots → 0. Car interior: 3 different colours → grey in every shot. Garbled signs: 2 → 0.
+The two-door coupe reads right (S08), and every written cut landed. Machine time: 89 min for 71.6 s of film.
