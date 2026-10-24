@@ -413,6 +413,15 @@ custom look in days for $500–2,400, and series sold as series.
   love story, F7 grandparent's life story, F14 bar/bat mitzvah film, F10 social stories. Each ad
   is 20–30 s of a finished example film, then a family's reaction, then one line and "From
   $X". (Wondertoon's and Custom Love Story's ads show what works: a free preview and reactions.)
+- **The ad format (the owner's idea, 2026-10-23): a vertical split screen**, the cartoon on top
+  and the person it is about watching it below: the child seeing his own episode, grandparents
+  watching their life story, a couple their love story, an owner and pet watching the pet's.
+  The reaction must be real and recorded by the family (a phone just below the screen, at eye
+  level, the cartoon's sound audible so the two can be lined up by sound; the first viewing
+  only). Open on the moment of recognition, then three or four gags each with its laugh, then
+  the offer; 15 s and 30 s cuts. Post it unpaid on Instagram/TikTok first: comments asking "how
+  do I get one" are free demand. A child's face in a paid ad: keep the school, home and street
+  out of the chosen scenes.
 - **The ask is a conversation, not a checkout:** a short form ("tell us about your family",
   photos optional) and a booked 20-minute call with the director. The price shows on the page.
 - **Audience:** parents (Meta's parent segments), pet owners, newly engaged and anniversary life
