@@ -633,6 +633,12 @@ Things to know:
 - **After a rebuild of the VM** the tunnel's credentials are still on the data disk, but the unit,
   the key's line and the machine's host key are new: `ssh-tunnel.sh up`, `ssh-tunnel.sh key`,
   delete `host-key.pub`, `cloud-env.sh`, paste the new script.
+- **Another machine behind the address** (Azure -> kc-local, 2026-10-13) has another host key, and
+  a pasted script that pins the old one stops every session at "host key changed". Delete
+  `host-key.pub`, run `KITCUT_VM=<machine> cloud-env.sh` (it reads the key over the VPN), paste.
+  The script answers to `kitcut-studio-1` (what `ops.sh` asks for by default) and to the machine's
+  own name, and pins the key under the fixed alias `kitcut-studio`. `cloud-env.sh` makes the
+  session's connection with the pinned key before it writes anything, so a stale key fails there.
 - **Never a `config.yml` in `~/.cloudflared`**: the studio's own tunnel (`run-tunnel.sh`) would
   read it at its next start. This tunnel's config is passed with `--config`.
 - **Why a firewall rule and not Cloudflare Access**: Access with a service token is the stronger

@@ -23,6 +23,11 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOST="${KITCUT_SSH_HOST:-ssh.kitcut.ai}"
 VM="${KITCUT_VM:-kitcut-studio-1}"
+# A session names the studio as ops.sh's default does (kitcut-studio-1), whichever machine is behind
+# ssh.kitcut.ai, so the script answers to that name and to the machine's own. The host key is pinned
+# under one alias that does not change with the machine.
+NAMES="kitcut-studio-1"; [ "$VM" = kitcut-studio-1 ] || NAMES="$NAMES $VM"
+PIN="kitcut-studio"
 ADMIN="kitcut"
 DIR="${1:?cloud-env.sh <private dir> [--pub|--test]}"
 mode="${2:-}"
@@ -41,21 +46,25 @@ gate="$(sed -n 's/^KITCUT_SSH_GATE=//p' "$DIR/gate.env" | tr -d '\r')"
 read -r hk_type hk_data _ < "$DIR/host-key.pub"
 [ "$hk_type" = ssh-ed25519 ] || die "$DIR/host-key.pub is not an ed25519 host key"
 
-if [ "$mode" = --test ]; then
-  printf '%s %s %s\n' "$VM" "$hk_type" "$hk_data" > "$DIR/known_hosts"
+# The connection a session makes, made from here with the pinned host key. The script is written
+# only after it succeeds: a machine moved behind ssh.kitcut.ai (Azure -> kc-local, 2026-10-13) has
+# another host key, and a script pinning the old one stops every session at "host key changed".
+probe() {
+  printf '%s %s %s\n' "$PIN" "$hk_type" "$hk_data" > "$DIR/known_hosts"
   ssh -i "$DIR/kitcut-cloud" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-    -o UserKnownHostsFile="$DIR/known_hosts" -o HostKeyAlias="$VM" -o ConnectTimeout=20 \
+    -o UserKnownHostsFile="$DIR/known_hosts" -o HostKeyAlias="$PIN" -o ConnectTimeout=20 \
     -o ProxyCommand="cloudflared access ssh --hostname $HOST --header 'x-kitcut-gate: $gate'" \
     "$ADMIN@$HOST" 'echo "reached $(hostname) as $(whoami), from ${SSH_CONNECTION%% *}"'
-  exit 0
-fi
+}
+if [ "$mode" = --test ]; then probe; exit 0; fi
 [ -z "$mode" ] || die "unknown argument: $mode"
+probe || die "$DIR/host-key.pub is not the key of the machine behind $HOST: delete it and run again with KITCUT_VM=<that machine>"
 
 out="$DIR/setup-script.sh"
 {
   cat <<EOF
 #!/bin/bash
-# KitCut: every session in this environment can reach the studio VM:  ssh $VM '<command>'
+# KitCut: every session in this environment can reach the studio ($VM):  ssh kitcut-studio-1 '<command>'
 # Generated $(date -u +%Y-%m-%d) by studio/deploy/cloud-env.sh (kitcut-hq/kitcut); change it there,
 # not here. It carries a private key and the gate secret: keep this environment to yourself.
 # A setup script that fails stops the session from starting, so this one always exits 0 and
@@ -76,11 +85,11 @@ EOF
   cat <<EOF
 KITCUT_KEY
   chmod 600 /root/.ssh/kitcut-studio
-  echo '$VM $hk_type $hk_data' > /root/.ssh/known_hosts.kitcut
+  echo '$PIN $hk_type $hk_data' > /root/.ssh/known_hosts.kitcut
   cat > /root/.ssh/config.kitcut <<'KITCUT_CONF'
-Host $VM
+Host $NAMES
   HostName $HOST
-  HostKeyAlias $VM
+  HostKeyAlias $PIN
   User $ADMIN
   IdentityFile /root/.ssh/kitcut-studio
   IdentitiesOnly yes
