@@ -105,6 +105,21 @@ KITCUT_CONF
     mv /root/.ssh/config.new /root/.ssh/config
   fi
   chmod 600 /root/.ssh/config
+  # A session with no repository attached reads no CLAUDE.md of ours and looks the name up in DNS
+  # (2026-10-25: "kc-local doesn't resolve"), so the user-level memory says how it is reached.
+  install -d -m 700 /root/.claude
+  if ! grep -qs 'kitcut-studio-ssh' /root/.claude/CLAUDE.md; then
+    cat >> /root/.claude/CLAUDE.md <<'KITCUT_NOTE'
+
+<!-- kitcut-studio-ssh -->
+## The KitCut studio ($VM) is reachable from this session over SSH only
+
+\`ssh kitcut-studio-1 '<command>'\` (or \`ssh $VM '<command>'\`) runs a command on the studio
+machine as \`kitcut\`. The names are aliases in /root/.ssh/config.kitcut, carried through
+Cloudflare by cloudflared: they do not resolve in DNS, and plain HTTP to them never works. When asked
+about the studio or $VM, use ssh. The kitcut repo's \`studio/deploy/ops.sh\` and \`vm.sh\` use the same alias.
+KITCUT_NOTE
+  fi
   ssh -V; /usr/local/bin/cloudflared --version
 } > /var/log/kitcut-setup.log 2>&1
 exit 0
