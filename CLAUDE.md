@@ -790,6 +790,11 @@ Each cost an hour or more in one session (2026-09-29/30). Check here first.
 - **Prefer the CLI to the dashboard.** `vercel`, `gh`, `az` and `vm.sh` are all
   allowed. A Vercel env var is `vercel env add NAME production`, a redeploy is
   `vercel redeploy <url>`. Only fall back to a browser if no CLI covers it.
+- **Getting new pages indexed means Google, in Chrome.** Find the pages Google does not
+  know (`inspect_url` on the sitemap's URLs), then press "Request indexing" for each in
+  Search Console's URL Inspection in Chrome (there is no API for it), and resubmit the
+  sitemap. Never use, suggest or mention Yandex, and do not report on IndexNow, which
+  feeds it (owner, 2026-10-25).
 
 ## Projects: the memory that outlives the session
 
