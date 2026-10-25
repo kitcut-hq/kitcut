@@ -254,6 +254,29 @@ Check the whip, the turns and every transition frame by frame from a `--draft` r
 (`ffmpeg ... -vf "fps=30,scale=216:216,tile=6x5"`), not only from stills: an empty frame between two
 scenes only shows in motion.
 
+## A benchmark film (a race we measured ourselves, music only)
+
+Models raced on the same task and replayed from the real timestamps; then why, by how much, what
+it cost. Worked examples (local): projects/nemotron-8gb, frontier-race, video-race and their
+-short versions; docs/reference.md "Benchmark films".
+
+1. **Measure first**: `scripts/llm-race.py` (language models, local servers too) or
+   `scripts/video-race.py` (video models). `--plan`, one wave, then the matrix with medians. One
+   effort setting on every model, said on screen. Tasks with checks a machine can score.
+2. **The film reads race.json and nothing else measured**; numbers we did not measure go in a
+   facts.json with a source each. `"modules": ["kit", "bench"]`. Video clips: leave windows,
+   return placements from `SK.REPORT()`, then `scripts/clip-overlay.py`.
+3. **Shape**: the finding on frame 0 with both sides of every comparison named; each round a held
+   question, the race (strobe cut in, laid out on the cut, a time-lapse once nothing differs), the
+   result given the screen; a board that names the winners in big type; the method small.
+4. **Nothing holds still**: stagger reveals, `pushKeys`, `strobe` cuts, a boiling `highlight`.
+   Look at a 1 fps sheet; a board that lands in 2 s and sits for 8 reads dead.
+5. **Sound from the film's clock**: `B.music(sections)` and a cue per data event; `"mix":
+   {"sfx_db": 10}`, `"master": {"lowpass": 15000, "tp": -3.5}`, audio at 256k.
+6. **A Short is laid out again** for 1080x1920 (one idea a screen, type 44 px+, nothing to read
+   in the bottom fifth or under the button column), sharing the data by a link, not shrunk.
+7. A fresh `video-review` pass before anything is shown; expect NOT YET and fix it.
+
 ## A YouTube Short (9:16, the words in the picture)
 
 A narrated film for a phone feed: `"frame": [1080, 1920]`, `"fps": 30` and `"modules": [...,
