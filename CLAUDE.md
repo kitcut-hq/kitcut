@@ -867,6 +867,7 @@ which cannot encode the glyphs at all.
 | `scripts/narration-check.py` | is a film's narration its word-for-word script (L01... lines, the spoken words in quotes)? Against vo.json, the timeline or the finished film's captions; `_narration.py` is the rule, which the studio also holds vo.json to on every save (`validate.narration_script`) |
 | `scripts/showreel.py` | a reel of finished films: one at a time with a caption, then 2x2, 3x3 around the logo, 4x4, a card; every cut on a beat and the music arranged from the same acts (`config/showreel/`, three styles); `--raw` the short cut. KitCut's launch reel is `projects/kitcut-launch/` |
 | `scripts/edl-cut.py` | a film from hand-chosen ranges of a few silent takes, with an elapsed counter driven by SOURCE time so it stays true over a sped-up wait |
+| `scripts/image-bench.py` | rank image models with checkable prompts: pictures through OpenRouter under a cap, OCR, blind packets for two Claude judges and a third on disputes, scores and labelled grids; spec and judges' rules in `config/bench/`, docs/reference.md "Ranking image models" |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
 | `sketch/` | the sketch-film engine (`engine.js`), cast (`props.js`), collage pieces (`collage.js`) and player page (`player.html`); `scripts/_sketch.py` and `_sketchaudio.py` are the Python half, `check-sketch.py` their test |
 | `config/sketch/example/` | a 12 s sketch film to copy into a new project: manifest, `film.js`, score, cues |

@@ -1262,3 +1262,24 @@ than the machine. Before starting a bulk job or a ship on the studio's VM, look 
 capped to how much (`ops.sh usage`, `systemctl list-units 'kitcut-*' 'sports-*'`), and do one
 heavy thing at a time: a release's tests and a 160 GB upload were both started because each was
 "capped and niced".
+
+### KI-067 · open · studio · On kc-local, a push to studio-poc wiped uncommitted edits in /srv/kitcut/repo
+
+**Symptom.** 2026-10-25, 13:22:58 PDT: sections added to `docs/reference.md`, a fix in the
+video-h3 skill and another session's edits to tracked files in `/srv/kitcut/repo` were gone, and
+`git status` showed a clean tree. The reflog read "checkout: moving from studio-poc to
+studio-poc" and "branch: Reset to origin/studio-poc", 36 s after another session's push of
+20004f3. Untracked files survived.
+**Cause.** `kitcut-autoship.service` (`studio/deploy/autoship.py`) ships studio-poc whenever
+GitHub's head moves. It runs `git checkout -q -f -B studio-poc origin/studio-poc` in the checkout
+it runs from, `/srv/kitcut/repo`, which is also where sessions on kc-local start. `-f` discards
+changes to tracked files without a word. That is by design: it mirrors GitHub (live first,
+tested after; the owner's choice of 2026-10-16) and never looks for a dirty tree. The same reset
+is in the reflog at 00:34 that morning and four times on 2026-10-23.
+**Workaround.** Treat `/srv/kitcut/repo` as the deploy mirror. Edit in a worktree on its own
+branch (`git worktree add /srv/kitcut/worktrees/<name> -b <branch> origin/studio-poc`, then
+symlink `.venv` from the repo so scripts run). Push from a session that can: kc-local has no
+GitHub credentials, and its `origin` is the local bare repo, which autoship fills from the public
+GitHub URL.
+**Fix, not made.** autoship could refuse to move a dirty checkout, or stash first and say so.
+That is the owner's call, because it can delay a ship.

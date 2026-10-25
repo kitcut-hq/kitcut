@@ -1,0 +1,383 @@
+{
+  "_about": "Image-model bench, October 2026: twelve prompts whose facts can be checked, one picture per model per prompt, scored by OCR where the check is text and by a Claude judge (one yes/no question per fact, the TIFA/DSG method) otherwise. scripts/image-bench.py runs it; docs/market-image-video-models-2026.md is the design.",
+  "id": "image-bench-2026-10",
+  "aspect": "1:1",
+  "resolution": "1K",
+  "quality": "medium",
+  "cap_usd": 5.2,
+  "models": [
+    "openai/gpt-image-2.5-sunburst",
+    "openai/gpt-image-2.5-flare",
+    "google/gemini-nano-banana-2.1",
+    "google/gemini-3-pro-image",
+    "bytedance-seed/seedream-5-0-pro",
+    "bytedance-seed/seedream-5-0-flash",
+    "microsoft/mai-image-2.6",
+    "x-ai/grok-imagine-image-2.0"
+  ],
+  "labels": {
+    "openai/gpt-image-2.5-sunburst": "GPT Image 2.5 Sunburst",
+    "openai/gpt-image-2.5-flare": "GPT Image 2.5 Flare",
+    "google/gemini-nano-banana-2.1": "Nano Banana 2.1",
+    "google/gemini-3-pro-image": "Nano Banana Pro",
+    "bytedance-seed/seedream-5-0-pro": "Seedream 5 Pro",
+    "bytedance-seed/seedream-5-0-flash": "Seedream 5 Flash",
+    "microsoft/mai-image-2.6": "MAI-Image 2.6",
+    "x-ai/grok-imagine-image-2.0": "Grok Imagine 2.0"
+  },
+  "prompts": [
+    {
+      "id": "p01-sign",
+      "ability": [
+        "text"
+      ],
+      "prompt": "A photo of a small bakery storefront in the morning. Above the door, a wooden sign reads exactly: GRAND OPENING. Below the window, a small chalkboard reads exactly: Saturday 10 AM.",
+      "checks": [
+        {
+          "id": "ocr-1",
+          "type": "ocr_contains",
+          "expect": "GRAND OPENING"
+        },
+        {
+          "id": "ocr-2",
+          "type": "ocr_contains",
+          "expect": "Saturday 10 AM"
+        },
+        {
+          "id": "j-1",
+          "type": "judge",
+          "q": "Is the main sign's text exactly GRAND OPENING, spelled correctly?"
+        },
+        {
+          "id": "j-2",
+          "type": "judge",
+          "q": "Is there a small chalkboard whose text is exactly 'Saturday 10 AM'?"
+        },
+        {
+          "id": "j-3",
+          "type": "judge",
+          "q": "Is it a bakery or shop front with a door and a wooden sign above it?"
+        }
+      ]
+    },
+    {
+      "id": "p02-poster",
+      "ability": [
+        "text",
+        "layout"
+      ],
+      "prompt": "A minimalist poster pasted on a brick wall. Three lines of large bold text, one under another: THE NIGHT MARKET / EVERY FRIDAY / 6 PM TO MIDNIGHT. A small paper lantern illustration under the text.",
+      "checks": [
+        {
+          "id": "ocr-1",
+          "type": "ocr_contains",
+          "expect": "THE NIGHT MARKET"
+        },
+        {
+          "id": "ocr-2",
+          "type": "ocr_contains",
+          "expect": "EVERY FRIDAY"
+        },
+        {
+          "id": "ocr-3",
+          "type": "ocr_contains",
+          "expect": "6 PM TO MIDNIGHT"
+        },
+        {
+          "id": "j-1",
+          "type": "judge",
+          "q": "Are there exactly three lines of headline text, in the order THE NIGHT MARKET, EVERY FRIDAY, 6 PM TO MIDNIGHT, all spelled correctly?"
+        },
+        {
+          "id": "j-2",
+          "type": "judge",
+          "q": "Is there a small lantern illustration below the text?"
+        },
+        {
+          "id": "j-3",
+          "type": "judge",
+          "q": "Is the poster on a brick wall?"
+        }
+      ]
+    },
+    {
+      "id": "p03-ukrainian",
+      "ability": [
+        "text"
+      ],
+      "prompt": "A cafe chalkboard sign on an easel on a sidewalk. Written in white chalk, the Ukrainian words: Кава з собою",
+      "checks": [
+        {
+          "id": "j-1",
+          "type": "judge",
+          "q": "Does the chalkboard read exactly 'Кава з собою' in Cyrillic, every letter correct (no Latin look-alikes, no missing or extra letters)?"
+        },
+        {
+          "id": "j-2",
+          "type": "judge",
+          "q": "Is it a chalkboard on an easel on a sidewalk?"
+        }
+      ]
+    },
+    {
+      "id": "p04-count",
+      "ability": [
+        "counting"
+      ],
+      "prompt": "Top-down photo of a white plate on a wooden table with exactly four red apples and exactly two green pears on it, and nothing else on the plate.",
+      "checks": [
+        {
+          "id": "j-1",
+          "type": "judge",
+          "q": "Are there exactly four red apples on the plate? Count them."
+        },
+        {
+          "id": "j-2",
+          "type": "judge",
+          "q": "Are there exactly two green pears on the plate? Count them."
+        },
+        {
+          "id": "j-3",
+          "type": "judge",
+          "q": "Is there nothing else on the plate besides the apples and pears?"
+        }
+      ]
+    },
+    {
+      "id": "p05-spatial",
+      "ability": [
+        "layout"
+      ],
+      "prompt": "On a wooden desk: a blue mug on the left, a yellow book on the right, and a black pen lying on top of the yellow book. Plain wall behind.",
+      "checks": [
+        {
+          "id": "j-1",
+          "type": "judge",
+          "q": "Is the mug blue and on the left side of the desk?"
+        },
+        {
+          "id": "j-2",
+          "type": "judge",
+          "q": "Is the book yellow and on the right side?"
+        },
+        {
+          "id": "j-3",
+          "type": "judge",
+          "q": "Is a black pen lying on top of the yellow book (not beside it)?"
+        }
+      ]
+    },
+    {
+      "id": "p06-binding",
+      "ability": [
+        "binding"
+      ],
+      "prompt": "A girl in a red coat holding a green umbrella stands next to a boy in a yellow raincoat holding a blue umbrella, on a rainy street.",
+      "checks": [
+        {
+          "id": "j-1",
+          "type": "judge",
+          "q": "Is the girl wearing a red coat?"
+        },
+        {
+          "id": "j-2",
+          "type": "judge",
+          "q": "Is the girl holding a green umbrella?"
+        },
+        {
+          "id": "j-3",
+          "type": "judge",
+          "q": "Is the boy wearing a yellow raincoat?"
+        },
+        {
+          "id": "j-4",
+          "type": "judge",
+          "q": "Is the boy holding a blue umbrella?"
+        }
+      ]
+    },
+    {
+      "id": "p07-exclude",
+      "ability": [
+        "exclusion"
+      ],
+      "prompt": "An empty city street at dawn with no people, no cars, and no signs, letters or text anywhere in the picture.",
+      "checks": [
+        {
+          "id": "ocr-none",
+          "type": "ocr_none"
+        },
+        {
+          "id": "j-1",
+          "type": "judge",
+          "q": "Is the picture free of any people?"
+        },
+        {
+          "id": "j-2",
+          "type": "judge",
+          "q": "Is the picture free of any cars or vehicles?"
+        },
+        {
+          "id": "j-3",
+          "type": "judge",
+          "q": "Is the picture free of any signs, letters or text?"
+        }
+      ]
+    },
+    {
+      "id": "p08-hands",
+      "ability": [
+        "anatomy"
+      ],
+      "prompt": "Close-up photo of two hands playing a grand piano, natural daylight.",
+      "checks": [
+        {
+          "id": "j-1",
+          "type": "judge",
+          "q": "Are there exactly two hands?"
+        },
+        {
+          "id": "j-2",
+          "type": "judge",
+          "q": "Does every visible hand have five fingers and plausible joints (no fused, extra or missing fingers)?"
+        },
+        {
+          "id": "j-3",
+          "type": "judge",
+          "q": "Do the piano keys look regular (black keys in groups of two and three, no melted keys)?"
+        }
+      ]
+    },
+    {
+      "id": "p09-portrait",
+      "ability": [
+        "binding",
+        "photoreal"
+      ],
+      "prompt": "Photorealistic portrait of an elderly fisherman with a grey beard, wearing a yellow raincoat, holding a silver fish, a harbor with boats behind him, golden hour light.",
+      "checks": [
+        {
+          "id": "j-1",
+          "type": "judge",
+          "q": "Is he an elderly man with a grey beard?"
+        },
+        {
+          "id": "j-2",
+          "type": "judge",
+          "q": "Is he wearing a yellow raincoat?"
+        },
+        {
+          "id": "j-3",
+          "type": "judge",
+          "q": "Is he holding a silver fish?"
+        },
+        {
+          "id": "j-4",
+          "type": "judge",
+          "q": "Is there a harbor with boats behind him?"
+        },
+        {
+          "id": "j-5",
+          "type": "judge",
+          "q": "Does it look like a photograph rather than a painting or render?"
+        }
+      ]
+    },
+    {
+      "id": "p10-product",
+      "ability": [
+        "text",
+        "photoreal"
+      ],
+      "prompt": "Product photo of a white sneaker with the word KITCUT printed on its side, on a pastel pink background, soft studio lighting.",
+      "checks": [
+        {
+          "id": "ocr-1",
+          "type": "ocr_contains",
+          "expect": "KITCUT"
+        },
+        {
+          "id": "j-1",
+          "type": "judge",
+          "q": "Is the word on the shoe exactly KITCUT, spelled correctly?"
+        },
+        {
+          "id": "j-2",
+          "type": "judge",
+          "q": "Is it a white sneaker?"
+        },
+        {
+          "id": "j-3",
+          "type": "judge",
+          "q": "Is the background pastel pink?"
+        }
+      ]
+    },
+    {
+      "id": "p11-diagram",
+      "ability": [
+        "text",
+        "layout"
+      ],
+      "prompt": "A clean flat infographic on a white background: three labelled steps in a row from left to right, Write, Draw, Publish, connected by arrows.",
+      "checks": [
+        {
+          "id": "ocr-1",
+          "type": "ocr_contains",
+          "expect": "Write"
+        },
+        {
+          "id": "ocr-2",
+          "type": "ocr_contains",
+          "expect": "Draw"
+        },
+        {
+          "id": "ocr-3",
+          "type": "ocr_contains",
+          "expect": "Publish"
+        },
+        {
+          "id": "j-1",
+          "type": "judge",
+          "q": "Are there exactly three steps, labelled Write, Draw and Publish, in that order from left to right?"
+        },
+        {
+          "id": "j-2",
+          "type": "judge",
+          "q": "Are the steps connected by arrows pointing left to right?"
+        },
+        {
+          "id": "j-3",
+          "type": "judge",
+          "q": "Is the background white and the style flat (not photographic)?"
+        }
+      ]
+    },
+    {
+      "id": "p12-style",
+      "ability": [
+        "style"
+      ],
+      "prompt": "A watercolor painting of a red fox sitting in a snowy forest, visible paper texture and soft washes.",
+      "checks": [
+        {
+          "id": "j-1",
+          "type": "judge",
+          "q": "Does it look like a watercolor painting (soft washes, visible paper texture), not a photo or digital render?"
+        },
+        {
+          "id": "j-2",
+          "type": "judge",
+          "q": "Is there a red fox, sitting?"
+        },
+        {
+          "id": "j-3",
+          "type": "judge",
+          "q": "Is the setting a snowy forest?"
+        }
+      ]
+    }
+  ],
+  "_not_tested": "FLUX 3 / FLUX 3 Klein (Black Forest Labs), Qwen-Image 2.1 (Alibaba), Recraft V4.1 and Krea: this OpenRouter account's allowed-providers setting does not route to their providers (refused 2026-10-25).",
+  "_hard_round": "Four harder prompts (a clock at 4:35, a wine glass full to the brim, a five-line menu with prices, eleven ducks) were planned on 2026-10-25 and refused: the OpenRouter key's own total limit was reached (403 'Key limit exceeded'), so nothing was charged. Re-add them when the key allows."
+}

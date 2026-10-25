@@ -22,7 +22,7 @@ release needs four large GPUs; Wan2GP streams the model through RAM.
 | Setting | Value | Why |
 |---|---|---|
 | model | `minimax_h3_fasth3_omni` (FastH3, 8 steps, pruned 20B, int8) | Fastest. Takes reference pictures **and** first/last frames. |
-| `config` | `gguf_q4_k_m,lower_ram` | Q4 text encoder (the Q2 one reads prompts worse). |
+| `config` | `gguf_q4_k_m` | Q4 text encoder (the Q2 one reads prompts worse). `config` is positional -- for FastH3 Omni the slots are Text Encoder, Video VAE, DiT Denoising Priority -- and a value in the wrong slot is dropped without a word (`normalize_config_selection`). The pilot asked for `gguf_q4_k_m,lower_ram`: `lower_ram` landed in the VAE slot and every shot ran at the default "Lower VRAM" (the settings saved inside each render read `gguf_q4_k_m`). To try Lower RAM, put it third: `gguf_q4_k_m,,lower_ram`, and check the saved settings. |
 | `resolution` | `1344x768` | **Never 480p**: at 480p Leo turned into another boy halfway through a shot. |
 | `seed` | fixed (42) | So an experiment changes one thing. |
 
