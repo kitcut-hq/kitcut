@@ -949,6 +949,11 @@ These come from how the repo is actually used — follow them without being aske
   `ruff format` are clean on it, and
   `python scripts/check-script.py --changed` passes (the check-script skill
   is the full review).
+- **Report a merge in one line.** Once a PR is merged, say "Pushed and merged
+  into `<branch>`" and nothing more: no PR link and no commit id, because the
+  owner does not review a merged PR. A PR left open is reported with its link.
+- **Ask less.** When the owner has approved the work, carry it through instead
+  of asking about each step.
 
 ## Agent skills
 
