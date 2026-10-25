@@ -867,6 +867,10 @@ which cannot encode the glyphs at all.
 | `scripts/narration-check.py` | is a film's narration its word-for-word script (L01... lines, the spoken words in quotes)? Against vo.json, the timeline or the finished film's captions; `_narration.py` is the rule, which the studio also holds vo.json to on every save (`validate.narration_script`) |
 | `scripts/showreel.py` | a reel of finished films: one at a time with a caption, then 2x2, 3x3 around the logo, 4x4, a card; every cut on a beat and the music arranged from the same acts (`config/showreel/`, three styles); `--raw` the short cut. KitCut's launch reel is `projects/kitcut-launch/` |
 | `scripts/edl-cut.py` | a film from hand-chosen ranges of a few silent takes, with an elapsed counter driven by SOURCE time so it stays true over a sped-up wait |
+| `scripts/llm-race.py` | race language models on the same tasks (OpenRouter, or a local llama.cpp server it starts under the GPU lock): every streamed piece with its arrival time, the bill, the check; `race.json` is what a benchmark film replays |
+| `scripts/video-race.py` | race video models on the same prompts (OpenRouter video API): each job's timeline, bill, file, refusals, OCR and Whisper checks |
+| `scripts/clip-overlay.py` | lay real video clips into a rendered sketch film, at the windows and times its `SK.REPORT()` names |
+| `sketch/bench.js` | the benchmark-film module: replayed race lanes on a zooming time axis, time-lapse clock, start lights, strobe cuts, ink stamps, boiling highlights, a score from the film's sections (docs/reference.md "Benchmark films") |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
 | `sketch/` | the sketch-film engine (`engine.js`), cast (`props.js`), collage pieces (`collage.js`) and player page (`player.html`); `scripts/_sketch.py` and `_sketchaudio.py` are the Python half, `check-sketch.py` their test |
 | `config/sketch/example/` | a 12 s sketch film to copy into a new project: manifest, `film.js`, score, cues |
