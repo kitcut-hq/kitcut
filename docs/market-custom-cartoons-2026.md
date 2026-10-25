@@ -447,6 +447,51 @@ custom look in days for $500–2,400, and series sold as series.
 private-school auction lots (donate one season; the bids price it), bar/bat mitzvah planners,
 estate planners who bundle legacy films, local screenings, word of mouth.
 
+## 7. The campaign, ready to load (written 2026-10-25)
+
+**Meta state on 2026-10-25** (read in Business Suite): no KitCut Page, Instagram account,
+business portfolio, ad account or pixel exists. The owner's portfolios are Botmakers LLC
+(verified Oct 2023; bot Pages; one disabled ad account "Switch Career"; ad-account creation
+limit 1), Botmakers (Page and Instagram botmakers_net), Tempo Date Athletes, and six loose Pages.
+Creating the Page, the Instagram account, an ad account and adding a card is the owner's to do.
+
+**Structure.** One campaign, objective Leads (website conversion "Lead" from the pixel on
+kitcut.ai/made-for-you; switch to an instant form only if the page converts badly), ABO, one ad
+set per use case, $25 a day each, 14 days, US, Advantage+ placements limited to Reels, Stories
+and Feed on Facebook and Instagram. Every ad set lands on its own URL
+(kitcut.ai/made-for-you/<case>) with `utm_source=meta&utm_campaign=made-for-you&utm_content=<case>`.
+
+| Ad set | Audience (all US) | Landing | Example |
+|---|---|---|---|
+| kids | Parents with toddlers (1–2), preschoolers (3–5), early school (6–8) AND household income top 10% or top 10–25% of ZIP codes | /made-for-you/kids | Leo |
+| pets | Interests cats, dogs, pets AND income top 10–25% | /made-for-you/pets | Duchess |
+| love-story | Anniversary within 30 / 31–60 days, Newlywed (1 year) AND income top 25% | /made-for-you/love-story | love-story example |
+| grandparents | Age 35–60, interests genealogy / National Grandparents Day AND income top 25% | /made-for-you/grandparents | life-story example |
+| milestones | Parents with preteens (9–12) AND income top 10% | /made-for-you/milestones | (needs an example) |
+| social-stories | Parents with preschoolers and early school AND income top 25%; no health targeting, no "your child's condition" wording | /made-for-you/social-stories | Leo "The Haircut" |
+| broad (control) | Advantage+ audience with the kids ad set's choices as suggestions | /made-for-you/kids | Leo |
+
+**Ads.** 9:16 video, 15 s and 30 s per use case (the split-screen reaction cut replaces them
+once a reaction is filmed). Primary text, one per ad set:
+- kids: "Your child, the hero of their own cartoon series. Their real house, their real jokes,
+  their brother, the family car. Made by our studio from your photos and stories."
+- pets: "She has a personality. Now she has a series. Your pet's own cartoon, made by our
+  studio from your photos and stories."
+- love-story: "How you met, the terrible first date, the dog, the proposal. Your love story as
+  an animated film, made from your photos and your own telling."
+- grandparents: "Grandpa's life, one decade an episode: the town he grew up in, the boat, the
+  bakery, all of you. An animated life story for the family to keep."
+- milestones: "Thirteen years, as a film for the party screen. Made from your photos and
+  stories, premiered on the night."
+- social-stories: "Short cartoons starring your child that walk through a haircut, the dentist
+  or a new school before the day comes."
+Headline: "A cartoon about your family". Description: "Films from $2,000 · Series from $5,000".
+Button: "Learn more".
+
+**Measurement.** Lead = an enquiry submitted on the page (stored with its use case, URL and
+UTM/fbclid). Read per ad set every 2–3 days: spend, cost per Lead, Leads that describe a real
+family, calls booked, deposits. Kill rules as in section 6.
+
 **Needed before the test:** example films for each use case (the Duchess series is ready; the
 family series shows a real child, so either the owner agrees to show it in ads or a fictional
 family is made), a page per use case, and a Meta ad account for KitCut.
