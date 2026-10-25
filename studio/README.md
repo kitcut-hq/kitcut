@@ -999,7 +999,8 @@ A sketch film made by hand with `scripts/sketch-render.py` (a `projects/<id>/` f
 account's film and an episode of one of its projects with `studio/import_film.py`: a new studio id
 and folder (the manifest as slug "film", the film's code and pictures, the engine it was drawn with
 in `engine/`, `outputs/film.mp4` and its poster), a done `studio.json` with `source: "import"`, its
-`kitcut.studio_runs` record (owner, `project_id`, state done) written before anything goes online,
+`kitcut.studio_runs` record (owner, `member` -- the `--as` account, so the site's All videos says
+who made it -- `project_id`, state done) written before anything goes online,
 then `media.publish` (web copy, card, blobs), and with `--vm` the folder copied into the VM's home,
 where the film page, Download and Publish to YouTube read it. No credits are spent and no Claude
 call is made; `--unlisted` keeps it link-only; `--plan` says what it would do. A square or vertical

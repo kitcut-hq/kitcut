@@ -22,7 +22,9 @@ One document per run, snake_case, real UTC datetimes (the kitcut-web conventions
     client              whose film: "o:<workspace>" through the public site (X-Client-Ip;
                         "u:<account>" before workspaces, the same owner: clients.py), else
                         the visitor's IP as Cloudflare saw it, or "local"
-    member              who asked: "u:<account>", a member of that workspace (X-Member)
+    member              who asked: "u:<account>", a member of that workspace (X-Member); an
+                        import (import_film.py) names the account it was imported as. Films
+                        from before X-Member have none: a personal workspace's are its person's
     tokens              {input, output, cache_read, cache_write_5m, cache_write_1h, web_search}
     calls               one entry per Claude API response: {message_id, at, model, tokens...,
                         cost_usd}
@@ -81,6 +83,8 @@ class MongoStore:
             col = client[DB][COLLECTION]
             col.create_index([("created_at", -1)])
             col.create_index([("state", 1), ("created_at", -1)])
+            # a workspace's films, newest first (the site's All videos)
+            col.create_index([("client", 1), ("created_at", -1)])
             self._col = col
         return self._col
 

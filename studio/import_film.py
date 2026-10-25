@@ -323,6 +323,8 @@ async def main():
         "caps": list(films.RECIPES[args.look]),
         "length": length,
         "client": client,
+        # who made it: the account it is imported as (an "All videos" list says whose it is)
+        "member": "u:" + uid,
         "source": "import",
         "priority": 0,
         "auth": "api",
@@ -349,6 +351,7 @@ async def main():
         "kind": "film",
         "source": "import",
         "client": client,
+        "member": "u:" + uid,
         "host": store.HOST,
         "prompt": prompt,
         "title": title,
