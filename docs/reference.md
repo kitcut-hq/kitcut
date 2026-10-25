@@ -4339,6 +4339,63 @@ available for the selected model`. On 2026-09-26 the kitcut key permitted only
 meta, azure, openai and typesafe. So Seedream, Qwen, FLUX.2, Recraft, Riverflow and Gemini all
 refused, even though they are in the catalogue at a price. `--plan` cannot see that setting;
 paint one scene per model before trusting a price.
+On 2026-10-25 it served the October bench's eight models (OpenAI, Google, ByteDance, Microsoft,
+xAI) but still refused Black Forest Labs, Alibaba, Recraft, Tencent and Krea, so FLUX, Qwen-Image,
+Recraft and Krea could not be benched.
+
+**Ranking image models: `image-bench.py`.** This is the same idea as `paint-compare.py`, turned
+into a scored test. A bench spec (`config/bench/*.json`) gives models, one aspect, resolution and
+quality, and prompts whose facts can be checked. Each check is one of:
+- `ocr_contains`: the words are read off the picture by RapidOCR, normalised, and must match
+  exactly, letter for letter but not space for space: RapidOCR runs words together on lettering
+  that has the space ("EVERYFRIDAY", "10AM"), and in the October run that was 10 of its 11 fails;
+- `ocr_none`: there must be no text at all;
+- `judge`: one yes/no question for a Claude reader. This is the decomposed-checklist method
+  (TIFA/DSG, GenEval 2's Soft-TIFA) that the literature finds agrees best with people. The
+  judges' instructions are `config/bench/judge.md`: blind letters, "no" when unsure, a count in
+  the note, and hidden is not missing.
+
+The steps, each resumable:
+- `--plan`: price from the catalogue.
+- `--run --cap`: make the pictures. It records the spend the API reports, the seconds and the
+  size.
+- `--ocr`.
+- `--packets`: for each prompt, the pictures under shuffled letters, with the key kept apart, so
+  judges never see model names.
+- `--reconcile`: two judges' answers from `verdicts_a/` and `verdicts_b/` are merged; a third
+  judge's answer from `verdicts_c/` settles each disagreement. It writes `agreement.json` (raw
+  agreement, Cohen's kappa, the dispute counts, and OCR against the judge on the same text facts)
+  and `disputes.json` (every disagreement with all three answers and notes, and whether it is
+  settled).
+- `--score`: `scores.json`, a table per model and ability (seconds as a true median), and
+  labelled by-prompt grids for publishing.
+
+The October 2026 run (`projects/image-bench-2026-10/`): 8 models x 12 prompts, 96 pictures,
+$4.31 (1K square, quality medium where a model has the setting). Two Claude Opus 5.5 judges
+answered every check blind and agreed on 95.7% of 304 answers (kappa 0.72); a third settled the
+13 disputes. Final: Seedream 5 Flash and Grok Imagine 2.0 47 of 48; GPT Image 2.5 Sunburst and
+Flare, Seedream 5 Pro and Nano Banana Pro 45; MAI-Image 2.6 and Nano Banana 2.1 44. Every model
+failed the piano keys. The judges are not yet calibrated against people, so a one- or two-check
+gap is noise. The scores feed the blog's test articles (kitcut.ai/blog, 25 October 2026); the
+design and the evidence behind it are in `docs/market-image-video-models-2026.md`.
+
+**Ask about what the picture shows, never about what it hides.** p08 asked "does every visible
+hand have five fingers"; in a natural photo of hands at a piano no hand shows all five. One judge
+answered "cannot tell, so no" for all eight pictures, the other "no defect, so yes", and that one
+check made 8 of the run's 13 disputes. The third judge was told what the brackets in the question
+already said: a finger hidden by the angle is not a missing finger. Write such checks as a defect
+question ("does any hand show an extra, fused or impossibly placed finger?") and keep that rule in
+the judge's instructions.
+
+**People, not objects.** The next spec puts people in nearly every prompt: portraits across
+ages, hands doing something, two or more people with attributes to bind, a person holding a sign,
+the same person across scenes, and the counting prompt done with people ("exactly three people at
+a table"). The same applies to anything published from a run (cover, reel poster, first figure)
+and to video tests (a person talking, walking, holding identity across a shot). This is the
+owner's call (2026-10-25): the October spec had only three people prompts (p06, p08, p09), and
+its fruit-plate counting prompt became the reel's poster. People are also where the models
+differed: every model passed counting, layout and colour binding, and the spread was in hands
+and anatomy.
 
 ### The picture: `sketch-render.py`
 

@@ -460,7 +460,9 @@ def plan() -> int:
         s, e, subj, prompt = build(n)
         cfg = {
             "model_type": "minimax_h3_fasth3_omni",
-            "config": "gguf_q4_k_m,lower_ram",
+            # positional: text encoder, video VAE, DiT priority; "lower_ram" in the second slot was
+            # dropped silently, so the pilot always ran at the default "Lower VRAM" (SKILL.md)
+            "config": "gguf_q4_k_m",
             "image_mode": 0,
             "image_prompt_type": "",
             "video_prompt_type": "I" if subj else "",
