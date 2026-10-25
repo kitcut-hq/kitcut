@@ -5110,6 +5110,69 @@ python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 2,
 python scripts/sketch-render.py --manifest projects/<id>/sketch.json --preview narration
 ```
 
+### Benchmark films: a measured race replayed (`llm-race.py`, `video-race.py`, `clip-overlay.py`, `sketch/bench.js`)
+
+A benchmark film shows a race nobody else publishes: the same task sent to several models (or one
+model in two setups) at the same moment, every streamed piece or job status kept with the second
+it arrived, then replayed on screen from those timestamps. The leaderboards publish other
+people's numbers (`docs/market-llm-leaderboards-2026.md`); a race we run is a number only we have.
+The format came from a 58 s music-only X film of Nemotron 3.5 Bolt with DFlash off and on.
+
+**Language models: `scripts/llm-race.py`.** A manifest (`race.json`) names models and tasks with a
+check each (`regex`, `answer`, `python` against a hidden tests file); `--plan` prices it, `--summary`
+rebuilds race.json (per model and task the median run, every run, the median run's compacted
+stream). Each wave sends every lane at once. Runs keep the provider, every piece as `[t, "r"|"c",
+text]`, usage with reasoning tokens and OpenRouter's billed `cost`. A local model is a lane with
+`base_url` and `serve` (the script takes the GPU lock, starts the server, warms it, samples the
+card's memory, records llama-server's `timings` with `draft_n`/`draft_n_accepted`, stops it);
+`"replay_thinking": true` and `"replay_step": 0` keep a local model's thinking and each token's
+own time, so speculative decoding's bursts show. Set one reasoning effort on every model and say
+so: OpenRouter's defaults differ (Kimi K3.1 Pro max, Opus 5.5 and Grok 4.7 high, GPT-6.1 Sol and
+Gemini 4 Argon medium; Anthropic's docs give Opus medium). An account's allowed-providers setting
+can refuse a model (404 "No allowed providers"): that is the owner's setting, not ours.
+
+**Video models: `scripts/video-race.py`** does the same through OpenRouter's video API (submit,
+poll every 2 s, download): each job's status timeline, the billed cost, what was delivered, and
+checks a machine can score: `ocr` (RapidOCR 4 frames a second: pass if any frame reads the word,
+plus the share that do) and `speech` (Whisper: every phrase heard). A refused job is a result
+(`failed`, `fail_pick`: when, and the provider's words). A sketch film cannot play video, so it
+leaves windows and returns placements from `SK.REPORT()` (any stills run saves report.json);
+**`scripts/clip-overlay.py`** lays the clips in (trimmed, looped or held, scaled to cover) in one
+encode, a clip's sound at `audio_db` or matched to `audio_lufs`, the mix low-passed and limited.
+
+**The look: `sketch/bench.js`** (`"modules": ["kit", "bench"]`, screen-pixel drawing).
+`replay(lane)` turns a race.json lane into `at(raceT)` (hidden thinking spread over the thinking
+time, both ending on the measured totals); `timeMap` is the race clock (1x, then a time-lapse);
+`lane()` draws a racer as a bar on a shared time `axis()` that zooms out as the clock passes its
+end, so one long thinker squeezes the rest to slivers; `big: 'tokens'` makes the lane's big
+number its tokens so far (five copies of one race clock say nothing). From a frame-level study of
+the reference: `strobe` (a cut is one frame of the next scene, three blank frames, then it
+settles; scenes composed on their first frame), `stamp(..., {ghost: true})` (one faint frame, then
+the ink is down), `highlight` (a marker blob that boils 12 times a second behind a hero number),
+`settle` (per-run dots that land on their bar), `startLights`, `pushKeys`, and `music(sections)`, a
+score from the film's own sections for `SK.film({sound})`.
+
+**Measured on 2026-10-25** (local projects nemotron-8gb, frontier-race, video-race and their
+-short versions):
+- Nemotron 3.5 Bolt E4B on an RTX 3070 8 GB, llama.cpp b11856 prebuilt CUDA 12.8: off 89-93 tok/s
+  on every prompt; DFlash math 251 (2.75x, 74% of guesses kept), code 156, chat 116; 3.6 / 5.4 GiB.
+  Greedy text with the drafter differs slightly (llama.cpp #25618): compare speed, not words.
+- Five flagships at effort high, 5 runs: all right every run; Sonnet 5.5 fastest on every task and
+  tied with GPT-6.1 Sol for the smallest bill; Grok 4.7 thought 4-6 min on the hard question and
+  ran up the biggest bill despite the lowest output price.
+- Six video models, 36 jobs: Seedance 2.5 refused a dance prompt twice ("the output audio may
+  contain sensitive information", unbilled) and made it with `generate_audio: false`; Veo 3.1 Fast
+  once wrote KITTCUT; all six said the line; Grok Imagine Lite fastest and cheapest, Veo 3.1 13x it.
+
+**Traps.** AAC at 192 kb/s overshot a clean -3.3 dBTP master of synthesised clicks by up to 7 dB:
+these films master with `"master": {"lowpass": 15000, "tp": -3.5}` and encode at 256k. `python -I`
+drops the script's folder from sys.path, so a tests file cannot import its `solution.py`: checks run
+`-E -s`. Verify a brute-forced answer by hand and run the tests file against a reference solution
+first (one expected value was wrong). A clip's placement only carries the keys `place()` copies:
+`audio_lufs` was once dropped and the listen segment went silent. A reviewer (video-review skill)
+said NOT YET on every first cut and was right each time: an unfair hook comparison, dead holds,
+like-for-unlike bars, text under the next row's clips.
+
 ### The kit: what every film was drawing by hand (`sketch/kit.js`)
 
 A module every studio film carries since 2026-10-01 (`film.CAPS["kit"]`, first in every look's

@@ -264,7 +264,7 @@ def write_master(m, pre, master):
     import subprocess
 
     final = os.path.join(m["_audio"], "final.wav")
-    A.loudnorm(pre, final, master["lufs"], master["tp"])
+    A.loudnorm(pre, final, master["lufs"], master["tp"], lowpass=master.get("lowpass"))
     mp3 = os.path.join(m["_audio"], "final.mp3")
     subprocess.run(
         ["ffmpeg", "-v", "error", "-y", "-i", final, "-c:a", "libmp3lame", "-b:a", "192k", mp3],

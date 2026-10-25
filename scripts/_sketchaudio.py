@@ -996,8 +996,14 @@ def voice_gate(music, voice, margin_db=8.0, win=1.0, hop=0.25, release=0.6, rate
 
 
 # ------------------------------------------------------------------ master
-def loudnorm(src, dst, lufs=-14.0, tp=-1.5, lra=11):
-    """Two-pass EBU R128 to `dst` (24-bit WAV). Returns the measured input stats."""
+def loudnorm(src, dst, lufs=-14.0, tp=-1.5, lra=11, lowpass=None):
+    """Two-pass EBU R128 to `dst` (24-bit WAV). Returns the measured input stats.
+
+    `lowpass` (Hz), the manifest's "master": {"lowpass": 15000}, filters ahead of both passes. A
+    soundtrack dense with synthesised clicks (a benchmark film's ticks) masters clean and then
+    overshoots by 4-7 dB once AAC encodes it (frontier-race, 2026-10-25: -3.3 dBTP master, +4.2 in
+    the mp4); 15 kHz took the same master to -1.3 at 256 kb/s."""
+    pre = "lowpass=f=%d," % int(lowpass) if lowpass else ""
     r = subprocess.run(  # noqa: PLW1510 -- loudnorm's analysis pass reports on stderr; exit code is not the signal
         [
             "ffmpeg",
@@ -1005,7 +1011,7 @@ def loudnorm(src, dst, lufs=-14.0, tp=-1.5, lra=11):
             "-i",
             src,
             "-af",
-            "loudnorm=I=%s:TP=%s:LRA=%s:print_format=json" % (lufs, tp, lra),
+            pre + "loudnorm=I=%s:TP=%s:LRA=%s:print_format=json" % (lufs, tp, lra),
             "-f",
             "null",
             "-",
@@ -1014,7 +1020,7 @@ def loudnorm(src, dst, lufs=-14.0, tp=-1.5, lra=11):
         text=True,
     )
     j = json.loads(r.stderr[r.stderr.rindex("{") : r.stderr.rindex("}") + 1])
-    af = (
+    af = pre + (
         "loudnorm=I=%s:TP=%s:LRA=%s:measured_I=%s:measured_TP=%s:measured_LRA=%s:measured_thresh=%s:offset=%s:linear=true,aresample=%d"
         % (
             lufs,
