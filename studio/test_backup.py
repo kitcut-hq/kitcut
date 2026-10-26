@@ -128,6 +128,8 @@ def the_rules():
         "/scratch/notes.txt",
         "/usage/2026-10-12.jsonl",
         "/backup.json",
+        "/monitor/secret.env",
+        "/monitor/history.json.gz",
     )
     for p in keeps:
         check(kept(p, rs), "mirrored: %s" % p)

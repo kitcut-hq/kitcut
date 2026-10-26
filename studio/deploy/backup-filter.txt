@@ -36,6 +36,9 @@
 - /usage/**
 # What the last pass did: written by the pass itself.
 - /backup.json
+# The machine's watch (deploy/monitor.py): this machine's own readings, and its page key and
+# Elasticsearch password (secret.env), which must not leave it.
+- /monitor/**
 
 # Everything a person made or paid for, and what the studio needs to work on it again.
 + /projects/**

@@ -33,6 +33,13 @@
 #                                                     memory: by hour, the low points of memory, by
 #                                                     film and by step (studio/deploy/usage.py)
 #   bash studio/deploy/ops.sh usage install           install and (re)start the sampler behind it
+#   bash studio/deploy/ops.sh monitor [status|install|tunnel|link|tidy|down|rules]   the machine's
+#                                                     watch (deploy/monitor.py): what it sees and
+#                                                     what stands wrong | set it up (Elasticsearch
+#                                                     user, key, unit) | the page at
+#                                                     machine.kitcut.ai | its address with the key |
+#                                                     clear the failed hand-job units | stop the
+#                                                     page | the thresholds (deploy/monitor-setup.sh)
 #   bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]   pick up a film the studio
 #                                                     stopped half-way (studio/resume.py), in the
 #                                                     same film; --plan spends nothing
@@ -270,7 +277,7 @@ case "$ssh_code" in
   000) echo "ssh.kitcut.ai: not set up" ;;
   *) echo "ssh.kitcut.ai: NOT LOCKED (answered $ssh_code without the header): ssh-lock.mjs --out, or ssh-tunnel.sh down" ;;
 esac
-echo "units: $(for u in kitcut-tunnel kitcut-studio-boot kitcut-login-check.timer kitcut-usage kitcut-prune.timer kitcut-backup.timer kitcut-backup-full.timer; do printf '%s=%s ' $u $(systemctl is-active $u); done)"
+echo "units: $(for u in kitcut-tunnel kitcut-studio-boot kitcut-login-check.timer kitcut-usage kitcut-prune.timer kitcut-backup.timer kitcut-backup-full.timer kitcut-monitor kitcut-monitor-tunnel; do printf '%s=%s ' $u $(systemctl is-active $u); done)"
 # the copy off the machine (studio/backup.py): when it last went through, and STALE when it has not
 STUDIO_HOME=$HOME_DIR STUDIO_REPO=/srv/kitcut/repo python3 /srv/kitcut/repo/studio/backup.py --status 2>&1 | sed 's/^/mirror: /'
 # the ship that follows GitHub (deploy/autoship.py): whether it is on, and what it last decided
@@ -357,6 +364,18 @@ EOF
     else
       on "STUDIO_HOME=$HOME_DIR python3 $REMOTE/studio/deploy/usage.py report$(printf ' %q' "$@")"
     fi
+    ;;
+
+  monitor)
+    # the machine's watch (deploy/monitor.py, deploy/monitor-setup.sh): every 15 s, to
+    # Elasticsearch, the page at machine.kitcut.ai and the owner's inbox (through the site)
+    what="${1:-status}"
+    case "$what" in
+      install|tunnel|tidy|down) change_on "bash $REMOTE/studio/deploy/monitor-setup.sh $what" ;;
+      status|link) on "STUDIO_HOME=$HOME_DIR bash $REMOTE/studio/deploy/monitor-setup.sh $what" ;;
+      rules) on "STUDIO_HOME=$HOME_DIR python3 $REMOTE/studio/deploy/monitor.py rules" ;;
+      *) die "monitor [status|install|tunnel|link|tidy|down|rules]" ;;
+    esac
     ;;
 
   rc)

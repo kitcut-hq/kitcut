@@ -393,6 +393,56 @@ First reading, 2026-10-01 12:40: two films rendering at once (one a `resume`, wh
 its own -- KI-043) ran 4 browsers each on the 4 cores, CPU pressure 90 %: each waited for a CPU
 almost all the time.
 
+## The machine's watch: the page, the logs, the emails
+
+```bash
+KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor            # what it sees now, what stands wrong
+KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor link       # machine.kitcut.ai with its key
+KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor install    # Elasticsearch user, key, unit (once; safe again)
+KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor tunnel     # publish the page (its own tunnel)
+KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor tidy       # clear failed hand-job units (run-u*)
+KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor rules      # the thresholds this machine uses
+```
+
+Built 2026-10-26, when the owner asked for the machine to be "predictable and stable". The usage
+sampler above answers *who* held the memory; nothing watched the rest, and nobody was told.
+`kitcut-monitor.service` (`studio/deploy/monitor.py`, stdlib, system python3, niced, capped at
+320 MB and the last thing the kernel kills) looks every 15 s at: CPU, memory and swap, pressure
+stall, every mount's space and inodes, the disk's throughput and its own SMART log (wear, spare,
+media errors, unsafe shutdowns), CPU/NVMe/GPU temperatures, the graphics card, the network and
+whether the internet answers, the services that must run, the units that failed, the studio's
+films, Elasticsearch's health, the clock, reboots (clean or not) -- and reads every journal line
+as it is written for the kernel's alarms (an OOM kill, a disk or hardware error, a GPU Xid, a
+hung task).
+
+Three places it goes:
+
+- **Elasticsearch on this machine**: `machine-metrics-<day>` (every look), `machine-logs-<day>`
+  (the whole journal, ~6k lines a day), `machine-events-<day>` (each alert as it starts and ends).
+  A lifecycle policy deletes them after 30, 30 and 365 days. Its user `kc-monitor` (file realm,
+  role `kc_monitor`) can write and read only those; the password and the page's key are in
+  `STUDIO_HOME/monitor/secret.env`, which the mirror leaves out.
+- **The page**, `https://machine.kitcut.ai`: published by its own tunnel (`kitcut-monitor-tunnel`,
+  files in `/srv/kitcut/monitor-tunnel`; the studio's tunnel is never touched) and locked by the
+  key -- `?key=` once sets a cookie for a year; without it the page answers 401. It does not read
+  Elasticsearch, because Elasticsearch is the heaviest thing here and the page must work when it
+  is the problem: the watch keeps its own seven days of minutes (`history.json.gz`).
+- **The owner's inbox**, through the site: `health.json` -> `machine_note.py` (at once when what is
+  to be told changes, and every 15 min with the mirror) -> `kitcut.studio_hosts` -> the site's
+  watch (sketch-studio `lib/studiowatch.js`). Each alert is told when it starts, again when it
+  gets worse or still stands a day later, and "All clear" when it ends; an event (OOM kill,
+  reboot, an internet outage once it is over) once. Through the site because the site already
+  tells the two things a machine cannot say about itself: the studio stopped answering, and the
+  note stopped coming -- and a watch whose last look is old is told as "the watch has stopped".
+
+Every rule must hold for a while before it counts and fall past a lower line before it is let go
+(`monitor.json`, `rules`; a machine overrides keys in `STUDIO_HOME/monitor/monitor.local.json`).
+The studio itself and its tunnel are watched but not told by this: the site already emails when
+the studio stops answering, and two emails for one fault teach you to ignore both. A unit nobody
+enabled (Postgres here is started by hand) is shown, not told. A failed hand job (`run-u*.service`,
+an `ops.sh` job) is shown, not told; a failed `kitcut-*` unit is told. It restarts itself when
+`monitor.py` or `monitor.json` changes, so autoship carries changes to it.
+
 ## The data disk, and what fills it
 
 ```bash
