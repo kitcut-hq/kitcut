@@ -395,54 +395,37 @@ almost all the time.
 
 ## The machine's watch: the page, the logs, the emails
 
+The watch is its own repository since 2026-10-26: **github.com/Instafill/machine-monitor**
+(private), checked out at `/opt/machine-monitor` on kc-local and run as `machine-monitor.service`.
+Its README is the manual; kc-local's settings are its `machines/kc-local.json`.
+
 ```bash
 KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor            # what it sees now, what stands wrong
-KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor link       # machine.kitcut.ai with its key
-KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor install    # Elasticsearch user, key, unit (once; safe again)
-KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor tunnel     # publish the page (its own tunnel)
+KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor update     # push the laptop's checkout to it
+KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor link       # the page with its key
+KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor tunnel     # publish the page (machine.kitcut.ai)
 KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor tidy       # clear failed hand-job units (run-u*)
-KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor rules      # the thresholds this machine uses
 ```
 
-Built 2026-10-26, when the owner asked for the machine to be "predictable and stable". The usage
-sampler above answers *who* held the memory; nothing watched the rest, and nobody was told.
-`kitcut-monitor.service` (`studio/deploy/monitor.py`, stdlib, system python3, niced, capped at
-320 MB and the last thing the kernel kills) looks every 15 s at: CPU, memory and swap, pressure
-stall, every mount's space and inodes, the disk's throughput and its own SMART log (wear, spare,
-media errors, unsafe shutdowns), CPU/NVMe/GPU temperatures, the graphics card, the network and
-whether the internet answers, the services that must run, the units that failed, the studio's
-films, Elasticsearch's health, the clock, reboots (clean or not) -- and reads every journal line
-as it is written for the kernel's alarms (an OOM kill, a disk or hardware error, a GPU Xid, a
-hung task).
+The machine holds no GitHub key, so `update` pushes `C:\instafill\machine-monitor` (or
+`MACHINE_MONITOR_REPO`) to it over ssh, as `push.sh` does the studio, and the service restarts
+itself on the new code. It does not ship with autoship.
 
-Three places it goes:
+What ties it to the studio:
 
-- **Elasticsearch on this machine**: `machine-metrics-<week>` (every look), `machine-logs-<week>`
-  (the whole journal, ~6k lines a day), `machine-events-<month>` (each alert as it starts and
-  ends). One index a week or a month, not a day: this node already carries ~413 shards on a 4 GB
-  heap, and daily indices would have added ~425 more. A lifecycle policy deletes them after 30, 30 and 365 days. Its user `kc-monitor` (file realm,
-  role `kc_monitor`) can write and read only those; the password and the page's key are in
-  `STUDIO_HOME/monitor/secret.env`, which the mirror leaves out.
-- **The page**, `https://machine.kitcut.ai`: published by its own tunnel (`kitcut-monitor-tunnel`,
-  files in `/srv/kitcut/monitor-tunnel`; the studio's tunnel is never touched) and locked by the
-  key -- `?key=` once sets a cookie for a year; without it the page answers 401. It does not read
-  Elasticsearch, because Elasticsearch is the heaviest thing here and the page must work when it
-  is the problem: the watch keeps its own seven days of minutes (`history.json.gz`).
-- **The owner's inbox**, through the site: `health.json` -> `machine_note.py` (at once when what is
-  to be told changes, and every 15 min with the mirror) -> `kitcut.studio_hosts` -> the site's
-  watch (sketch-studio `lib/studiowatch.js`). Each alert is told when it starts, again when it
-  gets worse or still stands a day later, and "All clear" when it ends; an event (OOM kill,
-  reboot, an internet outage once it is over) once. Through the site because the site already
-  tells the two things a machine cannot say about itself: the studio stopped answering, and the
-  note stopped coming -- and a watch whose last look is old is told as "the watch has stopped".
-
-Every rule must hold for a while before it counts and fall past a lower line before it is let go
-(`monitor.json`, `rules`; a machine overrides keys in `STUDIO_HOME/monitor/monitor.local.json`).
-The studio itself and its tunnel are watched but not told by this: the site already emails when
-the studio stops answering, and two emails for one fault teach you to ignore both. A unit nobody
-enabled (Postgres here is started by hand) is shown, not told. A failed hand job (`run-u*.service`,
-an `ops.sh` job) is shown, not told; a failed `kitcut-*` unit is told. It restarts itself when
-`monitor.py` or `monitor.json` changes, so autoship carries changes to it.
+- **Its state lives in `STUDIO_HOME/monitor`** (history, journal cursor, `health.json`, and
+  `secret.env` with the page key and its Elasticsearch password). The mirror leaves that folder
+  out (`backup-filter.txt`).
+- **Its alerts reach the owner through the studio.** Its `notify_cmd` is `studio/machine_note.py`,
+  which puts `health.json` in the machine note (`kitcut.studio_hosts`); the site's watch
+  (sketch-studio `lib/studiowatch.js`) emails each alert when it starts, gets worse or still stands a
+  day later, and "All clear" when it ends. The site already tells when the studio stops answering
+  or the note stops coming, which a machine cannot say about itself, so the watch does not repeat
+  those.
+- **Its "who holds the memory" panel** reads the usage sampler above (`STUDIO_HOME/usage`).
+- Elasticsearch on kc-local (the org's cluster) gets `machine-metrics-*`, `machine-logs-*` (the
+  whole journal) and `machine-events-*` through the file-realm user `machine-monitor`, which can
+  touch nothing else.
 
 ## The data disk, and what fills it
 

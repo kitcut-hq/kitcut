@@ -8,9 +8,9 @@
 The note: how full the data disk is, where the mirror of the studio's home stands
 (backup.py: its last pass, and why it counts as behind), and the last decision of the ship that
 follows GitHub (deploy/autoship.py, which also writes the note at once when it fails or holds),
-and what the machine's watch says stands wrong (deploy/monitor.py: memory, swap, the disk's
-health and how fast it fills, temperatures, services, OOM kills, reboots...; it writes the note at
-once when that changes).
+and what the machine's watch says stands wrong (github.com/Instafill/machine-monitor, whose
+health.json is in STUDIO_HOME/monitor: memory, swap, the disk's health and how fast it fills,
+temperatures, services, OOM kills, reboots...; it runs this at once when that changes).
 It goes into kitcut.studio_hosts, document "studio", field "machine" (store.note_machine), and
 the site's watch (sketch-studio lib/studiowatch.js) emails the owner from it: a disk past 80 %,
 a mirror that is behind, a ship that failed or waits for a person, each of the watch's alerts
@@ -47,7 +47,7 @@ def note():
         out["autoship"]["paused"] = os.path.exists(os.path.join(backup.HOME, "autoship.paused"))
     except (OSError, ValueError):
         pass  # autoship not on (or not yet looked): nothing to say
-    try:  # deploy/monitor.py's alerts (kitcut-monitor.service), with the time it last looked
+    try:  # machine-monitor's alerts (machine-monitor.service), with the time it last looked
         with open(os.path.join(backup.HOME, "monitor", "health.json"), encoding="utf-8") as f:
             out["health"] = json.load(f)
     except (OSError, ValueError):

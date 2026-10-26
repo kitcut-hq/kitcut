@@ -314,6 +314,12 @@ def the_machines_note():
         n,
     )
     check(json.dumps(n) and True, "and is plain enough to go into the database", n)
+    # the machine's watch (github.com/Instafill/machine-monitor) leaves health.json in the home
+    health = {"at": "2026-10-26T12:00:00-07:00", "alerts": [{"key": "memory", "level": "warn"}]}
+    os.makedirs(os.path.join(backup.HOME, "monitor"), exist_ok=True)
+    with open(os.path.join(backup.HOME, "monitor", "health.json"), "w", encoding="utf-8") as f:
+        json.dump(health, f)
+    check(machine_note.note().get("health") == health, "and carries the machine watch's alerts to the site")
 
 
 if __name__ == "__main__":

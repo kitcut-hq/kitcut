@@ -63,7 +63,6 @@ TESTS = (
     "test_filmgit.py",  # films' code in their projects' git repositories; a deleted film forgotten
     "test_episode.py",  # a series' next episode starts from its last one's code (episode.py)
     "test_usage.py",  # who uses the machine: each step's bill, the sampler, the report
-    "test_monitor.py",  # the machine's watch: hold and let-go lines, kernel alarms, the page's minutes
     "test_scenes.py",  # a film made in scenes: SK.scene on real stills, the passes, carrying on
     "test_people.py",  # people drawn as talking characters: the request, brief, voices, drawing
     "test_actors.py",  # a project's actor packs: put in, refused, seeded, prompted, drawn

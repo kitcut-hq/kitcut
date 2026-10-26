@@ -33,13 +33,13 @@
 #                                                     memory: by hour, the low points of memory, by
 #                                                     film and by step (studio/deploy/usage.py)
 #   bash studio/deploy/ops.sh usage install           install and (re)start the sampler behind it
-#   bash studio/deploy/ops.sh monitor [status|install|tunnel|link|tidy|down|rules]   the machine's
-#                                                     watch (deploy/monitor.py): what it sees and
-#                                                     what stands wrong | set it up (Elasticsearch
-#                                                     user, key, unit) | the page at
-#                                                     machine.kitcut.ai | its address with the key |
-#                                                     clear the failed hand-job units | stop the
-#                                                     page | the thresholds (deploy/monitor-setup.sh)
+#   bash studio/deploy/ops.sh monitor [status|update|install|tunnel|link|tidy|down|rules]   the
+#                                                     machine's watch (github.com/Instafill/machine-
+#                                                     monitor, /opt/machine-monitor there): what it
+#                                                     sees and what stands wrong | push the laptop's
+#                                                     checkout to it | set it up | publish the page |
+#                                                     its address with the key | clear failed hand-job
+#                                                     units | stop the page | the thresholds
 #   bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]   pick up a film the studio
 #                                                     stopped half-way (studio/resume.py), in the
 #                                                     same film; --plan spends nothing
@@ -277,7 +277,7 @@ case "$ssh_code" in
   000) echo "ssh.kitcut.ai: not set up" ;;
   *) echo "ssh.kitcut.ai: NOT LOCKED (answered $ssh_code without the header): ssh-lock.mjs --out, or ssh-tunnel.sh down" ;;
 esac
-echo "units: $(for u in kitcut-tunnel kitcut-studio-boot kitcut-login-check.timer kitcut-usage kitcut-prune.timer kitcut-backup.timer kitcut-backup-full.timer kitcut-monitor kitcut-monitor-tunnel; do printf '%s=%s ' $u $(systemctl is-active $u); done)"
+echo "units: $(for u in kitcut-tunnel kitcut-studio-boot kitcut-login-check.timer kitcut-usage kitcut-prune.timer kitcut-backup.timer kitcut-backup-full.timer machine-monitor machine-monitor-tunnel; do printf '%s=%s ' $u $(systemctl is-active $u); done)"
 # the copy off the machine (studio/backup.py): when it last went through, and STALE when it has not
 STUDIO_HOME=$HOME_DIR STUDIO_REPO=/srv/kitcut/repo python3 /srv/kitcut/repo/studio/backup.py --status 2>&1 | sed 's/^/mirror: /'
 # the ship that follows GitHub (deploy/autoship.py): whether it is on, and what it last decided
@@ -367,14 +367,30 @@ EOF
     ;;
 
   monitor)
-    # the machine's watch (deploy/monitor.py, deploy/monitor-setup.sh): every 15 s, to
-    # Elasticsearch, the page at machine.kitcut.ai and the owner's inbox (through the site)
+    # the machine's watch: its own repository (github.com/Instafill/machine-monitor), checked out
+    # at /opt/machine-monitor on the machine. The machine holds no GitHub key, so `update` pushes
+    # this laptop's checkout to it over ssh, as push.sh does the studio. Its alerts reach the owner
+    # through studio/machine_note.py (its notify_cmd) and the site's watch.
     what="${1:-status}"
+    MM=/opt/machine-monitor
     case "$what" in
-      install|tunnel|tidy|down) change_on "bash $REMOTE/studio/deploy/monitor-setup.sh $what" ;;
-      status|link) on "STUDIO_HOME=$HOME_DIR bash $REMOTE/studio/deploy/monitor-setup.sh $what" ;;
-      rules) on "STUDIO_HOME=$HOME_DIR python3 $REMOTE/studio/deploy/monitor.py rules" ;;
-      *) die "monitor [status|install|tunnel|link|tidy|down|rules]" ;;
+      update)
+        local_mm="${MACHINE_MONITOR_REPO:-$(cd "$HERE/../../.." && pwd)/machine-monitor}"
+        [ -d "$local_mm/.git" ] || die "no machine-monitor checkout at $local_mm (MACHINE_MONITOR_REPO)"
+        git -C "$local_mm" pull -q --ff-only
+        ip="$(bash "$HERE/vm.sh" ip "$VM")"
+        if [ "$DRY" = 1 ]; then
+          echo "  would push $local_mm main to $VM:$MM"
+        else
+          GIT_SSH_COMMAND="ssh -i ${KITCUT_SSH_KEY:-$HOME/.ssh/kitcut-studio} -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts.kitcut" \
+            git -C "$local_mm" push -q "ssh://kitcut@$ip$MM" main
+          on "git -C $MM log --oneline -1"
+        fi
+        ;;
+      install|tunnel|tidy|down) change_on "bash $MM/setup.sh $what" ;;
+      status|link) on "bash $MM/setup.sh $what" ;;
+      rules) on "python3 $MM/monitor.py rules" ;;
+      *) die "monitor [status|update|install|tunnel|link|tidy|down|rules]" ;;
     esac
     ;;
 
