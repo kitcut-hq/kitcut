@@ -3115,6 +3115,39 @@ detected card still wins if it comes earlier.
 The cleaner way is not to have the mark at all: KitCut's owner can turn it off
 for an account.
 
+## A filing's own page as a picture: `sec-crops.py`
+
+A research film about a company that just filed (an S-1, a 10-Q) is strongest
+when it shows the filing itself: the income statement as printed, the paragraph
+with "50.1% of the total voting power". Two things block an ordinary screenshot.
+EDGAR answers a headless browser with "Undeclared Automated Tool", so the file
+is downloaded with a declared user agent (`--ua "<org> research <email>"`, the
+SEC's own rule; `--save` keeps it). And Workiva-built filings, most large
+S-1s, are absolutely positioned: each printed page is one `div` 792pt tall and
+each line one `div` with a `top:`, so cropping by element returns slivers.
+
+`sec-crops.py` cuts the one page that holds a passage out of the file (Anthropic's
+S-1 was 14 MB, 421 pages), shoots it whole at 3x in headless Edge, and crops by
+the positions the HTML states. A crop is `name=start words|end words`: the first
+line holding the start words, through the first line at or below it holding the
+end words, each phrase on one printed line. Positions are summed down the open
+elements, because a table is a positioned block whose rows carry their own
+`top:` relative to it: read alone, the "Net loss" row of a summary table sat
+above its own heading and matched nothing. The bottom edge stops 1.5pt under
+the next line's top, or a sliver of its capitals shows along the edge.
+
+```powershell
+python scripts/sec-crops.py --htm projects/<id>/research/s1.htm --find "Net loss"
+python scripts/sec-crops.py --htm projects/<id>/research/s1.htm --list --crop "income=Consolidated Statements of Operations Data|Net loss"
+python scripts/sec-crops.py --htm projects/<id>/research/s1.htm --out projects/<id>/logos/src/<n> --crop "income=Consolidated Statements of Operations Data|Net loss" --crop "votes=The LTBT is intended to operate|will not have any economic rights"
+```
+
+`--list` and `--find` render nothing. A filing that is not Workiva-style (no
+792pt page divs) is refused with the reason; crop it by element with a browser.
+The crops are evidence, not a deliverable, so nothing goes in `project.json`.
+First used for film 32 (Anthropic's S-1, 2026-10-26): eight crops, each shown
+filling the frame in the film and in its Short.
+
 ## Thumbnail options: posters from the film's own pieces, else four moments of it (`thumb-options.py`, `_thumb.py`)
 
 kitcut.ai's "Publish to YouTube" offers four thumbnails, and the person picks one. A film that

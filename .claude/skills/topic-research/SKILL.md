@@ -162,9 +162,11 @@ By hand, the screenshots skill's `shoot.mjs` (headless Edge) takes them; keep th
   covers the page).
 - **SEC filings refuse headless browsers** ("Undeclared Automated Tool"). Download with curl and a
   declared user agent (`-A "<org> research <contact address>"`), then shoot the local file. In
-  inline-XBRL filings, find the text node and climb to the block that holds both phrases you want;
-  a prospectus laid out with absolute positioning will not crop by element, so show its sentence as
-  a big-number card credited to the filing instead.
+  inline-XBRL filings, find the text node and climb to the block that holds both phrases you want.
+  A prospectus laid out with absolute positioning (Workiva: most large S-1s) will not crop by
+  element: `python scripts/sec-crops.py --htm <file> --crop "name=first words|last words" --out
+  <dir>` cuts the page out and crops by the positions the HTML states, tables included (`--list`
+  and `--find` render nothing). Film 32's eight S-1 crops came from it.
 - **Some news sites block headless browsers** (Investing.com, several finance sites: 403). Find
   the same report on a relay that renders (TNW, Reuters via Euronext, Yahoo Finance).
 - **X posts** render logged out at `https://platform.twitter.com/embed/Tweet.html?id=<id>` (clip
