@@ -495,3 +495,84 @@ family, calls booked, deposits. Kill rules as in section 6.
 **Needed before the test:** example films for each use case (the Duchess series is ready; the
 family series shows a real child, so either the owner agrees to show it in ads or a fictional
 family is made), a page per use case, and a Meta ad account for KitCut.
+
+## 8. The first ten creatives (made 2026-10-25)
+
+Kids and pets only, five each, as the owner asked. Every ad is itself a short example of the
+product, a 30 s vertical (9:16) cartoon about a fictional child or pet that closes on a card:
+the ad's offer line, "Made for you by KitCut Studio", "Films from $2,000", the KitCut logo. No
+real child appears (the question of showing Leo in ads is still open). They live in the kitcut.ai
+project "Made for you: Meta ads" (p-d6aqidzzvq), whose brief holds the format: the hook on frame
+0, every line on screen for sound-off viewing, nothing that matters in the top 12% or bottom 20%
+(Instagram's buttons), the closing card. The Duchess ad is made in the Duchess project, so it is
+the real cat and her real narrator, and "she has her own series" is true.
+
+Each ad tests a different angle, and the looks are spread so the first numbers also say which
+look sells: humour as a genre parody (trailer, nature documentary, spy thriller), the child's
+own words or drawings taken literally, tenderness about what will not last, the gift, and proof
+(a real series).
+
+| Ad | Angle | Look | Hook on frame 0 | Offer line |
+|---|---|---|---|---|
+| K1 Theo vs. Bedtime | humour: a movie trailer | painted | IN A WORLD... | Your kid. Starring in their own cartoon. |
+| K2 When I Grow Up | the child's answer, animated literally | drawn, crayon | WE ASKED MILA, 5: | Your child's imagination, made into a cartoon. |
+| K3 Pasghetti | tender: what will be gone in a year | painted, watercolour | PASGHETTI | Who they are right now, kept as a cartoon. |
+| K4 Kevin the Dragon | the fridge drawing comes alive | collage | SAM DREW THIS. AGE 6. | Your child's drawings, alive in their own cartoon. |
+| K5 The Gift for Grandma | Christmas gift for grandparents | painted | WHAT DO YOU GIVE GRANDPARENTS WHO HAVE EVERYTHING? | This Christmas, give them a cartoon about the grandkids. |
+| P1 The Wild Labrador | humour: a nature documentary | painted | HERE, IN THE KITCHEN... | Your pet's real life, as their own cartoon. |
+| P2 3 A.M. | humour: a spy thriller | drawn, clean | OLIVE · 19 HOURS OF SLEEP | Your pet's secret life, made into a cartoon. |
+| P3 Barkley Reviews His Family | the pet's own voice, star ratings | collage | BARKLEY REVIEWS HIS FAMILY | Your pet, starring in their own cartoon. |
+| P4 Duchess | proof: a real ten-episode series | drawn, the series | THIS IS DUCHESS | Your pet, with their own cartoon series. |
+| P5 Twelve Years of Rufus | tender: an old dog's habits | painted, watercolour | RUFUS. 12 YEARS. | Your pet's story, as a film to keep. |
+
+**The films** (link-only on kitcut.ai; the MP4 for Meta is `https://media.kitcut.ai/films/<id>/film.mp4`):
+
+| Ad | Film | Length |
+|---|---|---|
+| K1 Theo vs. Bedtime | studio-20261025-155204-u65unr | 40 s |
+| K2 When I Grow Up | studio-20261025-162716-leuxgm | 40 s |
+| K3 Pasghetti | studio-20261025-160917-qc5up6 | 36 s |
+| K4 Kevin the Dragon | studio-20261025-165516-iycj3d | 30 s |
+| K5 The Gift for Grandma | studio-20261025-170918-brg5ag | 35 s |
+| P1 The Wild Labrador | studio-20261025-155223-6kho35 | 35 s |
+| P2 3 A.M. | studio-20261025-161216-wai3mm | 37 s |
+| P3 Barkley Reviews His Family | studio-20261025-162816-nvmwnt | 40 s |
+| P4 Duchess | studio-20261025-165616-u44tzs (in the Duchess project) | 30 s |
+| P5 Twelve Years of Rufus | studio-20261025-164316-btj6kh | 35 s |
+
+Asked for 30 s, they came back 30-40 s: the closing card holds 5-7 s and the studio paces the
+voice. K5's first version (studio-20261025-164116-ez5yij) is **not to be used**: its children were
+named Max and Ruby, which is a Nickelodeon show's title, and its figures were tiny in the tall
+frame. Never give an example child the name of a known show's character; the remake (painted,
+close shots) fixed both. Cost: 11 films, 330 of the account's credits, no other spend.
+
+**A fresh reviewer's ranking** (the video-review skill, 2026-10-25, before the owner saw them):
+K3 Pasghetti, K5 Gift for Grandma, P5 Rufus, K1 Theo vs. Bedtime (all four "show it"), then P1
+Labrador, P3 Barkley, K4 Kevin, P4 Duchess, K2 When I Grow Up, P2 3 A.M. ("wrong idea": a generic
+cat in a stock-explainer look; nothing says "your cat" or "$2,000"). The tender and the gift ads
+look worth the price; the flat drawn ones do not. Two gaps in all ten: nothing shows a real photo
+becoming the cartoon (a $2,000 buyer's first question is "will it look like mine?"), and the
+closing card has a price but no next step ("Send us photos and a story"). Both belong in round two.
+
+**Copy** (button "Learn more" on all; description "Films from $2,000 · Series from $5,000",
+except P4, "Series from $5,000 · Films from $2,000"):
+
+| Ad | Primary text | Headline |
+|---|---|---|
+| K1 | Every family has a Theo. We made him a trailer. We make a cartoon starring your child: their real bedtime stalling, their real shark questions, your real house. Made by our studio from your photos and stories. | Your kid, starring in their own cartoon |
+| K2 | Ask your kid what they'll be when they grow up. Then let us animate the answer, exactly as they said it. A one-of-a-kind cartoon about your child, with their dog, their house and their ideas in it. | Their imagination, animated |
+| K3 | The "pasghetti" phase doesn't last. Neither does the sock named Gerald. We turn the little things your child says and does right now into a cartoon they can watch at thirty. | Keep who they are right now |
+| K4 | That drawing on your fridge has a name, a personality and a fear of the vacuum. We bring your child's own drawings to life in a cartoon that stars them. | Your kid's drawings, alive |
+| K5 | For the grandparents who have everything: a cartoon about the grandkids. Their real jokes, their real house, made by our studio from your photos and stories. | The gift for grandparents who have everything |
+| P1 | Your dog's nine-year war with the mail deserves a documentary. We make a cartoon about your pet, from your photos and the stories only your family knows. | Your pet's real life, animated |
+| P2 | You know exactly what your cat does at 3 a.m. Now picture it as a cartoon. We make your pet's own film or series, from your photos and stories. | Your pet's secret life, animated |
+| P3 | If your dog reviewed your family, who would get five stars? We make a cartoon starring your pet: their habits, their people, and their nemesis, the vacuum. | Your pet, starring in their own cartoon |
+| P4 | Duchess has her own cartoon series: ten episodes of a very dignified cat losing her dignity. Your pet could be next. Made by our studio from your photos and stories. | Your pet's own cartoon series |
+| P5 | The tail thump when he hears your car. The one sock, always the left. Keep the little things about your pet in a film made from your photos and stories. | Your pet's story, as a film to keep |
+
+**How to read them.** Two ad sets (kids, pets), five ads each, equal spend forced by one ad per
+ad set or by Meta's "flexible" creative off, so the creative is the only variable. Read per ad:
+hook rate (3-second plays / impressions), hold (ThruPlays / 3-second plays), link CTR, and cost
+per enquiry once the pages exist. Before the landing pages exist, the hook rate and hold are
+what a creative can be judged on; an ad under ~25% hook rate after 2,000 impressions loses to
+the others.
