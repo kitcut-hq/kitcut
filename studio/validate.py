@@ -160,7 +160,8 @@ def _vo(d, max_lines, length=60, people=()):
     return out
 
 
-def _paint(d, length, caps):
+def _paint(d, length, caps, film_dir=None):
+    """`film_dir`: the film's folder, whose project pictures (inputs/pic_<name>.*) a ref may name."""
     out = []
     if not isinstance(d, dict):
         return ["paint.json must be an object"]
@@ -187,7 +188,13 @@ def _paint(d, length, caps):
         if not isinstance(im.get("prompt"), str) or not 0 < len(im["prompt"]) <= 2000:
             out.append("paint.json: image %d needs a prompt (at most 2000 characters)" % i)
         if "ref" in im and (im["ref"] not in names or im["ref"] == im.get("name")):
-            out.append("paint.json: image %d ref must name another image" % i)
+            pic = film_dir and im["ref"] not in names
+            pic = pic and _sketch.project_picture(film_dir, im["ref"])
+            if not pic:
+                out.append(
+                    "paint.json: image %d ref must name another image, or one of this film's "
+                    "project pictures (pic_<name>)" % i
+                )
         if set(im) - keys:
             out.append("paint.json: image %d may only have %s" % (i, ", ".join(sorted(keys))))
         c = im.get("cutout", False)
@@ -380,7 +387,7 @@ def problems(film, name):
             out = _verbatim(d, *script)
         return out
     if name == "paint.json":
-        return _paint(d, film.length, film.caps)
+        return _paint(d, film.length, film.caps, film.dir)
     if name in ("score.json", "sfx.json"):  # a kept sound or theme, played by name
         try:
             score, cues = A.expand_sounds(

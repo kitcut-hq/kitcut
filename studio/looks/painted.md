@@ -66,8 +66,11 @@ The studio has set `backend`, `model` and `max_images`; leave them. You set:
   the palette and the light in it too.
 - `images`: `[{"name": "kitchen", "prompt": "..."}, ...]` -- names of lowercase letters, digits,
   `-` and `_`. Describe each picture fully: who, doing what, where, the framing (wide,
-  close-up), the light. Never ask for words, letters or signs in a picture. The painter works
-  from the words alone: it takes no reference picture, so `ref` changes nothing.
+  close-up), the light. Never ask for words, letters or signs in a picture.
+- `ref` (on an image): a picture it is painted from, for its characters -- another image's name,
+  or one of the project's pictures, `pic_<name>`. It works only when the studio says this
+  project's pictures are painted from its style picture; with `meta/muse-image` the painter
+  works from the words alone and `ref` changes nothing.
 
 Each painting comes back 1920x1280 (a little taller than the 1920x1080 frame: room to move).
 
@@ -77,6 +80,12 @@ Each painting comes back 1920x1280 (a little taller than the 1920x1080 frame: ro
 - The same character in two paintings will not look quite the same. Describe them identically
   every time (age, hair, clothes and their colours), or keep them in one painting and frame
   different parts of it.
+- Where `ref` works and the project has pictures of its people, paint them from those: first a
+  cast sheet, `{"name": "cast", "prompt": "the family standing side by side, full length, on a
+  plain ground", "ref": "pic_<name>"}`, then each scene with `"ref": "cast"`. The characters stay
+  the same through the film, and they are the project's own people, not new ones. The cast
+  sheet is one of the film's paintings; it need not appear in the film. A repainted cast sheet
+  does not repaint the scenes made from it: repaint those too.
 - Draw a painting with `SK.image(name, x, y, w)` (centred on x, y; its height follows) under a
   camera: `SK.camera([[0, [x, y, zoom]], [t, [x, y, zoom], E.sine], ...])`. It must cover the
   frame at every moment -- a paper-coloured strip at an edge of a still means it does not. At zoom

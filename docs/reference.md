@@ -4345,6 +4345,25 @@ Backends:
 a data URL) wherever the model takes one, and is how a character stays the same from scene to
 scene. Muse takes no reference, so it paints the second scene from the words alone.
 
+`ref` may also name one of the film's project pictures, `pic_<name>`
+(`inputs/pic_<name>.png|jpg|webp`, seeded by `studio/library.py`). The picture is sent as it
+is and never painted.
+- The usual chain: a cast sheet painted from `pic_<name>`, then each scene painted from the
+  cast sheet. The characters stay the same through the film, and they are the project's own
+  people.
+- An image made from a picture is painted in the first batch, with the images that have no
+  `ref`. The scenes made from it follow in the second batch.
+- Its fingerprint carries the picture's content, and it is worked out before the others' wherever
+  it stands in the list. A new picture repaints it and every scene made from it.
+- The name must be `pic_` and a library name, and the file must resolve inside the film's
+  `inputs/`. Another name, a path or a link out is refused, by `sketch-paint.py` and by
+  `studio/validate.py`.
+- A film without a picture `ref` is planned, ordered and cached exactly as before. One old quirk
+  stays because of that: a scene listed before the painting it names is keyed without that
+  painting's fingerprint.
+- `gpt-image-2.5-flare` takes up to 16 reference pictures (OpenRouter's catalogue, 2026-10-26),
+  so the studio's `gpt` paint route uses it.
+
 **Choosing a painter.** `paint-compare.py` paints one paint block with several models side by
 side.
 - An image may carry its own `style`, so one test set can hold scenes from several films.
