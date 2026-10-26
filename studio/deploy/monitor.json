@@ -16,6 +16,8 @@
     "url": "http://127.0.0.1:9200",
     "indices": {"metrics": "machine-metrics", "logs": "machine-logs", "events": "machine-events"},
     "keep_days": {"metrics": 30, "logs": 30, "events": 365},
+    "period": {"metrics": "week", "logs": "week", "events": "month"},
+    "_period": "one index a week (a month for events), not a day: this node already holds ~413 shards on a 4 GB heap, and daily indices kept 30/30/365 days would have added ~425 more",
     "flush_s": 30,
     "buffer_max": 20000
   },

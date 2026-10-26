@@ -23,8 +23,8 @@ line of the journal, which it reads as it is written for the kernel's alarms (an
 error, a hardware error, a GPU Xid, a hung task).
 
 Where it goes:
-  Elasticsearch  on this machine: machine-metrics-<day> (every look), machine-logs-<day> (the
-                 whole journal), machine-events-<day> (each alert as it starts and ends). Deleted
+  Elasticsearch  on this machine: machine-metrics-<week> (every look), machine-logs-<week> (the
+                 whole journal), machine-events-<month> (each alert as it starts and ends). Deleted
                  by a lifecycle policy after monitor.json's keep_days. Its user may only write and
                  read those (`ops.sh monitor install` makes it in the file realm).
   the page       127.0.0.1:8770, published as machine.kitcut.ai by its own tunnel
@@ -1283,8 +1283,11 @@ class ES:
             return 0, {"error": str(e)[:200]}
 
     def index(self, kind, t=None):
-        day = datetime.fromtimestamp(t or time.time(), timezone.utc).strftime("%Y.%m.%d")
-        return "%s-%s" % (self.cfg["indices"][kind], day)
+        """machine-logs-2026.w43: one index a period (monitor.json `period`), so a year of events
+        is twelve shards, not 365."""
+        fmt = {"day": "%Y.%m.%d", "week": "%G.w%V", "month": "%Y.%m"}
+        when = datetime.fromtimestamp(t or time.time(), timezone.utc)
+        return "%s-%s" % (self.cfg["indices"][kind], when.strftime(fmt[self.cfg["period"][kind]]))
 
     def bulk(self, docs):
         """[(kind, doc)] -> True when every one was taken."""

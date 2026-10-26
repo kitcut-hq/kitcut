@@ -417,9 +417,10 @@ hung task).
 
 Three places it goes:
 
-- **Elasticsearch on this machine**: `machine-metrics-<day>` (every look), `machine-logs-<day>`
-  (the whole journal, ~6k lines a day), `machine-events-<day>` (each alert as it starts and ends).
-  A lifecycle policy deletes them after 30, 30 and 365 days. Its user `kc-monitor` (file realm,
+- **Elasticsearch on this machine**: `machine-metrics-<week>` (every look), `machine-logs-<week>`
+  (the whole journal, ~6k lines a day), `machine-events-<month>` (each alert as it starts and
+  ends). One index a week or a month, not a day: this node already carries ~413 shards on a 4 GB
+  heap, and daily indices would have added ~425 more. A lifecycle policy deletes them after 30, 30 and 365 days. Its user `kc-monitor` (file realm,
   role `kc_monitor`) can write and read only those; the password and the page's key are in
   `STUDIO_HOME/monitor/secret.env`, which the mirror leaves out.
 - **The page**, `https://machine.kitcut.ai`: published by its own tunnel (`kitcut-monitor-tunnel`,
