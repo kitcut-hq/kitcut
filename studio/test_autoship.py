@@ -83,6 +83,8 @@ def decisions(autoship):
         "a changed requirements file: hold for a person",
     )
     check(d(ff=False) == "refuse", "a rewritten branch on GitHub: refuse")
+    why = autoship.decide({}, dict(base, ff=False, ahead=["0f84923 bench films"]), now)[1]
+    check("holds 1 commit" in why and "0f84923" in why, "unpushed machine commits are named", why)
     check(d(st=dict(old, failed=head)) == "failed", "a head that failed: not tried again")
     check(d(st=dict(old, failed="c" * 40)) == "ship", "a new head after a failure: tried")
     check(d(paused="ops.sh rollback") == "idle", "paused (a rollback): nothing")

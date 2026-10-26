@@ -42,7 +42,9 @@ It does not ship, and says so in the note the site emails the owner from (machin
 
   - requirements*.txt changed: every release shares one venv, so installing them changes the
     films still being made on the old server -- ship that by hand at a quiet moment;
-  - GitHub's head is not a fast-forward of the machine's (a rewritten branch);
+  - GitHub's head is not a fast-forward of the machine's: either GitHub's branch was rewritten, or
+    the machine holds commits GitHub lacks (work committed on it and never pushed). The note names
+    those commits and says which, with the fix;
   - the head already failed its release's tests (and was switched back): once per commit,
     never again by itself. A new
     commit is tried as usual; `--forget` (ops.sh autoship now --retry) lets the same one be tried
@@ -112,10 +114,15 @@ def decide(st, f, now):
     if not leader:
         return "wait", "the studio does not answer on 127.0.0.1:%d" % PORT
     if not f["ff"]:
-        return "refuse", "GitHub's %s (%s) is not a fast-forward of the machine's" % (
-            BRANCH,
-            head[:12],
-        )
+        ahead = f.get("ahead") or []
+        why = "GitHub's %s (%s) is not a fast-forward of the machine's" % (BRANCH, head[:12])
+        if ahead:
+            return "refuse", (
+                "%s: the machine holds %d commit(s) GitHub lacks (%s). Push them from the machine"
+                " or merge them into GitHub's branch (git fetch the machine's bare repo, merge,"
+                " push); nothing is lost, the studio just will not move until GitHub has them"
+            ) % (why, len(ahead), "; ".join(ahead[:5]))
+        return "refuse", "%s: GitHub's branch was rewritten; ops.sh autoship --plan" % why
     if st.get("failed") == head:
         # still "failed", so the note keeps saying so until a new commit (or --retry) ships
         return "failed", "%s did not ship (%s); waiting for a new commit" % (
@@ -212,6 +219,16 @@ def facts():
             ).returncode
             == 0
         )
+        if not f["ff"]:
+            f["ahead"] = sh(
+                "git",
+                "-C",
+                BARE,
+                "log",
+                "--format=%h %s",
+                "refs/github/%s..refs/heads/%s" % (BRANCH, BRANCH),
+                check=False,
+            ).splitlines()
         full = sh(
             "git", "-C", BARE, "rev-parse", "--verify", "-q", f["leader"] + "^{commit}", check=False
         )
