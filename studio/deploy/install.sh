@@ -51,7 +51,8 @@ for unit in kitcut-studio@.service kitcut-studio-boot.service kitcut-tunnel.serv
   kitcut-login-check.service kitcut-login-check.timer kitcut-usage.service \
   kitcut-prune.service kitcut-prune.timer kitcut-backup.service kitcut-backup.timer \
   kitcut-backup-full.service kitcut-backup-full.timer kitcut-filmgit.service kitcut-filmgit.timer \
-  kitcut-claude-rc.service kitcut-autoship.service kitcut-autoship.timer kitcut-autoship.path \n  kitcut-monitor.service; do
+  kitcut-claude-rc.service kitcut-autoship.service kitcut-autoship.timer kitcut-autoship.path \
+  kitcut-monitor.service; do
   body="$(sed -e "s#@REPO@#$REPO#g" -e "s#@HOME@#$HOME_DIR#g" -e "s#@USER@#$USER_NAME#g" \
     "$REPO/studio/deploy/$unit")"
   put "/etc/systemd/system/$unit" "$body"
