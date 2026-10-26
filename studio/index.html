@@ -2578,6 +2578,11 @@ $('form').addEventListener('submit', async (e) => {
         (body.renews_at && !(CREDITS && CREDITS.refills === false) ? ` Credits renew on ${new Date(body.renews_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.` : '');
       return;
     }
+    if (r.status === 402 && body.reason === 'card_problem') {  // a trial whose card did not go through: another card first
+      finish(); $('status').textContent = body.error;
+      screen(`<div class="idle">${esc(body.error)}<br><a href="/account">Use another card</a></div>`);
+      return;
+    }
     if (r.status === 429) {  // films already being made, a full queue, or the day's limit: say which, and where to look
       finish(); $('status').textContent = body.error || 'The studio cannot take this film right now.';
       screen(`<div class="idle">${esc(body.error || 'The studio cannot take this film right now.')}` +
