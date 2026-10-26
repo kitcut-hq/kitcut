@@ -576,3 +576,47 @@ hook rate (3-second plays / impressions), hold (ThruPlays / 3-second plays), lin
 per enquiry once the pages exist. Before the landing pages exist, the hook rate and hold are
 what a creative can be judged on; an ad under ~25% hook rate after 2,000 impressions loses to
 the others.
+
+## 9. Round two: real series only, one message (2026-10-25, evening)
+
+**The owner's verdict on section 8.** Every invented creative (K1-K5, P1-P3, P5) is out:
+"tasteless, not optimized to be ads... I would never contact a company and ask them to create
+something like that". The reviewer's ranking did not survive contact with the buyer. Only P4,
+Duchess, worked, and for a reason worth keeping: it is a real series in its own formula, summed
+up across its episodes. Round two is variations of that, and the same for Leo. Invented examples
+are not made again unless asked.
+
+**What the owner changed, in order:**
+- The offer comes in the first seconds (a caption from frame 0, or the first line), never at
+  second 20 or only on the closing card.
+- The message for parents, in the owner's words: an entire show about your kids, a dozen
+  episodes; they will watch each one six times; the only kids in town with their own show;
+  hyper-personalized (photos, the words they say, what they like, where they go); delivered in
+  days, not weeks, even an episode a day; their own YouTube channel if you want.
+- No prices in the videos. No company name, no logo, no web address either: "it'll only confuse".
+- One core line, straight and simple. The show is ABOUT the kid, never "made for your kids". Keep
+  "show" (a series, the premium) and say "personalized" outright. The line in use: **"A
+  personalized cartoon show, starring your kid. Ready in days."**
+- The kid's real photos (cut out locally, shown as taped prints, never redrawn) open the ad:
+  the photo and the cartoon side by side answers "will it look like mine?" in two seconds,
+  the gap the section 8 review found.
+
+**The films that pass** (9:16, link-only, MP4 at `https://media.kitcut.ai/films/<id>/film.mp4`):
+
+| Ad | Opens with | Film | Length |
+|---|---|---|---|
+| H1, kids | A PERSONALIZED CARTOON SHOW / STARRING YOUR KID, photo and cartoon | studio-20261025-224416-wcwgsn | 30 s |
+| H2, kids | THIS 4-YEAR-OLD HAS HIS OWN CARTOON SHOW, then YOUR KID CAN TOO | studio-20261025-224516-5co4v6 | 35 s |
+| P2, pets | A PERSONALIZED CARTOON SHOW / STARRING YOUR PET, Duchess | studio-20261025-225517-fy2bs4 | 30 s |
+| D1, pets | YOUR PET'S OWN CARTOON SERIES (older card: KitCut logo and name) | studio-20261025-215747-nd63c7 | 30 s |
+| M1, kids | the owner's full message, 45 s (older card; a made-up subscriber count) | studio-20261025-215745-ua6clg | 45 s |
+
+H1 and H2 test two openings, a direct promise against curiosity about a real boy, so the hook
+rate settles which line stops the scroll. Versions stopped part-way as the message changed did
+not finish and cost nothing. Two that did finish carry the older KitCut card and are not
+proposed: studio-20261025-221217-dmweyl and studio-20261025-221917-6nwohn.
+
+**The landing pages followed the same rules** (sketch-studio PRs #63-#68): ad-only funnels at
+kitcut.ai/made-for-you/kids and /pets, the same headline as the ads, no navigation or links
+out, one repeated call to action, a two-step enquiry form; /business turns into a funnel for
+visitors who arrive from an ad.
