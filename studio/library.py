@@ -85,6 +85,7 @@ from film import (
     Film,
     _write_json,
     modules,
+    paint_kinds,
 )
 
 sys.path.insert(
@@ -694,7 +695,13 @@ def note(film):
     if pics:
         out += [
             "" if out else None,
-            "The project's pictures (Read one to see it; on screen: SK.image('<name>', x, y, w)):",
+            "The project's pictures (Read one to see it; on screen: SK.image('<name>', x, y, w)%s):"
+            % (
+                # painted from the style picture: the painter takes a reference (sketch-paint.py)
+                '; a painting made from one: "ref": "<name>" in paint.json'
+                if paint_kinds(film.caps) and (rec.get("paint_route") or {}).get("ref")
+                else ""
+            ),
         ]
         out += ["- %s (%sx%s): %s" % (p["name"], p.get("w"), p.get("h"), p["file"]) for p in pics]
     if got.get("actors"):

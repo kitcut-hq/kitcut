@@ -38,8 +38,11 @@ SK.cutout(name, ...). "aspect" ("1:1", "2:3", "3:2", ...) shapes the canvas it i
 
 "ref" names an image already painted, which goes in as a reference picture wherever the model
 takes one (gemini, and the OpenRouter models whose catalogue entry lists input_references): the
-way to keep a character the same from scene to scene. "quality" (low/medium/high) is sent to the
-models that have the setting (OpenAI's). scripts/paint-compare.py paints one paint block with
+way to keep a character the same from scene to scene. It may also name one of the film's project
+pictures, "pic_<name>" (inputs/pic_<name>.*, studio/library.py), which is sent as it is and never
+painted: a cast sheet painted from the project's own people, and then each scene from the cast
+sheet, keeps them the person's from the first picture to the last. "quality" (low/medium/high) is
+sent to the models that have the setting (OpenAI's). scripts/paint-compare.py paints one paint block with
 several models side by side, to choose between them.
 
 "style_ref" (a path beside the manifest: a project's style picture, studio/stylekit.py) goes in
@@ -48,8 +51,8 @@ light, how much space -- never for its layout, objects, people or words; an imag
 follows it as the second picture, for the characters. A model that takes no reference (Muse)
 paints from the words alone, so a style picture is for the OpenRouter models that take one.
 
-Images are cached by a fingerprint of backend, model, style, prompt and reference, so a rerun
-paints only what changed. Each image painted appends its cost to images/spend.jsonl, and a run
+Images are cached by a fingerprint of backend, model, style, prompt and reference (a project
+picture's own content), so a rerun paints only what changed. Each image painted appends its cost to images/spend.jsonl, and a run
 refuses to paint past max_images for the film (the cap a caller such as Sketch Studio sets).
 
 Invoke as:
@@ -228,10 +231,16 @@ def takes_refs(caps):
     return refs.get("max", 0) >= 1
 
 
-def data_url(path):
+def mime(path):
+    """A reference picture's type, from its name: a painting is JPEG or WebP, a project picture
+    PNG, JPEG or WebP."""
     kind = {".png": "png", ".webp": "webp"}.get(os.path.splitext(path)[1].lower(), "jpeg")
+    return "image/" + kind
+
+
+def data_url(path):
     with open(path, "rb") as f:
-        return "data:image/%s;base64," % kind + base64.b64encode(f.read()).decode()
+        return "data:%s;base64," % mime(path) + base64.b64encode(f.read()).decode()
 
 
 def ref_lead(ref=None, style_ref=None):
@@ -301,7 +310,7 @@ def paint_gemini(prompt, model, ref=None):
     if ref:
         with open(ref, "rb") as f:
             contents = [
-                types.Part.from_bytes(data=f.read(), mime_type="image/jpeg"),
+                types.Part.from_bytes(data=f.read(), mime_type=mime(ref)),
                 "Keep the characters, their clothes and the drawing style exactly as in this "
                 "picture. " + prompt,
             ]
@@ -481,11 +490,24 @@ def main():
     # which need painting: in order, so a "ref" is painted before the images that use it
     by_name = {im["name"]: im for im in images}
     fps, todo, discard = {}, [], []
+    pics = {}  # an image's ref that is a project picture: {image name: its file}
     for im in images:
         ref = im.get("ref")
         if ref and ref not in by_name:
-            sys.exit("image %s: ref %r is not one of the images" % (im["name"], ref))
-        fps[im["name"]] = fingerprint(spec, im, fps.get(ref) if ref else None, style_fp)
+            pic = _sketch.project_picture(m["_dir"], ref)
+            if not pic:
+                sys.exit(
+                    "image %s: ref %r is not one of the images, nor one of this film's project "
+                    "pictures (pic_<name>)" % (im["name"], ref)
+                )
+            pics[im["name"]] = pic
+            # first, with the picture's own content: a new one repaints it, and the scenes
+            # made from it wherever they stand in the list
+            fps[im["name"]] = fingerprint(spec, im, ["pic", file_fp(pic)], style_fp)
+    for im in images:
+        ref = im.get("ref")
+        if im["name"] not in pics:
+            fps[im["name"]] = fingerprint(spec, im, fps.get(ref) if ref else None, style_fp)
         cached = os.path.join(idir, "%s_%s%s" % (im["name"], fps[im["name"]], ext(spec, im)))
         retake = im["name"] in only and args.retake and os.path.exists(cached)
         if retake:
@@ -521,7 +543,9 @@ def main():
                 alpha = bool(cs) and gives_alpha(model_caps(cs["model"]))
                 prompt = full_prompt(spec, im, transparent=alpha)
                 r = im.get("ref")
-                ref = os.path.join(idir, r + ext(spec, by_name[r])) if r else None
+                ref = pics.get(im["name"]) or (
+                    os.path.join(idir, r + ext(spec, by_name[r])) if r else None
+                )
                 t, err = time.time(), None
                 for attempt in range(3):
                     try:
@@ -552,8 +576,10 @@ def main():
                     w, h = to_jpeg(data, path)
                 return im["name"], path, w, h, meta, time.time() - t
 
-            done, refs = [], [im for im in todo if not im.get("ref")]
-            later = [im for im in todo if im.get("ref")]
+            # a project picture is never painted: an image made from one goes first, so a
+            # scene painted from it (a cast sheet painted from pic_<name>) has it to work from
+            done, refs = [], [im for im in todo if not im.get("ref") or im["name"] in pics]
+            later = [im for im in todo if im.get("ref") and im["name"] not in pics]
             for batch in (refs, later):  # the references first: the others are painted from them
                 with ThreadPoolExecutor(max_workers=4) as ex:
                     for name, path, w, h, meta, sec in ex.map(one, batch):

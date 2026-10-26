@@ -38,6 +38,25 @@ def safe_name(name, what="name"):
     return name
 
 
+# a project's picture as a film names it (studio/library.py _seed_pictures): inputs/pic_<name>.*
+PIC_NAME = re.compile(r"^pic_[a-z][a-z0-9_]{0,30}$")
+PIC_EXT = (".png", ".jpg", ".jpeg", ".webp")
+
+
+def project_picture(film_dir, name):
+    """The file of the film's own project picture `name` (pic_<name>, in its inputs/), or None:
+    a name of another shape, no such picture, or a file that resolves outside the film's
+    inputs/ (a link) is not one."""
+    if not isinstance(name, str) or not PIC_NAME.match(name):
+        return None
+    inputs = os.path.realpath(os.path.join(film_dir, "inputs"))
+    for ext in PIC_EXT:
+        p = os.path.realpath(os.path.join(inputs, name + ext))
+        if p.startswith(inputs + os.sep) and os.path.isfile(p):
+            return p
+    return None
+
+
 # ------------------------------------------------------------------ manifest
 def load(path):
     """Read a sketch manifest and resolve everything it names relative to its folder."""

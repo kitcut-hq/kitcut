@@ -1161,7 +1161,9 @@ def note(film, lib):
                 "So each image's prompt says ONLY what to draw -- the subject, the framing, the "
                 "moment -- with no medium, style, palette or colour words: a colour word beats "
                 'the picture ("pink roses" came back pink from a black-ink style). A `ref` '
-                "works now too: it keeps a character the same from picture to picture."
+                "works now too: it keeps a character the same from picture to picture, and "
+                '`"ref": "pic_<name>"` paints from one of the project\'s own pictures (a cast '
+                'sheet of its people, then each scene with `"ref"` naming the sheet).'
             )
         else:
             lines.append(
