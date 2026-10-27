@@ -161,7 +161,7 @@ def _vo(d, max_lines, length=60, people=()):
 
 
 MAX_REFS = 4  # sketch-paint.py MAX_REFS: the pictures one painting is made from
-CHARACTERS = 12  # library.CHARACTERS: a project's painted characters
+CHARACTERS = 16  # library.CHARACTERS: a project's painted characters
 CAST_NAME = re.compile(r"^[a-z][a-z0-9_]{0,30}$")  # library.NAME: a kept painting joins the cast
 
 

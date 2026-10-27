@@ -1455,7 +1455,7 @@ def picture_thumb(client, project, name):
 # Every episode gets each live one as inputs/cast_<name>.<ext> (_seed_painted): a painting is made
 # from it with "ref": "cast_<name>" (sketch-paint.py), and it is drawn as it is with
 # SK.image('cast_<name>'). Old films keep their own copy; a removed character reaches no new one.
-CHARACTERS = 12  # a project's painted characters: every episode carries them all
+CHARACTERS = 16  # a project's painted characters: every episode carries them all
 MIN_SIDE = 512  # a character's short side: less gives the painter too little of a face
 MAX_ABOUT = 200  # a character's description, as a cast member's (_about)
 
