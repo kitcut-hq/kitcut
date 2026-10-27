@@ -133,7 +133,11 @@ def characters():
     for i in range(library.CHARACTERS - 1):
         library.add_character(CL, P1, "kid%d" % i, "Kid %d" % i, mom)
     check(
-        refused(lambda: library.add_character(CL, P1, "extra", "One more", mom), 409, "up to 12"),
+        refused(
+            lambda: library.add_character(CL, P1, "extra", "One more", mom),
+            409,
+            "up to %d" % library.CHARACTERS,
+        ),
         "at most %d painted characters" % library.CHARACTERS,
     )
     check(
@@ -149,7 +153,7 @@ def characters():
     back = library.add_character(CL, P1, "kid10", "Kid 10 again", mom)
     check(back["version"] == 2, "a removed name put in again comes back as its next version")
     library.delete(CL, "kid10", P1)
-    for i in range(1, 10):
+    for i in range(1, library.CHARACTERS - 1):  # all but kid0, for the episodes below
         library.delete(CL, "kid%d" % i, P1)
 
 
@@ -224,7 +228,12 @@ def checks(f):
     check(any("a project's episodes" in o for o in out), "keep outside a project is refused", out)
     full = dict(cast, painted=["c%d" % i for i in range(library.CHARACTERS)])
     out = problems([{"name": "dad", "prompt": "a", "keep": True, "about": "Dad"}], full)
-    check(any("holds 12" in o for o in out), "a kept painting past the cap is refused", out)
+    check(
+        any("holds %d" % library.CHARACTERS in o for o in out),
+        "a kept painting past the cap is refused",
+        out,
+    )
+    check(validate.CHARACTERS == library.CHARACTERS, "the check and the library hold the same cap")
     out = problems([{"name": "c3", "prompt": "a", "keep": True, "about": "C3, again"}], full)
     check(out == [], "a full cast takes a character's next version", out)
 

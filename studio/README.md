@@ -793,7 +793,7 @@ its films, next to `projects\` (its text is in its project's git repository too:
     description, and at least 512 px on the short side. Or an episode keeps one of its
     paintings: `"keep": true` with `"about"` in `paint.json` (`library._keep_painted`, from
     `keep`).
-  - **Limits.** At most 12 per project (`library.CHARACTERS`). A repaint under the same name is
+  - **Limits.** At most 16 per project (`library.CHARACTERS`). A repaint under the same name is
     the next version, and, as with a drawn member, only over the version the episode started
     from. A drawn member never replaces one, and one never takes a drawn member's name.
   - **Every episode gets them** as `inputs/cast_<name>.*` (`_seed_painted`). Its note says who
