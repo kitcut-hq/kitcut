@@ -227,7 +227,7 @@ $110). At list-price film costs, none of the columns makes money.
 | | Exists today | Must be built | Size |
 |---|---|---|---|
 | Plans | minute plans, Pro trial with $1 check | videos x length plans in Stripe, pricing page, trial that makes 3 videos | S-M |
-| Posting | connect channels, publish, calendar, schedule a film, auto-publish a project, titles, chapters, 4 thumbnails | nothing new for posting; **YouTube's app audit and a quota raise** (100 uploads a day for the whole app; unaudited apps may have uploads kept private) | M, a blocker |
+| Posting | connect channels, publish, calendar, schedule a film, auto-publish a project, titles, chapters, 4 thumbnails | nothing new for posting; **YouTube's app audit and a quota raise** (100 uploads a day for the whole app; unaudited apps may have uploads kept private) | M; set aside by the owner on 2026-10-27, revisit before scale |
 | A month of videos | projects keep a series' brief and cast; a queue of 10, expiring after 23 h, MCP only; 5 films per account a day | autopilot per channel: N a month, a cadence, the queue kept, on the website | L |
 | The producer | daily per-video analytics (views, watch time, view %, traffic sources, search terms); keyword volume; a "brainstorm" tool that only gathers material; the Monday numbers email | the weekly loop above, proposals with one-click approval, impressions, click-through and retention read too | L |
 | Shorts from a video | 9:16 films made from an idea, MCP only, each a separate full film | cut three Shorts from each long video's narration and scenes | L (interim: order 9:16 films from the script, M) |
@@ -238,8 +238,8 @@ $110). At list-price film costs, none of the columns makes money.
 **Order:** the earnings view, the channel plan page and the new plans first, delivered with what
 exists (a project per channel, the queue, auto-publish), as a test against today's card-first page
 at about $20 a day in the US and Canada. The producer runs on our own channels in parallel. The
-autopilot, Shorts and Express follow only if the test's trials hold and pay. The YouTube audit
-starts now, because nothing auto-posts at scale without it.
+autopilot, Shorts and Express follow only if the test's trials hold and pay. YouTube's app audit
+and upload quota are set aside for now (owner, 2026-10-27); they come back before real scale.
 
 ## Risks
 
@@ -249,7 +249,7 @@ starts now, because nothing auto-posts at scale without it.
 - **YouTube policy.** "Inauthentic content" is judged per channel, and YouTube removed big AI
   channels in January 2026. Variety and real value in every video are a product rule, not advice.
 - **Claude cost and capacity,** above.
-- **The YouTube app audit and upload quota,** above.
+- **The YouTube app audit and upload quota,** above: set aside for now, not forgotten.
 - **The 2027 Partner Program change:** from 1 February 2027 new channels need 8,000 watch hours,
   twice today's bar. The page must say which rule applies on the day a customer reads it.
 
