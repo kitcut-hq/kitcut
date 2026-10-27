@@ -67,6 +67,7 @@ TESTS = (
     "test_people.py",  # people drawn as talking characters: the request, brief, voices, drawing
     "test_actors.py",  # a project's actor packs: put in, refused, seeded, prompted, drawn
     "test_paintref.py",  # a painting made from a project's picture: refused, ordered, cached
+    "test_characters.py",  # painted characters: put in, seeded, kept, refused; @name in a prompt
     "test_templates.py",  # a film remade from a template: the version, the API, the first message, a render
     "test_web.py",  # the studio's web tools: public URLs only, pictures, pages, fonts (stubbed)
     "test_rounds.py",  # a finished film changed from its maker's notes: versions, the swap, the line

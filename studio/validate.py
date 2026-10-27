@@ -160,8 +160,16 @@ def _vo(d, max_lines, length=60, people=()):
     return out
 
 
-def _paint(d, length, caps, film_dir=None):
-    """`film_dir`: the film's folder, whose project pictures (inputs/pic_<name>.*) a ref may name."""
+MAX_REFS = 4  # sketch-paint.py MAX_REFS: the pictures one painting is made from
+CHARACTERS = 12  # library.CHARACTERS: a project's painted characters
+CAST_NAME = re.compile(r"^[a-z][a-z0-9_]{0,30}$")  # library.NAME: a kept painting joins the cast
+
+
+def _paint(d, length, caps, film_dir=None, cast=None):
+    """`film_dir`: the film's folder, whose project pictures and painted characters
+    (inputs/pic_<name>.*, inputs/cast_<name>.*) a ref may name. `cast`: an episode's
+    {"drawn": names, "painted": names} -- a painting it keeps ("keep": true) joins its project's
+    cast (library._keep_painted); None for a film outside projects, which keeps none."""
     out = []
     if not isinstance(d, dict):
         return ["paint.json must be an object"]
@@ -173,7 +181,7 @@ def _paint(d, length, caps, film_dir=None):
     ims = d.get("images", [])
     kinds = paint_kinds(caps)  # what this film's capabilities paint (film.CAPS)
     cap = sum(limits(length)[kind["cap"]] for kind in kinds)
-    keys = {"name", "prompt", "ref"} | {k for kind in kinds for k in kind["keys"]}
+    keys = {"name", "prompt", "ref", "keep", "about"} | {k for kind in kinds for k in kind["keys"]}
     if not isinstance(ims, list) or len(ims) > cap:
         return out + ["paint.json: images is a list of at most %d" % cap]
     names = [im.get("name") for im in ims if isinstance(im, dict)]
@@ -187,14 +195,8 @@ def _paint(d, length, caps, film_dir=None):
             out.append(str(e))
         if not isinstance(im.get("prompt"), str) or not 0 < len(im["prompt"]) <= 2000:
             out.append("paint.json: image %d needs a prompt (at most 2000 characters)" % i)
-        if "ref" in im and (im["ref"] not in names or im["ref"] == im.get("name")):
-            pic = film_dir and im["ref"] not in names
-            pic = pic and _sketch.project_picture(film_dir, im["ref"])
-            if not pic:
-                out.append(
-                    "paint.json: image %d ref must name another image, or one of this film's "
-                    "project pictures (pic_<name>)" % i
-                )
+        out += _ref(im, i, names, film_dir)
+        out += _keep(im, i, cast)
         if set(im) - keys:
             out.append("paint.json: image %d may only have %s" % (i, ", ".join(sorted(keys))))
         c = im.get("cutout", False)
@@ -207,7 +209,100 @@ def _paint(d, length, caps, film_dir=None):
             out.append("paint.json: image %d aspect is one of %s" % (i, ", ".join(ASPECTS)))
     if len(set(names)) != len(names):
         out.append("paint.json: image names must be unique")
-    return out
+    return out + _kept_count(ims, cast) + _named(ims, cast)
+
+
+def _ref(im, i, names, film_dir):
+    """An image's "ref": another image, a project picture or a painted character; or a list of
+    up to MAX_REFS of them."""
+    if "ref" not in im:
+        return []
+    ref = im["ref"]
+    refs = ref if isinstance(ref, list) else [ref]
+    if not refs or len(refs) > MAX_REFS or not all(isinstance(r, str) and r for r in refs):
+        return ["paint.json: image %d ref is a name, or a list of up to %d names" % (i, MAX_REFS)]
+    if len(set(refs)) != len(refs):
+        return ["paint.json: image %d ref names a picture twice" % i]
+    for r in refs:
+        if r in names and r != im.get("name"):
+            continue
+        if not (r not in names and film_dir and _sketch.project_picture(film_dir, r)):
+            return [
+                "paint.json: image %d ref %r must name another image, or one of this film's "
+                "project pictures (pic_<name>) or painted characters (cast_<name>)" % (i, r)
+            ]
+    return []
+
+
+def _keep(im, i, cast):
+    """A painting kept for the project's cast: "keep": true, with "about"."""
+    if "keep" in im and not isinstance(im["keep"], bool):
+        return ["paint.json: image %d keep is true or false" % i]
+    if "about" in im and not (isinstance(im["about"], str) and 0 < len(im["about"]) <= 200):
+        return ["paint.json: image %d about is one line saying who it is (at most 200)" % i]
+    if not im.get("keep"):
+        return []
+    if cast is None:
+        return ["paint.json: image %d keep is for a project's episodes; this film has none" % i]
+    name = im.get("name") or ""
+    if not CAST_NAME.match(name):
+        return [
+            "paint.json: image %d is kept in the cast under its name: lowercase letters, digits "
+            "and _, starting with a letter" % i
+        ]
+    if not im.get("about"):
+        return ['paint.json: image %d is kept: give it "about", who it is and what they wear' % i]
+    if name in cast["drawn"]:
+        return [
+            "paint.json: image %d: the cast has a drawn member called %s; name it else" % (i, name)
+        ]
+    return []
+
+
+def _kept_count(ims, cast):
+    """The project's painted characters once this film's kept paintings join them, over the cap."""
+    if not cast:
+        return []
+    new = {im.get("name") for im in ims if isinstance(im, dict) and im.get("keep") is True}
+    if len(set(cast["painted"]) | new) > CHARACTERS:
+        return [
+            "paint.json: the project's cast holds %d painted characters and has %d: keep fewer "
+            "new ones, or keep one as the next version of a character it has"
+            % (CHARACTERS, len(cast["painted"]))
+        ]
+    return []
+
+
+def _named(ims, cast):
+    """The painted characters the prompt names (@name): once paintings are written, each is
+    painted from its picture in at least one of them."""
+    if not cast or not cast.get("named") or not ims:
+        return []
+    refs = set()
+    for im in ims:
+        r = im.get("ref") if isinstance(im, dict) else None
+        refs |= {x for x in (r if isinstance(r, list) else [r]) if isinstance(x, str)}
+    gone = [n for n in cast["named"] if "cast_" + n not in refs]
+    if not gone:
+        return []
+    return [
+        "paint.json: the prompt names %s: paint the paintings they are in from their pictures, "
+        '"ref": %s' % (", ".join("@" + n for n in gone), ", ".join('"cast_%s"' % n for n in gone))
+    ]
+
+
+def _cast_of(film):
+    """An episode's cast as _paint checks a kept painting against it; None outside projects."""
+    rec = film.record()
+    if not (rec.get("project") or {}).get("id"):
+        return None
+    got = rec.get("library") or {}
+    drawn = {c["name"] for c in got.get("cast") or []}
+    if os.path.isdir(film.path("cast")):
+        drawn |= {n[:-3] for n in os.listdir(film.path("cast")) if n.endswith(".js")}
+    painted = [c["name"] for c in got.get("painted") or []]
+    named = [n for n in rec.get("characters") or [] if n in painted]
+    return {"drawn": drawn, "painted": painted, "named": named}
 
 
 def _cut_ok(c):
@@ -387,7 +482,7 @@ def problems(film, name):
             out = _verbatim(d, *script)
         return out
     if name == "paint.json":
-        return _paint(d, film.length, film.caps, film.dir)
+        return _paint(d, film.length, film.caps, film.dir, _cast_of(film))
     if name in ("score.json", "sfx.json"):  # a kept sound or theme, played by name
         try:
             score, cues = A.expand_sounds(

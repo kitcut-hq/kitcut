@@ -66,6 +66,7 @@ import shutil
 import hashlib
 import threading
 import contextlib
+import difflib
 from datetime import datetime
 
 import sys
@@ -381,6 +382,7 @@ def seed(film):
     got = {"cast": cast, "films": memory}
     if lib[1]:
         got["pictures"] = _seed_pictures(film, lib, idx)
+        got["painted"] = _seed_painted(film, lib, idx)
         got["voice"] = _seed_voice(film, lib, idx)
         try:  # the project's brand (brandkit.py): its faces, logos and brand.js
             got["brand"] = brandkit.seed(film, lib)
@@ -704,6 +706,14 @@ def note(film):
             ),
         ]
         out += ["- %s (%sx%s): %s" % (p["name"], p.get("w"), p.get("h"), p["file"]) for p in pics]
+    told = project and painted_note(
+        film, got.get("painted") or [], collection and "cast" not in kept
+    )
+    if told:
+        out += ["" if out else None, told]
+    told = project and named_note(film)
+    if told:
+        out += ["" if out else None, told]
     if got.get("actors"):
         out += ["" if out else None, actors_note(got["actors"])]
     if voice:
@@ -1221,9 +1231,13 @@ def _keep(film, lib, items, pictures):
     had = {c["name"]: c["hash"] for c in (film.record().get("library") or {}).get("cast") or []}
     told = {c["name"] for c in (film.record().get("library") or {}).get("clashed") or []}
     saved, clashed, merged = [], [], []
+    taken = []
     for it in items:
         n = it["name"]
         e = idx["cast"].get(n)
+        if e and e.get("painted") and not e.get("deleted"):
+            taken.append(n)  # a painted character's name: a drawing never replaces the picture
+            continue
         if it.get("merged_from") and e and e.get("hash") == it["merged_from"]:
             merged.append(n)  # merged onto what the library holds still (merges): saved over it
         elif e and e.get("hash") != had.get(n):  # changed since this film got it, or made elsewhere
@@ -1263,7 +1277,8 @@ def _keep(film, lib, items, pictures):
         saved.append(n)
         if n in told:  # this film was given the clashed copies to fold in, and saved its own
             shutil.rmtree(os.path.join(d, CLASHED, n), ignore_errors=True)
-    names = used(film)
+    painted, refused = _keep_painted(film, lib, idx, now) if lib[1] else ([], [])
+    names = used(film) + painted_used(film)
     for n in names:
         e = idx["cast"].get(n)
         if e and not e.get("deleted"):
@@ -1272,10 +1287,14 @@ def _keep(film, lib, items, pictures):
     idx["films"] = ([film.id] + [x for x in idx["films"] if x != film.id])[:LISTED]
     _save(lib, idx)
     sounds, sounds_clashed = _keep_sounds(film, lib, now) if lib[1] else ([], [])
-    if saved:
+    if saved or painted:
         _contact(lib, idx)
     _poster(lib, film)
     out = {"saved": saved, "used": [n for n in names if n in idx["cast"]]}
+    if painted:
+        out["painted"] = painted
+    if refused or taken:
+        out["painted_refused"] = refused + taken
     if merged:
         out["merged"] = merged
     if clashed:
@@ -1294,19 +1313,7 @@ def listing(client, project=None):
     if not lib:
         return {"cast": [], "films": []}
     idx = load(lib)
-    cast = [
-        {
-            "name": n,
-            "about": e.get("about", ""),
-            "kind": e.get("kind"),
-            "version": e["version"],
-            "films": e.get("films") or [],
-            "updated": e.get("updated"),
-            "thumb": bool(e.get("thumb")),
-        }
-        for n, e in sorted(idx["cast"].items())
-        if not e.get("deleted")
-    ]
+    cast = [_listed(n, e) for n, e in sorted(idx["cast"].items()) if not e.get("deleted")]
     out = {"cast": cast, "films": idx["films"]}
     if project:
         out["pictures"] = [
@@ -1434,6 +1441,340 @@ def picture_thumb(client, project, name):
         return None
     p = os.path.join(dir_of(lib), "pictures", name + ".thumb.png")
     return p if name in load(lib)["pictures"] and os.path.exists(p) else None
+
+
+# ---------------------------------------------------------------- a project's painted characters
+# A painted cast member is a picture, not code: a character the person put in as they are ("Add
+# a character" on the Cast tab, add_character), or a painting an episode kept for the series
+# ("keep": true on an image in paint.json, _keep_painted). It shares the cast's names, its
+# Remove (delete) and its thumbnails with the drawn members, and is told apart by "painted":
+#
+#     cast\<name>\v1.png v2.jpg ...   each kept version (the last KEEP), any of PICTURE_EXT
+#     cast\<name>\thumb.png           its latest version, small
+#
+# Every episode gets each live one as inputs/cast_<name>.<ext> (_seed_painted): a painting is made
+# from it with "ref": "cast_<name>" (sketch-paint.py), and it is drawn as it is with
+# SK.image('cast_<name>'). Old films keep their own copy; a removed character reaches no new one.
+CHARACTERS = 12  # a project's painted characters: every episode carries them all
+MIN_SIDE = 512  # a character's short side: less gives the painter too little of a face
+MAX_ABOUT = 200  # a character's description, as a cast member's (_about)
+
+
+def _bytes_hash(path):
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()[:16]
+
+
+def _live_painted(idx):
+    return {n: e for n, e in idx["cast"].items() if e.get("painted") and not e.get("deleted")}
+
+
+def _put_painted(lib, idx, name, src, about, now, **meta):
+    """A new version of painted member `name` from the picture at src (its thumbnail too), in
+    idx; the caller holds the lock and saves. Returns the entry, or raises PictureError when the
+    picture cannot be read."""
+    from PIL import Image
+
+    try:
+        with Image.open(src) as im:
+            w, h = im.size
+            fmt = (im.format or "").upper()
+    except (OSError, ValueError) as e:
+        raise PictureError(400, "That picture could not be read.") from e
+    ext = {"PNG": "png", "JPEG": "jpg", "WEBP": "webp"}.get(fmt)
+    if not ext:
+        raise PictureError(400, "A character is a PNG, JPEG or WebP picture.")
+    e = idx["cast"].get(name) or {"version": 0, "films": [], "created": now}
+    v = int(e.get("version") or 0) + 1
+    md = os.path.join(dir_of(lib), "cast", name)
+    os.makedirs(md, exist_ok=True)
+    shutil.copyfile(src, os.path.join(md, "v%d.%s" % (v, ext)))
+    for old in range(1, v - KEEP + 1):
+        for x in PICTURE_EXT:
+            with contextlib.suppress(OSError):
+                os.remove(os.path.join(md, "v%d.%s" % (old, x)))
+    with Image.open(src) as im:
+        im = im.convert("RGBA")
+        im.thumbnail((480, 480))
+        im.save(os.path.join(md, "thumb.png"))
+    e.update(
+        version=v,
+        hash=_bytes_hash(src),
+        about=" ".join(str(about or "").split())[:MAX_ABOUT],
+        kind=None,
+        painted=True,
+        ext=ext,
+        w=w,
+        h=h,
+        updated=now,
+        thumb=True,
+        **meta,
+    )
+    e.pop("deleted", None)
+    idx["cast"][name] = e
+    return e
+
+
+def add_character(client, project, name, about, src):
+    """Put a ready-made painted character (an upload's picture, checked by uploads.receive) into
+    a project's cast, under a name, with a description of who it is; the same name again is its
+    next version. Returns its entry as listing() shows it."""
+    lib = owner(client, project)
+    if not lib or not project:
+        raise PictureError(404, "No such project.")
+    if not NAME.match(name or ""):
+        raise PictureError(
+            400, "A character's name is lowercase letters, digits and _, starting with a letter."
+        )
+    about = " ".join(str(about or "").split())
+    if not about:
+        raise PictureError(400, "Say who the character is, in a line: it goes with the picture.")
+    if len(about) > MAX_ABOUT:
+        raise PictureError(400, "A character's description is at most %d characters." % MAX_ABOUT)
+    from PIL import Image
+
+    try:
+        with Image.open(src) as im:
+            short = min(im.size)
+    except (OSError, ValueError) as e:
+        raise PictureError(400, "That picture could not be read.") from e
+    if short < MIN_SIDE:
+        raise PictureError(
+            400,
+            "A character's picture needs at least %d px on its short side (this one has %d): "
+            "the painter copies the face from it." % (MIN_SIDE, short),
+        )
+    now = datetime.now().isoformat(timespec="seconds")
+    with _lock(lib):
+        idx = load(lib)
+        e = idx["cast"].get(name)
+        if e and not e.get("deleted") and not e.get("painted"):
+            raise PictureError(
+                409, "The cast has a drawn member called %s already: choose another name." % name
+            )
+        if name not in _live_painted(idx) and len(_live_painted(idx)) >= CHARACTERS:
+            raise PictureError(
+                409, "A project holds up to %d painted characters: remove one first." % CHARACTERS
+            )
+        e = _put_painted(lib, idx, name, src, about, now, uploaded=now)
+        _save(lib, idx)
+        _contact(lib, idx)
+    return _listed(name, e)
+
+
+def _seed_painted(film, lib, idx):
+    """A project's live painted characters into the film's inputs/ as cast_<name>.<ext>, each in
+    the manifest's images. [{name, file, about, w, h, hash}] (name without its cast_)."""
+    out = []
+    for n, e in sorted(_live_painted(idx).items()):
+        src = os.path.join(dir_of(lib), "cast", n, "v%d.%s" % (e["version"], e.get("ext")))
+        if not os.path.exists(src):
+            continue
+        os.makedirs(film.path("inputs"), exist_ok=True)
+        rel = "inputs/cast_%s.%s" % (n, e["ext"])
+        shutil.copyfile(src, film.path(*rel.split("/")))
+        out.append(
+            {"name": n, "file": rel, "about": e.get("about", "")}
+            | {k: e.get(k) for k in ("w", "h", "hash")}
+        )
+    if out:
+        with open(film.manifest, encoding="utf-8") as f:
+            m = json.load(f)
+        m.setdefault("images", {}).update({"cast_" + p["name"]: p["file"] for p in out})
+        _write_json(film.manifest, m)
+    return out
+
+
+def painted_note(film, painted, own_cast=False):
+    """What an episode is told of its project's painted characters, and of keeping one."""
+    paints = bool(paint_kinds(film.caps))
+    out = []
+    if painted:
+        out.append(
+            "The project's characters, as pictures (its cast: put in by its person, or kept by "
+            "earlier episodes; each in inputs/, Read it to see them)%s:"
+            % (
+                "; a collection's films do not share a cast, so bring one in only when this film "
+                "is about them"
+                if own_cast
+                else ""
+            )
+        )
+        out += ["- cast_%s: %s" % (c["name"], c.get("about") or "no description") for c in painted]
+        out.append(
+            'Whenever one of them is in a painting, paint it with "ref": "cast_<name>" -- '
+            '"ref": ["cast_<one>", "cast_<other>"] for two or more together, up to 4 -- and '
+            "describe them in its prompt as written here: the painter keeps their faces, clothes "
+            "and proportions, so they look the same in every film. Never give one of them another "
+            "look, and never paint them from the words alone."
+            if paints
+            else "On screen as they are: SK.image('cast_<name>', x, y, w)."
+        )
+    if paints:
+        full = len(painted) >= CHARACTERS
+        out.append(
+            "A new character the series should keep (a person or a mascot it will meet again): "
+            'paint them alone, whole, on a plain ground, and mark that painting "keep": true with '
+            '"about": "<who they are, what they wear>" in paint.json; after the film they join the '
+            "project's cast under the painting's name (lowercase letters, digits and _), and the "
+            "next episodes paint from them. A kept painting named as one of the characters above "
+            "is their next version: only when this episode is meant to change how they look."
+            + (
+                " The cast holds %d painted characters and is full: keep a new one only by "
+                "repainting one of these." % CHARACTERS
+                if full
+                else ""
+            )
+        )
+    return "\n".join(out)
+
+
+# "@mom" in a prompt: a cast member, by name (the site's @ list offers them). Not in a word, an
+# e-mail address or a path: a@b.com and x/@y are the prompt's own text
+MENTION = re.compile(r"(?<![\w@./])@([A-Za-z][A-Za-z0-9_]{0,30})\b")
+
+
+def mentioned(client, project, prompt):
+    """The project's cast members a prompt names as @name, in order: ([names], {typo: name}). An
+    @word that is no member's name but close to one (@mum, with a mom in the cast) is a typo, for
+    the person to fix before anything is held; any other @word is the prompt's own (a handle)."""
+    lib = owner(client, project)
+    if not lib or not project:
+        return [], {}
+    live = sorted(n for n, e in load(lib)["cast"].items() if not e.get("deleted"))
+    named, typos = [], {}
+    for w in MENTION.findall(prompt or ""):
+        n = w.lower()
+        if n in live:
+            if n not in named:
+                named.append(n)
+            continue
+        close = difflib.get_close_matches(n, live, 1, 0.6)  # @mum for @mom, not @kitcut
+        if close:
+            typos[n] = close[0]
+    return named, typos
+
+
+def named_note(film):
+    """What a film is told of the characters its prompt names (@name): each must be in it, as
+    the cast has them. "" when it names none."""
+    rec = film.record()
+    got = rec.get("library") or {}
+    painted = {c["name"]: c for c in got.get("painted") or []}
+    drawn = {c["name"]: c for c in got.get("cast") or []}
+    lines = []
+    for n in rec.get("characters") or []:
+        if n in painted:
+            lines.append(
+                "- @%s: %s -- painted: inputs/%s; every painting they are in is made with "
+                '"ref": "cast_%s" (or a list with it)'
+                % (n, painted[n].get("about") or "", os.path.basename(painted[n]["file"]), n)
+                if paint_kinds(film.caps)
+                else "- @%s: %s -- a picture: SK.image('cast_%s', x, y, w)"
+                % (n, painted[n].get("about") or "", n)
+            )
+        elif n in drawn:
+            lines.append("- @%s: %s -- drawn: SK.cast.%s" % (n, drawn[n].get("about") or "", n))
+    if not lines:
+        return ""
+    return (
+        "The prompt names these characters of the project's cast (@name). Each one is in this "
+        "film, as the cast has them -- the same face, clothes and proportions -- and nobody "
+        "else plays them:\n" + "\n".join(lines)
+    )
+
+
+def painted_used(film):
+    """The painted characters a film used: named by a painting's ref, or drawn as they are."""
+    try:
+        with open(film.path("paint.json"), encoding="utf-8") as f:
+            ims = (json.load(f) or {}).get("images") or []
+    except (OSError, ValueError, AttributeError):
+        ims = []
+    refs = [
+        r
+        for im in ims
+        if isinstance(im, dict)
+        for r in (im.get("ref") if isinstance(im.get("ref"), list) else [im.get("ref")])
+    ]
+    drawn = re.findall(
+        r"""SK\.image\(\s*['"]cast_([a-z][a-z0-9_]*)['"]""", _read(film.path("film.js")) or ""
+    )
+    return sorted(
+        {r[5:] for r in refs if isinstance(r, str) and r.startswith("cast_")} | set(drawn)
+    )
+
+
+def kept_paintings(film):
+    """The paintings a film marked to keep ("keep": true, with its "about"), that it painted:
+    [{name, about, path}]."""
+    try:
+        with open(film.path("paint.json"), encoding="utf-8") as f:
+            ims = (json.load(f) or {}).get("images") or []
+    except (OSError, ValueError, AttributeError):
+        return []
+    out = []
+    for im in ims:
+        if not (
+            isinstance(im, dict) and im.get("keep") is True and NAME.match(im.get("name") or "")
+        ):
+            continue
+        p = film.path("images", im["name"] + (".webp" if im.get("cutout") else ".jpg"))
+        if os.path.exists(p):
+            out.append(
+                {"name": im["name"], "about": im.get("about") or im.get("prompt"), "path": p}
+            )
+    return out
+
+
+def _keep_painted(film, lib, idx, now):
+    """A finished episode's kept paintings into its project's cast (under the lock): a new member,
+    or the next version of one -- but only over the version the film started from, as a drawn
+    member's (_keep); never over a drawn member, nor past CHARACTERS. -> (saved, refused)."""
+    had = {
+        c["name"]: c.get("hash") for c in (film.record().get("library") or {}).get("painted") or []
+    }
+    saved, refused = [], []
+    for it in kept_paintings(film):
+        n, e = it["name"], idx["cast"].get(it["name"])
+        live = e and not e.get("deleted")
+        if live and not e.get("painted"):
+            refused.append(n)  # a drawn member's name
+            continue
+        if live and e.get("hash") != had.get(n):
+            refused.append(n)  # changed since this film got it, or made by another meanwhile
+            continue
+        if live and e.get("hash") == _bytes_hash(it["path"]):
+            continue  # the same picture: nothing new
+        if not live and len(_live_painted(idx)) >= CHARACTERS:
+            refused.append(n)
+            continue
+        _put_painted(
+            lib,
+            idx,
+            n,
+            it["path"],
+            it["about"],
+            now,
+            film=film.id,
+            **({} if live else {"from_film": film.id}),
+        )
+        saved.append(n)
+    return saved, refused
+
+
+def _listed(n, e):
+    """A cast member as listing() shows it."""
+    return {
+        "name": n,
+        "about": e.get("about", ""),
+        "kind": e.get("kind"),
+        "version": e["version"],
+        "films": e.get("films") or [],
+        "updated": e.get("updated"),
+        "thumb": bool(e.get("thumb")),
+        **({"painted": True} if e.get("painted") else {}),
+    }
 
 
 # ---------------------------------------------------------------- a project's voice lines

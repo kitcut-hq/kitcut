@@ -2309,6 +2309,8 @@ async def keep_cast(film, tools, emit):
                 pictures = await asyncio.to_thread(library.thumbs, film, names)
             except ToolError as e:  # kept all the same, without a picture
                 print("film %s: no cast pictures: %s" % (film.id, e), file=sys.stderr, flush=True)
+        elif library.kept_paintings(film):  # painted characters only (library._keep_painted)
+            emit({"type": "stage", "name": "cast", "text": "Keeping the cast for the next films"})
         # a merge that draws nothing is not one: the film's own copy, kept as a clash
         items = [
             mine if it.get("merged_from") and it["name"] not in pictures else it

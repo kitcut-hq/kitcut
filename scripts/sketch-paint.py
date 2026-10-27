@@ -39,9 +39,11 @@ SK.cutout(name, ...). "aspect" ("1:1", "2:3", "3:2", ...) shapes the canvas it i
 "ref" names an image already painted, which goes in as a reference picture wherever the model
 takes one (gemini, and the OpenRouter models whose catalogue entry lists input_references): the
 way to keep a character the same from scene to scene. It may also name one of the film's project
-pictures, "pic_<name>" (inputs/pic_<name>.*, studio/library.py), which is sent as it is and never
-painted: a cast sheet painted from the project's own people, and then each scene from the cast
-sheet, keeps them the person's from the first picture to the last. "quality" (low/medium/high) is
+pictures, "pic_<name>" (inputs/pic_<name>.*, studio/library.py), or one of its painted characters,
+"cast_<name>" (inputs/cast_<name>.*), which is sent as it is and never painted: a cast sheet
+painted from the project's own people, and then each scene from the cast sheet, keeps them the
+person's from the first picture to the last. "ref" may be a list of up to MAX_REFS of these, for
+several characters in one painting (each its own picture, in order). "quality" (low/medium/high) is
 sent to the models that have the setting (OpenAI's). scripts/paint-compare.py paints one paint block with
 several models side by side, to choose between them.
 
@@ -96,6 +98,16 @@ STYLE_REF = (
 STYLE_AND_REF = (
     "The second attached picture shows the characters: keep them, their clothes and their "
     "proportions exactly as they are there, drawn in the first picture's style. "
+)
+# several references ("ref": [...]): one character or group in each
+MAX_REFS = 4
+KEEP_REFS = (
+    "Keep the characters, their clothes and the drawing style exactly as in these pictures: "
+    "each picture shows one of them. "
+)
+STYLE_AND_REFS = (
+    "The other attached pictures show the characters, one in each: keep them, their clothes and "
+    "their proportions exactly as they are there, drawn in the first picture's style. "
 )
 # the suffix sprinkles learned to send: any lettering, border or torn edge is a defect
 NO_TEXT = (
@@ -243,18 +255,25 @@ def data_url(path):
         return "data:%s;base64," % mime(path) + base64.b64encode(f.read()).decode()
 
 
+def refs_of(ref):
+    """An image's references as a list: "ref" is one name (or path), or a list of them."""
+    return list(ref) if isinstance(ref, (list, tuple)) else [ref] if ref else []
+
+
 def ref_lead(ref=None, style_ref=None):
-    """(the pictures to send, what the prompt says of them first)."""
+    """(the pictures to send, what the prompt says of them first). `ref`: a path, or a list."""
+    refs = refs_of(ref)
     if style_ref:
-        return [style_ref] + ([ref] if ref else []), STYLE_REF + (STYLE_AND_REF if ref else "")
-    return ([ref], KEEP_REF) if ref else ([], "")
+        tail = STYLE_AND_REF if len(refs) == 1 else STYLE_AND_REFS if refs else ""
+        return [style_ref, *refs], STYLE_REF + tail
+    return (refs, KEEP_REF if len(refs) == 1 else KEEP_REFS) if refs else ([], "")
 
 
 def paint_openrouter(
     prompt, model, ref=None, quality=None, aspect="16:9", transparent=False, style_ref=None
 ):
-    """One picture from an OpenRouter image model; `ref` (a JPEG, PNG or WebP path) goes in as a
-    reference picture when the model takes one, and is dropped (as Muse always dropped it) when
+    """One picture from an OpenRouter image model; `ref` (a JPEG, PNG or WebP path, or a list of
+    them) goes in as reference pictures when the model takes them, and is dropped (as Muse always dropped it) when
     not; `style_ref`, a style picture, goes in before it (ref_lead). `transparent` asks for a
     transparent background (sent only where the model has it)."""
     import httpx
@@ -307,13 +326,13 @@ def paint_gemini(prompt, model, ref=None):
         credentials=creds,
     )
     contents = [prompt]
-    if ref:
-        with open(ref, "rb") as f:
-            contents = [
-                types.Part.from_bytes(data=f.read(), mime_type=mime(ref)),
-                "Keep the characters, their clothes and the drawing style exactly as in this "
-                "picture. " + prompt,
-            ]
+    refs = refs_of(ref)
+    if refs:
+        parts = []
+        for r in refs:
+            with open(r, "rb") as f:
+                parts.append(types.Part.from_bytes(data=f.read(), mime_type=mime(r)))
+        contents = [*parts, (KEEP_REF if len(refs) == 1 else KEEP_REFS) + prompt]
     r = client.models.generate_content(
         model=model,
         contents=contents,
@@ -490,24 +509,46 @@ def main():
     # which need painting: in order, so a "ref" is painted before the images that use it
     by_name = {im["name"]: im for im in images}
     fps, todo, discard = {}, [], []
-    pics = {}  # an image's ref that is a project picture: {image name: its file}
+    files = {}  # each image's references as files: {image name: [paths, painted ones None]}
+    pics = set()  # the images made from pictures alone (never painted): painted first
     for im in images:
         ref = im.get("ref")
-        if ref and ref not in by_name:
-            pic = _sketch.project_picture(m["_dir"], ref)
-            if not pic:
+        refs = refs_of(ref)
+        if (
+            not isinstance(ref, (str, list, type(None)))
+            or len(refs) > MAX_REFS
+            or len(set(map(str, refs))) != len(refs)
+            or not all(isinstance(r, str) and r for r in refs)
+        ):
+            sys.exit("image %s: ref is a name, or a list of up to %d" % (im["name"], MAX_REFS))
+        files[im["name"]] = []
+        for r in refs:
+            pic = None if r in by_name else _sketch.project_picture(m["_dir"], r)
+            if r not in by_name and not pic:
                 sys.exit(
                     "image %s: ref %r is not one of the images, nor one of this film's project "
-                    "pictures (pic_<name>)" % (im["name"], ref)
+                    "pictures (pic_<name>) or painted characters (cast_<name>)" % (im["name"], r)
                 )
-            pics[im["name"]] = pic
-            # first, with the picture's own content: a new one repaints it, and the scenes
-            # made from it wherever they stand in the list
-            fps[im["name"]] = fingerprint(spec, im, ["pic", file_fp(pic)], style_fp)
-    for im in images:
+            files[im["name"]].append(pic)
+        if refs and all(files[im["name"]]):
+            pics.add(im["name"])
+            # first, with the pictures' own content: a new one repaints it, and the scenes made
+            # from it wherever they stand in the list
+            fp = [["pic", file_fp(f)] for f in files[im["name"]]]
+            fps[im["name"]] = fingerprint(spec, im, fp[0] if isinstance(ref, str) else fp, style_fp)
+
+    def ref_fp(im):
         ref = im.get("ref")
+        if isinstance(ref, str):  # one painting: as it always was keyed
+            return fps.get(ref)
+        return [
+            ["pic", file_fp(f)] if f else fps.get(r)
+            for r, f in zip(refs_of(ref), files[im["name"]], strict=True)
+        ] or None
+
+    for im in images:
         if im["name"] not in pics:
-            fps[im["name"]] = fingerprint(spec, im, fps.get(ref) if ref else None, style_fp)
+            fps[im["name"]] = fingerprint(spec, im, ref_fp(im), style_fp)
         cached = os.path.join(idir, "%s_%s%s" % (im["name"], fps[im["name"]], ext(spec, im)))
         retake = im["name"] in only and args.retake and os.path.exists(cached)
         if retake:
@@ -542,10 +583,11 @@ def main():
                 cs = cut_spec(spec, im)
                 alpha = bool(cs) and gives_alpha(model_caps(cs["model"]))
                 prompt = full_prompt(spec, im, transparent=alpha)
-                r = im.get("ref")
-                ref = pics.get(im["name"]) or (
-                    os.path.join(idir, r + ext(spec, by_name[r])) if r else None
-                )
+                ref = [
+                    f or os.path.join(idir, r + ext(spec, by_name[r]))
+                    for r, f in zip(refs_of(im.get("ref")), files[im["name"]], strict=True)
+                ]
+                ref = ref[0] if isinstance(im.get("ref"), str) else ref or None
                 t, err = time.time(), None
                 for attempt in range(3):
                     try:
@@ -576,8 +618,8 @@ def main():
                     w, h = to_jpeg(data, path)
                 return im["name"], path, w, h, meta, time.time() - t
 
-            # a project picture is never painted: an image made from one goes first, so a
-            # scene painted from it (a cast sheet painted from pic_<name>) has it to work from
+            # a project picture is never painted: an image made from pictures alone goes first,
+            # so a scene painted from it (a cast sheet from pic_<name>) has it to work from
             done, refs = [], [im for im in todo if not im.get("ref") or im["name"] in pics]
             later = [im for im in todo if im.get("ref") and im["name"] not in pics]
             for batch in (refs, later):  # the references first: the others are painted from them
