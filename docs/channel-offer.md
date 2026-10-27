@@ -73,16 +73,28 @@ explainers, templates). The channel plans are the path for the YouTube ads and t
 3. **The earnings view** (before sign-up): the niche's earnings per 1,000 views, and a slider of
    views per video with honest markers (see "What a channel can earn").
 4. **Sign up with Google, no card.**
-5. **The pilot, free:** the channel's first video, up to 1 minute, at full quality, with our
-   mark. Ready in about 10 minutes.
-6. **The channel plan, right after the pilot:** their next 12 titles on a 2-week posting calendar,
-   a pick of length and videos a month, the price beside it.
-7. **"Start my channel: 7 days free."** Card on the same page, $1 check.
+5. **The pilot, free (owner, 2026-10-27): a real 2-3 minute video,** the channel's first episode,
+   at full quality, with our mark. The site estimates 35-55 minutes for 2 minutes and 45-70 for 3, so the page does not leave them
+   waiting on a spinner: it moves straight on to step 6, and an email says when the video is ready.
+6. **The whole picture, while it is made and again under the finished video:** the channel's name
+   and look, 12 ideas for its next videos (a title and one line each, one Claude call), those
+   ideas on a 2-week posting calendar, the earnings view for their niche, and a pick of length and
+   videos a month with the price beside it.
+7. **Then nothing more is free.** Watching and sharing the pilot's link stay open; downloading it,
+   removing the mark, posting it to YouTube and every next video need the trial. The only button is
+   **"Start my channel: 7 days free"**, with the card on the same page and the $1 check.
 8. **Once the card holds:** the first 3 videos of the plan start making themselves and are
    scheduled to post. They come back to finished videos, not an empty page.
 9. **Day 8:** the first charge, the rest of the month's videos, and the producer's first report.
 
-The pilot and the plan cost us little (one short film and one Claude call). The 3 trial videos are
+**Who gets the pilot:** one per person (the existing one-person rules), and only sign-ups from the
+countries the ads target; anyone else sees the plan and the trial without a free video. The page
+says before they start: "Your first episode is free. Everything after it starts with a 7-day trial."
+
+**What the pilot costs:** about $0.85-1.10 in cash on the Claude subscription ($5.60-7.20 at list
+price), and the 12 ideas cents. The real limit is the subscription's room: at $20 a day of ads,
+about 80 pilots a month use ~$500 of list-price Claude work, which fits; at $50 a day, ~200 pilots
+use ~$1,300, about half of what one subscription carried in all of October. The 3 trial videos are
 made only after a card holds, because two of three cards so far failed.
 
 ## The producer
@@ -320,7 +332,7 @@ and upload quota are set aside for now (owner, 2026-10-27); they come back befor
 ## Decisions for the owner
 
 1. The prices in the grid, and whether Express is a monthly add-on or per video.
-2. The pilot: up to 1 minute (proposed) or the chosen length.
+2. ~~The pilot~~ decided 2026-10-27: a 2-3 minute first episode, free, then the whole picture and only the trial.
 3. The trial: 3 videos of the chosen length (proposed).
 4. Whether the producer starts on approval only, or with autopilot on by default.
 5. Which of our channels the producer runs on first.
