@@ -68,9 +68,10 @@ The studio has set `backend`, `model` and `max_images`; leave them. You set:
   `-` and `_`. Describe each picture fully: who, doing what, where, the framing (wide,
   close-up), the light. Never ask for words, letters or signs in a picture.
 - `ref` (on an image): a picture it is painted from, for its characters -- another image's name,
-  or one of the project's pictures, `pic_<name>`. It works only when the studio says this
-  project's pictures are painted from its style picture; with `meta/muse-image` the painter
-  works from the words alone and `ref` changes nothing.
+  one of the project's pictures, `pic_<name>`, or one of its painted characters, `cast_<name>`;
+  or a list of up to 4 of these, for several characters in one painting. It works only when
+  the studio says this project's pictures are painted from its style picture; with
+  `meta/muse-image` the painter works from the words alone and `ref` changes nothing.
 
 Each painting comes back 1920x1280 (a little taller than the 1920x1080 frame: room to move).
 
@@ -80,8 +81,9 @@ Each painting comes back 1920x1280 (a little taller than the 1920x1080 frame: ro
 - The same character in two paintings will not look quite the same. Describe them identically
   every time (age, hair, clothes and their colours), or keep them in one painting and frame
   different parts of it.
-- Where `ref` works and the project has pictures of its people, paint them from those: first a
-  cast sheet, `{"name": "cast", "prompt": "the family standing side by side, full length, on a
+- Where `ref` works and the project's cast has painted characters (`cast_<name>`), paint every
+  scene they are in from them. Where it has only pictures of its people, paint them from those:
+  first a cast sheet, `{"name": "cast", "prompt": "the family standing side by side, full length, on a
   plain ground", "ref": "pic_<name>"}`, then each scene with `"ref": "cast"`. The characters stay
   the same through the film, and they are the project's own people, not new ones. The cast
   sheet is one of the film's paintings; it need not appear in the film. A repainted cast sheet

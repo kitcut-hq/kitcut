@@ -4364,6 +4364,17 @@ is and never painted.
 - `gpt-image-2.5-flare` takes up to 16 reference pictures (OpenRouter's catalogue, 2026-10-26),
   so the studio's `gpt` paint route uses it.
 
+A project's painted characters (`studio/library.py`, "Painted characters" in `studio/README.md`)
+are pictures of the same kind: `cast_<name>`, from `inputs/cast_<name>.*`.
+
+`ref` may be a list of up to 4 (`MAX_REFS`): several characters in one painting, each its own
+picture, sent in order.
+- Its lead says so: `KEEP_REFS`, or `STYLE_AND_REFS` after a style picture.
+- Its fingerprint keys each reference as a single one would be.
+- An image made from pictures alone goes in the first batch. One that names a painting waits for
+  the second.
+- A one-name `ref` is sent, worded and keyed exactly as before.
+
 **Choosing a painter.** `paint-compare.py` paints one paint block with several models side by
 side.
 - An image may carry its own `style`, so one test set can hold scenes from several films.

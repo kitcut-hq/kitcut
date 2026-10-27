@@ -30,6 +30,7 @@ python studio/test_share.py                     # a film's share page words and 
 python studio/test_outro.py                     # the Free plan's mark and closing, on a right-to-left film too
 python studio/test_voroom.py                    # the voice's room, and vo.json "dry": a voice with none
 python studio/test_paintref.py                  # a painting made from a project's picture ("ref": "pic_<name>")
+python studio/test_characters.py                # painted characters in the cast, kept paintings, @name in a prompt
 ```
 
 `serve.ps1` writes the tunnel URL to `STUDIO_HOME\url.txt` and to MongoDB `kitcut.studio_hosts`.
@@ -784,6 +785,26 @@ its films, next to `projects\` (its text is in its project's git repository too:
   `camera: [x, y, zoom]`: the sheet draws it at its origin through that camera, the note and
   `/api/library` mark it a place. Its header comment is its manual: floor line, camera, options,
   and what it draws in front of the cast (`o.layer = 'front'`).
+- **Painted characters** (2026-10-27). A project's cast also holds characters that are pictures,
+  not code: `"painted": true` in the index, `cast\<name>\v<N>.png|jpg|webp` and `thumb.png`. They
+  share the cast's names, its listing, thumbnails and Remove.
+  - **Two ways in.** The person puts in a ready-made one on the Cast tab
+    (`POST /api/library/characters`, `library.add_character`). It needs a name, a one-line
+    description, and at least 512 px on the short side. Or an episode keeps one of its
+    paintings: `"keep": true` with `"about"` in `paint.json` (`library._keep_painted`, from
+    `keep`).
+  - **Limits.** At most 12 per project (`library.CHARACTERS`). A repaint under the same name is
+    the next version, and, as with a drawn member, only over the version the episode started
+    from. A drawn member never replaces one, and one never takes a drawn member's name.
+  - **Every episode gets them** as `inputs/cast_<name>.*` (`_seed_painted`). Its note says who
+    they are and to paint every scene they are in with `"ref": "cast_<name>"`, or a list of up
+    to 4 references for several together (`sketch-paint.py`). A drawn episode draws them as they
+    are with `SK.image`.
+  - **Named in the prompt.** `@mom` in a project film's prompt names a cast member
+    (`library.mentioned`). The film is told it must have them (`named_note`), and its paintings
+    are held to their pictures (`validate._named`). An `@word` close to a member's name (`@mum`)
+    is refused before anything is made, with "did you mean @mom?". Any other `@word` (a handle,
+    an e-mail) stays the prompt's own text.
 - **The episode log** (`canon.py`, 2026-10-02). An episode sees only its last five episodes'
   files, so at episode twelve the first seven are gone and a twist comes round again. After every
   finished episode one Claude call with no tools (beside the share, `server.py`; ~$0.02-0.05 on

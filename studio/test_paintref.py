@@ -56,9 +56,11 @@ def fake_paint(
     paints each image a colour of its own, named first in its prompt."""
     name = prompt.split(":")[0]
     seen = None
-    if ref and os.path.exists(ref):
-        with Image.open(ref) as im:
-            seen = im.convert("RGB").getpixel((5, 5))
+    for r in ref if isinstance(ref, list) else [ref]:
+        if r and os.path.exists(r):
+            with Image.open(r) as im:
+                px = im.convert("RGB").getpixel((5, 5))
+            seen = px if not isinstance(ref, list) else [*(seen or []), px]
     with LOCK:
         CALLS.append({"name": name, "ref": ref, "seen": seen, "style_ref": style_ref})
     return jpeg(COLOURS.get(name, (128, 128, 128))), {"cost_usd": 0.01}
@@ -90,6 +92,53 @@ def run(d, *extra):
         except SystemExit as e:
             err = str(e.code)
     return out.getvalue(), err
+
+
+def several():
+    """ "ref": [...]: a painted character (cast_<name>) and a picture together, then a scene from
+    that painting and the character -- each its own reference, in order."""
+    mom, fam = (240, 20, 20), (20, 20, 240)
+    images = [
+        {"name": "park", "prompt": "park: the two of them", "ref": ["cast", "cast_mom"]},
+        {"name": "cast", "prompt": "cast: the family", "ref": ["cast_mom", "pic_family"]},
+    ]
+    d = film("several", images, [("cast_mom.png", mom), ("pic_family.png", fam)])
+    paint = json.load(open(os.path.join(d, "paint.json")))
+    check(validate._paint(paint, 30, CAPS, d) == [], "the check takes a list of refs")
+    _, err = run(d)
+    by = {c["name"]: c for c in CALLS}
+    pics = [
+        os.path.realpath(os.path.join(d, "inputs", f)) for f in ("cast_mom.png", "pic_family.png")
+    ]
+    check(
+        err is None and by["cast"]["ref"] == pics and by["cast"]["seen"] == [mom, fam],
+        "a painting made from a character and a picture gets both, in order",
+        by.get("cast"),
+    )
+    check(
+        by["park"]["ref"] == [os.path.join(d, "images", "cast.jpg"), pics[0]]
+        and by["park"]["seen"][1] == mom
+        and all(
+            abs(a - b) < 12 for a, b in zip(by["park"]["seen"][0], COLOURS["cast"], strict=True)
+        ),
+        "a scene from that painting and the character: painted after it, with both",
+        by.get("park"),
+    )
+    pics_, lead = SP.ref_lead(["a.jpg", "b.jpg"])
+    check(pics_ == ["a.jpg", "b.jpg"] and lead == SP.KEEP_REFS, "several references: one each")
+    pics_, lead = SP.ref_lead(["a.jpg", "b.jpg"], "s.jpg")
+    check(
+        pics_ == ["s.jpg", "a.jpg", "b.jpg"] and lead == SP.STYLE_REF + SP.STYLE_AND_REFS,
+        "after the style picture",
+    )
+    out, err = run(d, "--plan")
+    check(err is None and out.count("cached ") == 2, "a rerun paints nothing", out)
+    Image.new("RGB", (64, 48), (1, 1, 1)).save(os.path.join(d, "inputs", "cast_mom.png"))
+    out, err = run(d, "--plan")
+    check(err is None and out.count("PAINT  ") == 2, "a new character repaints both", out)
+    e = film("five", [{"name": "x", "prompt": "x: x", "ref": ["cast_mom"] * 2}])
+    _, err = run(e, "--plan")
+    check(err and "a list of up to" in err, "the painter refuses a ref list it cannot take", err)
 
 
 def main():
@@ -214,6 +263,7 @@ def main():
         "a ref to no image and no picture is still refused",
     )
 
+    several()
     print("\n%s" % ("all passed" if not FAILS else "%d FAILED" % len(FAILS)))
     shutil.rmtree(HOME, ignore_errors=True)
     sys.exit(1 if FAILS else 0)

@@ -53,6 +53,10 @@ the day's budget still holds.
                                  "once" is true, in which case only the project's next episode
                                  does, and it is then removed. GET .../pictures/{name}/thumb.png
                                  and DELETE .../pictures/{name}, with ?project=
+    POST /api/library/characters {"project", "upload", "name", "about"}: an upload becomes a
+                                 painted character of the project's cast (library.add_character):
+                                 every future episode paints it from that picture. Its thumbnail
+                                 and Remove are a cast member's (above)
     POST /api/library/voice      {"project", "film", "line"}: approve line i of one of the
                                  asker's finished episodes as the project's voice line: the
                                  next episodes play that recording for the same words and voice
@@ -1088,6 +1092,11 @@ def limits_doc():
             "project_pictures": library.PICTURES,
             "brand_pictures": brandkit.MAX_PICTURES,
             "project_voice_lines": library.VOICE_LINES,
+            # a project's painted characters (library.add_character, _keep_painted)
+            "painted_characters": library.CHARACTERS,
+            "character_min_side_px": library.MIN_SIDE,
+            "character_about_chars": library.MAX_ABOUT,
+            "characters_per_painting": validate.MAX_REFS,
         },
         "by_length": {
             str(n): {
@@ -1316,6 +1325,24 @@ async def create(req):
     if err:
         return web.json_response({"error": err}, status=400)
     client = client_of(req)
+    # the project's characters the prompt names as @name (library.mentioned): each will be in the
+    # film; a near miss (@mum for @mom) is said now, before anything is held or made
+    named = []
+    if project and not tpl:
+        named, typos = await asyncio.to_thread(library.mentioned, client, project["id"], prompt)
+        if typos:
+            return web.json_response(
+                {
+                    "error": "No character %s in this project's cast: did you mean %s?"
+                    % (
+                        ", ".join("@" + t for t in typos),
+                        ", ".join("@" + n for n in typos.values()),
+                    ),
+                    "reason": "characters",
+                    "unknown": typos,
+                },
+                status=400,
+            )
     # who asked (a member of the client's workspace), and whose uploads it may attach: a person's
     # own, so a team's members never see each other's voice notes (clients.py)
     member = clients.member_of(req.headers)
@@ -1415,6 +1442,8 @@ async def create(req):
         )
         if preview:
             f.update(preview=True)
+        if named:  # the characters it must have (library.named_note)
+            f.update(characters=named)
         if tpl:  # its code and its own sample, the starting point (templates.seed)
             await asyncio.to_thread(templates.seed, f, tpl)
         uploads.release(uploader, attached + faces)  # the film has its own copies now
@@ -2139,6 +2168,45 @@ async def picture_add(req):
             uploads.file_of(uploader, meta),
             meta["ext"],
             bool(body.get("once")),
+        )
+    except library.PictureError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    uploads.release(uploader, [meta])
+    return web.json_response(entry, status=201)
+
+
+async def character_add(req):
+    """Put one of the asker's uploads into their project's cast as a painted character:
+    {"project": id, "upload": "up-...", "name": "mom", "about": "Mom, mid-30s, yellow raincoat"}.
+    The upload goes; the character stays, for every future episode. Answers its cast entry."""
+    try:
+        body = await req.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return web.json_response(
+            {"error": 'send {"project", "upload", "name", "about"}'}, status=400
+        )
+    client, project = client_of(req), str(body.get("project") or "")
+    if not films.PROJECT_ID.match(project) or not library.owner(client, project):
+        return web.json_response({"error": "No such project."}, status=404)
+    uploader = uploader_of(req)
+    meta = uploads.get(uploader, body.get("upload"))
+    if meta is None:
+        return web.json_response(
+            {"error": "That upload is no longer here; add it again.", "reason": "attachment"},
+            status=409,
+        )
+    if meta["kind"] != "image":
+        return web.json_response({"error": "A character is a picture."}, status=400)
+    try:
+        entry = await asyncio.to_thread(
+            library.add_character,
+            client,
+            project,
+            str(body.get("name") or ""),
+            str(body.get("about") or ""),
+            uploads.file_of(uploader, meta),
         )
     except library.PictureError as e:
         return web.json_response({"error": e.text}, status=e.status)
@@ -2911,6 +2979,7 @@ def make_app(token):
             web.get("/api/uploads/{id}", upload_status),
             web.get("/api/library", library_list),
             web.post("/api/library/pictures", picture_add),
+            web.post("/api/library/characters", character_add),
             web.get("/api/library/pictures/{name}/thumb.png", picture_thumb),
             web.delete("/api/library/pictures/{name}", picture_delete),
             web.post("/api/library/voice", voice_add),
