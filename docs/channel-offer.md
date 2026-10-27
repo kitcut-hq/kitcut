@@ -222,6 +222,70 @@ first 3 months (they will happen; see risks).
 The line between losing and winning: a paying customer may cost up to about $330 (3 months x
 $110). At list-price film costs, none of the columns makes money.
 
+### If every film is paid at API prices
+
+Asked 2026-10-27. Claude's list prices then: Opus 5.5 $4 / $20 per million tokens in / out, Sonnet
+5.5 $2 / $10 (half), Haiku 5.5 $0.10 / $0.50, Opus fast mode $8 / $40 (double). The Batch API's
+half price does not fit a film, which is a long back-and-forth session. Target: 50% gross margin
+after Stripe, the floor for a compute-heavy product.
+
+**Today's cost per video** (production formula, $2 + $0.026 a second, +8.5% failures and edits;
+the 8-minute figure sits between the formula's $15.70 and one measured film's $21.91):
+
+| Length | Per video | Per minute |
+|---|---|---|
+| 2 min | $5.56 | $2.78 |
+| 5 min | $10.63 | $2.13 |
+| 8 min | ~$18 | ~$2.25 |
+
+**Prices that would hold 50% at today's cost**, against the grid above: 10 x 2 min $122 (grid $49),
+20 x 5 min $456 ($149), 20 x 8 min $769 ($219), 30 x 8 min $1,151 ($319). Competitors sell 136-160
+minutes for $199-239, so at today's cost the long plans cannot be sold.
+
+**What a minute must cost** to sell the grid at 50%: about $1.05 for 10 x 2 and $0.62-0.68 for the
+5- and 8-minute plans: 2.5-3.5x cheaper than today. Almost all of an 8-minute video's cost is the
+per-second part (writing and checking scene code, ~92% Claude), so the levers have to hit that:
+
+| Lever | Estimated effect, to be measured | Note |
+|---|---|---|
+| Check the meter prices Opus 5.5 at $4 / $20 | up to 20% if it still uses Opus 5's $5 / $25 | a check, not a change |
+| Sonnet 5.5 for scene work, Opus for plan, script and review | per-minute part about halved | the 2026-10-02 bake-off kept Opus for whole films; scene work alone was not tested |
+| A channel kit: the look, cast, places and scene pieces written once per channel and reused | scene writing -30% or more | script, research and narration stay new every time (YouTube's "inauthentic" rule) |
+| Lower effort on scenes | unknown | |
+| Haiku 5.5 for the producer, titles, descriptions, thumbnail words | the producer costs cents a week | |
+| The free pilot | never cheapened | it sells the plan |
+
+With the first three, an 8-minute video comes to an estimated ~$7 ($0.88 a minute), a 2-minute
+one ~$3. **A grid that holds 50% at API prices after the levers:**
+
+| Plan | Our cost a month | Price |
+|---|---|---|
+| 10 x 2 min | ~$32 | $69 |
+| 20 x 2 min | ~$61 | $129 |
+| 10 x 8 min | ~$72 | $149 |
+| 20 x 5 min | ~$102 | $219 |
+| 20 x 8 min | ~$142 | $299 |
+| 30 x 8 min | ~$212 | $449 |
+
+**Express at API prices is per video, not monthly:** fast mode doubles Claude's price for the
+whole film, so an Express 8-minute video costs about $16 more today (about $6 after the levers):
+priced at about $35 today, $15 after.
+
+**Acquisition at API prices** (one month at $50 a day, the funnel columns above, average plan $149
+at 50%, so ~$74 a month per customer and at most ~$220 per paying customer for a 3-month payback):
+the free pilots cost ~$3.90 each today, and the trial is 3 videos of 2 minutes whatever length was
+chosen (~$17 today, ~$9 after the levers).
+
+| | Base, today's cost | Base, after levers | Good, after levers |
+|---|---|---|---|
+| Ads + pilots + trial videos | $2,584 | $2,127 | $2,489 |
+| Paying customers | 7 | 7 | 20 |
+| All-in cost per paying customer | ~$370 | ~$300 | ~$125 |
+| Months to earn it back | 5 | 4 | 1.7 |
+
+At API prices only the good column pays back within 3 months. The base column needs either the
+levers and a better funnel, or a higher average plan.
+
 ## What exists, what must be built
 
 | | Exists today | Must be built | Size |
