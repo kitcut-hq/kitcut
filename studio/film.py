@@ -99,7 +99,7 @@ FOR_LINE = re.compile(
     r"^[ \t]*//[ \t]*for:[ \t]*(\S[^\r\n]*?)[ \t]*\r?$", re.MULTILINE | re.IGNORECASE
 )
 # what Claude may not change in paint.json: the painter, and how many paintings a film may cost
-# (8 up to a minute, more for a longer film: limits()["images"], paint_pins)
+# (8 under a minute, 12 from a minute, more for a longer film: limits()["images"], paint_pins)
 PAINT_PINNED = {"backend": "muse", "model": "meta/muse-image", "max_images": 8}
 # a collage film's cut-outs: a model that paints on a transparent background (sketch-paint.py)
 CUTOUTS_PINNED = {
@@ -367,8 +367,9 @@ def limits(length):
         # a drums event's bars: 64 covered a short film; 8 minutes at 120 bpm is 240 bars (a bar
         # is at least a second at the 240 bpm the score allows)
         "drum_bars": max(64, length),
-        # paintings, repaints included: 12 up to 4 minutes, then one about every 20 s
-        "images": 8 if length <= 60 else min(24, max(12, length // 20)),
+        # paintings, repaints included: 8 under a minute; 12 from a minute (it was 8 at 60 s too,
+        # which left a minute four to six scenes) up to 4 minutes, then one about every 20 s
+        "images": 8 if length < 60 else min(24, max(12, length // 20)),
         # a collage film's cut-outs, repaints included: pages hold several each (the reference
         # 60 s collage used ~19); ~$0.014 each
         "cutouts": 10 if length <= 15 else min(40, max(14, length // 3)),

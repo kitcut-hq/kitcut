@@ -732,6 +732,10 @@ async def main():
         )
         n = [films.limits(s)["images"] for s in films.LENGTHS]
         check(n == sorted(n), "a longer film never gets fewer paintings (8 ... %d)" % n[-1])
+        check(
+            films.limits(55)["images"] == 8 and films.limits(60)["images"] == 12,
+            "a minute's painted film gets 12 paintings, a shorter one 8",
+        )
         vo = {"voice": validate.VOICES[0], "lines": [{"text": "Hi.", "start": 200}]}
         check(
             not validate._vo(vo, 12, 480) and validate._vo(vo, 12, 60),

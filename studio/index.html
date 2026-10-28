@@ -747,7 +747,7 @@ if (/^\/film\/studio-/.test(location.pathname)) document.documentElement.dataset
           <label class="lk"><input type="radio" name="look" value="painted"><span class="pv"><img src="/looks/painted.jpg?v=2" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/looks/painted.mp4?v=2"></video></span><b>Painted</b></label>
           <label class="lk"><input type="radio" name="look" value="collage"><span class="pv"><img src="/looks/collage.jpg" alt="" loading="lazy" onerror="this.remove()"><video muted loop playsinline preload="none" data-src="/looks/collage.mp4"></video></span><b>Collage</b></label>
         </div>
-        <p class="note" id="lookAbout" aria-live="polite"></p>
+        <p class="note" id="lookAbout" aria-live="polite"><span id="lookSays"></span> <span id="paintNote"></span></p>
       </div>
       <div class="len">
         <div class="lenhead"><label for="length">Length</label><b id="lenOut">0:30</b><span id="lenHint" hidden>Longer films are on Pro.</span></div>
@@ -907,7 +907,7 @@ if (/^\/film\/studio-/.test(location.pathname)) document.documentElement.dataset
   </section>
 
   </div>
-  <footer class="legal"><span>&copy; 2026 KitCut. Films written, drawn, narrated and scored by Claude.</span><span id="footNav" hidden><a href="/studio">Studio</a> · <a href="/pricing">Pricing</a> · <a href="/connect">Use it in Claude or ChatGPT</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/docs">Docs</a> · <a href="/blog">Blog</a> · <a href="mailto:hello@kitcut.ai">hello@kitcut.ai</a></span></footer>
+  <footer class="legal"><span>&copy; 2026 KitCut. Films written, drawn, narrated and scored by Claude.</span><span id="footNav" hidden><a href="/studio">Studio</a> · <a href="/pricing">Pricing</a> · <a href="/compare">Compare</a> · <a href="/connect">Use it in Claude or ChatGPT</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/docs">Docs</a> · <a href="/blog">Blog</a> · <a href="mailto:hello@kitcut.ai">hello@kitcut.ai</a></span></footer>
   </main>
 </div>
 
@@ -986,7 +986,7 @@ const LOOK_MAKERS = {
 };
 const lookOf = () => (document.querySelector('input[name=look]:checked') || { value: 'drawn' }).value;
 let onLook = () => {};  // the People row's Auto follows the look (set once the row exists)
-const lookLine = () => { $('lookAbout').textContent = LOOK_ABOUT[lookOf()] || ''; $('makers').textContent = LOOK_MAKERS[lookOf()] || LOOK_MAKERS.drawn; onLook(); };
+const lookLine = () => { $('lookSays').textContent = LOOK_ABOUT[lookOf()] || ''; $('makers').textContent = LOOK_MAKERS[lookOf()] || LOOK_MAKERS.drawn; onLook(); };
 function setLook(v) {
   const r = document.querySelector(`input[name=look][value="${v}"]`);
   if (r) { r.checked = true; lookLine(); }
@@ -998,7 +998,7 @@ for (const lk of document.querySelectorAll('.lk')) {
   const play = playOf(v), stop = () => { v.pause(); };
   lk.addEventListener('mouseenter', play); lk.addEventListener('mouseleave', stop);
   input.addEventListener('focus', play); input.addEventListener('blur', stop);
-  input.addEventListener('change', lookLine);
+  input.addEventListener('change', lookLine); input.addEventListener('change', paintNote);
   v.addEventListener('error', () => v.remove());
 }
 lookLine();
@@ -1607,6 +1607,15 @@ function drawTrack(max) {
       `<span class="dim" style="left: ${locked(s)}${s === TRACK_END ? '; transform: translateX(-100%)' : ''}">${mmss(s)}</span>`).join('');
   drawnMax = max;
 }
+// a painted film's paintings by its length, repaints included: the studio's limits()["images"]
+// (GET /api/limits by_length; test/looks.test.mjs holds this to docs/studio-limits.json)
+function paintings(s) { return s < 60 ? 8 : Math.min(24, Math.max(12, Math.floor(s / 20))); }
+// under the look's line, once Painted is picked: how many paintings the length chosen gets
+function paintNote() {
+  const s = lengthAsked();
+  $('paintNote').textContent = lookOf() !== 'painted' ? ''
+    : `${autoOn() ? `A film of up to ${mmss(s)}` : `A ${mmss(s)} film`} gets at most ${paintings(s)} paintings.`;
+}
 function paintLength() {
   const el = $('length');
   const max = (CREDITS && CREDITS.max_length) || 60;
@@ -1619,6 +1628,7 @@ function paintLength() {
   el.style.setProperty('--p', (v - +el.min) / (+el.max - +el.min));
   el.setAttribute('aria-valuetext', `${v} seconds`);
   $('lenOut').textContent = auto ? `up to ${mmss(ask)}` : mmss(v);
+  paintNote();
   const short = shortOf(ask);
   el.style.setProperty('--fill-color', short ? 'var(--bad)' : 'var(--accent)');
   $('go').textContent = short ? 'Not enough credits' : 'Make the film';
