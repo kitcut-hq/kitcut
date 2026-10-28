@@ -9,8 +9,8 @@ and hand-drawn marks on top.
 ## COMMANDS
 - `paint` -- paints every image in `paint.json` at once (about 30 s; unchanged ones come from
   cache) and tiles them into `images/sheet.jpg`. `retake: ["<name>"]` repaints some. At most
-  8 paintings for a film of up to a minute, 12 up to four minutes, then one for about every
-  20 s (24 at most), repaints included.
+  8 paintings for a film under a minute, 12 from a minute up to four minutes, then one for
+  about every 20 s (24 at most), repaints included.
 
 ## DIRECTION
 - the painting style (see "The paintings"), the light and the palette;
@@ -18,8 +18,8 @@ and hand-drawn marks on top.
 - the colour of the words on screen, and of the marks drawn over the paintings;
 
 ## STEPS
-1. Decide the idea and the direction (above): one clear point, told in the film's length, in one
-   to three paintings (a few more for a long film, within the limit).
+1. Decide the idea and the direction (above): one clear point, told in the film's length, in as
+   many paintings as "The paintings" gives for that length, within the limit.
 2. Write the narration in `vo.json` and call `voice`. It returns each line's start and end, and
    every word's time on the film clock. If a line's `acc` is below 0.9, rephrase it and
    record again. If the narration needs a little more than the film's length, the studio
@@ -75,9 +75,10 @@ The studio has set `backend`, `model` and `max_images`; leave them. You set:
 
 Each painting comes back 1920x1280 (a little taller than the 1920x1080 frame: room to move).
 
-- Fewer, richer paintings: one wide painting gives several shots -- push in on one part, then
-  pan to another. One or two paintings for 5 s, two or three for 10-15 s, four to six for a
-  minute, six to ten for two.
+- Rich paintings: one wide painting gives several shots -- push in on one part, then pan to
+  another. One or two paintings for 5 s, two or three for 10-15 s, four or five for 30 s,
+  eight to ten for a minute or two -- a new place or moment for each beat of the narration,
+  and leave two or three of the limit for repaints.
 - The same character in two paintings will not look quite the same. Describe them identically
   every time (age, hair, clothes and their colours), or keep them in one painting and frame
   different parts of it.
