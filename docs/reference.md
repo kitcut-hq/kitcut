@@ -6046,6 +6046,81 @@ draw a near-photo face. A rig has one expression, so every reaction a drama turn
 picture, and the painted look's painter (muse) takes no reference picture: a character painted
 twice drifts unless one fixed description is pasted into every prompt.
 
+## Shorts cut from a finished episode: `episode-short.py`
+
+A series episode (Duchess, Leo: two to six minutes, 16:9, crayon) holds several 40-60 second
+moments that work as YouTube Shorts on their own. `scripts/episode-short.py` cuts one from the
+episode's finished master, with nothing redrawn and nothing paid for:
+
+- the episode cropped to a **4:5 window** (864 px of its 1920, so the cast and the DIGNITY meter both
+  fit), scaled to the full 1080 width at y=336, over a blurred, darkened copy of itself; a manifest
+  may widen it to **1:1** (`"picture": {"aspect": [1, 1], "y": 380}`) for a two-hander whose cast
+  stand far apart, or a scene with a prop beside them (the Queen and Duchess, the bus and the camel);
+- a **camera** that holds or pans the window: `"camera": {"x": 0.5, "keys": [[t, x], ...]}`, x the
+  window's centre as a share of the episode's width, t in the Short's own seconds, smoothstep between
+  keys. Most Shorts need two to six keys;
+- a **headline** on a card in the top band, in the film's own paper, ink and accent (its sketch.json
+  `player` block) and Balsamiq, shrunk until it fits in two lines;
+- **captions** word by word from the episode's own word timings (`audio/vo/timeline.json`), no
+  transcription: `config/presets/cartoon-short.json`, white with an ink outline, the spoken word in
+  yellow, centred near 75% of the height (guidebook rules 24-27);
+- **segments** named by quoting the narration (`from_text` / `to_text`, cut in the gap between two
+  words, `pad_out` holds the picture after the last word); a quote said twice is refused, use a
+  number (`from` / `to`) there. Joins get a 30 ms audio fade. Cuts never run past the episode's end.
+
+The folder it writes (`sketch.json` with a 9:16 frame at 30 fps, `outputs/film.mp4`, poster, vtt)
+is what `studio/import_film.py` takes, so a Short becomes a film of the series' project and is
+published through the site's queue like an episode (`film.mjs youtube ... --no-draft --title
+--description-file --tags`: no studio draft, so no Claude call).
+
+```powershell
+python scripts/episode-short.py --manifest m.json --list           # segments, cut gaps, length
+python scripts/episode-short.py --manifest m.json --stills 0,20,46  # finished frames, no encode
+python scripts/episode-short.py --manifest m.json --src <episode folder> --out <dir>   # render
+python scripts/short-stillness.py <dir>/outputs/film.mp4 --box 0.19,0.72 --check   # rule 33
+```
+
+A 60 s Short renders in about 25 s on kc-local (2.6x realtime, NVENC).
+
+**What 28 Shorts from 25 episodes taught (2026-10-29):**
+
+- **Look at the 1 fps sheet of the render, every time.** 20 of 28 needed a camera fix after the
+  first render: a character half out of the window, the thing the line is about (a camel, a bug,
+  the box) cut off, and once (Leo 10) the speaker not in frame at all while he spoke, because he
+  hid behind Dad's leg at the far left. None of that shows in the stillness check, which passed all 28.
+- **Pan to a character, not with a fast one.** A cat bouncing round the room moves faster than any
+  pan a viewer can follow; following it cut the meter in half. Hold the window and let her cross it.
+- **Pick the gag, then cut to it.** The best Shorts are one bit of the episode played out whole
+  (the zoomies, the hiding game, the barber's chat), sometimes opened with the series' line and
+  joined to its payoff. A beat that only works with the scene before it (a suitcase scan without
+  the scan) is dropped, not cut short.
+- Frame 0 is what the feed shows first: a rear-view mirror or an empty map reads as nothing. Start
+  a second later, on the character.
+
+**Upload limits.** An unverified channel takes about ten uploads a day; the rest fail with "daily
+upload limit" and stay failed in `youtube_queue`. They go again when set back to `queued` (a
+day later, ten at a time). Verifying the channel (youtube.com/verify) lifts the cap and allows
+custom thumbnails.
+
+**As a kitcut.ai option (design, not built).** "Make Shorts" on a finished film's Studio page:
+
+1. *Pick:* one Claude call reads the film's timeline (lines with their times) and its 1 fps
+   motion sheets, and proposes 2-6 Shorts: segments as quotes, a headline, a title, and camera
+   keys from the probe's positions of the cast (`sketch/probe.js` already records what is drawn
+   where), so the window follows whoever is speaking.
+2. *Check:* render each at 960 px, run the stillness check, and have the reviewer (`review.py`)
+   read the 1 fps sheet with one question: is the speaker and the thing named in frame? One fix
+   turn moves keys, as was done by hand here.
+3. *Show:* the proposals as frame strips with their headline and length; the person keeps, drops
+   or edits the quotes; nothing costs credits until they press Make (a Short is 25 s of GPU, so
+   price it at a small flat number of credits rather than per second).
+4. *Make and schedule:* each kept Short becomes a film of the project (as `import_film.py` does
+   now), and "Schedule all" spaces them on the channel's calendar at its pace, ten uploads a day
+   at most on an unverified channel, the rest held and sent the next day by the site's own cron.
+
+The cheap parts exist (cutting, captions, import, publishing); the new work is the picking call,
+the camera from the probe, and the page.
+
 ## A showreel out of finished films: `showreel.py`
 
 A reel that shows what was made: films one at a time, each with a one-line caption, then a 2x2,
