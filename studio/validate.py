@@ -45,7 +45,7 @@ VO_KEYS = set(VO_PINNED) | {
 VO_LINE_KEYS = {"text", "start", "who", "pause"}
 MAX_PAUSE_S = 15  # the quiet a line may ask for before it: a gag's beat, a sunset without words
 MAX_LINE_CHARS = 300  # and at most film.limits()["lines"] lines
-PAINT_KEYS = set(PAINT_PINNED) | {"style", "images", "cutouts", "style_ref"}
+PAINT_KEYS = set(PAINT_PINNED) | {"style", "images", "cutouts", "style_ref", "quality"}
 # a cut-out (film.CAPS "cutouts") is painted on a canvas of its own shape
 ASPECTS = ("1:1", "2:3", "3:2", "3:4", "4:3", "16:9", "9:16")
 LANG = re.compile(r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$")
@@ -229,7 +229,8 @@ def _ref(im, i, names, film_dir):
         if not (r not in names and film_dir and _sketch.project_picture(film_dir, r)):
             return [
                 "paint.json: image %d ref %r must name another image, or one of this film's "
-                "project pictures (pic_<name>) or painted characters (cast_<name>)" % (i, r)
+                "project pictures (pic_<name>), painted characters (cast_<name>) or attached "
+                "pictures marked as how to draw something (upload<n>)" % (i, r)
             ]
     return []
 

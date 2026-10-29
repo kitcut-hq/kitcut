@@ -108,13 +108,19 @@ CUTOUTS_PINNED = {
     "border": 12,
     "cut": "scissor",
 }
-# a project's style picture (stylekit.py): how its episodes' pictures are painted. With a picture
-# route the style picture goes in with every painting (sketch-paint.py style_ref) and Claude's
-# prompts say only what to draw; "words" is Muse with the style line, which Claude may not
-# change. Gemini is the team's alone (the site says who: X-Team) and costs about seven times
-# Muse a picture; GPT Image about one and a half.
+# a project's style pictures (stylekit.py): how its episodes' pictures are painted. With a
+# picture route every style picture goes in with every painting (sketch-paint.py style_ref), the
+# style line in front of its prompt, and Claude's prompts say only what to draw; "words" is Muse
+# with the style line alone. Claude may change neither. Gemini is the team's alone (the site says
+# who: X-Team) and costs about seven times Muse a picture; GPT Image about one and a half at its
+# default quality, and its paintings are made at "high" (about four times that: lower it here).
 STYLE_ROUTES = {
-    "gpt": {"backend": "openrouter", "model": "openai/gpt-image-2.5-flare", "picture": True},
+    "gpt": {
+        "backend": "openrouter",
+        "model": "openai/gpt-image-2.5-flare",
+        "picture": True,
+        "quality": "high",
+    },
     "words": {"backend": "muse", "model": "meta/muse-image", "picture": False},
     "gemini": {
         "backend": "openrouter",
@@ -584,7 +590,8 @@ def paint_pins(length, caps, route=None):
     """What the studio sets in the paint.json of a film with these capabilities: the painter,
     each kind's own settings, and the cap on pictures (repaints included), its kinds' caps
     added up. `route` is the film record's paint_route (its project's style, stylekit.seed):
-    the painter it names and the style picture or the style line, the studio's too."""
+    the painter it names, the style line, its style pictures (a path, or a list of them) on a
+    picture route, and the route's quality -- the studio's too."""
     kinds = paint_kinds(caps)
     pins = dict(PAINT_PINNED)
     for kind in kinds:
@@ -594,10 +601,14 @@ def paint_pins(length, caps, route=None):
     if not r or not kinds:
         return pins
     pins |= {"backend": r["backend"], "model": r["model"]}
+    # the written style goes with the pictures: a style picture of people on a plain ground
+    # leaves a place or a garden to the painter's own look, and the line still says flat, no
+    # shading, no depth (a Brella reel, 2026-10-29)
+    pins["style"] = str(route.get("line") or "")[:400]
     if r["picture"] and route.get("ref"):
-        pins |= {"style": "", "style_ref": route["ref"]}
-    else:
-        pins["style"] = str(route.get("line") or "")[:400]
+        pins["style_ref"] = route["ref"]
+    if r.get("quality"):
+        pins["quality"] = r["quality"]
     if "cutouts" in pins and r["picture"]:  # the cut-outs from the same painter
         pins["cutouts"] = dict(pins["cutouts"], model=r["model"])
     return pins
@@ -1063,7 +1074,9 @@ class Film:
 
         attachments: what the visitor attached (uploads.take), each meta with its file as "src",
         copied into inputs/. A picture becomes upload1.jpg... and joins the manifest's images
-        under that name, so film.js can draw it with SK.image('upload1', ...); a voice note
+        under that name, so film.js can draw it with SK.image('upload1', ...) -- with its "role"
+        (show, scene, style) when the person said what it is for, also in inputs/roles.json,
+        where the painter looks before taking one as a reference; a voice note
         becomes voice1..., with its words in the record; a document becomes doc1.txt (or .md),
         with the name it came with.
 
@@ -1163,6 +1176,8 @@ class Film:
                 if a["kind"] == "image":
                     m.setdefault("images", {})[stem] = rel
                     item.update(name=stem, w=a.get("w"), h=a.get("h"))
+                    if a.get("role"):
+                        item["role"] = a["role"]
                 elif a["kind"] == "text":
                     item.update(name=a.get("name") or "", chars=a.get("chars"))
                     item.update(words=a.get("words"))
@@ -1170,6 +1185,9 @@ class Film:
                     item.update(secs=a.get("secs"), transcript=a.get("transcript") or "")
                     item.update(lang=a.get("lang"))
                 attached.append(item)
+            roles = {a["name"]: a["role"] for a in attached if a.get("role")}
+            if roles:  # the studio's file: Claude never writes inputs/
+                _write_json(film.path("inputs", "roles.json"), roles)
         cast_people = []
         for i, a in enumerate(people, 1):
             os.makedirs(film.path("inputs"), exist_ok=True)

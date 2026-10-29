@@ -746,6 +746,18 @@ def attached_note(film):
             % (label, validate.N.summary(said), validate.MAX_LINE_CHARS),
         ]
     for a in pics:
+        if a.get("role") in library.ROLE_NOTE:
+            lines.append(
+                "- Picture %s (%sx%s): Read %s to see it. The person said what it is for%s."
+                % (
+                    a["name"],
+                    a.get("w"),
+                    a.get("h"),
+                    a["file"],
+                    library.role_line(a["role"], bool(films.paint_kinds(film.caps))),
+                )
+            )
+            continue
         lines.append(
             "- Picture %s (%sx%s): Read %s to see it. On screen: SK.image('%s', x, y, w)."
             % (a["name"], a.get("w"), a.get("h"), a["file"], a["name"])
@@ -757,10 +769,11 @@ def attached_note(film):
             "(a logo, a product, a person, a place: put it on screen with SK.image), a reference "
             "to match (a look, a character, a layout: draw in its spirit, don't paste it), or the "
             "brief itself (a screenshot, a note, a sketch of the story: read it as the prompt). "
-            "Where the person said how to use one, do that; otherwise decide. Before you write "
-            "anything, say in one short sentence per picture what you took it to be. A photo in "
-            "a drawn film sits best framed, as a pinned print or a card, so it belongs to the "
-            "drawn world. A picture you don't draw never leaves the studio.",
+            "Where the person said how to use one (its role above, or the prompt), do that; "
+            "otherwise decide. Before you write anything, say in one short sentence per picture "
+            "what you took it to be. A photo in a drawn film sits best framed, as a pinned print "
+            "or a card, so it belongs to the drawn world. A picture you don't draw never leaves "
+            "the studio.",
         ]
     if not rec.get("prompt", "").strip():
         lines += [

@@ -494,6 +494,27 @@ def projects(check):
         and "pictures" not in library.listing("u:alice"),
         "a project's listing has its pictures, each saying whether it is once-only",
     )
+    # what a picture is for: none until its person says, then one of three
+    try:
+        library.add_picture("u:alice", P2, "p1", logo, "png", role="paint")
+        check(False, "a role that is not one is refused")
+    except library.PictureError as err:
+        check(err.status == 400, "a role that is not one is refused")
+    check(
+        library.add_picture("u:alice", P2, "p1", logo, "png", role="scene")["role"] == "scene",
+        "a picture added with a role keeps it",
+    )
+    check(
+        library.set_picture_role("u:alice", P1, "logo", "style")["role"] == "style"
+        and library.set_picture_role("u:alice", P1, "nobody", "style") is None
+        and library.set_picture_role("u:bob", P1, "logo", "show") is None,
+        "a picture's role changes; no picture, or another's, is not changed",
+    )
+    check(
+        {p["name"]: p.get("role") for p in library.listing("u:alice", P1)["pictures"]}
+        == {"logo": "style", "flash": None},
+        "the listing says each picture's role",
+    )
 
     # ------------------------------------------------ the first episode, bringing the person's cast
     E1 = episode("Olga meets the moon", bring=True)
@@ -508,10 +529,18 @@ def projects(check):
         and got["pictures"]
         == [
             {"name": "pic_flash", "file": "inputs/pic_flash.png", "w": 800, "h": 400},
-            {"name": "pic_logo", "file": "inputs/pic_logo.png", "w": 800, "h": 400},
+            {
+                "name": "pic_logo",
+                "file": "inputs/pic_logo.png",
+                "w": 800,
+                "h": 400,
+                "role": "style",
+            },
         ],
         "and its pictures, in inputs/, including the once-only one for this episode",
     )
+    with open(E1.path("inputs", "roles.json"), encoding="utf-8") as f:
+        check(json.load(f) == {"pic_logo": "style"}, "their roles, in inputs/roles.json")
     with open(E1.manifest, encoding="utf-8") as f:
         check(json.load(f)["images"].get("pic_logo") == "inputs/pic_logo.png", "in the manifest")
     check(
@@ -522,7 +551,8 @@ def projects(check):
     check(
         'episode of the project "Olga\'s Forest"' in note
         and "Calm narrator, soft piano." in note
-        and "- pic_logo (800x400): inputs/pic_logo.png" in note
+        and "- pic_logo (800x400): inputs/pic_logo.png -- style: how we draw this" in note
+        and "- pic_flash (800x400): inputs/pic_flash.png\n" in note
         and "Brought in from the person's films outside projects" in note
         and "first episode" in note,
         "the note names the project, its brief, pictures and cast",

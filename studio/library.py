@@ -37,7 +37,9 @@ A project on the site (a series, a channel) has a library of its own, inside its
                                                inputs/pic_<name>.*, SK.image('pic_<name>'), unless
                                                the person chose "this episode only" at upload: that
                                                one seeds its next episode and is then gone, so a
-                                               later episode needs a picture of its own (once)
+                                               later episode needs a picture of its own (once).
+                                               Each may carry a role (PICTURE_ROLES): what the
+                                               person said it is for
         voice\\<key>.wav|mp3                    approved voice lines: recordings of narration
                                                lines its person approved by ear; every episode
                                                gets them in audio/vo/approved/, and a line with
@@ -104,6 +106,50 @@ MAX_BYTES = 64 * 1024  # one member's code
 FILES = ("film.js", "vo.json", "score.json", "sfx.json", "sounds.json", "paint.json")
 PICTURES = 9  # a project's pictures: every review render carries them all
 PICTURE_EXT = ("png", "jpg", "webp")
+# what a picture is for, as its person said (the same three on the site's Pictures tab, beside a
+# film's attachments and in the MCP): no role is the old way, Claude reads it and decides
+PICTURE_ROLES = _sketch.ROLES
+ROLE_NOTE = {
+    "show": "show it as it is (SK.image); never repaint it, never a painting's ref",
+    "scene": (
+        "what a place has: Read it, and write two or three of the things in it (a chair, three "
+        "windows, palm trees) plainly into the prompt of the paintings of that place, no fine "
+        "detail; never on screen, never a ref (a photo as a ref pulls a painting towards a photo)"
+    ),
+    "style": (
+        "how we draw this: a drawn example of one kind of thing; every painting that shows that "
+        'thing is painted with "ref" naming it (beside any cast_ ref, MAX_REFS in all); never on '
+        "screen unless the prompt asks"
+    ),
+}
+# a film that paints nothing: the roles steer what Claude draws in code
+ROLE_NOTE_DRAWN = ROLE_NOTE | {
+    "scene": (
+        "what a place has: Read it, and draw two or three of the things in it plainly where "
+        "that place is; never on screen"
+    ),
+    "style": (
+        "how we draw this: draw that kind of thing in code the way this picture does; never on "
+        "screen unless the prompt asks"
+    ),
+}
+
+
+def role_line(role, painted=True):
+    """A picture's role, said to Claude ("" for a picture without one)."""
+    notes = ROLE_NOTE if painted else ROLE_NOTE_DRAWN
+    return " -- %s: %s" % (role, notes[role]) if role in notes else ""
+
+
+def write_roles(film, roles):
+    """The film's inputs/roles.json, {picture name: role}, merged with what is there: the
+    painter takes an attached picture as a ref only when its role is "style" (_sketch)."""
+    if not roles:
+        return
+    p = film.path("inputs", "roles.json")
+    got = _sketch.picture_roles(film.dir) | roles
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    _write_json(p, got)
 VOICE_LINES = 12  # a project's approved voice lines: every episode carries them all
 VOICE_KEY = re.compile(r"^[0-9a-f]{12}$")
 CLASHED = "clashed"  # a project library's members that did not merge: <name>/<film id>.js
@@ -556,9 +602,10 @@ def sounds_note(film):
 
 def _seed_pictures(film, lib, idx):
     """A project's pictures into the film's inputs/, each in the manifest's images as
-    pic_<name> (never a painted scene's name, nor an upload's). [{name, file, w, h}]. A picture
-    added "once" seeds this film and then leaves the project's library, so it never reaches a
-    later episode (the person adds a fresh one for that)."""
+    pic_<name> (never a painted scene's name, nor an upload's). [{name, file, w, h, role?}]. A
+    picture added "once" seeds this film and then leaves the project's library, so it never
+    reaches a later episode (the person adds a fresh one for that). Their roles go into the
+    film's inputs/roles.json."""
     out = []
     once = []
     for n, e in sorted(idx["pictures"].items()):
@@ -569,6 +616,8 @@ def _seed_pictures(film, lib, idx):
         rel = "inputs/pic_%s.%s" % (n, e["ext"])
         shutil.copyfile(src, film.path(*rel.split("/")))
         out.append({"name": "pic_" + n, "file": rel, "w": e.get("w"), "h": e.get("h")})
+        if e.get("role") in PICTURE_ROLES:
+            out[-1]["role"] = e["role"]
         if e.get("once"):
             once.append(n)
     if out:
@@ -576,6 +625,7 @@ def _seed_pictures(film, lib, idx):
             m = json.load(f)
         m.setdefault("images", {}).update({p["name"]: p["file"] for p in out})
         _write_json(film.manifest, m)
+        write_roles(film, {p["name"]: p["role"] for p in out if p.get("role")})
     if once:
         with _lock(lib):
             idx2 = load(lib)
@@ -697,15 +747,29 @@ def note(film):
     if pics:
         out += [
             "" if out else None,
-            "The project's pictures (Read one to see it; on screen: SK.image('<name>', x, y, w)%s):"
+            "The project's pictures (Read one to see it; on screen: "
+            "SK.image('<name>', x, y, w)%s)%s:"
             % (
                 # painted from the style picture: the painter takes a reference (sketch-paint.py)
                 '; a painting made from one: "ref": "<name>" in paint.json'
                 if paint_kinds(film.caps) and (rec.get("paint_route") or {}).get("ref")
-                else ""
+                else "",
+                ". Where its person said what one is for, that is what it is for"
+                if any(p.get("role") for p in pics)
+                else "",
             ),
         ]
-        out += ["- %s (%sx%s): %s" % (p["name"], p.get("w"), p.get("h"), p["file"]) for p in pics]
+        out += [
+            "- %s (%sx%s): %s%s"
+            % (
+                p["name"],
+                p.get("w"),
+                p.get("h"),
+                p["file"],
+                role_line(p.get("role"), bool(paint_kinds(film.caps))),
+            )
+            for p in pics
+        ]
     told = project and painted_note(
         film, got.get("painted") or [], collection and "cast" not in kept
     )
@@ -1317,7 +1381,9 @@ def listing(client, project=None):
     out = {"cast": cast, "films": idx["films"]}
     if project:
         out["pictures"] = [
-            {"name": n, "once": bool(e.get("once"))} | {k: e.get(k) for k in ("w", "h", "added")}
+            {"name": n, "once": bool(e.get("once"))}
+            | {k: e.get(k) for k in ("w", "h", "added")}
+            | ({"role": e["role"]} if e.get("role") in PICTURE_ROLES else {})
             for n, e in sorted(idx["pictures"].items())
         ]
         out["voice"] = [
@@ -1368,14 +1434,17 @@ class PictureError(Exception):
         self.status, self.text = status, text
 
 
-def add_picture(client, project, name, src, ext, once=False):
+def add_picture(client, project, name, src, ext, once=False, role=None):
     """Put a picture (an upload's file, checked by uploads.receive) into a project, under a name
     (the film's SK.image('pic_<name>')); the same name again replaces it. once=True: this picture
     seeds only the project's next episode, then is removed on its own (see _seed_pictures) -- the
-    person adds a fresh one for the episode after that. Returns its entry."""
+    person adds a fresh one for the episode after that. role: what it is for (PICTURE_ROLES), or
+    None for Claude to decide. Returns its entry."""
     lib = owner(client, project)
     if not lib or not project:
         raise PictureError(404, "No such project.")
+    if role is not None and role not in PICTURE_ROLES:
+        raise PictureError(400, "A picture's role is one of: %s." % ", ".join(PICTURE_ROLES))
     if not NAME.match(name or ""):
         raise PictureError(
             400, "A picture's name is lowercase letters, digits and _, starting with a letter."
@@ -1406,9 +1475,28 @@ def add_picture(client, project, name, src, ext, once=False):
             "h": h,
             "added": datetime.now().isoformat(timespec="seconds"),
             **({"once": True} if once else {}),
+            **({"role": role} if role else {}),
         }
         _save(lib, idx)
         return {"name": name} | idx["pictures"][name]
+
+
+def set_picture_role(client, project, name, role):
+    """Say what a project's picture is for (PICTURE_ROLES); the next episodes are told. Its
+    entry, or None when there is no such picture."""
+    if role not in PICTURE_ROLES:
+        raise PictureError(400, "A picture's role is one of: %s." % ", ".join(PICTURE_ROLES))
+    lib = owner(client, project)
+    if not lib or not project or not NAME.match(name or ""):
+        return None
+    with _lock(lib):
+        idx = load(lib)
+        e = idx["pictures"].get(name)
+        if not e:
+            return None
+        e["role"] = role
+        _save(lib, idx)
+        return {"name": name} | e
 
 
 def _remove_picture(d, name):

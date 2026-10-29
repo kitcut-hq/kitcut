@@ -2,9 +2,11 @@
 """A painting made from a project's picture ("ref": "pic_<name>" in paint.json), with the
 painter stood in for: python studio/test_paintref.py
 
-Covers: a pic ref resolves to the film's inputs/pic_<name>.* and goes to the painter as it is,
-never painted; the image made from it is painted before the scenes made from that image, which
-get it as their reference; the picture's content is in the fingerprint (a new picture paints
+Covers: several style pictures go to the painter with every painting, first, and each is in the
+fingerprint; an attached picture (upload<n>) is a ref only when the person marked it "style", and a
+picture marked "scene" never is; a pic ref resolves to the film's inputs/pic_<name>.* and goes
+to the painter as it is, never painted; the image made from it is painted before the scenes made
+from that image, which get it as their reference; the picture's content is in the fingerprint (a new picture paints
 afresh, the same one is cached); an unknown picture, another shape of name, a path escape and a
 link out of inputs/ are refused, by the painter and by the check (validate.py); a film without
 pic refs plans exactly as before. A throwaway folder, no network, no model.
@@ -54,7 +56,7 @@ def fake_paint(
 ):
     """The painter: says what it was given (and what its reference looked like then), and
     paints each image a colour of its own, named first in its prompt."""
-    name = prompt.split(":")[0]
+    name = next(c for c in prompt.split("\n\n") if ":" in c).split(":")[0]  # after a style line
     seen = None
     for r in ref if isinstance(ref, list) else [ref]:
         if r and os.path.exists(r):
@@ -128,8 +130,10 @@ def several():
     check(pics_ == ["a.jpg", "b.jpg"] and lead == SP.KEEP_REFS, "several references: one each")
     pics_, lead = SP.ref_lead(["a.jpg", "b.jpg"], "s.jpg")
     check(
-        pics_ == ["s.jpg", "a.jpg", "b.jpg"] and lead == SP.STYLE_REF + SP.STYLE_AND_REFS,
+        pics_ == ["s.jpg", "a.jpg", "b.jpg"]
+        and lead == SP.STYLE_REF + SP.STYLE_AND_REFS % "first picture",
         "after the style picture",
+        lead,
     )
     out, err = run(d, "--plan")
     check(err is None and out.count("cached ") == 2, "a rerun paints nothing", out)
@@ -139,6 +143,102 @@ def several():
     e = film("five", [{"name": "x", "prompt": "x: x", "ref": ["cast_mom"] * 2}])
     _, err = run(e, "--plan")
     check(err and "a list of up to" in err, "the painter refuses a ref list it cannot take", err)
+
+
+def styles():
+    """ "style_ref": [...]: every style picture beside the manifest goes with every painting, in
+    order, before the image's own refs; a new one repaints; one outside the folder is refused."""
+    images = [
+        {"name": "park", "prompt": "park: a garden", "ref": "cast_mom"},
+        {"name": "beach", "prompt": "beach: a beach"},
+    ]
+    d = film("styles", images, [("cast_mom.png", (240, 20, 20))])
+    os.makedirs(os.path.join(d, "style"))
+    for n, c in (("style.jpg", (1, 1, 1)), ("style2.jpg", (2, 2, 2)), ("style3.jpg", (3, 3, 3))):
+        Image.new("RGB", (32, 32), c).save(os.path.join(d, "style", n))
+    paint = json.load(open(os.path.join(d, "paint.json")))
+    paint |= {
+        "style": "flat shapes, no shading",
+        "style_ref": ["style/style.jpg", "style/style2.jpg", "style/style3.jpg"],
+    }
+    json.dump(paint, open(os.path.join(d, "paint.json"), "w"))
+    _, err = run(d)
+    by = {c["name"]: c for c in CALLS}
+    want = [os.path.realpath(os.path.join(d, *n.split("/"))) for n in paint["style_ref"]]
+    check(
+        err is None
+        and all(by[n]["style_ref"] == want for n in ("park", "beach"))
+        and by["park"]["ref"] == os.path.realpath(os.path.join(d, "inputs", "cast_mom.png")),
+        "every style picture goes with every painting, beside its own ref",
+        (err, CALLS),
+    )
+    out, err = run(d, "--plan")
+    check(err is None and out.count("cached ") == 2, "a rerun paints nothing", out)
+    Image.new("RGB", (32, 32), (9, 9, 9)).save(os.path.join(d, "style", "style3.jpg"))
+    out, err = run(d, "--plan")
+    check(err is None and out.count("PAINT  ") == 2, "a new style picture repaints all", out)
+    paint["style_ref"] = ["style/style.jpg", "../one-style/style/style.jpg"]
+    json.dump(paint, open(os.path.join(d, "paint.json"), "w"))
+    _, err = run(d, "--plan")
+    check(err and "not a picture beside the manifest" in err, "one outside is refused", err)
+    paint["style_ref"] = ["style/style.jpg"] * 5
+    json.dump(paint, open(os.path.join(d, "paint.json"), "w"))
+    _, err = run(d, "--plan")
+    check(err and "at most" in err, "too many style pictures are refused", err)
+    one = film("one-style", [{"name": "beach", "prompt": "beach: a beach"}])
+    os.makedirs(os.path.join(one, "style"))
+    Image.new("RGB", (32, 32), (1, 1, 1)).save(os.path.join(one, "style", "style.jpg"))
+    spec = {"backend": "openrouter", "model": "m", "style": "", "style_ref": "style/style.jpg"}
+    json.dump(spec | {"images": [{"name": "beach", "prompt": "beach: a beach"}]},
+              open(os.path.join(one, "paint.json"), "w"))
+    run(one)
+    fp_one = SP.fingerprint(spec, {"name": "beach", "prompt": "beach: a beach"}, None,
+                            SP.file_fp(os.path.join(one, "style", "style.jpg")))
+    check(
+        os.path.exists(os.path.join(one, "images", "beach_%s.jpg" % fp_one))
+        and isinstance(CALLS[0]["style_ref"], str),
+        "a style of one picture is sent and keyed as it always was",
+        os.listdir(os.path.join(one, "images")),
+    )
+
+
+def roles():
+    """An attached picture is a painting's ref only when its role (inputs/roles.json, the
+    studio's) is "style"; "scene" is never one, nor a project picture marked "scene"."""
+    pics = [
+        ("upload1.jpg", (10, 200, 10)),
+        ("upload2.jpg", (10, 10, 200)),
+        ("upload3.jpg", (200, 10, 10)),
+        ("pic_yard.png", (90, 90, 90)),
+    ]
+    d = film("roles", [{"name": "city", "prompt": "city: a city", "ref": "upload1"}], pics)
+    json.dump(
+        {"upload1": "style", "upload2": "scene", "pic_yard": "scene"},
+        open(os.path.join(d, "inputs", "roles.json"), "w"),
+    )
+    paint = json.load(open(os.path.join(d, "paint.json")))
+    check(validate._paint(paint, 30, CAPS, d) == [], "the check takes a style picture as a ref")
+    _, err = run(d)
+    check(
+        err is None
+        and CALLS[0]["ref"] == os.path.realpath(os.path.join(d, "inputs", "upload1.jpg"))
+        and all(abs(a - b) < 6 for a, b in zip(CALLS[0]["seen"], (10, 200, 10), strict=True)),
+        "an attached picture marked style goes to the painter as it is",
+        (err, CALLS),
+    )
+    for bad in ("upload2", "upload3", "pic_yard", "upload1x"):
+        p = dict(paint, images=[{"name": "city", "prompt": "city: a city", "ref": bad}])
+        out = validate._paint(p, 30, CAPS, d)
+        json.dump(p, open(os.path.join(d, "paint.json"), "w"))
+        _, err = run(d, "--plan")
+        check(
+            out
+            and "upload<n>" in out[0]
+            and err
+            and "marked as how to draw something (upload<n>)" in err,
+            "a picture of another role (or none) is refused as a ref: %s" % bad,
+            (out, err),
+        )
 
 
 def main():
@@ -264,6 +364,8 @@ def main():
     )
 
     several()
+    styles()
+    roles()
     print("\n%s" % ("all passed" if not FAILS else "%d FAILED" % len(FAILS)))
     shutil.rmtree(HOME, ignore_errors=True)
     sys.exit(1 if FAILS else 0)

@@ -127,16 +127,20 @@ def main():
     m = stylekit.add_file(d, "phone.heic", len(heic))
     stylekit.put_part(d, m["id"], 0, heic)
     check(refused(lambda: stylekit.finish(d, m["id"]), 415), "a HEIC is refused with what to do")
+    d4 = send(d, "fourth.png", enc(Image.new("RGB", (300, 200), (40, 90, 160)), "PNG"))
+    check(d4["kind"] == "image", "a fourth picture is taken")
     check(
-        refused(lambda: send(d, "fourth.png", enc(big, "PNG")), 409),
-        "a fourth picture is refused",
+        refused(lambda: send(d, "fifth.png", enc(big, "PNG")), 409),
+        "a fifth picture is refused",
     )
     with open(ANTON, "rb") as f:
         font = send(d, "Anton.ttf", f.read(), part=50_000)
     check(font["kind"] == "font" and font["family"] == "Anton", "a font file is read", font)
     check(refused(lambda: stylekit.put_part(d, a["id"], 0, b"x"), 409), "a finished file is shut")
     pics = stylekit.pictures(d)
-    check([p["id"] for p in pics] == [a["id"], b["id"], c["id"]], "the pictures, in order")
+    check(
+        [p["id"] for p in pics] == [a["id"], b["id"], c["id"], d4["id"]], "the pictures, in order"
+    )
 
     # ---- the colours, measured
     two = Image.new("RGB", (200, 100), "#E8A0AA")
@@ -206,7 +210,9 @@ def main():
     def fake_paint(
         prompt, model, ref=None, quality=None, aspect="16:9", transparent=False, style_ref=None
     ):
-        painted.append({"model": model, "prompt": prompt, "style_ref": style_ref})
+        painted.append(
+            {"model": model, "prompt": prompt, "style_ref": style_ref, "quality": quality}
+        )
         cost = {"meta/muse-image": 0.01, "openai/gpt-image-2.5-flare": 0.016}.get(model, 0.07)
         return enc(Image.new("RGB", (64, 36), "#ddd"), "PNG"), {"cost_usd": cost}
 
@@ -276,13 +282,16 @@ def main():
     gpt = next(p for p in painted if p["model"] == "openai/gpt-image-2.5-flare")
     words = next(p for p in painted if p["model"] == "meta/muse-image")
     check(
-        gpt["style_ref"]
-        and gpt["style_ref"].endswith(card["main"] + ".jpg")
-        and "watercolour" not in gpt["prompt"]
+        isinstance(gpt["style_ref"], list)
+        and [os.path.basename(x) for x in gpt["style_ref"]]
+        == [card["main"] + ".jpg"] + [p["id"] + ".jpg" for p in pics if p["id"] != card["main"]]
+        and gpt["prompt"].startswith(card["style"].rstrip("."))
+        and gpt["quality"] == "high"
         and "watercolour" in words["prompt"]
         and not words["style_ref"],
-        "GPT Image gets the picture and only the subject; Muse gets the style line",
-        (gpt["prompt"][:120], words["prompt"][:120]),
+        "GPT Image gets every picture (the main one first), the style line and high quality; "
+        "Muse gets the style line",
+        (gpt["style_ref"], gpt["prompt"][:120], words["prompt"][:120]),
     )
 
     # ---- the team: Gemini painted, priced, picked; nobody else may
@@ -350,38 +359,66 @@ def main():
         "its faces are fonts",
     )
     rec = ep.record()
+    refs = ["style/style.jpg", "style/style2.jpg", "style/style3.jpg", "style/style4.jpg"]
     check(
-        rec.get("paint_route") == {"route": "gpt", "ref": "style/style.jpg", "line": card["style"]},
-        "the record says how its pictures are painted",
+        rec.get("paint_route") == {"route": "gpt", "ref": refs, "line": card["style"]}
+        and all(os.path.exists(ep.path(*r.split("/"))) for r in refs),
+        "the record says how its pictures are painted: from every style picture",
         rec.get("paint_route"),
     )
+    with Image.open(ep.path("style", "style.jpg")) as im_, Image.open(
+        os.path.join(d, "pictures", card["main"] + ".jpg")
+    ) as main_:
+        check(im_.size == main_.size, "the main picture is style.jpg")
     paint = json.load(open(ep.path("paint.json"), encoding="utf-8"))
     check(
         paint["model"] == "openai/gpt-image-2.5-flare"
-        and paint["style_ref"] == "style/style.jpg"
-        and paint["style"] == "",
-        "paint.json is pinned to GPT Image and the style picture",
+        and paint["style_ref"] == refs
+        and paint["style"] == card["style"]
+        and paint["quality"] == "high",
+        "paint.json is pinned to GPT Image, every style picture, the style line and high quality",
         paint,
     )
-    paint |= {"model": "meta/muse-image", "style": "oil painting", "style_ref": "../x.jpg"}
+    paint |= {
+        "model": "meta/muse-image",
+        "style": "oil painting",
+        "style_ref": "../x.jpg",
+        "quality": "low",
+    }
     json.dump(paint, open(ep.path("paint.json"), "w", encoding="utf-8"))
     said = guard.pin_paint(ep)
     paint = json.load(open(ep.path("paint.json"), encoding="utf-8"))
     check(
         paint["model"] == "openai/gpt-image-2.5-flare"
-        and paint["style_ref"] == "style/style.jpg"
-        and paint["style"] == ""
+        and paint["style_ref"] == refs
+        and paint["style"] == card["style"]
+        and paint["quality"] == "high"
         and said,
-        "Claude cannot change the painter, the style or the picture",
+        "Claude cannot change the painter, the style, the pictures or the quality",
         paint,
     )
     pins = rounds._pins(ep, rec)  # noqa: SLF001
     check(
-        pins["paint"].get("style_ref") == "style/style.jpg"
-        and pins["paint"]["model"] == "openai/gpt-image-2.5-flare",
-        "a round keeps the episode's painter and picture",
+        pins["paint"].get("style_ref") == refs
+        and pins["paint"]["model"] == "openai/gpt-image-2.5-flare"
+        and pins["paint"]["quality"] == "high",
+        "a round keeps the episode's painter and pictures",
         pins.get("paint"),
     )
+    # an episode painted before the route had a quality (or the line, or more pictures): its
+    # round keeps what it was painted with, so nothing repaints
+    old = {k: v for k, v in paint.items() if k != "quality"}
+    old |= {"style": "", "style_ref": "style/style.jpg"}
+    json.dump(old, open(ep.path("paint.json"), "w", encoding="utf-8"))
+    pins = rounds._pins(ep, rec)  # noqa: SLF001
+    check(
+        "quality" not in pins["paint"]
+        and pins["paint"]["style"] == ""
+        and pins["paint"]["style_ref"] == "style/style.jpg",
+        "a round of an episode painted before keeps its own pins",
+        pins.get("paint"),
+    )
+    json.dump(paint, open(ep.path("paint.json"), "w", encoding="utf-8"))
     note = library.note(ep)
     check(
         "This project has a style" in note and "says ONLY what to draw" in note,
@@ -508,13 +545,30 @@ def main():
         "a styled film is never made into a template by accident",
     )
 
-    # ---- the painter: the style picture first, the character second
+    # ---- the painter: the style pictures first, the characters after them
     pics_, lead = SP.ref_lead("char.jpg", "style.jpg")
     check(
         pics_ == ["style.jpg", "char.jpg"]
         and lead.startswith(SP.STYLE_REF)
-        and SP.STYLE_AND_REF in lead,
+        and SP.STYLE_AND_REF % ("second", "first picture") in lead
+        and "empty space" not in lead,
         "the painter sends the style picture first and the character second",
+        lead,
+    )
+    pics_, lead = SP.ref_lead("char.jpg", ["s1.jpg", "s2.jpg", "s3.jpg"])
+    check(
+        pics_ == ["s1.jpg", "s2.jpg", "s3.jpg", "char.jpg"]
+        and lead.startswith(SP.STYLE_REFS % 3)
+        and "The fourth attached picture shows the characters" in lead
+        and "style of the first 3 pictures" in lead,
+        "several style pictures go first, and the lead counts them",
+        lead,
+    )
+    pics_, lead = SP.ref_lead(["a.jpg", "b.jpg"], ["s1.jpg", "s2.jpg", "s3.jpg"], room=4)
+    check(
+        pics_ == ["s1.jpg", "s2.jpg", "s3.jpg", "a.jpg"],
+        "a model with less room gets the style pictures first, then what fits",
+        pics_,
     )
     check(SP.ref_lead("char.jpg") == (["char.jpg"], SP.KEEP_REF), "without a style, as before")
     im = {"name": "a", "prompt": "a bridge"}
@@ -523,6 +577,12 @@ def main():
         SP.fingerprint(spec, im) == SP.fingerprint(spec, im, None, None)
         and SP.fingerprint(spec, im, None, "abc") != SP.fingerprint(spec, im),
         "a style picture is in a painting's fingerprint, and nothing changes without one",
+    )
+    check(
+        SP.fingerprint(spec, im, None, ["abc", "def"]) != SP.fingerprint(spec, im, None, "abc")
+        and SP.fingerprint(spec, im, None, ["abc", "def"])
+        != SP.fingerprint(spec, im, None, ["abc", "xyz"]),
+        "every style picture is in the fingerprint",
     )
 
     stylekit.remove(d)

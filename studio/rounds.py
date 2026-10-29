@@ -591,7 +591,13 @@ def _pins(work, rec):
         want = films.paint_pins(
             float(rec.get("length") or work.length), probe.caps, rec.get("paint_route")
         )
-        pins["paint"] = {k: paint.get(k, v) for k, v in want.items()}
+        pins["paint"] = {
+            k: paint.get(k, v)
+            for k, v in want.items()
+            # a film painted before its route had a quality keeps painting without one: with it,
+            # every picture's fingerprint would change and a round would repaint them all
+            if k != "quality" or k in paint or not paint
+        }
     return pins
 
 
