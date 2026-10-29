@@ -1283,3 +1283,19 @@ GitHub credentials, and its `origin` is the local bare repo, which autoship fill
 GitHub URL.
 **Fix, not made.** autoship could refuse to move a dirty checkout, or stash first and say so.
 That is the owner's call, because it can delay a ship.
+
+### KI-068 · fixed · studio · A tall painted film had paper-coloured bands at the top and bottom
+
+**Symptom.** 2026-10-23: Brella's survey demo, a painted film in 9:16, showed empty
+paper-coloured bands above and below its paintings for most of its length.
+**Cause.** The painted look never asked the painter for a tall picture. `sketch-paint.py` painted
+every scene 16:9 (Muse was sent the fixed `UNLISTED` 16:9, Gemini a hardcoded 16:9), and Claude
+was told the frame (`film.frame_note`) but not the painting's shape, so `looks/painted.md`'s
+"1920x1280, drawn 2000 wide" left a 1080x1920 frame with about two thirds of its height covered.
+**Fix.** The scenes are painted in the film's own shape (`sketch-paint.py frame_aspect`, from the
+manifest's `frame`; a wide painting keeps its old cache key). A tall film's scenes are painted by
+GPT Image 2.5 Flare (`film.TALL_PAINTER`) unless its project's style picture names its own
+painter: asked for 9:16, Muse paints 2:3 with speckled paper edges in three scenes of five (the
+painter bake-off of 2026-10-28, `paint-compare.py --aspect 9:16`). `frame_note` tells a tall
+painted film's Claude to draw a painting about 1170 wide, which covers the frame with room to
+move. `studio/test_paint_frame.py` holds all of it.

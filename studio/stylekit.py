@@ -680,7 +680,8 @@ def _sp():
 
 
 def paint_one(route, subject, style_line, style_jpg, out):
-    """One proof picture: (path, {cost_usd, seconds}) or raises."""
+    """One proof picture: (path, {cost_usd, seconds}) or raises. Always wide (16:9): it shows
+    the style, not a film, so a tall project's proof is wide too."""
     sp = _sp()
     r = STYLE_ROUTES[route]
     t = time.time()
@@ -1120,7 +1121,8 @@ def seed(film, lib):
     film.update(paint_route=pr)
     if paint_kinds(film.caps) and os.path.exists(film.path("paint.json")):
         p = _read_json(film.path("paint.json"), {}) or {}
-        _write_json(film.path("paint.json"), p | paint_pins(film.length, film.caps, pr))
+        pins = paint_pins(film.length, film.caps, pr, film.record().get("frame"))
+        _write_json(film.path("paint.json"), p | pins)
     return {"route": pr["route"], "fonts": used["families"], "picture": bool(picture)}
 
 

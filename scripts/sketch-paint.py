@@ -19,13 +19,19 @@ Backends:
     openrouter  any image model OpenRouter serves ("model": "bytedance-seed/seedream-5-0-lite"),
             through its Image API (OPENROUTER_API_KEY). What each model takes -- resolution,
             aspect ratio, output format, quality, reference pictures -- is read from OpenRouter's
-            catalogue, so a model is only sent what it accepts: 16:9 or the nearest landscape
+            catalogue, so a model is only sent what it accepts: the film's shape or the nearest
             ratio it has, 2K or the nearest below. The price comes back with each image.
-    muse    the same backend with meta/muse-image as its model (the studio's default): 1920x1280
-            whatever the aspect asked for, ~25 s and $0.01 an image. Muse is served but not in
-            the catalogue, so it is sent what it always was, and it takes no reference.
+    muse    the same backend with meta/muse-image as its model (the studio's default for a wide
+            film): 1920x1280, ~25 s and $0.01 an image. Muse is served but not in the catalogue, so
+            it is sent what it always was with the film's aspect, and it takes no reference. Asked
+            for 9:16 it paints 1280x1920 (2:3) with speckled paper edges (bake-off 2026-10-28), so
+            a tall film is painted by GPT Image instead (studio/film.py TALL_PAINTER).
     gemini  a Gemini image model on Vertex AI (GOOGLE_SERVICE_ACCOUNT_KEY), default
             gemini-3.1-flash-image: 1376x768, ~10 s.
+
+The scenes are painted in the shape of the manifest's "frame" ([w, h]; frame_aspect): 16:9 for a
+wide film or one with no frame, 9:16 for a tall one (a Short), 1:1 for a square one. A cut-out
+keeps its own "aspect".
 
 A cut-out -- `"cutout": true` on an image, or `{"border": 0}` / `{"border": 16, "cut": "round"}`
 -- is one subject alone, for a collage: it is asked for isolated, with a transparent background
@@ -157,7 +163,17 @@ def file_fp(path):
         return ""
 
 
-def fingerprint(spec, im, ref_fp=None, style_fp=None):
+def frame_aspect(m):
+    """The shape a film's scenes are painted in, from its manifest's "frame" [w, h]: "9:16" when
+    it is taller than wide, "1:1" when square, else (and with no frame) "16:9"."""
+    try:
+        w, h = (float(x) for x in (m.get("frame") or [1920, 1080])[:2])
+    except (TypeError, ValueError):
+        return "16:9"
+    return "9:16" if h > w else "1:1" if h == w else "16:9"
+
+
+def fingerprint(spec, im, ref_fp=None, style_fp=None, aspect="16:9"):
     parts = [spec.get("backend"), spec.get("model"), spec.get("style"), im["prompt"], ref_fp]
     if spec.get("quality"):  # only when set, so every painting made before it keeps its key
         parts.append(spec["quality"])
@@ -166,6 +182,8 @@ def fingerprint(spec, im, ref_fp=None, style_fp=None):
     cs = cut_spec(spec, im)
     if cs:  # only for cut-outs, so every scene painted before them keeps its key
         parts.append([cs, im.get("aspect")])
+    elif aspect != "16:9":  # a tall or square film's scenes: a wide film's keep their keys
+        parts.append(["frame", aspect])
     key = json.dumps(parts, sort_keys=True)
     return hashlib.sha1(key.encode(), usedforsecurity=False).hexdigest()[:10]
 
@@ -308,7 +326,7 @@ def paint_openrouter(
     return data, {"cost_usd": u.get("cost"), "tokens": u.get("completion_tokens")}
 
 
-def paint_gemini(prompt, model, ref=None):
+def paint_gemini(prompt, model, ref=None, aspect="16:9"):
     from google import genai
     from google.genai import types
     from google.oauth2 import service_account
@@ -338,7 +356,7 @@ def paint_gemini(prompt, model, ref=None):
         model=model,
         contents=contents,
         config=types.GenerateContentConfig(
-            response_modalities=["IMAGE"], image_config=types.ImageConfig(aspect_ratio="16:9")
+            response_modalities=["IMAGE"], image_config=types.ImageConfig(aspect_ratio=aspect)
         ),
     )
     part = next(p for p in r.candidates[0].content.parts if p.inline_data)
@@ -498,6 +516,7 @@ def main():
         if not style_ref.startswith(base + os.sep) or not os.path.isfile(style_ref):
             sys.exit("paint.style_ref %r is not a picture beside the manifest" % spec["style_ref"])
     style_fp = file_fp(style_ref) if style_ref else None
+    aspect = frame_aspect(m)  # the scenes' shape: the film's frame
     only = set(args.only.split(",")) if args.only else set(names)
     idir = os.path.join(m["_dir"], "images")
     os.makedirs(idir, exist_ok=True)
@@ -536,7 +555,9 @@ def main():
             # first, with the pictures' own content: a new one repaints it, and the scenes made
             # from it wherever they stand in the list
             fp = [["pic", file_fp(f)] for f in files[im["name"]]]
-            fps[im["name"]] = fingerprint(spec, im, fp[0] if isinstance(ref, str) else fp, style_fp)
+            fps[im["name"]] = fingerprint(
+                spec, im, fp[0] if isinstance(ref, str) else fp, style_fp, aspect
+            )
 
     def ref_fp(im):
         ref = im.get("ref")
@@ -549,7 +570,7 @@ def main():
 
     for im in images:
         if im["name"] not in pics:
-            fps[im["name"]] = fingerprint(spec, im, ref_fp(im), style_fp)
+            fps[im["name"]] = fingerprint(spec, im, ref_fp(im), style_fp, aspect)
         cached = os.path.join(idir, "%s_%s%s" % (im["name"], fps[im["name"]], ext(spec, im)))
         retake = im["name"] in only and args.retake and os.path.exists(cached)
         if retake:
@@ -598,10 +619,10 @@ def main():
                                 prompt, cs["model"], ref, cs["quality"], shape, alpha, style_ref
                             )
                         elif backend == "gemini":
-                            data, meta = paint_gemini(prompt, model, ref)
+                            data, meta = paint_gemini(prompt, model, ref, aspect)
                         else:
                             data, meta = paint_openrouter(
-                                prompt, model, ref, spec.get("quality"), style_ref=style_ref
+                                prompt, model, ref, spec.get("quality"), aspect, style_ref=style_ref
                             )
                         break
                     except Exception as e:  # noqa: BLE001 -- image services drop requests; retry
