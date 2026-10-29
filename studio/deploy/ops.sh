@@ -429,7 +429,12 @@ EOF
           systemctl is-active kitcut-claude-rc.service && $rc_tm capture-pane -p -J -t rc | $rc_shown -12"
         ;;
       stop) change_on "sudo systemctl disable -q --now kitcut-claude-rc.service; systemctl is-active kitcut-claude-rc.service || true" ;;
-      *) die "rc | rc login | rc code <code> | rc install | rc stop" ;;
+      session)
+        # a session started ON the machine, the kind that can send files to the phone (KI-069)
+        shift; args=""; for a in "$@"; do args="$args $(printf %q "$a")"; done
+        change_on "bash $REMOTE/studio/deploy/rc-session.sh$args"
+        ;;
+      *) die "rc | rc login | rc code <code> | rc install | rc stop | rc session new|list|stop ..." ;;
     esac
     ;;
 

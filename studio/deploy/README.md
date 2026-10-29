@@ -713,6 +713,21 @@ bash studio/deploy/ops.sh rc stop             # take it off
 - **Never restart this unit to unstick one session**: it ends every session on the machine,
   including the one doing the restart. Kill the stuck process instead.
 - `claude rc --help` over ssh without a terminal hangs; run `claude rc` only inside tmux.
+- **Only a session started on the machine can send files to the phone** (KI-069). A session
+  started from the phone's "New session" goes through `claude rc`, and its `SendUserFile` always
+  answers "not on a project thread", on every machine and version. A session started on the
+  machine with `claude --remote-control` delivers them. `rc-session.sh` starts one in a unit of
+  its own and prints its link:
+
+  ```bash
+  bash studio/deploy/rc-session.sh new "<name>" ["first message"]   # on the machine, from any session
+  bash studio/deploy/rc-session.sh list | stop <id>|--all
+  bash studio/deploy/ops.sh rc session new "<name>"                  # the same, from the laptop
+  ```
+
+  It sets `DISABLE_AUTOUPDATER=1`: an interactive session updates itself even with
+  `autoUpdates: false`, and the first one moved `~/.local/bin/claude`, which the films use, from
+  2.1.296 to 2.1.312. The script also checks that link and puts it back if it moved.
 - Until 2026-10-12 it was started by hand in a scope on the VM and did not survive a reboot.
 
 ## Building it again

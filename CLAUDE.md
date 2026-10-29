@@ -754,6 +754,11 @@ Each cost an hour or more in one session (2026-09-29/30). Check here first.
   Remote Control session on the machine. A job over a gigabyte or two goes in its own unit first
   (`sudo systemd-run ... -p MemoryMax=14G -p MemorySwapMax=0 --wait --collect`); to unstick a
   session kill its process, never restart that unit, which ends them all (KI-068).
+- **A session started from the phone cannot send files; one started on the machine can.**
+  `SendUserFile` in a phone "New session" always fails ("not on a project thread"), on kc-local and
+  on the laptop alike. To show the owner a picture or a render, run
+  `bash studio/deploy/rc-session.sh new "<name>" "Send me <path>"` and give them the link it
+  prints (KI-069). Never retry the send in the phone session, and never email it as a workaround.
 - **PowerShell 5.1 has no `&&` or `||`.** Use `;` or `if ($?) { ... }`. A `&&` fails
   the whole call as a parse error, before anything runs.
 - **Git Bash rewrites any argument starting with `/`** into a Windows path.

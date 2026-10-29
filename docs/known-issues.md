@@ -1311,3 +1311,23 @@ Throttling is the freeze. The rule stays: anything over a gigabyte or two gets i
 it starts (`studio/deploy/README.md`, "Remote Control"), a stuck session is unstuck by killing its
 process, never by restarting the unit, and a cap is tested on a throwaway unit, never on the one
 the sessions live in.
+
+### KI-069 · fixed · studio · A session started from the phone could not send the owner a single file
+
+**Symptom.** On kc-local, every `SendUserFile` from 2026-10-14 to 2026-10-28 answered "not
+delivered: this session is not on a project thread, so it has nowhere to place a file": cast
+sheets, renders, thumbnails, research. Sessions fell back on emailing the file, which fails above
+a few KB because the attachment is written out in the call.
+**Cause.** It depends on how the session was started, not on the machine or the version. Sessions
+started from the phone's "New session" run under `claude rc` (tag `remote-control-mobile`) and
+cannot send, on kc-local (2.1.296) or on the laptop (2.1.300: two attempts, both refused). Sessions
+started on the machine with `claude --remote-control` (tag `remote-control-repl`) deliver ("1 file
+delivered to user", the laptop on 2026-10-15 and kc-local on 2026-10-28). The phone app cannot
+start a session from a project.
+**Fix.** `studio/deploy/rc-session.sh new "<name>" ["first message"]` starts a session on the
+machine, in a unit of its own capped like KI-068, and prints its link. The owner opens the link
+on the phone, and files sent from that session arrive. The first such session updated itself to
+2.1.312 and moved `~/.local/bin/claude`, which the films use, even though `autoUpdates` was false.
+It was put back to 2.1.296, and the script now sets `DISABLE_AUTOUPDATER=1` and puts the link back
+if it ever moves.
+
