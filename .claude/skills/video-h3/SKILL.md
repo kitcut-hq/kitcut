@@ -172,6 +172,29 @@ non_diegetic_music:       N/A when the episode's own score is laid on later
   length, model, words.
 - Before a film goes to its owner, a fresh agent reviews it with the `video-review` skill.
 
+18. **A comic panel shot is anchored at both ends, and its cast pictures are only for cats drawn large.**
+    A 35-shot vertical comic adaptation (2026-10-29, Ref2VA pruned PDD, 576x1024) used each cleaned panel
+    as first AND last frame plus cast-pack references (`scripts/cast-pack.py`). With references, cats drawn
+    large stayed on model (a collar and bell, a scarred closed eye). Where the cats are SMALL in the frame, H3
+    treated the close-up references as shots of their own and cut to them: one shot jumped to the hero's head
+    reference, another became a two-close-up dialogue edit on white. Small-cat shots get the card's words and
+    no pictures; that held every one of 13.
+19. **Say that the references never set the framing.** "The reference pictures only show what each cat
+    looks like; they never set the framing. Every cat stays the same size and in the same place as in
+    <Picture 1>: no cut, no close-up, no zoom" stopped the jumps on large-cat shots.
+20. **H3 smiles.** In listening and silent moments it turned anxious, stern and terrified faces into grins
+    (4 of 35 shots) and opened eyes drawn shut (2 shots). A general line ("a listening cat
+    keeps the mood of <Picture 1>: nobody smiles unless <Picture 1> draws a smile") helped; what fixed each
+    one was a per-shot note naming the mood outright ("terrified: eyes wide, mouth closed; he never smiles").
+21. **An empty area plus an off-screen voice invites a new character.** A lone cat under a bubble-sized gap,
+    with another character speaking off screen, grew two extra copies of himself. A tighter window and "he is
+    alone in the frame; the speaker never appears" fixed it.
+22. **Clean the plate before H3 sees it; it animates every flaw.** Speech-bubble ghosts, tail tips and the
+    book's white gutter under slanted panel borders all stay in the video, and a patch H3 "corrects" mid-shot
+    morphs back to the plate at the end. Fill flat backgrounds from a fitted colour surface (no model), refine
+    textured ones with an inpainter at about 0.8 strength from that fill (1.0 invented animals and bubbles),
+    and fill an edge gutter line by line from the colour just inside it, blurred ACROSS the lines.
+
 ## Machine traps
 
 - **Wan2GP turns every blank-line paragraph of a prompt into a separate video** (its default
@@ -192,6 +215,16 @@ non_diegetic_music:       N/A when the episode's own score is laid on later
   lines every 30 s.
 - **The model's own audio is far louder than an effects stem.** It needed about -18 dB to sit where KitCut's
   effects did.
+
+- **One shot per wgp process.** Two Ref2VA shots in one process outgrew the 22 GB cap (the second was
+  OOM-killed); a single shot with 6 references sat at the cap with 2 GB of swap, so 3-4 cats get one
+  reference each. A runner that loops `wgp.py --process <one-shot.json>` is the pattern.
+- **A Ref2VA task naming a missing `audio_guide` is skipped in seconds** ("You must provide an Audio Source").
+  A silent shot drops `audio_guide` and sets `audio_prompt_type: ""`; its sound is replaced at assembly.
+- **Assemble shot by shot.** One ffmpeg graph with 35 decoded inputs held 8 GB; encoding each piece and
+  joining them with the concat demuxer (`-c copy`) took almost none.
+- **Measured pace (RTX 3070, 576x1024, 8 steps):** about 7 min for a 4.5 s shot, 26 min for 12.9 s; 35 shots
+  and 15 retakes took 7 h 50 min of GPU.
 
 ## Open questions (update as they are answered)
 
