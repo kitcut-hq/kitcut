@@ -704,6 +704,14 @@ bash studio/deploy/ops.sh rc stop             # take it off
 - **Its cap is a share of the machine** (`MemoryMax=20%`: 3.2 GB of the VM's 16, 6.4 of 32),
   on every session started through it together. Heavy work still goes through `ops.sh`, whose
   jobs are units of their own.
+- **No soft limit, no swap, and an OOM kills the process, not the unit** (no `MemoryHigh`,
+  `MemorySwapMax=0`, `OOMPolicy=continue`; KI-068). A job a session runs in its own shell is
+  inside this unit; one bigger than the cap is killed in a second instead of being throttled,
+  which freezes every session beside it.
+  Anything over a gigabyte or two gets its own unit before it starts:
+  `sudo systemd-run --uid=kitcut --gid=kitcut -p MemoryMax=14G -p MemorySwapMax=0 --wait --collect ...`.
+- **Never restart this unit to unstick one session**: it ends every session on the machine,
+  including the one doing the restart. Kill the stuck process instead.
 - `claude rc --help` over ssh without a terminal hangs; run `claude rc` only inside tmux.
 - Until 2026-10-12 it was started by hand in a scope on the VM and did not survive a reboot.
 

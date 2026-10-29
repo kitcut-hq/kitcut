@@ -33,8 +33,15 @@ ExecStop=/usr/bin/tmux -L claude-rc kill-server
 # when `claude rc` ends (the network at boot, an update) the tmux server ends with it: start again
 Restart=always
 RestartSec=60
-MemoryHigh=15%
 MemoryMax=20%
+# No soft limit, no swap, and an OOM kills one process, not the unit (KI-068). A session's uncapped
+# 8-12 GB job was throttled at MemoryHigh and every session in here was pushed into 7.8 GB of swap:
+# all of them froze for most of an hour. Throttling is the freeze, with or without swap: measured
+# on a 1 GB unit, a 1.5 GB job under MemoryHigh=750M was still alive after 45 s, and with no
+# MemoryHigh it was killed in 1 s. So the job dies at the cap, and the sessions beside it carry on.
+# OOMPolicy=stop (the default) would end the unit, and every session, at the first kill inside it.
+MemorySwapMax=0
+OOMPolicy=continue
 
 [Install]
 WantedBy=multi-user.target

@@ -750,6 +750,10 @@ Each cost an hour or more in one session (2026-09-29/30). Check here first.
   (`studio/deploy/README.md`, "SSH for Claude cloud sessions"). If that fails, read
   `/var/log/kitcut-setup.log` and say so. Do not try port 22, port 443 or the proxy's
   `CONNECT`: all three were measured dead on 2026-10-12.
+- **On kc-local, a session's own shell is inside `kitcut-claude-rc.service`**, shared by every
+  Remote Control session on the machine. A job over a gigabyte or two goes in its own unit first
+  (`sudo systemd-run ... -p MemoryMax=14G -p MemorySwapMax=0 --wait --collect`); to unstick a
+  session kill its process, never restart that unit, which ends them all (KI-068).
 - **PowerShell 5.1 has no `&&` or `||`.** Use `;` or `if ($?) { ... }`. A `&&` fails
   the whole call as a parse error, before anything runs.
 - **Git Bash rewrites any argument starting with `/`** into a Windows path.

@@ -1283,3 +1283,31 @@ GitHub credentials, and its `origin` is the local bare repo, which autoship fill
 GitHub URL.
 **Fix, not made.** autoship could refuse to move a dirty checkout, or stash first and say so.
 That is the owner's call, because it can delay a ship.
+
+### KI-068 · fixed · studio · On kc-local, one session's uncapped job swapped every Remote Control session to a standstill
+
+**Symptom.** 2026-10-28, from about 20:30 PDT: a Remote Control session building a cast pack
+(`scripts/cast-pack.py`, nine characters) stopped answering for most of an hour; a "Status?" sent
+at 21:15 was answered at 21:51. Its `cast-pack.py` sat in state `D` at 3.8 GB resident, the
+machine's 8 GB of swap was full, and the other sessions on the machine crawled too. At 21:52 the
+service was restarted from the laptop to clear it, which killed the session's next run half-way
+(exit 137, three of nine characters built).
+**Cause.** Every session started through Remote Control runs inside `kitcut-claude-rc.service`,
+so a job a session runs in its own shell is inside that unit's cap (`MemoryHigh=15%`,
+`MemoryMax=20%`: 5.0 and 6.4 GB of 32). The cut-out model needs 5 GB a picture and 8-12 GB for
+several in one process. The unit allowed unlimited swap, so instead of an OOM kill the kernel
+throttled the whole unit at `MemoryHigh` and pushed everything in it to swap: the unit's record
+reads "5.2G memory peak, 7.8G memory swap peak". The Claude processes of every session were
+swapped out with the job.
+**Fix.** The unit has no `MemoryHigh`, `MemorySwapMax=0` and `OOMPolicy=continue`: an
+oversized job is killed at `MemoryMax` and the sessions carry on (with the default
+`OOMPolicy=stop` the first kill would end the unit and every session in it). Removing swap alone
+was not enough. The first fix kept `MemoryHigh` and was tested with an 8 GB allocation inside the
+live unit: the kernel throttled it rather than killing it, the machine's monitor reported
+"everything waited on memory 68.94% of the last minute", and the machine was rebooted from the
+laptop at 22:07. Measured afterwards on a throwaway 1 GB unit: a 1.5 GB job under
+`MemoryHigh=750M` was still alive after 45 s; with no `MemoryHigh` it was killed in 1 s.
+Throttling is the freeze. The rule stays: anything over a gigabyte or two gets its own unit before
+it starts (`studio/deploy/README.md`, "Remote Control"), a stuck session is unstuck by killing its
+process, never by restarting the unit, and a cap is tested on a throwaway unit, never on the one
+the sessions live in.
