@@ -658,6 +658,26 @@ html[data-view=film] .work.done .screen { width: min(100%, calc(max(100svh - 230
 #ub .ubfoot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-top: -2px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; }
 #ub .ubfoot a:not(.btn) { color: var(--accent-2); }
 #ub .ubfoot .acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-left: auto; }
+/* the film in an email (the share bar's Email button; lib/emailpic.js): the picture as a mail app shows it */
+#em .dbody { gap: 14px; grid-template-columns: minmax(0, 1fr); }
+#em .emmail { margin: 0; padding: 14px; border-radius: 10px; background: #fff; border: 1px solid var(--line); color: #1f1d1a; font: 15px/1.4 Arial, Helvetica, sans-serif; }
+#em .emmail canvas { display: block; width: auto; max-width: 100%; max-height: 300px; border-radius: 8px; background: #1f1d1a; }
+#em .emmail figcaption { margin-top: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#em .emmail figcaption b::before { content: "\25B6\00A0"; }
+#em .emmail figcaption span { color: #6b665e; }
+#em .empick { display: grid; gap: 8px; min-width: 0; }
+#em .emstrip { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: thin; }
+#em .emstrip button { flex: none; position: relative; height: 56px; aspect-ratio: var(--emar, 16 / 9); padding: 0; border: 2px solid transparent; border-radius: 7px; background: var(--sunk) center / cover no-repeat; cursor: pointer; overflow: hidden; }
+#em .emstrip button.wait { background-image: linear-gradient(90deg, var(--panel) 20%, var(--hover) 50%, var(--panel) 80%); background-size: 250% 100%; animation: shimmer 1.4s linear infinite; }
+#em .emstrip button[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+#em .emstrip button span { position: absolute; left: 3px; bottom: 3px; padding: 1px 4px; border-radius: 4px; background: rgba(20, 18, 16, .72); color: #fff; font-size: 10.5px; font-weight: 600; }
+#em .emscrub { display: flex; align-items: center; gap: 10px; }
+#em .emscrub input { flex: 1; min-width: 0; accent-color: var(--accent); }
+#em .emscrub span { min-width: 3.2em; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; }
+#em .emown { justify-self: start; }
+#em .emnote { margin: 0; font-size: 13px; color: var(--ink-2); }
+#em .err { margin: 0; color: var(--bad); font-weight: 600; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { #em .emstrip button.wait { animation: none; } }
 </style>
 <script>
 // Where this visitor came from, for the sign-up to record (lib/attribution.js): the link's utm_*
@@ -774,6 +794,7 @@ if (/^\/film\/studio-/.test(location.pathname)) document.documentElement.dataset
           <div class="sb-l"><b id="sbSay">Share this film</b><a id="sbLink" href="#" target="_blank" rel="noopener"></a></div>
           <div class="sb-r">
             <button class="btn sm primary" type="button" id="sbCopy">Copy link</button>
+            <button class="btn sm" type="button" id="sbMail" hidden title="A picture of the film with a play button, to paste into an email"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4.5" width="19" height="15" rx="2"/><path d="m3 6 9 7 9-7"/></svg> Email</button>
             <a class="net" data-net="x" target="_blank" rel="noopener" title="Share on X" aria-label="Share on X"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
             <a class="net" data-net="facebook" target="_blank" rel="noopener" title="Share on Facebook" aria-label="Share on Facebook"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg></a>
             <a class="net" data-net="linkedin" target="_blank" rel="noopener" title="Share on LinkedIn" aria-label="Share on LinkedIn"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 1 1 0-4.125 2.062 2.062 0 0 1 0 4.125zM7.119 20.452H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>
@@ -929,6 +950,24 @@ if (/^\/film\/studio-/.test(location.pathname)) document.documentElement.dataset
     <p class="ubnote" id="ubNote">Cancel any time. The clean film stays yours.</p>
     <div class="ubfoot"><a id="ubPlans" href="/pricing">See all plans</a><span class="acts"><a class="btn sm" id="ubDl" href="#" download target="_blank" rel="noopener" hidden>Download with branding</a><button class="btn sm quiet" type="button" id="ubKeep">Keep the branding</button></span></div>
   </div>
+</dialog>
+<dialog id="em" aria-labelledby="emTitle">
+  <div class="dhead"><h2 id="emTitle">Put this film in an email</h2><form method="dialog"><button class="btn quiet icon" aria-label="Close">&times;</button></form></div>
+  <div class="dbody">
+    <figure class="emmail">
+      <canvas id="emPic" role="img" aria-label="The picture the email shows: the film with a play button on it"></canvas>
+      <figcaption><b id="emName"></b><span id="emLen"></span></figcaption>
+    </figure>
+    <div class="empick">
+      <span class="label">Thumbnail</span>
+      <div class="emstrip" id="emStrip" role="radiogroup" aria-label="Thumbnail"></div>
+      <div class="emscrub" id="emScrub" hidden><input type="range" id="emAt" min="0" max="1" step="0.1" value="0" aria-label="Any moment of the film"><span id="emTime">0:00</span></div>
+      <label class="btn sm emown"><input type="file" id="emFile" accept="image/jpeg,image/png,image/webp" hidden>Upload a picture</label>
+    </div>
+    <p class="emnote">The picture opens the film's page, where it plays. Paste it into Gmail, Outlook or Apple Mail, or put the HTML in a newsletter.</p>
+    <p class="err" id="emErr" hidden></p>
+  </div>
+  <div class="dfoot"><button class="btn sm" type="button" id="emHtml">Copy HTML</button><button class="btn sm primary" type="button" id="emCopy">Copy for email</button></div>
 </dialog>
 <dialog id="signin" aria-labelledby="signinTitle">
   <form method="dialog"><button class="btn quiet icon close" aria-label="Close">&times;</button></form>
@@ -1196,7 +1235,7 @@ function tick() { $('clock').textContent = (lastCost != null ? `${usd(lastCost)}
 function startClock(elapsed) { t0 = Date.now() - (elapsed || 0) * 1000; clearInterval(timer); tick(); timer = setInterval(tick, 500); }
 function finish() { clearInterval(timer); timer = null; clearTimeout(poll); poll = null; pending = null; unfresh(); $('go').disabled = !studioUp; $('stop').hidden = true; }
 function reset() {
-  finish(); ytReset(); ubReset(); ntReset(); t0 = 0; lastCost = null; lastLog = null; showedDone = false; FILM = null; OWN = null; filmDone = null; whoFor = null;
+  finish(); ytReset(); ubReset(); ntReset(); $('sbMail').hidden = true; t0 = 0; lastCost = null; lastLog = null; showedDone = false; FILM = null; OWN = null; filmDone = null; whoFor = null;
   $('stats').hidden = true; $('log').innerHTML = ''; $('clock').textContent = ''; $('views').hidden = true;
   $('work').classList.remove('done'); $('made').open = true;
   $('logHead').textContent = 'What Claude is doing'; $('logMore').textContent = '';
@@ -1778,8 +1817,9 @@ async function shareWho(id) {
   try {
     const r = await fetch(`/api/account/film?id=${encodeURIComponent(id)}`, { headers: { Accept: 'application/json' } });
     if (!r.ok || id !== currentId) return;
-    const { mine, profile: p, unbrand, unbrand_at: at } = await r.json();
-    if (mine) { OWN = id; if (!$('ideaAgain').hidden && FILM) $('ideaAgain').textContent = againLabel(); ubSet(id, unbrand, at); }
+    const { mine, profile: p, unbrand, unbrand_at: at, email } = await r.json();
+    emLast = email ? { id, ...email } : null;
+    if (mine) { OWN = id; if (!$('ideaAgain').hidden && FILM) $('ideaAgain').textContent = againLabel(); ubSet(id, unbrand, at); $('sbMail').hidden = !(filmDone && filmDone.video_url); }
     if (!mine || !p) return;
     $('sbSay').textContent = "Your film's page";
     const face = p.photo ? `<img src="${esc(p.photo)}" alt="" referrerpolicy="no-referrer">` : `<span class="face" style="background:${esc(p.tint)}">${esc(p.letter)}</span>`;
@@ -2038,6 +2078,201 @@ $('sbCopy').addEventListener('click', async () => {
   setTimeout(() => { $('sbCopy').textContent = 'Copy link'; }, 2200);
 });
 for (const a of $('sharebar').querySelectorAll('[data-net]')) a.addEventListener('click', () => shared(a.dataset.net));
+
+// ---------------------------------------------------------------- the film in an email
+// The share bar's Email button, for the film's maker: a picture of the film with a play button on
+// it, linked to its share page, to paste into an email (mail apps play no video). The picture is
+// drawn here: any moment of the film, the film's card, or a picture of their own, then the play
+// button and the film's length over it. POST /api/account/email-picture keeps it for good under
+// its hash (lib/emailpic.js) and answers the email's HTML. A moment of the film is read from its
+// copy online with CORS; where the browser may not read it, the strip offers the card alone.
+const EM_MOMENTS = 8;
+let EM = null;  // {id, dur, ar, video, src, at, from, saved: {html, text} for what is drawn now, q: the seeks in turn}
+let emLast = null;  // {id, at, from}: what this film's email used last time
+function emSize(ar) { return ar >= 1 ? { w: 1200, h: Math.round(1200 / ar) } : { w: Math.round(1200 * ar), h: 1200 }; }
+function emCover(g, src, w, h) {
+  const sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height;
+  if (!sw || !sh) return;
+  const k = Math.max(w / sw, h / sh), dw = sw * k, dh = sh * k;
+  g.drawImage(src, (w - dw) / 2, (h - dh) / 2, dw, dh);
+}
+function emDraw() {
+  if (!EM || !EM.src) return;
+  const c = $('emPic'), { w, h } = emSize(EM.ar), g = c.getContext('2d');
+  c.width = w; c.height = h;
+  g.fillStyle = '#1f1d1a'; g.fillRect(0, 0, w, h);
+  emCover(g, EM.src, w, h);
+  // the play button: a dark disc with a white ring, which reads on a light frame and a dark one
+  const r = Math.round(Math.min(w, h) * 0.09), cx = w / 2, cy = h / 2, t = r * 0.42;
+  g.save(); g.shadowColor = 'rgba(0, 0, 0, .4)'; g.shadowBlur = r * 0.6;
+  g.beginPath(); g.arc(cx, cy, r, 0, 2 * Math.PI); g.fillStyle = 'rgba(20, 18, 16, .62)'; g.fill(); g.restore();
+  g.lineWidth = Math.max(3, r * 0.07); g.strokeStyle = 'rgba(255, 255, 255, .92)'; g.stroke();
+  g.beginPath(); g.moveTo(cx - t * 0.55, cy - t); g.lineTo(cx + t * 1.05, cy); g.lineTo(cx - t * 0.55, cy + t); g.closePath();
+  g.fillStyle = '#fff'; g.fill();
+  // the film's length, in the corner, as a video player shows it
+  if (EM.dur) {
+    const label = mmss(EM.dur), fs = Math.round(Math.min(w, h) * 0.045), m = Math.round(fs * 0.8);
+    g.font = `600 ${fs}px system-ui, -apple-system, "Segoe UI", Arial, sans-serif`;
+    const pw = g.measureText(label).width + fs * 1.1, ph = fs * 1.6, x = w - m - pw, y = h - m - ph;
+    g.fillStyle = 'rgba(20, 18, 16, .78)';
+    g.beginPath(); if (g.roundRect) g.roundRect(x, y, pw, ph, fs * 0.3); else g.rect(x, y, pw, ph); g.fill();
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(label, x + pw / 2, y + ph / 2 + fs * 0.05);
+  }
+  EM.saved = null;
+}
+const emLoad = (url, cors) => new Promise((ok, no) => {
+  const i = new Image();
+  if (cors) i.crossOrigin = 'anonymous';
+  i.onload = () => ok(i); i.onerror = () => no(new Error('picture'));
+  i.src = url;
+});
+// the hidden copy of the film the moments are read from; resolves false where the browser may not read it
+function emVideo(url) {
+  return new Promise((ok) => {
+    const v = document.createElement('video');
+    v.crossOrigin = 'anonymous'; v.muted = true; v.playsInline = true; v.preload = 'auto';
+    v.onloadeddata = () => ok(v); v.onerror = () => ok(false);
+    // its own address, so a copy the player cached without CORS is not reused for this one
+    v.src = `${url}${url.includes('?') ? '&' : '?'}kc=email`;
+    setTimeout(() => ok(false), 20000);
+  });
+}
+const emSeek = (v, t) => new Promise((ok) => {
+  if (Math.abs(v.currentTime - t) < 0.01) return ok();
+  const done = () => { v.removeEventListener('seeked', done); ok(); };
+  v.addEventListener('seeked', done); v.currentTime = t;
+});
+function emTile(label, pick, wait) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', 'false');
+  b.setAttribute('aria-label', label); b.innerHTML = `<span>${esc(label)}</span>`;
+  if (wait) b.classList.add('wait');
+  b.addEventListener('click', () => pick(b));
+  $('emStrip').append(b);
+  return b;
+}
+function emChoose(b) {
+  for (const x of $('emStrip').children) x.setAttribute('aria-checked', String(x === b));
+  $('emErr').hidden = true;
+}
+// every look at the hidden copy waits for the one before, so the strip and the slider never cross
+function emAt(t, fn) {
+  const e = EM;
+  e.q = e.q.then(() => (EM === e ? emSeek(e.video, t).then(() => EM === e && fn()) : null));
+  return e.q;
+}
+function emAtMoment(t) {
+  if (!EM || !EM.video) return;
+  return emAt(t, () => {
+    Object.assign(EM, { src: EM.video, at: t, from: 'frame' });
+    $('emAt').value = String(t); $('emTime').textContent = mmss(t);
+    emDraw();
+  });
+}
+async function emOpen() {
+  const s = filmDone, id = currentId;
+  if (!s || !s.video_url || OWN !== id) return;
+  const m = /^(\d+):(\d+)$/.exec(s.frame || '');
+  EM = { id, dur: 0, ar: m ? m[1] / m[2] : 16 / 9, video: null, src: null, at: null, from: 'card', saved: null, q: Promise.resolve() };
+  $('emName').textContent = (s.share && s.share.title) || s.title || s.prompt || 'A film made with KitCut';
+  $('emLen').textContent = '';
+  $('emStrip').innerHTML = ''; $('emStrip').style.setProperty('--emar', String(EM.ar));
+  $('emScrub').hidden = true; $('emErr').hidden = true;
+  $('emCopy').textContent = 'Copy for email'; $('emHtml').textContent = 'Copy HTML';
+  $('em').showModal();
+  // the film's card: always there, and the first choice
+  const card = emTile('Card', async (b) => { emChoose(b); try { EM.src = await emLoad(`/film/${id}/card.jpg`); EM.at = null; EM.from = 'card'; emDraw(); } catch (e) { /* kept as it was */ } });
+  try { const img = await emLoad(`/film/${id}/card.jpg`); card.style.backgroundImage = `url("/film/${id}/card.jpg")`; if (EM && EM.id === id && !EM.src) { EM.src = img; emChoose(card); emDraw(); } } catch (e) { /* the moments still are */ }
+  const v = await emVideo(s.video_url);
+  if (!EM || EM.id !== id) return;
+  if (!v) return;  // no CORS on the film's copy: the card and their own picture
+  EM.video = v; EM.dur = v.duration || 0;
+  if (!m && v.videoWidth && v.videoHeight) { EM.ar = v.videoWidth / v.videoHeight; $('emStrip').style.setProperty('--emar', String(EM.ar)); }
+  $('emLen').textContent = EM.dur ? ` · ${mmss(EM.dur)}` : '';
+  $('emAt').max = String(Math.max(0.1, EM.dur - 0.1)); $('emScrub').hidden = !EM.dur;
+  if (EM.from === 'card') emDraw();  // the length on it now
+  // the moment this film's email used last time, if it was one (GET /api/account/film's email)
+  if (emLast && emLast.id === id && emLast.from === 'frame' && emLast.at != null && emLast.at < EM.dur) {
+    emChoose(null); emAtMoment(emLast.at);
+  }
+  // the moments, evenly through the film: each drawn small as the copy is seeked to it
+  const at = [...Array(EM_MOMENTS)].map((_, i) => Math.round(((i + 0.5) * EM.dur * 10) / EM_MOMENTS) / 10);
+  const tiles = at.map((t) => emTile(mmss(t), (b) => { emChoose(b); emAtMoment(t); }, true));
+  const small = document.createElement('canvas'), sz = { w: 192, h: Math.round(192 / EM.ar) };
+  small.width = sz.w; small.height = sz.h;
+  at.forEach((t, i) => emAt(t, () => {
+    try { emCover(small.getContext('2d'), v, sz.w, sz.h); tiles[i].style.backgroundImage = `url("${small.toDataURL('image/jpeg', 0.7)}")`; } catch (e) { /* drawn but not readable: left plain */ }
+    tiles[i].classList.remove('wait');
+  }));
+}
+$('sbMail').addEventListener('click', () => { shared('email'); emOpen(); });
+$('emAt').addEventListener('input', () => {
+  if (!EM || !EM.video) return;
+  for (const x of $('emStrip').children) x.setAttribute('aria-checked', 'false');
+  $('emTime').textContent = mmss(Number($('emAt').value));
+  clearTimeout(EM.seekT);
+  EM.seekT = setTimeout(() => emAtMoment(Number($('emAt').value)), 60);
+});
+$('emFile').addEventListener('change', async () => {
+  const f = $('emFile').files[0];
+  $('emFile').value = '';
+  if (!f || !EM) return;
+  const url = URL.createObjectURL(f);
+  try {
+    const img = await emLoad(url);
+    const b = emTile('Yours', (x) => { emChoose(x); Object.assign(EM, { src: img, at: null, from: 'own' }); emDraw(); });
+    b.style.backgroundImage = `url("${url}")`;
+    $('emStrip').prepend(b);
+    b.click();
+  } catch (e) { $('emErr').textContent = 'That file could not be read as a picture. Try a JPG or a PNG.'; $('emErr').hidden = false; }
+});
+// the picture kept, and the email's HTML for it: asked once for what is drawn now
+async function emSave() {
+  if (EM.saved) return EM.saved;
+  const blob = await new Promise((ok) => $('emPic').toBlob(ok, 'image/jpeg', 0.86));
+  if (!blob) throw new Error('The picture could not be made. Choose another one.');
+  const data = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(blob); });
+  const r = await fetch('/api/account/email-picture', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ film: EM.id, data, seconds: EM.dur || undefined, at: EM.at, from: EM.from }),
+  });
+  const b = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(b.error || 'The picture could not be kept just now. Try again in a minute.');
+  EM.saved = b;
+  return b;
+}
+function emSaid(btn, text, back) { btn.textContent = text; setTimeout(() => { btn.textContent = back; }, 2600); }
+function emFailed(e) { $('emErr').textContent = e.message; $('emErr').hidden = false; }
+$('emCopy').addEventListener('click', async () => {
+  if (!EM || !EM.src) return;
+  $('emErr').hidden = true; $('emCopy').disabled = true;
+  const got = emSave();
+  try {
+    // the clipboard is asked at once, with the picture still being kept, so Safari counts the click
+    const blob = (k, type) => got.then((b) => new Blob([b[k]], { type }));
+    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+      await navigator.clipboard.write([new ClipboardItem({ 'text/html': blob('html', 'text/html'), 'text/plain': blob('text', 'text/plain') })]);
+    } else {
+      const b = await got, box = document.createElement('div');
+      box.contentEditable = 'true'; box.innerHTML = b.html; box.style.cssText = 'position: fixed; left: -9999px;';
+      document.body.append(box);
+      const sel = getSelection(), range = document.createRange(); range.selectNodeContents(box); sel.removeAllRanges(); sel.addRange(range);
+      document.execCommand('copy'); sel.removeAllRanges(); box.remove();
+    }
+    emSaid($('emCopy'), 'Copied. Paste it into your email', 'Copy for email');
+  } catch (e) { await got.then(() => emFailed(new Error('Your browser would not copy it. Use Copy HTML instead.')), emFailed); }
+  $('emCopy').disabled = false;
+});
+$('emHtml').addEventListener('click', async () => {
+  if (!EM || !EM.src) return;
+  $('emErr').hidden = true; $('emHtml').disabled = true;
+  try {
+    const b = await emSave();
+    try { await navigator.clipboard.writeText(b.html); emSaid($('emHtml'), 'HTML copied', 'Copy HTML'); } catch (e) { window.prompt('Copy the HTML:', b.html); }
+  } catch (e) { emFailed(e); }
+  $('emHtml').disabled = false;
+});
+$('em').addEventListener('close', () => { if (EM && EM.video) { EM.video.removeAttribute('src'); EM.video.load(); } EM = null; });
 
 // ---------------------------------------------------------------- publishing to YouTube
 // Under a finished film of your own: "Publish to YouTube" opens the site's publish dialog
