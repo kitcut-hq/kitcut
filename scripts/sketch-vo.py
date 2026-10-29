@@ -30,7 +30,8 @@ line a sentence-final ending and a clean decay. Only mp3_44100_128 is available 
 Creator tier (192k is a 403).
 
 Voice names resolve through config/elevenlabs-voices.json (dub-tts.py's registry, which refuses
-unverified ids before anything is spent). "tts": "edge" is the free draft backend.
+unverified ids before anything is spent). "tts": "edge" is the free draft backend; its
+"settings": {"rate": 12} reads 12% faster (edge's own rate control, not a resample).
 
 Several people speaking (talking heads, sketch/heads.js): "cast" names each speaker's voice,
 laid over the film's own ({"alex": {"voice": "Puck"}, "sam": {"voice": "Kore", "style": ...}}),
@@ -342,8 +343,13 @@ def blocked(e):
     sys.exit(PARK_EXIT)
 
 
-def edge_take(text, voice, dub):
-    audio, marks = dub.speak(spoken(text), voice, backend="edge")
+def edge_take(text, voice, dub, settings=None):
+    """Record one edge line, at `settings.rate` percent faster (edge's own rate control).
+
+    `settings` is in the take's fingerprint, so a new rate records the line again.
+    """
+    rate = float((settings or {}).get("rate", 0) or 0)
+    audio, marks = dub.speak(spoken(text), voice, rate_pct=rate, backend="edge")
     return audio, marks
 
 
@@ -1403,7 +1409,7 @@ def main():
                             meta["cost_usd"],
                         )
                 else:
-                    audio, marks = edge_take(ln["text"], lvoice, dub)
+                    audio, marks = edge_take(ln["text"], lvoice, dub, lvo.get("settings"))
                     _sketch.write_wav(base + ".wav", audio)
                     align = {"words": [{"text": w, "s": a, "e": b} for w, a, b in marks]}
                 with open(base + ".json", "w", encoding="utf-8") as f:
