@@ -52,7 +52,8 @@ LOCK = threading.Lock()
 
 
 def fake_paint(
-    prompt, model, ref=None, quality=None, aspect="16:9", transparent=False, style_ref=None
+    prompt, model, ref=None, quality=None, aspect="16:9", transparent=False, style_ref=None,
+    redo=None,
 ):
     """The painter: says what it was given (and what its reference looked like then), and
     paints each image a colour of its own, named first in its prompt."""
@@ -64,7 +65,16 @@ def fake_paint(
                 px = im.convert("RGB").getpixel((5, 5))
             seen = px if not isinstance(ref, list) else [*(seen or []), px]
     with LOCK:
-        CALLS.append({"name": name, "ref": ref, "seen": seen, "style_ref": style_ref})
+        CALLS.append(
+            {
+                "name": name,
+                "ref": ref,
+                "seen": seen,
+                "style_ref": style_ref,
+                "redo": redo,
+                "quality": quality,
+            }
+        )
     return jpeg(COLOURS.get(name, (128, 128, 128))), {"cost_usd": 0.01}
 
 
@@ -200,6 +210,49 @@ def styles():
         "a style of one picture is sent and keyed as it always was",
         os.listdir(os.path.join(one, "images")),
     )
+
+
+def redo():
+    """"redo" (a sharper version, studio/rounds.py): each picture painted again from its own
+    draft alone, all at once, and cached under the key it has without redo -- so once redo goes,
+    nothing paints again."""
+    images = [
+        {"name": "park", "prompt": "park: the family in a park", "ref": "cast"},
+        {"name": "cast", "prompt": "cast: the family", "ref": "pic_family"},
+    ]
+    d = film("redo", images, [("pic_family.png", (200, 180, 40))])
+    run(d)
+    os.makedirs(os.path.join(d, "drafts"))
+    for n in ("park", "cast"):
+        shutil.copyfile(
+            os.path.join(d, "images", n + ".jpg"), os.path.join(d, "drafts", n + ".jpg")
+        )
+    paint = json.load(open(os.path.join(d, "paint.json")))
+    redone = paint | {"quality": "high", "redo": "drafts"}
+    json.dump(redone, open(os.path.join(d, "paint.json"), "w"))
+    _, err = run(d)
+    by = {c["name"]: c for c in CALLS}
+    check(
+        err is None
+        and sorted(by) == ["cast", "park"]
+        and all(
+            by[n]["redo"] == os.path.realpath(os.path.join(d, "drafts", n + ".jpg"))
+            and by[n]["quality"] == "high"
+            for n in by
+        ),
+        "a sharper version paints each picture from its own draft, at the quality asked",
+        (err, CALLS),
+    )
+    json.dump(paint | {"quality": "high"}, open(os.path.join(d, "paint.json"), "w"))
+    out, err = run(d, "--plan")
+    check(
+        err is None and out.count("cached ") == 2,
+        "once redo goes, the sharper paintings are the images' own: nothing paints again",
+        out,
+    )
+    json.dump(paint | {"redo": "../x"}, open(os.path.join(d, "paint.json"), "w"))
+    _, err = run(d, "--plan")
+    check(err and "not a folder beside the manifest" in err, "redo outside is refused", err)
 
 
 def roles():
@@ -366,6 +419,7 @@ def main():
     several()
     styles()
     roles()
+    redo()
     print("\n%s" % ("all passed" if not FAILS else "%d FAILED" % len(FAILS)))
     shutil.rmtree(HOME, ignore_errors=True)
     sys.exit(1 if FAILS else 0)

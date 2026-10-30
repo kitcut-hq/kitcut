@@ -725,6 +725,18 @@ ROUND makes all of it into the film's next VERSION -- the same film, page and li
   day's budget (`rounds.mine`, `rounds.reserve`), but is not one of the day's films. A film may
   have `STUDIO_ROUNDS_PER_DAY` (5) rounds in a day, a round up to 20 notes. A YouTube send and a
   redraw without branding each wait for a round, and a round for them.
+- **A sharper version** (2026-10-29): `POST .../versions {"key", "from", "sharpen": "medium"|"high"}`
+  instead of notes. Every film's paintings are drafts (`film.DRAFT`, wherever the painter has a
+  quality: `film.QUALITY_MODELS`); `rounds.pictures` says a film's quality and what it may be
+  raised to (`pictures` on `GET .../versions`: nothing for Muse, a drawn film or one in scenes).
+  The round takes no turn with Claude: `rounds.sharpen` keeps each painting in the copy's
+  `drafts/` and pins the quality and `redo`, `sketch-paint.py` paints every picture again from its
+  own draft alone ("this exact picture, finished": the camera moves were written for where things
+  stand), `rounds.unsharpen` takes `redo` and the drafts away, and the round renders as any other.
+  The paintings are cached under the keys they have without `redo`, so the version's next round
+  of notes paints nothing again. The draft stays one of the versions. It is one of the film's
+  rounds of the day; the site holds its credits as for notes, and the film's document gets
+  `paint_quality`.
 - **A filmstrip per version** (`rounds.make_strip`, `outputs/strip.jpg`, online beside the rest):
   24 small frames in a row, each sought in the web copy rather than the film decoded. The
   site's notes page cannot read a video's pixels off another host, so it cannot make its own.
@@ -934,8 +946,9 @@ its films, next to `projects\` (its text is in its project's git repository too:
   style picture (`style/style.jpg`, the main one, then `style2.jpg`...), sent with every painting
   and cut-out by `sketch-paint.py` beside the line (2026-10-29: given only a main picture of people
   on a plain ground and no line, a reel painted its full places in the painter's own look). GPT
-  Image paints at quality "high" (`STYLE_ROUTES`). The guard holds all of it, and a round keeps
-  what its film was painted with (a film from before keeps no quality, so nothing repaints); the run's
+  Image paints a draft (`film.DRAFT`, quality low; collage cut-outs too), and a sharper version is
+  its person's to ask for (below). The guard holds all of it, and a round keeps what its film was
+  painted with (a film from before keeps no quality, so nothing repaints); the run's
   document says `paint_route`, and the site marks a Gemini episode. Measured on KitCut's own collage
   still: the read in ~40 s, the card ~$0.05 on the key, a proof $0.03 (GPT Image + Muse) or $0.13
   with Gemini. `test_stylekit.py` covers it with Claude and the painters stood in for.

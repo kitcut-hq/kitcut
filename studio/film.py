@@ -101,10 +101,17 @@ FOR_LINE = re.compile(
 # what Claude may not change in paint.json: the painter, and how many paintings a film may cost
 # (8 under a minute, 12 from a minute, more for a longer film: limits()["images"], paint_pins)
 PAINT_PINNED = {"backend": "muse", "model": "meta/muse-image", "max_images": 8}
+# How carefully a picture is painted, where its model has the setting (OpenAI's): every film is
+# painted as a draft, and its person may have a sharper version made later (rounds.py sharpen):
+# each picture repainted at a higher quality from its own draft. The owner's call, 2026-10-29:
+# most films never need more than the draft. The page's words: Draft, Standard, High.
+QUALITIES = ("low", "medium", "high")
+DRAFT = "low"
+QUALITY_MODELS = {"openai/gpt-image-2.5-flare"}
 # a collage film's cut-outs: a model that paints on a transparent background (sketch-paint.py)
 CUTOUTS_PINNED = {
     "model": "openai/gpt-image-2.5-flare",
-    "quality": "medium",
+    "quality": DRAFT,
     "border": 12,
     "cut": "scissor",
 }
@@ -112,14 +119,14 @@ CUTOUTS_PINNED = {
 # picture route every style picture goes in with every painting (sketch-paint.py style_ref), the
 # style line in front of its prompt, and Claude's prompts say only what to draw; "words" is Muse
 # with the style line alone. Claude may change neither. Gemini is the team's alone (the site says
-# who: X-Team) and costs about seven times Muse a picture; GPT Image about one and a half at its
-# default quality, and its paintings are made at "high" (about four times that: lower it here).
+# who: X-Team) and costs about seven times Muse a picture; GPT Image about one and a half at
+# medium quality, and its paintings start as drafts (QUALITIES: about a quarter of that).
 STYLE_ROUTES = {
     "gpt": {
         "backend": "openrouter",
         "model": "openai/gpt-image-2.5-flare",
         "picture": True,
-        "quality": "high",
+        "quality": DRAFT,
     },
     "words": {"backend": "muse", "model": "meta/muse-image", "picture": False},
     "gemini": {

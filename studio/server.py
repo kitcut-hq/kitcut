@@ -1087,6 +1087,8 @@ def limits_doc():
                 "waiting_days": WAITING_DAYS,
             },
         },
+        # how carefully pictures are painted: every film a draft, a sharper version on request
+        "pictures": {"qualities": list(films.QUALITIES), "draft": films.DRAFT},
         "library": {
             "characters_per_new_film": library.SEEDED,
             "earlier_films_remembered": library.MEMORY,
@@ -2516,12 +2518,15 @@ async def versions(req):
             "film %s: its versions could not be read: %s" % (f.id, e), file=sys.stderr, flush=True
         )
         return web.json_response({"error": "This film's versions could not be read."}, status=500)
-    return web.json_response({"id": f.id, **rounds.public(rec)})
+    return web.json_response(
+        {"id": f.id, **rounds.public(rec), "pictures": rounds.pictures(f, rec)}
+    )
 
 
 async def versions_make(req):
-    """A round of changes: the film's maker's notes, made into its next version (rounds.py). The
-    film's own client only. It takes one of that client's films-at-once places and its reserve
+    """A round of changes: the film's maker's notes, made into its next version (rounds.py); or,
+    with {"key", "from", "sharpen": "medium"|"high"} and no notes, its pictures painted again at
+    that quality from their drafts (rounds.sharpen). The film's own client only. It takes one of that client's films-at-once places and its reserve
     of the day's budget, but is not one of the day's films. Asked again with the same key, it
     answers the round already asked for."""
     if DRAINING or MODE == "stopping":
@@ -2570,8 +2575,12 @@ async def versions_make(req):
     hand = body.get("hand")
     if hand is not None and not from_this_machine(req):
         return web.json_response({"error": "not from here"}, status=403)
+    sharp = body.get("sharpen")
+    if sharp is not None and (hand is not None or body.get("notes")):
+        return web.json_response({"error": "sharpen takes no notes"}, status=400)
     try:
-        notes = [] if hand is not None else rounds.clean_notes(f, body.get("notes"))
+        bare = hand is not None or sharp is not None
+        notes = [] if bare else rounds.clean_notes(f, body.get("notes"))
     except rounds.RoundError as e:
         return _round_error(e)
     if not await leading():
@@ -2611,6 +2620,7 @@ async def versions_make(req):
                 auth=auth,
                 src=body.get("from"),
                 hand=hand,
+                sharpen=sharp,
             )
         except rounds.RoundError as e:
             return _round_error(e)
@@ -2652,7 +2662,14 @@ async def versions_use(req):
         rec = await asyncio.to_thread(rounds.use, f, n)
     except rounds.RoundError as e:
         return _round_error(e)
-    fields = {"version": n, "versions": rec.get("versions"), "media_rev": rec.get("media_rev")}
+    fields = {
+        "version": n,
+        "versions": rec.get("versions"),
+        "media_rev": rec.get("media_rev"),
+        # another version may be another quality (a draft, or its sharper version)
+        "pictures": rounds.pictures(f, rec),
+        "paint_quality": rounds.pictures(f, rec)["quality"],
+    }
     if rec.get("media"):
         fields["media"] = rec["media"]
     await agent.save(f.id, fields, final=True)

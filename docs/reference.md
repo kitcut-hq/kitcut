@@ -4362,6 +4362,11 @@ is and never painted.
   `studio/validate.py`.
 - A picture the person attached, `upload<n>`, may be a `ref` too, but only when they marked it
   "How we draw this" (`style` in `inputs/roles.json`). A picture marked `scene` never is.
+
+`redo` (a folder beside the manifest, the studio's for a sharper version: `studio/rounds.py`)
+holds drafts, `<name>.jpg|webp`. An image with a draft there is painted from it alone, with the
+`REDO` lead (the same picture, finished: nothing added, moved or removed), in the first batch,
+and cached under the key it has without `redo`.
 - A film without a picture `ref` is planned, ordered and cached exactly as before. One old quirk
   stays because of that: a scene listed before the painting it names is keyed without that
   painting's fingerprint.

@@ -377,6 +377,20 @@ async def main():
             and v["round"] is None,
             "its maker is: one version, no round",
         )
+        # a sharper version: only for pictures painted by a model with a quality (rounds.pictures)
+        check(
+            v.get("pictures") == {"quality": None, "can": []},
+            "a drawn film has no picture quality to raise (%s)" % v.get("pictures"),
+        )
+        r = await c.post(url, json={"key": "s0", "from": 1, "sharpen": "high"}, headers=me)
+        check(
+            r.status == 409 and (await r.json()).get("reason") == "sharpen",
+            "so a sharper version of it is refused (%d)" % r.status,
+        )
+        r = await c.post(
+            url, json={"key": "s1", "sharpen": "high", "notes": [{"text": "x"}]}, headers=me
+        )
+        check(r.status == 400, "and sharpen takes no notes (%d)" % r.status)
         check(
             one.get("strip") == {"count": 24, "w": 160, "h": 90}
             and os.path.getsize(f.path("outputs", "strip.jpg")) > 2000

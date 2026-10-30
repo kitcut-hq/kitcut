@@ -1570,7 +1570,8 @@ function ntShow(id, doc) {
   $('ntOpen').hidden = making;
   v.hidden = !(making || doc.versions.length > 1);
   v.classList.toggle('busy', making);
-  v.innerHTML = making ? `<span class="pulse"></span>${r.waiting ? `Version ${r.n} is waiting its turn` : `Claude is making version ${r.n}`}` : `Version ${doc.current} of ${doc.versions.length}`;
+  // (sharper pictures: a round with `sharpen`, the film's pictures painted again; notes.js)
+  v.innerHTML = making ? `<span class="pulse"></span>${r.waiting ? `Version ${r.n} is waiting its turn` : r.sharpen ? `Painting sharper pictures for version ${r.n}` : `Claude is making version ${r.n}`}` : `Version ${doc.current} of ${doc.versions.length}`;
   v.title = making ? 'See how it is going' : 'See the versions, and what changed';
   // what YouTube would be sent is about to be the version before: the publish dialog says to wait
   // for it, so the button never sits there dead. It is told when a version starts and when it is
