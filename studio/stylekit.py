@@ -680,7 +680,8 @@ def _sp():
 
 
 def paint_one(route, subject, style_line, style_jpg, out):
-    """One proof picture: (path, {cost_usd, seconds}) or raises."""
+    """One proof picture: (path, {cost_usd, seconds}) or raises. Always wide (16:9): it shows
+    the style, not a film, so a tall project's proof is wide too."""
     sp = _sp()
     r = STYLE_ROUTES[route]
     t = time.time()

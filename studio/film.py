@@ -123,6 +123,12 @@ STYLE_ROUTES = {
         "team": True,
     },
 }
+# the shape a tall film's paintings come back in (sketch-paint.py paints in the film's frame), and
+# how much larger than the frame Claude draws one: Muse, asked for 9:16, paints 2:3 (1280x1920)
+# with rough paper up to about 150 px in at its edges, which a painting drawn 1.12 times the
+# frame's height keeps off screen; a style picture's painter (gpt, gemini) paints 9:16 clean
+# (the painter bake-off of 2026-10-28, scripts/paint-compare.py --aspect 9:16)
+TALL_PAINTING = {"muse": ((2, 3), 1.12), "picture": ((9, 16), 1.08)}
 # the print faces a collage film's pieces use (sketch/collage.js), on top of the template's
 COLLAGE_FONTS = [
     {"file": "fonts/AbrilFatface-Regular.ttf", "family": "Abril Fatface", "weight": "400"},
@@ -487,6 +493,31 @@ def frame_note(film):
                 "right of x %d from y 0 down (like, comment, share). The picture runs under them; "
                 "nothing that must be read goes there." % (by, rx)
             )
+        if h > w and "paintings" in (rec.get("caps") or ()):
+            # painted tall: not the wide painting looks/painted.md describes
+            r = STYLE_ROUTES.get((rec.get("paint_route") or {}).get("route")) or {}
+            (pw, ph), more = TALL_PAINTING["picture" if r.get("picture") else "muse"]
+            scale = max(w / pw, h / ph)
+            cover = round(pw * scale * more / 10) * 10
+            text += (
+                " Your paintings come back tall, %d:%d, not the 1920x1280 the painted look's "
+                "notes below describe. Drawn with SK.image about %d wide (%d tall), a painting "
+                "covers the whole %dx%d frame at zoom 1 with a little room to move%s. Drawn "
+                "narrower than %d, paper-coloured bands show at the frame's edges. Compose each "
+                "painting's subject for a phone held upright, in the middle of the picture."
+                % (
+                    pw,
+                    ph,
+                    cover,
+                    round(cover * ph / pw),
+                    w,
+                    h,
+                    ""
+                    if r.get("picture")
+                    else ", and the rough paper at its edges stays off screen",
+                    round(pw * scale),
+                )
+            )
         if (
             h > w
         ):  # a Short: what its first frame and first word are (vo_lead, the manifest's cover)
@@ -584,7 +615,8 @@ def paint_pins(length, caps, route=None):
     """What the studio sets in the paint.json of a film with these capabilities: the painter,
     each kind's own settings, and the cap on pictures (repaints included), its kinds' caps
     added up. `route` is the film record's paint_route (its project's style, stylekit.seed):
-    the painter it names and the style picture or the style line, the studio's too."""
+    the painter it names and the style picture or the style line, the studio's too. A tall film
+    has the same painter as a wide one; sketch-paint.py paints in the film's frame."""
     kinds = paint_kinds(caps)
     pins = dict(PAINT_PINNED)
     for kind in kinds:
