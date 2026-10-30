@@ -48,19 +48,32 @@ way to keep a character the same from scene to scene. It may also name one of th
 pictures, "pic_<name>" (inputs/pic_<name>.*, studio/library.py), or one of its painted characters,
 "cast_<name>" (inputs/cast_<name>.*), which is sent as it is and never painted: a cast sheet
 painted from the project's own people, and then each scene from the cast sheet, keeps them the
-person's from the first picture to the last. "ref" may be a list of up to MAX_REFS of these, for
-several characters in one painting (each its own picture, in order). "quality" (low/medium/high) is
+person's from the first picture to the last. A picture the person attached, "upload<n>", may be
+a "ref" only when they marked it as a style example ("style" in inputs/roles.json, written by the
+studio): a drawn example of one kind of thing, for the paintings that show that thing. "ref" may
+be a list of up to MAX_REFS of these, for several characters in one painting (each its own
+picture, in order). "quality" (low/medium/high) is
 sent to the models that have the setting (OpenAI's). scripts/paint-compare.py paints one paint block with
 several models side by side, to choose between them.
 
-"style_ref" (a path beside the manifest: a project's style picture, studio/stylekit.py) goes in
-with EVERY picture, first, as a reference for the style alone -- medium, palette, texture, line,
-light, how much space -- never for its layout, objects, people or words; an image's own "ref"
-follows it as the second picture, for the characters. A model that takes no reference (Muse)
-paints from the words alone, so a style picture is for the OpenRouter models that take one.
+"style_ref" (a path beside the manifest, or a list of up to MAX_STYLE_REFS: a project's style
+pictures, studio/stylekit.py) goes in with EVERY picture, first, as a reference for the style
+alone -- medium, palette, texture, line, light -- never for its layout, objects, people, words or
+how full it is (that is the prompt's); an image's own "ref" follows them, for the characters. The
+style line ("style") goes in front of the prompt beside them when it is set. A model that takes
+no reference (Muse) paints from the words alone, so a style picture is for the OpenRouter models
+that take one; a model that takes fewer references than it is given gets the style pictures
+first and as many of the image's own as fit.
+
+"redo" (a folder beside the manifest, set by the studio for a sharper version: studio/rounds.py)
+holds drafts, <name>.jpg or .webp: an image with a draft there is painted from it alone, told to
+paint that exact picture again at its finish -- the same composition, people, objects and colours
+-- so a film's camera moves still fit it. It is cached under the key it would have without
+"redo", so once the studio takes "redo" away the sharper painting is the image's own.
 
 Images are cached by a fingerprint of backend, model, style, prompt and reference (a project
-picture's own content), so a rerun paints only what changed. Each image painted appends its cost to images/spend.jsonl, and a run
+picture's own content, and the style pictures'), so a rerun paints only what changed. Each image
+painted appends its cost to images/spend.jsonl, and a run
 refuses to paint past max_images for the film (the cap a caller such as Sketch Studio sets).
 
 Invoke as:
@@ -96,15 +109,35 @@ OPENROUTER = "https://openrouter.ai/api/v1"
 UNLISTED = {"resolution": "2K", "aspect_ratio": "16:9", "output_format": "png"}
 KEEP_REF = "Keep the characters, their clothes and the drawing style exactly as in this picture. "
 # a style picture's lead (style_ref): measured on six style pictures, 2026-10-15 -- told only
-# "keep the style", the models copied the reference's moon, frame, text boxes and layout
+# "keep the style", the models copied the reference's moon, frame, text boxes and layout. It once
+# said to match "how much empty space it leaves" too, and a scene described as filled to every
+# edge came back half empty (a Brella reel, 2026-10-29): how full a picture is is the prompt's.
 STYLE_REF = (
     "Use the first attached picture only as a style reference: match its medium, palette, "
-    "texture, line, lighting and how much empty space it leaves. Never copy its layout, its "
-    "objects, its people, its frame or any of its text. "
+    "texture, line and lighting. Never copy its layout, its objects, its people, its frame or "
+    "any of its text; what is in the picture and how full it is come from the description. "
+)
+# several style pictures (a project's Style tab holds up to four): the same, for all of them
+STYLE_REFS = (
+    "Use the first %d attached pictures only as style references: they are one look, so match "
+    "their medium, palette, texture, line and lighting. Never copy their layout, their objects, "
+    "their people, their frames or any of their text; what is in the picture and how full it is "
+    "come from the description. "
 )
 STYLE_AND_REF = (
-    "The second attached picture shows the characters: keep them, their clothes and their "
-    "proportions exactly as they are there, drawn in the first picture's style. "
+    "The %s attached picture shows the characters: keep them, their clothes and their "
+    "proportions exactly as they are there, drawn in the style of the %s. "
+)
+ORDINAL = {2: "second", 3: "third", 4: "fourth", 5: "fifth"}
+MAX_STYLE_REFS = 4
+# a sharper version of a picture ("redo"): its draft, painted again at a higher quality. Told only
+# to keep the characters, a model is free to move them; the camera moves were written for where
+# things stand in the draft
+REDO = (
+    "The attached picture is a rough draft of this exact picture. Paint the same picture again, "
+    "finished: keep its composition, framing, camera angle, every person, object and colour, "
+    "where each stands and how big it is, and its drawing style. Only make it cleaner and more "
+    "detailed; add, move or remove nothing. "
 )
 # several references ("ref": [...]): one character or group in each
 MAX_REFS = 4
@@ -114,7 +147,7 @@ KEEP_REFS = (
 )
 STYLE_AND_REFS = (
     "The other attached pictures show the characters, one in each: keep them, their clothes and "
-    "their proportions exactly as they are there, drawn in the first picture's style. "
+    "their proportions exactly as they are there, drawn in the style of the %s. "
 )
 # the suffix sprinkles learned to send: any lettering, border or torn edge is a defect
 NO_TEXT = (
@@ -258,8 +291,13 @@ def gives_alpha(caps):
 
 def takes_refs(caps):
     """Whether the catalogue says the model takes a reference picture."""
+    return refs_max(caps) >= 1
+
+
+def refs_max(caps):
+    """How many reference pictures the catalogue says the model takes (0 for none)."""
     refs = ((caps or {}).get("supported_parameters") or {}).get("input_references") or {}
-    return refs.get("max", 0) >= 1
+    return int(refs.get("max", 0) or 0)
 
 
 def mime(path):
@@ -279,22 +317,43 @@ def refs_of(ref):
     return list(ref) if isinstance(ref, (list, tuple)) else [ref] if ref else []
 
 
-def ref_lead(ref=None, style_ref=None):
-    """(the pictures to send, what the prompt says of them first). `ref`: a path, or a list."""
-    refs = refs_of(ref)
-    if style_ref:
-        tail = STYLE_AND_REF if len(refs) == 1 else STYLE_AND_REFS if refs else ""
-        return [style_ref, *refs], STYLE_REF + tail
-    return (refs, KEEP_REF if len(refs) == 1 else KEEP_REFS) if refs else ([], "")
+def ref_lead(ref=None, style_ref=None, room=None):
+    """(the pictures to send, what the prompt says of them first). `ref`, `style_ref`: a path, or
+    a list. `room`: the most pictures the model takes; the style pictures go first, and the
+    image's own references fill what is left (a character a model has no room for is drawn from
+    the words)."""
+    styles, refs = refs_of(style_ref), refs_of(ref)
+    if room is not None:
+        styles = styles[:room]
+        refs = refs[: max(0, room - len(styles))]
+    if not styles:
+        return (refs, KEEP_REF if len(refs) == 1 else KEEP_REFS) if refs else ([], "")
+    n = len(styles)
+    lead = STYLE_REF if n == 1 else STYLE_REFS % n
+    whose = "first picture" if n == 1 else "first %d pictures" % n
+    if len(refs) == 1:
+        lead += STYLE_AND_REF % (ORDINAL.get(n + 1, "last"), whose)
+    elif refs:
+        lead += STYLE_AND_REFS % whose
+    return [*styles, *refs], lead
 
 
 def paint_openrouter(
-    prompt, model, ref=None, quality=None, aspect="16:9", transparent=False, style_ref=None
+    prompt,
+    model,
+    ref=None,
+    quality=None,
+    aspect="16:9",
+    transparent=False,
+    style_ref=None,
+    redo=None,
 ):
     """One picture from an OpenRouter image model; `ref` (a JPEG, PNG or WebP path, or a list of
-    them) goes in as reference pictures when the model takes them, and is dropped (as Muse always dropped it) when
-    not; `style_ref`, a style picture, goes in before it (ref_lead). `transparent` asks for a
-    transparent background (sent only where the model has it)."""
+    them) goes in as reference pictures when the model takes them, and is dropped (as Muse always
+    dropped it) when not; `style_ref`, a style picture or a list of them, goes in before it
+    (ref_lead), as many as the model takes. `redo`: the picture's own draft, sent alone in their
+    place (REDO). `transparent` asks for a transparent background (sent only where the model has
+    it)."""
     import httpx
 
     key = os.environ.get("OPENROUTER_API_KEY", "").strip()
@@ -302,7 +361,7 @@ def paint_openrouter(
         raise RuntimeError("OPENROUTER_API_KEY is not set (put it in .env)")
     caps = model_caps(model)
     body = {"model": model, "prompt": prompt, **pick_params(caps, quality, aspect, transparent)}
-    pics, lead = ref_lead(ref, style_ref)
+    pics, lead = ([redo], REDO) if redo else ref_lead(ref, style_ref, refs_max(caps))
     if pics and takes_refs(caps):
         body["input_references"] = [
             {"type": "image_url", "image_url": {"url": data_url(p)}} for p in pics
@@ -510,12 +569,33 @@ def main():
     model = spec.get("model") or MODELS[backend]
     spec["model"] = model
     style_ref = None
-    if spec.get("style_ref"):  # the project's style picture: beside the manifest, nowhere else
+    if spec.get("style_ref"):  # the project's style pictures: beside the manifest, nowhere else
+        base, given = os.path.realpath(m["_dir"]), refs_of(spec["style_ref"])
+        if len(given) > MAX_STYLE_REFS:
+            sys.exit("paint.style_ref names at most %d pictures" % MAX_STYLE_REFS)
+        style_ref = [os.path.realpath(os.path.join(base, str(p))) for p in given]
+        for p, asked in zip(style_ref, given, strict=True):
+            if not p.startswith(base + os.sep) or not os.path.isfile(p):
+                sys.exit("paint.style_ref %r is not a picture beside the manifest" % asked)
+        if len(style_ref) == 1:  # one picture: sent and keyed as it always was
+            style_ref = style_ref[0]
+    drafts = {}  # a sharper version's drafts ("redo"): {image name: its draft}
+    if spec.get("redo"):
         base = os.path.realpath(m["_dir"])
-        style_ref = os.path.realpath(os.path.join(base, str(spec["style_ref"])))
-        if not style_ref.startswith(base + os.sep) or not os.path.isfile(style_ref):
-            sys.exit("paint.style_ref %r is not a picture beside the manifest" % spec["style_ref"])
-    style_fp = file_fp(style_ref) if style_ref else None
+        rd = os.path.realpath(os.path.join(base, str(spec["redo"])))
+        if not rd.startswith(base + os.sep):
+            sys.exit("paint.redo %r is not a folder beside the manifest" % spec["redo"])
+        for im in images:
+            for e in (".jpg", ".webp"):
+                p = os.path.join(rd, im["name"] + e)
+                if os.path.isfile(p) and os.path.realpath(p).startswith(rd + os.sep):
+                    drafts[im["name"]] = p
+                    break
+    # each style picture's own content: a new one paints afresh
+    style_fp = None
+    if style_ref:
+        one = isinstance(style_ref, str)
+        style_fp = file_fp(style_ref) if one else [file_fp(p) for p in style_ref]
     aspect = frame_aspect(m)  # the scenes' shape: the film's frame
     only = set(args.only.split(",")) if args.only else set(names)
     idir = os.path.join(m["_dir"], "images")
@@ -547,7 +627,8 @@ def main():
             if r not in by_name and not pic:
                 sys.exit(
                     "image %s: ref %r is not one of the images, nor one of this film's project "
-                    "pictures (pic_<name>) or painted characters (cast_<name>)" % (im["name"], r)
+                    "pictures (pic_<name>), painted characters (cast_<name>) or attached pictures "
+                    "marked as how to draw something (upload<n>)" % (im["name"], r)
                 )
             files[im["name"]].append(pic)
         if refs and all(files[im["name"]]):
@@ -610,19 +691,33 @@ def main():
                     for r, f in zip(refs_of(im.get("ref")), files[im["name"]], strict=True)
                 ]
                 ref = ref[0] if isinstance(im.get("ref"), str) else ref or None
+                redo = drafts.get(im["name"])
                 t, err = time.time(), None
                 for attempt in range(3):
                     try:
                         if cs:  # a cut-out: its own model, square unless told, alpha if it has it
                             shape = im.get("aspect", "1:1")
                             data, meta = paint_openrouter(
-                                prompt, cs["model"], ref, cs["quality"], shape, alpha, style_ref
+                                prompt,
+                                cs["model"],
+                                ref,
+                                cs["quality"],
+                                shape,
+                                alpha,
+                                style_ref,
+                                redo=redo,
                             )
                         elif backend == "gemini":
-                            data, meta = paint_gemini(prompt, model, ref, aspect)
+                            data, meta = paint_gemini(prompt, model, redo or ref, aspect)
                         else:
                             data, meta = paint_openrouter(
-                                prompt, model, ref, spec.get("quality"), aspect, style_ref=style_ref
+                                prompt,
+                                model,
+                                ref,
+                                spec.get("quality"),
+                                aspect,
+                                style_ref=style_ref,
+                                redo=redo,
                             )
                         break
                     except Exception as e:  # noqa: BLE001 -- image services drop requests; retry
@@ -642,8 +737,10 @@ def main():
 
             # a project picture is never painted: an image made from pictures alone goes first,
             # so a scene painted from it (a cast sheet from pic_<name>) has it to work from
-            done, refs = [], [im for im in todo if not im.get("ref") or im["name"] in pics]
-            later = [im for im in todo if im.get("ref") and im["name"] not in pics]
+            # a picture repainted from its own draft needs nothing painted first
+            first = pics | set(drafts)
+            done, refs = [], [im for im in todo if not im.get("ref") or im["name"] in first]
+            later = [im for im in todo if im.get("ref") and im["name"] not in first]
             for batch in (refs, later):  # the references first: the others are painted from them
                 with ThreadPoolExecutor(max_workers=4) as ex:
                     for name, path, w, h, meta, sec in ex.map(one, batch):

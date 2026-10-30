@@ -4313,8 +4313,9 @@ draws in its thumbnails too.
 `head.scripts`, ahead of a brand's `brand/brand.js`: `SK.STYLE = {line, layout, palette, colors:
 {ground, ink, accent, other}, fonts: {title, body, accent, titleWeight, ...}}` and `SK.KIT.font` set
 to its body face (a brand's `brand.js`, loaded after it, wins). Its faces are in the manifest's
-`fonts` (`style/fonts/...`). Its main picture is `style/style.jpg`, which `paint.json`'s
-`style_ref` names when the project paints from it (below).
+`fonts` (`style/fonts/...`). Its pictures are `style/style.jpg` (the main one), `style2.jpg`...,
+which `paint.json`'s `style_ref` names, as a list when there are several, when the project paints
+from them (below).
 
 ### The paintings: `sketch-paint.py`, and choosing a painter with `paint-compare.py`
 
@@ -4322,10 +4323,11 @@ A painted film animates pictures made by an image model. The manifest's `paint` 
 or `"paint": "paint.json"`) lists them as `{"name", "prompt", "ref"?}`, with one `style` line
 in front of every prompt and a no-lettering, no-border suffix behind it. Each becomes
 `images/<name>.jpg` and joins the manifest's `images`, so `film.js` draws it with
-`SK.image(name, x, y, w)`. A `style_ref` (a project's style picture beside the manifest) goes in with every painting and
-cut-out, first, told to set the style alone (never the layout, objects, people or words), and an
-image's `ref` follows it as the second picture; the studio sets it, with the painter, from the
-film's `paint_route` (`film.paint_pins`). Paintings are cached by a fingerprint of backend, model, style,
+`SK.image(name, x, y, w)`. A `style_ref` (a project's style picture beside the manifest, or a list
+of up to 4) goes in with every painting and cut-out, first, told to set the style alone (never the
+layout, objects, people, words or how full the picture is), and an image's `ref` follows; the
+studio sets it, with the painter, the style line and the quality, from the film's `paint_route`
+(`film.paint_pins`). A model with room for fewer references gets the style pictures first. Paintings are cached by a fingerprint of backend, model, style,
 prompt and reference; `max_images` caps a film's total (Sketch Studio sets 8).
 
 Pictures a person gave the film (`inputs/upload1.png`, `inputs/pic_logo.png`, …) join `images`
@@ -4361,6 +4363,13 @@ is and never painted.
 - The name must be `pic_` and a library name, and the file must resolve inside the film's
   `inputs/`. Another name, a path or a link out is refused, by `sketch-paint.py` and by
   `studio/validate.py`.
+- A picture the person attached, `upload<n>`, may be a `ref` too, but only when they marked it
+  "How we draw this" (`style` in `inputs/roles.json`). A picture marked `scene` never is.
+
+`redo` (a folder beside the manifest, the studio's for a sharper version: `studio/rounds.py`)
+holds drafts, `<name>.jpg|webp`. An image with a draft there is painted from it alone, with the
+`REDO` lead (the same picture, finished: nothing added, moved or removed), in the first batch,
+and cached under the key it has without `redo`.
 - A film without a picture `ref` is planned, ordered and cached exactly as before. One old quirk
   stays because of that: a scene listed before the painting it names is keyed without that
   painting's fingerprint.

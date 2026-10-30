@@ -105,7 +105,14 @@ def painted(frame):
     asked = {}
 
     def fake(
-        prompt, model, ref=None, quality=None, aspect="16:9", transparent=False, style_ref=None
+        prompt,
+        model,
+        ref=None,
+        quality=None,
+        aspect="16:9",
+        transparent=False,
+        style_ref=None,
+        redo=None,
     ):
         asked["spoon" if "isolated subject" in prompt else "kitchen"] = aspect
         return png(), {"cost_usd": 0.01}
@@ -155,10 +162,11 @@ def pin_cases():
     gpt = {"route": "gpt", "ref": "style/style.jpg", "line": "x"}
     tg = films.paint_pins(30, P, gpt)
     expect(
-        "a style picture's painter keeps its picture",
+        "a style picture's painter keeps its picture, with the style line, as a draft",
         tg["model"] == "openai/gpt-image-2.5-flare"
         and tg["style_ref"] == "style/style.jpg"
-        and tg["style"] == "",
+        and tg["style"] == gpt["line"]
+        and tg["quality"] == films.DRAFT,
         tg,
     )
     expect(

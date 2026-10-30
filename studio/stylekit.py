@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""A project's style: one to three pictures of one look, read into a style card that every
+"""A project's style: one to four pictures of one look, read into a style card that every
 episode's pictures, colours and lettering follow (the Style tab on kitcut.ai; the plan and what
 six style pictures measured: specs/features/style-tab.md in the site's repo).
 
@@ -19,7 +19,9 @@ titles, captions and the end card, and the style is used for what the brand leav
         proof/<route>.jpg  proof.json            one subject painted each way (ROUTES): the
                                                  person picks the one that looks like the picture
         assets/                                  what an episode gets: style.jpg (the main
-                                                 picture), fonts/, style.js (SK.STYLE), used.json
+                                                 picture), style2.jpg... (the others, in the
+                                                 order sent), fonts/, style.js (SK.STYLE),
+                                                 used.json
         state.json                               {state, step, error, at, reads, proofs, cost_usd}
 
 Reading: the pictures' colours are measured here (k-means), then ONE Claude call with no tools
@@ -30,9 +32,12 @@ and a subject from the project's brief for the proof. Then the faces are fetched
 the proof is painted. Gemini is the team's alone (`team`, from the site's X-Team) and the card
 says so: it costs about seven times Muse a picture.
 
-An episode of the project gets the assets (seed: the picture in style/, the faces in its
+An episode of the project gets the assets (seed: the pictures in style/, the faces in its
 manifest, style.js before film.js) and its record's paint_route, from which film.paint_pins
-sets the painter, the style picture or the style line; and a note (note) saying what to do.
+sets the painter, the style line and -- on a picture route -- every style picture, sent with
+every painting; and a note (note) saying what to do. A style that covers what a project's films
+show (its people, a place, nature) in its pictures is what keeps a garden as flat as a face: a
+painter given only people on a plain ground paints a full place in its own look.
 
     python studio/stylekit.py --pictures a.jpg b.png --out <dir> --plan    convert and measure,
                                                                           no Claude, no painting
@@ -68,7 +73,7 @@ from film import STYLE_ROUTES, _write_json, paint_kinds, paint_pins  # noqa: E40
 # ------------------------------------------------------------------ limits
 PART = brandkit.PART  # the most one part may carry (the site sends ~3.8 MB)
 MAX_FILE = 25 * 1024 * 1024  # one picture or font file
-MAX_PICTURES = 3  # of one style: Claude reads them all, the painter gets the main one
+MAX_PICTURES = 4  # of one style: Claude reads them all, and the painter gets them all
 MAX_FONT_FILES = 4  # the person's own faces, used only with their tick (fonts_consent)
 LONG = 2048  # a picture's long side once converted
 ASK_LONG = 1568  # the long side Claude sees
@@ -680,14 +685,18 @@ def _sp():
 
 
 def paint_one(route, subject, style_line, style_jpg, out):
-    """One proof picture: (path, {cost_usd, seconds}) or raises. Always wide (16:9): it shows
-    the style, not a film, so a tall project's proof is wide too."""
+    """One proof picture, painted as an episode's would be (film.paint_pins): on a picture route
+    with every style picture (`style_jpg`, a path or a list) and the style line, at the route's
+    quality. (path, {cost_usd, seconds}) or raises. Always wide (16:9): it shows the style, not
+    a film, so a tall project's proof is wide too."""
     sp = _sp()
     r = STYLE_ROUTES[route]
     t = time.time()
     if r["picture"]:
-        prompt = sp.full_prompt({"style": ""}, {"prompt": subject})
-        data, meta = sp.paint_openrouter(prompt, r["model"], style_ref=style_jpg)
+        prompt = sp.full_prompt({"style": style_line}, {"prompt": subject})
+        data, meta = sp.paint_openrouter(
+            prompt, r["model"], quality=r.get("quality"), style_ref=style_jpg
+        )
     else:
         prompt = sp.full_prompt({"style": style_line}, {"prompt": subject})
         data, meta = sp.paint_openrouter(prompt, r["model"])
@@ -703,7 +712,7 @@ def paint_proof(d, card, team, log=print):
     """proof/<route>.jpg for each route this person may pick, painted at once; proof.json."""
     pd = os.path.join(d, "proof")
     os.makedirs(pd, exist_ok=True)
-    main = os.path.join(d, "pictures", (card.get("main") or "") + ".jpg")
+    main = style_pictures(d, card)
     subject = card.get("subject") or "A quiet street corner in the morning, a wide shot."
     results = {}
 
@@ -794,16 +803,38 @@ if (SK.KIT && SK.STYLE.fonts.body) SK.KIT.font = SK.STYLE.fonts.body;
 """
 
 
+def style_pictures(d, card):
+    """The style's pictures as files, the main one first and the others in the order sent."""
+    paths = [os.path.join(d, "pictures", m["id"] + ".jpg") for m in pictures(d)]
+    main = os.path.join(d, "pictures", (card.get("main") or "") + ".jpg")
+    paths = ([main] if main in paths else []) + [p for p in paths if p != main]
+    return [p for p in paths if os.path.exists(p)]
+
+
+def style_names(n):
+    """What an episode calls its n style pictures: style.jpg, style2.jpg..."""
+    return ["style.jpg"] + ["style%d.jpg" % i for i in range(2, n + 1)] if n else []
+
+
+def _copy_pictures(d, card, out):
+    """The style's pictures into `out` as style.jpg, style2.jpg...; any older ones there go."""
+    for n in os.listdir(out):
+        if re.fullmatch(r"style\d*\.jpg", n):
+            os.remove(os.path.join(out, n))
+    src = style_pictures(d, card)
+    for p, name in zip(src, style_names(len(src)), strict=True):
+        shutil.copyfile(p, os.path.join(out, name))
+
+
 def build_assets(d, card, log=print):
-    """assets/: the main picture as style.jpg, the faces picked (a sent one only with the
-    person's tick, else its free stand-in or nothing), style.js, used.json. What an episode
-    gets: {"faces": [...], "fonts": {role: family}, "palette", "route"}."""
+    """assets/: the pictures as style.jpg (the main one), style2.jpg..., the faces picked (a
+    sent one only with the person's tick, else its free stand-in or nothing), style.js,
+    used.json. What an episode gets: {"faces": [...], "fonts": {role: family}, "palette",
+    "route"}."""
     out = os.path.join(d, "assets.new")
     shutil.rmtree(out, ignore_errors=True)
     os.makedirs(os.path.join(out, "fonts"))
-    main = os.path.join(d, "pictures", (card.get("main") or "") + ".jpg")
-    if os.path.exists(main):
-        shutil.copyfile(main, os.path.join(out, "style.jpg"))
+    _copy_pictures(d, card, out)
     sent = {f["family"]: f for f in font_files(d)}
     faces, families = [], {}
     for role in FONT_ROLES:
@@ -1084,6 +1115,13 @@ def asset(d, kind, name):
 
 
 # ------------------------------------------------------------------ an episode's style
+def read_card(d):
+    """A style's card once it is ready for an episode (seed: the card and its assets), or None."""
+    if not os.path.exists(os.path.join(d, "assets", "used.json")):
+        return None
+    return _read_json(os.path.join(d, "card.json"))
+
+
 def route_of(card):
     """The route an episode is painted on: Gemini only when a team member picked it."""
     r = card.get("route") if card.get("route") in STYLE_ROUTES else "words"
@@ -1104,6 +1142,7 @@ def seed(film, lib):
     dst = film.path("style")
     shutil.rmtree(dst, ignore_errors=True)
     shutil.copytree(os.path.join(d, "assets"), dst, ignore=shutil.ignore_patterns("used.json"))
+    _copy_pictures(d, card, dst)  # every picture, from a style read before it held them all
     with open(film.manifest, encoding="utf-8") as f:
         m = json.load(f)
     fonts = [f for f in m.get("fonts") or [] if not str(f.get("file", "")).startswith("style/")]
@@ -1112,17 +1151,26 @@ def seed(film, lib):
     m["head"] = {**(m.get("head") or {}), "scripts": ["style/style.js", *head]}
     _write_json(film.manifest, m)
     route = route_of(card)
-    picture = STYLE_ROUTES[route]["picture"] and os.path.exists(film.path("style", "style.jpg"))
+    names = [n for n in style_names(MAX_PICTURES) if os.path.exists(film.path("style", n))]
+    picture = STYLE_ROUTES[route]["picture"] and bool(names)
+    refs = ["style/" + n for n in names]
     pr = {
         "route": route if picture or route == "words" else "words",
-        "ref": "style/style.jpg" if picture else None,
+        # one picture: a path, as a style of one always was; several: the list, the main first
+        "ref": (refs[0] if len(refs) == 1 else refs) if picture else None,
         "line": card.get("style") or "",
     }
     film.update(paint_route=pr)
     if paint_kinds(film.caps) and os.path.exists(film.path("paint.json")):
         p = _read_json(film.path("paint.json"), {}) or {}
-        _write_json(film.path("paint.json"), p | paint_pins(film.length, film.caps, pr))
-    return {"route": pr["route"], "fonts": used["families"], "picture": bool(picture)}
+        want = paint_pins(film.length, film.caps, pr, film.record().get("paint_quality"))
+        _write_json(film.path("paint.json"), p | want)
+    return {
+        "route": pr["route"],
+        "fonts": used["families"],
+        "picture": bool(picture),
+        "pictures": len(names),
+    }
 
 
 def note(film, lib):
@@ -1135,9 +1183,11 @@ def note(film, lib):
     pr = film.record().get("paint_route") or {}
     fam = used.get("families") or {}
     colours = "; ".join("%s %s" % (c["role"], c["hex"]) for c in card["palette"])
+    seen = [n for n in style_names(MAX_PICTURES) if os.path.exists(film.path("style", n))]
     lines = [
         "This project has a style, from its person's own pictures: every picture, colour and "
-        "line of lettering in this film follows it. Read style/style.jpg to see it.",
+        "line of lettering in this film follows it. Read %s to see it."
+        % " and ".join("style/" + n for n in seen or ["style.jpg"]),
         "- The style: %s" % card["style"],
         "- How its pictures are laid out: %s" % (card.get("layout") or "(not said)"),
         "- Its colours (SK.STYLE.colors, SK.STYLE.palette): %s. Grounds, ink and accents come "
@@ -1155,16 +1205,18 @@ def note(film, lib):
     if paint_kinds(film.caps):
         if pr.get("ref"):
             lines.append(
-                "- Its pictures are painted FROM the style picture: the studio gives it to the "
-                "painter with every picture (paint.json's painter, style and style_ref are the "
-                "studio's; this overrides the look's words that the painter works from words alone "
-                "and that a ref changes nothing). "
+                "- Its pictures are painted FROM the style pictures: the studio gives every one "
+                "of them, and the style line above, to the painter with every picture "
+                "(paint.json's painter, style, style_ref and quality are the studio's; this "
+                "overrides the look's words that the painter works from words alone and that a "
+                "ref changes nothing). "
                 "So each image's prompt says ONLY what to draw -- the subject, the framing, the "
-                "moment -- with no medium, style, palette or colour words: a colour word beats "
-                'the picture ("pink roses" came back pink from a black-ink style). A `ref` '
-                "works now too: it keeps a character the same from picture to picture, and "
-                '`"ref": "pic_<name>"` paints from one of the project\'s own pictures (a cast '
-                'sheet of its people, then each scene with `"ref"` naming the sheet).'
+                "moment, how full the picture is -- with no medium, style, palette or colour "
+                'words: a colour word beats the picture ("pink roses" came back pink from a '
+                "black-ink style). A `ref` works now too: it keeps a character the same from "
+                'picture to picture, and `"ref": "pic_<name>"` paints from one of the project\'s '
+                "own pictures (a cast sheet of its people, then each scene with `\"ref\"` "
+                "naming the sheet)."
             )
         else:
             lines.append(
@@ -1172,6 +1224,12 @@ def note(film, lib):
                 "paint.json's style (yours to leave). Each image's prompt says what to draw and "
                 "adds no other style."
             )
+    else:  # a drawn film: no painter, so the style is its written side and Claude's eye
+        lines.append(
+            "- This film paints nothing: draw in code in the spirit of the style pictures, with "
+            "the style line, the layout and the colours above (no picture of the style goes on "
+            "screen)."
+        )
     if os.path.exists(film.path("brand", "brand.js")):
         lines.append(
             "- The project has a brand too, and the brand wins where both speak: its faces, "
@@ -1184,7 +1242,7 @@ def note(film, lib):
 # ------------------------------------------------------------------ the command line
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--pictures", nargs="+", help="1-3 pictures of one style")
+    ap.add_argument("--pictures", nargs="+", help="1-4 pictures of one style")
     ap.add_argument("--out", help="a folder to read into (a style's own layout)")
     ap.add_argument("--proof", metavar="DIR", help="paint the proof of a read style (a step)")
     ap.add_argument("--brief", default="", help="the project's brief, for the proof's subject")

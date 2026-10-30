@@ -101,20 +101,35 @@ FOR_LINE = re.compile(
 # what Claude may not change in paint.json: the painter, and how many paintings a film may cost
 # (8 under a minute, 12 from a minute, more for a longer film: limits()["images"], paint_pins)
 PAINT_PINNED = {"backend": "muse", "model": "meta/muse-image", "max_images": 8}
+# How carefully a picture is painted, where its model has the setting (OpenAI's): every film is
+# painted as a draft, and its person may have a sharper version made later (rounds.py sharpen):
+# each picture repainted at a higher quality from its own draft. The owner's call, 2026-10-29:
+# most films never need more than the draft. The page's words: Draft, Standard, High.
+QUALITIES = ("low", "medium", "high")
+DRAFT = "low"
+QUALITY_MODELS = {"openai/gpt-image-2.5-flare"}
+# A film may also start at Standard or High (POST /api/films "quality", the record's
+# paint_quality, paint_pins), where its painter has the setting: chooses_quality.
 # a collage film's cut-outs: a model that paints on a transparent background (sketch-paint.py)
 CUTOUTS_PINNED = {
     "model": "openai/gpt-image-2.5-flare",
-    "quality": "medium",
+    "quality": DRAFT,
     "border": 12,
     "cut": "scissor",
 }
-# a project's style picture (stylekit.py): how its episodes' pictures are painted. With a picture
-# route the style picture goes in with every painting (sketch-paint.py style_ref) and Claude's
-# prompts say only what to draw; "words" is Muse with the style line, which Claude may not
-# change. Gemini is the team's alone (the site says who: X-Team) and costs about seven times
-# Muse a picture; GPT Image about one and a half.
+# a project's style pictures (stylekit.py): how its episodes' pictures are painted. With a
+# picture route every style picture goes in with every painting (sketch-paint.py style_ref), the
+# style line in front of its prompt, and Claude's prompts say only what to draw; "words" is Muse
+# with the style line alone. Claude may change neither. Gemini is the team's alone (the site says
+# who: X-Team) and costs about seven times Muse a picture; GPT Image about one and a half at
+# medium quality, and its paintings start as drafts (QUALITIES: about a quarter of that).
 STYLE_ROUTES = {
-    "gpt": {"backend": "openrouter", "model": "openai/gpt-image-2.5-flare", "picture": True},
+    "gpt": {
+        "backend": "openrouter",
+        "model": "openai/gpt-image-2.5-flare",
+        "picture": True,
+        "quality": DRAFT,
+    },
     "words": {"backend": "muse", "model": "meta/muse-image", "picture": False},
     "gemini": {
         "backend": "openrouter",
@@ -611,28 +626,50 @@ def paint_words(caps):
     return "painting the pictures", "pictures"
 
 
-def paint_pins(length, caps, route=None):
+def paint_pins(length, caps, route=None, quality=None):
     """What the studio sets in the paint.json of a film with these capabilities: the painter,
     each kind's own settings, and the cap on pictures (repaints included), its kinds' caps
     added up. `route` is the film record's paint_route (its project's style, stylekit.seed):
-    the painter it names and the style picture or the style line, the studio's too. A tall film
-    has the same painter as a wide one; sketch-paint.py paints in the film's frame."""
+    the painter it names, the style line, its style pictures (a path, or a list of them) on a
+    picture route, and the route's quality -- the studio's too. `quality`: the one the film was
+    asked for (its record's paint_quality), where the painter has the setting; else a draft. A
+    tall film has the same painter as a wide one; sketch-paint.py paints in the film's frame."""
     kinds = paint_kinds(caps)
     pins = dict(PAINT_PINNED)
     for kind in kinds:
         pins |= kind["pins"]
     pins |= {"max_images": sum(limits(length)[kind["cap"]] for kind in kinds)}
+    quality = quality if quality in QUALITIES else None
+    if quality and "cutouts" in pins and pins["cutouts"].get("model") in QUALITY_MODELS:
+        pins["cutouts"] = dict(pins["cutouts"], quality=quality)
     r = STYLE_ROUTES.get((route or {}).get("route"))
     if not r or not kinds:
         return pins
     pins |= {"backend": r["backend"], "model": r["model"]}
+    # the written style goes with the pictures: a style picture of people on a plain ground
+    # leaves a place or a garden to the painter's own look, and the line still says flat, no
+    # shading, no depth (a Brella reel, 2026-10-29)
+    pins["style"] = str(route.get("line") or "")[:400]
     if r["picture"] and route.get("ref"):
-        pins |= {"style": "", "style_ref": route["ref"]}
-    else:
-        pins["style"] = str(route.get("line") or "")[:400]
+        pins["style_ref"] = route["ref"]
+    if r.get("quality"):
+        pins["quality"] = quality or r["quality"]
     if "cutouts" in pins and r["picture"]:  # the cut-outs from the same painter
         pins["cutouts"] = dict(pins["cutouts"], model=r["model"])
     return pins
+
+
+def chooses_quality(look, route=None):
+    """Whether a film of this look -- a project's episode painted on `route` (stylekit.route_of),
+    or None -- is painted by a model with a quality to choose: a collage's cut-outs, and the
+    paintings of a style's GPT route. Muse (a painted film outside a project, a style's words
+    route) and a drawn film have none."""
+    caps = RECIPES.get(look) or ()
+    r = STYLE_ROUTES.get(route) or {}
+    if any("cutouts" in k["pins"] for k in paint_kinds(caps)):
+        # a style's picture route paints the cut-outs too (paint_pins)
+        return (r["model"] if r.get("picture") else CUTOUTS_PINNED["model"]) in QUALITY_MODELS
+    return bool(paint_kinds(caps)) and bool(r.get("quality"))
 
 
 def _release():
@@ -1069,6 +1106,7 @@ class Film:
         character_style="auto",
         member=None,
         narrator=None,
+        quality=None,
         template=None,
         frame=None,
         captions=False,
@@ -1095,7 +1133,9 @@ class Film:
 
         attachments: what the visitor attached (uploads.take), each meta with its file as "src",
         copied into inputs/. A picture becomes upload1.jpg... and joins the manifest's images
-        under that name, so film.js can draw it with SK.image('upload1', ...); a voice note
+        under that name, so film.js can draw it with SK.image('upload1', ...) -- with its "role"
+        (show, scene, style) when the person said what it is for, also in inputs/roles.json,
+        where the painter looks before taking one as a reference; a voice note
         becomes voice1..., with its words in the record; a document becomes doc1.txt (or .md),
         with the name it came with.
 
@@ -1195,6 +1235,8 @@ class Film:
                 if a["kind"] == "image":
                     m.setdefault("images", {})[stem] = rel
                     item.update(name=stem, w=a.get("w"), h=a.get("h"))
+                    if a.get("role"):
+                        item["role"] = a["role"]
                 elif a["kind"] == "text":
                     item.update(name=a.get("name") or "", chars=a.get("chars"))
                     item.update(words=a.get("words"))
@@ -1202,6 +1244,9 @@ class Film:
                     item.update(secs=a.get("secs"), transcript=a.get("transcript") or "")
                     item.update(lang=a.get("lang"))
                 attached.append(item)
+            roles = {a["name"]: a["role"] for a in attached if a.get("role")}
+            if roles:  # the studio's file: Claude never writes inputs/
+                _write_json(film.path("inputs", "roles.json"), roles)
         cast_people = []
         for i, a in enumerate(people, 1):
             os.makedirs(film.path("inputs"), exist_ok=True)
@@ -1231,7 +1276,7 @@ class Film:
             m["modules"] = list(modules(caps))
         if paint_kinds(caps):
             m["paint"] = "paint.json"
-            pins = paint_pins(seconds, caps)
+            pins = paint_pins(seconds, caps, quality=quality)
             _write_json(film.path("paint.json"), pins | {"style": "", "images": []})
         if fonts(caps):
             m["fonts"] = list(m.get("fonts") or []) + fonts(caps)
@@ -1299,6 +1344,9 @@ class Film:
                 **({"app": str(app)[:40]} if app else {}),
                 # asked for with no music at all (frame_note; the manifest's audio.music)
                 **({"music": "none"} if quiet else {}),
+                # its pictures asked for above a draft (paint_pins; the caller checked the
+                # painter has the setting: chooses_quality)
+                **({"paint_quality": quality} if quality in QUALITIES else {}),
                 "release": RELEASE,
                 # the engine it started from, when it is not this release's sketch/ (engine_base)
                 **(

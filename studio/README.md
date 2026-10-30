@@ -725,6 +725,18 @@ ROUND makes all of it into the film's next VERSION -- the same film, page and li
   day's budget (`rounds.mine`, `rounds.reserve`), but is not one of the day's films. A film may
   have `STUDIO_ROUNDS_PER_DAY` (5) rounds in a day, a round up to 20 notes. A YouTube send and a
   redraw without branding each wait for a round, and a round for them.
+- **A sharper version** (2026-10-29): `POST .../versions {"key", "from", "sharpen": "medium"|"high"}`
+  instead of notes. Every film's paintings are drafts (`film.DRAFT`, wherever the painter has a
+  quality: `film.QUALITY_MODELS`); `rounds.pictures` says a film's quality and what it may be
+  raised to (`pictures` on `GET .../versions`: nothing for Muse, a drawn film or one in scenes).
+  The round takes no turn with Claude: `rounds.sharpen` keeps each painting in the copy's
+  `drafts/` and pins the quality and `redo`, `sketch-paint.py` paints every picture again from its
+  own draft alone ("this exact picture, finished": the camera moves were written for where things
+  stand), `rounds.unsharpen` takes `redo` and the drafts away, and the round renders as any other.
+  The paintings are cached under the keys they have without `redo`, so the version's next round
+  of notes paints nothing again. The draft stays one of the versions. It is one of the film's
+  rounds of the day; the site holds its credits as for notes, and the film's document gets
+  `paint_quality`.
 - **A filmstrip per version** (`rounds.make_strip`, `outputs/strip.jpg`, online beside the rest):
   24 small frames in a row, each sought in the web copy rather than the film decoded. The
   site's notes page cannot read a video's pixels off another host, so it cannot make its own.
@@ -913,7 +925,7 @@ its films, next to `projects\` (its text is in its project's git repository too:
   Measured on two public brand books and a made-up one: 21-30 pages read in 1-10 s, the card in
   16-30 s at $0.15-0.41 on the key. `test_brandkit.py` covers it without Claude.
 - **A project's style** (`stylekit.py`, 2026-10-15). A brand is who is speaking; a style is how
-  the pictures look, from one to three pictures the person gives (the site's Style tab;
+  the pictures look, from one to four pictures the person gives (the site's Style tab;
   `specs/features/style-tab.md` in the site's repo has the plan and what six style pictures
   measured). Pictures (JPEG, PNG, WebP, AVIF, a GIF's first frame; a HEIC refused with what to do)
   and font files go up in parts as a brand's do, into `<project library>/style/`, each picture a
@@ -930,8 +942,13 @@ its films, next to `projects\` (its text is in its project's git repository too:
   a Gemini style to GPT Image and says so. An episode gets it at seed after the brand
   (`stylekit.seed`: `style/` in the film, its faces in the manifest, `style.js` -- `SK.STYLE` --
   ahead of `brand.js`, so the brand wins) and the record's `paint_route`, from which
-  `film.paint_pins` sets the painter, `style_ref` (the main picture, sent with every painting by
-  `sketch-paint.py`) or the style line, which the guard holds and a round keeps; the run's
+  `film.paint_pins` sets the painter, the style line and, on a picture route, `style_ref`: every
+  style picture (`style/style.jpg`, the main one, then `style2.jpg`...), sent with every painting
+  and cut-out by `sketch-paint.py` beside the line (2026-10-29: given only a main picture of people
+  on a plain ground and no line, a reel painted its full places in the painter's own look). GPT
+  Image paints a draft (`film.DRAFT`, quality low; collage cut-outs too), and a sharper version is
+  its person's to ask for (below). The guard holds all of it, and a round keeps what its film was
+  painted with (a film from before keeps no quality, so nothing repaints); the run's
   document says `paint_route`, and the site marks a Gemini episode. Measured on KitCut's own collage
   still: the read in ~40 s, the card ~$0.05 on the key, a proof $0.03 (GPT Image + Muse) or $0.13
   with Gemini. `test_stylekit.py` covers it with Claude and the painters stood in for.
@@ -993,7 +1010,16 @@ film it vouches is the person's. That film is an episode:
   outside projects never sees a project's. A project made with "bring in my characters" starts
   with a copy of the person's own cast, once.
 - **Pictures.** A project holds up to nine (`pictures\<name>.*`), made from uploads with `POST
-  /api/library/pictures {project, upload, name, once}`. Every episode gets them as
+  /api/library/pictures {project, upload, name, once, role}`. A role says what it is for
+  (`library.PICTURE_ROLES`, the site's words in brackets): `show` ("Show it as it is": on screen,
+  never repainted nor a ref), `scene` ("What the place has": Claude names two or three things in
+  it in the paintings' prompts; never shown, never a ref) or `style` ("How we draw this": a drawn
+  example of one kind of thing, the `ref` of the paintings that show it). `POST
+  .../pictures/{name}/role` changes it; none is the old way, Claude decides. A film's attachments
+  take the same (`picture_roles: {upload id: role}` on `POST /api/films`). Both reach the film's
+  `inputs\roles.json` (the studio's; Claude never writes `inputs\`) and Claude's note, and an
+  attachment (`upload<n>`) is a painting's `ref` only when its role is `style`, a `scene` picture
+  never (`_sketch.project_picture`). Every episode gets them as
   `inputs\pic_<name>.*`, in the manifest as `pic_<name>`; the ones neither film.js nor the cast
   draws leave before the final render, like unused attachments. `once: true` seeds only the
   project's next episode: `_seed_pictures` removes it from the project's library right after, so

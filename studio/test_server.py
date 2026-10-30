@@ -273,6 +273,74 @@ async def projects(c, auth, mem, check):
     r = await c.get("/api/library/pictures/logo/thumb.png?project=" + P, headers=other)
     check(r.status == 404, "its person's only")
 
+    # what a picture is for: a role on the way in, changed later, refused when it is not one
+    async def upload(who=me):
+        r = await c.post(
+            "/api/uploads", data=buf.getvalue(), headers=who | {"Content-Type": "image/png"}
+        )
+        return (await r.json()).get("id")
+
+    r = await c.post(
+        "/api/library/pictures",
+        json={"project": P, "upload": await upload(), "name": "city", "role": "style"},
+        headers=me,
+    )
+    check(r.status == 201 and (await r.json()).get("role") == "style", "a picture takes a role")
+    r = await c.post(
+        "/api/library/pictures",
+        json={"project": P, "upload": await upload(), "name": "odd", "role": "paint"},
+        headers=me,
+    )
+    check(r.status == 400, "a role that is not one is refused")
+    role_of = "/api/library/pictures/city/role"
+    r = await c.post(role_of, json={"project": P, "role": "scene"}, headers=me)
+    check(r.status == 200 and (await r.json())["role"] == "scene", "a picture's role changes")
+    r = await c.post(
+        "/api/library/pictures/city/role", json={"project": P, "role": "scene"}, headers=other
+    )
+    check(r.status == 404, "only by its person")
+    r = await c.post(role_of, json={"project": P, "role": "x"}, headers=me)
+    check(r.status == 400, "and only to a role")
+    lib = await (await c.get("/api/library?project=" + P, headers=me)).json()
+    check(
+        {p["name"]: p.get("role") for p in lib["pictures"]} == {"city": "scene", "logo": None},
+        "the listing says each picture's role (%s)" % lib["pictures"],
+    )
+    r = await c.delete("/api/library/pictures/city?project=" + P, headers=me)
+    check(r.status == 200, "and a picture with a role is taken out as any other")
+    # an attached picture's role: checked, and the film's inputs/roles.json says it (an account
+    # of its own: this one's library is looked at below)
+    rl = auth | {"X-Client-Ip": "u:proj-roles"}
+    a1, a2 = await upload(rl), await upload(rl)
+    r = await c.post(
+        "/api/films",
+        json={"prompt": "a city", "attachments": [a1], "picture_roles": {a2: "style"}},
+        headers=rl,
+    )
+    check(r.status == 400, "a role for a picture not attached is refused")
+    r = await c.post(
+        "/api/films",
+        json={"prompt": "a city", "attachments": [a1], "picture_roles": {a1: "brief"}},
+        headers=rl,
+    )
+    check(r.status == 400, "a role that is not one is refused for an attachment too")
+    r = await c.post(
+        "/api/films",
+        json={"prompt": "a city", "attachments": [a1, a2], "picture_roles": {a1: "style"}},
+        headers=rl,
+    )
+    fid = (await r.json()).get("id")
+    f = films.Film.open(fid) if r.status == 202 else None
+    roles_p = f and f.path("inputs", "roles.json")
+    check(
+        f is not None
+        and [a.get("role") for a in f.record()["attachments"]] == ["style", None]
+        and json.load(open(roles_p, encoding="utf-8")) == {"upload1": "style"},
+        "an attached picture keeps its role, in its record and in inputs/roles.json (%s)"
+        % (f and f.record().get("attachments")),
+    )
+    await wait_for(c, auth, fid)
+
     # an organisation's project: a member's own upload becomes the organisation's picture
     member = auth | {"X-Client-Ip": "u:tm-jo"}
     team = auth | {"X-Client-Ip": "o:tm-northwind", "X-Member": "u:tm-jo"}
@@ -304,6 +372,15 @@ async def projects(c, auth, mem, check):
         headers=me,
     )
     check(r.status == 400, "and is one of KitCut's voices")
+    # a quality above a draft, only where the painter has one (film.chooses_quality)
+    for body, why in (
+        ({"look": "collage", "quality": "ultra"}, "a quality that is not one"),
+        ({"look": "drawn", "quality": "high"}, "a drawn film"),
+        ({"look": "painted", "quality": "high"}, "a painted film outside a project (Muse)"),
+        ({"look": "painted", "quality": "medium", "project": project}, "a project with no style"),
+    ):
+        r = await c.post("/api/films", json={"prompt": "x"} | body, headers=me)
+        check(r.status == 400, "a quality is refused for %s (%d)" % (why, r.status))
     # the site asks as the workspace ("o:proj", the personal one: the same owner as "u:proj"),
     # says who asked, and sends the narrator the project set
     r = await c.post(
@@ -709,6 +786,8 @@ async def main():
             lim["lengths"] == {"min": films.LENGTHS[0], "max": films.LENGTHS[-1], "step": 5}
             and lim["prompt"]["max_chars"] == server.PROMPT_MAX
             and lim["attachments"]["pictures_per_film"] == server.uploads.MAX_IMAGES
+            and lim["library"]["style_pictures"] == server.stylekit.MAX_PICTURES
+            and lim["pictures"]["choose"] == {"looks": ["collage"], "style_routes": ["gpt"]}
             and lim["films"]["per_account_per_day"] == server.PER_CLIENT_DAILY
             and lim["films"]["at_once_per_account_max"] == server.AT_ONCE_MAX,
             "the limits are the constants the studio enforces (%s)" % lim["lengths"],

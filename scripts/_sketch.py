@@ -41,15 +41,39 @@ def safe_name(name, what="name"):
 # a project's picture as a film names it (studio/library.py _seed_pictures): inputs/pic_<name>.*,
 # and a painted character of its cast (_seed_painted): inputs/cast_<name>.*
 PIC_NAME = re.compile(r"^(pic|cast)_[a-z][a-z0-9_]{0,30}$")
+# a picture the person attached (studio/film.py: inputs/upload<n>.*): a painting's reference only
+# when they said it shows how to draw something (its role "style", in inputs/roles.json)
+UPLOAD_NAME = re.compile(r"^upload[1-9][0-9]?$")
 PIC_EXT = (".png", ".jpg", ".jpeg", ".webp")
+# what a picture is for, as the person said (the studio writes inputs/roles.json): "show" it as
+# it is, "scene" -- read what a place has, never sent to the painter -- or "style", a drawn
+# example of one kind of thing, a reference for the paintings that show it
+ROLES = ("show", "scene", "style")
+
+
+def picture_roles(film_dir):
+    """{picture name: role} from the film's inputs/roles.json ({} without one)."""
+    try:
+        with open(os.path.join(film_dir, "inputs", "roles.json"), encoding="utf-8") as f:
+            got = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(got, dict):
+        return {}
+    return {k: v for k, v in got.items() if isinstance(k, str) and v in ROLES}
 
 
 def project_picture(film_dir, name):
     """The file of the film's own project picture `name` (pic_<name> or cast_<name>, in its
-    inputs/), or None:
-    a name of another shape, no such picture, or a file that resolves outside the film's
-    inputs/ (a link) is not one."""
-    if not isinstance(name, str) or not PIC_NAME.match(name):
+    inputs/), or of a picture the person attached as a style example (upload<n>, its role
+    "style"), or None:
+    a name of another shape, no such picture, an attachment of another role, a picture marked
+    "scene" (a photo sent as a reference pulls a painting towards a photo), or a file that
+    resolves outside the film's inputs/ (a link) is not one."""
+    if not isinstance(name, str) or not (PIC_NAME.match(name) or UPLOAD_NAME.match(name)):
+        return None
+    role = picture_roles(film_dir).get(name)
+    if role == "scene" or (UPLOAD_NAME.match(name) and role != "style"):
         return None
     inputs = os.path.realpath(os.path.join(film_dir, "inputs"))
     for ext in PIC_EXT:

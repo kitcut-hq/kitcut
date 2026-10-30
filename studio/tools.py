@@ -618,7 +618,7 @@ class Tools:
         shutil.copyfile(src, dst)
         return dst
 
-    async def paint(self, retake=None):
+    async def paint(self, retake=None, timeout=None):
         if not paint_kinds(self.film.caps):
             raise ToolError("This film is drawn, not painted: there is nothing to paint.")
         args = []
@@ -627,7 +627,7 @@ class Tools:
             args = ["--only", ",".join(names), "--retake"]
         async with self.lock:
             self.gate()
-            tail = await self._script("paint", "sketch-paint.py", args)
+            tail = await self._script("paint", "sketch-paint.py", args, timeout=timeout)
         noun = paint_words(self.film.caps)[1]
         return "\n".join(tail[-8:]) + "\n\nRead images/sheet.jpg to look at the %s." % noun
 

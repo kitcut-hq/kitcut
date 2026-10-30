@@ -68,7 +68,8 @@ The studio has set `backend`, `model` and `max_images`; leave them. You set:
   `-` and `_`. Describe each picture fully: who, doing what, where, the framing (wide,
   close-up), the light. Never ask for words, letters or signs in a picture.
 - `ref` (on an image): a picture it is painted from, for its characters -- another image's name,
-  one of the project's pictures, `pic_<name>`, or one of its painted characters, `cast_<name>`;
+  one of the project's pictures, `pic_<name>`, one of its painted characters, `cast_<name>`, or a
+  picture the person attached and marked "how we draw this" (`upload<n>`, its role `style`);
   or a list of up to 4 of these, for several characters in one painting. It works only when
   the studio says this project's pictures are painted from its style picture; with
   `meta/muse-image` the painter works from the words alone and `ref` changes nothing.

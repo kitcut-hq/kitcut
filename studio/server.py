@@ -48,11 +48,13 @@ the day's budget still holds.
                                  its pictures and voice lines. Also GET /api/library/{name}/
                                  thumb.png, DELETE /api/library/{name} (a cast member), each
                                  with ?project=
-    POST /api/library/pictures   {"project", "upload", "name", "once"}: an upload becomes a
-                                 picture; every future episode of the project gets it, unless
+    POST /api/library/pictures   {"project", "upload", "name", "once", "role"}: an upload becomes
+                                 a picture; every future episode of the project gets it, unless
                                  "once" is true, in which case only the project's next episode
-                                 does, and it is then removed. GET .../pictures/{name}/thumb.png
-                                 and DELETE .../pictures/{name}, with ?project=
+                                 does, and it is then removed. "role" (optional): show, scene or
+                                 style (library.PICTURE_ROLES). GET .../pictures/{name}/thumb.png
+                                 and DELETE .../pictures/{name}, with ?project=; POST
+                                 .../pictures/{name}/role {"project", "role"} changes its role
     POST /api/library/characters {"project", "upload", "name", "about"}: an upload becomes a
                                  painted character of the project's cast (library.add_character):
                                  every future episode paints it from that picture. Its thumbnail
@@ -1085,12 +1087,27 @@ def limits_doc():
                 "waiting_days": WAITING_DAYS,
             },
         },
+        # how carefully pictures are painted: every film a draft, a sharper version on request
+        "pictures": {
+            "qualities": list(films.QUALITIES),
+            "draft": films.DRAFT,
+            # where a film may be asked for above a draft (film.chooses_quality): these looks,
+            # and a project's painted episodes on these style routes
+            "choose": {
+                "looks": [lk for lk in films.LOOKS if films.chooses_quality(lk)],
+                "style_routes": [
+                    r for r in films.STYLE_ROUTES if films.chooses_quality("painted", r)
+                ],
+            },
+        },
         "library": {
             "characters_per_new_film": library.SEEDED,
             "earlier_films_remembered": library.MEMORY,
             "versions_kept": library.KEEP,
             "project_pictures": library.PICTURES,
             "brand_pictures": brandkit.MAX_PICTURES,
+            # a project's style (the Style tab): every one goes with every painting
+            "style_pictures": stylekit.MAX_PICTURES,
             "project_voice_lines": library.VOICE_LINES,
             # a project's painted characters (library.add_character, _keep_painted)
             "painted_characters": library.CHARACTERS,
@@ -1256,6 +1273,20 @@ async def create(req):
             {"error": 'people must be at most %d of {"upload", "name"}' % films.MAX_PEOPLE},
             status=400,
         )
+    # what each attached picture is for, where the person said: {"up-...": "show"|"scene"|"style"}
+    roles = body.get("picture_roles") or {}
+    if (
+        not isinstance(roles, dict)
+        or not all(k in ids for k in roles)
+        or not all(v in library.PICTURE_ROLES for v in roles.values())
+    ):
+        return web.json_response(
+            {
+                "error": "picture_roles maps attached pictures to one of %s"
+                % ", ".join(library.PICTURE_ROLES)
+            },
+            status=400,
+        )
     style = body.get("character_style") or "auto"
     if style != "auto" and style not in films.people_styles():
         return web.json_response(
@@ -1318,6 +1349,31 @@ async def create(req):
                 else {}
             ),
         }
+    # how carefully its pictures are painted ("low" a draft, "medium", "high"; none: a draft),
+    # where its painter has the setting (film.chooses_quality: a collage, a project's GPT style).
+    # The site charges for more than a draft; a template's film keeps its own
+    quality = body.get("quality")
+    if quality is not None:
+        if quality not in films.QUALITIES or tpl:
+            return web.json_response(
+                {
+                    "error": "quality is one of %s, and not for a template's film"
+                    % ", ".join(films.QUALITIES)
+                },
+                status=400,
+            )
+        lib = library.owner(client_of(req), project["id"]) if project else None
+        card = stylekit.read_card(stylekit.dir_of(lib)) if lib else None
+        route = stylekit.route_of(card) if card else None
+        if quality != films.DRAFT and not films.chooses_quality(look, route):
+            return web.json_response(
+                {
+                    "reason": "quality",
+                    "error": "This film's pictures are painted by a model with no quality to "
+                    "choose: only a collage, or a project whose style is painted by GPT Image.",
+                },
+                status=400,
+            )
     # the narrator the person picked (the site's voice setting, kitcut.ai lib/narrator.js):
     # {"source": "kitcut", "voice": <a Gemini voice>} pins that voice (film.vo_pins); none, or
     # no voice in it, and Claude picks as ever
@@ -1391,6 +1447,9 @@ async def create(req):
         return web.json_response(e.body(), status=e.status)
     for a in attached + faces:
         a["src"] = uploads.file_of(uploader, a)
+    for a in attached:
+        if a["kind"] == "image" and roles.get(a["id"]):
+            a["role"] = roles[a["id"]]
     for a, p in zip(faces, people, strict=True):
         if a["kind"] != "image":
             return web.json_response(
@@ -1439,6 +1498,7 @@ async def create(req):
             captions=captions,
             music=music,
             auto_length=auto_length,
+            quality=quality,
         )
         if preview:
             f.update(preview=True)
@@ -2137,7 +2197,8 @@ async def style_asset(req):
 
 async def picture_add(req):
     """Put one of the asker's uploads into their project as a picture its episodes get:
-    {"project": id, "upload": "up-...", "name": "logo", "once": false}. The upload goes; the
+    {"project": id, "upload": "up-...", "name": "logo", "once": false, "role": "show"} (role
+    optional: library.PICTURE_ROLES). The upload goes; the
     picture stays, for every future episode unless "once" is true, in which case only the next
     one gets it. The upload is the person's (uploader_of: X-Member), the project the workspace's
     (the client)."""
@@ -2168,11 +2229,38 @@ async def picture_add(req):
             uploads.file_of(uploader, meta),
             meta["ext"],
             bool(body.get("once")),
+            body.get("role") or None,
         )
     except library.PictureError as e:
         return web.json_response({"error": e.text}, status=e.status)
     uploads.release(uploader, [meta])
     return web.json_response(entry, status=201)
+
+
+async def picture_role(req):
+    """Say what one of the asker's project pictures is for: {"project": id, "role": "style"}."""
+    try:
+        body = await req.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return web.json_response({"error": 'send {"project", "role"}'}, status=400)
+    project = str(body.get("project") or "")
+    if not films.PROJECT_ID.match(project):
+        return web.json_response({"error": "No such project."}, status=404)
+    try:
+        entry = await asyncio.to_thread(
+            library.set_picture_role,
+            client_of(req),
+            project,
+            req.match_info["name"],
+            body.get("role"),
+        )
+    except library.PictureError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    if not entry:
+        return web.json_response({"error": "no such picture"}, status=404)
+    return web.json_response(entry)
 
 
 async def character_add(req):
@@ -2467,12 +2555,15 @@ async def versions(req):
             "film %s: its versions could not be read: %s" % (f.id, e), file=sys.stderr, flush=True
         )
         return web.json_response({"error": "This film's versions could not be read."}, status=500)
-    return web.json_response({"id": f.id, **rounds.public(rec)})
+    return web.json_response(
+        {"id": f.id, **rounds.public(rec), "pictures": rounds.pictures(f, rec)}
+    )
 
 
 async def versions_make(req):
-    """A round of changes: the film's maker's notes, made into its next version (rounds.py). The
-    film's own client only. It takes one of that client's films-at-once places and its reserve
+    """A round of changes: the film's maker's notes, made into its next version (rounds.py); or,
+    with {"key", "from", "sharpen": "medium"|"high"} and no notes, its pictures painted again at
+    that quality from their drafts (rounds.sharpen). The film's own client only. It takes one of that client's films-at-once places and its reserve
     of the day's budget, but is not one of the day's films. Asked again with the same key, it
     answers the round already asked for."""
     if DRAINING or MODE == "stopping":
@@ -2521,8 +2612,12 @@ async def versions_make(req):
     hand = body.get("hand")
     if hand is not None and not from_this_machine(req):
         return web.json_response({"error": "not from here"}, status=403)
+    sharp = body.get("sharpen")
+    if sharp is not None and (hand is not None or body.get("notes")):
+        return web.json_response({"error": "sharpen takes no notes"}, status=400)
     try:
-        notes = [] if hand is not None else rounds.clean_notes(f, body.get("notes"))
+        bare = hand is not None or sharp is not None
+        notes = [] if bare else rounds.clean_notes(f, body.get("notes"))
     except rounds.RoundError as e:
         return _round_error(e)
     if not await leading():
@@ -2562,6 +2657,7 @@ async def versions_make(req):
                 auth=auth,
                 src=body.get("from"),
                 hand=hand,
+                sharpen=sharp,
             )
         except rounds.RoundError as e:
             return _round_error(e)
@@ -2603,7 +2699,14 @@ async def versions_use(req):
         rec = await asyncio.to_thread(rounds.use, f, n)
     except rounds.RoundError as e:
         return _round_error(e)
-    fields = {"version": n, "versions": rec.get("versions"), "media_rev": rec.get("media_rev")}
+    fields = {
+        "version": n,
+        "versions": rec.get("versions"),
+        "media_rev": rec.get("media_rev"),
+        # another version may be another quality (a draft, or its sharper version)
+        "pictures": rounds.pictures(f, rec),
+        "paint_quality": rounds.pictures(f, rec)["quality"],
+    }
     if rec.get("media"):
         fields["media"] = rec["media"]
     await agent.save(f.id, fields, final=True)
@@ -2982,6 +3085,7 @@ def make_app(token):
             web.post("/api/library/characters", character_add),
             web.get("/api/library/pictures/{name}/thumb.png", picture_thumb),
             web.delete("/api/library/pictures/{name}", picture_delete),
+            web.post("/api/library/pictures/{name}/role", picture_role),
             web.post("/api/library/voice", voice_add),
             web.get("/api/library/voice/{key}.mp3", voice_audio),
             web.delete("/api/library/voice/{key}", voice_delete),
