@@ -675,7 +675,10 @@ def _pins(work, rec):
     pins = {"vo": {k: vo.get(k, v) for k, v in probe.vo_pins().items()}}
     if films.paint_kinds(probe.caps):
         want = films.paint_pins(
-            float(rec.get("length") or work.length), probe.caps, rec.get("paint_route")
+            float(rec.get("length") or work.length),
+            probe.caps,
+            rec.get("paint_route"),
+            rec.get("paint_quality"),
         )
         pins["paint"] = {
             k: paint.get(k, v)
@@ -1643,6 +1646,8 @@ async def _run(job, film, sched):
         if await asyncio.to_thread(digest, film) != before:
             raise RuntimeError(MOVED)
         entry = await asyncio.to_thread(commit, film, work, urls, rev, n, state.summary, rid)
+        if sharp:  # what the film is painted at now (its document's paint_quality, below)
+            film.update(paint_quality=sharp)
         if hand:
             await asyncio.to_thread(shutil.rmtree, hand["dir"], True)
         work = None  # its files are the film's now

@@ -108,6 +108,8 @@ PAINT_PINNED = {"backend": "muse", "model": "meta/muse-image", "max_images": 8}
 QUALITIES = ("low", "medium", "high")
 DRAFT = "low"
 QUALITY_MODELS = {"openai/gpt-image-2.5-flare"}
+# A film may also start at Standard or High (POST /api/films "quality", the record's
+# paint_quality, paint_pins), where its painter has the setting: chooses_quality.
 # a collage film's cut-outs: a model that paints on a transparent background (sketch-paint.py)
 CUTOUTS_PINNED = {
     "model": "openai/gpt-image-2.5-flare",
@@ -593,17 +595,21 @@ def paint_words(caps):
     return "painting the pictures", "pictures"
 
 
-def paint_pins(length, caps, route=None):
+def paint_pins(length, caps, route=None, quality=None):
     """What the studio sets in the paint.json of a film with these capabilities: the painter,
     each kind's own settings, and the cap on pictures (repaints included), its kinds' caps
     added up. `route` is the film record's paint_route (its project's style, stylekit.seed):
     the painter it names, the style line, its style pictures (a path, or a list of them) on a
-    picture route, and the route's quality -- the studio's too."""
+    picture route, and the route's quality -- the studio's too. `quality`: the one the film was
+    asked for (its record's paint_quality), where the painter has the setting; else a draft."""
     kinds = paint_kinds(caps)
     pins = dict(PAINT_PINNED)
     for kind in kinds:
         pins |= kind["pins"]
     pins |= {"max_images": sum(limits(length)[kind["cap"]] for kind in kinds)}
+    quality = quality if quality in QUALITIES else None
+    if quality and "cutouts" in pins and pins["cutouts"].get("model") in QUALITY_MODELS:
+        pins["cutouts"] = dict(pins["cutouts"], quality=quality)
     r = STYLE_ROUTES.get((route or {}).get("route"))
     if not r or not kinds:
         return pins
@@ -615,10 +621,23 @@ def paint_pins(length, caps, route=None):
     if r["picture"] and route.get("ref"):
         pins["style_ref"] = route["ref"]
     if r.get("quality"):
-        pins["quality"] = r["quality"]
+        pins["quality"] = quality or r["quality"]
     if "cutouts" in pins and r["picture"]:  # the cut-outs from the same painter
         pins["cutouts"] = dict(pins["cutouts"], model=r["model"])
     return pins
+
+
+def chooses_quality(look, route=None):
+    """Whether a film of this look -- a project's episode painted on `route` (stylekit.route_of),
+    or None -- is painted by a model with a quality to choose: a collage's cut-outs, and the
+    paintings of a style's GPT route. Muse (a painted film outside a project, a style's words
+    route) and a drawn film have none."""
+    caps = RECIPES.get(look) or ()
+    r = STYLE_ROUTES.get(route) or {}
+    if any("cutouts" in k["pins"] for k in paint_kinds(caps)):
+        # a style's picture route paints the cut-outs too (paint_pins)
+        return (r["model"] if r.get("picture") else CUTOUTS_PINNED["model"]) in QUALITY_MODELS
+    return bool(paint_kinds(caps)) and bool(r.get("quality"))
 
 
 def _release():
@@ -1055,6 +1074,7 @@ class Film:
         character_style="auto",
         member=None,
         narrator=None,
+        quality=None,
         template=None,
         frame=None,
         captions=False,
@@ -1224,7 +1244,7 @@ class Film:
             m["modules"] = list(modules(caps))
         if paint_kinds(caps):
             m["paint"] = "paint.json"
-            pins = paint_pins(seconds, caps)
+            pins = paint_pins(seconds, caps, quality=quality)
             _write_json(film.path("paint.json"), pins | {"style": "", "images": []})
         if fonts(caps):
             m["fonts"] = list(m.get("fonts") or []) + fonts(caps)
@@ -1292,6 +1312,9 @@ class Film:
                 **({"app": str(app)[:40]} if app else {}),
                 # asked for with no music at all (frame_note; the manifest's audio.music)
                 **({"music": "none"} if quiet else {}),
+                # its pictures asked for above a draft (paint_pins; the caller checked the
+                # painter has the setting: chooses_quality)
+                **({"paint_quality": quality} if quality in QUALITIES else {}),
                 "release": RELEASE,
                 # the engine it started from, when it is not this release's sketch/ (engine_base)
                 **(

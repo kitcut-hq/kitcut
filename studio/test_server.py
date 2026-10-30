@@ -372,6 +372,15 @@ async def projects(c, auth, mem, check):
         headers=me,
     )
     check(r.status == 400, "and is one of KitCut's voices")
+    # a quality above a draft, only where the painter has one (film.chooses_quality)
+    for body, why in (
+        ({"look": "collage", "quality": "ultra"}, "a quality that is not one"),
+        ({"look": "drawn", "quality": "high"}, "a drawn film"),
+        ({"look": "painted", "quality": "high"}, "a painted film outside a project (Muse)"),
+        ({"look": "painted", "quality": "medium", "project": project}, "a project with no style"),
+    ):
+        r = await c.post("/api/films", json={"prompt": "x"} | body, headers=me)
+        check(r.status == 400, "a quality is refused for %s (%d)" % (why, r.status))
     # the site asks as the workspace ("o:proj", the personal one: the same owner as "u:proj"),
     # says who asked, and sends the narrator the project set
     r = await c.post(
@@ -778,6 +787,7 @@ async def main():
             and lim["prompt"]["max_chars"] == server.PROMPT_MAX
             and lim["attachments"]["pictures_per_film"] == server.uploads.MAX_IMAGES
             and lim["library"]["style_pictures"] == server.stylekit.MAX_PICTURES
+            and lim["pictures"]["choose"] == {"looks": ["collage"], "style_routes": ["gpt"]}
             and lim["films"]["per_account_per_day"] == server.PER_CLIENT_DAILY
             and lim["films"]["at_once_per_account_max"] == server.AT_ONCE_MAX,
             "the limits are the constants the studio enforces (%s)" % lim["lengths"],

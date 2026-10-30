@@ -34,6 +34,7 @@ import library  # noqa: E402
 import rounds  # noqa: E402
 import stylekit  # noqa: E402
 from film import KIT, Film  # noqa: E402
+import film as films_mod  # noqa: E402
 from PIL import Image, ImageDraw  # noqa: E402
 
 SP = importlib.import_module("sketch-paint")
@@ -466,6 +467,38 @@ def main():
     json.dump(dict(wp, quality="high"), open(ep.path("paint.json"), "w", encoding="utf-8"))
     check(rounds.pictures(ep)["can"] == [], "a film painted at High may go no higher")
     json.dump(paint, open(ep.path("paint.json"), "w", encoding="utf-8"))
+    # a film asked for above a draft: its record says so, and every pin follows it
+    hi = Film.create(
+        "Asked for high", 10, "painted", client="u:alice", project=PROJECT, quality="high"
+    )
+    library.seed(hi)
+    hp = json.load(open(hi.path("paint.json"), encoding="utf-8"))
+    check(
+        hi.record().get("paint_quality") == "high"
+        and hp["quality"] == "high"
+        and rounds.pictures(hi)["can"] == [],
+        "an episode asked for at High is painted at High, and offers nothing higher",
+        hp.get("quality"),
+    )
+    guard.pin_paint(hi)
+    check(
+        json.load(open(hi.path("paint.json"), encoding="utf-8"))["quality"] == "high",
+        "and the guard keeps it there",
+    )
+    col = Film.create("Collage", 10, "collage", client="u:alice", quality="medium")
+    cp = json.load(open(col.path("paint.json"), encoding="utf-8"))
+    check(
+        cp["cutouts"]["quality"] == "medium" and "quality" not in cp,
+        "a collage asked for at Standard cuts its pieces at Standard (its Muse scenes have none)",
+        cp,
+    )
+    check(
+        [lk for lk in films_mod.LOOKS if films_mod.chooses_quality(lk)] == ["collage"]
+        and films_mod.chooses_quality("painted", "gpt")
+        and not films_mod.chooses_quality("painted", "words")
+        and not films_mod.chooses_quality("collage", "gemini"),
+        "a quality is chosen only where the painter has one",
+    )
     muse = Film.create("Muse", 10, "painted", client="u:alice")
     check(
         rounds.pictures(Film.create("Drawn", 10, "drawn", client="u:alice"))

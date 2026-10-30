@@ -422,7 +422,10 @@ button.icon.send { background: var(--accent); color: var(--accent-ink); border-c
 .fr-1x1 { width: 12px; height: 12px; }
 .fr-9x16 { width: 9px; height: 15px; }
 #frameUse { margin: 0; max-width: 320px; }
-@media (max-width: 600px) { .framepick { width: 100%; } #frameUse { max-width: none; } .frames { display: flex; } .frm { flex: 1; } .frm span { justify-content: center; padding: 0 6px; } }
+/* how carefully the pictures are painted: the frame's segmented row, for a collage only */
+#qualityUse { margin: 0; max-width: 320px; }
+#qualityPick .frames { justify-self: start; }
+@media (max-width: 600px) { .framepick { width: 100%; } #frameUse, #qualityUse { max-width: none; } #qualityPick .frames { justify-self: stretch; } #qualityPick .frm span { display: flex; } .frames { display: flex; } .frm { flex: 1; } .frm span { justify-content: center; padding: 0 6px; } }
 .btn.go { height: 44px; padding: 0 22px; font-size: 15px; }
 .btn.go.short { background: var(--sunk); border-color: var(--line-2); color: var(--ink-2); }
 .note { color: var(--ink-2); font-size: 13px; }
@@ -828,6 +831,14 @@ try { if (JSON.parse(localStorage.getItem('kcShell') || 'null')?.user) document.
         </div>
         <p class="note" id="frameUse" aria-live="polite"></p>
       </div>
+      <div class="framepick" id="qualityPick" hidden>
+        <div class="frames" role="radiogroup" aria-label="Pictures">
+          <label class="frm"><input type="radio" name="quality" value="low" checked><span>Draft</span></label>
+          <label class="frm"><input type="radio" name="quality" value="medium"><span>Standard</span></label>
+          <label class="frm"><input type="radio" name="quality" value="high"><span>High</span></label>
+        </div>
+        <p class="note" id="qualityUse" aria-live="polite"></p>
+      </div>
       <button class="btn primary go" id="go" type="submit">Make the film</button>
       <span class="note"><span id="makers">Claude Opus 5.5 directs and draws every frame · Gemini narrates</span> · a 10-second film takes about 9-14 minutes<span id="busy"></span></span>
     </div>
@@ -1074,7 +1085,7 @@ const LOOK_MAKERS = {
 };
 const lookOf = () => (document.querySelector('input[name=look]:checked') || { value: 'drawn' }).value;
 let onLook = () => {};  // the People row's Auto follows the look (set once the row exists)
-const lookLine = () => { $('lookAbout').textContent = LOOK_ABOUT[lookOf()] || ''; $('makers').textContent = LOOK_MAKERS[lookOf()] || LOOK_MAKERS.drawn; onLook(); };
+const lookLine = () => { $('lookAbout').textContent = LOOK_ABOUT[lookOf()] || ''; $('makers').textContent = LOOK_MAKERS[lookOf()] || LOOK_MAKERS.drawn; onLook(); try { paintLength(); } catch (e) { /* before the slider is set up */ } };
 function setLook(v) {
   const r = document.querySelector(`input[name=look][value="${v}"]`);
   if (r) { r.checked = true; lookLine(); }
@@ -1099,6 +1110,34 @@ function setFrame(v) {
 }
 for (const r of document.querySelectorAll('input[name=frame]')) r.addEventListener('change', () => { frameLine(); paintLength(); });
 frameLine();
+// How carefully the pictures are painted (the site's lib/attachments.js QUALITY_CHOOSE, the studio's
+// GET /api/limits pictures.choose): a draft unless Standard or High is picked, offered only where the
+// painter has the setting -- here, with no project, a collage. What a level adds is the site's
+// lib/plans.js filmPrice: SHARPEN's part of the film's credits, rounded up, at least a round's
+// floor (copies of those numbers; test/attachments.test.mjs keeps them the same).
+const Q_LOOKS = ['collage'];
+const Q_PART = { low: 0, medium: 0.25, high: 0.5 }, Q_FLOOR = 5, Q_MIN = 30;
+const Q_WORDS = { low: 'Draft', medium: 'Standard', high: 'High' };
+const Q_USE = {
+  low: 'Painted quickly. A finished film can be made sharper later.',
+  medium: 'Finer pictures',
+  high: 'The finest pictures',
+};
+const qualityShown = () => Q_LOOKS.includes(lookOf());
+const qualityOf = () => (qualityShown() && (document.querySelector('input[name=quality]:checked') || {}).value) || 'low';
+// the credits a level adds to a film of v seconds
+const extraOf = (v, q = qualityOf()) => (q === 'low' ? 0 : Math.max(Q_FLOOR, Math.ceil(Math.max(v, (CREDITS && CREDITS.min_credits) || Q_MIN) * Q_PART[q])));
+const qualityBody = () => (qualityOf() !== 'low' ? { quality: qualityOf() } : {});
+function qualityLine(v) {
+  $('qualityPick').hidden = !qualityShown();
+  const q = qualityOf();
+  $('qualityUse').textContent = q === 'low' ? Q_USE.low : `${Q_USE[q]}: ${extraOf(v, q)} more credits.`;
+}
+function setQuality(v) {
+  const r = document.querySelector(`input[name=quality][value="${v || 'low'}"]`);
+  if (r) { r.checked = true; try { paintLength(); } catch (e) { /* drawn with the slider */ } }
+}
+for (const r of document.querySelectorAll('input[name=quality]')) r.addEventListener('change', () => paintLength());
 const STILL = matchMedia('(prefers-reduced-motion: reduce)');
 const playOf = (v) => () => { if (STILL.matches || !v.isConnected) return; if (!v.src) v.src = v.dataset.src; v.play().catch(() => {}); };
 for (const lk of document.querySelectorAll('.lk')) {
@@ -1625,7 +1664,7 @@ const SIGNIN_ERRORS = {
 };
 // the idea typed before signing in, kept in this browser until the visitor is back
 const draft = {
-  save() { try { localStorage.setItem('studioDraft', JSON.stringify({ prompt: $('prompt').value, look: lookOf(), frame: frameOf(), length: $('length').value, auto: autoOn() })); } catch (e) { /* private window */ } },
+  save() { try { localStorage.setItem('studioDraft', JSON.stringify({ prompt: $('prompt').value, look: lookOf(), frame: frameOf(), quality: qualityOf(), length: $('length').value, auto: autoOn() })); } catch (e) { /* private window */ } },
   take() {
     try {
       const d = JSON.parse(localStorage.getItem('studioDraft') || 'null');
@@ -1684,13 +1723,20 @@ $('emailForm').addEventListener('submit', async (e) => {
 // Where there is no /api/me (the laptop), CREDITS stays null and the slider is just a length.
 const renews = () => new Date(CREDITS.renews_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 // a film uses a credit a second, and at least min_credits (the site's lib/plans.js)
-const costOf = (v) => Math.max(v, (CREDITS && CREDITS.min_credits) || 0);
+// and, at Standard or High pictures, what that level adds (extraOf)
+const baseOf = (v) => Math.max(v, (CREDITS && CREDITS.min_credits) || 0);
+const costOf = (v) => baseOf(v) + extraOf(v);
 const shortOf = (v) => !!(CREDITS && costOf(v) > CREDITS.balance);
 // "Let Claude choose the length" (paid plans; the AUTO_LENGTH switch): the slider rests, the longest
 // film the balance and the plan allow is held, and the film uses only the length Claude gives it
 // (the site's lib/plans.js autoCap, lib/credits.js trim). The tick is remembered in this browser.
 const autoOn = () => !$('autoRow').hidden && !$('autoLen').disabled && $('autoLen').checked;
-const capOf = () => Math.max(CREDITS.min_credits || 0, Math.floor(Math.min(CREDITS.balance, maxOf()) / 5) * 5);
+// (with a level's extra, the longest whose credits and extra fit: lib/plans.js autoCapFor)
+function capOf() {
+  let s = Math.max(CREDITS.min_credits || 0, Math.floor(Math.min(CREDITS.balance, maxOf()) / 5) * 5);
+  while (s > (CREDITS.min_credits || 0) && costOf(s) > CREDITS.balance) s -= 5;
+  return s;
+}
 // the longest the slider allows: the plan's longest film, and no more than a Short's 3:00 for a tall one
 const maxOf = () => Math.min((CREDITS && CREDITS.max_length) || 60, frameOf() === '9:16' ? SHORT_MAX : Infinity);
 const lengthAsked = () => (autoOn() ? capOf() : +$('length').value);
@@ -1734,6 +1780,7 @@ function paintLength() {
   el.style.setProperty('--p', (v - +el.min) / (+el.max - +el.min));
   el.setAttribute('aria-valuetext', `${v} seconds`);
   $('lenOut').textContent = auto ? `up to ${mmss(ask)}` : mmss(v);
+  qualityLine(ask);
   const short = shortOf(ask);
   el.style.setProperty('--fill-color', short ? 'var(--bad)' : 'var(--accent)');
   $('go').textContent = short ? 'Not enough credits' : 'Make the film';
@@ -1749,8 +1796,9 @@ function paintLength() {
   } else if (CREDITS) {
     c.classList.toggle('short', short);
     // a second account of one person has no free film to renew (lib/sameperson.js): its account page says why
-    c.innerHTML = (auto ? `Up to ${costOf(ask)} credits: the film uses only the length Claude gives it`
-      : `${costOf(v)} credits${costOf(v) > v ? ' (the least a film uses)' : ''}`) + ` · you have ${mmss(CREDITS.balance)} left` +
+    const extra = extraOf(ask), pics = extra ? `, ${extra} of them for ${Q_WORDS[qualityOf()]} pictures` : '';
+    c.innerHTML = (auto ? `Up to ${costOf(ask)} credits${pics}: the film uses only the length Claude gives it`
+      : `${costOf(v)} credits${baseOf(v) > v ? ' (the least a film uses)' : ''}${pics}`) + ` · you have ${mmss(CREDITS.balance)} left` +
       (CREDITS.second ? ' · <a href="/account#second">no free film on a second account</a>' : CREDITS.refills === false ? '' : ` · renews ${renews()}`) +
       ' · <a href="/pricing">Get more film</a>' + (short ? ', or <a href="/account#invite">invite a friend for free film</a>' : '');
   }
@@ -1808,6 +1856,7 @@ async function whoami() {
     if (d.prompt) { $('prompt').value = d.prompt; countPrompt(); }
     if (d.look) setLook(d.look);
     if (d.frame) setFrame(d.frame);
+    if (d.quality) setQuality(d.quality);
     if (d.length) { $('length').value = d.length; }
     setAuto(d.auto);
     sayForm('Signed in. Your idea is back in the box: press "Make the film".');
@@ -2885,7 +2934,7 @@ $('form').addEventListener('submit', async (e) => {
     const ids = await attachmentIds(show);
     await PPL.ready(show);
     const send = (attachments) => api('/api/films', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, seconds: +$('length').value, ...(autoOn() ? { auto_length: true } : {}), look: lookOf(), ...frameBody(), ...(attachments.length ? { attachments, ...pictureRoles(attachments) } : {}), ...PPL.body() }) });
+      body: JSON.stringify({ prompt, seconds: +$('length').value, ...(autoOn() ? { auto_length: true } : {}), look: lookOf(), ...frameBody(), ...qualityBody(), ...(attachments.length ? { attachments, ...pictureRoles(attachments) } : {}), ...PPL.body() }) });
     let r = await send(ids);
     if (r.status === 409) {  // an attachment the studio no longer has (a day old): send it again, once
       const why = await r.clone().json().catch(() => ({}));

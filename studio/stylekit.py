@@ -1114,6 +1114,13 @@ def asset(d, kind, name):
 
 
 # ------------------------------------------------------------------ an episode's style
+def read_card(d):
+    """A style's card once it is ready for an episode (seed: the card and its assets), or None."""
+    if not os.path.exists(os.path.join(d, "assets", "used.json")):
+        return None
+    return _read_json(os.path.join(d, "card.json"))
+
+
 def route_of(card):
     """The route an episode is painted on: Gemini only when a team member picked it."""
     r = card.get("route") if card.get("route") in STYLE_ROUTES else "words"
@@ -1155,7 +1162,8 @@ def seed(film, lib):
     film.update(paint_route=pr)
     if paint_kinds(film.caps) and os.path.exists(film.path("paint.json")):
         p = _read_json(film.path("paint.json"), {}) or {}
-        _write_json(film.path("paint.json"), p | paint_pins(film.length, film.caps, pr))
+        want = paint_pins(film.length, film.caps, pr, film.record().get("paint_quality"))
+        _write_json(film.path("paint.json"), p | want)
     return {
         "route": pr["route"],
         "fonts": used["families"],

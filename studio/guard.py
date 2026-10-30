@@ -125,7 +125,12 @@ def pin_paint(film):
     want = (
         frozen
         if isinstance(frozen, dict) and frozen
-        else paint_pins(film.length, film.caps, film.record().get("paint_route"))
+        else paint_pins(
+            film.length,
+            film.caps,
+            film.record().get("paint_route"),
+            film.record().get("paint_quality"),
+        )
     )
     # a style picture is the project's (stylekit.seed), never one Claude names; the quality is
     # the route's (film.STYLE_ROUTES) or a sharper version's, and redo a sharper version's

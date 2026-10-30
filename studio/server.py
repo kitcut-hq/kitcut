@@ -1088,7 +1088,18 @@ def limits_doc():
             },
         },
         # how carefully pictures are painted: every film a draft, a sharper version on request
-        "pictures": {"qualities": list(films.QUALITIES), "draft": films.DRAFT},
+        "pictures": {
+            "qualities": list(films.QUALITIES),
+            "draft": films.DRAFT,
+            # where a film may be asked for above a draft (film.chooses_quality): these looks,
+            # and a project's painted episodes on these style routes
+            "choose": {
+                "looks": [lk for lk in films.LOOKS if films.chooses_quality(lk)],
+                "style_routes": [
+                    r for r in films.STYLE_ROUTES if films.chooses_quality("painted", r)
+                ],
+            },
+        },
         "library": {
             "characters_per_new_film": library.SEEDED,
             "earlier_films_remembered": library.MEMORY,
@@ -1338,6 +1349,31 @@ async def create(req):
                 else {}
             ),
         }
+    # how carefully its pictures are painted ("low" a draft, "medium", "high"; none: a draft),
+    # where its painter has the setting (film.chooses_quality: a collage, a project's GPT style).
+    # The site charges for more than a draft; a template's film keeps its own
+    quality = body.get("quality")
+    if quality is not None:
+        if quality not in films.QUALITIES or tpl:
+            return web.json_response(
+                {
+                    "error": "quality is one of %s, and not for a template's film"
+                    % ", ".join(films.QUALITIES)
+                },
+                status=400,
+            )
+        lib = library.owner(client_of(req), project["id"]) if project else None
+        card = stylekit.read_card(stylekit.dir_of(lib)) if lib else None
+        route = stylekit.route_of(card) if card else None
+        if quality != films.DRAFT and not films.chooses_quality(look, route):
+            return web.json_response(
+                {
+                    "reason": "quality",
+                    "error": "This film's pictures are painted by a model with no quality to "
+                    "choose: only a collage, or a project whose style is painted by GPT Image.",
+                },
+                status=400,
+            )
     # the narrator the person picked (the site's voice setting, kitcut.ai lib/narrator.js):
     # {"source": "kitcut", "voice": <a Gemini voice>} pins that voice (film.vo_pins); none, or
     # no voice in it, and Claude picks as ever
@@ -1462,6 +1498,7 @@ async def create(req):
             captions=captions,
             music=music,
             auto_length=auto_length,
+            quality=quality,
         )
         if preview:
             f.update(preview=True)
