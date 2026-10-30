@@ -3933,7 +3933,10 @@ python scripts/check-sketch.py                                                # 
 
 Start a film by copying `config/sketch/example/` to `projects/<id>/` (the scripts write
 `audio/ outputs/ temp/` next to the manifest). The example runs end to end for free: its
-voice is edge-tts.
+voice is edge-tts. An edge voice reads faster with `"settings": {"rate": 12}` in `vo` (percent, edge's own rate
+control, not a resample; it is in the take's fingerprint, so a new rate records the lines again). A
+`403 Invalid response status` from edge is an outdated `edge-tts` package: 7.3.1 answers again
+(2026-10-29).
 
 ### The pieces
 
@@ -5211,6 +5214,12 @@ plus the share that do) and `speech` (Whisper: every phrase heard). A refused jo
 leaves windows and returns placements from `SK.REPORT()` (any stills run saves report.json);
 **`scripts/clip-overlay.py`** lays the clips in (trimmed, looped or held, scaled to cover) in one
 encode, a clip's sound at `audio_db` or matched to `audio_lufs`, the mix low-passed and limited.
+A film may sit in a folder of its own inside its project (projects/<id>/ad-a/): the clips' `src`
+is relative to that folder, and the render is recorded on projects/<id>. Nothing the film drew
+inside a window survives the clip, so a caption card or a label meant to sit OVER the footage is
+named in the report as `"over": [{x, y, w, h, t0, t1}]`: boxes of the film's own frame put back on
+top while the clips are open (rectangles: keep them tight; the Meta ads' `shared/channel-ad.js`
+works each caption card's box out the way `sketch/captions.js` lays it).
 
 **The look: `sketch/bench.js`** (`"modules": ["kit", "bench"]`, screen-pixel drawing).
 `replay(lane)` turns a race.json lane into `at(raceT)` (hidden thinking spread over the thinking

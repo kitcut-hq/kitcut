@@ -687,7 +687,8 @@ def _sp():
 def paint_one(route, subject, style_line, style_jpg, out):
     """One proof picture, painted as an episode's would be (film.paint_pins): on a picture route
     with every style picture (`style_jpg`, a path or a list) and the style line, at the route's
-    quality. (path, {cost_usd, seconds}) or raises."""
+    quality. (path, {cost_usd, seconds}) or raises. Always wide (16:9): it shows the style, not
+    a film, so a tall project's proof is wide too."""
     sp = _sp()
     r = STYLE_ROUTES[route]
     t = time.time()

@@ -11,8 +11,11 @@ when `"loop": true` or else its last frame held to t1, and its own sound mixed i
 loudness measured over its window, so clips from different makers sound alike); the film's score
 should make room there: the film knows where.
 
-Nothing is drawn over a clip after this, so a film keeps its labels and stamps outside the
-windows; what the film drew inside a window (a placeholder, a poster) is covered.
+What the film drew inside a window (a placeholder, a poster) is covered. To keep a piece of the
+film on top of a clip -- a caption card, a label laid over the footage -- the report names it:
+{"over": [{"x", "y", "w", "h", "t0", "t1"}]}, boxes of the film's own frame (screen pixels, film
+seconds) put back over the clips while they are open. A box is a rectangle: what the film drew
+around the piece inside it comes back too, so keep the boxes tight.
 
     --film      the rendered sketch film (outputs/<slug>.mp4)
     --report    the film's report.json (default <film dir>/review/report.json)
@@ -77,9 +80,20 @@ def probe_audio(path):
     return bool(out.stdout.strip())
 
 
-def graph(clips, base_has_audio, fps):
-    """The filter graph: input 0 is the film, input i+1 is clips[i]."""
+def even(v):
+    return int(round(float(v))) // 2 * 2
+
+
+def graph(clips, base_has_audio, fps, over=()):
+    """The filter graph: input 0 is the film, input i+1 is clips[i]; `over` boxes of the film go
+    back on top of the clips."""
     v, a, last, mix = [], [], "[0:v]", []
+    if over:  # the film twice: under the clips, and the pieces of it that go back over them
+        v.append(
+            "[0:v]split=%d[base]%s"
+            % (len(over) + 1, "".join("[k%d]" % j for j in range(len(over))))
+        )
+        last = "[base]"
     for i, c in enumerate(clips):
         k = i + 1
         w, h = int(round(c["w"])) // 2 * 2, int(round(c["h"])) // 2 * 2
@@ -119,6 +133,14 @@ def graph(clips, base_has_audio, fps):
                 )
             )
             mix.append("[a%d]" % k)
+    for j, o in enumerate(over):
+        x, y, w, h = even(o["x"]), even(o["y"]), max(2, even(o["w"])), max(2, even(o["h"]))
+        v.append("[k%d]crop=%d:%d:%d:%d[r%d]" % (j, w, h, x, y, j))
+        v.append(
+            "%s[r%d]overlay=x=%d:y=%d:enable='between(t,%.3f,%.3f)'[q%d]"
+            % (last, j, x, y, float(o["t0"]), float(o["t1"]), j)
+        )
+        last = "[q%d]" % j
     fc = ";".join(v) + (";" if v else "")
     if mix:
         fc += ";".join(a) + ";" + ("[0:a]" if base_has_audio else "") + "".join(mix)
@@ -180,7 +202,8 @@ def main():
         ).stdout.strip()
     )
     base_audio = probe_audio(film)
-    fc, vout, has_mix = graph(clips, base_audio, fps)
+    over = [dict(o) for o in report.get("over", [])]
+    fc, vout, has_mix = graph(clips, base_audio, fps, over)
     out = _env.resolve(a.out) if a.out else os.path.splitext(film)[0] + "-clips.mp4"
     print("%d clips into %s (%s fps)" % (len(clips), os.path.relpath(film, _env.ROOT), fps))
     for c in clips:
@@ -199,6 +222,11 @@ def main():
                 os.path.relpath(c["src"], _env.ROOT),
             )
         )
+    for o in over:
+        print(
+            "  %6.2f-%6.2f  %4dx%-4d at %4d,%-4d  the film's own, back over the clips"
+            % (o["t0"], o["t1"], o["w"], o["h"], o["x"], o["y"])
+        )
     if a.plan:
         print("\nfilter graph (%d characters):\n%s" % (len(fc), fc.replace(";", ";\n")))
         return 0
@@ -216,7 +244,9 @@ def main():
     subprocess.run(cmd, check=True)
     os.remove(gpath)
     print("wrote %s" % os.path.relpath(out, _env.ROOT))
-    pid = os.path.basename(proj)
+    # the project the film belongs to: its projects/<id>/ root (a film may sit in a folder of its
+    # own inside the project), else the film's folder as before (a scratch folder on the studio)
+    pid = os.path.basename(_project.find_project_dir(film) or proj)
     _project.record(
         pid,
         "clips laid into the film",

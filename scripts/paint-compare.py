@@ -14,6 +14,8 @@ Writes, under the project's temp/paint-compare/:
     by-prompt/<name>.jpg                     one prompt across every model, labelled
     results.csv, results.json                model, image, ref, seconds, cost_usd, size, error
 
+--aspect paints every picture in that shape (9:16 for a Short): each model is sent the ratio from
+its catalogue entry, Muse the ratio outright. results.csv's width and height say what came back.
 --plan prices the run from OpenRouter's catalogue and paints nothing. --cap stops starting new
 pictures once the spend (as the API reports it) plus the next picture's estimate would pass it.
 A picture already painted for the same model, style, prompt and reference is reused, so a rerun
@@ -27,6 +29,7 @@ Invoke as:
 
 import sys
 import os
+import re
 import csv
 import json
 import time
@@ -55,14 +58,14 @@ def slug(model):
     return model.replace(":", "_").replace("/", "__")
 
 
-def estimate(model, has_ref, quality=None):
+def estimate(model, has_ref, quality=None, aspect="16:9"):
     """USD for one picture, from the catalogue's price list; None when it cannot say."""
     if model.startswith("gemini:"):
         return None
     caps = SP.model_caps(model)
     if caps is None:
         return UNPRICED.get(model)
-    params = SP.pick_params(caps, quality)
+    params = SP.pick_params(caps, quality, aspect)
     res = (params.get("resolution") or "").lower()
     out, extra = [], 0.0
     for p in caps.get("pricing") or []:
@@ -83,11 +86,12 @@ def estimate(model, has_ref, quality=None):
     return round((pick[0] if pick else max(u for _, u in out)) + extra, 4)
 
 
-def by_prompt_sheet(name, tiles, out):
-    """One prompt across every model: each picture labelled with its model, price and time."""
+def by_prompt_sheet(name, tiles, out, tall=False):
+    """One prompt across every model: each picture labelled with its model, price and time.
+    `tall` lays the tiles out for 9:16 pictures, so a tall painting is not a sliver."""
     from PIL import Image, ImageDraw
 
-    tw, th, cols = 640, 360, 3
+    tw, th, cols = (360, 640, 5) if tall else (640, 360, 3)
     rows = (len(tiles) + cols - 1) // cols
     sheet = Image.new("RGB", (cols * tw, rows * (th + 40)), (247, 242, 231))
     d = ImageDraw.Draw(sheet)
@@ -115,7 +119,14 @@ def main():
     ap.add_argument("--cap", type=float, default=4.0, help="stop at this spend in USD (4)")
     ap.add_argument("--retake", action="store_true", help="repaint pictures already painted")
     ap.add_argument("--workers", type=int, default=6)
+    ap.add_argument(
+        "--aspect",
+        default="16:9",
+        help="the pictures' aspect (16:9): 9:16 for a Short, 1:1 for a square film",
+    )
     args = ap.parse_args()
+    if not re.fullmatch(r"\d+:\d+", args.aspect):
+        sys.exit("--aspect looks like 16:9, 9:16 or 1:1")
 
     m = _sketch.load(args.manifest)
     spec = dict(m.get("paint") or {})
@@ -135,12 +146,15 @@ def main():
     models = [x.strip() for x in args.models.split(",") if x.strip()]
     quality = spec.get("quality")
 
-    print("%s  %d images x %d models, cap $%.2f" % (m["_id"], len(images), len(models), args.cap))
+    print(
+        "%s  %d images x %d models, %s, cap $%.2f"
+        % (m["_id"], len(images), len(models), args.aspect, args.cap)
+    )
     total = 0.0
     est = {}
     for mo in models:
         caps = None if mo.startswith("gemini:") else SP.model_caps(mo)
-        e1, e2 = estimate(mo, False, quality), estimate(mo, True, quality)
+        e1, e2 = estimate(mo, False, quality, args.aspect), estimate(mo, True, quality, args.aspect)
         est[mo] = (e1, e2)
         n_ref = sum(1 for im in images if im.get("ref"))
         cost = None if e1 is None else e1 * (len(images) - n_ref) + (e2 or e1) * n_ref
@@ -148,9 +162,10 @@ def main():
         how = (
             "vertex"
             if mo.startswith("gemini:")
-            else "unlisted: sent %s" % SP.UNLISTED
+            else "unlisted: sent %s" % SP.pick_params(None, quality, args.aspect)
             if caps is None
-            else "%s%s" % (SP.pick_params(caps, quality), "  +ref" if SP.takes_refs(caps) else "")
+            else "%s%s"
+            % (SP.pick_params(caps, quality, args.aspect), "  +ref" if SP.takes_refs(caps) else "")
         )
         print(
             "  %-40s %s/picture  %s  %s"
@@ -212,7 +227,7 @@ def main():
                 if spec_i["backend"] == "gemini":
                     data, meta = SP.paint_gemini(prompt, spec_i["model"], ref)
                 else:
-                    data, meta = SP.paint_openrouter(prompt, mo, ref, quality)
+                    data, meta = SP.paint_openrouter(prompt, mo, ref, quality, args.aspect)
                 w, h = SP.to_jpeg(data, path)
                 row.update(
                     seconds=round(time.time() - t, 1),
@@ -279,7 +294,9 @@ def main():
                         % (r.get("cost_usd"), r.get("seconds"), r.get("width"), r.get("height")),
                     )
                     tiles.append((label, r.get("path")))
-                by_prompt_sheet(n, tiles, os.path.join(bp, n + ".jpg"))
+                aw, ah = (int(x) for x in args.aspect.split(":"))
+                tall = ah > aw
+                by_prompt_sheet(n, tiles, os.path.join(bp, n + ".jpg"), tall)
             table = [rows[k] for k in sorted(rows)]
             cols = ["model", "image", "ref", "seconds", "cost_usd", "width", "height", "error"]
             with open(os.path.join(root, "results.csv"), "w", newline="", encoding="utf-8") as f:
