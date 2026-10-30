@@ -589,10 +589,7 @@ def _pins(work, rec):
     pins = {"vo": {k: vo.get(k, v) for k, v in probe.vo_pins().items()}}
     if films.paint_kinds(probe.caps):
         want = films.paint_pins(
-            float(rec.get("length") or work.length),
-            probe.caps,
-            rec.get("paint_route"),
-            rec.get("frame"),
+            float(rec.get("length") or work.length), probe.caps, rec.get("paint_route")
         )
         pins["paint"] = {k: paint.get(k, v) for k, v in want.items()}
     return pins

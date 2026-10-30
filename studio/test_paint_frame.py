@@ -1,18 +1,19 @@
 #!/usr/bin/env python
-"""A tall film's paintings are painted tall: the film's frame reaches the painter, a tall painted
-film is painted by GPT Image (film.TALL_PAINTER, the painter bake-off of 2026-10-28) unless its
-project's style picture names its own painter, and Claude is told the painting's real shape. No
-model, no network: the painter is stood in. Seconds.
+"""A tall film's paintings are painted tall: the film's frame reaches the painter, a tall film is
+painted by the same painter as a wide one (Muse, or its project's style picture's painter), and
+Claude is told the painting's real shape (film.TALL_PAINTING). No model, no network: the painter
+is stood in. Seconds.
 
     python studio/test_paint_frame.py
 
 Covers: frame_aspect reads a manifest's frame; sketch-paint.py sends each scene in the film's shape
 (16:9 with no frame, 9:16 for a Short) and keeps a cut-out's own; a wide painting keeps the key it
 had before frames, so no wide film repaints, while a tall one gets a key of its own; paint_pins
-gives a tall painted film GPT Image (no style, or a style line), keeps a style picture's painter
-and picture, and leaves every wide, square and unpainted film's pins exactly as they were; and the
-first message of a tall painted film says how wide to draw a painting, while a tall drawn film's
-and a wide film's say nothing of it.
+gives a tall film exactly a wide film's pins (Muse with no style or a style line, a style
+picture's painter with its picture); and the first message of a tall painted film says what shape
+its paintings come back in and how wide to draw one (Muse's 2:3, drawn larger to keep its rough
+paper edges off screen; a style picture's painter's 9:16), while a tall drawn film's and a wide
+film's say nothing of it.
 """
 
 import io
@@ -127,6 +128,11 @@ def call_cases():
     wide = painted(None)
     expect("a film with no frame is asked for 16:9, as ever", wide.get("kitchen") == "16:9", wide)
     expect("and a square film for 1:1", painted([1080, 1080]).get("kitchen") == "1:1")
+    expect(
+        "Muse, which is not in the catalogue, is asked for the film's shape too",
+        SP.pick_params(None, aspect="9:16")["aspect_ratio"] == "9:16"
+        and SP.pick_params(None)["aspect_ratio"] == "16:9",
+    )
 
 
 def pin_cases():
@@ -134,85 +140,76 @@ def pin_cases():
     P = ("paintings",)
     wide = films.paint_pins(30, P)
     expect(
-        "a wide painted film is Muse's, as it was",
+        "a painted film with no style is Muse's",
         {k: wide[k] for k in ("backend", "model")}
         == {"backend": "muse", "model": "meta/muse-image"},
         wide,
     )
-    expect("and naming its frame changes nothing", films.paint_pins(30, P, None, "16:9") == wide)
-    expect("nor does a square one", films.paint_pins(30, P, None, "1:1") == wide)
-    tall = films.paint_pins(30, P, None, "9:16")
-    expect("a tall one is GPT Image's", tall["model"] == "openai/gpt-image-2.5-flare", tall)
-    expect("through OpenRouter", tall["backend"] == "openrouter")
-    expect("with the same cap on paintings", tall["max_images"] == wide["max_images"])
     words = {"route": "words", "ref": None, "line": "Loose gouache, warm light"}
-    tw = films.paint_pins(30, P, words, "9:16")
+    tw = films.paint_pins(30, P, words)
     expect(
-        "a tall film with a style line: GPT Image, and the line kept",
-        tw["model"] == "openai/gpt-image-2.5-flare" and tw["style"] == words["line"],
+        "and one with a style line is Muse's, with the line",
+        tw["model"] == "meta/muse-image" and tw["style"] == words["line"] and "style_ref" not in tw,
         tw,
     )
-    expect("and no style picture it never had", "style_ref" not in tw, tw)
-    expect(
-        "the same project's wide film is still Muse with the line",
-        films.paint_pins(30, P, words, "16:9")["model"] == "meta/muse-image",
-    )
     gpt = {"route": "gpt", "ref": "style/style.jpg", "line": "x"}
-    tg = films.paint_pins(30, P, gpt, "9:16")
+    tg = films.paint_pins(30, P, gpt)
     expect(
-        "a style picture's own painter keeps its picture in a tall film",
+        "a style picture's painter keeps its picture",
         tg["model"] == "openai/gpt-image-2.5-flare"
         and tg["style_ref"] == "style/style.jpg"
         and tg["style"] == "",
         tg,
     )
-    gem = {"route": "gemini", "ref": "style/style.jpg", "line": "x"}
-    tgem = films.paint_pins(30, P, gem, "9:16")
     expect(
-        "and so does Gemini's",
-        tgem["model"] == films.STYLE_ROUTES["gemini"]["model"] and tgem["style_ref"],
-        tgem,
+        "paint_pins takes no frame: a tall film's painter is a wide film's",
+        "frame"
+        not in films.paint_pins.__code__.co_varnames[: films.paint_pins.__code__.co_argcount],
     )
-    expect(
-        "a tall film of every route is painted as its wide twin but for the painter",
-        all(
-            {
-                k: v
-                for k, v in films.paint_pins(30, P, r, "9:16").items()
-                if k not in ("backend", "model")
-            }
-            == {
-                k: v
-                for k, v in films.paint_pins(30, P, r, "16:9").items()
-                if k not in ("backend", "model")
-            }
-            for r in (None, words, gpt, gem)
-        ),
-    )
-    collage = films.paint_pins(30, ("cutouts",), None, "9:16")
-    expect(
-        "a tall film that paints only cut-outs keeps its pins",
-        collage == films.paint_pins(30, ("cutouts",)),
-        collage,
-    )
+    expect("no tall painter is left anywhere", not hasattr(films, "TALL_PAINTER"))
+
+
+def tall_film(look, route=None):
+    f = films.Film.create("how a fox bakes bread", 15, look, client="t", frame="9:16")
+    if route:
+        f.update(paint_route=route)
+    return f
 
 
 def note_cases():
     print("what Claude is told")
-    tall = films.Film.create("how a fox bakes bread", 15, "painted", client="t", frame="9:16")
+    tall = tall_film("painted")
     note = films.frame_note(tall)
     expect(
-        "a tall painted film is told its paintings come back tall",
-        "come back tall, 9:16" in note,
-        note[-700:],
+        "a tall painted film with no style is told Muse's paintings come back 2:3",
+        "come back tall, 2:3" in note,
+        note[-800:],
     )
-    expect("and how wide to draw one", "about 1170 wide (2080 tall)" in note, note[-700:])
+    expect(
+        "drawn large enough that Muse's rough paper edges stay off screen",
+        "about 1430 wide (2145 tall)" in note and "rough paper" in note,
+        note[-800:],
+    )
+    expect("and narrower than 1280 shows bands", "narrower than 1280" in note, note[-800:])
     with open(tall.path("paint.json"), encoding="utf-8") as f:
         pins = json.load(f)
+    expect("its paint.json names Muse", pins.get("model") == "meta/muse-image", pins)
+    words = tall_film("painted", {"route": "words", "ref": None, "line": "Loose gouache"})
     expect(
-        "its paint.json names GPT Image", pins.get("model") == "openai/gpt-image-2.5-flare", pins
+        "so does one with a style line",
+        "come back tall, 2:3" in films.frame_note(words),
     )
-    drawn = films.Film.create("how a fox bakes bread", 15, "drawn", client="t", frame="9:16")
+    pic = tall_film("painted", {"route": "gpt", "ref": "style/style.jpg", "line": "x"})
+    note = films.frame_note(pic)
+    expect(
+        "one with a style picture is told 9:16, about 1170 wide",
+        "come back tall, 9:16" in note
+        and "about 1170 wide (2080 tall)" in note
+        and "narrower than 1080" in note
+        and "rough paper" not in note,
+        note[-800:],
+    )
+    drawn = tall_film("drawn")
     expect(
         "a tall drawn film is told nothing of paintings", "paintings" not in films.frame_note(drawn)
     )

@@ -24,8 +24,8 @@ Backends:
     muse    the same backend with meta/muse-image as its model (the studio's default for a wide
             film): 1920x1280, ~25 s and $0.01 an image. Muse is served but not in the catalogue, so
             it is sent what it always was with the film's aspect, and it takes no reference. Asked
-            for 9:16 it paints 1280x1920 (2:3) with speckled paper edges (bake-off 2026-10-28), so
-            a tall film is painted by GPT Image instead (studio/film.py TALL_PAINTER).
+            for 9:16 it paints 1280x1920 (2:3) with rough paper at its edges (bake-off 2026-10-28),
+            which Claude draws large enough to crop (studio/film.py TALL_PAINTING).
     gemini  a Gemini image model on Vertex AI (GOOGLE_SERVICE_ACCOUNT_KEY), default
             gemini-3.1-flash-image: 1376x768, ~10 s.
 

@@ -123,14 +123,12 @@ STYLE_ROUTES = {
         "team": True,
     },
 }
-# who paints a tall film (9:16, a Short) when its project's style names no picture painter: Muse
-# paints 2:3 there, with speckled paper edges in three scenes of five. GPT Image paints a clean
-# 864x1536 at about Muse's price (~$0.010 a painting, 13-15 s) and keeps a character from its
-# reference (the painter bake-off of 2026-10-28, scripts/paint-compare.py --aspect 9:16; the
-# owner's pick). A style picture's own route (gpt, gemini) is kept as it is.
-TALL_PAINTER = {"backend": "openrouter", "model": "openai/gpt-image-2.5-flare"}
-# the shape a tall painting comes back in, near enough for every painter that paints 9:16
-TALL_PAINTING = (9, 16)
+# the shape a tall film's paintings come back in (sketch-paint.py paints in the film's frame), and
+# how much larger than the frame Claude draws one: Muse, asked for 9:16, paints 2:3 (1280x1920)
+# with rough paper up to about 150 px in at its edges, which a painting drawn 1.12 times the
+# frame's height keeps off screen; a style picture's painter (gpt, gemini) paints 9:16 clean
+# (the painter bake-off of 2026-10-28, scripts/paint-compare.py --aspect 9:16)
+TALL_PAINTING = {"muse": ((2, 3), 1.12), "picture": ((9, 16), 1.08)}
 # the print faces a collage film's pieces use (sketch/collage.js), on top of the template's
 COLLAGE_FONTS = [
     {"file": "fonts/AbrilFatface-Regular.ttf", "family": "Abril Fatface", "weight": "400"},
@@ -496,16 +494,29 @@ def frame_note(film):
                 "nothing that must be read goes there." % (by, rx)
             )
         if h > w and "paintings" in (rec.get("caps") or ()):
-            # painted tall (TALL_PAINTER): not the wide painting looks/painted.md describes
-            pw, ph = TALL_PAINTING
-            cover = round(w * 1.08 / 10) * 10
+            # painted tall: not the wide painting looks/painted.md describes
+            r = STYLE_ROUTES.get((rec.get("paint_route") or {}).get("route")) or {}
+            (pw, ph), more = TALL_PAINTING["picture" if r.get("picture") else "muse"]
+            scale = max(w / pw, h / ph)
+            cover = round(pw * scale * more / 10) * 10
             text += (
                 " Your paintings come back tall, %d:%d, not the 1920x1280 the painted look's "
                 "notes below describe. Drawn with SK.image about %d wide (%d tall), a painting "
-                "covers the whole %dx%d frame at zoom 1 with a little room to move. Drawn "
-                "narrower than %d, paper-coloured bands show at its edges. Compose each "
+                "covers the whole %dx%d frame at zoom 1 with a little room to move%s. Drawn "
+                "narrower than %d, paper-coloured bands show at the frame's edges. Compose each "
                 "painting's subject for a phone held upright, in the middle of the picture."
-                % (pw, ph, cover, round(cover * ph / pw), w, h, w)
+                % (
+                    pw,
+                    ph,
+                    cover,
+                    round(cover * ph / pw),
+                    w,
+                    h,
+                    ""
+                    if r.get("picture")
+                    else ", and the rough paper at its edges stays off screen",
+                    round(pw * scale),
+                )
             )
         if (
             h > w
@@ -600,26 +611,21 @@ def paint_words(caps):
     return "painting the pictures", "pictures"
 
 
-def paint_pins(length, caps, route=None, frame=None):
+def paint_pins(length, caps, route=None):
     """What the studio sets in the paint.json of a film with these capabilities: the painter,
     each kind's own settings, and the cap on pictures (repaints included), its kinds' caps
     added up. `route` is the film record's paint_route (its project's style, stylekit.seed):
-    the painter it names and the style picture or the style line, the studio's too. `frame` is
-    the film's ("9:16"...): a tall film's scenes are painted by TALL_PAINTER unless a style
-    picture names its own painter; every other film's pins are as they were."""
+    the painter it names and the style picture or the style line, the studio's too. A tall film
+    has the same painter as a wide one; sketch-paint.py paints in the film's frame."""
     kinds = paint_kinds(caps)
     pins = dict(PAINT_PINNED)
     for kind in kinds:
         pins |= kind["pins"]
     pins |= {"max_images": sum(limits(length)[kind["cap"]] for kind in kinds)}
     r = STYLE_ROUTES.get((route or {}).get("route"))
-    tall = frame == "9:16" and "paintings" in caps
-    if tall and (not r or not r["picture"]):  # Muse's route (or none): the tall painter
-        pins |= TALL_PAINTER
     if not r or not kinds:
         return pins
-    if not (tall and not r["picture"]):
-        pins |= {"backend": r["backend"], "model": r["model"]}
+    pins |= {"backend": r["backend"], "model": r["model"]}
     if r["picture"] and route.get("ref"):
         pins |= {"style": "", "style_ref": route["ref"]}
     else:
@@ -1225,8 +1231,7 @@ class Film:
             m["modules"] = list(modules(caps))
         if paint_kinds(caps):
             m["paint"] = "paint.json"
-            shape = next((k for k, v in FRAMES.items() if v == m.get("frame")), "16:9")
-            pins = paint_pins(seconds, caps, frame=shape)
+            pins = paint_pins(seconds, caps)
             _write_json(film.path("paint.json"), pins | {"style": "", "images": []})
         if fonts(caps):
             m["fonts"] = list(m.get("fonts") or []) + fonts(caps)
