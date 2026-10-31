@@ -750,9 +750,9 @@ def note(film):
             "The project's pictures (Read one to see it; on screen: "
             "SK.image('<name>', x, y, w)%s)%s:"
             % (
-                # painted from the style picture: the painter takes a reference (sketch-paint.py)
+                # every painter takes a reference now, Muse too (sketch-paint.py UNLISTED_REFS)
                 '; a painting made from one: "ref": "<name>" in paint.json'
-                if paint_kinds(film.caps) and (rec.get("paint_route") or {}).get("ref")
+                if paint_kinds(film.caps)
                 else "",
                 ". Where its person said what one is for, that is what it is for"
                 if any(p.get("role") for p in pics)

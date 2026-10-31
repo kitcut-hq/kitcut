@@ -77,7 +77,7 @@ def estimate(model, has_ref, quality=None, aspect="16:9"):
                 out.append(("", usd * PICTURE_MP))
             elif unit == "token":
                 out.append(("", usd * IMAGE_TOKENS))
-        elif has_ref and SP.takes_refs(caps) and bill in ("input_image", "input_reference"):
+        elif has_ref and SP.takes_refs(caps, model) and bill in ("input_image", "input_reference"):
             extra += usd * (IMAGE_TOKENS if unit == "token" else 1)
     if not out:
         return None
@@ -159,13 +159,13 @@ def main():
         n_ref = sum(1 for im in images if im.get("ref"))
         cost = None if e1 is None else e1 * (len(images) - n_ref) + (e2 or e1) * n_ref
         total += cost or 0
+        plus = "  +ref" if SP.takes_refs(caps, mo) else ""
         how = (
             "vertex"
             if mo.startswith("gemini:")
-            else "unlisted: sent %s" % SP.pick_params(None, quality, args.aspect)
+            else "unlisted: sent %s%s" % (SP.pick_params(None, quality, args.aspect), plus)
             if caps is None
-            else "%s%s"
-            % (SP.pick_params(caps, quality, args.aspect), "  +ref" if SP.takes_refs(caps) else "")
+            else "%s%s" % (SP.pick_params(caps, quality, args.aspect), plus)
         )
         print(
             "  %-40s %s/picture  %s  %s"

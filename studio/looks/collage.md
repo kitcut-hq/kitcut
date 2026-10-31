@@ -73,7 +73,9 @@ The studio has set `backend`, `model`, `max_images` and `cutouts`; leave them. Y
     in a picture: words go on screen in code, where they are sharp and can move.
   - It comes back as `images/<name>.webp`, up to 1024 px on its long side. An image without
     `cutout` is a whole scene (1920x1280), drawn with `SK.image`.
-  - The painter works from the words alone; `ref` changes nothing.
+  - `ref` (on an image): a picture it is painted from, for its characters -- another image's
+    name, `pic_<name>` or `cast_<name>` (the project's pictures and painted characters), or a
+    list of up to 4. The painter keeps the faces, clothes and proportions it sees there.
 
 # Pages and pieces (`engine/collage.js`)
 
