@@ -23,9 +23,10 @@ Backends:
             ratio it has, 2K or the nearest below. The price comes back with each image.
     muse    the same backend with meta/muse-image as its model (the studio's default for a wide
             film): 1920x1280, ~25 s and $0.01 an image. Muse is served but not in the catalogue, so
-            it is sent what it always was with the film's aspect, and it takes no reference. Asked
-            for 9:16 it paints 1280x1920 (2:3) with rough paper at its edges (bake-off 2026-10-28),
-            which Claude draws large enough to crop (studio/film.py TALL_PAINTING).
+            it is sent what it always was with the film's aspect, and reference pictures, which
+            it takes though the catalogue does not say so (UNLISTED_REFS). Asked for 9:16 it
+            paints 1280x1920 (2:3) with rough paper at its edges (bake-off 2026-10-28), which
+            Claude draws large enough to crop (studio/film.py TALL_PAINTING).
     gemini  a Gemini image model on Vertex AI (GOOGLE_SERVICE_ACCOUNT_KEY), default
             gemini-3.1-flash-image: 1376x768, ~10 s.
 
@@ -43,12 +44,12 @@ wide (at 1024 px on the long side; 12 by default, 0 for none) is cut round it in
 SK.cutout(name, ...). "aspect" ("1:1", "2:3", "3:2", ...) shapes the canvas it is painted on.
 
 "ref" names an image already painted, which goes in as a reference picture wherever the model
-takes one (gemini, and the OpenRouter models whose catalogue entry lists input_references): the
-way to keep a character the same from scene to scene. It may also name one of the film's project
-pictures, "pic_<name>" (inputs/pic_<name>.*, studio/library.py), or one of its painted characters,
-"cast_<name>" (inputs/cast_<name>.*), which is sent as it is and never painted: a cast sheet
-painted from the project's own people, and then each scene from the cast sheet, keeps them the
-person's from the first picture to the last. A picture the person attached, "upload<n>", may be
+takes one (gemini, Muse, and the OpenRouter models whose catalogue entry lists
+input_references): the way to keep a character the same from scene to scene. It may also
+name one of the film's project pictures, "pic_<name>" (inputs/pic_<name>.*, studio/library.py),
+or one of its painted characters, "cast_<name>" (inputs/cast_<name>.*), which is sent as it is
+and never painted: a cast sheet painted from the project's own people, and then each scene from
+the cast sheet, keeps them the person's from the first picture to the last. A picture the person attached, "upload<n>", may be
 a "ref" only when they marked it as a style example ("style" in inputs/roles.json, written by the
 studio): a drawn example of one kind of thing, for the paintings that show that thing. "ref" may
 be a list of up to MAX_REFS of these, for several characters in one painting (each its own
@@ -61,9 +62,8 @@ pictures, studio/stylekit.py) goes in with EVERY picture, first, as a reference 
 alone -- medium, palette, texture, line, light -- never for its layout, objects, people, words or
 how full it is (that is the prompt's); an image's own "ref" follows them, for the characters. The
 style line ("style") goes in front of the prompt beside them when it is set. A model that takes
-no reference (Muse) paints from the words alone, so a style picture is for the OpenRouter models
-that take one; a model that takes fewer references than it is given gets the style pictures
-first and as many of the image's own as fit.
+no reference paints from the words alone; a model that takes fewer references than it is given
+gets the style pictures first and as many of the image's own as fit.
 
 "redo" (a folder beside the manifest, set by the studio for a sharper version: studio/rounds.py)
 holds drafts, <name>.jpg or .webp: an image with a draft there is painted from it alone, told to
@@ -107,6 +107,13 @@ OPENROUTER = "https://openrouter.ai/api/v1"
 # what the muse backend always sent, for a model OpenRouter's catalogue does not describe; the
 # aspect follows the film's frame (pick_params), 16:9 unless the frame is tall or square
 UNLISTED = {"resolution": "2K", "aspect_ratio": "16:9", "output_format": "png"}
+# how many reference pictures a model takes where its catalogue entry does not say: Muse lists no
+# parameters, yet paints from the pictures it is given -- asked for "the woman in the attached
+# picture", it painted Brella's Ms Ada exactly, in the picture's own flat style, and without the
+# picture a stranger (2026-10-30). The pictures are not billed: $0.01 a painting either way. A
+# line-up of one style picture and N characters: all 7 right at 8 pictures; at 10 it painted one
+# twice and left one out. 8 holds a project's 4 style pictures and an image's 4 refs.
+UNLISTED_REFS = {"meta/muse-image": 8}
 KEEP_REF = "Keep the characters, their clothes and the drawing style exactly as in this picture. "
 # a style picture's lead (style_ref): measured on six style pictures, 2026-10-15 -- told only
 # "keep the style", the models copied the reference's moon, frame, text boxes and layout. It once
@@ -289,15 +296,18 @@ def gives_alpha(caps):
     return "transparent" in (bg.get("values") or [])
 
 
-def takes_refs(caps):
-    """Whether the catalogue says the model takes a reference picture."""
-    return refs_max(caps) >= 1
+def takes_refs(caps, model=None):
+    """Whether the model takes a reference picture (refs_max)."""
+    return refs_max(caps, model) >= 1
 
 
-def refs_max(caps):
-    """How many reference pictures the catalogue says the model takes (0 for none)."""
-    refs = ((caps or {}).get("supported_parameters") or {}).get("input_references") or {}
-    return int(refs.get("max", 0) or 0)
+def refs_max(caps, model=None):
+    """How many reference pictures the model takes (0 for none): what its catalogue entry says,
+    else what UNLISTED_REFS knows of `model`."""
+    refs = ((caps or {}).get("supported_parameters") or {}).get("input_references")
+    if refs is None:
+        return UNLISTED_REFS.get(model, 0)
+    return int((refs or {}).get("max", 0) or 0)
 
 
 def mime(path):
@@ -349,8 +359,8 @@ def paint_openrouter(
     redo=None,
 ):
     """One picture from an OpenRouter image model; `ref` (a JPEG, PNG or WebP path, or a list of
-    them) goes in as reference pictures when the model takes them, and is dropped (as Muse always
-    dropped it) when not; `style_ref`, a style picture or a list of them, goes in before it
+    them) goes in as reference pictures when the model takes them (refs_max), and is dropped when
+    not; `style_ref`, a style picture or a list of them, goes in before it
     (ref_lead), as many as the model takes. `redo`: the picture's own draft, sent alone in their
     place (REDO). `transparent` asks for a transparent background (sent only where the model has
     it)."""
@@ -361,8 +371,8 @@ def paint_openrouter(
         raise RuntimeError("OPENROUTER_API_KEY is not set (put it in .env)")
     caps = model_caps(model)
     body = {"model": model, "prompt": prompt, **pick_params(caps, quality, aspect, transparent)}
-    pics, lead = ([redo], REDO) if redo else ref_lead(ref, style_ref, refs_max(caps))
-    if pics and takes_refs(caps):
+    pics, lead = ([redo], REDO) if redo else ref_lead(ref, style_ref, refs_max(caps, model))
+    if pics and takes_refs(caps, model):
         body["input_references"] = [
             {"type": "image_url", "image_url": {"url": data_url(p)}} for p in pics
         ]

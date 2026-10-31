@@ -290,9 +290,9 @@ def main():
         and gpt["prompt"].startswith(card["style"].rstrip("."))
         and gpt["quality"] == "low"
         and "watercolour" in words["prompt"]
-        and not words["style_ref"],
+        and words["style_ref"] == gpt["style_ref"],
         "GPT Image gets every picture (the main one first), the style line, as a draft; "
-        "Muse gets the style line",
+        "Muse gets the same pictures and the line",
         (gpt["style_ref"], gpt["prompt"][:120], words["prompt"][:120]),
     )
 
@@ -533,9 +533,30 @@ def main():
     check(
         paint["model"] == "meta/muse-image"
         and paint["style"] == card["style"]
-        and "style_ref" not in paint,
-        "on the words route Muse paints from the style line",
+        and paint.get("style_ref")
+        == ["style/style.jpg", "style/style2.jpg", "style/style3.jpg", "style/style4.jpg"],
+        "on the words route Muse paints from the style pictures and the line",
         paint,
+    )
+    ep2.update(state="claude")
+    check(
+        "painted FROM the style pictures" in library.note(ep2),
+        "and its note says so",
+        library.note(ep2)[-900:],
+    )
+    old = films_mod.paint_pins(10, ep2.caps, {"route": "words", "ref": None, "line": "flat"})
+    check(
+        old["model"] == "meta/muse-image" and old["style"] == "flat" and "style_ref" not in old,
+        "an episode seeded before keeps the line alone: nothing it painted changes",
+        old,
+    )
+    collage = films_mod.paint_pins(10, films_mod.RECIPES["collage"], ep2.record()["paint_route"])
+    check(
+        collage["model"] == "meta/muse-image"
+        and collage["cutouts"]["model"] == films_mod.CUTOUTS_PINNED["model"]
+        and films_mod.chooses_quality("collage", "words"),
+        "a collage on the words route keeps its cut-outs on GPT Image (Muse has no clear ground)",
+        collage,
     )
     lone = Film.create("No project", 10, "painted", client="u:alice")
     library.seed(lone)

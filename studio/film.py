@@ -117,12 +117,15 @@ CUTOUTS_PINNED = {
     "border": 12,
     "cut": "scissor",
 }
-# a project's style pictures (stylekit.py): how its episodes' pictures are painted. With a
+# a project's style pictures (stylekit.py): how its episodes' pictures are painted. On a
 # picture route every style picture goes in with every painting (sketch-paint.py style_ref), the
-# style line in front of its prompt, and Claude's prompts say only what to draw; "words" is Muse
-# with the style line alone. Claude may change neither. Gemini is the team's alone (the site says
-# who: X-Team) and costs about seven times Muse a picture; GPT Image about one and a half at
-# medium quality, and its paintings start as drafts (QUALITIES: about a quarter of that).
+# style line in front of its prompt, and Claude's prompts say only what to draw. "words" is Muse:
+# once the style line alone, now given the pictures too (Muse takes references, 2026-10-30; the
+# id stays, as projects' cards keep it). Muse paints no transparent ground, so a collage's
+# cut-outs stay GPT Image's on it ("cutouts": False). Claude may change none of it. Gemini is the
+# team's alone (the site says who: X-Team) and costs about seven times Muse a picture; GPT Image
+# about one and a half at medium quality, and its paintings start as drafts (QUALITIES: about a
+# quarter of that).
 STYLE_ROUTES = {
     "gpt": {
         "backend": "openrouter",
@@ -130,7 +133,7 @@ STYLE_ROUTES = {
         "picture": True,
         "quality": DRAFT,
     },
-    "words": {"backend": "muse", "model": "meta/muse-image", "picture": False},
+    "words": {"backend": "muse", "model": "meta/muse-image", "picture": True, "cutouts": False},
     "gemini": {
         "backend": "openrouter",
         "model": "google/gemini-3.1-flash-image",
@@ -511,7 +514,8 @@ def frame_note(film):
         if h > w and "paintings" in (rec.get("caps") or ()):
             # painted tall: not the wide painting looks/painted.md describes
             r = STYLE_ROUTES.get((rec.get("paint_route") or {}).get("route")) or {}
-            (pw, ph), more = TALL_PAINTING["picture" if r.get("picture") else "muse"]
+            muse = r.get("backend", "muse") == "muse"  # Muse paints 2:3, with or without pictures
+            (pw, ph), more = TALL_PAINTING["muse" if muse else "picture"]
             scale = max(w / pw, h / ph)
             cover = round(pw * scale * more / 10) * 10
             text += (
@@ -527,9 +531,7 @@ def frame_note(film):
                     round(cover * ph / pw),
                     w,
                     h,
-                    ""
-                    if r.get("picture")
-                    else ", and the rough paper at its edges stays off screen",
+                    ", and the rough paper at its edges stays off screen" if muse else "",
                     round(pw * scale),
                 )
             )
@@ -654,9 +656,14 @@ def paint_pins(length, caps, route=None, quality=None):
         pins["style_ref"] = route["ref"]
     if r.get("quality"):
         pins["quality"] = quality or r["quality"]
-    if "cutouts" in pins and r["picture"]:  # the cut-outs from the same painter
+    if "cutouts" in pins and paints_cutouts(r):  # the cut-outs from the same painter
         pins["cutouts"] = dict(pins["cutouts"], model=r["model"])
     return pins
+
+
+def paints_cutouts(r):
+    """Whether a style route (STYLE_ROUTES) paints a collage's cut-outs as well as its scenes."""
+    return bool(r.get("picture")) and r.get("cutouts", True)
 
 
 def chooses_quality(look, route=None):
@@ -668,7 +675,7 @@ def chooses_quality(look, route=None):
     r = STYLE_ROUTES.get(route) or {}
     if any("cutouts" in k["pins"] for k in paint_kinds(caps)):
         # a style's picture route paints the cut-outs too (paint_pins)
-        return (r["model"] if r.get("picture") else CUTOUTS_PINNED["model"]) in QUALITY_MODELS
+        return (r["model"] if paints_cutouts(r) else CUTOUTS_PINNED["model"]) in QUALITY_MODELS
     return bool(paint_kinds(caps)) and bool(r.get("quality"))
 
 
