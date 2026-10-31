@@ -1101,9 +1101,9 @@ const FRAME_USE = {
 };
 const SHORT_MAX = 180;
 const frameOf = () => (document.querySelector('input[name=frame]:checked') || { value: '16:9' }).value;
-// what the film request says of its frame: nothing for 16:9, and captions with a 9:16 (the same two
-// lines as lib/mcp/tools.js frameInput, which the page cannot import)
-const frameBody = (f = frameOf()) => ({ ...(f !== '16:9' ? { frame: f } : {}), ...(f === '9:16' ? { captions: true } : {}) });
+// what the film request says of its frame: nothing for 16:9 (as lib/mcp/tools.js frameInput, which
+// the page cannot import). Its captions are not chosen here: on for a Short, switched on its page
+const frameBody = (f = frameOf()) => ({ ...(f !== '16:9' ? { frame: f } : {}) });
 function frameLine() { $('frameUse').textContent = FRAME_USE[frameOf()] || ''; }
 function setFrame(v) {
   const r = document.querySelector(`input[name=frame][value="${v || '16:9'}"]`);
@@ -1242,13 +1242,27 @@ function shape(frame) {
   if (m && Math.abs(m[1] / m[2] - 16 / 9) > 0.01) { el.style.setProperty('--ar', `${m[1]} / ${m[2]}`); el.style.setProperty('--arn', String(m[1] / m[2])); }
   else { el.style.removeProperty('--ar'); el.style.removeProperty('--arn'); }
 }
-function play(video, poster) {
+function play(video, poster, cc = null) {
   screen(`<video src="${esc(video)}" poster="${esc(poster || '')}" controls autoplay playsinline></video>`);
   // a film whose record names no frame (one brought in from outside the studio): its own picture says it
   const v = $('screen').querySelector('video');
   v.addEventListener('loadedmetadata', () => {
     if (v.isConnected && v.videoWidth && v.videoHeight && !$('screen').style.getPropertyValue('--ar')) shape(`${v.videoWidth}:${v.videoHeight}`);
   }, { once: true });
+  if (cc?.on) liveCaptions(v, cc);
+}
+// A film's captions, drawn over its player as its maker set them (/captions-layer.js, the site's
+// lib/captions.js): {url, on, style}. On the studio machine its answer names captions_url only.
+const ccOf = (s) => s.captions || (s.captions_url ? { url: s.captions_url, on: true } : null);
+function liveCaptions(v, cc) {
+  const go = () => fetch(cc.url).then((r) => (r.ok ? r.json() : null)).then((d) => {
+    if (d && v.isConnected && window.KCCaptions) window.KCCaptions.attach(v, d, { on: true, style: cc.style || null });
+  }).catch(() => {});
+  if (window.KCCaptions) return go();
+  const sc = document.createElement('script');
+  sc.src = '/captions-layer.js';
+  sc.onload = go;
+  document.head.appendChild(sc);
 }
 function stats(ev) {
   const st = ev.stages || {};
@@ -1515,7 +1529,7 @@ async function follow(since = 0, misses = 0) {
     if (s.status === 'queued') $('status').innerHTML = `<span class="pen"></span>` + esc(s.position > 1 ? `Waiting for a free studio: ${s.position - 1} film${s.position === 2 ? '' : 's'} ahead` : (s.wait || 'Waiting for a free studio'));
     else if (s.status === 'running' && s.wait) $('status').innerHTML = `<span class="pen"></span>${esc(s.wait)}`;
     if (s.status === 'done') {
-      if (s.video_url) play(s.video_url, s.poster_url);
+      if (s.video_url) play(s.video_url, s.poster_url, ccOf(s));
       filmDone = s;
       showShare(id, s);
       countView(id);
@@ -2180,7 +2194,7 @@ function ubWatch(id, n = 0) {
 function ubDone(id, s) {
   clearTimeout(ubPoll); ubPoll = null;
   filmDone = s;
-  if (s.video_url) play(s.video_url, s.poster_url);
+  if (s.video_url) play(s.video_url, s.poster_url, ccOf(s));
   showShare(id, s);  // Download is the clean film now
   $('status').innerHTML = '<span class="okmark">&#10003;</span> The KitCut branding is gone: this is your film, clean.';
   refreshCredits();

@@ -1,144 +1,85 @@
-/* sketch/captions.js -- the narration's words burned into the picture, a few at a time.
+/* sketch/captions.js -- the narration's words, a few at a time, as the film's captions.
 
-   A module: a film opts in with "modules": [..., "captions"] in its manifest, and sketch-render
-   loads it after engine.js and props.js. It needs nothing from the film: it reads the voice
-   timeline the bundler injects (SK.VO), cuts each line into short cards at its punctuation, and
-   draws the card being spoken over everything the film draws -- white type on a dark card, the
-   word being said in yellow -- so the words read on any picture. A video site ignores the soft
-   subtitle track an MP4 carries; these are in the pixels.
+   A module: a film opts in with "modules": [..., "captions-layer", "captions"] in its manifest
+   (studio/film.py CAPS "captions"), and sketch-render loads it after engine.js and props.js. It
+   needs nothing from the film: it reads the voice timeline the bundler injects (SK.VO), cuts each
+   line into short cards at its punctuation, and draws the card being spoken over everything the
+   film draws -- white type on a dark card, the word being said in yellow, or the project's brand
+   colours when it has a brand or a style -- so the words read on any picture. The drawing is
+   sketch/captions-layer.js, which the site's players use too.
 
-   Where the card sits, and how many words it holds, come from the frame's shape (GEOMETRY):
+   The film's video is drawn WITHOUT them (a render: ?export or ?encode): the captions go beside it
+   as captions.json (SK.captionData, sketch-render ?captions), and are drawn live over the video,
+   or burned into a copy that leaves KitCut (scripts/captions-burn.py). Its stills, strips and
+   motion sheets show them, so Claude sees where they fall. A film made before 2026-10-31 has its
+   own copy of the module that burned them in (engine/captions.js), and keeps it.
+
+   Where the card sits, and how many words it holds, come from the frame's shape (geometry):
 
      tall   (9:16, a Short)  low in the frame, but above what a phone's own buttons cover
      square (1:1)            along the bottom
      wide   (16:9)           along the bottom
 
    SK.captionBox() answers the band the card stays inside, [x0, y0, x1, y1] in screen pixels:
-   studio/film.py CAPTION_BAND tells the film's writer to keep it clear, so the two move together.
-   A film may set SK.CAPTIONS before SK.film() to change a value ({ on: false } draws none).
+   studio/film.py caption_band tells the film's writer to keep it clear, so the two move together.
+   A film may set SK.CAPTIONS before SK.film() to change a value: { card, ink, said, font, weight }
+   for its look, { on: false } for none.
 
    Every frame is a pure function of t: the table of cards is derived from SK.VO alone.
 */
 (function () {
   'use strict';
-  const SK = window.SK;
-  const { clamp } = SK;
+  const SK = window.SK, K = window.KCCaptions;
   const W = SK.W, H = SK.H;
-  // y: the card's centre; size: the type; w: the widest a line may be; words, chars: a card's most
-  const GEOMETRY = H > W
-    ? { y: H * .745, size: W * .061, w: W * .74, words: 4, chars: 22 }
-    : H === W
-      ? { y: H * .86, size: W * .05, w: W * .8, words: 5, chars: 28 }
-      : { y: H * .885, size: H * .046, w: W * .7, words: 8, chars: 46 };
-  const LOOK = {
-    font: "'Inter', 'Sofia Sans', sans-serif", weight: 800, lh: 1.2, padX: .42, padY: .26, radius: .32,
-    card: 'rgba(17,17,21,.86)', ink: '#ffffff', said: '#ffe14d',
-    lead: .05,  // a card is up this long before its first word, so the eye is there for it
-    hold: .25,  // and stays this long after its last, when nothing follows at once
-    join: .6,   // a pause shorter than this between two cards is bridged, not blinked
-  };
-  const cfg = () => ({ on: true, ...GEOMETRY, ...LOOK, ...(SK.CAPTIONS || {}) });
+  // a render of the video: the captions are drawn live over it instead (captions.json)
+  const CLEAN = typeof location !== 'undefined' && /[?&](export|encode)=/.test(location.search);
+  /** The heaviest loaded weight of a family on the page, 0 when none is. */
+  function faces(family) {
+    const want = String(family).replace(/['"]/g, '').trim().toLowerCase();
+    let top = 0;
+    for (const f of (typeof document !== 'undefined' && document.fonts) || []) {
+      if (String(f.family).replace(/['"]/g, '').trim().toLowerCase() !== want || f.status === 'error') continue;
+      const w = String(f.weight).split(/\s+/).map(Number).filter((n) => n > 0);
+      top = Math.max(top, ...w);
+    }
+    return top;
+  }
+  const cfg = () => ({ on: true, frame: [W, H], ...K.geometry(W, H), ...K.LOOK, ...K.brandLook(SK.BRAND, SK.STYLE, faces), ...(SK.CAPTIONS || {}) });
 
   /** The band the card stays inside, in screen pixels: two lines of type and their card. */
-  SK.captionBox = function () {
-    const o = cfg(), h = 2 * o.size * o.lh + 2 * o.size * o.padY;
-    const w = o.w + 2 * o.size * o.padX;
-    return [Math.round(W / 2 - w / 2), Math.round(o.y - h / 2), Math.round(W / 2 + w / 2), Math.round(o.y + h / 2)];
-  };
-
-  const ends = (s) => /[.!?…;:]["'»”)\]]*$/.test(s);
-  /** One line's words -> cards of at most `words` words and `chars` characters, cut at punctuation;
-   *  a last word is never left alone on a card when the one before can take it. */
-  function cut(words, o) {
-    const out = [];
-    let cur = [];
-    const len = (a) => a.reduce((n, w) => n + w.text.length + 1, -1);
-    const flush = () => { if (cur.length) out.push(cur); cur = []; };
-    words.forEach((w, i) => {
-      const full = cur.length >= o.words || (cur.length && len(cur) + 1 + w.text.length > o.chars);
-      const last = i === words.length - 1 || ends(w.text);
-      const fits = cur.length && len(cur) + 1 + w.text.length <= o.chars * 1.4 && cur.length <= o.words;
-      if (full && !(last && fits)) flush();
-      cur.push(w);
-      if (ends(w.text) || (/,$/.test(w.text) && cur.length >= 2)) flush();
-    });
-    flush();
-    return out;
-  }
+  SK.captionBox = () => K.box(W, H, cfg());
 
   let TABLE = null, TABLE_OF = null;
   function table(o) {
     if (TABLE && TABLE_OF === SK.VO) return TABLE;
-    const rows = [];
-    for (const L of (SK.VO && SK.VO.lines) || []) {
-      const ws = (L.words || []).filter((w) => w && String(w.text || '').trim()).map((w) => ({ text: String(w.text).trim(), s: +w.s, e: +w.e }));
-      for (const c of cut(ws, o)) rows.push({ words: c, s: c[0].s - o.lead, e: c[c.length - 1].e + o.hold });
-    }
-    rows.sort((a, b) => a.s - b.s);
-    rows.forEach((r, i) => {
-      const n = rows[i + 1];
-      if (!n) return;
-      const gap = n.s - (r.e - o.hold);
-      r.e = gap < o.join ? n.s : Math.min(r.e, n.s);
-    });
-    TABLE = rows; TABLE_OF = SK.VO;
-    return rows;
+    TABLE = K.cards(SK.VO, o); TABLE_OF = SK.VO;
+    return TABLE;
   }
   /** The cards and their times, [{ s, e, text }]: what a test or a film's own check reads. */
   SK.captionCards = () => table(cfg()).map((r) => ({ s: r.s, e: r.e, text: r.words.map((w) => w.text).join(' ') }));
 
-  function layout(c, words, o, size) {
-    c.font = `${o.weight} ${size}px ${o.font}`;
-    const sp = c.measureText(' ').width, ws = words.map((w) => c.measureText(w.text).width);
-    const width = (a, b) => ws.slice(a, b).reduce((n, x) => n + x, 0) + sp * Math.max(0, b - a - 1);
-    if (width(0, ws.length) <= o.w) return { lines: [[0, ws.length]], ws, sp, width };
-    let best = null; // two lines, as even as they can be
-    for (let k = 1; k < ws.length; k++) {
-      const m = Math.max(width(0, k), width(k, ws.length));
-      if (!best || m < best.m) best = { k, m };
-    }
-    if (best && best.m <= o.w) return { lines: [[0, best.k], [best.k, ws.length]], ws, sp, width };
-    return null; // too wide at this size
-  }
+  /** The film's captions.json: its cards with their word times, and the look they are drawn in
+   *  (sketch-render writes it beside the video; the studio adds the faces it names). */
+  SK.captionData = function () {
+    const o = cfg(), F = SK._film;
+    const keep = ['on', 'y', 'size', 'w', 'words', 'chars', 'lh', 'padX', 'padY', 'radius', 'lead', 'hold', 'join', ...K.STYLE_KEYS, 'brand'];
+    const style = {};
+    for (const k of keep) if (o[k] !== undefined && typeof o[k] !== 'function') style[k] = o[k];
+    return {
+      v: 1,
+      frame: [W, H],
+      duration: F ? F.duration : SK.LENGTH,
+      style,
+      cards: table(o).map((r) => ({ s: r.s, e: r.e, words: r.words.map((w) => ({ text: w.text, s: w.s, e: w.e })) })),
+    };
+  };
 
   function draw(t) {
+    if (CLEAN) return;
     const o = cfg();
     if (!o.on) return;
     const F = SK._film;
-    if (F && t >= F.duration) return;
-    const rows = table(o);
-    let r = null;
-    for (const x of rows) { if (t >= x.s && t < x.e) { r = x; break; } if (x.s > t) break; }
-    if (!r) return;
-    const c = SK.ctx();
-    c.save();
-    c.setTransform(1, 0, 0, 1, 0, 0);
-    c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.filter = 'none';
-    c.direction = 'ltr'; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
-    c.letterSpacing = '0px'; c.wordSpacing = '0px'; c.shadowColor = 'transparent';
-    let size = o.size, L = layout(c, r.words, o, size);
-    for (let i = 0; !L && i < 6; i++) { size *= .88; L = layout(c, r.words, o, size); }
-    if (!L) L = { ...layout(c, r.words, { ...o, w: Infinity }, size) };
-    const lh = size * o.lh, padX = size * o.padX, padY = size * o.padY;
-    const bw = Math.max(...L.lines.map(([a, b]) => L.width(a, b))) + 2 * padX, bh = L.lines.length * lh + 2 * padY;
-    const k = clamp((t - r.s) / .1), ease = 1 - (1 - k) * (1 - k);
-    c.translate(W / 2, o.y); c.scale(.94 + .06 * ease, .94 + .06 * ease);
-    c.globalAlpha = clamp((t - r.s) / .07);
-    c.fillStyle = o.card;
-    c.beginPath(); c.roundRect(-bw / 2, -bh / 2, bw, bh, size * o.radius); c.fill();
-    let now = -1;
-    r.words.forEach((w, i) => { if (t >= w.s) now = i; });
-    if (now >= 0 && t > r.words[now].e + .35) now = -1; // a long pause: nothing is being said
-    L.lines.forEach(([a, b], li) => {
-      let x = -L.width(a, b) / 2;
-      const y = -bh / 2 + padY + lh * li + lh * .5 + size * .35;
-      for (let i = a; i < b; i++) {
-        c.fillStyle = i === now ? o.said : o.ink;
-        c.fillText(r.words[i].text, x, y);
-        x += L.ws[i] + L.sp;
-      }
-    });
-    c.restore();
+    K.draw(SK.ctx(), table(o), t, o, 1, F ? F.duration : Infinity);
   }
 
   const film = SK.film;

@@ -93,6 +93,9 @@ the day's budget still holds.
     POST /api/films/{id}/youtube {"to": <YouTube upload session>, "key"}: the film's own client
                                  sends the finished film into a session the site opened (youtube.py)
     GET  /api/films/{id}/youtube/{key}  how that send is going, and YouTube's answer
+    POST /api/films/{id}/captioned {"kind": "download"|"preview", "style", "version"}: a copy
+                                 with the captions burned in (captions.py): ready with its url,
+                                 or preparing -- ask again
     POST /api/films/{id}/youtube/draft {"channel": {"id", "title", "handle"}, "recent": [...]}:
                                  the film's own client has its YouTube title, description and
                                  tags written from the film, in the voice of the channel's latest
@@ -174,6 +177,7 @@ import rounds  # noqa: E402
 import unbrand  # noqa: E402
 import share  # noqa: E402
 import canon  # noqa: E402
+import captions as burner  # noqa: E402
 import filmgit  # noqa: E402
 import brandkit  # noqa: E402
 import stylekit  # noqa: E402
@@ -981,6 +985,14 @@ async def index(req):
     return web.Response(text=page, content_type="text/html", headers={"Cache-Control": "no-store"})
 
 
+async def captions_layer(req):
+    """The captions index.html draws over a film (sketch/captions-layer.js: the drawing the
+    engine and the burner use, and the site's /captions-layer.js, byte for byte)."""
+    return web.FileResponse(
+        os.path.join(os.path.dirname(HERE), "sketch", "captions-layer.js"), headers={"Cache-Control": "no-cache"}
+    )
+
+
 async def people_row(req):
     """The People row index.html draws with (the site's people-row.js, mirrored here beside it)."""
     return web.FileResponse(
@@ -1315,18 +1327,17 @@ async def create(req):
         return web.json_response(
             {"error": "look must be one of %s" % ", ".join(films.LOOKS)}, status=400
         )
-    # a film from an idea in a frame of its own ("9:16": a YouTube Short), and with the
-    # narration's words drawn into the picture ("captions": true), which a Short needs: a video
-    # site shows no soft subtitle track. A template's film takes its template's (template_of).
-    # "music": false is a film with no music at all (film.create).
-    captions, music = False, True
+    # a film from an idea in a frame of its own ("9:16": a YouTube Short). A template's film
+    # takes its template's (template_of). Every film with narration has captions, drawn live
+    # over its video; "captions": true starts it with them shown (the site's switch decides
+    # after). "music": false is a film with no music at all (film.create).
+    captions, music = body.get("captions") is True, True
     if not tpl:
         frame = body.get("frame") or "16:9"
         if frame not in films.FRAMES:
             return web.json_response(
                 {"error": "frame must be one of %s" % ", ".join(films.FRAMES)}, status=400
             )
-        captions = body.get("captions") is True
         music = body.get("music") is not False
     # Claude picks the length, `seconds` the longest it may be (kitcut.ai: paid plans; agent.
     # pick_length). Never a template's: it keeps its own
@@ -1708,12 +1719,45 @@ async def youtube_send(req):
         key = body.get("key")
         if isinstance(key, str) and youtube.get(key) is None and peer_has("sends", key):
             return web.json_response({"key": key, "film": f.id, "state": "sending"}, status=202)
-        job = youtube.start(f, client, body.get("to"), key)
+        job = youtube.start(f, client, body.get("to"), key, captions=body.get("captions"))
     except (ValueError, AttributeError):
         return web.json_response({"error": "expected JSON"}, status=400)
     except youtube.SendError as e:
         return web.json_response({"error": e.text}, status=e.status)
     return web.json_response(youtube.public(job), status=202)
+
+
+async def captioned(req):
+    """A copy of the film with its captions burned in (captions.py): {"kind": "download" (the
+    film's maker only) or "preview" (the site's share page: the copy chat apps play), "style":
+    the look picked on the film's page, "version"}. Ready with its address, or being made -- ask
+    again in a few seconds; "none" for a film whose captions are not data (made before
+    2026-10-31: they are in its picture already)."""
+    f = film_of(req.match_info["id"])
+    rec = f.record()
+    if not rec.get("ok"):
+        return web.json_response({"error": "This film is not finished."}, status=409)
+    try:
+        body = await req.json()
+    except ValueError:
+        return web.json_response({"error": "expected JSON"}, status=400)
+    kind = body.get("kind") if body.get("kind") in ("download", "preview") else None
+    if kind is None:
+        return web.json_response({"error": "kind must be download or preview"}, status=400)
+    mine = from_this_machine(req) or clients.same(rec.get("client"), client_of(req))
+    if kind == "download" and not mine:
+        return web.json_response({"error": "only whoever made a film can download it"}, status=403)
+    try:
+        got = burner.want(f, kind, body.get("style"), body.get("version"))
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=400)
+    out = {k: v for k, v in got.items() if k in ("state", "error", "url")}
+    if got["state"] == "ready" and "url" not in out:
+        rel = os.path.relpath(got["path"], f.path("outputs")).replace(os.sep, "/")
+        if rel.startswith(".."):  # an older version's: its own folder is not served
+            return web.json_response({"state": "none"})
+        out["url"] = signed(req, f.id, rel) + ("&dl=1" if kind == "download" else "")
+    return web.json_response(out, status=202 if got["state"] == "preparing" else 200)
 
 
 async def youtube_sent(req):
@@ -2726,16 +2770,21 @@ def film_urls(req, jid, rec):
             out["card_url"] = m["card"]
         if m.get("subtitles"):
             out["subtitles_url"] = m["subtitles"]
+        if m.get("captions"):  # drawn live over the video (captions.py)
+            out["captions_url"] = m["captions"]
         if not out["poster_url"]:
             out["poster_url"] = signed(req, jid, "film_poster.png")
         return out
     f = Film.open(jid)
     web = f is not None and os.path.isfile(f.path("outputs", "film_web.mp4"))
-    return {
+    out = {
         "video_url": signed(req, jid, "film_web.mp4" if web else "film.mp4"),
         "download_url": signed(req, jid, "film.mp4") + "&dl=1",
         "poster_url": signed(req, jid, "film_poster.png"),
     }
+    if f is not None and os.path.isfile(f.path("outputs", "captions.json")):
+        out["captions_url"] = signed(req, jid, "captions.json")
+    return out
 
 
 # What has been read of the events.jsonl of films this server is not making (read_log), so a
@@ -3068,6 +3117,7 @@ def make_app(token):
             web.get("/film/{id}", index),  # one film's page: the page reads the id from the path
             web.get("/fonts/{name}", font),
             web.get("/people-row.js", people_row),
+            web.get("/captions-layer.js", captions_layer),
             web.get("/api/health", health),
             web.get("/api/limits", limits_route),
             web.get("/api/films", list_films),
@@ -3127,6 +3177,7 @@ def make_app(token):
             web.post("/api/films/{id}/youtube/draft", youtube_draft),
             web.get("/api/films/{id}/youtube/draft/{channel}", youtube_drafted),
             web.get("/api/films/{id}/youtube/{key}", youtube_sent),
+            web.post("/api/films/{id}/captioned", captioned),
             web.post("/api/admin/drain", drain),
             web.post("/api/admin/films/{id}/hidden", hide),
             web.get("/files/{id}/{path:.+}", files),

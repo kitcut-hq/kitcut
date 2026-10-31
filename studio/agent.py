@@ -2406,8 +2406,16 @@ def first_record(film, source, client):
             # a film from an idea in a frame of its own (a Short): the site shapes its page by it
             else ({"frame": rec["frame"]} if rec.get("frame") else {})
         ),
-        # the narration's words drawn into the picture (film.CAPS "captions")
-        **({"captions": "burned"} if "captions" in (rec.get("caps") or ()) else {}),
+        # the narration's words: "live", data beside the video the site draws over it and
+        # switches on and off (captions_on: how the film starts), or "burned" into the picture
+        # (a film made before 2026-10-31 with film.CAPS "captions")
+        **(
+            {"captions": "live", "captions_on": bool(rec.get("captions_on"))}
+            if rec.get("captions") == "live"
+            else {"captions": "burned"}
+            if "captions" in (rec.get("caps") or ())
+            else {}
+        ),
         # asked for with no music at all (film.create)
         **({"music": "none"} if rec.get("music") == "none" else {}),
         "state": "queued",
@@ -2660,7 +2668,7 @@ def main():
     ap.add_argument(
         "--captions",
         action="store_true",
-        help="draw the narration's words into the picture (sketch/captions.js)",
+        help="start with the captions shown (every film has them; the site's switch decides after)",
     )
     ap.add_argument(
         "--no-music",

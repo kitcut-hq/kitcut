@@ -65,17 +65,20 @@ def timeline():
 
 
 STUB = """
-const SK = { W: %d, H: %d, clamp: (v) => Math.max(0, Math.min(1, v)), VO: %s, film() { SK._film = {}; } };
-globalThis.window = { SK };
-require(%s);
-console.log(JSON.stringify({ box: SK.captionBox(), cards: SK.captionCards() }));
+const SK = { W: %d, H: %d, clamp: (v) => Math.max(0, Math.min(1, v)), VO: %s, film() { SK._film = {}; },
+  BRAND: %s };
+globalThis.window = globalThis; globalThis.SK = SK;
+require(%s); require(%s);
+console.log(JSON.stringify({ box: SK.captionBox(), cards: SK.captionCards(), data: SK.captionData() }));
 """
 
 
-def module(w, h):
-    """sketch/captions.js run by node against a stub of the engine: its band and its cards."""
+def module(w, h, brand=None):
+    """sketch/captions.js (and the layer it draws with) run by node against a stub of the
+    engine: its band, its cards and its captions.json."""
+    layer = os.path.join(_env.ROOT, "sketch", "captions-layer.js")
     src = os.path.join(_env.ROOT, "sketch", "captions.js")
-    code = STUB % (w, h, json.dumps(timeline()), json.dumps(src))
+    code = STUB % (w, h, json.dumps(timeline()), json.dumps(brand), json.dumps(layer), json.dumps(src))
     out = subprocess.run(["node", "-e", code], capture_output=True, text=True, check=True).stdout
     return json.loads(out)
 
@@ -91,9 +94,23 @@ def main():
     rec = short.record()
     expect("its manifest is 1080x1920", m.get("frame") == [1080, 1920], m.get("frame"))
     expect(
-        "and loads the captions module", "captions" in (m.get("modules") or []), m.get("modules")
+        "and loads the captions modules, the layer first",
+        (m.get("modules") or [])[-2:] == ["captions-layer", "captions"],
+        m.get("modules"),
     )
-    expect("which is in its engine folder", os.path.exists(short.path("engine", "captions.js")))
+    expect(
+        "which are in its engine folder",
+        os.path.exists(short.path("engine", "captions.js"))
+        and os.path.exists(short.path("engine", "captions-layer.js")),
+    )
+    expect(
+        "with the face they are drawn in",
+        any(
+            f.get("family") == "Inter" and f.get("file") == films.CAPTIONS_FONT["file"]
+            for f in m.get("fonts") or []
+        ),
+        m.get("fonts"),
+    )
     expect(
         "its record says so",
         rec.get("frame") == "9:16" and "captions" in rec.get("caps"),
@@ -102,8 +119,10 @@ def main():
     first = agent.first_record(short, "web", "t")
     expect(
         "and so does the run the site reads",
-        first.get("frame") == "9:16" and first.get("captions") == "burned",
-        (first.get("frame"), first.get("captions")),
+        first.get("frame") == "9:16"
+        and first.get("captions") == "live"
+        and first.get("captions_on") is True,
+        (first.get("frame"), first.get("captions"), first.get("captions_on")),
     )
     note = films.frame_note(short)
     x0, y0, x1, y1 = films.caption_band(1080, 1920)
@@ -161,9 +180,30 @@ def main():
     with open(wide.manifest, encoding="utf-8") as f:
         m = json.load(f)
     expect("has no frame in its manifest", "frame" not in m, m.get("frame"))
-    expect("no captions module", "captions" not in (m.get("modules") or []), m.get("modules"))
+    expect(
+        "has captions too, live, starting off",
+        "captions" in (m.get("modules") or [])
+        and wide.record().get("captions") == "live"
+        and wide.record().get("captions_on") is False,
+        (m.get("modules"), wide.record().get("captions"), wide.record().get("captions_on")),
+    )
     expect("no frame in its record", "frame" not in wide.record(), wide.record().get("frame"))
-    expect("and no note", films.frame_note(wide) == "")
+    wnote = films.frame_note(wide)
+    x0, y0, x1, y1 = films.caption_band(1920, 1080)
+    expect(
+        "and its note is the captions' band alone",
+        wnote.startswith("\n\nThe film has captions")
+        and "x %d to %d, y %d to %d" % (x0 - 960, x1 - 960, y0 - 540, y1 - 540) in wnote
+        and "1920" not in wnote,
+        wnote[:300],
+    )
+    expect(
+        "which says what may pass behind them, and what may not",
+        all(w in wnote for w in ("people's legs and bodies", "never a head, a face or a neck"))
+        and "check that no face is under a card" in wnote
+        and "switch them on or off" in wnote,
+        wnote,
+    )
     with open(wide.path("vo.json"), encoding="utf-8") as f:
         lead = json.load(f).get("lead")
     expect(
@@ -220,6 +260,44 @@ def main():
             "%s: a sentence ends its card" % name,
             all(c["text"].endswith(".") for c in cards if "." in c["text"]),
             [c["text"] for c in cards],
+        )
+    if shutil.which("node"):
+        print("the captions' data and their colours")
+        got = module(1080, 1920)
+        data = got["data"]
+        expect(
+            "captions.json holds the cards, with their words' times",
+            [" ".join(w["text"] for w in c["words"]) for c in data["cards"]]
+            == [c["text"] for c in got["cards"]]
+            and all("s" in w and "e" in w for c in data["cards"] for w in c["words"]),
+        )
+        expect(
+            "and the look and frame they are drawn in",
+            data["frame"] == [1080, 1920]
+            and all(k in data["style"] for k in ("card", "ink", "said", "font", "y", "size")),
+            data.get("style"),
+        )
+        expect("a film with no brand wears the default", data["style"]["said"] == "#ffe14d")
+        navy = {"colors": {"primary": "#192859", "accent": "#DAA33C", "background": "#FFFFFF"}}
+        st = module(1080, 1920, navy)["data"]["style"]
+        expect(
+            "a brand's: its darkest colour for the card, white words, its accent said",
+            (st["card"], st["ink"], st["said"]) == ("rgba(25,40,89,0.9)", "#ffffff", "#daa33c"),
+            st,
+        )
+        dim = {"colors": {"primary": "#202020", "accent": "#333366", "text": "#3a3a3a"}}
+        st = module(1080, 1920, dim)["data"]["style"]
+        expect(
+            "an accent that does not read on the card falls back to the yellow",
+            st["said"] == "#ffe14d" and st["card"] == "rgba(32,32,32,0.9)",
+            st,
+        )
+        pale = {"colors": {"primary": "#f4d35e", "accent": "#fefae0"}}
+        st = module(1080, 1920, pale)["data"]["style"]
+        expect(
+            "a brand with no colour white reads on keeps the default card",
+            st["card"] == "rgba(17,17,21,.86)",
+            st,
         )
     shutil.rmtree(HOME, ignore_errors=True)
     print("\n%s" % ("FAILED: %s" % "; ".join(FAILED) if FAILED else "all passed"))

@@ -211,11 +211,16 @@ def main():
     )
 
     # ------------------------------------------------ when it starts empty instead
+    def uncaptioned(f):
+        f.update(caps=[c for c in f.caps if c != "captions"])
+        return f
+
     for why, f in (
         ("a collection", ep("A promo", keep=["cast"])),
         ("another look", ep("Olga, painted", look="painted")),
         ("another frame", ep("Olga, a Short", frame="9:16")),
-        ("captions in one", ep("Olga, captioned", captions=True)),
+        # every film has captions since 2026-10-31: one made before has none in its caps
+        ("captions in one", uncaptioned(ep("Olga, from before captions"))),
         ("no music in one", ep("Olga, quiet", music=False)),
         ("made in scenes", ep("Olga, in scenes", mode="scenes")),
     ):

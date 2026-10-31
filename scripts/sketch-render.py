@@ -422,6 +422,59 @@ def write_sound(m, page, size):
         )
 
 
+def live_captions(m):
+    """Whether the film's captions are drawn live over its video, not into it: the module that
+    draws them for the stills and leaves the video clean (sketch/captions-layer.js, 2026-10-31).
+    A film made before has its own engine/captions.js that burns them in, and no layer."""
+    return "captions-layer" in (m.get("modules") or [])
+
+
+def write_captions(m, page, size):
+    """<outputs>/captions.json: the film's captions as data (SK.captionData -- the cards, their
+    word times, the look), with the faces its look names (and its brand's and style's, which a
+    person may pick for them later) copied beside it as captions_font<N>
+    and listed under "fonts" (file names next to it: the site, the burner and the studio read them
+    from there). Nothing for a film with no narration (and an old one is removed). Its path, or
+    None."""
+    dst = os.path.join(m["_outputs"], "captions.json")
+    for n in os.listdir(m["_outputs"]):
+        if n.startswith("captions_font"):
+            os.remove(os.path.join(m["_outputs"], n))
+    s = Session(page, size=size)
+    s.run("captions=1")
+    data = s.captions
+    if not data or not data.get("cards"):
+        if os.path.exists(dst):
+            os.remove(dst)
+        return None
+    font = str((data.get("style") or {}).get("font") or "")
+    families = [f.strip().strip("'\"").strip() for f in font.split(",")]
+    fonts = []
+    for fnt in m.get("fonts", []):
+        # the faces its look names, and the brand's and the style's: a person may pick one of
+        # those for the captions later (the film's page), with no new render
+        own = str(fnt.get("file", "")).startswith(("brand/", "style/"))
+        if fnt.get("family") not in families and not own:
+            continue
+        src = _sketch.font_file(m, fnt["file"])
+        name = "captions_font%d%s" % (len(fonts) + 1, os.path.splitext(src)[1].lower())
+        shutil.copyfile(src, os.path.join(m["_outputs"], name))
+        fonts.append(
+            {
+                "family": fnt["family"],
+                "weight": str(fnt.get("weight", "400")),
+                "style": fnt.get("style", "normal"),
+                "file": name,
+            }
+        )
+    data["fonts"] = fonts
+    tmp = dst + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+    os.replace(tmp, dst)
+    return dst
+
+
 def artifact_flavour(page):
     """claude.ai Artifacts wrap the page in their own doctype/html/head/body and viewport meta."""
     return re.sub(
@@ -457,6 +510,7 @@ class Session:
         self.error, self.automation, self.frames, self.last = None, None, 0, time.time()
         self.sound = None  # what the film says its score and cues are (?sound=1)
         self.report = None  # what the page's SK.REPORT() said after its stills, if it has one
+        self.captions = None  # the film's captions.json (?captions=1: SK.captionData())
         self.key = "/" + secrets.token_hex(12) + "/"
         sess = self
 
@@ -505,6 +559,8 @@ class Session:
                         sess.sound = json.loads(body)
                     elif path == "/report":
                         sess.report = json.loads(body)
+                    elif path == "/captions":
+                        sess.captions = json.loads(body)
                     elif path == "/error":
                         sess.error = body.decode("utf-8", "replace")
                         sess.done.set()
@@ -1148,6 +1204,7 @@ def main():
             "poster",
         ]
         names += ["web"] if args.web else []
+        names += ["captions"] if live_captions(m) and args.t0 == 0 and not args.draft else []
     with _sketch.Stages(m, "sketch-render", names, argv=sys.argv[1:]) as st:
         with st("bundle"):
             page = bundle(m)
@@ -1325,6 +1382,13 @@ def main():
                         os.path.getsize(web) / 1e6,
                         _encode.describe(wcfg),
                     )
+                )
+
+        if "captions" in names:
+            with st("captions"):
+                p = write_captions(m, light, size)
+                print(
+                    "  %s" % (os.path.relpath(p, _env.ROOT) if p else "no captions (no narration)")
                 )
 
     _project.record(

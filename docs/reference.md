@@ -3929,7 +3929,18 @@ python scripts/sketch-audio.py  --manifest projects/<id>/sketch.json --levels # 
 python scripts/sketch-render.py --manifest projects/<id>/sketch.json          # the video
 python scripts/sketch-render.py --manifest projects/<id>/sketch.json --timings
 python scripts/check-sketch.py                                                # free self-test
+python scripts/captions-burn.py --video <outputs>/film.mp4 --captions <outputs>/captions.json --out <copy>.mp4
 ```
+
+A film whose manifest loads the `captions-layer` module (every Sketch Studio film with narration
+since 2026-10-31) is rendered **without** its captions: the full render's last stage, "captions",
+writes `outputs/captions.json` (the cards cut from the voice timeline, their word times, their look,
+and the faces it names copied beside it as `captions_font<N>`), and its stills still draw them.
+`sketch/captions-layer.js` is the one drawing, used by the engine module (`sketch/captions.js`), by
+the site's players over the `<video>`, and by `captions-burn.py`, which draws each different picture
+of the captions once in the headless browser and lays them over the video with ffmpeg: the copy
+with captions that leaves KitCut (`studio/captions.py`). `--style` takes a look picked later
+(`{"preset": "plain"}`, colours, a face); `--plan` draws nothing.
 
 Start a film by copying `config/sketch/example/` to `projects/<id>/` (the scripts write
 `audio/ outputs/ temp/` next to the manifest). The example runs end to end for free: its

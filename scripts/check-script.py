@@ -48,6 +48,10 @@ ROOT = _env.ROOT
 
 # checks a script is allowed to skip, each with the reason it may
 EXCEPTIONS = {
+    "captions-burn.py": {
+        "record": "a copy of a Sketch Studio film made on request (studio/captions.py keeps and "
+        "prunes it), not a project's deliverable",
+    },
     "speaker-loops.py": {
         "record": "its loops are a website's assets (kitcut.ai's style tiles), committed in that "
         "repo; the film it cuts them from is recorded where it was rendered",

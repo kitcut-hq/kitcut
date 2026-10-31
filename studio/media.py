@@ -75,7 +75,26 @@ FILES = (
     ("poster", "film_poster.png", "image/png"),
     ("card", "card.jpg", "image/jpeg"),
     ("subtitles", "film.vtt", "text/vtt"),
+    # the captions as data, drawn live over the video (sketch-render's "captions" stage); the
+    # faces it names go up beside it (FONT_TYPES), and the site reads them from next to it
+    ("captions", "captions.json", "application/json"),
 )
+FONT_TYPES = {".woff2": "font/woff2", ".woff": "font/woff", ".ttf": "font/ttf", ".otf": "font/otf"}
+
+
+def caption_fonts(out):
+    """The faces captions.json names, beside it in `out`: [(name, type)]."""
+    try:
+        names = sorted(os.listdir(out))
+    except OSError:
+        return []
+    return [
+        (n, FONT_TYPES[os.path.splitext(n)[1].lower()])
+        for n in names
+        if n.startswith("captions_font") and os.path.splitext(n)[1].lower() in FONT_TYPES
+    ]
+
+
 CACHE = "public, max-age=31536000, immutable"  # a film's files never change under one id
 CARD = (1200, 628)  # the 1.91:1 image X, Facebook and most link previews show
 
@@ -515,6 +534,14 @@ async def publish(film, timeout=3600, out=None, rev=None):
                     how = download_name(film) if key == "video" else None
                     await _put(s, "%s/%s" % (film.id, blob_of(film, name, rev)), p, ctype, how)
                     urls[key] = url_of(film.id, blob_of(film, name, rev))
+            if "captions" in urls:
+                for name, ctype in caption_fonts(out):
+                    await _put(
+                        s,
+                        "%s/%s" % (film.id, blob_of(film, name, rev)),
+                        os.path.join(out, name),
+                        ctype,
+                    )
     except Exception as e:  # noqa: BLE001 -- the film is made; the copy is a bonus
         print("film %s: not copied online: %s" % (film.id, e), file=sys.stderr, flush=True)
         return urls if "video" in urls else {}

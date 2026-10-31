@@ -31,6 +31,7 @@ python studio/test_outro.py                     # the Free plan's mark and closi
 python studio/test_voroom.py                    # the voice's room, and vo.json "dry": a voice with none
 python studio/test_paintref.py                  # a painting made from a project's picture ("ref": "pic_<name>")
 python studio/test_characters.py                # painted characters in the cast, kept paintings, @name in a prompt
+python studio/test_captions.py                  # captions as data: clean video, captions.json, burned copies, YouTube
 ```
 
 `serve.ps1` writes the tunnel URL to `STUDIO_HOME\url.txt` and to MongoDB `kitcut.studio_hosts`.
@@ -200,14 +201,25 @@ the manifest's `frame`, the record's `frame`, and a paragraph in the first messa
 (`film.frame_note`) that replaces the brief's 1920x1080 -- the canvas, the box to keep to, and for
 a tall film what a phone's own buttons cover (`film.TALL_COVERED`: the bottom fifth and a strip
 down the right of the lower half). The system prompt is not touched, so every 16:9 film's prompt
-is byte for byte what it was. `"captions": true` adds the `captions` capability: the engine
-module `sketch/captions.js` draws the narration's words into the picture a card at a time, from
-the voice timeline, in a band that depends on the frame's shape (`film.caption_band`, which
-`studio/test_shorts.py` holds equal to the module's own `SK.captionBox`); the first message tells
-Claude to keep that band clear and to draw no captions of its own. Claude's stills, strips and
-motion sheets show the cards, and so does the review. A YouTube Short needs both: YouTube shows
-no soft subtitle track. From this machine: `python studio/agent.py "..." --frame 9:16 --captions`;
-from the site: `npm run film -- make ... --short`. Not yet on the site's idea box.
+is byte for byte what it was.
+
+**Captions** (`film.CAPS["captions"]`, `captions.py`, 2026-10-31). Every film with narration has
+them: the engine modules `sketch/captions-layer.js` (the drawing, byte for byte the site's
+`/captions-layer.js`) and `sketch/captions.js` cut the narration into cards from the voice
+timeline and draw them in a band that depends on the frame's shape (`film.caption_band`, which
+`studio/test_shorts.py` holds equal to `SK.captionBox`), in the project's brand or style colours
+when it has one. Claude's stills, strips and motion sheets show the cards, and the first message
+(`film.captions_note`) says what may pass behind them (ground, bodies; never a head, a face or
+anything to be read) and, for a painted film, how much of a painting's foot lies behind them. The
+video itself is rendered clean (`?export`/`?encode` draw no card); sketch-render's last stage
+writes `outputs/captions.json` (cards, word times, look, and the faces it names as
+`captions_font<N>`), which `media.publish` copies online beside the video, per version. The site
+draws them live and switches them; `"captions": true` in a film request only starts it with them
+shown (the record's `captions_on`). A copy with them burned in is made on request by
+`captions.py` (`scripts/captions-burn.py`, the same drawing in the browser, laid over the video by
+ffmpeg): `POST /api/films/<id>/captioned` for a download or a chat app's preview, and a YouTube
+send asked with `"captions": {"on": true}`. A film made before keeps its own `engine/captions.js`,
+which burns them in (`"captions": "burned"` on its run).
 
 A 9:16 film from an idea also opens as a feed needs it to (2026-10-09; `docs/shorts-guidebook.md`
 is the rulebook and says why). Its first word comes 0.1 s in, not 0.5 (`film.vo_lead`,
