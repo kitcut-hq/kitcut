@@ -4342,13 +4342,17 @@ Backends:
   nearest it, 2K or the nearest size below, and JPEG where offered. `quality` is sent only to
   models that have the setting (OpenAI's). The price comes back with each picture.
 - **`muse`**: the same backend pinned to `meta/muse-image`, the studio's painter. It is served
-  but missing from the catalogue, so it gets the settings it always got (2K, 16:9, PNG) and
-  answers 1920x1280 whatever ratio was asked. It costs about $0.01 a picture and takes 15-30 s.
+  but missing from the catalogue, so it gets the settings it always got (2K, the film's ratio,
+  PNG) and up to 8 reference pictures, which the catalogue does not list either
+  (`UNLISTED_REFS`; 2026-10-30: a line-up of one style picture and 7 characters came back with
+  all 7 right, and at 10 pictures one was painted twice and one left out). It costs about $0.01 a picture and takes 15-30 s.
 - **`gemini`**: Vertex AI.
 
 `ref` names a painting already made. It goes in as a reference picture (`input_references`,
 a data URL) wherever the model takes one, and is how a character stays the same from scene to
-scene. Muse takes no reference, so it paints the second scene from the words alone.
+scene. Muse takes them too (`UNLISTED_REFS`) and is not billed for them: $0.01 a painting
+either way. A film painted before Muse took them keeps its fingerprints, so nothing repaints by
+itself.
 
 `ref` may also name one of the film's project pictures, `pic_<name>`
 (`inputs/pic_<name>.png|jpg|webp`, seeded by `studio/library.py`). The picture is sent as it
@@ -5420,8 +5424,8 @@ Measured (2026-09-28): 17 cut-outs for the example film at medium quality, $0.19
 ($0.0107-0.0137 each), 78 s of wall clock four at a time; one repaint $0.011. Tested both ways
 on three subjects (an engraved freezer, a photographed cone, an engraved portrait): Flare's
 alpha and Muse-on-white keyed by `matte_white` both came out clean enough that the border hid
-any difference. Flare takes 16 reference pictures; Muse takes none but has the most detail per
-dollar. One cut-out of 17 came back with a white paper shape painted behind it (an engraving
+any difference. Flare takes 16 reference pictures; Muse (which was thought then to take none:
+it takes 8, `UNLISTED_REFS`) has the most detail per dollar. One cut-out of 17 came back with a white paper shape painted behind it (an engraving
 of barley); "drawn alone with nothing behind it" in the prompt fixed it.
 
 **Fonts** (`fonts/SOURCES.md`): Abril Fatface (headlines), UnifrakturMaguntia (mastheads),
@@ -6061,8 +6065,9 @@ sticker, woodcut and pop art drew the person in the medium; courtroom and paper 
 photographic face under a stylised edge (fixed in studio-poc d7768a6 by one sentence: the face is
 drawn in the medium too, with no photographic skin or light); watercolour and wooden peg still
 draw a near-photo face. A rig has one expression, so every reaction a drama turns on is a painted
-picture, and the painted look's painter (muse) takes no reference picture: a character painted
-twice drifts unless one fixed description is pasted into every prompt.
+picture. The painted look's painter (muse) was thought then to take no reference picture, so a
+character painted twice drifted unless one fixed description was pasted into every prompt; it
+takes them since 2026-10-30, and a `ref` keeps the character.
 
 ## Shorts cut from a finished episode: `episode-short.py`
 

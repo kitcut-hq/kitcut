@@ -935,8 +935,8 @@ its films, next to `projects\` (its text is in its project's git repository too:
   is asked for again), the things it saw, the layout, the look that suits it, each line of
   lettering with its box and 2-3 Google Fonts that come close, and a subject from the brief --
   then each line cut out and set in each face (`brandkit.standin` fetches them), then the proof:
-  the subject painted each way (`film.STYLE_ROUTES`: GPT Image given the picture, Muse from the
-  line; Gemini too for the team, `X-Team: 1` from the site's `KITCUT_TEAM`) as a step of its own
+  the subject painted each way (`film.STYLE_ROUTES`: GPT Image and Muse, each given the pictures
+  and the line; Gemini too for the team, `X-Team: 1` from the site's `KITCUT_TEAM`) as a step of its own
   (`stylekit.py --proof <dir>`, handed only OpenRouter's key: the server's environment has none).
   The person picks a route on the card; only the team may pick Gemini, and anyone else's edit moves
   a Gemini style to GPT Image and says so. An episode gets it at seed after the brand

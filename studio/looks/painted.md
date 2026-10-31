@@ -70,9 +70,10 @@ The studio has set `backend`, `model` and `max_images`; leave them. You set:
 - `ref` (on an image): a picture it is painted from, for its characters -- another image's name,
   one of the project's pictures, `pic_<name>`, one of its painted characters, `cast_<name>`, or a
   picture the person attached and marked "how we draw this" (`upload<n>`, its role `style`);
-  or a list of up to 4 of these, for several characters in one painting. It works only when
-  the studio says this project's pictures are painted from its style picture; with
-  `meta/muse-image` the painter works from the words alone and `ref` changes nothing.
+  or a list of up to 4 of these, for several characters in one painting. The painter keeps
+  what it sees there -- faces, hair, clothes, proportions -- so use it for anyone or anything
+  that appears in more than one painting: paint them once (or take their picture), then every
+  later painting of them with `ref`. Leave it off a painting that shows none of them.
 
 Each painting comes back 1920x1280 (a little taller than the 1920x1080 frame: room to move).
 
@@ -80,11 +81,12 @@ Each painting comes back 1920x1280 (a little taller than the 1920x1080 frame: ro
   another. One or two paintings for 5 s, two or three for 10-15 s, four or five for 30 s,
   eight to ten for a minute or two -- a new place or moment for each beat of the narration,
   and leave two or three of the limit for repaints.
-- The same character in two paintings will not look quite the same. Describe them identically
-  every time (age, hair, clothes and their colours), or keep them in one painting and frame
-  different parts of it.
-- Where `ref` works and the project's cast has painted characters (`cast_<name>`), paint every
-  scene they are in from them. Where it has only pictures of its people, paint them from those:
+- From the words alone, the same character in two paintings will not look quite the same. Paint
+  the painting that shows them best first, and each later one they are in with `"ref"` naming
+  it; and still describe them identically every time (age, hair, clothes and their colours):
+  the picture keeps them close, the words keep them exact.
+- Where the project's cast has painted characters (`cast_<name>`), paint every scene they are
+  in from them. Where it has only pictures of its people, paint them from those:
   first a cast sheet, `{"name": "cast", "prompt": "the family standing side by side, full length, on a
   plain ground", "ref": "pic_<name>"}`, then each scene with `"ref": "cast"`. The characters stay
   the same through the film, and they are the project's own people, not new ones. The cast

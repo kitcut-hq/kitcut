@@ -78,7 +78,7 @@ def fake_paint(
     return jpeg(COLOURS.get(name, (128, 128, 128))), {"cost_usd": 0.01}
 
 
-SP.paint_openrouter = fake_paint
+PAINT_OPENROUTER, SP.paint_openrouter = SP.paint_openrouter, fake_paint  # the real one: muse()
 
 
 def film(name, images, pics=()):
@@ -255,6 +255,65 @@ def redo():
     check(err and "not a folder beside the manifest" in err, "redo outside is refused", err)
 
 
+def muse():
+    """Muse lists nothing in OpenRouter's catalogue, yet takes reference pictures (UNLISTED_REFS):
+    the request itself carries them, style pictures first, as many as it takes; a model the
+    catalogue does not describe and the table does not know still gets none. A Muse film painted
+    before keeps its keys (they were taken from the same parts), so nothing repaints by itself."""
+    import httpx
+
+    sent = []
+
+    class Reply:
+        status_code = 200
+
+        def json(self):
+            return {"data": [{"b64_json": "eA=="}], "usage": {"cost": 0.01}}
+
+    pics = []
+    for i in range(10):
+        pics.append(os.path.join(HOME, "muse%d.png" % i))
+        Image.new("RGB", (8, 8), (i, i, i)).save(pics[-1])
+    post, caps = httpx.post, SP.model_caps
+    httpx.post = lambda url, json=None, **k: sent.append(json) or Reply()
+    SP.model_caps = lambda model: None  # Muse: no catalogue entry
+    os.environ.setdefault("OPENROUTER_API_KEY", "test")
+    try:
+        PAINT_OPENROUTER("a park", "meta/muse-image", ref=pics[1], style_ref=pics[0], aspect="9:16")
+        PAINT_OPENROUTER("a park", "meta/muse-image", ref=pics[4:10], style_ref=pics[:4])
+        PAINT_OPENROUTER("a park", "someone/unlisted", ref=pics[1])
+    finally:
+        httpx.post, SP.model_caps = post, caps
+    one, many, other = sent
+    check(
+        len(one.get("input_references") or []) == 2
+        and one["prompt"].startswith(SP.STYLE_REF)
+        and one["prompt"].endswith("a park")
+        and one["aspect_ratio"] == "9:16",
+        "Muse is sent the style picture and the character, with what they are for (a tall film)",
+        {k: v for k, v in one.items() if k != "input_references"},
+    )
+    check(
+        len(many["input_references"]) == SP.UNLISTED_REFS["meta/muse-image"]
+        and many["prompt"].startswith(SP.STYLE_REFS % 4),
+        "as many as it takes: every style picture first, then the characters that fit",
+        len(many.get("input_references") or []),
+    )
+    check("input_references" not in other, "a model nobody describes is still sent none")
+    check(
+        SP.refs_max({"supported_parameters": {"input_references": {"max": 0}}}, "meta/muse-image")
+        == 0,
+        "a catalogue entry, once there is one, wins over the table",
+    )
+    spec = {"backend": "muse", "model": "meta/muse-image", "style": "warm watercolour"}
+    im = {"name": "park", "prompt": "park: the family in a park"}
+    check(
+        SP.fingerprint(spec, im, "0123456789") == "539459eb1a"
+        and SP.fingerprint(spec, im, [["pic", "abcdef0123"]], None, "9:16") == "c81bc3d27e",
+        "a Muse painting with a ref keeps the key it was painted under (no repaint by itself)",
+    )
+
+
 def roles():
     """An attached picture is a painting's ref only when its role (inputs/roles.json, the
     studio's) is "style"; "scene" is never one, nor a project picture marked "scene"."""
@@ -420,6 +479,7 @@ def main():
     styles()
     roles()
     redo()
+    muse()
     print("\n%s" % ("all passed" if not FAILS else "%d FAILED" % len(FAILS)))
     shutil.rmtree(HOME, ignore_errors=True)
     sys.exit(1 if FAILS else 0)

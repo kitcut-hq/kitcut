@@ -96,7 +96,7 @@ _B32 = "abcdefghijklmnopqrstuvwxyz234567"
 ROUTES = ("gpt", "words", "gemini")
 ROUTE_NAMES = {
     "gpt": "GPT Image, given your picture",
-    "words": "Muse, from the style line",
+    "words": "Muse, given your pictures",
     "gemini": "Gemini, given your picture",
 }
 # USD a picture as measured on 2026-10-15 (the proof's own prices replace them once it has run):
@@ -686,20 +686,19 @@ def _sp():
 
 def paint_one(route, subject, style_line, style_jpg, out):
     """One proof picture, painted as an episode's would be (film.paint_pins): on a picture route
-    with every style picture (`style_jpg`, a path or a list) and the style line, at the route's
-    quality. (path, {cost_usd, seconds}) or raises. Always wide (16:9): it shows the style, not
-    a film, so a tall project's proof is wide too."""
+    (every route now, Muse's too) with every style picture (`style_jpg`, a path or a list) and the
+    style line, at the route's quality. (path, {cost_usd, seconds}) or raises. Always wide (16:9):
+    it shows the style, not a film, so a tall project's proof is wide too."""
     sp = _sp()
     r = STYLE_ROUTES[route]
     t = time.time()
-    if r["picture"]:
-        prompt = sp.full_prompt({"style": style_line}, {"prompt": subject})
-        data, meta = sp.paint_openrouter(
-            prompt, r["model"], quality=r.get("quality"), style_ref=style_jpg
-        )
-    else:
-        prompt = sp.full_prompt({"style": style_line}, {"prompt": subject})
-        data, meta = sp.paint_openrouter(prompt, r["model"])
+    prompt = sp.full_prompt({"style": style_line}, {"prompt": subject})
+    data, meta = sp.paint_openrouter(
+        prompt,
+        r["model"],
+        quality=r.get("quality"),
+        style_ref=style_jpg if r["picture"] else None,
+    )
     sp.to_jpeg(data, out)
     return out, {"cost_usd": meta.get("cost_usd"), "seconds": round(time.time() - t, 1)}
 
@@ -1207,13 +1206,11 @@ def note(film, lib):
             lines.append(
                 "- Its pictures are painted FROM the style pictures: the studio gives every one "
                 "of them, and the style line above, to the painter with every picture "
-                "(paint.json's painter, style, style_ref and quality are the studio's; this "
-                "overrides the look's words that the painter works from words alone and that a "
-                "ref changes nothing). "
+                "(paint.json's painter, style, style_ref and quality are the studio's). "
                 "So each image's prompt says ONLY what to draw -- the subject, the framing, the "
                 "moment, how full the picture is -- with no medium, style, palette or colour "
                 'words: a colour word beats the picture ("pink roses" came back pink from a '
-                "black-ink style). A `ref` works now too: it keeps a character the same from "
+                "black-ink style). A `ref` keeps a character the same from "
                 'picture to picture, and `"ref": "pic_<name>"` paints from one of the project\'s '
                 "own pictures (a cast sheet of its people, then each scene with `\"ref\"` "
                 "naming the sheet)."
