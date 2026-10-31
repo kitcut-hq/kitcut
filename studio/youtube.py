@@ -5,7 +5,8 @@ person's channel grants, the video's title, description and privacy, and the upl
 opens a resumable upload session with YouTube and hands the studio only that session's address,
 which lets exactly one video into exactly one channel and lapses within a week. So the studio
 never holds a Google token, and a leaked session address can do no more than finish this upload.
-The studio streams outputs/film.mp4 into it in 8 MiB pieces, picks up where YouTube says it
+The studio streams outputs/film.mp4 (or, asked with "captions": {"on": true, "style"}, the
+copy with the captions burned in: captions.py) into it in 8 MiB pieces, picks up where YouTube says it
 stopped after a dropped connection, and reports what YouTube answered.
 
     POST /api/films/<id>/youtube        {"to": <session address>, "key": <the site's post id>}
@@ -30,6 +31,7 @@ import asyncio
 import aiohttp
 
 import clients
+import captions as captioned
 
 # the only place a film may be sent: YouTube's own resumable upload endpoint
 HOSTS = ("https://www.googleapis.com/upload/youtube/v3/videos?",)
@@ -55,7 +57,9 @@ class _AgainError(Exception):
 
 def public(job):
     return {
-        k: job[k] for k in ("key", "film", "state", "sent", "size", "video", "error") if k in job
+        k: job[k]
+        for k in ("key", "film", "state", "sent", "size", "video", "error", "captions")
+        if k in job
     }
 
 
@@ -99,8 +103,10 @@ def _save(film, job):
         pass
 
 
-def start(film, client, to, key):
-    """Send a finished film into the upload session `to`, once per key."""
+def start(film, client, to, key, captions=None):
+    """Send a finished film into the upload session `to`, once per key. captions: {"on": true,
+    "style"} sends the copy with the captions burned in (captions.py, made first: the send is
+    "sending" with nothing sent meanwhile); anything else, the film as it is."""
     if not isinstance(key, str) or not KEY.match(key):
         raise SendError(400, "a send needs a key")
     if not isinstance(to, str) or not to.startswith(HOSTS) or "upload_id=" not in to:
@@ -119,7 +125,12 @@ def start(film, client, to, key):
     job["size"] = os.path.getsize(path)
     job["t"] = time.time()
     SENDS[key] = job
-    job["task"] = asyncio.get_running_loop().create_task(_run(job, film, path, to))
+    on = isinstance(captions, dict) and captions.get("on") is True
+    if on:
+        job["captions"] = True
+    job["task"] = asyncio.get_running_loop().create_task(
+        _run(job, film, path, to, captions.get("style") if on else False)
+    )
     return job
 
 
@@ -129,8 +140,14 @@ def prune(now=None):
         del SENDS[k]
 
 
-async def _run(job, film, path, to):
+async def _run(job, film, path, to, burn=False):
     try:
+        if burn is not False:  # the copy with its captions (None: in the film's own look)
+            try:
+                path = await captioned.burned(film, "youtube", burn)
+            except LookupError:
+                pass  # no captions as data: a film made before 2026-10-31 has them in its picture
+            job["size"] = os.path.getsize(path)
         job["video"] = await _send(job, path, to)
         job["state"] = "done"
     except SendError as e:

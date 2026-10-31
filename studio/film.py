@@ -32,6 +32,7 @@ to their own root.
 import os
 import re
 import json
+import math
 import time
 import shutil
 import secrets
@@ -76,6 +77,8 @@ EDITABLE = ("film.js", "score.json", "sfx.json", "vo.json")
 MADE = ("film.js", "score.json", "sfx.json")  # what a finished film must have
 # the film's own copy, in engine\; Claude may extend it. Its capabilities' modules join it
 ENGINE = ("engine.js", "props.js")
+# the captions modules every film copies from this release (Film.create), never a template's engine
+LIVE_CAPTIONS = ("captions-layer.js", "captions.js")
 # a member of the person's cast, cast\<name>.js (library.py), and one named in film code:
 # SK.cast.pip, cast.pip, cast['pip']
 CAST_FILE = re.compile(r"^[a-z][a-z0-9_]{0,30}\.js$")
@@ -239,11 +242,16 @@ CAPS["template"] = {}
 # routes: a real map and a route on it (the route tool: scripts/route-map.py --film), for a film
 # that replays a ride, a run or a hike on its real roads
 CAPS["routes"] = {}
-# captions: the narration's words drawn into the picture, a card at a time (sketch/captions.js),
-# for a film that goes where a soft subtitle track is not shown (a YouTube Short). Not part of any
-# look's recipe and it brings no reference: a film asked for with them gets it on top of its
-# look's (Film.create), and every prompt stays byte for byte what it was
-CAPS["captions"] = {"modules": ("captions",)}
+# captions: the narration's words, a card at a time (sketch/captions.js, drawn by
+# sketch/captions-layer.js), on every film with narration since 2026-10-31. The video is rendered
+# without them; they go beside it as captions.json, are drawn live over it by the site's players
+# and burned into a copy that leaves KitCut (captions.py) -- the film's page switches them on and
+# off. Claude's stills show them, so its pictures keep faces out of their band (frame_note). Not
+# part of any look's recipe and it brings no reference: every film gets it on top of its look's
+# (Film.create), and the system prompt stays byte for byte what it was. Their face is Inter, the
+# same file the site draws them with
+CAPTIONS_FONT = {"file": "fonts/Inter.woff2", "family": "Inter", "weight": "100 900", "load": "800"}
+CAPS["captions"] = {"modules": ("captions-layer", "captions"), "fonts": [CAPTIONS_FONT]}
 # actors: characters an image model drew and scripts/actor-pack.py cut into packs, put into a
 # project's library by hand (studio/actor_put.py) and given to each of its episodes
 # (library._seed_actors, which adds this to the film's caps). sketch/actors.js draws them;
@@ -479,10 +487,78 @@ def _round(v):
     return int(v + 0.5)
 
 
+def heads_above(rec, w, h):
+    """For a painted film: the share of a painting's height, from its foot, that lies behind the
+    captions' band when the painting covers the frame at zoom 1 -- the part of the picture its
+    prompt keeps every head and neck out of. A tall film's paintings are tall (TALL_PAINTING,
+    drawn a little larger than the frame); a wide or square film's are 1920x1280, covering it.
+    None for a film that paints nothing."""
+    if "paintings" not in (rec.get("caps") or ()):
+        return None
+    if h > w:
+        r = STYLE_ROUTES.get((rec.get("paint_route") or {}).get("route")) or {}
+        (pw, ph), more = TALL_PAINTING["muse" if r.get("backend", "muse") == "muse" else "picture"]
+    else:
+        (pw, ph), more = (1920, 1280), 1.0
+    tall = ph * max(w / pw, h / ph) * more  # the painting's height on screen
+    top = caption_band(w, h)[1]  # the band's top, from the frame's top
+    below = (tall - h) / 2 + h - top  # the painting's height under the band's top
+    return max(0.0, min(1.0, below / tall))
+
+
+def captions_note(film, rec, w, h):
+    """The first message's paragraph on the film's captions: where their band is, what may pass
+    behind it, and their colours. Every film with narration has them, drawn over its video live
+    and switched on and off after it is made, so the picture must work with them and without."""
+    x0, y0, x1, y1 = caption_band(w, h)
+    text = (
+        "\n\nThe film has captions: the words being spoken appear a few at a time on a card "
+        "inside the band x %d to %d, y %d to %d (zoom 1, camera at the centre; the card stays "
+        "there whatever the camera does), from the narration's own word times. %s Your stills, "
+        "strips and motion sheets show them. The picture runs under the band: ground, a lawn, a "
+        "floor, a table, plants, people's legs and bodies may pass behind the captions -- never "
+        "a head, a face or a neck, "
+        "and never words, numbers or anything to be read. When you look at your stills, check "
+        "that no face is under a card. Draw no captions or subtitles of your own: on-screen type "
+        "is for names, numbers and labels, never the narration's sentence again."
+        % (
+            x0 - w // 2,
+            x1 - w // 2,
+            y0 - h // 2,
+            y1 - h // 2,
+            "The studio draws them over the video, and whoever made the film can switch them on "
+            "or off at any time, so the picture must work with them and without."
+            if rec.get("captions") == "live"
+            else "The studio writes them into the picture itself.",
+        )
+    )
+    share = heads_above(rec, w, h)
+    if share:
+        text += (
+            " Write each painting's prompt so that every head and neck sits above the lowest "
+            "%d%% of the painting: drawn to cover the frame, that part of it lies behind the "
+            "captions." % math.ceil(share * 100)
+        )
+    try:
+        with open(film.manifest, encoding="utf-8") as f:
+            head = (json.load(f).get("head") or {}).get("scripts") or []
+    except (OSError, ValueError):
+        head = []
+    if "brand/brand.js" in head or "style/style.js" in head:
+        text += (
+            " They wear the project's colours (its brand's, or its style's): a card in its "
+            "darkest colour, the word being said in its accent, in its body face when that has a "
+            "bold weight. Set SK.CAPTIONS = { card, ink, said } before SK.film() only when the "
+            "brief asks for other colours."
+        )
+    return text
+
+
 def frame_note(film):
-    """For a film that is not 16:9, or carries burned captions: the frame it is drawn in and what
-    is taken in it. The system prompt and its example films are 16:9 (and stay so, to keep every
-    other film's prompt as it was), so the first message says what replaces that."""
+    """For a film that is not 16:9, or has captions (every film with narration): the frame it is
+    drawn in and what is taken in it. The system prompt and its example films are 16:9 (and stay
+    so, to keep every other film's prompt as it was), so the first message says what replaces
+    that."""
     rec = film.record()
     if rec.get("template"):
         return ""
@@ -550,18 +626,8 @@ def frame_note(film):
             "(the studio drops %s). Short, quiet, unpitched sounds on the cuts are welcome."
             % " and ".join('"%s"' % n for n in TONAL_FX)
         )
-    if "captions" in (rec.get("caps") or ()):
-        x0, y0, x1, y1 = caption_band(w, h)
-        text += (
-            "\n\nThe studio writes the captions into the picture itself: the words being spoken "
-            "appear a few at a time on a dark card inside the band x %d to %d, y %d to %d (zoom 1, "
-            "camera at the centre; the card stays there whatever the camera does), from the "
-            "narration's own word times. Your stills, strips and motion sheets show them. Keep that "
-            "band free of anything that must be read or that matters -- the picture's ground may "
-            "run under it -- and draw no captions or subtitles of your own: on-screen type is for "
-            "names, numbers and labels, never the narration's sentence again."
-            % (x0 - w // 2, x1 - w // 2, y0 - h // 2, y1 - h // 2)
-        )
+    if rec.get("captions") == "live" or "captions" in (rec.get("caps") or ()):
+        text += captions_note(film, rec, w, h)
     return text
 
 
@@ -1129,9 +1195,10 @@ class Film:
         the template's frames ("16:9", "1:1"...).
 
         frame, for a film made from an idea: "16:9" unless it is asked for in another of FRAMES
-        ("9:16": a YouTube Short). captions: the narration's words drawn into the picture
-        (CAPS "captions"); the first message says where they sit (frame_note). music: False for
-        a film with no music at all -- the manifest's audio.music, which sketch-audio.py obeys
+        ("9:16": a YouTube Short). captions: whether the film starts with its captions
+        shown (the record's captions_on; the site's switch decides after). Every film with
+        narration has them (CAPS "captions"); the first message says where they sit (frame_note).
+        music: False for a film with no music at all -- the manifest's audio.music, which sketch-audio.py obeys
         whatever the score holds, and the first message says so.
 
         A 9:16 film from an idea speaks at once (vo_lead) and keeps its own opening as the
@@ -1178,8 +1245,8 @@ class Film:
             # has no kit.js there, and its code never calls one
             if not os.path.exists(os.path.join(template["_dir"], "engine", "kit.js")):
                 caps = tuple(c for c in caps if c != "kit")
-        elif captions:
-            caps += ("captions",)
+        if not template or template.get("narration"):  # its captions, live (CAPS "captions")
+            caps += ("captions",) if "captions" not in caps else ()
         frame = frame if frame in FRAMES else None
         style = people_style(character_style, look) if people else None
         projects = os.path.join(HOME, "projects")
@@ -1201,8 +1268,10 @@ class Film:
         # a template's film runs on the engine it was drawn with (frozen in its version)
         src = os.path.join(template["_dir"], "engine") if template else os.path.join(KIT, "sketch")
         for name in ENGINE + tuple(m + ".js" for m in modules(caps)):
-            # copyfile, not copy2: a release's files are read-only
-            shutil.copyfile(os.path.join(src, name), film.path("engine", name))
+            # copyfile, not copy2: a release's files are read-only. A template's captions are
+            # this release's, whatever its engine (one drawn before 2026-10-31 burned them in)
+            at = os.path.join(KIT, "sketch") if name in LIVE_CAPTIONS else src
+            shutil.copyfile(os.path.join(at, name), film.path("engine", name))
         with open(os.path.join(HERE, "template", "sketch.json"), encoding="utf-8") as f:
             m = json.load(f)
         if template:  # its own look: fonts, player, the mix; narration and captions if it has one
@@ -1351,6 +1420,13 @@ class Film:
                 **({"app": str(app)[:40]} if app else {}),
                 # asked for with no music at all (frame_note; the manifest's audio.music)
                 **({"music": "none"} if quiet else {}),
+                # its captions are data beside the video, drawn live (CAPS "captions"); "on":
+                # whether the film starts with them shown -- the site's switch decides after
+                **(
+                    {"captions": "live", "captions_on": bool(captions)}
+                    if "captions" in caps
+                    else {}
+                ),
                 # its pictures asked for above a draft (paint_pins; the caller checked the
                 # painter has the setting: chooses_quality)
                 **({"paint_quality": quality} if quality in QUALITIES else {}),

@@ -222,7 +222,22 @@ def note_cases():
         "a tall drawn film is told nothing of paintings", "paintings" not in films.frame_note(drawn)
     )
     wide = films.Film.create("how a fox bakes bread", 15, "painted", client="t")
-    expect("and a wide painted film no note at all", films.frame_note(wide) == "")
+    wnote = films.frame_note(wide)
+    expect(
+        "a wide painted film is told only of its captions: heads above the lowest 24%",
+        wnote.startswith("\n\nThe film has captions")
+        and "come back tall" not in wnote
+        and "above the lowest 24% of the painting" in wnote,
+        wnote,
+    )
+    expect(
+        "a tall one keeps them above the lowest third of its tall painting",
+        "above the lowest 33% of the painting" in films.frame_note(tall_film("painted")),
+    )
+    expect(
+        "and a drawn film is told nothing of a painting's prompt",
+        "painting's prompt" not in films.frame_note(drawn),
+    )
     with open(wide.path("paint.json"), encoding="utf-8") as f:
         expect("and Muse paints it", json.load(f).get("model") == "meta/muse-image")
 
