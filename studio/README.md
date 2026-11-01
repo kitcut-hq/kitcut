@@ -665,6 +665,36 @@ plan's frame rate (`X-Fps`, `X-Priority`). No Claude and no voice: a render, min
 - `test_server.py` covers it on the Free-plan film it makes: refused for another client, a forced
   failure that changes nothing, then 5 s at 60 fps, still the film it was.
 
+**A film in another language** (`localize.py`, `POST /api/films {"localize": {...}}`, 2026-11-01):
+kitcut.ai's Translate. The site asks as the original's own client with a film's usual headers:
+`{"localize": {"from": <film id>, "version", "language", "key": <the site's hold id>}, "listed"?}`.
+- **A film of its own**: a new id, record and page; `localized: {from, version, language, key}` in
+  its record and in `GET /api/films/<id>`. It gets the original's idea, length, look, frame,
+  captions, music, narrator and paint quality, and its folder (`localize.seed`): the code, cast,
+  pictures, engine, music, sounds and `vo.json` (the same voice and lines, its `language` the new
+  one), with the original's narration and word times in `localize/` to read. Never carried: the
+  original's narration takes and mix (`audio/`), renders, YouTube drafts and thumbnails, share,
+  notes, versions, records (`NOT_CARRIED`). Nothing is painted again.
+- **Claude's first message** (`localize.ask`): translate every narration line and every word on
+  screen, record the narration in the same voice, move word cues and timed sounds to the new
+  recording, keep everything else. Afterwards a narration still the original's (a third of its
+  longer lines word for word) fails the film, so the site gives its credits back
+  (`localize.untranslated`); words of the original still in film.js get one short turn
+  (`localize.leftovers`), never a failure. A translation is never an episode's next one
+  (`episode.wanted`).
+- **Refused before anything is made**: 400 `language` for any language not in `LANGUAGES` (the
+  site's 19; never Russian); 404 for another's film; 409 with `reason`: `state` (not finished),
+  `round` (a new version being made), `own_voice` (the person's own ElevenLabs narrator),
+  `same` (its own language), `exists` (that language done or being made, with `film`), and not yet
+  supported: `template`, `long` (scene by scene), `people` (people from photos), `no_voice`.
+- **Asked twice with one key: the same film** (202 with its id), so the site can ask again when
+  it got no answer.
+- **Its YouTube draft** is written in its language: the site sends `"language"` and `"fresh":
+  true` with `POST /api/films/<id>/youtube/draft` (`ytdraft.options`), and a fresh ask never falls
+  back on a draft written before.
+- **By hand:** `python studio/localize.py --plan <film-id> <language>` says what it would carry,
+  or why it is refused. `test_localize.py` covers it.
+
 **A film deleted for good** (`delete_film.py`, `POST /api/films/<id>/delete`, 2026-10-05): the
 film's own client (the site, for its owner) or this machine asks, and nothing is kept, not even
 a backup. `{"plan": true}` answers what would go and removes nothing.

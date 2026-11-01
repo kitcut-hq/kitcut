@@ -608,6 +608,13 @@ a.google { width: 100%; margin-top: 14px; }
 .posts button { height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font: 550 12.5px/1 Inter, system-ui, sans-serif; cursor: pointer; }
 .posts button:hover { background: var(--hover); }
 .posts .studio { margin-left: auto; color: var(--accent-2); font-weight: 600; text-underline-offset: 3px; }
+/* the same film in other languages (localize.js is the dialog): a link to each, under the film */
+.langs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 0 14px 10px; font-size: 13px; color: var(--ink-2); }
+.langs a, .langs .on { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--ink); text-decoration: none; font-weight: 550; }
+.langs a:hover { background: var(--hover); }
+.langs .on { background: var(--accent-soft); border-color: var(--accent); }
+.langs small { color: var(--ink-3); font-weight: 500; }
+.langs .pulse { width: 7px; height: 7px; }
 /* the film's prompt, one line under the film: opened in full by a click, copied, or made again */
 .idea { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; border-top: 1px solid var(--line); font-size: 13.5px; }
 .idea .k { flex: none; color: var(--ink-3); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
@@ -848,7 +855,7 @@ try { if (JSON.parse(localStorage.getItem('kcShell') || 'null')?.user) document.
   <section class="work idle" id="work">
     <div class="stage">
       <div class="screen" id="screen"><div class="idle">Your film appears here.</div></div>
-      <div class="caption"><span id="status">Ready.</span><button class="ntver" type="button" id="ntVer" hidden></button><span class="right"><button class="btn sm" type="button" id="ntOpen" hidden title="Point at what should change, and Claude makes the next version"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg> Change something</button><a class="btn sm" id="dlBtn" href="#" download target="_blank" rel="noopener" hidden title="Download the full-quality MP4"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg> Download</a><button class="btn sm" type="button" id="ubOpen" hidden title="This film again, without the KitCut mark and ending"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7zM19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z"/></svg> Remove branding</button><button class="btn sm yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><a class="btn sm yt" id="ytOn" href="/studio" hidden title="Its page in your Studio: its details on YouTube, its day, who can watch it, its views"><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> <span id="ytOnText"></span><b>Manage</b></a><button class="btn sm" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span class="fresh" id="views" hidden></span><span id="clock"></span></span></div>
+      <div class="caption"><span id="status">Ready.</span><button class="ntver" type="button" id="ntVer" hidden></button><span class="right"><button class="btn sm" type="button" id="ntOpen" hidden title="Point at what should change, and Claude makes the next version"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg> Change something</button><button class="btn sm" type="button" id="lgOpen" hidden title="This film in other languages: the same pictures, voice and music, with the words translated"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg> Translate</button><a class="btn sm" id="dlBtn" href="#" download target="_blank" rel="noopener" hidden title="Download the full-quality MP4"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg> Download</a><button class="btn sm" type="button" id="ubOpen" hidden title="This film again, without the KitCut mark and ending"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7zM19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z"/></svg> Remove branding</button><button class="btn sm yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><a class="btn sm yt" id="ytOn" href="/studio" hidden title="Its page in your Studio: its details on YouTube, its day, who can watch it, its views"><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> <span id="ytOnText"></span><b>Manage</b></a><button class="btn sm" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span class="fresh" id="views" hidden></span><span id="clock"></span></span></div>
       <div class="sharebar" id="sharebar" hidden>
         <div class="sb">
           <div class="sb-l"><b id="sbSay">Share this film</b><a id="sbLink" href="#" target="_blank" rel="noopener"></a></div>
@@ -864,6 +871,7 @@ try { if (JSON.parse(localStorage.getItem('kcShell') || 'null')?.user) document.
         <p class="who" id="sbWho" hidden></p>
       </div>
       <div class="posts" id="ytPosts" hidden></div>
+      <div class="langs" id="lgRow" hidden></div>
       <div class="idea" id="idea" hidden>
         <span class="k">Prompt</span>
         <button type="button" class="t" id="ideaText" aria-expanded="false" title="Show the whole prompt"></button>
@@ -1346,7 +1354,7 @@ function tick() { $('clock').textContent = (lastCost != null ? `${usd(lastCost)}
 function startClock(elapsed) { t0 = Date.now() - (elapsed || 0) * 1000; clearInterval(timer); tick(); timer = setInterval(tick, 500); }
 function finish() { clearInterval(timer); timer = null; clearTimeout(poll); poll = null; pending = null; unfresh(); $('go').disabled = !studioUp; $('stop').hidden = true; }
 function reset() {
-  finish(); ytReset(); ubReset(); ntReset(); $('sbMail').hidden = true; t0 = 0; lastCost = null; lastLog = null; showedDone = false; FILM = null; OWN = null; filmDone = null; whoFor = null;
+  finish(); ytReset(); ubReset(); ntReset(); lgReset(); $('sbMail').hidden = true; t0 = 0; lastCost = null; lastLog = null; showedDone = false; FILM = null; OWN = null; filmDone = null; whoFor = null;
   $('stats').hidden = true; $('log').innerHTML = ''; $('clock').textContent = ''; $('views').hidden = true;
   $('work').classList.remove('done'); $('made').open = true;
   $('logHead').textContent = 'What Claude is doing'; $('logMore').textContent = '';
@@ -1521,6 +1529,7 @@ async function follow(since = 0, misses = 0) {
       countView(id);
       ytDoneId = id; ytLoad();
       ntOffer(id);
+      lgOffer(id);
       if (!showedDone && s.seconds != null) {  // a film from before the log was kept: its summary stands in
         stats(s); $('status').textContent = `Done in ${mmss(s.seconds)}.`;
         if (s.claude_said) line('say', s.claude_said, null);
@@ -1648,6 +1657,56 @@ async function ntOpen() {
 }
 $('ntOpen').addEventListener('click', ntOpen);
 $('ntVer').addEventListener('click', ntOpen);
+
+// ---- the same film in other languages: a link to each under the film, for anyone (the finished,
+// public ones; its owner sees them all), and for its owner Translate, which opens the dialog
+// (localize.js and localize.css, the site's own, fetched when first opened; the studio's own page
+// has neither, and its /api/films/<id>/languages is not found). /film/<id>#languages opens it.
+let LG = null;  // {id, doc}: the film's languages as lib/localize.js last gave them
+function lgReset() {
+  LG = null; $('lgOpen').hidden = true; $('lgRow').hidden = true;
+  if (window.KCLocalize && KCLocalize.isOpen()) KCLocalize.close();
+}
+function lgShow(id, doc) {
+  LG = { id, doc };
+  $('lgOpen').hidden = !doc.offer;
+  const vs = (doc.versions || []).filter((v) => v.state !== 'not_finished');
+  $('lgRow').hidden = vs.length < 2;
+  $('lgRow').innerHTML = vs.length < 2 ? '' : '<span>Languages:</span>' + vs.map((v) => {
+    const name = esc(v.native || v.name || 'Unknown');
+    const tag = v.original ? ' <small>original</small>' : v.state === 'making' ? ' <small>being made</small>' : '';
+    return v.id === id ? `<span class="on" aria-current="page">${v.state === 'making' ? '<span class="pulse"></span>' : ''}${name}${tag}</span>`
+      : `<a href="/film/${esc(v.id)}" lang="${esc(v.language || '')}">${v.state === 'making' ? '<span class="pulse"></span>' : ''}${name}${tag}</a>`;
+  }).join('');
+}
+async function lgOffer(id) {
+  try {
+    const r = await fetch(`/api/films/${encodeURIComponent(id)}/languages`);
+    if (!r.ok || id !== currentId) return;  // nothing to show, or a page with no languages
+    lgShow(id, await r.json());
+    if (location.hash === '#languages') lgOpen();
+  } catch (e) { /* the film plays without them */ }
+}
+async function lgOpen() {
+  if (!LG || !LG.doc.offer || (window.KCLocalize && KCLocalize.isOpen())) return;
+  const id = LG.id;
+  try {
+    if (!window.KCLocalize) {
+      await new Promise((ok, bad) => {
+        const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/localize.css'; document.head.appendChild(l);
+        const s = document.createElement('script'); s.src = '/localize.js'; s.onload = ok; s.onerror = bad; document.head.appendChild(s);
+      });
+    }
+  } catch (e) { return; }
+  if (id !== currentId) return;
+  KCLocalize.open(id, LG.doc, {
+    onClose: (doc) => {
+      if (location.hash === '#languages') history.replaceState(history.state, '', location.pathname + location.search);
+      if (doc && id === currentId) lgShow(id, doc);
+    },
+  });
+}
+$('lgOpen').addEventListener('click', lgOpen);
 
 // ---- the sign-up wall, on the public site only. /api/me exists where the site has accounts
 // (Vercel, api/auth.js); on the laptop and through the bare tunnel it is not found, AUTH stays

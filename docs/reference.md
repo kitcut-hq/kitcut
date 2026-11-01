@@ -5918,7 +5918,9 @@ prompt pasted in. Each side brings what only it has:
 - **The site brings the channel's voice.** With the `youtube.readonly` scope it already holds, it
   reads the channel's latest uploads (titles, descriptions, tags; KitCut's own earlier posts left
   out, so a pasted prompt cannot teach the voice). It posts them to
-  `POST /api/films/<id>/youtube/draft` `{"channel": {"id", "title", "handle"}, "recent": [...]}`.
+  `POST /api/films/<id>/youtube/draft` `{"channel": {"id", "title", "handle"}, "recent": [...]}`;
+  for a film in another language (`localize.py`) also `"language"` (its words and thumbnails are
+  written in it) and `"fresh": true` (no fallback on an earlier draft).
   Nothing of them is stored on either side.
 - **The studio brings the film.** `material()` reads the narration with each line's times
   (`audio/vo/timeline.json`), who it was made for (film.js line 1) and the maker's note under it,
