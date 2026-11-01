@@ -704,7 +704,8 @@ kitcut.ai's Translate. The site asks as the original's own client with a film's 
   (`localize.leftovers`), never a failure.
 - **Refused before anything is made**: 400 `language` for any language not in `LANGUAGES` (the
   site's 19; never Russian); 404 for another's film; 409 with `reason`: `state` (not finished),
-  `round` (a new version being made), `own_voice` (the person's own ElevenLabs narrator),
+  `round` (a new version being made), `own_voice` (told in the person's own ElevenLabs voice and
+  asked without a fresh pass to that same voice: the site mints one and sends it as `voice`),
   `same` (its own language), `exists` (that language done or being made, with `film`), and not yet
   supported: `long` (scene by scene: its passes write scenes/ and never read the translation's
   first message).

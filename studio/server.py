@@ -1560,7 +1560,12 @@ async def localize_create(req, body):
             status=202,
         )
     try:
-        src, lang, key, version = await asyncio.to_thread(localize.check, spec, client, films_seen)
+        narrator, bad = narrator_of(body.get("voice"))
+        if bad:
+            return web.json_response({"error": bad}, status=400)
+        src, lang, key, version = await asyncio.to_thread(
+            localize.check, spec, client, films_seen, narrator
+        )
     except localize.Refused as e:
         return web.json_response(e.body(), status=e.status)
     args = localize.create_args(src)
@@ -1626,6 +1631,7 @@ async def localize_create(req, body):
             frame=args["frame"],
             captions=args["captions"],
             music=args["music"],
+            narrator=narrator,
         )
         try:
             await asyncio.to_thread(localize.seed, f, src, lang, version, key)
