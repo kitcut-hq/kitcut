@@ -340,6 +340,10 @@ def wanted(film):
     because every await ahead of a film's Claude slot is time in which POST /api/films reads that
     the film has no slot yet and answers "running" for one that should wait."""
     rec = film.record()
+    if rec.get(
+        "localized"
+    ):  # a translation (localize.py) has the original's code, never the last episode's
+        return False
     return "carried" not in rec and bool(rec.get("project")) and enabled(rec.get("project"))
 
 

@@ -319,6 +319,23 @@ def sample(recent):
     return out
 
 
+LANG = re.compile(r"^[a-z]{2,3}$")
+
+
+def options(body):
+    """What else the site may send with its ask, for a film made in another language (kitcut.ai's
+    Translate, localize.py): "language", the film's language (the words and the thumbnails' words
+    are written in it), and "fresh": never fall back on a draft written from something else. Russian
+    is never a language here. -> {"language"?, "fresh"?}"""
+    if not isinstance(body, dict):
+        return {}
+    lang = str(body.get("language") or "").lower().split("-")[0]
+    out = {"language": lang} if LANG.match(lang) and lang not in ("ru", "rus") else {}
+    if body.get("fresh") is True:
+        out["fresh"] = True
+    return out
+
+
 def parse_request(body):
     """The site's ask: {channel: {id, title, handle}, recent: [...]} -> (channel, recent)."""
     if not isinstance(body, dict) or not isinstance(body.get("channel"), dict):
@@ -873,15 +890,19 @@ async def make_thumbs(job, film):
         job["t"] = time.time()
 
 
-async def start(film, client, channel, recent, auth="api"):
+async def start(film, client, channel, recent, auth="api", language=None, fresh=False):
     """Write the draft in the background (one at a time per film and channel). Returns the job;
-    its state is "done" at once when the same draft is already on disk."""
+    its state is "done" at once when the same draft is already on disk. language (options()): the
+    film's language as the site knows it, over its vo.json's; fresh: no fallback on the last draft
+    written when the film has had all it can, since that one may be from before it was translated."""
     prune()
     k = (film.id, channel["id"])
     job = JOBS.get(k)
     if job and busy(job):
         return job
     mat = await asyncio.to_thread(material, film)
+    if language:
+        mat["language"] = language
     job = {
         "film": film.id,
         "channel": channel["id"],
@@ -895,7 +916,8 @@ async def start(film, client, channel, recent, auth="api"):
         chain_thumbs(job, film)
     if job["draft"] is None:
         if (film.record().get("youtube_drafts") or 0) >= PER_FILM:
-            job["draft"] = cached(film, channel)  # the last one written, if any
+            # the last one written, if any -- unless the site asked for this film's own (fresh)
+            job["draft"] = None if fresh else cached(film, channel)
             if job["draft"] is None:
                 raise DraftError(429, "This film has had all the drafts it can have written.")
             chain_thumbs(job, film)

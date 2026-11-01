@@ -56,6 +56,7 @@ procs.load_secrets(os.environ.get("STUDIO_ENV_FILE") or os.path.join(films.REPO,
 import store  # noqa: E402
 import scenes  # noqa: E402
 import templates  # noqa: E402
+import localize  # noqa: E402
 import validate  # noqa: E402
 import episode  # noqa: E402
 from film import (  # noqa: E402
@@ -337,6 +338,8 @@ def ask(film, recent=()):
     """The first message: the film's own facts, then the visitor's prompt, then what recent
     films chose -- here and not in the system prompt, which stays the same for every film of a
     look (and so stays cached). A remake of a template gets the template's own (templates.ask)."""
+    if film.record().get("localized"):  # a translation of a finished film (localize.py)
+        return localize.ask(film) + mark_note(film)
     if film.record().get("template"):
         return templates.ask(film) + mark_note(film)
     n = film.asked
@@ -559,6 +562,36 @@ async def no_leftovers(film, emit, meter, tools, auth):
         left = await asyncio.to_thread(templates.leftovers, film)
     if left:
         raise RuntimeError("the film still shows the template's own words: %s" % ", ".join(left))
+
+
+async def localize_leftovers(film, emit, meter, tools, auth):
+    """A translation (localize.py) whose film.js still shows words of the original word for word:
+    one short turn to translate them. Never fails the film: names and brands rightly stay."""
+    left = await asyncio.to_thread(localize.leftovers, film)
+    sid = film.record().get("claude_session")
+    if not left or not sid:
+        return
+    emit(
+        {
+            "type": "stage",
+            "name": "claude",
+            "text": "Claude is translating the last words on screen",
+        }
+    )
+    with contextlib.suppress(TimeoutError):
+        await _within(
+            run_claude(
+                film,
+                emit,
+                meter,
+                tools,
+                auth,
+                prompt=localize.LEFTOVERS % ", ".join('"%s"' % s for s in left),
+                resume=sid,
+            ),
+            Clock(),
+            {"claude_s": WRAP_UP_S, "wall_s": WRAP_UP_S + 120},
+        )
 
 
 async def episode_leftovers(film, emit, meter, tools, auth):
@@ -1919,7 +1952,11 @@ async def make_film(
                 raise RuntimeError("Claude finished without changing the last episode's film.js")
             if unvoiced(film):  # its lines are written but were never spoken: not a silent film
                 raise RuntimeError("Claude finished without recording the narration")
-            if film.record().get("template"):
+            if localize.untranslated(film):  # a translation whose narration is still the original's
+                raise RuntimeError("Claude finished without translating the narration")
+            if film.record().get("localized"):
+                await localize_leftovers(film, emit, meter, tools, auth)
+            elif film.record().get("template"):
                 await no_leftovers(film, emit, meter, tools, auth)
             elif episode.carried(film):
                 await episode_leftovers(film, emit, meter, tools, auth)
@@ -2095,6 +2132,12 @@ async def make_film(
                 "carried": film.record().get("carried"),
                 # again here: the first record is not retried if the database was away
                 "project_id": (film.record().get("project") or {}).get("id"),
+                # again here, like project_id: a translation is found by its original and key
+                **(
+                    {"localized": film.record()["localized"]}
+                    if film.record().get("localized")
+                    else {}
+                ),
                 # again here, like project_id: a template's films are counted by it
                 **(
                     {
@@ -2410,6 +2453,8 @@ def first_record(film, source, client):
         **({"captions": "burned"} if "captions" in (rec.get("caps") or ()) else {}),
         # asked for with no music at all (film.create)
         **({"music": "none"} if rec.get("music") == "none" else {}),
+        # a translation of a finished film (localize.py): kitcut.ai finds it by its key and its original
+        **({"localized": rec["localized"]} if rec.get("localized") else {}),
         "state": "queued",
         "cost_usd": 0.0,
     }

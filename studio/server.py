@@ -164,6 +164,7 @@ import peers  # noqa: E402
 import procs  # noqa: E402
 import store  # noqa: E402
 import templates  # noqa: E402
+import localize  # noqa: E402 -- a finished film in another language (kitcut.ai's Translate)
 import validate  # noqa: E402
 import thumbs  # noqa: E402
 import uploads  # noqa: E402
@@ -1253,6 +1254,8 @@ async def create(req):
             },
             status=400,
         )
+    if body.get("localize") is not None:  # a finished film in another language (localize.py)
+        return await localize_create(req, body)
     tpl = frame = None
     if body.get("template") is not None:  # a remake of a template, as asked (templates.py)
         tpl, frame, err = template_of(body, from_this_machine(req))
@@ -1533,6 +1536,121 @@ async def create(req):
     )
 
 
+async def localize_create(req, body):
+    """POST /api/films {"localize": {"from", "version", "language", "key"}, "listed"?}: the original
+    made again in another language, as a film of its own (localize.py). The asker is the original's
+    own client (the site sends it), with a film's usual headers. Asked twice with one key: the same
+    film. 202 {"id", "status", "position", "listed", "localized"}; 409 {"reason"} for a film that
+    cannot be, or a language it has; 400 for a language there is none of; 404 for another's film."""
+    client = client_of(req)
+    member = clients.member_of(req.headers)
+    spec = body.get("localize")
+    key = str((spec or {}).get("key") or "") if isinstance(spec, dict) else ""
+    films_seen = await asyncio.to_thread(localize.recent)
+    again = localize.by_key(key, films_seen) if key else None
+    if again is not None and clients.same(again.record().get("client"), client):  # asked again
+        return web.json_response(
+            {
+                "id": again.id,
+                "status": again.record().get("state") or "queued",
+                "position": 0,
+                "listed": again.record().get("listed") is not False,
+                "localized": again.record().get("localized"),
+            },
+            status=202,
+        )
+    try:
+        src, lang, key, version = await asyncio.to_thread(localize.check, spec, client, films_seen)
+    except localize.Refused as e:
+        return web.json_response(e.body(), status=e.status)
+    args = localize.create_args(src)
+    seconds = args["seconds"]
+    priority = 1 if req.headers.get("X-Priority", "").strip() == "1" else 0
+    at_once = at_once_of(req)
+    local = "api" if body.get("auth") == "api" else os.environ.get("STUDIO_LOCAL_AUTH") or "login"
+    auth = local if from_this_machine(req) else site_auth()
+    branding = req.headers.get("X-Branding", "").strip() == "1"
+    listed = body.get("listed") is not False and src.record().get("listed") is not False
+    source = "mcp" if req.headers.get("X-Source", "").strip() == "mcp" else "web"
+    app = req.headers.get("X-App", "").strip()[:40] or None
+    fps = 30 if req.headers.get("X-Fps", "").strip() == "30" else 60
+    prune()
+    if not await leading():
+        return web.json_response({"error": RESTARTING}, status=503)
+    async with ADMIT:
+        if not peers.leads() or MODE != "serving" or DRAINING:
+            return web.json_response({"error": RESTARTING}, status=503)
+        # asked again while it waited for the lock, or that language started meanwhile
+        again = localize.by_key(key)
+        if again is not None and clients.same(again.record().get("client"), client):
+            return web.json_response(
+                {
+                    "id": again.id,
+                    "status": again.record().get("state") or "queued",
+                    "position": 0,
+                    "listed": again.record().get("listed") is not False,
+                    "localized": again.record().get("localized"),
+                },
+                status=202,
+            )
+        there = localize.made_in(src.id, lang)
+        if there is not None:
+            return web.json_response(
+                {
+                    "reason": "exists",
+                    "film": there.id,
+                    "error": "the film has that language already",
+                },
+                status=409,
+            )
+        others = peers.peers()
+        if len(everyone(("queued",), others)) >= MAX_QUEUE:
+            return web.json_response({"error": "the queue is full; try again later"}, status=429)
+        refused = await over_limit(client, seconds, auth, at_once, others)
+        if refused:
+            return web.json_response({"error": refused}, status=429)
+        f = Film.create(
+            args["prompt"],
+            seconds,
+            args["look"],
+            client=client,
+            source=source,
+            priority=priority,
+            auth=auth,
+            branding=branding,
+            project=args["project"],
+            listed=listed,
+            app=app,
+            fps=fps,
+            member=member,
+            frame=args["frame"],
+            captions=args["captions"],
+            music=args["music"],
+        )
+        try:
+            await asyncio.to_thread(localize.seed, f, src, lang, version, key)
+        except Exception as e:  # noqa: BLE001 -- a film that could not be laid in is not started
+            f.update(state="error", error="could not start from the original: %s" % e)
+            return web.json_response(
+                {"error": "the film could not be started from the original"}, status=500
+            )
+        await agent.save(f.id, agent.first_record(f, source, client))
+        start(f)
+    await asyncio.sleep(0)
+    ahead = SCHED["claude"].ahead(f.id)
+    return web.json_response(
+        {
+            "id": f.id,
+            "status": "queued" if ahead is not None else "running",
+            "position": (ahead + 1) if ahead is not None else 0,
+            "status_url": "%s/api/films/%s" % (base_url(req), f.id),
+            "listed": listed,
+            "localized": f.record().get("localized"),
+        },
+        status=202,
+    )
+
+
 # ------------------------------------------------------------------ templates (templates.py)
 PREVIEW_NAME = re.compile(r"sheet\.png|\d{3}\.\d{2}\.png")
 
@@ -1751,7 +1869,8 @@ async def youtube_draft(req):
     if not rec.get("ok"):
         return web.json_response({"error": "This film is not finished."}, status=409)
     try:
-        channel, recent = ytdraft.parse_request(await req.json())
+        body = await req.json()
+        channel, recent = ytdraft.parse_request(body)
     except ValueError as e:
         return web.json_response({"error": str(e) or "expected JSON"}, status=400)
     writing = {"film": f.id, "channel": channel["id"], "state": "writing"}
@@ -1762,7 +1881,7 @@ async def youtube_draft(req):
         (os.environ.get("STUDIO_LOCAL_AUTH") or "login") if from_this_machine(req) else site_auth()
     )
     try:
-        job = await ytdraft.start(f, client, channel, recent, auth)
+        job = await ytdraft.start(f, client, channel, recent, auth, **ytdraft.options(body))
     except ytdraft.DraftError as e:
         return web.json_response({"error": e.text}, status=e.status)
     return web.json_response(ytdraft.public(job), status=200 if job["state"] == "done" else 202)
@@ -2900,6 +3019,10 @@ async def status(req):
         # whether it carries the Free plan's mark and closing, and how removing them stands
         out.update(unbrand.public(f.record()))
     out["listed"] = r.get("listed") is not False  # a film from before the switch was listed
+    if f.record().get("localized"):  # a translation of a finished film (localize.py)
+        out["localized"] = {
+            k: f.record()["localized"].get(k) for k in ("from", "version", "language")
+        }
     made_from = f.record().get("template")  # a remake of a template: its "Made from" line
     if made_from:
         out["template"] = {k: made_from.get(k) for k in ("id", "version", "title")}
