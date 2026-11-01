@@ -674,19 +674,28 @@ kitcut.ai's Translate. The site asks as the original's own client with a film's 
   pictures, engine, music, sounds and `vo.json` (the same voice and lines, its `language` the new
   one), with the original's narration and word times in `localize/` to read. Never carried: the
   original's narration takes and mix (`audio/`), renders, YouTube drafts and thumbnails, share,
-  notes, versions, records (`NOT_CARRIED`). Nothing is painted again.
+  notes, versions, records (`NOT_CARRIED`), and inside what is carried any video and
+  `rigs/spend.jsonl` (what drawing its people cost). Carried: `web/` (the pictures it brought in,
+  `SK.image('web_...')`), `template/` and `content.json` (a template's film), `rigs/` (people
+  drawn from photos: never drawn again; the record gets no `people`, so nothing redraws or waits).
+  Nothing is painted again.
+- **No narration** (a template's music-only film, or any with `narration: false` or no lines):
+  no `vo.json`, `narration: false` on the record, a first message about the words on screen only;
+  it fails if film.js and content.json are both the original's word for word
+  (`localize.unchanged`).
 - **Claude's first message** (`localize.ask`): translate every narration line and every word on
   screen, record the narration in the same voice, move word cues and timed sounds to the new
   recording, keep everything else. Afterwards a narration still the original's (a third of its
   longer lines word for word) fails the film, so the site gives its credits back
-  (`localize.untranslated`); words of the original still in film.js get one short turn
+  (`localize.untranslated`); words of the original still in film.js or content.json get one short turn
   (`localize.leftovers`), never a failure. A translation is never an episode's next one
   (`episode.wanted`).
 - **Refused before anything is made**: 400 `language` for any language not in `LANGUAGES` (the
   site's 19; never Russian); 404 for another's film; 409 with `reason`: `state` (not finished),
   `round` (a new version being made), `own_voice` (the person's own ElevenLabs narrator),
   `same` (its own language), `exists` (that language done or being made, with `film`), and not yet
-  supported: `template`, `long` (scene by scene), `people` (people from photos), `no_voice`.
+  supported: `long` (scene by scene: its passes write scenes/ and never read the translation's
+  first message).
 - **Asked twice with one key: the same film** (202 with its id), so the site can ask again when
   it got no answer.
 - **Its YouTube draft** is written in its language: the site sends `"language"` and `"fresh":

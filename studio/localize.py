@@ -22,9 +22,14 @@ Refused, before anything is made (409 {reason}): a film that is not finished (st
 version is being made (round), one told in the person's own ElevenLabs voice (own_voice: its pass
 to their account was for the making of that film), one already in that language (same), one that
 has a film in that language done or being made (exists, with its id), and, not yet supported, a
-film made from a template (template), made scene by scene (long) or with people drawn from photos
-(people). 400 for a language that is not one of LANGUAGES (never Russian). 404 for a film that is
-not the asker's.
+film made scene by scene (long). 400 for a language that is not one of LANGUAGES (never Russian).
+404 for a film that is not the asker's.
+
+Taken as they are: a film made from a template (its words are in content.json, translated with
+film.js; its template/ pictures carried), one with people drawn from photos (their rigs carried,
+never drawn again; their mouths move to the new recording), and one with no narration (only the
+words on screen are translated, and it fails if none of its words changed). The pictures it
+brought in from the web (web/) are carried too: they are its own, SK.image('web_...').
 
 Asking twice with one key is one film: a film whose record has that key is answered again (the
 site asks once more when it got no answer, and finds the film by its key before giving the
@@ -32,7 +37,8 @@ credits back).
 
 After Claude's part (agent.make_film): a narration left as the original's (untranslated) fails the
 film, so its credits go back; words of the original still in film.js get one short turn to go
-(leftovers), never a failure -- names and brands rightly stay.
+(leftovers), never a failure -- names and brands rightly stay. A film with no narration whose
+film.js and content.json are both the original's word for word fails the same way (unchanged).
 """
 
 import os
@@ -63,9 +69,14 @@ SCAN = 400  # the newest films looked through for a key or a language already ma
 # record of its making, or something the translation makes again in its language.
 NOT_CARRIED = {
     "studio.json", "events.jsonl", "temp", "versions", "library", "youtube", "share", "outputs",
-    "web", "notes", "drafts", "link", "stills", "shots", "audio", "localize", "rigs", "template",
-    "scenes", "project.json", "journal.md",
+    "notes", "drafts", "link", "stills", "shots", "audio", "localize", "scenes", "project.json",
+    "journal.md",
 }  # fmt: skip
+# Inside what is carried, what is still the original's own record: what drawing its people cost
+# (agent counts rigs/spend.jsonl into the film's cost) and any video a folder holds.
+NOT_CARRIED_FILES = {"spend.jsonl"}
+NOT_CARRIED_EXT = (".mp4", ".webm", ".mov")
+WORDS_IN = ("film.js", "content.json")  # where a film writes the words it shows
 SOURCE = "localize"  # in the new film: the original's narration, as it was, read-only
 
 
@@ -153,16 +164,8 @@ def check(spec, client, films=None):
         raise Refused(409, "round", "a new version of the film is being made")
     if (rec.get("narrator") or {}).get("source") == "elevenlabs":
         raise Refused(409, "own_voice", "the film is told in its person's own ElevenLabs voice")
-    if rec.get("template"):
-        raise Refused(409, "template", "A film made from a template cannot be translated yet.")
     if rec.get("mode") == "scenes" or os.path.isdir(src.path("scenes")):
         raise Refused(409, "long", "A film made scene by scene cannot be translated yet.")
-    if rec.get("people"):
-        raise Refused(
-            409, "people", "A film with people drawn from photos cannot be translated yet."
-        )
-    if rec.get("narration") is False or not (_read(src.path("vo.json"), {}) or {}).get("lines"):
-        raise Refused(409, "no_voice", "A film with no narration has nothing to translate yet.")
     if language_of(src) == lang:
         raise Refused(409, "same", "the film is in that language already")
     there = made_in(src.id, lang, films)
@@ -192,6 +195,17 @@ def create_args(src):
     }
 
 
+def narrated(src):
+    """Whether the original has a narration to translate (a template's is often music only)."""
+    if src.record().get("narration") is False:
+        return False
+    return bool((_read(src.path("vo.json"), {}) or {}).get("lines"))
+
+
+def _ignore(_dir, names):
+    return [n for n in names if n in NOT_CARRIED_FILES or n.lower().endswith(NOT_CARRIED_EXT)]
+
+
 def seed(film, src, lang, version, key):
     """Lay the original into the new film's folder (Film.create made it): its code, pictures,
     cast, engine and music as the film's own, its narration's words to translate, and the
@@ -207,8 +221,8 @@ def seed(film, src, lang, version, key):
         if os.path.isdir(a):
             if os.path.isdir(b):
                 shutil.rmtree(b)
-            shutil.copytree(a, b, symlinks=False)
-        elif os.path.isfile(a):
+            shutil.copytree(a, b, symlinks=False, ignore=_ignore)
+        elif os.path.isfile(a) and not _ignore(src.dir, [name]):
             shutil.copyfile(a, b)
     # the manifest: the original's, at this film's own frame rate (the plan's)
     m = _read(film.manifest, {}) or {}
@@ -216,14 +230,18 @@ def seed(film, src, lang, version, key):
         m["fps"] = fps
         _write_json(film.manifest, m)
     # the narration: the same voice, its style and characters' voices; its language the new one;
-    # its lines the original's, for Claude to translate and record
-    vo = _read(src.path("vo.json"), {}) or {}
+    # its lines the original's, for Claude to translate and record. A film with none has none.
     os.makedirs(film.path(SOURCE), exist_ok=True)
-    _write_json(film.path(SOURCE, "vo.json"), vo)
-    tl = src.path("audio", "vo", "timeline.json")
-    if os.path.exists(tl):
-        shutil.copyfile(tl, film.path(SOURCE, "timeline.json"))
-    _write_json(film.path("vo.json"), {**vo, "language": lang})
+    voiced = narrated(src)
+    if voiced:
+        vo = _read(src.path("vo.json"), {}) or {}
+        _write_json(film.path(SOURCE, "vo.json"), vo)
+        tl = src.path("audio", "vo", "timeline.json")
+        if os.path.exists(tl):
+            shutil.copyfile(tl, film.path(SOURCE, "timeline.json"))
+        _write_json(film.path("vo.json"), {**vo, "language": lang})
+    elif os.path.exists(film.path("vo.json")):
+        os.remove(film.path("vo.json"))  # Film.create's empty one: nothing is recorded
     rec = src.record()
     film.update(
         localized={"from": src.id, "version": version, "language": lang, "key": key},
@@ -231,6 +249,7 @@ def seed(film, src, lang, version, key):
         **({"narrator": rec["narrator"]} if rec.get("narrator") else {}),
         **({"paint_quality": rec["paint_quality"]} if rec.get("paint_quality") else {}),
         **({"music": "none"} if rec.get("music") == "none" else {}),
+        **({} if voiced else {"narration": False}),
     )
 
 
@@ -244,6 +263,37 @@ def ask(film):
     lang = LANGUAGES.get(loc.get("language"), loc.get("language"))
     n = film.length
     lines = len((_read(film.path("vo.json"), {}) or {}).get("lines") or [])
+    data = (
+        " Its facts -- names, dates, places, people, every word it shows -- are in content.json "
+        "(SK.DATA.content), which film.js reads: translate the words there, never its keys, "
+        "links or file names."
+        if os.path.exists(film.path("content.json"))
+        else ""
+    )
+    if film.record().get("narration") is False:
+        return "\n\n".join(
+            [
+                "Translate the film into %s. It is a finished film with no narration -- its music "
+                "carries it -- so what changes is every word it shows on screen; change nothing "
+                "else." % lang,
+                "Length: %d seconds, the original's. Your working time: about %d minutes "
+                "(waiting for the machine is not counted)." % (n, limits(n)["claude_s"] // 60),
+                "What you have: the original's own code (film.js, its cast in cast/, its engine), "
+                "its pictures and its music, all yours.%s Do not write a vo.json and do not "
+                "record anything." % data,
+                "Do this: translate every word the film shows (titles, labels, captions, lists, "
+                "dates' month and day names, numbers' units) into natural %s, as a native designer "
+                "would write it. Keep names, brands and numbers as they are unless %s writes them "
+                "differently. Keep the type, the sizes and the layout; where a translation is "
+                "longer, fit it the way the film already fits text (a smaller size, a second "
+                "line), never by cutting words. Call check, look at stills where words changed "
+                "length, and stop." % (lang, lang),
+                "Keep everything else as it is: the scenes and their order, the pictures (never "
+                "paint or draw new ones; words inside a picture stay as they are), the people, "
+                "the camera, the motion, the colours, the music and the sounds. It is a "
+                "translation.",
+            ]
+        )
     return "\n\n".join(
         [
             "Translate the film into %s. It is a finished film; make it again in %s and change "
@@ -256,14 +306,14 @@ def ask(film):
             "pictures and its music, all yours. vo.json is its narration -- the voice, the way it "
             "is read (style), the characters' voices and its %d lines, still in the original "
             "language; vo.json's language is %s already. localize/vo.json and localize/timeline.json "
-            "are the original's narration and its word times, to read." % (lines, lang),
+            "are the original's narration and its word times, to read.%s" % (lines, lang, data),
             "Do this:\n"
             "1. Translate every narration line in vo.json into natural, spoken %s -- what a native "
             "narrator would say, not word for word -- keeping the number of lines, what each says "
             "and about its length, and the same tone. Keep names, brands and numbers as they are "
             "unless %s writes them differently.\n"
             "2. Translate every word the film shows on screen (titles, labels, captions, lists, "
-            "numbers' units, anything written in film.js or the cast) into %s. Keep the type, the "
+            "numbers' units, anything written in film.js, content.json or the cast) into %s. Keep the type, the "
             "sizes and the layout; where a translation is longer, fit it the way the film already "
             "fits text (a smaller size, a second line), never by cutting words.\n"
             "3. Record the narration with the voice tool, in the same voice.\n"
@@ -273,7 +323,9 @@ def ask(film):
             "(localize/timeline.json has where each line and word was)." % (lang, lang, lang),
             "Keep everything else as it is: the scenes and their order, the pictures (never paint "
             "or draw new ones; words inside a picture stay as they are), the characters, the "
-            "camera, the motion, the colours, the music and the sounds. Do not improve, shorten or "
+            "camera, the motion, the colours, the music and the sounds. People drawn from photos "
+            "(SK.head) stay; their mouths follow the new recording by themselves. Do not improve, "
+            "shorten or "
             "rewrite the story: it is a translation.",
         ]
     )
@@ -286,12 +338,35 @@ def _lines(vo):
     ]
 
 
+def _text(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def unchanged(film):
+    """A translation with no narration whose words on screen (film.js, content.json) are all the
+    original's, as they were: nothing was translated. Such a film fails (its credits go back)."""
+    loc = film.record().get("localized") or {}
+    if not loc.get("from") or film.record().get("narration") is not False:
+        return False
+    src = Film.open(loc["from"])
+    if src is None:
+        return False
+    return all(_text(src.path(n)) == _text(film.path(n)) for n in WORDS_IN)
+
+
 def untranslated(film):
     """Whether the narration is still the original's: at least a third of its lines of four or
-    more words word for word the same. Such a film fails (its credits go back).
+    more words word for word the same -- or, for a film with no narration, nothing it shows
+    changed (unchanged). Such a film fails (its credits go back).
     """
     if not (film.record().get("localized") or {}).get("from"):
         return False
+    if film.record().get("narration") is False:
+        return unchanged(film)
     now = _lines(_read(film.path("vo.json"), {}) or {})
     was = _lines(_read(film.path(SOURCE, "vo.json"), {}) or {})
     long_was = {w.lower() for w in was if len(w.split()) >= 4}
@@ -310,25 +385,25 @@ def _strings(code):
 
 
 def leftovers(film):
-    """Words the original showed that film.js still shows word for word: at most eight."""
+    """Words the original showed that film.js or content.json still shows word for word: at most
+    eight."""
     if not (film.record().get("localized") or {}).get("from"):
         return []
     src = Film.open(film.record()["localized"]["from"])
     if src is None:
         return []
-    try:
-        with open(src.path("film.js"), encoding="utf-8") as f:
-            was = _strings(f.read())
-        with open(film.path("film.js"), encoding="utf-8") as f:
-            now = _strings(f.read())
-    except OSError:
-        return []
-    return sorted(was & now)[:8]
+    left = set()
+    for name in WORDS_IN:
+        was, now = _text(src.path(name)), _text(film.path(name))
+        if was is not None and now is not None:
+            left |= _strings(was) & _strings(now)
+    return sorted(left)[:8]
 
 
 LEFTOVERS = (
-    "These words are still in the original's language on screen: %s. Translate each one in "
-    "film.js (keep a name or a brand as it is), call check, and stop with one sentence."
+    "These words are still in the original's language on screen: %s. Translate each one where "
+    "it is written, in film.js or content.json (keep a name or a brand as it is), call check, "
+    "and stop with one sentence."
 )
 
 

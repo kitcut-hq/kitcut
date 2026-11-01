@@ -6,11 +6,13 @@ through the API with the film itself stubbed: no Claude, no voice, seconds.
 
 Covers: what a translation is given of the original (its code, pictures, cast, engine, music,
 voice; never its narration takes, renders, YouTube drafts, share, notes or record) and what its
-record says; the refusals (another's film, not finished, a new version being made, own voice, a
-template, scene by scene, people, no narration, its own language, a language it has, Russian and
-any language not offered); asking twice with one key is one film; Claude's first message; a
-narration left untranslated fails, words left on screen get a turn; a film made in another
-language is not an episode's next one; and the YouTube draft's language and "fresh".
+record says; the refusals (another's film, not finished, a new version being made, own voice,
+scene by scene, its own language, a language it has, Russian and any language not offered); a
+template's film (content.json, template/), one with people (rigs carried, their cost not) and one
+with no narration (no vo.json, its own first message, unchanged fails) taken; the web pictures it
+brought in carried; asking twice with one key is one film; Claude's first message; a narration
+left untranslated fails, words left on screen get a turn; a film made in another language is not
+an episode's next one; and the YouTube draft's language and "fresh".
 """
 
 import os
@@ -61,6 +63,7 @@ def original(client=ALICE, **rec):
     touch(f.path("audio", "vo", "line1.mp3"))
     touch(f.path("outputs", "film.mp4"))
     touch(f.path("web", "film_web.mp4"))
+    touch(f.path("web", "logo.png"))  # a picture it brought in from the web: SK.image('web_logo')
     touch(f.path("youtube", "UC" + "x" * 22, "draft.json"), '{"title": "How bees make honey"}')
     touch(f.path("share", "card.jpg"))
     touch(f.path("notes", "n1.json"), "{}")
@@ -103,10 +106,7 @@ async def main():
     for what, rec, reason in (
         ("not finished", {"state": "running"}, "state"),
         ("its own voice", {"narrator": {"source": "elevenlabs"}}, "own_voice"),
-        ("a template's", {"template": {"id": "t-x", "version": 1}}, "template"),
         ("scene by scene", {"mode": "scenes"}, "long"),
-        ("people from photos", {"people": [{"name": "Ann"}]}, "people"),
-        ("no narration", {"narration": False}, "no_voice"),
     ):
         f = original(**rec)
         check(
@@ -114,6 +114,51 @@ async def main():
             "a film %s is refused (%s)" % (what, reason),
             refused({**spec, "from": f.id}),
         )
+
+    for what, rec in (
+        ("a template's", {"template": {"id": "t-x", "version": 1}}),
+        ("people from photos", {"people": [{"id": "p1", "name": "Ann"}]}),
+        ("no narration", {"narration": False}),
+    ):
+        f = original(**rec)
+        check(refused({**spec, "from": f.id}) is None, "a film %s is taken" % what)
+
+    # ---- a template's film with no narration, and people drawn from photos: laid in
+    tpl = original(template={"id": "t-x", "version": 1}, narration=False)
+    os.remove(tpl.path("vo.json"))
+    touch(tpl.path("content.json"), '{"title": "Spring open day at the hive"}')
+    touch(tpl.path("template", "logo.png"))
+    touch(tpl.path("rigs", "p1", "rig.json"), "{}")
+    touch(tpl.path("rigs", "spend.jsonl"), '{"cost_usd": 0.4}')
+    t_new = Film.create("How bees make honey", 30, "drawn", client=ALICE)
+    localize.seed(t_new, tpl, "de", 1, "hold-t")
+    t_has = lambda *p: os.path.exists(t_new.path(*p))  # noqa: E731
+    check(
+        t_has("content.json") and t_has("template", "logo.png") and t_has("rigs", "p1", "rig.json"),
+        "a template's words and pictures, and the people's rigs, are carried",
+    )
+    check(not t_has("rigs", "spend.jsonl"), "what drawing the people cost is not")
+    check(
+        not t_has("vo.json") and t_new.record().get("narration") is False,
+        "a film with no narration gets none, and records nothing",
+    )
+    check("content.json" in t_new.editable(), "its content.json is Claude's to translate")
+    t_msg = localize.ask(t_new)
+    check(
+        "no narration" in t_msg and "content.json" in t_msg and "German" in t_msg,
+        "its first message: the words on screen only, content.json included",
+        t_msg[:200],
+    )
+    check(localize.untranslated(t_new), "nothing changed: untranslated, and it fails")
+    touch(t_new.path("content.json"), '{"title": "Tag der offenen Tür im Bienenstock"}')
+    check(not localize.untranslated(t_new), "its words translated: not")
+    touch(t_new.path("content.json"), '{"title": "Spring open day at the hive"}')
+    touch(t_new.path("film.js"), 'SK.text("Wie Bienen Honig machen", {size: 64});\n')
+    check(
+        localize.leftovers(t_new) == ["Spring open day at the hive"],
+        "words left in content.json are found",
+        localize.leftovers(t_new),
+    )
 
     # ---- through the API
     async with TestClient(TestServer(server.make_app(TOKEN))) as c:
@@ -161,6 +206,7 @@ async def main():
             ),
             "it is given the original's code, cast, pictures, music and sounds",
         )
+        check(has("web", "logo.png"), "the pictures it brought in from the web are carried")
         check(
             not any(
                 has(p)

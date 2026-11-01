@@ -1953,7 +1953,7 @@ async def make_film(
             if unvoiced(film):  # its lines are written but were never spoken: not a silent film
                 raise RuntimeError("Claude finished without recording the narration")
             if localize.untranslated(film):  # a translation whose narration is still the original's
-                raise RuntimeError("Claude finished without translating the narration")
+                raise RuntimeError("Claude finished without translating the film")
             if film.record().get("localized"):
                 await localize_leftovers(film, emit, meter, tools, auth)
             elif film.record().get("template"):
