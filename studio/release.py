@@ -69,6 +69,7 @@ TESTS = (
     "test_paintref.py",  # a painting made from a project's picture: refused, ordered, cached
     "test_characters.py",  # painted characters: put in, seeded, kept, refused; @name in a prompt
     "test_templates.py",  # a film remade from a template: the version, the API, the first message, a render
+    "test_localize.py",  # a finished film in another language: what is carried, refused, asked, checked
     "test_web.py",  # the studio's web tools: public URLs only, pictures, pages, fonts (stubbed)
     "test_rounds.py",  # a finished film changed from its maker's notes: versions, the swap, the line
     "test_resume.py",  # a film changed by hand is not rendered over a version it never saw (KI-061)
